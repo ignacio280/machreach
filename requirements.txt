@@ -1,0 +1,6 @@
+flask>=3.0
+flask-login>=0.6
+openai>=1.30
+python-dotenv>=1.0
+apscheduler>=3.10
+bleach>=6.0

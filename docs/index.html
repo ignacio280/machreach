@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MachReach — AI-Powered Email Outreach Platform</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --primary: #6c63ff;
+            --primary-dark: #5a52d5;
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --card: #22253a;
+            --text: #e4e6f0;
+            --text-muted: #9a9cb8;
+            --accent: #00d4aa;
+            --border: #2e3148;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        a { color: var(--primary); text-decoration: none; }
+        a:hover { color: var(--accent); }
+
+        /* NAV */
+        nav {
+            position: fixed; top: 0; width: 100%; z-index: 100;
+            background: rgba(15, 17, 23, .85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .logo { font-size: 1.4rem; font-weight: 700; color: #fff; }
+        .logo span { color: var(--primary); }
+        nav ul { list-style: none; display: flex; gap: 2rem; }
+        nav ul a { color: var(--text-muted); font-size: .95rem; transition: color .2s; }
+        nav ul a:hover { color: #fff; }
+        .nav-cta {
+            background: var(--primary); color: #fff; padding: .55rem 1.4rem;
+            border-radius: 8px; font-weight: 600; font-size: .9rem;
+            transition: background .2s;
+        }
+        .nav-cta:hover { background: var(--primary-dark); color: #fff; }
+
+        /* HERO */
+        .hero {
+            padding: 10rem 2rem 6rem;
+            text-align: center;
+            max-width: 820px; margin: auto;
+        }
+        .hero h1 { font-size: 3.2rem; font-weight: 800; line-height: 1.15; margin-bottom: 1.2rem; }
+        .hero h1 span { color: var(--primary); }
+        .hero p { font-size: 1.2rem; color: var(--text-muted); max-width: 600px; margin: 0 auto 2.5rem; }
+        .btn {
+            display: inline-block; padding: .85rem 2.4rem; border-radius: 10px;
+            font-size: 1.05rem; font-weight: 700; transition: all .2s;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-2px); color: #fff; }
+        .btn-outline { border: 2px solid var(--border); color: var(--text); margin-left: 1rem; }
+        .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+        /* FEATURES */
+        .section { padding: 5rem 2rem; max-width: 1100px; margin: auto; }
+        .section-title { text-align: center; font-size: 2.2rem; font-weight: 700; margin-bottom: .6rem; }
+        .section-sub { text-align: center; color: var(--text-muted); font-size: 1.05rem; margin-bottom: 3rem; max-width: 600px; margin-left: auto; margin-right: auto; }
+        .features-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .feature-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 2rem;
+            transition: transform .2s, border-color .2s;
+        }
+        .feature-card:hover { transform: translateY(-4px); border-color: var(--primary); }
+        .feature-icon { font-size: 2rem; margin-bottom: .8rem; }
+        .feature-card h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: .5rem; }
+        .feature-card p { color: var(--text-muted); font-size: .95rem; }
+
+        /* PRICING */
+        .pricing-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+        }
+        .price-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 2.2rem; text-align: center;
+            transition: transform .2s, border-color .2s;
+            position: relative;
+        }
+        .price-card:hover { transform: translateY(-4px); border-color: var(--primary); }
+        .price-card.popular { border-color: var(--primary); }
+        .popular-badge {
+            position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+            background: var(--primary); color: #fff; padding: .25rem 1rem;
+            border-radius: 20px; font-size: .75rem; font-weight: 700; text-transform: uppercase;
+        }
+        .price-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: .5rem; }
+        .price { font-size: 2.4rem; font-weight: 800; color: #fff; }
+        .price small { font-size: .9rem; color: var(--text-muted); font-weight: 400; }
+        .price-card ul { list-style: none; margin: 1.5rem 0; text-align: left; }
+        .price-card li { padding: .4rem 0; font-size: .92rem; color: var(--text-muted); }
+        .price-card li::before { content: "✓ "; color: var(--accent); font-weight: 700; }
+
+        /* HOW IT WORKS */
+        .steps { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; }
+        .step {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 2rem; text-align: center;
+            flex: 1; min-width: 200px; max-width: 260px;
+        }
+        .step-num {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 48px; height: 48px; border-radius: 50%;
+            background: var(--primary); color: #fff; font-size: 1.2rem; font-weight: 800;
+            margin-bottom: 1rem;
+        }
+        .step h3 { font-size: 1.05rem; margin-bottom: .4rem; }
+        .step p { font-size: .9rem; color: var(--text-muted); }
+
+        /* FOOTER */
+        footer {
+            text-align: center; padding: 3rem 2rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted); font-size: .9rem;
+        }
+
+        @media (max-width: 640px) {
+            .hero h1 { font-size: 2.2rem; }
+            nav ul { display: none; }
+            .btn-outline { margin-left: 0; margin-top: .8rem; display: block; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="logo">Mach<span>Reach</span></div>
+    <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how">How It Works</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+    </ul>
+    <a href="#pricing" class="nav-cta">Get Started</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+    <h1>Scale Your Outreach with <span>AI-Powered</span> Email Campaigns</h1>
+    <p>MachReach automates cold email outreach — from prospect discovery to reply tracking — so you can focus on closing deals.</p>
+    <a href="#pricing" class="btn btn-primary">Start Free</a>
+    <a href="#features" class="btn btn-outline">See Features</a>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+    <h2 class="section-title">Everything You Need to Reach More Leads</h2>
+    <p class="section-sub">All-in-one outreach platform with AI writing, tracking, and inbox management.</p>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">🚀</div>
+            <h3>Automated Campaigns</h3>
+            <p>Create multi-step email sequences with A/B testing. Set schedules, delays, and let the system send for you.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🤖</div>
+            <h3>AI-Powered Writing</h3>
+            <p>Generate personalized email copy with GPT-4o. Automatic subject lines, body text, and follow-ups tailored to each lead.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📬</div>
+            <h3>Mail Hub</h3>
+            <p>Unified inbox to triage all replies. Snooze, star, archive, and reply — all without leaving MachReach.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Open &amp; Reply Tracking</h3>
+            <p>Real-time tracking pixels and IMAP reply detection. See who opened, clicked, and replied with sentiment analysis.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">👥</div>
+            <h3>Contacts CRM</h3>
+            <p>Built-in contacts book to organize leads. Import CSV, tag, filter, and manage your pipeline in one place.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📎</div>
+            <h3>File Attachments</h3>
+            <p>Attach PDFs, decks, and documents directly to outreach emails and replies. Up to 25 MB per message.</p>
+        </div>
+    </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how">
+    <h2 class="section-title">How It Works</h2>
+    <p class="section-sub">Get from zero to sending in minutes.</p>
+    <div class="steps">
+        <div class="step">
+            <div class="step-num">1</div>
+            <h3>Connect Your Email</h3>
+            <p>Link your Gmail or SMTP account with a one-time setup.</p>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <h3>Build a Campaign</h3>
+            <p>Import contacts, let AI write your sequence, and set your schedule.</p>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <h3>Launch &amp; Track</h3>
+            <p>Hit send. Track opens, replies, and manage conversations from Mail Hub.</p>
+        </div>
+    </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="pricing">
+    <h2 class="section-title">Simple, Transparent Pricing</h2>
+    <p class="section-sub">Start free. Upgrade when you need more volume.</p>
+    <div class="pricing-grid">
+        <div class="price-card">
+            <h3>Free</h3>
+            <div class="price">$0 <small>/mo</small></div>
+            <ul>
+                <li>200 emails / month</li>
+                <li>50 emails / day</li>
+                <li>2 campaigns</li>
+                <li>1 mailbox</li>
+                <li>Open &amp; reply tracking</li>
+            </ul>
+            <a href="#" class="btn btn-outline" style="width:100%;">Get Started</a>
+        </div>
+        <div class="price-card">
+            <h3>Growth</h3>
+            <div class="price">$8.000 <small>CLP/mo</small></div>
+            <ul>
+                <li>2,000 emails / month</li>
+                <li>200 emails / day</li>
+                <li>Unlimited campaigns</li>
+                <li>3 mailboxes</li>
+                <li>AI sentiment analysis</li>
+            </ul>
+            <a href="#" class="btn btn-outline" style="width:100%;">Upgrade</a>
+        </div>
+        <div class="price-card popular">
+            <div class="popular-badge">Most Popular</div>
+            <h3>Pro</h3>
+            <div class="price">$20.000 <small>CLP/mo</small></div>
+            <ul>
+                <li>10,000 emails / month</li>
+                <li>500 emails / day</li>
+                <li>Unlimited campaigns</li>
+                <li>5 mailboxes</li>
+                <li>AI sentiment analysis</li>
+            </ul>
+            <a href="#" class="btn btn-primary" style="width:100%;">Upgrade</a>
+        </div>
+        <div class="price-card">
+            <h3>Unlimited</h3>
+            <div class="price">$40.000 <small>CLP/mo</small></div>
+            <ul>
+                <li>Unlimited emails</li>
+                <li>No daily limit</li>
+                <li>Unlimited campaigns</li>
+                <li>Unlimited mailboxes</li>
+                <li>AI sentiment analysis</li>
+            </ul>
+            <a href="#" class="btn btn-outline" style="width:100%;">Upgrade</a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <p>&copy; 2026 MachReach. Built by Ignacio Machuca.</p>
+</footer>
+
+</body>
+</html>
