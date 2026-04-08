@@ -4595,7 +4595,7 @@ def billing_page():
     # Plan cards with PayPal buttons
     plan_order = ["free", "growth", "pro", "unlimited"]
     plan_labels = {{"free": "Free", "growth": "Growth", "pro": "Pro", "unlimited": "Unlimited"}}
-    plan_prices = {{"free": "$0", "growth": "$8.000", "pro": "$20.000", "unlimited": "$40.000"}}
+    plan_prices = {{"free": "$0", "growth": "$8", "pro": "$20", "unlimited": "$40"}}
     plan_ids = {{"growth": PAYPAL_PLAN_GROWTH, "pro": PAYPAL_PLAN_PRO, "unlimited": PAYPAL_PLAN_UNLIMITED}}
     plan_features = {{
         "free": ["200 emails/month", "1 mailbox", "2 campaigns", "10 Mail Hub syncs/month", "Basic analytics"],
@@ -4623,7 +4623,7 @@ def billing_page():
         <div class="card" style="flex:1;min-width:220px;max-width:280px;{{border}}">
           <div style="padding:20px;text-align:center;">
             <h3 style="margin:0;">{{plan_labels[p]}}{{badge}}</h3>
-            <div style="font-size:36px;font-weight:800;margin:12px 0;">{{plan_prices[p]}}<span style="font-size:14px;font-weight:400;color:var(--text-muted);"> CLP/mo</span></div>
+            <div style="font-size:36px;font-weight:800;margin:12px 0;">{{plan_prices[p]}}<span style="font-size:14px;font-weight:400;color:var(--text-muted);"> USD/mo</span></div>
             <ul style="text-align:left;list-style:none;padding:0;margin:16px 0;">
               {{features_html}}
             </ul>
@@ -4839,15 +4839,15 @@ def pricing_page():
             "200 emails/month", "1 mailbox", "2 campaigns", "10 Mail Hub syncs/month",
             "Open tracking", "Reply detection", "Basic analytics"
         ]),
-        ("Growth", "$8.000", "Scale your outreach", [
+        ("Growth", "$8", "Scale your outreach", [
             "2,000 emails/month", "3 mailboxes", "Unlimited campaigns", "Unlimited Mail Hub syncs",
             "AI email classification", "AI reply sentiment", "A/B testing"
         ]),
-        ("Pro", "$20.000", "Full power for pros", [
+        ("Pro", "$20", "Full power for pros", [
             "10,000 emails/month", "5 mailboxes", "Unlimited campaigns", "Unlimited Mail Hub syncs",
             "AI everything", "Smart send times", "Priority support", "CSV export"
         ]),
-        ("Unlimited", "$40.000", "No limits, ever", [
+        ("Unlimited", "$40", "No limits, ever", [
             "Unlimited emails", "Unlimited mailboxes", "Unlimited everything", "AI everything",
             "Priority support", "All current & future features", "Custom integrations"
         ]),
@@ -4863,7 +4863,7 @@ def pricing_page():
           <div style="padding:24px;text-align:center;">
             <h3 style="margin:0;font-size:20px;">{name}{pop}</h3>
             <p style="color:var(--text-muted);font-size:13px;margin:4px 0 16px;">{desc}</p>
-            <div style="font-size:42px;font-weight:800;">{price}<span style="font-size:14px;font-weight:400;color:var(--text-muted);"> CLP/mo</span></div>
+            <div style="font-size:42px;font-weight:800;">{price}<span style="font-size:14px;font-weight:400;color:var(--text-muted);"> USD/mo</span></div>
             <ul style="text-align:left;list-style:none;padding:0;margin:20px 0;">
               {feat_html}
             </ul>
