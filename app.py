@@ -809,6 +809,11 @@ def dashboard():
     campaigns = get_campaigns(session["client_id"])
     gstats = get_global_stats(session["client_id"])
 
+    # Check if user has connected an email account
+    from outreach.db import get_email_accounts
+    accounts = get_email_accounts(session["client_id"])
+    has_accounts = len(accounts) > 0
+
     # Usage info for plan banner
     from outreach.db import get_subscription, get_usage
     from outreach.config import PLAN_LIMITS
@@ -870,6 +875,31 @@ def dashboard():
       <a href="/billing" class="btn btn-ghost btn-sm">&#128179; Manage Plan</a>
     </div>
 
+    {% if not has_accounts %}
+    <div style="background:linear-gradient(135deg, var(--primary), #7c3aed);border-radius:12px;padding:28px 32px;margin-bottom:24px;color:#fff;">
+      <h2 style="margin:0 0 8px;font-size:1.3rem;">&#128075; Welcome to MachReach!</h2>
+      <p style="margin:0 0 16px;opacity:.9;font-size:.95rem;">Complete these steps to start sending outreach emails:</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="background:rgba(255,255,255,.15);border-radius:10px;padding:16px 20px;flex:1;min-width:200px;">
+          <div style="font-size:1.5rem;margin-bottom:6px;">1️⃣</div>
+          <strong>Connect your email</strong>
+          <p style="font-size:.85rem;opacity:.85;margin:4px 0 10px;">Add your Gmail or SMTP account so MachReach can send emails on your behalf.</p>
+          <a href="/settings" style="background:#fff;color:var(--primary);padding:8px 16px;border-radius:8px;font-weight:700;font-size:.85rem;text-decoration:none;display:inline-block;">Go to Settings &rarr;</a>
+        </div>
+        <div style="background:rgba(255,255,255,.1);border-radius:10px;padding:16px 20px;flex:1;min-width:200px;opacity:.7;">
+          <div style="font-size:1.5rem;margin-bottom:6px;">2️⃣</div>
+          <strong>Create a campaign</strong>
+          <p style="font-size:.85rem;opacity:.85;margin:4px 0 0;">Add contacts, write email sequences, and launch your first outreach.</p>
+        </div>
+        <div style="background:rgba(255,255,255,.1);border-radius:10px;padding:16px 20px;flex:1;min-width:200px;opacity:.7;">
+          <div style="font-size:1.5rem;margin-bottom:6px;">3️⃣</div>
+          <strong>Track &amp; manage replies</strong>
+          <p style="font-size:.85rem;opacity:.85;margin:4px 0 0;">Monitor opens, replies, and manage conversations from Mail Hub.</p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="stats-grid">
       <div class="stat-card stat-purple"><div class="num" data-stat="total_campaigns">{{g.total_campaigns}}</div><div class="label">Campaigns</div></div>
       <div class="stat-card stat-green"><div class="num" data-stat="active_campaigns">{{g.active_campaigns}}</div><div class="label">Active</div></div>
@@ -891,7 +921,8 @@ def dashboard():
     </div>
     """, active_page="dashboard", rows=Markup(rows), g=gstats,
         g_open_rate=f"{gstats['open_rate']:.0%}", g_reply_rate=f"{gstats['reply_rate']:.0%}",
-        usage_text=Markup(usage_text), upgrade_cta=Markup(upgrade_cta))
+        usage_text=Markup(usage_text), upgrade_cta=Markup(upgrade_cta),
+        has_accounts=has_accounts)
 
 
 # ---------------------------------------------------------------------------
