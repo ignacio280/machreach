@@ -836,21 +836,39 @@ def forgot_password():
         email = request.form.get("email", "").strip()
         client = get_client_by_email(email)
         if client:
-            import secrets
+            import secrets, smtplib
             from datetime import datetime, timedelta
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
             token = secrets.token_urlsafe(32)
             expires = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
             create_reset_token(client["id"], token, expires)
-            # Send reset email via system SMTP
-            from outreach.config import BASE_URL
+            from outreach.config import BASE_URL, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
             reset_link = f"{BASE_URL}/reset-password/{token}"
+            body = f"Click here to reset your MachReach password:\n\n{reset_link}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email."
             try:
-                from outreach.sender import send_email
-                send_email(
-                    email,
-                    "MachReach — Password Reset",
-                    f"Click here to reset your password:\n\n{reset_link}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.",
-                )
+                # Determine SMTP credentials: prefer user's own email account, fallback to system
+                smtp_host, smtp_port, smtp_user, smtp_pw = SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+                from outreach.db import get_default_email_account
+                acct = get_default_email_account(client["id"])
+                if acct:
+                    smtp_host, smtp_port = acct["smtp_host"], acct["smtp_port"]
+                    smtp_user, smtp_pw = acct["email"], acct["password"]
+                if smtp_user and smtp_pw:
+                    msg = MIMEMultipart("alternative")
+                    msg["Subject"] = "MachReach — Password Reset"
+                    msg["From"] = smtp_user
+                    msg["To"] = email
+                    msg.attach(MIMEText(body, "plain"))
+                    if smtp_port == 587:
+                        with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as srv:
+                            srv.starttls()
+                            srv.login(smtp_user, smtp_pw)
+                            srv.send_message(msg)
+                    else:
+                        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as srv:
+                            srv.login(smtp_user, smtp_pw)
+                            srv.send_message(msg)
             except Exception:
                 pass  # Don't reveal whether email was sent
         # Always show same message to prevent email enumeration
