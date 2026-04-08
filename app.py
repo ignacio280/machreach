@@ -3957,7 +3957,7 @@ def contacts_page():
     all_rels = set()
     for c in contacts:
         if c.get("tags"):
-            all_tags.update(t.strip() for t in c["tags"].split(",") if t.strip())
+            all_tags.update(tg.strip() for tg in c["tags"].split(",") if tg.strip())
         if c.get("relationship"):
             all_rels.add(c["relationship"])
 
@@ -3967,9 +3967,9 @@ def contacts_page():
         rel_options += f'<option value="{_esc(r)}" {sel}>{_esc(r.title())}</option>'
 
     tag_badges = ""
-    for t in sorted(all_tags):
-        active = "background:var(--primary);color:#fff;" if tag_filter == t else ""
-        tag_badges += f'<a href="?tag={_esc(t)}" class="badge badge-gray" style="text-decoration:none;font-size:12px;cursor:pointer;{active}">{_esc(t)}</a> '
+    for tg in sorted(all_tags):
+        active = "background:var(--primary);color:#fff;" if tag_filter == tg else ""
+        tag_badges += f'<a href="?tag={_esc(tg)}" class="badge badge-gray" style="text-decoration:none;font-size:12px;cursor:pointer;{active}">{_esc(tg)}</a> '
 
     # Build contact cards
     contact_cards = ""
@@ -3978,10 +3978,10 @@ def contacts_page():
         rel_badge = f'<span class="badge badge-blue" style="font-size:10px;">{_esc(c["relationship"].title())}</span>' if c.get("relationship") else ""
         tags_html = ""
         if c.get("tags"):
-            for t in c["tags"].split(","):
-                t = t.strip()
-                if t:
-                    tags_html += f'<span class="badge badge-gray" style="font-size:9px;">{_esc(t)}</span> '
+            for tg in c["tags"].split(","):
+                tg = tg.strip()
+                if tg:
+                    tags_html += f'<span class="badge badge-gray" style="font-size:9px;">{_esc(tg)}</span> '
         last = c["last_contacted"][:10] if c.get("last_contacted") else "Never"
         notes_preview = _esc(c["notes"][:80]) + "..." if len(c.get("notes", "")) > 80 else _esc(c.get("notes", ""))
 
@@ -4147,15 +4147,15 @@ def contact_detail(contact_id):
     # Tags display
     tags_html = ""
     if contact.get("tags"):
-        for t in contact["tags"].split(","):
-            t = t.strip()
-            if t:
-                tags_html += f'<span class="badge badge-gray" style="font-size:12px;">{_esc(t)}</span> '
+        for tg in contact["tags"].split(","):
+            tg = tg.strip()
+            if tg:
+                tags_html += f'<span class="badge badge-gray" style="font-size:12px;">{_esc(tg)}</span> '
 
     rel_badge = f'<span class="badge badge-blue" style="font-size:14px;">{_esc(contact["relationship"].title())}</span>' if contact.get("relationship") else ""
 
     return _render("Contact", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / <a href="/contacts">Contacts</a> / {_esc(contact['name'] or contact['email'])}</div>
+    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / <a href="/contacts">{t("contacts.title")}</a> / {_esc(contact['name'] or contact['email'])}</div>
 
     <div style="display:grid;grid-template-columns:1fr 400px;gap:24px;align-items:start;">
       <!-- Left: Profile -->
