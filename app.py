@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import html as html_module
+import os
 
 from flask import Flask, flash, jsonify, redirect, render_template_string, request, session, url_for, Response
 from markupsafe import Markup
@@ -40,6 +41,9 @@ from outreach.db import (
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+
+# Ensure DB is initialized (for gunicorn and direct run)
+init_db()
 
 
 # ---------------------------------------------------------------------------
@@ -4619,4 +4623,5 @@ def api_usage():
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=os.environ.get("FLASK_DEBUG", "0") == "1", host="0.0.0.0", port=port)
