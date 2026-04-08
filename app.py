@@ -1405,8 +1405,8 @@ def ab_tests():
 
     # Build test cards
     cards = ""
-    for sid, t in tests.items():
-        a, b = t["a"], t["b"]
+    for sid, tst in tests.items():
+        a, b = tst["a"], tst["b"]
         a_rate = (a["opens"] / a["sent"] * 100) if a["sent"] else 0
         b_rate = (b["opens"] / b["sent"] * 100) if b["sent"] else 0
         a_reply = (a["replies"] / a["sent"] * 100) if a["sent"] else 0
@@ -1427,13 +1427,13 @@ def ab_tests():
         cards += f"""
         <div class="card" style="margin-bottom:16px;">
           <div class="card-header">
-            <h2>Step {t['step']} — <a href="/campaign/{t['campaign_id']}" style="color:var(--primary);">{_esc(t['campaign_name'])}</a></h2>
+            <h2>Step {tst['step']} — <a href="/campaign/{tst['campaign_id']}" style="color:var(--primary);">{_esc(tst['campaign_name'])}</a></h2>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;">
             <div style="padding:12px;border:2px solid {'var(--green)' if winner == 'a' else 'var(--border-light)'};border-radius:8px;">
               <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">VARIANT A{a_winner}</div>
-              <div style="font-size:13px;font-weight:600;margin-bottom:8px;">{_esc(t['subject_a'])}</div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:8px;">{_esc(tst['subject_a'])}</div>
               <div style="display:flex;gap:16px;font-size:12px;">
                 <div><span style="font-weight:700;font-size:18px;">{a['sent']}</span> sent</div>
                 <div><span style="font-weight:700;font-size:18px;color:var(--blue);">{a_rate:.0f}%</span> opens</div>
@@ -1446,7 +1446,7 @@ def ab_tests():
 
             <div style="padding:12px;border:2px solid {'var(--green)' if winner == 'b' else 'var(--border-light)'};border-radius:8px;">
               <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">VARIANT B{b_winner}</div>
-              <div style="font-size:13px;font-weight:600;margin-bottom:8px;">{_esc(t['subject_b'])}</div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:8px;">{_esc(tst['subject_b'])}</div>
               <div style="display:flex;gap:16px;font-size:12px;">
                 <div><span style="font-weight:700;font-size:18px;">{b['sent']}</span> sent</div>
                 <div><span style="font-weight:700;font-size:18px;color:var(--blue);">{b_rate:.0f}%</span> opens</div>
