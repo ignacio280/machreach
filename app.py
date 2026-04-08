@@ -2865,8 +2865,9 @@ def mail_hub():
       <div>
         <div class="card" style="padding:18px;position:sticky;top:76px;max-height:calc(100vh - 96px);overflow-y:auto;">
           <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Filters</div>
-          <a href="?filter=all" class="{'btn btn-primary' if filter_by == 'all' and not category and not search_q else 'btn btn-ghost'}" style="width:100%;justify-content:flex-start;margin-bottom:4px;font-size:14px;padding:10px 14px;">&#128233; All ({stats['total']})</a>
+          <a href="?filter=all" class="{'btn btn-primary' if filter_by == 'all' and not category and not search_q else 'btn btn-ghost'}" style="width:100%;justify-content:flex-start;margin-bottom:4px;font-size:14px;padding:10px 14px;">&#128233; All ({stats['unread']})</a>
           <a href="?filter=unread" class="{'btn btn-primary' if filter_by == 'unread' else 'btn btn-ghost'}" style="width:100%;justify-content:flex-start;margin-bottom:4px;font-size:14px;padding:10px 14px;">&#128308; Unread ({stats['unread']})</a>
+          <a href="?filter=read" class="{'btn btn-primary' if filter_by == 'read' else 'btn btn-ghost'}" style="width:100%;justify-content:flex-start;margin-bottom:4px;font-size:14px;padding:10px 14px;">&#128065; Read ({stats['read']})</a>
           <a href="?filter=starred" class="{'btn btn-primary' if filter_by == 'starred' else 'btn btn-ghost'}" style="width:100%;justify-content:flex-start;margin-bottom:4px;font-size:14px;padding:10px 14px;">&#9733; Starred ({stats['starred']})</a>
           <a href="?filter=urgent" class="{'btn btn-primary' if filter_by == 'urgent' else 'btn btn-ghost'}" style="width:100%;justify-content:flex-start;margin-bottom:4px;font-size:14px;padding:10px 14px;">&#128680; Urgent ({stats['urgent']})</a>
           <a href="?filter=snoozed" class="{'btn btn-primary' if filter_by == 'snoozed' else 'btn btn-ghost'}" style="width:100%;justify-content:flex-start;margin-bottom:4px;font-size:14px;padding:10px 14px;">&#128340; Snoozed ({stats['snoozed']})</a>

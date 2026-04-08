@@ -992,8 +992,12 @@ def get_mail_inbox(client_id: int, filter_by: str = "all",
         # Handle snoozed items
         conditions.append("(m.snooze_until IS NULL OR m.snooze_until <= datetime('now', 'localtime'))")
 
-        if filter_by == "unread":
+        if filter_by == "all":
             conditions.append("m.is_read = 0")
+        elif filter_by == "unread":
+            conditions.append("m.is_read = 0")
+        elif filter_by == "read":
+            conditions.append("m.is_read = 1")
         elif filter_by == "starred":
             conditions.append("m.is_starred = 1")
         elif filter_by == "urgent":
@@ -1052,6 +1056,9 @@ def get_mail_stats(client_id: int) -> dict:
         urgent = db.execute(
             "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND is_archived = 0 AND priority IN ('urgent','important')",
             (client_id,)).fetchone()[0]
+        read = db.execute(
+            "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND is_archived = 0 AND is_read = 1",
+            (client_id,)).fetchone()[0]
         snoozed = db.execute(
             "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND snooze_until IS NOT NULL AND snooze_until > datetime('now', 'localtime')",
             (client_id,)).fetchone()[0]
@@ -1073,7 +1080,7 @@ def get_mail_stats(client_id: int) -> dict:
         priorities = {r["priority"]: r["cnt"] for r in pri_rows}
 
         return {
-            "total": total, "unread": unread, "starred": starred,
+            "total": total, "unread": unread, "read": read, "starred": starred,
             "urgent": urgent, "snoozed": snoozed,
             "categories": categories, "priorities": priorities,
         }
