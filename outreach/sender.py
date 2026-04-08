@@ -76,9 +76,15 @@ def send_email(
     msg.attach(MIMEText(html, "html"))
 
     try:
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.send_message(msg)
+        if SMTP_PORT == 587:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.send_message(msg)
         return True
     except Exception as e:
         print(f"Email send failed ({to_email}): {e}")

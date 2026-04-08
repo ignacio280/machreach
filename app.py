@@ -3172,19 +3172,34 @@ def api_add_email_account():
     # Test IMAP connection
     import imaplib
     try:
-        imap = imaplib.IMAP4_SSL(imap_host, imap_port)
+        imap = imaplib.IMAP4_SSL(imap_host, imap_port, timeout=15)
         imap.login(email_addr, password)
         imap.logout()
     except Exception as e:
         return jsonify({"error": f"IMAP connection failed: {str(e)[:100]}"}), 400
 
-    # Test SMTP connection
+    # Test SMTP connection — try SSL (465) first, fall back to STARTTLS (587)
     import smtplib
+    smtp_connected = False
+    smtp_error = ""
     try:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as srv:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as srv:
             srv.login(email_addr, password)
+        smtp_connected = True
     except Exception as e:
-        return jsonify({"error": f"SMTP connection failed: {str(e)[:100]}"}), 400
+        smtp_error = str(e)[:100]
+        # Fallback: try STARTTLS on port 587
+        if smtp_port == 465:
+            try:
+                with smtplib.SMTP(smtp_host, 587, timeout=15) as srv:
+                    srv.starttls()
+                    srv.login(email_addr, password)
+                smtp_connected = True
+                smtp_port = 587  # Save the working port
+            except Exception:
+                pass
+    if not smtp_connected:
+        return jsonify({"error": f"SMTP connection failed: {smtp_error}"}), 400
 
     try:
         acct_id = create_email_account(
@@ -3404,9 +3419,15 @@ def api_mail_send_compose():
             part.add_header("Content-Disposition", f'attachment; filename="{safe_name}"')
             msg.attach(part)
 
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as srv:
-            srv.login(smtp_user, smtp_pw)
-            srv.send_message(msg)
+        if smtp_port == 587:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as srv:
+                srv.starttls()
+                srv.login(smtp_user, smtp_pw)
+                srv.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as srv:
+                srv.login(smtp_user, smtp_pw)
+                srv.send_message(msg)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3871,9 +3892,15 @@ def api_mail_send_reply(mail_id):
             part.add_header("Content-Disposition", f'attachment; filename="{safe_name}"')
             msg.attach(part)
 
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as srv:
-            srv.login(smtp_user, smtp_pw)
-            srv.send_message(msg)
+        if smtp_port == 587:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as srv:
+                srv.starttls()
+                srv.login(smtp_user, smtp_pw)
+                srv.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as srv:
+                srv.login(smtp_user, smtp_pw)
+                srv.send_message(msg)
 
         # Update last_contacted on the contact if they exist
         from outreach.db import get_contact_by_email, update_contact
