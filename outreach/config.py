@@ -42,13 +42,14 @@ FOLLOWUP_DELAY_DAYS = [3, 7, 14]  # Days after initial email for follow-ups
 # Apollo.io (prospect finder — free tier: 10k credits/month)
 APOLLO_API_KEY = os.getenv("APOLLO_API_KEY", "")
 
-# Lemon Squeezy (billing — merchant of record, works worldwide)
-LS_API_KEY = os.getenv("LEMONSQUEEZY_API_KEY", "")
-LS_STORE_ID = os.getenv("LEMONSQUEEZY_STORE_ID", "")
-LS_WEBHOOK_SECRET = os.getenv("LEMONSQUEEZY_WEBHOOK_SECRET", "")
-LS_VARIANT_GROWTH = os.getenv("LEMONSQUEEZY_VARIANT_GROWTH", "")
-LS_VARIANT_PRO = os.getenv("LEMONSQUEEZY_VARIANT_PRO", "")
-LS_VARIANT_UNLIMITED = os.getenv("LEMONSQUEEZY_VARIANT_UNLIMITED", "")
+# PayPal (billing — subscriptions via PayPal JS SDK)
+PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "")
+PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "")
+PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "")
+PAYPAL_PLAN_GROWTH = os.getenv("PAYPAL_PLAN_GROWTH", "")         # PayPal Plan ID
+PAYPAL_PLAN_PRO = os.getenv("PAYPAL_PLAN_PRO", "")
+PAYPAL_PLAN_UNLIMITED = os.getenv("PAYPAL_PLAN_UNLIMITED", "")
+PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")               # sandbox or live
 
 # Plan limits
 PLAN_LIMITS = {
