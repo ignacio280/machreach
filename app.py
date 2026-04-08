@@ -17,6 +17,7 @@ from outreach.db import (
     add_contacts,
     create_campaign,
     create_client,
+    create_reset_token,
     delete_campaign,
     delete_contact,
     delete_sequence,
@@ -33,10 +34,13 @@ from outreach.db import (
     get_reply_context,
     get_sent_emails,
     get_sequences,
+    get_valid_reset_token,
     init_db,
+    mark_reset_token_used,
     save_sequence,
     update_campaign_status,
     update_client,
+    update_client_password,
     update_sequence,
 )
 
@@ -802,6 +806,7 @@ def login():
           <div class="form-group"><label>{t("auth.password")}</label><input name="password" type="password" required></div>
           <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.sign_in")}</button>
         </form>
+        <div style="text-align:center;margin-top:12px;"><a href="/forgot-password" style="font-size:13px;color:var(--text-muted);">{t("auth.forgot_password")}</a></div>
         <div class="auth-footer">{t("auth.no_account")} <a href="/register">{t("auth.sign_up_free")}</a></div>
       </div>
     </div>
@@ -819,6 +824,151 @@ def set_language(lang):
     if lang in ("en", "es"):
         session["lang"] = lang
     return redirect(request.referrer or url_for("index"))
+
+
+# ---------------------------------------------------------------------------
+# Routes — Forgot / Reset Password
+# ---------------------------------------------------------------------------
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        client = get_client_by_email(email)
+        if client:
+            import secrets
+            from datetime import datetime, timedelta
+            token = secrets.token_urlsafe(32)
+            expires = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+            create_reset_token(client["id"], token, expires)
+            # Send reset email via system SMTP
+            from outreach.config import BASE_URL
+            reset_link = f"{BASE_URL}/reset-password/{token}"
+            try:
+                from outreach.sender import send_email
+                send_email(
+                    email,
+                    "MachReach — Password Reset",
+                    f"Click here to reset your password:\n\n{reset_link}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.",
+                )
+            except Exception:
+                pass  # Don't reveal whether email was sent
+        # Always show same message to prevent email enumeration
+        flash(("success", t("auth.reset_sent")))
+        return redirect(url_for("forgot_password"))
+    return render_template_string(LAYOUT, title="Forgot Password", logged_in=False,
+        messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
+        active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"),
+        content=Markup(f"""
+    <div class="auth-wrapper">
+      <div class="auth-card">
+        <h1>{t("auth.reset_title")}</h1>
+        <p class="subtitle">{t("auth.reset_desc")}</p>
+        <form method="post">
+          <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="john@company.com" required></div>
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.send_reset")}</button>
+        </form>
+        <div class="auth-footer"><a href="/login">{t("auth.log_in")}</a></div>
+      </div>
+    </div>
+    """))
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    reset = get_valid_reset_token(token)
+    if not reset:
+        flash(("error", t("auth.reset_invalid")))
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        pw1 = request.form.get("password", "")
+        pw2 = request.form.get("password2", "")
+        if pw1 != pw2:
+            flash(("error", t("auth.passwords_no_match")))
+            return redirect(f"/reset-password/{token}")
+        if len(pw1) < 6:
+            flash(("error", t("auth.all_required")))
+            return redirect(f"/reset-password/{token}")
+        update_client_password(reset["client_id"], _hash_pw(pw1))
+        mark_reset_token_used(token)
+        flash(("success", t("auth.reset_success")))
+        return redirect(url_for("login"))
+    return render_template_string(LAYOUT, title="Reset Password", logged_in=False,
+        messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
+        active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"),
+        content=Markup(f"""
+    <div class="auth-wrapper">
+      <div class="auth-card">
+        <h1>{t("auth.reset_btn")}</h1>
+        <form method="post">
+          <div class="form-group"><label>{t("auth.new_password")}</label><input name="password" type="password" placeholder="At least 6 characters" required minlength="6"></div>
+          <div class="form-group"><label>{t("auth.confirm_password")}</label><input name="password2" type="password" required minlength="6"></div>
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.reset_btn")}</button>
+        </form>
+      </div>
+    </div>
+    """))
+
+
+# ---------------------------------------------------------------------------
+# Routes — Change Password (from Settings)
+# ---------------------------------------------------------------------------
+
+@app.route("/settings/change-password", methods=["POST"])
+def change_password():
+    if not _logged_in():
+        return redirect(url_for("login"))
+    current = request.form.get("current_password", "")
+    new_pw = request.form.get("new_password", "")
+    confirm = request.form.get("confirm_password", "")
+    client = get_client(session["client_id"])
+    if client["password"] != _hash_pw(current):
+        flash(("error", t("settings.wrong_password")))
+        return redirect(url_for("settings"))
+    if new_pw != confirm:
+        flash(("error", t("auth.passwords_no_match")))
+        return redirect(url_for("settings"))
+    if len(new_pw) < 6:
+        flash(("error", t("auth.all_required")))
+        return redirect(url_for("settings"))
+    update_client_password(session["client_id"], _hash_pw(new_pw))
+    flash(("success", t("settings.password_updated")))
+    return redirect(url_for("settings"))
+
+
+# ---------------------------------------------------------------------------
+# Routes — Delete Account
+# ---------------------------------------------------------------------------
+
+@app.route("/settings/delete-account", methods=["POST"])
+def delete_account():
+    if not _logged_in():
+        return redirect(url_for("login"))
+    confirm_text = request.form.get("confirm", "").strip()
+    if confirm_text not in ("DELETE", "ELIMINAR"):
+        flash(("error", "Please type DELETE to confirm."))
+        return redirect(url_for("settings"))
+    client_id = session["client_id"]
+    from outreach.db import get_db
+    with get_db() as db:
+        db.execute("DELETE FROM password_reset_tokens WHERE client_id = ?", (client_id,))
+        db.execute("DELETE FROM email_accounts WHERE client_id = ?", (client_id,))
+        db.execute("DELETE FROM subscriptions WHERE client_id = ?", (client_id,))
+        db.execute("DELETE FROM usage_tracking WHERE client_id = ?", (client_id,))
+        # Delete campaigns and related data
+        camp_ids = [r["id"] for r in db.execute("SELECT id FROM campaigns WHERE client_id = ?", (client_id,)).fetchall()]
+        for cid in camp_ids:
+            db.execute("DELETE FROM email_sequences WHERE campaign_id = ?", (cid,))
+            db.execute("DELETE FROM contacts WHERE campaign_id = ?", (cid,))
+            db.execute("DELETE FROM sent_emails WHERE campaign_id = ?", (cid,))
+        db.execute("DELETE FROM campaigns WHERE client_id = ?", (client_id,))
+        db.execute("DELETE FROM contacts_book WHERE client_id = ?", (client_id,))
+        db.execute("DELETE FROM mail_inbox WHERE client_id = ?", (client_id,))
+        db.execute("DELETE FROM scheduled_emails WHERE client_id = ?", (client_id,))
+        db.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+    session.clear()
+    flash(("success", t("settings.account_deleted")))
+    return redirect(url_for("index"))
 
 
 # ---------------------------------------------------------------------------
@@ -1079,6 +1229,35 @@ def settings():
         <p><strong>Daily Limit:</strong> {{{{daily_limit}}}} emails/day (based on your plan)</p>
         <p><strong>Delay Between Emails:</strong> 60 seconds</p>
         <p class="text-xs text-muted mt-2">Daily limits scale with your plan: Free=50, Growth=200, Pro=500, Unlimited=∞</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>&#128272; {t("settings.security")}</h2></div>
+      <h3 style="font-size:15px;margin-bottom:12px;">{t("settings.change_password")}</h3>
+      <form method="post" action="/settings/change-password">
+        <div class="form-group"><label>{t("settings.current_password")}</label><input name="current_password" type="password" required></div>
+        <div class="form-row">
+          <div class="form-group"><label>{t("settings.new_password")}</label><input name="new_password" type="password" required minlength="6"></div>
+          <div class="form-group"><label>{t("settings.confirm_password")}</label><input name="confirm_password" type="password" required minlength="6"></div>
+        </div>
+        <button class="btn btn-primary" type="submit">{t("settings.update_password")}</button>
+      </form>
+    </div>
+
+    <div class="card" style="border-color:var(--red);">
+      <div class="card-header"><h2 style="color:var(--red);">&#9888;&#65039; Danger Zone</h2></div>
+      <div style="margin-bottom:16px;">
+        <h3 style="font-size:15px;margin-bottom:6px;">{t("settings.delete_account")}</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">{t("settings.delete_warning")}</p>
+        <button class="btn btn-ghost" style="color:var(--red);border-color:var(--red);" onclick="document.getElementById('delete-confirm-box').style.display='block';this.style.display='none';">{t("settings.delete_account")}</button>
+        <div id="delete-confirm-box" style="display:none;margin-top:12px;padding:16px;background:rgba(239,68,68,0.06);border-radius:var(--radius-sm);border:1px solid var(--red);">
+          <form method="post" action="/settings/delete-account">
+            <p style="font-size:13px;margin-bottom:10px;">{t("settings.delete_confirm")}</p>
+            <div class="form-group"><input name="confirm" placeholder="DELETE" required autocomplete="off" style="border-color:var(--red);"></div>
+            <button class="btn btn-primary" type="submit" style="background:var(--red);border-color:var(--red);">{t("settings.delete_account")}</button>
+          </form>
+        </div>
       </div>
     </div>
 

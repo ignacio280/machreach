@@ -41,6 +41,15 @@ def init_db():
             created_at  TEXT DEFAULT (datetime('now', 'localtime'))
         );
 
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id   INTEGER NOT NULL REFERENCES clients(id),
+            token       TEXT NOT NULL UNIQUE,
+            expires_at  TEXT NOT NULL,
+            used        INTEGER DEFAULT 0,
+            created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+        );
+
         CREATE TABLE IF NOT EXISTS campaigns (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id   INTEGER NOT NULL REFERENCES clients(id),
@@ -730,6 +739,34 @@ def update_client(client_id: int, name: str, business: str):
     with get_db() as db:
         db.execute("UPDATE clients SET name = ?, business = ? WHERE id = ?",
                    (name, business, client_id))
+
+
+def update_client_password(client_id: int, password_hash: str):
+    with get_db() as db:
+        db.execute("UPDATE clients SET password = ? WHERE id = ?",
+                   (password_hash, client_id))
+
+
+def create_reset_token(client_id: int, token: str, expires_at: str):
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO password_reset_tokens (client_id, token, expires_at) VALUES (?, ?, ?)",
+            (client_id, token, expires_at),
+        )
+
+
+def get_valid_reset_token(token: str) -> dict | None:
+    with get_db() as db:
+        row = db.execute(
+            "SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0 AND expires_at > datetime('now', 'localtime')",
+            (token,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def mark_reset_token_used(token: str):
+    with get_db() as db:
+        db.execute("UPDATE password_reset_tokens SET used = 1 WHERE token = ?", (token,))
 
 
 def get_client(client_id: int) -> dict | None:
