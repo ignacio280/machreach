@@ -2675,7 +2675,7 @@ def mail_hub():
         return redirect(url_for("login"))
 
     from outreach.db import get_mail_inbox, get_mail_stats, search_mail_inbox, get_scheduled_emails, get_email_accounts, get_subscription, get_top_senders
-    filter_by = request.args.get("filter", "all")
+    filter_by = request.args.get("filter", "unread")
     category = request.args.get("category")
     search_q = request.args.get("q", "").strip()
     account_filter = request.args.get("account")
@@ -2874,7 +2874,7 @@ def mail_hub():
           <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px;">Categories</div>
           {cat_sidebar}
 
-          {'<div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px;">&#128101; Contacts</div>' + sender_sidebar + ('<a href="/mail-hub" style="display:block;text-align:center;font-size:12px;color:var(--primary);margin-top:4px;text-decoration:none;">Clear filter</a>' if sender_filter else '') if top_senders else ''}
+          {'<div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px;">&#128101; Saved Contacts</div>' + sender_sidebar + ('<a href="/mail-hub" style="display:block;text-align:center;font-size:12px;color:var(--primary);margin-top:4px;text-decoration:none;">Clear filter</a>' if sender_filter else '') if top_senders else ''}
 
           {'<div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px;">&#128340; Scheduled (' + str(sched_count) + ')</div>' + sched_html if sched_count > 0 else ''}
         </div>

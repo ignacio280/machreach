@@ -156,20 +156,24 @@ def fetch_inbox(days: int = 3, limit: int = 50, existing_ids: set | None = None,
             mail.logout()
             return []
 
-        # --- Batch fetch: single IMAP call for all new email bodies ---
+        # --- Batch fetch: FLAGS + BODY to detect seen status ---
         body_range = b",".join(new_ids)
         try:
-            _, body_data = mail.fetch(body_range, "(BODY.PEEK[])")
+            _, body_data = mail.fetch(body_range, "(FLAGS BODY.PEEK[])")
         except Exception:
             mail.logout()
             return []
 
+        import re as _re
         for item in body_data:
             if not isinstance(item, tuple) or len(item) != 2:
                 continue
             try:
                 raw = item[1]
                 msg = email.message_from_bytes(raw)
+                # Detect \Seen flag from IMAP response
+                flags_str = item[0].decode("utf-8", errors="replace") if isinstance(item[0], bytes) else str(item[0])
+                is_seen = bool(_re.search(r'\\Seen', flags_str))
 
                 # Parse headers
                 subject = _decode_header_value(msg.get("Subject", ""))
@@ -204,6 +208,7 @@ def fetch_inbox(days: int = 3, limit: int = 50, existing_ids: set | None = None,
                     "subject": subject,
                     "body_preview": body_preview,
                     "received_at": received_at,
+                    "is_seen": is_seen,
                 })
             except Exception:
                 continue
@@ -385,6 +390,7 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
             category="uncategorized",
             ai_summary="",
             account_id=account_id,
+            is_read=1 if email_data.get("is_seen") else 0,
         )
         if added:
             new_count += 1

@@ -963,17 +963,18 @@ def get_export_data(client_id: int, campaign_id: int | None = None) -> list[dict
 def upsert_mail(client_id: int, message_id: str, from_name: str, from_email: str,
                 to_email: str, subject: str, body_preview: str, received_at: str,
                 priority: str = "normal", category: str = "uncategorized",
-                ai_summary: str = "", account_id: int | None = None) -> bool:
+                ai_summary: str = "", account_id: int | None = None,
+                is_read: int = 0) -> bool:
     """Insert or ignore a mail message. Returns True if new."""
     with get_db() as db:
         try:
             db.execute("""
                 INSERT INTO mail_inbox
                     (client_id, message_id, from_name, from_email, to_email,
-                     subject, body_preview, received_at, priority, category, ai_summary, account_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (client_id, message_id, from_name, from_email, to_email,
-                  subject, body_preview, received_at, priority, category, ai_summary, account_id))
+                  subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read))
             return True
         except Exception:
             return False
@@ -1079,17 +1080,18 @@ def get_mail_stats(client_id: int) -> dict:
 
 
 def get_top_senders(client_id: int, limit: int = 10) -> list[dict]:
-    """Get top senders by email count for the Mail Hub sidebar filter."""
+    """Get saved contacts that appear in the Mail Hub inbox for the sidebar filter."""
     with get_db() as db:
         rows = db.execute("""
-            SELECT from_email, from_name, COUNT(*) as cnt
-            FROM mail_inbox
-            WHERE client_id = ? AND is_archived = 0
-            GROUP BY LOWER(from_email)
+            SELECT cb.email, cb.name, COUNT(m.id) as cnt
+            FROM contacts_book cb
+            JOIN mail_inbox m ON LOWER(m.from_email) = LOWER(cb.email) AND m.client_id = cb.client_id
+            WHERE cb.client_id = ? AND m.is_archived = 0
+            GROUP BY LOWER(cb.email)
             ORDER BY cnt DESC
             LIMIT ?
         """, (client_id, limit)).fetchall()
-        return [{"email": r["from_email"], "name": r["from_name"] or r["from_email"].split("@")[0], "count": r["cnt"]} for r in rows]
+        return [{"email": r["email"], "name": r["name"] or r["email"].split("@")[0], "count": r["cnt"]} for r in rows]
 
 
 def update_mail_field(mail_id: int, client_id: int, field: str, value) -> bool:
