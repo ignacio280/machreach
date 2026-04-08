@@ -12,6 +12,7 @@ from markupsafe import Markup
 
 from outreach.ai import generate_sequence, personalize_email, generate_reply_draft, get_optimal_send_hour
 from outreach.config import SECRET_KEY, SENDER_NAME
+from outreach.i18n import t, t_dict
 from outreach.db import (
     add_contacts,
     create_campaign,
@@ -79,7 +80,7 @@ def _esc(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 LAYOUT = """<!DOCTYPE html>
-<html lang="en" data-theme="">
+<html lang="{{lang}}" data-theme="">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -464,26 +465,28 @@ LAYOUT = """<!DOCTYPE html>
     </a>
     <div class="nav-links">
       {% if logged_in %}
-        <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
-        <a href="/campaign/new" {% if active_page == 'new_campaign' %}class="active"{% endif %}>New Campaign</a>
-        <a href="/inbox" {% if active_page == 'inbox' %}class="active"{% endif %}>Inbox</a>
-        <a href="/ab-tests" {% if active_page == 'ab_tests' %}class="active"{% endif %}>A/B Tests</a>
-        <a href="/smart-times" {% if active_page == 'smart_times' %}class="active"{% endif %}>&#9201; Send Times</a>
-        <a href="/calendar" {% if active_page == 'calendar' %}class="active"{% endif %}>Calendar</a>
-        <a href="/export" {% if active_page == 'export' %}class="active"{% endif %}>&#128202; Export</a>
+        <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>{{nav.dashboard}}</a>
+        <a href="/campaign/new" {% if active_page == 'new_campaign' %}class="active"{% endif %}>{{nav.new_campaign}}</a>
+        <a href="/inbox" {% if active_page == 'inbox' %}class="active"{% endif %}>{{nav.inbox}}</a>
+        <a href="/ab-tests" {% if active_page == 'ab_tests' %}class="active"{% endif %}>{{nav.ab_tests}}</a>
+        <a href="/smart-times" {% if active_page == 'smart_times' %}class="active"{% endif %}>&#9201; {{nav.send_times}}</a>
+        <a href="/calendar" {% if active_page == 'calendar' %}class="active"{% endif %}>{{nav.calendar}}</a>
+        <a href="/export" {% if active_page == 'export' %}class="active"{% endif %}>&#128202; {{nav.export}}</a>
         <div class="nav-divider"></div>
-        <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %} style="{% if active_page == 'mail_hub' %}color:var(--primary);{% endif %}">&#128233; Mail Hub</a>
-        <a href="/contacts" {% if active_page == 'contacts' %}class="active"{% endif %} style="{% if active_page == 'contacts' %}color:var(--primary);{% endif %}">&#128101; Contacts</a>
-        <a href="/billing" {% if active_page == 'billing' %}class="active"{% endif %}>&#128179; Billing</a>
-        <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %}>Settings</a>
+        <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %} style="{% if active_page == 'mail_hub' %}color:var(--primary);{% endif %}">&#128233; {{nav.mail_hub}}</a>
+        <a href="/contacts" {% if active_page == 'contacts' %}class="active"{% endif %} style="{% if active_page == 'contacts' %}color:var(--primary);{% endif %}">&#128101; {{nav.contacts}}</a>
+        <a href="/billing" {% if active_page == 'billing' %}class="active"{% endif %}>&#128179; {{nav.billing}}</a>
+        <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %}>{{nav.settings}}</a>
         <button onclick="toggleDarkMode()" class="btn btn-ghost btn-sm" id="theme-toggle" title="Toggle dark mode" style="font-size:16px;padding:4px 8px;cursor:pointer;background:none;border:none;color:#94A3B8;">&#127769;</button>
+        <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
         <div class="nav-divider"></div>
         <span class="nav-user">{{client_name}}</span>
-        <a href="/logout" style="color:#EF4444;">Logout</a>
+        <a href="/logout" style="color:#EF4444;">{{nav.logout}}</a>
       {% else %}
-        <a href="/pricing">Pricing</a>
-        <a href="/login">Login</a>
-        <a href="/register" class="btn btn-primary btn-sm" style="color:#fff;">Get Started</a>
+        <a href="/pricing">{{nav.pricing}}</a>
+        <a href="/login">{{nav.login}}</a>
+        <a href="/register" class="btn btn-primary btn-sm" style="color:#fff;">{{nav.get_started}}</a>
+        <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
       {% endif %}
     </div>
   </div>
@@ -681,6 +684,7 @@ LAYOUT = """<!DOCTYPE html>
 
 def _render(title: str, content: str, active_page: str = "", wide: bool = False, **kwargs):
     flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
+    nav = t_dict("nav")
     return render_template_string(
         LAYOUT,
         title=title,
@@ -690,6 +694,8 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
         active_page=active_page,
         client_name=session.get("client_name", ""),
         wide=wide,
+        nav=nav,
+        lang=session.get("lang", "en"),
     )
 
 
@@ -701,24 +707,24 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
 def index():
     if _logged_in():
         return redirect(url_for("dashboard"))
-    return render_template_string(LAYOUT, title="Home", logged_in=False, messages=[], active_page="home", client_name="", content=Markup("""
+    return render_template_string(LAYOUT, title="Home", logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
     <div class="hero">
-      <h1>Cold email outreach,<br><span>powered by AI</span></h1>
-      <p>Generate personalized email sequences, A/B test subject lines, track opens and replies &mdash; all on autopilot.</p>
+      <h1>{t("landing.hero_title")}</h1>
+      <p>{t("landing.hero_desc")}</p>
       <div class="btn-group" style="justify-content:center;">
-        <a href="/register" class="btn btn-primary btn-lg">Start Free</a>
-        <a href="/pricing" class="btn btn-outline btn-lg">See Pricing</a>
-        <a href="/login" class="btn btn-ghost btn-lg">Login</a>
+        <a href="/register" class="btn btn-primary btn-lg">{t("landing.start_free")}</a>
+        <a href="/pricing" class="btn btn-outline btn-lg">{t("landing.see_pricing")}</a>
+        <a href="/login" class="btn btn-ghost btn-lg">{t("nav.login")}</a>
       </div>
     </div>
     <div class="features">
-      <div class="feature"><div class="feature-icon">&#129302;</div><h3>AI-Written Emails</h3><p>GPT generates entire sequences tailored to your audience and tone.</p></div>
-      <div class="feature"><div class="feature-icon">&#128233;</div><h3>Mail Hub</h3><p>AI-triaged inbox management. Auto-classify, prioritize, snooze &amp; schedule replies.</p></div>
-      <div class="feature"><div class="feature-icon">&#128200;</div><h3>Track Everything</h3><p>Open tracking, reply detection, sentiment analysis, and per-campaign analytics.</p></div>
-      <div class="feature"><div class="feature-icon">&#9889;</div><h3>Fully Automated</h3><p>Follow-ups, A/B tests, smart send times &mdash; all on autopilot.</p></div>
+      <div class="feature"><div class="feature-icon">&#129302;</div><h3>{t("landing.ai_emails")}</h3><p>{t("landing.ai_emails_desc")}</p></div>
+      <div class="feature"><div class="feature-icon">&#128233;</div><h3>{t("landing.mail_hub")}</h3><p>{t("landing.mail_hub_desc")}</p></div>
+      <div class="feature"><div class="feature-icon">&#128200;</div><h3>{t("landing.track")}</h3><p>{t("landing.track_desc")}</p></div>
+      <div class="feature"><div class="feature-icon">&#9889;</div><h3>{t("landing.automated")}</h3><p>{t("landing.automated_desc")}</p></div>
     </div>
     <div style="text-align:center;margin:32px 0;color:var(--text-muted);">
-      <p>Free forever for small teams. Plans start at <b>$8.000 CLP/month</b>.</p>
+      <p>{t("landing.free_forever")}</p>
     </div>
     """))
 
@@ -735,29 +741,29 @@ def register():
         password = request.form.get("password", "")
         business = request.form.get("business", "").strip()
         if not name or not email or not password:
-            flash(("error", "All fields are required."))
+            flash(("error", t("auth.all_required")))
             return redirect(url_for("register"))
         if get_client_by_email(email):
-            flash(("error", "An account with that email already exists."))
+            flash(("error", t("auth.email_exists")))
             return redirect(url_for("register"))
         client_id = create_client(name, email, _hash_pw(password), business)
         session["client_id"] = client_id
         session["client_name"] = name
         flash(("success", f"Welcome, {_esc(name)}! Create your first campaign to get started."))
         return redirect(url_for("dashboard"))
-    return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", content=Markup("""
+    return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
-        <h1>Create your account</h1>
-        <p class="subtitle">Start sending smarter cold emails in minutes.</p>
+        <h1>{t("auth.create_account")}</h1>
+        <p class="subtitle">{t("auth.create_subtitle")}</p>
         <form method="post">
-          <div class="form-group"><label>Full Name</label><input name="name" placeholder="John Doe" required></div>
-          <div class="form-group"><label>Email</label><input name="email" type="email" placeholder="john@company.com" required></div>
-          <div class="form-group"><label>Password</label><input name="password" type="password" placeholder="At least 6 characters" required minlength="6"></div>
-          <div class="form-group"><label>Business Name <span style="font-weight:400;text-transform:none;color:var(--text-muted);">(optional)</span></label><input name="business" placeholder="Acme Inc."></div>
-          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">Create Account</button>
+          <div class="form-group"><label>{t("auth.full_name")}</label><input name="name" placeholder="John Doe" required></div>
+          <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="john@company.com" required></div>
+          <div class="form-group"><label>{t("auth.password")}</label><input name="password" type="password" placeholder="At least 6 characters" required minlength="6"></div>
+          <div class="form-group"><label>{t("auth.business_name")} <span style="font-weight:400;text-transform:none;color:var(--text-muted);">({t("auth.optional")})</span></label><input name="business" placeholder="Acme Inc."></div>
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.create_btn")}</button>
         </form>
-        <div class="auth-footer">Already have an account? <a href="/login">Log in</a></div>
+        <div class="auth-footer">{t("auth.have_account")} <a href="/login">{t("auth.log_in")}</a></div>
       </div>
     </div>
     """))
@@ -770,22 +776,22 @@ def login():
         password = request.form.get("password", "")
         client = get_client_by_email(email)
         if not client or client["password"] != _hash_pw(password):
-            flash(("error", "Invalid email or password."))
+            flash(("error", t("auth.invalid_creds")))
             return redirect(url_for("login"))
         session["client_id"] = client["id"]
         session["client_name"] = client["name"]
         return redirect(url_for("dashboard"))
-    return render_template_string(LAYOUT, title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", content=Markup("""
+    return render_template_string(LAYOUT, title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
-        <h1>Welcome back</h1>
-        <p class="subtitle">Log in to manage your campaigns.</p>
+        <h1>{t("auth.welcome_back")}</h1>
+        <p class="subtitle">{t("auth.sign_in_desc")}</p>
         <form method="post">
-          <div class="form-group"><label>Email</label><input name="email" type="email" placeholder="john@company.com" required></div>
-          <div class="form-group"><label>Password</label><input name="password" type="password" required></div>
-          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">Log In</button>
+          <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="john@company.com" required></div>
+          <div class="form-group"><label>{t("auth.password")}</label><input name="password" type="password" required></div>
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.sign_in")}</button>
         </form>
-        <div class="auth-footer">Don't have an account? <a href="/register">Sign up free</a></div>
+        <div class="auth-footer">{t("auth.no_account")} <a href="/register">{t("auth.sign_up_free")}</a></div>
       </div>
     </div>
     """))
@@ -795,6 +801,13 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("index"))
+
+
+@app.route("/set-language/<lang>")
+def set_language(lang):
+    if lang in ("en", "es"):
+        session["lang"] = lang
+    return redirect(request.referrer or url_for("index"))
 
 
 # ---------------------------------------------------------------------------
@@ -865,9 +878,9 @@ def dashboard():
           </div>
         </td></tr>"""
 
-    return _render("Dashboard", """
+    return _render(t("dash.title"), """
     <div class="page-header">
-      <h1>Dashboard</h1>
+      <h1>{{page_title}}</h1>
     </div>
 
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 20px;margin-bottom:20px;font-size:14px;color:var(--text-muted);display:flex;align-items:center;justify-content:space-between;">
@@ -901,28 +914,35 @@ def dashboard():
     {% endif %}
 
     <div class="stats-grid">
-      <div class="stat-card stat-purple"><div class="num" data-stat="total_campaigns">{{g.total_campaigns}}</div><div class="label">Campaigns</div></div>
-      <div class="stat-card stat-green"><div class="num" data-stat="active_campaigns">{{g.active_campaigns}}</div><div class="label">Active</div></div>
-      <div class="stat-card stat-blue"><div class="num" data-stat="total_sent">{{g.total_sent}}</div><div class="label">Emails Sent</div></div>
-      <div class="stat-card stat-purple"><div class="num" data-stat="open_rate_fmt">{{g_open_rate}}</div><div class="label">Open Rate</div></div>
-      <div class="stat-card stat-green"><div class="num" data-stat="total_replied">{{g.total_replied}}</div><div class="label">Replies</div></div>
+      <div class="stat-card stat-purple"><div class="num" data-stat="total_campaigns">{{g.total_campaigns}}</div><div class="label">{{lbl_campaigns}}</div></div>
+      <div class="stat-card stat-green"><div class="num" data-stat="active_campaigns">{{g.active_campaigns}}</div><div class="label">{{lbl_active}}</div></div>
+      <div class="stat-card stat-blue"><div class="num" data-stat="total_sent">{{g.total_sent}}</div><div class="label">{{lbl_emails_sent}}</div></div>
+      <div class="stat-card stat-purple"><div class="num" data-stat="open_rate_fmt">{{g_open_rate}}</div><div class="label">{{lbl_open_rate}}</div></div>
+      <div class="stat-card stat-green"><div class="num" data-stat="total_replied">{{g.total_replied}}</div><div class="label">{{lbl_replies}}</div></div>
       <div class="stat-card stat-yellow"><div class="num" data-stat="reply_rate_fmt">{{g_reply_rate}}</div><div class="label">Reply Rate</div></div>
     </div>
 
     <div class="card">
       <div class="card-header">
-        <h2>Campaigns</h2>
-        <a href="/campaign/new" class="btn btn-primary btn-sm">+ New Campaign</a>
+        <h2>{{lbl_campaigns}}</h2>
+        <a href="/campaign/new" class="btn btn-primary btn-sm">+ {{lbl_new_campaign}}</a>
       </div>
       <table>
-        <thead><tr><th>Name</th><th>Status</th><th>Contacts</th><th>Sent</th><th>Opens</th><th>Replies</th><th></th></tr></thead>
+        <thead><tr><th>{{lbl_name}}</th><th>{{lbl_status}}</th><th>Contacts</th><th>{{lbl_sent}}</th><th>{{lbl_opened}}</th><th>{{lbl_replied}}</th><th></th></tr></thead>
         <tbody>{{rows}}</tbody>
       </table>
     </div>
     """, active_page="dashboard", rows=Markup(rows), g=gstats,
         g_open_rate=f"{gstats['open_rate']:.0%}", g_reply_rate=f"{gstats['reply_rate']:.0%}",
         usage_text=Markup(usage_text), upgrade_cta=Markup(upgrade_cta),
-        has_accounts=has_accounts)
+        has_accounts=has_accounts,
+        page_title=t("dash.title"),
+        lbl_campaigns=t("dash.campaigns"), lbl_active=t("common.active"),
+        lbl_emails_sent=t("dash.emails_sent"), lbl_open_rate=t("dash.open_rate"),
+        lbl_replies=t("dash.replies"), lbl_new_campaign=t("dash.new_campaign"),
+        lbl_name=t("dash.name"), lbl_status=t("dash.status"),
+        lbl_sent=t("dash.sent"), lbl_opened=t("dash.opened"),
+        lbl_replied=t("dash.replied"))
 
 
 # ---------------------------------------------------------------------------
@@ -978,9 +998,9 @@ def settings():
 
     limit_text = "Unlimited" if max_mailboxes == -1 else str(max_mailboxes)
 
-    return _render("Settings", f"""
+    return _render(t("settings.title"), f"""
     <div class="page-header">
-      <h1>Settings</h1>
+      <h1>{t("settings.title")}</h1>
       <p>Manage your account details and email connections.</p>
     </div>
     <div class="card">
@@ -1270,11 +1290,11 @@ def inbox():
           <p>Emails will appear here once your campaigns start sending.</p>
         </div>"""
 
-    return _render("Inbox", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Inbox</div>
+    return _render(t("inbox.title"), f"""
+    <div class="breadcrumb"><a href="/dashboard">{t("dash.title")}</a> / {t("inbox.title")}</div>
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
       <div>
-        <h1>&#128236; Reply Inbox</h1>
+        <h1>&#128236; {t("inbox.title")}</h1>
         <p class="subtitle">Track every email sent, see who opened, and respond to replies.</p>
       </div>
       <button onclick="checkRepliesNow()" class="btn btn-primary btn-sm" id="check-replies-btn">&#128260; Check Replies Now</button>
@@ -1496,10 +1516,10 @@ def ab_tests():
       </div>
     </div>"""
 
-    return _render("A/B Tests", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / A/B Tests</div>
+    return _render(t("ab.title"), f"""
+    <div class="breadcrumb"><a href="/dashboard">{t("dash.title")}</a> / {t("ab.title")}</div>
     <div class="page-header">
-      <h1>&#128202; A/B Test Dashboard</h1>
+      <h1>&#128202; {t("ab.title")}</h1>
       <p class="subtitle">See which subject lines and send times perform best.</p>
     </div>
     {cards}
@@ -1638,10 +1658,10 @@ def calendar_view():
     if not upcoming_html:
         upcoming_html = '<div style="font-size:13px;color:var(--text-muted);padding:12px 0;">No upcoming sends</div>'
 
-    return _render("Calendar", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Calendar</div>
+    return _render(t("calendar.title"), f"""
+    <div class="breadcrumb"><a href="/dashboard">{t("dash.title")}</a> / {t("calendar.title")}</div>
     <div class="page-header">
-      <h1>&#128197; Campaign Calendar</h1>
+      <h1>&#128197; {t("calendar.title")}</h1>
       <p class="subtitle">View all sent and scheduled emails across campaigns.</p>
     </div>
 
@@ -1732,47 +1752,49 @@ def new_campaign():
 
         return redirect(f"/campaign/{camp_id}")
 
-    return _render("New Campaign", """
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / New Campaign</div>
+    return _render(t("campaign.new_title"), """
+    <div class="breadcrumb"><a href="/dashboard">{{lbl_dashboard}}</a> / {{lbl_new_campaign}}</div>
     <div class="page-header">
-      <h1>Create Campaign</h1>
-      <p>Our AI will generate a personalized email sequence for you.</p>
+      <h1>{{lbl_new_campaign}}</h1>
     </div>
     <div class="card">
       <form method="post" data-loading>
         <div class="form-group">
-          <label>Campaign Name</label>
+          <label>{{lbl_name}}</label>
           <input name="name" placeholder="e.g. Q2 Agency Outreach" required>
         </div>
         <div class="form-group">
           <label>Your Business Type</label>
           <input name="business_type" placeholder="e.g. AI-powered email outreach SaaS" required>
-          <p class="form-hint">What does your business do? This helps the AI write relevant emails.</p>
         </div>
         <div class="form-group">
-          <label>Target Audience</label>
-          <textarea name="target_audience" placeholder="e.g. Marketing directors at mid-size e-commerce companies who need to improve their email conversion rates" required></textarea>
-          <p class="form-hint">Be specific &mdash; the more detail, the better the emails.</p>
+          <label>{{lbl_audience}}</label>
+          <textarea name="target_audience" placeholder="e.g. Marketing directors at mid-size e-commerce companies" required></textarea>
         </div>
         <div class="form-group">
-          <label>Tone</label>
+          <label>{{lbl_tone}}</label>
           <select name="tone">
-            <option value="professional">Professional</option>
-            <option value="casual">Casual &amp; Friendly</option>
+            <option value="professional">{{lbl_professional}}</option>
+            <option value="casual">{{lbl_casual}}</option>
             <option value="direct">Direct &amp; Concise</option>
             <option value="humorous">Witty &amp; Humorous</option>
           </select>
         </div>
         <div class="btn-group mt-2">
           <button class="btn btn-primary" type="submit">
-            <span class="btn-text">&#129302; Generate Campaign</span>
+            <span class="btn-text">&#129302; {{lbl_create}}</span>
             <span class="spinner"></span>
           </button>
-          <a href="/dashboard" class="btn btn-outline">Cancel</a>
+          <a href="/dashboard" class="btn btn-outline">{{lbl_cancel}}</a>
         </div>
       </form>
     </div>
-    """, active_page="new_campaign")
+    """, active_page="new_campaign",
+        lbl_dashboard=t("dash.title"), lbl_new_campaign=t("campaign.new_title"),
+        lbl_name=t("campaign.name"), lbl_audience=t("campaign.target_audience"),
+        lbl_tone=t("campaign.tone"), lbl_professional=t("campaign.tone_professional"),
+        lbl_casual=t("campaign.tone_casual"), lbl_create=t("campaign.create_btn"),
+        lbl_cancel=t("common.cancel"))
 
 
 @app.route("/campaign/<int:campaign_id>")
@@ -2117,7 +2139,7 @@ def unsubscribe(contact_id):
     from outreach.db import get_db
     with get_db() as db:
         db.execute("UPDATE contacts SET status = 'unsubscribed' WHERE id = ?", (contact_id,))
-    return render_template_string(LAYOUT, title="Unsubscribed", logged_in=False, messages=[], active_page="", client_name="", content=Markup("""
+    return render_template_string(LAYOUT, title="Unsubscribed", logged_in=False, messages=[], active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup("""
     <div style="text-align:center;padding:80px 24px;">
       <div style="font-size:48px;margin-bottom:16px;opacity:0.4;">&#9993;</div>
       <h1 style="font-size:22px;margin-bottom:8px;">You've been unsubscribed</h1>
@@ -2277,10 +2299,10 @@ def smart_times():
 
     hour_headers = "".join(f'<th style="font-size:10px;color:var(--text-muted);font-weight:500;padding:2px 0;">{h}</th>' for h in range(6, 22))
 
-    return _render("Smart Send Times", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Smart Send Times</div>
+    return _render(t("smart.title"), f"""
+    <div class="breadcrumb"><a href="/dashboard">{t("dash.title")}</a> / {t("smart.title")}</div>
     <div class="page-header">
-      <h1>&#9201; Smart Send Times</h1>
+      <h1>&#9201; {t("smart.title")}</h1>
       <p class="subtitle">AI-analyzed optimal sending windows based on your open rate data.</p>
     </div>
 
@@ -2334,10 +2356,10 @@ def export_page():
     for c in campaigns:
         options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
 
-    return _render("Export Analytics", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Export</div>
+    return _render(t("export.title"), f"""
+    <div class="breadcrumb"><a href="/dashboard">{t("dash.title")}</a> / {t("export.title")}</div>
     <div class="page-header">
-      <h1>&#128202; Export Analytics</h1>
+      <h1>&#128202; {t("export.title")}</h1>
       <p class="subtitle">Download campaign data as CSV for reporting and analysis.</p>
     </div>
 
@@ -2585,11 +2607,11 @@ def mail_hub():
     for s in scheduled[:5]:
         sched_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border-light);font-size:13px;"><div style="font-weight:600;">{_esc(s["to_email"])}</div><div style="color:var(--text-muted);">{_esc(s["subject"][:40])}</div><div style="color:var(--primary);font-size:12px;">&#128340; {s["scheduled_at"][:16]}</div></div>'
 
-    return _render("Mail Hub", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Mail Hub</div>
+    return _render(t("mail.title"), f"""
+    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / {t("mail.title")}</div>
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
       <div>
-        <h1 style="font-size:30px;">&#128233; Mail Hub</h1>
+        <h1 style="font-size:30px;">&#128233; {t("mail.title")}</h1>
         <p class="subtitle" style="font-size:16px;">AI-powered inbox triage — your emails organized by what matters. <span style="font-size:13px;color:var(--text-muted);cursor:pointer;" onclick="document.getElementById('shortcuts-modal').style.display='flex'">Press <kbd style="background:var(--border-light);padding:1px 6px;border-radius:4px;font-size:12px;border:1px solid var(--border);">?</kbd> for shortcuts</span></p>
       </div>
       <div class="btn-group" style="display:flex;align-items:center;gap:12px;">
@@ -3516,8 +3538,8 @@ def mail_hub_detail(mail_id):
     subject = _esc(mail["subject"] or "(no subject)")
     time_str = mail["received_at"][:19] if mail["received_at"] else ""
 
-    return _render("Mail Hub", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / <a href="/mail-hub">Mail Hub</a> / Email</div>
+    return _render(t("mail.title"), f"""
+    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / <a href="/mail-hub">{t("mail.title")}</a> / Email</div>
 
     <div style="display:grid;grid-template-columns:1fr 380px;gap:24px;align-items:start;">
       <!-- Main email view -->
@@ -3991,11 +4013,11 @@ def contacts_page():
           <p>{'Try different filters.' if search or rel_filter or tag_filter else 'Open an email in Mail Hub and click "Save Contact" to start building your contact book.'}</p>
         </div>"""
 
-    return _render("Contacts", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Contacts</div>
+    return _render(t("contacts.title"), f"""
+    <div class="breadcrumb"><a href="/dashboard">{t("dash.title")}</a> / {t("contacts.title")}</div>
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
       <div>
-        <h1 style="font-size:30px;">&#128101; Contacts</h1>
+        <h1 style="font-size:30px;">&#128101; {t("contacts.title")}</h1>
         <p class="subtitle" style="font-size:16px;">Your personal contact book — AI uses this context to write perfect replies.</p>
       </div>
       <div class="btn-group">
@@ -4400,19 +4422,19 @@ def billing_page():
 
     status_badge = {"active": "badge-green", "past_due": "badge-yellow", "canceled": "badge-red"}.get(sub.get("status", "active"), "badge-gray")
 
-    return _render("Billing", f"""
+    return _render(t("billing.title"), f"""
     <div class="page-header">
-      <h1>&#128179; Billing & Plan</h1>
+      <h1>&#128179; {t("billing.title")}</h1>
     </div>
 
     <div class="card" style="margin-bottom:24px;">
-      <div class="card-header"><h2>Current Usage (This Month)</h2><span class="badge {status_badge}">{sub.get('status', 'active').replace('_', ' ').title()}</span></div>
+      <div class="card-header"><h2>{t("billing.current_usage")}</h2><span class="badge {status_badge}">{sub.get('status', 'active').replace('_', ' ').title()}</span></div>
       <div style="padding:20px;">
         {usage_html}
       </div>
     </div>
 
-    <h2 style="margin-bottom:16px;">Choose Your Plan</h2>
+    <h2 style="margin-bottom:16px;">{t("billing.choose_plan")}</h2>
     <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:32px;">
       {cards}
     </div>
@@ -4634,17 +4656,18 @@ def pricing_page():
             <ul style="text-align:left;list-style:none;padding:0;margin:20px 0;">
               {feat_html}
             </ul>
-            <a href="/register" class="btn btn-primary btn-sm" style="width:100%;justify-content:center;">{'Start Free' if name == 'Free' else 'Get Started'}</a>
+            <a href="/register" class="btn btn-primary btn-sm" style="width:100%;justify-content:center;">{t("landing.start_free") if name == 'Free' else t("nav.get_started")}</a>
           </div>
         </div>"""
 
     return render_template_string(LAYOUT, title="Pricing", logged_in=_logged_in(),
         messages=[], active_page="pricing", client_name=session.get("client_name", ""),
+        nav=t_dict("nav"), lang=session.get("lang", "en"),
         content=Markup(f"""
     <div style="max-width:1200px;margin:0 auto;padding:40px 20px;">
       <div style="text-align:center;margin-bottom:40px;">
-        <h1 style="font-size:36px;margin-bottom:8px;">Simple, transparent pricing</h1>
-        <p style="color:var(--text-muted);font-size:18px;">Start free. Upgrade when you need more power.</p>
+        <h1 style="font-size:36px;margin-bottom:8px;">{t("pricing.title")}</h1>
+        <p style="color:var(--text-muted);font-size:18px;">{t("pricing.subtitle")}</p>
       </div>
       <div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:center;">
         {cards}
