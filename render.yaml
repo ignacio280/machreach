@@ -7,6 +7,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.13.12"
+      - key: DATABASE_PATH
+        value: /data/outreach.db
 
   - type: worker
     name: machreach-worker
