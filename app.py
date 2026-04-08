@@ -43,6 +43,17 @@ from outreach.db import (
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
+# ── Startup diagnostic — log DB path so we can debug persistence ──
+import logging
+from outreach.config import DATABASE_PATH
+logging.basicConfig(level=logging.INFO)
+_log = logging.getLogger("machreach")
+_log.info(f"DATABASE_PATH = {DATABASE_PATH}")
+_log.info(f"DATABASE_PATH exists = {DATABASE_PATH.exists()}")
+_log.info(f"/data dir exists = {os.path.isdir('/data')}")
+if os.path.isdir('/data'):
+    _log.info(f"/data contents = {os.listdir('/data')}")
+
 # Ensure DB is initialized (for gunicorn and direct run)
 init_db()
 
