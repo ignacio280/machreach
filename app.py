@@ -4594,21 +4594,21 @@ def billing_page():
 
     # Plan cards with PayPal buttons
     plan_order = ["free", "growth", "pro", "unlimited"]
-    plan_labels = {{"free": "Free", "growth": "Growth", "pro": "Pro", "unlimited": "Unlimited"}}
-    plan_prices = {{"free": "$0", "growth": "$8", "pro": "$20", "unlimited": "$40"}}
-    plan_ids = {{"growth": PAYPAL_PLAN_GROWTH, "pro": PAYPAL_PLAN_PRO, "unlimited": PAYPAL_PLAN_UNLIMITED}}
-    plan_features = {{
+    plan_labels = {"free": "Free", "growth": "Growth", "pro": "Pro", "unlimited": "Unlimited"}
+    plan_prices = {"free": "$0", "growth": "$8", "pro": "$20", "unlimited": "$40"}
+    plan_ids = {"growth": PAYPAL_PLAN_GROWTH, "pro": PAYPAL_PLAN_PRO, "unlimited": PAYPAL_PLAN_UNLIMITED}
+    plan_features = {
         "free": ["200 emails/month", "1 mailbox", "2 campaigns", "10 Mail Hub syncs/month", "Basic analytics"],
         "growth": ["2,000 emails/month", "3 mailboxes", "Unlimited campaigns", "Unlimited Mail Hub syncs", "AI email classification", "Reply sentiment analysis"],
         "pro": ["10,000 emails/month", "5 mailboxes", "Unlimited campaigns", "Unlimited Mail Hub syncs", "AI everything", "Priority support", "A/B testing insights"],
         "unlimited": ["Unlimited emails", "Unlimited mailboxes", "Unlimited everything", "AI everything", "Priority support", "CSV export", "All future features"],
-    }}
+    }
 
     cards = ""
     for p in plan_order:
         is_current = (p == plan)
         badge = ' <span class="badge badge-green">Current</span>' if is_current else ""
-        features_html = "".join(f"<li>{{f}}</li>" for f in plan_features[p])
+        features_html = "".join(f"<li>{f}</li>" for f in plan_features[p])
 
         if is_current:
             btn = '<button class="btn btn-outline btn-sm" disabled style="width:100%;justify-content:center;opacity:0.5;">Current Plan</button>'
@@ -4616,22 +4616,22 @@ def billing_page():
             btn = '<form method="post" action="/billing/downgrade"><button class="btn btn-outline btn-sm" style="width:100%;justify-content:center;">Downgrade</button></form>'
         else:
             pp_id = plan_ids.get(p, "")
-            btn = f'<div id="paypal-btn-{{p}}" style="margin-top:8px;"></div>' if pp_id else '<button class="btn btn-outline btn-sm" disabled style="width:100%;">Not available</button>'
+            btn = f'<div id="paypal-btn-{p}" style="margin-top:8px;"></div>' if pp_id else '<button class="btn btn-outline btn-sm" disabled style="width:100%;">Not available</button>'
 
         border = "border:2px solid var(--primary);" if is_current else ""
         cards += f"""
-        <div class="card" style="flex:1;min-width:220px;max-width:280px;{{border}}">
+        <div class="card" style="flex:1;min-width:220px;max-width:280px;{border}">
           <div style="padding:20px;text-align:center;">
-            <h3 style="margin:0;">{{plan_labels[p]}}{{badge}}</h3>
-            <div style="font-size:36px;font-weight:800;margin:12px 0;">{{plan_prices[p]}}<span style="font-size:14px;font-weight:400;color:var(--text-muted);"> USD/mo</span></div>
+            <h3 style="margin:0;">{plan_labels[p]}{badge}</h3>
+            <div style="font-size:36px;font-weight:800;margin:12px 0;">{plan_prices[p]}<span style="font-size:14px;font-weight:400;color:var(--text-muted);"> USD/mo</span></div>
             <ul style="text-align:left;list-style:none;padding:0;margin:16px 0;">
-              {{features_html}}
+              {features_html}
             </ul>
-            {{btn}}
+            {btn}
           </div>
         </div>"""
 
-    status_badge = {{"active": "badge-green", "past_due": "badge-yellow", "canceled": "badge-red"}}.get(sub.get("status", "active"), "badge-gray")
+    status_badge = {"active": "badge-green", "past_due": "badge-yellow", "canceled": "badge-red"}.get(sub.get("status", "active"), "badge-gray")
 
     # PayPal JS SDK script + button renderers
     paypal_script = ""
@@ -4640,55 +4640,55 @@ def billing_page():
         for p_name, p_id in plan_ids.items():
             if p_id and p_name != plan:
                 paypal_buttons_js += f"""
-        if (document.getElementById('paypal-btn-{{p_name}}')) {{
+        if (document.getElementById('paypal-btn-{p_name}')) {{
           paypal.Buttons({{
             style: {{ shape: 'rect', color: 'blue', layout: 'vertical', label: 'subscribe' }},
             createSubscription: function(data, actions) {{
-              return actions.subscription.create({{ plan_id: '{{p_id}}' }});
+              return actions.subscription.create({{ plan_id: '{p_id}' }});
             }},
             onApprove: function(data) {{
               fetch('/billing/activate', {{
                 method: 'POST',
                 headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ subscription_id: data.subscriptionID, plan: '{{p_name}}' }})
+                body: JSON.stringify({{ subscription_id: data.subscriptionID, plan: '{p_name}' }})
               }}).then(function() {{ window.location = '/billing?upgraded=1'; }});
             }},
             onCancel: function() {{ window.location = '/billing?canceled=1'; }},
             onError: function(err) {{ console.error('PayPal error:', err); alert('Payment error. Please try again.'); }}
-          }}).render('#paypal-btn-{{p_name}}');
+          }}).render('#paypal-btn-{p_name}');
         }}
 """
         paypal_script = f"""
-    <script src="https://www.paypal.com/sdk/js?client-id={{PAYPAL_CLIENT_ID}}&vault=true&intent=subscription" data-sdk-integration-source="button-factory"></script>
-    <script>{{paypal_buttons_js}}</script>
+    <script src="https://www.paypal.com/sdk/js?client-id={PAYPAL_CLIENT_ID}&vault=true&intent=subscription" data-sdk-integration-source="button-factory"></script>
+    <script>{paypal_buttons_js}</script>
     """
 
     return _render(t("billing.title"), f"""
     <div class="page-header">
-      <h1>&#128179; {{t("billing.title")}}</h1>
+      <h1>&#128179; {t("billing.title")}</h1>
     </div>
 
     <div class="card" style="margin-bottom:24px;">
-      <div class="card-header"><h2>{{t("billing.current_usage")}}</h2><span class="badge {{status_badge}}">{{sub.get('status', 'active').replace('_', ' ').title()}}</span></div>
+      <div class="card-header"><h2>{t("billing.current_usage")}</h2><span class="badge {status_badge}">{sub.get('status', 'active').replace('_', ' ').title()}</span></div>
       <div style="padding:20px;">
-        {{usage_html}}
+        {usage_html}
       </div>
     </div>
 
-    <h2 style="margin-bottom:16px;">{{t("billing.choose_plan")}}</h2>
+    <h2 style="margin-bottom:16px;">{t("billing.choose_plan")}</h2>
     <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:32px;">
-      {{cards}}
+      {cards}
     </div>
 
-    {{paypal_script}}
+    {paypal_script}
 
     <style>
-      .usage-row {{{{ margin-bottom:16px; }}}}
-      .usage-label {{{{ font-weight:600;font-size:14px; }}}}
-      .usage-val {{{{ float:right;font-size:13px;color:var(--text-muted); }}}}
-      .bar-red {{{{ background:var(--red, #EF4444) !important; }}}}
-      ul li {{{{ padding:6px 0;font-size:14px;color:var(--text-muted);border-bottom:1px solid var(--border); }}}}
-      ul li:last-child {{{{ border-bottom:none; }}}}
+      .usage-row {{ margin-bottom:16px; }}
+      .usage-label {{ font-weight:600;font-size:14px; }}
+      .usage-val {{ float:right;font-size:13px;color:var(--text-muted); }}
+      .bar-red {{ background:var(--red, #EF4444) !important; }}
+      ul li {{ padding:6px 0;font-size:14px;color:var(--text-muted);border-bottom:1px solid var(--border); }}
+      ul li:last-child {{ border-bottom:none; }}
     </style>
     """, active_page="billing")
 
@@ -4697,22 +4697,22 @@ def billing_page():
 def billing_activate():
     """Activate a PayPal subscription after user approval."""
     if not _logged_in():
-        return jsonify({{"error": "unauthorized"}}), 401
+        return jsonify({"error": "unauthorized"}), 401
 
-    data = request.get_json() or {{}}
+    data = request.get_json() or {}
     pp_sub_id = data.get("subscription_id", "")
     plan = data.get("plan", "")
 
     if not pp_sub_id or plan not in ("growth", "pro", "unlimited"):
-        return jsonify({{"error": "invalid"}}), 400
+        return jsonify({"error": "invalid"}), 400
 
     from outreach.db import update_subscription
     update_subscription(session["client_id"],
                         plan=plan,
                         stripe_subscription_id=pp_sub_id,
                         status="active")
-    print(f"[PAYPAL] Client {{session['client_id']}} upgraded to {{plan}} (sub={{pp_sub_id}})")
-    return jsonify({{"ok": True}})
+    print(f"[PAYPAL] Client {session['client_id']} upgraded to {plan} (sub={pp_sub_id})")
+    return jsonify({"ok": True})
 
 
 @app.route("/billing/downgrade", methods=["POST"])
@@ -4732,17 +4732,17 @@ def billing_downgrade():
             import requests as rq
             base = "https://api-m.paypal.com" if PAYPAL_MODE == "live" else "https://api-m.sandbox.paypal.com"
             # Get access token
-            auth_resp = rq.post(f"{{base}}/v1/oauth2/token",
+            auth_resp = rq.post(f"{base}/v1/oauth2/token",
                                 auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
-                                data={{"grant_type": "client_credentials"}},
-                                headers={{"Accept": "application/json"}})
+                                data={"grant_type": "client_credentials"},
+                                headers={"Accept": "application/json"})
             token = auth_resp.json().get("access_token", "")
             if token:
-                rq.post(f"{{base}}/v1/billing/subscriptions/{{pp_sub_id}}/cancel",
-                        headers={{"Authorization": f"Bearer {{token}}", "Content-Type": "application/json"}},
-                        json={{"reason": "Customer requested downgrade"}})
+                rq.post(f"{base}/v1/billing/subscriptions/{pp_sub_id}/cancel",
+                        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                        json={"reason": "Customer requested downgrade"})
         except Exception as e:
-            print(f"[PAYPAL] Cancel error: {{e}}")
+            print(f"[PAYPAL] Cancel error: {e}")
 
     update_subscription(session["client_id"], plan="free", stripe_subscription_id="", status="active")
     flash(("success", "Downgraded to Free plan."))
@@ -4765,15 +4765,15 @@ def paypal_webhook():
         try:
             import requests as rq
             base = "https://api-m.paypal.com" if PAYPAL_MODE == "live" else "https://api-m.sandbox.paypal.com"
-            auth_resp = rq.post(f"{{base}}/v1/oauth2/token",
+            auth_resp = rq.post(f"{base}/v1/oauth2/token",
                                 auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
-                                data={{"grant_type": "client_credentials"}},
-                                headers={{"Accept": "application/json"}})
+                                data={"grant_type": "client_credentials"},
+                                headers={"Accept": "application/json"})
             token = auth_resp.json().get("access_token", "")
             if token:
-                verify_resp = rq.post(f"{{base}}/v1/notifications/verify-webhook-signature",
-                    headers={{"Authorization": f"Bearer {{token}}", "Content-Type": "application/json"}},
-                    json={{
+                verify_resp = rq.post(f"{base}/v1/notifications/verify-webhook-signature",
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    json={
                         "auth_algo": request.headers.get("PAYPAL-AUTH-ALGO", ""),
                         "cert_url": request.headers.get("PAYPAL-CERT-URL", ""),
                         "transmission_id": request.headers.get("PAYPAL-TRANSMISSION-ID", ""),
@@ -4781,15 +4781,15 @@ def paypal_webhook():
                         "transmission_time": request.headers.get("PAYPAL-TRANSMISSION-TIME", ""),
                         "webhook_id": PAYPAL_WEBHOOK_ID,
                         "webhook_event": body,
-                    }})
+                    })
                 if verify_resp.json().get("verification_status") != "SUCCESS":
                     print("[PAYPAL] Webhook signature verification failed")
                     return "Invalid signature", 400
         except Exception as e:
-            print(f"[PAYPAL] Webhook verify error: {{e}}")
+            print(f"[PAYPAL] Webhook verify error: {e}")
 
     event_type = body.get("event_type", "")
-    resource = body.get("resource", {{}})
+    resource = body.get("resource", {})
     pp_sub_id = resource.get("id", "") or resource.get("billing_agreement_id", "")
 
     from outreach.db import update_subscription, get_subscription_by_stripe_sub
@@ -4798,27 +4798,27 @@ def paypal_webhook():
         sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
         if sub_rec:
             update_subscription(sub_rec["client_id"], status="active")
-            print(f"[PAYPAL] Subscription {{pp_sub_id}} activated")
+            print(f"[PAYPAL] Subscription {pp_sub_id} activated")
 
     elif event_type == "BILLING.SUBSCRIPTION.CANCELLED":
         sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
         if sub_rec:
             update_subscription(sub_rec["client_id"], plan="free",
                                 stripe_subscription_id="", status="active")
-            print(f"[PAYPAL] Client {{sub_rec['client_id']}} subscription cancelled -> free")
+            print(f"[PAYPAL] Client {sub_rec['client_id']} subscription cancelled -> free")
 
     elif event_type == "BILLING.SUBSCRIPTION.SUSPENDED":
         sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
         if sub_rec:
             update_subscription(sub_rec["client_id"], status="past_due")
-            print(f"[PAYPAL] Subscription {{pp_sub_id}} suspended")
+            print(f"[PAYPAL] Subscription {pp_sub_id} suspended")
 
     elif event_type == "BILLING.SUBSCRIPTION.EXPIRED":
         sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
         if sub_rec:
             update_subscription(sub_rec["client_id"], plan="free",
                                 stripe_subscription_id="", status="active")
-            print(f"[PAYPAL] Subscription {{pp_sub_id}} expired -> free")
+            print(f"[PAYPAL] Subscription {pp_sub_id} expired -> free")
 
     elif event_type == "PAYMENT.SALE.COMPLETED":
         pp_sub_id = resource.get("billing_agreement_id", "")
@@ -4826,7 +4826,7 @@ def paypal_webhook():
             sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
             if sub_rec and sub_rec.get("status") == "past_due":
                 update_subscription(sub_rec["client_id"], status="active")
-                print(f"[PAYPAL] Payment received, reactivated client {{sub_rec['client_id']}}")
+                print(f"[PAYPAL] Payment received, reactivated client {sub_rec['client_id']}")
 
     return "ok", 200
 
