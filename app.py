@@ -619,6 +619,14 @@ LAYOUT = """<!DOCTYPE html>
     {% endfor %}
     {{content|safe}}
   </div>
+  <footer style="border-top:1px solid var(--border);margin-top:48px;padding:24px 48px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-muted);flex-wrap:wrap;gap:12px;">
+    <span>&copy; 2026 MachReach. All rights reserved.</span>
+    <div style="display:flex;gap:18px;">
+      <a href="/privacy" style="color:var(--text-muted);text-decoration:none;">Privacy Policy</a>
+      <a href="/terms" style="color:var(--text-muted);text-decoration:none;">Terms of Service</a>
+      <a href="mailto:support@machreach.com" style="color:var(--text-muted);text-decoration:none;">Contact</a>
+    </div>
+  </footer>
   <script>
     // Loading button handler
     document.querySelectorAll('form[data-loading]').forEach(form => {
@@ -899,6 +907,7 @@ def register():
           <div class="form-group"><label>{t("auth.password")}</label><input name="password" type="password" placeholder="At least 6 characters" required minlength="6"></div>
           <div class="form-group"><label>{t("auth.business_name")} <span style="font-weight:400;text-transform:none;color:var(--text-muted);">({t("auth.optional")})</span></label><input name="business" placeholder="Acme Inc."></div>
           <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.create_btn")}</button>
+          <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:12px;line-height:1.6;">By creating an account, you agree to our <a href="/terms" style="color:var(--primary);">Terms of Service</a> and <a href="/privacy" style="color:var(--primary);">Privacy Policy</a>.</p>
         </form>
         <div class="auth-footer">{t("auth.have_account")} <a href="/login">{t("auth.log_in")}</a></div>
       </div>
@@ -5340,6 +5349,158 @@ def pricing_page():
       ul li:last-child {{ border-bottom:none; }}
     </style>
     """))
+
+
+# ---------------------------------------------------------------------------
+# Privacy Policy & Terms of Service
+# ---------------------------------------------------------------------------
+
+@app.route("/privacy")
+def privacy_page():
+    return _render("Privacy Policy", Markup("""
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
+      <h1 style="font-size:32px;margin-bottom:8px;">Privacy Policy</h1>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 9, 2026</p>
+
+      <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Information We Collect</h2>
+        <p><strong>Account Information:</strong> When you register, we collect your name, email address, and password (stored with bcrypt encryption).</p>
+        <p><strong>Email Account Credentials:</strong> When you connect an email account, we store your email address and app password. App passwords are encrypted at rest using AES-256 (Fernet) encryption and are never stored in plaintext.</p>
+        <p><strong>Email Content:</strong> We access your email via IMAP solely to sync your inbox for the Mail Hub feature and to detect replies to your outreach campaigns. We do not read, analyze, or sell your email content for advertising purposes.</p>
+        <p><strong>Usage Data:</strong> We collect information about how you use MachReach, including campaigns created, emails sent, and feature usage, to improve our service.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. How We Use Your Information</h2>
+        <ul style="padding-left:20px;">
+          <li>To provide and maintain the MachReach service</li>
+          <li>To send outreach emails on your behalf through your connected email accounts</li>
+          <li>To sync and classify your inbox in Mail Hub</li>
+          <li>To track email opens, replies, and campaign performance</li>
+          <li>To process payments and manage your subscription</li>
+          <li>To send you service-related notifications (password resets, security alerts)</li>
+        </ul>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Data Security</h2>
+        <p>We take security seriously:</p>
+        <ul style="padding-left:20px;">
+          <li>Passwords are hashed with <strong>bcrypt</strong> (cost factor 12)</li>
+          <li>Email credentials are encrypted with <strong>AES-256</strong> at rest</li>
+          <li>All connections use <strong>HTTPS/TLS</strong></li>
+          <li>CSRF protection on all forms and API endpoints</li>
+          <li>Rate limiting on authentication endpoints</li>
+          <li>Security headers (HSTS, X-Frame-Options, etc.)</li>
+        </ul>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Data Sharing</h2>
+        <p>We do <strong>not</strong> sell, rent, or share your personal information with third parties, except:</p>
+        <ul style="padding-left:20px;">
+          <li><strong>OpenAI:</strong> Email subjects and snippets may be sent to OpenAI's API for AI-powered classification and reply generation. No full email bodies are sent unless you use AI compose features.</li>
+          <li><strong>PayPal:</strong> Payment information is processed by PayPal. We do not store credit card numbers.</li>
+          <li><strong>Legal requirements:</strong> We may disclose information if required by law or to protect our rights.</li>
+        </ul>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Data Retention</h2>
+        <p>Your data is retained as long as your account is active. When you delete your account, all associated data (campaigns, contacts, email accounts, synced emails) is permanently deleted within 30 days.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. Your Rights</h2>
+        <p>You can:</p>
+        <ul style="padding-left:20px;">
+          <li>Access and export your data at any time</li>
+          <li>Update or correct your personal information in Settings</li>
+          <li>Delete your account and all associated data</li>
+          <li>Disconnect email accounts at any time (credentials are immediately deleted)</li>
+        </ul>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. Cookies</h2>
+        <p>We use session cookies for authentication only. We do not use tracking cookies or third-party analytics. Cookies are set with <strong>HttpOnly</strong> and <strong>SameSite=Lax</strong> flags for security.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. Changes to This Policy</h2>
+        <p>We may update this policy from time to time. We will notify you of significant changes via email or an in-app notice.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">9. Contact</h2>
+        <p>If you have questions about this Privacy Policy, contact us at <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+      </div>
+    </div>
+    """), active_page="privacy")
+
+
+@app.route("/terms")
+def terms_page():
+    return _render("Terms of Service", Markup("""
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
+      <h1 style="font-size:32px;margin-bottom:8px;">Terms of Service</h1>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 9, 2026</p>
+
+      <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Acceptance of Terms</h2>
+        <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. Description of Service</h2>
+        <p>MachReach is an email outreach platform that allows you to create and manage email campaigns, sync your inbox, track engagement, and use AI-assisted features. The service connects to your email accounts via IMAP/SMTP using credentials you provide.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Account Responsibilities</h2>
+        <ul style="padding-left:20px;">
+          <li>You must provide accurate information when registering</li>
+          <li>You are responsible for maintaining the security of your account credentials</li>
+          <li>You must not share your account with others</li>
+          <li>You must be at least 18 years old to use MachReach</li>
+          <li>You are responsible for all activity under your account</li>
+        </ul>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Acceptable Use</h2>
+        <p>You agree <strong>not</strong> to use MachReach to:</p>
+        <ul style="padding-left:20px;">
+          <li>Send spam, unsolicited bulk email, or messages that violate CAN-SPAM, GDPR, or any applicable anti-spam laws</li>
+          <li>Send emails containing malware, phishing links, or fraudulent content</li>
+          <li>Harass, threaten, or abuse recipients</li>
+          <li>Impersonate other individuals or organizations</li>
+          <li>Violate any applicable local, national, or international laws</li>
+          <li>Scrape or harvest email addresses without consent</li>
+          <li>Exceed reasonable usage limits or abuse shared infrastructure</li>
+        </ul>
+        <p>We reserve the right to suspend or terminate accounts that violate these terms without notice.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Email Sending & Compliance</h2>
+        <p>You are solely responsible for the content of emails sent through MachReach and for complying with all applicable email regulations (CAN-SPAM Act, GDPR, CASL, etc.). This includes:</p>
+        <ul style="padding-left:20px;">
+          <li>Including a valid physical address in commercial emails</li>
+          <li>Providing a clear unsubscribe mechanism</li>
+          <li>Honoring opt-out requests promptly</li>
+          <li>Having proper consent or legitimate interest for contacting recipients</li>
+        </ul>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. Subscriptions & Billing</h2>
+        <ul style="padding-left:20px;">
+          <li>Free plans are available with limited features</li>
+          <li>Paid plans are billed monthly through PayPal</li>
+          <li>You can cancel your subscription at any time; access continues until the end of the billing period</li>
+          <li>Refunds are handled on a case-by-case basis</li>
+          <li>We reserve the right to change pricing with 30 days' notice</li>
+        </ul>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. AI Features</h2>
+        <p>MachReach uses AI (powered by OpenAI) for email classification, reply generation, and other features. AI-generated content is provided as suggestions — you are responsible for reviewing and approving all content before sending.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. Limitation of Liability</h2>
+        <p>MachReach is provided "as is" without warranties of any kind. We are not liable for:</p>
+        <ul style="padding-left:20px;">
+          <li>Email deliverability issues (bounces, spam filtering, etc.)</li>
+          <li>Consequences of emails sent through the platform</li>
+          <li>Data loss due to circumstances beyond our control</li>
+          <li>Service interruptions or downtime</li>
+          <li>Any indirect, incidental, or consequential damages</li>
+        </ul>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">9. Account Termination</h2>
+        <p>You may delete your account at any time from Settings. We may suspend or terminate accounts that violate these terms. Upon termination, your data will be permanently deleted within 30 days.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">10. Changes to Terms</h2>
+        <p>We may update these terms from time to time. Continued use of MachReach after changes constitutes acceptance of the updated terms. We will notify you of significant changes via email.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">11. Contact</h2>
+        <p>Questions about these terms? Contact us at <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+      </div>
+    </div>
+    """), active_page="terms")
 
 
 # ---------------------------------------------------------------------------
