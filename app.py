@@ -5616,6 +5616,7 @@ def contacts_page():
     for c in contacts:
         initials = (c["name"][:1] if c["name"] else c["email"][:1]).upper()
         rel_badge = f'<span class="badge badge-blue" style="font-size:10px;">{_esc(c["relationship"].title())}</span>' if c.get("relationship") else ""
+        lang_badge = f'<span class="badge badge-gray" style="font-size:9px;">&#127760; {_esc(c["language"])}</span>' if c.get("language") else ""
         tags_html = ""
         if c.get("tags"):
             for tg in c["tags"].split(","):
@@ -5636,6 +5637,7 @@ def contacts_page():
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               <span style="font-weight:600;font-size:16px;">{_esc(c['name'] or c['email'])}</span>
               {rel_badge}
+              {lang_badge}
             </div>
             <div style="font-size:13px;color:var(--text-muted);margin-top:2px;">{_esc(c['email'])}</div>
             {'<div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">' + _esc(c['company']) + (' — ' + _esc(c['role']) if c.get('role') else '') + '</div>' if c.get('company') else ''}
@@ -5712,6 +5714,25 @@ def contacts_page():
               </select>
             </div>
             <div class="form-group"><label>Tags</label><input name="tags" placeholder="comma,separated" style="font-size:14px;"></div>
+            <div class="form-group"><label>Language</label>
+              <select name="language" style="font-size:14px;">
+                <option value="">Select...</option>
+                <option value="English">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="Portuguese">Portuguese</option>
+                <option value="German">German</option>
+                <option value="Italian">Italian</option>
+                <option value="Dutch">Dutch</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Chinese">Chinese</option>
+                <option value="Korean">Korean</option>
+                <option value="Arabic">Arabic</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Russian">Russian</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
           </div>
           <div class="form-group" style="margin-top:8px;"><label>Notes</label><textarea name="notes" rows="3" placeholder="Who are they? What do they care about?" style="font-size:14px;"></textarea></div>
           <div class="form-group"><label>Personality / Communication Style</label><textarea name="personality" rows="2" placeholder="e.g. 'Direct and concise, prefers bullet points, casual tone'" style="font-size:14px;"></textarea></div>
@@ -5793,6 +5814,7 @@ def contacts_add():
         notes=request.form.get("notes", "").strip(),
         personality=request.form.get("personality", "").strip(),
         tags=request.form.get("tags", "").strip(),
+        language=request.form.get("language", "").strip(),
     )
     session.setdefault("_flashes", []).append(("success", f"Contact {email} saved."))
     return redirect(url_for("contacts_page"))
@@ -5891,6 +5913,10 @@ def contact_detail(contact_id):
                 <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Last Contacted</div>
                 <div style="font-size:15px;">{contact['last_contacted'][:10] if contact.get('last_contacted') else 'Never'}</div>
               </div>
+              <div>
+                <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Language</div>
+                <div style="font-size:15px;">{_esc(contact.get('language','')) or '<span style="color:var(--text-muted);">Not set</span>'}</div>
+              </div>
             </div>
 
             {'<div style="margin-top:20px;"><div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Notes</div><div style="font-size:14px;line-height:1.6;color:var(--text-secondary);background:var(--bg);padding:14px;border-radius:var(--radius-xs);">' + _esc(contact['notes']).replace(chr(10), '<br>') + '</div></div>' if contact.get('notes') else ''}
@@ -5929,6 +5955,25 @@ def contact_detail(contact_id):
               </select>
             </div>
             <div class="form-group"><label>Tags</label><input name="tags" value="{_esc(contact['tags'])}" placeholder="comma,separated" style="font-size:14px;"></div>
+            <div class="form-group"><label>Language</label>
+              <select name="language" style="font-size:14px;">
+                <option value="">Select...</option>
+                <option value="English" {'selected' if contact.get('language')=='English' else ''}>English</option>
+                <option value="Spanish" {'selected' if contact.get('language')=='Spanish' else ''}>Spanish</option>
+                <option value="French" {'selected' if contact.get('language')=='French' else ''}>French</option>
+                <option value="Portuguese" {'selected' if contact.get('language')=='Portuguese' else ''}>Portuguese</option>
+                <option value="German" {'selected' if contact.get('language')=='German' else ''}>German</option>
+                <option value="Italian" {'selected' if contact.get('language')=='Italian' else ''}>Italian</option>
+                <option value="Dutch" {'selected' if contact.get('language')=='Dutch' else ''}>Dutch</option>
+                <option value="Japanese" {'selected' if contact.get('language')=='Japanese' else ''}>Japanese</option>
+                <option value="Chinese" {'selected' if contact.get('language')=='Chinese' else ''}>Chinese</option>
+                <option value="Korean" {'selected' if contact.get('language')=='Korean' else ''}>Korean</option>
+                <option value="Arabic" {'selected' if contact.get('language')=='Arabic' else ''}>Arabic</option>
+                <option value="Hindi" {'selected' if contact.get('language')=='Hindi' else ''}>Hindi</option>
+                <option value="Russian" {'selected' if contact.get('language')=='Russian' else ''}>Russian</option>
+                <option value="Other" {'selected' if contact.get('language')=='Other' else ''}>Other</option>
+              </select>
+            </div>
             <div class="form-group"><label>Notes</label><textarea name="notes" rows="3" style="font-size:14px;">{_esc(contact['notes'])}</textarea></div>
             <div class="form-group"><label>Personality / Communication Style</label><textarea name="personality" rows="2" style="font-size:14px;" placeholder="e.g. 'Direct, prefers bullet points, casual tone'">{_esc(contact['personality'])}</textarea></div>
             <button type="submit" class="btn btn-primary" style="width:100%;font-size:14px;">Save Changes</button>
@@ -5996,6 +6041,7 @@ def contacts_book_edit(contact_id):
         notes=request.form.get("notes", "").strip(),
         personality=request.form.get("personality", "").strip(),
         tags=request.form.get("tags", "").strip(),
+        language=request.form.get("language", "").strip(),
     )
     session.setdefault("_flashes", []).append(("success", "Contact updated."))
     return redirect(url_for("contact_detail", contact_id=contact_id))

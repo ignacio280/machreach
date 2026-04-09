@@ -348,6 +348,11 @@ def init_db():
             db.execute("ALTER TABLE clients ADD COLUMN mail_exclusions TEXT DEFAULT ''")
         except Exception:
             pass
+        # Migration: add language column to contacts_book
+        try:
+            db.execute("ALTER TABLE contacts_book ADD COLUMN language TEXT DEFAULT ''")
+        except Exception:
+            pass
     print("Database initialized.")
 
 def create_client(name: str, email: str, password_hash: str, business: str = "") -> int:
@@ -1297,11 +1302,11 @@ def get_mail_item(mail_id: int, client_id: int) -> dict | None:
 
 def upsert_contact(client_id: int, email: str, name: str = "", company: str = "",
                    role: str = "", relationship: str = "", notes: str = "",
-                   personality: str = "", tags: str = "") -> int:
+                   personality: str = "", tags: str = "", language: str = "") -> int:
     with get_db() as db:
         cur = db.execute("""
-            INSERT INTO contacts_book (client_id, email, name, company, role, relationship, notes, personality, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO contacts_book (client_id, email, name, company, role, relationship, notes, personality, tags, language)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(client_id, email) DO UPDATE SET
                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE contacts_book.name END,
                 company = CASE WHEN excluded.company != '' THEN excluded.company ELSE contacts_book.company END,
@@ -1309,8 +1314,9 @@ def upsert_contact(client_id: int, email: str, name: str = "", company: str = ""
                 relationship = CASE WHEN excluded.relationship != '' THEN excluded.relationship ELSE contacts_book.relationship END,
                 notes = CASE WHEN excluded.notes != '' THEN excluded.notes ELSE contacts_book.notes END,
                 personality = CASE WHEN excluded.personality != '' THEN excluded.personality ELSE contacts_book.personality END,
-                tags = CASE WHEN excluded.tags != '' THEN excluded.tags ELSE contacts_book.tags END
-        """, (client_id, email, name, company, role, relationship, notes, personality, tags))
+                tags = CASE WHEN excluded.tags != '' THEN excluded.tags ELSE contacts_book.tags END,
+                language = CASE WHEN excluded.language != '' THEN excluded.language ELSE contacts_book.language END
+        """, (client_id, email, name, company, role, relationship, notes, personality, tags, language))
         return cur.lastrowid
 
 
@@ -1351,7 +1357,7 @@ def get_contact_by_email(client_id: int, email: str) -> dict | None:
 
 def update_contact(contact_id: int, client_id: int, **fields) -> bool:
     allowed = {"name", "company", "role", "relationship", "notes", "personality",
-               "tags", "last_contacted"}
+               "tags", "last_contacted", "language"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return False
