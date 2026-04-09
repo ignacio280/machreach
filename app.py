@@ -3435,7 +3435,7 @@ def import_crm_contacts(campaign_id):
                 "email": c["email"],
                 "company": c.get("company", ""),
                 "role": c.get("role", ""),
-                "language": "en",
+                "language": c.get("language", "") or "en",
             })
     if to_add:
         count = add_contacts(campaign_id, to_add)
