@@ -3248,13 +3248,13 @@ def view_campaign(campaign_id):
         if (!contacts.length) { list.innerHTML = '<p class="text-muted text-xs">No contacts found.</p>'; return; }
         var html = '<div style="display:flex;flex-direction:column;gap:6px;">';
         contacts.forEach(function(c) {
-          html += '<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-xs);cursor:pointer;border:1px solid var(--border-light);">' +
-            '<input type="checkbox" class="crm-cb" value="' + c.id + '">' +
-            '<div style="flex:1;min-width:0;">' +
-              '<div style="font-weight:600;font-size:13px;">' + (c.name||c.email) + '</div>' +
-              '<div style="font-size:11px;color:var(--text-muted);">' + c.email + (c.company ? ' &bull; ' + c.company : '') + (c.role ? ' &bull; ' + c.role : '') + '</div>' +
+          html += '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-xs);cursor:pointer;border:1px solid var(--border-light);transition:background .15s;">' +
+            '<input type="checkbox" class="crm-cb" value="' + c.id + '" style="width:16px;height:16px;flex-shrink:0;accent-color:var(--primary);cursor:pointer;">' +
+            '<div style="flex:1;min-width:0;overflow:hidden;">' +
+              '<div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (c.name||c.email) + '</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + c.email + (c.company ? ' &bull; ' + c.company : '') + (c.role ? ' &bull; ' + c.role : '') + '</div>' +
             '</div>' +
-            (c.tags ? '<span class="badge badge-gray" style="font-size:10px;">' + c.tags + '</span>' : '') +
+            (c.tags ? '<span class="badge badge-gray" style="font-size:10px;flex-shrink:0;">' + c.tags + '</span>' : '') +
           '</label>';
         });
         html += '</div>';
