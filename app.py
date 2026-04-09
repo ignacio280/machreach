@@ -1456,16 +1456,6 @@ def settings():
     </div>
 
     <div class="card">
-      <div class="card-header"><h2>Sending Configuration</h2></div>
-      <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;">
-        <p><strong>Sender Name:</strong> {{{{sender_name}}}}</p>
-        <p><strong>Daily Limit:</strong> {{{{daily_limit}}}} emails/day (based on your plan)</p>
-        <p><strong>Delay Between Emails:</strong> 60 seconds</p>
-        <p class="text-xs text-muted mt-2">Daily limits scale with your plan: Free=50, Growth=200, Pro=500, Unlimited=∞</p>
-      </div>
-    </div>
-
-    <div class="card">
       <div class="card-header">
         <h2>&#127760; Custom Domain Sending</h2>
       </div>
@@ -1531,6 +1521,16 @@ def settings():
           </div>
         </div>
       </details>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Sending Configuration</h2></div>
+      <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;">
+        <p><strong>Sender Name:</strong> {{{{sender_name}}}}</p>
+        <p><strong>Daily Limit:</strong> {{{{daily_limit}}}} emails/day (based on your plan)</p>
+        <p><strong>Delay Between Emails:</strong> 60 seconds</p>
+        <p class="text-xs text-muted mt-2">Daily limits scale with your plan: Free=50, Growth=200, Pro=500, Unlimited=∞</p>
+      </div>
     </div>
 
     <div class="card">
