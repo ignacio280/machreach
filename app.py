@@ -3170,6 +3170,20 @@ def view_campaign(campaign_id):
       <div class="stat-card stat-purple"><div class="num" data-stat="camp_reply_rate_fmt">{{reply_rate_fmt}}</div><div class="label">Reply Rate</div></div>
     </div>
 
+    <!-- Sending progress banner -->
+    <div id="sending-banner" style="display:none;background:linear-gradient(90deg,var(--primary-light),#EDE9FE);border:1px solid var(--primary);border-radius:var(--radius-xs);padding:14px 20px;margin-bottom:16px;align-items:center;gap:14px;">
+      <div class="send-spinner" style="width:20px;height:20px;border:3px solid var(--primary);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:14px;color:var(--primary);" id="sending-label">Sending emails...</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="sending-detail"></div>
+      </div>
+      <div style="min-width:80px;height:6px;background:var(--border-light);border-radius:3px;overflow:hidden;">
+        <div id="sending-progress-bar" style="height:100%;background:var(--primary);border-radius:3px;width:0%;transition:width 0.4s ease;"></div>
+      </div>
+      <span id="sending-pct" style="font-size:13px;font-weight:700;color:var(--primary);min-width:40px;text-align:right;">0%</span>
+    </div>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
     <div class="tabs">
       <a class="tab {% if tab == 'overview' %}active{% endif %}" href="?tab=overview">Sequence <span class="tab-count">{{num_sequences}}</span></a>
       <a class="tab {% if tab == 'ab' %}active{% endif %}" href="?tab=ab">A/B Results</a>
@@ -3314,11 +3328,56 @@ def view_campaign(campaign_id):
         {{activity_html}}
       </div>
     {% endif %}
+
+    {% if camp_status == 'active' %}
+    <script>
+    (function pollCampaignStats() {
+      fetch('/api/campaign/{{camp_id}}/live-stats')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var banner = document.getElementById('sending-banner');
+          if (d.sending) {
+            banner.style.display = 'flex';
+            var pct = d.batch_total ? Math.round(d.batch_sent / d.batch_total * 100) : 0;
+            document.getElementById('sending-label').textContent = 'Sending emails\u2026 (' + d.batch_sent + '/' + d.batch_total + ')';
+            document.getElementById('sending-detail').textContent = d.pending + ' pending \u00b7 ' + d.sent + ' sent \u00b7 ' + d.replied + ' replied';
+            document.getElementById('sending-progress-bar').style.width = pct + '%';
+            document.getElementById('sending-pct').textContent = pct + '%';
+          } else {
+            banner.style.display = 'none';
+          }
+          // Update stat cards
+          var el;
+          el = document.querySelector('[data-stat="camp_emails_sent"]'); if (el) el.textContent = d.sent;
+          el = document.querySelector('[data-stat="camp_total_contacts"]'); if (el) el.textContent = d.total;
+          // Update progress bar
+          var progPct = d.total ? Math.min(d.sent / d.total * 100, 100) : 0;
+          var progBar = document.querySelector('.bar-purple');
+          if (progBar) progBar.style.width = progPct + '%';
+          // Update contact badges in header
+          var badges = document.querySelectorAll('.card-header .badge');
+          badges.forEach(function(b) {
+            if (b.classList.contains('badge-gray') && b.textContent.indexOf('pending') >= 0) b.textContent = d.pending + ' pending';
+            if (b.classList.contains('badge-blue') && b.textContent.indexOf('sent') >= 0) b.textContent = d.sent + ' sent';
+            if (b.classList.contains('badge-green') && b.textContent.indexOf('replied') >= 0) b.textContent = d.replied + ' replied';
+          });
+          // Keep polling if there are still pending or actively sending
+          if (d.pending > 0 || d.sending) {
+            setTimeout(pollCampaignStats, 2500);
+          } else if (d.sent > 0) {
+            // Final refresh to show updated activity/contacts
+            setTimeout(function() { location.reload(); }, 1500);
+          }
+        })
+        .catch(function() { setTimeout(pollCampaignStats, 5000); });
+    })();
+    </script>
+    {% endif %}
     """, camp_name=_esc(camp["name"]), status_badge=Markup(status_badge), actions=Markup(actions),
         stats=stats, seq_html=Markup(seq_html), contacts_html=Markup(contacts_html),
         activity_html=Markup(activity_html), ab_html=Markup(ab_html),
         schedule_html=Markup(schedule_html),
-        camp_id=campaign_id, tab=tab,
+        camp_id=campaign_id, tab=tab, camp_status=camp["status"],
         pct_fmt=f"{min(pct,100):.0f}", num_sequences=len(sequences), num_sent=len(sent_emails),
         pending=pending_count, sent_c=sent_count, replied=replied_count,
         open_rate_fmt=f"{stats['open_rate']:.0%}", reply_rate_fmt=f"{stats['reply_rate']:.0%}")
@@ -3489,15 +3548,136 @@ def campaign_status(campaign_id):
         return redirect(url_for("login"))
     action = request.form.get("action", "")
     msgs = {
-        "activate": ("active", "Campaign activated! Emails will start sending."),
+        "activate": ("active", "Campaign activated! Emails are being sent now."),
         "pause": ("paused", "Campaign paused."),
         "complete": ("completed", "Campaign completed."),
     }
     if action in msgs:
         status, msg = msgs[action]
         update_campaign_status(campaign_id, status)
+        if action == "activate":
+            _trigger_campaign_send(campaign_id)
         flash(("success", msg))
     return redirect(f"/campaign/{campaign_id}")
+
+
+def _trigger_campaign_send(campaign_id):
+    """Kick off a background thread to send pending emails for this campaign immediately."""
+    job = _campaign_sends.get(campaign_id)
+    if job and job.get("status") == "sending":
+        return  # already running
+
+    _campaign_sends[campaign_id] = {"status": "sending", "sent": 0, "total": 0}
+
+    def _bg_send():
+        import time as _time
+        from outreach.db import get_db, record_sent, delete_sent_email, check_limit, increment_usage
+        from outreach.ai import personalize_email, personalize_subject, translate_email
+        from outreach.config import DELAY_BETWEEN_EMAILS_SEC, SENDER_NAME
+        from outreach.sender import pick_variant, send_email
+
+        try:
+            with get_db() as db:
+                rows = db.execute("""
+                    SELECT c.id as contact_id, c.name, c.email, c.company, c.role,
+                           c.language, c.campaign_id,
+                           es.id as sequence_id, es.subject_a, es.subject_b,
+                           es.body_a, es.body_b, es.step
+                    FROM contacts c
+                    JOIN campaigns camp ON c.campaign_id = camp.id
+                    JOIN email_sequences es ON es.campaign_id = camp.id AND es.step = 1
+                    WHERE camp.id = ? AND camp.status = 'active'
+                      AND c.status = 'pending'
+                      AND c.id NOT IN (SELECT contact_id FROM sent_emails)
+                      AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= datetime('now', 'localtime'))
+                    LIMIT 30
+                """, (campaign_id,)).fetchall()
+                batch = [dict(r) for r in rows]
+
+                # Get client_id
+                camp_row = db.execute("SELECT client_id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+                client_id = camp_row[0] if camp_row else None
+
+            _campaign_sends[campaign_id]["total"] = len(batch)
+
+            for item in batch:
+                # Check campaign still active
+                with get_db() as db:
+                    st = db.execute("SELECT status FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+                    if not st or st[0] != "active":
+                        break
+
+                # Check limits
+                if client_id:
+                    allowed, used, limit = check_limit(client_id, "emails_sent")
+                    if not allowed:
+                        break
+
+                variant = pick_variant()
+                if variant == "b" and item.get("subject_b"):
+                    subject = item["subject_b"]
+                    body = item.get("body_b") or item["body_a"]
+                else:
+                    variant = "a"
+                    subject = item["subject_a"]
+                    body = item["body_a"]
+
+                contact = {"name": item["name"], "company": item["company"], "role": item["role"]}
+                subject = personalize_subject(subject, contact, SENDER_NAME)
+                body = personalize_email(body, contact, SENDER_NAME)
+
+                lang = item.get("language", "en")
+                if lang and lang.lower() not in ("en", "english"):
+                    try:
+                        subject, body = translate_email(subject, body, lang)
+                    except Exception:
+                        pass
+
+                sent_id = record_sent(
+                    contact_id=item["contact_id"], sequence_id=item["sequence_id"],
+                    variant=variant, subject=subject, body=body,
+                )
+                success = send_email(
+                    to_email=item["email"], subject=subject, body_text=body,
+                    contact_id=item["contact_id"], tracking_id=sent_id,
+                )
+
+                if success:
+                    _campaign_sends[campaign_id]["sent"] += 1
+                    if client_id:
+                        try:
+                            increment_usage(client_id, "emails_sent")
+                        except Exception:
+                            pass
+                else:
+                    delete_sent_email(sent_id, item["contact_id"])
+
+                _time.sleep(DELAY_BETWEEN_EMAILS_SEC)
+
+        except Exception as e:
+            print(f"[CAMPAIGN SEND] Error for campaign {campaign_id}: {e}")
+        finally:
+            _campaign_sends[campaign_id]["status"] = "done"
+
+    threading.Thread(target=_bg_send, daemon=True).start()
+
+
+@app.route("/api/campaign/<int:campaign_id>/live-stats")
+def api_campaign_live_stats(campaign_id):
+    """Live polling endpoint for campaign sending progress."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    contacts = get_campaign_contacts(campaign_id)
+    pending = sum(1 for c in contacts if c["status"] == "pending")
+    sent = sum(1 for c in contacts if c["status"] in ("sent", "opened"))
+    replied = sum(1 for c in contacts if c["status"] == "replied")
+    total = len(contacts)
+    job = _campaign_sends.get(campaign_id, {})
+    sending = job.get("status") == "sending"
+    return jsonify({
+        "pending": pending, "sent": sent, "replied": replied, "total": total,
+        "sending": sending, "batch_sent": job.get("sent", 0), "batch_total": job.get("total", 0),
+    })
 
 
 @app.route("/campaign/<int:campaign_id>/activate", methods=["POST"])
@@ -3505,7 +3685,8 @@ def activate_campaign(campaign_id):
     if not _logged_in():
         return redirect(url_for("login"))
     update_campaign_status(campaign_id, "active")
-    flash(("success", "Campaign activated!"))
+    _trigger_campaign_send(campaign_id)
+    flash(("success", "Campaign activated! Emails are being sent now."))
     return redirect(f"/campaign/{campaign_id}")
 
 
@@ -4931,6 +5112,7 @@ def api_mail_peek():
 # In-memory sync job tracker
 import threading
 _sync_jobs: dict[int, dict] = {}  # client_id -> {status, new_emails, error}
+_campaign_sends: dict[int, dict] = {}  # campaign_id -> {status, sent, total}
 
 @app.route("/api/mail-hub/sync", methods=["POST"])
 def api_mail_sync():
