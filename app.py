@@ -549,6 +549,10 @@ LAYOUT = """<!DOCTYPE html>
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
+    /* Sync spinner */
+    .sync-spinner { width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
     /* Progress bar animation */
     .progress-bar { transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
 
@@ -923,24 +927,92 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
 def index():
     if _logged_in():
         return redirect(url_for("dashboard"))
-    return render_template_string(LAYOUT, title="Home", logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
-    <div class="hero">
-      <h1>{t("landing.hero_title")}</h1>
-      <p>{t("landing.hero_desc")}</p>
-      <div class="btn-group" style="justify-content:center;">
-        <a href="/register" class="btn btn-primary btn-lg">{t("landing.start_free")}</a>
+    return render_template_string(LAYOUT, title="AI Email Outreach", logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), wide=True, content=Markup(f"""
+    <div class="hero" style="padding:100px 24px 60px;">
+      <h1 style="font-size:56px;max-width:700px;margin:0 auto 20px;"><span>AI-powered</span> email outreach that actually gets replies</h1>
+      <p style="max-width:560px;">MachReach writes personalized multi-step email sequences, sends them on your schedule, and tracks every open, click, and reply &mdash; all on autopilot.</p>
+      <div class="btn-group" style="justify-content:center;gap:12px;">
+        <a href="/register" class="btn btn-primary btn-lg" style="font-size:16px;padding:14px 32px;">{t("landing.start_free")} &rarr;</a>
         <a href="/pricing" class="btn btn-outline btn-lg">{t("landing.see_pricing")}</a>
-        <a href="/login" class="btn btn-ghost btn-lg">{t("nav.login")}</a>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:14px;">No credit card required &bull; Free plan available forever</p>
+    </div>
+
+    <!-- Social proof -->
+    <div style="text-align:center;padding:20px 0 48px;border-bottom:1px solid var(--border-light);">
+      <p style="font-size:13px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;font-weight:600;">Trusted by sales teams, agencies &amp; founders</p>
+    </div>
+
+    <!-- How it works -->
+    <div style="max-width:900px;margin:0 auto;padding:72px 24px;">
+      <h2 style="text-align:center;font-size:32px;font-weight:800;margin-bottom:8px;">How it works</h2>
+      <p style="text-align:center;color:var(--text-muted);margin-bottom:48px;font-size:16px;">Three steps to your first campaign. Takes under 5 minutes.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:32px;">
+        <div style="text-align:center;">
+          <div style="width:56px;height:56px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 16px;">1</div>
+          <h3 style="font-size:18px;margin-bottom:6px;">Describe your audience</h3>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.6;">Tell us your business type, target audience, and preferred tone. Our AI handles the rest.</p>
+        </div>
+        <div style="text-align:center;">
+          <div style="width:56px;height:56px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 16px;">2</div>
+          <h3 style="font-size:18px;margin-bottom:6px;">AI writes your sequence</h3>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.6;">GPT-4 generates a multi-step email sequence with A/B variants, follow-ups, and personalization.</p>
+        </div>
+        <div style="text-align:center;">
+          <div style="width:56px;height:56px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 16px;">3</div>
+          <h3 style="font-size:18px;margin-bottom:6px;">Add contacts &amp; send</h3>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.6;">Import contacts via CSV or your CRM. MachReach sends, tracks, and follows up automatically.</p>
+        </div>
       </div>
     </div>
-    <div class="features">
-      <div class="feature"><div class="feature-icon">&#129302;</div><h3>{t("landing.ai_emails")}</h3><p>{t("landing.ai_emails_desc")}</p></div>
-      <div class="feature"><div class="feature-icon">&#128233;</div><h3>{t("landing.mail_hub")}</h3><p>{t("landing.mail_hub_desc")}</p></div>
-      <div class="feature"><div class="feature-icon">&#128200;</div><h3>{t("landing.track")}</h3><p>{t("landing.track_desc")}</p></div>
-      <div class="feature"><div class="feature-icon">&#9889;</div><h3>{t("landing.automated")}</h3><p>{t("landing.automated_desc")}</p></div>
+
+    <!-- Features grid -->
+    <div style="background:var(--border-light);padding:72px 24px;">
+      <div style="max-width:960px;margin:0 auto;">
+        <h2 style="text-align:center;font-size:32px;font-weight:800;margin-bottom:8px;">Everything you need for outreach</h2>
+        <p style="text-align:center;color:var(--text-muted);margin-bottom:48px;font-size:16px;">No patchwork of tools. One platform, zero fluff.</p>
+        <div class="features" style="max-width:none;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;">
+          <div class="feature"><div class="feature-icon">&#129302;</div><h3>{t("landing.ai_emails")}</h3><p>{t("landing.ai_emails_desc")}</p></div>
+          <div class="feature"><div class="feature-icon">&#128233;</div><h3>{t("landing.mail_hub")}</h3><p>{t("landing.mail_hub_desc")}</p></div>
+          <div class="feature"><div class="feature-icon">&#128200;</div><h3>{t("landing.track")}</h3><p>{t("landing.track_desc")}</p></div>
+          <div class="feature"><div class="feature-icon">&#9889;</div><h3>{t("landing.automated")}</h3><p>{t("landing.automated_desc")}</p></div>
+          <div class="feature"><div class="feature-icon">&#128101;</div><h3>CRM &amp; Contacts</h3><p>Manage your contacts book, tag leads, import/export, and track relationships.</p></div>
+          <div class="feature"><div class="feature-icon">&#128272;</div><h3>A/B Testing</h3><p>Test subject lines and body copy. MachReach picks the winner automatically.</p></div>
+          <div class="feature"><div class="feature-icon">&#128197;</div><h3>Campaign Scheduling</h3><p>Schedule campaigns to start at the perfect time. No manual activation needed.</p></div>
+          <div class="feature"><div class="feature-icon">&#128101;</div><h3>Team Collaboration</h3><p>Invite teammates to share campaigns, contacts, and inbox. Everyone stays in sync.</p></div>
+        </div>
+      </div>
     </div>
-    <div style="text-align:center;margin:32px 0;color:var(--text-muted);">
-      <p>{t("landing.free_forever")}</p>
+
+    <!-- Pricing teaser -->
+    <div style="max-width:700px;margin:0 auto;padding:72px 24px;text-align:center;">
+      <h2 style="font-size:32px;font-weight:800;margin-bottom:8px;">Simple, transparent pricing</h2>
+      <p style="color:var(--text-muted);font-size:16px;margin-bottom:32px;">Start free. Upgrade when you're ready.</p>
+      <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap;">
+        <div class="card" style="flex:1;min-width:180px;max-width:220px;text-align:center;padding:28px;">
+          <div style="font-size:14px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Free</div>
+          <div style="font-size:40px;font-weight:800;margin:8px 0;">$0</div>
+          <div style="font-size:13px;color:var(--text-muted);">200 emails/mo</div>
+        </div>
+        <div class="card" style="flex:1;min-width:180px;max-width:220px;text-align:center;padding:28px;border:2px solid var(--primary);">
+          <div style="font-size:14px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:1px;">Pro</div>
+          <div style="font-size:40px;font-weight:800;margin:8px 0;">$20</div>
+          <div style="font-size:13px;color:var(--text-muted);">10,000 emails/mo</div>
+        </div>
+        <div class="card" style="flex:1;min-width:180px;max-width:220px;text-align:center;padding:28px;">
+          <div style="font-size:14px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Unlimited</div>
+          <div style="font-size:40px;font-weight:800;margin:8px 0;">$40</div>
+          <div style="font-size:13px;color:var(--text-muted);">No limits, ever</div>
+        </div>
+      </div>
+      <a href="/pricing" class="btn btn-outline" style="margin-top:24px;">See all plans &rarr;</a>
+    </div>
+
+    <!-- Final CTA -->
+    <div style="background:linear-gradient(135deg,var(--primary),#8B5CF6);padding:72px 24px;text-align:center;border-radius:var(--radius);margin:0 24px 48px;">
+      <h2 style="font-size:32px;font-weight:800;color:#fff;margin-bottom:12px;">Ready to send emails that get replies?</h2>
+      <p style="color:rgba(255,255,255,0.8);font-size:16px;margin-bottom:28px;">Join during beta and get all features free. No credit card needed.</p>
+      <a href="/register" class="btn btn-lg" style="background:#fff;color:var(--primary);font-weight:700;font-size:16px;padding:14px 36px;">Create Free Account &rarr;</a>
     </div>
     """))
 
@@ -1002,9 +1074,14 @@ def login():
             return redirect(url_for("login"))
         _maybe_upgrade_hash(client["id"], password, client["password"])
         _log_security("LOGIN_OK", client_id=client["id"], email=email)
+        # Preserve team invite token across session clear
+        pending_token = session.get("team_invite_token")
         session.clear()
         session["client_id"] = client["id"]
         session["client_name"] = client["name"]
+        # Check for pending team invite
+        if pending_token:
+            return redirect(url_for("team_accept_invite", token=pending_token))
         return redirect(url_for("dashboard"))
     return render_template_string(LAYOUT, title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
     <div class="auth-wrapper">
@@ -1202,6 +1279,68 @@ def delete_account():
     session.clear()
     flash(("success", t("settings.account_deleted")))
     return redirect(url_for("index"))
+
+
+# ---------------------------------------------------------------------------
+# Routes — Team Seats
+# ---------------------------------------------------------------------------
+
+@app.route("/api/team/invite", methods=["POST"])
+def api_team_invite():
+    if not _logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    email = data.get("email", "").strip().lower()
+    role = data.get("role", "member")
+    if role not in ("member", "viewer"):
+        role = "member"
+    if not email or "@" not in email:
+        return jsonify({"error": "Valid email required"}), 400
+    from outreach.db import invite_team_member
+    client = get_client(session["client_id"])
+    if client["email"].lower() == email:
+        return jsonify({"error": "You can't invite yourself"}), 400
+    result = invite_team_member(session["client_id"], email, role)
+    if "error" in result:
+        return jsonify(result), 409
+    # Build invite link
+    invite_url = f"{request.host_url.rstrip('/')}/team/accept/{result['token']}"
+    return jsonify({"ok": True, "invite_url": invite_url, "email": email, "role": role})
+
+
+@app.route("/team/accept/<token>")
+def team_accept_invite(token):
+    if not _logged_in():
+        flash(("info", "Please log in or sign up to accept the team invite."))
+        session["team_invite_token"] = token
+        return redirect(url_for("login"))
+    from outreach.db import accept_team_invite
+    result = accept_team_invite(token, session["client_id"])
+    if result:
+        flash(("success", "You've joined the team! You can now access shared campaigns and data."))
+    else:
+        flash(("error", "Invalid or expired invite link."))
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/api/team/<int:member_id>/remove", methods=["DELETE"])
+def api_team_remove(member_id):
+    if not _logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+    from outreach.db import remove_team_member
+    ok = remove_team_member(member_id, session["client_id"])
+    if ok:
+        return jsonify({"ok": True})
+    return jsonify({"error": "Not found"}), 404
+
+
+@app.route("/api/team", methods=["GET"])
+def api_team_list():
+    if not _logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+    from outreach.db import get_team_members
+    members = get_team_members(session["client_id"])
+    return jsonify(members)
 
 
 # ---------------------------------------------------------------------------
@@ -1554,7 +1693,7 @@ def settings():
             flash(("success", "Settings saved."))
         return redirect(url_for("settings"))
 
-    from outreach.db import get_email_accounts, get_subscription, get_mail_preferences
+    from outreach.db import get_email_accounts, get_subscription, get_mail_preferences, get_team_members
     from outreach.config import PLAN_LIMITS
     accounts = get_email_accounts(session["client_id"])
     sub = get_subscription(session["client_id"])
@@ -1563,6 +1702,7 @@ def settings():
     max_mailboxes = limits.get("mailboxes", 1)
     can_add = max_mailboxes == -1 or len(accounts) < max_mailboxes
     current_prefs = get_mail_preferences(session["client_id"])
+    team = get_team_members(session["client_id"])
 
     accounts_html = ""
     for a in accounts:
@@ -1613,6 +1753,62 @@ def settings():
       </div>
       <button class="btn btn-primary" onclick="saveSettingsPrefs()" id="save-prefs-btn">Save Preferences</button>
       <span id="prefs-save-status" style="margin-left:10px;font-size:13px;"></span>
+    </div>
+    """
+
+    # Build team card
+    team_rows_html = ""
+    for m in team:
+        name_display = _esc(m.get("member_name") or m["member_email"])
+        status_badge = {
+            "active": '<span class="badge badge-green">Active</span>',
+            "pending": '<span class="badge badge-yellow">Pending</span>',
+        }.get(m["status"], '<span class="badge">' + _esc(m["status"]) + '</span>')
+        role_badge = '<span class="badge badge-blue" style="font-size:10px;">' + _esc(m["role"].title()) + '</span>'
+        team_rows_html += f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border-light);">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#8B5CF6,#EC4899);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;">
+              {_esc(m['member_email'][:1].upper())}
+            </div>
+            <div>
+              <div style="font-weight:600;font-size:14px;">{name_display} {role_badge}</div>
+              <div style="font-size:12px;color:var(--text-muted);">{_esc(m['member_email'])} &middot; {status_badge}</div>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="removeTeamMember({m['id']})" style="font-size:12px;color:var(--red);">Remove</button>
+        </div>
+        """
+    if not team_rows_html:
+        team_rows_html = '<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">No team members yet. Invite someone to collaborate!</p>'
+
+    team_card = f"""
+    <div class="card">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>&#128101; Team</h2>
+        <span style="font-size:13px;color:var(--text-muted);">{len(team)} member{'s' if len(team) != 1 else ''}</span>
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Invite team members to share campaigns, contacts, and inbox access.</p>
+      <div id="team-list">
+        {team_rows_html}
+      </div>
+      <div style="margin-top:16px;">
+        <div id="invite-form" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+          <div class="form-group" style="flex:1;min-width:200px;margin:0;">
+            <label style="font-size:12px;">Email address</label>
+            <input id="invite-email" type="email" placeholder="colleague@company.com" style="margin:0;">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:12px;">Role</label>
+            <select id="invite-role" style="margin:0;padding:8px 12px;">
+              <option value="member">Member</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="inviteTeamMember()" id="invite-btn">Send Invite</button>
+        </div>
+        <div id="invite-status" style="font-size:13px;margin-top:8px;"></div>
+      </div>
     </div>
     """
 
@@ -1785,6 +1981,8 @@ def settings():
     </div>
 
     {prefs_card}
+
+    {team_card}
 
     <div class="card" style="border-color:var(--red);">
       <div class="card-header"><h2 style="color:var(--red);">&#9888;&#65039; Danger Zone</h2></div>
@@ -1967,6 +2165,44 @@ def settings():
         btn.textContent = 'Save Preferences';
         status.innerHTML = '<span style="color:var(--red);">Connection error</span>';
       }});
+    }}
+    // --- Team ---
+    function inviteTeamMember() {{
+      var email = document.getElementById('invite-email').value.trim();
+      var role = document.getElementById('invite-role').value;
+      var btn = document.getElementById('invite-btn');
+      var status = document.getElementById('invite-status');
+      if (!email) {{ status.innerHTML = '<span style="color:var(--red);">Enter an email address</span>'; return; }}
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      fetch('/api/team/invite', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{email: email, role: role}})
+      }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
+        btn.disabled = false;
+        btn.textContent = 'Send Invite';
+        if (data.ok) {{
+          status.innerHTML = '<span style="color:var(--green);">&#10003; Invite sent! Share this link: <input style="width:260px;font-size:12px;padding:4px 8px;margin-left:6px;" readonly value="' + data.invite_url + '" onclick="this.select()"></span>';
+          document.getElementById('invite-email').value = '';
+          setTimeout(function() {{ location.reload(); }}, 3000);
+        }} else {{
+          status.innerHTML = '<span style="color:var(--red);">' + (data.error || 'Failed') + '</span>';
+        }}
+      }}).catch(function() {{
+        btn.disabled = false;
+        btn.textContent = 'Send Invite';
+        status.innerHTML = '<span style="color:var(--red);">Connection error</span>';
+      }});
+    }}
+    function removeTeamMember(id) {{
+      if (!confirm('Remove this team member?')) return;
+      fetch('/api/team/' + id + '/remove', {{method: 'DELETE'}})
+        .then(function(r) {{ return r.json(); }})
+        .then(function(data) {{
+          if (data.ok) location.reload();
+          else alert(data.error || 'Failed to remove');
+        }});
     }}
     </script>
     """, active_page="settings", client=client, sender_name=SENDER_NAME,
@@ -4135,28 +4371,52 @@ def mail_hub():
     </div>
 
     <script>
-    // --- Sync ---
+    // --- Sync with progress polling ---
+    var _syncPoll = null;
     function syncInbox() {{
-      const btn = document.getElementById('sync-btn');
+      var btn = document.getElementById('sync-btn');
       btn.innerHTML = '&#8987; Syncing...';
       btn.disabled = true;
+      // Show skeleton loading indicator
+      var emailList = document.querySelector('.mail-list-body, table tbody');
+      if (emailList && emailList.children.length === 0) {{
+        emailList.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;"><div class="sync-spinner"></div><p style="color:var(--text-muted);font-size:13px;margin-top:12px;">Fetching &amp; classifying emails...</p></td></tr>';
+      }}
       fetch('/api/mail-hub/sync', {{method: 'POST'}})
-        .then(r => r.json())
-        .then(data => {{
-          if (data.new_emails > 0) {{
-            btn.innerHTML = '&#9989; ' + data.new_emails + ' new! Refreshing...';
-            setTimeout(() => location.reload(), 800);
-          }} else if (data.new_emails === 0) {{
-            btn.innerHTML = '&#10003; Already up to date';
-            setTimeout(() => {{ btn.innerHTML = '&#128260; Sync Inbox'; btn.disabled = false; }}, 2000);
-          }} else {{
-            btn.innerHTML = '&#9888; ' + (data.error || 'Failed');
-            setTimeout(() => {{ btn.innerHTML = '&#128260; Sync Inbox'; btn.disabled = false; }}, 3000);
+        .then(function(r) {{ return r.json(); }})
+        .then(function(data) {{
+          if (data.error) {{
+            btn.innerHTML = '&#9888; ' + data.error;
+            setTimeout(function() {{ btn.innerHTML = '&#128260; Sync Inbox'; btn.disabled = false; }}, 3000);
+            return;
           }}
+          // Start polling
+          _syncPoll = setInterval(function() {{
+            fetch('/api/mail-hub/sync-status')
+              .then(function(r) {{ return r.json(); }})
+              .then(function(s) {{
+                if (s.status === 'done') {{
+                  clearInterval(_syncPoll);
+                  if (s.new_emails > 0) {{
+                    btn.innerHTML = '&#9989; ' + s.new_emails + ' new! Refreshing...';
+                    showToast(s.new_emails + ' new email(s) synced &amp; classified.', 'success');
+                    setTimeout(function() {{ location.reload(); }}, 800);
+                  }} else {{
+                    btn.innerHTML = '&#10003; Already up to date';
+                    setTimeout(function() {{ btn.innerHTML = '&#128260; Sync Inbox'; btn.disabled = false; }}, 2000);
+                  }}
+                }} else if (s.status === 'error') {{
+                  clearInterval(_syncPoll);
+                  btn.innerHTML = '&#9888; ' + (s.error || 'Sync failed');
+                  setTimeout(function() {{ btn.innerHTML = '&#128260; Sync Inbox'; btn.disabled = false; }}, 3000);
+                }}
+                // else status === 'syncing', keep polling
+              }});
+          }}, 1500);
         }})
-        .catch(() => {{
+        .catch(function() {{
           btn.innerHTML = '&#9888; Sync failed';
-          setTimeout(() => {{ btn.innerHTML = '&#128260; Sync Inbox'; btn.disabled = false; }}, 2000);
+          setTimeout(function() {{ btn.innerHTML = '&#128260; Sync Inbox'; btn.disabled = false; }}, 2000);
         }});
     }}
 
@@ -4680,33 +4940,60 @@ def api_mail_peek():
         return jsonify({"error": str(e)}), 500
 
 
+# In-memory sync job tracker
+import threading
+_sync_jobs: dict[int, dict] = {}  # client_id -> {status, new_emails, error}
+
 @app.route("/api/mail-hub/sync", methods=["POST"])
 def api_mail_sync():
-    """Sync inbox via IMAP and classify with AI — syncs ALL connected email accounts."""
+    """Start inbox sync in background — returns immediately."""
     if not _logged_in():
         return jsonify({"error": "unauthorized"}), 401
+    client_id = session["client_id"]
+    # If already syncing, return current status
+    job = _sync_jobs.get(client_id)
+    if job and job["status"] == "syncing":
+        return jsonify({"status": "syncing"})
     try:
-        from outreach.db import check_limit, increment_usage, get_email_accounts
-        allowed, used, limit = check_limit(session["client_id"], "mail_hub_syncs")
+        from outreach.db import check_limit, get_email_accounts
+        allowed, used, limit = check_limit(client_id, "mail_hub_syncs")
         if not allowed:
             return jsonify({"error": f"Monthly Mail Hub sync limit reached ({used}/{limit}). Upgrade your plan for unlimited syncs."}), 429
 
-        from outreach.mail_hub import sync_inbox
-        accounts = get_email_accounts(session["client_id"])
-        total_new = 0
-        if accounts:
-            for acct in accounts:
-                n = sync_inbox(session["client_id"], days=3, account_id=acct["id"])
-                total_new += n
-        else:
-            # Fallback to .env credentials if no accounts configured
-            total_new = sync_inbox(session["client_id"], days=3)
-        # Only count as a used sync if new emails were actually found
-        if total_new > 0:
-            increment_usage(session["client_id"], "mail_hub_syncs")
-        return jsonify({"new_emails": total_new})
+        accounts = get_email_accounts(client_id)
+        _sync_jobs[client_id] = {"status": "syncing", "new_emails": 0, "error": None}
+
+        def _bg_sync():
+            try:
+                from outreach.mail_hub import sync_inbox
+                from outreach.db import increment_usage
+                total_new = 0
+                if accounts:
+                    for acct in accounts:
+                        n = sync_inbox(client_id, days=3, account_id=acct["id"])
+                        total_new += n
+                else:
+                    total_new = sync_inbox(client_id, days=3)
+                if total_new > 0:
+                    increment_usage(client_id, "mail_hub_syncs")
+                _sync_jobs[client_id] = {"status": "done", "new_emails": total_new, "error": None}
+            except Exception as e:
+                _sync_jobs[client_id] = {"status": "error", "new_emails": 0, "error": str(e)}
+        threading.Thread(target=_bg_sync, daemon=True).start()
+        return jsonify({"status": "syncing"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/mail-hub/sync-status")
+def api_mail_sync_status():
+    """Poll sync job progress."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    job = _sync_jobs.get(session["client_id"])
+    if not job:
+        return jsonify({"status": "idle"})
+    return jsonify(job)
 
 
 @app.route("/api/mail-hub/<int:mail_id>/update", methods=["POST"])

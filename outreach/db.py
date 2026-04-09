@@ -327,6 +327,22 @@ def init_db():
             db.execute("ALTER TABLE campaigns ADD COLUMN scheduled_start TEXT")
         except Exception:
             pass
+        # Migration: team_members table
+        try:
+            db.execute("""CREATE TABLE IF NOT EXISTS team_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_id INTEGER NOT NULL REFERENCES clients(id),
+                member_email TEXT NOT NULL,
+                member_client_id INTEGER REFERENCES clients(id),
+                role TEXT NOT NULL DEFAULT 'member',
+                status TEXT NOT NULL DEFAULT 'pending',
+                invite_token TEXT,
+                invited_at TEXT DEFAULT (datetime('now', 'localtime')),
+                accepted_at TEXT,
+                UNIQUE(owner_id, member_email)
+            )""")
+        except Exception:
+            pass
     print("Database initialized.")
 
 def create_client(name: str, email: str, password_hash: str, business: str = "") -> int:
@@ -1392,6 +1408,81 @@ def bulk_update_mail(mail_ids: list[int], client_id: int, field: str, value) -> 
             [value] + mail_ids + [client_id],
         )
         return cur.rowcount
+
+
+# ---------------------------------------------------------------------------
+# Team Members
+# ---------------------------------------------------------------------------
+
+def invite_team_member(owner_id: int, member_email: str, role: str = "member") -> dict:
+    """Invite a team member. Returns the invite record or error."""
+    import secrets
+    token = secrets.token_urlsafe(32)
+    with get_db() as db:
+        # Check if already invited
+        existing = db.execute(
+            "SELECT id, status FROM team_members WHERE owner_id = ? AND member_email = ?",
+            (owner_id, member_email),
+        ).fetchone()
+        if existing:
+            return {"error": "Already invited", "status": dict(existing)["status"]}
+        db.execute(
+            "INSERT INTO team_members (owner_id, member_email, role, invite_token) VALUES (?, ?, ?, ?)",
+            (owner_id, member_email, role, token),
+        )
+        return {"token": token, "email": member_email, "role": role}
+
+
+def get_team_members(owner_id: int) -> list[dict]:
+    """Get all team members for a workspace owner."""
+    with get_db() as db:
+        rows = db.execute(
+            """SELECT tm.*, c.name as member_name
+               FROM team_members tm
+               LEFT JOIN clients c ON c.id = tm.member_client_id
+               WHERE tm.owner_id = ?
+               ORDER BY tm.invited_at DESC""",
+            (owner_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def accept_team_invite(token: str, client_id: int) -> dict | None:
+    """Accept a team invite using the token. Links the member_client_id."""
+    with get_db() as db:
+        row = db.execute(
+            "SELECT * FROM team_members WHERE invite_token = ? AND status = 'pending'",
+            (token,),
+        ).fetchone()
+        if not row:
+            return None
+        db.execute(
+            """UPDATE team_members
+               SET status = 'active', member_client_id = ?, accepted_at = datetime('now', 'localtime'), invite_token = NULL
+               WHERE id = ?""",
+            (client_id, row["id"]),
+        )
+        return dict(row)
+
+
+def remove_team_member(member_id: int, owner_id: int) -> bool:
+    """Remove a team member (only the owner can)."""
+    with get_db() as db:
+        cur = db.execute(
+            "DELETE FROM team_members WHERE id = ? AND owner_id = ?",
+            (member_id, owner_id),
+        )
+        return cur.rowcount > 0
+
+
+def get_team_owner(client_id: int) -> int | None:
+    """If client_id is a team member, return the owner's client_id. Otherwise None."""
+    with get_db() as db:
+        row = db.execute(
+            "SELECT owner_id FROM team_members WHERE member_client_id = ? AND status = 'active'",
+            (client_id,),
+        ).fetchone()
+        return row["owner_id"] if row else None
 
 
 # ---------------------------------------------------------------------------
