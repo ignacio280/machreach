@@ -343,6 +343,11 @@ def init_db():
             )""")
         except Exception:
             pass
+        # Migration: add mail_exclusions column to clients
+        try:
+            db.execute("ALTER TABLE clients ADD COLUMN mail_exclusions TEXT DEFAULT ''")
+        except Exception:
+            pass
     print("Database initialized.")
 
 def create_client(name: str, email: str, password_hash: str, business: str = "") -> int:
@@ -886,6 +891,19 @@ def update_mail_preferences(client_id: int, preferences: str):
 def get_mail_preferences(client_id: int) -> str:
     with get_db() as db:
         row = db.execute("SELECT mail_preferences FROM clients WHERE id = ?",
+                         (client_id,)).fetchone()
+        return (row[0] or "") if row else ""
+
+
+def update_mail_exclusions(client_id: int, exclusions: str):
+    with get_db() as db:
+        db.execute("UPDATE clients SET mail_exclusions = ? WHERE id = ?",
+                   (exclusions, client_id))
+
+
+def get_mail_exclusions(client_id: int) -> str:
+    with get_db() as db:
+        row = db.execute("SELECT mail_exclusions FROM clients WHERE id = ?",
                          (client_id,)).fetchone()
         return (row[0] or "") if row else ""
 

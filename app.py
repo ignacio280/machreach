@@ -1693,7 +1693,7 @@ def settings():
             flash(("success", "Settings saved."))
         return redirect(url_for("settings"))
 
-    from outreach.db import get_email_accounts, get_subscription, get_mail_preferences, get_team_members
+    from outreach.db import get_email_accounts, get_subscription, get_mail_preferences, get_team_members, get_mail_exclusions
     from outreach.config import PLAN_LIMITS
     accounts = get_email_accounts(session["client_id"])
     sub = get_subscription(session["client_id"])
@@ -1702,6 +1702,7 @@ def settings():
     max_mailboxes = limits.get("mailboxes", 1)
     can_add = max_mailboxes == -1 or len(accounts) < max_mailboxes
     current_prefs = get_mail_preferences(session["client_id"])
+    current_exclusions = get_mail_exclusions(session["client_id"])
     team = get_team_members(session["client_id"])
 
     accounts_html = ""
@@ -1753,6 +1754,19 @@ def settings():
       </div>
       <button class="btn btn-primary" onclick="saveSettingsPrefs()" id="save-prefs-btn">Save Preferences</button>
       <span id="prefs-save-status" style="margin-left:10px;font-size:13px;"></span>
+
+      <hr style="border:none;border-top:1px solid var(--border-light);margin:24px 0 18px;">
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:18px;">&#128683;</span>
+        <h3 style="font-size:15px;margin:0;">Deprioritize / Exclude Rules</h3>
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Tell the AI what to <strong>downrank</strong>. Emails matching these rules will never be marked urgent or important.</p>
+      <div class="form-group">
+        <textarea id="settings-exclusions" placeholder="e.g. do NOT mark no-reply@render.com as urgent&#10;ignore all emails from noreply@github.com&#10;newsletters from marketing@ are always low priority" style="height:90px;font-size:13px;">{_esc(current_exclusions)}</textarea>
+      </div>
+      <button class="btn btn-outline" onclick="saveExclusions()" id="save-exclusions-btn">Save Exclusion Rules</button>
+      <span id="exclusions-save-status" style="margin-left:10px;font-size:13px;"></span>
     </div>
     """
 
@@ -2167,6 +2181,31 @@ def settings():
       }});
     }}
     // --- Team ---
+    function saveExclusions() {{
+      var text = document.getElementById('settings-exclusions').value.trim();
+      var btn = document.getElementById('save-exclusions-btn');
+      var status = document.getElementById('exclusions-save-status');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      fetch('/api/mail-exclusions', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{exclusions: text}})
+      }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
+        btn.disabled = false;
+        btn.textContent = 'Save Exclusion Rules';
+        if (data.ok) {{
+          status.innerHTML = '<span style="color:var(--green);">&#10003; Saved!</span>';
+          setTimeout(function() {{ status.innerHTML = ''; }}, 3000);
+        }} else {{
+          status.innerHTML = '<span style="color:var(--red);">Failed to save</span>';
+        }}
+      }}).catch(function() {{
+        btn.disabled = false;
+        btn.textContent = 'Save Exclusion Rules';
+        status.innerHTML = '<span style="color:var(--red);">Connection error</span>';
+      }});
+    }}
     function inviteTeamMember() {{
       var email = document.getElementById('invite-email').value.trim();
       var role = document.getElementById('invite-role').value;
@@ -4873,6 +4912,18 @@ def api_save_mail_preferences():
         return jsonify({"error": "Preferences cannot be empty"}), 400
     from outreach.db import update_mail_preferences
     update_mail_preferences(session["client_id"], prefs[:2000])
+    return jsonify({"ok": True})
+
+
+@app.route("/api/mail-exclusions", methods=["POST"])
+def api_save_mail_exclusions():
+    """Save the user's mail exclusion / deprioritize rules."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    data = request.get_json() or {}
+    exclusions = data.get("exclusions", "").strip()
+    from outreach.db import update_mail_exclusions
+    update_mail_exclusions(session["client_id"], exclusions[:2000])
     return jsonify({"ok": True})
 
 

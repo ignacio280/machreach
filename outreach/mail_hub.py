@@ -220,7 +220,7 @@ def fetch_inbox(days: int = 3, limit: int = 50, existing_ids: set | None = None,
     return results
 
 
-def classify_emails_batch(emails: list[dict], user_preferences: str = "") -> list[dict]:
+def classify_emails_batch(emails: list[dict], user_preferences: str = "", user_exclusions: str = "") -> list[dict]:
     """Classify a batch of emails by priority and category using GPT.
 
     Takes list of {subject, from_email, body_preview} dicts.
@@ -252,6 +252,13 @@ IMPORTANT — USER SORTING RULES (these OVERRIDE default priority logic):
 {user_preferences}
 
 Any email matching these rules MUST be classified as "urgent" or "important" and given the appropriate category. These are the user's explicit instructions — treat them as the highest-priority classification signal.
+"""
+    if user_exclusions:
+        user_pref_block += f"""
+USER EXCLUSION / DEPRIORITIZE RULES (these also OVERRIDE default logic):
+{user_exclusions}
+
+Emails matching ANY of the above exclusion rules MUST be deprioritized. Classify them as "low" priority and "newsletter" or "fyi" category — NEVER as "urgent" or "important". These are explicit user instructions to ignore or downrank these emails.
 """
 
     prompt = f"""Classify each email below. Return a JSON array with one object per email, in order.
@@ -380,10 +387,12 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
 
     # Stage 1: Classify ALL emails with AI before inserting (synchronous)
     user_prefs = get_mail_preferences(client_id)
+    from outreach.db import get_mail_exclusions
+    user_exclusions = get_mail_exclusions(client_id)
     all_classifications = []
     for i in range(0, len(raw_emails), 20):
         batch = raw_emails[i:i + 20]
-        cls_batch = classify_emails_batch(batch, user_preferences=user_prefs)
+        cls_batch = classify_emails_batch(batch, user_preferences=user_prefs, user_exclusions=user_exclusions)
         all_classifications.extend(cls_batch)
 
     # Stage 2: Insert emails with their AI classification already applied
