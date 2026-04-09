@@ -1312,12 +1312,13 @@ def dashboard():
       </table>
     </div>
 
+    {% raw %}
     <script>
     let actChart = null;
-    function loadChart(days) {{
+    function loadChart(days) {
       fetch('/api/analytics/daily?days=' + days)
         .then(r => r.json())
-        .then(data => {{
+        .then(data => {
           if (data.error) return;
           const labels = data.map(d => d.day);
           const sent = data.map(d => d.sent);
@@ -1328,35 +1329,36 @@ def dashboard():
           if (!ctx) return;
           if (actChart) actChart.destroy();
           const cs = getComputedStyle(document.documentElement);
-          actChart = new Chart(ctx, {{
+          actChart = new Chart(ctx, {
             type: 'line',
-            data: {{
+            data: {
               labels,
               datasets: [
-                {{label:'Sent', data:sent, borderColor:cs.getPropertyValue('--blue').trim()||'#3B82F6', backgroundColor:'rgba(59,130,246,0.08)', fill:true, tension:0.3, pointRadius:3}},
-                {{label:'Opened', data:opened, borderColor:cs.getPropertyValue('--green').trim()||'#10B981', backgroundColor:'rgba(16,185,129,0.08)', fill:true, tension:0.3, pointRadius:3}},
-                {{label:'Replied', data:replied, borderColor:cs.getPropertyValue('--primary').trim()||'#7C3AED', backgroundColor:'rgba(124,58,237,0.08)', fill:true, tension:0.3, pointRadius:3}},
-                {{label:'Bounced', data:bounced, borderColor:cs.getPropertyValue('--red').trim()||'#EF4444', backgroundColor:'rgba(239,68,68,0.08)', fill:true, tension:0.3, pointRadius:3}},
+                {label:'Sent', data:sent, borderColor:cs.getPropertyValue('--blue').trim()||'#3B82F6', backgroundColor:'rgba(59,130,246,0.08)', fill:true, tension:0.3, pointRadius:3},
+                {label:'Opened', data:opened, borderColor:cs.getPropertyValue('--green').trim()||'#10B981', backgroundColor:'rgba(16,185,129,0.08)', fill:true, tension:0.3, pointRadius:3},
+                {label:'Replied', data:replied, borderColor:cs.getPropertyValue('--primary').trim()||'#7C3AED', backgroundColor:'rgba(124,58,237,0.08)', fill:true, tension:0.3, pointRadius:3},
+                {label:'Bounced', data:bounced, borderColor:cs.getPropertyValue('--red').trim()||'#EF4444', backgroundColor:'rgba(239,68,68,0.08)', fill:true, tension:0.3, pointRadius:3},
               ]
-            }},
-            options: {{
+            },
+            options: {
               responsive: true,
               maintainAspectRatio: false,
-              interaction: {{ mode: 'index', intersect: false }},
-              plugins: {{
-                legend: {{ position: 'top', labels: {{ usePointStyle: true, padding: 16, font: {{ family: 'Inter', size: 12 }} }} }},
-                tooltip: {{ backgroundColor: 'rgba(0,0,0,0.8)', titleFont: {{ family: 'Inter' }}, bodyFont: {{ family: 'Inter' }} }}
-              }},
-              scales: {{
-                x: {{ grid: {{ display: false }}, ticks: {{ font: {{ family: 'Inter', size: 11 }}, maxRotation: 45 }} }},
-                y: {{ beginAtZero: true, ticks: {{ font: {{ family: 'Inter', size: 11 }}, precision: 0 }}, grid: {{ color: 'rgba(128,128,128,0.1)' }} }}
-              }}
-            }}
-          }});
-        }}).catch(() => {{}});
-    }}
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { family: 'Inter', size: 12 } } },
+                tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { family: 'Inter' }, bodyFont: { family: 'Inter' } }
+              },
+              scales: {
+                x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 11 }, maxRotation: 45 } },
+                y: { beginAtZero: true, ticks: { font: { family: 'Inter', size: 11 }, precision: 0 }, grid: { color: 'rgba(128,128,128,0.1)' } }
+              }
+            }
+          });
+        }).catch(() => {});
+    }
     if (document.getElementById('activityChart')) loadChart(30);
     </script>
+    {% endraw %}
     """, active_page="dashboard", rows=Markup(rows), g=gstats,
         g_open_rate=f"{gstats['open_rate']:.0%}", g_reply_rate=f"{gstats['reply_rate']:.0%}",
         usage_text=Markup(usage_text), upgrade_cta=Markup(upgrade_cta),
