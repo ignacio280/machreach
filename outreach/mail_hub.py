@@ -220,7 +220,7 @@ def fetch_inbox(days: int = 3, limit: int = 50, existing_ids: set | None = None,
     return results
 
 
-def classify_emails_batch(emails: list[dict], user_preferences: str = "", user_exclusions: str = "") -> list[dict]:
+def classify_emails_batch(emails: list[dict], user_rules: str = "") -> list[dict]:
     """Classify a batch of emails by priority and category using GPT.
 
     Takes list of {subject, from_email, body_preview} dicts.
@@ -246,19 +246,16 @@ def classify_emails_batch(emails: list[dict], user_preferences: str = "", user_e
         )
 
     user_pref_block = ""
-    if user_preferences:
+    if user_rules:
         user_pref_block = f"""
-IMPORTANT — USER SORTING RULES (these OVERRIDE default priority logic):
-{user_preferences}
+IMPORTANT — USER SORTING RULES (these OVERRIDE all default priority logic):
+{user_rules}
 
-Any email matching these rules MUST be classified as "urgent" or "important" and given the appropriate category. These are the user's explicit instructions — treat them as the highest-priority classification signal.
-"""
-    if user_exclusions:
-        user_pref_block += f"""
-USER EXCLUSION / DEPRIORITIZE RULES (these also OVERRIDE default logic):
-{user_exclusions}
+Follow these rules EXACTLY. They may include:
+- Prioritize rules (e.g. "Client emails are urgent") → classify matching emails as "urgent" or "important"
+- Deprioritize/exclude rules (e.g. "do NOT mark no-reply@render.com as urgent", "ignore newsletters from X") → classify matching emails as "low" priority and "fyi" or "newsletter" category, NEVER as "urgent" or "important"
 
-Emails matching ANY of the above exclusion rules MUST be deprioritized. Classify them as "low" priority and "newsletter" or "fyi" category — NEVER as "urgent" or "important". These are explicit user instructions to ignore or downrank these emails.
+These are the user's explicit instructions and override any default classification logic.
 """
 
     prompt = f"""Classify each email below. Return a JSON array with one object per email, in order.
@@ -386,13 +383,11 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
         return False
 
     # Stage 1: Classify ALL emails with AI before inserting (synchronous)
-    user_prefs = get_mail_preferences(client_id)
-    from outreach.db import get_mail_exclusions
-    user_exclusions = get_mail_exclusions(client_id)
+    user_rules = get_mail_preferences(client_id)
     all_classifications = []
     for i in range(0, len(raw_emails), 20):
         batch = raw_emails[i:i + 20]
-        cls_batch = classify_emails_batch(batch, user_preferences=user_prefs, user_exclusions=user_exclusions)
+        cls_batch = classify_emails_batch(batch, user_rules=user_rules)
         all_classifications.extend(cls_batch)
 
     # Stage 2: Insert emails with their AI classification already applied
@@ -422,14 +417,14 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
 
     # Stage 3: Reclassify existing recent emails with current preferences
     # This ensures preference/exclusion changes apply retroactively
-    _reclassify_existing(client_id, days, user_prefs, user_exclusions, campaign_emails, campaign_subjects)
+    _reclassify_existing(client_id, days, user_rules, campaign_emails, campaign_subjects)
 
     return new_count
 
 
-def _reclassify_existing(client_id: int, days: int, user_prefs: str, user_exclusions: str,
+def _reclassify_existing(client_id: int, days: int, user_rules: str,
                          campaign_emails: set, campaign_subjects: set):
-    """Re-run AI classification on recent existing emails using current prefs."""
+    """Re-run AI classification on recent existing emails using current rules."""
     from outreach.db import get_db
     from datetime import date, timedelta
 
@@ -455,7 +450,7 @@ def _reclassify_existing(client_id: int, days: int, user_prefs: str, user_exclus
     all_cls = []
     for i in range(0, len(emails_for_ai), 20):
         batch = emails_for_ai[i:i + 20]
-        cls_batch = classify_emails_batch(batch, user_preferences=user_prefs, user_exclusions=user_exclusions)
+        cls_batch = classify_emails_batch(batch, user_rules=user_rules)
         all_cls.extend(cls_batch)
 
     def _is_campaign(email_data: dict) -> bool:

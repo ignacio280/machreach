@@ -1693,7 +1693,7 @@ def settings():
             flash(("success", "Settings saved."))
         return redirect(url_for("settings"))
 
-    from outreach.db import get_email_accounts, get_subscription, get_mail_preferences, get_team_members, get_mail_exclusions
+    from outreach.db import get_email_accounts, get_subscription, get_mail_preferences, get_team_members
     from outreach.config import PLAN_LIMITS
     accounts = get_email_accounts(session["client_id"])
     sub = get_subscription(session["client_id"])
@@ -1702,7 +1702,6 @@ def settings():
     max_mailboxes = limits.get("mailboxes", 1)
     can_add = max_mailboxes == -1 or len(accounts) < max_mailboxes
     current_prefs = get_mail_preferences(session["client_id"])
-    current_exclusions = get_mail_exclusions(session["client_id"])
     team = get_team_members(session["client_id"])
 
     accounts_html = ""
@@ -1731,42 +1730,23 @@ def settings():
 
     limit_text = "Unlimited" if max_mailboxes == -1 else str(max_mailboxes)
 
-    prefs_list = [p.strip() for p in current_prefs.split(",") if p.strip()] if current_prefs else []
-    all_pref_options = ["Client emails", "Sales leads", "Meeting invites", "Urgent deadlines", "Team messages", "Financial", "Support tickets", "Job applications", "Legal", "Shipping"]
-    pref_chips_html = ""
-    for opt in all_pref_options:
-        selected = "selected" in opt or opt in prefs_list
-        sel_cls = "background:var(--primary);color:#fff;border-color:var(--primary);" if opt in prefs_list else ""
-        pref_chips_html += f'<button type="button" class="pref-chip" data-val="{_esc(opt)}" style="display:inline-block;padding:6px 14px;margin:4px;border-radius:20px;border:1.5px solid var(--border-light);background:var(--bg);font-size:13px;cursor:pointer;transition:all .2s;{sel_cls}" onclick="toggleSettingsPref(this)">{_esc(opt)}</button>'
-    custom_prefs = [p for p in prefs_list if p not in all_pref_options]
-    custom_prefs_text = ", ".join(custom_prefs)
-
     prefs_card = f"""
     <div class="card">
-      <div class="card-header"><h2>&#128340; Mail Sorting Preferences</h2></div>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Select what kinds of emails matter most to you. The AI will prioritize these when sorting your inbox.</p>
-      <div id="settings-pref-chips" style="margin-bottom:14px;">
-        {pref_chips_html}
+      <div class="card-header"><h2>&#128340; Mail Sorting Rules</h2></div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Tell the AI how to sort your inbox. You can write both <strong>prioritize</strong> and <strong>deprioritize</strong> rules in plain English.</p>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.7;background:var(--bg);padding:12px 14px;border-radius:var(--radius-xs);">
+        <strong>Examples:</strong><br>
+        &#128314; Client emails and sales leads are always urgent<br>
+        &#128314; Meeting invites from @company.com are important<br>
+        &#128315; Do NOT mark no-reply@render.com as urgent or important<br>
+        &#128315; Newsletters and marketing emails are always low priority<br>
+        &#128315; Ignore all emails from noreply@github.com
       </div>
       <div class="form-group">
-        <label>Custom priorities</label>
-        <textarea id="settings-custom-prefs" placeholder="e.g. VIP clients, investor updates, supplier invoices..." style="height:60px;font-size:13px;">{_esc(custom_prefs_text)}</textarea>
+        <textarea id="settings-mail-rules" placeholder="Write your mail sorting rules here...&#10;e.g. Client emails are urgent&#10;Do NOT mark no-reply@render.com as important&#10;Financial emails are important&#10;Ignore newsletters from marketing@" style="height:120px;font-size:13px;">{_esc(current_prefs)}</textarea>
       </div>
-      <button class="btn btn-primary" onclick="saveSettingsPrefs()" id="save-prefs-btn">Save Preferences</button>
-      <span id="prefs-save-status" style="margin-left:10px;font-size:13px;"></span>
-
-      <hr style="border:none;border-top:1px solid var(--border-light);margin:24px 0 18px;">
-
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <span style="font-size:18px;">&#128683;</span>
-        <h3 style="font-size:15px;margin:0;">Deprioritize / Exclude Rules</h3>
-      </div>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Tell the AI what to <strong>downrank</strong>. Emails matching these rules will never be marked urgent or important.</p>
-      <div class="form-group">
-        <textarea id="settings-exclusions" placeholder="e.g. do NOT mark no-reply@render.com as urgent&#10;ignore all emails from noreply@github.com&#10;newsletters from marketing@ are always low priority" style="height:90px;font-size:13px;">{_esc(current_exclusions)}</textarea>
-      </div>
-      <button class="btn btn-outline" onclick="saveExclusions()" id="save-exclusions-btn">Save Exclusion Rules</button>
-      <span id="exclusions-save-status" style="margin-left:10px;font-size:13px;"></span>
+      <button class="btn btn-primary" onclick="saveMailRules()" id="save-rules-btn">Save Rules</button>
+      <span id="rules-save-status" style="margin-left:10px;font-size:13px;"></span>
     </div>
     """
 
@@ -2137,72 +2117,29 @@ def settings():
       fetch('/api/email-accounts/' + id, {{method: 'DELETE'}})
         .then(() => window.location.reload());
     }}
-    function toggleSettingsPref(el) {{
-      const sel = el.style.background.includes('var(--primary)');
-      if (sel) {{
-        el.style.background = 'var(--bg)';
-        el.style.color = '';
-        el.style.borderColor = 'var(--border-light)';
-      }} else {{
-        el.style.background = 'var(--primary)';
-        el.style.color = '#fff';
-        el.style.borderColor = 'var(--primary)';
-      }}
-    }}
-    function saveSettingsPrefs() {{
-      const chips = document.querySelectorAll('#settings-pref-chips .pref-chip');
-      const selected = [];
-      chips.forEach(c => {{
-        if (c.style.background.includes('var(--primary)')) selected.push(c.dataset.val);
-      }});
-      const custom = document.getElementById('settings-custom-prefs').value.trim();
-      if (custom) selected.push(custom);
-      const btn = document.getElementById('save-prefs-btn');
-      const status = document.getElementById('prefs-save-status');
+    function saveMailRules() {{
+      var text = document.getElementById('settings-mail-rules').value.trim();
+      var btn = document.getElementById('save-rules-btn');
+      var status = document.getElementById('rules-save-status');
+      if (!text) {{ status.innerHTML = '<span style="color:var(--red);">Please enter at least one rule</span>'; return; }}
       btn.disabled = true;
       btn.textContent = 'Saving...';
       fetch('/api/mail-preferences', {{
         method: 'POST',
         headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify({{preferences: selected.join(', ')}})
-      }}).then(r => r.json()).then(data => {{
-        btn.disabled = false;
-        btn.textContent = 'Save Preferences';
-        if (data.ok) {{
-          status.innerHTML = '<span style="color:var(--green);">&#10003; Saved!</span>';
-          setTimeout(() => status.innerHTML = '', 3000);
-        }} else {{
-          status.innerHTML = '<span style="color:var(--red);">Failed to save</span>';
-        }}
-      }}).catch(() => {{
-        btn.disabled = false;
-        btn.textContent = 'Save Preferences';
-        status.innerHTML = '<span style="color:var(--red);">Connection error</span>';
-      }});
-    }}
-    // --- Team ---
-    function saveExclusions() {{
-      var text = document.getElementById('settings-exclusions').value.trim();
-      var btn = document.getElementById('save-exclusions-btn');
-      var status = document.getElementById('exclusions-save-status');
-      btn.disabled = true;
-      btn.textContent = 'Saving...';
-      fetch('/api/mail-exclusions', {{
-        method: 'POST',
-        headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify({{exclusions: text}})
+        body: JSON.stringify({{preferences: text}})
       }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
         btn.disabled = false;
-        btn.textContent = 'Save Exclusion Rules';
+        btn.textContent = 'Save Rules';
         if (data.ok) {{
-          status.innerHTML = '<span style="color:var(--green);">&#10003; Saved!</span>';
-          setTimeout(function() {{ status.innerHTML = ''; }}, 3000);
+          status.innerHTML = '<span style="color:var(--green);">&#10003; Saved! Rules will apply on next sync.</span>';
+          setTimeout(function() {{ status.innerHTML = ''; }}, 4000);
         }} else {{
-          status.innerHTML = '<span style="color:var(--red);">Failed to save</span>';
+          status.innerHTML = '<span style="color:var(--red);">' + (data.error || 'Failed to save') + '</span>';
         }}
       }}).catch(function() {{
         btn.disabled = false;
-        btn.textContent = 'Save Exclusion Rules';
+        btn.textContent = 'Save Rules';
         status.innerHTML = '<span style="color:var(--red);">Connection error</span>';
       }});
     }}
@@ -4912,18 +4849,6 @@ def api_save_mail_preferences():
         return jsonify({"error": "Preferences cannot be empty"}), 400
     from outreach.db import update_mail_preferences
     update_mail_preferences(session["client_id"], prefs[:2000])
-    return jsonify({"ok": True})
-
-
-@app.route("/api/mail-exclusions", methods=["POST"])
-def api_save_mail_exclusions():
-    """Save the user's mail exclusion / deprioritize rules."""
-    if not _logged_in():
-        return jsonify({"error": "unauthorized"}), 401
-    data = request.get_json() or {}
-    exclusions = data.get("exclusions", "").strip()
-    from outreach.db import update_mail_exclusions
-    update_mail_exclusions(session["client_id"], exclusions[:2000])
     return jsonify({"ok": True})
 
 
