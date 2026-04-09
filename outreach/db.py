@@ -568,6 +568,11 @@ def get_campaign_stats(campaign_id: int) -> dict:
             "WHERE c.campaign_id = ? AND se.status = 'replied'",
             (campaign_id,),
         ).fetchone()[0]
+        bounced = db.execute(
+            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
+            "WHERE c.campaign_id = ? AND se.status = 'bounced'",
+            (campaign_id,),
+        ).fetchone()[0]
         return {
             "total_contacts": total,
             "emails_sent": sent,
@@ -575,6 +580,8 @@ def get_campaign_stats(campaign_id: int) -> dict:
             "open_rate": opened / sent if sent else 0,
             "replies": replied,
             "reply_rate": replied / sent if sent else 0,
+            "bounced": bounced,
+            "bounce_rate": bounced / sent if sent else 0,
         }
 
 
@@ -743,6 +750,12 @@ def get_global_stats(client_id: int) -> dict:
             "WHERE camp.client_id = ? AND se.status = 'replied'",
             (client_id,),
         ).fetchone()[0]
+        total_bounced = db.execute(
+            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
+            "JOIN campaigns camp ON c.campaign_id = camp.id "
+            "WHERE camp.client_id = ? AND se.status = 'bounced'",
+            (client_id,),
+        ).fetchone()[0]
         return {
             "total_campaigns": total_camps,
             "active_campaigns": active_camps,
@@ -752,7 +765,28 @@ def get_global_stats(client_id: int) -> dict:
             "open_rate": total_opened / total_sent if total_sent else 0,
             "total_replied": total_replied,
             "reply_rate": total_replied / total_sent if total_sent else 0,
+            "total_bounced": total_bounced,
+            "bounce_rate": total_bounced / total_sent if total_sent else 0,
         }
+
+
+def get_daily_analytics(client_id: int, days: int = 30) -> list[dict]:
+    """Return daily sent/opened/replied/bounced counts for the last N days."""
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT DATE(se.sent_at) AS day, "
+            "  COUNT(*) AS sent, "
+            "  SUM(CASE WHEN se.status IN ('opened','clicked','replied') THEN 1 ELSE 0 END) AS opened, "
+            "  SUM(CASE WHEN se.status = 'replied' THEN 1 ELSE 0 END) AS replied, "
+            "  SUM(CASE WHEN se.status = 'bounced' THEN 1 ELSE 0 END) AS bounced "
+            "FROM sent_emails se "
+            "JOIN contacts c ON se.contact_id = c.id "
+            "JOIN campaigns camp ON c.campaign_id = camp.id "
+            "WHERE camp.client_id = ? AND se.sent_at >= DATE('now', 'localtime', ?) "
+            "GROUP BY day ORDER BY day",
+            (client_id, f"-{days} days"),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def duplicate_campaign(campaign_id: int, client_id: int) -> int | None:

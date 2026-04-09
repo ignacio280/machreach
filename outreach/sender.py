@@ -75,6 +75,12 @@ def send_email(
     msg.attach(MIMEText(body_text, "plain"))
     msg.attach(MIMEText(html, "html"))
 
+    # CAN-SPAM / RFC 8058 unsubscribe headers (required by Gmail/Yahoo since 2024)
+    if contact_id and BASE_URL:
+        unsub_url = f"{BASE_URL}/unsubscribe/{contact_id}"
+        msg["List-Unsubscribe"] = f"<{unsub_url}>"
+        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+
     try:
         if SMTP_PORT == 587:
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:

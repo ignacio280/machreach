@@ -253,3 +253,133 @@ def _imap_date(days_ago: int) -> str:
     from datetime import date, timedelta
     d = date.today() - timedelta(days=days_ago)
     return d.strftime("%d-%b-%Y")
+
+
+# ---------------------------------------------------------------------------
+# Bounce detection — scans for delivery failure notifications
+# ---------------------------------------------------------------------------
+
+_BOUNCE_FROM = {"mailer-daemon", "postmaster", "mail-daemon"}
+_BOUNCE_SUBJECTS = [
+    "delivery status notification", "undeliverable", "returned mail",
+    "mail delivery failed", "failure notice", "delivery failure",
+    "not delivered", "delivery problem", "undelivered mail",
+    "message not delivered", "could not be delivered",
+]
+
+
+def check_bounces(imap_host: str | None = None, imap_port: int | None = None,
+                  imap_user: str | None = None, imap_password: str | None = None) -> int:
+    """Check inbox for bounce notifications and mark contacts as bounced.
+    Can use default IMAP or per-account credentials.
+    Returns the number of bounces detected."""
+    host = imap_host or IMAP_HOST
+    port = imap_port or IMAP_PORT
+    user = imap_user or IMAP_USER
+    pw = imap_password or IMAP_PASSWORD
+    if not user or not pw:
+        return 0
+
+    known_emails = get_all_sent_recipient_emails()
+    if not known_emails:
+        return 0
+
+    bounces_found = 0
+    try:
+        mail = imaplib.IMAP4_SSL(host, port)
+        mail.login(user, pw)
+        mail.select("INBOX")
+
+        # Search recent emails from mailer-daemon/postmaster
+        _, msg_ids = mail.search(None, "(SINCE " + _imap_date(3) + ")")
+        if not msg_ids[0]:
+            mail.logout()
+            return 0
+
+        all_ids = msg_ids[0].split()
+        if not all_ids:
+            mail.logout()
+            return 0
+
+        # Batch fetch headers
+        id_range = b",".join(all_ids[-200:])  # Check last 200 messages max
+        try:
+            _, hdr_data = mail.fetch(id_range, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])")
+        except Exception:
+            mail.logout()
+            return 0
+
+        bounce_msg_ids = []
+        for item in hdr_data:
+            if not isinstance(item, tuple) or len(item) != 2:
+                continue
+            try:
+                msg = email.message_from_bytes(item[1])
+                from_header = msg.get("From", "")
+                _, from_addr = parseaddr(from_header)
+                from_local = from_addr.lower().split("@")[0] if "@" in from_addr else from_addr.lower()
+                subject = (msg.get("Subject", "") or "").lower()
+
+                is_bounce = from_local in _BOUNCE_FROM or any(
+                    kw in subject for kw in _BOUNCE_SUBJECTS
+                )
+                if is_bounce:
+                    bounce_msg_ids.append(all_ids[len(bounce_msg_ids)])
+            except Exception:
+                continue
+
+        if not bounce_msg_ids:
+            mail.logout()
+            return 0
+
+        # Fetch bodies of bounce messages to extract the bounced email address
+        body_range = b",".join(bounce_msg_ids[:50])  # Max 50 bounces at a time
+        try:
+            _, body_data = mail.fetch(body_range, "(BODY.PEEK[])")
+        except Exception:
+            mail.logout()
+            return 0
+
+        for b_item in body_data:
+            if not isinstance(b_item, tuple) or len(b_item) != 2:
+                continue
+            try:
+                full_msg = email.message_from_bytes(b_item[1])
+                body = _extract_body(full_msg)
+                # Try to find the original recipient email in the bounce body
+                import re
+                # Common patterns in bounce messages
+                found_emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', body.lower())
+                for bounced_addr in found_emails:
+                    if bounced_addr in known_emails:
+                        if _mark_bounced(bounced_addr):
+                            bounces_found += 1
+                            print(f"  Bounce detected for {bounced_addr}")
+                        break
+            except Exception:
+                continue
+
+        mail.logout()
+    except Exception as e:
+        print(f"[BOUNCE CHECK] IMAP error: {e}")
+
+    return bounces_found
+
+
+def _mark_bounced(contact_email: str) -> bool:
+    """Mark a contact as bounced in both campaign contacts and sent_emails."""
+    from outreach.db import get_db
+    with get_db() as db:
+        row = db.execute(
+            "SELECT c.id as contact_id, se.id as sent_id "
+            "FROM contacts c "
+            "JOIN sent_emails se ON se.contact_id = c.id "
+            "WHERE LOWER(c.email) = LOWER(?) AND c.status NOT IN ('bounced', 'replied') "
+            "ORDER BY se.sent_at DESC LIMIT 1",
+            (contact_email,),
+        ).fetchone()
+        if not row:
+            return False
+        db.execute("UPDATE contacts SET status = 'bounced' WHERE id = ?", (row["contact_id"],))
+        db.execute("UPDATE sent_emails SET status = 'bounced' WHERE id = ?", (row["sent_id"],))
+        return True

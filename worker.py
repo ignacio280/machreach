@@ -11,7 +11,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from outreach.ai import personalize_email, personalize_subject, translate_email
 from outreach.config import DELAY_BETWEEN_EMAILS_SEC, PLAN_LIMITS, SENDER_NAME
 from outreach.db import get_emails_to_send, init_db, record_sent
-from outreach.reply_checker import check_replies
+from outreach.reply_checker import check_replies, check_bounces
 from outreach.sender import pick_variant, send_email
 
 sent_today = {}  # {client_id: count}
@@ -51,6 +51,14 @@ def send_batch():
             print(f"Detected {n} new reply(s).")
     except Exception as e:
         print(f"Reply check error (non-fatal): {e}")
+
+    # Check for bounces — stops follow-ups to invalid addresses
+    try:
+        b = check_bounces()
+        if b:
+            print(f"Detected {b} bounce(s).")
+    except Exception as e:
+        print(f"Bounce check error (non-fatal): {e}")
 
     batch = get_emails_to_send(limit=30)
     if not batch:

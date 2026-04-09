@@ -166,6 +166,7 @@ LAYOUT = """<!DOCTYPE html>
   <title>MachReach — {{title}}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script>
     // Apply saved theme immediately to prevent flash
     (function(){var t=localStorage.getItem('machreach-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
@@ -655,6 +656,7 @@ LAYOUT = """<!DOCTYPE html>
         open_rate_fmt: document.querySelector('[data-stat="open_rate_fmt"]'),
         total_replied: document.querySelector('[data-stat="total_replied"]'),
         reply_rate_fmt: document.querySelector('[data-stat="reply_rate_fmt"]'),
+        total_bounced: document.querySelector('[data-stat="total_bounced"]'),
       };
       const hasDashStats = Object.values(dashStatEls).some(el => el !== null);
 
@@ -1281,6 +1283,22 @@ def dashboard():
       <div class="stat-card stat-purple"><div class="num" data-stat="open_rate_fmt">{{g_open_rate}}</div><div class="label">{{lbl_open_rate}}</div></div>
       <div class="stat-card stat-green"><div class="num" data-stat="total_replied">{{g.total_replied}}</div><div class="label">{{lbl_replies}}</div></div>
       <div class="stat-card stat-yellow"><div class="num" data-stat="reply_rate_fmt">{{g_reply_rate}}</div><div class="label">Reply Rate</div></div>
+      <div class="stat-card stat-red"><div class="num" data-stat="total_bounced">{{g.total_bounced}}</div><div class="label">Bounced</div></div>
+    </div>
+
+    <!-- Analytics Chart -->
+    <div class="card" style="margin-bottom:22px;">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>&#128200; Email Activity</h2>
+        <select id="chart-range" onchange="loadChart(this.value)" style="font-size:13px;padding:6px 12px;border-radius:var(--radius-xs);border:1px solid var(--border-light);background:var(--card);color:var(--text);">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </div>
+      <div style="position:relative;height:280px;padding:8px;">
+        <canvas id="activityChart"></canvas>
+      </div>
     </div>
 
     <div class="card">
@@ -1293,6 +1311,52 @@ def dashboard():
         <tbody>{{rows}}</tbody>
       </table>
     </div>
+
+    <script>
+    let actChart = null;
+    function loadChart(days) {{
+      fetch('/api/analytics/daily?days=' + days)
+        .then(r => r.json())
+        .then(data => {{
+          if (data.error) return;
+          const labels = data.map(d => d.day);
+          const sent = data.map(d => d.sent);
+          const opened = data.map(d => d.opened);
+          const replied = data.map(d => d.replied);
+          const bounced = data.map(d => d.bounced);
+          const ctx = document.getElementById('activityChart');
+          if (!ctx) return;
+          if (actChart) actChart.destroy();
+          const cs = getComputedStyle(document.documentElement);
+          actChart = new Chart(ctx, {{
+            type: 'line',
+            data: {{
+              labels,
+              datasets: [
+                {{label:'Sent', data:sent, borderColor:cs.getPropertyValue('--blue').trim()||'#3B82F6', backgroundColor:'rgba(59,130,246,0.08)', fill:true, tension:0.3, pointRadius:3}},
+                {{label:'Opened', data:opened, borderColor:cs.getPropertyValue('--green').trim()||'#10B981', backgroundColor:'rgba(16,185,129,0.08)', fill:true, tension:0.3, pointRadius:3}},
+                {{label:'Replied', data:replied, borderColor:cs.getPropertyValue('--primary').trim()||'#7C3AED', backgroundColor:'rgba(124,58,237,0.08)', fill:true, tension:0.3, pointRadius:3}},
+                {{label:'Bounced', data:bounced, borderColor:cs.getPropertyValue('--red').trim()||'#EF4444', backgroundColor:'rgba(239,68,68,0.08)', fill:true, tension:0.3, pointRadius:3}},
+              ]
+            }},
+            options: {{
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: {{ mode: 'index', intersect: false }},
+              plugins: {{
+                legend: {{ position: 'top', labels: {{ usePointStyle: true, padding: 16, font: {{ family: 'Inter', size: 12 }} }} }},
+                tooltip: {{ backgroundColor: 'rgba(0,0,0,0.8)', titleFont: {{ family: 'Inter' }}, bodyFont: {{ family: 'Inter' }} }}
+              }},
+              scales: {{
+                x: {{ grid: {{ display: false }}, ticks: {{ font: {{ family: 'Inter', size: 11 }}, maxRotation: 45 }} }},
+                y: {{ beginAtZero: true, ticks: {{ font: {{ family: 'Inter', size: 11 }}, precision: 0 }}, grid: {{ color: 'rgba(128,128,128,0.1)' }} }}
+              }}
+            }}
+          }});
+        }}).catch(() => {{}});
+    }}
+    if (document.getElementById('activityChart')) loadChart(30);
+    </script>
     """, active_page="dashboard", rows=Markup(rows), g=gstats,
         g_open_rate=f"{gstats['open_rate']:.0%}", g_reply_rate=f"{gstats['reply_rate']:.0%}",
         usage_text=Markup(usage_text), upgrade_cta=Markup(upgrade_cta),
@@ -2792,16 +2856,33 @@ def track_open(sent_email_id):
     return Response(TRACKING_PIXEL, mimetype="image/gif")
 
 
-@app.route("/unsubscribe/<int:contact_id>")
+@app.route("/unsubscribe/<int:contact_id>", methods=["GET", "POST"])
+@csrf.exempt  # Unsubscribe must work without CSRF (external email clients)
 def unsubscribe(contact_id):
     from outreach.db import get_db
     with get_db() as db:
+        # Get the contact's email before updating
+        contact = db.execute("SELECT email, campaign_id FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+        # Mark the campaign contact as unsubscribed
         db.execute("UPDATE contacts SET status = 'unsubscribed' WHERE id = ?", (contact_id,))
+        # Also block in contacts_book (across all campaigns) if we know who they are
+        if contact:
+            email_addr = contact["email"]
+            # Find the client_id via the campaign
+            camp = db.execute("SELECT client_id FROM campaigns WHERE id = ?", (contact["campaign_id"],)).fetchone()
+            if camp:
+                # Mark all campaign contacts with this email as unsubscribed for this client
+                db.execute("""UPDATE contacts SET status = 'unsubscribed'
+                    WHERE email = ? AND campaign_id IN (SELECT id FROM campaigns WHERE client_id = ?)
+                    AND status != 'unsubscribed'""", (email_addr, camp["client_id"]))
+    # RFC 8058: POST = one-click unsubscribe (email client auto-sends)
+    if request.method == "POST":
+        return "", 200
     return render_template_string(LAYOUT, title="Unsubscribed", logged_in=False, messages=[], active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup("""
     <div style="text-align:center;padding:80px 24px;">
       <div style="font-size:48px;margin-bottom:16px;opacity:0.4;">&#9993;</div>
       <h1 style="font-size:22px;margin-bottom:8px;">You've been unsubscribed</h1>
-      <p style="color:var(--text-secondary);font-size:14px;">You won't receive any more emails from this campaign.</p>
+      <p style="color:var(--text-secondary);font-size:14px;">You won't receive any more emails from this sender.</p>
     </div>
     """))
 
@@ -2813,7 +2894,20 @@ def api_global_stats():
     gstats = get_global_stats(session["client_id"])
     gstats["open_rate_fmt"] = f"{gstats['open_rate']:.0%}"
     gstats["reply_rate_fmt"] = f"{gstats['reply_rate']:.0%}"
+    gstats["bounce_rate_fmt"] = f"{gstats['bounce_rate']:.0%}"
     return jsonify(gstats)
+
+
+@app.route("/api/analytics/daily")
+def api_analytics_daily():
+    """Return daily time-series data for charts."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    from outreach.db import get_daily_analytics
+    days = request.args.get("days", 30, type=int)
+    days = min(max(days, 7), 365)
+    data = get_daily_analytics(session["client_id"], days)
+    return jsonify(data)
 
 
 @app.route("/api/campaign/<int:campaign_id>/stats")
@@ -2824,6 +2918,7 @@ def api_campaign_stats(campaign_id):
     stats = get_campaign_stats(campaign_id)
     stats["open_rate_fmt"] = f"{stats['open_rate']:.0%}"
     stats["reply_rate_fmt"] = f"{stats['reply_rate']:.0%}"
+    stats["bounce_rate_fmt"] = f"{stats['bounce_rate']:.0%}"
     return jsonify(stats)
 
 
@@ -2838,6 +2933,7 @@ def api_check_replies():
         gstats = get_global_stats(session["client_id"])
         gstats["open_rate_fmt"] = f"{gstats['open_rate']:.0%}"
         gstats["reply_rate_fmt"] = f"{gstats['reply_rate']:.0%}"
+        gstats["bounce_rate_fmt"] = f"{gstats['bounce_rate']:.0%}"
         return jsonify({"new_replies": n, "stats": gstats})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3056,6 +3152,10 @@ def export_page():
               <div style="text-align:center;padding:16px;">
                 <div style="font-size:28px;font-weight:800;color:var(--primary);">${{d.total_replied}}</div>
                 <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;">Replies (${{d.reply_rate_fmt}})</div>
+              </div>
+              <div style="text-align:center;padding:16px;">
+                <div style="font-size:28px;font-weight:800;color:var(--red);">${{d.total_bounced}}</div>
+                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;">Bounced (${{d.bounce_rate_fmt}})</div>
               </div>
               <div style="text-align:center;padding:16px;">
                 <div style="font-size:28px;font-weight:800;color:var(--yellow);">${{d.total_contacts}}</div>
@@ -4748,12 +4848,16 @@ def contacts_page():
     contacts = get_contacts(session["client_id"], search=search,
                             relationship=rel_filter, tag=tag_filter)
 
-    # Collect all unique tags and relationships for filters
-    all_tags = set()
+    # Collect all unique tags and relationships for filters (need full list for counts)
+    all_tags_count = {}
     all_rels = set()
-    for c in contacts:
+    all_contacts_full = get_contacts(session["client_id"])
+    for c in all_contacts_full:
         if c.get("tags"):
-            all_tags.update(tg.strip() for tg in c["tags"].split(",") if tg.strip())
+            for tg in c["tags"].split(","):
+                tg = tg.strip()
+                if tg:
+                    all_tags_count[tg] = all_tags_count.get(tg, 0) + 1
         if c.get("relationship"):
             all_rels.add(c["relationship"])
 
@@ -4763,9 +4867,9 @@ def contacts_page():
         rel_options += f'<option value="{_esc(r)}" {sel}>{_esc(r.title())}</option>'
 
     tag_badges = ""
-    for tg in sorted(all_tags):
+    for tg in sorted(all_tags_count.keys()):
         active = "background:var(--primary);color:#fff;" if tag_filter == tg else ""
-        tag_badges += f'<a href="?tag={_esc(tg)}" class="badge badge-gray" style="text-decoration:none;font-size:12px;cursor:pointer;{active}">{_esc(tg)}</a> '
+        tag_badges += f'<a href="?tag={_esc(tg)}" class="badge badge-gray" style="text-decoration:none;font-size:12px;cursor:pointer;{active}">{_esc(tg)} <span style="opacity:0.7;">({all_tags_count[tg]})</span></a> '
 
     # Build contact cards
     contact_cards = ""
@@ -4782,7 +4886,9 @@ def contacts_page():
         notes_preview = _esc(c["notes"][:80]) + "..." if len(c.get("notes", "")) > 80 else _esc(c.get("notes", ""))
 
         contact_cards += f"""
-        <a href="/contacts/{c['id']}" class="card" style="text-decoration:none;color:inherit;display:flex;align-items:flex-start;gap:16px;padding:20px;cursor:pointer;transition:box-shadow 0.15s;">
+        <div class="card" style="display:flex;align-items:flex-start;gap:16px;padding:20px;position:relative;">
+          <input type="checkbox" class="bulk-sel" data-cid="{c['id']}" style="position:absolute;top:12px;left:12px;width:16px;height:16px;cursor:pointer;accent-color:var(--primary);display:none;" onclick="event.stopPropagation();">
+          <a href="/contacts/{c['id']}" style="text-decoration:none;color:inherit;display:flex;align-items:flex-start;gap:16px;flex:1;cursor:pointer;">
           <div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#8B5CF6);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:20px;flex-shrink:0;">
             {initials}
           </div>
@@ -4799,7 +4905,8 @@ def contacts_page():
               <span style="font-size:11px;color:var(--text-muted);margin-left:auto;">Last contact: {last}</span>
             </div>
           </div>
-        </a>"""
+          </a>
+        </div>"""
 
     if not contact_cards:
         contact_cards = f"""
@@ -4817,6 +4924,7 @@ def contacts_page():
         <p class="subtitle" style="font-size:16px;">Your personal contact book — AI uses this context to write perfect replies.</p>
       </div>
       <div class="btn-group">
+        <button onclick="toggleBulkMode()" class="btn btn-ghost" id="bulk-btn" style="font-size:14px;padding:10px 18px;">&#9745; Select</button>
         <button onclick="document.getElementById('add-modal').style.display='flex'" class="btn btn-primary" style="font-size:15px;padding:10px 22px;">&#43; Add Contact</button>
       </div>
     </div>
@@ -4874,6 +4982,56 @@ def contacts_page():
         </form>
       </div>
     </div>
+
+    <!-- Bulk action bar -->
+    <div id="bulk-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:2px solid var(--primary);padding:14px 24px;z-index:190;box-shadow:0 -4px 20px rgba(0,0,0,0.15);display:none;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span id="bulk-count" style="font-weight:700;font-size:14px;color:var(--primary);">0 selected</span>
+      <input type="text" id="bulk-tag-input" placeholder="Enter tag name..." style="font-size:14px;padding:8px 14px;border-radius:var(--radius-xs);border:1px solid var(--border-light);min-width:180px;">
+      <button onclick="bulkTag('add')" class="btn btn-primary btn-sm" style="font-size:13px;">+ Add Tag</button>
+      <button onclick="bulkTag('remove')" class="btn btn-ghost btn-sm" style="font-size:13px;color:var(--red);">- Remove Tag</button>
+      <div style="margin-left:8px;display:flex;gap:6px;flex-wrap:wrap;" id="quick-tags">
+        <button onclick="document.getElementById('bulk-tag-input').value='VIP';bulkTag('add')" class="btn btn-ghost btn-sm" style="font-size:11px;">VIP</button>
+        <button onclick="document.getElementById('bulk-tag-input').value='Hot Lead';bulkTag('add')" class="btn btn-ghost btn-sm" style="font-size:11px;">Hot Lead</button>
+        <button onclick="document.getElementById('bulk-tag-input').value='Follow Up';bulkTag('add')" class="btn btn-ghost btn-sm" style="font-size:11px;">Follow Up</button>
+        <button onclick="document.getElementById('bulk-tag-input').value='Priority';bulkTag('add')" class="btn btn-ghost btn-sm" style="font-size:11px;">Priority</button>
+      </div>
+      <button onclick="toggleBulkMode()" class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:13px;">Cancel</button>
+    </div>
+
+    <script>
+    let bulkMode = false;
+    function toggleBulkMode() {{
+      bulkMode = !bulkMode;
+      const boxes = document.querySelectorAll('.bulk-sel');
+      const bar = document.getElementById('bulk-bar');
+      const btn = document.getElementById('bulk-btn');
+      boxes.forEach(b => {{ b.style.display = bulkMode ? 'block' : 'none'; b.checked = false; }});
+      bar.style.display = bulkMode ? 'flex' : 'none';
+      btn.textContent = bulkMode ? '\u2716 Cancel' : '\u2611 Select';
+      updateBulkCount();
+    }}
+    document.addEventListener('change', function(e) {{
+      if (e.target.classList.contains('bulk-sel')) updateBulkCount();
+    }});
+    function updateBulkCount() {{
+      const n = document.querySelectorAll('.bulk-sel:checked').length;
+      document.getElementById('bulk-count').textContent = n + ' selected';
+    }}
+    function bulkTag(action) {{
+      const tag = document.getElementById('bulk-tag-input').value.trim();
+      if (!tag) return alert('Enter a tag name first.');
+      const ids = [...document.querySelectorAll('.bulk-sel:checked')].map(b => parseInt(b.dataset.cid));
+      if (!ids.length) return alert('Select at least one contact.');
+      fetch('/api/contacts/bulk-tag', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{ids, tag, action}})
+      }}).then(r => r.json()).then(d => {{
+        if (d.ok) location.reload();
+        else alert(d.error || 'Error');
+      }}).catch(() => alert('Network error'));
+    }}
+    </script>
     """, active_page="contacts", wide=True)
 
 
@@ -5129,6 +5287,39 @@ def api_contact_quick_save():
     )
     c = get_contact_by_email(session["client_id"], data["email"])
     return jsonify({"id": c["id"] if c else None})
+
+
+@app.route("/api/contacts/bulk-tag", methods=["POST"])
+def api_contacts_bulk_tag():
+    """Add or remove a tag from multiple contacts at once."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    from outreach.db import get_contact, update_contact
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "invalid request"}), 400
+    ids = data.get("ids", [])
+    tag = data.get("tag", "").strip()
+    action = data.get("action", "add")  # "add" or "remove"
+    if not tag or not ids:
+        return jsonify({"error": "tag and ids required"}), 400
+    updated = 0
+    for cid in ids:
+        c = get_contact(int(cid), session["client_id"])
+        if not c:
+            continue
+        existing = set(t.strip() for t in (c.get("tags") or "").split(",") if t.strip())
+        if action == "add":
+            existing.add(tag)
+        elif action == "remove":
+            existing.discard(tag)
+        new_tags = ",".join(sorted(existing))
+        update_contact(int(cid), session["client_id"],
+                       name=c["name"], company=c["company"], role=c["role"],
+                       relationship=c["relationship"], notes=c["notes"],
+                       personality=c.get("personality", ""), tags=new_tags)
+        updated += 1
+    return jsonify({"ok": True, "updated": updated})
 
 
 @app.route("/api/contacts/<int:contact_id>/mark-important", methods=["POST"])
