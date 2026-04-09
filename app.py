@@ -1211,12 +1211,12 @@ def settings():
       <div id="add-account-form" style="display:none;margin-top:16px;padding:20px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border-light);">
         <h3 style="font-size:16px;margin-bottom:14px;">Add Email Account</h3>
         <div class="form-row">
-          <div class="form-group"><label>Label</label><input id="acct-label" placeholder="Work Gmail, Personal, etc."></div>
-          <div class="form-group"><label>Email Address</label><input id="acct-email" type="email" placeholder="you@example.com" required></div>
+          <div class="form-group"><label>Label</label><input id="acct-label" placeholder="Work Gmail, Personal, etc." autocomplete="off"></div>
+          <div class="form-group"><label>Email Address</label><input id="acct-email" type="email" placeholder="you@example.com" required autocomplete="off"></div>
         </div>
         <div class="form-group">
           <label>App Password</label>
-          <input id="acct-password" type="password" placeholder="Gmail: Settings > Security > App Passwords" required>
+          <input id="acct-password" type="password" placeholder="Paste your 16-character App Password here" required autocomplete="new-password">
           <p class="form-hint">For Gmail, generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>. For Outlook, use your account password with <a href="https://support.microsoft.com/en-us/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944" target="_blank">app passwords</a>.</p>
         </div>
         <details style="margin-bottom:14px;">
@@ -1960,11 +1960,47 @@ def new_campaign():
 
         return redirect(f"/campaign/{camp_id}")
 
+    # Check if user has any existing campaigns for tutorial
+    existing_camps = get_campaigns(session["client_id"])
+    show_tutorial = "block" if len(existing_camps) == 0 else "none"
+
     return _render(t("campaign.new_title"), """
     <div class="breadcrumb"><a href="/dashboard">{{lbl_dashboard}}</a> / {{lbl_new_campaign}}</div>
     <div class="page-header">
       <h1>{{lbl_new_campaign}}</h1>
     </div>
+
+    <div id="campaign-tutorial" class="card" style="display:{{show_tutorial}};margin-bottom:24px;border:2px solid var(--primary);background:linear-gradient(135deg, var(--primary-light), var(--bg));">
+      <div style="padding:24px;position:relative;">
+        <button onclick="document.getElementById('campaign-tutorial').style.display='none'" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);">&times;</button>
+        <h2 style="margin:0 0 8px;">&#129302; How Campaigns Work</h2>
+        <p style="color:var(--text-secondary);margin-bottom:16px;">MachReach uses AI to create your entire email sequence automatically. Here's what to expect:</p>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--primary);color:white;border-radius:50%;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">1</span>
+            <div>
+              <strong>Fill in the form below</strong>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Tell us your business type, target audience, and preferred tone. The more specific, the better your emails will be.</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--primary);color:white;border-radius:50%;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">2</span>
+            <div>
+              <strong>AI generates a multi-step email sequence</strong>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Our AI creates 3-5 follow-up emails with A/B test variants, spaced out over days. You can edit any of them before sending.</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--primary);color:white;border-radius:50%;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">3</span>
+            <div>
+              <strong>Add contacts and start sending</strong>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Import contacts via CSV or add them manually. MachReach sends emails on your behalf and tracks opens, clicks, and replies.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <form method="post" data-loading>
         <div class="form-group">
@@ -2002,7 +2038,7 @@ def new_campaign():
         lbl_name=t("campaign.name"), lbl_audience=t("campaign.target_audience"),
         lbl_tone=t("campaign.tone"), lbl_professional=t("campaign.tone_professional"),
         lbl_casual=t("campaign.tone_casual"), lbl_create=t("campaign.create_btn"),
-        lbl_cancel=t("common.cancel"))
+        lbl_cancel=t("common.cancel"), show_tutorial=show_tutorial)
 
 
 @app.route("/campaign/<int:campaign_id>")
@@ -2414,7 +2450,7 @@ def api_reply_draft(sent_email_id):
             reply_sentiment=ctx.get("reply_sentiment", "neutral"),
             contact_name=ctx["contact_name"],
             contact_company=ctx["company"],
-            sender_name=SENDER_NAME,
+            sender_name=get_client(session["client_id"]).get("name", SENDER_NAME),
             business_context=ctx.get("business_type", ""),
         )
         return jsonify({"draft": draft})
@@ -2815,7 +2851,46 @@ def mail_hub():
     for s in scheduled[:5]:
         sched_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border-light);font-size:13px;"><div style="font-weight:600;">{_esc(s["to_email"])}</div><div style="color:var(--text-muted);">{_esc(s["subject"][:40])}</div><div style="color:var(--primary);font-size:12px;">&#128340; {s["scheduled_at"][:16]}</div></div>'
 
+    # Show tutorial if user has no email accounts (first time visiting Mail Hub)
+    mail_hub_tutorial = ""
+    if not accounts:
+        mail_hub_tutorial = f"""
+    <div class="card" style="margin-bottom:24px;border:2px solid var(--primary);background:linear-gradient(135deg, var(--primary-light), var(--bg));">
+      <div style="padding:24px;">
+        <h2 style="margin:0 0 8px;">&#128231; {t("mail.title")} — Getting Started</h2>
+        <p style="color:var(--text-secondary);margin-bottom:20px;">Follow these steps to set up your Mail Hub inbox:</p>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--primary);color:white;border-radius:50%;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">1</span>
+            <div>
+              <strong>Connect your email account</strong>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Go to <a href="/settings" style="color:var(--primary);font-weight:600;">Settings</a> and click "+ Add Email Account". You'll need a Gmail <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--primary);">App Password</a> (not your regular password).</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--primary);color:white;border-radius:50%;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">2</span>
+            <div>
+              <strong>Enable 2-Step Verification first</strong>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">App Passwords require 2FA. Go to <a href="https://myaccount.google.com/security" target="_blank" style="color:var(--primary);">Google Security</a> → enable 2-Step Verification → then create an App Password.</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="background:var(--primary);color:white;border-radius:50%;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">3</span>
+            <div>
+              <strong>Sync your inbox</strong>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Once connected, come back here and click "Sync" to pull in your emails. AI will automatically classify and prioritize them.</p>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:20px;">
+          <a href="/settings" class="btn btn-primary">&#9881; Go to Settings</a>
+        </div>
+      </div>
+    </div>
+    """
+
     return _render(t("mail.title"), f"""
+    {mail_hub_tutorial}
     <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / {t("mail.title")}</div>
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
       <div>
@@ -3393,7 +3468,7 @@ def api_add_email_account():
         return jsonify({"error": f"Mailbox limit reached ({max_mb}). Upgrade your plan for more."}), 429
 
     email_addr = data["email"].strip().lower()
-    password = data["password"]
+    password = data["password"].strip()
     imap_host = data.get("imap_host", "imap.gmail.com")
     imap_port = int(data.get("imap_port", 993))
     smtp_host = data.get("smtp_host", "smtp.gmail.com")
@@ -4044,7 +4119,7 @@ def api_mail_draft(mail_id):
             body=mail["body_preview"],
             priority=mail["priority"],
             category=mail["category"],
-            sender_name=SENDER_NAME,
+            sender_name=get_client(session["client_id"]).get("name", SENDER_NAME),
             contact_context=contact,
         )
         return jsonify({"draft": draft})
