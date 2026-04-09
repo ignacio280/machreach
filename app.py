@@ -258,8 +258,12 @@ LAYOUT = """<!DOCTYPE html>
     :root[data-theme="dark"] .badge-gray { background: #334155; color: #CBD5E1; }
     :root[data-theme="dark"] .badge-purple { background: #312E81; color: #C7D2FE; }
     :root[data-theme="dark"] .stat-card { border-color: #334155; }
-    :root[data-theme="dark"] .flash-success { background: #064E3B; color: #6EE7B7; border-color: #065F46; }
-    :root[data-theme="dark"] .flash-error { background: #450A0A; color: #FCA5A5; border-color: #7F1D1D; }
+    :root[data-theme="dark"] .toast-success { background: #064E3B; color: #6EE7B7; border-color: #065F46; }
+    :root[data-theme="dark"] .toast-success .toast-progress { background: #6EE7B7; }
+    :root[data-theme="dark"] .toast-error { background: #450A0A; color: #FCA5A5; border-color: #7F1D1D; }
+    :root[data-theme="dark"] .toast-error .toast-progress { background: #FCA5A5; }
+    :root[data-theme="dark"] .toast-info { background: #172554; color: #93C5FD; border-color: #1E3A5F; }
+    :root[data-theme="dark"] .toast-info .toast-progress { background: #93C5FD; }
     :root[data-theme="dark"] .seq-body { background: #0F172A; border-color: #334155; }
     :root[data-theme="dark"] .seq-card { border-left-color: #818CF8; }
     :root[data-theme="dark"] .auth-card { border-color: #334155; }
@@ -389,11 +393,19 @@ LAYOUT = """<!DOCTYPE html>
     .badge-red { background: var(--red-light); color: #991B1B; }
     .badge-purple { background: var(--primary-light); color: var(--primary-dark); }
 
-    /* Flash messages */
-    .flash { padding: 13px 18px; border-radius: var(--radius-sm); margin-bottom: 14px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 10px; animation: slideDown 0.3s ease; }
-    .flash-success { background: var(--green-light); color: var(--green-dark); border: 1px solid #A7F3D0; }
-    .flash-error { background: var(--red-light); color: #991B1B; border: 1px solid #FECACA; }
-    .flash-info { background: var(--blue-light); color: #1E40AF; border: 1px solid #93C5FD; }
+    /* Toast notifications */
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-width: 400px; }
+    .toast { padding: 14px 20px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 10px; pointer-events: auto; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,.15); animation: toastIn 0.35s ease; position: relative; overflow: hidden; }
+    .toast .toast-progress { position: absolute; bottom: 0; left: 0; height: 3px; border-radius: 0 0 var(--radius-sm) var(--radius-sm); animation: toastTimer 4s linear forwards; }
+    .toast-success { background: var(--green-light); color: var(--green-dark); border: 1px solid #A7F3D0; }
+    .toast-success .toast-progress { background: var(--green-dark); }
+    .toast-error { background: var(--red-light); color: #991B1B; border: 1px solid #FECACA; }
+    .toast-error .toast-progress { background: #991B1B; }
+    .toast-info { background: var(--blue-light); color: #1E40AF; border: 1px solid #93C5FD; }
+    .toast-info .toast-progress { background: #1E40AF; }
+    .toast.toast-out { animation: toastOut 0.3s ease forwards; }
+    .toast-close { margin-left: auto; background: none; border: none; color: inherit; font-size: 16px; cursor: pointer; opacity: .6; padding: 0 2px; }
+    .toast-close:hover { opacity: 1; }
 
     /* Sequence cards */
     .seq-card { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); margin-bottom: 12px; border: 1px solid var(--border-light); border-left: 3px solid var(--primary); position: relative; }
@@ -484,6 +496,9 @@ LAYOUT = """<!DOCTYPE html>
     @keyframes spin { to { transform: rotate(360deg); } }
 
     @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(80px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes toastOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(80px); } }
+    @keyframes toastTimer { from { width: 100%; } to { width: 0%; } }
 
     /* Entrance animations */
     @keyframes fadeInUp {
@@ -581,6 +596,7 @@ LAYOUT = """<!DOCTYPE html>
       .nav-links a.active { background: rgba(255,255,255,0.13); }
       .nav-links .nav-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 8px 0; width: 100%; }
       .nav-links .nav-user { font-size: 14px; padding: 12px 16px; }
+      .toast-container { right: 12px; left: 12px; max-width: none; }
     }
   </style>
 </head>
@@ -623,12 +639,16 @@ LAYOUT = """<!DOCTYPE html>
     <div style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;padding:10px 20px;border-radius:8px;margin-bottom:18px;text-align:center;font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:8px;">
       &#128679; <b>Beta</b> &mdash; MachReach is in testing mode. Subscriptions are not available yet. All features are free during this period.
     </div>
+    <div class="toast-container" id="toast-container">
     {% for cat, msg in messages %}
-      <div class="flash flash-{{cat}}">
-        {% if cat == 'success' %}&#10003;{% else %}&#9888;{% endif %}
-        {{msg}}
+      <div class="toast toast-{{cat}}" onclick="dismissToast(this)">
+        {% if cat == 'success' %}&#10003;{% elif cat == 'error' %}&#10007;{% else %}&#8505;{% endif %}
+        <span style="flex:1;">{{msg}}</span>
+        <button class="toast-close" onclick="event.stopPropagation();dismissToast(this.parentElement)">&times;</button>
+        <div class="toast-progress"></div>
       </div>
     {% endfor %}
+    </div>
     {{content|safe}}
   </div>
   <footer style="border-top:1px solid var(--border);margin-top:48px;padding:24px 48px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-muted);flex-wrap:wrap;gap:12px;">
@@ -640,6 +660,29 @@ LAYOUT = """<!DOCTYPE html>
     </div>
   </footer>
   <script>
+    // Toast notifications
+    function dismissToast(el) {
+      el.classList.add('toast-out');
+      setTimeout(function() { el.remove(); }, 300);
+    }
+    function showToast(msg, cat) {
+      var c = document.getElementById('toast-container');
+      if (!c) return;
+      var icons = {success: '\u2713', error: '\u2717', info: '\u2139'};
+      var d = document.createElement('div');
+      d.className = 'toast toast-' + (cat || 'success');
+      d.onclick = function() { dismissToast(d); };
+      d.innerHTML = (icons[cat] || icons.success) +
+        ' <span style="flex:1;">' + msg + '</span>' +
+        '<button class="toast-close" onclick="event.stopPropagation();dismissToast(this.parentElement)">&times;</button>' +
+        '<div class="toast-progress"></div>';
+      c.appendChild(d);
+      setTimeout(function() { dismissToast(d); }, 4000);
+    }
+    // Auto-dismiss server-rendered toasts
+    document.querySelectorAll('.toast').forEach(function(t) {
+      setTimeout(function() { dismissToast(t); }, 4000);
+    });
     // Loading button handler
     document.querySelectorAll('form[data-loading]').forEach(form => {
       form.addEventListener('submit', () => {
