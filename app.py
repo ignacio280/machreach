@@ -3274,12 +3274,20 @@ def view_campaign(campaign_id):
         });
       }
       // Load CRM contacts when modal opens
-      document.getElementById('crm-import-modal').addEventListener('transitionend', function(){});
       (function loadCrm() {
-        fetch('/api/contacts-book/list').then(function(r) { return r.json(); }).then(function(data) {
-          _crmCache = data.contacts || [];
-          renderCrmList(_crmCache);
-        });
+        fetch('/api/contacts-book/list')
+          .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function(data) {
+            _crmCache = data.contacts || [];
+            renderCrmList(_crmCache);
+          })
+          .catch(function(err) {
+            document.getElementById('crm-contacts-list').innerHTML =
+              '<p class="text-muted text-xs" style="color:var(--red);">Failed to load contacts: ' + err.message + '</p>';
+          });
       })();
       </script>
       {% endraw %}
@@ -3391,14 +3399,17 @@ def upload_contacts(campaign_id):
 def api_contacts_book_list():
     if not _logged_in():
         return jsonify({"error": "Not logged in"}), 401
-    from outreach.db import get_contacts as get_crm_contacts
-    contacts = get_crm_contacts(session["client_id"], search=request.args.get("q", ""))
-    return jsonify({"contacts": [
-        {"id": c["id"], "name": c.get("name", ""), "email": c["email"],
-         "company": c.get("company", ""), "role": c.get("role", ""),
-         "tags": c.get("tags", "")}
-        for c in contacts
-    ]})
+    try:
+        from outreach.db import get_contacts as get_crm_contacts
+        contacts = get_crm_contacts(session["client_id"], search=request.args.get("q", ""))
+        return jsonify({"contacts": [
+            {"id": c["id"], "name": c.get("name", ""), "email": c["email"],
+             "company": c.get("company", ""), "role": c.get("role", ""),
+             "tags": c.get("tags", "")}
+            for c in contacts
+        ]})
+    except Exception as e:
+        return jsonify({"error": str(e), "contacts": []}), 500
 
 
 @app.route("/campaign/<int:campaign_id>/import-contacts", methods=["POST"])
