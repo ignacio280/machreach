@@ -420,4 +420,63 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
         if added:
             new_count += 1
 
+    # Stage 3: Reclassify existing recent emails with current preferences
+    # This ensures preference/exclusion changes apply retroactively
+    _reclassify_existing(client_id, days, user_prefs, user_exclusions, campaign_emails, campaign_subjects)
+
     return new_count
+
+
+def _reclassify_existing(client_id: int, days: int, user_prefs: str, user_exclusions: str,
+                         campaign_emails: set, campaign_subjects: set):
+    """Re-run AI classification on recent existing emails using current prefs."""
+    from outreach.db import get_db
+    from datetime import date, timedelta
+
+    since = (date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    with get_db() as db:
+        rows = db.execute(
+            """SELECT id, from_email, subject, body_preview
+               FROM mail_inbox
+               WHERE client_id = ? AND received_at >= ?
+               ORDER BY received_at DESC LIMIT 100""",
+            (client_id, since),
+        ).fetchall()
+
+    if not rows:
+        return
+
+    emails_for_ai = [
+        {"from_email": r["from_email"], "subject": r["subject"], "body_preview": r["body_preview"]}
+        for r in rows
+    ]
+
+    all_cls = []
+    for i in range(0, len(emails_for_ai), 20):
+        batch = emails_for_ai[i:i + 20]
+        cls_batch = classify_emails_batch(batch, user_preferences=user_prefs, user_exclusions=user_exclusions)
+        all_cls.extend(cls_batch)
+
+    def _is_campaign(email_data: dict) -> bool:
+        sender = email_data.get("from_email", "").lower().strip()
+        if sender in campaign_emails:
+            return True
+        subj = (email_data.get("subject") or "").strip()
+        if subj.lower().startswith("re:"):
+            clean = subj[3:].strip().lower()
+            if clean in campaign_subjects:
+                return True
+        return False
+
+    with get_db() as db:
+        for row, cls in zip(rows, all_cls):
+            priority = cls.get("priority", "normal")
+            if _is_campaign({"from_email": row["from_email"], "subject": row["subject"]}) and priority not in ("urgent",):
+                priority = "important"
+            db.execute(
+                """UPDATE mail_inbox SET priority = ?, category = ?, ai_summary = ?
+                   WHERE id = ? AND client_id = ?""",
+                (priority, cls.get("category", "uncategorized"), cls.get("summary", ""),
+                 row["id"], client_id),
+            )
