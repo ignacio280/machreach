@@ -120,6 +120,16 @@ def _logged_in() -> bool:
     return "client_id" in session
 
 
+def _effective_client_id() -> int:
+    """Return the client_id to use for data access.
+    If the user is a full-access team member, returns the owner's client_id
+    so they see the owner's campaigns, contacts, and inbox."""
+    cid = session["client_id"]
+    from outreach.db import get_team_owner
+    owner = get_team_owner(cid)
+    return owner if owner else cid
+
+
 @app.before_request
 def _validate_session():
     if "client_id" in session:
@@ -1300,7 +1310,10 @@ def api_team_invite():
     client = get_client(session["client_id"])
     if client["email"].lower() == email:
         return jsonify({"error": "You can't invite yourself"}), 400
-    result = invite_team_member(session["client_id"], email, role)
+    campaign_id = data.get("campaign_id")
+    if campaign_id is not None:
+        campaign_id = int(campaign_id)
+    result = invite_team_member(session["client_id"], email, role, campaign_id=campaign_id)
     if "error" in result:
         return jsonify(result), 409
     # Build invite link
@@ -1372,14 +1385,28 @@ def dashboard():
     if not _logged_in():
         return redirect(url_for("login"))
 
-    campaigns = get_campaigns(session["client_id"])
-    gstats = get_global_stats(session["client_id"])
+    data_cid = _effective_client_id()
+    campaigns = get_campaigns(data_cid)
+
+    # Also include campaign-scoped team access
+    from outreach.db import get_team_campaign_ids
+    shared_camp_ids = get_team_campaign_ids(session["client_id"])
+    if shared_camp_ids and data_cid == session["client_id"]:
+        # Not a full-access member, but has campaign-scoped invites
+        shared_camps = [get_campaign(cid) for cid in shared_camp_ids]
+        shared_camps = [c for c in shared_camps if c]
+        existing_ids = {c["id"] for c in campaigns}
+        for c in shared_camps:
+            if c["id"] not in existing_ids:
+                campaigns.append(c)
+
+    gstats = get_global_stats(data_cid)
 
     # Check if user has connected an email account
     from outreach.db import get_email_accounts, get_contacts
-    accounts = get_email_accounts(session["client_id"])
+    accounts = get_email_accounts(data_cid)
     has_accounts = len(accounts) > 0
-    has_contacts = len(get_contacts(session["client_id"])) > 0
+    has_contacts = len(get_contacts(data_cid)) > 0
     has_campaigns = len(campaigns) > 0
     has_sent = gstats.get("total_sent", 0) > 0
 
@@ -1713,7 +1740,7 @@ def settings():
             flash(("success", "Settings saved."))
         return redirect(url_for("settings"))
 
-    from outreach.db import get_email_accounts, get_subscription, get_mail_preferences, get_team_members
+    from outreach.db import get_email_accounts, get_subscription, get_mail_preferences, get_team_members, get_my_team_memberships
     from outreach.config import PLAN_LIMITS
     accounts = get_email_accounts(session["client_id"])
     sub = get_subscription(session["client_id"])
@@ -1723,6 +1750,7 @@ def settings():
     can_add = max_mailboxes == -1 or len(accounts) < max_mailboxes
     current_prefs = get_mail_preferences(session["client_id"])
     team = get_team_members(session["client_id"])
+    my_memberships = get_my_team_memberships(session["client_id"])
 
     accounts_html = ""
     for a in accounts:
@@ -1779,6 +1807,7 @@ def settings():
             "pending": '<span class="badge badge-yellow">Pending</span>',
         }.get(m["status"], '<span class="badge">' + _esc(m["status"]) + '</span>')
         role_badge = '<span class="badge badge-blue" style="font-size:10px;">' + _esc(m["role"].title()) + '</span>'
+        scope_badge = ('<span class="badge" style="font-size:10px;background:#FEF3C7;color:#92400E;">' + _esc(m["campaign_name"]) + '</span>') if m.get("campaign_name") else '<span class="badge badge-green" style="font-size:10px;">Full Access</span>'
         team_rows_html += f"""
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border-light);">
           <div style="display:flex;align-items:center;gap:12px;">
@@ -1786,7 +1815,7 @@ def settings():
               {_esc(m['member_email'][:1].upper())}
             </div>
             <div>
-              <div style="font-weight:600;font-size:14px;">{name_display} {role_badge}</div>
+              <div style="font-weight:600;font-size:14px;">{name_display} {role_badge} {scope_badge}</div>
               <div style="font-size:12px;color:var(--text-muted);">{_esc(m['member_email'])} &middot; {status_badge}</div>
             </div>
           </div>
@@ -1795,6 +1824,39 @@ def settings():
         """
     if not team_rows_html:
         team_rows_html = '<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">No team members yet. Invite someone to collaborate!</p>'
+
+    # Build "Your Teams" section for invited members
+    memberships_html = ""
+    if my_memberships:
+        mem_rows = ""
+        for mb in my_memberships:
+            owner_display = _esc(mb.get("owner_name") or mb["owner_email"])
+            mb_role = '<span class="badge badge-blue" style="font-size:10px;">' + _esc(mb["role"].title()) + '</span>'
+            mb_scope = ('<span class="badge" style="font-size:10px;background:#FEF3C7;color:#92400E;">' + _esc(mb["campaign_name"]) + '</span>') if mb.get("campaign_name") else '<span class="badge badge-green" style="font-size:10px;">Full Access</span>'
+            mem_rows += f"""
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-light);">
+              <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#10B981,#3B82F6);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;">
+                {_esc(mb['owner_email'][:1].upper())}
+              </div>
+              <div>
+                <div style="font-weight:600;font-size:14px;">{owner_display}'s Team {mb_role} {mb_scope}</div>
+                <div style="font-size:12px;color:var(--text-muted);">{_esc(mb['owner_email'])}</div>
+              </div>
+            </div>
+            """
+        memberships_html = f"""
+        <div style="margin-top:20px;padding-top:16px;border-top:2px solid var(--border-light);">
+          <h3 style="font-size:15px;margin-bottom:10px;">&#127919; Teams You Belong To</h3>
+          {mem_rows}
+        </div>
+        """
+
+    # Build campaigns options for scoped invite
+    from outreach.db import get_campaigns
+    all_campaigns = get_campaigns(session["client_id"])
+    campaign_options = '<option value="">Full Access (all campaigns)</option>'
+    for c in all_campaigns:
+        campaign_options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
 
     team_card = f"""
     <div class="card">
@@ -1819,10 +1881,17 @@ def settings():
               <option value="viewer">Viewer</option>
             </select>
           </div>
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:12px;">Scope</label>
+            <select id="invite-campaign" style="margin:0;padding:8px 12px;">
+              {campaign_options}
+            </select>
+          </div>
           <button class="btn btn-primary" onclick="inviteTeamMember()" id="invite-btn">Send Invite</button>
         </div>
         <div id="invite-status" style="font-size:13px;margin-top:8px;"></div>
       </div>
+      {memberships_html}
     </div>
     """
 
@@ -2166,15 +2235,19 @@ def settings():
     function inviteTeamMember() {{
       var email = document.getElementById('invite-email').value.trim();
       var role = document.getElementById('invite-role').value;
+      var campaignSel = document.getElementById('invite-campaign');
+      var campaignId = campaignSel ? campaignSel.value : '';
       var btn = document.getElementById('invite-btn');
       var status = document.getElementById('invite-status');
       if (!email) {{ status.innerHTML = '<span style="color:var(--red);">Enter an email address</span>'; return; }}
       btn.disabled = true;
       btn.textContent = 'Sending...';
+      var payload = {{email: email, role: role}};
+      if (campaignId) payload.campaign_id = parseInt(campaignId);
       fetch('/api/team/invite', {{
         method: 'POST',
         headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify({{email: email, role: role}})
+        body: JSON.stringify(payload)
       }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
         btn.disabled = false;
         btn.textContent = 'Send Invite';
@@ -2926,6 +2999,13 @@ def view_campaign(campaign_id):
     if not camp:
         return redirect(url_for("dashboard"))
 
+    # Access check: owner, full-team member, or campaign-scoped member
+    data_cid = _effective_client_id()
+    from outreach.db import get_team_campaign_ids
+    shared_camp_ids = get_team_campaign_ids(session["client_id"])
+    if camp["client_id"] != session["client_id"] and camp["client_id"] != data_cid and campaign_id not in shared_camp_ids:
+        return redirect(url_for("dashboard"))
+
     tab = request.args.get("tab", "overview")
     stats = get_campaign_stats(campaign_id)
     sequences = get_sequences(campaign_id)
@@ -3190,20 +3270,6 @@ def view_campaign(campaign_id):
       <div class="stat-card stat-purple"><div class="num" data-stat="camp_reply_rate_fmt">{{reply_rate_fmt}}</div><div class="label">Reply Rate</div></div>
     </div>
 
-    <!-- Sending progress banner -->
-    <div id="sending-banner" style="display:none;background:linear-gradient(90deg,var(--primary-light),#EDE9FE);border:1px solid var(--primary);border-radius:var(--radius-xs);padding:14px 20px;margin-bottom:16px;align-items:center;gap:14px;">
-      <div class="send-spinner" style="width:20px;height:20px;border:3px solid var(--primary);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;"></div>
-      <div style="flex:1;">
-        <div style="font-weight:600;font-size:14px;color:var(--primary);" id="sending-label">Sending emails...</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="sending-detail"></div>
-      </div>
-      <div style="min-width:80px;height:6px;background:var(--border-light);border-radius:3px;overflow:hidden;">
-        <div id="sending-progress-bar" style="height:100%;background:var(--primary);border-radius:3px;width:0%;transition:width 0.4s ease;"></div>
-      </div>
-      <span id="sending-pct" style="font-size:13px;font-weight:700;color:var(--primary);min-width:40px;text-align:right;">0%</span>
-    </div>
-    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
-
     <div class="tabs">
       <a class="tab {% if tab == 'overview' %}active{% endif %}" href="?tab=overview">Sequence <span class="tab-count">{{num_sequences}}</span></a>
       <a class="tab {% if tab == 'ab' %}active{% endif %}" href="?tab=ab">A/B Results</a>
@@ -3347,51 +3413,6 @@ def view_campaign(campaign_id):
         <div class="card-header"><h2>Recent Activity</h2></div>
         {{activity_html}}
       </div>
-    {% endif %}
-
-    {% if camp_status == 'active' %}
-    <script>
-    (function pollCampaignStats() {
-      fetch('/api/campaign/{{camp_id}}/live-stats')
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          var banner = document.getElementById('sending-banner');
-          if (d.sending) {
-            banner.style.display = 'flex';
-            var pct = d.batch_total ? Math.round(d.batch_sent / d.batch_total * 100) : 0;
-            document.getElementById('sending-label').textContent = 'Sending emails\u2026 (' + d.batch_sent + '/' + d.batch_total + ')';
-            document.getElementById('sending-detail').textContent = d.pending + ' pending \u00b7 ' + d.sent + ' sent \u00b7 ' + d.replied + ' replied';
-            document.getElementById('sending-progress-bar').style.width = pct + '%';
-            document.getElementById('sending-pct').textContent = pct + '%';
-          } else {
-            banner.style.display = 'none';
-          }
-          // Update stat cards
-          var el;
-          el = document.querySelector('[data-stat="camp_emails_sent"]'); if (el) el.textContent = d.sent;
-          el = document.querySelector('[data-stat="camp_total_contacts"]'); if (el) el.textContent = d.total;
-          // Update progress bar
-          var progPct = d.total ? Math.min(d.sent / d.total * 100, 100) : 0;
-          var progBar = document.querySelector('.bar-purple');
-          if (progBar) progBar.style.width = progPct + '%';
-          // Update contact badges in header
-          var badges = document.querySelectorAll('.card-header .badge');
-          badges.forEach(function(b) {
-            if (b.classList.contains('badge-gray') && b.textContent.indexOf('pending') >= 0) b.textContent = d.pending + ' pending';
-            if (b.classList.contains('badge-blue') && b.textContent.indexOf('sent') >= 0) b.textContent = d.sent + ' sent';
-            if (b.classList.contains('badge-green') && b.textContent.indexOf('replied') >= 0) b.textContent = d.replied + ' replied';
-          });
-          // Keep polling if there are still pending or actively sending
-          if (d.pending > 0 || d.sending) {
-            setTimeout(pollCampaignStats, 2500);
-          } else if (d.sent > 0) {
-            // Final refresh to show updated activity/contacts
-            setTimeout(function() { location.reload(); }, 1500);
-          }
-        })
-        .catch(function() { setTimeout(pollCampaignStats, 5000); });
-    })();
-    </script>
     {% endif %}
     """, camp_name=_esc(camp["name"]), status_badge=Markup(status_badge), actions=Markup(actions),
         stats=stats, seq_html=Markup(seq_html), contacts_html=Markup(contacts_html),
@@ -4128,6 +4149,7 @@ def mail_hub():
         return redirect(url_for("login"))
 
     from outreach.db import get_mail_inbox, get_mail_stats, search_mail_inbox, get_scheduled_emails, get_email_accounts, get_subscription, get_top_senders
+    data_cid = _effective_client_id()
     filter_by = request.args.get("filter", "unread")
     category = request.args.get("category")
     search_q = request.args.get("q", "").strip()
@@ -4135,21 +4157,21 @@ def mail_hub():
     account_id = int(account_filter) if account_filter and account_filter.isdigit() else None
     sender_filter = request.args.get("sender", "").strip().lower()
 
-    stats = get_mail_stats(session["client_id"])
-    accounts = get_email_accounts(session["client_id"])
-    top_senders = get_top_senders(session["client_id"])
-    sub = get_subscription(session["client_id"])
+    stats = get_mail_stats(data_cid)
+    accounts = get_email_accounts(data_cid)
+    top_senders = get_top_senders(data_cid)
+    sub = get_subscription(data_cid)
     user_plan = sub.get("plan", "free") if sub else "free"
     is_paid = user_plan in ("growth", "pro", "unlimited")
     # Build account lookup for labels/colors
     acct_map = {a["id"]: a for a in accounts}
 
     if search_q:
-        emails = search_mail_inbox(session["client_id"], search_q)
+        emails = search_mail_inbox(data_cid, search_q)
     else:
-        emails = get_mail_inbox(session["client_id"], filter_by=filter_by, category=category, account_id=account_id, sender=sender_filter or None)
+        emails = get_mail_inbox(data_cid, filter_by=filter_by, category=category, account_id=account_id, sender=sender_filter or None)
 
-    scheduled = get_scheduled_emails(session["client_id"], status="pending")
+    scheduled = get_scheduled_emails(data_cid, status="pending")
     sched_count = len(scheduled)
 
     # Priority colors/icons
@@ -5800,13 +5822,14 @@ def contacts_page():
     search = request.args.get("q", "")
     rel_filter = request.args.get("rel", "")
     tag_filter = request.args.get("tag", "")
-    contacts = get_contacts(session["client_id"], search=search,
+    data_cid = _effective_client_id()
+    contacts = get_contacts(data_cid, search=search,
                             relationship=rel_filter, tag=tag_filter)
 
     # Collect all unique tags and relationships for filters (need full list for counts)
     all_tags_count = {}
     all_rels = set()
-    all_contacts_full = get_contacts(session["client_id"])
+    all_contacts_full = get_contacts(data_cid)
     for c in all_contacts_full:
         if c.get("tags"):
             for tg in c["tags"].split(","):

@@ -337,10 +337,16 @@ def init_db():
                 role TEXT NOT NULL DEFAULT 'member',
                 status TEXT NOT NULL DEFAULT 'pending',
                 invite_token TEXT,
+                campaign_id INTEGER REFERENCES campaigns(id),
                 invited_at TEXT DEFAULT (datetime('now', 'localtime')),
                 accepted_at TEXT,
                 UNIQUE(owner_id, member_email)
             )""")
+        except Exception:
+            pass
+        # Migration: add campaign_id column to existing team_members
+        try:
+            db.execute("ALTER TABLE team_members ADD COLUMN campaign_id INTEGER REFERENCES campaigns(id)")
         except Exception:
             pass
         # Migration: add mail_exclusions column to clients
@@ -1438,21 +1444,27 @@ def bulk_update_mail(mail_ids: list[int], client_id: int, field: str, value) -> 
 # Team Members
 # ---------------------------------------------------------------------------
 
-def invite_team_member(owner_id: int, member_email: str, role: str = "member") -> dict:
-    """Invite a team member. Returns the invite record or error."""
+def invite_team_member(owner_id: int, member_email: str, role: str = "member", campaign_id: int | None = None) -> dict:
+    """Invite a team member. campaign_id=None means full team access."""
     import secrets
     token = secrets.token_urlsafe(32)
     with get_db() as db:
-        # Check if already invited
-        existing = db.execute(
-            "SELECT id, status FROM team_members WHERE owner_id = ? AND member_email = ?",
-            (owner_id, member_email),
-        ).fetchone()
+        # Check if already invited (same owner+email+campaign scope)
+        if campaign_id:
+            existing = db.execute(
+                "SELECT id, status FROM team_members WHERE owner_id = ? AND member_email = ? AND campaign_id = ?",
+                (owner_id, member_email, campaign_id),
+            ).fetchone()
+        else:
+            existing = db.execute(
+                "SELECT id, status FROM team_members WHERE owner_id = ? AND member_email = ? AND campaign_id IS NULL",
+                (owner_id, member_email),
+            ).fetchone()
         if existing:
             return {"error": "Already invited", "status": dict(existing)["status"]}
         db.execute(
-            "INSERT INTO team_members (owner_id, member_email, role, invite_token) VALUES (?, ?, ?, ?)",
-            (owner_id, member_email, role, token),
+            "INSERT INTO team_members (owner_id, member_email, role, invite_token, campaign_id) VALUES (?, ?, ?, ?, ?)",
+            (owner_id, member_email, role, token, campaign_id),
         )
         return {"token": token, "email": member_email, "role": role}
 
@@ -1461,9 +1473,10 @@ def get_team_members(owner_id: int) -> list[dict]:
     """Get all team members for a workspace owner."""
     with get_db() as db:
         rows = db.execute(
-            """SELECT tm.*, c.name as member_name
+            """SELECT tm.*, c.name as member_name, camp.name as campaign_name
                FROM team_members tm
                LEFT JOIN clients c ON c.id = tm.member_client_id
+               LEFT JOIN campaigns camp ON camp.id = tm.campaign_id
                WHERE tm.owner_id = ?
                ORDER BY tm.invited_at DESC""",
             (owner_id,),
@@ -1471,42 +1484,40 @@ def get_team_members(owner_id: int) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-def accept_team_invite(token: str, client_id: int) -> dict | None:
-    """Accept a team invite using the token. Links the member_client_id."""
+def get_my_team_memberships(client_id: int) -> list[dict]:
+    """Get all teams the client has been invited to (as a member, not owner)."""
     with get_db() as db:
-        row = db.execute(
-            "SELECT * FROM team_members WHERE invite_token = ? AND status = 'pending'",
-            (token,),
-        ).fetchone()
-        if not row:
-            return None
-        db.execute(
-            """UPDATE team_members
-               SET status = 'active', member_client_id = ?, accepted_at = datetime('now', 'localtime'), invite_token = NULL
-               WHERE id = ?""",
-            (client_id, row["id"]),
-        )
-        return dict(row)
-
-
-def remove_team_member(member_id: int, owner_id: int) -> bool:
-    """Remove a team member (only the owner can)."""
-    with get_db() as db:
-        cur = db.execute(
-            "DELETE FROM team_members WHERE id = ? AND owner_id = ?",
-            (member_id, owner_id),
-        )
-        return cur.rowcount > 0
+        rows = db.execute(
+            """SELECT tm.*, owner.name as owner_name, owner.email as owner_email,
+                      camp.name as campaign_name
+               FROM team_members tm
+               JOIN clients owner ON owner.id = tm.owner_id
+               LEFT JOIN campaigns camp ON camp.id = tm.campaign_id
+               WHERE tm.member_client_id = ? AND tm.status = 'active'
+               ORDER BY tm.accepted_at DESC""",
+            (client_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_team_owner(client_id: int) -> int | None:
-    """If client_id is a team member, return the owner's client_id. Otherwise None."""
+    """If client_id is a team member with full access, return the owner's client_id. Otherwise None."""
     with get_db() as db:
         row = db.execute(
-            "SELECT owner_id FROM team_members WHERE member_client_id = ? AND status = 'active'",
+            "SELECT owner_id FROM team_members WHERE member_client_id = ? AND status = 'active' AND campaign_id IS NULL",
             (client_id,),
         ).fetchone()
         return row["owner_id"] if row else None
+
+
+def get_team_campaign_ids(client_id: int) -> list[int]:
+    """Return campaign IDs this member has been invited to (campaign-scoped access only)."""
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT campaign_id FROM team_members WHERE member_client_id = ? AND status = 'active' AND campaign_id IS NOT NULL",
+            (client_id,),
+        ).fetchall()
+        return [r["campaign_id"] for r in rows]
 
 
 # ---------------------------------------------------------------------------
