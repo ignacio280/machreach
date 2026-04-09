@@ -1143,9 +1143,16 @@ def dashboard():
     gstats = get_global_stats(session["client_id"])
 
     # Check if user has connected an email account
-    from outreach.db import get_email_accounts
+    from outreach.db import get_email_accounts, get_contacts
     accounts = get_email_accounts(session["client_id"])
     has_accounts = len(accounts) > 0
+    has_contacts = len(get_contacts(session["client_id"])) > 0
+    has_campaigns = len(campaigns) > 0
+    has_sent = gstats.get("total_sent", 0) > 0
+
+    # Onboarding progress
+    onboarding_steps_done = sum([has_accounts, has_contacts, has_campaigns, has_sent])
+    onboarding_complete = onboarding_steps_done == 4
 
     # Usage info for plan banner
     from outreach.db import get_subscription, get_usage
@@ -1208,26 +1215,60 @@ def dashboard():
       <a href="/billing" class="btn btn-ghost btn-sm">&#128179; Manage Plan</a>
     </div>
 
-    {% if not has_accounts %}
-    <div style="background:linear-gradient(135deg, var(--primary), #7c3aed);border-radius:12px;padding:28px 32px;margin-bottom:24px;color:#fff;">
-      <h2 style="margin:0 0 8px;font-size:1.3rem;">&#128075; Welcome to MachReach!</h2>
-      <p style="margin:0 0 16px;opacity:.9;font-size:.95rem;">Complete these steps to start sending outreach emails:</p>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;">
-        <div style="background:rgba(255,255,255,.15);border-radius:10px;padding:16px 20px;flex:1;min-width:200px;">
-          <div style="font-size:1.5rem;margin-bottom:6px;">1️⃣</div>
-          <strong>Connect your email</strong>
-          <p style="font-size:.85rem;opacity:.85;margin:4px 0 10px;">Add your Gmail or SMTP account so MachReach can send emails on your behalf.</p>
-          <a href="/settings" style="background:#fff;color:var(--primary);padding:8px 16px;border-radius:8px;font-weight:700;font-size:.85rem;text-decoration:none;display:inline-block;">Go to Settings &rarr;</a>
+    {% if not onboarding_complete %}
+    <div class="card" style="border:2px solid var(--primary);background:linear-gradient(135deg, rgba(99,102,241,0.04), rgba(124,58,237,0.04));">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h2 style="margin:0;font-size:20px;">&#127919; Get Started with MachReach</h2>
+          <p style="margin:4px 0 0;color:var(--text-muted);font-size:14px;">Complete these steps to launch your first outreach campaign</p>
         </div>
-        <div style="background:rgba(255,255,255,.1);border-radius:10px;padding:16px 20px;flex:1;min-width:200px;opacity:.7;">
-          <div style="font-size:1.5rem;margin-bottom:6px;">2️⃣</div>
-          <strong>Create a campaign</strong>
-          <p style="font-size:.85rem;opacity:.85;margin:4px 0 0;">Add contacts, write email sequences, and launch your first outreach.</p>
+        <div style="background:var(--primary);color:#fff;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;">
+          {{onboarding_steps_done}} / 4 complete
         </div>
-        <div style="background:rgba(255,255,255,.1);border-radius:10px;padding:16px 20px;flex:1;min-width:200px;opacity:.7;">
-          <div style="font-size:1.5rem;margin-bottom:6px;">3️⃣</div>
-          <strong>Track &amp; manage replies</strong>
-          <p style="font-size:.85rem;opacity:.85;margin:4px 0 0;">Monitor opens, replies, and manage conversations from Mail Hub.</p>
+      </div>
+      <div style="background:var(--border-light);border-radius:8px;height:8px;margin-bottom:20px;overflow:hidden;">
+        <div style="background:linear-gradient(90deg,var(--primary),#7C3AED);height:100%;border-radius:8px;width:{{onboarding_pct}}%;transition:width 0.5s;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
+        <div style="padding:18px;border-radius:10px;border:1px solid {% if has_accounts %}var(--green){% else %}var(--primary){% endif %};background:{% if has_accounts %}var(--green-light){% else %}var(--card){% endif %};">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:18px;">{% if has_accounts %}&#9989;{% else %}1&#65039;&#8419;{% endif %}</span>
+            <strong style="font-size:14px;{% if has_accounts %}color:var(--green-dark);{% endif %}">Connect your email</strong>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Add your Gmail, Yahoo, or Outlook account so MachReach can send emails on your behalf.</p>
+          {% if not has_accounts %}
+          <a href="/settings" class="btn btn-primary btn-sm">&#128231; Add Email Account</a>
+          {% endif %}
+        </div>
+        <div style="padding:18px;border-radius:10px;border:1px solid {% if has_contacts %}var(--green){% elif has_accounts %}var(--primary){% else %}var(--border){% endif %};background:{% if has_contacts %}var(--green-light){% else %}var(--card){% endif %};{% if not has_accounts %}opacity:0.6;{% endif %}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:18px;">{% if has_contacts %}&#9989;{% else %}2&#65039;&#8419;{% endif %}</span>
+            <strong style="font-size:14px;{% if has_contacts %}color:var(--green-dark);{% endif %}">Import contacts</strong>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Add people to reach out to — paste emails, upload a CSV, or add them one by one.</p>
+          {% if has_accounts and not has_contacts %}
+          <a href="/contacts" class="btn btn-primary btn-sm">&#128101; Add Contacts</a>
+          {% endif %}
+        </div>
+        <div style="padding:18px;border-radius:10px;border:1px solid {% if has_campaigns %}var(--green){% elif has_contacts %}var(--primary){% else %}var(--border){% endif %};background:{% if has_campaigns %}var(--green-light){% else %}var(--card){% endif %};{% if not has_contacts %}opacity:0.6;{% endif %}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:18px;">{% if has_campaigns %}&#9989;{% else %}3&#65039;&#8419;{% endif %}</span>
+            <strong style="font-size:14px;{% if has_campaigns %}color:var(--green-dark);{% endif %}">Create a campaign</strong>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Describe your business and audience — AI generates a personalized email sequence for you.</p>
+          {% if has_contacts and not has_campaigns %}
+          <a href="/campaign/new" class="btn btn-primary btn-sm">&#128640; Create Campaign</a>
+          {% endif %}
+        </div>
+        <div style="padding:18px;border-radius:10px;border:1px solid {% if has_sent %}var(--green){% elif has_campaigns %}var(--primary){% else %}var(--border){% endif %};background:{% if has_sent %}var(--green-light){% else %}var(--card){% endif %};{% if not has_campaigns %}opacity:0.6;{% endif %}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:18px;">{% if has_sent %}&#9989;{% else %}4&#65039;&#8419;{% endif %}</span>
+            <strong style="font-size:14px;{% if has_sent %}color:var(--green-dark);{% endif %}">Launch &amp; track</strong>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Activate your campaign and monitor opens, replies, and conversions in real time.</p>
+          {% if has_campaigns and not has_sent %}
+          <a href="/campaign/{{first_campaign_id}}" class="btn btn-primary btn-sm">&#9889; Activate Campaign</a>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -1255,7 +1296,12 @@ def dashboard():
     """, active_page="dashboard", rows=Markup(rows), g=gstats,
         g_open_rate=f"{gstats['open_rate']:.0%}", g_reply_rate=f"{gstats['reply_rate']:.0%}",
         usage_text=Markup(usage_text), upgrade_cta=Markup(upgrade_cta),
-        has_accounts=has_accounts,
+        has_accounts=has_accounts, has_contacts=has_contacts,
+        has_campaigns=has_campaigns, has_sent=has_sent,
+        onboarding_complete=onboarding_complete,
+        onboarding_steps_done=onboarding_steps_done,
+        onboarding_pct=int(onboarding_steps_done / 4 * 100),
+        first_campaign_id=campaigns[0]["id"] if campaigns else 0,
         page_title=t("dash.title"),
         lbl_campaigns=t("dash.campaigns"), lbl_active=t("common.active"),
         lbl_emails_sent=t("dash.emails_sent"), lbl_open_rate=t("dash.open_rate"),
@@ -1417,6 +1463,74 @@ def settings():
         <p><strong>Delay Between Emails:</strong> 60 seconds</p>
         <p class="text-xs text-muted mt-2">Daily limits scale with your plan: Free=50, Growth=200, Pro=500, Unlimited=∞</p>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>&#127760; Custom Domain Sending</h2>
+      </div>
+      <p style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Send emails from <strong>you@yourcompany.com</strong> instead of a Gmail or Yahoo address. This improves deliverability and looks more professional.</p>
+
+      <details>
+        <summary style="font-size:14px;font-weight:600;cursor:pointer;color:var(--primary);margin-bottom:12px;">&#128218; How to set up custom domain email</summary>
+        <div style="margin-top:12px;font-size:13px;color:var(--text-secondary);line-height:1.8;">
+          <div style="background:var(--bg);border-radius:var(--radius-sm);padding:16px;margin-bottom:14px;">
+            <h4 style="font-size:14px;margin:0 0 8px;">Step 1: Get a business email</h4>
+            <p style="margin:0;">You need an email address on your own domain (e.g. <code>hello@yourcompany.com</code>). Popular options:</p>
+            <ul style="padding-left:18px;margin:8px 0 0;">
+              <li><strong>Google Workspace</strong> ($6/mo) — Uses Gmail interface, supports App Passwords</li>
+              <li><strong>Microsoft 365</strong> ($6/mo) — Uses Outlook interface</li>
+              <li><strong>Zoho Mail</strong> (free tier available) — Good budget option</li>
+              <li><strong>Your hosting provider</strong> — Many hosts include email with your domain</li>
+            </ul>
+          </div>
+
+          <div style="background:var(--bg);border-radius:var(--radius-sm);padding:16px;margin-bottom:14px;">
+            <h4 style="font-size:14px;margin:0 0 8px;">Step 2: Set up DNS records</h4>
+            <p style="margin:0 0 8px;">Add these records in your domain registrar (Namecheap, GoDaddy, Cloudflare, etc.):</p>
+            <table style="width:100%;font-size:12px;border-collapse:collapse;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:6px 8px;">Record</th><th style="padding:6px 8px;">Purpose</th><th style="padding:6px 8px;">What it does</th>
+              </tr></thead>
+              <tbody>
+                <tr style="border-bottom:1px solid var(--border-light);">
+                  <td style="padding:6px 8px;"><strong>SPF</strong></td>
+                  <td style="padding:6px 8px;">TXT record</td>
+                  <td style="padding:6px 8px;">Tells servers which IPs can send from your domain</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border-light);">
+                  <td style="padding:6px 8px;"><strong>DKIM</strong></td>
+                  <td style="padding:6px 8px;">TXT record</td>
+                  <td style="padding:6px 8px;">Digitally signs your emails to prove authenticity</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 8px;"><strong>DMARC</strong></td>
+                  <td style="padding:6px 8px;">TXT record</td>
+                  <td style="padding:6px 8px;">Policy that tells receivers how to handle unauthenticated emails</td>
+                </tr>
+              </tbody>
+            </table>
+            <p style="margin:10px 0 0;font-size:12px;color:var(--text-muted);">Your email provider (Google Workspace, Microsoft 365, etc.) will give you the exact values to add.</p>
+          </div>
+
+          <div style="background:var(--bg);border-radius:var(--radius-sm);padding:16px;margin-bottom:14px;">
+            <h4 style="font-size:14px;margin:0 0 8px;">Step 3: Connect to MachReach</h4>
+            <p style="margin:0;">Once your domain email is set up, add it to MachReach just like any other account:</p>
+            <ol style="padding-left:18px;margin:8px 0 0;">
+              <li>Click <strong>"+ Add Email Account"</strong> above</li>
+              <li>Enter your custom domain email (e.g. <code>hello@yourcompany.com</code>)</li>
+              <li>If using Google Workspace, it auto-detects Gmail settings</li>
+              <li>For other providers, open <strong>Advanced Settings</strong> and enter your IMAP/SMTP details</li>
+              <li>Use an App Password if your provider supports it</li>
+            </ol>
+          </div>
+
+          <div style="background:var(--green-light);border-radius:var(--radius-sm);padding:14px 16px;">
+            <strong style="color:var(--green-dark);">&#128161; Pro tip:</strong>
+            <span style="color:var(--green-dark);font-size:13px;">Start with a low sending volume (10-20 emails/day) for the first 2 weeks to warm up your domain. This builds reputation and prevents your emails from landing in spam.</span>
+          </div>
+        </div>
+      </details>
     </div>
 
     <div class="card">
