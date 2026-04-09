@@ -3,6 +3,7 @@ Flask web dashboard — client-facing campaign management.
 """
 from __future__ import annotations
 
+import bcrypt
 import hashlib
 import html as html_module
 import os
@@ -47,6 +48,26 @@ from outreach.db import (
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
+# ── Security: session cookie hardening ──
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.getenv("RENDER", "") != ""  # HTTPS-only in production
+app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours max session
+
+# ── Security: CSRF protection ──
+from flask_wtf.csrf import CSRFProtect, generate_csrf
+csrf = CSRFProtect(app)
+
+# ── Security: Rate limiting ──
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per minute"],
+    storage_uri="memory://",
+)
+
 # ── Startup diagnostic — log DB path so we can debug persistence ──
 import logging
 from outreach.config import DATABASE_PATH
@@ -67,7 +88,32 @@ init_db()
 # ---------------------------------------------------------------------------
 
 def _hash_pw(pw: str) -> str:
-    return hashlib.sha256(pw.encode()).hexdigest()
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt(12)).decode()
+
+
+def _verify_pw(pw: str, stored_hash: str) -> bool:
+    """Verify a password against a stored hash. Supports bcrypt and legacy SHA256."""
+    if stored_hash.startswith("$2b$") or stored_hash.startswith("$2a$"):
+        return bcrypt.checkpw(pw.encode(), stored_hash.encode())
+    # Legacy SHA256 — verify and auto-upgrade
+    return hashlib.sha256(pw.encode()).hexdigest() == stored_hash
+
+
+def _maybe_upgrade_hash(client_id: int, pw: str, stored_hash: str):
+    """If the stored hash is legacy SHA256, upgrade it to bcrypt."""
+    if not (stored_hash.startswith("$2b$") or stored_hash.startswith("$2a$")):
+        update_client_password(client_id, _hash_pw(pw))
+
+
+_sec_log = logging.getLogger("machreach.security")
+
+
+def _log_security(event: str, **extra):
+    """Log a security event with request context."""
+    ip = request.remote_addr or "unknown"
+    ua = request.headers.get("User-Agent", "")[:100]
+    details = " ".join(f"{k}={v}" for k, v in extra.items())
+    _sec_log.info(f"[SECURITY] {event} ip={ip} ua={ua} {details}")
 
 
 def _logged_in() -> bool:
@@ -90,6 +136,23 @@ def _esc(text: str) -> str:
     return html_module.escape(str(text)) if text else ""
 
 
+@app.after_request
+def _set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if os.getenv("RENDER", ""):
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+@app.before_request
+def _make_session_permanent():
+    session.permanent = True
+
+
 # ---------------------------------------------------------------------------
 # HTML Layout
 # ---------------------------------------------------------------------------
@@ -99,16 +162,39 @@ LAYOUT = """<!DOCTYPE html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>MachReach — {{title}}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
     // Apply saved theme immediately to prevent flash
     (function(){var t=localStorage.getItem('machreach-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+    // Auto-inject CSRF token into all fetch requests
+    (function(){
+      var _fetch = window.fetch;
+      window.fetch = function(url, opts) {
+        opts = opts || {};
+        if (opts.method && opts.method !== 'GET') {
+          opts.headers = opts.headers || {};
+          if (opts.headers instanceof Headers) {
+            if (!opts.headers.has('X-CSRFToken')) {
+              var m = document.querySelector('meta[name="csrf-token"]');
+              if (m) opts.headers.set('X-CSRFToken', m.content);
+            }
+          } else {
+            if (!opts.headers['X-CSRFToken']) {
+              var m = document.querySelector('meta[name="csrf-token"]');
+              if (m) opts.headers['X-CSRFToken'] = m.content;
+            }
+          }
+        }
+        return _fetch.call(this, url, opts);
+      };
+    })();
   </script>
   <style>
     :root {
-      --bg: #F0F2F5;
+      --bg: #F8FAFC;
       --card: #FFFFFF;
       --primary: #6366F1;
       --primary-hover: #4F46E5;
@@ -125,17 +211,17 @@ LAYOUT = """<!DOCTYPE html>
       --yellow-light: #FEF3C7;
       --blue: #3B82F6;
       --blue-light: #DBEAFE;
-      --text: #1E293B;
-      --text-secondary: #64748B;
+      --text: #0F172A;
+      --text-secondary: #475569;
       --text-muted: #94A3B8;
       --border: #E2E8F0;
       --border-light: #F1F5F9;
-      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.06);
-      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.06);
-      --radius: 12px;
-      --radius-sm: 8px;
-      --radius-xs: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+      --shadow-lg: 0 12px 24px rgba(0,0,0,0.08), 0 4px 8px rgba(0,0,0,0.04);
+      --radius: 14px;
+      --radius-sm: 10px;
+      --radius-xs: 7px;
     }
 
     /* Dark mode */
@@ -194,38 +280,45 @@ LAYOUT = """<!DOCTYPE html>
     .nav {
       background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
       padding: 0 48px; display: flex; align-items: center; justify-content: space-between;
-      height: 56px; position: sticky; top: 0; z-index: 100;
+      height: 58px; position: sticky; top: 0; z-index: 100;
       border-bottom: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(12px);
     }
-    .nav .brand { color: #fff; font-weight: 800; font-size: 17px; letter-spacing: -0.5px; display: flex; align-items: center; gap: 10px; text-decoration: none; }
-    .nav .brand-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--primary), #8B5CF6); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; }
-    .nav-links { display: flex; align-items: center; gap: 1px; }
-    .nav-links a { color: #94A3B8; text-decoration: none; font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: var(--radius-xs); transition: all 0.15s; }
-    .nav-links a:hover { color: #E2E8F0; background: rgba(255,255,255,0.08); }
-    .nav-links a.active { color: #fff; background: rgba(255,255,255,0.12); }
-    .nav-links .nav-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.1); margin: 0 4px; }
+    .nav .brand { color: #fff; font-weight: 800; font-size: 18px; letter-spacing: -0.5px; display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav .brand-icon { width: 30px; height: 30px; background: linear-gradient(135deg, var(--primary), #8B5CF6); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; box-shadow: 0 2px 8px rgba(99,102,241,0.4); }
+    .nav-links { display: flex; align-items: center; gap: 2px; }
+    .nav-links a { color: #94A3B8; text-decoration: none; font-size: 13px; font-weight: 500; padding: 7px 13px; border-radius: var(--radius-xs); transition: all 0.2s; }
+    .nav-links a:hover { color: #F1F5F9; background: rgba(255,255,255,0.08); }
+    .nav-links a.active { color: #fff; background: rgba(255,255,255,0.13); }
+    .nav-links .nav-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.1); margin: 0 6px; }
     .nav-links .nav-user { color: #64748B; font-size: 12px; margin-right: 4px; }
 
     /* Layout — edge-to-edge with comfortable padding */
-    .container { max-width: 1600px; margin: 0 auto; padding: 28px 48px; }
-    .container.container-wide { max-width: 100%; padding: 28px 48px; }
-    .page-header { margin-bottom: 24px; }
-    .page-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
-    .page-header p { color: var(--text-secondary); margin-top: 2px; font-size: 14px; }
+    .container { max-width: 1600px; margin: 0 auto; padding: 32px 48px; }
+    .container.container-wide { max-width: 100%; padding: 32px 48px; }
+    .page-header { margin-bottom: 26px; }
+    .page-header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.7px; }
+    .page-header p { color: var(--text-secondary); margin-top: 4px; font-size: 15px; }
     .breadcrumb { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
     .breadcrumb a { color: var(--text-muted); text-decoration: none; }
     .breadcrumb a:hover { color: var(--primary); }
 
     /* Cards */
-    .card { background: var(--card); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); margin-bottom: 16px; border: 1px solid var(--border); }
+    .card { background: var(--card); border-radius: var(--radius); padding: 26px; box-shadow: var(--shadow); margin-bottom: 18px; border: 1px solid var(--border); transition: box-shadow 0.2s ease; }
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border-light); }
-    .card-header h2 { font-size: 16px; font-weight: 600; }
+    .card-header h2 { font-size: 16px; font-weight: 700; }
 
     /* Stats */
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 20px; }
-    .stat-card { background: var(--card); border-radius: var(--radius); padding: 18px; text-align: center; box-shadow: var(--shadow); border: 1px solid var(--border); }
-    .stat-card .num { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
-    .stat-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-top: 2px; font-weight: 600; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 22px; }
+    .stat-card { background: var(--card); border-radius: var(--radius); padding: 20px; text-align: center; box-shadow: var(--shadow); border: 1px solid var(--border); position: relative; overflow: hidden; }
+    .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: var(--radius) var(--radius) 0 0; }
+    .stat-purple::before { background: linear-gradient(90deg, var(--primary), #8B5CF6); }
+    .stat-green::before { background: linear-gradient(90deg, var(--green), #34D399); }
+    .stat-blue::before { background: linear-gradient(90deg, var(--blue), #60A5FA); }
+    .stat-yellow::before { background: linear-gradient(90deg, var(--yellow), #FBBF24); }
+    .stat-red::before { background: linear-gradient(90deg, var(--red), #F87171); }
+    .stat-card .num { font-size: 30px; font-weight: 800; letter-spacing: -1px; }
+    .stat-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-top: 4px; font-weight: 600; }
     .stat-purple .num { color: var(--primary); }
     .stat-green .num { color: var(--green); }
     .stat-blue .num { color: var(--blue); }
@@ -241,11 +334,11 @@ LAYOUT = """<!DOCTYPE html>
     /* Forms */
     label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
     input, textarea, select {
-      width: 100%; padding: 9px 13px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
       font-size: 14px; margin-bottom: 14px; background: var(--card); color: var(--text);
       transition: border-color 0.2s, box-shadow 0.2s; font-family: inherit;
     }
-    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
     textarea { min-height: 90px; resize: vertical; }
     input[type="file"] { padding: 8px; cursor: pointer; }
     .form-hint { font-size: 11px; color: var(--text-muted); margin-top: -10px; margin-bottom: 14px; }
@@ -255,13 +348,14 @@ LAYOUT = """<!DOCTYPE html>
 
     /* Buttons */
     .btn {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
       text-decoration: none; border: none; border-radius: var(--radius-xs);
-      transition: all 0.15s; font-family: inherit; white-space: nowrap;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); font-family: inherit; white-space: nowrap;
     }
-    .btn-primary { background: var(--primary); color: #fff; }
-    .btn-primary:hover { background: var(--primary-hover); box-shadow: var(--shadow-md); }
+    .btn-primary { background: linear-gradient(135deg, var(--primary), #7C3AED); color: #fff; box-shadow: 0 2px 8px rgba(99,102,241,0.25); }
+    .btn-primary:hover { background: linear-gradient(135deg, var(--primary-hover), #6D28D9); box-shadow: 0 4px 16px rgba(99,102,241,0.35); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(99,102,241,0.25); }
     .btn-green { background: var(--green); color: #fff; }
     .btn-green:hover { background: var(--green-hover); }
     .btn-red { background: var(--red); color: #fff; }
@@ -269,11 +363,11 @@ LAYOUT = """<!DOCTYPE html>
     .btn-yellow { background: var(--yellow); color: #fff; }
     .btn-yellow:hover { background: #D97706; }
     .btn-outline { background: transparent; color: var(--text-secondary); border: 1.5px solid var(--border); }
-    .btn-outline:hover { border-color: var(--text-secondary); color: var(--text); background: var(--border-light); }
-    .btn-ghost { background: transparent; color: var(--text-muted); padding: 6px 10px; }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+    .btn-ghost { background: transparent; color: var(--text-muted); padding: 7px 12px; }
     .btn-ghost:hover { color: var(--text); background: var(--border-light); }
-    .btn-sm { padding: 5px 12px; font-size: 12px; }
-    .btn-lg { padding: 12px 28px; font-size: 15px; }
+    .btn-sm { padding: 6px 14px; font-size: 12px; }
+    .btn-lg { padding: 13px 32px; font-size: 15px; border-radius: var(--radius-sm); }
     .btn-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .btn-icon { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-xs); }
 
@@ -295,9 +389,10 @@ LAYOUT = """<!DOCTYPE html>
     .badge-purple { background: var(--primary-light); color: var(--primary-dark); }
 
     /* Flash messages */
-    .flash { padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px; animation: slideDown 0.25s ease; }
+    .flash { padding: 13px 18px; border-radius: var(--radius-sm); margin-bottom: 14px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 10px; animation: slideDown 0.3s ease; }
     .flash-success { background: var(--green-light); color: var(--green-dark); border: 1px solid #A7F3D0; }
     .flash-error { background: var(--red-light); color: #991B1B; border: 1px solid #FECACA; }
+    .flash-info { background: var(--blue-light); color: #1E40AF; border: 1px solid #93C5FD; }
 
     /* Sequence cards */
     .seq-card { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); margin-bottom: 12px; border: 1px solid var(--border-light); border-left: 3px solid var(--primary); position: relative; }
@@ -324,23 +419,24 @@ LAYOUT = """<!DOCTYPE html>
     .empty p { font-size: 13px; max-width: 300px; margin: 0 auto; }
 
     /* Auth pages */
-    .auth-wrapper { max-width: 420px; margin: 60px auto; padding: 0 24px; }
-    .auth-card { background: var(--card); border-radius: var(--radius); padding: 36px; box-shadow: var(--shadow-lg); border: 1px solid var(--border-light); }
-    .auth-card h1 { font-size: 22px; text-align: center; margin-bottom: 6px; }
-    .auth-card .subtitle { text-align: center; color: var(--text-muted); margin-bottom: 24px; font-size: 13px; }
-    .auth-footer { text-align: center; margin-top: 18px; font-size: 13px; color: var(--text-muted); }
+    .auth-wrapper { max-width: 440px; margin: 60px auto; padding: 0 24px; }
+    .auth-card { background: var(--card); border-radius: var(--radius); padding: 40px; box-shadow: var(--shadow-lg); border: 1px solid var(--border-light); }
+    .auth-card h1 { font-size: 24px; text-align: center; margin-bottom: 6px; font-weight: 800; }
+    .auth-card .subtitle { text-align: center; color: var(--text-muted); margin-bottom: 28px; font-size: 14px; }
+    .auth-footer { text-align: center; margin-top: 20px; font-size: 13px; color: var(--text-muted); }
     .auth-footer a { color: var(--primary); font-weight: 600; text-decoration: none; }
 
     /* Hero */
-    .hero { text-align: center; padding: 72px 24px 48px; }
-    .hero h1 { font-size: 42px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 14px; }
-    .hero h1 span { background: linear-gradient(135deg, var(--primary), #8B5CF6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    .hero p { font-size: 17px; color: var(--text-secondary); max-width: 480px; margin: 0 auto 28px; line-height: 1.6; }
-    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 780px; margin: 0 auto; }
-    .feature { background: var(--card); border-radius: var(--radius); padding: 28px 20px; text-align: center; box-shadow: var(--shadow); border: 1px solid var(--border-light); }
-    .feature-icon { font-size: 28px; margin-bottom: 10px; }
-    .feature h3 { font-size: 14px; margin-bottom: 4px; font-weight: 600; }
-    .feature p { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .hero { text-align: center; padding: 80px 24px 52px; }
+    .hero h1 { font-size: 48px; font-weight: 800; letter-spacing: -2px; line-height: 1.08; margin-bottom: 18px; }
+    .hero h1 span { background: linear-gradient(135deg, var(--primary), #8B5CF6, #EC4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero p { font-size: 18px; color: var(--text-secondary); max-width: 500px; margin: 0 auto 32px; line-height: 1.7; }
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; max-width: 860px; margin: 0 auto; }
+    .feature { background: var(--card); border-radius: var(--radius); padding: 32px 22px; text-align: center; box-shadow: var(--shadow); border: 1px solid var(--border-light); transition: transform 0.2s, box-shadow 0.2s; }
+    .feature:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+    .feature-icon { font-size: 32px; margin-bottom: 12px; }
+    .feature h3 { font-size: 15px; margin-bottom: 6px; font-weight: 700; }
+    .feature p { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
 
     /* Activity */
     .activity-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-light); }
@@ -369,6 +465,11 @@ LAYOUT = """<!DOCTYPE html>
     .confirm-form { display: inline; }
     .divider { border: none; border-top: 1px solid var(--border-light); margin: 20px 0; }
     .text-muted { color: var(--text-muted); }
+
+    /* Collapsible details */
+    details[open] .pw-arrow { transform: rotate(90deg); }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::marker { display: none; content: ''; }
     .text-sm { font-size: 13px; }
     .text-xs { font-size: 11px; }
     .mt-2 { margin-top: 8px; }
@@ -409,7 +510,6 @@ LAYOUT = """<!DOCTYPE html>
 
     .card {
       animation: fadeIn 0.2s ease both;
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
     .card:hover { box-shadow: var(--shadow-md); }
 
@@ -417,10 +517,8 @@ LAYOUT = """<!DOCTYPE html>
     .badge:hover { transform: scale(1.05); }
 
     .btn {
-      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.35); }
-    .btn-primary:active { transform: translateY(0); }
 
     .seq-card {
       transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
@@ -431,7 +529,7 @@ LAYOUT = """<!DOCTYPE html>
     input:focus, textarea:focus, select:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px var(--primary-light);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
@@ -458,17 +556,21 @@ LAYOUT = """<!DOCTYPE html>
       .container, .container.container-wide { padding: 20px 20px; }
       .nav { padding: 0 16px; }
       .nav-links a { font-size: 12px; padding: 5px 8px; }
+      .hero h1 { font-size: 36px; }
     }
     @media (max-width: 640px) {
       .container, .container.container-wide { padding: 16px; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .form-row { grid-template-columns: 1fr; }
       .features { grid-template-columns: 1fr; }
-      .hero h1 { font-size: 30px; }
+      .hero { padding: 48px 16px 32px; }
+      .hero h1 { font-size: 28px; letter-spacing: -1px; }
+      .hero p { font-size: 15px; }
       .nav { padding: 0 12px; }
       .seq-card .seq-actions { opacity: 1; }
       .nav-links a { font-size: 11px; padding: 4px 6px; }
       .nav-links .nav-divider { display: none; }
+      .auth-card { padding: 28px 20px; }
     }
   </style>
 </head>
@@ -506,6 +608,9 @@ LAYOUT = """<!DOCTYPE html>
     </div>
   </div>
   <div class="container{% if wide %} container-wide{% endif %}">
+    <div style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;padding:10px 20px;border-radius:8px;margin-bottom:18px;text-align:center;font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:8px;">
+      &#128679; <b>Beta</b> &mdash; MachReach is in testing mode. Subscriptions are not available yet. All features are free during this period.
+    </div>
     {% for cat, msg in messages %}
       <div class="flash flash-{{cat}}">
         {% if cat == 'success' %}&#10003;{% else %}&#9888;{% endif %}
@@ -693,6 +798,20 @@ LAYOUT = """<!DOCTYPE html>
       });
     })();
   </script>
+  <script>
+    // Auto-inject CSRF hidden field into all forms
+    document.addEventListener('DOMContentLoaded', function() {
+      var token = document.querySelector('meta[name="csrf-token"]');
+      if (!token) return;
+      document.querySelectorAll('form[method="post"]').forEach(function(f) {
+        if (!f.querySelector('input[name="csrf_token"]')) {
+          var inp = document.createElement('input');
+          inp.type = 'hidden'; inp.name = 'csrf_token'; inp.value = token.content;
+          f.appendChild(inp);
+        }
+      });
+    });
+  </script>
 </body>
 </html>"""
 
@@ -749,6 +868,7 @@ def index():
 # ---------------------------------------------------------------------------
 
 @app.route("/register", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def register():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -759,9 +879,11 @@ def register():
             flash(("error", t("auth.all_required")))
             return redirect(url_for("register"))
         if get_client_by_email(email):
+            _log_security("REGISTER_DUPLICATE", email=email)
             flash(("error", t("auth.email_exists")))
             return redirect(url_for("register"))
         client_id = create_client(name, email, _hash_pw(password), business)
+        _log_security("REGISTER_OK", client_id=client_id, email=email)
         session["client_id"] = client_id
         session["client_name"] = name
         flash(("success", f"Welcome, {_esc(name)}! Create your first campaign to get started."))
@@ -785,14 +907,19 @@ def register():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("5 per minute", methods=["POST"])
 def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
         client = get_client_by_email(email)
-        if not client or client["password"] != _hash_pw(password):
+        if not client or not _verify_pw(password, client["password"]):
+            _log_security("LOGIN_FAIL", email=email)
             flash(("error", t("auth.invalid_creds")))
             return redirect(url_for("login"))
+        _maybe_upgrade_hash(client["id"], password, client["password"])
+        _log_security("LOGIN_OK", client_id=client["id"], email=email)
+        session.clear()
         session["client_id"] = client["id"]
         session["client_name"] = client["name"]
         return redirect(url_for("dashboard"))
@@ -831,6 +958,7 @@ def set_language(lang):
 # ---------------------------------------------------------------------------
 
 @app.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit("3 per minute", methods=["POST"])
 def forgot_password():
     if request.method == "POST":
         email = request.form.get("email", "").strip()
@@ -893,6 +1021,7 @@ def forgot_password():
 
 
 @app.route("/reset-password/<token>", methods=["GET", "POST"])
+@limiter.limit("5 per minute", methods=["POST"])
 def reset_password(token):
     reset = get_valid_reset_token(token)
     if not reset:
@@ -909,6 +1038,7 @@ def reset_password(token):
             return redirect(f"/reset-password/{token}")
         update_client_password(reset["client_id"], _hash_pw(pw1))
         mark_reset_token_used(token)
+        _log_security("PASSWORD_RESET_OK", client_id=reset["client_id"])
         flash(("success", t("auth.reset_success")))
         return redirect(url_for("login"))
     return render_template_string(LAYOUT, title="Reset Password", logged_in=False,
@@ -940,7 +1070,8 @@ def change_password():
     new_pw = request.form.get("new_password", "")
     confirm = request.form.get("confirm_password", "")
     client = get_client(session["client_id"])
-    if client["password"] != _hash_pw(current):
+    if not _verify_pw(current, client["password"]):
+        _log_security("PASSWORD_CHANGE_FAIL", client_id=session["client_id"])
         flash(("error", t("settings.wrong_password")))
         return redirect(url_for("settings"))
     if new_pw != confirm:
@@ -950,6 +1081,7 @@ def change_password():
         flash(("error", t("auth.all_required")))
         return redirect(url_for("settings"))
     update_client_password(session["client_id"], _hash_pw(new_pw))
+    _log_security("PASSWORD_CHANGE_OK", client_id=session["client_id"])
     flash(("success", t("settings.password_updated")))
     return redirect(url_for("settings"))
 
@@ -1142,7 +1274,7 @@ def settings():
             flash(("success", "Settings saved."))
         return redirect(url_for("settings"))
 
-    from outreach.db import get_email_accounts, get_subscription
+    from outreach.db import get_email_accounts, get_subscription, get_mail_preferences
     from outreach.config import PLAN_LIMITS
     accounts = get_email_accounts(session["client_id"])
     sub = get_subscription(session["client_id"])
@@ -1150,6 +1282,7 @@ def settings():
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
     max_mailboxes = limits.get("mailboxes", 1)
     can_add = max_mailboxes == -1 or len(accounts) < max_mailboxes
+    current_prefs = get_mail_preferences(session["client_id"])
 
     accounts_html = ""
     for a in accounts:
@@ -1176,6 +1309,32 @@ def settings():
         accounts_html = '<p style="color:var(--text-muted);padding:20px 0;text-align:center;">No email accounts connected yet. Add one below to start using Mail Hub and sending emails.</p>'
 
     limit_text = "Unlimited" if max_mailboxes == -1 else str(max_mailboxes)
+
+    prefs_list = [p.strip() for p in current_prefs.split(",") if p.strip()] if current_prefs else []
+    all_pref_options = ["Client emails", "Sales leads", "Meeting invites", "Urgent deadlines", "Team messages", "Financial", "Support tickets", "Job applications", "Legal", "Shipping"]
+    pref_chips_html = ""
+    for opt in all_pref_options:
+        selected = "selected" in opt or opt in prefs_list
+        sel_cls = "background:var(--primary);color:#fff;border-color:var(--primary);" if opt in prefs_list else ""
+        pref_chips_html += f'<button type="button" class="pref-chip" data-val="{_esc(opt)}" style="display:inline-block;padding:6px 14px;margin:4px;border-radius:20px;border:1.5px solid var(--border-light);background:var(--bg);font-size:13px;cursor:pointer;transition:all .2s;{sel_cls}" onclick="toggleSettingsPref(this)">{_esc(opt)}</button>'
+    custom_prefs = [p for p in prefs_list if p not in all_pref_options]
+    custom_prefs_text = ", ".join(custom_prefs)
+
+    prefs_card = f"""
+    <div class="card">
+      <div class="card-header"><h2>&#128340; Mail Sorting Preferences</h2></div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Select what kinds of emails matter most to you. The AI will prioritize these when sorting your inbox.</p>
+      <div id="settings-pref-chips" style="margin-bottom:14px;">
+        {pref_chips_html}
+      </div>
+      <div class="form-group">
+        <label>Custom priorities</label>
+        <textarea id="settings-custom-prefs" placeholder="e.g. VIP clients, investor updates, supplier invoices..." style="height:60px;font-size:13px;">{_esc(custom_prefs_text)}</textarea>
+      </div>
+      <button class="btn btn-primary" onclick="saveSettingsPrefs()" id="save-prefs-btn">Save Preferences</button>
+      <span id="prefs-save-status" style="margin-left:10px;font-size:13px;"></span>
+    </div>
+    """
 
     return _render(t("settings.title"), f"""
     <div class="page-header">
@@ -1212,12 +1371,13 @@ def settings():
         <h3 style="font-size:16px;margin-bottom:14px;">Add Email Account</h3>
         <div class="form-row">
           <div class="form-group"><label>Label</label><input id="acct-label" placeholder="Work Gmail, Personal, etc." autocomplete="off"></div>
-          <div class="form-group"><label>Email Address</label><input id="acct-email" type="email" placeholder="you@example.com" required autocomplete="off"></div>
+          <div class="form-group"><label>Email Address</label><input id="acct-email" type="email" placeholder="you@example.com" required autocomplete="off" oninput="detectProvider(this.value)"></div>
         </div>
+        <div id="provider-badge" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:var(--radius-xs);font-size:13px;background:#EFF6FF;color:#1E40AF;align-items:center;gap:8px;"></div>
         <div class="form-group">
           <label>App Password</label>
-          <input id="acct-password" type="password" placeholder="Paste your 16-character App Password here" required autocomplete="new-password">
-          <p class="form-hint">For Gmail, generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>. For Outlook, use your account password with <a href="https://support.microsoft.com/en-us/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944" target="_blank">app passwords</a>.</p>
+          <input id="acct-password" type="password" placeholder="Paste your App Password here" required autocomplete="new-password">
+          <p class="form-hint" id="password-hint">For Gmail, generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>. For Outlook, use your account password with <a href="https://support.microsoft.com/en-us/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944" target="_blank">app passwords</a>.</p>
         </div>
         <details style="margin-bottom:14px;">
           <summary style="font-size:13px;color:var(--text-muted);cursor:pointer;">Advanced Settings (IMAP/SMTP)</summary>
@@ -1252,16 +1412,31 @@ def settings():
 
     <div class="card">
       <div class="card-header"><h2>&#128272; {t("settings.security")}</h2></div>
-      <h3 style="font-size:15px;margin-bottom:12px;">{t("settings.change_password")}</h3>
-      <form method="post" action="/settings/change-password">
-        <div class="form-group"><label>{t("settings.current_password")}</label><input name="current_password" type="password" required></div>
-        <div class="form-row">
-          <div class="form-group"><label>{t("settings.new_password")}</label><input name="new_password" type="password" required minlength="6"></div>
-          <div class="form-group"><label>{t("settings.confirm_password")}</label><input name="confirm_password" type="password" required minlength="6"></div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--green-light);border-radius:var(--radius-sm);margin-bottom:16px;">
+        <span style="font-size:22px;">&#9989;</span>
+        <div>
+          <div style="font-weight:600;font-size:14px;color:var(--green-dark);">Your account is secure</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Password protected with bcrypt encryption. You can change your password below if needed.</div>
         </div>
-        <button class="btn btn-primary" type="submit">{t("settings.update_password")}</button>
-      </form>
+      </div>
+      <details style="cursor:pointer;">
+        <summary style="font-size:14px;font-weight:600;color:var(--text-secondary);padding:10px 0;list-style:none;display:flex;align-items:center;gap:8px;">
+          <span style="transition:transform 0.2s;display:inline-block;" class="pw-arrow">&#9654;</span> {t("settings.change_password")} <span style="font-size:12px;font-weight:400;color:var(--text-muted);">(optional)</span>
+        </summary>
+        <div style="padding:16px 0 4px;">
+          <form method="post" action="/settings/change-password">
+            <div class="form-group"><label>{t("settings.current_password")}</label><input name="current_password" type="password" required></div>
+            <div class="form-row">
+              <div class="form-group"><label>{t("settings.new_password")}</label><input name="new_password" type="password" required minlength="6"></div>
+              <div class="form-group"><label>{t("settings.confirm_password")}</label><input name="confirm_password" type="password" required minlength="6"></div>
+            </div>
+            <button class="btn btn-outline" type="submit">{t("settings.update_password")}</button>
+          </form>
+        </div>
+      </details>
     </div>
+
+    {prefs_card}
 
     <div class="card" style="border-color:var(--red);">
       <div class="card-header"><h2 style="color:var(--red);">&#9888;&#65039; Danger Zone</h2></div>
@@ -1280,6 +1455,53 @@ def settings():
     </div>
 
     <script>
+    const EMAIL_PROVIDERS = {{
+      'gmail.com': {{imap: 'imap.gmail.com', smtp: 'smtp.gmail.com', imap_port: 993, smtp_port: 465, name: 'Gmail', color: '#EA4335',
+        hint: 'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a> in your Google account.'}},
+      'googlemail.com': {{imap: 'imap.gmail.com', smtp: 'smtp.gmail.com', imap_port: 993, smtp_port: 465, name: 'Gmail', color: '#EA4335',
+        hint: 'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a> in your Google account.'}},
+      'yahoo.com': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+      'yahoo.es': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+      'yahoo.co.uk': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+      'yahoo.com.ar': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+      'ymail.com': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+      'outlook.com': {{imap: 'imap-mail.outlook.com', smtp: 'smtp-mail.outlook.com', imap_port: 993, smtp_port: 587, name: 'Outlook', color: '#0078D4',
+        hint: 'Use your regular password. If 2FA is on, generate an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
+      'hotmail.com': {{imap: 'imap-mail.outlook.com', smtp: 'smtp-mail.outlook.com', imap_port: 993, smtp_port: 587, name: 'Outlook', color: '#0078D4',
+        hint: 'Use your regular password. If 2FA is on, generate an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
+      'live.com': {{imap: 'imap-mail.outlook.com', smtp: 'smtp-mail.outlook.com', imap_port: 993, smtp_port: 587, name: 'Outlook', color: '#0078D4',
+        hint: 'Use your regular password. If 2FA is on, generate an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
+      'msn.com': {{imap: 'imap-mail.outlook.com', smtp: 'smtp-mail.outlook.com', imap_port: 993, smtp_port: 587, name: 'Outlook', color: '#0078D4',
+        hint: 'Use your regular password. If 2FA is on, generate an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
+    }};
+    function detectProvider(email) {{
+      const badge = document.getElementById('provider-badge');
+      const hint = document.getElementById('password-hint');
+      const at = email.indexOf('@');
+      if (at < 0) {{ badge.style.display = 'none'; return; }}
+      const domain = email.substring(at + 1).toLowerCase().trim();
+      const p = EMAIL_PROVIDERS[domain];
+      if (p) {{
+        document.getElementById('acct-imap-host').value = p.imap;
+        document.getElementById('acct-imap-port').value = p.imap_port;
+        document.getElementById('acct-smtp-host').value = p.smtp;
+        document.getElementById('acct-smtp-port').value = p.smtp_port;
+        badge.innerHTML = '<span style="font-weight:600;">' + p.name + ' detected</span> — IMAP/SMTP settings filled automatically.';
+        badge.style.display = 'flex';
+        badge.style.borderLeft = '3px solid ' + p.color;
+        hint.innerHTML = p.hint;
+      }} else {{
+        badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — please set IMAP/SMTP in Advanced Settings below.';
+        badge.style.display = 'flex';
+        badge.style.borderLeft = '3px solid var(--text-muted)';
+        hint.innerHTML = 'Enter the App Password or mail password for this account.';
+      }}
+    }}
     function showAddAccount() {{
       document.getElementById('add-account-form').style.display = 'block';
       document.getElementById('add-account-btn').style.display = 'none';
@@ -1328,6 +1550,49 @@ def settings():
       if (!confirm('Remove this email account? Emails already synced will be kept.')) return;
       fetch('/api/email-accounts/' + id, {{method: 'DELETE'}})
         .then(() => window.location.reload());
+    }}
+    function toggleSettingsPref(el) {{
+      const sel = el.style.background.includes('var(--primary)');
+      if (sel) {{
+        el.style.background = 'var(--bg)';
+        el.style.color = '';
+        el.style.borderColor = 'var(--border-light)';
+      }} else {{
+        el.style.background = 'var(--primary)';
+        el.style.color = '#fff';
+        el.style.borderColor = 'var(--primary)';
+      }}
+    }}
+    function saveSettingsPrefs() {{
+      const chips = document.querySelectorAll('#settings-pref-chips .pref-chip');
+      const selected = [];
+      chips.forEach(c => {{
+        if (c.style.background.includes('var(--primary)')) selected.push(c.dataset.val);
+      }});
+      const custom = document.getElementById('settings-custom-prefs').value.trim();
+      if (custom) selected.push(custom);
+      const btn = document.getElementById('save-prefs-btn');
+      const status = document.getElementById('prefs-save-status');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      fetch('/api/mail-preferences', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{preferences: selected.join(', ')}})
+      }}).then(r => r.json()).then(data => {{
+        btn.disabled = false;
+        btn.textContent = 'Save Preferences';
+        if (data.ok) {{
+          status.innerHTML = '<span style="color:var(--green);">&#10003; Saved!</span>';
+          setTimeout(() => status.innerHTML = '', 3000);
+        }} else {{
+          status.innerHTML = '<span style="color:var(--red);">Failed to save</span>';
+        }}
+      }}).catch(() => {{
+        btn.disabled = false;
+        btn.textContent = 'Save Preferences';
+        status.innerHTML = '<span style="color:var(--red);">Connection error</span>';
+      }});
     }}
     </script>
     """, active_page="settings", client=client, sender_name=SENDER_NAME,
@@ -2889,8 +3154,91 @@ def mail_hub():
     </div>
     """
 
+    # Show preferences popup if user has accounts but no mail preferences set yet
+    from outreach.db import get_mail_preferences
+    user_prefs = get_mail_preferences(session["client_id"])
+    prefs_popup = ""
+    if accounts and not user_prefs:
+        prefs_popup = """
+    <div id="prefs-modal" style="display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+      <div class="card" style="max-width:560px;width:90%;max-height:90vh;overflow-y:auto;margin:0;">
+        <div style="padding:28px;">
+          <h2 style="margin:0 0 6px;">&#127919; What matters most to you?</h2>
+          <p style="color:var(--text-secondary);margin-bottom:20px;font-size:14px;">Help our AI prioritize your inbox better. Select the topics that are important to you and add any custom priorities.</p>
+
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;" id="pref-chips">
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Client emails" style="display:none;"><span>&#128188; Client emails</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Sales leads & prospects" style="display:none;"><span>&#128176; Sales leads & prospects</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Meeting invites & scheduling" style="display:none;"><span>&#128197; Meeting invites & scheduling</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Urgent deadlines" style="display:none;"><span>&#9200; Urgent deadlines</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Team & coworker messages" style="display:none;"><span>&#129309; Team & coworker messages</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Financial & billing" style="display:none;"><span>&#128179; Financial & billing</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Support tickets & customer issues" style="display:none;"><span>&#127384; Support tickets & customer issues</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Job applications & recruiting" style="display:none;"><span>&#128188; Job applications & recruiting</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Legal & contracts" style="display:none;"><span>&#128220; Legal & contracts</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:13px;transition:all 0.2s;" class="pref-chip">
+              <input type="checkbox" value="Shipping & orders" style="display:none;"><span>&#128230; Shipping & orders</span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-bottom:20px;">
+            <label style="font-size:13px;font-weight:600;">Custom priorities (optional)</label>
+            <textarea id="pref-custom" placeholder="e.g. Emails from @bigclient.com are always urgent, partnership proposals are important..." style="width:100%;min-height:70px;font-size:13px;"></textarea>
+          </div>
+
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="savePreferences()">&#10003; Save Preferences</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('prefs-modal').style.display='none'">Skip for now</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .pref-chip:has(input:checked) { border-color: var(--primary); background: var(--primary-light); color: var(--primary); font-weight: 600; }
+    </style>
+
+    <script>
+    function savePreferences() {
+      const chips = document.querySelectorAll('#pref-chips input:checked');
+      const selected = Array.from(chips).map(c => c.value);
+      const custom = document.getElementById('pref-custom').value.trim();
+      const prefs = selected.join(', ') + (custom ? '. ' + custom : '');
+      if (!prefs.trim()) { alert('Please select at least one priority or add a custom one.'); return; }
+      fetch('/api/mail-preferences', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({preferences: prefs})
+      }).then(r => r.json()).then(data => {
+        if (data.ok) {
+          document.getElementById('prefs-modal').style.display = 'none';
+        }
+      });
+    }
+    </script>
+    """
+
     return _render(t("mail.title"), f"""
     {mail_hub_tutorial}
+    {prefs_popup}
     <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / {t("mail.title")}</div>
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
       <div>
@@ -3447,6 +3795,7 @@ def mail_hub():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/email-accounts", methods=["POST"])
+@limiter.limit("10 per minute")
 def api_add_email_account():
     """Add a new email account after testing IMAP + SMTP connection."""
     if not _logged_in():
@@ -3536,6 +3885,20 @@ def api_delete_email_account(account_id):
         return jsonify({"error": "unauthorized"}), 401
     from outreach.db import delete_email_account
     delete_email_account(account_id, session["client_id"])
+    return jsonify({"ok": True})
+
+
+@app.route("/api/mail-preferences", methods=["POST"])
+def api_save_mail_preferences():
+    """Save the user's mail sorting preferences."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    data = request.get_json() or {}
+    prefs = data.get("preferences", "").strip()
+    if not prefs:
+        return jsonify({"error": "Preferences cannot be empty"}), 400
+    from outreach.db import update_mail_preferences
+    update_mail_preferences(session["client_id"], prefs[:2000])
     return jsonify({"ok": True})
 
 
@@ -4743,6 +5106,11 @@ def billing_page():
       <h1>&#128179; {t("billing.title")}</h1>
     </div>
 
+    <div style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;padding:16px 24px;border-radius:10px;margin-bottom:24px;text-align:center;">
+      <div style="font-size:18px;font-weight:700;margin-bottom:4px;">&#128679; Testing Mode</div>
+      <div style="font-size:14px;opacity:0.95;">Subscriptions and paid plans are <b>not available</b> during the beta period. All features are currently free. We'll announce when plans go live!</div>
+    </div>
+
     <div class="card" style="margin-bottom:24px;">
       <div class="card-header"><h2>{t("billing.current_usage")}</h2><span class="badge {status_badge}">{sub.get('status', 'active').replace('_', ' ').title()}</span></div>
       <div style="padding:20px;">
@@ -4825,6 +5193,7 @@ def billing_downgrade():
 
 
 @app.route("/paypal/webhook", methods=["POST"])
+@csrf.exempt
 def paypal_webhook():
     """Handle PayPal webhook events for subscription lifecycle."""
     import json
@@ -4954,6 +5323,9 @@ def pricing_page():
       <div style="text-align:center;margin-bottom:40px;">
         <h1 style="font-size:36px;margin-bottom:8px;">{t("pricing.title")}</h1>
         <p style="color:var(--text-muted);font-size:18px;">{t("pricing.subtitle")}</p>
+        <div style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;padding:12px 24px;border-radius:10px;margin-top:16px;display:inline-block;font-size:14px;font-weight:600;">
+          &#128679; We're in beta! All features are free during testing. Paid plans coming soon.
+        </div>
       </div>
       <div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:center;">
         {cards}

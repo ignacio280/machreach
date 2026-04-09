@@ -1,8 +1,12 @@
 flask>=3.0
 flask-login>=0.6
+flask-wtf>=1.2
+flask-limiter>=3.5
 openai>=1.30
 python-dotenv>=1.0
 apscheduler>=3.10
 bleach>=6.0
 gunicorn>=22.0
 requests>=2.31
+bcrypt>=4.1
+cryptography>=42.0

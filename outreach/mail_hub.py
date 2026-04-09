@@ -220,7 +220,7 @@ def fetch_inbox(days: int = 3, limit: int = 50, existing_ids: set | None = None,
     return results
 
 
-def classify_emails_batch(emails: list[dict]) -> list[dict]:
+def classify_emails_batch(emails: list[dict], user_preferences: str = "") -> list[dict]:
     """Classify a batch of emails by priority and category using GPT.
 
     Takes list of {subject, from_email, body_preview} dicts.
@@ -245,6 +245,13 @@ def classify_emails_batch(emails: list[dict]) -> list[dict]:
             f"Preview: {e.get('body_preview','')[:200]}"
         )
 
+    user_pref_block = ""
+    if user_preferences:
+        user_pref_block = f"""
+USER PRIORITIES (use these to adjust importance — emails matching these topics should be ranked higher):
+{user_preferences}
+"""
+
     prompt = f"""Classify each email below. Return a JSON array with one object per email, in order.
 
 Each object must have:
@@ -265,7 +272,7 @@ Category rules:
 - newsletter = marketing emails, subscriptions, promotions
 - personal = personal/social messages
 - spam = obvious spam or irrelevant
-
+{user_pref_block}
 Emails:
 {chr(10).join(email_texts)}
 
@@ -314,7 +321,7 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
     Otherwise falls back to .env IMAP defaults.
     Returns number of new emails added. Skips already-synced messages.
     """
-    from outreach.db import upsert_mail, get_db, get_email_account
+    from outreach.db import upsert_mail, get_db, get_email_account, get_mail_preferences
 
     # Get account credentials if specified
     imap_kwargs = {}
@@ -398,12 +405,13 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
 
     # Stage 2: Classify in background thread (non-blocking)
     if unclassified_ids:
+        user_prefs = get_mail_preferences(client_id)
         import threading
         def _bg_classify():
             try:
                 for i in range(0, len(unclassified_ids), 20):
                     batch = unclassified_ids[i:i + 20]
-                    classifications = classify_emails_batch(batch)
+                    classifications = classify_emails_batch(batch, user_preferences=user_prefs)
                     for email_data, cls in zip(batch, classifications):
                         p = cls.get("priority", "normal")
                         if _is_campaign_related(email_data) and p not in ("urgent",):

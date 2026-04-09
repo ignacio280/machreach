@@ -7,7 +7,33 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-from outreach.config import DATABASE_PATH
+from cryptography.fernet import Fernet, InvalidToken
+from outreach.config import DATABASE_PATH, ENCRYPTION_KEY
+
+# ---------------------------------------------------------------------------
+# Fernet encryption for email account passwords at rest
+# ---------------------------------------------------------------------------
+
+def _get_fernet() -> Fernet:
+    """Return a Fernet cipher using the configured ENCRYPTION_KEY."""
+    import base64, hashlib
+    # Derive a valid 32-byte Fernet key from the env variable via SHA256
+    key_bytes = hashlib.sha256(ENCRYPTION_KEY.encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(key_bytes))
+
+
+def encrypt_password(plaintext: str) -> str:
+    """Encrypt a plaintext password for storage."""
+    return _get_fernet().encrypt(plaintext.encode()).decode()
+
+
+def decrypt_password(ciphertext: str) -> str:
+    """Decrypt a stored password. Returns plaintext on failure (legacy unencrypted)."""
+    try:
+        return _get_fernet().decrypt(ciphertext.encode()).decode()
+    except (InvalidToken, Exception):
+        # Legacy: password was stored in plaintext before encryption was added
+        return ciphertext
 
 
 def _ensure_dir():
@@ -38,6 +64,7 @@ def init_db():
             email       TEXT NOT NULL UNIQUE,
             password    TEXT NOT NULL,
             business    TEXT DEFAULT '',
+            mail_preferences TEXT DEFAULT '',
             created_at  TEXT DEFAULT (datetime('now', 'localtime'))
         );
 
@@ -228,6 +255,10 @@ def init_db():
             db.execute("ALTER TABLE mail_inbox ADD COLUMN snooze_note TEXT DEFAULT ''")
         except Exception:
             pass
+        try:
+            db.execute("ALTER TABLE clients ADD COLUMN mail_preferences TEXT DEFAULT ''")
+        except Exception:
+            pass
         # Ensure subscriptions table exists (migration)
         try:
             db.execute("""CREATE TABLE IF NOT EXISTS subscriptions (
@@ -311,7 +342,12 @@ def get_email_accounts(client_id: int) -> list[dict]:
             "SELECT * FROM email_accounts WHERE client_id = ? ORDER BY is_default DESC, created_at ASC",
             (client_id,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["password"] = decrypt_password(d["password"])
+            result.append(d)
+        return result
 
 
 def get_email_account(account_id: int, client_id: int) -> dict | None:
@@ -320,7 +356,11 @@ def get_email_account(account_id: int, client_id: int) -> dict | None:
             "SELECT * FROM email_accounts WHERE id = ? AND client_id = ?",
             (account_id, client_id),
         ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        d = dict(row)
+        d["password"] = decrypt_password(d["password"])
+        return d
 
 
 def get_default_email_account(client_id: int) -> dict | None:
@@ -330,7 +370,11 @@ def get_default_email_account(client_id: int) -> dict | None:
             "SELECT * FROM email_accounts WHERE client_id = ? ORDER BY is_default DESC, id ASC LIMIT 1",
             (client_id,),
         ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        d = dict(row)
+        d["password"] = decrypt_password(d["password"])
+        return d
 
 
 def create_email_account(client_id: int, label: str, email: str, password: str,
@@ -349,7 +393,7 @@ def create_email_account(client_id: int, label: str, email: str, password: str,
             INSERT INTO email_accounts (client_id, label, email, imap_host, imap_port,
                                         smtp_host, smtp_port, password, is_default)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (client_id, label, email, imap_host, imap_port, smtp_host, smtp_port, password, is_default))
+        """, (client_id, label, email, imap_host, imap_port, smtp_host, smtp_port, encrypt_password(password), is_default))
         return cur.lastrowid
 
 
@@ -358,6 +402,9 @@ def update_email_account(account_id: int, client_id: int, **kwargs) -> bool:
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return False
+    # Encrypt password if being updated
+    if "password" in updates:
+        updates["password"] = encrypt_password(updates["password"])
     with get_db() as db:
         if updates.get("is_default"):
             db.execute("UPDATE email_accounts SET is_default = 0 WHERE client_id = ?", (client_id,))
@@ -739,6 +786,19 @@ def update_client(client_id: int, name: str, business: str):
     with get_db() as db:
         db.execute("UPDATE clients SET name = ?, business = ? WHERE id = ?",
                    (name, business, client_id))
+
+
+def update_mail_preferences(client_id: int, preferences: str):
+    with get_db() as db:
+        db.execute("UPDATE clients SET mail_preferences = ? WHERE id = ?",
+                   (preferences, client_id))
+
+
+def get_mail_preferences(client_id: int) -> str:
+    with get_db() as db:
+        row = db.execute("SELECT mail_preferences FROM clients WHERE id = ?",
+                         (client_id,)).fetchone()
+        return (row[0] or "") if row else ""
 
 
 def update_client_password(client_id: int, password_hash: str):

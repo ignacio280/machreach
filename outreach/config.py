@@ -31,9 +31,18 @@ IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "") or SMTP_PASSWORD
 DATABASE_PATH = Path(os.getenv("DATABASE_PATH", BASE_DIR / "data" / "outreach.db"))
 
 # App
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
+_secret = os.getenv("SECRET_KEY", "")
+if not _secret and os.getenv("RENDER", ""):
+    raise RuntimeError("SECRET_KEY must be set in production")
+SECRET_KEY = _secret or "dev-secret-change-me"
 BASE_URL = os.getenv("BASE_URL", "http://localhost:5000")
 SENDER_NAME = os.getenv("SENDER_NAME", "Ignacio")
+
+# Encryption key for email account passwords at rest (Fernet, 32-byte base64)
+_enc_key = os.getenv("ENCRYPTION_KEY", "")
+if not _enc_key and os.getenv("RENDER", ""):
+    raise RuntimeError("ENCRYPTION_KEY must be set in production")
+ENCRYPTION_KEY = _enc_key or "RGV2LWVuY3J5cHRpb24ta2V5LW5vdC1mb3ItcHJvZA=="  # dev-only placeholder
 
 # Sending limits
 DELAY_BETWEEN_EMAILS_SEC = int(os.getenv("DELAY_BETWEEN_EMAILS_SEC", "5"))  # seconds between sends
