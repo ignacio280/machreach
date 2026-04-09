@@ -3231,6 +3231,7 @@ def view_campaign(campaign_id):
           </div>
         </div>
       </div>
+      <script>var _campId = {{camp_id}};</script>
       {% raw %}
       <script>
       var _crmCache = [];
@@ -3266,7 +3267,7 @@ def view_campaign(campaign_id):
         var ids = [];
         document.querySelectorAll('.crm-cb:checked').forEach(function(cb) { ids.push(parseInt(cb.value)); });
         if (!ids.length) { alert('Select at least one contact.'); return; }
-        fetch('/campaign/' + {{camp_id}} + '/import-contacts', {
+        fetch('/campaign/' + _campId + '/import-contacts', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({contact_ids: ids})
         }).then(function(r) { return r.json(); }).then(function(d) {
