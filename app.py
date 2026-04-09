@@ -1602,28 +1602,54 @@ def settings():
       'msn.com': {{imap: 'imap-mail.outlook.com', smtp: 'smtp-mail.outlook.com', imap_port: 993, smtp_port: 587, name: 'Outlook', color: '#0078D4',
         hint: 'Use your regular password. If 2FA is on, generate an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
     }};
+    let _mxTimeout = null;
+    function _applyProvider(p, badge, hint) {{
+      document.getElementById('acct-imap-host').value = p.imap;
+      document.getElementById('acct-imap-port').value = p.imap_port;
+      document.getElementById('acct-smtp-host').value = p.smtp;
+      document.getElementById('acct-smtp-port').value = p.smtp_port;
+      badge.innerHTML = '<span style="font-weight:600;">' + p.name + ' detected</span> — IMAP/SMTP settings filled automatically.';
+      badge.style.display = 'flex';
+      badge.style.borderLeft = '3px solid ' + p.color;
+      hint.innerHTML = p.hint;
+    }}
     function detectProvider(email) {{
       const badge = document.getElementById('provider-badge');
       const hint = document.getElementById('password-hint');
       const at = email.indexOf('@');
       if (at < 0) {{ badge.style.display = 'none'; return; }}
       const domain = email.substring(at + 1).toLowerCase().trim();
+      if (!domain || domain.indexOf('.') < 0) {{ badge.style.display = 'none'; return; }}
       const p = EMAIL_PROVIDERS[domain];
       if (p) {{
-        document.getElementById('acct-imap-host').value = p.imap;
-        document.getElementById('acct-imap-port').value = p.imap_port;
-        document.getElementById('acct-smtp-host').value = p.smtp;
-        document.getElementById('acct-smtp-port').value = p.smtp_port;
-        badge.innerHTML = '<span style="font-weight:600;">' + p.name + ' detected</span> — IMAP/SMTP settings filled automatically.';
-        badge.style.display = 'flex';
-        badge.style.borderLeft = '3px solid ' + p.color;
-        hint.innerHTML = p.hint;
-      }} else {{
-        badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — please set IMAP/SMTP in Advanced Settings below.';
-        badge.style.display = 'flex';
-        badge.style.borderLeft = '3px solid var(--text-muted)';
-        hint.innerHTML = 'Enter the App Password or mail password for this account.';
+        _applyProvider(p, badge, hint);
+        return;
       }}
+      // Unknown domain — debounce MX lookup via server
+      clearTimeout(_mxTimeout);
+      badge.innerHTML = '<span style="color:var(--text-muted);">&#8987; Detecting provider for <b>' + domain + '</b>...</span>';
+      badge.style.display = 'flex';
+      badge.style.borderLeft = '3px solid var(--border)';
+      _mxTimeout = setTimeout(() => {{
+        fetch('/api/detect-provider?domain=' + encodeURIComponent(domain))
+          .then(r => r.json())
+          .then(data => {{
+            if (data.provider) {{
+              _applyProvider(data, badge, hint);
+            }} else {{
+              badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> below and enter your IMAP/SMTP server details. Check with your IT department or email provider.';
+              badge.style.display = 'flex';
+              badge.style.borderLeft = '3px solid var(--yellow)';
+              hint.innerHTML = 'Enter the password for this email account. If your provider supports App Passwords, use one for better security.';
+            }}
+          }})
+          .catch(() => {{
+            badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> below and enter your IMAP/SMTP server details.';
+            badge.style.display = 'flex';
+            badge.style.borderLeft = '3px solid var(--yellow)';
+            hint.innerHTML = 'Enter the password for this email account.';
+          }});
+      }}, 600);
     }}
     function showAddAccount() {{
       document.getElementById('add-account-form').style.display = 'block';
@@ -5633,6 +5659,57 @@ def api_usage():
     plan = sub.get("plan", "free")
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
     return jsonify({"plan": plan, "usage": usage, "limits": limits})
+
+
+# ---------------------------------------------------------------------------
+# API — Email provider detection via MX lookup
+# ---------------------------------------------------------------------------
+
+@app.route("/api/detect-provider")
+@limiter.limit("30 per minute")
+def api_detect_provider():
+    """Detect email provider from domain MX records."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    import dns.resolver
+    domain = request.args.get("domain", "").strip().lower()
+    if not domain or len(domain) > 253:
+        return jsonify({"error": "invalid domain"}), 400
+
+    try:
+        answers = dns.resolver.resolve(domain, "MX")
+        mx_hosts = [str(r.exchange).lower().rstrip(".") for r in answers]
+    except Exception:
+        return jsonify({"provider": None, "mx": []})
+
+    # Check MX records for known providers
+    for mx in mx_hosts:
+        if "google" in mx or "gmail" in mx or "aspmx" in mx:
+            return jsonify({"provider": "google", "name": "Google Workspace",
+                "imap": "imap.gmail.com", "smtp": "smtp.gmail.com",
+                "imap_port": 993, "smtp_port": 465, "color": "#EA4335",
+                "hint": "This domain uses Google Workspace. Generate an <a href='https://myaccount.google.com/apppasswords' target='_blank'>App Password</a> in your Google account.",
+                "mx": mx_hosts})
+        if "outlook" in mx or "microsoft" in mx or "protection.outlook" in mx:
+            return jsonify({"provider": "microsoft", "name": "Microsoft 365",
+                "imap": "imap-mail.outlook.com", "smtp": "smtp-mail.outlook.com",
+                "imap_port": 993, "smtp_port": 587, "color": "#0078D4",
+                "hint": "This domain uses Microsoft 365. Use your regular password, or generate an <a href='https://account.live.com/proofs/AppPassword' target='_blank'>app password</a> if 2FA is on.",
+                "mx": mx_hosts})
+        if "yahoodns" in mx or "yahoo" in mx:
+            return jsonify({"provider": "yahoo", "name": "Yahoo Mail",
+                "imap": "imap.mail.yahoo.com", "smtp": "smtp.mail.yahoo.com",
+                "imap_port": 993, "smtp_port": 465, "color": "#6001D2",
+                "hint": "This domain uses Yahoo. Generate an <a href='https://login.yahoo.com/account/security' target='_blank'>App Password</a> in Yahoo Account Security.",
+                "mx": mx_hosts})
+        if "zoho" in mx:
+            return jsonify({"provider": "zoho", "name": "Zoho Mail",
+                "imap": "imap.zoho.com", "smtp": "smtp.zoho.com",
+                "imap_port": 993, "smtp_port": 465, "color": "#F0483E",
+                "hint": "This domain uses Zoho Mail. Go to Zoho Mail Settings → Security → App Passwords to generate one.",
+                "mx": mx_hosts})
+
+    return jsonify({"provider": None, "mx": mx_hosts})
 
 
 if __name__ == "__main__":
