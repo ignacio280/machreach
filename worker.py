@@ -69,7 +69,7 @@ def send_batch():
     for item in batch:
         # Check per-client monthly email limit
         try:
-            from outreach.db import check_limit, increment_usage, get_db
+            from outreach.db import check_limit, increment_usage, get_db, get_default_email_account
             with get_db() as db:
                 camp = db.execute("SELECT client_id FROM campaigns WHERE id = ?",
                                   (item["campaign_id"],)).fetchone()
@@ -114,6 +114,21 @@ def send_batch():
             except Exception as e:
                 print(f"    Translation failed for {item['email']} ({lang}): {e}")
 
+        # Resolve per-account SMTP credentials
+        acct_smtp = {}
+        if camp:
+            try:
+                acct = get_default_email_account(camp[0])
+                if acct:
+                    acct_smtp = {
+                        "smtp_host": acct["smtp_host"],
+                        "smtp_port": acct["smtp_port"],
+                        "smtp_user": acct["email"],
+                        "smtp_password": acct["password"],
+                    }
+            except Exception:
+                pass
+
         # Record first to get tracking ID, then send with pixel embedded
         sent_id = record_sent(
             contact_id=item["contact_id"],
@@ -129,6 +144,7 @@ def send_batch():
             body_text=body,
             contact_id=item["contact_id"],
             tracking_id=sent_id,
+            **acct_smtp,
         )
 
         if success:

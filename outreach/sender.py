@@ -60,9 +60,21 @@ def send_email(
     body_text: str,
     contact_id: int | None = None,
     tracking_id: int | None = None,
+    smtp_host: str | None = None,
+    smtp_port: int | None = None,
+    smtp_user: str | None = None,
+    smtp_password: str | None = None,
 ) -> bool:
-    """Send a single email via SMTP. Returns True on success."""
-    if not SMTP_USER or not SMTP_PASSWORD:
+    """Send a single email via SMTP. Returns True on success.
+    
+    If per-account SMTP credentials are provided, they override the global config.
+    """
+    _host = smtp_host or SMTP_HOST
+    _port = smtp_port or SMTP_PORT
+    _user = smtp_user or SMTP_USER
+    _pass = smtp_password or SMTP_PASSWORD
+
+    if not _user or not _pass:
         print(f"[DRY RUN] Would send to {to_email}: {subject}")
         return True
 
@@ -70,7 +82,7 @@ def send_email(
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = SMTP_USER
+    msg["From"] = _user
     msg["To"] = to_email
     msg.attach(MIMEText(body_text, "plain"))
     msg.attach(MIMEText(html, "html"))
@@ -82,14 +94,14 @@ def send_email(
         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
     try:
-        if SMTP_PORT == 587:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+        if _port == 587:
+            with smtplib.SMTP(_host, _port, timeout=30) as server:
                 server.starttls()
-                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.login(_user, _pass)
                 server.send_message(msg)
         else:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as server:
-                server.login(SMTP_USER, SMTP_PASSWORD)
+            with smtplib.SMTP_SSL(_host, _port, timeout=30) as server:
+                server.login(_user, _pass)
                 server.send_message(msg)
         return True
     except Exception as e:

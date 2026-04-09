@@ -1305,6 +1305,26 @@ def api_team_invite():
         return jsonify(result), 409
     # Build invite link
     invite_url = f"{request.host_url.rstrip('/')}/team/accept/{result['token']}"
+
+    # Send the invite email to the colleague
+    from outreach.db import get_default_email_account
+    from outreach.sender import send_email as _send_email
+    acct = get_default_email_account(session["client_id"])
+    smtp_kw = {}
+    if acct:
+        smtp_kw = {"smtp_host": acct["smtp_host"], "smtp_port": acct["smtp_port"],
+                    "smtp_user": acct["email"], "smtp_password": acct["password"]}
+    invite_body = (
+        f"Hi,\n\n"
+        f"{client['name'] or client['email']} has invited you to join their team on MachReach as a {role}.\n\n"
+        f"Click the link below to accept the invitation:\n"
+        f"{invite_url}\n\n"
+        f"If you don't have an account yet, you'll be able to sign up first.\n\n"
+        f"— MachReach"
+    )
+    _send_email(to_email=email, subject=f"You're invited to join {client['name'] or 'a team'} on MachReach",
+                body_text=invite_body, **smtp_kw)
+
     return jsonify({"ok": True, "invite_url": invite_url, "email": email, "role": role})
 
 
@@ -3571,7 +3591,7 @@ def _trigger_campaign_send(campaign_id):
 
     def _bg_send():
         import time as _time
-        from outreach.db import get_db, record_sent, delete_sent_email, check_limit, increment_usage
+        from outreach.db import get_db, record_sent, delete_sent_email, check_limit, increment_usage, get_default_email_account
         from outreach.ai import personalize_email, personalize_subject, translate_email
         from outreach.config import DELAY_BETWEEN_EMAILS_SEC, SENDER_NAME
         from outreach.sender import pick_variant, send_email
@@ -3597,6 +3617,18 @@ def _trigger_campaign_send(campaign_id):
                 # Get client_id
                 camp_row = db.execute("SELECT client_id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
                 client_id = camp_row[0] if camp_row else None
+
+            # Resolve SMTP credentials from user's connected email account
+            acct_smtp = {}
+            if client_id:
+                acct = get_default_email_account(client_id)
+                if acct:
+                    acct_smtp = {
+                        "smtp_host": acct["smtp_host"],
+                        "smtp_port": acct["smtp_port"],
+                        "smtp_user": acct["email"],
+                        "smtp_password": acct["password"],
+                    }
 
             _campaign_sends[campaign_id]["total"] = len(batch)
 
@@ -3640,6 +3672,7 @@ def _trigger_campaign_send(campaign_id):
                 success = send_email(
                     to_email=item["email"], subject=subject, body_text=body,
                     contact_id=item["contact_id"], tracking_id=sent_id,
+                    **acct_smtp,
                 )
 
                 if success:
