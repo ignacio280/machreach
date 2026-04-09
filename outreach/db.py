@@ -65,6 +65,7 @@ def init_db():
             password    TEXT NOT NULL,
             business    TEXT DEFAULT '',
             mail_preferences TEXT DEFAULT '',
+            is_admin    INTEGER DEFAULT 0,
             created_at  TEXT DEFAULT (datetime('now', 'localtime'))
         );
 
@@ -313,6 +314,11 @@ def init_db():
         # Migration: add account_id to scheduled_emails
         try:
             db.execute("ALTER TABLE scheduled_emails ADD COLUMN account_id INTEGER")
+        except Exception:
+            pass
+        # Migration: add is_admin column to clients
+        try:
+            db.execute("ALTER TABLE clients ADD COLUMN is_admin INTEGER DEFAULT 0")
         except Exception:
             pass
     print("Database initialized.")
@@ -583,6 +589,25 @@ def get_campaign_stats(campaign_id: int) -> dict:
             "bounced": bounced,
             "bounce_rate": bounced / sent if sent else 0,
         }
+
+
+def get_ab_stats(campaign_id: int) -> list[dict]:
+    """Return A/B variant comparison stats per sequence step."""
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT es.step, se.variant,
+                   COUNT(*) AS sent,
+                   SUM(CASE WHEN se.status IN ('opened','clicked','replied') THEN 1 ELSE 0 END) AS opened,
+                   SUM(CASE WHEN se.status = 'replied' THEN 1 ELSE 0 END) AS replied,
+                   SUM(CASE WHEN se.status = 'bounced' THEN 1 ELSE 0 END) AS bounced
+            FROM sent_emails se
+            JOIN contacts c ON se.contact_id = c.id
+            JOIN email_sequences es ON se.sequence_id = es.id
+            WHERE c.campaign_id = ?
+            GROUP BY es.step, se.variant
+            ORDER BY es.step, se.variant
+        """, (campaign_id,)).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_emails_to_send(limit: int = 50) -> list[dict]:
@@ -867,6 +892,13 @@ def get_client(client_id: int) -> dict | None:
     with get_db() as db:
         row = db.execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
         return dict(row) if row else None
+
+
+def get_all_client_emails() -> list[dict]:
+    """Return id, name, email for all registered clients (admin broadcast)."""
+    with get_db() as db:
+        rows = db.execute("SELECT id, name, email FROM clients ORDER BY id").fetchall()
+        return [dict(r) for r in rows]
 
 
 def update_sequence(seq_id: int, subject_a: str, subject_b: str,

@@ -595,6 +595,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/contacts" {% if active_page == 'contacts' %}class="active"{% endif %} style="{% if active_page == 'contacts' %}color:var(--primary);{% endif %}">&#128101; {{nav.contacts}}</a>
         <a href="/billing" {% if active_page == 'billing' %}class="active"{% endif %}>&#128179; {{nav.billing}}</a>
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %}>{{nav.settings}}</a>
+        {% if is_admin %}<a href="/admin/broadcast" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <button onclick="toggleDarkMode()" class="btn btn-ghost btn-sm" id="theme-toggle" title="Toggle dark mode" style="font-size:16px;padding:4px 8px;cursor:pointer;background:none;border:none;color:#94A3B8;">&#127769;</button>
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
         <div class="nav-divider"></div>
@@ -829,6 +830,10 @@ LAYOUT = """<!DOCTYPE html>
 def _render(title: str, content: str, active_page: str = "", wide: bool = False, **kwargs):
     flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
     nav = t_dict("nav")
+    is_admin = False
+    if _logged_in():
+        c = get_client(session["client_id"])
+        is_admin = bool(c and c.get("is_admin"))
     return render_template_string(
         LAYOUT,
         title=title,
@@ -840,6 +845,7 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
         wide=wide,
         nav=nav,
         lang=session.get("lang", "en"),
+        is_admin=is_admin,
     )
 
 
@@ -1375,6 +1381,93 @@ def dashboard():
         lbl_name=t("dash.name"), lbl_status=t("dash.status"),
         lbl_sent=t("dash.sent"), lbl_opened=t("dash.opened"),
         lbl_replied=t("dash.replied"))
+
+
+# ---------------------------------------------------------------------------
+# Routes — Admin Broadcast
+# ---------------------------------------------------------------------------
+
+def _is_admin():
+    """Check if current user is an admin (via is_admin flag or ADMIN_EMAILS env var)."""
+    if not _logged_in():
+        return False
+    client = get_client(session["client_id"])
+    if not client:
+        return False
+    if client.get("is_admin"):
+        return True
+    # Also check ADMIN_EMAILS env var (comma-separated)
+    admin_emails = os.getenv("ADMIN_EMAILS", "")
+    if admin_emails:
+        admins = [e.strip().lower() for e in admin_emails.split(",") if e.strip()]
+        if client["email"].lower() in admins:
+            return True
+    return False
+
+
+@app.route("/admin/broadcast", methods=["GET", "POST"])
+def admin_broadcast():
+    """Send an announcement email to all registered users."""
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+
+    from outreach.db import get_all_client_emails
+    from outreach.sender import send_email as smtp_send
+
+    users = get_all_client_emails()
+    sent_count = 0
+    error_msg = ""
+
+    if request.method == "POST":
+        subject = request.form.get("subject", "").strip()
+        body = request.form.get("body", "").strip()
+        if not subject or not body:
+            error_msg = "Subject and body are required."
+        else:
+            for u in users:
+                try:
+                    smtp_send(u["email"], subject, body)
+                    sent_count += 1
+                except Exception as e:
+                    print(f"Broadcast send error to {u['email']}: {e}")
+            flash(("success", f"Broadcast sent to {sent_count} of {len(users)} users."))
+            return redirect(url_for("admin_broadcast"))
+
+    return _render("Admin Broadcast", f"""
+    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Admin Broadcast</div>
+    <div class="page-header">
+      <h1>&#128227; Admin Broadcast</h1>
+      <p class="subtitle">Send an announcement email to all {len(users)} registered users.</p>
+    </div>
+    {'<div class="alert alert-red" style="margin-bottom:16px;">' + _esc(error_msg) + '</div>' if error_msg else ''}
+    <div class="card" style="max-width:700px;">
+      <form method="POST">
+        <div class="form-group">
+          <label>Subject</label>
+          <input name="subject" placeholder="Important: MachReach Platform Update" required style="font-size:15px;">
+        </div>
+        <div class="form-group">
+          <label>Message Body</label>
+          <textarea name="body" rows="10" placeholder="Hi there,&#10;&#10;We have an important update..." required style="font-size:14px;line-height:1.7;"></textarea>
+          <p class="form-hint">Plain text. Will be wrapped in the standard MachReach email template.</p>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <button type="submit" class="btn btn-primary" style="font-size:15px;padding:10px 28px;" onclick="return confirm('Send this email to ALL {len(users)} registered users?')">&#128640; Send to {len(users)} Users</button>
+          <a href="/dashboard" class="btn btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+
+    <div class="card" style="margin-top:20px;max-width:700px;">
+      <div class="card-header"><h2>Registered Users ({len(users)})</h2></div>
+      <table>
+        <thead><tr><th>Name</th><th>Email</th></tr></thead>
+        <tbody>
+          {''.join(f'<tr><td>{_esc(u["name"])}</td><td style="font-family:monospace;font-size:13px;">{_esc(u["email"])}</td></tr>' for u in users)}
+        </tbody>
+      </table>
+    </div>
+    """)
 
 
 # ---------------------------------------------------------------------------
@@ -2534,6 +2627,9 @@ def view_campaign(campaign_id):
     sequences = get_sequences(campaign_id)
     contacts = get_campaign_contacts(campaign_id)
 
+    from outreach.db import get_ab_stats
+    ab_data = get_ab_stats(campaign_id)
+
     # Status badge
     sc = {"active": "badge-green", "draft": "badge-gray", "paused": "badge-yellow", "completed": "badge-blue"}.get(camp["status"], "badge-gray")
     status_badge = f'<span class="badge {sc}">{camp["status"]}</span>'
@@ -2646,6 +2742,96 @@ def view_campaign(campaign_id):
     if not activity_html:
         activity_html = '<div class="empty" style="padding:24px;"><div class="empty-icon">&#128172;</div><p>No activity yet. Activate the campaign to start sending.</p></div>'
 
+    # A/B test results
+    ab_html = ""
+    # Group ab_data by step
+    ab_by_step = {}
+    for row in ab_data:
+        step = row["step"]
+        ab_by_step.setdefault(step, {})[row["variant"]] = row
+    if ab_by_step:
+        for step in sorted(ab_by_step.keys()):
+            variants = ab_by_step[step]
+            a = variants.get("a", {"sent": 0, "opened": 0, "replied": 0, "bounced": 0})
+            b = variants.get("b", {"sent": 0, "opened": 0, "replied": 0, "bounced": 0})
+            # Find matching sequence for subject lines
+            seq_match = next((s for s in sequences if s["step"] == step), None)
+            subj_a = _esc(seq_match["subject_a"]) if seq_match else "Variant A"
+            subj_b = _esc(seq_match.get("subject_b", "")) if seq_match else "Variant B"
+            a_sent = a.get("sent", 0) or 0
+            b_sent = b.get("sent", 0) or 0
+            a_open_r = (a.get("opened", 0) / a_sent * 100) if a_sent else 0
+            b_open_r = (b.get("opened", 0) / b_sent * 100) if b_sent else 0
+            a_reply_r = (a.get("replied", 0) / a_sent * 100) if a_sent else 0
+            b_reply_r = (b.get("replied", 0) / b_sent * 100) if b_sent else 0
+            # Determine winner
+            winner = ""
+            if a_sent >= 5 and b_sent >= 5:
+                if a_reply_r > b_reply_r:
+                    winner = "a"
+                elif b_reply_r > a_reply_r:
+                    winner = "b"
+                elif a_open_r > b_open_r:
+                    winner = "a"
+                elif b_open_r > a_open_r:
+                    winner = "b"
+            win_a = "border:2px solid var(--green);" if winner == "a" else ""
+            win_b = "border:2px solid var(--green);" if winner == "b" else ""
+            trophy_a = ' <span style="color:var(--green);font-weight:700;">&#127942; Winner</span>' if winner == "a" else ""
+            trophy_b = ' <span style="color:var(--green);font-weight:700;">&#127942; Winner</span>' if winner == "b" else ""
+
+            if not subj_b:
+                ab_html += f"""
+                <div class="card" style="padding:20px;margin-bottom:16px;">
+                  <h3 style="font-size:16px;font-weight:700;margin-bottom:8px;">Step {step}</h3>
+                  <p style="font-size:13px;color:var(--text-muted);">No B variant configured for this step. <a href="/campaign/{campaign_id}/sequence/{seq_match['id']}/edit" style="color:var(--primary);">Add a Subject B</a> to start A/B testing.</p>
+                </div>"""
+                continue
+
+            # Build bar widths
+            max_open = max(a_open_r, b_open_r, 1)
+            max_reply = max(a_reply_r, b_reply_r, 1)
+
+            ab_html += f"""
+            <div class="card" style="padding:24px;margin-bottom:16px;">
+              <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;">Step {step} — A/B Comparison</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div style="padding:16px;border-radius:var(--radius-xs);background:var(--bg);{win_a}">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                    <span class="badge badge-blue" style="font-size:11px;">A</span>
+                    <span style="font-size:13px;font-weight:600;">{subj_a}</span>{trophy_a}
+                  </div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Sent: <strong>{a_sent}</strong></div>
+                  <div style="margin-bottom:8px;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">Open Rate: <strong>{a_open_r:.1f}%</strong> ({a.get('opened',0)})</div>
+                    <div style="height:8px;background:var(--border-light);border-radius:4px;overflow:hidden;"><div style="height:100%;width:{a_open_r/max_open*100:.0f}%;background:var(--green);border-radius:4px;"></div></div>
+                  </div>
+                  <div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">Reply Rate: <strong>{a_reply_r:.1f}%</strong> ({a.get('replied',0)})</div>
+                    <div style="height:8px;background:var(--border-light);border-radius:4px;overflow:hidden;"><div style="height:100%;width:{a_reply_r/max_reply*100:.0f}%;background:var(--primary);border-radius:4px;"></div></div>
+                  </div>
+                </div>
+                <div style="padding:16px;border-radius:var(--radius-xs);background:var(--bg);{win_b}">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                    <span class="badge badge-purple" style="font-size:11px;">B</span>
+                    <span style="font-size:13px;font-weight:600;">{subj_b}</span>{trophy_b}
+                  </div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Sent: <strong>{b_sent}</strong></div>
+                  <div style="margin-bottom:8px;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">Open Rate: <strong>{b_open_r:.1f}%</strong> ({b.get('opened',0)})</div>
+                    <div style="height:8px;background:var(--border-light);border-radius:4px;overflow:hidden;"><div style="height:100%;width:{b_open_r/max_open*100:.0f}%;background:var(--green);border-radius:4px;"></div></div>
+                  </div>
+                  <div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">Reply Rate: <strong>{b_reply_r:.1f}%</strong> ({b.get('replied',0)})</div>
+                    <div style="height:8px;background:var(--border-light);border-radius:4px;overflow:hidden;"><div style="height:100%;width:{b_reply_r/max_reply*100:.0f}%;background:var(--primary);border-radius:4px;"></div></div>
+                  </div>
+                </div>
+              </div>
+              {'<p style="font-size:11px;color:var(--text-muted);margin-top:10px;text-align:center;">Need at least 5 sends per variant to declare a winner.</p>' if not winner else ''}
+            </div>"""
+    else:
+        ab_html = '<div class="empty" style="padding:40px;"><div class="empty-icon">&#128202;</div><h3>No A/B data yet</h3><p>Start sending emails to see variant performance comparison.</p></div>'
+
     return _render(_esc(camp["name"]), """
     <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / {{camp_name}}</div>
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
@@ -2670,12 +2856,16 @@ def view_campaign(campaign_id):
 
     <div class="tabs">
       <a class="tab {% if tab == 'overview' %}active{% endif %}" href="?tab=overview">Sequence <span class="tab-count">{{num_sequences}}</span></a>
+      <a class="tab {% if tab == 'ab' %}active{% endif %}" href="?tab=ab">A/B Results</a>
       <a class="tab {% if tab == 'contacts' %}active{% endif %}" href="?tab=contacts">Contacts <span class="tab-count">{{stats.total_contacts}}</span></a>
       <a class="tab {% if tab == 'activity' %}active{% endif %}" href="?tab=activity">Activity <span class="tab-count">{{num_sent}}</span></a>
     </div>
 
     {% if tab == 'overview' %}
       {{seq_html}}
+
+    {% elif tab == 'ab' %}
+      {{ab_html}}
 
     {% elif tab == 'contacts' %}
       <div class="card">
@@ -2718,7 +2908,8 @@ def view_campaign(campaign_id):
     {% endif %}
     """, camp_name=_esc(camp["name"]), status_badge=Markup(status_badge), actions=Markup(actions),
         stats=stats, seq_html=Markup(seq_html), contacts_html=Markup(contacts_html),
-        activity_html=Markup(activity_html), camp_id=campaign_id, tab=tab,
+        activity_html=Markup(activity_html), ab_html=Markup(ab_html),
+        camp_id=campaign_id, tab=tab,
         pct_fmt=f"{min(pct,100):.0f}", num_sequences=len(sequences), num_sent=len(sent_emails),
         pending=pending_count, sent_c=sent_count, replied=replied_count,
         open_rate_fmt=f"{stats['open_rate']:.0%}", reply_rate_fmt=f"{stats['reply_rate']:.0%}")
