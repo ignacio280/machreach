@@ -248,8 +248,10 @@ def classify_emails_batch(emails: list[dict], user_preferences: str = "") -> lis
     user_pref_block = ""
     if user_preferences:
         user_pref_block = f"""
-USER PRIORITIES (use these to adjust importance — emails matching these topics should be ranked higher):
+IMPORTANT — USER SORTING RULES (these OVERRIDE default priority logic):
 {user_preferences}
+
+Any email matching these rules MUST be classified as "urgent" or "important" and given the appropriate category. These are the user's explicit instructions — treat them as the highest-priority classification signal.
 """
 
     prompt = f"""Classify each email below. Return a JSON array with one object per email, in order.
@@ -376,12 +378,19 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
                 return True
         return False
 
-    # Stage 1: Insert all emails immediately with default classification
+    # Stage 1: Classify ALL emails with AI before inserting (synchronous)
+    user_prefs = get_mail_preferences(client_id)
+    all_classifications = []
+    for i in range(0, len(raw_emails), 20):
+        batch = raw_emails[i:i + 20]
+        cls_batch = classify_emails_batch(batch, user_preferences=user_prefs)
+        all_classifications.extend(cls_batch)
+
+    # Stage 2: Insert emails with their AI classification already applied
     new_count = 0
-    unclassified_ids = []  # (db_mail_id, email_data) for background classification
-    for email_data in raw_emails:
-        priority = "normal"
-        if _is_campaign_related(email_data):
+    for email_data, cls in zip(raw_emails, all_classifications):
+        priority = cls.get("priority", "normal")
+        if _is_campaign_related(email_data) and priority not in ("urgent",):
             priority = "important"
 
         added = upsert_mail(
@@ -394,42 +403,12 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
             body_preview=email_data["body_preview"],
             received_at=email_data["received_at"],
             priority=priority,
-            category="uncategorized",
-            ai_summary="",
+            category=cls.get("category", "uncategorized"),
+            ai_summary=cls.get("summary", ""),
             account_id=account_id,
             is_read=1 if email_data.get("is_seen") else 0,
         )
         if added:
             new_count += 1
-            unclassified_ids.append(email_data)
-
-    # Stage 2: Classify in background thread (non-blocking)
-    if unclassified_ids:
-        user_prefs = get_mail_preferences(client_id)
-        import threading
-        def _bg_classify():
-            try:
-                for i in range(0, len(unclassified_ids), 20):
-                    batch = unclassified_ids[i:i + 20]
-                    classifications = classify_emails_batch(batch, user_preferences=user_prefs)
-                    for email_data, cls in zip(batch, classifications):
-                        p = cls.get("priority", "normal")
-                        if _is_campaign_related(email_data) and p not in ("urgent",):
-                            p = "important"
-                        try:
-                            with get_db() as db:
-                                db.execute("""
-                                    UPDATE mail_inbox
-                                    SET priority = ?, category = ?, ai_summary = ?
-                                    WHERE client_id = ? AND message_id = ?
-                                """, (p, cls.get("category", "uncategorized"),
-                                      cls.get("summary", ""), client_id,
-                                      email_data["message_id"]))
-                                db.commit()
-                        except Exception:
-                            pass
-            except Exception as e:
-                print(f"[MAIL HUB] Background classification error: {e}")
-        threading.Thread(target=_bg_classify, daemon=True).start()
 
     return new_count
