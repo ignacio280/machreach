@@ -569,9 +569,18 @@ LAYOUT = """<!DOCTYPE html>
       .hero p { font-size: 15px; }
       .nav { padding: 0 12px; }
       .seq-card .seq-actions { opacity: 1; }
-      .nav-links a { font-size: 11px; padding: 4px 6px; }
-      .nav-links .nav-divider { display: none; }
       .auth-card { padding: 28px 20px; }
+    }
+    /* Mobile hamburger */
+    .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #94A3B8; font-size: 24px; line-height: 1; }
+    @media (max-width: 768px) {
+      .hamburger { display: block; }
+      .nav-links { display: none; position: fixed; top: 58px; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); flex-direction: column; padding: 20px 24px; gap: 4px; overflow-y: auto; z-index: 199; }
+      .nav-links.open { display: flex; }
+      .nav-links a { font-size: 15px !important; padding: 12px 16px !important; border-radius: var(--radius-xs); }
+      .nav-links a.active { background: rgba(255,255,255,0.13); }
+      .nav-links .nav-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 8px 0; width: 100%; }
+      .nav-links .nav-user { font-size: 14px; padding: 12px 16px; }
     }
   </style>
 </head>
@@ -581,6 +590,7 @@ LAYOUT = """<!DOCTYPE html>
       <div class="brand-icon">&#9993;</div>
       MachReach
     </a>
+    <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open');this.innerHTML=this.innerHTML==='&#9776;'?'&#10005;':'&#9776;'" aria-label="Menu">&#9776;</button>
     <div class="nav-links">
       {% if logged_in %}
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>{{nav.dashboard}}</a>
@@ -643,6 +653,19 @@ LAYOUT = """<!DOCTYPE html>
     }
     function hidePreview(id) {
       document.getElementById('preview-' + id).classList.remove('show');
+    }
+    function loadPreview(sel) {
+      var seqId = sel.getAttribute('data-seq-id');
+      var campId = sel.getAttribute('data-camp-id');
+      var contactId = sel.value;
+      var url = '/api/campaign/' + campId + '/preview/' + seqId;
+      if (contactId) url += '?contact_id=' + contactId;
+      fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+        document.getElementById('preview-subj-' + seqId).textContent = d.subject;
+        document.getElementById('preview-body-' + seqId).textContent = d.body;
+        document.getElementById('preview-hint-' + seqId).textContent =
+          'Previewing as: ' + d.contact_name;
+      });
     }
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') document.querySelectorAll('.preview-modal.show').forEach(m => m.classList.remove('show'));
@@ -2515,10 +2538,11 @@ def new_campaign():
         btype = request.form.get("business_type", "").strip()
         audience = request.form.get("target_audience", "").strip()
         tone = request.form.get("tone", "professional")
+        scheduled_start = request.form.get("scheduled_start", "").strip()
         if not name or not btype or not audience:
             flash(("error", "Please fill in all required fields."))
             return redirect(url_for("new_campaign"))
-        camp_id = create_campaign(session["client_id"], name, btype, audience, tone)
+        camp_id = create_campaign(session["client_id"], name, btype, audience, tone, scheduled_start)
 
         try:
             steps = generate_sequence(btype, audience, tone)
@@ -2597,6 +2621,11 @@ def new_campaign():
             <option value="humorous">Witty &amp; Humorous</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>&#128197; Schedule Start <span class="text-xs text-muted">(optional)</span></label>
+          <input type="datetime-local" name="scheduled_start">
+          <p class="form-hint">Leave empty to send immediately when activated. Set a date/time to delay sending until then.</p>
+        </div>
         <div class="btn-group mt-2">
           <button class="btn btn-primary" type="submit">
             <span class="btn-text">&#129302; {{lbl_create}}</span>
@@ -2633,6 +2662,28 @@ def view_campaign(campaign_id):
     # Status badge
     sc = {"active": "badge-green", "draft": "badge-gray", "paused": "badge-yellow", "completed": "badge-blue"}.get(camp["status"], "badge-gray")
     status_badge = f'<span class="badge {sc}">{camp["status"]}</span>'
+    sched = camp.get("scheduled_start") or ""
+    if sched:
+        status_badge += f' <span class="badge badge-blue" title="Scheduled">&#128197; {_esc(sched)}</span>'
+
+    # Schedule form for draft/paused campaigns
+    schedule_html = ""
+    if camp["status"] in ("draft", "paused"):
+        clear_btn = ""
+        if sched:
+            clear_btn = f'<form method="post" action="/campaign/{campaign_id}/schedule" style="margin:0;"><input type="hidden" name="scheduled_start" value=""><button class="btn btn-ghost btn-sm" type="submit">Clear</button></form>'
+        schedule_html = f"""
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header"><h2>&#128197; Schedule Start</h2></div>
+          <form method="post" action="/campaign/{campaign_id}/schedule" style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
+            <div class="form-group" style="margin:0;flex:1;min-width:200px;">
+              <label class="text-xs text-muted">Start sending at</label>
+              <input type="datetime-local" name="scheduled_start" value="{_esc(sched)}">
+            </div>
+            <button class="btn btn-outline btn-sm" type="submit">{'Update Schedule' if sched else 'Set Schedule'}</button>
+          </form>
+          {clear_btn}
+        </div>"""
 
     # Progress
     pct = (stats["emails_sent"] / stats["total_contacts"] * 100) if stats["total_contacts"] else 0
@@ -2657,6 +2708,10 @@ def view_campaign(campaign_id):
     # Sequence cards with previews
     seq_html = ""
     sample_contact = {"name": "John", "company": "Acme Inc", "role": "CEO"}
+    # Build contact options for preview selector
+    contact_options = '<option value="">Sample (John, CEO at Acme Inc)</option>'
+    for c in contacts[:100]:
+        contact_options += f'<option value="{c["id"]}">{_esc(c["name"])} ({_esc(c["email"])})</option>'
     for s in sequences:
         delay_str = "Initial email" if s["step"] == 1 else f"Follow-up &bull; {s['delay_days']}d delay"
         subj_b = f'<div style="margin-top:3px;"><span class="seq-subject-label">Subject B:</span> <span class="seq-subject">{_esc(s["subject_b"])}</span></div>' if s.get("subject_b") else ""
@@ -2683,9 +2738,15 @@ def view_campaign(campaign_id):
               <button class="btn btn-ghost btn-sm" onclick="hidePreview({s['id']})">&#10005; Close</button>
             </div>
             <div class="preview-body">
-              <p class="text-xs text-muted mb-4">Showing how this email looks with sample data (John, CEO at Acme Inc).</p>
-              <div class="preview-field"><div class="pf-label">Subject</div><div class="pf-value" style="font-weight:600;">{_esc(preview_subj)}</div></div>
-              <div class="preview-email">{_esc(preview_body)}</div>
+              <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+                <label class="text-xs text-muted" style="white-space:nowrap;">Preview as:</label>
+                <select class="preview-contact-select" data-seq-id="{s['id']}" data-camp-id="{campaign_id}" onchange="loadPreview(this)" style="flex:1;font-size:12px;padding:4px 8px;">
+                  {contact_options}
+                </select>
+              </div>
+              <p class="text-xs text-muted mb-4" id="preview-hint-{s['id']}">Showing how this email looks with sample data (John, CEO at Acme Inc).</p>
+              <div class="preview-field"><div class="pf-label">Subject</div><div class="pf-value" style="font-weight:600;" id="preview-subj-{s['id']}">{_esc(preview_subj)}</div></div>
+              <div class="preview-email" id="preview-body-{s['id']}">{_esc(preview_body)}</div>
             </div>
           </div>
         </div>"""
@@ -2863,6 +2924,7 @@ def view_campaign(campaign_id):
 
     {% if tab == 'overview' %}
       {{seq_html}}
+      {{schedule_html}}
 
     {% elif tab == 'ab' %}
       {{ab_html}}
@@ -2883,7 +2945,89 @@ def view_campaign(campaign_id):
           </div>
           <button class="btn btn-green" type="submit">Add Contacts</button>
         </form>
+        <hr class="form-divider">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="btn btn-outline" onclick="document.getElementById('crm-import-modal').style.display='flex'">&#128209; Import from Contacts Book</button>
+          <span class="text-xs text-muted">Pick contacts from your CRM</span>
+        </div>
       </div>
+
+      <!-- CRM Import Modal -->
+      <div id="crm-import-modal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.5);align-items:center;justify-content:center;">
+        <div style="background:var(--card);border-radius:var(--radius);max-width:640px;width:90%;max-height:80vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);">
+          <div style="padding:20px 24px;border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;">Import from Contacts Book</h3>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('crm-import-modal').style.display='none'">&#10005;</button>
+          </div>
+          <div style="padding:16px 24px;">
+            <input id="crm-search" type="text" placeholder="Search contacts..." style="width:100%;" oninput="searchCrmContacts(this.value)">
+          </div>
+          <div id="crm-contacts-list" style="overflow-y:auto;flex:1;padding:0 24px 16px;">
+            <p class="text-muted text-xs">Loading contacts...</p>
+          </div>
+          <div style="padding:16px 24px;border-top:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;">
+            <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" id="crm-select-all" onchange="toggleAllCrm(this.checked)"> Select all
+            </label>
+            <div class="btn-group">
+              <button class="btn btn-outline btn-sm" onclick="document.getElementById('crm-import-modal').style.display='none'">Cancel</button>
+              <button class="btn btn-green btn-sm" onclick="importCrmContacts()">Import Selected</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% raw %}
+      <script>
+      var _crmCache = [];
+      function searchCrmContacts(q) {
+        var list = document.getElementById('crm-contacts-list');
+        var filtered = _crmCache.filter(function(c) {
+          var s = (c.name + ' ' + c.email + ' ' + (c.company||'') + ' ' + (c.tags||'')).toLowerCase();
+          return s.indexOf(q.toLowerCase()) >= 0;
+        });
+        renderCrmList(filtered);
+      }
+      function renderCrmList(contacts) {
+        var list = document.getElementById('crm-contacts-list');
+        if (!contacts.length) { list.innerHTML = '<p class="text-muted text-xs">No contacts found.</p>'; return; }
+        var html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+        contacts.forEach(function(c) {
+          html += '<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-xs);cursor:pointer;border:1px solid var(--border-light);">' +
+            '<input type="checkbox" class="crm-cb" value="' + c.id + '">' +
+            '<div style="flex:1;min-width:0;">' +
+              '<div style="font-weight:600;font-size:13px;">' + (c.name||c.email) + '</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);">' + c.email + (c.company ? ' &bull; ' + c.company : '') + (c.role ? ' &bull; ' + c.role : '') + '</div>' +
+            '</div>' +
+            (c.tags ? '<span class="badge badge-gray" style="font-size:10px;">' + c.tags + '</span>' : '') +
+          '</label>';
+        });
+        html += '</div>';
+        list.innerHTML = html;
+      }
+      function toggleAllCrm(checked) {
+        document.querySelectorAll('.crm-cb').forEach(function(cb) { cb.checked = checked; });
+      }
+      function importCrmContacts() {
+        var ids = [];
+        document.querySelectorAll('.crm-cb:checked').forEach(function(cb) { ids.push(parseInt(cb.value)); });
+        if (!ids.length) { alert('Select at least one contact.'); return; }
+        fetch('/campaign/' + {{camp_id}} + '/import-contacts', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({contact_ids: ids})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d.ok) { location.reload(); } else { alert(d.error || 'Import failed'); }
+        });
+      }
+      // Load CRM contacts when modal opens
+      document.getElementById('crm-import-modal').addEventListener('transitionend', function(){});
+      (function loadCrm() {
+        fetch('/api/contacts-book/list').then(function(r) { return r.json(); }).then(function(data) {
+          _crmCache = data.contacts || [];
+          renderCrmList(_crmCache);
+        });
+      })();
+      </script>
+      {% endraw %}
 
       <div class="card">
         <div class="card-header">
@@ -2909,6 +3053,7 @@ def view_campaign(campaign_id):
     """, camp_name=_esc(camp["name"]), status_badge=Markup(status_badge), actions=Markup(actions),
         stats=stats, seq_html=Markup(seq_html), contacts_html=Markup(contacts_html),
         activity_html=Markup(activity_html), ab_html=Markup(ab_html),
+        schedule_html=Markup(schedule_html),
         camp_id=campaign_id, tab=tab,
         pct_fmt=f"{min(pct,100):.0f}", num_sequences=len(sequences), num_sent=len(sent_emails),
         pending=pending_count, sent_c=sent_count, replied=replied_count,
@@ -2985,6 +3130,90 @@ def upload_contacts(campaign_id):
     else:
         flash(("error", "No valid contacts found. Format: name, email, company, role, language"))
     return redirect(f"/campaign/{campaign_id}?tab=contacts")
+
+
+@app.route("/api/contacts-book/list")
+def api_contacts_book_list():
+    if not _logged_in():
+        return jsonify({"error": "Not logged in"}), 401
+    from outreach.db import get_contacts as get_crm_contacts
+    contacts = get_crm_contacts(session["client_id"], search=request.args.get("q", ""))
+    return jsonify({"contacts": [
+        {"id": c["id"], "name": c.get("name", ""), "email": c["email"],
+         "company": c.get("company", ""), "role": c.get("role", ""),
+         "tags": c.get("tags", "")}
+        for c in contacts
+    ]})
+
+
+@app.route("/campaign/<int:campaign_id>/import-contacts", methods=["POST"])
+def import_crm_contacts(campaign_id):
+    if not _logged_in():
+        return jsonify({"error": "Not logged in"}), 401
+    data = request.get_json(silent=True) or {}
+    contact_ids = data.get("contact_ids", [])
+    if not contact_ids or not isinstance(contact_ids, list):
+        return jsonify({"error": "No contacts selected"}), 400
+    from outreach.db import get_contacts as get_crm_contacts
+    crm_contacts = get_crm_contacts(session["client_id"])
+    crm_map = {c["id"]: c for c in crm_contacts}
+    to_add = []
+    for cid in contact_ids:
+        if not isinstance(cid, int):
+            continue
+        c = crm_map.get(cid)
+        if c:
+            to_add.append({
+                "name": c.get("name", ""),
+                "email": c["email"],
+                "company": c.get("company", ""),
+                "role": c.get("role", ""),
+                "language": "en",
+            })
+    if to_add:
+        count = add_contacts(campaign_id, to_add)
+        flash(("success", f"Imported {count} contact{'s' if count != 1 else ''} from Contacts Book."))
+        return jsonify({"ok": True, "count": count})
+    return jsonify({"error": "No valid contacts found"}), 400
+
+
+@app.route("/api/campaign/<int:campaign_id>/preview/<int:seq_id>")
+def api_preview_email(campaign_id, seq_id):
+    if not _logged_in():
+        return jsonify({"error": "Not logged in"}), 401
+    contact_id = request.args.get("contact_id", type=int)
+    sequences = get_sequences(campaign_id)
+    seq = next((s for s in sequences if s["id"] == seq_id), None)
+    if not seq:
+        return jsonify({"error": "Sequence not found"}), 404
+    if contact_id:
+        contacts = get_campaign_contacts(campaign_id)
+        contact = next((c for c in contacts if c["id"] == contact_id), None)
+        if not contact:
+            return jsonify({"error": "Contact not found"}), 404
+        sample = {"name": contact["name"], "company": contact.get("company", ""),
+                  "role": contact.get("role", "")}
+    else:
+        sample = {"name": "John", "company": "Acme Inc", "role": "CEO"}
+    sender = get_client(session["client_id"]).get("name", SENDER_NAME)
+    preview_subj = personalize_email(seq["subject_a"], sample, sender)
+    preview_body = personalize_email(seq["body_a"], sample, sender)
+    return jsonify({"subject": preview_subj, "body": preview_body,
+                    "contact_name": sample["name"]})
+
+
+@app.route("/campaign/<int:campaign_id>/schedule", methods=["POST"])
+def campaign_schedule(campaign_id):
+    if not _logged_in():
+        return redirect(url_for("login"))
+    from outreach.db import update_campaign_schedule
+    scheduled_start = request.form.get("scheduled_start", "").strip()
+    update_campaign_schedule(campaign_id, scheduled_start)
+    if scheduled_start:
+        flash(("success", f"Campaign scheduled to start at {scheduled_start}."))
+    else:
+        flash(("success", "Schedule cleared. Campaign will send immediately when activated."))
+    return redirect(f"/campaign/{campaign_id}")
 
 
 @app.route("/campaign/<int:campaign_id>/status", methods=["POST"])

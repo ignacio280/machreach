@@ -86,6 +86,7 @@ def init_db():
             target_audience TEXT DEFAULT '',
             tone        TEXT DEFAULT 'professional',
             status      TEXT DEFAULT 'draft',  -- draft, active, paused, completed
+            scheduled_start TEXT,  -- optional: don't send before this datetime
             created_at  TEXT DEFAULT (datetime('now', 'localtime'))
         );
 
@@ -321,6 +322,11 @@ def init_db():
             db.execute("ALTER TABLE clients ADD COLUMN is_admin INTEGER DEFAULT 0")
         except Exception:
             pass
+        # Migration: add scheduled_start column to campaigns
+        try:
+            db.execute("ALTER TABLE campaigns ADD COLUMN scheduled_start TEXT")
+        except Exception:
+            pass
     print("Database initialized.")
 
 def create_client(name: str, email: str, password_hash: str, business: str = "") -> int:
@@ -434,14 +440,20 @@ def delete_email_account(account_id: int, client_id: int) -> bool:
 
 
 def create_campaign(client_id: int, name: str, business_type: str,
-                    target_audience: str, tone: str) -> int:
+                    target_audience: str, tone: str, scheduled_start: str = "") -> int:
     with get_db() as db:
         cur = db.execute(
-            "INSERT INTO campaigns (client_id, name, business_type, target_audience, tone) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (client_id, name, business_type, target_audience, tone),
+            "INSERT INTO campaigns (client_id, name, business_type, target_audience, tone, scheduled_start) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (client_id, name, business_type, target_audience, tone, scheduled_start or None),
         )
         return cur.lastrowid
+
+
+def update_campaign_schedule(campaign_id: int, scheduled_start: str):
+    with get_db() as db:
+        db.execute("UPDATE campaigns SET scheduled_start = ? WHERE id = ?",
+                   (scheduled_start or None, campaign_id))
 
 
 def get_campaigns(client_id: int) -> list[dict]:
@@ -628,6 +640,7 @@ def get_emails_to_send(limit: int = 50) -> list[dict]:
             WHERE camp.status = 'active'
               AND c.status = 'pending'
               AND c.id NOT IN (SELECT contact_id FROM sent_emails)
+              AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= datetime('now', 'localtime'))
             LIMIT ?
         """, (limit,)).fetchall()
         results.extend(dict(r) for r in rows)
@@ -650,6 +663,7 @@ def get_emails_to_send(limit: int = 50) -> list[dict]:
             WHERE camp.status = 'active'
               AND c.status NOT IN ('replied', 'bounced', 'unsubscribed')
               AND se.status NOT IN ('replied', 'bounced')
+              AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= datetime('now', 'localtime'))
               -- Enough days have passed since the last email
               AND julianday('now', 'localtime') - julianday(se.sent_at) >= next_seq.delay_days
               -- Haven't already sent this next step
