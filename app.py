@@ -1147,8 +1147,11 @@ def register():
                         srv.login(SMTP_USER, SMTP_PASSWORD)
                         srv.send_message(msg)
                 email_sent = True
+                print(f"[VERIFY] Verification email sent to {email}")
         except Exception as e:
+            import traceback
             print(f"[VERIFY] Verification flow failed for {email}: {e}")
+            traceback.print_exc()
 
         if email_sent:
             flash(("success", "Account created! Please check your email to verify your address before logging in."))
