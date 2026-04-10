@@ -3,6 +3,7 @@ Email sender — SMTP delivery with open-tracking pixel injection.
 """
 from __future__ import annotations
 
+import os
 import random
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -29,9 +30,14 @@ def _sign_dkim(msg: MIMEMultipart) -> None:
         if sig_str.startswith("DKIM-Signature:"):
             msg["DKIM-Signature"] = sig_str.split(":", 1)[1].strip()
     except ImportError:
-        pass  # dkimpy not installed — skip signing
+        print("[DKIM] dkimpy not installed — DKIM signing skipped")
     except Exception as e:
         print(f"[DKIM] Signing failed: {e}")
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(e)
+        except Exception:
+            pass
 
 
 def _wrap_html(body_text: str, contact_id: int | None = None,
@@ -106,6 +112,9 @@ def send_email(
     _pass = smtp_password or SMTP_PASSWORD
 
     if not _user or not _pass:
+        if os.getenv("RENDER", ""):
+            print(f"[ERROR] SMTP credentials missing in production for {to_email}")
+            return False
         print(f"[DRY RUN] Would send to {to_email}: {subject}")
         return True
 

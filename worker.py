@@ -74,6 +74,7 @@ def send_batch():
 
     print(f"Sending {len(batch)} emails...")
     for item in batch:
+      try:
         # Check per-client monthly email limit
         try:
             from outreach.db import check_limit, increment_usage, get_db, get_default_email_account, _fetchone
@@ -186,6 +187,15 @@ def send_batch():
             print(f"  FAILED to send to {item['email']} — will retry next cycle")
 
         time.sleep(DELAY_BETWEEN_EMAILS_SEC)
+
+      except Exception as exc:
+        print(f"  ERROR processing {item.get('email', '?')}: {exc}")
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass
+        continue
 
     total_sent = sum(sent_today.values())
     print(f"Batch complete. {total_sent} sent today across all clients.")

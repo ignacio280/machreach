@@ -34,6 +34,7 @@ from outreach.db import (
     create_campaign,
     create_client,
     create_reset_token,
+    create_verification_token,
     delete_campaign,
     delete_contact,
     delete_sequence,
@@ -51,7 +52,9 @@ from outreach.db import (
     get_sent_emails,
     get_sequences,
     get_valid_reset_token,
+    get_valid_verification_token,
     init_db,
+    mark_email_verified,
     mark_reset_token_used,
     save_sequence,
     update_campaign_status,
@@ -1107,10 +1110,45 @@ def register():
             return redirect(url_for("register"))
         client_id = create_client(name, email, _hash_pw(password), business)
         _log_security("REGISTER_OK", client_id=client_id, email=email)
-        session["client_id"] = client_id
-        session["client_name"] = name
-        flash(("success", f"Welcome, {_esc(name)}! Create your first campaign to get started."))
-        return redirect(url_for("dashboard"))
+
+        # Send verification email
+        import secrets as _secrets
+        token = _secrets.token_urlsafe(32)
+        expires = (datetime.now() + __import__("datetime").timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+        create_verification_token(client_id, token, expires)
+        verify_link = f"{BASE_URL}/verify-email/{token}"
+        body = (
+            f"Hi {name},\n\n"
+            f"Welcome to MachReach! Please verify your email address:\n\n"
+            f"{verify_link}\n\n"
+            f"This link expires in 24 hours.\n\n"
+            f"— MachReach"
+        )
+        try:
+            from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+            import smtplib as _smtplib
+            from email.mime.text import MIMEText as _MIMEText
+            from email.mime.multipart import MIMEMultipart as _MIMEMultipart
+            if SMTP_USER and SMTP_PASSWORD:
+                msg = _MIMEMultipart("alternative")
+                msg["Subject"] = "MachReach — Verify Your Email"
+                msg["From"] = SMTP_USER
+                msg["To"] = email
+                msg.attach(_MIMEText(body, "plain"))
+                if SMTP_PORT == 587:
+                    with _smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
+                        srv.starttls()
+                        srv.login(SMTP_USER, SMTP_PASSWORD)
+                        srv.send_message(msg)
+                else:
+                    with _smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
+                        srv.login(SMTP_USER, SMTP_PASSWORD)
+                        srv.send_message(msg)
+        except Exception as e:
+            print(f"[VERIFY] Failed to send verification email to {email}: {e}")
+
+        flash(("success", "Account created! Please check your email to verify your address before logging in."))
+        return redirect(url_for("login"))
     return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
@@ -1141,6 +1179,9 @@ def login():
             _log_security("LOGIN_FAIL", email=email)
             flash(("error", t("auth.invalid_creds")))
             return redirect(url_for("login"))
+        if not client.get("email_verified"):
+            flash(("error", "Please verify your email address first. Check your inbox for the verification link."))
+            return redirect(url_for("login"))
         _maybe_upgrade_hash(client["id"], password, client["password"])
         _log_security("LOGIN_OK", client_id=client["id"], email=email)
         # Preserve team invite token across session clear
@@ -1163,6 +1204,13 @@ def login():
           <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.sign_in")}</button>
         </form>
         <div style="text-align:center;margin-top:12px;"><a href="/forgot-password" style="font-size:13px;color:var(--text-muted);">{t("auth.forgot_password")}</a></div>
+        <details style="text-align:center;margin-top:8px;">
+          <summary style="font-size:12px;color:var(--text-muted);cursor:pointer;list-style:none;">Didn't get verification email?</summary>
+          <form method="post" action="/resend-verification" style="margin-top:8px;display:flex;gap:8px;justify-content:center;">
+            <input name="email" type="email" placeholder="your@email.com" required style="font-size:12px;padding:6px 10px;max-width:200px;">
+            <button class="btn btn-outline btn-sm" type="submit">Resend</button>
+          </form>
+        </details>
         <div class="auth-footer">{t("auth.no_account")} <a href="/register">{t("auth.sign_up_free")}</a></div>
       </div>
     </div>
@@ -1173,6 +1221,53 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("index"))
+
+
+@app.route("/verify-email/<token>")
+def verify_email(token):
+    rec = get_valid_verification_token(token)
+    if not rec:
+        flash(("error", "Invalid or expired verification link. Please request a new one."))
+        return redirect(url_for("login"))
+    mark_email_verified(rec["client_id"])
+    client = get_client(rec["client_id"])
+    flash(("success", f"Email verified! Welcome, {_esc(client['name']) if client else ''}. You can now log in."))
+    return redirect(url_for("login"))
+
+
+@app.route("/resend-verification", methods=["POST"])
+@limiter.limit("3 per minute")
+def resend_verification():
+    email = request.form.get("email", "").strip()
+    client = get_client_by_email(email)
+    if client and not client.get("email_verified"):
+        import secrets as _secrets
+        token = _secrets.token_urlsafe(32)
+        expires = (datetime.now() + __import__("datetime").timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+        create_verification_token(client["id"], token, expires)
+        verify_link = f"{BASE_URL}/verify-email/{token}"
+        body = f"Hi {client['name']},\n\nVerify your MachReach email:\n\n{verify_link}\n\nExpires in 24 hours.\n\n— MachReach"
+        try:
+            from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+            import smtplib as _smtplib
+            from email.mime.text import MIMEText as _MIMEText
+            from email.mime.multipart import MIMEMultipart as _MIMEMultipart
+            if SMTP_USER and SMTP_PASSWORD:
+                msg = _MIMEMultipart("alternative")
+                msg["Subject"] = "MachReach — Verify Your Email"
+                msg["From"] = SMTP_USER
+                msg["To"] = email
+                msg.attach(_MIMEText(body, "plain"))
+                if SMTP_PORT == 587:
+                    with _smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
+                        srv.starttls(); srv.login(SMTP_USER, SMTP_PASSWORD); srv.send_message(msg)
+                else:
+                    with _smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
+                        srv.login(SMTP_USER, SMTP_PASSWORD); srv.send_message(msg)
+        except Exception:
+            pass
+    flash(("info", "If the email is registered, a new verification link has been sent."))
+    return redirect(url_for("login"))
 
 
 @app.route("/set-language/<lang>")
@@ -6641,6 +6736,7 @@ def billing_page():
 
 
 @app.route("/billing/activate", methods=["POST"])
+@limiter.limit("5 per minute")
 def billing_activate():
     """Activate a PayPal subscription after user approval."""
     if not _logged_in():
@@ -6663,6 +6759,7 @@ def billing_activate():
 
 
 @app.route("/billing/downgrade", methods=["POST"])
+@limiter.limit("5 per minute")
 def billing_downgrade():
     """Cancel PayPal subscription and revert to free plan."""
     if not _logged_in():
@@ -6707,34 +6804,39 @@ def paypal_webhook():
     except Exception:
         return "Bad JSON", 400
 
-    # Optional: verify webhook signature with PayPal API
+    # Verify webhook signature with PayPal API (mandatory)
     from outreach.config import PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID, PAYPAL_MODE
-    if PAYPAL_WEBHOOK_ID and PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET:
-        try:
-            import requests as rq
-            base = "https://api-m.paypal.com" if PAYPAL_MODE == "live" else "https://api-m.sandbox.paypal.com"
-            auth_resp = rq.post(f"{base}/v1/oauth2/token",
-                                auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
-                                data={"grant_type": "client_credentials"},
-                                headers={"Accept": "application/json"})
-            token = auth_resp.json().get("access_token", "")
-            if token:
-                verify_resp = rq.post(f"{base}/v1/notifications/verify-webhook-signature",
-                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                    json={
-                        "auth_algo": request.headers.get("PAYPAL-AUTH-ALGO", ""),
-                        "cert_url": request.headers.get("PAYPAL-CERT-URL", ""),
-                        "transmission_id": request.headers.get("PAYPAL-TRANSMISSION-ID", ""),
-                        "transmission_sig": request.headers.get("PAYPAL-TRANSMISSION-SIG", ""),
-                        "transmission_time": request.headers.get("PAYPAL-TRANSMISSION-TIME", ""),
-                        "webhook_id": PAYPAL_WEBHOOK_ID,
-                        "webhook_event": body,
-                    })
-                if verify_resp.json().get("verification_status") != "SUCCESS":
-                    print("[PAYPAL] Webhook signature verification failed")
-                    return "Invalid signature", 400
-        except Exception as e:
-            print(f"[PAYPAL] Webhook verify error: {e}")
+    if not PAYPAL_WEBHOOK_ID or not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+        print("[PAYPAL] Webhook rejected — credentials not configured")
+        return "Webhook not configured", 500
+    try:
+        import requests as rq
+        base = "https://api-m.paypal.com" if PAYPAL_MODE == "live" else "https://api-m.sandbox.paypal.com"
+        auth_resp = rq.post(f"{base}/v1/oauth2/token",
+                            auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
+                            data={"grant_type": "client_credentials"},
+                            headers={"Accept": "application/json"})
+        token = auth_resp.json().get("access_token", "")
+        if not token:
+            print("[PAYPAL] Could not obtain access token for webhook verification")
+            return "Verification failed", 500
+        verify_resp = rq.post(f"{base}/v1/notifications/verify-webhook-signature",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={
+                "auth_algo": request.headers.get("PAYPAL-AUTH-ALGO", ""),
+                "cert_url": request.headers.get("PAYPAL-CERT-URL", ""),
+                "transmission_id": request.headers.get("PAYPAL-TRANSMISSION-ID", ""),
+                "transmission_sig": request.headers.get("PAYPAL-TRANSMISSION-SIG", ""),
+                "transmission_time": request.headers.get("PAYPAL-TRANSMISSION-TIME", ""),
+                "webhook_id": PAYPAL_WEBHOOK_ID,
+                "webhook_event": body,
+            })
+        if verify_resp.json().get("verification_status") != "SUCCESS":
+            print("[PAYPAL] Webhook signature verification failed")
+            return "Invalid signature", 400
+    except Exception as e:
+        print(f"[PAYPAL] Webhook verify error: {e}")
+        return "Verification error", 500
 
     event_type = body.get("event_type", "")
     resource = body.get("resource", {})

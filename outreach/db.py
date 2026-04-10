@@ -140,6 +140,16 @@ CREATE TABLE IF NOT EXISTS clients (
     mail_preferences TEXT DEFAULT '',
     mail_exclusions TEXT DEFAULT '',
     is_admin    INTEGER DEFAULT 0,
+    email_verified INTEGER DEFAULT 0,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id),
+    token       TEXT NOT NULL UNIQUE,
+    expires_at  TIMESTAMP NOT NULL,
+    used        INTEGER DEFAULT 0,
     created_at  TIMESTAMP DEFAULT NOW()
 );
 
@@ -163,6 +173,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
     scheduled_start TIMESTAMP,
     created_at  TIMESTAMP DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_campaigns_client ON campaigns(client_id);
 
 CREATE TABLE IF NOT EXISTS contacts (
     id          SERIAL PRIMARY KEY,
@@ -340,6 +352,16 @@ CREATE TABLE IF NOT EXISTS clients (
     mail_preferences TEXT DEFAULT '',
     mail_exclusions TEXT DEFAULT '',
     is_admin    INTEGER DEFAULT 0,
+    email_verified INTEGER DEFAULT 0,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id),
+    token       TEXT NOT NULL UNIQUE,
+    expires_at  TEXT NOT NULL,
+    used        INTEGER DEFAULT 0,
     created_at  TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
@@ -363,6 +385,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
     scheduled_start TEXT,
     created_at  TEXT DEFAULT (datetime('now', 'localtime'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_campaigns_client ON campaigns(client_id);
 
 CREATE TABLE IF NOT EXISTS contacts (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -548,6 +572,7 @@ def _run_migrations():
     """Add columns that may be missing from older schemas."""
     migrations = [
         ("clients", "physical_address", "TEXT DEFAULT ''"),
+        ("clients", "email_verified", "INTEGER DEFAULT 0"),
     ]
     with get_db() as db:
         for table, col, col_type in migrations:
@@ -696,6 +721,31 @@ def get_valid_reset_token(token: str) -> dict | None:
 def mark_reset_token_used(token: str):
     with get_db() as db:
         _exec(db, "UPDATE password_reset_tokens SET used = 1 WHERE token = %s", (token,))
+
+
+# ---------------------------------------------------------------------------
+# Email verification
+# ---------------------------------------------------------------------------
+
+def create_verification_token(client_id: int, token: str, expires_at: str):
+    with get_db() as db:
+        _exec(db,
+              "INSERT INTO email_verification_tokens (client_id, token, expires_at) VALUES (%s, %s, %s)",
+              (client_id, token, expires_at))
+
+
+def get_valid_verification_token(token: str) -> dict | None:
+    with get_db() as db:
+        now = _now_expr()
+        return _fetchone(db,
+            f"SELECT * FROM email_verification_tokens WHERE token = %s AND used = 0 AND expires_at > {now}",
+            (token,))
+
+
+def mark_email_verified(client_id: int):
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET email_verified = 1 WHERE id = %s", (client_id,))
+        _exec(db, "UPDATE email_verification_tokens SET used = 1 WHERE client_id = %s", (client_id,))
 
 
 # ---------------------------------------------------------------------------
