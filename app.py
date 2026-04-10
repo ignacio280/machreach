@@ -990,11 +990,6 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
         is_admin=is_admin,
     )
 
-
-# ---------------------------------------------------------------------------
-# Routes — Public
-# ---------------------------------------------------------------------------
-
 @app.route("/")
 def index():
     if _logged_in():
@@ -1087,11 +1082,6 @@ def index():
       <a href="/register" class="btn btn-lg" style="background:#fff;color:var(--primary);font-weight:700;font-size:16px;padding:14px 36px;">Create Free Account &rarr;</a>
     </div>
     """))
-
-
-# ---------------------------------------------------------------------------
-# Routes — Auth
-# ---------------------------------------------------------------------------
 
 @app.route("/register", methods=["GET", "POST"])
 @limiter.limit("10 per minute", methods=["POST"])
@@ -6685,6 +6675,8 @@ def group_send(group_name):
         body_tpl = request.form.get("body", "").strip()
         use_ai = request.form.get("use_ai") == "1"
         ai_idea = request.form.get("ai_idea", "").strip()
+        schedule_date = request.form.get("schedule_date", "").strip()
+        schedule_time = request.form.get("schedule_time", "").strip() or "09:00"
 
         # AI generate a single email template
         if use_ai and ai_idea:
@@ -6703,6 +6695,17 @@ def group_send(group_name):
             flash(("error", "Subject and body are required."))
             return redirect(request.url)
 
+        # Collect file attachments
+        uploaded_files = request.files.getlist("attachments")
+        attachment_data = []
+        for f in uploaded_files:
+            if f and f.filename:
+                attachment_data.append({
+                    "filename": f.filename,
+                    "content": f.read(),
+                    "content_type": f.content_type or "application/octet-stream",
+                })
+
         # Resolve SMTP credentials
         from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
         smtp_host, smtp_port, smtp_user, smtp_pw = SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
@@ -6718,15 +6721,50 @@ def group_send(group_name):
             flash(("error", "No email account configured. Set up SMTP credentials first."))
             return redirect(request.url)
 
-        # Send personalized email to each contact
+        # If scheduled, store in scheduled_emails table for the worker to send later
+        if schedule_date:
+            from outreach.db import create_scheduled_email
+            from datetime import datetime as _dt_cls
+            # Convert local time to UTC
+            try:
+                local_dt = _dt_cls.strptime(f"{schedule_date} {schedule_time}:00", "%Y-%m-%d %H:%M:%S")
+                import time as _time_mod
+                # Use UTC offset from server; for Render (UTC) this is a no-op
+                # The browser already sent local date/time, convert as best we can
+                utc_str = local_dt.strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                utc_str = f"{schedule_date} {schedule_time}:00"
+
+            scheduled_count = 0
+            for c in contacts:
+                psubject = subject_tpl
+                pbody = body_tpl
+                for old, new in {
+                    "{{name}}": c.get("name") or "there", "{{company}}": c.get("company") or "your company",
+                    "{{role}}": c.get("role") or "", "{name}": c.get("name") or "there",
+                    "{company}": c.get("company") or "your company", "{role}": c.get("role") or "",
+                }.items():
+                    psubject = psubject.replace(old, new)
+                    pbody = pbody.replace(old, new)
+                # Note: attachments not supported for scheduled emails (worker limitation)
+                create_scheduled_email(
+                    session["client_id"], to_email=c["email"], subject=psubject,
+                    body=pbody, scheduled_at=utc_str, to_name=c.get("name", ""),
+                )
+                scheduled_count += 1
+            flash(("success", f"Scheduled {scheduled_count} email{'s' if scheduled_count != 1 else ''} for {schedule_date} {schedule_time}"))
+            return redirect(url_for("contacts_page"))
+
+        # Send immediately with attachments
         import smtplib as _smtplib
         from email.mime.text import MIMEText as _MIMEText
         from email.mime.multipart import MIMEMultipart as _MMP
+        from email.mime.base import MIMEBase as _MIMEBase
+        from email import encoders as _encoders
         sent_count = 0
         fail_count = 0
         for c in contacts:
             try:
-                # Personalize placeholders
                 psubject = subject_tpl
                 pbody = body_tpl
                 replacements = {
@@ -6741,14 +6779,25 @@ def group_send(group_name):
                     psubject = psubject.replace(old, new)
                     pbody = pbody.replace(old, new)
 
-                msg = _MMP("alternative")
+                msg = _MMP("mixed")
                 msg["Subject"] = psubject
                 msg["From"] = smtp_user
                 msg["To"] = c["email"]
-                msg.attach(_MIMEText(pbody, "plain", "utf-8"))
-                # Simple HTML version
+
+                # Text + HTML body
+                body_part = _MMP("alternative")
+                body_part.attach(_MIMEText(pbody, "plain", "utf-8"))
                 body_html = pbody.replace("\\n", "<br>").replace("\n", "<br>")
-                msg.attach(_MIMEText(f'<div style="font-family:sans-serif;font-size:14px;line-height:1.6;">{body_html}</div>', "html", "utf-8"))
+                body_part.attach(_MIMEText(f'<div style="font-family:sans-serif;font-size:14px;line-height:1.6;">{body_html}</div>', "html", "utf-8"))
+                msg.attach(body_part)
+
+                # Attachments
+                for att in attachment_data:
+                    part = _MIMEBase("application", "octet-stream")
+                    part.set_payload(att["content"])
+                    _encoders.encode_base64(part)
+                    part.add_header("Content-Disposition", f'attachment; filename="{att["filename"]}"')
+                    msg.attach(part)
 
                 if smtp_port == 587:
                     with _smtplib.SMTP(smtp_host, smtp_port, timeout=30) as srv:
@@ -6785,7 +6834,7 @@ def group_send(group_name):
       <div class="card" style="padding:28px;">
         <h3 style="font-size:18px;margin-bottom:16px;">&#129302; AI Generate</h3>
         <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Describe your email idea and AI writes it. Each contact gets a personalized copy.</p>
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
           <input type="hidden" name="use_ai" value="1">
           <div class="form-group">
             <label>Email Idea *</label>
@@ -6800,7 +6849,18 @@ def group_send(group_name):
               <option value="formal">Formal</option>
             </select>
           </div>
-          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#129302; Generate &amp; Send Now</button>
+          <div class="form-group">
+            <label>&#128206; Attachments <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+            <input type="file" name="attachments" multiple style="font-size:13px;">
+          </div>
+          <div class="form-group">
+            <label>&#128340; Schedule <span style="font-weight:400;color:var(--text-muted);">(leave empty to send now)</span></label>
+            <div style="display:flex;gap:8px;">
+              <input type="date" name="schedule_date" style="font-size:13px;flex:1;">
+              <input type="time" name="schedule_time" value="09:00" style="font-size:13px;width:100px;">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#129302; Generate &amp; Send</button>
         </form>
       </div>
 
@@ -6808,7 +6868,7 @@ def group_send(group_name):
       <div class="card" style="padding:28px;">
         <h3 style="font-size:18px;margin-bottom:16px;">&#9997; Write Yourself</h3>
         <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Use <code>{{{{name}}}}</code>, <code>{{{{company}}}}</code>, <code>{{{{role}}}}</code> and each contact gets their own personalized version.</p>
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
           <input type="hidden" name="use_ai" value="0">
           <div class="form-group">
             <label>Subject *</label>
@@ -6818,7 +6878,18 @@ def group_send(group_name):
             <label>Body *</label>
             <textarea name="body" rows="8" placeholder="Hi {{{{name}}}},&#10;&#10;Just wanted to let you know..." style="font-size:14px;" required></textarea>
           </div>
-          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#9993; Send Now</button>
+          <div class="form-group">
+            <label>&#128206; Attachments <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+            <input type="file" name="attachments" multiple style="font-size:13px;">
+          </div>
+          <div class="form-group">
+            <label>&#128340; Schedule <span style="font-weight:400;color:var(--text-muted);">(leave empty to send now)</span></label>
+            <div style="display:flex;gap:8px;">
+              <input type="date" name="schedule_date" style="font-size:13px;flex:1;">
+              <input type="time" name="schedule_time" value="09:00" style="font-size:13px;width:100px;">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#9993; Send</button>
         </form>
       </div>
     </div>
