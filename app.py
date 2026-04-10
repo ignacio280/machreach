@@ -6667,12 +6667,12 @@ def api_contact_mark_important(contact_id):
 
 @app.route("/contacts/group/<group_name>/send", methods=["GET", "POST"])
 def group_send(group_name):
-    """Send personalized emails to all contacts in a group."""
+    """Send personalized emails directly to all contacts in a group (no campaign)."""
     if not _logged_in():
         return redirect(url_for("login"))
     from urllib.parse import unquote
     group_name = unquote(group_name)
-    from outreach.db import get_contacts_by_group
+    from outreach.db import get_contacts_by_group, get_default_email_account
     data_cid = _effective_client_id()
     contacts = get_contacts_by_group(data_cid, group_name)
 
@@ -6681,62 +6681,94 @@ def group_send(group_name):
         return redirect(url_for("contacts_page"))
 
     if request.method == "POST":
-        subject = request.form.get("subject", "").strip()
-        body = request.form.get("body", "").strip()
+        subject_tpl = request.form.get("subject", "").strip()
+        body_tpl = request.form.get("body", "").strip()
         use_ai = request.form.get("use_ai") == "1"
         ai_idea = request.form.get("ai_idea", "").strip()
-        campaign_name = request.form.get("campaign_name", "").strip() or f"Group: {group_name}"
 
+        # AI generate a single email template
         if use_ai and ai_idea:
-            # AI generates the email sequence
-            from outreach.ai import generate_sequence
-            from outreach.db import create_campaign, add_contacts, save_sequence
             try:
-                campaign_id = create_campaign(
-                    session["client_id"], campaign_name,
-                    business_type=ai_idea,
-                    target_audience=group_name,
-                    tone=request.form.get("tone", "professional"),
-                )
-                sequence = generate_sequence(ai_idea, group_name,
-                                             tone=request.form.get("tone", "professional"),
-                                             num_steps=1)
-                for step_def in sequence:
-                    save_sequence(
-                        campaign_id, step_def["step"],
-                        step_def["subject_a"], step_def.get("subject_b", ""),
-                        step_def["body_a"], step_def.get("body_b", ""),
-                        step_def.get("delay_days", 0),
-                    )
-                contact_list = [{"name": c["name"], "email": c["email"],
-                                 "company": c.get("company", ""),
-                                 "role": c.get("role", ""),
-                                 "language": c.get("language", "en")} for c in contacts]
-                add_contacts(campaign_id, contact_list)
-                flash(("success", f"Campaign created with {len(contact_list)} contacts! Review and activate it."))
-                return redirect(f"/campaign/{campaign_id}")
+                from outreach.ai import generate_sequence
+                tone = request.form.get("tone", "professional")
+                seq = generate_sequence(ai_idea, group_name, tone=tone, num_steps=1)
+                if seq:
+                    subject_tpl = seq[0].get("subject_a", "")
+                    body_tpl = seq[0].get("body_a", "")
             except Exception as e:
                 flash(("error", f"AI generation failed: {e}"))
                 return redirect(request.url)
 
-        elif subject and body:
-            # Manual email — create campaign with user's subject/body
-            from outreach.db import create_campaign, add_contacts, save_sequence
-            campaign_id = create_campaign(
-                session["client_id"], campaign_name,
-                business_type="", target_audience=group_name, tone="professional",
-            )
-            save_sequence(campaign_id, 1, subject, "", body, "", 0)
-            contact_list = [{"name": c["name"], "email": c["email"],
-                             "company": c.get("company", ""),
-                             "role": c.get("role", ""),
-                             "language": c.get("language", "en")} for c in contacts]
-            add_contacts(campaign_id, contact_list)
-            flash(("success", f"Campaign created with {len(contact_list)} contacts! Review and activate it."))
-            return redirect(f"/campaign/{campaign_id}")
-        else:
-            flash(("error", "Please provide an email idea for AI or write your own subject and body."))
+        if not subject_tpl or not body_tpl:
+            flash(("error", "Subject and body are required."))
             return redirect(request.url)
+
+        # Resolve SMTP credentials
+        from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+        smtp_host, smtp_port, smtp_user, smtp_pw = SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+        try:
+            acct = get_default_email_account(session["client_id"])
+            if acct:
+                smtp_host, smtp_port = acct["smtp_host"], acct["smtp_port"]
+                smtp_user, smtp_pw = acct["email"], acct["password"]
+        except Exception:
+            pass
+
+        if not smtp_user or not smtp_pw:
+            flash(("error", "No email account configured. Set up SMTP credentials first."))
+            return redirect(request.url)
+
+        # Send personalized email to each contact
+        import smtplib as _smtplib
+        from email.mime.text import MIMEText as _MIMEText
+        from email.mime.multipart import MIMEMultipart as _MMP
+        sent_count = 0
+        fail_count = 0
+        for c in contacts:
+            try:
+                # Personalize placeholders
+                psubject = subject_tpl
+                pbody = body_tpl
+                replacements = {
+                    "{{name}}": c.get("name") or "there",
+                    "{{company}}": c.get("company") or "your company",
+                    "{{role}}": c.get("role") or "",
+                    "{name}": c.get("name") or "there",
+                    "{company}": c.get("company") or "your company",
+                    "{role}": c.get("role") or "",
+                }
+                for old, new in replacements.items():
+                    psubject = psubject.replace(old, new)
+                    pbody = pbody.replace(old, new)
+
+                msg = _MMP("alternative")
+                msg["Subject"] = psubject
+                msg["From"] = smtp_user
+                msg["To"] = c["email"]
+                msg.attach(_MIMEText(pbody, "plain", "utf-8"))
+                # Simple HTML version
+                body_html = pbody.replace("\\n", "<br>").replace("\n", "<br>")
+                msg.attach(_MIMEText(f'<div style="font-family:sans-serif;font-size:14px;line-height:1.6;">{body_html}</div>', "html", "utf-8"))
+
+                if smtp_port == 587:
+                    with _smtplib.SMTP(smtp_host, smtp_port, timeout=30) as srv:
+                        srv.starttls()
+                        srv.login(smtp_user, smtp_pw)
+                        srv.send_message(msg)
+                else:
+                    with _smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as srv:
+                        srv.login(smtp_user, smtp_pw)
+                        srv.send_message(msg)
+                sent_count += 1
+            except Exception as e:
+                print(f"[GROUP SEND] Failed to send to {c['email']}: {e}", flush=True)
+                fail_count += 1
+
+        if sent_count:
+            flash(("success", f"Sent {sent_count} email{'s' if sent_count != 1 else ''} to group '{group_name}'!" + (f" ({fail_count} failed)" if fail_count else "")))
+        else:
+            flash(("error", f"All {fail_count} emails failed to send."))
+        return redirect(url_for("contacts_page"))
 
     # GET — show the send form
     contact_rows = ""
@@ -6746,56 +6778,47 @@ def group_send(group_name):
     return _render(f"Send to {_esc(group_name)}", f"""
     <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / <a href="/contacts">Contacts</a> / Send to {_esc(group_name)}</div>
     <h1 style="font-size:28px;">&#9993; Send to Group: {_esc(group_name)}</h1>
-    <p class="subtitle">{len(contacts)} contact{"s" if len(contacts) != 1 else ""} in this group</p>
+    <p class="subtitle">{len(contacts)} contact{"s" if len(contacts) != 1 else ""} in this group. Each email is personalized with their name, company, and role.</p>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;">
       <!-- AI Generate -->
       <div class="card" style="padding:28px;">
         <h3 style="font-size:18px;margin-bottom:16px;">&#129302; AI Generate</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Describe your email idea and AI will generate personalized emails for each contact.</p>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Describe your email idea and AI writes it. Each contact gets a personalized copy.</p>
         <form method="POST">
           <input type="hidden" name="use_ai" value="1">
           <div class="form-group">
-            <label>Campaign Name</label>
-            <input name="campaign_name" value="Group: {_esc(group_name)}" style="font-size:14px;">
-          </div>
-          <div class="form-group">
             <label>Email Idea *</label>
-            <textarea name="ai_idea" rows="4" placeholder="e.g. Introduce our new product launch and invite them to a demo call..." style="font-size:14px;" required></textarea>
+            <textarea name="ai_idea" rows="4" placeholder="e.g. Invite everyone to Friday's team standup at 3pm..." style="font-size:14px;" required></textarea>
           </div>
           <div class="form-group">
             <label>Tone</label>
             <select name="tone" style="font-size:14px;">
               <option value="professional">Professional</option>
-              <option value="friendly">Friendly</option>
+              <option value="friendly" selected>Friendly</option>
               <option value="casual">Casual</option>
               <option value="formal">Formal</option>
-              <option value="persuasive">Persuasive</option>
             </select>
           </div>
-          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#129302; Generate &amp; Create Campaign</button>
+          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#129302; Generate &amp; Send Now</button>
         </form>
       </div>
 
       <!-- Manual Compose -->
       <div class="card" style="padding:28px;">
         <h3 style="font-size:18px;margin-bottom:16px;">&#9997; Write Yourself</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Write your own email. Use {{{{name}}}}, {{{{company}}}}, {{{{role}}}} for personalization.</p>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Use <code>{{{{name}}}}</code>, <code>{{{{company}}}}</code>, <code>{{{{role}}}}</code> and each contact gets their own personalized version.</p>
         <form method="POST">
           <input type="hidden" name="use_ai" value="0">
           <div class="form-group">
-            <label>Campaign Name</label>
-            <input name="campaign_name" value="Group: {_esc(group_name)}" style="font-size:14px;">
-          </div>
-          <div class="form-group">
             <label>Subject *</label>
-            <input name="subject" placeholder="e.g. Quick question, {{{{name}}}}" style="font-size:14px;" required>
+            <input name="subject" placeholder="e.g. Hey {{{{name}}}}, quick update" style="font-size:14px;" required>
           </div>
           <div class="form-group">
             <label>Body *</label>
-            <textarea name="body" rows="6" placeholder="Hi {{{{name}}}},\n\nI wanted to reach out about..." style="font-size:14px;" required></textarea>
+            <textarea name="body" rows="8" placeholder="Hi {{{{name}}}},&#10;&#10;Just wanted to let you know..." style="font-size:14px;" required></textarea>
           </div>
-          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#9993; Create Campaign</button>
+          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#9993; Send Now</button>
         </form>
       </div>
     </div>
