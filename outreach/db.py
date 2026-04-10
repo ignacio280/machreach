@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS clients (
     email       TEXT NOT NULL UNIQUE,
     password    TEXT NOT NULL,
     business    TEXT DEFAULT '',
+    physical_address TEXT DEFAULT '',
     mail_preferences TEXT DEFAULT '',
     mail_exclusions TEXT DEFAULT '',
     is_admin    INTEGER DEFAULT 0,
@@ -335,6 +336,7 @@ CREATE TABLE IF NOT EXISTS clients (
     email       TEXT NOT NULL UNIQUE,
     password    TEXT NOT NULL,
     business    TEXT DEFAULT '',
+    physical_address TEXT DEFAULT '',
     mail_preferences TEXT DEFAULT '',
     mail_exclusions TEXT DEFAULT '',
     is_admin    INTEGER DEFAULT 0,
@@ -529,14 +531,30 @@ CREATE TABLE IF NOT EXISTS team_members (
 
 
 def init_db():
-    """Create all tables if they don't exist."""
+    """Create all tables if they don't exist, then run migrations."""
     with get_db() as db:
         if _USE_PG:
             cur = db.cursor()
             cur.execute(_PG_SCHEMA)
         else:
             db.executescript(_SQLITE_SCHEMA)
+
+    # Run migrations for columns that may not exist yet
+    _run_migrations()
     print("Database initialized.")
+
+
+def _run_migrations():
+    """Add columns that may be missing from older schemas."""
+    migrations = [
+        ("clients", "physical_address", "TEXT DEFAULT ''"),
+    ]
+    with get_db() as db:
+        for table, col, col_type in migrations:
+            try:
+                _exec(db, f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+            except Exception:
+                pass  # column already exists
 
 
 # ---------------------------------------------------------------------------
@@ -618,10 +636,10 @@ def get_all_client_emails() -> list[dict]:
         return _fetchall(db, "SELECT id, name, email FROM clients ORDER BY id")
 
 
-def update_client(client_id: int, name: str, business: str):
+def update_client(client_id: int, name: str, business: str, physical_address: str = ""):
     with get_db() as db:
-        _exec(db, "UPDATE clients SET name = %s, business = %s WHERE id = %s",
-              (name, business, client_id))
+        _exec(db, "UPDATE clients SET name = %s, business = %s, physical_address = %s WHERE id = %s",
+              (name, business, physical_address, client_id))
 
 
 def update_client_password(client_id: int, password_hash: str):

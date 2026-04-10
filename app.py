@@ -8,12 +8,27 @@ import hashlib
 import html as html_module
 import os
 
-from flask import Flask, flash, jsonify, redirect, render_template_string, request, session, url_for, Response
+import json
+from datetime import datetime
+
+from flask import Flask, flash, jsonify, make_response, redirect, render_template_string, request, session, url_for, Response
 from markupsafe import Markup
 
 from outreach.ai import generate_sequence, personalize_email, generate_reply_draft, get_optimal_send_hour
 from outreach.config import SECRET_KEY, SENDER_NAME
 from outreach.i18n import t, t_dict
+
+# ── Sentry error tracking (production only — set SENTRY_DSN env var) ──
+from outreach.config import SENTRY_DSN
+if SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.1,
+        environment="production" if os.getenv("RENDER", "") else "development",
+    )
+
 from outreach.db import (
     add_contacts,
     create_campaign,
@@ -81,6 +96,23 @@ if os.path.isdir('/data'):
 
 # Ensure DB is initialized (for gunicorn and direct run)
 init_db()
+
+
+# ---------------------------------------------------------------------------
+# Health check — Render uses this to know if the app is alive
+# ---------------------------------------------------------------------------
+
+@app.route("/health")
+@limiter.exempt
+def health_check():
+    """Lightweight health probe for Render / load balancers."""
+    try:
+        from outreach.db import get_db, _fetchval
+        with get_db() as db:
+            _fetchval(db, "SELECT 1")
+        return jsonify({"status": "ok", "db": "connected"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "db": str(e)}), 503
 
 
 # ---------------------------------------------------------------------------
@@ -908,6 +940,28 @@ LAYOUT = """<!DOCTYPE html>
       });
     });
   </script>
+
+  <!-- Cookie Consent Banner (GDPR) -->
+  <div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--card);border-top:1px solid var(--border-light);box-shadow:0 -2px 16px rgba(0,0,0,.12);padding:16px 24px;font-size:13px;color:var(--text-secondary);">
+    <div style="max-width:960px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <p style="flex:1;margin:0;min-width:200px;">We use essential cookies to keep you signed in and remember your preferences. No tracking or advertising cookies. <a href="/privacy" style="color:var(--primary);text-decoration:underline;">Privacy Policy</a></p>
+      <button onclick="acceptCookies()" class="btn btn-primary btn-sm">Accept</button>
+    </div>
+  </div>
+  <script>
+  (function(){
+    if(!document.cookie.match(/(?:^|;\\s*)cookie_consent=1/)){
+      var el=document.getElementById('cookie-consent');
+      if(el) el.style.display='block';
+    }
+  })();
+  function acceptCookies(){
+    document.cookie='cookie_consent=1;path=/;max-age=31536000;SameSite=Lax';
+    var el=document.getElementById('cookie-consent');
+    if(el) el.style.display='none';
+  }
+  </script>
+
 </body>
 </html>"""
 
@@ -1739,8 +1793,9 @@ def settings():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         business = request.form.get("business", "").strip()
+        physical_address = request.form.get("physical_address", "").strip()
         if name:
-            update_client(session["client_id"], name, business)
+            update_client(session["client_id"], name, business, physical_address)
             session["client_name"] = name
             flash(("success", "Settings saved."))
         return redirect(url_for("settings"))
@@ -1911,6 +1966,11 @@ def settings():
         <div class="form-row">
           <div class="form-group"><label>Name</label><input name="name" value="{{{{client.name}}}}" required></div>
           <div class="form-group"><label>Business</label><input name="business" value="{{{{client.business or ''}}}}"></div>
+        </div>
+        <div class="form-group">
+          <label>Physical Address <span style="font-weight:400;color:var(--text-muted);">(required by CAN-SPAM)</span></label>
+          <input name="physical_address" value="{{{{client.physical_address or ''}}}}" placeholder="123 Main St, Suite 100, Santiago, Chile">
+          <p class="form-hint">CAN-SPAM requires a valid physical address in all commercial emails. This will appear in your email footer.</p>
         </div>
         <div class="form-group">
           <label>Email</label>
@@ -2129,6 +2189,12 @@ def settings():
     {prefs_card}
 
     {team_card}
+
+    <div class="card">
+      <div class="card-header"><h2>&#128230; Your Data (GDPR)</h2></div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">Download a copy of all your personal data stored in MachReach (profile, campaigns, contacts, emails). The export is in JSON format.</p>
+      <a class="btn btn-outline" href="/api/export-my-data">&#11015; Export My Data</a>
+    </div>
 
     <div class="card" style="border-color:var(--red);">
       <div class="card-header"><h2 style="color:var(--red);">&#9888;&#65039; Danger Zone</h2></div>
@@ -3361,6 +3427,10 @@ def view_campaign(campaign_id):
             <label>Or paste manually</label>
             <textarea name="contacts_csv" placeholder="John Doe,john@company.com,Acme Inc,CEO,en&#10;Maria Garcia,maria@empresa.com,Empresa SA,Directora,es" style="min-height:70px;font-family:monospace;font-size:12px;"></textarea>
           </div>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;">
+            <input type="checkbox" name="consent" value="1" required>
+            I confirm these contacts have opted in to receive emails or I have a legitimate business interest (CAN-SPAM / GDPR).
+          </label>
           <button class="btn btn-green" type="submit">Add Contacts</button>
         </form>
         <hr class="form-divider">
@@ -3533,6 +3603,9 @@ def edit_sequence(cid, sid):
 def upload_contacts(campaign_id):
     if not _logged_in():
         return redirect(url_for("login"))
+    if not request.form.get("consent"):
+        flash(("error", "You must confirm contacts have opted in before importing."))
+        return redirect(f"/campaign/{campaign_id}?tab=contacts")
     raw = request.form.get("contacts_csv", "")
     csv_file = request.files.get("csv_file")
     if csv_file and csv_file.filename:
@@ -3702,8 +3775,9 @@ def _trigger_campaign_send(campaign_id):
                 camp_row = _fetchone(db, "SELECT client_id FROM campaigns WHERE id = %s", (campaign_id,))
                 client_id = camp_row["client_id"] if camp_row else None
 
-            # Resolve SMTP credentials from user's connected email account
+            # Resolve SMTP credentials and physical address from user's account
             acct_smtp = {}
+            _physical_address = ""
             if client_id:
                 acct = get_default_email_account(client_id)
                 if acct:
@@ -3713,6 +3787,9 @@ def _trigger_campaign_send(campaign_id):
                         "smtp_user": acct["email"],
                         "smtp_password": acct["password"],
                     }
+                _client = get_client(client_id)
+                if _client:
+                    _physical_address = _client.get("physical_address", "")
 
             _campaign_sends[campaign_id]["total"] = len(batch)
 
@@ -3756,6 +3833,7 @@ def _trigger_campaign_send(campaign_id):
                 success = send_email(
                     to_email=item["email"], subject=subject, body_text=body,
                     contact_id=item["contact_id"], tracking_id=sent_id,
+                    physical_address=_physical_address,
                     **acct_smtp,
                 )
 
@@ -6777,13 +6855,14 @@ def privacy_page():
     return _render("Privacy Policy", Markup("""
     <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
       <h1 style="font-size:32px;margin-bottom:8px;">Privacy Policy</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 9, 2026</p>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 10, 2026</p>
 
       <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Information We Collect</h2>
         <p><strong>Account Information:</strong> When you register, we collect your name, email address, and password (stored with bcrypt encryption).</p>
         <p><strong>Email Account Credentials:</strong> When you connect an email account, we store your email address and app password. App passwords are encrypted at rest using AES-256 (Fernet) encryption and are never stored in plaintext.</p>
         <p><strong>Email Content:</strong> We access your email via IMAP solely to sync your inbox for the Mail Hub feature and to detect replies to your outreach campaigns. We do not read, analyze, or sell your email content for advertising purposes.</p>
+        <p><strong>Contact Data:</strong> You may upload or enter contact information (names, emails, companies) for your outreach campaigns. You are responsible for ensuring you have proper consent or legitimate interest to contact those individuals.</p>
         <p><strong>Usage Data:</strong> We collect information about how you use MachReach, including campaigns created, emails sent, and feature usage, to improve our service.</p>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. How We Use Your Information</h2>
@@ -6807,33 +6886,52 @@ def privacy_page():
           <li>Security headers (HSTS, X-Frame-Options, etc.)</li>
         </ul>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Data Sharing</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Data Sharing &amp; Sub-processors</h2>
         <p>We do <strong>not</strong> sell, rent, or share your personal information with third parties, except:</p>
         <ul style="padding-left:20px;">
           <li><strong>OpenAI:</strong> Email subjects and snippets may be sent to OpenAI's API for AI-powered classification and reply generation. No full email bodies are sent unless you use AI compose features.</li>
           <li><strong>PayPal:</strong> Payment information is processed by PayPal. We do not store credit card numbers.</li>
+          <li><strong>Render:</strong> Our application and database are hosted on Render's infrastructure.</li>
           <li><strong>Legal requirements:</strong> We may disclose information if required by law or to protect our rights.</li>
         </ul>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Data Retention</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Data Storage &amp; Location</h2>
+        <p>Your data is stored on servers located in the <strong>United States</strong>, operated by Render Inc. By using MachReach, you consent to the transfer and storage of your data in the United States. We take appropriate safeguards to protect your data during international transfers.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. Data Retention</h2>
         <p>Your data is retained as long as your account is active. When you delete your account, all associated data (campaigns, contacts, email accounts, synced emails) is permanently deleted within 30 days.</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. Your Rights</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. Your Rights</h2>
         <p>You can:</p>
         <ul style="padding-left:20px;">
-          <li>Access and export your data at any time</li>
+          <li>Access and export your data at any time via Settings &gt; Export My Data</li>
           <li>Update or correct your personal information in Settings</li>
           <li>Delete your account and all associated data</li>
           <li>Disconnect email accounts at any time (credentials are immediately deleted)</li>
+          <li>Request a copy of your personal data in JSON format</li>
         </ul>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. Cookies</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. International Users (GDPR)</h2>
+        <p>If you are located in the European Economic Area (EEA), you have additional rights under the General Data Protection Regulation (GDPR):</p>
+        <ul style="padding-left:20px;">
+          <li><strong>Right of access:</strong> Request a copy of your personal data</li>
+          <li><strong>Right to rectification:</strong> Correct inaccurate personal data</li>
+          <li><strong>Right to erasure:</strong> Request deletion of your personal data</li>
+          <li><strong>Right to data portability:</strong> Receive your data in a machine-readable format (JSON export)</li>
+          <li><strong>Right to object:</strong> Object to processing of your personal data</li>
+        </ul>
+        <p>To exercise any of these rights, contact us at <a href="mailto:support@machreach.com">support@machreach.com</a> or use the in-app data export feature.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">9. Cookies</h2>
         <p>We use session cookies for authentication only. We do not use tracking cookies or third-party analytics. Cookies are set with <strong>HttpOnly</strong> and <strong>SameSite=Lax</strong> flags for security.</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. Changes to This Policy</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">10. Changes to This Policy</h2>
         <p>We may update this policy from time to time. We will notify you of significant changes via email or an in-app notice.</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">9. Contact</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">11. Governing Law</h2>
+        <p>This Privacy Policy is governed by the laws of the Republic of Chile, including Ley 19.628 on the Protection of Private Life. Any disputes will be resolved in the courts of Santiago, Chile.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">12. Contact</h2>
         <p>If you have questions about this Privacy Policy, contact us at <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
       </div>
     </div>
@@ -6845,7 +6943,7 @@ def terms_page():
     return _render("Terms of Service", Markup("""
     <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
       <h1 style="font-size:32px;margin-bottom:8px;">Terms of Service</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 9, 2026</p>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 10, 2026</p>
 
       <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Acceptance of Terms</h2>
@@ -6913,7 +7011,10 @@ def terms_page():
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">10. Changes to Terms</h2>
         <p>We may update these terms from time to time. Continued use of MachReach after changes constitutes acceptance of the updated terms. We will notify you of significant changes via email.</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">11. Contact</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">11. Governing Law</h2>
+        <p>These Terms of Service are governed by the laws of the Republic of Chile. Any disputes arising from the use of MachReach will be resolved in the courts of Santiago, Chile.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">12. Contact</h2>
         <p>Questions about these terms? Contact us at <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
       </div>
     </div>
@@ -7078,6 +7179,49 @@ def api_check_deliverability():
     result["score"] = passed
     result["max_score"] = 3
     return jsonify(result)
+
+
+# ── GDPR: Data Export ──────────────────────────────────────────
+@app.route("/api/export-my-data")
+@limiter.limit("3 per hour")
+def api_export_my_data():
+    """GDPR Art. 20 — Return all user data as downloadable JSON."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    cid = session["client_id"]
+    from outreach.db import (
+        get_client, get_campaigns, get_contacts, get_sent_emails,
+        get_email_accounts, get_subscription, get_usage,
+    )
+    client = get_client(cid)
+    if not client:
+        return jsonify({"error": "not found"}), 404
+
+    profile = {k: client[k] for k in ("id", "name", "email", "business", "physical_address", "created_at") if k in client}
+    campaigns = [dict(c) for c in get_campaigns(cid)]
+    contacts_all = []
+    for camp in campaigns:
+        contacts_all.extend([dict(c) for c in get_contacts(cid, campaign_id=camp["id"])])
+    sent = get_export_data(cid)
+    accounts = [{"id": a["id"], "email": a["email"], "smtp_host": a["smtp_host"]} for a in (get_email_accounts(cid) or [])]
+    sub = get_subscription(cid)
+    usage = get_usage(cid)
+
+    payload = {
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "profile": profile,
+        "subscription": dict(sub) if sub else None,
+        "usage": dict(usage) if usage else None,
+        "email_accounts": accounts,
+        "campaigns": campaigns,
+        "contacts": contacts_all,
+        "sent_emails": sent,
+    }
+
+    resp = make_response(json.dumps(payload, indent=2, default=str))
+    resp.headers["Content-Type"] = "application/json"
+    resp.headers["Content-Disposition"] = "attachment; filename=machreach-my-data.json"
+    return resp
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ bleach>=6.0
 gunicorn>=22.0
 psycopg2-binary>=2.9
 requests>=2.31
+sentry-sdk[flask]>=2.0
 bcrypt>=4.1
 cryptography>=42.0
 dkimpy>=1.1

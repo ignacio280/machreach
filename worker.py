@@ -10,6 +10,13 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from outreach.ai import personalize_email, personalize_subject, translate_email
 from outreach.config import DELAY_BETWEEN_EMAILS_SEC, PLAN_LIMITS, SENDER_NAME
+
+# ── Sentry error tracking (production only) ──
+from outreach.config import SENTRY_DSN
+if SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(dsn=SENTRY_DSN, environment="worker")
+
 from outreach.db import get_emails_to_send, init_db, record_sent
 from outreach.reply_checker import check_replies, check_bounces
 from outreach.sender import pick_variant, send_email
@@ -138,12 +145,24 @@ def send_batch():
             body=body,
         )
 
+        # Look up client physical address for CAN-SPAM footer
+        _physical_address = ""
+        if camp:
+            try:
+                from outreach.db import get_client
+                _client = get_client(camp["client_id"])
+                if _client:
+                    _physical_address = _client.get("physical_address", "")
+            except Exception:
+                pass
+
         success = send_email(
             to_email=item["email"],
             subject=subject,
             body_text=body,
             contact_id=item["contact_id"],
             tracking_id=sent_id,
+            physical_address=_physical_address,
             **acct_smtp,
         )
 

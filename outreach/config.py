@@ -66,6 +66,9 @@ PAYPAL_PLAN_PRO = os.getenv("PAYPAL_PLAN_PRO", "")
 PAYPAL_PLAN_UNLIMITED = os.getenv("PAYPAL_PLAN_UNLIMITED", "")
 PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")               # sandbox or live
 
+# Sentry (error tracking — set SENTRY_DSN in production)
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+
 # Plan limits
 PLAN_LIMITS = {
     "free":      {"emails_per_month": 200,   "emails_per_day": 50,  "campaigns": 2,  "mail_hub_syncs": 10,  "ai_classify": False, "mailboxes": 1,  "price": 0},

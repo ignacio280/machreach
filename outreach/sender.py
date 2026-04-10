@@ -35,7 +35,8 @@ def _sign_dkim(msg: MIMEMultipart) -> None:
 
 
 def _wrap_html(body_text: str, contact_id: int | None = None,
-               tracking_id: int | None = None) -> str:
+               tracking_id: int | None = None,
+               physical_address: str = "") -> str:
     """Wrap plain-text email body in a polished HTML template."""
     body_html = body_text.replace("\n", "<br>")
 
@@ -49,6 +50,11 @@ def _wrap_html(body_text: str, contact_id: int | None = None,
     unsub_link = ""
     if contact_id:
         unsub_link = f'{BASE_URL}/unsubscribe/{contact_id}'
+
+    address_line = ""
+    if physical_address:
+        import html as _html
+        address_line = f'<div style="color:#A0AEC0;font-size:10px;margin-top:4px;">{_html.escape(physical_address)}</div>'
 
     return f"""<!DOCTYPE html>
 <html>
@@ -68,6 +74,7 @@ def _wrap_html(body_text: str, contact_id: int | None = None,
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;">
         <tr><td style="padding:20px 36px;text-align:center;">
           {f'<a href="{unsub_link}" style="color:#A0AEC0;font-size:11px;text-decoration:underline;">Unsubscribe</a>' if unsub_link else ''}
+          {address_line}
         </td></tr>
       </table>
       {tracking_pixel}
@@ -87,6 +94,7 @@ def send_email(
     smtp_port: int | None = None,
     smtp_user: str | None = None,
     smtp_password: str | None = None,
+    physical_address: str = "",
 ) -> bool:
     """Send a single email via SMTP. Returns True on success.
     
@@ -101,7 +109,7 @@ def send_email(
         print(f"[DRY RUN] Would send to {to_email}: {subject}")
         return True
 
-    html = _wrap_html(body_text, contact_id=contact_id, tracking_id=tracking_id)
+    html = _wrap_html(body_text, contact_id=contact_id, tracking_id=tracking_id, physical_address=physical_address)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
