@@ -368,18 +368,18 @@ def check_bounces(imap_host: str | None = None, imap_port: int | None = None,
 
 def _mark_bounced(contact_email: str) -> bool:
     """Mark a contact as bounced in both campaign contacts and sent_emails."""
-    from outreach.db import get_db
+    from outreach.db import get_db, _fetchone, _exec
     with get_db() as db:
-        row = db.execute(
+        row = _fetchone(db,
             "SELECT c.id as contact_id, se.id as sent_id "
             "FROM contacts c "
             "JOIN sent_emails se ON se.contact_id = c.id "
-            "WHERE LOWER(c.email) = LOWER(?) AND c.status NOT IN ('bounced', 'replied') "
+            "WHERE LOWER(c.email) = LOWER(%s) AND c.status NOT IN ('bounced', 'replied') "
             "ORDER BY se.sent_at DESC LIMIT 1",
             (contact_email,),
-        ).fetchone()
+        )
         if not row:
             return False
-        db.execute("UPDATE contacts SET status = 'bounced' WHERE id = ?", (row["contact_id"],))
-        db.execute("UPDATE sent_emails SET status = 'bounced' WHERE id = ?", (row["sent_id"],))
+        _exec(db, "UPDATE contacts SET status = 'bounced' WHERE id = %s", (row["contact_id"],))
+        _exec(db, "UPDATE sent_emails SET status = 'bounced' WHERE id = %s", (row["sent_id"],))
         return True

@@ -327,7 +327,7 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
     Otherwise falls back to .env IMAP defaults.
     Returns number of new emails added. Skips already-synced messages.
     """
-    from outreach.db import upsert_mail, get_db, get_email_account, get_mail_preferences
+    from outreach.db import upsert_mail, get_db, get_email_account, get_mail_preferences, _exec
 
     # Get account credentials if specified
     imap_kwargs = {}
@@ -344,10 +344,10 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
     # Get existing message IDs to skip them during fetch
     existing_ids = set()
     with get_db() as db:
-        rows = db.execute(
-            "SELECT message_id FROM mail_inbox WHERE client_id = ?",
+        rows = _exec(db,
+            "SELECT message_id FROM mail_inbox WHERE client_id = %s",
             (client_id,)).fetchall()
-        existing_ids = {r[0] for r in rows}
+        existing_ids = {r["message_id"] for r in rows}
 
     raw_emails = fetch_inbox(days=days, existing_ids=existing_ids, **imap_kwargs)
     if not raw_emails:
@@ -357,19 +357,19 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
     campaign_emails = set()
     campaign_subjects = set()
     with get_db() as db:
-        rows = db.execute("""
-            SELECT DISTINCT LOWER(c.email) FROM contacts c
+        rows = _exec(db, """
+            SELECT DISTINCT LOWER(c.email) as email FROM contacts c
             JOIN campaigns camp ON c.campaign_id = camp.id
-            WHERE camp.client_id = ?
+            WHERE camp.client_id = %s
         """, (client_id,)).fetchall()
-        campaign_emails = {r[0] for r in rows}
-        rows = db.execute("""
+        campaign_emails = {r["email"] for r in rows}
+        rows = _exec(db, """
             SELECT DISTINCT se.subject FROM sent_emails se
             JOIN contacts c ON se.contact_id = c.id
             JOIN campaigns camp ON c.campaign_id = camp.id
-            WHERE camp.client_id = ?
+            WHERE camp.client_id = %s
         """, (client_id,)).fetchall()
-        campaign_subjects = {r[0].lower() for r in rows if r[0]}
+        campaign_subjects = {r["subject"].lower() for r in rows if r["subject"]}
 
     def _is_campaign_related(email_data: dict) -> bool:
         sender = email_data.get("from_email", "").lower().strip()
@@ -425,16 +425,16 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
 def _reclassify_existing(client_id: int, days: int, user_rules: str,
                          campaign_emails: set, campaign_subjects: set):
     """Re-run AI classification on recent existing emails using current rules."""
-    from outreach.db import get_db
+    from outreach.db import get_db, _exec, _fetchall
     from datetime import date, timedelta
 
     since = (date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
 
     with get_db() as db:
-        rows = db.execute(
+        rows = _exec(db,
             """SELECT id, from_email, subject, body_preview
                FROM mail_inbox
-               WHERE client_id = ? AND received_at >= ?
+               WHERE client_id = %s AND received_at >= %s
                ORDER BY received_at DESC LIMIT 100""",
             (client_id, since),
         ).fetchall()
@@ -469,9 +469,9 @@ def _reclassify_existing(client_id: int, days: int, user_rules: str,
             priority = cls.get("priority", "normal")
             if _is_campaign({"from_email": row["from_email"], "subject": row["subject"]}) and priority not in ("urgent",):
                 priority = "important"
-            db.execute(
-                """UPDATE mail_inbox SET priority = ?, category = ?, ai_summary = ?
-                   WHERE id = ? AND client_id = ?""",
+            _exec(db,
+                """UPDATE mail_inbox SET priority = %s, category = %s, ai_summary = %s
+                   WHERE id = %s AND client_id = %s""",
                 (priority, cls.get("category", "uncategorized"), cls.get("summary", ""),
                  row["id"], client_id),
             )

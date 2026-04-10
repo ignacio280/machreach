@@ -28,6 +28,7 @@ IMAP_USER = os.getenv("IMAP_USER", "") or SMTP_USER
 IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "") or SMTP_PASSWORD
 
 # Database
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 DATABASE_PATH = Path(os.getenv("DATABASE_PATH", BASE_DIR / "data" / "outreach.db"))
 
 # App

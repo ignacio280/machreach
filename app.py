@@ -133,10 +133,10 @@ def _effective_client_id() -> int:
 @app.before_request
 def _validate_session():
     if "client_id" in session:
-        from outreach.db import get_db
+        from outreach.db import get_db, _fetchval
         with get_db() as db:
-            row = db.execute("SELECT 1 FROM clients WHERE id = ?",
-                             (session["client_id"],)).fetchone()
+            row = _fetchval(db, "SELECT 1 FROM clients WHERE id = %s",
+                            (session["client_id"],))
             if row is None:
                 session.clear()
 
@@ -1274,23 +1274,23 @@ def delete_account():
         flash(("error", "Please type DELETE to confirm."))
         return redirect(url_for("settings"))
     client_id = session["client_id"]
-    from outreach.db import get_db
+    from outreach.db import get_db, _exec
     with get_db() as db:
-        db.execute("DELETE FROM password_reset_tokens WHERE client_id = ?", (client_id,))
-        db.execute("DELETE FROM email_accounts WHERE client_id = ?", (client_id,))
-        db.execute("DELETE FROM subscriptions WHERE client_id = ?", (client_id,))
-        db.execute("DELETE FROM usage_tracking WHERE client_id = ?", (client_id,))
+        _exec(db, "DELETE FROM password_reset_tokens WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM email_accounts WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM subscriptions WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM usage_tracking WHERE client_id = %s", (client_id,))
         # Delete campaigns and related data
-        camp_ids = [r["id"] for r in db.execute("SELECT id FROM campaigns WHERE client_id = ?", (client_id,)).fetchall()]
+        camp_ids = [r["id"] for r in _exec(db, "SELECT id FROM campaigns WHERE client_id = %s", (client_id,)).fetchall()]
         for cid in camp_ids:
-            db.execute("DELETE FROM email_sequences WHERE campaign_id = ?", (cid,))
-            db.execute("DELETE FROM contacts WHERE campaign_id = ?", (cid,))
-            db.execute("DELETE FROM sent_emails WHERE campaign_id = ?", (cid,))
-        db.execute("DELETE FROM campaigns WHERE client_id = ?", (client_id,))
-        db.execute("DELETE FROM contacts_book WHERE client_id = ?", (client_id,))
-        db.execute("DELETE FROM mail_inbox WHERE client_id = ?", (client_id,))
-        db.execute("DELETE FROM scheduled_emails WHERE client_id = ?", (client_id,))
-        db.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+            _exec(db, "DELETE FROM email_sequences WHERE campaign_id = %s", (cid,))
+            _exec(db, "DELETE FROM contacts WHERE campaign_id = %s", (cid,))
+            _exec(db, "DELETE FROM sent_emails WHERE campaign_id = %s", (cid,))
+        _exec(db, "DELETE FROM campaigns WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM contacts_book WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM mail_inbox WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM scheduled_emails WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
     session.clear()
     flash(("success", t("settings.account_deleted")))
     return redirect(url_for("index"))
@@ -3617,14 +3617,14 @@ def _trigger_campaign_send(campaign_id):
 
     def _bg_send():
         import time as _time
-        from outreach.db import get_db, record_sent, delete_sent_email, check_limit, increment_usage, get_default_email_account
+        from outreach.db import get_db, record_sent, delete_sent_email, check_limit, increment_usage, get_default_email_account, _exec, _fetchone, _now_expr
         from outreach.ai import personalize_email, personalize_subject, translate_email
         from outreach.config import DELAY_BETWEEN_EMAILS_SEC, SENDER_NAME
         from outreach.sender import pick_variant, send_email
 
         try:
             with get_db() as db:
-                rows = db.execute("""
+                rows = _exec(db, f"""
                     SELECT c.id as contact_id, c.name, c.email, c.company, c.role,
                            c.language, c.campaign_id,
                            es.id as sequence_id, es.subject_a, es.subject_b,
@@ -3632,17 +3632,17 @@ def _trigger_campaign_send(campaign_id):
                     FROM contacts c
                     JOIN campaigns camp ON c.campaign_id = camp.id
                     JOIN email_sequences es ON es.campaign_id = camp.id AND es.step = 1
-                    WHERE camp.id = ? AND camp.status = 'active'
+                    WHERE camp.id = %s AND camp.status = 'active'
                       AND c.status = 'pending'
                       AND c.id NOT IN (SELECT contact_id FROM sent_emails)
-                      AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= datetime('now', 'localtime'))
+                      AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= {_now_expr()})
                     LIMIT 30
                 """, (campaign_id,)).fetchall()
                 batch = [dict(r) for r in rows]
 
                 # Get client_id
-                camp_row = db.execute("SELECT client_id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
-                client_id = camp_row[0] if camp_row else None
+                camp_row = _fetchone(db, "SELECT client_id FROM campaigns WHERE id = %s", (campaign_id,))
+                client_id = camp_row["client_id"] if camp_row else None
 
             # Resolve SMTP credentials from user's connected email account
             acct_smtp = {}
@@ -3661,8 +3661,8 @@ def _trigger_campaign_send(campaign_id):
             for item in batch:
                 # Check campaign still active
                 with get_db() as db:
-                    st = db.execute("SELECT status FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
-                    if not st or st[0] != "active":
+                    st = _fetchone(db, "SELECT status FROM campaigns WHERE id = %s", (campaign_id,))
+                    if not st or st["status"] != "active":
                         break
 
                 # Check limits
@@ -3788,21 +3788,21 @@ def track_open(sent_email_id):
 @app.route("/unsubscribe/<int:contact_id>", methods=["GET", "POST"])
 @csrf.exempt  # Unsubscribe must work without CSRF (external email clients)
 def unsubscribe(contact_id):
-    from outreach.db import get_db
+    from outreach.db import get_db, _exec, _fetchone
     with get_db() as db:
         # Get the contact's email before updating
-        contact = db.execute("SELECT email, campaign_id FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+        contact = _fetchone(db, "SELECT email, campaign_id FROM contacts WHERE id = %s", (contact_id,))
         # Mark the campaign contact as unsubscribed
-        db.execute("UPDATE contacts SET status = 'unsubscribed' WHERE id = ?", (contact_id,))
+        _exec(db, "UPDATE contacts SET status = 'unsubscribed' WHERE id = %s", (contact_id,))
         # Also block in contacts_book (across all campaigns) if we know who they are
         if contact:
             email_addr = contact["email"]
             # Find the client_id via the campaign
-            camp = db.execute("SELECT client_id FROM campaigns WHERE id = ?", (contact["campaign_id"],)).fetchone()
+            camp = _fetchone(db, "SELECT client_id FROM campaigns WHERE id = %s", (contact["campaign_id"],))
             if camp:
                 # Mark all campaign contacts with this email as unsubscribed for this client
-                db.execute("""UPDATE contacts SET status = 'unsubscribed'
-                    WHERE email = ? AND campaign_id IN (SELECT id FROM campaigns WHERE client_id = ?)
+                _exec(db, """UPDATE contacts SET status = 'unsubscribed'
+                    WHERE email = %s AND campaign_id IN (SELECT id FROM campaigns WHERE client_id = %s)
                     AND status != 'unsubscribed'""", (email_addr, camp["client_id"]))
     # RFC 8058: POST = one-click unsubscribe (email client auto-sends)
     if request.method == "POST":
@@ -5115,16 +5115,15 @@ def api_mail_peek():
     if not _logged_in():
         return jsonify({"error": "unauthorized"}), 401
     try:
-        from outreach.db import get_email_accounts, get_db
+        from outreach.db import get_email_accounts, get_db, _fetchval
         from outreach.mail_hub import peek_unseen
         from datetime import datetime, timedelta
 
         # Find the date of the most recent synced email
         with get_db() as db:
-            row = db.execute(
-                "SELECT MAX(received_at) FROM mail_inbox WHERE client_id = ?",
-                (session["client_id"],)).fetchone()
-            last_synced = row[0] if row and row[0] else None
+            last_synced = _fetchval(db,
+                "SELECT MAX(received_at) FROM mail_inbox WHERE client_id = %s",
+                (session["client_id"],))
 
         # Convert last synced date to IMAP format; count DB emails from that date
         if last_synced:
@@ -5142,9 +5141,9 @@ def api_mail_peek():
 
         # Count DB emails from that date onward
         with get_db() as db:
-            db_count = db.execute(
-                "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND received_at >= ?",
-                (session["client_id"], db_since)).fetchone()[0]
+            db_count = _fetchval(db,
+                "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND received_at >= %s",
+                (session["client_id"], db_since))
 
         # Count IMAP emails from that date onward
         accounts = get_email_accounts(session["client_id"])

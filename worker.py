@@ -30,10 +30,10 @@ def _reset_daily_counter():
 def _get_daily_limit(client_id):
     """Return daily email limit for a client based on their plan."""
     try:
-        from outreach.db import get_db
+        from outreach.db import get_db, _fetchone
         with get_db() as db:
-            row = db.execute("SELECT plan FROM subscriptions WHERE client_id = ?", (client_id,)).fetchone()
-            plan = row[0] if row else "free"
+            row = _fetchone(db, "SELECT plan FROM subscriptions WHERE client_id = %s", (client_id,))
+            plan = row["plan"] if row else "free"
     except Exception:
         plan = "free"
     return PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])["emails_per_day"]
@@ -69,12 +69,12 @@ def send_batch():
     for item in batch:
         # Check per-client monthly email limit
         try:
-            from outreach.db import check_limit, increment_usage, get_db, get_default_email_account
+            from outreach.db import check_limit, increment_usage, get_db, get_default_email_account, _fetchone
             with get_db() as db:
-                camp = db.execute("SELECT client_id FROM campaigns WHERE id = ?",
-                                  (item["campaign_id"],)).fetchone()
+                camp = _fetchone(db, "SELECT client_id FROM campaigns WHERE id = %s",
+                                  (item["campaign_id"],))
             if camp:
-                client_id = camp[0]
+                client_id = camp["client_id"]
                 allowed, used, limit = check_limit(client_id, "emails_sent")
                 if not allowed:
                     print(f"  Skipping {item['email']} — client {client_id} hit monthly limit ({used}/{limit})")
@@ -118,7 +118,7 @@ def send_batch():
         acct_smtp = {}
         if camp:
             try:
-                acct = get_default_email_account(camp[0])
+                acct = get_default_email_account(camp["client_id"])
                 if acct:
                     acct_smtp = {
                         "smtp_host": acct["smtp_host"],
@@ -148,13 +148,13 @@ def send_batch():
         )
 
         if success:
-            cid = camp[0] if camp else None
+            cid = camp["client_id"] if camp else None
             if cid:
                 sent_today[cid] = sent_today.get(cid, 0) + 1
             # Track usage for billing
             try:
                 if camp:
-                    increment_usage(camp[0], "emails_sent")
+                    increment_usage(camp["client_id"], "emails_sent")
             except Exception:
                 pass
             step = item.get("step", 1)
@@ -243,29 +243,29 @@ def sync_mail_hub():
     For free users: skip background sync (they sync manually within their limit).
     """
     try:
-        from outreach.db import get_db, check_limit, increment_usage, get_email_accounts, get_subscription
+        from outreach.db import get_db, check_limit, increment_usage, get_email_accounts, get_subscription, _exec, _fetchval, _fetchall
         from outreach.mail_hub import sync_inbox, peek_unseen
         with get_db() as db:
-            clients = db.execute("SELECT id FROM clients").fetchall()
+            clients = _fetchall(db, "SELECT id FROM clients")
         for row in clients:
             try:
+                client_id = row["id"]
                 # Only auto-sync for paid tiers
-                sub = get_subscription(row[0])
+                sub = get_subscription(client_id)
                 plan = sub.get("plan", "free") if sub else "free"
                 if plan == "free":
                     continue
 
-                allowed, used, limit = check_limit(row[0], "mail_hub_syncs")
+                allowed, used, limit = check_limit(client_id, "mail_hub_syncs")
                 if not allowed:
                     continue
 
                 # Peek first — only sync if there are unseen emails since last sync
                 # Get last synced email date for this client
                 with get_db() as db:
-                    last_row = db.execute(
-                        "SELECT MAX(received_at) FROM mail_inbox WHERE client_id = ?",
-                        (row[0],)).fetchone()
-                    last_synced = last_row[0] if last_row and last_row[0] else None
+                    last_synced = _fetchval(db,
+                        "SELECT MAX(received_at) FROM mail_inbox WHERE client_id = %s",
+                        (client_id,))
 
                 from datetime import datetime, timedelta
                 if last_synced:
@@ -277,7 +277,7 @@ def sync_mail_hub():
                 else:
                     imap_since = (datetime.now() - timedelta(days=3)).strftime("%d-%b-%Y")
 
-                accounts = get_email_accounts(row[0])
+                accounts = get_email_accounts(client_id)
                 has_new = False
                 if accounts:
                     for acct in accounts:
@@ -298,16 +298,16 @@ def sync_mail_hub():
                 total_new = 0
                 if accounts:
                     for acct in accounts:
-                        n = sync_inbox(row[0], days=3, account_id=acct["id"])
+                        n = sync_inbox(client_id, days=3, account_id=acct["id"])
                         total_new += n
                 else:
                     # Fallback to .env credentials
-                    total_new = sync_inbox(row[0], days=3)
+                    total_new = sync_inbox(client_id, days=3)
                 if total_new:
-                    increment_usage(row[0], "mail_hub_syncs")
-                    print(f"[MAIL HUB] Auto-synced {total_new} new email(s) for client {row[0]}")
+                    increment_usage(client_id, "mail_hub_syncs")
+                    print(f"[MAIL HUB] Auto-synced {total_new} new email(s) for client {client_id}")
             except Exception as e:
-                print(f"[MAIL HUB] Sync error for client {row[0]}: {e}")
+                print(f"[MAIL HUB] Sync error for client {row.get('id', '?')}: {e}")
     except Exception as e:
         print(f"[MAIL HUB] Background sync error (non-fatal): {e}")
 

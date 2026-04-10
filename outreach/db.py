@@ -1,379 +1,683 @@
 """
-SQLite database — campaigns, contacts, emails, tracking.
+PostgreSQL database — campaigns, contacts, emails, tracking.
+Migrated from SQLite.  Uses DATABASE_URL env var (Render Postgres format).
+Falls back to SQLite via DATABASE_PATH when DATABASE_URL is empty (local dev).
 """
 from __future__ import annotations
 
-import sqlite3
+import os
 from contextlib import contextmanager
-from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
-from outreach.config import DATABASE_PATH, ENCRYPTION_KEY
+from outreach.config import DATABASE_URL, ENCRYPTION_KEY
+
+# ---------------------------------------------------------------------------
+# Detect engine: postgres vs sqlite fallback
+# ---------------------------------------------------------------------------
+_USE_PG = bool(DATABASE_URL)
+
+if _USE_PG:
+    import psycopg2
+    import psycopg2.extras
+    import psycopg2.errors
+else:
+    import sqlite3
+    from pathlib import Path
+    from outreach.config import DATABASE_PATH
 
 # ---------------------------------------------------------------------------
 # Fernet encryption for email account passwords at rest
 # ---------------------------------------------------------------------------
 
 def _get_fernet() -> Fernet:
-    """Return a Fernet cipher using the configured ENCRYPTION_KEY."""
     import base64, hashlib
-    # Derive a valid 32-byte Fernet key from the env variable via SHA256
     key_bytes = hashlib.sha256(ENCRYPTION_KEY.encode()).digest()
     return Fernet(base64.urlsafe_b64encode(key_bytes))
 
 
 def encrypt_password(plaintext: str) -> str:
-    """Encrypt a plaintext password for storage."""
     return _get_fernet().encrypt(plaintext.encode()).decode()
 
 
 def decrypt_password(ciphertext: str) -> str:
-    """Decrypt a stored password. Returns plaintext on failure (legacy unencrypted)."""
     try:
         return _get_fernet().decrypt(ciphertext.encode()).decode()
     except (InvalidToken, Exception):
-        # Legacy: password was stored in plaintext before encryption was added
         return ciphertext
 
 
-def _ensure_dir():
-    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-
+# ---------------------------------------------------------------------------
+# Connection helper
+# ---------------------------------------------------------------------------
 
 @contextmanager
 def get_db():
-    _ensure_dir()
-    conn = sqlite3.connect(str(DATABASE_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+    if _USE_PG:
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    else:
+        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(DATABASE_PATH))
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def _exec(db, sql, params=()):
+    """Execute helper — converts %s back to ? for SQLite if needed."""
+    if not _USE_PG:
+        sql = sql.replace("%s", "?")
+    cur = db.cursor()
+    cur.execute(sql, params)
+    return cur
+
+
+def _fetchone(db, sql, params=()):
+    cur = _exec(db, sql, params)
+    row = cur.fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def _fetchall(db, sql, params=()):
+    cur = _exec(db, sql, params)
+    return [dict(r) for r in cur.fetchall()]
+
+
+def _fetchval(db, sql, params=()):
+    """Fetch a single scalar value."""
+    cur = _exec(db, sql, params)
+    row = cur.fetchone()
+    if row is None:
+        return None
+    if _USE_PG:
+        # RealDictRow — get first value
+        return list(row.values())[0]
+    else:
+        return row[0]
+
+
+def _insert_returning_id(db, sql_pg, params, sql_sqlite=None):
+    """Insert and return the new row id.
+    sql_pg must end with RETURNING id.
+    sql_sqlite is the INSERT without RETURNING (uses lastrowid)."""
+    if _USE_PG:
+        cur = db.cursor()
+        cur.execute(sql_pg, params)
+        return cur.fetchone()["id"]
+    else:
+        sql = (sql_sqlite or sql_pg.rsplit("RETURNING", 1)[0]).replace("%s", "?")
+        cur = db.cursor()
+        cur.execute(sql, params)
+        return cur.lastrowid
+
+
+# ---------------------------------------------------------------------------
+# Schema / Migrations
+# ---------------------------------------------------------------------------
+
+_PG_SCHEMA = """
+CREATE TABLE IF NOT EXISTS clients (
+    id          SERIAL PRIMARY KEY,
+    name        TEXT NOT NULL,
+    email       TEXT NOT NULL UNIQUE,
+    password    TEXT NOT NULL,
+    business    TEXT DEFAULT '',
+    mail_preferences TEXT DEFAULT '',
+    mail_exclusions TEXT DEFAULT '',
+    is_admin    INTEGER DEFAULT 0,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id),
+    token       TEXT NOT NULL UNIQUE,
+    expires_at  TIMESTAMP NOT NULL,
+    used        INTEGER DEFAULT 0,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS campaigns (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id),
+    name        TEXT NOT NULL,
+    business_type TEXT DEFAULT '',
+    target_audience TEXT DEFAULT '',
+    tone        TEXT DEFAULT 'professional',
+    status      TEXT DEFAULT 'draft',
+    scheduled_start TIMESTAMP,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS contacts (
+    id          SERIAL PRIMARY KEY,
+    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    name        TEXT DEFAULT '',
+    email       TEXT NOT NULL,
+    company     TEXT DEFAULT '',
+    role        TEXT DEFAULT '',
+    language    TEXT DEFAULT 'en',
+    custom_data TEXT DEFAULT '{}',
+    status      TEXT DEFAULT 'pending',
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS email_sequences (
+    id          SERIAL PRIMARY KEY,
+    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    step        INTEGER NOT NULL DEFAULT 1,
+    subject_a   TEXT NOT NULL,
+    subject_b   TEXT DEFAULT '',
+    body_a      TEXT NOT NULL,
+    body_b      TEXT DEFAULT '',
+    delay_days  INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sent_emails (
+    id          SERIAL PRIMARY KEY,
+    contact_id  INTEGER NOT NULL REFERENCES contacts(id),
+    sequence_id INTEGER NOT NULL REFERENCES email_sequences(id),
+    variant     TEXT DEFAULT 'a',
+    subject     TEXT NOT NULL,
+    body        TEXT NOT NULL,
+    status      TEXT DEFAULT 'sent',
+    sent_at     TIMESTAMP DEFAULT NOW(),
+    opened_at   TIMESTAMP,
+    replied_at  TIMESTAMP,
+    reply_body  TEXT DEFAULT '',
+    reply_sentiment TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_contacts_campaign ON contacts(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_sent_contact ON sent_emails(contact_id);
+CREATE INDEX IF NOT EXISTS idx_sent_sequence ON sent_emails(sequence_id);
+
+CREATE TABLE IF NOT EXISTS mail_inbox (
+    id           SERIAL PRIMARY KEY,
+    client_id    INTEGER NOT NULL REFERENCES clients(id),
+    message_id   TEXT NOT NULL,
+    from_name    TEXT DEFAULT '',
+    from_email   TEXT NOT NULL,
+    to_email     TEXT DEFAULT '',
+    subject      TEXT DEFAULT '',
+    body_preview TEXT DEFAULT '',
+    received_at  TEXT DEFAULT '',
+    priority     TEXT DEFAULT 'normal',
+    category     TEXT DEFAULT 'uncategorized',
+    is_read      INTEGER DEFAULT 0,
+    is_starred   INTEGER DEFAULT 0,
+    is_archived  INTEGER DEFAULT 0,
+    snooze_until TEXT,
+    snooze_note  TEXT DEFAULT '',
+    ai_summary   TEXT DEFAULT '',
+    account_id   INTEGER,
+    fetched_at   TIMESTAMP DEFAULT NOW(),
+    UNIQUE(client_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mail_inbox_client ON mail_inbox(client_id);
+CREATE INDEX IF NOT EXISTS idx_mail_inbox_priority ON mail_inbox(client_id, priority);
+CREATE INDEX IF NOT EXISTS idx_mail_inbox_category ON mail_inbox(client_id, category);
+
+CREATE TABLE IF NOT EXISTS email_accounts (
+    id           SERIAL PRIMARY KEY,
+    client_id    INTEGER NOT NULL REFERENCES clients(id),
+    label        TEXT NOT NULL DEFAULT '',
+    email        TEXT NOT NULL,
+    imap_host    TEXT NOT NULL DEFAULT 'imap.gmail.com',
+    imap_port    INTEGER NOT NULL DEFAULT 993,
+    smtp_host    TEXT NOT NULL DEFAULT 'smtp.gmail.com',
+    smtp_port    INTEGER NOT NULL DEFAULT 465,
+    password     TEXT NOT NULL DEFAULT '',
+    is_default   INTEGER DEFAULT 0,
+    created_at   TIMESTAMP DEFAULT NOW(),
+    UNIQUE(client_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_accounts_client ON email_accounts(client_id);
+
+CREATE TABLE IF NOT EXISTS contacts_book (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL REFERENCES clients(id),
+    email           TEXT NOT NULL,
+    name            TEXT DEFAULT '',
+    company         TEXT DEFAULT '',
+    role            TEXT DEFAULT '',
+    relationship    TEXT DEFAULT '',
+    notes           TEXT DEFAULT '',
+    personality     TEXT DEFAULT '',
+    tags            TEXT DEFAULT '',
+    language        TEXT DEFAULT '',
+    last_contacted  TEXT DEFAULT '',
+    created_at      TIMESTAMP DEFAULT NOW(),
+    UNIQUE(client_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_contacts_book_client ON contacts_book(client_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_book_email ON contacts_book(client_id, email);
+
+CREATE TABLE IF NOT EXISTS scheduled_emails (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL REFERENCES clients(id),
+    to_email        TEXT NOT NULL,
+    to_name         TEXT DEFAULT '',
+    subject         TEXT NOT NULL,
+    body            TEXT NOT NULL,
+    scheduled_at    TEXT NOT NULL,
+    status          TEXT DEFAULT 'pending',
+    sent_at         TIMESTAMP,
+    reply_to_mail_id INTEGER,
+    account_id      INTEGER,
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_client ON scheduled_emails(client_id);
+CREATE INDEX IF NOT EXISTS idx_scheduled_status ON scheduled_emails(status, scheduled_at);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL UNIQUE REFERENCES clients(id),
+    plan            TEXT NOT NULL DEFAULT 'free',
+    stripe_customer_id   TEXT DEFAULT '',
+    stripe_subscription_id TEXT DEFAULT '',
+    status          TEXT DEFAULT 'active',
+    current_period_start TEXT DEFAULT '',
+    current_period_end   TEXT DEFAULT '',
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS usage_tracking (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL REFERENCES clients(id),
+    month           TEXT NOT NULL,
+    emails_sent     INTEGER DEFAULT 0,
+    mail_hub_syncs  INTEGER DEFAULT 0,
+    ai_classifications INTEGER DEFAULT 0,
+    UNIQUE(client_id, month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_client_month ON usage_tracking(client_id, month);
+
+CREATE TABLE IF NOT EXISTS team_members (
+    id              SERIAL PRIMARY KEY,
+    owner_id        INTEGER NOT NULL REFERENCES clients(id),
+    member_email    TEXT NOT NULL,
+    member_client_id INTEGER REFERENCES clients(id),
+    role            TEXT NOT NULL DEFAULT 'member',
+    status          TEXT NOT NULL DEFAULT 'pending',
+    invite_token    TEXT,
+    campaign_id     INTEGER REFERENCES campaigns(id),
+    invited_at      TIMESTAMP DEFAULT NOW(),
+    accepted_at     TIMESTAMP,
+    UNIQUE(owner_id, member_email)
+);
+"""
+
+_SQLITE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS clients (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    email       TEXT NOT NULL UNIQUE,
+    password    TEXT NOT NULL,
+    business    TEXT DEFAULT '',
+    mail_preferences TEXT DEFAULT '',
+    mail_exclusions TEXT DEFAULT '',
+    is_admin    INTEGER DEFAULT 0,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id),
+    token       TEXT NOT NULL UNIQUE,
+    expires_at  TEXT NOT NULL,
+    used        INTEGER DEFAULT 0,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS campaigns (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id),
+    name        TEXT NOT NULL,
+    business_type TEXT DEFAULT '',
+    target_audience TEXT DEFAULT '',
+    tone        TEXT DEFAULT 'professional',
+    status      TEXT DEFAULT 'draft',
+    scheduled_start TEXT,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS contacts (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    name        TEXT DEFAULT '',
+    email       TEXT NOT NULL,
+    company     TEXT DEFAULT '',
+    role        TEXT DEFAULT '',
+    language    TEXT DEFAULT 'en',
+    custom_data TEXT DEFAULT '{}',
+    status      TEXT DEFAULT 'pending',
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS email_sequences (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    step        INTEGER NOT NULL DEFAULT 1,
+    subject_a   TEXT NOT NULL,
+    subject_b   TEXT DEFAULT '',
+    body_a      TEXT NOT NULL,
+    body_b      TEXT DEFAULT '',
+    delay_days  INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sent_emails (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    contact_id  INTEGER NOT NULL REFERENCES contacts(id),
+    sequence_id INTEGER NOT NULL REFERENCES email_sequences(id),
+    variant     TEXT DEFAULT 'a',
+    subject     TEXT NOT NULL,
+    body        TEXT NOT NULL,
+    status      TEXT DEFAULT 'sent',
+    sent_at     TEXT DEFAULT (datetime('now', 'localtime')),
+    opened_at   TEXT,
+    replied_at  TEXT,
+    reply_body  TEXT DEFAULT '',
+    reply_sentiment TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_contacts_campaign ON contacts(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_sent_contact ON sent_emails(contact_id);
+CREATE INDEX IF NOT EXISTS idx_sent_sequence ON sent_emails(sequence_id);
+
+CREATE TABLE IF NOT EXISTS mail_inbox (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id    INTEGER NOT NULL REFERENCES clients(id),
+    message_id   TEXT NOT NULL,
+    from_name    TEXT DEFAULT '',
+    from_email   TEXT NOT NULL,
+    to_email     TEXT DEFAULT '',
+    subject      TEXT DEFAULT '',
+    body_preview TEXT DEFAULT '',
+    received_at  TEXT DEFAULT '',
+    priority     TEXT DEFAULT 'normal',
+    category     TEXT DEFAULT 'uncategorized',
+    is_read      INTEGER DEFAULT 0,
+    is_starred   INTEGER DEFAULT 0,
+    is_archived  INTEGER DEFAULT 0,
+    snooze_until TEXT,
+    snooze_note  TEXT DEFAULT '',
+    ai_summary   TEXT DEFAULT '',
+    account_id   INTEGER,
+    fetched_at   TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(client_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mail_inbox_client ON mail_inbox(client_id);
+CREATE INDEX IF NOT EXISTS idx_mail_inbox_priority ON mail_inbox(client_id, priority);
+CREATE INDEX IF NOT EXISTS idx_mail_inbox_category ON mail_inbox(client_id, category);
+
+CREATE TABLE IF NOT EXISTS email_accounts (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id    INTEGER NOT NULL REFERENCES clients(id),
+    label        TEXT NOT NULL DEFAULT '',
+    email        TEXT NOT NULL,
+    imap_host    TEXT NOT NULL DEFAULT 'imap.gmail.com',
+    imap_port    INTEGER NOT NULL DEFAULT 993,
+    smtp_host    TEXT NOT NULL DEFAULT 'smtp.gmail.com',
+    smtp_port    INTEGER NOT NULL DEFAULT 465,
+    password     TEXT NOT NULL DEFAULT '',
+    is_default   INTEGER DEFAULT 0,
+    created_at   TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(client_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_accounts_client ON email_accounts(client_id);
+
+CREATE TABLE IF NOT EXISTS contacts_book (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id       INTEGER NOT NULL REFERENCES clients(id),
+    email           TEXT NOT NULL,
+    name            TEXT DEFAULT '',
+    company         TEXT DEFAULT '',
+    role            TEXT DEFAULT '',
+    relationship    TEXT DEFAULT '',
+    notes           TEXT DEFAULT '',
+    personality     TEXT DEFAULT '',
+    tags            TEXT DEFAULT '',
+    language        TEXT DEFAULT '',
+    last_contacted  TEXT DEFAULT '',
+    created_at      TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(client_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_contacts_book_client ON contacts_book(client_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_book_email ON contacts_book(client_id, email);
+
+CREATE TABLE IF NOT EXISTS scheduled_emails (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id       INTEGER NOT NULL REFERENCES clients(id),
+    to_email        TEXT NOT NULL,
+    to_name         TEXT DEFAULT '',
+    subject         TEXT NOT NULL,
+    body            TEXT NOT NULL,
+    scheduled_at    TEXT NOT NULL,
+    status          TEXT DEFAULT 'pending',
+    sent_at         TEXT,
+    reply_to_mail_id INTEGER,
+    account_id      INTEGER,
+    created_at      TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_client ON scheduled_emails(client_id);
+CREATE INDEX IF NOT EXISTS idx_scheduled_status ON scheduled_emails(status, scheduled_at);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id       INTEGER NOT NULL UNIQUE REFERENCES clients(id),
+    plan            TEXT NOT NULL DEFAULT 'free',
+    stripe_customer_id   TEXT DEFAULT '',
+    stripe_subscription_id TEXT DEFAULT '',
+    status          TEXT DEFAULT 'active',
+    current_period_start TEXT DEFAULT '',
+    current_period_end   TEXT DEFAULT '',
+    created_at      TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at      TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS usage_tracking (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id       INTEGER NOT NULL REFERENCES clients(id),
+    month           TEXT NOT NULL,
+    emails_sent     INTEGER DEFAULT 0,
+    mail_hub_syncs  INTEGER DEFAULT 0,
+    ai_classifications INTEGER DEFAULT 0,
+    UNIQUE(client_id, month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_client_month ON usage_tracking(client_id, month);
+
+CREATE TABLE IF NOT EXISTS team_members (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id        INTEGER NOT NULL REFERENCES clients(id),
+    member_email    TEXT NOT NULL,
+    member_client_id INTEGER REFERENCES clients(id),
+    role            TEXT NOT NULL DEFAULT 'member',
+    status          TEXT NOT NULL DEFAULT 'pending',
+    invite_token    TEXT,
+    campaign_id     INTEGER REFERENCES campaigns(id),
+    invited_at      TEXT DEFAULT (datetime('now', 'localtime')),
+    accepted_at     TEXT,
+    UNIQUE(owner_id, member_email)
+);
+"""
 
 
 def init_db():
     """Create all tables if they don't exist."""
     with get_db() as db:
-        db.executescript("""
-        CREATE TABLE IF NOT EXISTS clients (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            email       TEXT NOT NULL UNIQUE,
-            password    TEXT NOT NULL,
-            business    TEXT DEFAULT '',
-            mail_preferences TEXT DEFAULT '',
-            is_admin    INTEGER DEFAULT 0,
-            created_at  TEXT DEFAULT (datetime('now', 'localtime'))
-        );
-
-        CREATE TABLE IF NOT EXISTS password_reset_tokens (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id   INTEGER NOT NULL REFERENCES clients(id),
-            token       TEXT NOT NULL UNIQUE,
-            expires_at  TEXT NOT NULL,
-            used        INTEGER DEFAULT 0,
-            created_at  TEXT DEFAULT (datetime('now', 'localtime'))
-        );
-
-        CREATE TABLE IF NOT EXISTS campaigns (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id   INTEGER NOT NULL REFERENCES clients(id),
-            name        TEXT NOT NULL,
-            business_type TEXT DEFAULT '',
-            target_audience TEXT DEFAULT '',
-            tone        TEXT DEFAULT 'professional',
-            status      TEXT DEFAULT 'draft',  -- draft, active, paused, completed
-            scheduled_start TEXT,  -- optional: don't send before this datetime
-            created_at  TEXT DEFAULT (datetime('now', 'localtime'))
-        );
-
-        CREATE TABLE IF NOT EXISTS contacts (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-            name        TEXT DEFAULT '',
-            email       TEXT NOT NULL,
-            company     TEXT DEFAULT '',
-            role        TEXT DEFAULT '',
-            language    TEXT DEFAULT 'en',
-            custom_data TEXT DEFAULT '{}',
-            status      TEXT DEFAULT 'pending',  -- pending, sent, replied, bounced, unsubscribed
-            created_at  TEXT DEFAULT (datetime('now', 'localtime'))
-        );
-
-        CREATE TABLE IF NOT EXISTS email_sequences (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-            step        INTEGER NOT NULL DEFAULT 1,  -- 1=initial, 2=followup1, 3=followup2...
-            subject_a   TEXT NOT NULL,
-            subject_b   TEXT DEFAULT '',  -- A/B test variant
-            body_a      TEXT NOT NULL,
-            body_b      TEXT DEFAULT '',
-            delay_days  INTEGER DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS sent_emails (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            contact_id  INTEGER NOT NULL REFERENCES contacts(id),
-            sequence_id INTEGER NOT NULL REFERENCES email_sequences(id),
-            variant     TEXT DEFAULT 'a',  -- a or b
-            subject     TEXT NOT NULL,
-            body        TEXT NOT NULL,
-            status      TEXT DEFAULT 'sent',  -- sent, opened, clicked, replied, bounced
-            sent_at     TEXT DEFAULT (datetime('now', 'localtime')),
-            opened_at   TEXT,
-            replied_at  TEXT,
-            reply_body  TEXT DEFAULT '',
-            reply_sentiment TEXT DEFAULT ''  -- positive, negative, neutral
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_contacts_campaign ON contacts(campaign_id);
-        CREATE INDEX IF NOT EXISTS idx_sent_contact ON sent_emails(contact_id);
-        CREATE INDEX IF NOT EXISTS idx_sent_sequence ON sent_emails(sequence_id);
-
-        -- Mail Hub: triaged inbox emails for day-to-day workers
-        CREATE TABLE IF NOT EXISTS mail_inbox (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id    INTEGER NOT NULL REFERENCES clients(id),
-            message_id   TEXT NOT NULL,          -- IMAP Message-ID header (dedup key)
-            from_name    TEXT DEFAULT '',
-            from_email   TEXT NOT NULL,
-            to_email     TEXT DEFAULT '',
-            subject      TEXT DEFAULT '',
-            body_preview TEXT DEFAULT '',         -- first ~10000 chars
-            received_at  TEXT DEFAULT '',
-            priority     TEXT DEFAULT 'normal',   -- urgent, important, normal, low
-            category     TEXT DEFAULT 'uncategorized', -- action_required, meeting, fyi, newsletter, personal, spam, uncategorized
-            is_read      INTEGER DEFAULT 0,
-            is_starred   INTEGER DEFAULT 0,
-            is_archived  INTEGER DEFAULT 0,
-            snooze_until TEXT,
-            ai_summary   TEXT DEFAULT '',         -- one-line AI summary
-            account_id   INTEGER,                 -- FK to email_accounts (which mailbox)
-            fetched_at   TEXT DEFAULT (datetime('now', 'localtime')),
-            UNIQUE(client_id, message_id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_mail_inbox_client ON mail_inbox(client_id);
-        CREATE INDEX IF NOT EXISTS idx_mail_inbox_priority ON mail_inbox(client_id, priority);
-        CREATE INDEX IF NOT EXISTS idx_mail_inbox_category ON mail_inbox(client_id, category);
-
-        -- Email Accounts: multiple mailboxes per client
-        CREATE TABLE IF NOT EXISTS email_accounts (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id    INTEGER NOT NULL REFERENCES clients(id),
-            label        TEXT NOT NULL DEFAULT '',        -- e.g. "Work Gmail", "Personal"
-            email        TEXT NOT NULL,                   -- email address
-            imap_host    TEXT NOT NULL DEFAULT 'imap.gmail.com',
-            imap_port    INTEGER NOT NULL DEFAULT 993,
-            smtp_host    TEXT NOT NULL DEFAULT 'smtp.gmail.com',
-            smtp_port    INTEGER NOT NULL DEFAULT 465,
-            password     TEXT NOT NULL DEFAULT '',        -- app password
-            is_default   INTEGER DEFAULT 0,
-            created_at   TEXT DEFAULT (datetime('now', 'localtime')),
-            UNIQUE(client_id, email)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_email_accounts_client ON email_accounts(client_id);
-
-        -- Contacts Book: personal CRM for relationship tracking
-        CREATE TABLE IF NOT EXISTS contacts_book (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id       INTEGER NOT NULL REFERENCES clients(id),
-            email           TEXT NOT NULL,
-            name            TEXT DEFAULT '',
-            company         TEXT DEFAULT '',
-            role            TEXT DEFAULT '',
-            relationship    TEXT DEFAULT '',       -- client, colleague, vendor, friend, lead, other
-            notes           TEXT DEFAULT '',       -- free-text notes about this person
-            personality     TEXT DEFAULT '',       -- communication style / personality notes for AI
-            tags            TEXT DEFAULT '',       -- comma-separated tags
-            last_contacted  TEXT DEFAULT '',
-            created_at      TEXT DEFAULT (datetime('now', 'localtime')),
-            UNIQUE(client_id, email)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_contacts_book_client ON contacts_book(client_id);
-        CREATE INDEX IF NOT EXISTS idx_contacts_book_email ON contacts_book(client_id, email);
-
-        -- Scheduled emails: compose now, send later
-        CREATE TABLE IF NOT EXISTS scheduled_emails (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id       INTEGER NOT NULL REFERENCES clients(id),
-            to_email        TEXT NOT NULL,
-            to_name         TEXT DEFAULT '',
-            subject         TEXT NOT NULL,
-            body            TEXT NOT NULL,
-            scheduled_at    TEXT NOT NULL,
-            status          TEXT DEFAULT 'pending',  -- pending, sent, failed
-            sent_at         TEXT,
-            reply_to_mail_id INTEGER,
-            account_id      INTEGER,                -- FK to email_accounts (which mailbox to send from)
-            created_at      TEXT DEFAULT (datetime('now', 'localtime'))
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_scheduled_client ON scheduled_emails(client_id);
-        CREATE INDEX IF NOT EXISTS idx_scheduled_status ON scheduled_emails(status, scheduled_at);
-
-        -- Subscriptions (Stripe billing)
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id       INTEGER NOT NULL UNIQUE REFERENCES clients(id),
-            plan            TEXT NOT NULL DEFAULT 'free',   -- free, growth, pro, unlimited
-            stripe_customer_id   TEXT DEFAULT '',
-            stripe_subscription_id TEXT DEFAULT '',
-            status          TEXT DEFAULT 'active',          -- active, past_due, canceled
-            current_period_start TEXT DEFAULT '',
-            current_period_end   TEXT DEFAULT '',
-            created_at      TEXT DEFAULT (datetime('now', 'localtime')),
-            updated_at      TEXT DEFAULT (datetime('now', 'localtime'))
-        );
-
-        -- Monthly usage tracking
-        CREATE TABLE IF NOT EXISTS usage_tracking (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id       INTEGER NOT NULL REFERENCES clients(id),
-            month           TEXT NOT NULL,                  -- YYYY-MM
-            emails_sent     INTEGER DEFAULT 0,
-            mail_hub_syncs  INTEGER DEFAULT 0,
-            ai_classifications INTEGER DEFAULT 0,
-            UNIQUE(client_id, month)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_usage_client_month ON usage_tracking(client_id, month);
-        """)
-        # Migrations for existing databases
-        try:
-            db.execute("ALTER TABLE sent_emails ADD COLUMN reply_body TEXT DEFAULT ''")
-        except Exception:
-            pass
-        try:
-            db.execute("ALTER TABLE sent_emails ADD COLUMN reply_sentiment TEXT DEFAULT ''")
-        except Exception:
-            pass
-        try:
-            db.execute("ALTER TABLE mail_inbox ADD COLUMN snooze_note TEXT DEFAULT ''")
-        except Exception:
-            pass
-        try:
-            db.execute("ALTER TABLE clients ADD COLUMN mail_preferences TEXT DEFAULT ''")
-        except Exception:
-            pass
-        # Ensure subscriptions table exists (migration)
-        try:
-            db.execute("""CREATE TABLE IF NOT EXISTS subscriptions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                client_id INTEGER NOT NULL UNIQUE REFERENCES clients(id),
-                plan TEXT NOT NULL DEFAULT 'free',
-                stripe_customer_id TEXT DEFAULT '',
-                stripe_subscription_id TEXT DEFAULT '',
-                status TEXT DEFAULT 'active',
-                current_period_start TEXT DEFAULT '',
-                current_period_end TEXT DEFAULT '',
-                created_at TEXT DEFAULT (datetime('now', 'localtime')),
-                updated_at TEXT DEFAULT (datetime('now', 'localtime'))
-            )""")
-        except Exception:
-            pass
-        try:
-            db.execute("""CREATE TABLE IF NOT EXISTS usage_tracking (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                client_id INTEGER NOT NULL REFERENCES clients(id),
-                month TEXT NOT NULL,
-                emails_sent INTEGER DEFAULT 0,
-                mail_hub_syncs INTEGER DEFAULT 0,
-                ai_classifications INTEGER DEFAULT 0,
-                UNIQUE(client_id, month)
-            )""")
-        except Exception:
-            pass
-        # Migration: email_accounts table
-        try:
-            db.execute("""CREATE TABLE IF NOT EXISTS email_accounts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                client_id INTEGER NOT NULL REFERENCES clients(id),
-                label TEXT NOT NULL DEFAULT '',
-                email TEXT NOT NULL,
-                imap_host TEXT NOT NULL DEFAULT 'imap.gmail.com',
-                imap_port INTEGER NOT NULL DEFAULT 993,
-                smtp_host TEXT NOT NULL DEFAULT 'smtp.gmail.com',
-                smtp_port INTEGER NOT NULL DEFAULT 465,
-                password TEXT NOT NULL DEFAULT '',
-                is_default INTEGER DEFAULT 0,
-                created_at TEXT DEFAULT (datetime('now', 'localtime')),
-                UNIQUE(client_id, email)
-            )""")
-        except Exception:
-            pass
-        # Migration: add account_id to mail_inbox
-        try:
-            db.execute("ALTER TABLE mail_inbox ADD COLUMN account_id INTEGER")
-        except Exception:
-            pass
-        # Migration: add account_id to scheduled_emails
-        try:
-            db.execute("ALTER TABLE scheduled_emails ADD COLUMN account_id INTEGER")
-        except Exception:
-            pass
-        # Migration: add is_admin column to clients
-        try:
-            db.execute("ALTER TABLE clients ADD COLUMN is_admin INTEGER DEFAULT 0")
-        except Exception:
-            pass
-        # Migration: add scheduled_start column to campaigns
-        try:
-            db.execute("ALTER TABLE campaigns ADD COLUMN scheduled_start TEXT")
-        except Exception:
-            pass
-        # Migration: team_members table
-        try:
-            db.execute("""CREATE TABLE IF NOT EXISTS team_members (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                owner_id INTEGER NOT NULL REFERENCES clients(id),
-                member_email TEXT NOT NULL,
-                member_client_id INTEGER REFERENCES clients(id),
-                role TEXT NOT NULL DEFAULT 'member',
-                status TEXT NOT NULL DEFAULT 'pending',
-                invite_token TEXT,
-                campaign_id INTEGER REFERENCES campaigns(id),
-                invited_at TEXT DEFAULT (datetime('now', 'localtime')),
-                accepted_at TEXT,
-                UNIQUE(owner_id, member_email)
-            )""")
-        except Exception:
-            pass
-        # Migration: add campaign_id column to existing team_members
-        try:
-            db.execute("ALTER TABLE team_members ADD COLUMN campaign_id INTEGER REFERENCES campaigns(id)")
-        except Exception:
-            pass
-        # Migration: add mail_exclusions column to clients
-        try:
-            db.execute("ALTER TABLE clients ADD COLUMN mail_exclusions TEXT DEFAULT ''")
-        except Exception:
-            pass
-        # Migration: add language column to contacts_book
-        try:
-            db.execute("ALTER TABLE contacts_book ADD COLUMN language TEXT DEFAULT ''")
-        except Exception:
-            pass
+        if _USE_PG:
+            cur = db.cursor()
+            cur.execute(_PG_SCHEMA)
+        else:
+            db.executescript(_SQLITE_SCHEMA)
     print("Database initialized.")
+
+
+# ---------------------------------------------------------------------------
+# Helpers for datetime — cross-engine
+# ---------------------------------------------------------------------------
+
+def _now_expr():
+    """SQL expression for current timestamp."""
+    return "NOW()" if _USE_PG else "datetime('now', 'localtime')"
+
+
+def _date_diff_days(col):
+    """SQL expression: fractional days since `col` until now."""
+    if _USE_PG:
+        return f"EXTRACT(EPOCH FROM NOW() - {col}::timestamp) / 86400.0"
+    return f"julianday('now', 'localtime') - julianday({col})"
+
+
+def _n_days_ago(n):
+    """SQL expression for the date N days ago."""
+    if _USE_PG:
+        return f"(CURRENT_DATE - INTERVAL '{n} days')::text"
+    return f"DATE('now', 'localtime', '-{n} days')"
+
+
+def _date_plus_days(col, days_col):
+    """SQL expression: col + days_col days (both column names)."""
+    if _USE_PG:
+        return f"({col}::date + ({days_col} || ' days')::interval)"
+    return f"date({col}, '+' || {days_col} || ' days')"
+
+
+def _dow_expr(col):
+    """Day of week (0=Sun for SQLite, 0=Sun for PG via DOW)."""
+    if _USE_PG:
+        return f"EXTRACT(DOW FROM {col}::timestamp)::int"
+    return f"CAST(strftime('%w', {col}) AS INTEGER)"
+
+
+def _hour_expr(col):
+    """Hour of day."""
+    if _USE_PG:
+        return f"EXTRACT(HOUR FROM {col}::timestamp)::int"
+    return f"CAST(strftime('%H', {col}) AS INTEGER)"
+
+
+def _date_expr(col):
+    """Extract date from timestamp."""
+    if _USE_PG:
+        return f"({col})::date::text"
+    return f"DATE({col})"
+
+
+# ---------------------------------------------------------------------------
+# Clients
+# ---------------------------------------------------------------------------
 
 def create_client(name: str, email: str, password_hash: str, business: str = "") -> int:
     with get_db() as db:
-        cur = db.execute(
-            "INSERT INTO clients (name, email, password, business) VALUES (?, ?, ?, ?)",
+        return _insert_returning_id(
+            db,
+            "INSERT INTO clients (name, email, password, business) VALUES (%s, %s, %s, %s) RETURNING id",
             (name, email, password_hash, business),
         )
-        return cur.lastrowid
 
 
 def get_client_by_email(email: str) -> dict | None:
     with get_db() as db:
-        row = db.execute("SELECT * FROM clients WHERE email = ?", (email,)).fetchone()
-        return dict(row) if row else None
+        return _fetchone(db, "SELECT * FROM clients WHERE email = %s", (email,))
+
+
+def get_client(client_id: int) -> dict | None:
+    with get_db() as db:
+        return _fetchone(db, "SELECT * FROM clients WHERE id = %s", (client_id,))
+
+
+def get_all_client_emails() -> list[dict]:
+    with get_db() as db:
+        return _fetchall(db, "SELECT id, name, email FROM clients ORDER BY id")
+
+
+def update_client(client_id: int, name: str, business: str):
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET name = %s, business = %s WHERE id = %s",
+              (name, business, client_id))
+
+
+def update_client_password(client_id: int, password_hash: str):
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET password = %s WHERE id = %s",
+              (password_hash, client_id))
+
+
+def update_mail_preferences(client_id: int, preferences: str):
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET mail_preferences = %s WHERE id = %s",
+              (preferences, client_id))
+
+
+def get_mail_preferences(client_id: int) -> str:
+    with get_db() as db:
+        val = _fetchval(db, "SELECT mail_preferences FROM clients WHERE id = %s",
+                        (client_id,))
+        return (val or "")
+
+
+def update_mail_exclusions(client_id: int, exclusions: str):
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET mail_exclusions = %s WHERE id = %s",
+              (exclusions, client_id))
+
+
+def get_mail_exclusions(client_id: int) -> str:
+    with get_db() as db:
+        val = _fetchval(db, "SELECT mail_exclusions FROM clients WHERE id = %s",
+                        (client_id,))
+        return (val or "")
+
+
+# ---------------------------------------------------------------------------
+# Password reset
+# ---------------------------------------------------------------------------
+
+def create_reset_token(client_id: int, token: str, expires_at: str):
+    with get_db() as db:
+        _exec(db,
+              "INSERT INTO password_reset_tokens (client_id, token, expires_at) VALUES (%s, %s, %s)",
+              (client_id, token, expires_at))
+
+
+def get_valid_reset_token(token: str) -> dict | None:
+    with get_db() as db:
+        now = _now_expr()
+        return _fetchone(db,
+            f"SELECT * FROM password_reset_tokens WHERE token = %s AND used = 0 AND expires_at > {now}",
+            (token,))
+
+
+def mark_reset_token_used(token: str):
+    with get_db() as db:
+        _exec(db, "UPDATE password_reset_tokens SET used = 1 WHERE token = %s", (token,))
 
 
 # ---------------------------------------------------------------------------
@@ -382,42 +686,31 @@ def get_client_by_email(email: str) -> dict | None:
 
 def get_email_accounts(client_id: int) -> list[dict]:
     with get_db() as db:
-        rows = db.execute(
-            "SELECT * FROM email_accounts WHERE client_id = ? ORDER BY is_default DESC, created_at ASC",
-            (client_id,),
-        ).fetchall()
-        result = []
-        for r in rows:
-            d = dict(r)
+        rows = _fetchall(db,
+            "SELECT * FROM email_accounts WHERE client_id = %s ORDER BY is_default DESC, created_at ASC",
+            (client_id,))
+        for d in rows:
             d["password"] = decrypt_password(d["password"])
-            result.append(d)
-        return result
+        return rows
 
 
 def get_email_account(account_id: int, client_id: int) -> dict | None:
     with get_db() as db:
-        row = db.execute(
-            "SELECT * FROM email_accounts WHERE id = ? AND client_id = ?",
-            (account_id, client_id),
-        ).fetchone()
-        if not row:
-            return None
-        d = dict(row)
-        d["password"] = decrypt_password(d["password"])
+        d = _fetchone(db,
+            "SELECT * FROM email_accounts WHERE id = %s AND client_id = %s",
+            (account_id, client_id))
+        if d:
+            d["password"] = decrypt_password(d["password"])
         return d
 
 
 def get_default_email_account(client_id: int) -> dict | None:
-    """Get the default email account, or the first one if no default set."""
     with get_db() as db:
-        row = db.execute(
-            "SELECT * FROM email_accounts WHERE client_id = ? ORDER BY is_default DESC, id ASC LIMIT 1",
-            (client_id,),
-        ).fetchone()
-        if not row:
-            return None
-        d = dict(row)
-        d["password"] = decrypt_password(d["password"])
+        d = _fetchone(db,
+            "SELECT * FROM email_accounts WHERE client_id = %s ORDER BY is_default DESC, id ASC LIMIT 1",
+            (client_id,))
+        if d:
+            d["password"] = decrypt_password(d["password"])
         return d
 
 
@@ -426,19 +719,19 @@ def create_email_account(client_id: int, label: str, email: str, password: str,
                          smtp_host: str = "smtp.gmail.com", smtp_port: int = 465,
                          is_default: int = 0) -> int:
     with get_db() as db:
-        # If setting as default, unset other defaults
         if is_default:
-            db.execute("UPDATE email_accounts SET is_default = 0 WHERE client_id = ?", (client_id,))
-        # If this is the first account, make it default
-        existing = db.execute("SELECT COUNT(*) FROM email_accounts WHERE client_id = ?", (client_id,)).fetchone()[0]
+            _exec(db, "UPDATE email_accounts SET is_default = 0 WHERE client_id = %s", (client_id,))
+        existing = _fetchval(db, "SELECT COUNT(*) FROM email_accounts WHERE client_id = %s", (client_id,))
         if existing == 0:
             is_default = 1
-        cur = db.execute("""
-            INSERT INTO email_accounts (client_id, label, email, imap_host, imap_port,
-                                        smtp_host, smtp_port, password, is_default)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (client_id, label, email, imap_host, imap_port, smtp_host, smtp_port, encrypt_password(password), is_default))
-        return cur.lastrowid
+        return _insert_returning_id(
+            db,
+            """INSERT INTO email_accounts (client_id, label, email, imap_host, imap_port,
+                                           smtp_host, smtp_port, password, is_default)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (client_id, label, email, imap_host, imap_port, smtp_host, smtp_port,
+             encrypt_password(password), is_default),
+        )
 
 
 def update_email_account(account_id: int, client_id: int, **kwargs) -> bool:
@@ -446,199 +739,278 @@ def update_email_account(account_id: int, client_id: int, **kwargs) -> bool:
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return False
-    # Encrypt password if being updated
     if "password" in updates:
         updates["password"] = encrypt_password(updates["password"])
     with get_db() as db:
         if updates.get("is_default"):
-            db.execute("UPDATE email_accounts SET is_default = 0 WHERE client_id = ?", (client_id,))
-        sets = ", ".join(f"{k} = ?" for k in updates)
+            _exec(db, "UPDATE email_accounts SET is_default = 0 WHERE client_id = %s", (client_id,))
+        sets = ", ".join(f"{k} = %s" for k in updates)
         vals = list(updates.values()) + [account_id, client_id]
-        db.execute(f"UPDATE email_accounts SET {sets} WHERE id = ? AND client_id = ?", vals)
+        _exec(db, f"UPDATE email_accounts SET {sets} WHERE id = %s AND client_id = %s", vals)
         return True
 
 
 def delete_email_account(account_id: int, client_id: int) -> bool:
     with get_db() as db:
-        db.execute("DELETE FROM email_accounts WHERE id = ? AND client_id = ?",
-                   (account_id, client_id))
-        # If we deleted the default, promote the next one
-        remaining = db.execute(
-            "SELECT id FROM email_accounts WHERE client_id = ? LIMIT 1",
-            (client_id,)).fetchone()
+        _exec(db, "DELETE FROM email_accounts WHERE id = %s AND client_id = %s",
+              (account_id, client_id))
+        remaining = _fetchone(db, "SELECT id FROM email_accounts WHERE client_id = %s LIMIT 1",
+                              (client_id,))
         if remaining:
-            db.execute("UPDATE email_accounts SET is_default = 1 WHERE id = ?", (remaining[0],))
+            _exec(db, "UPDATE email_accounts SET is_default = 1 WHERE id = %s", (remaining["id"],))
         return True
 
+
+# ---------------------------------------------------------------------------
+# Campaigns
+# ---------------------------------------------------------------------------
 
 def create_campaign(client_id: int, name: str, business_type: str,
                     target_audience: str, tone: str, scheduled_start: str = "") -> int:
     with get_db() as db:
-        cur = db.execute(
+        return _insert_returning_id(
+            db,
             "INSERT INTO campaigns (client_id, name, business_type, target_audience, tone, scheduled_start) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
             (client_id, name, business_type, target_audience, tone, scheduled_start or None),
         )
-        return cur.lastrowid
 
 
 def update_campaign_schedule(campaign_id: int, scheduled_start: str):
     with get_db() as db:
-        db.execute("UPDATE campaigns SET scheduled_start = ? WHERE id = ?",
-                   (scheduled_start or None, campaign_id))
+        _exec(db, "UPDATE campaigns SET scheduled_start = %s WHERE id = %s",
+              (scheduled_start or None, campaign_id))
 
 
 def get_campaigns(client_id: int) -> list[dict]:
     with get_db() as db:
-        rows = db.execute(
-            "SELECT * FROM campaigns WHERE client_id = ? ORDER BY created_at DESC",
-            (client_id,),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        return _fetchall(db,
+            "SELECT * FROM campaigns WHERE client_id = %s ORDER BY created_at DESC",
+            (client_id,))
 
 
 def get_campaign(campaign_id: int) -> dict | None:
     with get_db() as db:
-        row = db.execute("SELECT * FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
-        return dict(row) if row else None
+        return _fetchone(db, "SELECT * FROM campaigns WHERE id = %s", (campaign_id,))
 
+
+def update_campaign_status(campaign_id: int, status: str):
+    with get_db() as db:
+        _exec(db, "UPDATE campaigns SET status = %s WHERE id = %s", (status, campaign_id))
+
+
+def delete_campaign(campaign_id: int):
+    with get_db() as db:
+        _exec(db, """DELETE FROM sent_emails WHERE contact_id IN
+                     (SELECT id FROM contacts WHERE campaign_id = %s)""", (campaign_id,))
+        _exec(db, """DELETE FROM sent_emails WHERE sequence_id IN
+                     (SELECT id FROM email_sequences WHERE campaign_id = %s)""", (campaign_id,))
+        _exec(db, "DELETE FROM campaigns WHERE id = %s", (campaign_id,))
+
+
+def duplicate_campaign(campaign_id: int, client_id: int) -> int | None:
+    with get_db() as db:
+        camp = _fetchone(db, "SELECT * FROM campaigns WHERE id = %s", (campaign_id,))
+        if not camp:
+            return None
+        new_id = _insert_returning_id(
+            db,
+            "INSERT INTO campaigns (client_id, name, business_type, target_audience, tone, status) "
+            "VALUES (%s, %s, %s, %s, %s, 'draft') RETURNING id",
+            (client_id, camp["name"] + " (copy)", camp["business_type"],
+             camp["target_audience"], camp["tone"]),
+        )
+        seqs = _fetchall(db,
+            "SELECT * FROM email_sequences WHERE campaign_id = %s ORDER BY step",
+            (campaign_id,))
+        for s in seqs:
+            _exec(db,
+                "INSERT INTO email_sequences (campaign_id, step, subject_a, subject_b, body_a, body_b, delay_days) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (new_id, s["step"], s["subject_a"], s["subject_b"],
+                 s["body_a"], s["body_b"], s["delay_days"]))
+        return new_id
+
+
+# ---------------------------------------------------------------------------
+# Contacts
+# ---------------------------------------------------------------------------
 
 def add_contacts(campaign_id: int, contacts: list[dict]) -> int:
     with get_db() as db:
-        # Ensure language column exists (migration for existing DBs)
-        try:
-            db.execute("ALTER TABLE contacts ADD COLUMN language TEXT DEFAULT 'en'")
-        except Exception:
-            pass  # column already exists
         count = 0
         for c in contacts:
             try:
-                db.execute(
+                _exec(db,
                     "INSERT INTO contacts (campaign_id, name, email, company, role, language) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
                     (campaign_id, c.get("name", ""), c["email"],
                      c.get("company", ""), c.get("role", ""),
-                     c.get("language", "en")),
-                )
+                     c.get("language", "en")))
                 count += 1
-            except sqlite3.IntegrityError:
-                pass  # duplicate
+            except Exception:
+                if _USE_PG:
+                    db.rollback()  # PG requires rollback after error in tx
+                pass
         return count
 
 
 def get_campaign_contacts(campaign_id: int, status: str | None = None) -> list[dict]:
     with get_db() as db:
         if status:
-            rows = db.execute(
-                "SELECT * FROM contacts WHERE campaign_id = ? AND status = ?",
-                (campaign_id, status),
-            ).fetchall()
-        else:
-            rows = db.execute(
-                "SELECT * FROM contacts WHERE campaign_id = ?",
-                (campaign_id,),
-            ).fetchall()
-        return [dict(r) for r in rows]
+            return _fetchall(db,
+                "SELECT * FROM contacts WHERE campaign_id = %s AND status = %s",
+                (campaign_id, status))
+        return _fetchall(db,
+            "SELECT * FROM contacts WHERE campaign_id = %s",
+            (campaign_id,))
 
+
+def delete_contact(contact_id: int):
+    with get_db() as db:
+        _exec(db, "DELETE FROM sent_emails WHERE contact_id = %s", (contact_id,))
+        _exec(db, "DELETE FROM contacts WHERE id = %s", (contact_id,))
+
+
+# ---------------------------------------------------------------------------
+# Sequences
+# ---------------------------------------------------------------------------
 
 def save_sequence(campaign_id: int, step: int, subject_a: str, subject_b: str,
                   body_a: str, body_b: str, delay_days: int = 0) -> int:
     with get_db() as db:
-        cur = db.execute(
+        return _insert_returning_id(
+            db,
             "INSERT INTO email_sequences (campaign_id, step, subject_a, subject_b, "
-            "body_a, body_b, delay_days) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "body_a, body_b, delay_days) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (campaign_id, step, subject_a, subject_b, body_a, body_b, delay_days),
         )
-        return cur.lastrowid
 
 
 def get_sequences(campaign_id: int) -> list[dict]:
     with get_db() as db:
-        rows = db.execute(
-            "SELECT * FROM email_sequences WHERE campaign_id = ? ORDER BY step",
-            (campaign_id,),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        return _fetchall(db,
+            "SELECT * FROM email_sequences WHERE campaign_id = %s ORDER BY step",
+            (campaign_id,))
 
+
+def update_sequence(seq_id: int, subject_a: str, subject_b: str,
+                    body_a: str, delay_days: int):
+    with get_db() as db:
+        _exec(db,
+            "UPDATE email_sequences SET subject_a=%s, subject_b=%s, body_a=%s, delay_days=%s "
+            "WHERE id=%s",
+            (subject_a, subject_b, body_a, delay_days, seq_id))
+
+
+def delete_sequence(seq_id: int):
+    with get_db() as db:
+        _exec(db, "DELETE FROM email_sequences WHERE id = %s", (seq_id,))
+
+
+# ---------------------------------------------------------------------------
+# Sent emails & tracking
+# ---------------------------------------------------------------------------
 
 def record_sent(contact_id: int, sequence_id: int, variant: str,
                 subject: str, body: str) -> int:
     with get_db() as db:
-        cur = db.execute(
+        sent_id = _insert_returning_id(
+            db,
             "INSERT INTO sent_emails (contact_id, sequence_id, variant, subject, body) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
             (contact_id, sequence_id, variant, subject, body),
         )
-        db.execute("UPDATE contacts SET status = 'sent' WHERE id = ?", (contact_id,))
-        return cur.lastrowid
+        _exec(db, "UPDATE contacts SET status = 'sent' WHERE id = %s", (contact_id,))
+        return sent_id
 
 
 def delete_sent_email(sent_id: int, contact_id: int):
-    """Remove a sent_email record (e.g. if SMTP failed) and reset contact to pending."""
     with get_db() as db:
-        db.execute("DELETE FROM sent_emails WHERE id = ?", (sent_id,))
-        # Reset contact only if no other sent_emails exist for this contact
-        other = db.execute(
-            "SELECT COUNT(*) FROM sent_emails WHERE contact_id = ?", (contact_id,)
-        ).fetchone()[0]
+        _exec(db, "DELETE FROM sent_emails WHERE id = %s", (sent_id,))
+        other = _fetchval(db, "SELECT COUNT(*) FROM sent_emails WHERE contact_id = %s", (contact_id,))
         if other == 0:
-            db.execute("UPDATE contacts SET status = 'pending' WHERE id = ?", (contact_id,))
+            _exec(db, "UPDATE contacts SET status = 'pending' WHERE id = %s", (contact_id,))
 
 
 def record_open(sent_email_id: int):
     with get_db() as db:
-        db.execute(
-            "UPDATE sent_emails SET status = 'opened', opened_at = datetime('now', 'localtime') WHERE id = ? AND status = 'sent'",
-            (sent_email_id,),
-        )
-        # Also update contact status to 'opened' if it's still 'sent'
-        db.execute("""
+        now = _now_expr()
+        _exec(db,
+            f"UPDATE sent_emails SET status = 'opened', opened_at = {now} WHERE id = %s AND status = 'sent'",
+            (sent_email_id,))
+        _exec(db, """
             UPDATE contacts SET status = 'opened'
-            WHERE id = (SELECT contact_id FROM sent_emails WHERE id = ?)
+            WHERE id = (SELECT contact_id FROM sent_emails WHERE id = %s)
               AND status = 'sent'
         """, (sent_email_id,))
 
 
+def record_reply(contact_email: str, reply_body: str = "", reply_sentiment: str = "") -> bool:
+    with get_db() as db:
+        row = _fetchone(db,
+            "SELECT c.id as contact_id, se.id as sent_id "
+            "FROM contacts c "
+            "JOIN sent_emails se ON se.contact_id = c.id "
+            "WHERE LOWER(c.email) = LOWER(%s) AND c.status != 'replied' "
+            "ORDER BY se.sent_at DESC LIMIT 1",
+            (contact_email,))
+        if not row:
+            return False
+        now = _now_expr()
+        _exec(db, "UPDATE contacts SET status = 'replied' WHERE id = %s",
+              (row["contact_id"],))
+        _exec(db,
+            f"UPDATE sent_emails SET status = 'replied', replied_at = {now}, "
+            "reply_body = %s, reply_sentiment = %s WHERE id = %s",
+            (reply_body, reply_sentiment, row["sent_id"]))
+        return True
+
+
+def get_all_sent_recipient_emails() -> set[str]:
+    with get_db() as db:
+        rows = _fetchall(db,
+            "SELECT DISTINCT LOWER(c.email) as email FROM contacts c "
+            "JOIN sent_emails se ON se.contact_id = c.id "
+            "WHERE c.status != 'replied'")
+        return {r["email"] for r in rows}
+
+
+# ---------------------------------------------------------------------------
+# Stats
+# ---------------------------------------------------------------------------
+
 def get_campaign_stats(campaign_id: int) -> dict:
     with get_db() as db:
-        total = db.execute(
-            "SELECT COUNT(*) FROM contacts WHERE campaign_id = ?", (campaign_id,)
-        ).fetchone()[0]
-        sent = db.execute(
+        total = _fetchval(db, "SELECT COUNT(*) FROM contacts WHERE campaign_id = %s", (campaign_id,))
+        sent = _fetchval(db,
             "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "WHERE c.campaign_id = ?", (campaign_id,)
-        ).fetchone()[0]
-        opened = db.execute(
+            "WHERE c.campaign_id = %s", (campaign_id,))
+        opened = _fetchval(db,
             "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "WHERE c.campaign_id = ? AND se.status IN ('opened', 'clicked', 'replied')",
-            (campaign_id,),
-        ).fetchone()[0]
-        replied = db.execute(
+            "WHERE c.campaign_id = %s AND se.status IN ('opened', 'clicked', 'replied')",
+            (campaign_id,))
+        replied = _fetchval(db,
             "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "WHERE c.campaign_id = ? AND se.status = 'replied'",
-            (campaign_id,),
-        ).fetchone()[0]
-        bounced = db.execute(
+            "WHERE c.campaign_id = %s AND se.status = 'replied'", (campaign_id,))
+        bounced = _fetchval(db,
             "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "WHERE c.campaign_id = ? AND se.status = 'bounced'",
-            (campaign_id,),
-        ).fetchone()[0]
+            "WHERE c.campaign_id = %s AND se.status = 'bounced'", (campaign_id,))
         return {
-            "total_contacts": total,
-            "emails_sent": sent,
-            "opens": opened,
-            "open_rate": opened / sent if sent else 0,
-            "replies": replied,
-            "reply_rate": replied / sent if sent else 0,
-            "bounced": bounced,
-            "bounce_rate": bounced / sent if sent else 0,
+            "total_contacts": total or 0,
+            "emails_sent": sent or 0,
+            "opens": opened or 0,
+            "open_rate": (opened or 0) / sent if sent else 0,
+            "replies": replied or 0,
+            "reply_rate": (replied or 0) / sent if sent else 0,
+            "bounced": bounced or 0,
+            "bounce_rate": (bounced or 0) / sent if sent else 0,
         }
 
 
 def get_ab_stats(campaign_id: int) -> list[dict]:
-    """Return A/B variant comparison stats per sequence step."""
     with get_db() as db:
-        rows = db.execute("""
+        return _fetchall(db, """
             SELECT es.step, se.variant,
                    COUNT(*) AS sent,
                    SUM(CASE WHEN se.status IN ('opened','clicked','replied') THEN 1 ELSE 0 END) AS opened,
@@ -647,21 +1019,94 @@ def get_ab_stats(campaign_id: int) -> list[dict]:
             FROM sent_emails se
             JOIN contacts c ON se.contact_id = c.id
             JOIN email_sequences es ON se.sequence_id = es.id
-            WHERE c.campaign_id = ?
+            WHERE c.campaign_id = %s
             GROUP BY es.step, se.variant
             ORDER BY es.step, se.variant
-        """, (campaign_id,)).fetchall()
-        return [dict(r) for r in rows]
+        """, (campaign_id,))
 
+
+def get_global_stats(client_id: int) -> dict:
+    with get_db() as db:
+        total_camps = _fetchval(db, "SELECT COUNT(*) FROM campaigns WHERE client_id = %s", (client_id,))
+        active_camps = _fetchval(db, "SELECT COUNT(*) FROM campaigns WHERE client_id = %s AND status = 'active'", (client_id,))
+        total_contacts = _fetchval(db,
+            "SELECT COUNT(*) FROM contacts c JOIN campaigns camp ON c.campaign_id = camp.id WHERE camp.client_id = %s",
+            (client_id,))
+        total_sent = _fetchval(db,
+            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
+            "JOIN campaigns camp ON c.campaign_id = camp.id WHERE camp.client_id = %s", (client_id,))
+        total_opened = _fetchval(db,
+            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
+            "JOIN campaigns camp ON c.campaign_id = camp.id "
+            "WHERE camp.client_id = %s AND se.status IN ('opened', 'clicked', 'replied')", (client_id,))
+        total_replied = _fetchval(db,
+            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
+            "JOIN campaigns camp ON c.campaign_id = camp.id "
+            "WHERE camp.client_id = %s AND se.status = 'replied'", (client_id,))
+        total_bounced = _fetchval(db,
+            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
+            "JOIN campaigns camp ON c.campaign_id = camp.id "
+            "WHERE camp.client_id = %s AND se.status = 'bounced'", (client_id,))
+        ts = total_sent or 0
+        return {
+            "total_campaigns": total_camps or 0,
+            "active_campaigns": active_camps or 0,
+            "total_contacts": total_contacts or 0,
+            "total_sent": ts,
+            "total_opened": total_opened or 0,
+            "open_rate": (total_opened or 0) / ts if ts else 0,
+            "total_replied": total_replied or 0,
+            "reply_rate": (total_replied or 0) / ts if ts else 0,
+            "total_bounced": total_bounced or 0,
+            "bounce_rate": (total_bounced or 0) / ts if ts else 0,
+        }
+
+
+def get_daily_analytics(client_id: int, days: int = 30) -> list[dict]:
+    with get_db() as db:
+        date_col = _date_expr("se.sent_at")
+        since = _n_days_ago(days)
+        return _fetchall(db, f"""
+            SELECT {date_col} AS day,
+              COUNT(*) AS sent,
+              SUM(CASE WHEN se.status IN ('opened','clicked','replied') THEN 1 ELSE 0 END) AS opened,
+              SUM(CASE WHEN se.status = 'replied' THEN 1 ELSE 0 END) AS replied,
+              SUM(CASE WHEN se.status = 'bounced' THEN 1 ELSE 0 END) AS bounced
+            FROM sent_emails se
+            JOIN contacts c ON se.contact_id = c.id
+            JOIN campaigns camp ON c.campaign_id = camp.id
+            WHERE camp.client_id = %s AND se.sent_at >= {since}
+            GROUP BY day ORDER BY day
+        """, (client_id,))
+
+
+def get_send_time_stats(client_id: int) -> list[dict]:
+    with get_db() as db:
+        dow = _dow_expr("se.sent_at")
+        hour = _hour_expr("se.sent_at")
+        return _fetchall(db, f"""
+            SELECT {dow} as dow, {hour} as hour,
+                   COUNT(*) as total,
+                   SUM(CASE WHEN se.status IN ('opened','clicked','replied') THEN 1 ELSE 0 END) as opens
+            FROM sent_emails se
+            JOIN contacts c ON se.contact_id = c.id
+            JOIN campaigns camp ON c.campaign_id = camp.id
+            WHERE camp.client_id = %s
+            GROUP BY dow, hour
+            ORDER BY dow, hour
+        """, (client_id,))
+
+
+# ---------------------------------------------------------------------------
+# Emails to send (worker)
+# ---------------------------------------------------------------------------
 
 def get_emails_to_send(limit: int = 50) -> list[dict]:
-    """Get pending contacts from active campaigns that haven't been emailed yet (step 1),
-    or contacts due for a follow-up."""
     with get_db() as db:
         results = []
+        now = _now_expr()
 
-        # Step 1: contacts never emailed in active campaigns
-        rows = db.execute("""
+        rows = _fetchall(db, f"""
             SELECT c.id as contact_id, c.name, c.email, c.company, c.role,
                    c.language,
                    c.campaign_id, camp.tone, camp.business_type, camp.target_audience,
@@ -672,15 +1117,17 @@ def get_emails_to_send(limit: int = 50) -> list[dict]:
             WHERE camp.status = 'active'
               AND c.status = 'pending'
               AND c.id NOT IN (SELECT contact_id FROM sent_emails)
-              AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= datetime('now', 'localtime'))
-            LIMIT ?
-        """, (limit,)).fetchall()
-        results.extend(dict(r) for r in rows)
+              AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= {now})
+            LIMIT %s
+        """, (limit,))
+        results.extend(rows)
 
         remaining = limit - len(results)
         if remaining <= 0:
             return results
-        followup_rows = db.execute("""
+
+        diff = _date_diff_days("se.sent_at")
+        followup_rows = _fetchall(db, f"""
             SELECT c.id as contact_id, c.name, c.email, c.company, c.role,
                    c.language,
                    c.campaign_id, camp.tone, camp.business_type, camp.target_audience,
@@ -695,289 +1142,30 @@ def get_emails_to_send(limit: int = 50) -> list[dict]:
             WHERE camp.status = 'active'
               AND c.status NOT IN ('replied', 'bounced', 'unsubscribed')
               AND se.status NOT IN ('replied', 'bounced')
-              AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= datetime('now', 'localtime'))
-              -- Enough days have passed since the last email
-              AND julianday('now', 'localtime') - julianday(se.sent_at) >= next_seq.delay_days
-              -- Haven't already sent this next step
+              AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= {now})
+              AND {diff} >= next_seq.delay_days
               AND NOT EXISTS (
                   SELECT 1 FROM sent_emails se2
                   WHERE se2.contact_id = c.id AND se2.sequence_id = next_seq.id
               )
-              -- This sent_email is the latest step for this contact
               AND NOT EXISTS (
                   SELECT 1 FROM sent_emails se3
                   JOIN email_sequences es3 ON se3.sequence_id = es3.id
                   WHERE se3.contact_id = c.id AND es3.step > last_seq.step
               )
-            LIMIT ?
-        """, (remaining,)).fetchall()
-        results.extend(dict(r) for r in followup_rows)
-
+            LIMIT %s
+        """, (remaining,))
+        results.extend(followup_rows)
         return results
 
 
-def record_reply(contact_email: str, reply_body: str = "", reply_sentiment: str = "") -> bool:
-    """Mark a contact as replied based on their email address.
-    Returns True if a matching contact was found and updated."""
-    with get_db() as db:
-        row = db.execute(
-            "SELECT c.id as contact_id, se.id as sent_id "
-            "FROM contacts c "
-            "JOIN sent_emails se ON se.contact_id = c.id "
-            "WHERE LOWER(c.email) = LOWER(?) AND c.status != 'replied' "
-            "ORDER BY se.sent_at DESC LIMIT 1",
-            (contact_email,),
-        ).fetchone()
-        if not row:
-            return False
-        db.execute(
-            "UPDATE contacts SET status = 'replied' WHERE id = ?",
-            (row["contact_id"],),
-        )
-        db.execute(
-            "UPDATE sent_emails SET status = 'replied', replied_at = datetime('now', 'localtime'), "
-            "reply_body = ?, reply_sentiment = ? WHERE id = ?",
-            (reply_body, reply_sentiment, row["sent_id"]),
-        )
-        return True
-
-
-def get_all_sent_recipient_emails() -> set[str]:
-    """Return the set of all email addresses we've sent to (for IMAP reply matching)."""
-    with get_db() as db:
-        rows = db.execute(
-            "SELECT DISTINCT LOWER(c.email) as email FROM contacts c "
-            "JOIN sent_emails se ON se.contact_id = c.id "
-            "WHERE c.status != 'replied'"
-        ).fetchall()
-        return {r["email"] for r in rows}
-
-
-def delete_campaign(campaign_id: int):
-    """Delete a campaign and all related data (cascade)."""
-    with get_db() as db:
-        # Delete sent_emails first (no ON DELETE CASCADE on its FKs)
-        db.execute("""DELETE FROM sent_emails WHERE contact_id IN
-                      (SELECT id FROM contacts WHERE campaign_id = ?)""", (campaign_id,))
-        db.execute("""DELETE FROM sent_emails WHERE sequence_id IN
-                      (SELECT id FROM email_sequences WHERE campaign_id = ?)""", (campaign_id,))
-        db.execute("DELETE FROM campaigns WHERE id = ?", (campaign_id,))
-
-
-def update_campaign_status(campaign_id: int, status: str):
-    with get_db() as db:
-        db.execute("UPDATE campaigns SET status = ? WHERE id = ?", (status, campaign_id))
-
-
-def delete_contact(contact_id: int):
-    with get_db() as db:
-        db.execute("DELETE FROM sent_emails WHERE contact_id = ?", (contact_id,))
-        db.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
-
-
-def get_sent_emails(campaign_id: int) -> list[dict]:
-    """Get all sent emails for a campaign with contact info."""
-    with get_db() as db:
-        rows = db.execute("""
-            SELECT se.*, c.name as contact_name, c.email as contact_email,
-                   c.company as contact_company, es.step
-            FROM sent_emails se
-            JOIN contacts c ON se.contact_id = c.id
-            JOIN email_sequences es ON se.sequence_id = es.id
-            WHERE c.campaign_id = ?
-            ORDER BY se.sent_at DESC
-        """, (campaign_id,)).fetchall()
-        return [dict(r) for r in rows]
-
-
-def get_global_stats(client_id: int) -> dict:
-    """Aggregate stats across all campaigns for a client."""
-    with get_db() as db:
-        total_camps = db.execute(
-            "SELECT COUNT(*) FROM campaigns WHERE client_id = ?", (client_id,)
-        ).fetchone()[0]
-        active_camps = db.execute(
-            "SELECT COUNT(*) FROM campaigns WHERE client_id = ? AND status = 'active'",
-            (client_id,),
-        ).fetchone()[0]
-        total_contacts = db.execute(
-            "SELECT COUNT(*) FROM contacts c JOIN campaigns camp ON c.campaign_id = camp.id "
-            "WHERE camp.client_id = ?", (client_id,)
-        ).fetchone()[0]
-        total_sent = db.execute(
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "JOIN campaigns camp ON c.campaign_id = camp.id WHERE camp.client_id = ?",
-            (client_id,),
-        ).fetchone()[0]
-        total_opened = db.execute(
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "JOIN campaigns camp ON c.campaign_id = camp.id "
-            "WHERE camp.client_id = ? AND se.status IN ('opened', 'clicked', 'replied')",
-            (client_id,),
-        ).fetchone()[0]
-        total_replied = db.execute(
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "JOIN campaigns camp ON c.campaign_id = camp.id "
-            "WHERE camp.client_id = ? AND se.status = 'replied'",
-            (client_id,),
-        ).fetchone()[0]
-        total_bounced = db.execute(
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "JOIN campaigns camp ON c.campaign_id = camp.id "
-            "WHERE camp.client_id = ? AND se.status = 'bounced'",
-            (client_id,),
-        ).fetchone()[0]
-        return {
-            "total_campaigns": total_camps,
-            "active_campaigns": active_camps,
-            "total_contacts": total_contacts,
-            "total_sent": total_sent,
-            "total_opened": total_opened,
-            "open_rate": total_opened / total_sent if total_sent else 0,
-            "total_replied": total_replied,
-            "reply_rate": total_replied / total_sent if total_sent else 0,
-            "total_bounced": total_bounced,
-            "bounce_rate": total_bounced / total_sent if total_sent else 0,
-        }
-
-
-def get_daily_analytics(client_id: int, days: int = 30) -> list[dict]:
-    """Return daily sent/opened/replied/bounced counts for the last N days."""
-    with get_db() as db:
-        rows = db.execute(
-            "SELECT DATE(se.sent_at) AS day, "
-            "  COUNT(*) AS sent, "
-            "  SUM(CASE WHEN se.status IN ('opened','clicked','replied') THEN 1 ELSE 0 END) AS opened, "
-            "  SUM(CASE WHEN se.status = 'replied' THEN 1 ELSE 0 END) AS replied, "
-            "  SUM(CASE WHEN se.status = 'bounced' THEN 1 ELSE 0 END) AS bounced "
-            "FROM sent_emails se "
-            "JOIN contacts c ON se.contact_id = c.id "
-            "JOIN campaigns camp ON c.campaign_id = camp.id "
-            "WHERE camp.client_id = ? AND se.sent_at >= DATE('now', 'localtime', ?) "
-            "GROUP BY day ORDER BY day",
-            (client_id, f"-{days} days"),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
-def duplicate_campaign(campaign_id: int, client_id: int) -> int | None:
-    """Duplicate a campaign with its sequences (no contacts/sent data)."""
-    with get_db() as db:
-        camp = db.execute("SELECT * FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
-        if not camp:
-            return None
-        cur = db.execute(
-            "INSERT INTO campaigns (client_id, name, business_type, target_audience, tone, status) "
-            "VALUES (?, ?, ?, ?, ?, 'draft')",
-            (client_id, camp["name"] + " (copy)", camp["business_type"],
-             camp["target_audience"], camp["tone"]),
-        )
-        new_id = cur.lastrowid
-        seqs = db.execute(
-            "SELECT * FROM email_sequences WHERE campaign_id = ? ORDER BY step",
-            (campaign_id,),
-        ).fetchall()
-        for s in seqs:
-            db.execute(
-                "INSERT INTO email_sequences (campaign_id, step, subject_a, subject_b, body_a, body_b, delay_days) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (new_id, s["step"], s["subject_a"], s["subject_b"],
-                 s["body_a"], s["body_b"], s["delay_days"]),
-            )
-        return new_id
-
-
-def update_client(client_id: int, name: str, business: str):
-    with get_db() as db:
-        db.execute("UPDATE clients SET name = ?, business = ? WHERE id = ?",
-                   (name, business, client_id))
-
-
-def update_mail_preferences(client_id: int, preferences: str):
-    with get_db() as db:
-        db.execute("UPDATE clients SET mail_preferences = ? WHERE id = ?",
-                   (preferences, client_id))
-
-
-def get_mail_preferences(client_id: int) -> str:
-    with get_db() as db:
-        row = db.execute("SELECT mail_preferences FROM clients WHERE id = ?",
-                         (client_id,)).fetchone()
-        return (row[0] or "") if row else ""
-
-
-def update_mail_exclusions(client_id: int, exclusions: str):
-    with get_db() as db:
-        db.execute("UPDATE clients SET mail_exclusions = ? WHERE id = ?",
-                   (exclusions, client_id))
-
-
-def get_mail_exclusions(client_id: int) -> str:
-    with get_db() as db:
-        row = db.execute("SELECT mail_exclusions FROM clients WHERE id = ?",
-                         (client_id,)).fetchone()
-        return (row[0] or "") if row else ""
-
-
-def update_client_password(client_id: int, password_hash: str):
-    with get_db() as db:
-        db.execute("UPDATE clients SET password = ? WHERE id = ?",
-                   (password_hash, client_id))
-
-
-def create_reset_token(client_id: int, token: str, expires_at: str):
-    with get_db() as db:
-        db.execute(
-            "INSERT INTO password_reset_tokens (client_id, token, expires_at) VALUES (?, ?, ?)",
-            (client_id, token, expires_at),
-        )
-
-
-def get_valid_reset_token(token: str) -> dict | None:
-    with get_db() as db:
-        row = db.execute(
-            "SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0 AND expires_at > datetime('now', 'localtime')",
-            (token,),
-        ).fetchone()
-        return dict(row) if row else None
-
-
-def mark_reset_token_used(token: str):
-    with get_db() as db:
-        db.execute("UPDATE password_reset_tokens SET used = 1 WHERE token = ?", (token,))
-
-
-def get_client(client_id: int) -> dict | None:
-    with get_db() as db:
-        row = db.execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
-        return dict(row) if row else None
-
-
-def get_all_client_emails() -> list[dict]:
-    """Return id, name, email for all registered clients (admin broadcast)."""
-    with get_db() as db:
-        rows = db.execute("SELECT id, name, email FROM clients ORDER BY id").fetchall()
-        return [dict(r) for r in rows]
-
-
-def update_sequence(seq_id: int, subject_a: str, subject_b: str,
-                    body_a: str, delay_days: int):
-    with get_db() as db:
-        db.execute(
-            "UPDATE email_sequences SET subject_a=?, subject_b=?, body_a=?, delay_days=? "
-            "WHERE id=?",
-            (subject_a, subject_b, body_a, delay_days, seq_id),
-        )
-
-
-def delete_sequence(seq_id: int):
-    with get_db() as db:
-        db.execute("DELETE FROM email_sequences WHERE id = ?", (seq_id,))
+# ---------------------------------------------------------------------------
+# Inbox / threads
+# ---------------------------------------------------------------------------
 
 def get_replies(client_id: int) -> list[dict]:
-    """Get all replied contacts with their email thread for the inbox."""
     with get_db() as db:
-        rows = db.execute("""
+        return _fetchall(db, """
             SELECT se.id as sent_id, se.subject, se.body, se.variant,
                    se.sent_at, se.replied_at, se.status as email_status,
                    c.id as contact_id, c.name as contact_name, c.email as contact_email,
@@ -988,17 +1176,14 @@ def get_replies(client_id: int) -> list[dict]:
             JOIN contacts c ON se.contact_id = c.id
             JOIN campaigns camp ON c.campaign_id = camp.id
             JOIN email_sequences es ON se.sequence_id = es.id
-            WHERE camp.client_id = ?
-              AND se.status = 'replied'
+            WHERE camp.client_id = %s AND se.status = 'replied'
             ORDER BY se.replied_at DESC
-        """, (client_id,)).fetchall()
-        return [dict(r) for r in rows]
+        """, (client_id,))
 
 
 def get_inbox_all(client_id: int) -> list[dict]:
-    """Get all sent emails grouped by contact for the inbox view."""
     with get_db() as db:
-        rows = db.execute("""
+        return _fetchall(db, """
             SELECT se.id as sent_id, se.subject, se.body, se.variant,
                    se.sent_at, se.opened_at, se.replied_at,
                    se.status as email_status,
@@ -1012,54 +1197,45 @@ def get_inbox_all(client_id: int) -> list[dict]:
             JOIN contacts c ON se.contact_id = c.id
             JOIN campaigns camp ON c.campaign_id = camp.id
             JOIN email_sequences es ON se.sequence_id = es.id
-            WHERE camp.client_id = ?
+            WHERE camp.client_id = %s
             ORDER BY se.sent_at DESC
-        """, (client_id,)).fetchall()
-        return [dict(r) for r in rows]
+        """, (client_id,))
 
-def get_ab_stats(client_id: int) -> list[dict]:
-    """Get A/B test performance for all sequences across all campaigns."""
+
+def get_sent_emails(campaign_id: int) -> list[dict]:
     with get_db() as db:
-        rows = db.execute("""
-            SELECT es.id as seq_id, es.step, es.subject_a, es.subject_b,
-                   camp.id as campaign_id, camp.name as campaign_name,
-                   se.variant,
-                   COUNT(se.id) as sent_count,
-                   SUM(CASE WHEN se.status IN ('opened','clicked','replied') THEN 1 ELSE 0 END) as opens,
-                   SUM(CASE WHEN se.status = 'replied' THEN 1 ELSE 0 END) as replies
-            FROM email_sequences es
-            JOIN campaigns camp ON es.campaign_id = camp.id
-            LEFT JOIN sent_emails se ON se.sequence_id = es.id
-            WHERE camp.client_id = ?
-              AND es.subject_b IS NOT NULL AND es.subject_b != ''
-            GROUP BY es.id, se.variant
-            ORDER BY camp.name, es.step, se.variant
-        """, (client_id,)).fetchall()
-        return [dict(r) for r in rows]
+        return _fetchall(db, """
+            SELECT se.*, c.name as contact_name, c.email as contact_email,
+                   c.company as contact_company, es.step
+            FROM sent_emails se
+            JOIN contacts c ON se.contact_id = c.id
+            JOIN email_sequences es ON se.sequence_id = es.id
+            WHERE c.campaign_id = %s
+            ORDER BY se.sent_at DESC
+        """, (campaign_id,))
 
 
-def get_send_time_stats(client_id: int) -> list[dict]:
-    """Get open rates by hour-of-day and day-of-week."""
+def get_reply_context(sent_email_id: int) -> dict | None:
     with get_db() as db:
-        rows = db.execute("""
-            SELECT strftime('%w', se.sent_at) as dow,
-                   strftime('%H', se.sent_at) as hour,
-                   COUNT(*) as total,
-                   SUM(CASE WHEN se.status IN ('opened','clicked','replied') THEN 1 ELSE 0 END) as opens
+        return _fetchone(db, """
+            SELECT se.subject, se.body, se.reply_body, se.reply_sentiment,
+                   c.name as contact_name, c.email as contact_email,
+                   c.company, c.role,
+                   camp.business_type, camp.target_audience, camp.tone
             FROM sent_emails se
             JOIN contacts c ON se.contact_id = c.id
             JOIN campaigns camp ON c.campaign_id = camp.id
-            WHERE camp.client_id = ?
-            GROUP BY dow, hour
-            ORDER BY dow, hour
-        """, (client_id,)).fetchall()
-        return [dict(r) for r in rows]
-    
+            WHERE se.id = %s AND se.status = 'replied'
+        """, (sent_email_id,))
+
+
+# ---------------------------------------------------------------------------
+# Calendar
+# ---------------------------------------------------------------------------
+
 def get_calendar_events(client_id: int) -> list[dict]:
-    """Get all sent and pending emails for the calendar view."""
     with get_db() as db:
-        # Already sent
-        sent = db.execute("""
+        sent = _fetchall(db, """
             SELECT se.sent_at as date, c.name as contact_name, c.email as contact_email,
                    se.subject, se.status as email_status, se.variant,
                    camp.name as campaign_name, camp.id as campaign_id,
@@ -1068,13 +1244,13 @@ def get_calendar_events(client_id: int) -> list[dict]:
             JOIN contacts c ON se.contact_id = c.id
             JOIN campaigns camp ON c.campaign_id = camp.id
             JOIN email_sequences es ON se.sequence_id = es.id
-            WHERE camp.client_id = ?
+            WHERE camp.client_id = %s
             ORDER BY se.sent_at DESC
-        """, (client_id,)).fetchall()
+        """, (client_id,))
 
-        # Pending (contacts waiting for follow-ups)
-        pending = db.execute("""
-            SELECT date(se.sent_at, '+' || next_seq.delay_days || ' days') as date,
+        date_plus = _date_plus_days("se.sent_at", "next_seq.delay_days")
+        pending = _fetchall(db, f"""
+            SELECT {date_plus} as date,
                    c.name as contact_name, c.email as contact_email,
                    next_seq.subject_a as subject,
                    'pending' as email_status, '' as variant,
@@ -1086,7 +1262,7 @@ def get_calendar_events(client_id: int) -> list[dict]:
             JOIN email_sequences last_seq ON se.sequence_id = last_seq.id
             JOIN email_sequences next_seq ON next_seq.campaign_id = camp.id
                                           AND next_seq.step = last_seq.step + 1
-            WHERE camp.client_id = ?
+            WHERE camp.client_id = %s
               AND camp.status = 'active'
               AND c.status NOT IN ('replied', 'bounced', 'unsubscribed')
               AND NOT EXISTS (
@@ -1098,30 +1274,41 @@ def get_calendar_events(client_id: int) -> list[dict]:
                   JOIN email_sequences es3 ON se3.sequence_id = es3.id
                   WHERE se3.contact_id = c.id AND es3.step > last_seq.step
               )
-        """, (client_id,)).fetchall()
+        """, (client_id,))
 
-        events = [dict(r) for r in sent] + [dict(r) for r in pending]
-        return events
+        return sent + pending
 
 
-def get_reply_context(sent_email_id: int) -> dict | None:
-    """Get the full thread context for a replied email (for AI reply drafts)."""
+# ---------------------------------------------------------------------------
+# A/B global stats
+# ---------------------------------------------------------------------------
+
+def get_ab_stats_global(client_id: int) -> list[dict]:
+    """get_ab_stats but across all client campaigns (used by /ab-tests page)."""
     with get_db() as db:
-        row = db.execute("""
-            SELECT se.subject, se.body, se.reply_body, se.reply_sentiment,
-                   c.name as contact_name, c.email as contact_email,
-                   c.company, c.role,
-                   camp.business_type, camp.target_audience, camp.tone
-            FROM sent_emails se
-            JOIN contacts c ON se.contact_id = c.id
-            JOIN campaigns camp ON c.campaign_id = camp.id
-            WHERE se.id = ? AND se.status = 'replied'
-        """, (sent_email_id,)).fetchone()
-        return dict(row) if row else None
+        return _fetchall(db, """
+            SELECT es.id as seq_id, es.step, es.subject_a, es.subject_b,
+                   camp.id as campaign_id, camp.name as campaign_name,
+                   se.variant,
+                   COUNT(se.id) as sent_count,
+                   SUM(CASE WHEN se.status IN ('opened','clicked','replied') THEN 1 ELSE 0 END) as opens,
+                   SUM(CASE WHEN se.status = 'replied' THEN 1 ELSE 0 END) as replies
+            FROM email_sequences es
+            JOIN campaigns camp ON es.campaign_id = camp.id
+            LEFT JOIN sent_emails se ON se.sequence_id = es.id
+            WHERE camp.client_id = %s
+              AND es.subject_b IS NOT NULL AND es.subject_b != ''
+            GROUP BY es.id, es.step, es.subject_a, es.subject_b,
+                     camp.id, camp.name, se.variant
+            ORDER BY camp.name, es.step, se.variant
+        """, (client_id,))
 
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
 
 def get_export_data(client_id: int, campaign_id: int | None = None) -> list[dict]:
-    """Get all email data for CSV export."""
     with get_db() as db:
         query = """
             SELECT camp.name as campaign_name,
@@ -1135,33 +1322,49 @@ def get_export_data(client_id: int, campaign_id: int | None = None) -> list[dict
             JOIN contacts c ON se.contact_id = c.id
             JOIN campaigns camp ON c.campaign_id = camp.id
             JOIN email_sequences es ON se.sequence_id = es.id
-            WHERE camp.client_id = ?
+            WHERE camp.client_id = %s
         """
         params = [client_id]
         if campaign_id:
-            query += " AND camp.id = ?"
+            query += " AND camp.id = %s"
             params.append(campaign_id)
         query += " ORDER BY camp.name, se.sent_at DESC"
-        rows = db.execute(query, params).fetchall()
-        return [dict(r) for r in rows]
-    
+        return _fetchall(db, query, params)
+
+
+# ---------------------------------------------------------------------------
+# Mail Hub
+# ---------------------------------------------------------------------------
+
 def upsert_mail(client_id: int, message_id: str, from_name: str, from_email: str,
                 to_email: str, subject: str, body_preview: str, received_at: str,
                 priority: str = "normal", category: str = "uncategorized",
                 ai_summary: str = "", account_id: int | None = None,
                 is_read: int = 0) -> bool:
-    """Insert or ignore a mail message. Returns True if new."""
     with get_db() as db:
         try:
-            db.execute("""
-                INSERT INTO mail_inbox
-                    (client_id, message_id, from_name, from_email, to_email,
-                     subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (client_id, message_id, from_name, from_email, to_email,
-                  subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read))
-            return True
+            if _USE_PG:
+                _exec(db, """
+                    INSERT INTO mail_inbox
+                        (client_id, message_id, from_name, from_email, to_email,
+                         subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (client_id, message_id) DO NOTHING
+                """, (client_id, message_id, from_name, from_email, to_email,
+                      subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read))
+                return db.cursor().rowcount != 0 if hasattr(db, 'cursor') else True
+            else:
+                _exec(db, """
+                    INSERT INTO mail_inbox
+                        (client_id, message_id, from_name, from_email, to_email,
+                         subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (client_id, message_id, from_name, from_email, to_email,
+                      subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read))
+                return True
         except Exception:
+            if _USE_PG:
+                db.rollback()
             return False
 
 
@@ -1169,13 +1372,12 @@ def get_mail_inbox(client_id: int, filter_by: str = "all",
                    category: str | None = None, account_id: int | None = None,
                    sender: str | None = None,
                    limit: int = 100) -> list[dict]:
-    """Get mail inbox items with optional filtering."""
     with get_db() as db:
-        conditions = ["m.client_id = ?", "m.is_archived = 0"]
+        now = _now_expr()
+        conditions = ["m.client_id = %s", "m.is_archived = 0"]
         params: list = [client_id]
 
-        # Handle snoozed items
-        conditions.append("(m.snooze_until IS NULL OR m.snooze_until <= datetime('now', 'localtime'))")
+        conditions.append(f"(m.snooze_until IS NULL OR m.snooze_until <= {now})")
 
         if filter_by == "all":
             conditions.append("m.is_read = 0")
@@ -1188,24 +1390,24 @@ def get_mail_inbox(client_id: int, filter_by: str = "all",
         elif filter_by == "urgent":
             conditions.append("m.priority IN ('urgent', 'important')")
         elif filter_by == "snoozed":
-            # Override — show snoozed items regardless
-            conditions = ["m.client_id = ?", "m.snooze_until IS NOT NULL AND m.snooze_until > datetime('now', 'localtime')"]
+            conditions = ["m.client_id = %s",
+                          f"m.snooze_until IS NOT NULL AND m.snooze_until > {now}"]
             params = [client_id]
 
         if category and category != "all":
-            conditions.append("m.category = ?")
+            conditions.append("m.category = %s")
             params.append(category)
 
         if account_id is not None:
-            conditions.append("m.account_id = ?")
+            conditions.append("m.account_id = %s")
             params.append(account_id)
 
         if sender:
-            conditions.append("LOWER(m.from_email) = ?")
+            conditions.append("LOWER(m.from_email) = %s")
             params.append(sender.lower())
 
         where = " AND ".join(conditions)
-        rows = db.execute(f"""
+        return _fetchall(db, f"""
             SELECT * FROM mail_inbox m
             WHERE {where}
             ORDER BY
@@ -1221,144 +1423,175 @@ def get_mail_inbox(client_id: int, filter_by: str = "all",
                     ELSE 0
                 END,
                 m.received_at DESC
-            LIMIT ?
-        """, params + [limit]).fetchall()
-        return [dict(r) for r in rows]
+            LIMIT %s
+        """, params + [limit])
 
 
 def get_mail_stats(client_id: int) -> dict:
-    """Get counts for the mail hub sidebar."""
     with get_db() as db:
-        total = db.execute(
-            "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND is_archived = 0",
-            (client_id,)).fetchone()[0]
-        unread = db.execute(
-            "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND is_archived = 0 AND is_read = 0",
-            (client_id,)).fetchone()[0]
-        starred = db.execute(
-            "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND is_starred = 1 AND is_archived = 0",
-            (client_id,)).fetchone()[0]
-        urgent = db.execute(
-            "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND is_archived = 0 AND priority IN ('urgent','important')",
-            (client_id,)).fetchone()[0]
-        read = db.execute(
-            "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND is_archived = 0 AND is_read = 1",
-            (client_id,)).fetchone()[0]
-        snoozed = db.execute(
-            "SELECT COUNT(*) FROM mail_inbox WHERE client_id = ? AND snooze_until IS NOT NULL AND snooze_until > datetime('now', 'localtime')",
-            (client_id,)).fetchone()[0]
+        now = _now_expr()
+        total = _fetchval(db, "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND is_archived = 0", (client_id,))
+        unread = _fetchval(db, "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND is_archived = 0 AND is_read = 0", (client_id,))
+        starred = _fetchval(db, "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND is_starred = 1 AND is_archived = 0", (client_id,))
+        urgent = _fetchval(db, "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND is_archived = 0 AND priority IN ('urgent','important')", (client_id,))
+        read_count = _fetchval(db, "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND is_archived = 0 AND is_read = 1", (client_id,))
+        snoozed = _fetchval(db, f"SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND snooze_until IS NOT NULL AND snooze_until > {now}", (client_id,))
 
-        # Category counts
-        cat_rows = db.execute("""
+        cat_rows = _fetchall(db, """
             SELECT category, COUNT(*) as cnt FROM mail_inbox
-            WHERE client_id = ? AND is_archived = 0
+            WHERE client_id = %s AND is_archived = 0
             GROUP BY category
-        """, (client_id,)).fetchall()
+        """, (client_id,))
         categories = {r["category"]: r["cnt"] for r in cat_rows}
 
-        # Priority counts
-        pri_rows = db.execute("""
+        pri_rows = _fetchall(db, """
             SELECT priority, COUNT(*) as cnt FROM mail_inbox
-            WHERE client_id = ? AND is_archived = 0
+            WHERE client_id = %s AND is_archived = 0
             GROUP BY priority
-        """, (client_id,)).fetchall()
+        """, (client_id,))
         priorities = {r["priority"]: r["cnt"] for r in pri_rows}
 
         return {
-            "total": total, "unread": unread, "read": read, "starred": starred,
-            "urgent": urgent, "snoozed": snoozed,
+            "total": total or 0, "unread": unread or 0, "read": read_count or 0,
+            "starred": starred or 0, "urgent": urgent or 0, "snoozed": snoozed or 0,
             "categories": categories, "priorities": priorities,
         }
 
 
 def get_top_senders(client_id: int, limit: int = 10) -> list[dict]:
-    """Get saved contacts that appear in the Mail Hub inbox for the sidebar filter."""
     with get_db() as db:
-        rows = db.execute("""
+        rows = _fetchall(db, """
             SELECT cb.email, cb.name, COUNT(m.id) as cnt
             FROM contacts_book cb
             JOIN mail_inbox m ON LOWER(m.from_email) = LOWER(cb.email) AND m.client_id = cb.client_id
-            WHERE cb.client_id = ? AND m.is_archived = 0
-            GROUP BY LOWER(cb.email)
+            WHERE cb.client_id = %s AND m.is_archived = 0
+            GROUP BY cb.email, cb.name
             ORDER BY cnt DESC
-            LIMIT ?
-        """, (client_id, limit)).fetchall()
+            LIMIT %s
+        """, (client_id, limit))
         return [{"email": r["email"], "name": r["name"] or r["email"].split("@")[0], "count": r["cnt"]} for r in rows]
 
 
 def update_mail_field(mail_id: int, client_id: int, field: str, value) -> bool:
-    """Update a single field on a mail item (safe fields only)."""
     allowed = {"is_read", "is_starred", "is_archived", "snooze_until", "snooze_note", "priority", "category"}
     if field not in allowed:
         return False
     with get_db() as db:
-        db.execute(
-            f"UPDATE mail_inbox SET {field} = ? WHERE id = ? AND client_id = ?",
-            (value, mail_id, client_id),
-        )
+        _exec(db, f"UPDATE mail_inbox SET {field} = %s WHERE id = %s AND client_id = %s",
+              (value, mail_id, client_id))
         return True
 
 
 def get_mail_item(mail_id: int, client_id: int) -> dict | None:
     with get_db() as db:
-        row = db.execute(
-            "SELECT * FROM mail_inbox WHERE id = ? AND client_id = ?",
-            (mail_id, client_id)).fetchone()
-        return dict(row) if row else None
+        return _fetchone(db, "SELECT * FROM mail_inbox WHERE id = %s AND client_id = %s",
+                         (mail_id, client_id))
+
+
+def search_mail_inbox(client_id: int, query: str, limit: int = 50) -> list[dict]:
+    with get_db() as db:
+        like = f"%{query}%"
+        return _fetchall(db, """
+            SELECT * FROM mail_inbox
+            WHERE client_id = %s AND is_archived = 0
+              AND (subject LIKE %s OR body_preview LIKE %s OR from_name LIKE %s OR from_email LIKE %s)
+            ORDER BY received_at DESC
+            LIMIT %s
+        """, (client_id, like, like, like, like, limit))
+
+
+def bulk_update_mail(mail_ids: list[int], client_id: int, field: str, value) -> int:
+    allowed = {"is_read", "is_starred", "is_archived", "priority", "category"}
+    if field not in allowed or not mail_ids:
+        return 0
+    with get_db() as db:
+        if _USE_PG:
+            placeholders = ",".join(["%s"] * len(mail_ids))
+        else:
+            placeholders = ",".join(["?"] * len(mail_ids))
+        # Use raw cursor here since we mix placeholders
+        cur = db.cursor()
+        sql = f"UPDATE mail_inbox SET {field} = %s WHERE id IN ({placeholders}) AND client_id = %s"
+        if not _USE_PG:
+            sql = sql.replace("%s", "?")
+        cur.execute(sql, [value] + mail_ids + [client_id])
+        return cur.rowcount
+
+
+# ---------------------------------------------------------------------------
+# Contacts Book (CRM)
+# ---------------------------------------------------------------------------
 
 def upsert_contact(client_id: int, email: str, name: str = "", company: str = "",
                    role: str = "", relationship: str = "", notes: str = "",
                    personality: str = "", tags: str = "", language: str = "") -> int:
     with get_db() as db:
-        cur = db.execute("""
-            INSERT INTO contacts_book (client_id, email, name, company, role, relationship, notes, personality, tags, language)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(client_id, email) DO UPDATE SET
-                name = CASE WHEN excluded.name != '' THEN excluded.name ELSE contacts_book.name END,
-                company = CASE WHEN excluded.company != '' THEN excluded.company ELSE contacts_book.company END,
-                role = CASE WHEN excluded.role != '' THEN excluded.role ELSE contacts_book.role END,
-                relationship = CASE WHEN excluded.relationship != '' THEN excluded.relationship ELSE contacts_book.relationship END,
-                notes = CASE WHEN excluded.notes != '' THEN excluded.notes ELSE contacts_book.notes END,
-                personality = CASE WHEN excluded.personality != '' THEN excluded.personality ELSE contacts_book.personality END,
-                tags = CASE WHEN excluded.tags != '' THEN excluded.tags ELSE contacts_book.tags END,
-                language = CASE WHEN excluded.language != '' THEN excluded.language ELSE contacts_book.language END
-        """, (client_id, email, name, company, role, relationship, notes, personality, tags, language))
-        return cur.lastrowid
+        if _USE_PG:
+            cur = db.cursor()
+            cur.execute("""
+                INSERT INTO contacts_book (client_id, email, name, company, role, relationship, notes, personality, tags, language)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT(client_id, email) DO UPDATE SET
+                    name = CASE WHEN EXCLUDED.name != '' THEN EXCLUDED.name ELSE contacts_book.name END,
+                    company = CASE WHEN EXCLUDED.company != '' THEN EXCLUDED.company ELSE contacts_book.company END,
+                    role = CASE WHEN EXCLUDED.role != '' THEN EXCLUDED.role ELSE contacts_book.role END,
+                    relationship = CASE WHEN EXCLUDED.relationship != '' THEN EXCLUDED.relationship ELSE contacts_book.relationship END,
+                    notes = CASE WHEN EXCLUDED.notes != '' THEN EXCLUDED.notes ELSE contacts_book.notes END,
+                    personality = CASE WHEN EXCLUDED.personality != '' THEN EXCLUDED.personality ELSE contacts_book.personality END,
+                    tags = CASE WHEN EXCLUDED.tags != '' THEN EXCLUDED.tags ELSE contacts_book.tags END,
+                    language = CASE WHEN EXCLUDED.language != '' THEN EXCLUDED.language ELSE contacts_book.language END
+                RETURNING id
+            """, (client_id, email, name, company, role, relationship, notes, personality, tags, language))
+            return cur.fetchone()["id"]
+        else:
+            cur = db.cursor()
+            cur.execute("""
+                INSERT INTO contacts_book (client_id, email, name, company, role, relationship, notes, personality, tags, language)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(client_id, email) DO UPDATE SET
+                    name = CASE WHEN excluded.name != '' THEN excluded.name ELSE contacts_book.name END,
+                    company = CASE WHEN excluded.company != '' THEN excluded.company ELSE contacts_book.company END,
+                    role = CASE WHEN excluded.role != '' THEN excluded.role ELSE contacts_book.role END,
+                    relationship = CASE WHEN excluded.relationship != '' THEN excluded.relationship ELSE contacts_book.relationship END,
+                    notes = CASE WHEN excluded.notes != '' THEN excluded.notes ELSE contacts_book.notes END,
+                    personality = CASE WHEN excluded.personality != '' THEN excluded.personality ELSE contacts_book.personality END,
+                    tags = CASE WHEN excluded.tags != '' THEN excluded.tags ELSE contacts_book.tags END,
+                    language = CASE WHEN excluded.language != '' THEN excluded.language ELSE contacts_book.language END
+            """, (client_id, email, name, company, role, relationship, notes, personality, tags, language))
+            return cur.lastrowid
 
 
 def get_contacts(client_id: int, search: str = "", tag: str = "",
                  relationship: str = "") -> list[dict]:
     with get_db() as db:
-        sql = "SELECT * FROM contacts_book WHERE client_id = ?"
+        sql = "SELECT * FROM contacts_book WHERE client_id = %s"
         params: list = [client_id]
         if search:
-            sql += " AND (name LIKE ? OR email LIKE ? OR company LIKE ?)"
+            sql += " AND (name LIKE %s OR email LIKE %s OR company LIKE %s)"
             s = f"%{search}%"
             params.extend([s, s, s])
         if tag:
-            sql += " AND (',' || tags || ',') LIKE ?"
+            sql += " AND (',' || tags || ',') LIKE %s"
             params.append(f"%,{tag},%")
         if relationship:
-            sql += " AND relationship = ?"
+            sql += " AND relationship = %s"
             params.append(relationship)
         sql += " ORDER BY last_contacted DESC, name ASC"
-        return [dict(r) for r in db.execute(sql, params).fetchall()]
+        return _fetchall(db, sql, params)
 
 
 def get_contact(contact_id: int, client_id: int) -> dict | None:
     with get_db() as db:
-        row = db.execute(
-            "SELECT * FROM contacts_book WHERE id = ? AND client_id = ?",
-            (contact_id, client_id)).fetchone()
-        return dict(row) if row else None
+        return _fetchone(db,
+            "SELECT * FROM contacts_book WHERE id = %s AND client_id = %s",
+            (contact_id, client_id))
 
 
 def get_contact_by_email(client_id: int, email: str) -> dict | None:
     with get_db() as db:
-        row = db.execute(
-            "SELECT * FROM contacts_book WHERE client_id = ? AND email = ?",
-            (client_id, email)).fetchone()
-        return dict(row) if row else None
+        return _fetchone(db,
+            "SELECT * FROM contacts_book WHERE client_id = %s AND email = %s",
+            (client_id, email))
 
 
 def update_contact(contact_id: int, client_id: int, **fields) -> bool:
@@ -1367,76 +1600,37 @@ def update_contact(contact_id: int, client_id: int, **fields) -> bool:
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return False
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    set_clause = ", ".join(f"{k} = %s" for k in updates)
     vals = list(updates.values()) + [contact_id, client_id]
     with get_db() as db:
-        db.execute(f"UPDATE contacts_book SET {set_clause} WHERE id = ? AND client_id = ?", vals)
+        _exec(db, f"UPDATE contacts_book SET {set_clause} WHERE id = %s AND client_id = %s", vals)
         return True
 
 
 def delete_contact_book(contact_id: int, client_id: int) -> bool:
     with get_db() as db:
-        db.execute("DELETE FROM contacts_book WHERE id = ? AND client_id = ?",
-                   (contact_id, client_id))
+        _exec(db, "DELETE FROM contacts_book WHERE id = %s AND client_id = %s",
+              (contact_id, client_id))
         return True
 
 
 def get_contact_email_history(client_id: int, email: str, limit: int = 20) -> list[dict]:
-    """Get recent emails from mail_inbox for a given contact email."""
     with get_db() as db:
-        return [dict(r) for r in db.execute("""
+        return _fetchall(db, """
             SELECT id, subject, body_preview, received_at, priority, category, ai_summary
-            FROM mail_inbox WHERE client_id = ? AND from_email = ?
-            ORDER BY received_at DESC LIMIT ?
-        """, (client_id, email, limit)).fetchall()]
+            FROM mail_inbox WHERE client_id = %s AND from_email = %s
+            ORDER BY received_at DESC LIMIT %s
+        """, (client_id, email, limit))
 
 
 def mark_contact_emails_priority(client_id: int, email: str, priority: str) -> int:
-    """Set priority on all mail_inbox emails from a given sender."""
     allowed = {"urgent", "important", "normal", "low"}
     if priority not in allowed:
         return 0
     with get_db() as db:
-        cur = db.execute(
-            "UPDATE mail_inbox SET priority = ? WHERE client_id = ? AND from_email = ?",
-            (priority, client_id, email),
-        )
-        return cur.rowcount
-
-
-# ---------------------------------------------------------------------------
-# Search
-# ---------------------------------------------------------------------------
-
-def search_mail_inbox(client_id: int, query: str, limit: int = 50) -> list[dict]:
-    """Full-text search across subject, body, sender."""
-    with get_db() as db:
-        like = f"%{query}%"
-        rows = db.execute("""
-            SELECT * FROM mail_inbox
-            WHERE client_id = ? AND is_archived = 0
-              AND (subject LIKE ? OR body_preview LIKE ? OR from_name LIKE ? OR from_email LIKE ?)
-            ORDER BY received_at DESC
-            LIMIT ?
-        """, (client_id, like, like, like, like, limit)).fetchall()
-        return [dict(r) for r in rows]
-
-
-# ---------------------------------------------------------------------------
-# Bulk operations
-# ---------------------------------------------------------------------------
-
-def bulk_update_mail(mail_ids: list[int], client_id: int, field: str, value) -> int:
-    """Bulk update a field on multiple mail items."""
-    allowed = {"is_read", "is_starred", "is_archived", "priority", "category"}
-    if field not in allowed or not mail_ids:
-        return 0
-    placeholders = ",".join("?" * len(mail_ids))
-    with get_db() as db:
-        cur = db.execute(
-            f"UPDATE mail_inbox SET {field} = ? WHERE id IN ({placeholders}) AND client_id = ?",
-            [value] + mail_ids + [client_id],
-        )
+        cur = _exec(db,
+            "UPDATE mail_inbox SET priority = %s WHERE client_id = %s AND from_email = %s",
+            (priority, client_id, email))
         return cur.rowcount
 
 
@@ -1444,79 +1638,88 @@ def bulk_update_mail(mail_ids: list[int], client_id: int, field: str, value) -> 
 # Team Members
 # ---------------------------------------------------------------------------
 
-def invite_team_member(owner_id: int, member_email: str, role: str = "member", campaign_id: int | None = None) -> dict:
-    """Invite a team member. campaign_id=None means full team access."""
+def invite_team_member(owner_id: int, member_email: str, role: str = "member",
+                       campaign_id: int | None = None) -> dict:
     import secrets
     token = secrets.token_urlsafe(32)
     with get_db() as db:
-        # Check if already invited (same owner+email+campaign scope)
         if campaign_id:
-            existing = db.execute(
-                "SELECT id, status FROM team_members WHERE owner_id = ? AND member_email = ? AND campaign_id = ?",
-                (owner_id, member_email, campaign_id),
-            ).fetchone()
+            existing = _fetchone(db,
+                "SELECT id, status FROM team_members WHERE owner_id = %s AND member_email = %s AND campaign_id = %s",
+                (owner_id, member_email, campaign_id))
         else:
-            existing = db.execute(
-                "SELECT id, status FROM team_members WHERE owner_id = ? AND member_email = ? AND campaign_id IS NULL",
-                (owner_id, member_email),
-            ).fetchone()
+            existing = _fetchone(db,
+                "SELECT id, status FROM team_members WHERE owner_id = %s AND member_email = %s AND campaign_id IS NULL",
+                (owner_id, member_email))
         if existing:
-            return {"error": "Already invited", "status": dict(existing)["status"]}
-        db.execute(
-            "INSERT INTO team_members (owner_id, member_email, role, invite_token, campaign_id) VALUES (?, ?, ?, ?, ?)",
-            (owner_id, member_email, role, token, campaign_id),
-        )
+            return {"error": "Already invited", "status": existing["status"]}
+        _exec(db,
+            "INSERT INTO team_members (owner_id, member_email, role, invite_token, campaign_id) VALUES (%s, %s, %s, %s, %s)",
+            (owner_id, member_email, role, token, campaign_id))
         return {"token": token, "email": member_email, "role": role}
 
 
-def get_team_members(owner_id: int) -> list[dict]:
-    """Get all team members for a workspace owner."""
+def accept_team_invite(token: str, client_id: int) -> bool:
+    """Accept a team invite using the token. Links the member_client_id."""
     with get_db() as db:
-        rows = db.execute(
-            """SELECT tm.*, c.name as member_name, camp.name as campaign_name
-               FROM team_members tm
-               LEFT JOIN clients c ON c.id = tm.member_client_id
-               LEFT JOIN campaigns camp ON camp.id = tm.campaign_id
-               WHERE tm.owner_id = ?
-               ORDER BY tm.invited_at DESC""",
-            (owner_id,),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        row = _fetchone(db,
+            "SELECT id, status FROM team_members WHERE invite_token = %s", (token,))
+        if not row or row["status"] != "pending":
+            return False
+        now = _now_expr()
+        _exec(db,
+            f"UPDATE team_members SET status = 'active', member_client_id = %s, accepted_at = {now} WHERE id = %s",
+            (client_id, row["id"]))
+        return True
+
+
+def remove_team_member(member_id: int, owner_id: int) -> bool:
+    """Remove a team member (only owner can remove)."""
+    with get_db() as db:
+        cur = _exec(db,
+            "DELETE FROM team_members WHERE id = %s AND owner_id = %s",
+            (member_id, owner_id))
+        return cur.rowcount > 0
+
+
+def get_team_members(owner_id: int) -> list[dict]:
+    with get_db() as db:
+        return _fetchall(db, """
+            SELECT tm.*, c.name as member_name, camp.name as campaign_name
+            FROM team_members tm
+            LEFT JOIN clients c ON c.id = tm.member_client_id
+            LEFT JOIN campaigns camp ON camp.id = tm.campaign_id
+            WHERE tm.owner_id = %s
+            ORDER BY tm.invited_at DESC
+        """, (owner_id,))
 
 
 def get_my_team_memberships(client_id: int) -> list[dict]:
-    """Get all teams the client has been invited to (as a member, not owner)."""
     with get_db() as db:
-        rows = db.execute(
-            """SELECT tm.*, owner.name as owner_name, owner.email as owner_email,
-                      camp.name as campaign_name
-               FROM team_members tm
-               JOIN clients owner ON owner.id = tm.owner_id
-               LEFT JOIN campaigns camp ON camp.id = tm.campaign_id
-               WHERE tm.member_client_id = ? AND tm.status = 'active'
-               ORDER BY tm.accepted_at DESC""",
-            (client_id,),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        return _fetchall(db, """
+            SELECT tm.*, owner.name as owner_name, owner.email as owner_email,
+                   camp.name as campaign_name
+            FROM team_members tm
+            JOIN clients owner ON owner.id = tm.owner_id
+            LEFT JOIN campaigns camp ON camp.id = tm.campaign_id
+            WHERE tm.member_client_id = %s AND tm.status = 'active'
+            ORDER BY tm.accepted_at DESC
+        """, (client_id,))
 
 
 def get_team_owner(client_id: int) -> int | None:
-    """If client_id is a team member with full access, return the owner's client_id. Otherwise None."""
     with get_db() as db:
-        row = db.execute(
-            "SELECT owner_id FROM team_members WHERE member_client_id = ? AND status = 'active' AND campaign_id IS NULL",
-            (client_id,),
-        ).fetchone()
+        row = _fetchone(db,
+            "SELECT owner_id FROM team_members WHERE member_client_id = %s AND status = 'active' AND campaign_id IS NULL",
+            (client_id,))
         return row["owner_id"] if row else None
 
 
 def get_team_campaign_ids(client_id: int) -> list[int]:
-    """Return campaign IDs this member has been invited to (campaign-scoped access only)."""
     with get_db() as db:
-        rows = db.execute(
-            "SELECT campaign_id FROM team_members WHERE member_client_id = ? AND status = 'active' AND campaign_id IS NOT NULL",
-            (client_id,),
-        ).fetchall()
+        rows = _fetchall(db,
+            "SELECT campaign_id FROM team_members WHERE member_client_id = %s AND status = 'active' AND campaign_id IS NOT NULL",
+            (client_id,))
         return [r["campaign_id"] for r in rows]
 
 
@@ -1529,64 +1732,54 @@ def create_scheduled_email(client_id: int, to_email: str, subject: str, body: st
                            reply_to_mail_id: int | None = None,
                            account_id: int | None = None) -> int:
     with get_db() as db:
-        cur = db.execute("""
-            INSERT INTO scheduled_emails (client_id, to_email, to_name, subject, body,
-                                          scheduled_at, reply_to_mail_id, account_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (client_id, to_email, to_name, subject, body, scheduled_at, reply_to_mail_id, account_id))
-        return cur.lastrowid
+        return _insert_returning_id(
+            db,
+            """INSERT INTO scheduled_emails (client_id, to_email, to_name, subject, body,
+                                             scheduled_at, reply_to_mail_id, account_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (client_id, to_email, to_name, subject, body, scheduled_at, reply_to_mail_id, account_id),
+        )
 
 
 def get_scheduled_emails(client_id: int, status: str | None = None) -> list[dict]:
     with get_db() as db:
         if status:
-            rows = db.execute(
-                "SELECT * FROM scheduled_emails WHERE client_id = ? AND status = ? ORDER BY scheduled_at ASC",
-                (client_id, status),
-            ).fetchall()
-        else:
-            rows = db.execute(
-                "SELECT * FROM scheduled_emails WHERE client_id = ? ORDER BY scheduled_at DESC",
-                (client_id,),
-            ).fetchall()
-        return [dict(r) for r in rows]
+            return _fetchall(db,
+                "SELECT * FROM scheduled_emails WHERE client_id = %s AND status = %s ORDER BY scheduled_at ASC",
+                (client_id, status))
+        return _fetchall(db,
+            "SELECT * FROM scheduled_emails WHERE client_id = %s ORDER BY scheduled_at DESC",
+            (client_id,))
 
 
 def delete_scheduled_email(email_id: int, client_id: int) -> bool:
     with get_db() as db:
-        db.execute(
-            "DELETE FROM scheduled_emails WHERE id = ? AND client_id = ? AND status = 'pending'",
-            (email_id, client_id),
-        )
+        _exec(db, "DELETE FROM scheduled_emails WHERE id = %s AND client_id = %s AND status = 'pending'",
+              (email_id, client_id))
         return True
 
 
 def get_due_scheduled_emails() -> list[dict]:
-    """Get all pending scheduled emails that are due (scheduled_at <= now)."""
     with get_db() as db:
-        rows = db.execute("""
+        now = _now_expr()
+        return _fetchall(db, f"""
             SELECT * FROM scheduled_emails
-            WHERE status = 'pending' AND scheduled_at <= datetime('now', 'localtime')
+            WHERE status = 'pending' AND scheduled_at <= {now}
             ORDER BY scheduled_at ASC
-        """).fetchall()
-        return [dict(r) for r in rows]
+        """)
 
 
 def mark_scheduled_sent(email_id: int) -> bool:
     with get_db() as db:
-        db.execute(
-            "UPDATE scheduled_emails SET status = 'sent', sent_at = datetime('now', 'localtime') WHERE id = ?",
-            (email_id,),
-        )
+        now = _now_expr()
+        _exec(db, f"UPDATE scheduled_emails SET status = 'sent', sent_at = {now} WHERE id = %s",
+              (email_id,))
         return True
 
 
 def mark_scheduled_failed(email_id: int) -> bool:
     with get_db() as db:
-        db.execute(
-            "UPDATE scheduled_emails SET status = 'failed' WHERE id = ?",
-            (email_id,),
-        )
+        _exec(db, "UPDATE scheduled_emails SET status = 'failed' WHERE id = %s", (email_id,))
         return True
 
 
@@ -1595,13 +1788,12 @@ def mark_scheduled_failed(email_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 def process_snoozed_emails() -> int:
-    """Bump resurfaced snoozed emails to 'important' priority. Returns count updated."""
     with get_db() as db:
-        cur = db.execute("""
-            UPDATE mail_inbox
-            SET priority = 'important'
+        now = _now_expr()
+        cur = _exec(db, f"""
+            UPDATE mail_inbox SET priority = 'important'
             WHERE snooze_until IS NOT NULL
-              AND snooze_until <= datetime('now', 'localtime')
+              AND snooze_until <= {now}
               AND priority NOT IN ('urgent', 'important')
         """)
         return cur.rowcount
@@ -1612,18 +1804,14 @@ def process_snoozed_emails() -> int:
 # ---------------------------------------------------------------------------
 
 def get_subscription(client_id: int) -> dict:
-    """Get or create subscription for a client. Defaults to free plan."""
     with get_db() as db:
-        row = db.execute("SELECT * FROM subscriptions WHERE client_id = ?",
-                         (client_id,)).fetchone()
+        row = _fetchone(db, "SELECT * FROM subscriptions WHERE client_id = %s", (client_id,))
         if row:
-            return dict(row)
-        db.execute("INSERT INTO subscriptions (client_id, plan) VALUES (?, 'free')",
-                   (client_id,))
+            return row
+        _exec(db, "INSERT INTO subscriptions (client_id, plan) VALUES (%s, 'free')", (client_id,))
         db.commit()
-        row = db.execute("SELECT * FROM subscriptions WHERE client_id = ?",
-                         (client_id,)).fetchone()
-        return dict(row)
+        row = _fetchone(db, "SELECT * FROM subscriptions WHERE client_id = %s", (client_id,))
+        return row
 
 
 def update_subscription(client_id: int, **fields) -> bool:
@@ -1632,33 +1820,29 @@ def update_subscription(client_id: int, **fields) -> bool:
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return False
-    updates["updated_at"] = "datetime('now', 'localtime')"
+    now = _now_expr()
     set_parts = []
     vals = []
     for k, v in updates.items():
-        if v == "datetime('now', 'localtime')":
-            set_parts.append(f"{k} = datetime('now', 'localtime')")
-        else:
-            set_parts.append(f"{k} = ?")
-            vals.append(v)
+        set_parts.append(f"{k} = %s")
+        vals.append(v)
+    set_parts.append(f"updated_at = {now}")
     vals.append(client_id)
     with get_db() as db:
-        db.execute(f"UPDATE subscriptions SET {', '.join(set_parts)} WHERE client_id = ?", vals)
+        _exec(db, f"UPDATE subscriptions SET {', '.join(set_parts)} WHERE client_id = %s", vals)
         return True
 
 
 def get_subscription_by_stripe_customer(stripe_customer_id: str) -> dict | None:
     with get_db() as db:
-        row = db.execute("SELECT * FROM subscriptions WHERE stripe_customer_id = ?",
-                         (stripe_customer_id,)).fetchone()
-        return dict(row) if row else None
+        return _fetchone(db, "SELECT * FROM subscriptions WHERE stripe_customer_id = %s",
+                         (stripe_customer_id,))
 
 
 def get_subscription_by_stripe_sub(stripe_sub_id: str) -> dict | None:
     with get_db() as db:
-        row = db.execute("SELECT * FROM subscriptions WHERE stripe_subscription_id = ?",
-                         (stripe_sub_id,)).fetchone()
-        return dict(row) if row else None
+        return _fetchone(db, "SELECT * FROM subscriptions WHERE stripe_subscription_id = %s",
+                         (stripe_sub_id,))
 
 
 def _current_month() -> str:
@@ -1667,42 +1851,45 @@ def _current_month() -> str:
 
 
 def get_usage(client_id: int) -> dict:
-    """Get current month usage. Creates record if missing."""
     month = _current_month()
     with get_db() as db:
-        row = db.execute("SELECT * FROM usage_tracking WHERE client_id = ? AND month = ?",
-                         (client_id, month)).fetchone()
+        row = _fetchone(db, "SELECT * FROM usage_tracking WHERE client_id = %s AND month = %s",
+                        (client_id, month))
         if row:
-            return dict(row)
-        db.execute("INSERT INTO usage_tracking (client_id, month) VALUES (?, ?)",
-                   (client_id, month))
+            return row
+        _exec(db, "INSERT INTO usage_tracking (client_id, month) VALUES (%s, %s)",
+              (client_id, month))
         db.commit()
-        row = db.execute("SELECT * FROM usage_tracking WHERE client_id = ? AND month = ?",
-                         (client_id, month)).fetchone()
-        return dict(row)
+        row = _fetchone(db, "SELECT * FROM usage_tracking WHERE client_id = %s AND month = %s",
+                        (client_id, month))
+        return row
 
 
 def increment_usage(client_id: int, field: str, amount: int = 1) -> int:
-    """Increment a usage counter. Returns new value."""
     allowed = {"emails_sent", "mail_hub_syncs", "ai_classifications"}
     if field not in allowed:
         return 0
     month = _current_month()
     with get_db() as db:
-        db.execute(f"""
-            INSERT INTO usage_tracking (client_id, month, {field})
-            VALUES (?, ?, ?)
-            ON CONFLICT(client_id, month) DO UPDATE SET {field} = {field} + ?
-        """, (client_id, month, amount, amount))
+        if _USE_PG:
+            _exec(db, f"""
+                INSERT INTO usage_tracking (client_id, month, {field})
+                VALUES (%s, %s, %s)
+                ON CONFLICT(client_id, month) DO UPDATE SET {field} = usage_tracking.{field} + %s
+            """, (client_id, month, amount, amount))
+        else:
+            _exec(db, f"""
+                INSERT INTO usage_tracking (client_id, month, {field})
+                VALUES (%s, %s, %s)
+                ON CONFLICT(client_id, month) DO UPDATE SET {field} = {field} + %s
+            """, (client_id, month, amount, amount))
         db.commit()
-        row = db.execute(f"SELECT {field} FROM usage_tracking WHERE client_id = ? AND month = ?",
-                         (client_id, month)).fetchone()
-        return row[0] if row else 0
+        val = _fetchval(db, f"SELECT {field} FROM usage_tracking WHERE client_id = %s AND month = %s",
+                        (client_id, month))
+        return val or 0
 
 
 def check_limit(client_id: int, field: str) -> tuple[bool, int, int]:
-    """Check if a client has remaining quota for a field.
-    Returns (allowed, used, limit). limit=-1 means unlimited."""
     from outreach.config import PLAN_LIMITS
     sub = get_subscription(client_id)
     plan = sub.get("plan", "free")
