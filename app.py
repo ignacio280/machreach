@@ -1444,15 +1444,20 @@ def delete_account():
     from outreach.db import get_db, _exec
     with get_db() as db:
         _exec(db, "DELETE FROM password_reset_tokens WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM email_verification_tokens WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM email_accounts WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM subscriptions WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM usage_tracking WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM team_members WHERE owner_id = %s OR member_client_id = %s", (client_id, client_id))
         # Delete campaigns and related data
         camp_ids = [r["id"] for r in _exec(db, "SELECT id FROM campaigns WHERE client_id = %s", (client_id,)).fetchall()]
         for cid in camp_ids:
+            # Delete sent_emails via contacts (sent_emails has contact_id, not campaign_id)
+            contact_ids = [r["id"] for r in _exec(db, "SELECT id FROM contacts WHERE campaign_id = %s", (cid,)).fetchall()]
+            for ct_id in contact_ids:
+                _exec(db, "DELETE FROM sent_emails WHERE contact_id = %s", (ct_id,))
             _exec(db, "DELETE FROM email_sequences WHERE campaign_id = %s", (cid,))
             _exec(db, "DELETE FROM contacts WHERE campaign_id = %s", (cid,))
-            _exec(db, "DELETE FROM sent_emails WHERE campaign_id = %s", (cid,))
         _exec(db, "DELETE FROM campaigns WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM contacts_book WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM mail_inbox WHERE client_id = %s", (client_id,))
