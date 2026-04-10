@@ -1,5 +1,7 @@
 # AI Email Outreach Agent
 
+> **Proprietary Software** — © 2026 MachReach. All rights reserved. See [LICENSE](LICENSE).
+
 Autonomous AI-powered cold email outreach system for small businesses.
 
 ## What It Does
