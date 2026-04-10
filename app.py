@@ -1112,21 +1112,21 @@ def register():
         _log_security("REGISTER_OK", client_id=client_id, email=email)
 
         # Send verification email
-        import secrets as _secrets
-        from datetime import timedelta
-        token = _secrets.token_urlsafe(32)
-        expires = (datetime.now() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
-        create_verification_token(client_id, token, expires)
-        verify_link = f"{BASE_URL}/verify-email/{token}"
-        body = (
-            f"Hi {name},\n\n"
-            f"Welcome to MachReach! Please verify your email address:\n\n"
-            f"{verify_link}\n\n"
-            f"This link expires in 24 hours.\n\n"
-            f"— MachReach"
-        )
         email_sent = False
         try:
+            import secrets as _secrets
+            from datetime import timedelta
+            token = _secrets.token_urlsafe(32)
+            expires = (datetime.now() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+            create_verification_token(client_id, token, expires)
+            verify_link = f"{BASE_URL}/verify-email/{token}"
+            body = (
+                f"Hi {name},\n\n"
+                f"Welcome to MachReach! Please verify your email address:\n\n"
+                f"{verify_link}\n\n"
+                f"This link expires in 24 hours.\n\n"
+                f"— MachReach"
+            )
             from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
             import smtplib as _smtplib
             from email.mime.text import MIMEText as _MIMEText
@@ -1148,14 +1148,17 @@ def register():
                         srv.send_message(msg)
                 email_sent = True
         except Exception as e:
-            print(f"[VERIFY] Failed to send verification email to {email}: {e}")
+            print(f"[VERIFY] Verification flow failed for {email}: {e}")
 
         if email_sent:
             flash(("success", "Account created! Please check your email to verify your address before logging in."))
             return redirect(url_for("login"))
         else:
             # Email failed — auto-verify so user isn't locked out
-            mark_email_verified(client_id)
+            try:
+                mark_email_verified(client_id)
+            except Exception:
+                pass
             session["client_id"] = client_id
             session["client_name"] = name
             flash(("success", f"Welcome, {_esc(name)}! Your account is ready."))
@@ -1192,14 +1195,21 @@ def login():
             return redirect(url_for("login"))
         if not client.get("email_verified"):
             # Auto-verify if no verification tokens exist (account created before verification was added)
-            from outreach.db import get_db, _fetchone as _fo
-            with get_db() as _db:
-                has_token = _fo(_db, "SELECT id FROM email_verification_tokens WHERE client_id = %s LIMIT 1", (client["id"],))
-            if not has_token:
-                mark_email_verified(client["id"])
-            else:
-                flash(("error", "Please verify your email address first. Check your inbox for the verification link."))
-                return redirect(url_for("login"))
+            try:
+                from outreach.db import get_db, _fetchone as _fo
+                with get_db() as _db:
+                    has_token = _fo(_db, "SELECT id FROM email_verification_tokens WHERE client_id = %s LIMIT 1", (client["id"],))
+                if not has_token:
+                    mark_email_verified(client["id"])
+                else:
+                    flash(("error", "Please verify your email address first. Check your inbox for the verification link."))
+                    return redirect(url_for("login"))
+            except Exception as e:
+                print(f"[VERIFY] Login verification check failed for {client['id']}: {e}")
+                try:
+                    mark_email_verified(client["id"])
+                except Exception:
+                    pass
         _maybe_upgrade_hash(client["id"], password, client["password"])
         _log_security("LOGIN_OK", client_id=client["id"], email=email)
         # Preserve team invite token across session clear
