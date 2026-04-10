@@ -603,6 +603,7 @@ LAYOUT = """<!DOCTYPE html>
     /* Mobile hamburger */
     .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #94A3B8; font-size: 24px; line-height: 1; z-index: 201; }
     @media (max-width: 1024px) {
+      .nav { backdrop-filter: none; }
       .hamburger { display: block; }
       .nav-links { display: none; position: fixed; top: 58px; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); flex-direction: column; padding: 20px 24px; gap: 4px; overflow-y: auto; z-index: 200; }
       .nav-links.open { display: flex; }
