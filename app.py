@@ -1147,10 +1147,12 @@ def register():
                         srv.login(SMTP_USER, SMTP_PASSWORD)
                         srv.send_message(msg)
                 email_sent = True
-                print(f"[VERIFY] Verification email sent to {email}")
+                print(f"[VERIFY] Verification email sent to {email}", flush=True)
+            else:
+                print(f"[VERIFY] SMTP_USER or SMTP_PASSWORD not set — skipping verification email for {email}", flush=True)
         except Exception as e:
             import traceback
-            print(f"[VERIFY] Verification flow failed for {email}: {e}")
+            print(f"[VERIFY] Verification flow failed for {email}: {e}", flush=True)
             traceback.print_exc()
 
         if email_sent:
