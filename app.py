@@ -1116,10 +1116,11 @@ def register():
         try:
             import secrets as _secrets
             from datetime import timedelta
+            from outreach.config import BASE_URL as _base_url
             token = _secrets.token_urlsafe(32)
             expires = (datetime.now() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
             create_verification_token(client_id, token, expires)
-            verify_link = f"{BASE_URL}/verify-email/{token}"
+            verify_link = f"{_base_url}/verify-email/{token}"
             body = (
                 f"Hi {name},\n\n"
                 f"Welcome to MachReach! Please verify your email address:\n\n"
@@ -1264,10 +1265,11 @@ def resend_verification():
     client = get_client_by_email(email)
     if client and not client.get("email_verified"):
         import secrets as _secrets
+        from outreach.config import BASE_URL as _base_url
         token = _secrets.token_urlsafe(32)
         expires = (datetime.now() + __import__("datetime").timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         create_verification_token(client["id"], token, expires)
-        verify_link = f"{BASE_URL}/verify-email/{token}"
+        verify_link = f"{_base_url}/verify-email/{token}"
         body = f"Hi {client['name']},\n\nVerify your MachReach email:\n\n{verify_link}\n\nExpires in 24 hours.\n\n— MachReach"
         try:
             from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
