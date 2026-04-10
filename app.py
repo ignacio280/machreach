@@ -5188,12 +5188,19 @@ def mail_hub():
           status.innerHTML = '<span style="color:var(--red);">Please select a date for scheduling.</span>';
           return;
         }}
+        // Convert local time to UTC for server comparison against NOW()
+        const localDt = new Date(date + 'T' + time + ':00');
+        const utcStr = localDt.getUTCFullYear() + '-' +
+          String(localDt.getUTCMonth()+1).padStart(2,'0') + '-' +
+          String(localDt.getUTCDate()).padStart(2,'0') + ' ' +
+          String(localDt.getUTCHours()).padStart(2,'0') + ':' +
+          String(localDt.getUTCMinutes()).padStart(2,'0') + ':00';
         btn.disabled = true;
         btn.innerHTML = '&#8987; Scheduling...';
         fetch('/api/mail-hub/schedule', {{
           method: 'POST',
           headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify({{to_email: to, subject: subject, body: body, scheduled_at: date + ' ' + time + ':00', account_id: accountId}})
+          body: JSON.stringify({{to_email: to, subject: subject, body: body, scheduled_at: utcStr, account_id: accountId}})
         }}).then(r => r.json()).then(data => {{
           if (data.id) {{
             status.innerHTML = '<span style="color:var(--green);">&#10003; Scheduled for ' + date + ' ' + time + '</span>';
@@ -6160,6 +6167,33 @@ def contacts_page():
           <p>{'Try different filters.' if search or rel_filter or tag_filter else 'Open an email in Mail Hub and click "Save Contact" to start building your contact book.'}</p>
         </div>"""
 
+    # Build groups section
+    from outreach.db import get_contact_groups
+    groups = get_contact_groups(data_cid)
+    groups_html = ""
+    if groups:
+        group_cards = ""
+        for g in groups:
+            from urllib.parse import quote as _urlquote
+            gname = _esc(g["name"])
+            gcount = g["count"]
+            gurl = _urlquote(g["name"])
+            group_cards += (
+                f'<div class="card" style="padding:14px 18px;display:flex;align-items:center;'
+                f'justify-content:space-between;gap:12px;min-width:220px;">'
+                f'<div><div style="font-weight:600;font-size:14px;">&#128193; {gname}</div>'
+                f'<div style="color:var(--text-muted);font-size:12px;">{gcount} contact{"s" if gcount != 1 else ""}</div></div>'
+                f'<a href="/contacts/group/{gurl}/send" class="btn btn-primary btn-sm" style="font-size:12px;white-space:nowrap;">&#9993; Send</a>'
+                f'</div>'
+            )
+        groups_html = (
+            '<div style="margin-bottom:20px;">'
+            '<h3 style="font-size:16px;margin-bottom:10px;">&#128193; Groups</h3>'
+            f'<div style="display:flex;gap:10px;flex-wrap:wrap;">{group_cards}</div>'
+            '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;">Tag contacts to create groups, then send personalized emails to entire groups at once.</p>'
+            '</div>'
+        )
+
     return _render(t("contacts.title"), f"""
     <div class="breadcrumb"><a href="/dashboard">{t("dash.title")}</a> / {t("contacts.title")}</div>
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
@@ -6186,6 +6220,8 @@ def contacts_page():
       </form>
     </div>
     {'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">' + tag_badges + '</div>' if tag_badges else ''}
+
+    {groups_html}
 
     <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">{len(contacts)} contact{'s' if len(contacts) != 1 else ''}</div>
 
@@ -6623,6 +6659,160 @@ def api_contact_mark_important(contact_id):
     priority = data.get("priority", "important")
     count = mark_contact_emails_priority(session["client_id"], contact["email"], priority)
     return jsonify({"ok": True, "updated": count})
+
+
+# ---------------------------------------------------------------------------
+# Routes — Send to Group
+# ---------------------------------------------------------------------------
+
+@app.route("/contacts/group/<group_name>/send", methods=["GET", "POST"])
+def group_send(group_name):
+    """Send personalized emails to all contacts in a group."""
+    if not _logged_in():
+        return redirect(url_for("login"))
+    from urllib.parse import unquote
+    group_name = unquote(group_name)
+    from outreach.db import get_contacts_by_group
+    data_cid = _effective_client_id()
+    contacts = get_contacts_by_group(data_cid, group_name)
+
+    if not contacts:
+        flash(("error", f"No contacts found in group '{group_name}'."))
+        return redirect(url_for("contacts_page"))
+
+    if request.method == "POST":
+        subject = request.form.get("subject", "").strip()
+        body = request.form.get("body", "").strip()
+        use_ai = request.form.get("use_ai") == "1"
+        ai_idea = request.form.get("ai_idea", "").strip()
+        campaign_name = request.form.get("campaign_name", "").strip() or f"Group: {group_name}"
+
+        if use_ai and ai_idea:
+            # AI generates the email sequence
+            from outreach.ai import generate_sequence
+            from outreach.db import create_campaign, add_contacts, save_sequence
+            try:
+                campaign_id = create_campaign(
+                    session["client_id"], campaign_name,
+                    business_type=ai_idea,
+                    target_audience=group_name,
+                    tone=request.form.get("tone", "professional"),
+                )
+                sequence = generate_sequence(ai_idea, group_name,
+                                             tone=request.form.get("tone", "professional"),
+                                             num_steps=1)
+                for step_def in sequence:
+                    save_sequence(
+                        campaign_id, step_def["step"],
+                        step_def["subject_a"], step_def.get("subject_b", ""),
+                        step_def["body_a"], step_def.get("body_b", ""),
+                        step_def.get("delay_days", 0),
+                    )
+                contact_list = [{"name": c["name"], "email": c["email"],
+                                 "company": c.get("company", ""),
+                                 "role": c.get("role", ""),
+                                 "language": c.get("language", "en")} for c in contacts]
+                add_contacts(campaign_id, contact_list)
+                flash(("success", f"Campaign created with {len(contact_list)} contacts! Review and activate it."))
+                return redirect(f"/campaign/{campaign_id}")
+            except Exception as e:
+                flash(("error", f"AI generation failed: {e}"))
+                return redirect(request.url)
+
+        elif subject and body:
+            # Manual email — create campaign with user's subject/body
+            from outreach.db import create_campaign, add_contacts, save_sequence
+            campaign_id = create_campaign(
+                session["client_id"], campaign_name,
+                business_type="", target_audience=group_name, tone="professional",
+            )
+            save_sequence(campaign_id, 1, subject, "", body, "", 0)
+            contact_list = [{"name": c["name"], "email": c["email"],
+                             "company": c.get("company", ""),
+                             "role": c.get("role", ""),
+                             "language": c.get("language", "en")} for c in contacts]
+            add_contacts(campaign_id, contact_list)
+            flash(("success", f"Campaign created with {len(contact_list)} contacts! Review and activate it."))
+            return redirect(f"/campaign/{campaign_id}")
+        else:
+            flash(("error", "Please provide an email idea for AI or write your own subject and body."))
+            return redirect(request.url)
+
+    # GET — show the send form
+    contact_rows = ""
+    for c in contacts:
+        contact_rows += f'<tr><td>{_esc(c["name"] or "-")}</td><td>{_esc(c["email"])}</td><td>{_esc(c.get("company", "") or "-")}</td></tr>'
+
+    return _render(f"Send to {_esc(group_name)}", f"""
+    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / <a href="/contacts">Contacts</a> / Send to {_esc(group_name)}</div>
+    <h1 style="font-size:28px;">&#9993; Send to Group: {_esc(group_name)}</h1>
+    <p class="subtitle">{len(contacts)} contact{"s" if len(contacts) != 1 else ""} in this group</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;">
+      <!-- AI Generate -->
+      <div class="card" style="padding:28px;">
+        <h3 style="font-size:18px;margin-bottom:16px;">&#129302; AI Generate</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Describe your email idea and AI will generate personalized emails for each contact.</p>
+        <form method="POST">
+          <input type="hidden" name="use_ai" value="1">
+          <div class="form-group">
+            <label>Campaign Name</label>
+            <input name="campaign_name" value="Group: {_esc(group_name)}" style="font-size:14px;">
+          </div>
+          <div class="form-group">
+            <label>Email Idea *</label>
+            <textarea name="ai_idea" rows="4" placeholder="e.g. Introduce our new product launch and invite them to a demo call..." style="font-size:14px;" required></textarea>
+          </div>
+          <div class="form-group">
+            <label>Tone</label>
+            <select name="tone" style="font-size:14px;">
+              <option value="professional">Professional</option>
+              <option value="friendly">Friendly</option>
+              <option value="casual">Casual</option>
+              <option value="formal">Formal</option>
+              <option value="persuasive">Persuasive</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#129302; Generate &amp; Create Campaign</button>
+        </form>
+      </div>
+
+      <!-- Manual Compose -->
+      <div class="card" style="padding:28px;">
+        <h3 style="font-size:18px;margin-bottom:16px;">&#9997; Write Yourself</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Write your own email. Use {{{{name}}}}, {{{{company}}}}, {{{{role}}}} for personalization.</p>
+        <form method="POST">
+          <input type="hidden" name="use_ai" value="0">
+          <div class="form-group">
+            <label>Campaign Name</label>
+            <input name="campaign_name" value="Group: {_esc(group_name)}" style="font-size:14px;">
+          </div>
+          <div class="form-group">
+            <label>Subject *</label>
+            <input name="subject" placeholder="e.g. Quick question, {{{{name}}}}" style="font-size:14px;" required>
+          </div>
+          <div class="form-group">
+            <label>Body *</label>
+            <textarea name="body" rows="6" placeholder="Hi {{{{name}}}},\n\nI wanted to reach out about..." style="font-size:14px;" required></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#9993; Create Campaign</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Contacts in this group -->
+    <div class="card" style="padding:24px;margin-top:24px;">
+      <h3 style="font-size:16px;margin-bottom:12px;">&#128101; Contacts in this group ({len(contacts)})</h3>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <thead><tr style="border-bottom:2px solid var(--border-light);">
+          <th style="text-align:left;padding:8px;">Name</th>
+          <th style="text-align:left;padding:8px;">Email</th>
+          <th style="text-align:left;padding:8px;">Company</th>
+        </tr></thead>
+        <tbody>{contact_rows}</tbody>
+      </table>
+    </div>
+    """, active_page="contacts")
 
 
 # ---------------------------------------------------------------------------

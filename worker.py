@@ -252,9 +252,15 @@ def send_scheduled():
                         msg["In-Reply-To"] = original["message_id"]
                         msg["References"] = original["message_id"]
 
-                with smtplib.SMTP_SSL(smtp_host, smtp_port) as srv:
-                    srv.login(smtp_user, smtp_pw)
-                    srv.send_message(msg)
+                if smtp_port == 587:
+                    with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as srv:
+                        srv.starttls()
+                        srv.login(smtp_user, smtp_pw)
+                        srv.send_message(msg)
+                else:
+                    with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as srv:
+                        srv.login(smtp_user, smtp_pw)
+                        srv.send_message(msg)
 
                 mark_scheduled_sent(email["id"])
                 print(f"  Sent scheduled email to {email['to_email']} (id={email['id']})")

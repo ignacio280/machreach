@@ -1682,6 +1682,24 @@ def delete_contact_book(contact_id: int, client_id: int) -> bool:
         return True
 
 
+def get_contact_groups(client_id: int) -> list[dict]:
+    """Return all unique tags (groups) with contact count."""
+    all_contacts = get_contacts(client_id)
+    groups: dict[str, int] = {}
+    for c in all_contacts:
+        if c.get("tags"):
+            for tg in c["tags"].split(","):
+                tg = tg.strip()
+                if tg:
+                    groups[tg] = groups.get(tg, 0) + 1
+    return [{"name": name, "count": count} for name, count in sorted(groups.items())]
+
+
+def get_contacts_by_group(client_id: int, group: str) -> list[dict]:
+    """Return contacts that have a specific tag/group."""
+    return get_contacts(client_id, tag=group)
+
+
 def get_contact_email_history(client_id: int, email: str, limit: int = 20) -> list[dict]:
     with get_db() as db:
         return _fetchall(db, """
