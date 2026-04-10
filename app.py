@@ -1113,8 +1113,9 @@ def register():
 
         # Send verification email
         import secrets as _secrets
+        from datetime import timedelta
         token = _secrets.token_urlsafe(32)
-        expires = (datetime.now() + __import__("datetime").timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+        expires = (datetime.now() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         create_verification_token(client_id, token, expires)
         verify_link = f"{BASE_URL}/verify-email/{token}"
         body = (
@@ -1124,6 +1125,7 @@ def register():
             f"This link expires in 24 hours.\n\n"
             f"— MachReach"
         )
+        email_sent = False
         try:
             from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
             import smtplib as _smtplib
@@ -1144,11 +1146,20 @@ def register():
                     with _smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
                         srv.login(SMTP_USER, SMTP_PASSWORD)
                         srv.send_message(msg)
+                email_sent = True
         except Exception as e:
             print(f"[VERIFY] Failed to send verification email to {email}: {e}")
 
-        flash(("success", "Account created! Please check your email to verify your address before logging in."))
-        return redirect(url_for("login"))
+        if email_sent:
+            flash(("success", "Account created! Please check your email to verify your address before logging in."))
+            return redirect(url_for("login"))
+        else:
+            # Email failed — auto-verify so user isn't locked out
+            mark_email_verified(client_id)
+            session["client_id"] = client_id
+            session["client_name"] = name
+            flash(("success", f"Welcome, {_esc(name)}! Your account is ready."))
+            return redirect(url_for("dashboard"))
     return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
@@ -1180,8 +1191,15 @@ def login():
             flash(("error", t("auth.invalid_creds")))
             return redirect(url_for("login"))
         if not client.get("email_verified"):
-            flash(("error", "Please verify your email address first. Check your inbox for the verification link."))
-            return redirect(url_for("login"))
+            # Auto-verify if no verification tokens exist (account created before verification was added)
+            from outreach.db import get_db, _fetchone as _fo
+            with get_db() as _db:
+                has_token = _fo(_db, "SELECT id FROM email_verification_tokens WHERE client_id = %s LIMIT 1", (client["id"],))
+            if not has_token:
+                mark_email_verified(client["id"])
+            else:
+                flash(("error", "Please verify your email address first. Check your inbox for the verification link."))
+                return redirect(url_for("login"))
         _maybe_upgrade_hash(client["id"], password, client["password"])
         _log_security("LOGIN_OK", client_id=client["id"], email=email)
         # Preserve team invite token across session clear
