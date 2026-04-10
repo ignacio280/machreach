@@ -299,7 +299,6 @@ LAYOUT = """<!DOCTYPE html>
       height: 58px; position: sticky; top: 0; z-index: 100;
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: blur(12px);
-      overflow: hidden;
     }
     .nav .brand { color: #fff; font-weight: 800; font-size: 18px; letter-spacing: -0.5px; display: flex; align-items: center; gap: 10px; text-decoration: none; }
     .nav .brand-icon { width: 30px; height: 30px; background: linear-gradient(135deg, var(--primary), #8B5CF6); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; box-shadow: 0 2px 8px rgba(99,102,241,0.4); }
