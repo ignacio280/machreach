@@ -8,7 +8,30 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from outreach.config import BASE_URL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER
+from outreach.config import BASE_URL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, DKIM_PRIVATE_KEY, DKIM_SELECTOR, DKIM_DOMAIN
+
+
+def _sign_dkim(msg: MIMEMultipart) -> None:
+    """Sign email with DKIM if private key is configured. Modifies msg in-place."""
+    if not DKIM_PRIVATE_KEY or not DKIM_DOMAIN:
+        return
+    try:
+        import dkim
+        sig = dkim.sign(
+            message=msg.as_bytes(),
+            selector=DKIM_SELECTOR.encode(),
+            domain=DKIM_DOMAIN.encode(),
+            privkey=DKIM_PRIVATE_KEY.replace("\\n", "\n").encode(),
+            include_headers=[b"From", b"To", b"Subject", b"Date", b"Message-ID"],
+        )
+        # dkim.sign returns the header as bytes, e.g. b"DKIM-Signature: v=1; ..."
+        sig_str = sig.decode().strip()
+        if sig_str.startswith("DKIM-Signature:"):
+            msg["DKIM-Signature"] = sig_str.split(":", 1)[1].strip()
+    except ImportError:
+        pass  # dkimpy not installed — skip signing
+    except Exception as e:
+        print(f"[DKIM] Signing failed: {e}")
 
 
 def _wrap_html(body_text: str, contact_id: int | None = None,
@@ -92,6 +115,9 @@ def send_email(
         unsub_url = f"{BASE_URL}/unsubscribe/{contact_id}"
         msg["List-Unsubscribe"] = f"<{unsub_url}>"
         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+
+    # DKIM signing (if configured)
+    _sign_dkim(msg)
 
     try:
         if _port == 587:

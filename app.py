@@ -2033,6 +2033,64 @@ def settings():
     </div>
 
     <div class="card">
+      <div class="card-header">
+        <h2>&#128737; Email Deliverability Check</h2>
+      </div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">Verify your domain's SPF, DKIM, and DMARC records. All three are <strong>required</strong> by Gmail and Yahoo since 2024 for bulk senders.</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">
+        <input id="dlvr-domain" type="text" placeholder="yourcompany.com" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--bg);" />
+        <button id="dlvr-check-btn" class="btn btn-primary" onclick="checkDeliverability()" style="white-space:nowrap;">Check Domain</button>
+      </div>
+      <div id="dlvr-results" style="display:none;">
+        <div id="dlvr-score" style="text-align:center;margin-bottom:16px;padding:14px;border-radius:var(--radius-sm);font-weight:600;font-size:15px;"></div>
+        <div style="display:flex;flex-direction:column;gap:8px;" id="dlvr-rows"></div>
+        <div id="dlvr-tips" style="margin-top:14px;font-size:12px;color:var(--text-muted);"></div>
+      </div>
+      <script>
+      function checkDeliverability() {{
+        const domain = document.getElementById('dlvr-domain').value.trim();
+        if (!domain) return;
+        const btn = document.getElementById('dlvr-check-btn');
+        btn.disabled = true; btn.textContent = 'Checking...';
+        document.getElementById('dlvr-results').style.display = 'none';
+        fetch('/api/check-deliverability?domain=' + encodeURIComponent(domain))
+          .then(r => r.json()).then(d => {{
+            btn.disabled = false; btn.textContent = 'Check Domain';
+            if (d.error) {{ showToast(d.error, 'error'); return; }}
+            document.getElementById('dlvr-results').style.display = 'block';
+            const scorePct = Math.round((d.score / d.max_score) * 100);
+            const scoreEl = document.getElementById('dlvr-score');
+            const colors = {{0: ['#FEE2E2','#DC2626'], 1: ['#FEF3C7','#D97706'], 2: ['#FEF3C7','#D97706'], 3: ['#DCFCE7','#16A34A']}};
+            const [bg, fg] = colors[d.score] || colors[0];
+            scoreEl.style.background = bg; scoreEl.style.color = fg;
+            scoreEl.textContent = d.score + '/3 checks passed — ' + (d.score === 3 ? 'Excellent! Your domain is fully authenticated.' : d.score >= 2 ? 'Good, but fix the remaining issue.' : 'Action needed — your emails may land in spam.');
+
+            const rowsEl = document.getElementById('dlvr-rows');
+            rowsEl.innerHTML = '';
+            [{{key:'spf', label:'SPF', icon:'&#128274;'}}, {{key:'dkim', label:'DKIM', icon:'&#128273;'}}, {{key:'dmarc', label:'DMARC', icon:'&#128737;'}}].forEach(item => {{
+              const c = d[item.key];
+              const ok = c && c.status === 'pass';
+              const row = document.createElement('div');
+              row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;background:' + (ok ? 'var(--green-light)' : '#FEF3C7') + ';';
+              row.innerHTML = '<span style="font-size:18px;">' + (ok ? '&#9989;' : '&#9888;&#65039;') + '</span>'
+                + '<div style="flex:1;"><strong style="font-size:13px;">' + item.label + '</strong>'
+                + (c && c.record ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;word-break:break-all;font-family:monospace;">' + (c.record.length > 80 ? c.record.slice(0,80)+'...' : c.record) + '</div>' : '')
+                + (c && c.selector ? '<div style="font-size:11px;color:var(--text-muted);">Selector: ' + c.selector + '</div>' : '')
+                + (!ok ? '<div style="font-size:11px;color:#D97706;margin-top:2px;">' + (c && c.hint ? c.hint : 'Not found — add this record in your domain DNS settings.') + '</div>' : '')
+                + '</div>';
+              rowsEl.appendChild(row);
+            }});
+
+            const tips = document.getElementById('dlvr-tips');
+            if (d.score < 3) {{
+              tips.innerHTML = '<strong>How to fix:</strong> Log into your domain registrar (Namecheap, Cloudflare, GoDaddy, etc.) and add the missing DNS TXT records. Your email provider (Google Workspace, Microsoft 365, etc.) will give you the exact values.';
+            }} else {{ tips.innerHTML = ''; }}
+          }}).catch(() => {{ btn.disabled = false; btn.textContent = 'Check Domain'; showToast('Check failed', 'error'); }});
+      }}
+      </script>
+    </div>
+
+    <div class="card">
       <div class="card-header"><h2>Sending Configuration</h2></div>
       <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;">
         <p><strong>Sender Name:</strong> {{{{sender_name}}}}</p>
@@ -6929,6 +6987,97 @@ def api_detect_provider():
                 "mx": mx_hosts})
 
     return jsonify({"provider": None, "mx": mx_hosts})
+
+
+# ---------------------------------------------------------------------------
+# API — Email deliverability check (SPF / DKIM / DMARC)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/check-deliverability")
+@limiter.limit("10 per minute")
+def api_check_deliverability():
+    """Check SPF, DKIM, and DMARC DNS records for a domain."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    import dns.resolver
+    import re as _re
+    domain = request.args.get("domain", "").strip().lower()
+    if not domain or len(domain) > 253 or not _re.match(r'^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$', domain):
+        return jsonify({"error": "invalid domain"}), 400
+
+    result = {"domain": domain, "spf": None, "dkim": None, "dmarc": None}
+
+    # --- SPF ---
+    try:
+        answers = dns.resolver.resolve(domain, "TXT")
+        for rdata in answers:
+            txt = rdata.to_text().strip('"')
+            if txt.startswith("v=spf1"):
+                result["spf"] = {"status": "pass", "record": txt}
+                break
+        if not result["spf"]:
+            result["spf"] = {"status": "missing", "record": None}
+    except dns.resolver.NXDOMAIN:
+        result["spf"] = {"status": "missing", "record": None}
+    except dns.resolver.NoAnswer:
+        result["spf"] = {"status": "missing", "record": None}
+    except Exception as e:
+        result["spf"] = {"status": "error", "record": None, "error": str(e)}
+
+    # --- DKIM (check common selectors) ---
+    dkim_selectors = ["google", "default", "selector1", "selector2", "dkim", "mail", "k1", "s1", "s2"]
+    dkim_found = False
+    for sel in dkim_selectors:
+        try:
+            answers = dns.resolver.resolve(f"{sel}._domainkey.{domain}", "TXT")
+            for rdata in answers:
+                txt = rdata.to_text().strip('"')
+                if "p=" in txt:
+                    result["dkim"] = {"status": "pass", "selector": sel, "record": txt[:120] + "..."}
+                    dkim_found = True
+                    break
+        except Exception:
+            pass
+        if dkim_found:
+            break
+    if not dkim_found:
+        try:
+            dns.resolver.resolve(f"_domainkey.{domain}", "TXT")
+            result["dkim"] = {"status": "pass", "selector": "_domainkey", "record": "(base record found)"}
+        except Exception:
+            result["dkim"] = {"status": "missing", "record": None,
+                              "hint": "No DKIM record found for common selectors. Your email provider should give you the selector and key to add."}
+
+    # --- DMARC ---
+    try:
+        answers = dns.resolver.resolve(f"_dmarc.{domain}", "TXT")
+        for rdata in answers:
+            txt = rdata.to_text().strip('"')
+            if txt.startswith("v=DMARC1"):
+                policy = "none"
+                if "p=reject" in txt:
+                    policy = "reject"
+                elif "p=quarantine" in txt:
+                    policy = "quarantine"
+                elif "p=none" in txt:
+                    policy = "none"
+                result["dmarc"] = {"status": "pass", "record": txt, "policy": policy}
+                break
+        if not result["dmarc"]:
+            result["dmarc"] = {"status": "missing", "record": None}
+    except dns.resolver.NXDOMAIN:
+        result["dmarc"] = {"status": "missing", "record": None}
+    except dns.resolver.NoAnswer:
+        result["dmarc"] = {"status": "missing", "record": None}
+    except Exception as e:
+        result["dmarc"] = {"status": "error", "record": None, "error": str(e)}
+
+    # Overall score
+    checks = [result["spf"], result["dkim"], result["dmarc"]]
+    passed = sum(1 for c in checks if c and c.get("status") == "pass")
+    result["score"] = passed
+    result["max_score"] = 3
+    return jsonify(result)
 
 
 if __name__ == "__main__":
