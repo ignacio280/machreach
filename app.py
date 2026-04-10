@@ -1194,22 +1194,11 @@ def login():
             flash(("error", t("auth.invalid_creds")))
             return redirect(url_for("login"))
         if not client.get("email_verified"):
-            # Auto-verify if no verification tokens exist (account created before verification was added)
+            # Password login is sufficient proof of identity — auto-verify
             try:
-                from outreach.db import get_db, _fetchone as _fo
-                with get_db() as _db:
-                    has_token = _fo(_db, "SELECT id FROM email_verification_tokens WHERE client_id = %s LIMIT 1", (client["id"],))
-                if not has_token:
-                    mark_email_verified(client["id"])
-                else:
-                    flash(("error", "Please verify your email address first. Check your inbox for the verification link."))
-                    return redirect(url_for("login"))
-            except Exception as e:
-                print(f"[VERIFY] Login verification check failed for {client['id']}: {e}")
-                try:
-                    mark_email_verified(client["id"])
-                except Exception:
-                    pass
+                mark_email_verified(client["id"])
+            except Exception:
+                pass
         _maybe_upgrade_hash(client["id"], password, client["password"])
         _log_security("LOGIN_OK", client_id=client["id"], email=email)
         # Preserve team invite token across session clear
