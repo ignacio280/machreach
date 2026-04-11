@@ -223,11 +223,22 @@ def send_scheduled():
         from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, BASE_URL, SECRET_KEY
         import hashlib
 
+        # Debug: check pending emails
+        from outreach.db import get_db, _fetchall, _USE_PG
+        with get_db() as db:
+            pending = _fetchall(db, "SELECT id, to_email, scheduled_at, status FROM scheduled_emails WHERE status = 'pending' ORDER BY scheduled_at ASC")
+        if pending:
+            from datetime import datetime
+            now_utc = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[SCHEDULED] {len(pending)} pending emails. Server UTC now: {now_utc}", flush=True)
+            for p in pending[:5]:
+                print(f"  id={p['id']} to={p['to_email']} scheduled_at={p['scheduled_at']} (due={'YES' if p['scheduled_at'] <= now_utc else 'NO'})", flush=True)
+
         due = get_due_scheduled_emails()
         if not due:
             return
 
-        print(f"Sending {len(due)} scheduled email(s)...")
+        print(f"[SCHEDULED] Found {len(due)} due email(s) to send", flush=True)
         for email in due:
             try:
                 # Check suppression list before sending

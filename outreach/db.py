@@ -1924,12 +1924,18 @@ def delete_scheduled_email(email_id: int, client_id: int) -> bool:
 
 def get_due_scheduled_emails() -> list[dict]:
     with get_db() as db:
-        now = _now_expr()
-        return _fetchall(db, f"""
-            SELECT * FROM scheduled_emails
-            WHERE status = 'pending' AND scheduled_at <= {now}
-            ORDER BY scheduled_at ASC
-        """)
+        if _USE_PG:
+            return _fetchall(db, """
+                SELECT * FROM scheduled_emails
+                WHERE status = 'pending' AND scheduled_at::timestamp <= NOW()
+                ORDER BY scheduled_at ASC
+            """)
+        else:
+            return _fetchall(db, """
+                SELECT * FROM scheduled_emails
+                WHERE status = 'pending' AND scheduled_at <= datetime('now')
+                ORDER BY scheduled_at ASC
+            """)
 
 
 def mark_scheduled_sent(email_id: int) -> bool:
