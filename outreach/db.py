@@ -50,6 +50,14 @@ def decrypt_password(ciphertext: str) -> str:
 # Connection helper
 # ---------------------------------------------------------------------------
 
+def _db_fingerprint() -> str:
+    """Short hash of DATABASE_URL for comparing web vs worker connections."""
+    import hashlib
+    if _USE_PG and DATABASE_URL:
+        return hashlib.sha256(DATABASE_URL.encode()).hexdigest()[:12]
+    return "sqlite"
+
+
 @contextmanager
 def get_db():
     if _USE_PG:
@@ -1900,13 +1908,16 @@ def create_scheduled_email(client_id: int, to_email: str, subject: str, body: st
                            reply_to_mail_id: int | None = None,
                            account_id: int | None = None) -> int:
     with get_db() as db:
-        return _insert_returning_id(
+        new_id = _insert_returning_id(
             db,
             """INSERT INTO scheduled_emails (client_id, to_email, to_name, subject, body,
                                              scheduled_at, reply_to_mail_id, account_id)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (client_id, to_email, to_name, subject, body, scheduled_at, reply_to_mail_id, account_id),
         )
+        # Log insert so we can confirm it persisted
+        print(f"[SCHED INSERT] id={new_id} to={to_email} at={scheduled_at} client={client_id} db={'PG' if _USE_PG else 'SQLite'} db_fingerprint={_db_fingerprint()}", flush=True)
+        return new_id
 
 
 def get_scheduled_emails(client_id: int, status: str | None = None) -> list[dict]:
@@ -1930,11 +1941,13 @@ def delete_scheduled_email(email_id: int, client_id: int) -> bool:
 def get_due_scheduled_emails() -> list[dict]:
     with get_db() as db:
         if _USE_PG:
-            # scheduled_at is stored as UTC text — cast explicitly to UTC timestamptz
+            # scheduled_at stores UTC text like '2026-04-11 06:30:00'
+            # Use pure TEXT comparison — ISO dates sort lexicographically.
+            # This avoids all ::timestamp / AT TIME ZONE cast issues.
             return _fetchall(db, """
                 SELECT * FROM scheduled_emails
                 WHERE status = 'pending'
-                  AND (scheduled_at::timestamp AT TIME ZONE 'UTC') <= NOW()
+                  AND scheduled_at <= TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
                 ORDER BY scheduled_at ASC
             """)
         else:

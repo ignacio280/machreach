@@ -5701,6 +5701,27 @@ def api_scheduled_delete(email_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/debug/scheduled")
+def api_debug_scheduled():
+    """Diagnostic: show what the web app sees in scheduled_emails. Login required."""
+    if not _logged_in():
+        return jsonify({"error": "unauthorized"}), 401
+    from outreach.db import get_db, _fetchall, _fetchval, _USE_PG, _db_fingerprint
+    result = {"engine": "PG" if _USE_PG else "SQLite", "db_fingerprint": _db_fingerprint()}
+    try:
+        with get_db() as db:
+            if _USE_PG:
+                result["db_name"] = _fetchval(db, "SELECT current_database()")
+                result["pg_now"] = _fetchval(db, "SELECT TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')")
+            result["total_rows"] = _fetchval(db, "SELECT COUNT(*) FROM scheduled_emails")
+            result["pending_rows"] = _fetchval(db, "SELECT COUNT(*) FROM scheduled_emails WHERE status = 'pending'")
+            rows = _fetchall(db, "SELECT id, to_email, scheduled_at, status, client_id FROM scheduled_emails ORDER BY id DESC LIMIT 10")
+            result["last_10"] = [{k: str(v) for k, v in r.items()} for r in rows]
+    except Exception as e:
+        result["error"] = str(e)
+    return jsonify(result)
+
+
 # ---------------------------------------------------------------------------
 # Route — Mail Hub detail view
 # ---------------------------------------------------------------------------

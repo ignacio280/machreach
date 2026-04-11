@@ -224,30 +224,36 @@ def send_scheduled():
         import hashlib
 
         # Debug: check pending emails and DB engine
-        from outreach.db import get_db, _fetchall, _USE_PG
+        from outreach.db import get_db, _fetchall, _USE_PG, _db_fingerprint
         from outreach.config import DATABASE_URL
         from datetime import datetime
         now_utc = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[SCHEDULED] DB engine: {'PG' if _USE_PG else 'SQLite'} | DATABASE_URL set: {bool(DATABASE_URL)} | len={len(DATABASE_URL or '')}", flush=True)
+        print(f"[SCHEDULED] DB engine: {'PG' if _USE_PG else 'SQLite'} | db_fingerprint={_db_fingerprint()} | DATABASE_URL len={len(DATABASE_URL or '')}", flush=True)
         try:
             with get_db() as db:
-                # Also check PG server time
                 if _USE_PG:
                     from outreach.db import _fetchval
-                    pg_now = _fetchval(db, "SELECT NOW()::text")
-                    pg_tz = _fetchval(db, "SHOW timezone")
+                    pg_now = _fetchval(db, "SELECT TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')")
                     db_name = _fetchval(db, "SELECT current_database()")
                     total_all = _fetchval(db, "SELECT COUNT(*) FROM scheduled_emails")
-                    print(f"[SCHEDULED] PG NOW()={pg_now} | timezone={pg_tz} | db={db_name}", flush=True)
-                    print(f"[SCHEDULED] Total rows in scheduled_emails (ANY status): {total_all}", flush=True)
+                    total_pending = _fetchval(db, "SELECT COUNT(*) FROM scheduled_emails WHERE status = 'pending'")
+                    print(f"[SCHEDULED] PG formatted NOW={pg_now} | db={db_name} | total_rows={total_all} | pending={total_pending}", flush=True)
                     # Show last 5 rows regardless of status
                     all_rows = _fetchall(db, "SELECT id, to_email, scheduled_at, status, client_id FROM scheduled_emails ORDER BY id DESC LIMIT 5")
-                    for r in all_rows:
-                        print(f"  ROW id={r['id']} to={r['to_email']} at={r['scheduled_at']} status={r['status']} client={r['client_id']}", flush=True)
-                pending = _fetchall(db, "SELECT id, to_email, scheduled_at, status FROM scheduled_emails WHERE status = 'pending' ORDER BY scheduled_at ASC")
-            print(f"[SCHEDULED] {len(pending)} pending email(s). Worker UTC now: {now_utc}", flush=True)
-            for p in pending[:5]:
-                print(f"  id={p['id']} to={p['to_email']} at={p['scheduled_at']} due={'Y' if str(p['scheduled_at'])[:19] <= now_utc else 'N'}", flush=True)
+                    if all_rows:
+                        for r in all_rows:
+                            print(f"  ROW id={r['id']} to={r['to_email']} at={r['scheduled_at']} status={r['status']} client={r['client_id']}", flush=True)
+                    else:
+                        print(f"  TABLE IS EMPTY — no rows at all in scheduled_emails!", flush=True)
+                    # Test the actual due query logic
+                    due_test = _fetchall(db, """
+                        SELECT id, to_email, scheduled_at, status,
+                               scheduled_at <= TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS is_due
+                        FROM scheduled_emails WHERE status = 'pending'
+                        ORDER BY scheduled_at ASC LIMIT 5
+                    """)
+                    for d in due_test:
+                        print(f"  PENDING id={d['id']} at={d['scheduled_at']} is_due={d['is_due']}", flush=True)
         except Exception as dbg_err:
             print(f"[SCHEDULED] Debug query failed: {dbg_err}", flush=True)
 
