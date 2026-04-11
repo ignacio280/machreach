@@ -183,7 +183,7 @@ RULES:
 1. Keep it short (2-4 sentences max)
 2. Be natural and conversational, not salesy
 3. Reference something specific from their reply
-4. Sign off with "Best,\\n{sender_name}"
+4. Sign off appropriately in the same language as their reply. For English use "Best,", for Spanish use "Saludos,", for French use "Cordialement,", etc. Always include {sender_name} after the sign-off.
 5. Do NOT include a subject line — just the body
 
 Return ONLY the reply body text, nothing else."""
@@ -246,7 +246,7 @@ INSTRUCTIONS:
 - Match the formality of the original email
 {f'- IMPORTANT: Adapt your tone and style to match their communication preferences: {contact_context["personality"]}' if contact_context and contact_context.get("personality") else ""}
 {f'- They are a {contact_context["relationship"]} — adjust formality accordingly' if contact_context and contact_context.get("relationship") else ""}
-- Sign off with "Best,\\n{sender_name}"
+- Sign off appropriately in the same language as the original email. For English use "Best,", for Spanish "Saludos,", for French "Cordialement,", etc. Always include {sender_name} after the sign-off.
 
 Return ONLY the reply body text, nothing else."""
 

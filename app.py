@@ -1624,6 +1624,7 @@ def dashboard():
             <div class="btn-group">
               <a href="/campaign/{c['id']}" class="btn btn-outline btn-sm">View</a>
               <form method="post" action="/campaign/{c['id']}/duplicate" class="confirm-form"><button class="btn btn-ghost btn-sm" title="Duplicate">&#128203;</button></form>
+              <form method="post" action="/campaign/{c['id']}/delete" class="confirm-form" onsubmit="return confirm('Delete this campaign and all its data?')"><button class="btn btn-ghost btn-sm" title="Delete" style="color:var(--red);">&#128465;</button></form>
             </div>
           </td>
         </tr>"""
@@ -3133,6 +3134,13 @@ def new_campaign():
         if not name or not btype or not audience:
             flash(("error", "Please fill in all required fields."))
             return redirect(url_for("new_campaign"))
+
+        # Require physical address for CAN-SPAM compliance
+        client = get_client(session["client_id"])
+        if not client.get("physical_address", "").strip():
+            flash(("error", "A physical mailing address is required to create campaigns (CAN-SPAM). Please add one in Settings."))
+            return redirect(url_for("new_campaign"))
+
         camp_id = create_campaign(session["client_id"], name, btype, audience, tone, scheduled_start)
 
         try:
@@ -4912,7 +4920,7 @@ def mail_hub():
             badge.textContent = data.unseen + ' new email' + (data.unseen === 1 ? '' : 's') + ' waiting';
             badge.style.display = 'inline-block';
             // Auto-sync for paid tiers (once per page load)
-            if (isPaid && !peekAutoSynced) {{
+            if (!peekAutoSynced) {{
               peekAutoSynced = true;
               syncInbox();
             }}
@@ -6650,11 +6658,6 @@ def api_contact_mark_important(contact_id):
     count = mark_contact_emails_priority(session["client_id"], contact["email"], priority)
     return jsonify({"ok": True, "updated": count})
 
-
-# ---------------------------------------------------------------------------
-# Routes — Send to Group
-# ---------------------------------------------------------------------------
-
 @app.route("/contacts/group/<group_name>/send", methods=["GET", "POST"])
 def group_send(group_name):
     """Send personalized emails directly to all contacts in a group (no campaign)."""
@@ -6724,14 +6727,17 @@ def group_send(group_name):
         # If scheduled, store in scheduled_emails table for the worker to send later
         if schedule_date:
             from outreach.db import create_scheduled_email
-            from datetime import datetime as _dt_cls
-            # Convert local time to UTC
+            from datetime import datetime as _dt_cls, timedelta
+            # Convert local time to UTC using browser-provided timezone offset
+            tz_offset_min = request.form.get("tz_offset", "")
             try:
                 local_dt = _dt_cls.strptime(f"{schedule_date} {schedule_time}:00", "%Y-%m-%d %H:%M:%S")
-                import time as _time_mod
-                # Use UTC offset from server; for Render (UTC) this is a no-op
-                # The browser already sent local date/time, convert as best we can
-                utc_str = local_dt.strftime("%Y-%m-%d %H:%M:%S")
+                if tz_offset_min:
+                    # tz_offset is in minutes ahead of UTC (e.g. -240 for UTC-4)
+                    utc_dt = local_dt + timedelta(minutes=int(tz_offset_min))
+                    utc_str = utc_dt.strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    utc_str = local_dt.strftime("%Y-%m-%d %H:%M:%S")
             except Exception:
                 utc_str = f"{schedule_date} {schedule_time}:00"
 
@@ -6859,6 +6865,7 @@ def group_send(group_name):
               <input type="date" name="schedule_date" style="font-size:13px;flex:1;">
               <input type="time" name="schedule_time" value="09:00" style="font-size:13px;width:100px;">
             </div>
+            <input type="hidden" name="tz_offset" class="tz-offset-input">
           </div>
           <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#129302; Generate &amp; Send</button>
         </form>
@@ -6888,6 +6895,7 @@ def group_send(group_name):
               <input type="date" name="schedule_date" style="font-size:13px;flex:1;">
               <input type="time" name="schedule_time" value="09:00" style="font-size:13px;width:100px;">
             </div>
+            <input type="hidden" name="tz_offset" class="tz-offset-input">
           </div>
           <button type="submit" class="btn btn-primary" style="width:100%;font-size:15px;">&#9993; Send</button>
         </form>
@@ -6906,6 +6914,7 @@ def group_send(group_name):
         <tbody>{contact_rows}</tbody>
       </table>
     </div>
+    <script>document.querySelectorAll('.tz-offset-input').forEach(function(el){{el.value=new Date().getTimezoneOffset();}});</script>
     """, active_page="contacts")
 
 
