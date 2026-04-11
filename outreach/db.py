@@ -617,6 +617,11 @@ def _now_expr():
     return "NOW()" if _USE_PG else "datetime('now', 'localtime')"
 
 
+def _ts_cast(col: str) -> str:
+    """Cast a TEXT column to timestamp for comparison (PG needs explicit cast)."""
+    return f"{col}::timestamp" if _USE_PG else col
+
+
 def _date_diff_days(col):
     """SQL expression: fractional days since `col` until now."""
     if _USE_PG:
@@ -1471,7 +1476,7 @@ def get_mail_inbox(client_id: int, filter_by: str = "all",
         conditions = ["m.client_id = %s", "m.is_archived = 0"]
         params: list = [client_id]
 
-        conditions.append(f"(m.snooze_until IS NULL OR m.snooze_until <= {now})")
+        conditions.append(f"(m.snooze_until IS NULL OR {_ts_cast('m.snooze_until')} <= {now})")
 
         if filter_by == "all":
             conditions.append("m.is_read = 0")
@@ -1485,7 +1490,7 @@ def get_mail_inbox(client_id: int, filter_by: str = "all",
             conditions.append("m.priority IN ('urgent', 'important')")
         elif filter_by == "snoozed":
             conditions = ["m.client_id = %s",
-                          f"m.snooze_until IS NOT NULL AND m.snooze_until > {now}"]
+                          f"m.snooze_until IS NOT NULL AND {_ts_cast('m.snooze_until')} > {now}"]
             params = [client_id]
 
         if category and category != "all":
@@ -1529,7 +1534,7 @@ def get_mail_stats(client_id: int) -> dict:
         starred = _fetchval(db, "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND is_starred = 1 AND is_archived = 0", (client_id,))
         urgent = _fetchval(db, "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND is_archived = 0 AND priority IN ('urgent','important')", (client_id,))
         read_count = _fetchval(db, "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND is_archived = 0 AND is_read = 1", (client_id,))
-        snoozed = _fetchval(db, f"SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND snooze_until IS NOT NULL AND snooze_until > {now}", (client_id,))
+        snoozed = _fetchval(db, f"SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND snooze_until IS NOT NULL AND {_ts_cast('snooze_until')} > {now}", (client_id,))
 
         cat_rows = _fetchall(db, """
             SELECT category, COUNT(*) as cnt FROM mail_inbox
@@ -1962,7 +1967,7 @@ def process_snoozed_emails() -> int:
         cur = _exec(db, f"""
             UPDATE mail_inbox SET priority = 'important'
             WHERE snooze_until IS NOT NULL
-              AND snooze_until <= {now}
+              AND {_ts_cast('snooze_until')} <= {now}
               AND priority NOT IN ('urgent', 'important')
         """)
         return cur.rowcount
