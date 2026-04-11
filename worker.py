@@ -236,7 +236,14 @@ def send_scheduled():
                     from outreach.db import _fetchval
                     pg_now = _fetchval(db, "SELECT NOW()::text")
                     pg_tz = _fetchval(db, "SHOW timezone")
-                    print(f"[SCHEDULED] PG NOW()={pg_now} | timezone={pg_tz}", flush=True)
+                    db_name = _fetchval(db, "SELECT current_database()")
+                    total_all = _fetchval(db, "SELECT COUNT(*) FROM scheduled_emails")
+                    print(f"[SCHEDULED] PG NOW()={pg_now} | timezone={pg_tz} | db={db_name}", flush=True)
+                    print(f"[SCHEDULED] Total rows in scheduled_emails (ANY status): {total_all}", flush=True)
+                    # Show last 5 rows regardless of status
+                    all_rows = _fetchall(db, "SELECT id, to_email, scheduled_at, status, client_id FROM scheduled_emails ORDER BY id DESC LIMIT 5")
+                    for r in all_rows:
+                        print(f"  ROW id={r['id']} to={r['to_email']} at={r['scheduled_at']} status={r['status']} client={r['client_id']}", flush=True)
                 pending = _fetchall(db, "SELECT id, to_email, scheduled_at, status FROM scheduled_emails WHERE status = 'pending' ORDER BY scheduled_at ASC")
             print(f"[SCHEDULED] {len(pending)} pending email(s). Worker UTC now: {now_utc}", flush=True)
             for p in pending[:5]:
