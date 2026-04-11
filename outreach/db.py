@@ -1930,9 +1930,11 @@ def delete_scheduled_email(email_id: int, client_id: int) -> bool:
 def get_due_scheduled_emails() -> list[dict]:
     with get_db() as db:
         if _USE_PG:
+            # scheduled_at is stored as UTC text — cast explicitly to UTC timestamptz
             return _fetchall(db, """
                 SELECT * FROM scheduled_emails
-                WHERE status = 'pending' AND scheduled_at::timestamp <= NOW()
+                WHERE status = 'pending'
+                  AND (scheduled_at::timestamp AT TIME ZONE 'UTC') <= NOW()
                 ORDER BY scheduled_at ASC
             """)
         else:
