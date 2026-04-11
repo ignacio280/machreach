@@ -4582,7 +4582,7 @@ def mail_hub():
     # Build scheduled emails section
     sched_html = ""
     for s in scheduled:
-        sched_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border-light);font-size:13px;display:flex;align-items:center;gap:6px;"><div style="flex:1;min-width:0;"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{_esc(s["to_email"])}</div><div style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{_esc(s["subject"][:40])}</div><div style="color:var(--primary);font-size:12px;">&#128340; {s["scheduled_at"][:16]}</div></div><button onclick="cancelScheduled({s["id"]})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;padding:4px;flex-shrink:0;" title="Cancel this email">&#10005;</button></div>'
+        sched_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border-light);font-size:13px;display:flex;align-items:center;gap:6px;"><div style="flex:1;min-width:0;"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{_esc(s["to_email"])}</div><div style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{_esc(s["subject"][:40])}</div><div style="color:var(--primary);font-size:12px;" class="sched-utc" data-utc="{s["scheduled_at"][:19]}">&#128340; {s["scheduled_at"][:16]}</div></div><button onclick="cancelScheduled({s["id"]})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;padding:4px;flex-shrink:0;" title="Cancel this email">&#10005;</button></div>'
 
     # Show tutorial if user has no email accounts (first time visiting Mail Hub)
     mail_hub_tutorial = ""
@@ -4972,6 +4972,20 @@ def mail_hub():
     // Peek immediately on page load, then every 60s
     peekInbox();
     setInterval(peekInbox, 60000);
+
+    // Convert scheduled email times from UTC to local
+    document.querySelectorAll('.sched-utc').forEach(function(el) {{
+      try {{
+        const utc = el.getAttribute('data-utc');
+        const d = new Date(utc.replace(' ', 'T') + 'Z');
+        const local = d.getFullYear() + '-' +
+          String(d.getMonth()+1).padStart(2,'0') + '-' +
+          String(d.getDate()).padStart(2,'0') + ' ' +
+          String(d.getHours()).padStart(2,'0') + ':' +
+          String(d.getMinutes()).padStart(2,'0');
+        el.innerHTML = '&#128340; ' + local;
+      }} catch(e) {{}}
+    }});
 
     // --- Cancel scheduled email ---
     function cancelScheduled(id) {{
@@ -5934,10 +5948,17 @@ def mail_hub_detail(mail_id):
         }}
         btn.innerHTML = '&#8987; Scheduling...';
         btn.disabled = true;
+        // Convert local time to UTC
+        const localDt = new Date(date + 'T' + time + ':00');
+        const utcStr = localDt.getUTCFullYear() + '-' +
+          String(localDt.getUTCMonth()+1).padStart(2,'0') + '-' +
+          String(localDt.getUTCDate()).padStart(2,'0') + ' ' +
+          String(localDt.getUTCHours()).padStart(2,'0') + ':' +
+          String(localDt.getUTCMinutes()).padStart(2,'0') + ':00';
         fetch('/api/mail-hub/schedule', {{
           method: 'POST',
           headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify({{to_email: '{mail["from_email"]}', subject: subject, body: body, scheduled_at: date + ' ' + time + ':00', reply_to_mail_id: id, account_id: accountId}})
+          body: JSON.stringify({{to_email: '{mail["from_email"]}', subject: subject, body: body, scheduled_at: utcStr, reply_to_mail_id: id, account_id: accountId}})
         }}).then(r => r.json()).then(data => {{
           if (data.id) {{
             status.innerHTML = '<span style="color:var(--green);">&#10003; Reply scheduled for ' + date + ' ' + time + '</span>';
