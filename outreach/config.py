@@ -44,6 +44,11 @@ SECRET_KEY = _secret or "dev-secret-change-me"
 BASE_URL = os.getenv("BASE_URL", "http://localhost:5000")
 SENDER_NAME = os.getenv("SENDER_NAME", "Ignacio")
 
+# System/transactional email sender (verification, password reset, etc.)
+# This should be support@machreach.com or noreply@machreach.com
+SYSTEM_FROM_EMAIL = os.getenv("SYSTEM_FROM_EMAIL", "") or os.getenv("SMTP_USER", "")
+SYSTEM_FROM_NAME = os.getenv("SYSTEM_FROM_NAME", "MachReach")
+
 # Encryption key for email account passwords at rest (Fernet, 32-byte base64)
 _enc_key = os.getenv("ENCRYPTION_KEY", "")
 if not _enc_key and os.getenv("RENDER", ""):

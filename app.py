@@ -1119,13 +1119,14 @@ def register():
                 f"— MachReach"
             )
             from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+            from outreach.config import SYSTEM_FROM_EMAIL, SYSTEM_FROM_NAME
             import smtplib as _smtplib
             from email.mime.text import MIMEText as _MIMEText
             from email.mime.multipart import MIMEMultipart as _MIMEMultipart
             if SMTP_USER and SMTP_PASSWORD:
                 msg = _MIMEMultipart("alternative")
                 msg["Subject"] = "MachReach — Verify Your Email"
-                msg["From"] = SMTP_USER
+                msg["From"] = f"{SYSTEM_FROM_NAME} <{SYSTEM_FROM_EMAIL}>" if SYSTEM_FROM_EMAIL else SMTP_USER
                 msg["To"] = email
                 msg.attach(_MIMEText(body, "plain"))
                 if SMTP_PORT == 587:
@@ -1263,13 +1264,14 @@ def resend_verification():
         body = f"Hi {client['name']},\n\nVerify your MachReach email:\n\n{verify_link}\n\nExpires in 24 hours.\n\n— MachReach"
         try:
             from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+            from outreach.config import SYSTEM_FROM_EMAIL, SYSTEM_FROM_NAME
             import smtplib as _smtplib
             from email.mime.text import MIMEText as _MIMEText
             from email.mime.multipart import MIMEMultipart as _MIMEMultipart
             if SMTP_USER and SMTP_PASSWORD:
                 msg = _MIMEMultipart("alternative")
                 msg["Subject"] = "MachReach — Verify Your Email"
-                msg["From"] = SMTP_USER
+                msg["From"] = f"{SYSTEM_FROM_NAME} <{SYSTEM_FROM_EMAIL}>" if SYSTEM_FROM_EMAIL else SMTP_USER
                 msg["To"] = email
                 msg.attach(_MIMEText(body, "plain"))
                 if SMTP_PORT == 587:
@@ -1310,30 +1312,25 @@ def forgot_password():
             expires = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
             create_reset_token(client["id"], token, expires)
             from outreach.config import BASE_URL, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+            from outreach.config import SYSTEM_FROM_EMAIL, SYSTEM_FROM_NAME
             reset_link = f"{BASE_URL}/reset-password/{token}"
             body = f"Click here to reset your MachReach password:\n\n{reset_link}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email."
             try:
-                # Determine SMTP credentials: prefer user's own email account, fallback to system
-                smtp_host, smtp_port, smtp_user, smtp_pw = SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
-                from outreach.db import get_default_email_account
-                acct = get_default_email_account(client["id"])
-                if acct:
-                    smtp_host, smtp_port = acct["smtp_host"], acct["smtp_port"]
-                    smtp_user, smtp_pw = acct["email"], acct["password"]
-                if smtp_user and smtp_pw:
+                # System emails always use global SMTP — never client's own account
+                if SMTP_USER and SMTP_PASSWORD:
                     msg = MIMEMultipart("alternative")
                     msg["Subject"] = "MachReach — Password Reset"
-                    msg["From"] = smtp_user
+                    msg["From"] = f"{SYSTEM_FROM_NAME} <{SYSTEM_FROM_EMAIL}>" if SYSTEM_FROM_EMAIL else SMTP_USER
                     msg["To"] = email
                     msg.attach(MIMEText(body, "plain"))
-                    if smtp_port == 587:
-                        with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as srv:
+                    if SMTP_PORT == 587:
+                        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
                             srv.starttls()
-                            srv.login(smtp_user, smtp_pw)
+                            srv.login(SMTP_USER, SMTP_PASSWORD)
                             srv.send_message(msg)
                     else:
-                        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as srv:
-                            srv.login(smtp_user, smtp_pw)
+                        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
+                            srv.login(SMTP_USER, SMTP_PASSWORD)
                             srv.send_message(msg)
             except Exception:
                 pass  # Don't reveal whether email was sent
