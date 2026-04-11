@@ -4550,8 +4550,8 @@ def mail_hub():
 
     # Build scheduled emails section
     sched_html = ""
-    for s in scheduled[:5]:
-        sched_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border-light);font-size:13px;"><div style="font-weight:600;">{_esc(s["to_email"])}</div><div style="color:var(--text-muted);">{_esc(s["subject"][:40])}</div><div style="color:var(--primary);font-size:12px;">&#128340; {s["scheduled_at"][:16]}</div></div>'
+    for s in scheduled:
+        sched_html += f'<div style="padding:8px 0;border-bottom:1px solid var(--border-light);font-size:13px;display:flex;align-items:center;gap:6px;"><div style="flex:1;min-width:0;"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{_esc(s["to_email"])}</div><div style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{_esc(s["subject"][:40])}</div><div style="color:var(--primary);font-size:12px;">&#128340; {s["scheduled_at"][:16]}</div></div><button onclick="cancelScheduled({s["id"]})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;padding:4px;flex-shrink:0;" title="Cancel this email">&#10005;</button></div>'
 
     # Show tutorial if user has no email accounts (first time visiting Mail Hub)
     mail_hub_tutorial = ""
@@ -4916,10 +4916,17 @@ def mail_hub():
         .then(r => r.json())
         .then(data => {{
           const badge = document.getElementById('peek-badge');
-          if (data.unseen > 0) {{
+          if (data.imap_error) {{
+            badge.textContent = '&#9888; IMAP connection failed — check email account settings';
+            badge.style.display = 'inline-block';
+            badge.style.background = 'var(--red-light, #fee)';
+            badge.style.color = 'var(--red, #e53e3e)';
+          }} else if (data.unseen > 0) {{
             badge.textContent = data.unseen + ' new email' + (data.unseen === 1 ? '' : 's') + ' waiting';
             badge.style.display = 'inline-block';
-            // Auto-sync for paid tiers (once per page load)
+            badge.style.background = '';
+            badge.style.color = '';
+            // Auto-sync (once per page load)
             if (!peekAutoSynced) {{
               peekAutoSynced = true;
               syncInbox();
@@ -4934,6 +4941,14 @@ def mail_hub():
     // Peek immediately on page load, then every 60s
     peekInbox();
     setInterval(peekInbox, 60000);
+
+    // --- Cancel scheduled email ---
+    function cancelScheduled(id) {{
+      if (!confirm('Cancel this scheduled email?')) return;
+      fetch('/api/mail-hub/scheduled/' + id + '/delete', {{method: 'POST'}})
+        .then(function(r) {{ return r.json(); }})
+        .then(function(data) {{ if (data.ok) location.reload(); }});
+    }}
 
     // --- Star ---
     function toggleStar(id, el) {{
@@ -5413,23 +5428,35 @@ def api_mail_peek():
         # Count IMAP emails from that date onward
         accounts = get_email_accounts(session["client_id"])
         imap_total = 0
+        imap_errors = []
         if accounts:
             for acct in accounts:
                 n = peek_unseen(
                     imap_host=acct["imap_host"], imap_port=acct["imap_port"],
                     imap_user=acct["email"], imap_password=acct["password"],
                     since_date=imap_since)
-                if n > 0:
+                if n == -1:
+                    imap_errors.append(acct["email"])
+                    print(f"[PEEK] IMAP failed for {acct['email']} ({acct['imap_host']}:{acct['imap_port']})", flush=True)
+                elif n > 0:
                     imap_total += n
         else:
             n = peek_unseen(since_date=imap_since)
-            if n > 0:
+            if n == -1:
+                imap_errors.append("default")
+                print("[PEEK] IMAP failed for default account", flush=True)
+            elif n > 0:
                 imap_total = n
 
         # New = IMAP count since last sync minus what's already in DB
         waiting = max(imap_total - db_count, 0)
-        return jsonify({"unseen": waiting})
+        result = {"unseen": waiting}
+        if imap_errors:
+            result["imap_error"] = True
+            result["failed_accounts"] = imap_errors
+        return jsonify(result)
     except Exception as e:
+        print(f"[PEEK] Error: {e}", flush=True)
         return jsonify({"error": str(e)}), 500
 
 
