@@ -223,14 +223,22 @@ def send_scheduled():
         from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, BASE_URL, SECRET_KEY
         import hashlib
 
-        # Debug: check pending emails
-        from outreach.db import get_db, _fetchall
+        # Debug: check pending emails and DB engine
+        from outreach.db import get_db, _fetchall, _USE_PG
+        from outreach.config import DATABASE_URL
         from datetime import datetime
         now_utc = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[SCHEDULED] DB engine: {'PG' if _USE_PG else 'SQLite'} | DATABASE_URL set: {bool(DATABASE_URL)} | len={len(DATABASE_URL or '')}", flush=True)
         try:
             with get_db() as db:
+                # Also check PG server time
+                if _USE_PG:
+                    from outreach.db import _fetchval
+                    pg_now = _fetchval(db, "SELECT NOW()::text")
+                    pg_tz = _fetchval(db, "SHOW timezone")
+                    print(f"[SCHEDULED] PG NOW()={pg_now} | timezone={pg_tz}", flush=True)
                 pending = _fetchall(db, "SELECT id, to_email, scheduled_at, status FROM scheduled_emails WHERE status = 'pending' ORDER BY scheduled_at ASC")
-            print(f"[SCHEDULED] {len(pending)} pending email(s). UTC now: {now_utc}", flush=True)
+            print(f"[SCHEDULED] {len(pending)} pending email(s). Worker UTC now: {now_utc}", flush=True)
             for p in pending[:5]:
                 print(f"  id={p['id']} to={p['to_email']} at={p['scheduled_at']} due={'Y' if str(p['scheduled_at'])[:19] <= now_utc else 'N'}", flush=True)
         except Exception as dbg_err:
