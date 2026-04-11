@@ -4,6 +4,7 @@ Run separately from the web app: python worker.py
 """
 from __future__ import annotations
 
+import os
 import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -215,10 +216,12 @@ def process_snoozes():
 def send_scheduled():
     """Send any due scheduled emails — uses per-account SMTP if available."""
     try:
-        from outreach.db import get_due_scheduled_emails, mark_scheduled_sent, mark_scheduled_failed, get_mail_item, get_email_account, get_default_email_account
+        from outreach.db import get_due_scheduled_emails, mark_scheduled_sent, mark_scheduled_failed, get_mail_item, get_email_account, get_default_email_account, get_client, is_suppressed
         import smtplib
         from email.mime.text import MIMEText
-        from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+        from email.mime.multipart import MIMEMultipart
+        from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, BASE_URL, SECRET_KEY
+        import hashlib
 
         due = get_due_scheduled_emails()
         if not due:
@@ -227,6 +230,12 @@ def send_scheduled():
         print(f"Sending {len(due)} scheduled email(s)...")
         for email in due:
             try:
+                # Check suppression list before sending
+                if is_suppressed(email["client_id"], email["to_email"]):
+                    print(f"  SKIPPED scheduled email to {email['to_email']} (suppressed/unsubscribed)")
+                    mark_scheduled_failed(email["id"])
+                    continue
+
                 # Determine SMTP credentials
                 smtp_host, smtp_port, smtp_user, smtp_pw = SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
                 if email.get("account_id"):
@@ -240,13 +249,38 @@ def send_scheduled():
                         smtp_host, smtp_port = acct["smtp_host"], acct["smtp_port"]
                         smtp_user, smtp_pw = acct["email"], acct["password"]
 
-                msg = MIMEText(email["body"], "plain", "utf-8")
+                # Build CAN-SPAM footer
+                client = get_client(email["client_id"])
+                physical_addr = client.get("physical_address", "") if client else ""
+                app_secret = SECRET_KEY
+                token = hashlib.sha256(f"{email['client_id']}:{email['to_email']}:{app_secret}".encode()).hexdigest()[:16]
+                unsub_url = f"{BASE_URL}/unsubscribe/g/{token}?e={email['to_email']}&c={email['client_id']}"
+                addr_html = f'<div style="color:#A0AEC0;font-size:10px;margin-top:4px;">{physical_addr}</div>' if physical_addr else ''
+                unsub_footer = (f'<div style="text-align:center;padding:16px 0 8px;margin-top:20px;border-top:1px solid #E2E8F0;font-size:11px;color:#A0AEC0;">'
+                               f'<a href="{unsub_url}" style="color:#A0AEC0;font-size:11px;text-decoration:underline;">Unsubscribe</a>'
+                               f'{addr_html}</div>')
+
+                # Build multipart email with HTML footer
+                is_reply = bool(email.get("reply_to_mail_id"))
+                msg = MIMEMultipart("alternative")
                 msg["From"] = smtp_user
                 msg["To"] = email["to_email"]
                 msg["Subject"] = email["subject"]
 
+                if not is_reply:
+                    # Add unsubscribe headers for non-reply emails
+                    msg["List-Unsubscribe"] = f"<{unsub_url}>"
+                    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+
+                # Plain text + HTML
+                plain_unsub = f"\n\n---\nUnsubscribe: {unsub_url}" + (f"\n{physical_addr}" if physical_addr else "")
+                msg.attach(MIMEText(email["body"] + (plain_unsub if not is_reply else ""), "plain", "utf-8"))
+                body_html = email["body"].replace("\\n", "<br>").replace("\n", "<br>")
+                footer = unsub_footer if not is_reply else ""
+                msg.attach(MIMEText(f'<div style="font-family:sans-serif;font-size:14px;line-height:1.6;">{body_html}{footer}</div>', "html", "utf-8"))
+
                 # If replying, add threading headers
-                if email.get("reply_to_mail_id"):
+                if is_reply:
                     original = get_mail_item(email["reply_to_mail_id"], email["client_id"])
                     if original and original.get("message_id"):
                         msg["In-Reply-To"] = original["message_id"]

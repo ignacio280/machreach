@@ -339,6 +339,19 @@ CREATE TABLE IF NOT EXISTS team_members (
     accepted_at     TIMESTAMP,
     UNIQUE(owner_id, member_email)
 );
+
+CREATE TABLE IF NOT EXISTS email_suppressions (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL REFERENCES clients(id),
+    email           TEXT NOT NULL,
+    reason          TEXT DEFAULT 'unsubscribed',
+    source          TEXT DEFAULT '',
+    created_at      TIMESTAMP DEFAULT NOW(),
+    UNIQUE(client_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_suppressions_client ON email_suppressions(client_id);
+CREATE INDEX IF NOT EXISTS idx_suppressions_email ON email_suppressions(client_id, email);
 """
 
 _SQLITE_SCHEMA = """
@@ -551,6 +564,19 @@ CREATE TABLE IF NOT EXISTS team_members (
     accepted_at     TEXT,
     UNIQUE(owner_id, member_email)
 );
+
+CREATE TABLE IF NOT EXISTS email_suppressions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id       INTEGER NOT NULL REFERENCES clients(id),
+    email           TEXT NOT NULL,
+    reason          TEXT DEFAULT 'unsubscribed',
+    source          TEXT DEFAULT '',
+    created_at      TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(client_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_suppressions_client ON email_suppressions(client_id);
+CREATE INDEX IF NOT EXISTS idx_suppressions_email ON email_suppressions(client_id, email);
 """
 
 
@@ -1679,6 +1705,57 @@ def delete_contact_book(contact_id: int, client_id: int) -> bool:
     with get_db() as db:
         _exec(db, "DELETE FROM contacts_book WHERE id = %s AND client_id = %s",
               (contact_id, client_id))
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Email Suppressions (Global unsubscribe / CAN-SPAM)
+# ---------------------------------------------------------------------------
+
+def add_suppression(client_id: int, email: str, reason: str = "unsubscribed", source: str = "") -> None:
+    """Add an email to the global suppression list for a client."""
+    with get_db() as db:
+        _exec(db,
+            """INSERT INTO email_suppressions (client_id, email, reason, source)
+               VALUES (%s, %s, %s, %s)
+               ON CONFLICT (client_id, email) DO UPDATE SET reason = EXCLUDED.reason""",
+            (client_id, email.lower().strip(), reason, source))
+
+
+def is_suppressed(client_id: int, email: str) -> bool:
+    """Check if an email is on the global suppression list."""
+    with get_db() as db:
+        row = _fetchone(db,
+            "SELECT 1 FROM email_suppressions WHERE client_id = %s AND email = %s",
+            (client_id, email.lower().strip()))
+        return row is not None
+
+
+def filter_suppressed(client_id: int, emails: list[str]) -> list[str]:
+    """Return list of emails that are NOT suppressed."""
+    if not emails:
+        return []
+    with get_db() as db:
+        rows = _fetchall(db,
+            "SELECT email FROM email_suppressions WHERE client_id = %s",
+            (client_id,))
+    suppressed = {r["email"] for r in rows}
+    return [e for e in emails if e.lower().strip() not in suppressed]
+
+
+def get_suppressions(client_id: int) -> list[dict]:
+    """Get all suppressed emails for a client."""
+    with get_db() as db:
+        return _fetchall(db,
+            "SELECT * FROM email_suppressions WHERE client_id = %s ORDER BY created_at DESC",
+            (client_id,))
+
+
+def remove_suppression(client_id: int, email: str) -> bool:
+    """Remove an email from the suppression list."""
+    with get_db() as db:
+        _exec(db, "DELETE FROM email_suppressions WHERE client_id = %s AND email = %s",
+              (client_id, email.lower().strip()))
         return True
 
 

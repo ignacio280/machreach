@@ -4046,7 +4046,7 @@ def track_open(sent_email_id):
 @app.route("/unsubscribe/<int:contact_id>", methods=["GET", "POST"])
 @csrf.exempt  # Unsubscribe must work without CSRF (external email clients)
 def unsubscribe(contact_id):
-    from outreach.db import get_db, _exec, _fetchone
+    from outreach.db import get_db, _exec, _fetchone, add_suppression
     with get_db() as db:
         # Get the contact's email before updating
         contact = _fetchone(db, "SELECT email, campaign_id FROM contacts WHERE id = %s", (contact_id,))
@@ -4062,7 +4062,38 @@ def unsubscribe(contact_id):
                 _exec(db, """UPDATE contacts SET status = 'unsubscribed'
                     WHERE email = %s AND campaign_id IN (SELECT id FROM campaigns WHERE client_id = %s)
                     AND status != 'unsubscribed'""", (email_addr, camp["client_id"]))
+                # Add to global suppression list
+                add_suppression(camp["client_id"], email_addr, reason="unsubscribed", source="campaign_unsubscribe")
     # RFC 8058: POST = one-click unsubscribe (email client auto-sends)
+    if request.method == "POST":
+        return "", 200
+    return render_template_string(LAYOUT, title="Unsubscribed", logged_in=False, messages=[], active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup("""
+    <div style="text-align:center;padding:80px 24px;">
+      <div style="font-size:48px;margin-bottom:16px;opacity:0.4;">&#9993;</div>
+      <h1 style="font-size:22px;margin-bottom:8px;">You've been unsubscribed</h1>
+      <p style="color:var(--text-secondary);font-size:14px;">You won't receive any more emails from this sender.</p>
+    </div>
+    """))
+
+
+@app.route("/unsubscribe/g/<token>", methods=["GET", "POST"])
+@csrf.exempt
+def unsubscribe_global(token):
+    """Global unsubscribe for non-campaign emails (group sends, scheduled)."""
+    import hashlib
+    from outreach.db import get_db, _fetchone, add_suppression
+    # Token format: sha256(client_id:email:secret)
+    # We look up by brute-checking — or store the token. For simplicity, decode from query params.
+    email = request.args.get("e", "")
+    cid = request.args.get("c", "")
+    if email and cid:
+        try:
+            client_id = int(cid)
+            expected = hashlib.sha256(f"{client_id}:{email}:{app.secret_key}".encode()).hexdigest()[:16]
+            if token == expected:
+                add_suppression(client_id, email, reason="unsubscribed", source="global_unsubscribe")
+        except (ValueError, Exception):
+            pass
     if request.method == "POST":
         return "", 200
     return render_template_string(LAYOUT, title="Unsubscribed", logged_in=False, messages=[], active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup("""
@@ -6692,7 +6723,7 @@ def group_send(group_name):
         return redirect(url_for("login"))
     from urllib.parse import unquote
     group_name = unquote(group_name)
-    from outreach.db import get_contacts_by_group, get_default_email_account
+    from outreach.db import get_contacts_by_group, get_default_email_account, filter_suppressed
     data_cid = _effective_client_id()
     contacts = get_contacts_by_group(data_cid, group_name)
 
@@ -6750,6 +6781,29 @@ def group_send(group_name):
         if not smtp_user or not smtp_pw:
             flash(("error", "No email account configured. Set up SMTP credentials first."))
             return redirect(request.url)
+
+        # Filter out suppressed/unsubscribed emails (CAN-SPAM compliance)
+        allowed_emails = filter_suppressed(data_cid, [c["email"] for c in contacts])
+        original_count = len(contacts)
+        contacts = [c for c in contacts if c["email"] in allowed_emails]
+        suppressed_count = original_count - len(contacts)
+        if not contacts:
+            flash(("error", f"All {original_count} contacts are on the suppression list (unsubscribed)."))
+            return redirect(request.url)
+
+        # Build CAN-SPAM footer with unsubscribe link + physical address
+        import hashlib
+        client = get_client(session["client_id"])
+        physical_addr = client.get("physical_address", "") if client else ""
+
+        def _build_unsub_footer(to_email):
+            token = hashlib.sha256(f"{data_cid}:{to_email}:{app.secret_key}".encode()).hexdigest()[:16]
+            from outreach.config import BASE_URL
+            unsub_url = f"{BASE_URL}/unsubscribe/g/{token}?e={to_email}&c={data_cid}"
+            addr_line = f'<div style="color:#A0AEC0;font-size:10px;margin-top:4px;">{physical_addr}</div>' if physical_addr else ''
+            return (f'<div style="text-align:center;padding:16px 0 8px;margin-top:20px;border-top:1px solid #E2E8F0;font-size:11px;color:#A0AEC0;">'
+                    f'<a href="{unsub_url}" style="color:#A0AEC0;font-size:11px;text-decoration:underline;">Unsubscribe</a>'
+                    f'{addr_line}</div>'), unsub_url
 
         # If scheduled, store in scheduled_emails table for the worker to send later
         if schedule_date:
@@ -6817,11 +6871,17 @@ def group_send(group_name):
                 msg["From"] = smtp_user
                 msg["To"] = c["email"]
 
-                # Text + HTML body
+                # CAN-SPAM: unsubscribe headers (RFC 8058)
+                unsub_footer, unsub_url = _build_unsub_footer(c["email"])
+                msg["List-Unsubscribe"] = f"<{unsub_url}>"
+                msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+
+                # Text + HTML body with CAN-SPAM footer
                 body_part = _MMP("alternative")
-                body_part.attach(_MIMEText(pbody, "plain", "utf-8"))
+                plain_unsub = f"\n\n---\nUnsubscribe: {unsub_url}" + (f"\n{physical_addr}" if physical_addr else "")
+                body_part.attach(_MIMEText(pbody + plain_unsub, "plain", "utf-8"))
                 body_html = pbody.replace("\\n", "<br>").replace("\n", "<br>")
-                body_part.attach(_MIMEText(f'<div style="font-family:sans-serif;font-size:14px;line-height:1.6;">{body_html}</div>', "html", "utf-8"))
+                body_part.attach(_MIMEText(f'<div style="font-family:sans-serif;font-size:14px;line-height:1.6;">{body_html}{unsub_footer}</div>', "html", "utf-8"))
                 msg.attach(body_part)
 
                 # Attachments
@@ -6847,7 +6907,8 @@ def group_send(group_name):
                 fail_count += 1
 
         if sent_count:
-            flash(("success", f"Sent {sent_count} email{'s' if sent_count != 1 else ''} to group '{group_name}'!" + (f" ({fail_count} failed)" if fail_count else "")))
+            suppressed_msg = f" ({suppressed_count} skipped — unsubscribed)" if suppressed_count else ""
+            flash(("success", f"Sent {sent_count} email{'s' if sent_count != 1 else ''} to group '{group_name}'!{suppressed_msg}" + (f" ({fail_count} failed)" if fail_count else "")))
         else:
             flash(("error", f"All {fail_count} emails failed to send."))
         return redirect(url_for("contacts_page"))
