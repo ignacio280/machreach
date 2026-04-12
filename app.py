@@ -1164,15 +1164,9 @@ def register():
             flash(("success", "Account created! Please check your email to verify your address before logging in."))
             return redirect(url_for("login"))
         else:
-            # Email failed — auto-verify so user isn't locked out
-            try:
-                mark_email_verified(client_id)
-            except Exception:
-                pass
-            session["client_id"] = client_id
-            session["client_name"] = name
-            flash(("success", f"Welcome, {_esc(name)}! Your account is ready."))
-            return redirect(url_for("dashboard"))
+            # Email failed — still require verification, don't auto-skip
+            flash(("warning", "Account created, but we couldn't send the verification email. Please try resending it from the login page or contact support@machreach.com."))
+            return redirect(url_for("login"))
     return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
@@ -1204,11 +1198,8 @@ def login():
             flash(("error", t("auth.invalid_creds")))
             return redirect(url_for("login"))
         if not client.get("email_verified"):
-            # Password login is sufficient proof of identity — auto-verify
-            try:
-                mark_email_verified(client["id"])
-            except Exception:
-                pass
+            flash(("warning", "Please verify your email before logging in. Check your inbox or resend the verification link below."))
+            return redirect(url_for("login"))
         _maybe_upgrade_hash(client["id"], password, client["password"])
         _log_security("LOGIN_OK", client_id=client["id"], email=email)
         # Preserve team invite token across session clear
