@@ -203,6 +203,78 @@ def debug_smtp_send_test():
 
 
 # ---------------------------------------------------------------------------
+# ONE-TIME: Account reset — delete all accounts and notify users
+# Remove this endpoint after use!
+# ---------------------------------------------------------------------------
+
+@app.route("/api/admin/reset-all-accounts", methods=["POST"])
+@limiter.exempt
+def admin_reset_all_accounts():
+    """One-time admin action: notify all users and delete all accounts."""
+    from outreach.config import SECRET_KEY
+    auth = request.headers.get("X-Admin-Key", "")
+    if auth != SECRET_KEY:
+        return jsonify({"error": "unauthorized"}), 403
+
+    from outreach.db import get_db, _fetchall, _exec
+
+    # 1. Collect all user emails and names
+    with get_db() as db:
+        clients = _fetchall(db, "SELECT id, name, email FROM clients")
+
+    if not clients:
+        return jsonify({"message": "No accounts found", "total": 0})
+
+    # 2. Send notification email to each user
+    sent_count = 0
+    failed = []
+    for c in clients:
+        body = (
+            f"Hi {c['name'] or 'there'},\n\n"
+            f"Due to a critical update to our security and email verification system, "
+            f"all MachReach accounts have been reset.\n\n"
+            f"We identified a privacy issue that required an immediate platform-wide reset "
+            f"to protect our users. As part of this fix, all existing accounts have been removed.\n\n"
+            f"We welcome you to create a new account at:\n"
+            f"https://machreach.onrender.com/register\n\n"
+            f"We sincerely apologize for the inconvenience and appreciate your understanding. "
+            f"Your data security is our top priority.\n\n"
+            f"If you have any questions, reply to this email or contact us at support@machreach.com.\n\n"
+            f"— The MachReach Team"
+        )
+        ok = _send_system_email(c["email"], "MachReach — Important Account Update", body)
+        if ok:
+            sent_count += 1
+        else:
+            failed.append(c["email"])
+
+    # 3. Delete ALL data
+    with get_db() as db:
+        # Order matters — foreign keys
+        _exec(db, "DELETE FROM sent_emails")
+        _exec(db, "DELETE FROM email_sequences")
+        _exec(db, "DELETE FROM contacts")
+        _exec(db, "DELETE FROM campaigns")
+        _exec(db, "DELETE FROM contacts_book")
+        _exec(db, "DELETE FROM mail_inbox")
+        _exec(db, "DELETE FROM scheduled_emails")
+        _exec(db, "DELETE FROM password_reset_tokens")
+        _exec(db, "DELETE FROM email_verification_tokens")
+        _exec(db, "DELETE FROM email_accounts")
+        _exec(db, "DELETE FROM usage_tracking")
+        _exec(db, "DELETE FROM subscriptions")
+        _exec(db, "DELETE FROM team_members")
+        _exec(db, "DELETE FROM clients")
+
+    return jsonify({
+        "message": "All accounts deleted",
+        "total_users": len(clients),
+        "emails_sent": sent_count,
+        "emails_failed": failed,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
 
