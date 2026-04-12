@@ -154,6 +154,38 @@ def health_check():
         return jsonify({"status": "error", "db": str(e)}), 503
 
 
+@app.route("/api/debug/smtp-test")
+@limiter.exempt
+def debug_smtp_test():
+    """Diagnose SMTP — test connection without sending."""
+    from outreach.config import SMTP_HOST, SMTP_PORT, SYSTEM_FROM_EMAIL, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD
+    info = {
+        "SMTP_HOST": SMTP_HOST,
+        "SMTP_PORT": SMTP_PORT,
+        "SYSTEM_FROM_EMAIL": SYSTEM_FROM_EMAIL,
+        "SYSTEM_SMTP_USER": SYSTEM_SMTP_USER[:3] + "***" if SYSTEM_SMTP_USER else "(empty)",
+        "SYSTEM_SMTP_PASSWORD": ("set, len=" + str(len(SYSTEM_SMTP_PASSWORD))) if SYSTEM_SMTP_PASSWORD else "(empty)",
+    }
+    # Try actual SMTP connection
+    import smtplib
+    try:
+        if SMTP_PORT == 587:
+            srv = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15)
+            srv.starttls()
+        else:
+            srv = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15)
+        info["connection"] = "OK"
+        try:
+            srv.login(SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD)
+            info["login"] = "OK"
+        except Exception as e:
+            info["login"] = f"FAILED: {e}"
+        srv.quit()
+    except Exception as e:
+        info["connection"] = f"FAILED: {e}"
+    return jsonify(info)
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
