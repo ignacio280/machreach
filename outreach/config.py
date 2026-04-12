@@ -48,6 +48,10 @@ SENDER_NAME = os.getenv("SENDER_NAME", "Ignacio")
 # This should be support@machreach.com or noreply@machreach.com
 SYSTEM_FROM_EMAIL = os.getenv("SYSTEM_FROM_EMAIL", "") or os.getenv("SMTP_USER", "")
 SYSTEM_FROM_NAME = os.getenv("SYSTEM_FROM_NAME", "MachReach")
+# System SMTP credentials — authenticate as the support account, not personal Gmail
+# Falls back to global SMTP_USER/SMTP_PASSWORD if not set
+SYSTEM_SMTP_USER = os.getenv("SYSTEM_SMTP_USER", "") or SYSTEM_FROM_EMAIL
+SYSTEM_SMTP_PASSWORD = os.getenv("SYSTEM_SMTP_PASSWORD", "") or os.getenv("SMTP_PASSWORD", "")
 
 # Encryption key for email account passwords at rest (Fernet, 32-byte base64)
 _enc_key = os.getenv("ENCRYPTION_KEY", "")
