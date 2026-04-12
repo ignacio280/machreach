@@ -208,6 +208,7 @@ def debug_smtp_send_test():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/admin/reset-all-accounts", methods=["POST"])
+@csrf.exempt
 @limiter.exempt
 def admin_reset_all_accounts():
     """One-time admin action: notify all users and delete all accounts."""
