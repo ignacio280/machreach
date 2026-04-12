@@ -113,8 +113,9 @@ def _send_system_email(to: str, subject: str, body: str) -> bool:
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
+    print(f"[SYSTEM EMAIL] Attempting to send to {to} via {SMTP_HOST}:{SMTP_PORT} as {SYSTEM_SMTP_USER}", flush=True)
     if not SYSTEM_SMTP_USER or not SYSTEM_SMTP_PASSWORD:
-        print(f"[SYSTEM EMAIL] SMTP credentials not set — cannot send to {to}", flush=True)
+        print(f"[SYSTEM EMAIL] SMTP credentials not set — SYSTEM_SMTP_USER={'set' if SYSTEM_SMTP_USER else 'EMPTY'}, SYSTEM_SMTP_PASSWORD={'set' if SYSTEM_SMTP_PASSWORD else 'EMPTY'}", flush=True)
         return False
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -131,9 +132,12 @@ def _send_system_email(to: str, subject: str, body: str) -> bool:
             with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
                 srv.login(SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD)
                 srv.send_message(msg)
+        print(f"[SYSTEM EMAIL] Successfully sent to {to}", flush=True)
         return True
     except Exception as e:
-        print(f"[SYSTEM EMAIL] Send failed ({to}): {e}", flush=True)
+        import traceback
+        print(f"[SYSTEM EMAIL] Send FAILED ({to}): {type(e).__name__}: {e}", flush=True)
+        traceback.print_exc()
         return False
 
 
@@ -1196,9 +1200,17 @@ def register():
             flash(("success", "Account created! Please check your email to verify your address before logging in."))
             return redirect(url_for("login"))
         else:
-            # Email failed — still require verification, don't auto-skip
-            flash(("warning", "Account created, but we couldn't send the verification email. Please try resending it from the login page or contact support@machreach.com."))
-            return redirect(url_for("login"))
+            # Verification email failed — delete the account so it's not half-created
+            try:
+                from outreach.db import get_db, _exec
+                with get_db() as db:
+                    _exec(db, "DELETE FROM email_verification_tokens WHERE client_id = %s", (client_id,))
+                    _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
+                print(f"[REGISTER] Rolled back account for {email} — verification email failed", flush=True)
+            except Exception:
+                pass
+            flash(("error", "We couldn't send the verification email. Please check your email address and try again, or contact support@machreach.com."))
+            return redirect(url_for("register"))
     return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
