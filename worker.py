@@ -134,6 +134,7 @@ def send_batch():
                         "smtp_port": acct["smtp_port"],
                         "smtp_user": acct["email"],
                         "smtp_password": acct["password"],
+                        "from_name": acct.get("label", "") or "",
                     }
             except Exception:
                 pass

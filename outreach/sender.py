@@ -9,7 +9,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from outreach.config import BASE_URL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, DKIM_PRIVATE_KEY, DKIM_SELECTOR, DKIM_DOMAIN
+from outreach.config import BASE_URL, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, DKIM_PRIVATE_KEY, DKIM_SELECTOR, DKIM_DOMAIN, SENDER_NAME
 
 
 def _sign_dkim(msg: MIMEMultipart) -> None:
@@ -101,6 +101,7 @@ def send_email(
     smtp_user: str | None = None,
     smtp_password: str | None = None,
     physical_address: str = "",
+    from_name: str | None = None,
 ) -> bool:
     """Send a single email via SMTP. Returns True on success.
     
@@ -120,9 +121,10 @@ def send_email(
 
     html = _wrap_html(body_text, contact_id=contact_id, tracking_id=tracking_id, physical_address=physical_address)
 
+    _from_name = from_name or SENDER_NAME
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = _user
+    msg["From"] = f"{_from_name} <{_user}>" if _from_name else _user
     msg["To"] = to_email
     msg.attach(MIMEText(body_text, "plain"))
     msg.attach(MIMEText(html, "html"))

@@ -1489,14 +1489,8 @@ def api_team_invite():
     # Build invite link
     invite_url = f"{request.host_url.rstrip('/')}/team/accept/{result['token']}"
 
-    # Send the invite email to the colleague
-    from outreach.db import get_default_email_account
+    # Send the invite email using system SMTP (not client's personal account)
     from outreach.sender import send_email as _send_email
-    acct = get_default_email_account(session["client_id"])
-    smtp_kw = {}
-    if acct:
-        smtp_kw = {"smtp_host": acct["smtp_host"], "smtp_port": acct["smtp_port"],
-                    "smtp_user": acct["email"], "smtp_password": acct["password"]}
     invite_body = (
         f"Hi,\n\n"
         f"{client['name'] or client['email']} has invited you to join their team on MachReach as a {role}.\n\n"
@@ -1506,7 +1500,7 @@ def api_team_invite():
         f"— MachReach"
     )
     _send_email(to_email=email, subject=f"You're invited to join {client['name'] or 'a team'} on MachReach",
-                body_text=invite_body, **smtp_kw)
+                body_text=invite_body, from_name="MachReach")
 
     return jsonify({"ok": True, "invite_url": invite_url, "email": email, "role": role})
 
@@ -3905,6 +3899,7 @@ def _trigger_campaign_send(campaign_id):
                         "smtp_port": acct["smtp_port"],
                         "smtp_user": acct["email"],
                         "smtp_password": acct["password"],
+                        "from_name": acct.get("label", "") or "",
                     }
                 _client = get_client(client_id)
                 if _client:
