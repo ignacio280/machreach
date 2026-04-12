@@ -383,31 +383,26 @@ def sync_mail_hub():
                     imap_since = (datetime.now() - timedelta(days=3)).strftime("%d-%b-%Y")
 
                 accounts = get_email_accounts(client_id)
+                if not accounts:
+                    continue  # No connected accounts — skip (never use global .env creds)
+
                 has_new = False
-                if accounts:
-                    for acct in accounts:
-                        n = peek_unseen(
-                            imap_host=acct["imap_host"], imap_port=acct["imap_port"],
-                            imap_user=acct["email"], imap_password=acct["password"],
-                            since_date=imap_since)
-                        if n > 0:
-                            has_new = True
-                            break
-                else:
-                    n = peek_unseen(since_date=imap_since)
-                    has_new = n > 0
+                for acct in accounts:
+                    n = peek_unseen(
+                        imap_host=acct["imap_host"], imap_port=acct["imap_port"],
+                        imap_user=acct["email"], imap_password=acct["password"],
+                        since_date=imap_since)
+                    if n > 0:
+                        has_new = True
+                        break
 
                 if not has_new:
                     continue
 
                 total_new = 0
-                if accounts:
-                    for acct in accounts:
-                        n = sync_inbox(client_id, days=3, account_id=acct["id"])
-                        total_new += n
-                else:
-                    # Fallback to .env credentials
-                    total_new = sync_inbox(client_id, days=3)
+                for acct in accounts:
+                    n = sync_inbox(client_id, days=3, account_id=acct["id"])
+                    total_new += n
                 if total_new:
                     increment_usage(client_id, "mail_hub_syncs")
                     print(f"[MAIL HUB] Auto-synced {total_new} new email(s) for client {client_id}")

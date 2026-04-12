@@ -12,7 +12,7 @@ import json
 from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 
-from outreach.config import IMAP_HOST, IMAP_PASSWORD, IMAP_PORT, IMAP_USER
+from outreach.config import IMAP_HOST, IMAP_PORT
 
 
 def _decode_header_value(value: str) -> str:
@@ -45,8 +45,8 @@ def peek_unseen(imap_host: str | None = None, imap_port: int | None = None,
     """
     host = imap_host or IMAP_HOST
     port = imap_port or IMAP_PORT
-    user = imap_user or IMAP_USER
-    pw = imap_password or IMAP_PASSWORD
+    user = imap_user
+    pw = imap_password
 
     if not user or not pw:
         return -1
@@ -93,15 +93,15 @@ def fetch_inbox(days: int = 3, limit: int = 50, existing_ids: set | None = None,
                 imap_user: str | None = None, imap_password: str | None = None) -> list[dict]:
     """Fetch recent emails from an IMAP inbox.
 
-    If credentials are not provided, falls back to .env defaults.
+    Credentials must be provided — no global fallback.
     If existing_ids is provided, skip emails already in the database.
     Returns list of dicts with: message_id, from_name, from_email,
     to_email, subject, body_preview, received_at
     """
     host = imap_host or IMAP_HOST
     port = imap_port or IMAP_PORT
-    user = imap_user or IMAP_USER
-    pw = imap_password or IMAP_PASSWORD
+    user = imap_user
+    pw = imap_password
 
     if not user or not pw:
         return []
@@ -323,23 +323,25 @@ Return ONLY a JSON array, no markdown, no explanation."""
 def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> int:
     """Fetch emails from IMAP, classify with AI, and store in DB.
 
-    If account_id is provided, uses that account's credentials.
-    Otherwise falls back to .env IMAP defaults.
+    account_id is required — each user must have a connected email account.
     Returns number of new emails added. Skips already-synced messages.
     """
     from outreach.db import upsert_mail, get_db, get_email_account, get_mail_preferences, _exec
 
-    # Get account credentials if specified
-    imap_kwargs = {}
-    if account_id:
-        acct = get_email_account(account_id, client_id)
-        if acct:
-            imap_kwargs = {
-                "imap_host": acct["imap_host"],
-                "imap_port": acct["imap_port"],
-                "imap_user": acct["email"],
-                "imap_password": acct["password"],
-            }
+    # Get account credentials — never fall back to global .env (privacy!)
+    if not account_id:
+        print(f"[MAIL HUB] sync_inbox called without account_id for client {client_id} — skipping")
+        return 0
+    acct = get_email_account(account_id, client_id)
+    if not acct:
+        print(f"[MAIL HUB] account_id {account_id} not found for client {client_id} — skipping")
+        return 0
+    imap_kwargs = {
+        "imap_host": acct["imap_host"],
+        "imap_port": acct["imap_port"],
+        "imap_user": acct["email"],
+        "imap_password": acct["password"],
+    }
 
     # Get existing message IDs to skip them during fetch
     existing_ids = set()

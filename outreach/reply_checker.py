@@ -12,7 +12,7 @@ import imaplib
 from email.header import decode_header
 from email.utils import parseaddr
 
-from outreach.config import IMAP_HOST, IMAP_PASSWORD, IMAP_PORT, IMAP_USER
+from outreach.config import IMAP_HOST, IMAP_PORT
 from outreach.db import get_all_sent_recipient_emails, record_reply
 
 
@@ -89,41 +89,68 @@ def _fetch_body(mail, msg_id) -> str:
 
 
 def check_replies() -> int:
-    """Check inbox for replies from outreach contacts.
+    """Check inbox for replies from outreach contacts across all client accounts.
     Returns the number of new replies detected."""
-    if not IMAP_USER or not IMAP_PASSWORD:
-        print("[REPLY CHECK] IMAP not configured — skipping.")
-        return 0
+    from outreach.db import get_db, _fetchall, get_email_accounts
 
     known_emails = get_all_sent_recipient_emails()
     if not known_emails:
         return 0
 
-    replies_found = 0
+    # Gather all unique email accounts across all clients
+    accounts = []
     try:
-        mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
-        mail.login(IMAP_USER, IMAP_PASSWORD)
-
-        # Check INBOX for replies from contacts (standard case)
-        replies_found += _scan_folder(mail, "INBOX", known_emails, mark_seen=True)
-
-        # Also check Sent Mail — catches replies when testing with same Gmail account
-        try:
-            status, _ = mail.select('"[Gmail]/Sent Mail"', readonly=True)
-            if status == "OK":
-                replies_found += _scan_folder(mail, None, known_emails, mark_seen=False, days=2)
-        except Exception:
-            pass  # Not all providers have this folder
-
-        mail.logout()
+        with get_db() as db:
+            clients = _fetchall(db, "SELECT id FROM clients")
+        for row in clients:
+            accts = get_email_accounts(row["id"])
+            for acct in accts:
+                if acct.get("email") and acct.get("password"):
+                    accounts.append(acct)
     except Exception as e:
-        print(f"[REPLY CHECK] IMAP error: {e}")
+        print(f"[REPLY CHECK] Failed to load accounts: {e}")
+
+    if not accounts:
+        print("[REPLY CHECK] No connected email accounts — skipping.")
+        return 0
+
+    # De-duplicate by email address (same mailbox might be connected by multiple users)
+    seen = set()
+    unique_accounts = []
+    for acct in accounts:
+        if acct["email"].lower() not in seen:
+            seen.add(acct["email"].lower())
+            unique_accounts.append(acct)
+
+    replies_found = 0
+    for acct in unique_accounts:
+        try:
+            host = acct.get("imap_host") or IMAP_HOST
+            port = acct.get("imap_port") or IMAP_PORT
+            mail = imaplib.IMAP4_SSL(host, port)
+            mail.login(acct["email"], acct["password"])
+
+            replies_found += _scan_folder(mail, "INBOX", known_emails, mark_seen=True,
+                                          sender_email=acct["email"])
+
+            try:
+                status, _ = mail.select('"[Gmail]/Sent Mail"', readonly=True)
+                if status == "OK":
+                    replies_found += _scan_folder(mail, None, known_emails, mark_seen=False,
+                                                  days=2, sender_email=acct["email"])
+            except Exception:
+                pass
+
+            mail.logout()
+        except Exception as e:
+            print(f"[REPLY CHECK] IMAP error for {acct['email']}: {e}")
 
     return replies_found
 
 
 def _scan_folder(mail, folder: str | None, known_emails: set[str],
-                 mark_seen: bool = False, days: int = 7) -> int:
+                 mark_seen: bool = False, days: int = 7,
+                 sender_email: str = "") -> int:
     """Scan a mailbox folder for replies from known contacts."""
     if folder:
         mail.select(folder)
@@ -172,7 +199,7 @@ def _scan_folder(mail, folder: str | None, known_emails: set[str],
             # Check if this is a reply TO a known contact (self-reply during testing)
             subject = msg.get("Subject", "")
             in_reply_to = msg.get("In-Reply-To", "")
-            if (in_reply_to or subject.lower().startswith("re:")) and from_addr == IMAP_USER.lower():
+            if (in_reply_to or subject.lower().startswith("re:")) and sender_email and from_addr == sender_email.lower():
                 need_body.append((msg_id_bytes, from_addr, True, None))
         except Exception:
             continue
@@ -268,26 +295,58 @@ _BOUNCE_SUBJECTS = [
 ]
 
 
-def check_bounces(imap_host: str | None = None, imap_port: int | None = None,
-                  imap_user: str | None = None, imap_password: str | None = None) -> int:
-    """Check inbox for bounce notifications and mark contacts as bounced.
-    Can use default IMAP or per-account credentials.
+def check_bounces() -> int:
+    """Check inbox for bounce notifications across all client accounts.
     Returns the number of bounces detected."""
-    host = imap_host or IMAP_HOST
-    port = imap_port or IMAP_PORT
-    user = imap_user or IMAP_USER
-    pw = imap_password or IMAP_PASSWORD
-    if not user or not pw:
-        return 0
+    from outreach.db import get_db, _fetchall, get_email_accounts
 
     known_emails = get_all_sent_recipient_emails()
     if not known_emails:
         return 0
 
+    # Gather all unique email accounts across all clients
+    accounts = []
+    try:
+        with get_db() as db:
+            clients = _fetchall(db, "SELECT id FROM clients")
+        for row in clients:
+            accts = get_email_accounts(row["id"])
+            for acct in accts:
+                if acct.get("email") and acct.get("password"):
+                    accounts.append(acct)
+    except Exception as e:
+        print(f"[BOUNCE CHECK] Failed to load accounts: {e}")
+
+    if not accounts:
+        return 0
+
+    seen = set()
+    unique_accounts = []
+    for acct in accounts:
+        if acct["email"].lower() not in seen:
+            seen.add(acct["email"].lower())
+            unique_accounts.append(acct)
+
+    bounces_found = 0
+    for acct in unique_accounts:
+        bounces_found += _check_bounces_for_account(
+            imap_host=acct.get("imap_host") or IMAP_HOST,
+            imap_port=acct.get("imap_port") or IMAP_PORT,
+            imap_user=acct["email"],
+            imap_password=acct["password"],
+            known_emails=known_emails,
+        )
+    return bounces_found
+
+
+def _check_bounces_for_account(imap_host: str, imap_port: int,
+                               imap_user: str, imap_password: str,
+                               known_emails: set[str]) -> int:
+    """Check a single IMAP account for bounce notifications."""
     bounces_found = 0
     try:
-        mail = imaplib.IMAP4_SSL(host, port)
-        mail.login(user, pw)
+        mail = imaplib.IMAP4_SSL(imap_host, imap_port)
+        mail.login(imap_user, imap_password)
         mail.select("INBOX")
 
         # Search recent emails from mailer-daemon/postmaster

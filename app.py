@@ -5477,13 +5477,6 @@ def api_mail_peek():
                     print(f"[PEEK] IMAP failed for {acct['email']} ({acct['imap_host']}:{acct['imap_port']})", flush=True)
                 elif n > 0:
                     imap_total += n
-        else:
-            n = peek_unseen(since_date=imap_since)
-            if n == -1:
-                imap_errors.append("default")
-                print("[PEEK] IMAP failed for default account", flush=True)
-            elif n > 0:
-                imap_total = n
 
         # New = IMAP count since last sync minus what's already in DB
         waiting = max(imap_total - db_count, 0)
@@ -5526,12 +5519,12 @@ def api_mail_sync():
                 from outreach.mail_hub import sync_inbox
                 from outreach.db import increment_usage
                 total_new = 0
-                if accounts:
-                    for acct in accounts:
-                        n = sync_inbox(client_id, days=3, account_id=acct["id"])
-                        total_new += n
-                else:
-                    total_new = sync_inbox(client_id, days=3)
+                if not accounts:
+                    _sync_jobs[client_id] = {"status": "done", "new_emails": 0, "error": "No email account connected. Add one in Settings."}
+                    return
+                for acct in accounts:
+                    n = sync_inbox(client_id, days=3, account_id=acct["id"])
+                    total_new += n
                 if total_new > 0:
                     increment_usage(client_id, "mail_hub_syncs")
                 _sync_jobs[client_id] = {"status": "done", "new_emails": total_new, "error": None}
