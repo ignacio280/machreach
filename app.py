@@ -190,6 +190,18 @@ def debug_smtp_test():
     return jsonify(info)
 
 
+@app.route("/api/debug/smtp-send-test")
+@limiter.exempt
+def debug_smtp_send_test():
+    """Actually send a test email to support@machreach.com to verify delivery."""
+    result = _send_system_email(
+        "support@machreach.com",
+        "MachReach SMTP Test",
+        "If you received this, system emails are working correctly."
+    )
+    return jsonify({"sent": result})
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
