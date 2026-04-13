@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS clients (
     physical_address TEXT DEFAULT '',
     mail_preferences TEXT DEFAULT '',
     mail_exclusions TEXT DEFAULT '',
+    account_type TEXT DEFAULT 'business',
     is_admin    INTEGER DEFAULT 0,
     email_verified INTEGER DEFAULT 0,
     created_at  TIMESTAMP DEFAULT NOW()
@@ -372,6 +373,7 @@ CREATE TABLE IF NOT EXISTS clients (
     physical_address TEXT DEFAULT '',
     mail_preferences TEXT DEFAULT '',
     mail_exclusions TEXT DEFAULT '',
+    account_type TEXT DEFAULT 'business',
     is_admin    INTEGER DEFAULT 0,
     email_verified INTEGER DEFAULT 0,
     created_at  TEXT DEFAULT (datetime('now', 'localtime'))
@@ -607,6 +609,7 @@ def _run_migrations():
     migrations = [
         ("clients", "physical_address", "TEXT DEFAULT ''"),
         ("clients", "email_verified", "INTEGER DEFAULT 0"),
+        ("clients", "account_type", "TEXT DEFAULT 'business'"),
     ]
     with get_db() as db:
         for table, col, col_type in migrations:
@@ -676,12 +679,12 @@ def _date_expr(col):
 # Clients
 # ---------------------------------------------------------------------------
 
-def create_client(name: str, email: str, password_hash: str, business: str = "") -> int:
+def create_client(name: str, email: str, password_hash: str, business: str = "", account_type: str = "business") -> int:
     with get_db() as db:
         return _insert_returning_id(
             db,
-            "INSERT INTO clients (name, email, password, business) VALUES (%s, %s, %s, %s) RETURNING id",
-            (name, email, password_hash, business),
+            "INSERT INTO clients (name, email, password, business, account_type) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (name, email, password_hash, business, account_type),
         )
 
 

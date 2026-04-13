@@ -854,6 +854,15 @@ LAYOUT = """<!DOCTYPE html>
     <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open');this.innerHTML=this.innerHTML==='&#9776;'?'&#10005;':'&#9776;'" aria-label="Menu">&#9776;</button>
     <div class="nav-links">
       {% if logged_in %}
+        {% if account_type == 'student' %}
+        <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
+        <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
+        <a href="/student/exams" {% if active_page == 'student_exams' %}class="active"{% endif %}>&#128221; Exams</a>
+        <a href="/student/plan" {% if active_page == 'student_plan' %}class="active"{% endif %}>&#128197; Study Plan</a>
+        <a href="/student/canvas-settings" {% if active_page == 'student_canvas' %}class="active"{% endif %}>&#128279; Canvas</a>
+        <div class="nav-divider"></div>
+        <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %}>{{nav.settings}}</a>
+        {% else %}
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>{{nav.dashboard}}</a>
         <a href="/campaign/new" {% if active_page == 'new_campaign' %}class="active"{% endif %}>{{nav.new_campaign}}</a>
         <a href="/inbox" {% if active_page == 'inbox' %}class="active"{% endif %}>{{nav.inbox}}</a>
@@ -866,6 +875,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/contacts" {% if active_page == 'contacts' %}class="active"{% endif %} style="{% if active_page == 'contacts' %}color:var(--primary);{% endif %}">&#128101; {{nav.contacts}}</a>
         <a href="/billing" {% if active_page == 'billing' %}class="active"{% endif %}>&#128179; {{nav.billing}}</a>
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %}>{{nav.settings}}</a>
+        {% endif %}
         {% if is_admin %}<a href="/admin/broadcast" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <button onclick="toggleDarkMode()" class="btn btn-ghost btn-sm" id="theme-toggle" title="Toggle dark mode" style="font-size:16px;padding:4px 8px;cursor:pointer;background:none;border:none;color:#94A3B8;">&#127769;</button>
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
@@ -1164,9 +1174,11 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
     flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
     nav = t_dict("nav")
     is_admin = False
+    acct_type = session.get("account_type", "business")
     if _logged_in():
         c = get_client(session["client_id"])
         is_admin = bool(c and c.get("is_admin"))
+        acct_type = (c.get("account_type") or "business") if c else acct_type
     return render_template_string(
         LAYOUT,
         title=title,
@@ -1179,6 +1191,7 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
         nav=nav,
         lang=session.get("lang", "en"),
         is_admin=is_admin,
+        account_type=acct_type,
     )
 
 @app.route("/")
@@ -1282,6 +1295,9 @@ def register():
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
         business = request.form.get("business", "").strip()
+        account_type = request.form.get("account_type", "business").strip()
+        if account_type not in ("business", "student"):
+            account_type = "business"
         if not name or not email or not password:
             flash(("error", t("auth.all_required")))
             return redirect(url_for("register"))
@@ -1289,7 +1305,7 @@ def register():
             _log_security("REGISTER_DUPLICATE", email=email)
             flash(("error", t("auth.email_exists")))
             return redirect(url_for("register"))
-        client_id = create_client(name, email, _hash_pw(password), business)
+        client_id = create_client(name, email, _hash_pw(password), business, account_type)
         _log_security("REGISTER_OK", client_id=client_id, email=email)
 
         # Send verification email
@@ -1336,13 +1352,39 @@ def register():
         <h1>{t("auth.create_account")}</h1>
         <p class="subtitle">{t("auth.create_subtitle")}</p>
         <form method="post">
+          <div class="form-group">
+            <label>I'm signing up as</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;" id="type-selector">
+              <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border:2px solid var(--primary);border-radius:var(--radius-sm);cursor:pointer;background:var(--primary-light);transition:all .2s;" id="type-business" onclick="selectType('business')">
+                <input type="radio" name="account_type" value="business" checked style="accent-color:var(--primary);">
+                <div>
+                  <div style="font-weight:700;font-size:14px;color:var(--text);">&#128188; Business</div>
+                  <div style="font-size:11px;color:var(--text-muted);font-weight:400;">Email outreach &amp; campaigns</div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--card);transition:all .2s;" id="type-student" onclick="selectType('student')">
+                <input type="radio" name="account_type" value="student" style="accent-color:var(--primary);">
+                <div>
+                  <div style="font-weight:700;font-size:14px;color:var(--text);">&#127891; Student</div>
+                  <div style="font-size:11px;color:var(--text-muted);font-weight:400;">AI study planner &amp; Canvas</div>
+                </div>
+              </label>
+            </div>
+          </div>
           <div class="form-group"><label>{t("auth.full_name")}</label><input name="name" placeholder="John Doe" required></div>
           <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="john@company.com" required></div>
           <div class="form-group"><label>{t("auth.password")}</label><input name="password" type="password" placeholder="At least 6 characters" required minlength="6"></div>
-          <div class="form-group"><label>{t("auth.business_name")} <span style="font-weight:400;text-transform:none;color:var(--text-muted);">({t("auth.optional")})</span></label><input name="business" placeholder="Acme Inc."></div>
+          <div class="form-group" id="business-field"><label>{t("auth.business_name")} <span style="font-weight:400;text-transform:none;color:var(--text-muted);">({t("auth.optional")})</span></label><input name="business" placeholder="Acme Inc."></div>
           <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.create_btn")}</button>
           <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:12px;line-height:1.6;">By creating an account, you agree to our <a href="/terms" style="color:var(--primary);">Terms of Service</a> and <a href="/privacy" style="color:var(--primary);">Privacy Policy</a>.</p>
         </form>
+        <script>
+        function selectType(t){{
+          var bus=document.getElementById('type-business'),stu=document.getElementById('type-student'),bf=document.getElementById('business-field');
+          if(t==='student'){{stu.style.border='2px solid var(--primary)';stu.style.background='var(--primary-light)';bus.style.border='2px solid var(--border)';bus.style.background='var(--card)';bf.style.display='none';}}
+          else{{bus.style.border='2px solid var(--primary)';bus.style.background='var(--primary-light)';stu.style.border='2px solid var(--border)';stu.style.background='var(--card)';bf.style.display='block';}}
+        }}
+        </script>
         <div class="auth-footer">{t("auth.have_account")} <a href="/login">{t("auth.log_in")}</a></div>
       </div>
     </div>
@@ -1370,9 +1412,12 @@ def login():
         session.clear()
         session["client_id"] = client["id"]
         session["client_name"] = client["name"]
+        session["account_type"] = client.get("account_type", "business")
         # Check for pending team invite
         if pending_token:
             return redirect(url_for("team_accept_invite", token=pending_token))
+        if session["account_type"] == "student":
+            return redirect(url_for("student_dashboard_page"))
         return redirect(url_for("dashboard"))
     return render_template_string(LAYOUT, title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
     <div class="auth-wrapper">
