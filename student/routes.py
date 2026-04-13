@@ -669,6 +669,7 @@ def register_student_routes(app, csrf, limiter):
         courses = sdb.get_courses(cid)
         exams = sdb.get_upcoming_exams(cid)
         stats = sdb.get_study_stats(cid)
+        focus_stats = sdb.get_focus_stats(cid)
         plan_row = sdb.get_latest_plan(cid)
 
         # Today's plan
@@ -758,11 +759,44 @@ def register_student_routes(app, csrf, limiter):
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;">
+        <!-- Motivational quote -->
+        <div id="daily-quote" style="background:linear-gradient(135deg,var(--primary),#8B5CF6);color:#fff;border-radius:var(--radius-sm);padding:16px 24px;margin-bottom:20px;position:relative;overflow:hidden;">
+          <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:48px;opacity:0.15;">&#128161;</div>
+          <div style="font-style:italic;font-size:15px;max-width:85%;" id="quote-text"></div>
+          <div style="font-size:12px;margin-top:4px;opacity:0.8;" id="quote-author"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-bottom:24px;">
           <div class="stat-card stat-purple"><div class="num">{len(courses)}</div><div class="label">Courses</div></div>
           <div class="stat-card stat-red"><div class="num">{stats['upcoming_exams']}</div><div class="label">Upcoming Exams</div></div>
-          <div class="stat-card stat-green"><div class="num">{stats['completion_pct']}%</div><div class="label">Progress</div></div>
-          <div class="stat-card stat-blue"><div class="num" style="font-size:14px;color:{canvas_color};">{canvas_status}</div><div class="label">Canvas</div></div>
+          <div class="stat-card stat-green"><div class="num">{stats['completion_pct']}%</div><div class="label">Plan Progress</div></div>
+          <div class="stat-card stat-blue"><div class="num">{focus_stats['total_hours']}</div><div class="label">Hours Focused</div></div>
+          <div class="stat-card" style="background:var(--card);border:1px solid var(--border);"><div class="num" style="color:#F59E0B;">{focus_stats['streak_days']}&#128293;</div><div class="label">Day Streak</div></div>
+          <div class="stat-card" style="background:var(--card);border:1px solid var(--border);"><div class="num" style="font-size:14px;color:{canvas_color};">{canvas_status}</div><div class="label">Canvas</div></div>
+        </div>
+
+        <!-- Quick actions -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px;">
+          <a href="/student/focus" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#127917;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">Focus Mode</div>
+            <div style="font-size:11px;color:var(--text-muted);">Pomodoro &amp; Pages</div>
+          </a>
+          <a href="/student/gpa" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#127891;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">GPA Calculator</div>
+            <div style="font-size:11px;color:var(--text-muted);">Track your grades</div>
+          </a>
+          <a href="/student/courses" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#128218;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">My Courses</div>
+            <div style="font-size:11px;color:var(--text-muted);">{len(courses)} synced</div>
+          </a>
+          <a href="/student/plan" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#128197;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">Study Plan</div>
+            <div style="font-size:11px;color:var(--text-muted);">AI-generated</div>
+          </a>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
@@ -793,6 +827,27 @@ def register_student_routes(app, csrf, limiter):
         <style>@keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}</style>
 
         <script>
+        // Daily motivational quote
+        var quotes = [
+          ["The secret of getting ahead is getting started.", "Mark Twain"],
+          ["It always seems impossible until it's done.", "Nelson Mandela"],
+          ["Success is the sum of small efforts repeated day in and day out.", "Robert Collier"],
+          ["Don't watch the clock; do what it does. Keep going.", "Sam Levenson"],
+          ["The expert in anything was once a beginner.", "Helen Hayes"],
+          ["Education is the passport to the future.", "Malcolm X"],
+          ["A little progress each day adds up to big results.", "Satya Nani"],
+          ["The beautiful thing about learning is nobody can take it away from you.", "B.B. King"],
+          ["You don't have to be great to start, but you have to start to be great.", "Zig Ziglar"],
+          ["Study hard, for the well is deep, and our brains are shallow.", "Richard Baxter"],
+          ["Push yourself, because no one else is going to do it for you.", "Unknown"],
+          ["There are no shortcuts to any place worth going.", "Beverly Sills"],
+          ["The mind is not a vessel to be filled, but a fire to be kindled.", "Plutarch"],
+          ["Motivation is what gets you started. Habit is what keeps you going.", "Jim Ryun"]
+        ];
+        var dayIdx = Math.floor(Date.now() / 86400000) % quotes.length;
+        document.getElementById('quote-text').textContent = '"' + quotes[dayIdx][0] + '"';
+        document.getElementById('quote-author').textContent = '\u2014 ' + quotes[dayIdx][1];
+
         async function syncCourses() {{
           var btn = document.getElementById('sync-btn');
           btn.disabled = true; btn.innerHTML = '&#9203; Starting...';
@@ -1659,6 +1714,12 @@ def register_student_routes(app, csrf, limiter):
               <button onclick="resetTimer()" id="reset-btn" class="btn btn-outline">&#8635; Reset</button>
               <button onclick="skipPhase()" id="skip-btn" class="btn btn-ghost btn-sm" style="display:none;">Skip &raquo;</button>
             </div>
+            <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:10px;">
+              Shortcuts: <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Space</kbd> start/pause
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">R</kbd> reset
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">S</kbd> skip
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">P</kbd> page done
+            </p>
           </div>
 
           <!-- Right column -->
@@ -2052,6 +2113,15 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('spotify-iframe').src =
             'https://open.spotify.com/embed/' + type + '/' + id + '?utm_source=generator&theme=0';
         }}
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {{
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+          if (e.code === 'Space') {{ e.preventDefault(); if (isRunning) pauseTimer(); else startTimer(); }}
+          if (e.code === 'KeyR' && !e.ctrlKey) {{ e.preventDefault(); resetTimer(); }}
+          if (e.code === 'KeyS' && !e.ctrlKey) {{ e.preventDefault(); skipPhase(); }}
+          if (e.code === 'KeyP' && currentMode === 'pages') {{ e.preventDefault(); clickPage(); }}
+        }});
         </script>
         """, active_page="student_focus")
 

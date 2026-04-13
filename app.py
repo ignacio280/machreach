@@ -1200,6 +1200,8 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
 @app.route("/")
 def index():
     if _logged_in():
+        if session.get("account_type") == "student":
+            return redirect(url_for("student_dashboard_page"))
         return redirect(url_for("dashboard"))
     return render_template_string(LAYOUT, title="AI Email Outreach", logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), wide=True, content=Markup(f"""
     <div class="hero" style="padding:100px 24px 60px;">
@@ -1729,6 +1731,8 @@ def api_team_list():
 def dashboard():
     if not _logged_in():
         return redirect(url_for("login"))
+    if session.get("account_type") == "student":
+        return redirect(url_for("student_dashboard_page"))
 
     data_cid = _effective_client_id()
     campaigns = get_campaigns(data_cid)
