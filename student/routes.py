@@ -927,6 +927,15 @@ def register_student_routes(app, csrf, limiter):
             {upload_buttons}
           </div>
         </div>
+        <div id="upload-bar" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 18px;margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;">
+            <span>&#128206; Uploading <b id="upload-bar-name"></b></span>
+            <span id="upload-bar-pct">0%</span>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;height:10px;overflow:hidden;">
+            <div id="upload-bar-fill" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
+          </div>
+        </div>
         <div id="sync-progress" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 18px;margin-top:16px;">
           <div style="display:flex;align-items:center;gap:10px;">
             <span style="animation:spin 1s linear infinite;display:inline-block;">&#9203;</span>
@@ -970,19 +979,52 @@ def register_student_routes(app, csrf, limiter):
             }}, 2000);
           }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; }}
         }}
+        function showUploadBar(name) {{
+          var bar = document.getElementById('upload-bar');
+          document.getElementById('upload-bar-name').textContent = name;
+          document.getElementById('upload-bar-fill').style.width = '0%';
+          document.getElementById('upload-bar-pct').textContent = '0%';
+          bar.style.display = 'block';
+        }}
+        function updateUploadBar(pct) {{
+          document.getElementById('upload-bar-fill').style.width = pct + '%';
+          document.getElementById('upload-bar-pct').textContent = Math.round(pct) + '%';
+        }}
+        function hideUploadBar(msg) {{
+          document.getElementById('upload-bar-fill').style.width = '100%';
+          document.getElementById('upload-bar-pct').textContent = msg || 'Done!';
+          setTimeout(function(){{ document.getElementById('upload-bar').style.display = 'none'; }}, 1500);
+        }}
         async function uploadFile(courseId, input) {{
           if (!input.files[0]) return;
           var fd = new FormData();
           fd.append('file', input.files[0]);
           var csrfToken = document.querySelector('meta[name="csrf-token"]');
-          var headers = {{}};
-          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+          showUploadBar(input.files[0].name);
           try {{
-            var r = await fetch('/api/student/courses/' + courseId + '/upload', {{method:'POST', body:fd, headers:headers}});
-            var d = await r.json();
-            if (r.ok) {{ alert('File uploaded! ' + d.text_length + ' characters extracted. Re-sync to update your study plan.'); location.reload(); }}
-            else {{ alert(d.error || 'Upload failed'); }}
-          }} catch(e) {{ alert('Network error'); }}
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/student/courses/' + courseId + '/upload');
+            if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
+            xhr.upload.onprogress = function(e) {{
+              if (e.lengthComputable) updateUploadBar((e.loaded / e.total) * 80);
+            }};
+            xhr.onload = function() {{
+              updateUploadBar(90);
+              try {{
+                var d = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300) {{
+                  hideUploadBar('&#10003; Uploaded!');
+                  setTimeout(function(){{ location.reload(); }}, 1000);
+                }} else {{
+                  hideUploadBar('Failed');
+                  alert(d.error || 'Upload failed');
+                }}
+              }} catch(e) {{ hideUploadBar('Failed'); alert('Upload failed'); }}
+            }};
+            xhr.onerror = function() {{ hideUploadBar('Failed'); alert('Network error'); }};
+            updateUploadBar(5);
+            xhr.send(fd);
+          }} catch(e) {{ hideUploadBar('Failed'); alert('Network error'); }}
           input.value = '';
         }}
         async function deleteFile(fileId) {{
@@ -1164,6 +1206,17 @@ def register_student_routes(app, csrf, limiter):
           {files_html}
         </div>
 
+        <!-- Upload progress bar -->
+        <div id="detail-upload-bar" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 18px;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;">
+            <span>&#128206; Uploading <b id="detail-upload-name"></b></span>
+            <span id="detail-upload-pct">0%</span>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;height:10px;overflow:hidden;">
+            <div id="detail-upload-fill" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
+          </div>
+        </div>
+
         <style>
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
@@ -1308,19 +1361,53 @@ def register_student_routes(app, csrf, limiter):
           c.appendChild(div);
         }}
 
+        function showUploadBar(name) {{
+          var bar = document.getElementById('detail-upload-bar');
+          document.getElementById('detail-upload-name').textContent = name;
+          document.getElementById('detail-upload-fill').style.width = '0%';
+          document.getElementById('detail-upload-pct').textContent = '0%';
+          bar.style.display = 'block';
+        }}
+        function updateUploadBar(pct) {{
+          document.getElementById('detail-upload-fill').style.width = pct + '%';
+          document.getElementById('detail-upload-pct').textContent = Math.round(pct) + '%';
+        }}
+        function hideUploadBar(msg) {{
+          document.getElementById('detail-upload-fill').style.width = '100%';
+          document.getElementById('detail-upload-pct').textContent = msg || 'Done!';
+          setTimeout(function(){{ document.getElementById('detail-upload-bar').style.display = 'none'; }}, 1500);
+        }}
+        function doUpload(cid, fd, fileName) {{
+          showUploadBar(fileName);
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/student/courses/' + cid + '/upload');
+          if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
+          xhr.upload.onprogress = function(e) {{
+            if (e.lengthComputable) updateUploadBar((e.loaded / e.total) * 80);
+          }};
+          xhr.onload = function() {{
+            updateUploadBar(90);
+            try {{
+              var d = JSON.parse(xhr.responseText);
+              if (xhr.status >= 200 && xhr.status < 300) {{
+                hideUploadBar('&#10003; Uploaded!');
+                setTimeout(function(){{ location.reload(); }}, 1000);
+              }} else {{
+                hideUploadBar('Failed');
+                alert(d.error || 'Upload failed');
+              }}
+            }} catch(e) {{ hideUploadBar('Failed'); alert('Upload failed'); }}
+          }};
+          xhr.onerror = function() {{ hideUploadBar('Failed'); alert('Network error'); }};
+          updateUploadBar(5);
+          xhr.send(fd);
+        }}
         async function uploadFile(cid, input) {{
           if (!input.files[0]) return;
           var fd = new FormData();
           fd.append('file', input.files[0]);
-          var csrfToken = document.querySelector('meta[name="csrf-token"]');
-          var headers = {{}};
-          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
-          try {{
-            var r = await fetch('/api/student/courses/' + cid + '/upload', {{method:'POST', body:fd, headers:headers}});
-            var d = await r.json();
-            if (r.ok) {{ alert('File uploaded! ' + d.text_length + ' chars extracted.'); location.reload(); }}
-            else {{ alert(d.error || 'Upload failed'); }}
-          }} catch(e) {{ alert('Network error'); }}
+          doUpload(cid, fd, input.files[0].name);
           input.value = '';
         }}
 
@@ -1329,15 +1416,7 @@ def register_student_routes(app, csrf, limiter):
           var fd = new FormData();
           fd.append('file', input.files[0]);
           fd.append('exam_id', examId);
-          var csrfToken = document.querySelector('meta[name="csrf-token"]');
-          var headers = {{}};
-          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
-          try {{
-            var r = await fetch('/api/student/courses/' + cid + '/upload', {{method:'POST', body:fd, headers:headers}});
-            var d = await r.json();
-            if (r.ok) {{ alert('File uploaded for this exam!'); location.reload(); }}
-            else {{ alert(d.error || 'Upload failed'); }}
-          }} catch(e) {{ alert('Network error'); }}
+          doUpload(cid, fd, input.files[0].name);
           input.value = '';
         }}
 
@@ -1529,20 +1608,33 @@ def register_student_routes(app, csrf, limiter):
 
             <!-- Page method settings -->
             <div id="settings-pages" style="display:none;">
-              <div style="display:flex;gap:10px;margin-bottom:12px;">
-                <div class="form-group" style="flex:1;">
-                  <label style="font-size:12px;">Target pages</label>
-                  <input type="number" id="page-target" value="20" min="1" max="500" class="edit-input">
-                </div>
-                <div class="form-group" style="flex:1;">
-                  <label style="font-size:12px;">Pages done</label>
-                  <input type="number" id="page-done" value="0" min="0" class="edit-input" onchange="updatePageProgress()">
-                </div>
+              <div class="form-group" style="margin-bottom:12px;">
+                <label style="font-size:12px;">Target pages</label>
+                <input type="number" id="page-target" value="20" min="1" max="500" class="edit-input" onchange="updatePageProgress()">
               </div>
-              <div style="background:var(--bg);border-radius:8px;height:8px;overflow:hidden;margin-bottom:8px;">
-                <div id="page-bar" style="height:100%;background:var(--primary);width:0%;transition:width 0.3s;border-radius:8px;"></div>
+              <!-- Big page counter display -->
+              <div style="text-align:center;margin:12px 0;">
+                <div id="page-counter-display" style="font-size:48px;font-weight:800;color:var(--primary);">0</div>
+                <div id="page-status" style="font-size:14px;color:var(--text-muted);">0 / 20 pages</div>
               </div>
-              <p id="page-status" style="font-size:13px;color:var(--text-muted);text-align:center;">0 / 20 pages</p>
+              <div style="background:var(--bg);border-radius:8px;height:12px;overflow:hidden;margin-bottom:16px;">
+                <div id="page-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.5s ease;border-radius:8px;"></div>
+              </div>
+              <!-- Big satisfying page-done button -->
+              <button id="page-done-btn" onclick="clickPage()" style="
+                display:block;width:100%;padding:20px;font-size:22px;font-weight:700;
+                background:linear-gradient(135deg,var(--primary),#8B5CF6);color:#fff;
+                border:none;border-radius:16px;cursor:pointer;
+                transition:transform 0.15s ease,box-shadow 0.15s ease;
+                box-shadow:0 4px 16px rgba(139,92,246,0.3);
+                user-select:none;
+              " onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'" onmouseleave="this.style.transform='scale(1)'">
+                &#128214; Page Completed!
+              </button>
+              <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">
+                <button onclick="undoPage()" class="btn btn-ghost btn-sm" style="font-size:12px;">&#8630; Undo last</button>
+                <button onclick="resetPages()" class="btn btn-ghost btn-sm" style="font-size:12px;">&#128260; Reset</button>
+              </div>
             </div>
 
             <!-- Custom timer settings -->
@@ -1569,8 +1661,9 @@ def register_student_routes(app, csrf, limiter):
             </div>
           </div>
 
-          <!-- Spotify + ambient card -->
+          <!-- Right column -->
           <div>
+            <!-- Spotify card -->
             <div class="card" style="margin-bottom:16px;">
               <div class="card-header"><h2>&#127925; Study Music</h2></div>
               <div style="margin-bottom:12px;">
@@ -1598,10 +1691,41 @@ def register_student_routes(app, csrf, limiter):
               </div>
             </div>
 
+            <!-- Flashcard quick-review -->
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-header"><h2>&#127183; Quick Flashcards</h2></div>
+              <div id="flashcard-area">
+                <div id="flashcard-box" onclick="flipCard()" style="
+                  min-height:120px;background:var(--bg);border-radius:12px;padding:24px;
+                  text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;
+                  font-size:16px;font-weight:500;border:2px dashed var(--border);transition:all 0.3s ease;
+                  user-select:none;
+                ">
+                  <span style="color:var(--text-muted);">Click + Add Flashcard to start, then click to flip</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+                  <div style="display:flex;gap:6px;">
+                    <button onclick="prevCard()" class="btn btn-ghost btn-sm">&larr; Prev</button>
+                    <button onclick="nextCard()" class="btn btn-ghost btn-sm">Next &rarr;</button>
+                  </div>
+                  <span id="card-counter" style="font-size:12px;color:var(--text-muted);">0 / 0</span>
+                  <button onclick="showAddCard()" class="btn btn-outline btn-sm">+ Add</button>
+                </div>
+                <div id="add-card-form" style="display:none;margin-top:10px;background:var(--bg);border-radius:8px;padding:12px;">
+                  <input type="text" id="card-front" class="edit-input" placeholder="Front (question)" style="margin-bottom:6px;">
+                  <input type="text" id="card-back" class="edit-input" placeholder="Back (answer)" style="margin-bottom:8px;">
+                  <div style="display:flex;gap:6px;">
+                    <button onclick="addCard()" class="btn btn-primary btn-sm">Add Card</button>
+                    <button onclick="document.getElementById('add-card-form').style.display='none'" class="btn btn-ghost btn-sm">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Quick notes -->
             <div class="card">
               <div class="card-header"><h2>&#128221; Quick Notes</h2></div>
-              <textarea id="focus-notes" class="edit-input" rows="6" placeholder="Jot down notes while studying..." style="resize:vertical;"></textarea>
+              <textarea id="focus-notes" class="edit-input" rows="5" placeholder="Jot down notes while studying..." style="resize:vertical;"></textarea>
               <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Notes are saved in your browser.</p>
             </div>
           </div>
@@ -1611,9 +1735,54 @@ def register_student_routes(app, csrf, limiter):
         .mode-btn.active {{ background:var(--primary);color:#fff;border-color:var(--primary); }}
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        #page-done-btn:hover {{ box-shadow:0 6px 24px rgba(139,92,246,0.45); }}
+        #page-done-btn:active {{ transform:scale(0.93) !important; }}
+        @keyframes pagePop {{ 0%{{transform:scale(1);}} 50%{{transform:scale(1.15);}} 100%{{transform:scale(1);}} }}
+        @keyframes confettiFade {{ 0%{{opacity:1;transform:translateY(0) rotate(0deg);}} 100%{{opacity:0;transform:translateY(-60px) rotate(180deg);}} }}
+        .page-confetti {{ position:absolute;pointer-events:none;font-size:20px;animation:confettiFade 0.8s ease-out forwards; }}
         </style>
 
         <script>
+        /* === Calming alarm audio === */
+        var alarmCtx = null;
+        function playAlarm() {{
+          try {{
+            if (!alarmCtx) alarmCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var ctx = alarmCtx;
+            var now = ctx.currentTime;
+            // Gentle 3-chime bell sound
+            var freqs = [523.25, 659.25, 783.99]; // C5, E5, G5 major chord
+            freqs.forEach(function(freq, i) {{
+              var osc = ctx.createOscillator();
+              var gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.value = freq;
+              gain.gain.setValueAtTime(0, now + i * 0.5);
+              gain.gain.linearRampToValueAtTime(0.25, now + i * 0.5 + 0.05);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.5 + 1.5);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(now + i * 0.5);
+              osc.stop(now + i * 0.5 + 1.8);
+            }});
+            // Final gentle chord
+            [523.25, 659.25, 783.99].forEach(function(freq) {{
+              var osc = ctx.createOscillator();
+              var gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.value = freq;
+              gain.gain.setValueAtTime(0, now + 1.8);
+              gain.gain.linearRampToValueAtTime(0.15, now + 1.9);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(now + 1.8);
+              osc.stop(now + 3.8);
+            }});
+          }} catch(e) {{}}
+        }}
+
+        /* === Timer state === */
         var timerInterval = null;
         var timeLeft = 25 * 60;
         var totalTime = 25 * 60;
@@ -1623,6 +1792,7 @@ def register_student_routes(app, csrf, limiter):
         var currentMode = 'pomodoro';
         var totalFocusSeconds = 0;
         var sessionStarted = false;
+        var pageDone = 0;
 
         // Load saved notes
         var savedNotes = localStorage.getItem('focus_notes');
@@ -1631,6 +1801,44 @@ def register_student_routes(app, csrf, limiter):
           localStorage.setItem('focus_notes', this.value);
         }});
 
+        /* === Flashcards (localStorage) === */
+        var flashcards = JSON.parse(localStorage.getItem('focus_flashcards') || '[]');
+        var cardIndex = 0;
+        var cardFlipped = false;
+        function renderCard() {{
+          var box = document.getElementById('flashcard-box');
+          var counter = document.getElementById('card-counter');
+          if (flashcards.length === 0) {{
+            box.innerHTML = '<span style="color:var(--text-muted);">Click + Add Flashcard to start, then click to flip</span>';
+            counter.textContent = '0 / 0';
+            return;
+          }}
+          var c = flashcards[cardIndex];
+          box.innerHTML = cardFlipped
+            ? '<div style="color:var(--green);font-size:14px;margin-bottom:4px;">ANSWER</div><div>' + c.back + '</div>'
+            : '<div style="color:var(--primary);font-size:14px;margin-bottom:4px;">QUESTION</div><div>' + c.front + '</div>';
+          box.style.borderColor = cardFlipped ? 'var(--green)' : 'var(--border)';
+          counter.textContent = (cardIndex + 1) + ' / ' + flashcards.length;
+        }}
+        function flipCard() {{ if (flashcards.length > 0) {{ cardFlipped = !cardFlipped; renderCard(); }} }}
+        function nextCard() {{ if (flashcards.length > 0) {{ cardIndex = (cardIndex + 1) % flashcards.length; cardFlipped = false; renderCard(); }} }}
+        function prevCard() {{ if (flashcards.length > 0) {{ cardIndex = (cardIndex - 1 + flashcards.length) % flashcards.length; cardFlipped = false; renderCard(); }} }}
+        function showAddCard() {{ document.getElementById('add-card-form').style.display = ''; document.getElementById('card-front').focus(); }}
+        function addCard() {{
+          var f = document.getElementById('card-front').value.trim();
+          var b = document.getElementById('card-back').value.trim();
+          if (!f || !b) {{ alert('Both sides required'); return; }}
+          flashcards.push({{front: f, back: b}});
+          localStorage.setItem('focus_flashcards', JSON.stringify(flashcards));
+          cardIndex = flashcards.length - 1; cardFlipped = false;
+          document.getElementById('card-front').value = '';
+          document.getElementById('card-back').value = '';
+          document.getElementById('add-card-form').style.display = 'none';
+          renderCard();
+        }}
+        renderCard();
+
+        /* === Mode switching === */
         function setMode(mode) {{
           currentMode = mode;
           document.querySelectorAll('.mode-btn').forEach(function(b) {{ b.classList.remove('active'); b.classList.add('btn-outline'); }});
@@ -1645,8 +1853,10 @@ def register_student_routes(app, csrf, limiter):
             timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
           }} else if (mode === 'pages') {{
             timeLeft = 0; totalTime = 0;
+            pageDone = 0;
+            document.getElementById('page-counter-display').textContent = '0';
             document.getElementById('timer-display').textContent = '00:00';
-            document.getElementById('timer-label').textContent = 'Counting up \u2014 track your pages';
+            document.getElementById('timer-label').textContent = 'Start timer, then click the big button for each page';
           }} else {{
             timeLeft = parseInt(document.getElementById('custom-mins').value) * 60;
           }}
@@ -1660,13 +1870,61 @@ def register_student_routes(app, csrf, limiter):
             var m = Math.floor(elapsed / 60);
             var s = elapsed % 60;
             document.getElementById('timer-display').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-          }} else {{
+          }} else if (currentMode !== 'pages') {{
             var m = Math.floor(timeLeft / 60);
             var s = timeLeft % 60;
             document.getElementById('timer-display').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
           }}
         }}
 
+        /* === Page method click === */
+        function clickPage() {{
+          if (!isRunning) {{ startTimer(); }}
+          pageDone++;
+          document.getElementById('page-counter-display').textContent = pageDone;
+          document.getElementById('page-counter-display').style.animation = 'none';
+          void document.getElementById('page-counter-display').offsetWidth;
+          document.getElementById('page-counter-display').style.animation = 'pagePop 0.3s ease';
+          updatePageProgress();
+          // Confetti burst
+          var btn = document.getElementById('page-done-btn');
+          var rect = btn.getBoundingClientRect();
+          var emojis = ['&#127881;','&#11088;','&#128214;','&#127942;','&#10024;','&#128640;'];
+          for (var i = 0; i < 6; i++) {{
+            var span = document.createElement('span');
+            span.className = 'page-confetti';
+            span.innerHTML = emojis[i % emojis.length];
+            span.style.left = (rect.left + Math.random() * rect.width) + 'px';
+            span.style.top = (rect.top + window.scrollY - 10) + 'px';
+            document.body.appendChild(span);
+            setTimeout(function(s){{ s.remove(); }}, 900, span);
+          }}
+        }}
+        function undoPage() {{
+          if (pageDone > 0) {{
+            pageDone--;
+            document.getElementById('page-counter-display').textContent = pageDone;
+            updatePageProgress();
+          }}
+        }}
+        function resetPages() {{
+          pageDone = 0;
+          document.getElementById('page-counter-display').textContent = '0';
+          updatePageProgress();
+        }}
+        function updatePageProgress() {{
+          var target = parseInt(document.getElementById('page-target').value) || 1;
+          var pct = Math.min(100, Math.round(pageDone / target * 100));
+          document.getElementById('page-bar').style.width = pct + '%';
+          document.getElementById('page-status').textContent = pageDone + ' / ' + target + ' pages (' + pct + '%)';
+          if (pageDone >= target && sessionStarted) {{
+            playAlarm();
+            saveFocusSession();
+            document.getElementById('timer-label').textContent = '&#127881; Page goal reached!';
+          }}
+        }}
+
+        /* === Timer controls === */
         function startTimer() {{
           if (isRunning) return;
           isRunning = true;
@@ -1676,7 +1934,7 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('skip-btn').style.display = currentMode === 'pomodoro' ? '' : 'none';
 
           if (currentMode === 'pages') {{
-            document.getElementById('timer-label').textContent = '&#128214; Reading \u2014 update pages as you go';
+            document.getElementById('timer-label').textContent = '&#128214; Reading \u2014 click the big button for each page';
             timerInterval = setInterval(function() {{
               totalFocusSeconds++;
               updateDisplay();
@@ -1714,6 +1972,7 @@ def register_student_routes(app, csrf, limiter):
           totalFocusSeconds = 0;
           sessionStarted = false;
           pomoCount = 0;
+          pageDone = 0;
           document.getElementById('start-btn').style.display = '';
           document.getElementById('pause-btn').style.display = 'none';
           document.getElementById('skip-btn').style.display = 'none';
@@ -1724,6 +1983,7 @@ def register_student_routes(app, csrf, limiter):
             timeLeft = parseInt(document.getElementById('custom-mins').value) * 60;
           }} else {{
             timeLeft = 0;
+            document.getElementById('page-counter-display').textContent = '0';
           }}
           totalTime = timeLeft;
           updateDisplay();
@@ -1737,6 +1997,7 @@ def register_student_routes(app, csrf, limiter):
         }}
 
         function onTimerEnd() {{
+          playAlarm();
           if (currentMode === 'pomodoro') {{
             if (!isBreak) {{
               pomoCount++;
@@ -1758,7 +2019,6 @@ def register_student_routes(app, csrf, limiter):
             updateDisplay();
             document.getElementById('start-btn').style.display = '';
             document.getElementById('pause-btn').style.display = 'none';
-            try {{ new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU'+Array(300).join('A')).play(); }} catch(e) {{}}
           }} else {{
             saveFocusSession();
             document.getElementById('timer-label').textContent = '&#10003; Session complete!';
@@ -1767,21 +2027,9 @@ def register_student_routes(app, csrf, limiter):
           }}
         }}
 
-        function updatePageProgress() {{
-          var done = parseInt(document.getElementById('page-done').value) || 0;
-          var target = parseInt(document.getElementById('page-target').value) || 1;
-          var pct = Math.min(100, Math.round(done / target * 100));
-          document.getElementById('page-bar').style.width = pct + '%';
-          document.getElementById('page-status').textContent = done + ' / ' + target + ' pages (' + pct + '%)';
-          if (done >= target && sessionStarted) {{
-            saveFocusSession();
-            document.getElementById('timer-label').textContent = '&#127881; Page goal reached!';
-          }}
-        }}
-
         async function saveFocusSession() {{
           var minutes = Math.round(totalFocusSeconds / 60);
-          var pages = currentMode === 'pages' ? (parseInt(document.getElementById('page-done').value) || 0) : 0;
+          var pages = currentMode === 'pages' ? pageDone : 0;
           var course = document.getElementById('focus-course').value;
           try {{
             await fetch('/api/student/focus/save', {{
