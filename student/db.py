@@ -265,6 +265,22 @@ def get_course(course_db_id: int) -> dict | None:
         return _fetchone(db, "SELECT * FROM student_courses WHERE id = %s", (course_db_id,))
 
 
+def update_course_info(course_db_id: int, client_id: int, name: str, code: str,
+                       grading: dict, weekly_schedule: list, study_tips: list):
+    """Update editable fields of a course's analysis_json."""
+    with get_db() as db:
+        row = _fetchone(db, "SELECT analysis_json FROM student_courses WHERE id = %s AND client_id = %s",
+                        (course_db_id, client_id))
+        if not row:
+            return
+        analysis = json.loads(row["analysis_json"]) if isinstance(row["analysis_json"], str) else (row["analysis_json"] or {})
+        analysis["grading"] = grading
+        analysis["weekly_schedule"] = weekly_schedule
+        analysis["study_tips"] = study_tips
+        _exec(db, "UPDATE student_courses SET name = %s, code = %s, analysis_json = %s WHERE id = %s AND client_id = %s",
+              (name, code, json.dumps(analysis, ensure_ascii=False), course_db_id, client_id))
+
+
 # ── Exams ───────────────────────────────────────────────────
 
 def save_exams(client_id: int, course_db_id: int, exams: list[dict]):
@@ -302,6 +318,41 @@ def get_upcoming_exams(client_id: int) -> list[dict]:
             "ORDER BY e.exam_date",
             (client_id, today),
         )
+
+
+def get_course_exams(course_db_id: int) -> list[dict]:
+    with get_db() as db:
+        return _fetchall(
+            db, "SELECT * FROM student_exams WHERE course_id = %s ORDER BY exam_date",
+            (course_db_id,),
+        )
+
+
+def upsert_exam(client_id: int, course_db_id: int, exam_id: int | None,
+                name: str, exam_date: str | None, weight_pct: int,
+                topics: list[str]) -> int:
+    with get_db() as db:
+        topics_json = json.dumps(topics, ensure_ascii=False)
+        if exam_id:
+            _exec(db,
+                  "UPDATE student_exams SET name = %s, exam_date = %s, weight_pct = %s, "
+                  "topics_json = %s WHERE id = %s AND client_id = %s",
+                  (name, exam_date, weight_pct, topics_json, exam_id, client_id))
+            return exam_id
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_exams (client_id, course_id, name, exam_date, weight_pct, topics_json) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (client_id, course_db_id, name, exam_date, weight_pct, topics_json),
+            "INSERT INTO student_exams (client_id, course_id, name, exam_date, weight_pct, topics_json) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+        )
+
+
+def delete_exam(exam_id: int, client_id: int):
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_exams WHERE id = %s AND client_id = %s",
+              (exam_id, client_id))
 
 
 # ── Study plans ─────────────────────────────────────────────
