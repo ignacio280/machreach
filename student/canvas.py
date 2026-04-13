@@ -66,13 +66,45 @@ class CanvasClient:
 
     # ── courses ─────────────────────────────────────────────
     def get_courses(self, enrollment_state: str = "active") -> list[dict]:
-        """Get all courses the student is enrolled in."""
+        """Get courses the student is enrolled in for the current term only.
+
+        Canvas keeps past-semester enrollments as 'active', so we fetch
+        term info and only return courses from the most recent term that
+        actually has courses (i.e. the current semester).
+        """
         courses = self._get_paginated("/courses", {
             "enrollment_state": enrollment_state,
-            "include[]": "total_students",
+            "include[]": ["total_students", "term"],
         })
         # Filter out courses without a name (access-restricted shells)
-        return [c for c in courses if c.get("name")]
+        courses = [c for c in courses if c.get("name")]
+
+        # ── filter to current term ──
+        # Identify the most recent term by end_at (or start_at, or id)
+        # among courses that have term info.
+        from datetime import datetime as _dt
+        now = _dt.utcnow().isoformat() + "Z"
+
+        termed = [c for c in courses if c.get("term")]
+        if not termed:
+            return courses  # no term info available, return all
+
+        def _term_sort_key(c):
+            """Sort terms: prefer ones that are current (start <= now <= end),
+            then by latest start_at, then by highest term id."""
+            t = c.get("term", {})
+            start = t.get("start_at") or ""
+            end = t.get("end_at") or "9999"
+            # Currently active term gets priority
+            is_current = 1 if (start <= now <= end) else 0
+            return (is_current, start, t.get("id", 0))
+
+        termed.sort(key=_term_sort_key, reverse=True)
+        current_term_id = termed[0]["term"]["id"]
+
+        # Return only courses from the current (most recent) term
+        return [c for c in courses
+                if c.get("term", {}).get("id") == current_term_id]
 
     def get_course(self, course_id: int) -> dict:
         return self._get(f"/courses/{course_id}")
