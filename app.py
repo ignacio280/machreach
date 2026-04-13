@@ -854,7 +854,7 @@ LAYOUT = """<!DOCTYPE html>
     <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open');this.innerHTML=this.innerHTML==='&#9776;'?'&#10005;':'&#9776;'" aria-label="Menu">&#9776;</button>
     <div class="nav-links">
       {% if logged_in %}
-        {% if account_type == 'student' %}
+        {% if account_type|default('business') == 'student' %}
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <a href="/student/exams" {% if active_page == 'student_exams' %}class="active"{% endif %}>&#128221; Exams</a>
