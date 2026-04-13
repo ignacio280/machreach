@@ -82,6 +82,18 @@ CREATE TABLE IF NOT EXISTS student_study_progress (
     created_at      TIMESTAMP DEFAULT NOW(),
     UNIQUE(client_id, plan_date)
 );
+
+CREATE TABLE IF NOT EXISTS student_course_files (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id       INTEGER NOT NULL REFERENCES student_courses(id) ON DELETE CASCADE,
+    original_name   TEXT NOT NULL,
+    file_type       TEXT DEFAULT '',
+    extracted_text  TEXT DEFAULT '',
+    uploaded_at     TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_student_files_course ON student_course_files(course_id);
 """
 
 STUDENT_SQLITE_SCHEMA = """
@@ -143,6 +155,18 @@ CREATE TABLE IF NOT EXISTS student_study_progress (
     created_at      TEXT DEFAULT (datetime('now', 'localtime')),
     UNIQUE(client_id, plan_date)
 );
+
+CREATE TABLE IF NOT EXISTS student_course_files (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id       INTEGER NOT NULL REFERENCES student_courses(id) ON DELETE CASCADE,
+    original_name   TEXT NOT NULL,
+    file_type       TEXT DEFAULT '',
+    extracted_text  TEXT DEFAULT '',
+    uploaded_at     TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_student_files_course ON student_course_files(course_id);
 """
 
 
@@ -361,6 +385,36 @@ def get_study_stats(client_id: int) -> dict:
         }
 
 
+# ── Course files (manual uploads) ───────────────────────────
+
+def save_course_file(client_id: int, course_id: int, original_name: str,
+                     file_type: str, extracted_text: str) -> int:
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_course_files (client_id, course_id, original_name, file_type, extracted_text) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (client_id, course_id, original_name, file_type, extracted_text),
+            "INSERT INTO student_course_files (client_id, course_id, original_name, file_type, extracted_text) "
+            "VALUES (?, ?, ?, ?, ?)",
+        )
+
+
+def get_course_files(client_id: int, course_id: int) -> list[dict]:
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT * FROM student_course_files WHERE client_id = %s AND course_id = %s ORDER BY uploaded_at DESC",
+            (client_id, course_id),
+        )
+
+
+def delete_course_file(file_id: int, client_id: int):
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_course_files WHERE id = %s AND client_id = %s",
+              (file_id, client_id))
+
+
 # ── Cleanup ─────────────────────────────────────────────────
 
 def delete_student_data(client_id: int):
@@ -369,5 +423,6 @@ def delete_student_data(client_id: int):
         _exec(db, "DELETE FROM student_study_progress WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_study_plans WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_exams WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM student_course_files WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_courses WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_canvas_tokens WHERE client_id = %s", (client_id,))

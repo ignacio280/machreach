@@ -93,7 +93,7 @@ def register_student_routes(app, csrf, limiter):
     @limiter.limit("5 per minute")
     def student_sync_courses():
         """
-        Full sync: fetch courses from Canvas, analyze syllabi & files with AI,
+        Full sync: fetch courses from Canvas, analyze ALL files & material with AI,
         extract exams, and save everything.
         """
         if not _logged_in():
@@ -117,7 +117,7 @@ def register_student_routes(app, csrf, limiter):
             # Save/update course in DB
             db_id = sdb.upsert_course(_cid(), cid, name, code)
 
-            # Gather material for AI analysis
+            # Gather ALL material for AI analysis
             syllabus_html = ""
             file_texts = []
             assignments = []
@@ -127,23 +127,63 @@ def register_student_routes(app, csrf, limiter):
             except Exception:
                 pass
 
+            # Download ALL readable files from the course (PDF, DOCX)
             try:
-                syllabus_files = canvas.find_syllabus_files(cid)
-                for sf in syllabus_files[:5]:  # Limit to 5 files per course
-                    content = canvas.get_file_content(sf)
+                all_files = canvas.get_files(cid)
+                for sf in all_files[:20]:  # Up to 20 files per course
                     fname = sf.get("display_name", sf.get("filename", ""))
-                    text = ""
-                    if fname.lower().endswith(".pdf"):
-                        text = extract_text_from_pdf(content)
-                    elif fname.lower().endswith((".docx", ".doc")):
-                        text = extract_text_from_docx(content)
-                    if text:
-                        file_texts.append({"filename": fname, "text": text})
+                    fl = fname.lower()
+                    if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
+                        continue
+                    # Skip huge files (>10MB)
+                    if sf.get("size", 0) > 10 * 1024 * 1024:
+                        continue
+                    try:
+                        content = canvas.get_file_content(sf)
+                        text = ""
+                        if fl.endswith(".pdf"):
+                            text = extract_text_from_pdf(content)
+                        elif fl.endswith((".docx", ".doc")):
+                            text = extract_text_from_docx(content)
+                        if text and len(text.strip()) > 50:
+                            file_texts.append({"filename": fname, "text": text})
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # Also include any manually-uploaded files for this course
+            try:
+                uploaded = sdb.get_course_files(_cid(), db_id)
+                for uf in uploaded:
+                    if uf.get("extracted_text") and len(uf["extracted_text"].strip()) > 50:
+                        file_texts.append({
+                            "filename": uf["original_name"],
+                            "text": uf["extracted_text"],
+                        })
             except Exception:
                 pass
 
             try:
                 assignments = canvas.get_assignments(cid)
+            except Exception:
+                pass
+
+            # Also pull page content (wiki pages often have schedules)
+            try:
+                pages = canvas.get_pages(cid)
+                for pg in pages[:10]:
+                    page_data = canvas.get_page(cid, pg["url"])
+                    body = page_data.get("body", "")
+                    if body:
+                        import re as _re
+                        clean = _re.sub(r"<[^>]+>", " ", body)
+                        clean = _re.sub(r"\s+", " ", clean).strip()
+                        if len(clean) > 100:
+                            file_texts.append({
+                                "filename": f"Page: {pg.get('title', 'Untitled')}",
+                                "text": clean[:6000],
+                            })
             except Exception:
                 pass
 
@@ -200,6 +240,69 @@ def register_student_routes(app, csrf, limiter):
         course = dict(course)
         course["analysis_json"] = json.loads(course["analysis_json"]) if isinstance(course["analysis_json"], str) else course["analysis_json"]
         return jsonify(course)
+
+    # ── File uploads ────────────────────────────────────────
+
+    @app.route("/api/student/courses/<int:course_id>/files", methods=["GET"])
+    def student_get_course_files(course_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Not found"}), 404
+        files = sdb.get_course_files(_cid(), course_id)
+        return jsonify({"files": [dict(f) for f in files]})
+
+    @app.route("/api/student/courses/<int:course_id>/upload", methods=["POST"])
+    @limiter.limit("30 per minute")
+    def student_upload_file(course_id):
+        """Upload a PDF or DOCX file for a course. Text is extracted and stored."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Not found"}), 404
+
+        if "file" not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        f = request.files["file"]
+        if not f.filename:
+            return jsonify({"error": "Empty filename"}), 400
+
+        fname = f.filename
+        fl = fname.lower()
+        if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
+            return jsonify({"error": "Only PDF and DOCX files are supported"}), 400
+
+        # Read file content (limit 15MB)
+        content = f.read(15 * 1024 * 1024 + 1)
+        if len(content) > 15 * 1024 * 1024:
+            return jsonify({"error": "File too large (max 15MB)"}), 400
+
+        # Extract text
+        text = ""
+        try:
+            if fl.endswith(".pdf"):
+                text = extract_text_from_pdf(content)
+            elif fl.endswith((".docx", ".doc")):
+                text = extract_text_from_docx(content)
+        except Exception as e:
+            return jsonify({"error": f"Could not extract text: {e}"}), 400
+
+        if not text or len(text.strip()) < 20:
+            return jsonify({"error": "Could not extract readable text from this file"}), 400
+
+        file_type = "pdf" if fl.endswith(".pdf") else "docx"
+        file_id = sdb.save_course_file(_cid(), course_id, fname, file_type, text)
+
+        return jsonify({"id": file_id, "filename": fname, "text_length": len(text)})
+
+    @app.route("/api/student/files/<int:file_id>", methods=["DELETE"])
+    def student_delete_file(file_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        sdb.delete_course_file(file_id, _cid())
+        return jsonify({"ok": True})
 
     # ── Exams ───────────────────────────────────────────────
 
@@ -546,16 +649,30 @@ def register_student_routes(app, csrf, limiter):
             grading = analysis.get("grading", {})
             grading_str = ", ".join(f"{k}: {v}%" for k, v in list(grading.items())[:4]) if grading else "Not detected"
             synced = c.get("last_synced", "Never")
+            # Count uploaded files
+            uploaded_files = sdb.get_course_files(_cid(), c["id"])
+            n_files = len(uploaded_files)
+            files_list_html = ""
+            for uf in uploaded_files:
+                files_list_html += f"""<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;">
+                  <span>&#128196; {_esc(uf['original_name'])}</span>
+                  <button onclick="deleteFile({uf['id']})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px;">&#10005;</button>
+                </div>"""
             rows += f"""<tr>
               <td style="font-weight:600;">{_esc(c['name'])}</td>
               <td>{_esc(c.get('code',''))}</td>
               <td>{n_exams}</td>
               <td>{has_sched}</td>
               <td style="font-size:12px;">{_esc(grading_str)}</td>
+              <td style="font-size:11px;color:var(--text-muted);">{n_files} file{'s' if n_files != 1 else ''}
+                <button onclick="document.getElementById('upload-{c['id']}').click()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;margin-left:4px;" title="Upload file">&#128206;</button>
+                <input type="file" id="upload-{c['id']}" style="display:none;" accept=".pdf,.docx,.doc" onchange="uploadFile({c['id']},this)">
+                {('<div style=\"margin-top:4px;border-top:1px solid var(--border);padding-top:4px;\">' + files_list_html + '</div>') if files_list_html else ''}
+              </td>
               <td style="font-size:12px;color:var(--text-muted);">{synced}</td>
             </tr>"""
         if not rows:
-            rows = """<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);">
+            rows = """<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);">
               <div style="font-size:36px;margin-bottom:10px;">&#128218;</div>
               No courses synced yet. Connect Canvas and hit Sync.
             </td></tr>"""
@@ -567,9 +684,19 @@ def register_student_routes(app, csrf, limiter):
         </div>
         <div class="card">
           <table>
-            <thead><tr><th>Course</th><th>Code</th><th>Exams</th><th>Schedule</th><th>Grading</th><th>Last Synced</th></tr></thead>
+            <thead><tr><th>Course</th><th>Code</th><th>Exams</th><th>Schedule</th><th>Grading</th><th>Files</th><th>Last Synced</th></tr></thead>
             <tbody>{rows}</tbody>
           </table>
+        </div>
+        <div class="card" style="margin-top:16px;padding:16px;">
+          <h3 style="margin:0 0 8px;">&#128206; Upload Course Files</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">
+            Upload PDFs or DOCX files (syllabi, class notes, schedules, etc.) to help the AI generate a better study plan.
+            Click the &#128206; icon next to any course above, or use the buttons below.
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            {"".join(f'<button onclick="document.getElementById(' + chr(39) + f'upload-{c["id"]}' + chr(39) + ').click()" class="btn btn-outline btn-sm">{_esc(c["name"][:25])}</button>' for c in courses)}
+          </div>
         </div>
         <script>
         async function syncCourses() {{
@@ -582,6 +709,26 @@ def register_student_routes(app, csrf, limiter):
             else {{ alert(d.error || 'Sync failed'); }}
           }} catch(e) {{ alert('Network error'); }}
           btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
+        }}
+        async function uploadFile(courseId, input) {{
+          if (!input.files[0]) return;
+          var fd = new FormData();
+          fd.append('file', input.files[0]);
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var headers = {{}};
+          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+          try {{
+            var r = await fetch('/api/student/courses/' + courseId + '/upload', {{method:'POST', body:fd, headers:headers}});
+            var d = await r.json();
+            if (r.ok) {{ alert('File uploaded! ' + d.text_length + ' characters extracted. Re-sync to update your study plan.'); location.reload(); }}
+            else {{ alert(d.error || 'Upload failed'); }}
+          }} catch(e) {{ alert('Network error'); }}
+          input.value = '';
+        }}
+        async function deleteFile(fileId) {{
+          if (!confirm('Delete this file?')) return;
+          await fetch('/api/student/files/' + fileId, {{method:'DELETE'}});
+          location.reload();
         }}
         </script>
         """, active_page="student_courses")
