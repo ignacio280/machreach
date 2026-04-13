@@ -677,6 +677,12 @@ def register_student_routes(app, csrf, limiter):
               No courses synced yet. Connect Canvas and hit Sync.
             </td></tr>"""
 
+        upload_buttons = ""
+        for c in courses:
+            cname = _esc(c["name"][:25])
+            cid = c["id"]
+            upload_buttons += f"<button onclick=\"document.getElementById('upload-{cid}').click()\" class=\"btn btn-outline btn-sm\">{cname}</button>"
+
         return _s_render("Courses", f"""
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
           <h1>&#128218; My Courses</h1>
@@ -695,7 +701,7 @@ def register_student_routes(app, csrf, limiter):
             Click the &#128206; icon next to any course above, or use the buttons below.
           </p>
           <div style="display:flex;flex-wrap:wrap;gap:8px;">
-            {"".join(f'<button onclick="document.getElementById(' + chr(39) + f'upload-{c["id"]}' + chr(39) + ').click()" class="btn btn-outline btn-sm">{_esc(c["name"][:25])}</button>' for c in courses)}
+            {upload_buttons}
           </div>
         </div>
         <script>
