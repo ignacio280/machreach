@@ -100,6 +100,12 @@ if os.path.isdir('/data'):
 # Ensure DB is initialized (for gunicorn and direct run)
 init_db()
 
+# ── MachReach Student module ──
+from student.db import init_student_db
+from student.routes import register_student_routes
+init_student_db()
+register_student_routes(app, csrf, limiter)
+
 
 # ---------------------------------------------------------------------------
 # System email helper — sends transactional emails from support@machreach.com
