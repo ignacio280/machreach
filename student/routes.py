@@ -318,7 +318,9 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "Could not extract readable text from this file"}), 400
 
         file_type = "pdf" if fl.endswith(".pdf") else "docx"
-        file_id = sdb.save_course_file(_cid(), course_id, fname, file_type, text)
+        exam_id = request.form.get("exam_id")
+        exam_id = int(exam_id) if exam_id else None
+        file_id = sdb.save_course_file(_cid(), course_id, fname, file_type, text, exam_id=exam_id)
 
         return jsonify({"id": file_id, "filename": fname, "text_length": len(text)})
 
@@ -558,6 +560,28 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "Unauthorized"}), 401
         stats = sdb.get_study_stats(_cid())
         return jsonify(stats)
+
+    # ── Focus / Pomodoro ────────────────────────────────────
+
+    @app.route("/api/student/focus/save", methods=["POST"])
+    def student_save_focus():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        sdb.save_focus_session(
+            _cid(),
+            mode=data.get("mode", "pomodoro"),
+            minutes=int(data.get("minutes", 0)),
+            pages=int(data.get("pages", 0)),
+            course_name=data.get("course_name", ""),
+        )
+        return jsonify({"ok": True})
+
+    @app.route("/api/student/focus/stats", methods=["GET"])
+    def student_focus_stats():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        return jsonify(sdb.get_focus_stats(_cid()))
 
     # ── Dashboard data (single call for the frontend) ──────
 
@@ -989,16 +1013,27 @@ def register_student_routes(app, csrf, limiter):
         exams = sdb.get_course_exams(course_id)
         uploaded_files = sdb.get_course_files(_cid(), course_id)
 
-        # Build exams HTML
+# Build exams HTML with per-exam file uploads
         exams_rows = ""
         for e in exams:
             topics = json.loads(e["topics_json"]) if isinstance(e.get("topics_json"), str) else []
             topics_str = ", ".join(topics) if topics else ""
+            exam_files = sdb.get_course_files(_cid(), course_id, exam_id=e["id"])
+            ef_html = ""
+            for ef in exam_files:
+                ef_html += f"<span style='display:inline-block;background:var(--bg);padding:2px 8px;border-radius:10px;font-size:11px;margin:2px;'>&#128196; {_esc(ef['original_name'])} <button onclick=\"deleteFile({ef['id']})\" style='background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;'>&#10005;</button></span>"
             exams_rows += f"""<tr data-exam-id="{e['id']}">
               <td><input type="text" value="{_esc(e.get('name',''))}" class="edit-input" data-field="name"></td>
               <td><input type="date" value="{_esc(e.get('exam_date','') or '')}" class="edit-input" data-field="exam_date"></td>
               <td><input type="number" value="{e.get('weight_pct',0)}" class="edit-input" data-field="weight_pct" min="0" max="100" style="width:60px;">%</td>
               <td><input type="text" value="{_esc(topics_str)}" class="edit-input" data-field="topics" placeholder="Topic 1, Topic 2, ..." style="width:100%;"></td>
+              <td style="font-size:11px;">
+                {ef_html}
+                <label class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;cursor:pointer;" title="Upload file for this exam">
+                  &#128206;
+                  <input type="file" style="display:none;" accept=".pdf,.docx,.doc" onchange="uploadExamFile({course_id},{e['id']},this)">
+                </label>
+              </td>
               <td>
                 <button onclick="saveExam({e['id']},this)" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;" title="Save">&#128190;</button>
                 <button onclick="deleteExam({e['id']})" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;color:var(--red);" title="Delete">&#128465;</button>
@@ -1077,7 +1112,7 @@ def register_student_routes(app, csrf, limiter):
             <button onclick="addExamRow()" class="btn btn-outline btn-sm">+ Add Exam</button>
           </div>
           <table id="exams-table">
-            <thead><tr><th>Name</th><th>Date</th><th>Weight</th><th>Topics</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Date</th><th>Weight</th><th>Topics</th><th>Files</th><th></th></tr></thead>
             <tbody>{exams_rows}</tbody>
           </table>
           <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0;">Separate topics with commas. Click &#128190; to save each exam individually.</p>
@@ -1196,6 +1231,7 @@ def register_student_routes(app, csrf, limiter):
             + '<td><input type="date" class="edit-input" data-field="exam_date"></td>'
             + '<td><input type="number" class="edit-input" data-field="weight_pct" value="0" min="0" max="100" style="width:60px;">%</td>'
             + '<td><input type="text" class="edit-input" data-field="topics" placeholder="Topic 1, Topic 2, ..."></td>'
+            + '<td style="font-size:11px;color:var(--text-muted);">Save first</td>'
             + '<td><button onclick="saveExam(null,this)" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;">&#128190;</button>'
             + ' <button onclick="this.closest(\'tr\').remove()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;color:var(--red);">&#128465;</button></td>';
           tbody.appendChild(tr);
@@ -1283,6 +1319,23 @@ def register_student_routes(app, csrf, limiter):
             var r = await fetch('/api/student/courses/' + cid + '/upload', {{method:'POST', body:fd, headers:headers}});
             var d = await r.json();
             if (r.ok) {{ alert('File uploaded! ' + d.text_length + ' chars extracted.'); location.reload(); }}
+            else {{ alert(d.error || 'Upload failed'); }}
+          }} catch(e) {{ alert('Network error'); }}
+          input.value = '';
+        }}
+
+        async function uploadExamFile(cid, examId, input) {{
+          if (!input.files[0]) return;
+          var fd = new FormData();
+          fd.append('file', input.files[0]);
+          fd.append('exam_id', examId);
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var headers = {{}};
+          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+          try {{
+            var r = await fetch('/api/student/courses/' + cid + '/upload', {{method:'POST', body:fd, headers:headers}});
+            var d = await r.json();
+            if (r.ok) {{ alert('File uploaded for this exam!'); location.reload(); }}
             else {{ alert(d.error || 'Upload failed'); }}
           }} catch(e) {{ alert('Network error'); }}
           input.value = '';
@@ -1409,6 +1462,468 @@ def register_student_routes(app, csrf, limiter):
         }}
         </script>
         """, active_page="student_plan")
+
+    # ── Focus / Pomodoro page ───────────────────────────────
+
+    @app.route("/student/focus")
+    def student_focus_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        courses = sdb.get_courses(_cid())
+        focus_stats = sdb.get_focus_stats(_cid())
+
+        course_options = ""
+        for c in courses:
+            course_options += f'<option value="{_esc(c["name"])}">{_esc(c["name"])}</option>'
+
+        return _s_render("Focus Mode", f"""
+        <h1 style="margin-bottom:20px;">&#127917; Focus Mode</h1>
+
+        <!-- Stats bar -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px;">
+          <div class="stat-card stat-purple"><div class="num">{focus_stats['total_hours']}</div><div class="label">Hours Focused</div></div>
+          <div class="stat-card stat-blue"><div class="num">{focus_stats['sessions']}</div><div class="label">Sessions</div></div>
+          <div class="stat-card stat-green"><div class="num">{focus_stats['total_pages']}</div><div class="label">Pages Read</div></div>
+          <div class="stat-card stat-red"><div class="num">{focus_stats['streak_days']}</div><div class="label">Day Streak &#128293;</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+          <!-- Timer card -->
+          <div class="card">
+            <div class="card-header"><h2>&#9201; Study Timer</h2></div>
+
+            <!-- Mode tabs -->
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+              <button onclick="setMode('pomodoro')" class="btn btn-sm mode-btn active" id="mode-pomodoro">&#127813; Pomodoro</button>
+              <button onclick="setMode('pages')" class="btn btn-outline btn-sm mode-btn" id="mode-pages">&#128214; Page Method</button>
+              <button onclick="setMode('custom')" class="btn btn-outline btn-sm mode-btn" id="mode-custom">&#9881; Custom</button>
+            </div>
+
+            <!-- Course selector -->
+            <div class="form-group" style="margin-bottom:12px;">
+              <label style="font-size:12px;">Studying for:</label>
+              <select id="focus-course" class="edit-input">
+                <option value="">General study</option>
+                {course_options}
+              </select>
+            </div>
+
+            <!-- Pomodoro settings -->
+            <div id="settings-pomodoro">
+              <div style="display:flex;gap:10px;margin-bottom:12px;">
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:12px;">Work (min)</label>
+                  <input type="number" id="pomo-work" value="25" min="5" max="120" class="edit-input">
+                </div>
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:12px;">Break (min)</label>
+                  <input type="number" id="pomo-break" value="5" min="1" max="30" class="edit-input">
+                </div>
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:12px;">Long break (min)</label>
+                  <input type="number" id="pomo-long" value="15" min="5" max="60" class="edit-input">
+                </div>
+              </div>
+              <p style="font-size:12px;color:var(--text-muted);margin:0;">Long break after every 4 sessions.</p>
+            </div>
+
+            <!-- Page method settings -->
+            <div id="settings-pages" style="display:none;">
+              <div style="display:flex;gap:10px;margin-bottom:12px;">
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:12px;">Target pages</label>
+                  <input type="number" id="page-target" value="20" min="1" max="500" class="edit-input">
+                </div>
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:12px;">Pages done</label>
+                  <input type="number" id="page-done" value="0" min="0" class="edit-input" onchange="updatePageProgress()">
+                </div>
+              </div>
+              <div style="background:var(--bg);border-radius:8px;height:8px;overflow:hidden;margin-bottom:8px;">
+                <div id="page-bar" style="height:100%;background:var(--primary);width:0%;transition:width 0.3s;border-radius:8px;"></div>
+              </div>
+              <p id="page-status" style="font-size:13px;color:var(--text-muted);text-align:center;">0 / 20 pages</p>
+            </div>
+
+            <!-- Custom timer settings -->
+            <div id="settings-custom" style="display:none;">
+              <div class="form-group" style="margin-bottom:12px;">
+                <label style="font-size:12px;">Duration (min)</label>
+                <input type="number" id="custom-mins" value="45" min="5" max="300" class="edit-input">
+              </div>
+            </div>
+
+            <!-- Timer display -->
+            <div style="text-align:center;padding:24px 0;">
+              <div id="timer-display" style="font-size:64px;font-weight:800;font-family:monospace;color:var(--text);letter-spacing:2px;">25:00</div>
+              <div id="timer-label" style="font-size:14px;color:var(--text-muted);margin-top:4px;">Ready to focus</div>
+              <div id="pomo-count" style="font-size:12px;color:var(--text-muted);margin-top:4px;">Session 1 of 4</div>
+            </div>
+
+            <!-- Controls -->
+            <div style="display:flex;justify-content:center;gap:12px;">
+              <button onclick="startTimer()" id="start-btn" class="btn btn-primary">&#9654; Start</button>
+              <button onclick="pauseTimer()" id="pause-btn" class="btn btn-outline" style="display:none;">&#10074;&#10074; Pause</button>
+              <button onclick="resetTimer()" id="reset-btn" class="btn btn-outline">&#8635; Reset</button>
+              <button onclick="skipPhase()" id="skip-btn" class="btn btn-ghost btn-sm" style="display:none;">Skip &raquo;</button>
+            </div>
+          </div>
+
+          <!-- Spotify + ambient card -->
+          <div>
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-header"><h2>&#127925; Study Music</h2></div>
+              <div style="margin-bottom:12px;">
+                <label style="font-size:12px;color:var(--text-muted);">Paste a Spotify playlist or album link:</label>
+                <div style="display:flex;gap:8px;margin-top:4px;">
+                  <input type="text" id="spotify-url" class="edit-input" placeholder="https://open.spotify.com/playlist/..."
+                    value="https://open.spotify.com/playlist/0vvXsWCC9xrXsKd4FyS8kM">
+                  <button onclick="loadSpotify()" class="btn btn-outline btn-sm">Load</button>
+                </div>
+              </div>
+              <div id="spotify-embed">
+                <iframe id="spotify-iframe" style="border-radius:12px;width:100%;height:352px;border:0;"
+                  src="https://open.spotify.com/embed/playlist/0vvXsWCC9xrXsKd4FyS8kM?utm_source=generator&theme=0"
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+              </div>
+              <div style="margin-top:8px;">
+                <p style="font-size:11px;color:var(--text-muted);">Quick picks:</p>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  <button onclick="setPlaylist('0vvXsWCC9xrXsKd4FyS8kM')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#127911; Lo-fi Beats</button>
+                  <button onclick="setPlaylist('37i9dQZF1DWWQRwui0ExPn')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#127926; Lo-Fi</button>
+                  <button onclick="setPlaylist('37i9dQZF1DX8Uebhn9wzrS')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#127764; Chill Study</button>
+                  <button onclick="setPlaylist('37i9dQZF1DX9sIqqvKsjG8')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#127793; Deep Focus</button>
+                  <button onclick="setPlaylist('37i9dQZF1DWZeKCadgRdKQ')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#9749; Coffee Jazz</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick notes -->
+            <div class="card">
+              <div class="card-header"><h2>&#128221; Quick Notes</h2></div>
+              <textarea id="focus-notes" class="edit-input" rows="6" placeholder="Jot down notes while studying..." style="resize:vertical;"></textarea>
+              <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Notes are saved in your browser.</p>
+            </div>
+          </div>
+        </div>
+
+        <style>
+        .mode-btn.active {{ background:var(--primary);color:#fff;border-color:var(--primary); }}
+        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
+        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        </style>
+
+        <script>
+        var timerInterval = null;
+        var timeLeft = 25 * 60;
+        var totalTime = 25 * 60;
+        var isRunning = false;
+        var isBreak = false;
+        var pomoCount = 0;
+        var currentMode = 'pomodoro';
+        var totalFocusSeconds = 0;
+        var sessionStarted = false;
+
+        // Load saved notes
+        var savedNotes = localStorage.getItem('focus_notes');
+        if (savedNotes) document.getElementById('focus-notes').value = savedNotes;
+        document.getElementById('focus-notes').addEventListener('input', function() {{
+          localStorage.setItem('focus_notes', this.value);
+        }});
+
+        function setMode(mode) {{
+          currentMode = mode;
+          document.querySelectorAll('.mode-btn').forEach(function(b) {{ b.classList.remove('active'); b.classList.add('btn-outline'); }});
+          document.getElementById('mode-' + mode).classList.add('active');
+          document.getElementById('mode-' + mode).classList.remove('btn-outline');
+          document.getElementById('settings-pomodoro').style.display = mode === 'pomodoro' ? '' : 'none';
+          document.getElementById('settings-pages').style.display = mode === 'pages' ? '' : 'none';
+          document.getElementById('settings-custom').style.display = mode === 'custom' ? '' : 'none';
+          document.getElementById('pomo-count').style.display = mode === 'pomodoro' ? '' : 'none';
+          resetTimer();
+          if (mode === 'pomodoro') {{
+            timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
+          }} else if (mode === 'pages') {{
+            timeLeft = 0; totalTime = 0;
+            document.getElementById('timer-display').textContent = '00:00';
+            document.getElementById('timer-label').textContent = 'Counting up \u2014 track your pages';
+          }} else {{
+            timeLeft = parseInt(document.getElementById('custom-mins').value) * 60;
+          }}
+          totalTime = timeLeft;
+          updateDisplay();
+        }}
+
+        function updateDisplay() {{
+          if (currentMode === 'pages' && isRunning) {{
+            var elapsed = totalFocusSeconds;
+            var m = Math.floor(elapsed / 60);
+            var s = elapsed % 60;
+            document.getElementById('timer-display').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+          }} else {{
+            var m = Math.floor(timeLeft / 60);
+            var s = timeLeft % 60;
+            document.getElementById('timer-display').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+          }}
+        }}
+
+        function startTimer() {{
+          if (isRunning) return;
+          isRunning = true;
+          sessionStarted = true;
+          document.getElementById('start-btn').style.display = 'none';
+          document.getElementById('pause-btn').style.display = '';
+          document.getElementById('skip-btn').style.display = currentMode === 'pomodoro' ? '' : 'none';
+
+          if (currentMode === 'pages') {{
+            document.getElementById('timer-label').textContent = '&#128214; Reading \u2014 update pages as you go';
+            timerInterval = setInterval(function() {{
+              totalFocusSeconds++;
+              updateDisplay();
+            }}, 1000);
+          }} else {{
+            document.getElementById('timer-label').textContent = isBreak ? '&#9749; Break time!' : '&#128293; Focus!';
+            timerInterval = setInterval(function() {{
+              timeLeft--;
+              if (!isBreak) totalFocusSeconds++;
+              updateDisplay();
+              if (timeLeft <= 0) {{
+                clearInterval(timerInterval);
+                isRunning = false;
+                onTimerEnd();
+              }}
+            }}, 1000);
+          }}
+        }}
+
+        function pauseTimer() {{
+          clearInterval(timerInterval);
+          isRunning = false;
+          document.getElementById('start-btn').style.display = '';
+          document.getElementById('pause-btn').style.display = 'none';
+          document.getElementById('timer-label').textContent = 'Paused';
+        }}
+
+        function resetTimer() {{
+          clearInterval(timerInterval);
+          isRunning = false;
+          isBreak = false;
+          if (sessionStarted && totalFocusSeconds > 60) {{
+            saveFocusSession();
+          }}
+          totalFocusSeconds = 0;
+          sessionStarted = false;
+          pomoCount = 0;
+          document.getElementById('start-btn').style.display = '';
+          document.getElementById('pause-btn').style.display = 'none';
+          document.getElementById('skip-btn').style.display = 'none';
+          if (currentMode === 'pomodoro') {{
+            timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
+            document.getElementById('pomo-count').textContent = 'Session 1 of 4';
+          }} else if (currentMode === 'custom') {{
+            timeLeft = parseInt(document.getElementById('custom-mins').value) * 60;
+          }} else {{
+            timeLeft = 0;
+          }}
+          totalTime = timeLeft;
+          updateDisplay();
+          document.getElementById('timer-label').textContent = 'Ready to focus';
+        }}
+
+        function skipPhase() {{
+          clearInterval(timerInterval);
+          isRunning = false;
+          onTimerEnd();
+        }}
+
+        function onTimerEnd() {{
+          if (currentMode === 'pomodoro') {{
+            if (!isBreak) {{
+              pomoCount++;
+              document.getElementById('pomo-count').textContent = 'Completed ' + pomoCount + ' of 4';
+              if (pomoCount % 4 === 0) {{
+                timeLeft = parseInt(document.getElementById('pomo-long').value) * 60;
+                document.getElementById('timer-label').textContent = '&#127881; Long break!';
+              }} else {{
+                timeLeft = parseInt(document.getElementById('pomo-break').value) * 60;
+                document.getElementById('timer-label').textContent = '&#9749; Short break';
+              }}
+              isBreak = true;
+            }} else {{
+              timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
+              document.getElementById('timer-label').textContent = 'Ready for next session';
+              isBreak = false;
+            }}
+            totalTime = timeLeft;
+            updateDisplay();
+            document.getElementById('start-btn').style.display = '';
+            document.getElementById('pause-btn').style.display = 'none';
+            try {{ new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU'+Array(300).join('A')).play(); }} catch(e) {{}}
+          }} else {{
+            saveFocusSession();
+            document.getElementById('timer-label').textContent = '&#10003; Session complete!';
+            document.getElementById('start-btn').style.display = '';
+            document.getElementById('pause-btn').style.display = 'none';
+          }}
+        }}
+
+        function updatePageProgress() {{
+          var done = parseInt(document.getElementById('page-done').value) || 0;
+          var target = parseInt(document.getElementById('page-target').value) || 1;
+          var pct = Math.min(100, Math.round(done / target * 100));
+          document.getElementById('page-bar').style.width = pct + '%';
+          document.getElementById('page-status').textContent = done + ' / ' + target + ' pages (' + pct + '%)';
+          if (done >= target && sessionStarted) {{
+            saveFocusSession();
+            document.getElementById('timer-label').textContent = '&#127881; Page goal reached!';
+          }}
+        }}
+
+        async function saveFocusSession() {{
+          var minutes = Math.round(totalFocusSeconds / 60);
+          var pages = currentMode === 'pages' ? (parseInt(document.getElementById('page-done').value) || 0) : 0;
+          var course = document.getElementById('focus-course').value;
+          try {{
+            await fetch('/api/student/focus/save', {{
+              method: 'POST',
+              headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ mode: currentMode, minutes: minutes, pages: pages, course_name: course }})
+            }});
+          }} catch(e) {{}}
+        }}
+
+        function loadSpotify() {{
+          var url = document.getElementById('spotify-url').value.trim();
+          var match = url.match(/open\\.spotify\\.com\\/(playlist|album|track)\\/([a-zA-Z0-9]+)/);
+          if (!match) {{ alert('Paste a valid Spotify link'); return; }}
+          setPlaylist(match[2], match[1]);
+        }}
+
+        function setPlaylist(id, type) {{
+          type = type || 'playlist';
+          document.getElementById('spotify-iframe').src =
+            'https://open.spotify.com/embed/' + type + '/' + id + '?utm_source=generator&theme=0';
+        }}
+        </script>
+        """, active_page="student_focus")
+
+    # ── GPA Calculator page ─────────────────────────────────
+
+    @app.route("/student/gpa")
+    def student_gpa_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        courses = sdb.get_courses(_cid())
+
+        course_rows = ""
+        for c in courses:
+            analysis = json.loads(c["analysis_json"]) if isinstance(c.get("analysis_json"), str) else c.get("analysis_json", {})
+            course_rows += f"""<div class="gpa-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+              <input type="text" value="{_esc(c['name'])}" class="edit-input" style="flex:2;" placeholder="Course name">
+              <input type="number" value="3" class="edit-input" style="width:70px;" min="1" max="10" placeholder="Credits">
+              <select class="edit-input" style="width:80px;">
+                <option value="4.0">A</option><option value="3.7">A-</option>
+                <option value="3.3">B+</option><option value="3.0" selected>B</option><option value="2.7">B-</option>
+                <option value="2.3">C+</option><option value="2.0">C</option><option value="1.7">C-</option>
+                <option value="1.3">D+</option><option value="1.0">D</option><option value="0.0">F</option>
+              </select>
+              <button onclick="this.parentElement.remove();calcGPA();" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>
+            </div>"""
+
+        return _s_render("GPA Calculator", f"""
+        <h1 style="margin-bottom:20px;">&#127891; GPA Calculator</h1>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;">
+          <div class="card">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h2>&#128218; Courses</h2>
+              <button onclick="addGPARow()" class="btn btn-outline btn-sm">+ Add Course</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;font-size:12px;font-weight:600;color:var(--text-muted);padding:0 4px;">
+              <span style="flex:2;">Course</span><span style="width:70px;">Credits</span><span style="width:80px;">Grade</span><span style="width:20px;"></span>
+            </div>
+            <div id="gpa-rows">
+              {course_rows}
+            </div>
+            <button onclick="calcGPA()" class="btn btn-primary btn-sm" style="margin-top:12px;">Calculate GPA</button>
+          </div>
+          <div>
+            <div class="card" style="text-align:center;">
+              <div class="card-header"><h2>Your GPA</h2></div>
+              <div id="gpa-result" style="font-size:56px;font-weight:800;color:var(--primary);padding:20px 0;">-</div>
+              <div id="gpa-scale" style="font-size:14px;color:var(--text-muted);">out of 4.0</div>
+              <div id="gpa-credits" style="font-size:13px;color:var(--text-muted);margin-top:8px;"></div>
+            </div>
+            <div class="card" style="margin-top:16px;">
+              <div class="card-header"><h2>&#128200; What-If</h2></div>
+              <p style="font-size:13px;color:var(--text-muted);">Enter your current cumulative GPA to see how this semester affects it:</p>
+              <div style="display:flex;gap:8px;margin-top:8px;">
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:12px;">Current GPA</label>
+                  <input type="number" id="cum-gpa" step="0.01" min="0" max="4" value="0" class="edit-input">
+                </div>
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:12px;">Total credits</label>
+                  <input type="number" id="cum-credits" min="0" value="0" class="edit-input">
+                </div>
+              </div>
+              <button onclick="calcCumGPA()" class="btn btn-outline btn-sm" style="margin-top:8px;width:100%;">Calculate Cumulative</button>
+              <div id="cum-result" style="text-align:center;font-size:24px;font-weight:700;color:var(--text);margin-top:12px;">-</div>
+            </div>
+          </div>
+        </div>
+        <style>
+        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
+        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        </style>
+        <script>
+        function addGPARow() {{
+          var c = document.getElementById('gpa-rows');
+          var div = document.createElement('div');
+          div.className = 'gpa-row';
+          div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;';
+          div.innerHTML = '<input type="text" class="edit-input" style="flex:2;" placeholder="Course name">'
+            + '<input type="number" class="edit-input" style="width:70px;" value="3" min="1" max="10" placeholder="Credits">'
+            + '<select class="edit-input" style="width:80px;"><option value="4.0">A</option><option value="3.7">A-</option><option value="3.3">B+</option><option value="3.0" selected>B</option><option value="2.7">B-</option><option value="2.3">C+</option><option value="2.0">C</option><option value="1.7">C-</option><option value="1.3">D+</option><option value="1.0">D</option><option value="0.0">F</option></select>'
+            + '<button onclick="this.parentElement.remove();calcGPA();" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>';
+          c.appendChild(div);
+        }}
+
+        function calcGPA() {{
+          var rows = document.querySelectorAll('#gpa-rows .gpa-row');
+          var totalPts = 0, totalCreds = 0;
+          rows.forEach(function(row) {{
+            var inputs = row.querySelectorAll('input');
+            var sel = row.querySelector('select');
+            var credits = parseFloat(inputs[1].value) || 0;
+            var grade = parseFloat(sel.value);
+            totalPts += credits * grade;
+            totalCreds += credits;
+          }});
+          var gpa = totalCreds > 0 ? (totalPts / totalCreds).toFixed(2) : '0.00';
+          document.getElementById('gpa-result').textContent = gpa;
+          document.getElementById('gpa-credits').textContent = totalCreds + ' credits this semester';
+          var g = parseFloat(gpa);
+          document.getElementById('gpa-result').style.color = g >= 3.5 ? 'var(--green)' : g >= 2.5 ? 'var(--primary)' : g >= 2.0 ? '#F59E0B' : 'var(--red)';
+        }}
+
+        function calcCumGPA() {{
+          // Get current semester GPA first
+          calcGPA();
+          var semGPA = parseFloat(document.getElementById('gpa-result').textContent) || 0;
+          var semRows = document.querySelectorAll('#gpa-rows .gpa-row');
+          var semCredits = 0;
+          semRows.forEach(function(row) {{ semCredits += parseFloat(row.querySelectorAll('input')[1].value) || 0; }});
+          var cumGPA = parseFloat(document.getElementById('cum-gpa').value) || 0;
+          var cumCredits = parseInt(document.getElementById('cum-credits').value) || 0;
+          var totalPts = (cumGPA * cumCredits) + (semGPA * semCredits);
+          var totalCreds = cumCredits + semCredits;
+          var result = totalCreds > 0 ? (totalPts / totalCreds).toFixed(2) : '0.00';
+          document.getElementById('cum-result').textContent = 'Cumulative GPA: ' + result;
+        }}
+
+        calcGPA();
+        </script>
+        """, active_page="student_gpa")
 
     @app.route("/student/canvas-settings")
     def student_canvas_settings_page():

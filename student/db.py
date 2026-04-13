@@ -180,7 +180,27 @@ def init_student_db():
             cur.execute(STUDENT_PG_SCHEMA)
         else:
             db.executescript(STUDENT_SQLITE_SCHEMA)
+    # Migrations
+    _student_migrations()
     log.info("Student tables initialized.")
+
+
+def _student_migrations():
+    """Run safe column additions."""
+    migrations = [
+        ("student_course_files", "exam_id", "INTEGER DEFAULT NULL"),
+        ("student_study_progress", "focus_minutes", "INTEGER DEFAULT 0"),
+        ("student_study_progress", "pages_read", "INTEGER DEFAULT 0"),
+    ]
+    for table, col, col_type in migrations:
+        try:
+            with get_db() as db:
+                if _USE_PG:
+                    db.cursor().execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+                else:
+                    db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass  # column already exists
 
 
 # ── Canvas tokens ───────────────────────────────────────────
@@ -439,20 +459,26 @@ def get_study_stats(client_id: int) -> dict:
 # ── Course files (manual uploads) ───────────────────────────
 
 def save_course_file(client_id: int, course_id: int, original_name: str,
-                     file_type: str, extracted_text: str) -> int:
+                     file_type: str, extracted_text: str, exam_id: int | None = None) -> int:
     with get_db() as db:
         return _insert_returning_id(
             db,
-            "INSERT INTO student_course_files (client_id, course_id, original_name, file_type, extracted_text) "
-            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (client_id, course_id, original_name, file_type, extracted_text),
-            "INSERT INTO student_course_files (client_id, course_id, original_name, file_type, extracted_text) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO student_course_files (client_id, course_id, original_name, file_type, extracted_text, exam_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (client_id, course_id, original_name, file_type, extracted_text, exam_id),
+            "INSERT INTO student_course_files (client_id, course_id, original_name, file_type, extracted_text, exam_id) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
         )
 
 
-def get_course_files(client_id: int, course_id: int) -> list[dict]:
+def get_course_files(client_id: int, course_id: int, exam_id: int | None = None) -> list[dict]:
     with get_db() as db:
+        if exam_id is not None:
+            return _fetchall(
+                db,
+                "SELECT * FROM student_course_files WHERE client_id = %s AND course_id = %s AND exam_id = %s ORDER BY uploaded_at DESC",
+                (client_id, course_id, exam_id),
+            )
         return _fetchall(
             db,
             "SELECT * FROM student_course_files WHERE client_id = %s AND course_id = %s ORDER BY uploaded_at DESC",
@@ -475,6 +501,60 @@ def delete_course(course_id: int, client_id: int):
               (course_id, client_id))
         _exec(db, "DELETE FROM student_courses WHERE id = %s AND client_id = %s",
               (course_id, client_id))
+
+
+# ── Focus / Pomodoro tracking ────────────────────────────────
+
+def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
+                       course_name: str = "") -> int:
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
+            "VALUES (%s, %s, 1, %s, %s, %s) RETURNING id",
+            (client_id, datetime.now().strftime("%Y-%m-%d"),
+             f"{mode}: {course_name}" if course_name else mode, minutes, pages),
+            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
+            "VALUES (?, ?, 1, ?, ?, ?)",
+        )
+
+
+def get_focus_stats(client_id: int) -> dict:
+    with get_db() as db:
+        total_min = _fetchval(
+            db, "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress WHERE client_id = %s",
+            (client_id,),
+        ) or 0
+        total_pages = _fetchval(
+            db, "SELECT COALESCE(SUM(pages_read),0) FROM student_study_progress WHERE client_id = %s",
+            (client_id,),
+        ) or 0
+        sessions = _fetchval(
+            db, "SELECT COUNT(*) FROM student_study_progress WHERE client_id = %s AND focus_minutes > 0",
+            (client_id,),
+        ) or 0
+        # Streak: consecutive days with focus sessions
+        rows = _fetchall(
+            db, "SELECT DISTINCT plan_date FROM student_study_progress "
+                "WHERE client_id = %s AND focus_minutes > 0 ORDER BY plan_date DESC",
+            (client_id,),
+        )
+        streak = 0
+        today = datetime.now().date()
+        for r in rows:
+            d = datetime.strptime(r["plan_date"], "%Y-%m-%d").date()
+            expected = today - __import__('datetime').timedelta(days=streak)
+            if d == expected:
+                streak += 1
+            else:
+                break
+        return {
+            "total_minutes": total_min,
+            "total_hours": round(total_min / 60, 1),
+            "total_pages": total_pages,
+            "sessions": sessions,
+            "streak_days": streak,
+        }
 
 
 # ── Cleanup ─────────────────────────────────────────────────
