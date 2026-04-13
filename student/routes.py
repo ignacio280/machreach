@@ -127,17 +127,28 @@ def register_student_routes(app, csrf, limiter):
             except Exception:
                 pass
 
-            # Download ALL readable files from the course (PDF, DOCX)
+            # Download relevant files (syllabi, programs, schedules, evaluations)
+            import re as _re
+            _FILE_PATTERN = _re.compile(
+                r"syllab|program|cronograma|schedule|calendar|outline|"
+                r"plan\s*(de)?\s*(curso|class|estudio)|evaluaci[oó]n|assessment|"
+                r"rubric|temario|contenido|examen|prueba|pauta|norma|"
+                r"clase|lecture|nota|resumen|apunte|guia|gu[ií]a",
+                _re.IGNORECASE,
+            )
             try:
                 all_files = canvas.get_files(cid)
-                for sf in all_files[:20]:  # Up to 20 files per course
+                downloaded = 0
+                for sf in all_files:
+                    if downloaded >= 8:
+                        break
                     fname = sf.get("display_name", sf.get("filename", ""))
                     fl = fname.lower()
                     if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
                         continue
-                    # Skip huge files (>10MB)
-                    if sf.get("size", 0) > 10 * 1024 * 1024:
+                    if sf.get("size", 0) > 5 * 1024 * 1024:
                         continue
+                    # Prioritize files with relevant names, but also take any PDF/DOCX
                     try:
                         content = canvas.get_file_content(sf)
                         text = ""
@@ -146,44 +157,27 @@ def register_student_routes(app, csrf, limiter):
                         elif fl.endswith((".docx", ".doc")):
                             text = extract_text_from_docx(content)
                         if text and len(text.strip()) > 50:
-                            file_texts.append({"filename": fname, "text": text})
+                            file_texts.append({"filename": fname, "text": text[:6000]})
+                            downloaded += 1
                     except Exception:
                         pass
             except Exception:
                 pass
 
-            # Also include any manually-uploaded files for this course
+            # Include manually-uploaded files for this course
             try:
                 uploaded = sdb.get_course_files(_cid(), db_id)
                 for uf in uploaded:
                     if uf.get("extracted_text") and len(uf["extracted_text"].strip()) > 50:
                         file_texts.append({
                             "filename": uf["original_name"],
-                            "text": uf["extracted_text"],
+                            "text": uf["extracted_text"][:6000],
                         })
             except Exception:
                 pass
 
             try:
                 assignments = canvas.get_assignments(cid)
-            except Exception:
-                pass
-
-            # Also pull page content (wiki pages often have schedules)
-            try:
-                pages = canvas.get_pages(cid)
-                for pg in pages[:10]:
-                    page_data = canvas.get_page(cid, pg["url"])
-                    body = page_data.get("body", "")
-                    if body:
-                        import re as _re
-                        clean = _re.sub(r"<[^>]+>", " ", body)
-                        clean = _re.sub(r"\s+", " ", clean).strip()
-                        if len(clean) > 100:
-                            file_texts.append({
-                                "filename": f"Page: {pg.get('title', 'Untitled')}",
-                                "text": clean[:6000],
-                            })
             except Exception:
                 pass
 
