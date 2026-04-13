@@ -329,6 +329,17 @@ def register_student_routes(app, csrf, limiter):
         sdb.delete_course_file(file_id, _cid())
         return jsonify({"ok": True})
 
+    @app.route("/api/student/courses/<int:course_id>", methods=["DELETE"])
+    def student_delete_course(course_id):
+        """Remove a course and all its related data."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Not found"}), 404
+        sdb.delete_course(course_id, _cid())
+        return jsonify({"ok": True})
+
     # ── Exams ───────────────────────────────────────────────
 
     @app.route("/api/student/exams", methods=["GET"])
@@ -350,20 +361,23 @@ def register_student_routes(app, csrf, limiter):
 
         return jsonify({"exams": result})
 
-    # ── Study plan ──────────────────────────────────────────
+    # ── Study plan (background) ──────────────────────────────
+
+    _plan_status: dict[int, dict] = {}
 
     @app.route("/api/student/plan/generate", methods=["POST"])
     @limiter.limit("3 per minute")
     def student_generate_plan():
-        """Generate an AI study plan based on all synced courses."""
+        """Kick off background study plan generation. Returns immediately."""
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
 
+        client_id = _cid()
         data = request.get_json(force=True) if request.is_json else {}
         preferences = data.get("preferences", {})
 
         # Gather all course analyses
-        courses = sdb.get_courses(_cid())
+        courses = sdb.get_courses(client_id)
         courses_data = []
         for c in courses:
             analysis = json.loads(c["analysis_json"]) if isinstance(c["analysis_json"], str) else c["analysis_json"]
@@ -373,14 +387,43 @@ def register_student_routes(app, csrf, limiter):
         if not courses_data:
             return jsonify({"error": "No courses synced. Run /api/student/sync first."}), 400
 
-        plan = generate_study_plan(courses_data, preferences)
-        plan_id = sdb.save_study_plan(_cid(), plan, preferences)
+        existing = _plan_status.get(client_id, {})
+        if existing.get("status") == "running":
+            return jsonify({"message": "Plan generation already in progress", "plan_status": existing})
 
-        return jsonify({
-            "message": "Study plan generated",
-            "plan_id": plan_id,
-            "plan": plan,
-        })
+        _plan_status[client_id] = {
+            "status": "running",
+            "progress": "Generating your study plan with AI...",
+        }
+
+        def _do_plan():
+            try:
+                plan = generate_study_plan(courses_data, preferences)
+                plan_id = sdb.save_study_plan(client_id, plan, preferences)
+                _plan_status[client_id] = {
+                    "status": "done",
+                    "progress": "Study plan generated!",
+                    "plan_id": plan_id,
+                }
+            except Exception as e:
+                log.error("Plan generation failed for client %s: %s", client_id, e)
+                _plan_status[client_id] = {
+                    "status": "error",
+                    "progress": f"Plan generation failed: {e}",
+                }
+
+        thread = threading.Thread(target=_do_plan, daemon=True)
+        thread.start()
+
+        return jsonify({"message": "Plan generation started", "plan_status": _plan_status[client_id]})
+
+    @app.route("/api/student/plan/status", methods=["GET"])
+    def student_plan_status():
+        """Poll plan generation progress."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        status = _plan_status.get(_cid(), {"status": "idle"})
+        return jsonify(status)
 
     @app.route("/api/student/plan", methods=["GET"])
     def student_get_plan():
@@ -637,6 +680,9 @@ def register_student_routes(app, csrf, limiter):
             <span id="sync-msg" style="color:var(--text-secondary);font-size:14px;">Starting sync...</span>
           </div>
           <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span> &middot; Files: <span id="sync-files">0</span></div>
+          <div style="margin-top:10px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px;color:var(--text-muted);">
+            &#9749; Take a break &mdash; this may take a while depending on how many files your courses have.
+          </div>
         </div>
         <style>@keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}</style>
 
@@ -681,10 +727,23 @@ def register_student_routes(app, csrf, limiter):
           try {{
             var r = await fetch('/api/student/plan/generate', {{method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({{preferences: {{hours_per_day: 5}}}}) }});
             var d = await r.json();
-            if (r.ok) {{ alert('Plan generated!'); location.reload(); }}
-            else {{ alert(d.error || 'Generation failed'); }}
-          }} catch(e) {{ alert('Network error'); }}
-          btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan';
+            if (!r.ok) {{ alert(d.error || 'Generation failed'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; return; }}
+            var iv = setInterval(async function() {{
+              try {{
+                var r2 = await fetch('/api/student/plan/status');
+                var s = await r2.json();
+                if (s.status === 'done') {{
+                  clearInterval(iv);
+                  alert('Study plan generated!');
+                  location.reload();
+                }} else if (s.status === 'error') {{
+                  clearInterval(iv);
+                  alert(s.progress || 'Plan generation failed');
+                  btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan';
+                }}
+              }} catch(e) {{}}
+            }}, 2000);
+          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; }}
         }}
         async function markComplete() {{
           var r = await fetch('/api/student/progress/complete', {{method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({{}})}});
@@ -727,9 +786,10 @@ def register_student_routes(app, csrf, limiter):
                 {('<div style=\"margin-top:4px;border-top:1px solid var(--border);padding-top:4px;\">' + files_list_html + '</div>') if files_list_html else ''}
               </td>
               <td style="font-size:12px;color:var(--text-muted);">{synced}</td>
+              <td><button onclick="deleteCourse({c['id']},'{_esc(c['name'][:30])}')" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;padding:4px 8px;" title="Remove course">&#128465;</button></td>
             </tr>"""
         if not rows:
-            rows = """<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);">
+            rows = """<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">
               <div style="font-size:36px;margin-bottom:10px;">&#128218;</div>
               No courses synced yet. Connect Canvas and hit Sync.
             </td></tr>"""
@@ -747,7 +807,7 @@ def register_student_routes(app, csrf, limiter):
         </div>
         <div class="card">
           <table>
-            <thead><tr><th>Course</th><th>Code</th><th>Exams</th><th>Schedule</th><th>Grading</th><th>Files</th><th>Last Synced</th></tr></thead>
+            <thead><tr><th>Course</th><th>Code</th><th>Exams</th><th>Schedule</th><th>Grading</th><th>Files</th><th>Last Synced</th><th></th></tr></thead>
             <tbody>{rows}</tbody>
           </table>
         </div>
@@ -767,6 +827,9 @@ def register_student_routes(app, csrf, limiter):
             <span id="sync-msg" style="color:var(--text-secondary);font-size:14px;">Starting sync...</span>
           </div>
           <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span> &middot; Files: <span id="sync-files">0</span></div>
+          <div style="margin-top:10px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px;color:var(--text-muted);">
+            &#9749; Take a break &mdash; this may take a while depending on how many files your courses have.
+          </div>
         </div>
         <style>@keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}</style>
         <script>
@@ -820,6 +883,14 @@ def register_student_routes(app, csrf, limiter):
           if (!confirm('Delete this file?')) return;
           await fetch('/api/student/files/' + fileId, {{method:'DELETE'}});
           location.reload();
+        }}
+        async function deleteCourse(courseId, name) {{
+          if (!confirm('Remove "' + name + '"? This will delete all its exams and uploaded files.')) return;
+          try {{
+            var r = await fetch('/api/student/courses/' + courseId, {{method:'DELETE'}});
+            if (r.ok) {{ location.reload(); }}
+            else {{ var d = await r.json(); alert(d.error || 'Failed to remove course'); }}
+          }} catch(e) {{ alert('Network error'); }}
         }}
         </script>
         """, active_page="student_courses")
@@ -917,10 +988,23 @@ def register_student_routes(app, csrf, limiter):
           try {{
             var r = await fetch('/api/student/plan/generate', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{preferences:{{hours_per_day:5}}}}) }});
             var d = await r.json();
-            if (r.ok) {{ alert('Plan generated!'); location.reload(); }}
-            else {{ alert(d.error || 'Failed'); }}
-          }} catch(e) {{ alert('Network error'); }}
-          btn.disabled = false; btn.innerHTML = '&#128260; Regenerate';
+            if (!r.ok) {{ alert(d.error || 'Failed'); btn.disabled = false; btn.innerHTML = '&#128260; Regenerate'; return; }}
+            var iv = setInterval(async function() {{
+              try {{
+                var r2 = await fetch('/api/student/plan/status');
+                var s = await r2.json();
+                if (s.status === 'done') {{
+                  clearInterval(iv);
+                  alert('Study plan generated!');
+                  location.reload();
+                }} else if (s.status === 'error') {{
+                  clearInterval(iv);
+                  alert(s.progress || 'Plan generation failed');
+                  btn.disabled = false; btn.innerHTML = '&#128260; Regenerate';
+                }}
+              }} catch(e) {{}}
+            }}, 2000);
+          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#128260; Regenerate'; }}
         }}
         </script>
         """, active_page="student_plan")

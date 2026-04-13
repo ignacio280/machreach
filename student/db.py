@@ -415,6 +415,17 @@ def delete_course_file(file_id: int, client_id: int):
               (file_id, client_id))
 
 
+def delete_course(course_id: int, client_id: int):
+    """Delete a course and all its related data (exams, files)."""
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_course_files WHERE course_id = %s AND client_id = %s",
+              (course_id, client_id))
+        _exec(db, "DELETE FROM student_exams WHERE course_id = %s AND client_id = %s",
+              (course_id, client_id))
+        _exec(db, "DELETE FROM student_courses WHERE id = %s AND client_id = %s",
+              (course_id, client_id))
+
+
 # ── Cleanup ─────────────────────────────────────────────────
 
 def delete_student_data(client_id: int):
