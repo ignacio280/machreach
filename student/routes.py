@@ -87,125 +87,156 @@ def register_student_routes(app, csrf, limiter):
             "canvas_url": tok["canvas_url"],
         })
 
-    # ── Sync courses ────────────────────────────────────────
+    # ── Sync courses (background) ──────────────────────────
+
+    import threading
+
+    # In-memory sync status per client  {client_id: {status, progress, ...}}
+    _sync_status: dict[int, dict] = {}
 
     @app.route("/api/student/sync", methods=["POST"])
-    @limiter.limit("5 per minute")
+    @limiter.limit("3 per minute")
     def student_sync_courses():
-        """
-        Full sync: fetch courses from Canvas, analyze ALL files & material with AI,
-        extract exams, and save everything.
-        """
+        """Kick off a background sync. Returns immediately."""
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
 
-        canvas = _get_canvas(_cid())
-        if not canvas:
+        client_id = _cid()
+        tok = sdb.get_canvas_token(client_id)
+        if not tok:
             return jsonify({"error": "Canvas not connected"}), 400
 
-        try:
-            courses = canvas.get_courses()
-        except Exception as e:
-            return jsonify({"error": f"Failed to fetch courses: {e}"}), 500
+        # Don't start if already running
+        existing = _sync_status.get(client_id, {})
+        if existing.get("status") == "running":
+            return jsonify({"message": "Sync already in progress", "sync": existing})
 
-        synced = []
-        for c in courses:
-            cid = c["id"]
-            name = c.get("name", "Unknown Course")
-            code = c.get("course_code", "")
+        _sync_status[client_id] = {
+            "status": "running",
+            "progress": "Starting...",
+            "courses_total": 0,
+            "courses_done": 0,
+            "files_downloaded": 0,
+            "started_at": datetime.now().isoformat(),
+        }
 
-            # Save/update course in DB
-            db_id = sdb.upsert_course(_cid(), cid, name, code)
-
-            # Gather ALL material for AI analysis
-            syllabus_html = ""
-            file_texts = []
-            assignments = []
-
+        def _do_sync():
             try:
-                syllabus_html = canvas.get_syllabus(cid)
-            except Exception:
-                pass
+                canvas = CanvasClient(tok["canvas_url"], tok["token"])
+                courses = canvas.get_courses()
+                _sync_status[client_id]["courses_total"] = len(courses)
+                _sync_status[client_id]["progress"] = f"Found {len(courses)} courses"
 
-            # Download relevant files (syllabi, programs, schedules, evaluations)
-            import re as _re
-            _FILE_PATTERN = _re.compile(
-                r"syllab|program|cronograma|schedule|calendar|outline|"
-                r"plan\s*(de)?\s*(curso|class|estudio)|evaluaci[oó]n|assessment|"
-                r"rubric|temario|contenido|examen|prueba|pauta|norma|"
-                r"clase|lecture|nota|resumen|apunte|guia|gu[ií]a",
-                _re.IGNORECASE,
-            )
-            try:
-                all_files = canvas.get_files(cid)
-                downloaded = 0
-                for sf in all_files:
-                    if downloaded >= 8:
-                        break
-                    fname = sf.get("display_name", sf.get("filename", ""))
-                    fl = fname.lower()
-                    if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
-                        continue
-                    if sf.get("size", 0) > 5 * 1024 * 1024:
-                        continue
-                    # Prioritize files with relevant names, but also take any PDF/DOCX
+                synced = []
+                total_files = 0
+
+                for idx, c in enumerate(courses):
+                    cid_canvas = c["id"]
+                    name = c.get("name", "Unknown Course")
+                    code = c.get("course_code", "")
+                    _sync_status[client_id]["progress"] = f"Syncing {name} ({idx + 1}/{len(courses)})"
+
+                    db_id = sdb.upsert_course(client_id, cid_canvas, name, code)
+
+                    syllabus_html = ""
+                    file_texts = []
+                    assignments = []
+
                     try:
-                        content = canvas.get_file_content(sf)
-                        text = ""
-                        if fl.endswith(".pdf"):
-                            text = extract_text_from_pdf(content)
-                        elif fl.endswith((".docx", ".doc")):
-                            text = extract_text_from_docx(content)
-                        if text and len(text.strip()) > 50:
-                            file_texts.append({"filename": fname, "text": text[:6000]})
-                            downloaded += 1
+                        syllabus_html = canvas.get_syllabus(cid_canvas)
                     except Exception:
                         pass
-            except Exception:
-                pass
 
-            # Include manually-uploaded files for this course
-            try:
-                uploaded = sdb.get_course_files(_cid(), db_id)
-                for uf in uploaded:
-                    if uf.get("extracted_text") and len(uf["extracted_text"].strip()) > 50:
-                        file_texts.append({
-                            "filename": uf["original_name"],
-                            "text": uf["extracted_text"][:6000],
-                        })
-            except Exception:
-                pass
+                    # Download ALL PDF/DOCX files — no limit
+                    try:
+                        all_files = canvas.get_files(cid_canvas)
+                        for sf in all_files:
+                            fname = sf.get("display_name", sf.get("filename", ""))
+                            fl = fname.lower()
+                            if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
+                                continue
+                            if sf.get("size", 0) > 15 * 1024 * 1024:
+                                continue
+                            try:
+                                _sync_status[client_id]["progress"] = f"{name}: downloading {fname}"
+                                content = canvas.get_file_content(sf)
+                                text = ""
+                                if fl.endswith(".pdf"):
+                                    text = extract_text_from_pdf(content)
+                                elif fl.endswith((".docx", ".doc")):
+                                    text = extract_text_from_docx(content)
+                                if text and len(text.strip()) > 50:
+                                    file_texts.append({"filename": fname, "text": text[:8000]})
+                                    total_files += 1
+                                    _sync_status[client_id]["files_downloaded"] = total_files
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
 
-            try:
-                assignments = canvas.get_assignments(cid)
-            except Exception:
-                pass
+                    # Include manually-uploaded files
+                    try:
+                        uploaded = sdb.get_course_files(client_id, db_id)
+                        for uf in uploaded:
+                            if uf.get("extracted_text") and len(uf["extracted_text"].strip()) > 50:
+                                file_texts.append({
+                                    "filename": uf["original_name"],
+                                    "text": uf["extracted_text"][:8000],
+                                })
+                    except Exception:
+                        pass
 
-            # AI analysis
-            analysis = analyze_course_material(
-                course_name=name,
-                syllabus_html=syllabus_html,
-                file_texts=file_texts,
-                assignments=assignments,
-            )
+                    try:
+                        assignments = canvas.get_assignments(cid_canvas)
+                    except Exception:
+                        pass
 
-            sdb.update_course_analysis(db_id, analysis)
+                    # AI analysis
+                    _sync_status[client_id]["progress"] = f"{name}: AI analyzing {len(file_texts)} files..."
+                    analysis = analyze_course_material(
+                        course_name=name,
+                        syllabus_html=syllabus_html,
+                        file_texts=file_texts,
+                        assignments=assignments,
+                    )
 
-            # Save extracted exams
-            if analysis.get("exams"):
-                sdb.save_exams(_cid(), db_id, analysis["exams"])
+                    sdb.update_course_analysis(db_id, analysis)
+                    if analysis.get("exams"):
+                        sdb.save_exams(client_id, db_id, analysis["exams"])
 
-            synced.append({
-                "course": name,
-                "exams_found": len(analysis.get("exams", [])),
-                "has_schedule": bool(analysis.get("weekly_schedule")),
-                "has_grading": bool(analysis.get("grading")),
-            })
+                    _sync_status[client_id]["courses_done"] = idx + 1
+                    synced.append(name)
 
-        return jsonify({
-            "message": f"Synced {len(synced)} courses",
-            "courses": synced,
-        })
+                _sync_status[client_id] = {
+                    "status": "done",
+                    "progress": f"Synced {len(synced)} courses, {total_files} files downloaded",
+                    "courses_total": len(courses),
+                    "courses_done": len(courses),
+                    "files_downloaded": total_files,
+                    "courses": synced,
+                }
+            except Exception as e:
+                log.error("Background sync failed for client %s: %s", client_id, e)
+                _sync_status[client_id] = {
+                    "status": "error",
+                    "progress": f"Sync failed: {e}",
+                    "courses_total": 0,
+                    "courses_done": 0,
+                    "files_downloaded": 0,
+                }
+
+        thread = threading.Thread(target=_do_sync, daemon=True)
+        thread.start()
+
+        return jsonify({"message": "Sync started", "sync": _sync_status[client_id]})
+
+    @app.route("/api/student/sync/status", methods=["GET"])
+    def student_sync_status():
+        """Poll sync progress."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        status = _sync_status.get(_cid(), {"status": "idle", "progress": "No sync running"})
+        return jsonify(status)
 
     # ── Courses ─────────────────────────────────────────────
 
@@ -600,17 +631,49 @@ def register_student_routes(app, csrf, limiter):
 
         {"<div class='card' style='margin-top:20px;'><div class='card-header'><h2>&#128161; AI Recommendations</h2></div><ul style='padding-left:20px;'>" + recs_html + "</ul></div>" if recs_html else ""}
 
+        <div id="sync-progress" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 18px;margin-top:16px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span id="sync-spinner" style="animation:spin 1s linear infinite;display:inline-block;">&#9203;</span>
+            <span id="sync-msg" style="color:var(--text-secondary);font-size:14px;">Starting sync...</span>
+          </div>
+          <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span> &middot; Files: <span id="sync-files">0</span></div>
+        </div>
+        <style>@keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}</style>
+
         <script>
         async function syncCourses() {{
           var btn = document.getElementById('sync-btn');
-          btn.disabled = true; btn.innerHTML = '&#9203; Syncing...';
+          btn.disabled = true; btn.innerHTML = '&#9203; Starting...';
+          document.getElementById('sync-progress').style.display = 'block';
           try {{
             var r = await fetch('/api/student/sync', {{method: 'POST'}});
             var d = await r.json();
-            if (r.ok) {{ alert('Synced ' + d.courses.length + ' courses!'); location.reload(); }}
-            else {{ alert(d.error || 'Sync failed'); }}
-          }} catch(e) {{ alert('Network error'); }}
-          btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
+            if (!r.ok) {{ alert(d.error || 'Sync failed'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; return; }}
+            pollSync(btn);
+          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; }}
+        }}
+        function pollSync(btn) {{
+          var iv = setInterval(async function() {{
+            try {{
+              var r = await fetch('/api/student/sync/status');
+              var d = await r.json();
+              document.getElementById('sync-msg').textContent = d.progress || 'Syncing...';
+              document.getElementById('sync-courses').textContent = (d.courses_done||0) + '/' + (d.courses_total||0);
+              document.getElementById('sync-files').textContent = d.files_downloaded || 0;
+              if (d.status === 'done') {{
+                clearInterval(iv);
+                document.getElementById('sync-progress').style.display = 'none';
+                btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
+                alert('Sync complete! ' + d.files_downloaded + ' files processed across ' + d.courses_done + ' courses.');
+                location.reload();
+              }} else if (d.status === 'error') {{
+                clearInterval(iv);
+                document.getElementById('sync-progress').style.display = 'none';
+                btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
+                alert(d.progress || 'Sync failed');
+              }}
+            }} catch(e) {{}}
+          }}, 2000);
         }}
         async function generatePlan() {{
           var btn = document.getElementById('plan-btn');
@@ -698,17 +761,45 @@ def register_student_routes(app, csrf, limiter):
             {upload_buttons}
           </div>
         </div>
+        <div id="sync-progress" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 18px;margin-top:16px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="animation:spin 1s linear infinite;display:inline-block;">&#9203;</span>
+            <span id="sync-msg" style="color:var(--text-secondary);font-size:14px;">Starting sync...</span>
+          </div>
+          <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span> &middot; Files: <span id="sync-files">0</span></div>
+        </div>
+        <style>@keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}</style>
         <script>
         async function syncCourses() {{
           var btn = document.getElementById('sync-btn');
-          btn.disabled = true; btn.innerHTML = '&#9203; Syncing...';
+          btn.disabled = true; btn.innerHTML = '&#9203; Starting...';
+          document.getElementById('sync-progress').style.display = 'block';
           try {{
             var r = await fetch('/api/student/sync', {{method: 'POST'}});
             var d = await r.json();
-            if (r.ok) {{ alert('Synced ' + d.courses.length + ' courses!'); location.reload(); }}
-            else {{ alert(d.error || 'Sync failed'); }}
-          }} catch(e) {{ alert('Network error'); }}
-          btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
+            if (!r.ok) {{ alert(d.error || 'Sync failed'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; return; }}
+            var iv = setInterval(async function() {{
+              try {{
+                var r2 = await fetch('/api/student/sync/status');
+                var s = await r2.json();
+                document.getElementById('sync-msg').textContent = s.progress || 'Syncing...';
+                document.getElementById('sync-courses').textContent = (s.courses_done||0) + '/' + (s.courses_total||0);
+                document.getElementById('sync-files').textContent = s.files_downloaded || 0;
+                if (s.status === 'done') {{
+                  clearInterval(iv);
+                  document.getElementById('sync-progress').style.display = 'none';
+                  btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
+                  alert('Sync complete! ' + s.files_downloaded + ' files processed.');
+                  location.reload();
+                }} else if (s.status === 'error') {{
+                  clearInterval(iv);
+                  document.getElementById('sync-progress').style.display = 'none';
+                  btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
+                  alert(s.progress || 'Sync failed');
+                }}
+              }} catch(e) {{}}
+            }}, 2000);
+          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; }}
         }}
         async function uploadFile(courseId, input) {{
           if (!input.files[0]) return;
