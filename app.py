@@ -203,6 +203,34 @@ def debug_smtp_send_test():
 
 
 # ---------------------------------------------------------------------------
+# ONE-TIME: Diagnostic — check what DB Render is using
+# ---------------------------------------------------------------------------
+
+@app.route("/api/admin/check-db", methods=["POST"])
+@csrf.exempt
+@limiter.exempt
+def admin_check_db():
+    from outreach.config import SECRET_KEY
+    auth = request.headers.get("X-Admin-Key", "")
+    if auth != SECRET_KEY:
+        return jsonify({"error": "unauthorized"}), 403
+
+    from outreach.db import get_db, _fetchall, _USE_PG, _db_fingerprint
+    from outreach.config import DATABASE_URL
+
+    with get_db() as db:
+        clients = _fetchall(db, "SELECT id, name, email FROM clients")
+
+    return jsonify({
+        "using_pg": _USE_PG,
+        "db_fingerprint": _db_fingerprint(),
+        "db_url_prefix": (DATABASE_URL[:40] + "...") if DATABASE_URL else "NOT SET",
+        "client_count": len(clients),
+        "clients": [{"id": c["id"], "name": c["name"], "email": c["email"]} for c in clients],
+    })
+
+
+# ---------------------------------------------------------------------------
 # ONE-TIME: Account reset — delete all accounts and notify users
 # Remove this endpoint after use!
 # ---------------------------------------------------------------------------
