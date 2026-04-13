@@ -611,12 +611,14 @@ def _run_migrations():
         ("clients", "email_verified", "INTEGER DEFAULT 0"),
         ("clients", "account_type", "TEXT DEFAULT 'business'"),
     ]
-    with get_db() as db:
-        for table, col, col_type in migrations:
-            try:
+    # Each migration runs in its own connection so a failed ALTER TABLE
+    # (column already exists) doesn't poison the PG transaction for the rest.
+    for table, col, col_type in migrations:
+        try:
+            with get_db() as db:
                 _exec(db, f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
-            except Exception:
-                pass  # column already exists
+        except Exception:
+            pass  # column already exists
 
 
 # ---------------------------------------------------------------------------
