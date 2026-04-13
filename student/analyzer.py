@@ -222,7 +222,7 @@ A student has these courses with their exam schedules and topics:
 
 Student preferences: {prefs_str}
 
-Create a detailed daily study plan from today until 3 days after their last exam.
+Create a detailed daily study plan for the NEXT 14 DAYS ONLY (from {today}).
 Return ONLY valid JSON:
 
 {{
@@ -260,6 +260,7 @@ Return ONLY valid JSON:
 }}
 
 Rules:
+- ONLY 14 days of daily_plan entries, no more
 - Allocate {hours_per_day}h per day max
 - Start intensive review {prep_days} days before each exam
 - Weight study time by exam weight (a 40% final gets more time than a 10% quiz)
@@ -268,6 +269,7 @@ Rules:
 - Include specific topics, not just "study for exam"
 - Sunday is a lighter day (half study time)
 - Mark priority based on how close the exam is and its weight
+- Keep each session description concise (under 15 words)
 - Return ONLY JSON, no markdown fences"""
 
     try:
@@ -275,19 +277,28 @@ Rules:
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
-            max_tokens=8000,
+            max_tokens=16000,
         )
-        raw = resp.choices[0].message.content.strip()
+        choice = resp.choices[0]
+        raw = choice.message.content.strip()
         raw = re.sub(r"^```json?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
+
+        # Handle truncated JSON (finish_reason == 'length')
+        if getattr(choice, 'finish_reason', None) == 'length':
+            log.warning("Study plan response was truncated, attempting repair")
+            # Try to close any open arrays/objects
+            for closer in [']}]}', ']}', '}]}'  , ']}]}']:
+                try:
+                    return json.loads(raw + closer)
+                except json.JSONDecodeError:
+                    continue
+            raise ValueError("AI response was truncated and could not be repaired")
+
         return json.loads(raw)
     except Exception as e:
         log.error("Study plan generation failed: %s", e)
-        return {
-            "daily_plan": [],
-            "upcoming_exams": sorted(all_exams, key=lambda x: x.get("date") or "9999"),
-            "recommendations": ["Could not generate plan — check your Canvas connection"],
-        }
+        raise RuntimeError(f"Plan generation failed: {e}")
 
 
 # ── helpers ─────────────────────────────────────────────────

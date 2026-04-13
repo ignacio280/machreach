@@ -399,6 +399,8 @@ def register_student_routes(app, csrf, limiter):
         def _do_plan():
             try:
                 plan = generate_study_plan(courses_data, preferences)
+                if not plan.get("daily_plan"):
+                    raise ValueError("AI returned an empty plan")
                 plan_id = sdb.save_study_plan(client_id, plan, preferences)
                 _plan_status[client_id] = {
                     "status": "done",
