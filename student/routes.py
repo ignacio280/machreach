@@ -1268,6 +1268,16 @@ def register_student_routes(app, csrf, limiter):
             <tbody>{exams_rows}</tbody>
           </table>
           <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0;">Separate topics with commas. Click &#128190; to save each exam individually.</p>
+          <!-- Exam upload progress bar -->
+          <div id="exam-upload-bar" style="display:none;margin-top:12px;background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px;">
+              <span>&#128206; Uploading <b id="exam-upload-name"></b></span>
+              <span id="exam-upload-pct">0%</span>
+            </div>
+            <div style="background:var(--border);border-radius:8px;height:8px;overflow:hidden;">
+              <div id="exam-upload-fill" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Grading -->
@@ -1526,7 +1536,54 @@ def register_student_routes(app, csrf, limiter):
           var fd = new FormData();
           fd.append('file', input.files[0]);
           fd.append('exam_id', examId);
-          doUpload(cid, fd, input.files[0].name);
+          // Use exam-specific upload bar
+          var fileName = input.files[0].name;
+          var bar = document.getElementById('exam-upload-bar');
+          document.getElementById('exam-upload-name').textContent = fileName;
+          document.getElementById('exam-upload-fill').style.width = '0%';
+          document.getElementById('exam-upload-pct').textContent = '0%';
+          bar.style.display = 'block';
+          bar.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/student/courses/' + cid + '/upload');
+          if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
+          xhr.upload.onprogress = function(e) {{
+            if (e.lengthComputable) {{
+              var pct = (e.loaded / e.total) * 80;
+              document.getElementById('exam-upload-fill').style.width = pct + '%';
+              document.getElementById('exam-upload-pct').textContent = Math.round(pct) + '%';
+            }}
+          }};
+          xhr.onload = function() {{
+            document.getElementById('exam-upload-fill').style.width = '90%';
+            document.getElementById('exam-upload-pct').textContent = '90%';
+            try {{
+              var d = JSON.parse(xhr.responseText);
+              if (xhr.status >= 200 && xhr.status < 300) {{
+                document.getElementById('exam-upload-fill').style.width = '100%';
+                document.getElementById('exam-upload-pct').textContent = '&#10003; Done!';
+                setTimeout(function(){{ location.reload(); }}, 1000);
+              }} else {{
+                document.getElementById('exam-upload-pct').textContent = 'Failed';
+                alert(d.error || 'Upload failed');
+                setTimeout(function(){{ bar.style.display = 'none'; }}, 2000);
+              }}
+            }} catch(e) {{
+              document.getElementById('exam-upload-pct').textContent = 'Failed';
+              alert('Upload failed');
+              setTimeout(function(){{ bar.style.display = 'none'; }}, 2000);
+            }}
+          }};
+          xhr.onerror = function() {{
+            document.getElementById('exam-upload-pct').textContent = 'Failed';
+            alert('Network error');
+            setTimeout(function(){{ bar.style.display = 'none'; }}, 2000);
+          }};
+          document.getElementById('exam-upload-fill').style.width = '5%';
+          document.getElementById('exam-upload-pct').textContent = '5%';
+          xhr.send(fd);
           input.value = '';
         }}
 
