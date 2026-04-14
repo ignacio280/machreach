@@ -1335,6 +1335,87 @@ def register_student_routes(app, csrf, limiter):
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
         </style>
 
+        <!-- Upload functions in isolated script block -->
+        <script>
+        function showUploadToast(name) {{
+          var t = document.getElementById('upload-toast');
+          document.getElementById('upload-toast-name').textContent = name;
+          document.getElementById('upload-toast-fill').style.width = '0%';
+          document.getElementById('upload-toast-pct').textContent = '0%';
+          document.getElementById('upload-toast-status').textContent = 'Starting upload...';
+          t.style.display = 'block';
+        }}
+        function updateUploadToast(pct, status) {{
+          document.getElementById('upload-toast-fill').style.width = pct + '%';
+          document.getElementById('upload-toast-pct').textContent = Math.round(pct) + '%';
+          if (status) document.getElementById('upload-toast-status').textContent = status;
+        }}
+        function hideUploadToast(msg, success) {{
+          document.getElementById('upload-toast-fill').style.width = '100%';
+          document.getElementById('upload-toast-pct').textContent = success ? '&#10003;' : '&#10007;';
+          document.getElementById('upload-toast-status').textContent = msg || 'Done!';
+          var delay = success ? 1500 : 3000;
+          setTimeout(function(){{ document.getElementById('upload-toast').style.display = 'none'; }}, delay);
+        }}
+        function doUpload(cid, fd, fileName) {{
+          showUploadToast(fileName);
+          updateUploadToast(5, 'Preparing upload...');
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/student/courses/' + cid + '/upload');
+          if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
+          xhr.upload.onprogress = function(e) {{
+            if (e.lengthComputable) {{
+              var pct = Math.round((e.loaded / e.total) * 80);
+              updateUploadToast(pct, 'Uploading ' + fileName + '...');
+            }}
+          }};
+          xhr.onload = function() {{
+            updateUploadToast(90, 'Processing file...');
+            try {{
+              var d = JSON.parse(xhr.responseText);
+              if (xhr.status >= 200 && xhr.status < 300) {{
+                hideUploadToast('File uploaded successfully!', true);
+                setTimeout(function(){{ location.reload(); }}, 1200);
+              }} else {{
+                var errMsg = d.error || 'Upload failed (status ' + xhr.status + ')';
+                hideUploadToast(errMsg, false);
+                alert('Upload failed: ' + errMsg);
+              }}
+            }} catch(e) {{
+              hideUploadToast('Upload failed - server error (status ' + xhr.status + ')', false);
+              alert('Upload failed - server returned status ' + xhr.status);
+              console.error('Upload response:', xhr.status, xhr.responseText);
+            }}
+          }};
+          xhr.onerror = function() {{
+            hideUploadToast('Network error - check connection', false);
+            alert('Upload network error - check your internet connection.');
+          }};
+          xhr.send(fd);
+        }}
+        function uploadFile(cid, input) {{
+          if (!input.files[0]) return;
+          var fd = new FormData();
+          fd.append('file', input.files[0]);
+          doUpload(cid, fd, input.files[0].name);
+          input.value = '';
+        }}
+        function uploadExamFile(cid, examId, input) {{
+          if (!input.files[0]) return;
+          var fileName = input.files[0].name;
+          var fd = new FormData();
+          fd.append('file', input.files[0]);
+          fd.append('exam_id', examId);
+          doUpload(cid, fd, fileName);
+          input.value = '';
+        }}
+        function deleteFile(fileId) {{
+          if (!confirm('Delete this file?')) return;
+          fetch('/api/student/files/' + fileId, {{method:'DELETE'}}).then(function(){{ location.reload(); }});
+        }}
+        </script>
+
         <script>
         var courseId = {course_id};
 
@@ -1474,125 +1555,6 @@ def register_student_routes(app, csrf, limiter):
           c.appendChild(div);
         }}
 
-        function showUploadToast(name) {{
-          var t = document.getElementById('upload-toast');
-          document.getElementById('upload-toast-name').textContent = name;
-          document.getElementById('upload-toast-fill').style.width = '0%';
-          document.getElementById('upload-toast-pct').textContent = '0%';
-          document.getElementById('upload-toast-status').textContent = 'Starting upload...';
-          t.style.display = 'block';
-        }}
-        function updateUploadToast(pct, status) {{
-          document.getElementById('upload-toast-fill').style.width = pct + '%';
-          document.getElementById('upload-toast-pct').textContent = Math.round(pct) + '%';
-          if (status) document.getElementById('upload-toast-status').textContent = status;
-        }}
-        function hideUploadToast(msg, success) {{
-          document.getElementById('upload-toast-fill').style.width = '100%';
-          document.getElementById('upload-toast-pct').textContent = success ? '&#10003;' : '&#10007;';
-          document.getElementById('upload-toast-status').textContent = msg || 'Done!';
-          var delay = success ? 1500 : 3000;
-          setTimeout(function(){{ document.getElementById('upload-toast').style.display = 'none'; }}, delay);
-        }}
-        // Legacy wrappers
-        function showUploadBar(n) {{ showUploadToast(n); }}
-        function updateUploadBar(p) {{ updateUploadToast(p, 'Uploading...'); }}
-        function hideUploadBar(m) {{ hideUploadToast(m || 'Done!', true); }}
-        function doUpload(cid, fd, fileName) {{
-          showUploadToast(fileName);
-          updateUploadToast(5, 'Preparing upload...');
-          var csrfToken = document.querySelector('meta[name="csrf-token"]');
-          var xhr = new XMLHttpRequest();
-          xhr.open('POST', '/api/student/courses/' + cid + '/upload');
-          if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
-          xhr.upload.onprogress = function(e) {{
-            if (e.lengthComputable) {{
-              var pct = Math.round((e.loaded / e.total) * 80);
-              updateUploadToast(pct, 'Uploading ' + fileName + '...');
-            }}
-          }};
-          xhr.onload = function() {{
-            updateUploadToast(90, 'Processing file...');
-            try {{
-              var d = JSON.parse(xhr.responseText);
-              if (xhr.status >= 200 && xhr.status < 300) {{
-                hideUploadToast('File uploaded successfully!', true);
-                setTimeout(function(){{ location.reload(); }}, 1200);
-              }} else {{
-                var errMsg = d.error || 'Upload failed (status ' + xhr.status + ')';
-                hideUploadToast(errMsg, false);
-                alert('Upload failed: ' + errMsg);
-              }}
-            }} catch(e) {{
-              hideUploadToast('Upload failed — server error (status ' + xhr.status + ')', false);
-              alert('Upload failed — server returned status ' + xhr.status + '. Check browser console (F12) for details.');
-              console.error('Upload response:', xhr.status, xhr.responseText);
-            }}
-          }};
-          xhr.onerror = function() {{
-            hideUploadToast('Network error — check connection', false);
-            alert('Upload network error — check your internet connection.');
-          }};
-          xhr.send(fd);
-        }}
-        async function uploadFile(cid, input) {{
-          if (!input.files[0]) return;
-          var fd = new FormData();
-          fd.append('file', input.files[0]);
-          doUpload(cid, fd, input.files[0].name);
-          input.value = '';
-        }}
-
-        async function uploadExamFile(cid, examId, input) {{
-          if (!input.files[0]) return;
-          var fileName = input.files[0].name;
-          var fd = new FormData();
-          fd.append('file', input.files[0]);
-          fd.append('exam_id', examId);
-          showUploadToast(fileName);
-          updateUploadToast(5, 'Preparing upload...');
-
-          var csrfToken = document.querySelector('meta[name="csrf-token"]');
-          var xhr = new XMLHttpRequest();
-          xhr.open('POST', '/api/student/courses/' + cid + '/upload');
-          if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
-          xhr.upload.onprogress = function(e) {{
-            if (e.lengthComputable) {{
-              var pct = Math.round((e.loaded / e.total) * 80);
-              updateUploadToast(pct, 'Uploading ' + fileName + '...');
-            }}
-          }};
-          xhr.onload = function() {{
-            updateUploadToast(90, 'Processing file...');
-            try {{
-              var d = JSON.parse(xhr.responseText);
-              if (xhr.status >= 200 && xhr.status < 300) {{
-                hideUploadToast('File uploaded successfully!', true);
-                setTimeout(function(){{ location.reload(); }}, 1200);
-              }} else {{
-                var errMsg = d.error || 'Upload failed (status ' + xhr.status + ')';
-                hideUploadToast(errMsg, false);
-                alert('Upload failed: ' + errMsg);
-              }}
-            }} catch(e) {{
-              hideUploadToast('Upload failed — server error (status ' + xhr.status + ')', false);
-              alert('Upload failed — server returned status ' + xhr.status + '. Check browser console (F12) for details.');
-              console.error('Upload response:', xhr.status, xhr.responseText);
-            }}
-          }};
-          xhr.onerror = function() {{
-            hideUploadToast('Network error — check your connection', false);
-            alert('Upload network error — check your internet connection.');
-          }};
-          xhr.send(fd);
-          input.value = ''
-        }}
-
-        async function deleteFile(fileId) {{
-          if (!confirm('Delete this file?')) return;
-          await fetch('/api/student/files/' + fileId, {{method:'DELETE'}});
-          location.reload();
-        }}
         </script>
         """, active_page="student_courses")
 
