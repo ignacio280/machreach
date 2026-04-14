@@ -1268,15 +1268,16 @@ def register_student_routes(app, csrf, limiter):
             <tbody>{exams_rows}</tbody>
           </table>
           <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0;">Separate topics with commas. Click &#128190; to save each exam individually.</p>
-          <!-- Exam upload progress bar -->
-          <div id="exam-upload-bar" style="display:none;margin-top:12px;background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;">
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px;">
-              <span>&#128206; Uploading <b id="exam-upload-name"></b></span>
-              <span id="exam-upload-pct">0%</span>
-            </div>
-            <div style="background:var(--border);border-radius:8px;height:8px;overflow:hidden;">
-              <div id="exam-upload-fill" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
-            </div>
+        </div>
+
+        <!-- Exam upload progress bar (outside card to avoid overflow:hidden) -->
+        <div id="exam-upload-bar" style="display:none;background:var(--card);border:2px solid var(--primary);border-radius:var(--radius-sm);padding:12px 18px;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;">
+            <span>&#128206; Uploading <b id="exam-upload-name"></b></span>
+            <span id="exam-upload-pct">0%</span>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;height:10px;overflow:hidden;">
+            <div id="exam-upload-fill" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
           </div>
         </div>
 
