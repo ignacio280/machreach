@@ -1270,14 +1270,17 @@ def register_student_routes(app, csrf, limiter):
           <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0;">Separate topics with commas. Click &#128190; to save each exam individually.</p>
         </div>
 
-        <!-- Exam upload progress bar (outside card to avoid overflow:hidden) -->
-        <div id="exam-upload-bar" style="display:none;background:var(--card);border:2px solid var(--primary);border-radius:var(--radius-sm);padding:12px 18px;margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;">
-            <span>&#128206; Uploading <b id="exam-upload-name"></b></span>
-            <span id="exam-upload-pct">0%</span>
-          </div>
-          <div style="background:var(--bg);border-radius:8px;height:10px;overflow:hidden;">
-            <div id="exam-upload-fill" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
+        <!-- Global upload toast (fixed position, always visible) -->
+        <div id="upload-toast" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#1E1B4B;border-bottom:3px solid #7C3AED;padding:14px 24px;box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+          <div style="max-width:800px;margin:0 auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span style="color:#E0E7FF;font-size:14px;font-weight:600;">&#128206; Uploading <span id="upload-toast-name" style="color:#A5B4FC;"></span></span>
+              <span id="upload-toast-pct" style="color:#A5B4FC;font-size:14px;font-weight:700;">0%</span>
+            </div>
+            <div style="background:#312E81;border-radius:8px;height:12px;overflow:hidden;">
+              <div id="upload-toast-fill" style="height:100%;background:linear-gradient(90deg,#7C3AED,#A78BFA,#C4B5FD);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
+            </div>
+            <div id="upload-toast-status" style="color:#A5B4FC;font-size:12px;margin-top:6px;">Starting upload...</div>
           </div>
         </div>
 
@@ -1325,17 +1328,6 @@ def register_student_routes(app, csrf, limiter):
             </label>
           </div>
           {files_html}
-        </div>
-
-        <!-- Upload progress bar -->
-        <div id="detail-upload-bar" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 18px;margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;">
-            <span>&#128206; Uploading <b id="detail-upload-name"></b></span>
-            <span id="detail-upload-pct">0%</span>
-          </div>
-          <div style="background:var(--bg);border-radius:8px;height:10px;overflow:hidden;">
-            <div id="detail-upload-fill" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
-          </div>
         </div>
 
         <style>
@@ -1482,46 +1474,56 @@ def register_student_routes(app, csrf, limiter):
           c.appendChild(div);
         }}
 
-        function showUploadBar(name) {{
-          var bar = document.getElementById('detail-upload-bar');
-          document.getElementById('detail-upload-name').textContent = name;
-          document.getElementById('detail-upload-fill').style.width = '0%';
-          document.getElementById('detail-upload-pct').textContent = '0%';
-          bar.style.display = 'block';
+        function showUploadToast(name) {{
+          var t = document.getElementById('upload-toast');
+          document.getElementById('upload-toast-name').textContent = name;
+          document.getElementById('upload-toast-fill').style.width = '0%';
+          document.getElementById('upload-toast-pct').textContent = '0%';
+          document.getElementById('upload-toast-status').textContent = 'Starting upload...';
+          t.style.display = 'block';
         }}
-        function updateUploadBar(pct) {{
-          document.getElementById('detail-upload-fill').style.width = pct + '%';
-          document.getElementById('detail-upload-pct').textContent = Math.round(pct) + '%';
+        function updateUploadToast(pct, status) {{
+          document.getElementById('upload-toast-fill').style.width = pct + '%';
+          document.getElementById('upload-toast-pct').textContent = Math.round(pct) + '%';
+          if (status) document.getElementById('upload-toast-status').textContent = status;
         }}
-        function hideUploadBar(msg) {{
-          document.getElementById('detail-upload-fill').style.width = '100%';
-          document.getElementById('detail-upload-pct').textContent = msg || 'Done!';
-          setTimeout(function(){{ document.getElementById('detail-upload-bar').style.display = 'none'; }}, 1500);
+        function hideUploadToast(msg, success) {{
+          document.getElementById('upload-toast-fill').style.width = '100%';
+          document.getElementById('upload-toast-pct').textContent = success ? '&#10003;' : '&#10007;';
+          document.getElementById('upload-toast-status').textContent = msg || 'Done!';
+          var delay = success ? 1500 : 3000;
+          setTimeout(function(){{ document.getElementById('upload-toast').style.display = 'none'; }}, delay);
         }}
+        // Legacy wrappers
+        function showUploadBar(n) {{ showUploadToast(n); }}
+        function updateUploadBar(p) {{ updateUploadToast(p, 'Uploading...'); }}
+        function hideUploadBar(m) {{ hideUploadToast(m || 'Done!', true); }}
         function doUpload(cid, fd, fileName) {{
-          showUploadBar(fileName);
+          showUploadToast(fileName);
+          updateUploadToast(5, 'Preparing upload...');
           var csrfToken = document.querySelector('meta[name="csrf-token"]');
           var xhr = new XMLHttpRequest();
           xhr.open('POST', '/api/student/courses/' + cid + '/upload');
           if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
           xhr.upload.onprogress = function(e) {{
-            if (e.lengthComputable) updateUploadBar((e.loaded / e.total) * 80);
+            if (e.lengthComputable) {{
+              var pct = Math.round((e.loaded / e.total) * 80);
+              updateUploadToast(pct, 'Uploading ' + fileName + '...');
+            }}
           }};
           xhr.onload = function() {{
-            updateUploadBar(90);
+            updateUploadToast(90, 'Processing file...');
             try {{
               var d = JSON.parse(xhr.responseText);
               if (xhr.status >= 200 && xhr.status < 300) {{
-                hideUploadBar('&#10003; Uploaded!');
-                setTimeout(function(){{ location.reload(); }}, 1000);
+                hideUploadToast('File uploaded successfully!', true);
+                setTimeout(function(){{ location.reload(); }}, 1200);
               }} else {{
-                hideUploadBar('Failed');
-                alert(d.error || 'Upload failed');
+                hideUploadToast(d.error || 'Upload failed', false);
               }}
-            }} catch(e) {{ hideUploadBar('Failed'); alert('Upload failed'); }}
+            }} catch(e) {{ hideUploadToast('Upload failed — server error', false); }}
           }};
-          xhr.onerror = function() {{ hideUploadBar('Failed'); alert('Network error'); }};
-          updateUploadBar(5);
+          xhr.onerror = function() {{ hideUploadToast('Network error — check connection', false); }};
           xhr.send(fd);
         }}
         async function uploadFile(cid, input) {{
@@ -1534,17 +1536,12 @@ def register_student_routes(app, csrf, limiter):
 
         async function uploadExamFile(cid, examId, input) {{
           if (!input.files[0]) return;
+          var fileName = input.files[0].name;
           var fd = new FormData();
           fd.append('file', input.files[0]);
           fd.append('exam_id', examId);
-          // Use exam-specific upload bar
-          var fileName = input.files[0].name;
-          var bar = document.getElementById('exam-upload-bar');
-          document.getElementById('exam-upload-name').textContent = fileName;
-          document.getElementById('exam-upload-fill').style.width = '0%';
-          document.getElementById('exam-upload-pct').textContent = '0%';
-          bar.style.display = 'block';
-          bar.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+          showUploadToast(fileName);
+          updateUploadToast(5, 'Preparing upload...');
 
           var csrfToken = document.querySelector('meta[name="csrf-token"]');
           var xhr = new XMLHttpRequest();
@@ -1552,40 +1549,29 @@ def register_student_routes(app, csrf, limiter):
           if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
           xhr.upload.onprogress = function(e) {{
             if (e.lengthComputable) {{
-              var pct = (e.loaded / e.total) * 80;
-              document.getElementById('exam-upload-fill').style.width = pct + '%';
-              document.getElementById('exam-upload-pct').textContent = Math.round(pct) + '%';
+              var pct = Math.round((e.loaded / e.total) * 80);
+              updateUploadToast(pct, 'Uploading ' + fileName + '...');
             }}
           }};
           xhr.onload = function() {{
-            document.getElementById('exam-upload-fill').style.width = '90%';
-            document.getElementById('exam-upload-pct').textContent = '90%';
+            updateUploadToast(90, 'Processing file...');
             try {{
               var d = JSON.parse(xhr.responseText);
               if (xhr.status >= 200 && xhr.status < 300) {{
-                document.getElementById('exam-upload-fill').style.width = '100%';
-                document.getElementById('exam-upload-pct').textContent = '&#10003; Done!';
-                setTimeout(function(){{ location.reload(); }}, 1000);
+                hideUploadToast('File uploaded successfully!', true);
+                setTimeout(function(){{ location.reload(); }}, 1200);
               }} else {{
-                document.getElementById('exam-upload-pct').textContent = 'Failed';
-                alert(d.error || 'Upload failed');
-                setTimeout(function(){{ bar.style.display = 'none'; }}, 2000);
+                hideUploadToast(d.error || 'Upload failed', false);
               }}
             }} catch(e) {{
-              document.getElementById('exam-upload-pct').textContent = 'Failed';
-              alert('Upload failed');
-              setTimeout(function(){{ bar.style.display = 'none'; }}, 2000);
+              hideUploadToast('Upload failed — server error', false);
             }}
           }};
           xhr.onerror = function() {{
-            document.getElementById('exam-upload-pct').textContent = 'Failed';
-            alert('Network error');
-            setTimeout(function(){{ bar.style.display = 'none'; }}, 2000);
+            hideUploadToast('Network error — check your connection', false);
           }};
-          document.getElementById('exam-upload-fill').style.width = '5%';
-          document.getElementById('exam-upload-pct').textContent = '5%';
           xhr.send(fd);
-          input.value = '';
+          input.value = ''
         }}
 
         async function deleteFile(fileId) {{
