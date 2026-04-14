@@ -129,6 +129,7 @@ def register_student_routes(app, csrf, limiter):
 
                 synced = []
                 total_files = 0
+                no_syllabus_courses = []
 
                 for idx, c in enumerate(courses):
                     cid_canvas = c["id"]
@@ -141,16 +142,19 @@ def register_student_routes(app, csrf, limiter):
                     syllabus_html = ""
                     file_texts = []
                     assignments = []
+                    found_syllabus = False
 
                     try:
                         syllabus_html = canvas.get_syllabus(cid_canvas)
+                        if syllabus_html and len(syllabus_html.strip()) > 50:
+                            found_syllabus = True
                     except Exception:
                         pass
 
-                    # Download ALL PDF/DOCX files — no limit
+                    # Download ONLY syllabus-related files (syllabus, programa, guía docente, etc.)
                     try:
-                        all_files = canvas.get_files(cid_canvas)
-                        for sf in all_files:
+                        syllabus_files = canvas.find_syllabus_files(cid_canvas)
+                        for sf in syllabus_files:
                             fname = sf.get("display_name", sf.get("filename", ""))
                             fl = fname.lower()
                             if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
@@ -168,6 +172,7 @@ def register_student_routes(app, csrf, limiter):
                                 if text and len(text.strip()) > 50:
                                     file_texts.append({"filename": fname, "text": text[:8000]})
                                     total_files += 1
+                                    found_syllabus = True
                                     _sync_status[client_id]["files_downloaded"] = total_files
                             except Exception:
                                 pass
@@ -183,6 +188,7 @@ def register_student_routes(app, csrf, limiter):
                                     "filename": uf["original_name"],
                                     "text": uf["extracted_text"][:8000],
                                 })
+                                found_syllabus = True
                     except Exception:
                         pass
 
@@ -190,6 +196,9 @@ def register_student_routes(app, csrf, limiter):
                         assignments = canvas.get_assignments(cid_canvas)
                     except Exception:
                         pass
+
+                    if not found_syllabus:
+                        no_syllabus_courses.append(name)
 
                     # AI analysis
                     _sync_status[client_id]["progress"] = f"{name}: AI analyzing {len(file_texts)} files..."
@@ -207,13 +216,24 @@ def register_student_routes(app, csrf, limiter):
                     _sync_status[client_id]["courses_done"] = idx + 1
                     synced.append(name)
 
+                # Build final status with syllabus warnings
+                warnings = []
+                if no_syllabus_courses:
+                    for cn in no_syllabus_courses:
+                        warnings.append(
+                            f"Could not find a syllabus/programa for \"{cn}\". "
+                            f"Please upload it manually on the course page so the AI can create the best study plan."
+                        )
+
                 _sync_status[client_id] = {
                     "status": "done",
-                    "progress": f"Synced {len(synced)} courses, {total_files} files downloaded",
+                    "progress": f"Synced {len(synced)} courses, {total_files} syllabus files downloaded",
                     "courses_total": len(courses),
                     "courses_done": len(courses),
                     "files_downloaded": total_files,
                     "courses": synced,
+                    "warnings": warnings,
+                    "no_syllabus": no_syllabus_courses,
                 }
             except Exception as e:
                 log.error("Background sync failed for client %s: %s", client_id, e)
@@ -908,7 +928,11 @@ def register_student_routes(app, csrf, limiter):
                 clearInterval(iv);
                 document.getElementById('sync-progress').style.display = 'none';
                 btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
-                alert('Sync complete! ' + d.files_downloaded + ' files processed across ' + d.courses_done + ' courses.');
+                var msg = 'Sync complete! ' + d.files_downloaded + ' syllabus files processed across ' + d.courses_done + ' courses.';
+                if (d.warnings && d.warnings.length > 0) {{
+                  msg += '\n\n\u26A0\uFE0F Warnings:\n' + d.warnings.join('\n');
+                }}
+                alert(msg);
                 location.reload();
               }} else if (d.status === 'error') {{
                 clearInterval(iv);
@@ -1915,7 +1939,10 @@ def register_student_routes(app, csrf, limiter):
                     <button onclick="nextCard()" class="btn btn-ghost btn-sm">Next &rarr;</button>
                   </div>
                   <span id="card-counter" style="font-size:12px;color:var(--text-muted);">0 / 0</span>
-                  <button onclick="showAddCard()" class="btn btn-outline btn-sm">+ Add</button>
+                  <div style="display:flex;gap:6px;">
+                    <button onclick="deleteCard()" class="btn btn-ghost btn-sm" style="color:var(--red);" title="Delete current card">&#128465;</button>
+                    <button onclick="showAddCard()" class="btn btn-outline btn-sm">+ Add</button>
+                  </div>
                 </div>
                 <div id="add-card-form" style="display:none;margin-top:10px;background:var(--bg);border-radius:8px;padding:12px;">
                   <input type="text" id="card-front" class="edit-input" placeholder="Front (question)" style="margin-bottom:6px;">
@@ -2030,6 +2057,15 @@ def register_student_routes(app, csrf, limiter):
         function nextCard() {{ if (flashcards.length > 0) {{ cardIndex = (cardIndex + 1) % flashcards.length; cardFlipped = false; renderCard(); }} }}
         function prevCard() {{ if (flashcards.length > 0) {{ cardIndex = (cardIndex - 1 + flashcards.length) % flashcards.length; cardFlipped = false; renderCard(); }} }}
         function showAddCard() {{ document.getElementById('add-card-form').style.display = ''; document.getElementById('card-front').focus(); }}
+        function deleteCard() {{
+          if (flashcards.length === 0) return;
+          if (!confirm('Delete this flashcard?')) return;
+          flashcards.splice(cardIndex, 1);
+          localStorage.setItem('focus_flashcards', JSON.stringify(flashcards));
+          if (cardIndex >= flashcards.length) cardIndex = Math.max(0, flashcards.length - 1);
+          cardFlipped = false;
+          renderCard();
+        }}
         function addCard() {{
           var f = document.getElementById('card-front').value.trim();
           var b = document.getElementById('card-back').value.trim();

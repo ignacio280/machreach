@@ -151,12 +151,17 @@ class CanvasClient:
             r"syllab",
             r"program[a-z]*",
             r"cronograma",
+            r"gu[ií]a\s*(docente|del?\s*curso|acad[eé]mica)?",
+            r"sumario",
             r"schedule",
             r"calendar",
             r"outline",
             r"plan\s*(de)?\s*(curso|class|estudio)",
             r"evaluaci[oó]n",
             r"assessment",
+            r"course\s*info",
+            r"temario",
+            r"contenido",
         ]
         regex = re.compile("|".join(patterns), re.IGNORECASE)
         hits: list[dict] = []
