@@ -1183,7 +1183,7 @@ def register_student_routes(app, csrf, limiter):
                 {ef_html}
                 <label class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;cursor:pointer;" title="Upload file for this exam">
                   &#128206;
-                  <input type="file" style="display:none;" accept=".pdf,.docx,.doc" onchange="uploadExamFile({course_id},{e['id']},this)">
+                  <input type="file" style="display:none;" accept=".pdf,.docx,.doc" onchange="try{{uploadExamFile({course_id},{e['id']},this)}}catch(err){{alert('Upload error: '+err.message)}}">
                 </label>
               </td>
               <td>
@@ -1324,7 +1324,7 @@ def register_student_routes(app, csrf, limiter):
             <h2>&#128206; Uploaded Files</h2>
             <label class="btn btn-outline btn-sm" style="cursor:pointer;">
               + Upload File
-              <input type="file" style="display:none;" accept=".pdf,.docx,.doc" onchange="uploadFile({course_id},this)">
+              <input type="file" style="display:none;" accept=".pdf,.docx,.doc" onchange="try{{uploadFile({course_id},this)}}catch(err){{alert('Upload error: '+err.message)}}">
             </label>
           </div>
           {files_html}
@@ -1519,11 +1519,20 @@ def register_student_routes(app, csrf, limiter):
                 hideUploadToast('File uploaded successfully!', true);
                 setTimeout(function(){{ location.reload(); }}, 1200);
               }} else {{
-                hideUploadToast(d.error || 'Upload failed', false);
+                var errMsg = d.error || 'Upload failed (status ' + xhr.status + ')';
+                hideUploadToast(errMsg, false);
+                alert('Upload failed: ' + errMsg);
               }}
-            }} catch(e) {{ hideUploadToast('Upload failed — server error', false); }}
+            }} catch(e) {{
+              hideUploadToast('Upload failed — server error (status ' + xhr.status + ')', false);
+              alert('Upload failed — server returned status ' + xhr.status + '. Check browser console (F12) for details.');
+              console.error('Upload response:', xhr.status, xhr.responseText);
+            }}
           }};
-          xhr.onerror = function() {{ hideUploadToast('Network error — check connection', false); }};
+          xhr.onerror = function() {{
+            hideUploadToast('Network error — check connection', false);
+            alert('Upload network error — check your internet connection.');
+          }};
           xhr.send(fd);
         }}
         async function uploadFile(cid, input) {{
@@ -1561,14 +1570,19 @@ def register_student_routes(app, csrf, limiter):
                 hideUploadToast('File uploaded successfully!', true);
                 setTimeout(function(){{ location.reload(); }}, 1200);
               }} else {{
-                hideUploadToast(d.error || 'Upload failed', false);
+                var errMsg = d.error || 'Upload failed (status ' + xhr.status + ')';
+                hideUploadToast(errMsg, false);
+                alert('Upload failed: ' + errMsg);
               }}
             }} catch(e) {{
-              hideUploadToast('Upload failed — server error', false);
+              hideUploadToast('Upload failed — server error (status ' + xhr.status + ')', false);
+              alert('Upload failed — server returned status ' + xhr.status + '. Check browser console (F12) for details.');
+              console.error('Upload response:', xhr.status, xhr.responseText);
             }}
           }};
           xhr.onerror = function() {{
             hideUploadToast('Network error — check your connection', false);
+            alert('Upload network error — check your internet connection.');
           }};
           xhr.send(fd);
           input.value = ''
