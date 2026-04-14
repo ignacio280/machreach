@@ -461,13 +461,31 @@ def register_student_routes(app, csrf, limiter):
         # Gather all course analyses
         courses = sdb.get_courses(client_id)
         courses_data = []
+        course_difficulties = {}
         for c in courses:
             analysis = json.loads(c["analysis_json"]) if isinstance(c["analysis_json"], str) else c["analysis_json"]
             if analysis and analysis.get("course_name"):
                 courses_data.append(analysis)
+                diff = c.get("difficulty", 3) or 3
+                course_difficulties[analysis["course_name"]] = diff
 
         if not courses_data:
             return jsonify({"error": "No courses synced. Run /api/student/sync first."}), 400
+
+        # Gather schedule settings
+        schedule_settings = sdb.get_schedule_settings(client_id)
+        schedule_list = []
+        if schedule_settings:
+            for s in schedule_settings:
+                schedule_list.append({
+                    "day": s["day_of_week"],
+                    "hours": s["available_hours"],
+                    "free": bool(s["is_free_day"]),
+                })
+
+        # Gather incomplete assignments from previous days
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        incomplete = sdb.get_incomplete_assignments(client_id, today_str)
 
         existing = _plan_status.get(client_id, {})
         if existing.get("status") == "running":
@@ -480,7 +498,12 @@ def register_student_routes(app, csrf, limiter):
 
         def _do_plan():
             try:
-                plan = generate_study_plan(courses_data, preferences)
+                plan = generate_study_plan(
+                    courses_data, preferences,
+                    schedule_settings=schedule_list or None,
+                    course_difficulties=course_difficulties or None,
+                    incomplete_assignments=incomplete or None,
+                )
                 if not plan.get("daily_plan"):
                     raise ValueError("AI returned an empty plan")
                 plan_id = sdb.save_study_plan(client_id, plan, preferences)
@@ -675,28 +698,37 @@ def register_student_routes(app, csrf, limiter):
         # Today's plan
         today_plan = None
         today_sessions_html = ""
+        today_assignment_progress = {}
         if plan_row:
             today_str = datetime.now().strftime("%Y-%m-%d")
             for day in plan_row["plan_json"].get("daily_plan", []):
                 if day.get("date") == today_str:
                     today_plan = day
                     break
+            if today_plan:
+                ap = sdb.get_assignment_progress(cid, today_str)
+                today_assignment_progress = {r["session_index"]: bool(r["completed"]) for r in ap}
 
         if today_plan:
-            for s in today_plan.get("sessions", []):
+            sessions = today_plan.get("sessions", [])
+            for idx, s in enumerate(sessions):
                 prio_colors = {"high": "#EF4444", "medium": "#F59E0B", "low": "#10B981"}
                 pc = prio_colors.get(s.get("priority", "medium"), "#94A3B8")
+                checked = "checked" if today_assignment_progress.get(idx, False) else ""
+                strike = "text-decoration:line-through;opacity:0.6;" if today_assignment_progress.get(idx, False) else ""
                 today_sessions_html += f"""
-                <div style="background:var(--card);border:1px solid var(--border);border-left:4px solid {pc};border-radius:var(--radius-sm);padding:14px 18px;margin-bottom:10px;">
+                <div style="background:var(--card);border:1px solid var(--border);border-left:4px solid {pc};border-radius:var(--radius-sm);padding:14px 18px;margin-bottom:10px;{strike}" id="dash-session-{idx}">
                   <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <input type="checkbox" {checked} onchange="toggleDashAssignment({idx},this.checked)"
+                        style="width:18px;height:18px;cursor:pointer;accent-color:var(--primary);">
                       <span style="font-weight:700;color:var(--text);">{_esc(s.get('course',''))}</span>
-                      <span style="color:var(--text-muted);font-size:13px;margin-left:8px;">{s.get('hours',0)}h &middot; {s.get('type','study')}</span>
+                      <span style="color:var(--text-muted);font-size:13px;">{s.get('hours',0)}h &middot; {s.get('type','study')}</span>
                     </div>
                     <span style="background:{pc}18;color:{pc};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;">{s.get('priority','').upper()}</span>
                   </div>
-                  <div style="color:var(--text-secondary);font-size:14px;margin-top:6px;">{_esc(s.get('topic',''))}</div>
-                  {"<div style='color:var(--text-muted);font-size:12px;margin-top:4px;font-style:italic;'>" + _esc(s.get('reason','')) + "</div>" if s.get('reason') else ""}
+                  <div style="color:var(--text-secondary);font-size:14px;margin-top:6px;margin-left:26px;">{_esc(s.get('topic',''))}</div>
+                  {"<div style='color:var(--text-muted);font-size:12px;margin-top:4px;margin-left:26px;font-style:italic;'>" + _esc(s.get('reason','')) + "</div>" if s.get('reason') else ""}
                 </div>"""
         else:
             today_sessions_html = """
@@ -796,6 +828,11 @@ def register_student_routes(app, csrf, limiter):
             <div style="font-size:28px;margin-bottom:6px;">&#128197;</div>
             <div style="font-weight:600;font-size:13px;color:var(--text);">Study Plan</div>
             <div style="font-size:11px;color:var(--text-muted);">AI-generated</div>
+          </a>
+          <a href="/student/schedule" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#128337;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">Schedule</div>
+            <div style="font-size:11px;color:var(--text-muted);">Times & Difficulty</div>
           </a>
         </div>
 
@@ -909,6 +946,24 @@ def register_student_routes(app, csrf, limiter):
         async function markComplete() {{
           var r = await fetch('/api/student/progress/complete', {{method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({{}})}});
           if (r.ok) {{ alert('Today marked as complete!'); location.reload(); }}
+        }}
+        async function toggleDashAssignment(idx, completed) {{
+          var today = new Date().toISOString().split('T')[0];
+          var row = document.getElementById('dash-session-' + idx);
+          if (completed) {{
+            row.style.textDecoration = 'line-through';
+            row.style.opacity = '0.6';
+          }} else {{
+            row.style.textDecoration = '';
+            row.style.opacity = '1';
+          }}
+          try {{
+            await fetch('/api/student/assignments/toggle', {{
+              method: 'POST',
+              headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ date: today, session_index: idx, completed: completed }})
+            }});
+          }} catch(e) {{}}
         }}
         </script>
         """, active_page="student_dashboard")
@@ -1530,6 +1585,15 @@ def register_student_routes(app, csrf, limiter):
         progress = sdb.get_progress(_cid())
         completed_dates = set(p["plan_date"] for p in progress if p.get("completed"))
 
+        # Gather assignment-level progress for all plan dates
+        all_assignment_progress = {}
+        if plan_row:
+            for day in plan_row["plan_json"].get("daily_plan", []):
+                d = day.get("date", "")
+                if d:
+                    ap = sdb.get_assignment_progress(_cid(), d)
+                    all_assignment_progress[d] = {r["session_index"]: bool(r["completed"]) for r in ap}
+
         content = ""
         if not plan_row:
             content = """
@@ -1542,27 +1606,71 @@ def register_student_routes(app, csrf, limiter):
         else:
             daily = plan_row["plan_json"].get("daily_plan", [])
             days_html = ""
-            for day in daily[:30]:  # Show next 30 days
+            for day in daily[:30]:
                 d = day.get("date", "")
-                done = d in completed_dates
-                icon = "&#10003;" if done else "&#9744;"
-                bg = "var(--green-light)" if done else "var(--card)"
-                border_c = "var(--green)" if done else "var(--border)"
-                sessions = ""
-                for s in day.get("sessions", []):
-                    sessions += f"<div style='font-size:13px;color:var(--text-secondary);'>{_esc(s.get('course',''))} — {_esc(s.get('topic',''))} ({s.get('hours',0)}h)</div>"
+                sessions = day.get("sessions", [])
+                ap = all_assignment_progress.get(d, {})
+
+                # Check if all sessions are complete
+                all_done = len(sessions) > 0 and all(ap.get(i, False) for i in range(len(sessions)))
+                is_free = len(sessions) == 0
+
+                if is_free:
+                    icon = "&#127947;"
+                    bg = "var(--card)"
+                    border_c = "var(--border)"
+                elif all_done:
+                    icon = "&#10003;"
+                    bg = "var(--green-light, #D1FAE5)"
+                    border_c = "var(--green, #10B981)"
+                else:
+                    icon = "&#9744;"
+                    bg = "var(--card)"
+                    border_c = "var(--border)"
+
+                sessions_html = ""
+                if is_free:
+                    sessions_html = "<div style='font-size:13px;color:var(--text-muted);font-style:italic;padding:4px 0;'>Free day — no study scheduled</div>"
+                else:
+                    for idx, s in enumerate(sessions):
+                        checked = "checked" if ap.get(idx, False) else ""
+                        prio_colors = {"high": "#EF4444", "medium": "#F59E0B", "low": "#10B981"}
+                        pc = prio_colors.get(s.get("priority", "medium"), "#94A3B8")
+                        strike = "text-decoration:line-through;opacity:0.6;" if ap.get(idx, False) else ""
+                        sessions_html += f"""
+                        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);{strike}" id="session-{d}-{idx}">
+                          <input type="checkbox" {checked} onchange="toggleAssignment('{d}',{idx},this.checked)"
+                            style="width:18px;height:18px;cursor:pointer;accent-color:var(--primary);">
+                          <span style="font-weight:600;color:var(--text);">{_esc(s.get('course',''))}</span>
+                          <span style="color:var(--text-secondary);font-size:13px;">{_esc(s.get('topic',''))}</span>
+                          <span style="margin-left:auto;font-size:12px;color:var(--text-muted);">{s.get('hours',0)}h</span>
+                          <span style="background:{pc}18;color:{pc};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">{s.get('priority','').upper()}</span>
+                        </div>"""
+
+                completed_count = sum(1 for i in range(len(sessions)) if ap.get(i, False))
+                progress_text = f"{completed_count}/{len(sessions)}" if sessions else ""
+
                 days_html += f"""
                 <div style="background:{bg};border:1px solid {border_c};border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:8px;">
-                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:{'8px' if sessions else '0'};">
                     <span style="font-weight:700;">{icon} {day.get('day_name','')} {d}</span>
-                    <span style="font-size:13px;color:var(--text-muted);">{day.get('total_hours', 0)}h</span>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span style="font-size:12px;color:var(--text-muted);">{progress_text}</span>
+                      <span style="font-size:13px;color:var(--text-muted);">{day.get('total_hours', 0)}h</span>
+                    </div>
                   </div>
-                  {sessions}
+                  {sessions_html}
                 </div>"""
             content = f"""
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
               <span style="font-size:13px;color:var(--text-muted);">Generated: {plan_row.get('generated_at','?')}</span>
-              <button onclick="generatePlan()" class="btn btn-outline btn-sm" id="plan-btn">&#128260; Regenerate</button>
+              <div style="display:flex;gap:8px;">
+                <a href="/student/schedule" class="btn btn-outline btn-sm">&#128337; Schedule & Difficulty</a>
+                <button onclick="generatePlan()" class="btn btn-outline btn-sm" id="plan-btn">&#128260; Regenerate</button>
+              </div>
+            </div>
+            <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--text-muted);">
+              &#128161; Check off each assignment as you complete it. Incomplete assignments will be rolled over when the plan regenerates at midnight.
             </div>
             {days_html}"""
 
@@ -1570,6 +1678,23 @@ def register_student_routes(app, csrf, limiter):
         <h1 style="margin-bottom:20px;">&#128197; Study Plan</h1>
         <div class="card">{content}</div>
         <script>
+        async function toggleAssignment(date, idx, completed) {{
+          var row = document.getElementById('session-' + date + '-' + idx);
+          if (completed) {{
+            row.style.textDecoration = 'line-through';
+            row.style.opacity = '0.6';
+          }} else {{
+            row.style.textDecoration = '';
+            row.style.opacity = '1';
+          }}
+          try {{
+            await fetch('/api/student/assignments/toggle', {{
+              method: 'POST',
+              headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ date: date, session_index: idx, completed: completed }})
+            }});
+          }} catch(e) {{ console.error('Failed to save assignment progress:', e); }}
+        }}
         async function generatePlan() {{
           var btn = document.getElementById('plan-btn');
           btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
@@ -2299,6 +2424,253 @@ def register_student_routes(app, csrf, limiter):
         }}
         </script>
         """, active_page="student_canvas")
+
+    # ── Schedule settings (per-day availability) ────────────
+
+    @app.route("/api/student/schedule", methods=["GET"])
+    def student_get_schedule():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        settings = sdb.get_schedule_settings(_cid())
+        # Build a full week map (0=Mon..6=Sun), unset days = full free day
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        result = []
+        settings_map = {s["day_of_week"]: s for s in settings}
+        for i in range(7):
+            if i in settings_map:
+                s = settings_map[i]
+                result.append({
+                    "day": i,
+                    "day_name": days[i],
+                    "hours": s["available_hours"],
+                    "free": bool(s["is_free_day"]),
+                })
+            else:
+                # Unset = full free day
+                result.append({
+                    "day": i,
+                    "day_name": days[i],
+                    "hours": 0,
+                    "free": True,
+                })
+        return jsonify({"schedule": result})
+
+    @app.route("/api/student/schedule", methods=["PUT"])
+    def student_set_schedule():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        settings = data.get("schedule", [])
+        if not isinstance(settings, list):
+            return jsonify({"error": "schedule must be a list"}), 400
+        cleaned = []
+        for s in settings:
+            day = int(s.get("day", -1))
+            if day < 0 or day > 6:
+                continue
+            cleaned.append({
+                "day": day,
+                "hours": max(0, min(24, float(s.get("hours", 0)))),
+                "free": bool(s.get("free", False)),
+            })
+        sdb.save_schedule_settings(_cid(), cleaned)
+        return jsonify({"ok": True})
+
+    # ── Course difficulty ───────────────────────────────────
+
+    @app.route("/api/student/courses/<int:course_id>/difficulty", methods=["PUT"])
+    def student_set_difficulty(course_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Not found"}), 404
+        data = request.get_json(force=True)
+        difficulty = int(data.get("difficulty", 3))
+        sdb.set_course_difficulty(_cid(), course_id, difficulty)
+        return jsonify({"ok": True, "difficulty": max(1, min(5, difficulty))})
+
+    # ── Assignment-level completion ─────────────────────────
+
+    @app.route("/api/student/assignments/toggle", methods=["POST"])
+    def student_toggle_assignment():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        plan_date = data.get("date")
+        session_index = data.get("session_index")
+        completed = data.get("completed", True)
+        if plan_date is None or session_index is None:
+            return jsonify({"error": "date and session_index are required"}), 400
+        sdb.toggle_assignment_complete(_cid(), plan_date, int(session_index), bool(completed))
+        return jsonify({"ok": True})
+
+    @app.route("/api/student/assignments/progress", methods=["GET"])
+    def student_assignment_progress():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        plan_date = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+        progress = sdb.get_assignment_progress(_cid(), plan_date)
+        return jsonify({"progress": progress, "date": plan_date})
+
+    @app.route("/api/student/assignments/incomplete", methods=["GET"])
+    def student_incomplete_assignments():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        today = datetime.now().strftime("%Y-%m-%d")
+        incomplete = sdb.get_incomplete_assignments(_cid(), today)
+        return jsonify({"incomplete": incomplete})
+
+    # ── Schedule settings page ──────────────────────────────
+
+    @app.route("/student/schedule")
+    def student_schedule_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        settings = sdb.get_schedule_settings(_cid())
+        settings_map = {s["day_of_week"]: s for s in settings}
+        courses = sdb.get_courses(_cid())
+
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        day_rows = ""
+        for i in range(7):
+            s = settings_map.get(i, {})
+            hours = s.get("available_hours", 0) if s else 0
+            is_free = s.get("is_free_day", True) if not s else bool(s.get("is_free_day", 0))
+            # If no settings saved at all, default: unset = free
+            if not settings:
+                is_free = True
+                hours = 0
+            checked = "checked" if is_free else ""
+            day_rows += f"""
+            <div class="schedule-row" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;">
+              <span style="width:100px;font-weight:600;color:var(--text);">{days[i]}</span>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;min-width:100px;">
+                <input type="checkbox" class="free-day-check" data-day="{i}" {checked} onchange="toggleFreeDay({i},this.checked)">
+                <span style="font-size:13px;color:var(--text-muted);">Free day</span>
+              </label>
+              <div id="hours-group-{i}" style="display:flex;align-items:center;gap:8px;{'opacity:0.3;pointer-events:none;' if is_free else ''}">
+                <label style="font-size:12px;color:var(--text-muted);">Study hours:</label>
+                <input type="number" id="hours-{i}" value="{hours}" min="0" max="24" step="0.5" class="edit-input" style="width:70px;" onchange="updateSchedule()">
+              </div>
+            </div>"""
+
+        # Course difficulty section
+        diff_rows = ""
+        for c in courses:
+            diff = c.get("difficulty", 3) or 3
+            stars = ""
+            for star in range(1, 6):
+                active = "color:var(--primary);font-weight:700;" if star <= diff else "color:var(--border);"
+                stars += f'<span class="diff-star" data-course="{c["id"]}" data-val="{star}" style="cursor:pointer;font-size:20px;{active}" onclick="setDiff({c["id"]},{star})">&#9733;</span>'
+            diff_rows += f"""
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;">
+              <span style="font-weight:600;">{_esc(c['name'])}</span>
+              <div style="display:flex;align-items:center;gap:4px;">
+                {stars}
+                <span id="diff-label-{c['id']}" style="font-size:12px;color:var(--text-muted);margin-left:8px;min-width:60px;">
+                  {['','Very Easy','Easy','Medium','Hard','Very Hard'][diff]}
+                </span>
+              </div>
+            </div>"""
+
+        if not diff_rows:
+            diff_rows = "<p style='color:var(--text-muted);text-align:center;padding:16px;'>No courses synced yet.</p>"
+
+        return _s_render("Study Schedule", f"""
+        <h1 style="margin-bottom:20px;">&#128197; Study Schedule & Difficulty</h1>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+          <div class="card">
+            <div class="card-header">
+              <h2>&#128337; Weekly Availability</h2>
+              <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0;">Set your available study hours for each day. Days left unconfigured are treated as free days.</p>
+            </div>
+            {day_rows}
+            <button onclick="saveSchedule()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="save-sched-btn">Save Schedule</button>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>&#9733; Course Difficulty</h2>
+              <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0;">Rate difficulty (1-5 stars). Harder courses get more study time in the AI plan.</p>
+            </div>
+            {diff_rows}
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div style="background:var(--bg);border-radius:var(--radius-sm);padding:14px 18px;">
+            <p style="font-size:13px;color:var(--text-muted);margin:0;">
+              &#128161; <b>How it works:</b> When you generate a study plan, the AI will respect your schedule &mdash; only assigning study time on days you're available, for the number of hours you set. Harder courses get proportionally more study time. If you don't configure a day, it's considered a free day (no study).
+            </p>
+          </div>
+        </div>
+
+        <style>
+        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
+        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        .diff-star:hover {{ transform:scale(1.2); }}
+        </style>
+        <script>
+        function toggleFreeDay(day, free) {{
+          var g = document.getElementById('hours-group-' + day);
+          if (free) {{
+            g.style.opacity = '0.3';
+            g.style.pointerEvents = 'none';
+            document.getElementById('hours-' + day).value = 0;
+          }} else {{
+            g.style.opacity = '1';
+            g.style.pointerEvents = '';
+            if (parseFloat(document.getElementById('hours-' + day).value) === 0) {{
+              document.getElementById('hours-' + day).value = 4;
+            }}
+          }}
+        }}
+
+        async function saveSchedule() {{
+          var btn = document.getElementById('save-sched-btn');
+          btn.disabled = true; btn.innerHTML = '&#9203; Saving...';
+          var schedule = [];
+          for (var i = 0; i < 7; i++) {{
+            var free = document.querySelector('.free-day-check[data-day="' + i + '"]').checked;
+            var hours = parseFloat(document.getElementById('hours-' + i).value) || 0;
+            schedule.push({{ day: i, hours: free ? 0 : hours, free: free }});
+          }}
+          try {{
+            var r = await fetch('/api/student/schedule', {{
+              method: 'PUT',
+              headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ schedule: schedule }})
+            }});
+            if (r.ok) {{
+              btn.innerHTML = '&#10003; Saved!';
+              setTimeout(function() {{ btn.disabled = false; btn.innerHTML = 'Save Schedule'; }}, 1500);
+            }} else {{
+              alert('Failed to save'); btn.disabled = false; btn.innerHTML = 'Save Schedule';
+            }}
+          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = 'Save Schedule'; }}
+        }}
+
+        var diffLabels = ['', 'Very Easy', 'Easy', 'Medium', 'Hard', 'Very Hard'];
+        async function setDiff(courseId, val) {{
+          // Update stars visually
+          document.querySelectorAll('.diff-star[data-course="' + courseId + '"]').forEach(function(star) {{
+            var sv = parseInt(star.dataset.val);
+            star.style.color = sv <= val ? 'var(--primary)' : 'var(--border)';
+            star.style.fontWeight = sv <= val ? '700' : '400';
+          }});
+          document.getElementById('diff-label-' + courseId).textContent = diffLabels[val];
+          try {{
+            await fetch('/api/student/courses/' + courseId + '/difficulty', {{
+              method: 'PUT',
+              headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ difficulty: val }})
+            }});
+          }} catch(e) {{}}
+        }}
+        </script>
+        """, active_page="student_schedule")
 
     def _esc(s):
         """HTML-escape a string."""

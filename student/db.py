@@ -94,6 +94,28 @@ CREATE TABLE IF NOT EXISTS student_course_files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_student_files_course ON student_course_files(course_id);
+
+CREATE TABLE IF NOT EXISTS student_schedule_settings (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    day_of_week INTEGER NOT NULL,  -- 0=Monday .. 6=Sunday
+    available_hours REAL DEFAULT 0,
+    is_free_day BOOLEAN DEFAULT FALSE,
+    created_at  TIMESTAMP DEFAULT NOW(),
+    UNIQUE(client_id, day_of_week)
+);
+
+CREATE TABLE IF NOT EXISTS student_assignment_progress (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    plan_date       TEXT NOT NULL,
+    session_index   INTEGER NOT NULL,  -- index within that day's sessions
+    completed       BOOLEAN DEFAULT FALSE,
+    completed_at    TIMESTAMP,
+    UNIQUE(client_id, plan_date, session_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_student_assignment_client ON student_assignment_progress(client_id, plan_date);
 """
 
 STUDENT_SQLITE_SCHEMA = """
@@ -167,6 +189,28 @@ CREATE TABLE IF NOT EXISTS student_course_files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_student_files_course ON student_course_files(course_id);
+
+CREATE TABLE IF NOT EXISTS student_schedule_settings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    day_of_week INTEGER NOT NULL,
+    available_hours REAL DEFAULT 0,
+    is_free_day INTEGER DEFAULT 0,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(client_id, day_of_week)
+);
+
+CREATE TABLE IF NOT EXISTS student_assignment_progress (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    plan_date       TEXT NOT NULL,
+    session_index   INTEGER NOT NULL,
+    completed       INTEGER DEFAULT 0,
+    completed_at    TEXT,
+    UNIQUE(client_id, plan_date, session_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_student_assignment_client ON student_assignment_progress(client_id, plan_date);
 """
 
 
@@ -191,6 +235,7 @@ def _student_migrations():
         ("student_course_files", "exam_id", "INTEGER DEFAULT NULL"),
         ("student_study_progress", "focus_minutes", "INTEGER DEFAULT 0"),
         ("student_study_progress", "pages_read", "INTEGER DEFAULT 0"),
+        ("student_courses", "difficulty", "INTEGER DEFAULT 3"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -557,11 +602,138 @@ def get_focus_stats(client_id: int) -> dict:
         }
 
 
+# ── Schedule settings (per-day availability) ────────────────
+
+def save_schedule_settings(client_id: int, settings: list[dict]):
+    """Save weekly schedule settings.
+    settings: [{"day": 0, "hours": 4.0, "free": False}, ...]  (day 0=Mon..6=Sun)
+    """
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_schedule_settings WHERE client_id = %s", (client_id,))
+        for s in settings:
+            _exec(db,
+                  "INSERT INTO student_schedule_settings (client_id, day_of_week, available_hours, is_free_day) "
+                  "VALUES (%s, %s, %s, %s)",
+                  (client_id, s["day"], s.get("hours", 0), 1 if s.get("free") else 0))
+
+
+def get_schedule_settings(client_id: int) -> list[dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db, "SELECT * FROM student_schedule_settings WHERE client_id = %s ORDER BY day_of_week",
+            (client_id,),
+        )
+        return [dict(r) for r in rows]
+
+
+# ── Course difficulty ────────────────────────────────────────
+
+def set_course_difficulty(client_id: int, course_db_id: int, difficulty: int):
+    """Set difficulty 1-5 for a course."""
+    difficulty = max(1, min(5, difficulty))
+    with get_db() as db:
+        _exec(db, "UPDATE student_courses SET difficulty = %s WHERE id = %s AND client_id = %s",
+              (difficulty, course_db_id, client_id))
+
+
+def get_course_difficulty(client_id: int, course_db_id: int) -> int:
+    with get_db() as db:
+        val = _fetchval(
+            db, "SELECT difficulty FROM student_courses WHERE id = %s AND client_id = %s",
+            (course_db_id, client_id),
+        )
+        return val if val is not None else 3
+
+
+# ── Assignment-level progress ────────────────────────────────
+
+def toggle_assignment_complete(client_id: int, plan_date: str, session_index: int,
+                               completed: bool):
+    """Mark a specific session/assignment within a day as complete or incomplete."""
+    with get_db() as db:
+        existing = _fetchval(
+            db,
+            "SELECT id FROM student_assignment_progress WHERE client_id = %s AND plan_date = %s AND session_index = %s",
+            (client_id, plan_date, session_index),
+        )
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if existing:
+            _exec(db,
+                  "UPDATE student_assignment_progress SET completed = %s, completed_at = %s WHERE id = %s",
+                  (1 if completed else 0, now_str if completed else None, existing))
+        else:
+            _exec(db,
+                  "INSERT INTO student_assignment_progress (client_id, plan_date, session_index, completed, completed_at) "
+                  "VALUES (%s, %s, %s, %s, %s)",
+                  (client_id, plan_date, session_index, 1 if completed else 0,
+                   now_str if completed else None))
+
+
+def get_assignment_progress(client_id: int, plan_date: str) -> list[dict]:
+    """Get completion status for all assignments on a given date."""
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT * FROM student_assignment_progress WHERE client_id = %s AND plan_date = %s ORDER BY session_index",
+            (client_id, plan_date),
+        )
+        return [dict(r) for r in rows]
+
+
+def get_incomplete_assignments(client_id: int, before_date: str) -> list[dict]:
+    """Get all incomplete assignments before a given date (for rollover)."""
+    with get_db() as db:
+        plan_row = _fetchone(
+            db,
+            "SELECT plan_json FROM student_study_plans WHERE client_id = %s ORDER BY generated_at DESC LIMIT 1",
+            (client_id,),
+        )
+        if not plan_row:
+            return []
+        plan = json.loads(plan_row["plan_json"]) if isinstance(plan_row["plan_json"], str) else plan_row["plan_json"]
+        daily_plan = plan.get("daily_plan", [])
+
+        incomplete = []
+        for day in daily_plan:
+            d = day.get("date", "")
+            if d >= before_date:
+                continue
+            sessions = day.get("sessions", [])
+            progress = _fetchall(
+                db,
+                "SELECT session_index, completed FROM student_assignment_progress "
+                "WHERE client_id = %s AND plan_date = %s",
+                (client_id, d),
+            )
+            completed_indices = {r["session_index"] for r in progress if r["completed"]}
+            for idx, s in enumerate(sessions):
+                if idx not in completed_indices:
+                    incomplete.append({
+                        "date": d,
+                        "session_index": idx,
+                        "course": s.get("course", ""),
+                        "topic": s.get("topic", ""),
+                        "hours": s.get("hours", 0),
+                        "type": s.get("type", "study"),
+                        "priority": s.get("priority", "medium"),
+                    })
+        return incomplete
+
+
+def get_all_student_client_ids() -> list[int]:
+    """Return all client IDs that have at least one study plan."""
+    with get_db() as db:
+        rows = _fetchall(db, "SELECT DISTINCT client_id FROM student_study_plans", ())
+        return [r["client_id"] for r in rows]
+
+
 # ── Cleanup ─────────────────────────────────────────────────
 
 def delete_student_data(client_id: int):
     """Remove all student data for a client (account deletion)."""
     with get_db() as db:
+        _exec(db, "DELETE FROM student_assignment_progress WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM student_schedule_settings WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_study_progress WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_study_plans WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_exams WHERE client_id = %s", (client_id,))

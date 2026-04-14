@@ -159,6 +159,9 @@ COURSE MATERIAL:
 def generate_study_plan(
     courses_data: list[dict],
     preferences: dict | None = None,
+    schedule_settings: list[dict] | None = None,
+    course_difficulties: dict | None = None,
+    incomplete_assignments: list[dict] | None = None,
 ) -> dict:
     """
     Given analyzed data for ALL courses, generate a unified study plan.
@@ -172,6 +175,9 @@ def generate_study_plan(
             "weak_subjects": ["Cálculo"],
             "exam_prep_days": 7,
         }
+        schedule_settings: [{day: 0, hours: 4.0, free: False}, ...] per weekday
+        course_difficulties: {"Course Name": 5, ...}  (1-5 scale)
+        incomplete_assignments: [{"course": ..., "topic": ..., "hours": ...}, ...]
 
     Returns:
         {
@@ -196,6 +202,8 @@ def generate_study_plan(
     hours_per_day = prefs.get("hours_per_day", 4)
     prep_days = prefs.get("exam_prep_days", 7)
     weak = prefs.get("weak_subjects", [])
+    difficulties = course_difficulties or {}
+    incomplete = incomplete_assignments or []
 
     # Build exam timeline
     all_exams = []
@@ -214,6 +222,36 @@ def generate_study_plan(
 
     today = date.today().isoformat()
 
+    # Build schedule context
+    schedule_ctx = ""
+    if schedule_settings:
+        day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        lines = []
+        for s in schedule_settings:
+            dn = day_names[s["day"]] if 0 <= s["day"] <= 6 else f"Day {s['day']}"
+            if s.get("free"):
+                lines.append(f"  - {dn}: FREE DAY (no study)")
+            else:
+                lines.append(f"  - {dn}: {s.get('hours', 0)}h available")
+        schedule_ctx = "WEEKLY SCHEDULE (student-configured):\n" + "\n".join(lines)
+    else:
+        schedule_ctx = f"No weekly schedule set — use {hours_per_day}h per day as default."
+
+    # Build difficulty context
+    diff_ctx = ""
+    if difficulties:
+        diff_lines = [f"  - {name}: {level}/5" for name, level in difficulties.items()]
+        diff_ctx = "\nCOURSE DIFFICULTY RATINGS (1=easy, 5=very hard):\n" + "\n".join(diff_lines)
+        diff_ctx += "\nAllocate proportionally MORE study time to higher-difficulty courses."
+
+    # Build incomplete assignments context
+    incomplete_ctx = ""
+    if incomplete:
+        inc_lines = [f"  - [{a['date']}] {a['course']}: {a['topic']} ({a['hours']}h, was {a['priority']} priority)"
+                     for a in incomplete[:20]]
+        incomplete_ctx = "\nINCOMPLETE ASSIGNMENTS FROM PREVIOUS DAYS (must be rescheduled):\n" + "\n".join(inc_lines)
+        incomplete_ctx += "\nThese MUST be included in the new plan — prioritize them."
+
     prompt = f"""You are an expert academic study planner. Today is {today}.
 
 A student has these courses with their exam schedules and topics:
@@ -221,6 +259,10 @@ A student has these courses with their exam schedules and topics:
 {courses_summary}
 
 Student preferences: {prefs_str}
+
+{schedule_ctx}
+{diff_ctx}
+{incomplete_ctx}
 
 Create a detailed daily study plan for the NEXT 14 DAYS ONLY (from {today}).
 Return ONLY valid JSON:
@@ -261,14 +303,17 @@ Return ONLY valid JSON:
 
 Rules:
 - ONLY 14 days of daily_plan entries, no more
-- Allocate {hours_per_day}h per day max
+- RESPECT the weekly schedule: if a day is marked FREE, set total_hours=0 and sessions=[] for that day
+- For non-free days, allocate EXACTLY the hours the student specified (not more)
+- If no schedule is set, use {hours_per_day}h per day max
 - Start intensive review {prep_days} days before each exam
 - Weight study time by exam weight (a 40% final gets more time than a 10% quiz)
+- Courses with higher difficulty ratings (1-5) get proportionally more study time
 - Weak subjects get 50% more study time: {weak}
+- If there are incomplete assignments from previous days, schedule them FIRST with high priority
 - Alternate between subjects to avoid burnout (max 3h same subject)
 - Include specific topics, not just "study for exam"
-- Sunday is a lighter day (half study time)
-- Mark priority based on how close the exam is and its weight
+- Mark priority based on how close the exam is, its weight, AND course difficulty
 - Keep each session description concise (under 15 words)
 - Return ONLY JSON, no markdown fences"""
 

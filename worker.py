@@ -412,8 +412,79 @@ def sync_mail_hub():
         print(f"[MAIL HUB] Background sync error (non-fatal): {e}")
 
 
+def refresh_student_plans():
+    """Midnight job: for each student with a plan, check for incomplete
+    assignments and regenerate the study plan with those rolled over."""
+    try:
+        from student import db as sdb
+        from student.analyzer import generate_study_plan
+        import json
+        from datetime import datetime
+
+        client_ids = sdb.get_all_student_client_ids()
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        for client_id in client_ids:
+            try:
+                # Check if there are incomplete assignments
+                incomplete = sdb.get_incomplete_assignments(client_id, today)
+
+                # Get course data
+                courses = sdb.get_courses(client_id)
+                courses_data = []
+                course_difficulties = {}
+                for c in courses:
+                    analysis = json.loads(c["analysis_json"]) if isinstance(c["analysis_json"], str) else c["analysis_json"]
+                    if analysis and analysis.get("course_name"):
+                        courses_data.append(analysis)
+                        diff = c.get("difficulty", 3) or 3
+                        course_difficulties[analysis["course_name"]] = diff
+
+                if not courses_data:
+                    continue
+
+                # Get schedule settings
+                schedule_settings = sdb.get_schedule_settings(client_id)
+                schedule_list = []
+                if schedule_settings:
+                    for s in schedule_settings:
+                        schedule_list.append({
+                            "day": s["day_of_week"],
+                            "hours": s["available_hours"],
+                            "free": bool(s["is_free_day"]),
+                        })
+
+                # Get latest preferences
+                plan_row = sdb.get_latest_plan(client_id)
+                preferences = plan_row.get("preferences_json", {}) if plan_row else {}
+
+                # Regenerate
+                plan = generate_study_plan(
+                    courses_data, preferences,
+                    schedule_settings=schedule_list or None,
+                    course_difficulties=course_difficulties or None,
+                    incomplete_assignments=incomplete or None,
+                )
+                if plan.get("daily_plan"):
+                    sdb.save_study_plan(client_id, plan, preferences)
+                    print(f"[STUDENT] Refreshed study plan for client {client_id}"
+                          f" ({len(incomplete)} incomplete assignments rolled over)")
+            except Exception as e:
+                print(f"[STUDENT] Plan refresh failed for client {client_id}: {e}")
+    except Exception as e:
+        print(f"[STUDENT] Midnight plan refresh error (non-fatal): {e}")
+
+
 if __name__ == "__main__":
     init_db()
+
+    # Init student tables too
+    try:
+        from student.db import init_student_db
+        init_student_db()
+    except Exception as e:
+        print(f"Student DB init skipped: {e}")
+
     print("Email worker started. Checking every 5 minutes...")
     print("Daily limits are per-plan (free=50, growth=200, pro=500, unlimited=∞)")
 
@@ -422,6 +493,7 @@ if __name__ == "__main__":
     scheduler.add_job(process_snoozes, "interval", minutes=1, id="process_snoozes")
     scheduler.add_job(send_scheduled, "interval", minutes=1, id="send_scheduled")
     scheduler.add_job(sync_mail_hub, "interval", minutes=3, id="sync_mail_hub")
+    scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
 
     # Run once immediately
     send_batch()
