@@ -878,11 +878,11 @@ LAYOUT = """<!DOCTYPE html>
             <a href="/student/focus">&#127917; Focus Mode</a>
             <a href="/student/gpa">&#127891; GPA Calculator</a>
             <a href="/student/schedule">&#128337; Schedule</a>
+            <a href="/student/weak-topics">&#127919; Weak Topics</a>
           </div>
         </div>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <a href="/student/plan" {% if active_page == 'student_plan' %}class="active"{% endif %}>&#128197; Plan</a>
-        <a href="/student/weak-topics" {% if active_page == 'student_weak_topics' %}class="active"{% endif %}>&#127919; Weak Topics</a>
         <div class="nav-divider"></div>
         <a href="/student/flashcards" {% if active_page == 'student_flashcards' %}class="active"{% endif %}>&#127183; Flashcards</a>
         <a href="/student/quizzes" {% if active_page == 'student_quizzes' %}class="active"{% endif %}>&#128221; Quizzes</a>
@@ -890,7 +890,6 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/chat" {% if active_page == 'student_chat' %}class="active"{% endif %}>&#129302; Tutor</a>
         <a href="/student/achievements" {% if active_page == 'student_achievements' %}class="active"{% endif %}>&#127942; XP</a>
         <div class="nav-divider"></div>
-        <a href="/student/canvas-settings" {% if active_page == 'student_canvas' %}class="active"{% endif %}>&#128279; Canvas</a>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; Mail</a>
         <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881;</a>
         {% else %}
