@@ -862,65 +862,6 @@ def register_student_routes(app, csrf, limiter):
           <div class="stat-card" style="background:var(--card);border:1px solid var(--border);"><div class="num" style="font-size:14px;color:{canvas_color};">{canvas_status}</div><div class="label">Canvas</div></div>
         </div>
 
-        <!-- Quick actions -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px;">
-          <a href="/student/focus" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#127917;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">Focus Mode</div>
-            <div style="font-size:11px;color:var(--text-muted);">Pomodoro &amp; Pages</div>
-          </a>
-          <a href="/student/gpa" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#127891;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">GPA Calculator</div>
-            <div style="font-size:11px;color:var(--text-muted);">Track your grades</div>
-          </a>
-          <a href="/student/courses" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#128218;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">My Courses</div>
-            <div style="font-size:11px;color:var(--text-muted);">{len(courses)} synced</div>
-          </a>
-          <a href="/student/plan" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#128197;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">Study Plan</div>
-            <div style="font-size:11px;color:var(--text-muted);">AI-generated</div>
-          </a>
-          <a href="/student/schedule" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#128337;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">Schedule</div>
-            <div style="font-size:11px;color:var(--text-muted);">Times & Difficulty</div>
-          </a>
-          <a href="/student/flashcards" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#127183;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">Flashcards</div>
-            <div style="font-size:11px;color:var(--text-muted);">AI-generated</div>
-          </a>
-          <a href="/student/quizzes" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#128221;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">Quizzes</div>
-            <div style="font-size:11px;color:var(--text-muted);">Practice exams</div>
-          </a>
-          <a href="/student/notes" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#128214;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">AI Notes</div>
-            <div style="font-size:11px;color:var(--text-muted);">Study summaries</div>
-          </a>
-          <a href="/student/chat" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#129302;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">AI Tutor</div>
-            <div style="font-size:11px;color:var(--text-muted);">Ask anything</div>
-          </a>
-          <a href="/student/youtube" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#127916;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">YouTube</div>
-            <div style="font-size:11px;color:var(--text-muted);">Video → notes</div>
-          </a>
-          <a href="/student/weak-topics" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
-            <div style="font-size:28px;margin-bottom:6px;">&#127919;</div>
-            <div style="font-weight:600;font-size:13px;color:var(--text);">Weak Topics</div>
-            <div style="font-size:11px;color:var(--text-muted);">Focus areas</div>
-          </a>
-        </div>
-
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
           <div class="card">
             <div class="card-header"><h2>&#128197; Today's Study Plan</h2></div>
@@ -4200,8 +4141,9 @@ def register_student_routes(app, csrf, limiter):
         # Get transcript
         try:
             from youtube_transcript_api import YouTubeTranscriptApi
-            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['es', 'en', 'pt', 'fr', 'de'])
-            transcript = " ".join(t["text"] for t in transcript_list)
+            api = YouTubeTranscriptApi()
+            fetched = api.fetch(video_id, languages=['es', 'en', 'pt', 'fr', 'de'])
+            transcript = " ".join(s.text for s in fetched.snippets)
             video_title = data.get("title", f"YouTube Video {video_id}")
         except Exception as e:
             log.error("YouTube transcript failed for %s: %s", url, e)
@@ -4264,11 +4206,11 @@ def register_student_routes(app, csrf, limiter):
             if imp.get("deck_id"):
                 links.append(f'<a href="/student/flashcards/{imp["deck_id"]}">🃏 Flashcards</a>')
             imports_html += f"""
-            <div style="padding:12px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;
-                        display:flex;justify-content:space-between;align-items:center">
+            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;
+                        display:flex;justify-content:space-between;align-items:center;background:var(--card);color:var(--text)">
               <div>
                 <strong>{status_badge} {_esc(imp.get('video_title','Video'))}</strong>
-                <div style="font-size:13px;color:#64748b">{_esc(str(imp.get('created_at',''))[:10])}</div>
+                <div style="font-size:13px;color:var(--text-muted)">{_esc(str(imp.get('created_at',''))[:10])}</div>
               </div>
               <div style="display:flex;gap:8px">{' '.join(links)}</div>
             </div>"""
@@ -4276,16 +4218,16 @@ def register_student_routes(app, csrf, limiter):
         return _s_render("YouTube → Notes", f"""
         <div style="max-width:800px;margin:0 auto">
           <h2><span style="font-size:1.3em">🎬</span> YouTube → Study Materials</h2>
-          <p style="color:#64748b;margin-bottom:20px">
+          <p style="color:var(--text-muted);margin-bottom:20px">
             Paste a YouTube link and we'll generate notes and flashcards from the video transcript.
           </p>
-          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:24px">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
             <input id="yt-url" type="text" placeholder="https://www.youtube.com/watch?v=..."
-              style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;margin-bottom:8px;font-size:15px">
+              style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;font-size:15px;background:var(--bg);color:var(--text)">
             <input id="yt-title" type="text" placeholder="Video title (optional)"
-              style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;margin-bottom:8px">
+              style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg);color:var(--text)">
             <select id="yt-course"
-              style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;margin-bottom:8px">
+              style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg);color:var(--text)">
               <option value="">No course</option>
               {course_opts}
             </select>
@@ -4299,8 +4241,8 @@ def register_student_routes(app, csrf, limiter):
               🎬 Import Video
             </button>
           </div>
-          <h3>Previous Imports</h3>
-          <div id="yt-list">{imports_html if imports_html else '<p style="color:#94a3b8">No imports yet.</p>'}</div>
+          <h3 style="color:var(--text)">Previous Imports</h3>
+          <div id="yt-list">{imports_html if imports_html else '<p style="color:var(--text-muted)">No imports yet.</p>'}</div>
         </div>
         <script>
         async function importYT() {{
@@ -4361,14 +4303,14 @@ def register_student_routes(app, csrf, limiter):
             score = t.get("score", 0)
             color = "#ef4444" if score < 50 else "#f59e0b" if score < 75 else "#22c55e"
             weak_html += f"""
-            <div style="padding:12px 16px;border-left:4px solid {color};background:#f8fafc;
+            <div style="padding:12px 16px;border-left:4px solid {color};background:var(--card);
                         border-radius:0 8px 8px 0;margin-bottom:8px">
               <div style="display:flex;justify-content:space-between;align-items:center">
-                <strong>{_esc(t.get('topic',''))}</strong>
+                <strong style="color:var(--text)">{_esc(t.get('topic',''))}</strong>
                 <span style="background:{color};color:#fff;padding:2px 10px;border-radius:12px;
                              font-size:13px;font-weight:600">{score}%</span>
               </div>
-              <div style="font-size:13px;color:#64748b;margin-top:2px">
+              <div style="font-size:13px;color:var(--text-muted);margin-top:2px">
                 {_esc(t.get('course',''))} — {_esc(t.get('source',''))}
               </div>
             </div>"""
@@ -4378,13 +4320,13 @@ def register_student_routes(app, csrf, limiter):
         return _s_render("Weak Topics", f"""
         <div style="max-width:800px;margin:0 auto">
           <h2><span style="font-size:1.3em">🎯</span> Weak Topic Detector</h2>
-          <p style="color:#64748b;margin-bottom:20px">
+          <p style="color:var(--text-muted);margin-bottom:20px">
             Based on your flashcard accuracy and quiz scores, here are the topics that need more attention.
           </p>
           <div style="margin-bottom:24px">
-            {weak_html if weak_html else '<p style="color:#94a3b8">Not enough data yet — complete some quizzes and review flashcards!</p>'}
+            {weak_html if weak_html else '<p style="color:var(--text-muted)">Not enough data yet — complete some quizzes and review flashcards!</p>'}
           </div>
-          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">
             {recs}
           </div>
         </div>
@@ -4456,11 +4398,11 @@ def register_student_routes(app, csrf, limiter):
         badges_html = ""
         for b in badges:
             badges_html += f"""
-            <div style="text-align:center;padding:12px;background:#f8fafc;border-radius:12px;
-                        border:1px solid #e2e8f0;min-width:100px">
+            <div style="text-align:center;padding:12px;background:var(--card);border-radius:12px;
+                        border:1px solid var(--border);min-width:100px">
               <div style="font-size:2em">{b.get('emoji','🏅')}</div>
-              <div style="font-weight:600;font-size:13px;margin-top:4px">{_esc(b.get('name',''))}</div>
-              <div style="font-size:11px;color:#64748b">{_esc(b.get('desc',''))}</div>
+              <div style="font-weight:600;font-size:13px;margin-top:4px;color:var(--text)">{_esc(b.get('name',''))}</div>
+              <div style="font-size:11px;color:var(--text-muted)">{_esc(b.get('desc',''))}</div>
             </div>"""
 
         # All possible badges
@@ -4478,7 +4420,7 @@ def register_student_routes(app, csrf, limiter):
         for h in history:
             history_html += f"""
             <div style="display:flex;justify-content:space-between;padding:6px 0;
-                        border-bottom:1px solid #f1f5f9;font-size:14px">
+                        border-bottom:1px solid var(--border);font-size:14px;color:var(--text)">
               <span>{_esc(h.get('detail','') or h['action'])}</span>
               <span style="color:#22c55e;font-weight:600">+{h['xp']} XP</span>
             </div>"""
@@ -4501,17 +4443,17 @@ def register_student_routes(app, csrf, limiter):
 
           <!-- Streak -->
           <div style="display:flex;gap:16px;margin-bottom:24px">
-            <div style="flex:1;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;
+            <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;
                         padding:16px;text-align:center">
               <div style="font-size:2em">🔥</div>
               <div style="font-size:2em;font-weight:700;color:#ea580c">{streak}</div>
-              <div style="font-size:13px;color:#9a3412">Day Streak</div>
+              <div style="font-size:13px;color:var(--text-muted)">Day Streak</div>
             </div>
-            <div style="flex:1;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;
+            <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;
                         padding:16px;text-align:center">
               <div style="font-size:2em">🏅</div>
               <div style="font-size:2em;font-weight:700;color:#16a34a">{len(badges)}</div>
-              <div style="font-size:13px;color:#15803d">Badges Earned</div>
+              <div style="font-size:13px;color:var(--text-muted)">Badges Earned</div>
             </div>
           </div>
 
@@ -4528,9 +4470,9 @@ def register_student_routes(app, csrf, limiter):
           </div>
 
           <!-- XP History -->
-          <h3>📊 Recent Activity</h3>
-          <div style="background:#f8fafc;border-radius:12px;padding:16px">
-            {history_html if history_html else '<p style="color:#94a3b8">No activity yet.</p>'}
+          <h3 style="color:var(--text)">📊 Recent Activity</h3>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
+            {history_html if history_html else '<p style="color:var(--text-muted)">No activity yet.</p>'}
           </div>
         </div>
         """, active_page="student_achievements")
