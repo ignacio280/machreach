@@ -889,6 +889,8 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/quizzes" {% if active_page == 'student_quizzes' %}class="active"{% endif %}>&#128221; Quizzes</a>
         <a href="/student/notes" {% if active_page == 'student_notes' %}class="active"{% endif %}>&#128214; Notes</a>
         <a href="/student/chat" {% if active_page == 'student_chat' %}class="active"{% endif %}>&#129302; Tutor</a>
+        <a href="/student/smart-import" {% if active_page == 'student_smart_import' %}class="active"{% endif %}>&#128640; Import</a>
+        <a href="/student/exchange" {% if active_page == 'student_exchange' %}class="active"{% endif %}>&#128218; Exchange</a>
         <a href="/student/achievements" {% if active_page == 'student_achievements' %}class="active"{% endif %}>&#127942; XP</a>
         <div class="nav-divider"></div>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; Mail</a>
@@ -1331,6 +1333,43 @@ LAYOUT = """<!DOCTYPE html>
       "Rank": "Posición", "Student": "Estudiante",
       "No students on the leaderboard yet. Start earning XP!":
         "Aún no hay estudiantes en la clasificación. ¡Empieza a ganar XP!",
+      // Smart Import
+      "Smart Import": "Importación Inteligente",
+      "Drop a PDF or DOCX — we'll auto-generate notes, flashcards, and a quiz":
+        "Sube un PDF o DOCX — generaremos apuntes, tarjetas y un examen automáticamente",
+      "Drag & Drop your file here": "Arrastra y suelta tu archivo aquí",
+      "or click to browse": "o haz clic para buscar",
+      "Generate Notes + Flashcards + Quiz": "Generar Apuntes + Tarjetas + Examen",
+      "Processing your document...": "Procesando tu documento...",
+      "Study materials created!": "¡Materiales de estudio creados!",
+      "Import": "Importar",
+      // Study Exchange
+      "Study Exchange": "Intercambio de Apuntes",
+      "Browse & share study notes with other students":
+        "Navega y comparte apuntes con otros estudiantes",
+      "My Shared Notes": "Mis Apuntes Compartidos",
+      "Search notes...": "Buscar apuntes...", "Subject/Course": "Materia/Curso",
+      "Share": "Compartir", "Unpublish": "Despublicar",
+      "Public": "Público", "Private": "Privado",
+      "Fork to My Notes": "Copiar a Mis Apuntes", "Exchange": "Intercambio",
+      "No shared notes yet. Be the first to share!":
+        "Aún no hay apuntes compartidos. ¡Sé el primero en compartir!",
+      // Exam Simulator
+      "Exam Simulator": "Simulador de Examen",
+      "Start Exam": "Iniciar Examen",
+      "Exam Rules:": "Reglas del Examen:",
+      "Lock In Answer": "Confirmar Respuesta",
+      "Exam Complete!": "¡Examen Completado!",
+      "Question Review": "Revisión de Preguntas",
+      "Retake Exam": "Repetir Examen",
+      "Analytics": "Análisis",
+      "Avg per question": "Promedio por pregunta",
+      "Fastest answer": "Respuesta más rápida",
+      "Slowest answer": "Respuesta más lenta",
+      // SRS
+      "Spaced Repetition": "Repetición Espaciada",
+      "due": "pendientes", "Again": "Otra vez", "Hard": "Difícil",
+      "Good": "Bien", "Easy": "Fácil",
       // Dashboard
       "Today's Plan": "Plan de Hoy", "Upcoming Exams": "Próximos Exámenes",
       "Study Stats": "Estadísticas de Estudio", "Quick Actions": "Acciones Rápidas",

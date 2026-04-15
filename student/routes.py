@@ -2934,7 +2934,12 @@ def register_student_routes(app, csrf, limiter):
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
-        sdb.update_flashcard_progress(data["card_id"], data.get("correct", False))
+        quality = data.get("quality")  # 0-5 for SRS mode
+        correct = data.get("correct", False)
+        if quality is not None:
+            quality = max(0, min(5, int(quality)))
+            correct = quality >= 3
+        sdb.update_flashcard_progress(data["card_id"], correct, quality=quality)
         # Gamification — 1 XP per flashcard review
         sdb.award_xp(_cid(), "flashcard_review", 1, "Reviewed a flashcard")
         return jsonify({"ok": True})
@@ -3159,6 +3164,241 @@ def register_student_routes(app, csrf, limiter):
         sdb.delete_note(note_id, _cid())
         return jsonify({"ok": True})
 
+    # ── Smart Import (PDF Auto-Processing) ──────────────────
+
+    @app.route("/api/student/smart-import", methods=["POST"])
+    @limiter.limit("5 per minute")
+    def student_smart_import():
+        """Upload a PDF/DOCX and auto-generate notes + flashcards + quiz."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+
+        if "file" not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        f = request.files["file"]
+        if not f.filename:
+            return jsonify({"error": "Empty filename"}), 400
+
+        fname = f.filename
+        fl = fname.lower()
+        if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
+            return jsonify({"error": "Only PDF and DOCX files are supported"}), 400
+
+        content = f.read(15 * 1024 * 1024 + 1)
+        if len(content) > 15 * 1024 * 1024:
+            return jsonify({"error": "File too large (max 15MB)"}), 400
+
+        text = ""
+        try:
+            if fl.endswith(".pdf"):
+                text = extract_text_from_pdf(content)
+            elif fl.endswith((".docx", ".doc")):
+                text = extract_text_from_docx(content)
+        except Exception as e:
+            return jsonify({"error": f"Could not extract text: {e}"}), 400
+
+        if not text or len(text.strip()) < 50:
+            return jsonify({"error": "Could not extract enough readable text from this file"}), 400
+
+        subject = request.form.get("subject", fname.rsplit(".", 1)[0])
+        course_id = request.form.get("course_id")
+        course_id = int(course_id) if course_id else None
+
+        # Optionally save to course files
+        if course_id:
+            ftype = "pdf" if fl.endswith(".pdf") else "docx"
+            sdb.save_course_file(_cid(), course_id, fname, ftype, text)
+
+        results = {}
+
+        # 1) Generate notes
+        try:
+            note_result = generate_notes(course_name=subject, source_text=text[:12000])
+            if note_result.get("content_html"):
+                note_id = sdb.create_note(_cid(), note_result["title"], note_result["content_html"],
+                                          course_id=course_id, source_type="pdf-import")
+                results["note_id"] = note_id
+                results["note_title"] = note_result["title"]
+        except Exception as e:
+            log.warning("Smart import notes failed: %s", e)
+
+        # 2) Generate flashcards
+        try:
+            cards = generate_flashcards(course_name=subject, source_text=text[:12000], count=15)
+            if cards:
+                deck_id = sdb.create_flashcard_deck(_cid(), f"Flashcards: {subject}", course_id=course_id,
+                                                     source_type="pdf-import")
+                sdb.add_flashcards(deck_id, cards)
+                results["deck_id"] = deck_id
+                results["card_count"] = len(cards)
+        except Exception as e:
+            log.warning("Smart import flashcards failed: %s", e)
+
+        # 3) Generate quiz
+        try:
+            questions = generate_quiz(course_name=subject, source_text=text[:12000], difficulty="medium", count=10)
+            if questions:
+                quiz_id = sdb.create_quiz(_cid(), f"Quiz: {subject}", "medium", course_id=course_id)
+                sdb.add_quiz_questions(quiz_id, questions)
+                results["quiz_id"] = quiz_id
+                results["question_count"] = len(questions)
+        except Exception as e:
+            log.warning("Smart import quiz failed: %s", e)
+
+        if not results:
+            return jsonify({"error": "Failed to generate study materials. The file might not contain enough content."}), 500
+
+        return jsonify(results)
+
+    @app.route("/student/smart-import")
+    def student_smart_import_page():
+        """Smart Import page — drag & drop PDF to auto-generate everything."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+        courses = sdb.get_courses(_cid())
+        course_options = '<option value="">No specific course</option>'
+        for c in courses:
+            course_options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
+
+        return _s_render("Smart Import", f"""
+        <div style="max-width:700px;margin:0 auto;">
+          <h1 style="margin:0;">&#128640; Smart Import</h1>
+          <p style="color:var(--text-muted);margin:4px 0 24px;font-size:14px;">Drop a PDF or DOCX — we'll auto-generate notes, flashcards, and a quiz</p>
+
+          <!-- Drop zone -->
+          <div id="drop-zone" style="
+            border:3px dashed var(--border);border-radius:16px;padding:60px 40px;text-align:center;
+            cursor:pointer;transition:all 0.3s;background:var(--card);
+          " ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='var(--primary-light,#EDE9FE)'"
+             ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--card)'"
+             ondrop="handleDrop(event)"
+             onclick="document.getElementById('file-input').click()">
+            <div style="font-size:64px;margin-bottom:16px;">&#128196;</div>
+            <h2 style="margin:0 0 8px;font-size:20px;">Drag & Drop your file here</h2>
+            <p style="color:var(--text-muted);margin:0;">or click to browse &middot; PDF, DOCX up to 15MB</p>
+            <input type="file" id="file-input" accept=".pdf,.docx,.doc" style="display:none;" onchange="handleFile(this.files[0])">
+          </div>
+
+          <!-- Options -->
+          <div id="import-options" style="display:none;margin-top:20px;">
+            <div class="card" style="padding:20px;">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <span style="font-size:24px;">&#128196;</span>
+                <div>
+                  <div id="file-name" style="font-weight:600;font-size:15px;"></div>
+                  <div id="file-size" style="font-size:12px;color:var(--text-muted);"></div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div class="form-group">
+                  <label style="font-weight:600;font-size:13px;">Subject / Title</label>
+                  <input type="text" id="import-subject" class="edit-input" placeholder="e.g. Organic Chemistry Ch.5" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);">
+                </div>
+                <div class="form-group">
+                  <label style="font-weight:600;font-size:13px;">Link to Course (optional)</label>
+                  <select id="import-course" class="edit-input" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);">{course_options}</select>
+                </div>
+              </div>
+              <button onclick="startImport()" class="btn btn-primary" style="margin-top:16px;width:100%;padding:12px;font-size:15px;" id="import-btn">&#10024; Generate Notes + Flashcards + Quiz</button>
+            </div>
+          </div>
+
+          <!-- Progress -->
+          <div id="import-progress" style="display:none;margin-top:20px;">
+            <div class="card" style="padding:30px;text-align:center;">
+              <div style="font-size:48px;margin-bottom:16px;" id="progress-emoji">&#9203;</div>
+              <h2 id="progress-title" style="margin:0 0 8px;">Processing your document...</h2>
+              <p id="progress-detail" style="color:var(--text-muted);margin:0;">Extracting text and generating AI study materials. This may take 15-30 seconds.</p>
+              <div style="margin-top:20px;background:var(--border);border-radius:8px;height:8px;overflow:hidden;">
+                <div id="import-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:10%;transition:width 0.5s;border-radius:8px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div id="import-results" style="display:none;margin-top:20px;">
+            <div class="card" style="padding:24px;">
+              <div style="text-align:center;margin-bottom:20px;">
+                <div style="font-size:48px;">&#127881;</div>
+                <h2 style="margin:0;">Study materials created!</h2>
+              </div>
+              <div id="result-links" style="display:grid;gap:12px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <script>
+        var selectedFile = null;
+
+        function handleDrop(e) {{
+          e.preventDefault();
+          e.currentTarget.style.borderColor = 'var(--border)';
+          e.currentTarget.style.background = 'var(--card)';
+          if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        }}
+
+        function handleFile(file) {{
+          if (!file) return;
+          var ext = file.name.split('.').pop().toLowerCase();
+          if (!['pdf','docx','doc'].includes(ext)) {{ alert('Only PDF and DOCX files are supported'); return; }}
+          if (file.size > 15 * 1024 * 1024) {{ alert('File too large (max 15MB)'); return; }}
+          selectedFile = file;
+          document.getElementById('file-name').textContent = file.name;
+          document.getElementById('file-size').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+          document.getElementById('import-subject').value = file.name.split('.').slice(0,-1).join('.').replace(/[_-]/g, ' ');
+          document.getElementById('drop-zone').style.display = 'none';
+          document.getElementById('import-options').style.display = '';
+        }}
+
+        async function startImport() {{
+          if (!selectedFile) return;
+          var btn = document.getElementById('import-btn');
+          btn.disabled = true;
+          document.getElementById('import-options').style.display = 'none';
+          document.getElementById('import-progress').style.display = '';
+
+          var bar = document.getElementById('import-bar');
+          var steps = [20, 40, 60, 80];
+          var si = 0;
+          var progressInterval = setInterval(function() {{
+            if (si < steps.length) {{ bar.style.width = steps[si] + '%'; si++; }}
+          }}, 4000);
+
+          var fd = new FormData();
+          fd.append('file', selectedFile);
+          fd.append('subject', document.getElementById('import-subject').value);
+          var courseId = document.getElementById('import-course').value;
+          if (courseId) fd.append('course_id', courseId);
+
+          try {{
+            var r = await fetch('/api/student/smart-import', {{ method: 'POST', body: fd }});
+            clearInterval(progressInterval);
+            bar.style.width = '100%';
+            var d = await r.json();
+
+            if (r.ok) {{
+              document.getElementById('import-progress').style.display = 'none';
+              document.getElementById('import-results').style.display = '';
+              var links = '';
+              if (d.note_id) links += '<a href="/student/notes/' + d.note_id + '" class="card" style="padding:16px;text-decoration:none;display:flex;align-items:center;gap:12px;"><span style="font-size:24px;">&#128214;</span><div><strong>AI Study Notes</strong><br><span style="font-size:13px;color:var(--text-muted);">' + (d.note_title || 'Generated notes') + '</span></div></a>';
+              if (d.deck_id) links += '<a href="/student/flashcards/' + d.deck_id + '" class="card" style="padding:16px;text-decoration:none;display:flex;align-items:center;gap:12px;"><span style="font-size:24px;">&#127183;</span><div><strong>' + d.card_count + ' Flashcards</strong><br><span style="font-size:13px;color:var(--text-muted);">Ready to study with spaced repetition</span></div></a>';
+              if (d.quiz_id) links += '<a href="/student/quizzes/' + d.quiz_id + '" class="card" style="padding:16px;text-decoration:none;display:flex;align-items:center;gap:12px;"><span style="font-size:24px;">&#128221;</span><div><strong>' + d.question_count + '-Question Quiz</strong><br><span style="font-size:13px;color:var(--text-muted);">Test your understanding</span></div></a>';
+              document.getElementById('result-links').innerHTML = links;
+            }} else {{
+              document.getElementById('progress-emoji').innerHTML = '&#128532;';
+              document.getElementById('progress-title').textContent = 'Import failed';
+              document.getElementById('progress-detail').textContent = d.error || 'Something went wrong';
+            }}
+          }} catch(e) {{
+            clearInterval(progressInterval);
+            document.getElementById('progress-emoji').innerHTML = '&#128532;';
+            document.getElementById('progress-title').textContent = 'Network error';
+            document.getElementById('progress-detail').textContent = 'Please try again';
+          }}
+        }}
+        </script>
+        """, active_page="student_smart_import")
+
     # ── Flashcards Frontend Page ────────────────────────────
 
     @app.route("/student/flashcards")
@@ -3174,6 +3414,8 @@ def register_student_routes(app, csrf, limiter):
 
         decks_html = ""
         for d in decks:
+            due = sdb.count_due_flashcards(d["id"])
+            due_badge = f'<span style="background:#F59E0B22;color:#F59E0B;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">{due} due</span>' if due > 0 else ''
             decks_html += f"""
             <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/flashcards/{d['id']}'">
               <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -3182,6 +3424,7 @@ def register_student_routes(app, csrf, limiter):
                   <span style="font-size:13px;color:var(--text-muted);">{_esc(d.get('course_name',''))} &middot; {d.get('card_count',0)} cards</span>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
+                  {due_badge}
                   <span style="font-size:12px;color:var(--text-muted);">{str(d.get('created_at',''))[:10]}</span>
                   <button onclick="event.stopPropagation();deleteDeck({d['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
                 </div>
@@ -3277,16 +3520,30 @@ def register_student_routes(app, csrf, limiter):
 
     @app.route("/student/flashcards/<int:deck_id>")
     def student_flashcard_study_page(deck_id):
-        """Interactive flashcard study page with flip animation and edit mode."""
+        """Interactive flashcard study page with flip animation, SRS, and edit mode."""
         if not _logged_in():
             return redirect(url_for("login"))
         deck = sdb.get_flashcard_deck(deck_id, _cid())
         if not deck:
             return redirect(url_for("student_flashcards_page"))
-        cards = sdb.get_flashcards(deck_id)
+
+        # SRS mode — show only due cards; fallback to all cards if none due
+        srs_mode = request.args.get("srs", "1") == "1"
+        if srs_mode:
+            cards = sdb.get_due_flashcards(deck_id)
+            if not cards:
+                cards = sdb.get_flashcards(deck_id)
+                srs_mode = False  # no due cards, show all
+        else:
+            cards = sdb.get_flashcards(deck_id)
+
+        all_count = sdb.get_flashcards(deck_id)
+        due_count = sdb.count_due_flashcards(deck_id)
+
         cards_json = json.dumps([{"id": c["id"], "front": c["front"], "back": c["back"],
                                   "times_seen": c.get("times_seen", 0),
-                                  "times_correct": c.get("times_correct", 0)} for c in cards],
+                                  "times_correct": c.get("times_correct", 0),
+                                  "interval_days": c.get("interval_days", 0)} for c in cards],
                                 ensure_ascii=False)
 
         return _s_render(f"Study: {deck.get('title','')}", f"""
@@ -3294,12 +3551,25 @@ def register_student_routes(app, csrf, limiter):
           <div>
             <a href="/student/flashcards" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Decks</a>
             <h1 style="margin:4px 0 0;font-size:24px;">{_esc(deck.get('title',''))}</h1>
-            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">{_esc(deck.get('course_name',''))} &middot; <span id="card-count-txt">{deck.get('card_count',0)}</span> cards</p>
+            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">{_esc(deck.get('course_name',''))} &middot; <span id="card-count-txt">{len(all_count)}</span> cards
+              {'&middot; <span style="color:#F59E0B;font-weight:600;">' + str(due_count) + ' due</span>' if due_count > 0 else ''}
+            </p>
           </div>
           <div style="display:flex;gap:8px;">
             <button onclick="switchMode('study')" class="btn btn-primary btn-sm" id="mode-study-btn">&#127183; Study</button>
             <button onclick="switchMode('edit')" class="btn btn-outline btn-sm" id="mode-edit-btn">&#9999;&#65039; Edit Cards</button>
           </div>
+        </div>
+
+        <!-- SRS toggle -->
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);">
+          <span style="font-size:13px;font-weight:600;color:var(--text);">&#128257; Spaced Repetition</span>
+          <label style="position:relative;display:inline-block;width:40px;height:22px;cursor:pointer;">
+            <input type="checkbox" id="srs-toggle" {'checked' if srs_mode else ''} onchange="toggleSRS()" style="opacity:0;width:0;height:0;">
+            <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--border);border-radius:22px;transition:0.3s;"></span>
+            <span style="position:absolute;top:2px;left:{'20' if srs_mode else '2'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:0.3s;box-shadow:0 1px 3px rgba(0,0,0,0.2);" id="srs-knob"></span>
+          </label>
+          <span style="font-size:12px;color:var(--text-muted);" id="srs-label">{'Showing ' + str(len(cards)) + ' due cards' if srs_mode else 'Showing all cards'}</span>
         </div>
 
         <!-- ===== STUDY MODE ===== -->
@@ -3322,19 +3592,30 @@ def register_student_routes(app, csrf, limiter):
               <div style="position:absolute;bottom:16px;font-size:12px;color:var(--text-muted);">Click to flip</div>
             </div>
 
-            <div style="display:flex;justify-content:center;gap:16px;margin-top:24px;">
+            <div style="display:flex;justify-content:center;gap:16px;margin-top:24px;" id="classic-btns">
               <button onclick="prevCard()" class="btn btn-outline" style="min-width:100px;">&larr; Prev</button>
               <button onclick="markCard(false)" class="btn" style="min-width:100px;background:#EF4444;color:#fff;border:none;">&#10007; Wrong</button>
               <button onclick="markCard(true)" class="btn" style="min-width:100px;background:#10B981;color:#fff;border:none;">&#10003; Got it</button>
               <button onclick="nextCard()" class="btn btn-outline" style="min-width:100px;">Next &rarr;</button>
             </div>
 
+            <!-- SRS quality buttons (shown when SRS is on) -->
+            <div style="display:none;margin-top:24px;" id="srs-btns">
+              <p style="text-align:center;font-size:12px;color:var(--text-muted);margin-bottom:8px;" id="srs-hint">Flip the card first, then rate your recall</p>
+              <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">
+                <button onclick="markSRS(0)" class="btn srs-btn" style="background:#EF4444;color:#fff;border:none;min-width:80px;font-size:13px;" title="No idea at all">&#128565; Again<br><span style="font-size:10px;opacity:0.8;">now</span></button>
+                <button onclick="markSRS(2)" class="btn srs-btn" style="background:#F97316;color:#fff;border:none;min-width:80px;font-size:13px;" title="Barely recalled">&#128528; Hard<br><span style="font-size:10px;opacity:0.8;">soon</span></button>
+                <button onclick="markSRS(4)" class="btn srs-btn" style="background:#3B82F6;color:#fff;border:none;min-width:80px;font-size:13px;" title="Recalled with effort">&#128578; Good<br><span id="srs-good-days" style="font-size:10px;opacity:0.8;"></span></button>
+                <button onclick="markSRS(5)" class="btn srs-btn" style="background:#10B981;color:#fff;border:none;min-width:80px;font-size:13px;" title="Instant recall">&#129321; Easy<br><span id="srs-easy-days" style="font-size:10px;opacity:0.8;"></span></button>
+              </div>
+            </div>
+
             <p style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:12px;">
               <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Space</kbd> flip
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">&larr;</kbd> prev
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">&rarr;</kbd> next
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">1</kbd> wrong
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">2</kbd> got it
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">1</kbd> again
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">2</kbd> hard
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">3</kbd> good
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">4</kbd> easy
             </p>
 
             <div id="fc-summary" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;margin-top:24px;">
@@ -3368,6 +3649,27 @@ def register_student_routes(app, csrf, limiter):
         var deckId = {deck_id};
         var idx = 0, flipped = false, correct = 0, seen = 0;
         var currentMode = 'study';
+        var srsEnabled = {'true' if srs_mode else 'false'};
+
+        function toggleSRS() {{
+          srsEnabled = document.getElementById('srs-toggle').checked;
+          var knob = document.getElementById('srs-knob');
+          knob.style.left = srsEnabled ? '20px' : '2px';
+          knob.parentElement.previousElementSibling.nextElementSibling.style.background = srsEnabled ? 'var(--primary)' : 'var(--border)';
+          document.getElementById('classic-btns').style.display = srsEnabled ? 'none' : 'flex';
+          document.getElementById('srs-btns').style.display = srsEnabled ? 'block' : 'none';
+          document.getElementById('srs-label').textContent = srsEnabled ? 'Review due cards with spaced repetition' : 'Showing all cards';
+          // Reload with SRS mode
+          window.location = '/student/flashcards/{deck_id}?srs=' + (srsEnabled ? '1' : '0');
+        }}
+
+        function updateSRSBtnLabels() {{
+          if (idx >= cards.length) return;
+          var c = cards[idx];
+          var interval = c.interval_days || 0;
+          document.getElementById('srs-good-days').textContent = interval < 1 ? '1d' : Math.max(1, Math.round(interval * 2.5)) + 'd';
+          document.getElementById('srs-easy-days').textContent = interval < 1 ? '4d' : Math.max(4, Math.round(interval * 2.5 * 1.3)) + 'd';
+        }}
 
         function switchMode(mode) {{
           currentMode = mode;
@@ -3378,6 +3680,13 @@ def register_student_routes(app, csrf, limiter):
           if (mode === 'edit') renderCardList();
           if (mode === 'study') {{ idx = 0; correct = 0; seen = 0; document.getElementById('fc-card').style.display = 'flex'; document.getElementById('fc-summary').style.display = 'none'; renderCard(); }}
         }}
+
+        // Show/hide SRS buttons based on initial state
+        document.getElementById('classic-btns').style.display = srsEnabled ? 'none' : 'flex';
+        document.getElementById('srs-btns').style.display = srsEnabled ? 'block' : 'none';
+        var toggleInput = document.getElementById('srs-toggle');
+        toggleInput.parentElement.querySelector('span:last-child').style.left = srsEnabled ? '20px' : '2px';
+        if (srsEnabled) toggleInput.nextElementSibling.style.background = 'var(--primary)';
 
         // ── Study functions ──
         function renderCard() {{
@@ -3390,6 +3699,7 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('progress-txt').textContent = (idx + 1) + ' / ' + cards.length;
           document.getElementById('fc-progress-bar').style.width = ((idx + 1) / cards.length * 100) + '%';
           flipped = false;
+          if (srsEnabled) updateSRSBtnLabels();
         }}
 
         function flipCard() {{
@@ -3412,6 +3722,19 @@ def register_student_routes(app, csrf, limiter):
           fetch('/api/student/flashcards/progress', {{
             method: 'POST', headers: {{'Content-Type':'application/json'}},
             body: JSON.stringify({{ card_id: cards[idx].id, correct: isCorrect }})
+          }}).catch(function(){{}});
+          idx++;
+          renderCard();
+        }}
+
+        function markSRS(quality) {{
+          if (idx >= cards.length) return;
+          if (!flipped) flipCard();
+          seen++;
+          if (quality >= 3) correct++;
+          fetch('/api/student/flashcards/progress', {{
+            method: 'POST', headers: {{'Content-Type':'application/json'}},
+            body: JSON.stringify({{ card_id: cards[idx].id, quality: quality, correct: quality >= 3 }})
           }}).catch(function(){{}});
           idx++;
           renderCard();
@@ -3516,10 +3839,17 @@ def register_student_routes(app, csrf, limiter):
           if (currentMode !== 'study') return;
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           if (e.code === 'Space') {{ e.preventDefault(); flipCard(); }}
-          if (e.code === 'ArrowLeft') {{ e.preventDefault(); prevCard(); }}
-          if (e.code === 'ArrowRight') {{ e.preventDefault(); nextCard(); }}
-          if (e.code === 'Digit1' || e.code === 'Numpad1') {{ e.preventDefault(); markCard(false); }}
-          if (e.code === 'Digit2' || e.code === 'Numpad2') {{ e.preventDefault(); markCard(true); }}
+          if (srsEnabled) {{
+            if (e.code === 'Digit1' || e.code === 'Numpad1') {{ e.preventDefault(); markSRS(0); }}
+            if (e.code === 'Digit2' || e.code === 'Numpad2') {{ e.preventDefault(); markSRS(2); }}
+            if (e.code === 'Digit3' || e.code === 'Numpad3') {{ e.preventDefault(); markSRS(4); }}
+            if (e.code === 'Digit4' || e.code === 'Numpad4') {{ e.preventDefault(); markSRS(5); }}
+          }} else {{
+            if (e.code === 'ArrowLeft') {{ e.preventDefault(); prevCard(); }}
+            if (e.code === 'ArrowRight') {{ e.preventDefault(); nextCard(); }}
+            if (e.code === 'Digit1' || e.code === 'Numpad1') {{ e.preventDefault(); markCard(false); }}
+            if (e.code === 'Digit2' || e.code === 'Numpad2') {{ e.preventDefault(); markCard(true); }}
+          }}
         }});
 
         renderCard();
@@ -3554,6 +3884,7 @@ def register_student_routes(app, csrf, limiter):
                   <span style="background:{diff_color}18;color:{diff_color};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;">{q.get('difficulty','medium').upper()}</span>
                   <span style="font-size:13px;font-weight:600;color:var(--text);">{score_txt}</span>
                   <span style="font-size:12px;color:var(--text-muted);">{q.get('attempts',0)} attempts</span>
+                  <button onclick="event.stopPropagation();window.location='/student/exam-sim/{q['id']}'" class="btn btn-ghost btn-sm" style="color:var(--primary);font-size:12px;" title="Exam Simulator">&#9889;</button>
                   <button onclick="event.stopPropagation();deleteQuiz({q['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
                 </div>
               </div>
@@ -3813,6 +4144,266 @@ def register_student_routes(app, csrf, limiter):
         }});
 
         renderQuestion();
+        </script>
+        """, active_page="student_quizzes")
+
+    # ── Exam Simulator Mode ────────────────────────────────
+
+    @app.route("/student/exam-sim/<int:quiz_id>")
+    def student_exam_simulator_page(quiz_id):
+        """Exam simulator — timed, no going back, pressure UI, analytics."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+        quiz = sdb.get_quiz(quiz_id, _cid())
+        if not quiz:
+            return redirect(url_for("student_quizzes_page"))
+        questions = sdb.get_quiz_questions(quiz_id)
+        questions_json = json.dumps([{
+            "id": q["id"], "question": q["question"],
+            "option_a": q.get("option_a", ""), "option_b": q.get("option_b", ""),
+            "option_c": q.get("option_c", ""), "option_d": q.get("option_d", ""),
+            "correct": q["correct"], "explanation": q.get("explanation", "")
+        } for q in questions], ensure_ascii=False)
+
+        # Default: 2 min per question
+        default_minutes = max(5, len(questions) * 2)
+
+        return _s_render(f"Exam Simulator: {quiz.get('title','')}", f"""
+        <!-- Setup screen -->
+        <div id="exam-setup" style="max-width:500px;margin:40px auto;text-align:center;">
+          <div style="font-size:64px;margin-bottom:16px;">&#128221;</div>
+          <h1 style="margin:0;">Exam Simulator</h1>
+          <p style="color:var(--text-muted);margin:8px 0 0;">{_esc(quiz.get('title',''))}</p>
+          <p style="color:var(--text-muted);font-size:13px;">{len(questions)} questions &middot; {quiz.get('difficulty','').upper()}</p>
+
+          <div class="card" style="padding:24px;margin:24px 0;text-align:left;">
+            <h3 style="margin:0 0 16px;">&#9881; Settings</h3>
+            <div class="form-group" style="margin-bottom:16px;">
+              <label style="font-weight:600;font-size:14px;">Time Limit (minutes)</label>
+              <input type="number" id="exam-time" value="{default_minutes}" min="1" max="180" class="edit-input" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:15px;margin-top:6px;">
+            </div>
+            <div style="background:var(--bg);border-radius:var(--radius-sm);padding:14px;font-size:13px;color:var(--text-muted);">
+              <p style="margin:0 0 6px;"><strong style="color:var(--text);">&#9888;&#65039; Exam Rules:</strong></p>
+              <ul style="margin:0;padding-left:18px;line-height:1.8;">
+                <li>You <strong>cannot go back</strong> to previous questions</li>
+                <li>Timer runs continuously — no pausing</li>
+                <li>Answers are final once submitted</li>
+                <li>Detailed analytics provided at the end</li>
+              </ul>
+            </div>
+          </div>
+
+          <button onclick="startExam()" class="btn btn-primary" style="padding:12px 40px;font-size:16px;">&#9889; Start Exam</button>
+          <p style="margin-top:12px;"><a href="/student/quizzes" style="color:var(--text-muted);font-size:13px;">&larr; Back to Quizzes</a></p>
+        </div>
+
+        <!-- Active exam -->
+        <div id="exam-active" style="display:none;">
+          <!-- Timer bar -->
+          <div style="position:sticky;top:60px;z-index:50;background:var(--bg);padding:8px 0;margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="font-size:14px;font-weight:600;color:var(--text);" id="exam-q-txt">Question 1 / {len(questions)}</span>
+              <span style="font-size:20px;font-weight:700;font-family:monospace;" id="exam-timer" style="color:var(--text);">00:00</span>
+            </div>
+            <div style="background:var(--border);border-radius:8px;height:6px;overflow:hidden;">
+              <div id="exam-timer-bar" style="height:100%;background:linear-gradient(90deg,#10B981,#3B82F6);width:100%;transition:width 1s linear;border-radius:8px;"></div>
+            </div>
+          </div>
+
+          <div style="max-width:700px;margin:0 auto;">
+            <div id="exam-card" class="card" style="padding:30px;">
+              <div id="exam-question" style="font-size:18px;font-weight:600;margin-bottom:20px;line-height:1.5;"></div>
+              <div id="exam-options"></div>
+              <div style="display:flex;justify-content:flex-end;margin-top:20px;">
+                <button id="exam-submit-btn" onclick="submitAnswer()" class="btn btn-primary" disabled>Lock In Answer &rarr;</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div id="exam-results" style="display:none;max-width:800px;margin:0 auto;">
+          <div class="card" style="text-align:center;padding:30px;margin-bottom:20px;">
+            <div id="exam-emoji" style="font-size:64px;margin-bottom:12px;">&#127942;</div>
+            <h1 style="margin:0 0 8px;">Exam Complete!</h1>
+            <div id="exam-final-score" style="font-size:48px;font-weight:800;color:var(--primary);"></div>
+            <div id="exam-final-detail" style="font-size:14px;color:var(--text-muted);margin-top:4px;"></div>
+            <div id="exam-time-taken" style="font-size:14px;color:var(--text-muted);margin-top:4px;"></div>
+          </div>
+
+          <!-- Analytics -->
+          <div class="card" style="padding:24px;margin-bottom:20px;">
+            <h2 style="margin:0 0 16px;">&#128202; Analytics</h2>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
+              <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius-sm);">
+                <div id="anal-avg-time" style="font-size:24px;font-weight:700;color:var(--primary);">0s</div>
+                <div style="font-size:12px;color:var(--text-muted);">Avg per question</div>
+              </div>
+              <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius-sm);">
+                <div id="anal-fastest" style="font-size:24px;font-weight:700;color:#10B981;">0s</div>
+                <div style="font-size:12px;color:var(--text-muted);">Fastest answer</div>
+              </div>
+              <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius-sm);">
+                <div id="anal-slowest" style="font-size:24px;font-weight:700;color:#EF4444;">0s</div>
+                <div style="font-size:12px;color:var(--text-muted);">Slowest answer</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Per-question review -->
+          <div class="card" style="padding:24px;">
+            <h2 style="margin:0 0 16px;">&#128214; Question Review</h2>
+            <div id="exam-review"></div>
+          </div>
+
+          <div style="display:flex;gap:12px;justify-content:center;margin:24px 0;">
+            <button onclick="location.reload()" class="btn btn-primary">&#128260; Retake Exam</button>
+            <a href="/student/quizzes" class="btn btn-outline">Back to Quizzes</a>
+          </div>
+        </div>
+
+        <style>
+        .exam-opt {{
+          display:block;width:100%;text-align:left;padding:14px 18px;margin-bottom:10px;
+          background:var(--bg);border:2px solid var(--border);border-radius:12px;
+          cursor:pointer;font-size:15px;color:var(--text);transition:all 0.2s ease;
+        }}
+        .exam-opt:hover {{ border-color:var(--primary);background:var(--card); }}
+        .exam-opt.selected {{ border-color:var(--primary);background:var(--primary-light,#EDE9FE);font-weight:600; }}
+        .review-q {{ padding:16px;margin-bottom:12px;border-radius:var(--radius-sm);border-left:4px solid; }}
+        .review-q.correct {{ border-color:#10B981;background:#D1FAE520; }}
+        .review-q.wrong {{ border-color:#EF4444;background:#FEE2E220; }}
+        </style>
+
+        <script>
+        var questions = {questions_json};
+        var eIdx = 0, eScore = 0, eSelected = null;
+        var timePerQuestion = [];
+        var answers = [];
+        var questionStartTime = 0;
+        var timerInterval = null;
+        var totalSeconds = 0;
+        var elapsedSeconds = 0;
+
+        function startExam() {{
+          totalSeconds = parseInt(document.getElementById('exam-time').value) * 60;
+          if (totalSeconds < 60) totalSeconds = 60;
+          elapsedSeconds = 0;
+          document.getElementById('exam-setup').style.display = 'none';
+          document.getElementById('exam-active').style.display = '';
+          questionStartTime = Date.now();
+          timerInterval = setInterval(tickTimer, 1000);
+          renderExamQ();
+        }}
+
+        function tickTimer() {{
+          elapsedSeconds++;
+          var remaining = totalSeconds - elapsedSeconds;
+          if (remaining <= 0) {{
+            clearInterval(timerInterval);
+            // Auto-submit current and force end
+            if (eSelected) answers.push({{ q: eIdx, selected: eSelected, time: (Date.now() - questionStartTime) / 1000 }});
+            finishExam();
+            return;
+          }}
+          var m = Math.floor(remaining / 60);
+          var s = remaining % 60;
+          var timerEl = document.getElementById('exam-timer');
+          timerEl.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+          timerEl.style.color = remaining <= 60 ? '#EF4444' : remaining <= 300 ? '#F59E0B' : 'var(--text)';
+          document.getElementById('exam-timer-bar').style.width = (remaining / totalSeconds * 100) + '%';
+          if (remaining <= 60) document.getElementById('exam-timer-bar').style.background = '#EF4444';
+          else if (remaining <= 300) document.getElementById('exam-timer-bar').style.background = '#F59E0B';
+        }}
+
+        function renderExamQ() {{
+          if (eIdx >= questions.length) {{ finishExam(); return; }}
+          var q = questions[eIdx];
+          eSelected = null;
+          document.getElementById('exam-submit-btn').disabled = true;
+          document.getElementById('exam-q-txt').textContent = 'Question ' + (eIdx + 1) + ' / ' + questions.length;
+          document.getElementById('exam-question').textContent = 'Q' + (eIdx + 1) + '. ' + q.question;
+          var opts = document.getElementById('exam-options');
+          opts.innerHTML = '';
+          ['a','b','c','d'].forEach(function(key) {{
+            var btn = document.createElement('button');
+            btn.className = 'exam-opt';
+            btn.textContent = key.toUpperCase() + '. ' + q['option_' + key];
+            btn.dataset.key = key;
+            btn.onclick = function() {{
+              document.querySelectorAll('.exam-opt').forEach(function(b) {{ b.classList.remove('selected'); }});
+              btn.classList.add('selected');
+              eSelected = key;
+              document.getElementById('exam-submit-btn').disabled = false;
+            }};
+            opts.appendChild(btn);
+          }});
+          questionStartTime = Date.now();
+        }}
+
+        function submitAnswer() {{
+          if (!eSelected) return;
+          var q = questions[eIdx];
+          var timeTaken = (Date.now() - questionStartTime) / 1000;
+          var isCorrect = eSelected === q.correct;
+          if (isCorrect) eScore++;
+          answers.push({{ q: eIdx, selected: eSelected, correct: q.correct, isCorrect: isCorrect, time: timeTaken, explanation: q.explanation }});
+          eIdx++;
+          renderExamQ();
+        }}
+
+        function finishExam() {{
+          clearInterval(timerInterval);
+          document.getElementById('exam-active').style.display = 'none';
+          document.getElementById('exam-results').style.display = '';
+          var pct = Math.round(eScore / questions.length * 100);
+          document.getElementById('exam-final-score').textContent = pct + '%';
+          document.getElementById('exam-final-detail').textContent = eScore + ' of ' + questions.length + ' correct';
+          document.getElementById('exam-time-taken').textContent = 'Time: ' + Math.floor(elapsedSeconds / 60) + 'm ' + (elapsedSeconds % 60) + 's';
+          document.getElementById('exam-emoji').innerHTML = pct >= 90 ? '&#127942;' : pct >= 70 ? '&#127881;' : pct >= 50 ? '&#128170;' : '&#128218;';
+
+          // Analytics
+          var times = answers.map(function(a) {{ return a.time; }});
+          var avg = times.length ? (times.reduce(function(s,t) {{ return s + t; }}, 0) / times.length) : 0;
+          document.getElementById('anal-avg-time').textContent = Math.round(avg) + 's';
+          document.getElementById('anal-fastest').textContent = Math.round(Math.min.apply(null, times)) + 's';
+          document.getElementById('anal-slowest').textContent = Math.round(Math.max.apply(null, times)) + 's';
+
+          // Review
+          var reviewHtml = '';
+          answers.forEach(function(a) {{
+            var q = questions[a.q];
+            reviewHtml += '<div class="review-q ' + (a.isCorrect ? 'correct' : 'wrong') + '">'
+              + '<div style="display:flex;justify-content:space-between;align-items:start;">'
+              + '<strong>Q' + (a.q + 1) + '. ' + escH(q.question) + '</strong>'
+              + '<span style="font-size:12px;color:var(--text-muted);white-space:nowrap;">' + Math.round(a.time) + 's</span>'
+              + '</div>'
+              + '<div style="font-size:13px;margin-top:6px;">Your answer: <strong>' + a.selected.toUpperCase() + '</strong>'
+              + (a.isCorrect ? ' &#10003;' : ' &#10007; (Correct: ' + a.correct.toUpperCase() + ')') + '</div>'
+              + (a.explanation ? '<div style="font-size:13px;margin-top:6px;color:var(--text-muted);font-style:italic;">' + escH(a.explanation) + '</div>' : '')
+              + '</div>';
+          }});
+          document.getElementById('exam-review').innerHTML = reviewHtml;
+
+          // Submit score
+          fetch('/api/student/quizzes/{quiz_id}/score', {{
+            method: 'POST', headers: {{'Content-Type':'application/json'}},
+            body: JSON.stringify({{ score: pct }})
+          }}).catch(function(){{}});
+        }}
+
+        function escH(t) {{ var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }}
+
+        document.addEventListener('keydown', function(e) {{
+          if (document.getElementById('exam-active').style.display === 'none') return;
+          if (!eSelected || eSelected === null) {{
+            if (e.code === 'KeyA' || e.code === 'Digit1') {{ e.preventDefault(); document.querySelector('.exam-opt[data-key="a"]').click(); }}
+            if (e.code === 'KeyB' || e.code === 'Digit2') {{ e.preventDefault(); document.querySelector('.exam-opt[data-key="b"]').click(); }}
+            if (e.code === 'KeyC' || e.code === 'Digit3') {{ e.preventDefault(); document.querySelector('.exam-opt[data-key="c"]').click(); }}
+            if (e.code === 'KeyD' || e.code === 'Digit4') {{ e.preventDefault(); document.querySelector('.exam-opt[data-key="d"]').click(); }}
+          }}
+          if (e.code === 'Enter' && eSelected) {{ e.preventDefault(); submitAnswer(); }}
+        }});
         </script>
         """, active_page="student_quizzes")
 
@@ -4254,6 +4845,252 @@ def register_student_routes(app, csrf, limiter):
             history=[{"action": h["action"], "xp": h["xp"], "detail": h.get("detail",""),
                       "date": str(h.get("created_at",""))[:10]} for h in history],
         )
+
+    # ── Study Exchange ──────────────────────────────────────
+
+    @app.route("/student/exchange")
+    def student_exchange_page():
+        """Study Exchange — browse/share notes like Studocu."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+
+        search = request.args.get("q", "")
+        subject = request.args.get("subject", "")
+        university = request.args.get("university", "")
+        notes = sdb.browse_public_notes(search=search, subject=subject, university=university)
+
+        notes_html = ""
+        for n in notes:
+            length_kb = round((n.get("content_length", 0) or 0) / 1024, 1)
+            notes_html += f"""
+            <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/exchange/{n['id']}'">
+              <div style="display:flex;justify-content:space-between;align-items:start;">
+                <div>
+                  <h3 style="margin:0;font-size:16px;">{_esc(n.get('title','Untitled'))}</h3>
+                  <span style="font-size:13px;color:var(--text-muted);">
+                    {_esc(n.get('course_name',''))}
+                    {(' &middot; ' + _esc(n.get('university',''))) if n.get('university') else ''}
+                    &middot; {_esc(n.get('source_type','ai'))} &middot; {length_kb}KB
+                  </span>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                    &#128100; {_esc(n.get('author_name','Anonymous'))} &middot; {str(n.get('created_at',''))[:10]}
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;color:var(--text-muted);font-size:14px;">
+                  <span style="color:#EF4444;">&#10084;</span> {n.get('likes',0)}
+                </div>
+              </div>
+            </div>"""
+        if not notes_html:
+            notes_html = """<div style="text-align:center;padding:40px;color:var(--text-muted);">
+              <div style="font-size:48px;margin-bottom:12px;">&#128218;</div>
+              <p>No shared notes yet. Be the first to share!</p>
+            </div>"""
+
+        return _s_render("Study Exchange", f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1 style="margin:0;">&#128218; Study Exchange</h1>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Browse & share study notes with other students</p>
+          </div>
+          <a href="/student/exchange/my" class="btn btn-outline btn-sm">&#128196; My Shared Notes</a>
+        </div>
+
+        <!-- Search/filter -->
+        <div class="card" style="padding:16px;margin-bottom:20px;">
+          <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;">
+            <input name="q" value="{_esc(search)}" placeholder="Search notes..." style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
+            <input name="subject" value="{_esc(subject)}" placeholder="Subject/Course" style="width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
+            <input name="university" value="{_esc(university)}" placeholder="University" style="width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
+            <button type="submit" class="btn btn-primary btn-sm">&#128269; Search</button>
+          </form>
+        </div>
+
+        {notes_html}
+        """, active_page="student_exchange")
+
+    @app.route("/student/exchange/my")
+    def student_exchange_my_page():
+        """Manage your shared notes."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+        notes = sdb.get_notes(_cid())
+        prefs = sdb.get_email_prefs(_cid())
+        author_name = prefs.get("name", "") if prefs else ""
+        university = prefs.get("university", "") if prefs else ""
+
+        my_html = ""
+        for n in notes:
+            is_pub = n.get("is_public", False)
+            pub_badge = '<span style="background:#10B98122;color:#10B981;padding:2px 8px;border-radius:10px;font-size:11px;">Public</span>' if is_pub else '<span style="background:var(--bg);color:var(--text-muted);padding:2px 8px;border-radius:10px;font-size:11px;">Private</span>'
+            action = f'<button onclick="unpublish({n["id"]})" class="btn btn-ghost btn-sm" style="font-size:12px;color:#EF4444;">Unpublish</button>' if is_pub else f'<button onclick="publish({n["id"]})" class="btn btn-ghost btn-sm" style="font-size:12px;color:#10B981;">Share</button>'
+            my_html += f"""
+            <div class="card" style="margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <h3 style="margin:0;font-size:15px;">{_esc(n.get('title','Untitled'))}</h3>
+                  <span style="font-size:12px;color:var(--text-muted);">{str(n.get('created_at',''))[:10]}</span>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  {pub_badge}
+                  {action}
+                </div>
+              </div>
+            </div>"""
+        if not my_html:
+            my_html = '<p style="text-align:center;color:var(--text-muted);padding:30px;">No notes to share. Create notes first!</p>'
+
+        return _s_render("My Shared Notes", f"""
+        <a href="/student/exchange" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Exchange</a>
+        <h1 style="margin:8px 0 20px;">&#128196; My Shared Notes</h1>
+        <p style="color:var(--text-muted);font-size:14px;margin-bottom:20px;">Click "Share" to publish your notes to the Study Exchange. Other students can view and fork them.</p>
+        {my_html}
+        <script>
+        async function publish(noteId) {{
+          try {{
+            var r = await fetch('/api/student/exchange/publish', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ note_id: noteId }})
+            }});
+            if (r.ok) location.reload();
+            else alert('Failed to publish');
+          }} catch(e) {{ alert('Error'); }}
+        }}
+        async function unpublish(noteId) {{
+          try {{
+            var r = await fetch('/api/student/exchange/unpublish', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ note_id: noteId }})
+            }});
+            if (r.ok) location.reload();
+            else alert('Failed to unpublish');
+          }} catch(e) {{ alert('Error'); }}
+        }}
+        </script>
+        """, active_page="student_exchange")
+
+    @app.route("/student/exchange/<int:note_id>")
+    def student_exchange_view_page(note_id):
+        """View a public note in the exchange."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+        note = sdb.get_public_note(note_id)
+        if not note:
+            return redirect(url_for("student_exchange_page"))
+
+        liked = sdb.has_liked_note(_cid(), note_id)
+        like_class = "color:#EF4444;font-weight:700;" if liked else "color:var(--text-muted);"
+
+        return _s_render(f"Exchange: {note.get('title','')}", f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <div>
+            <a href="/student/exchange" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Exchange</a>
+            <h1 style="margin:4px 0 0;font-size:24px;">{_esc(note.get('title',''))}</h1>
+            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">
+              &#128100; {_esc(note.get('author_name','Anonymous'))}
+              {(' &middot; ' + _esc(note.get('university',''))) if note.get('university') else ''}
+              &middot; {_esc(note.get('course_name',''))}
+              &middot; {str(note.get('created_at',''))[:10]}
+            </p>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="toggleLike()" class="btn btn-outline btn-sm" id="like-btn" style="{like_class}">
+              &#10084; <span id="like-count">{note.get('likes',0)}</span>
+            </button>
+            <button onclick="forkNote()" class="btn btn-primary btn-sm">&#128203; Fork to My Notes</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:30px;">
+          {note.get('content_html','')}
+        </div>
+
+        <style>
+        @media print {{
+          body * {{ visibility: hidden; }}
+          .card, .card * {{ visibility: visible; }}
+          .card {{ position: absolute; left: 0; top: 0; width: 100%; }}
+        }}
+        </style>
+        <script>
+        async function toggleLike() {{
+          try {{
+            var r = await fetch('/api/student/exchange/like', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ note_id: {note_id} }})
+            }});
+            var d = await r.json();
+            if (r.ok) {{
+              document.getElementById('like-count').textContent = d.likes;
+              var btn = document.getElementById('like-btn');
+              btn.style.color = d.liked ? '#EF4444' : 'var(--text-muted)';
+              btn.style.fontWeight = d.liked ? '700' : '400';
+            }}
+          }} catch(e) {{}}
+        }}
+        async function forkNote() {{
+          if (!confirm('Copy this note to your personal notes?')) return;
+          try {{
+            var r = await fetch('/api/student/exchange/fork', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ note_id: {note_id} }})
+            }});
+            var d = await r.json();
+            if (r.ok && d.note_id) {{
+              window.location = '/student/notes/' + d.note_id;
+            }} else {{ alert(d.error || 'Fork failed'); }}
+          }} catch(e) {{ alert('Error'); }}
+        }}
+        </script>
+        """, active_page="student_exchange")
+
+    # ── Study Exchange API ──────────────────────────────────
+
+    @app.route("/api/student/exchange/publish", methods=["POST"])
+    def student_exchange_publish():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        note_id = data.get("note_id")
+        if not note_id:
+            return jsonify({"error": "note_id required"}), 400
+        # Verify ownership
+        note = sdb.get_note(note_id, _cid())
+        if not note:
+            return jsonify({"error": "Note not found"}), 404
+        prefs = sdb.get_email_prefs(_cid())
+        author = prefs.get("name", "Anonymous") if prefs else "Anonymous"
+        uni = prefs.get("university", "") if prefs else ""
+        sdb.publish_note(note_id, _cid(), author, uni)
+        return jsonify({"ok": True})
+
+    @app.route("/api/student/exchange/unpublish", methods=["POST"])
+    def student_exchange_unpublish():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        sdb.unpublish_note(data.get("note_id"), _cid())
+        return jsonify({"ok": True})
+
+    @app.route("/api/student/exchange/like", methods=["POST"])
+    def student_exchange_like():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        note_id = data.get("note_id")
+        liked = sdb.toggle_note_like(_cid(), note_id)
+        note = sdb.get_public_note(note_id)
+        return jsonify({"ok": True, "liked": liked, "likes": note.get("likes", 0) if note else 0})
+
+    @app.route("/api/student/exchange/fork", methods=["POST"])
+    def student_exchange_fork():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        new_id = sdb.fork_note(_cid(), data.get("note_id"))
+        if not new_id:
+            return jsonify({"error": "Note not found or not public"}), 404
+        return jsonify({"ok": True, "note_id": new_id})
 
     @app.route("/student/achievements")
     def student_achievements_page():

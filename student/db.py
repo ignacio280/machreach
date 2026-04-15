@@ -463,6 +463,18 @@ def init_student_db():
     log.info("Student tables initialized.")
 
 
+def _create_table_safe(pg_sql: str, sqlite_sql: str):
+    """Create a table if it doesn't exist (safe for migrations)."""
+    try:
+        with get_db() as db:
+            if _USE_PG:
+                db.cursor().execute(pg_sql)
+            else:
+                db.execute(sqlite_sql)
+    except Exception:
+        pass
+
+
 def _student_migrations():
     """Run safe column additions."""
     migrations = [
@@ -473,6 +485,15 @@ def _student_migrations():
         ("student_email_prefs", "university", "TEXT DEFAULT ''"),
         ("student_email_prefs", "field_of_study", "TEXT DEFAULT ''"),
         ("student_email_prefs", "lang", "TEXT DEFAULT 'en'"),
+        # SRS columns for spaced repetition
+        ("student_flashcards", "easiness_factor", "REAL DEFAULT 2.5"),
+        ("student_flashcards", "interval_days", "INTEGER DEFAULT 0"),
+        ("student_flashcards", "repetitions", "INTEGER DEFAULT 0"),
+        # Study Exchange — public notes
+        ("student_notes", "is_public", "BOOLEAN DEFAULT FALSE"),
+        ("student_notes", "likes", "INTEGER DEFAULT 0"),
+        ("student_notes", "university", "TEXT DEFAULT ''"),
+        ("student_notes", "author_name", "TEXT DEFAULT ''"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -483,6 +504,21 @@ def _student_migrations():
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
         except Exception:
             pass  # column already exists
+    # Study Exchange — note likes table
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_note_likes ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL, "
+        "note_id INTEGER NOT NULL, "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(client_id, note_id))",
+        "CREATE TABLE IF NOT EXISTS student_note_likes ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL, "
+        "note_id INTEGER NOT NULL, "
+        "created_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(client_id, note_id))",
+    )
 
 
 # ── Canvas tokens ───────────────────────────────────────────
@@ -1048,16 +1084,80 @@ def get_flashcards(deck_id: int) -> list[dict]:
         )
 
 
-def update_flashcard_progress(card_id: int, correct: bool):
+def get_due_flashcards(deck_id: int) -> list[dict]:
+    """Get flashcards due for review (SRS). Returns due cards first, then new cards."""
     with get_db() as db:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return _fetchall(
+            db,
+            "SELECT * FROM student_flashcards WHERE deck_id = %s "
+            "AND (next_review IS NULL OR next_review <= %s) "
+            "ORDER BY CASE WHEN next_review IS NULL THEN 0 ELSE 1 END, next_review ASC, id",
+            (deck_id, now),
+        )
+
+
+def count_due_flashcards(deck_id: int) -> int:
+    """Count how many cards are due for review in a deck."""
+    with get_db() as db:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return _fetchval(
+            db,
+            "SELECT COUNT(*) FROM student_flashcards WHERE deck_id = %s "
+            "AND (next_review IS NULL OR next_review <= %s)",
+            (deck_id, now),
+        ) or 0
+
+
+def update_flashcard_progress(card_id: int, correct: bool, quality: int = None):
+    """Update flashcard with SM-2 spaced repetition algorithm.
+    quality: 0-5 (0=complete blackout, 5=perfect recall)
+    If quality is None, use old binary mode (correct=True→4, False→1).
+    """
+    if quality is None:
+        quality = 4 if correct else 1
+
+    with get_db() as db:
+        # Fetch current SRS state
+        row = _fetchone(db, "SELECT easiness_factor, interval_days, repetitions FROM student_flashcards WHERE id = %s", (card_id,))
+        ef = float(row.get("easiness_factor") or 2.5) if row else 2.5
+        interval = int(row.get("interval_days") or 0) if row else 0
+        reps = int(row.get("repetitions") or 0) if row else 0
+
+        # SM-2 algorithm
+        ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+        if ef < 1.3:
+            ef = 1.3
+
+        if quality < 3:
+            # Reset on failure
+            reps = 0
+            interval = 0
+        else:
+            reps += 1
+            if reps == 1:
+                interval = 1
+            elif reps == 2:
+                interval = 6
+            else:
+                interval = int(interval * ef)
+
+        from datetime import timedelta
+        next_review = (datetime.now() + timedelta(days=max(interval, 0))).strftime("%Y-%m-%d %H:%M:%S")
+
         if correct:
             _exec(db,
                   "UPDATE student_flashcards SET times_seen = times_seen + 1, "
-                  "times_correct = times_correct + 1 WHERE id = %s", (card_id,))
+                  "times_correct = times_correct + 1, "
+                  "easiness_factor = %s, interval_days = %s, repetitions = %s, next_review = %s "
+                  "WHERE id = %s",
+                  (round(ef, 2), interval, reps, next_review, card_id))
         else:
             _exec(db,
-                  "UPDATE student_flashcards SET times_seen = times_seen + 1 WHERE id = %s",
-                  (card_id,))
+                  "UPDATE student_flashcards SET times_seen = times_seen + 1, "
+                  "easiness_factor = %s, interval_days = %s, repetitions = %s, next_review = %s "
+                  "WHERE id = %s",
+                  (round(ef, 2), interval, reps, next_review, card_id))
 
 
 def delete_flashcard_deck(deck_id: int, client_id: int):
@@ -1572,3 +1672,113 @@ def get_student_rank(client_id: int) -> int:
         if r["client_id"] == client_id:
             return i
     return 0
+
+
+# ── Study Exchange ──────────────────────────────────────────
+
+def publish_note(note_id: int, client_id: int, author_name: str, university: str):
+    """Make a note public for the Study Exchange."""
+    with get_db() as db:
+        _exec(db,
+              "UPDATE student_notes SET is_public = TRUE, author_name = %s, university = %s "
+              "WHERE id = %s AND client_id = %s",
+              (author_name, university, note_id, client_id))
+
+
+def unpublish_note(note_id: int, client_id: int):
+    """Remove a note from the Study Exchange."""
+    with get_db() as db:
+        _exec(db,
+              "UPDATE student_notes SET is_public = FALSE WHERE id = %s AND client_id = %s",
+              (note_id, client_id))
+
+
+def browse_public_notes(search: str = "", subject: str = "", university: str = "",
+                        limit: int = 50, offset: int = 0) -> list[dict]:
+    """Browse public notes in the Study Exchange."""
+    with get_db() as db:
+        conditions = ["n.is_public = TRUE"]
+        params = []
+        if search:
+            conditions.append("LOWER(n.title) LIKE %s")
+            params.append(f"%{search.lower()}%")
+        if subject:
+            conditions.append("LOWER(COALESCE(c.name, '')) LIKE %s")
+            params.append(f"%{subject.lower()}%")
+        if university:
+            conditions.append("LOWER(COALESCE(n.university, '')) LIKE %s")
+            params.append(f"%{university.lower()}%")
+        where = " AND ".join(conditions)
+        params.extend([limit, offset])
+        return _fetchall(
+            db,
+            f"SELECT n.id, n.title, n.source_type, n.created_at, n.likes, "
+            f"n.author_name, n.university, COALESCE(c.name, '') as course_name, "
+            f"LENGTH(n.content_html) as content_length "
+            f"FROM student_notes n "
+            f"LEFT JOIN student_courses c ON n.course_id = c.id "
+            f"WHERE {where} "
+            f"ORDER BY n.likes DESC, n.created_at DESC LIMIT %s OFFSET %s",
+            tuple(params),
+        )
+
+
+def get_public_note(note_id: int) -> dict | None:
+    """Get a public note for viewing (anyone can read)."""
+    with get_db() as db:
+        return _fetchone(
+            db,
+            "SELECT n.*, COALESCE(c.name, '') as course_name "
+            "FROM student_notes n "
+            "LEFT JOIN student_courses c ON n.course_id = c.id "
+            "WHERE n.id = %s AND n.is_public = TRUE",
+            (note_id,),
+        )
+
+
+def toggle_note_like(client_id: int, note_id: int) -> bool:
+    """Like/unlike a note. Returns True if liked, False if unliked."""
+    with get_db() as db:
+        existing = _fetchval(
+            db, "SELECT id FROM student_note_likes WHERE client_id = %s AND note_id = %s",
+            (client_id, note_id),
+        )
+        if existing:
+            _exec(db, "DELETE FROM student_note_likes WHERE client_id = %s AND note_id = %s",
+                  (client_id, note_id))
+            _exec(db, "UPDATE student_notes SET likes = CASE WHEN likes > 0 THEN likes - 1 ELSE 0 END WHERE id = %s", (note_id,))
+            return False
+        else:
+            _exec(db,
+                  "INSERT INTO student_note_likes (client_id, note_id) VALUES (%s, %s)",
+                  (client_id, note_id))
+            _exec(db, "UPDATE student_notes SET likes = likes + 1 WHERE id = %s", (note_id,))
+            return True
+
+
+def has_liked_note(client_id: int, note_id: int) -> bool:
+    """Check if a user has liked a note."""
+    with get_db() as db:
+        return bool(_fetchval(
+            db, "SELECT id FROM student_note_likes WHERE client_id = %s AND note_id = %s",
+            (client_id, note_id),
+        ))
+
+
+def fork_note(client_id: int, note_id: int) -> int | None:
+    """Copy a public note to a user's private notes."""
+    with get_db() as db:
+        note = _fetchone(
+            db, "SELECT * FROM student_notes WHERE id = %s AND is_public = TRUE",
+            (note_id,),
+        )
+        if not note:
+            return None
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_notes (client_id, title, content_html, source_type) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (client_id, f"[Forked] {note['title']}", note["content_html"], "forked"),
+            "INSERT INTO student_notes (client_id, title, content_html, source_type) "
+            "VALUES (?, ?, ?, ?)",
+        )
