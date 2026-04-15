@@ -22,7 +22,9 @@ def register_student_routes(app, csrf, limiter):
     # Import here to avoid circular imports at module level
     from student.canvas import CanvasClient, extract_text_from_pdf, extract_text_from_docx
     from student.analyzer import (analyze_course_material, generate_study_plan,
-                                  generate_flashcards, generate_quiz, generate_notes)
+                                  generate_flashcards, generate_quiz, generate_notes,
+                                  chat_with_tutor, notes_from_transcript,
+                                  flashcards_from_transcript, detect_weak_topics)
     from student import db as sdb
 
     # ── helpers ─────────────────────────────────────────────
@@ -805,6 +807,14 @@ def register_student_routes(app, csrf, limiter):
         canvas_status = "Connected" if canvas_tok else "Not connected"
         canvas_color = "#10B981" if canvas_tok else "#EF4444"
 
+        # Gamification
+        total_xp = sdb.get_total_xp(cid)
+        level_name, level_floor, level_ceil = sdb.get_level(total_xp)
+        xp_pct = min(100, int(100 * (total_xp - level_floor) / max(1, level_ceil - level_floor)))
+        streak_days = sdb.get_streak_days(cid)
+        # Auto-award login badge
+        sdb.earn_badge(cid, "first_login")
+
         return _s_render("Dashboard", f"""
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
           <div>
@@ -823,6 +833,25 @@ def register_student_routes(app, csrf, limiter):
           <div style="font-style:italic;font-size:15px;max-width:85%;" id="quote-text"></div>
           <div style="font-size:12px;margin-top:4px;opacity:0.8;" id="quote-author"></div>
         </div>
+
+        <!-- XP / Level Bar -->
+        <a href="/student/achievements" style="text-decoration:none;display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 18px;margin-bottom:20px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:1.4em">🏆</span>
+              <span style="font-weight:700;color:var(--text)">{_esc(level_name)}</span>
+              <span style="color:var(--text-muted);font-size:13px">{total_xp} XP</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="color:#ea580c;font-weight:700">🔥 {streak_days}</span>
+              <span style="color:var(--text-muted);font-size:12px">streak</span>
+            </div>
+          </div>
+          <div style="background:var(--border);border-radius:6px;height:8px;overflow:hidden">
+            <div style="background:linear-gradient(90deg,#6366f1,#8b5cf6);height:100%;width:{xp_pct}%;border-radius:6px;transition:width 0.5s"></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;text-align:right">{total_xp - level_floor}/{level_ceil - level_floor} XP to next level</div>
+        </a>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-bottom:24px;">
           <div class="stat-card stat-purple"><div class="num">{len(courses)}</div><div class="label">Courses</div></div>
@@ -874,6 +903,21 @@ def register_student_routes(app, csrf, limiter):
             <div style="font-size:28px;margin-bottom:6px;">&#128214;</div>
             <div style="font-weight:600;font-size:13px;color:var(--text);">AI Notes</div>
             <div style="font-size:11px;color:var(--text-muted);">Study summaries</div>
+          </a>
+          <a href="/student/chat" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#129302;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">AI Tutor</div>
+            <div style="font-size:11px;color:var(--text-muted);">Ask anything</div>
+          </a>
+          <a href="/student/youtube" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#127916;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">YouTube</div>
+            <div style="font-size:11px;color:var(--text-muted);">Video → notes</div>
+          </a>
+          <a href="/student/weak-topics" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#127919;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">Weak Topics</div>
+            <div style="font-size:11px;color:var(--text-muted);">Focus areas</div>
           </a>
         </div>
 
@@ -2828,6 +2872,8 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
         sdb.update_flashcard_progress(data["card_id"], data.get("correct", False))
+        # Gamification — 1 XP per flashcard review
+        sdb.award_xp(_cid(), "flashcard_review", 1, "Reviewed a flashcard")
         return jsonify({"ok": True})
 
     @app.route("/api/student/flashcards/<int:card_id>", methods=["PUT"])
@@ -2954,6 +3000,13 @@ def register_student_routes(app, csrf, limiter):
         data = request.get_json(force=True)
         score = int(data.get("score", 0))
         sdb.update_quiz_score(quiz_id, score)
+        # Gamification
+        xp = max(5, score // 10)
+        sdb.award_xp(_cid(), "quiz_complete", xp, f"Quiz score: {score}%")
+        if score == 100:
+            sdb.earn_badge(_cid(), "quiz_master")
+        if not sdb.get_badges(_cid()) or not any(b["badge_key"] == "first_quiz" for b in sdb.get_badges(_cid())):
+            sdb.earn_badge(_cid(), "first_quiz")
         return jsonify({"ok": True})
 
     @app.route("/api/student/quizzes/<int:quiz_id>", methods=["DELETE"])
@@ -3003,6 +3056,7 @@ def register_student_routes(app, csrf, limiter):
 
         note_id = sdb.create_note(_cid(), result["title"], result["content_html"],
                                   course_id=course_id)
+        sdb.award_xp(_cid(), "notes_create", 10, f"Created: {result['title'][:40]}")
         return jsonify({"note_id": note_id, "title": result["title"]})
 
     @app.route("/api/student/notes", methods=["GET"])
@@ -3877,5 +3931,616 @@ def register_student_routes(app, csrf, limiter):
         function printNote() {{ window.print(); }}
         </script>
         """, active_page="student_notes")
+
+    # ================================================================
+    #  FEATURE 1 — AI Study Chat (Tutor)
+    # ================================================================
+
+    @app.route("/api/student/chat", methods=["POST"])
+    @limiter.limit("30 per minute")
+    def student_chat_send():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        cid = _cid()
+        data = request.get_json(force=True)
+        msg = (data.get("message") or "").strip()
+        course_id = data.get("course_id")
+        if not msg:
+            return jsonify(error="Empty message"), 400
+
+        # Build context from course notes/syllabus
+        context_text = ""
+        course_name = "General"
+        if course_id:
+            course = sdb.get_course(int(course_id), cid)
+            if course:
+                course_name = course.get("name", "General")
+                notes = sdb.get_notes(cid, int(course_id))
+                for n in notes[:3]:
+                    context_text += (n.get("content_html") or "") + "\n"
+                analysis = course.get("analysis_json")
+                if analysis:
+                    import json as _json
+                    try:
+                        a = _json.loads(analysis) if isinstance(analysis, str) else analysis
+                        if a.get("topics"):
+                            context_text += "\nTopics: " + ", ".join(
+                                t.get("name", "") if isinstance(t, dict) else str(t)
+                                for t in a["topics"][:20])
+                    except Exception:
+                        pass
+
+        # Get recent history
+        history_rows = sdb.get_chat_history(cid, int(course_id) if course_id else None, limit=20)
+        history = [{"role": r["role"], "content": r["content"]} for r in reversed(history_rows)]
+
+        # Save user message
+        sdb.add_chat_message(cid, "user", msg, int(course_id) if course_id else None)
+
+        # Get AI reply
+        reply = chat_with_tutor(course_name, msg, history, context_text)
+
+        # Save assistant reply
+        sdb.add_chat_message(cid, "assistant", reply, int(course_id) if course_id else None)
+
+        # Award XP
+        sdb.award_xp(cid, "chat_question", 2, f"Asked: {msg[:50]}")
+        # Check badge
+        total_msgs = len(sdb.get_chat_history(cid, limit=1000))
+        if total_msgs >= 10:
+            sdb.earn_badge(cid, "chat_curious")
+
+        return jsonify(reply=reply)
+
+    @app.route("/api/student/chat/clear", methods=["POST"])
+    def student_chat_clear():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        data = request.get_json(force=True)
+        sdb.clear_chat_history(_cid(), data.get("course_id"))
+        return jsonify(ok=True)
+
+    @app.route("/student/chat")
+    def student_chat_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        courses = sdb.get_courses(cid)
+        course_opts = "".join(
+            f'<option value="{c["id"]}">{_esc(c["name"])}</option>' for c in courses
+        )
+        return _s_render("AI Tutor", f"""
+        <div style="max-width:800px;margin:0 auto">
+          <h2 style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:1.5em">🤖</span> AI Study Tutor
+          </h2>
+          <p style="color:#64748b;margin-bottom:16px">
+            Ask anything about your courses — your AI tutor uses your own notes and course material to help.
+          </p>
+          <div style="margin-bottom:12px">
+            <select id="chat-course" onchange="loadHistory()"
+              style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;width:100%">
+              <option value="">General (no specific course)</option>
+              {course_opts}
+            </select>
+          </div>
+          <div id="chat-box" style="border:1px solid #e2e8f0;border-radius:12px;height:450px;
+               overflow-y:auto;padding:16px;background:#f8fafc;margin-bottom:12px"></div>
+          <div style="display:flex;gap:8px">
+            <input id="chat-input" type="text" placeholder="Ask your tutor..."
+              style="flex:1;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:15px"
+              onkeydown="if(event.key==='Enter')sendMsg()">
+            <button onclick="sendMsg()"
+              style="padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;
+                     font-weight:600;cursor:pointer">Send</button>
+            <button onclick="clearChat()" title="Clear history"
+              style="padding:10px 12px;background:#ef4444;color:#fff;border:none;border-radius:8px;
+                     cursor:pointer">🗑</button>
+          </div>
+        </div>
+        <script>
+        var chatBox = document.getElementById('chat-box');
+        function addBubble(role, text) {{
+          var d = document.createElement('div');
+          d.style.cssText = 'margin-bottom:10px;display:flex;' + (role==='user'?'justify-content:flex-end':'');
+          var b = document.createElement('div');
+          b.style.cssText = 'max-width:75%;padding:10px 14px;border-radius:12px;line-height:1.5;white-space:pre-wrap;' +
+            (role==='user'
+              ? 'background:#6366f1;color:#fff;border-bottom-right-radius:4px'
+              : 'background:#e2e8f0;color:#1e293b;border-bottom-left-radius:4px');
+          b.textContent = text;
+          d.appendChild(b);
+          chatBox.appendChild(d);
+          chatBox.scrollTop = chatBox.scrollHeight;
+        }}
+        async function loadHistory() {{
+          chatBox.innerHTML = '';
+          var cid = document.getElementById('chat-course').value;
+          // Show welcome message
+          addBubble('assistant', 'Hi! I\\'m your AI study tutor. Ask me anything about your course material! 📚');
+        }}
+        loadHistory();
+        async function sendMsg() {{
+          var inp = document.getElementById('chat-input');
+          var msg = inp.value.trim();
+          if (!msg) return;
+          inp.value = '';
+          addBubble('user', msg);
+          addBubble('assistant', '💭 Thinking...');
+          try {{
+            var r = await fetch('/api/student/chat', {{
+              method:'POST', headers:{{'Content-Type':'application/json'}},
+              body: JSON.stringify({{message: msg, course_id: document.getElementById('chat-course').value || null}})
+            }});
+            chatBox.removeChild(chatBox.lastChild);
+            var d = await r.json();
+            if (r.ok) {{ addBubble('assistant', d.reply); }}
+            else {{ addBubble('assistant', '❌ ' + (d.error || 'Error')); }}
+          }} catch(e) {{ chatBox.removeChild(chatBox.lastChild); addBubble('assistant', '❌ Network error'); }}
+        }}
+        async function clearChat() {{
+          if (!confirm('Clear chat history?')) return;
+          await fetch('/api/student/chat/clear', {{
+            method:'POST', headers:{{'Content-Type':'application/json'}},
+            body: JSON.stringify({{course_id: document.getElementById('chat-course').value || null}})
+          }});
+          loadHistory();
+        }}
+        </script>
+        """, active_page="student_chat")
+
+    # ================================================================
+    #  FEATURE 2 — YouTube Video → Notes
+    # ================================================================
+
+    @app.route("/api/student/youtube/import", methods=["POST"])
+    @limiter.limit("10 per minute")
+    def student_youtube_import():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        cid = _cid()
+        data = request.get_json(force=True)
+        url = (data.get("url") or "").strip()
+        course_id = data.get("course_id")
+        generate = data.get("generate", ["notes"])  # notes, flashcards
+
+        if not url:
+            return jsonify(error="YouTube URL required"), 400
+
+        # Extract video ID
+        import re as _re
+        m = _re.search(r'(?:v=|youtu\.be/|/embed/)([\w-]{11})', url)
+        if not m:
+            return jsonify(error="Invalid YouTube URL"), 400
+        video_id = m.group(1)
+
+        # Get transcript
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['es', 'en', 'pt', 'fr', 'de'])
+            transcript = " ".join(t["text"] for t in transcript_list)
+            video_title = data.get("title", f"YouTube Video {video_id}")
+        except Exception as e:
+            log.error("YouTube transcript failed for %s: %s", url, e)
+            return jsonify(error="Could not get transcript. The video might not have captions."), 400
+
+        # Save import
+        imp_id = sdb.create_youtube_import(cid, url, video_title, transcript)
+
+        results = {"import_id": imp_id, "video_title": video_title}
+
+        course_name = ""
+        if course_id:
+            c = sdb.get_course(int(course_id), cid)
+            if c:
+                course_name = c.get("name", "")
+
+        if "notes" in generate:
+            nd = notes_from_transcript(video_title, transcript, course_name)
+            note_id = sdb.create_note(cid, nd["title"], nd["content_html"],
+                                      int(course_id) if course_id else None, "youtube")
+            sdb.update_youtube_import(imp_id, note_id=note_id, status="done")
+            results["note_id"] = note_id
+
+        if "flashcards" in generate:
+            cards = flashcards_from_transcript(video_title, transcript)
+            if cards:
+                deck_id = sdb.create_flashcard_deck(
+                    cid, f"📺 {video_title}", len(cards),
+                    int(course_id) if course_id else None)
+                for card in cards:
+                    sdb.add_flashcard(deck_id, card["front"], card["back"])
+                sdb.update_youtube_import(imp_id, deck_id=deck_id)
+                results["deck_id"] = deck_id
+
+        # Award XP
+        sdb.award_xp(cid, "youtube_import", 15, f"Imported: {video_title[:50]}")
+        yt_imports = sdb.get_youtube_imports(cid)
+        if len(yt_imports) >= 5:
+            sdb.earn_badge(cid, "youtube_scholar")
+
+        return jsonify(**results)
+
+    @app.route("/student/youtube")
+    def student_youtube_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        courses = sdb.get_courses(cid)
+        imports = sdb.get_youtube_imports(cid)
+
+        course_opts = "".join(
+            f'<option value="{c["id"]}">{_esc(c["name"])}</option>' for c in courses
+        )
+        imports_html = ""
+        for imp in imports:
+            status_badge = "✅" if imp.get("status") == "done" else "⏳"
+            links = []
+            if imp.get("note_id"):
+                links.append(f'<a href="/student/notes/{imp["note_id"]}">📝 Notes</a>')
+            if imp.get("deck_id"):
+                links.append(f'<a href="/student/flashcards/{imp["deck_id"]}">🃏 Flashcards</a>')
+            imports_html += f"""
+            <div style="padding:12px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;
+                        display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <strong>{status_badge} {_esc(imp.get('video_title','Video'))}</strong>
+                <div style="font-size:13px;color:#64748b">{_esc(str(imp.get('created_at',''))[:10])}</div>
+              </div>
+              <div style="display:flex;gap:8px">{' '.join(links)}</div>
+            </div>"""
+
+        return _s_render("YouTube → Notes", f"""
+        <div style="max-width:800px;margin:0 auto">
+          <h2><span style="font-size:1.3em">🎬</span> YouTube → Study Materials</h2>
+          <p style="color:#64748b;margin-bottom:20px">
+            Paste a YouTube link and we'll generate notes and flashcards from the video transcript.
+          </p>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:24px">
+            <input id="yt-url" type="text" placeholder="https://www.youtube.com/watch?v=..."
+              style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;margin-bottom:8px;font-size:15px">
+            <input id="yt-title" type="text" placeholder="Video title (optional)"
+              style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;margin-bottom:8px">
+            <select id="yt-course"
+              style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;margin-bottom:8px">
+              <option value="">No course</option>
+              {course_opts}
+            </select>
+            <div style="display:flex;gap:12px;margin-bottom:12px">
+              <label><input type="checkbox" id="yt-gen-notes" checked> 📝 Generate Notes</label>
+              <label><input type="checkbox" id="yt-gen-flash" checked> 🃏 Generate Flashcards</label>
+            </div>
+            <button id="yt-btn" onclick="importYT()"
+              style="padding:10px 24px;background:#ef4444;color:#fff;border:none;border-radius:8px;
+                     font-weight:600;cursor:pointer;font-size:15px">
+              🎬 Import Video
+            </button>
+          </div>
+          <h3>Previous Imports</h3>
+          <div id="yt-list">{imports_html if imports_html else '<p style="color:#94a3b8">No imports yet.</p>'}</div>
+        </div>
+        <script>
+        async function importYT() {{
+          var btn = document.getElementById('yt-btn');
+          btn.disabled = true; btn.innerHTML = '⏳ Processing...';
+          var gen = [];
+          if (document.getElementById('yt-gen-notes').checked) gen.push('notes');
+          if (document.getElementById('yt-gen-flash').checked) gen.push('flashcards');
+          try {{
+            var r = await fetch('/api/student/youtube/import', {{
+              method:'POST', headers:{{'Content-Type':'application/json'}},
+              body: JSON.stringify({{
+                url: document.getElementById('yt-url').value,
+                title: document.getElementById('yt-title').value || undefined,
+                course_id: document.getElementById('yt-course').value || null,
+                generate: gen
+              }})
+            }});
+            var d = await r.json();
+            if (r.ok) {{
+              var msg = 'Imported!';
+              if (d.note_id) msg += ' Notes created.';
+              if (d.deck_id) msg += ' Flashcards created.';
+              alert(msg);
+              location.reload();
+            }} else {{ alert(d.error || 'Import failed'); }}
+          }} catch(e) {{ alert('Network error'); }}
+          btn.disabled = false; btn.innerHTML = '🎬 Import Video';
+        }}
+        </script>
+        """, active_page="student_youtube")
+
+    # ================================================================
+    #  FEATURE 3 — Weak Topic Detector
+    # ================================================================
+
+    @app.route("/api/student/weak-topics")
+    def student_weak_topics_api():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        cid = _cid()
+        fc_data = sdb.get_flashcard_accuracy(cid)
+        quiz_data = sdb.get_quiz_scores(cid)
+        result = detect_weak_topics(fc_data, quiz_data)
+        return jsonify(**result)
+
+    @app.route("/student/weak-topics")
+    def student_weak_topics_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        fc_data = sdb.get_flashcard_accuracy(cid)
+        quiz_data = sdb.get_quiz_scores(cid)
+        result = detect_weak_topics(fc_data, quiz_data)
+
+        weak_html = ""
+        for t in result.get("weak_topics", []):
+            score = t.get("score", 0)
+            color = "#ef4444" if score < 50 else "#f59e0b" if score < 75 else "#22c55e"
+            weak_html += f"""
+            <div style="padding:12px 16px;border-left:4px solid {color};background:#f8fafc;
+                        border-radius:0 8px 8px 0;margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <strong>{_esc(t.get('topic',''))}</strong>
+                <span style="background:{color};color:#fff;padding:2px 10px;border-radius:12px;
+                             font-size:13px;font-weight:600">{score}%</span>
+              </div>
+              <div style="font-size:13px;color:#64748b;margin-top:2px">
+                {_esc(t.get('course',''))} — {_esc(t.get('source',''))}
+              </div>
+            </div>"""
+
+        recs = result.get("recommendations_html", "")
+
+        return _s_render("Weak Topics", f"""
+        <div style="max-width:800px;margin:0 auto">
+          <h2><span style="font-size:1.3em">🎯</span> Weak Topic Detector</h2>
+          <p style="color:#64748b;margin-bottom:20px">
+            Based on your flashcard accuracy and quiz scores, here are the topics that need more attention.
+          </p>
+          <div style="margin-bottom:24px">
+            {weak_html if weak_html else '<p style="color:#94a3b8">Not enough data yet — complete some quizzes and review flashcards!</p>'}
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px">
+            {recs}
+          </div>
+        </div>
+        """, active_page="student_weak_topics")
+
+    # ================================================================
+    #  FEATURE 4 — Gamification (XP / Badges / Streaks / Level)
+    # ================================================================
+
+    @app.route("/api/student/gamification")
+    def student_gamification_api():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        cid = _cid()
+        total_xp = sdb.get_total_xp(cid)
+        level_name, level_floor, level_ceil = sdb.get_level(total_xp)
+        streak = sdb.get_streak_days(cid)
+        badges = sdb.get_badges(cid)
+        history = sdb.get_xp_history(cid)
+
+        # Auto-award streak badges
+        if streak >= 3:
+            sdb.earn_badge(cid, "streak_3")
+        if streak >= 7:
+            sdb.earn_badge(cid, "streak_7")
+        if streak >= 30:
+            sdb.earn_badge(cid, "streak_30")
+        if total_xp >= 100:
+            sdb.earn_badge(cid, "xp_100")
+        if total_xp >= 500:
+            sdb.earn_badge(cid, "xp_500")
+        if total_xp >= 1000:
+            sdb.earn_badge(cid, "xp_1000")
+
+        return jsonify(
+            total_xp=total_xp,
+            level=level_name,
+            level_floor=level_floor,
+            level_ceil=level_ceil,
+            streak=streak,
+            badges=[{"badge_key": b["badge_key"], "emoji": b.get("emoji","🏅"),
+                     "name": b.get("name",""), "desc": b.get("desc","")} for b in badges],
+            history=[{"action": h["action"], "xp": h["xp"], "detail": h.get("detail",""),
+                      "date": str(h.get("created_at",""))[:10]} for h in history],
+        )
+
+    @app.route("/student/achievements")
+    def student_achievements_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        total_xp = sdb.get_total_xp(cid)
+        level_name, level_floor, level_ceil = sdb.get_level(total_xp)
+        streak = sdb.get_streak_days(cid)
+        badges = sdb.get_badges(cid)
+        history = sdb.get_xp_history(cid, limit=20)
+
+        # Auto-award streak/XP badges
+        for key, threshold in [("streak_3", 3), ("streak_7", 7), ("streak_30", 30)]:
+            if streak >= threshold:
+                sdb.earn_badge(cid, key)
+        for key, threshold in [("xp_100", 100), ("xp_500", 500), ("xp_1000", 1000)]:
+            if total_xp >= threshold:
+                sdb.earn_badge(cid, key)
+        badges = sdb.get_badges(cid)
+
+        pct = min(100, int(100 * (total_xp - level_floor) / max(1, level_ceil - level_floor)))
+
+        badges_html = ""
+        for b in badges:
+            badges_html += f"""
+            <div style="text-align:center;padding:12px;background:#f8fafc;border-radius:12px;
+                        border:1px solid #e2e8f0;min-width:100px">
+              <div style="font-size:2em">{b.get('emoji','🏅')}</div>
+              <div style="font-weight:600;font-size:13px;margin-top:4px">{_esc(b.get('name',''))}</div>
+              <div style="font-size:11px;color:#64748b">{_esc(b.get('desc',''))}</div>
+            </div>"""
+
+        # All possible badges
+        all_badges_html = ""
+        for key, info in sdb.BADGE_DEFS.items():
+            earned = any(b["badge_key"] == key for b in badges)
+            opacity = "1" if earned else "0.3"
+            all_badges_html += f"""
+            <div style="text-align:center;padding:8px;opacity:{opacity};min-width:80px" title="{_esc(info['desc'])}">
+              <div style="font-size:1.5em">{info['emoji']}</div>
+              <div style="font-size:11px;font-weight:600">{_esc(info['name'])}</div>
+            </div>"""
+
+        history_html = ""
+        for h in history:
+            history_html += f"""
+            <div style="display:flex;justify-content:space-between;padding:6px 0;
+                        border-bottom:1px solid #f1f5f9;font-size:14px">
+              <span>{_esc(h.get('detail','') or h['action'])}</span>
+              <span style="color:#22c55e;font-weight:600">+{h['xp']} XP</span>
+            </div>"""
+
+        return _s_render("Achievements", f"""
+        <div style="max-width:800px;margin:0 auto">
+          <h2><span style="font-size:1.3em">🏆</span> Achievements & Progress</h2>
+
+          <!-- Level & XP Bar -->
+          <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;
+                      border-radius:16px;padding:24px;margin-bottom:24px;text-align:center">
+            <div style="font-size:14px;opacity:0.9">Level</div>
+            <div style="font-size:2em;font-weight:700;margin:4px 0">{_esc(level_name)}</div>
+            <div style="font-size:1.5em;font-weight:600">{total_xp} XP</div>
+            <div style="background:rgba(255,255,255,0.3);border-radius:8px;height:12px;margin:12px auto;max-width:300px">
+              <div style="background:#fff;border-radius:8px;height:12px;width:{pct}%;transition:width 0.5s"></div>
+            </div>
+            <div style="font-size:13px;opacity:0.8">{total_xp - level_floor} / {level_ceil - level_floor} XP to next level</div>
+          </div>
+
+          <!-- Streak -->
+          <div style="display:flex;gap:16px;margin-bottom:24px">
+            <div style="flex:1;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;
+                        padding:16px;text-align:center">
+              <div style="font-size:2em">🔥</div>
+              <div style="font-size:2em;font-weight:700;color:#ea580c">{streak}</div>
+              <div style="font-size:13px;color:#9a3412">Day Streak</div>
+            </div>
+            <div style="flex:1;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;
+                        padding:16px;text-align:center">
+              <div style="font-size:2em">🏅</div>
+              <div style="font-size:2em;font-weight:700;color:#16a34a">{len(badges)}</div>
+              <div style="font-size:13px;color:#15803d">Badges Earned</div>
+            </div>
+          </div>
+
+          <!-- Earned Badges -->
+          <h3>🏅 Your Badges</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:24px">
+            {badges_html if badges_html else '<p style="color:#94a3b8">No badges yet — keep studying!</p>'}
+          </div>
+
+          <!-- All Badges -->
+          <h3>🎖 All Badges</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">
+            {all_badges_html}
+          </div>
+
+          <!-- XP History -->
+          <h3>📊 Recent Activity</h3>
+          <div style="background:#f8fafc;border-radius:12px;padding:16px">
+            {history_html if history_html else '<p style="color:#94a3b8">No activity yet.</p>'}
+          </div>
+        </div>
+        """, active_page="student_achievements")
+
+    # ================================================================
+    #  FEATURE 5 — Email Preferences (for daily study email)
+    # ================================================================
+
+    @app.route("/api/student/email-prefs", methods=["GET", "POST"])
+    def student_email_prefs_api():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        cid = _cid()
+        if request.method == "GET":
+            prefs = sdb.get_email_prefs(cid)
+            if not prefs:
+                return jsonify(daily_email=True, email_hour=7, timezone="America/Mexico_City")
+            return jsonify(
+                daily_email=bool(prefs.get("daily_email")),
+                email_hour=prefs.get("email_hour", 7),
+                timezone=prefs.get("timezone", "America/Mexico_City"),
+            )
+        data = request.get_json(force=True)
+        sdb.upsert_email_prefs(
+            cid,
+            daily_email=data.get("daily_email", True),
+            email_hour=data.get("email_hour", 7),
+            timezone=data.get("timezone", "America/Mexico_City"),
+        )
+        return jsonify(ok=True)
+
+    @app.route("/student/settings")
+    def student_settings_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        prefs = sdb.get_email_prefs(cid) or {}
+        de = prefs.get("daily_email", 1)
+        hour = prefs.get("email_hour", 7)
+        tz = prefs.get("timezone", "America/Mexico_City")
+
+        return _s_render("Settings", f"""
+        <div style="max-width:600px;margin:0 auto">
+          <h2>⚙️ Settings</h2>
+
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px">
+            <h3>📧 Daily Study Email</h3>
+            <p style="color:#64748b;font-size:14px;margin-bottom:12px">
+              Get a morning email with your study plan, upcoming exams, and weak topics to review.
+            </p>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer">
+              <input type="checkbox" id="pref-daily" {'checked' if de else ''}>
+              <span>Enable daily study email</span>
+            </label>
+            <div style="display:flex;gap:12px;margin-bottom:12px">
+              <div>
+                <label style="font-size:13px;color:#64748b">Send at (hour)</label>
+                <select id="pref-hour" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;width:80px">
+                  {"".join(f'<option value="{h}" {"selected" if h==hour else ""}>{h:02d}:00</option>' for h in range(5,23))}
+                </select>
+              </div>
+              <div>
+                <label style="font-size:13px;color:#64748b">Timezone</label>
+                <select id="pref-tz" style="padding:6px;border:1px solid #d1d5db;border-radius:6px">
+                  <option value="America/Mexico_City" {"selected" if tz=="America/Mexico_City" else ""}>Mexico City</option>
+                  <option value="America/New_York" {"selected" if tz=="America/New_York" else ""}>New York</option>
+                  <option value="America/Chicago" {"selected" if tz=="America/Chicago" else ""}>Chicago</option>
+                  <option value="America/Los_Angeles" {"selected" if tz=="America/Los_Angeles" else ""}>Los Angeles</option>
+                  <option value="America/Bogota" {"selected" if tz=="America/Bogota" else ""}>Bogotá</option>
+                  <option value="America/Sao_Paulo" {"selected" if tz=="America/Sao_Paulo" else ""}>São Paulo</option>
+                  <option value="Europe/Madrid" {"selected" if tz=="Europe/Madrid" else ""}>Madrid</option>
+                  <option value="Europe/London" {"selected" if tz=="Europe/London" else ""}>London</option>
+                </select>
+              </div>
+            </div>
+            <button onclick="savePrefs()"
+              style="padding:8px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;
+                     font-weight:600;cursor:pointer">Save Preferences</button>
+          </div>
+        </div>
+        <script>
+        async function savePrefs() {{
+          var r = await fetch('/api/student/email-prefs', {{
+            method:'POST', headers:{{'Content-Type':'application/json'}},
+            body: JSON.stringify({{
+              daily_email: document.getElementById('pref-daily').checked,
+              email_hour: parseInt(document.getElementById('pref-hour').value),
+              timezone: document.getElementById('pref-tz').value
+            }})
+          }});
+          if (r.ok) alert('Saved!'); else alert('Error saving.');
+        }}
+        </script>
+        """, active_page="student_settings")
 
     log.info("Student routes registered.")

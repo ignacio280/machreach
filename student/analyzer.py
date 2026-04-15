@@ -566,3 +566,209 @@ No markdown fences. ONLY the JSON object."""
     except Exception as e:
         log.error("Notes generation failed for %s: %s", course_name, e)
         return {"title": f"Notes: {course_name}", "content_html": "<p>Generation failed. Please try again.</p>"}
+
+
+# ── AI Study Chat (Tutor) ──────────────────────────────────
+
+def chat_with_tutor(
+    course_name: str,
+    user_message: str,
+    history: list[dict] | None = None,
+    context_text: str = "",
+) -> str:
+    """
+    AI Tutor chat — answers student questions using course material as RAG context.
+
+    Parameters:
+        course_name:   Name of the course
+        user_message:  The student's question
+        history:       Recent chat messages [{"role": "user"/"assistant", "content": "..."}]
+        context_text:  Relevant course notes/syllabus text for grounding
+
+    Returns:
+        The tutor's reply as a string.
+    """
+    system = f"""You are a friendly, expert AI tutor for the course "{course_name}".
+Your role:
+- Answer the student's questions clearly and helpfully
+- Use the provided course material to give accurate, relevant answers
+- If you don't know or the material doesn't cover it, say so honestly
+- Use examples when helpful
+- Keep answers concise but thorough
+- Match the language of the student (if they write in Spanish, reply in Spanish)
+- Encourage the student and be supportive"""
+
+    if context_text:
+        system += f"\n\nCOURSE MATERIAL FOR REFERENCE:\n{context_text[:8000]}"
+
+    messages = [{"role": "system", "content": system}]
+    if history:
+        for h in history[-10:]:
+            messages.append({"role": h["role"], "content": h["content"]})
+    messages.append({"role": "user", "content": user_message})
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.4,
+            max_tokens=2000,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        log.error("Chat tutor failed for %s: %s", course_name, e)
+        return "Sorry, I couldn't process your question right now. Please try again."
+
+
+# ── YouTube transcript → notes ──────────────────────────────
+
+def notes_from_transcript(
+    video_title: str,
+    transcript: str,
+    course_name: str = "",
+) -> dict:
+    """
+    Generate study notes from a YouTube video transcript.
+
+    Returns:
+        {"title": "...", "content_html": "..."}
+    """
+    course_ctx = f' for the course "{course_name}"' if course_name else ""
+
+    prompt = f"""You are creating study notes from a YouTube video{course_ctx}.
+Video title: "{video_title}"
+
+TRANSCRIPT:
+{transcript[:12000]}
+
+Create comprehensive, well-structured study notes in HTML format:
+- Use <h2> for major sections and <h3> for subsections
+- Use <ul>/<li> for key points
+- Use <strong> for important terms
+- Extract all key concepts, formulas, and examples
+- Organize chronologically or by topic (whichever works better)
+- Keep in the same language as the transcript
+
+Return ONLY valid JSON:
+{{
+  "title": "Notes: Video Title",
+  "content_html": "<h2>...</h2><p>...</p>"
+}}
+
+No markdown fences. ONLY the JSON object."""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=8000,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        return {
+            "title": data.get("title", f"Notes: {video_title}"),
+            "content_html": data.get("content_html", ""),
+        }
+    except Exception as e:
+        log.error("YouTube notes generation failed: %s", e)
+        return {"title": f"Notes: {video_title}",
+                "content_html": "<p>Failed to generate notes from transcript.</p>"}
+
+
+def flashcards_from_transcript(
+    video_title: str,
+    transcript: str,
+    count: int = 15,
+) -> list[dict]:
+    """Generate flashcards from a YouTube video transcript."""
+    prompt = f"""Create {count} study flashcards from this YouTube video.
+Video: "{video_title}"
+
+TRANSCRIPT:
+{transcript[:10000]}
+
+Return ONLY a JSON array of flashcards:
+[{{"front": "question", "back": "answer"}}]
+Keep in the same language as the transcript. No markdown fences."""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=4000,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        cards = json.loads(raw)
+        if isinstance(cards, list):
+            return [{"front": c.get("front", ""), "back": c.get("back", "")}
+                    for c in cards if c.get("front") and c.get("back")]
+        return []
+    except Exception as e:
+        log.error("YouTube flashcards failed: %s", e)
+        return []
+
+
+# ── Weak topic detection ────────────────────────────────────
+
+def detect_weak_topics(
+    flashcard_data: list[dict],
+    quiz_data: list[dict],
+) -> dict:
+    """
+    Analyze flashcard accuracy and quiz scores to find weak topics
+    and generate study recommendations.
+
+    Returns:
+        {"weak_topics": [...], "recommendations_html": "..."}
+    """
+    summary_lines = []
+    for fd in flashcard_data:
+        summary_lines.append(
+            f"- Flashcard deck \"{fd['title']}\" (course: {fd.get('course_name','N/A')}): "
+            f"{fd.get('accuracy', 0)}% accuracy ({fd.get('total_correct',0)}/{fd.get('total_seen',0)})"
+        )
+    for qd in quiz_data:
+        summary_lines.append(
+            f"- Quiz \"{qd['title']}\" (course: {qd.get('course_name','N/A')}): "
+            f"best score {qd.get('best_score', 0)}% ({qd.get('attempts', 0)} attempts)"
+        )
+
+    if not summary_lines:
+        return {"weak_topics": [], "recommendations_html":
+                "<p>Not enough data yet. Complete some quizzes and review flashcards first!</p>"}
+
+    prompt = f"""You are a study advisor. Analyze this student's performance data and identify weak topics.
+
+PERFORMANCE DATA:
+{chr(10).join(summary_lines)}
+
+Return ONLY valid JSON:
+{{
+  "weak_topics": [
+    {{"topic": "Topic name", "score": 45, "source": "quiz/flashcard", "course": "Course name"}}
+  ],
+  "recommendations_html": "<h3>Study Recommendations</h3><ul><li>Focus on ...</li></ul>"
+}}
+
+Sort weak_topics from weakest to strongest. Keep recommendations in the same language as the topic names."""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=3000,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        return json.loads(raw)
+    except Exception as e:
+        log.error("Weak topic detection failed: %s", e)
+        return {"weak_topics": [], "recommendations_html": "<p>Analysis failed. Try again.</p>"}

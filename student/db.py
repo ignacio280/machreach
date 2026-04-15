@@ -181,6 +181,58 @@ CREATE TABLE IF NOT EXISTS student_notes (
     updated_at  TIMESTAMP DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_notes_client ON student_notes(client_id);
+
+CREATE TABLE IF NOT EXISTS student_chat_messages (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id   INTEGER REFERENCES student_courses(id) ON DELETE SET NULL,
+    role        TEXT NOT NULL DEFAULT 'user',
+    content     TEXT NOT NULL,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chat_client ON student_chat_messages(client_id, course_id);
+
+CREATE TABLE IF NOT EXISTS student_youtube_imports (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    youtube_url TEXT NOT NULL,
+    video_title TEXT DEFAULT '',
+    transcript  TEXT DEFAULT '',
+    status      TEXT DEFAULT 'pending',
+    note_id     INTEGER REFERENCES student_notes(id) ON DELETE SET NULL,
+    deck_id     INTEGER REFERENCES student_flashcard_decks(id) ON DELETE SET NULL,
+    quiz_id     INTEGER REFERENCES student_quizzes(id) ON DELETE SET NULL,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_yt_client ON student_youtube_imports(client_id);
+
+CREATE TABLE IF NOT EXISTS student_xp (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    action      TEXT NOT NULL,
+    xp          INTEGER NOT NULL DEFAULT 0,
+    detail      TEXT DEFAULT '',
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_xp_client ON student_xp(client_id);
+
+CREATE TABLE IF NOT EXISTS student_badges (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    badge_key   TEXT NOT NULL,
+    earned_at   TIMESTAMP DEFAULT NOW(),
+    UNIQUE(client_id, badge_key)
+);
+CREATE INDEX IF NOT EXISTS idx_badges_client ON student_badges(client_id);
+
+CREATE TABLE IF NOT EXISTS student_email_prefs (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    daily_email BOOLEAN DEFAULT TRUE,
+    email_hour  INTEGER DEFAULT 7,
+    timezone    TEXT DEFAULT 'America/Mexico_City',
+    UNIQUE(client_id)
+);
 """
 
 STUDENT_SQLITE_SCHEMA = """
@@ -341,6 +393,58 @@ CREATE TABLE IF NOT EXISTS student_notes (
     updated_at  TEXT DEFAULT (datetime('now', 'localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_notes_client ON student_notes(client_id);
+
+CREATE TABLE IF NOT EXISTS student_chat_messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id   INTEGER REFERENCES student_courses(id) ON DELETE SET NULL,
+    role        TEXT NOT NULL DEFAULT 'user',
+    content     TEXT NOT NULL,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_client ON student_chat_messages(client_id, course_id);
+
+CREATE TABLE IF NOT EXISTS student_youtube_imports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    youtube_url TEXT NOT NULL,
+    video_title TEXT DEFAULT '',
+    transcript  TEXT DEFAULT '',
+    status      TEXT DEFAULT 'pending',
+    note_id     INTEGER REFERENCES student_notes(id) ON DELETE SET NULL,
+    deck_id     INTEGER REFERENCES student_flashcard_decks(id) ON DELETE SET NULL,
+    quiz_id     INTEGER REFERENCES student_quizzes(id) ON DELETE SET NULL,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_yt_client ON student_youtube_imports(client_id);
+
+CREATE TABLE IF NOT EXISTS student_xp (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    action      TEXT NOT NULL,
+    xp          INTEGER NOT NULL DEFAULT 0,
+    detail      TEXT DEFAULT '',
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_xp_client ON student_xp(client_id);
+
+CREATE TABLE IF NOT EXISTS student_badges (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    badge_key   TEXT NOT NULL,
+    earned_at   TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(client_id, badge_key)
+);
+CREATE INDEX IF NOT EXISTS idx_badges_client ON student_badges(client_id);
+
+CREATE TABLE IF NOT EXISTS student_email_prefs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    daily_email INTEGER DEFAULT 1,
+    email_hour  INTEGER DEFAULT 7,
+    timezone    TEXT DEFAULT 'America/Mexico_City',
+    UNIQUE(client_id)
+);
 """
 
 
@@ -1135,3 +1239,274 @@ def delete_note(note_id: int, client_id: int):
     with get_db() as db:
         _exec(db, "DELETE FROM student_notes WHERE id = %s AND client_id = %s",
               (note_id, client_id))
+
+
+# ── Chat messages ───────────────────────────────────────────
+
+def add_chat_message(client_id: int, role: str, content: str, course_id: int | None = None) -> int:
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_chat_messages (client_id, course_id, role, content) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (client_id, course_id, role, content),
+            "INSERT INTO student_chat_messages (client_id, course_id, role, content) "
+            "VALUES (?, ?, ?, ?)",
+        )
+
+
+def get_chat_history(client_id: int, course_id: int | None = None, limit: int = 50) -> list[dict]:
+    with get_db() as db:
+        if course_id:
+            return _fetchall(
+                db,
+                "SELECT * FROM student_chat_messages WHERE client_id = %s AND course_id = %s "
+                "ORDER BY created_at DESC LIMIT %s",
+                (client_id, course_id, limit),
+            )
+        return _fetchall(
+            db,
+            "SELECT * FROM student_chat_messages WHERE client_id = %s "
+            "ORDER BY created_at DESC LIMIT %s",
+            (client_id, limit),
+        )
+
+
+def clear_chat_history(client_id: int, course_id: int | None = None):
+    with get_db() as db:
+        if course_id:
+            _exec(db, "DELETE FROM student_chat_messages WHERE client_id = %s AND course_id = %s",
+                  (client_id, course_id))
+        else:
+            _exec(db, "DELETE FROM student_chat_messages WHERE client_id = %s", (client_id,))
+
+
+# ── YouTube imports ─────────────────────────────────────────
+
+def create_youtube_import(client_id: int, youtube_url: str, video_title: str = "",
+                          transcript: str = "") -> int:
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_youtube_imports (client_id, youtube_url, video_title, transcript) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (client_id, youtube_url, video_title, transcript),
+            "INSERT INTO student_youtube_imports (client_id, youtube_url, video_title, transcript) "
+            "VALUES (?, ?, ?, ?)",
+        )
+
+
+def update_youtube_import(import_id: int, **kwargs):
+    with get_db() as db:
+        sets = []
+        vals = []
+        for k, v in kwargs.items():
+            if k in ("status", "transcript", "video_title", "note_id", "deck_id", "quiz_id"):
+                sets.append(f"{k} = %s")
+                vals.append(v)
+        if not sets:
+            return
+        vals.append(import_id)
+        _exec(db, f"UPDATE student_youtube_imports SET {', '.join(sets)} WHERE id = %s",
+              tuple(vals))
+
+
+def get_youtube_imports(client_id: int) -> list[dict]:
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT * FROM student_youtube_imports WHERE client_id = %s ORDER BY created_at DESC",
+            (client_id,),
+        )
+
+
+# ── XP / Gamification ──────────────────────────────────────
+
+def award_xp(client_id: int, action: str, xp: int, detail: str = "") -> int:
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s) RETURNING id",
+            (client_id, action, xp, detail),
+            "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (?, ?, ?, ?)",
+        )
+
+
+def get_total_xp(client_id: int) -> int:
+    with get_db() as db:
+        return _fetchval(
+            db,
+            "SELECT COALESCE(SUM(xp), 0) FROM student_xp WHERE client_id = %s",
+            (client_id,),
+        ) or 0
+
+
+def get_xp_history(client_id: int, limit: int = 30) -> list[dict]:
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT * FROM student_xp WHERE client_id = %s ORDER BY created_at DESC LIMIT %s",
+            (client_id, limit),
+        )
+
+
+def get_streak_days(client_id: int) -> int:
+    """Count consecutive days with XP activity ending today."""
+    with get_db() as db:
+        if _USE_PG:
+            rows = _fetchall(
+                db,
+                "SELECT DISTINCT created_at::date AS d FROM student_xp "
+                "WHERE client_id = %s ORDER BY d DESC LIMIT 90",
+                (client_id,),
+            )
+        else:
+            rows = _fetchall(
+                db,
+                "SELECT DISTINCT date(created_at) AS d FROM student_xp "
+                "WHERE client_id = %s ORDER BY d DESC LIMIT 90",
+                (client_id,),
+            )
+    if not rows:
+        return 0
+    from datetime import date as _date, timedelta
+    today = _date.today()
+    streak = 0
+    for r in rows:
+        d = r["d"]
+        if isinstance(d, str):
+            d = _date.fromisoformat(d)
+        expected = today - timedelta(days=streak)
+        if d == expected:
+            streak += 1
+        else:
+            break
+    return streak
+
+
+# ── Badges ──────────────────────────────────────────────────
+
+BADGE_DEFS = {
+    "first_login":     {"emoji": "🎉", "name": "Welcome!",        "desc": "Logged in for the first time"},
+    "first_quiz":      {"emoji": "📝", "name": "Quiz Rookie",     "desc": "Completed your first quiz"},
+    "quiz_master":     {"emoji": "🏆", "name": "Quiz Master",     "desc": "Scored 100% on a quiz"},
+    "flashcard_fan":   {"emoji": "🃏", "name": "Flashcard Fan",   "desc": "Reviewed 100 flashcards"},
+    "streak_3":        {"emoji": "🔥", "name": "On Fire!",        "desc": "3-day study streak"},
+    "streak_7":        {"emoji": "⚡", "name": "Unstoppable",      "desc": "7-day study streak"},
+    "streak_30":       {"emoji": "💎", "name": "Diamond Student",  "desc": "30-day study streak"},
+    "note_taker":      {"emoji": "📒", "name": "Note Taker",      "desc": "Created 10 notes"},
+    "youtube_scholar": {"emoji": "🎬", "name": "YouTube Scholar", "desc": "Imported 5 YouTube videos"},
+    "xp_100":          {"emoji": "⭐", "name": "Rising Star",     "desc": "Earned 100 XP"},
+    "xp_500":          {"emoji": "🌟", "name": "Shining Star",    "desc": "Earned 500 XP"},
+    "xp_1000":         {"emoji": "💫", "name": "Superstar",       "desc": "Earned 1000 XP"},
+    "chat_curious":    {"emoji": "💬", "name": "Curious Mind",    "desc": "Asked 10 questions to AI tutor"},
+}
+
+LEVEL_THRESHOLDS = [
+    (0, "Freshman"),
+    (100, "Sophomore"),
+    (300, "Junior"),
+    (600, "Senior"),
+    (1000, "Scholar"),
+    (2000, "Master"),
+    (5000, "Professor"),
+]
+
+
+def get_level(xp: int) -> tuple[str, int, int]:
+    """Return (level_name, current_level_xp_floor, next_level_xp_floor)."""
+    for i in range(len(LEVEL_THRESHOLDS) - 1, -1, -1):
+        if xp >= LEVEL_THRESHOLDS[i][0]:
+            floor = LEVEL_THRESHOLDS[i][0]
+            ceil = LEVEL_THRESHOLDS[i + 1][0] if i + 1 < len(LEVEL_THRESHOLDS) else floor + 1000
+            return LEVEL_THRESHOLDS[i][1], floor, ceil
+    return "Freshman", 0, 100
+
+
+def earn_badge(client_id: int, badge_key: str) -> bool:
+    """Try to award a badge. Returns True if newly earned, False if already had."""
+    if badge_key not in BADGE_DEFS:
+        return False
+    with get_db() as db:
+        try:
+            _exec(db, "INSERT INTO student_badges (client_id, badge_key) VALUES (%s, %s)",
+                  (client_id, badge_key))
+            return True
+        except Exception:
+            return False
+
+
+def get_badges(client_id: int) -> list[dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db, "SELECT * FROM student_badges WHERE client_id = %s ORDER BY earned_at",
+            (client_id,),
+        )
+    result = []
+    for r in rows:
+        info = BADGE_DEFS.get(r["badge_key"], {})
+        result.append({**r, **info})
+    return result
+
+
+# ── Email prefs ─────────────────────────────────────────────
+
+def get_email_prefs(client_id: int) -> dict | None:
+    with get_db() as db:
+        return _fetchone(
+            db, "SELECT * FROM student_email_prefs WHERE client_id = %s", (client_id,),
+        )
+
+
+def upsert_email_prefs(client_id: int, daily_email: bool = True, email_hour: int = 7,
+                        timezone: str = "America/Mexico_City"):
+    with get_db() as db:
+        existing = _fetchone(db, "SELECT id FROM student_email_prefs WHERE client_id = %s",
+                             (client_id,))
+        de = 1 if daily_email else 0
+        if existing:
+            _exec(db,
+                  "UPDATE student_email_prefs SET daily_email = %s, email_hour = %s, timezone = %s "
+                  "WHERE client_id = %s",
+                  (de, email_hour, timezone, client_id))
+        else:
+            _exec(db,
+                  "INSERT INTO student_email_prefs (client_id, daily_email, email_hour, timezone) "
+                  "VALUES (%s, %s, %s, %s)",
+                  (client_id, de, email_hour, timezone))
+
+
+# ── Weak topics ─────────────────────────────────────────────
+
+def get_flashcard_accuracy(client_id: int) -> list[dict]:
+    """Get per-deck accuracy rates for flashcards."""
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT d.id, d.title, d.course_id, c.name as course_name, "
+            "SUM(f.times_seen) as total_seen, SUM(f.times_correct) as total_correct, "
+            "CASE WHEN SUM(f.times_seen) > 0 THEN "
+            "ROUND(100.0 * SUM(f.times_correct) / SUM(f.times_seen)) ELSE 0 END as accuracy "
+            "FROM student_flashcard_decks d "
+            "JOIN student_flashcards f ON f.deck_id = d.id "
+            "LEFT JOIN student_courses c ON d.course_id = c.id "
+            "WHERE d.client_id = %s AND f.times_seen > 0 "
+            "GROUP BY d.id, d.title, d.course_id, c.name "
+            "ORDER BY accuracy ASC",
+            (client_id,),
+        )
+
+
+def get_quiz_scores(client_id: int) -> list[dict]:
+    """Get quiz scores for weak topic detection."""
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT q.id, q.title, q.course_id, c.name as course_name, "
+            "q.best_score, q.attempts, q.question_count "
+            "FROM student_quizzes q "
+            "LEFT JOIN student_courses c ON q.course_id = c.id "
+            "WHERE q.client_id = %s AND q.attempts > 0 "
+            "ORDER BY q.best_score ASC",
+            (client_id,),
+        )
