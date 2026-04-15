@@ -835,16 +835,16 @@ def register_student_routes(app, csrf, limiter):
         </div>
 
         <!-- XP / Level Bar -->
-        <a href="/student/achievements" style="text-decoration:none;display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 18px;margin-bottom:20px;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <a href="/student/achievements" style="text-decoration:none;display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px;margin-bottom:20px;transition:all 0.2s" onmouseover="this.style.borderColor='var(--primary)';this.style.boxShadow='0 4px 12px rgba(99,102,241,0.12)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:1.4em">🏆</span>
               <span style="font-weight:700;color:var(--text)">{_esc(level_name)}</span>
               <span style="color:var(--text-muted);font-size:13px">{total_xp} XP</span>
             </div>
-            <div style="display:flex;align-items:center;gap:12px">
-              <span style="color:#ea580c;font-weight:700">🔥 {streak_days}</span>
-              <span style="color:var(--text-muted);font-size:12px">streak</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="color:#ea580c;font-weight:700;font-size:15px">🔥 {streak_days}</span>
+              <span style="color:var(--text-muted);font-size:12px">day streak</span>
             </div>
           </div>
           <div style="background:var(--border);border-radius:6px;height:8px;overflow:hidden">
@@ -853,13 +853,11 @@ def register_student_routes(app, csrf, limiter):
           <div style="font-size:11px;color:var(--text-muted);margin-top:4px;text-align:right">{total_xp - level_floor}/{level_ceil - level_floor} XP to next level</div>
         </a>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-bottom:24px;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
           <div class="stat-card stat-purple"><div class="num">{len(courses)}</div><div class="label">Courses</div></div>
           <div class="stat-card stat-red"><div class="num">{stats['upcoming_exams']}</div><div class="label">Upcoming Exams</div></div>
           <div class="stat-card stat-green"><div class="num">{stats['completion_pct']}%</div><div class="label">Plan Progress</div></div>
           <div class="stat-card stat-blue"><div class="num">{focus_stats['total_hours']}</div><div class="label">Hours Focused</div></div>
-          <div class="stat-card" style="background:var(--card);border:1px solid var(--border);"><div class="num" style="color:#F59E0B;">{focus_stats['streak_days']}&#128293;</div><div class="label">Day Streak</div></div>
-          <div class="stat-card" style="background:var(--card);border:1px solid var(--border);"><div class="num" style="font-size:14px;color:{canvas_color};">{canvas_status}</div><div class="label">Canvas</div></div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
@@ -4114,168 +4112,6 @@ def register_student_routes(app, csrf, limiter):
         """, active_page="student_chat")
 
     # ================================================================
-    #  FEATURE 2 — YouTube Video → Notes
-    # ================================================================
-
-    @app.route("/api/student/youtube/import", methods=["POST"])
-    @limiter.limit("10 per minute")
-    def student_youtube_import():
-        if not _logged_in():
-            return jsonify(error="Login required"), 401
-        cid = _cid()
-        data = request.get_json(force=True)
-        url = (data.get("url") or "").strip()
-        course_id = data.get("course_id")
-        generate = data.get("generate", ["notes"])  # notes, flashcards
-
-        if not url:
-            return jsonify(error="YouTube URL required"), 400
-
-        # Extract video ID
-        import re as _re
-        m = _re.search(r'(?:v=|youtu\.be/|/embed/)([\w-]{11})', url)
-        if not m:
-            return jsonify(error="Invalid YouTube URL"), 400
-        video_id = m.group(1)
-
-        # Get transcript
-        try:
-            from youtube_transcript_api import YouTubeTranscriptApi
-            api = YouTubeTranscriptApi()
-            fetched = api.fetch(video_id, languages=['es', 'en', 'pt', 'fr', 'de'])
-            transcript = " ".join(s.text for s in fetched.snippets)
-            video_title = data.get("title", f"YouTube Video {video_id}")
-        except Exception as e:
-            log.error("YouTube transcript failed for %s: %s", url, e)
-            return jsonify(error="Could not get transcript. The video might not have captions."), 400
-
-        # Save import
-        imp_id = sdb.create_youtube_import(cid, url, video_title, transcript)
-
-        results = {"import_id": imp_id, "video_title": video_title}
-
-        course_name = ""
-        if course_id:
-            c = sdb.get_course(int(course_id), cid)
-            if c:
-                course_name = c.get("name", "")
-
-        if "notes" in generate:
-            nd = notes_from_transcript(video_title, transcript, course_name)
-            note_id = sdb.create_note(cid, nd["title"], nd["content_html"],
-                                      int(course_id) if course_id else None, "youtube")
-            sdb.update_youtube_import(imp_id, note_id=note_id, status="done")
-            results["note_id"] = note_id
-
-        if "flashcards" in generate:
-            cards = flashcards_from_transcript(video_title, transcript)
-            if cards:
-                deck_id = sdb.create_flashcard_deck(
-                    cid, f"📺 {video_title}", len(cards),
-                    int(course_id) if course_id else None)
-                for card in cards:
-                    sdb.add_flashcard(deck_id, card["front"], card["back"])
-                sdb.update_youtube_import(imp_id, deck_id=deck_id)
-                results["deck_id"] = deck_id
-
-        # Award XP
-        sdb.award_xp(cid, "youtube_import", 15, f"Imported: {video_title[:50]}")
-        yt_imports = sdb.get_youtube_imports(cid)
-        if len(yt_imports) >= 5:
-            sdb.earn_badge(cid, "youtube_scholar")
-
-        return jsonify(**results)
-
-    @app.route("/student/youtube")
-    def student_youtube_page():
-        if not _logged_in():
-            return redirect(url_for("login"))
-        cid = _cid()
-        courses = sdb.get_courses(cid)
-        imports = sdb.get_youtube_imports(cid)
-
-        course_opts = "".join(
-            f'<option value="{c["id"]}">{_esc(c["name"])}</option>' for c in courses
-        )
-        imports_html = ""
-        for imp in imports:
-            status_badge = "✅" if imp.get("status") == "done" else "⏳"
-            links = []
-            if imp.get("note_id"):
-                links.append(f'<a href="/student/notes/{imp["note_id"]}">📝 Notes</a>')
-            if imp.get("deck_id"):
-                links.append(f'<a href="/student/flashcards/{imp["deck_id"]}">🃏 Flashcards</a>')
-            imports_html += f"""
-            <div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;
-                        display:flex;justify-content:space-between;align-items:center;background:var(--card);color:var(--text)">
-              <div>
-                <strong>{status_badge} {_esc(imp.get('video_title','Video'))}</strong>
-                <div style="font-size:13px;color:var(--text-muted)">{_esc(str(imp.get('created_at',''))[:10])}</div>
-              </div>
-              <div style="display:flex;gap:8px">{' '.join(links)}</div>
-            </div>"""
-
-        return _s_render("YouTube → Notes", f"""
-        <div style="max-width:800px;margin:0 auto">
-          <h2><span style="font-size:1.3em">🎬</span> YouTube → Study Materials</h2>
-          <p style="color:var(--text-muted);margin-bottom:20px">
-            Paste a YouTube link and we'll generate notes and flashcards from the video transcript.
-          </p>
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
-            <input id="yt-url" type="text" placeholder="https://www.youtube.com/watch?v=..."
-              style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;font-size:15px;background:var(--bg);color:var(--text)">
-            <input id="yt-title" type="text" placeholder="Video title (optional)"
-              style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg);color:var(--text)">
-            <select id="yt-course"
-              style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg);color:var(--text)">
-              <option value="">No course</option>
-              {course_opts}
-            </select>
-            <div style="display:flex;gap:12px;margin-bottom:12px">
-              <label><input type="checkbox" id="yt-gen-notes" checked> 📝 Generate Notes</label>
-              <label><input type="checkbox" id="yt-gen-flash" checked> 🃏 Generate Flashcards</label>
-            </div>
-            <button id="yt-btn" onclick="importYT()"
-              style="padding:10px 24px;background:#ef4444;color:#fff;border:none;border-radius:8px;
-                     font-weight:600;cursor:pointer;font-size:15px">
-              🎬 Import Video
-            </button>
-          </div>
-          <h3 style="color:var(--text)">Previous Imports</h3>
-          <div id="yt-list">{imports_html if imports_html else '<p style="color:var(--text-muted)">No imports yet.</p>'}</div>
-        </div>
-        <script>
-        async function importYT() {{
-          var btn = document.getElementById('yt-btn');
-          btn.disabled = true; btn.innerHTML = '⏳ Processing...';
-          var gen = [];
-          if (document.getElementById('yt-gen-notes').checked) gen.push('notes');
-          if (document.getElementById('yt-gen-flash').checked) gen.push('flashcards');
-          try {{
-            var r = await fetch('/api/student/youtube/import', {{
-              method:'POST', headers:{{'Content-Type':'application/json'}},
-              body: JSON.stringify({{
-                url: document.getElementById('yt-url').value,
-                title: document.getElementById('yt-title').value || undefined,
-                course_id: document.getElementById('yt-course').value || null,
-                generate: gen
-              }})
-            }});
-            var d = await r.json();
-            if (r.ok) {{
-              var msg = 'Imported!';
-              if (d.note_id) msg += ' Notes created.';
-              if (d.deck_id) msg += ' Flashcards created.';
-              alert(msg);
-              location.reload();
-            }} else {{ alert(d.error || 'Import failed'); }}
-          }} catch(e) {{ alert('Network error'); }}
-          btn.disabled = false; btn.innerHTML = '🎬 Import Video';
-        }}
-        </script>
-        """, active_page="student_youtube")
-
-    # ================================================================
     #  FEATURE 3 — Weak Topic Detector
     # ================================================================
 
@@ -4303,32 +4139,37 @@ def register_student_routes(app, csrf, limiter):
             score = t.get("score", 0)
             color = "#ef4444" if score < 50 else "#f59e0b" if score < 75 else "#22c55e"
             weak_html += f"""
-            <div style="padding:12px 16px;border-left:4px solid {color};background:var(--card);
-                        border-radius:0 8px 8px 0;margin-bottom:8px">
+            <div style="padding:14px 18px;border-left:4px solid {color};background:var(--card);
+                        border:1px solid var(--border);border-left:4px solid {color};
+                        border-radius:var(--radius-sm);margin-bottom:10px;transition:transform 0.15s"
+                 onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform=''">
               <div style="display:flex;justify-content:space-between;align-items:center">
                 <strong style="color:var(--text)">{_esc(t.get('topic',''))}</strong>
-                <span style="background:{color};color:#fff;padding:2px 10px;border-radius:12px;
-                             font-size:13px;font-weight:600">{score}%</span>
+                <span style="background:{color};color:#fff;padding:3px 12px;border-radius:12px;
+                             font-size:13px;font-weight:700">{score}%</span>
               </div>
-              <div style="font-size:13px;color:var(--text-muted);margin-top:2px">
+              <div style="font-size:13px;color:var(--text-muted);margin-top:4px">
                 {_esc(t.get('course',''))} — {_esc(t.get('source',''))}
               </div>
             </div>"""
 
         recs = result.get("recommendations_html", "")
 
+        no_data_html = '<div style="text-align:center;padding:40px;color:var(--text-muted);background:var(--card);border:1px solid var(--border);border-radius:var(--radius)"><div style="font-size:48px;margin-bottom:12px">📊</div><p>Not enough data yet</p><p style="font-size:13px;margin-top:4px">Complete some quizzes and review flashcards to see your weak spots.</p></div>'
+        recs_section = ""
+        if recs:
+            recs_section = '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:22px"><h3 style="color:var(--text);margin-bottom:12px">💡 Recommendations</h3>' + recs + '</div>'
+
         return _s_render("Weak Topics", f"""
         <div style="max-width:800px;margin:0 auto">
-          <h2><span style="font-size:1.3em">🎯</span> Weak Topic Detector</h2>
-          <p style="color:var(--text-muted);margin-bottom:20px">
+          <h2 style="margin-bottom:4px"><span style="font-size:1.3em">🎯</span> Weak Topic Detector</h2>
+          <p style="color:var(--text-muted);margin-bottom:24px">
             Based on your flashcard accuracy and quiz scores, here are the topics that need more attention.
           </p>
-          <div style="margin-bottom:24px">
-            {weak_html if weak_html else '<p style="color:var(--text-muted)">Not enough data yet — complete some quizzes and review flashcards!</p>'}
+          <div style="margin-bottom:28px">
+            {weak_html if weak_html else no_data_html}
           </div>
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">
-            {recs}
-          </div>
+          {recs_section}
         </div>
         """, active_page="student_weak_topics")
 
@@ -4398,22 +4239,28 @@ def register_student_routes(app, csrf, limiter):
         badges_html = ""
         for b in badges:
             badges_html += f"""
-            <div style="text-align:center;padding:12px;background:var(--card);border-radius:12px;
-                        border:1px solid var(--border);min-width:100px">
-              <div style="font-size:2em">{b.get('emoji','🏅')}</div>
-              <div style="font-weight:600;font-size:13px;margin-top:4px;color:var(--text)">{_esc(b.get('name',''))}</div>
-              <div style="font-size:11px;color:var(--text-muted)">{_esc(b.get('desc',''))}</div>
+            <div style="text-align:center;padding:16px 12px;background:var(--card);border-radius:var(--radius);
+                        border:1px solid var(--border);min-width:110px;flex:1;max-width:160px;
+                        transition:transform 0.2s,box-shadow 0.2s;cursor:default"
+                 onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-md)'"
+                 onmouseout="this.style.transform='';this.style.boxShadow=''">
+              <div style="font-size:2.2em;margin-bottom:4px">{b.get('emoji','🏅')}</div>
+              <div style="font-weight:700;font-size:13px;color:var(--text)">{_esc(b.get('name',''))}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">{_esc(b.get('desc',''))}</div>
             </div>"""
 
         # All possible badges
         all_badges_html = ""
         for key, info in sdb.BADGE_DEFS.items():
             earned = any(b["badge_key"] == key for b in badges)
-            opacity = "1" if earned else "0.3"
+            opacity = "1" if earned else "0.25"
+            border = "var(--primary)" if earned else "var(--border)"
             all_badges_html += f"""
-            <div style="text-align:center;padding:8px;opacity:{opacity};min-width:80px" title="{_esc(info['desc'])}">
-              <div style="font-size:1.5em">{info['emoji']}</div>
-              <div style="font-size:11px;font-weight:600">{_esc(info['name'])}</div>
+            <div style="text-align:center;padding:10px 8px;opacity:{opacity};min-width:90px;flex:1;max-width:120px;
+                        border:1px solid {border};border-radius:var(--radius-sm);background:var(--card);
+                        transition:opacity 0.2s" title="{_esc(info['desc'])}">
+              <div style="font-size:1.6em">{info['emoji']}</div>
+              <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:2px">{_esc(info['name'])}</div>
             </div>"""
 
         history_html = ""
@@ -4427,51 +4274,55 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Achievements", f"""
         <div style="max-width:800px;margin:0 auto">
-          <h2><span style="font-size:1.3em">🏆</span> Achievements & Progress</h2>
+          <h2 style="margin-bottom:20px"><span style="font-size:1.3em">🏆</span> Achievements & Progress</h2>
 
           <!-- Level & XP Bar -->
-          <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;
-                      border-radius:16px;padding:24px;margin-bottom:24px;text-align:center">
-            <div style="font-size:14px;opacity:0.9">Level</div>
-            <div style="font-size:2em;font-weight:700;margin:4px 0">{_esc(level_name)}</div>
-            <div style="font-size:1.5em;font-weight:600">{total_xp} XP</div>
-            <div style="background:rgba(255,255,255,0.3);border-radius:8px;height:12px;margin:12px auto;max-width:300px">
-              <div style="background:#fff;border-radius:8px;height:12px;width:{pct}%;transition:width 0.5s"></div>
+          <div style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%);color:#fff;
+                      border-radius:var(--radius);padding:28px 32px;margin-bottom:24px;text-align:center;
+                      box-shadow:0 8px 32px rgba(99,102,241,0.3);position:relative;overflow:hidden">
+            <div style="position:absolute;top:-20px;right:-20px;font-size:120px;opacity:0.08">🏆</div>
+            <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1.5px;font-weight:600">Level</div>
+            <div style="font-size:2.2em;font-weight:800;margin:6px 0;letter-spacing:-1px">{_esc(level_name)}</div>
+            <div style="font-size:1.4em;font-weight:600;opacity:0.95">{total_xp} XP</div>
+            <div style="background:rgba(255,255,255,0.2);border-radius:8px;height:10px;margin:14px auto;max-width:320px">
+              <div style="background:#fff;border-radius:8px;height:10px;width:{pct}%;transition:width 0.6s ease;box-shadow:0 0 12px rgba(255,255,255,0.3)"></div>
             </div>
-            <div style="font-size:13px;opacity:0.8">{total_xp - level_floor} / {level_ceil - level_floor} XP to next level</div>
+            <div style="font-size:13px;opacity:0.75">{total_xp - level_floor} / {level_ceil - level_floor} XP to next level</div>
           </div>
 
-          <!-- Streak -->
-          <div style="display:flex;gap:16px;margin-bottom:24px">
-            <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;
-                        padding:16px;text-align:center">
-              <div style="font-size:2em">🔥</div>
-              <div style="font-size:2em;font-weight:700;color:#ea580c">{streak}</div>
-              <div style="font-size:13px;color:var(--text-muted)">Day Streak</div>
+          <!-- Streak & Badges Count -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px">
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+                        padding:20px;text-align:center;transition:transform 0.2s"
+                 onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+              <div style="font-size:2.2em">🔥</div>
+              <div style="font-size:2.4em;font-weight:800;color:#ea580c;margin:4px 0">{streak}</div>
+              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Day Streak</div>
             </div>
-            <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;
-                        padding:16px;text-align:center">
-              <div style="font-size:2em">🏅</div>
-              <div style="font-size:2em;font-weight:700;color:#16a34a">{len(badges)}</div>
-              <div style="font-size:13px;color:var(--text-muted)">Badges Earned</div>
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+                        padding:20px;text-align:center;transition:transform 0.2s"
+                 onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+              <div style="font-size:2.2em">🏅</div>
+              <div style="font-size:2.4em;font-weight:800;color:#16a34a;margin:4px 0">{len(badges)}</div>
+              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Badges Earned</div>
             </div>
           </div>
 
           <!-- Earned Badges -->
-          <h3>🏅 Your Badges</h3>
-          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:24px">
-            {badges_html if badges_html else '<p style="color:#94a3b8">No badges yet — keep studying!</p>'}
+          <h3 style="color:var(--text);margin-bottom:12px">🏅 Your Badges</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:28px">
+            {badges_html if badges_html else '<p style="color:var(--text-muted)">No badges yet — keep studying!</p>'}
           </div>
 
           <!-- All Badges -->
-          <h3>🎖 All Badges</h3>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">
+          <h3 style="color:var(--text);margin-bottom:12px">🎖 All Badges</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:28px">
             {all_badges_html}
           </div>
 
           <!-- XP History -->
-          <h3 style="color:var(--text)">📊 Recent Activity</h3>
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <h3 style="color:var(--text);margin-bottom:12px">📊 Recent Activity</h3>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px">
             {history_html if history_html else '<p style="color:var(--text-muted)">No activity yet.</p>'}
           </div>
         </div>

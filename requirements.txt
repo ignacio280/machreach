@@ -16,4 +16,3 @@ dkimpy>=1.1
 dnspython>=2.6
 PyPDF2>=3.0
 python-docx>=1.1
-youtube-transcript-api>=0.6

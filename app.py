@@ -537,10 +537,10 @@ LAYOUT = """<!DOCTYPE html>
     /* Nav dropdown */
     .nav-dropdown { position: relative; }
     .nav-dropdown > a { cursor: pointer; }
-    .nav-dropdown-menu { display:none; position:absolute; top:100%; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:8px 0; min-width:180px; z-index:300; box-shadow:0 8px 32px rgba(0,0,0,0.4); margin-top:6px; }
-    .nav-dropdown:hover .nav-dropdown-menu { display:block; }
-    .nav-dropdown-menu a { display:block; padding:8px 16px !important; font-size:13px !important; color:#94a3b8 !important; border-radius:0 !important; }
-    .nav-dropdown-menu a:hover { color:#fff !important; background:rgba(255,255,255,0.08) !important; }
+    .nav-dropdown-menu { display:none; position:absolute; top:100%; left:50%; transform:translateX(-50%) translateY(4px); opacity:0; background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:6px 0; min-width:180px; z-index:300; box-shadow:0 12px 40px rgba(0,0,0,0.5); margin-top:2px; transition:opacity 0.15s,transform 0.15s; }
+    .nav-dropdown:hover .nav-dropdown-menu { display:block; opacity:1; transform:translateX(-50%) translateY(0); }
+    .nav-dropdown-menu a { display:block; padding:9px 18px !important; font-size:13px !important; color:#94a3b8 !important; border-radius:0 !important; transition:all 0.15s !important; }
+    .nav-dropdown-menu a:hover { color:#fff !important; background:rgba(99,102,241,0.15) !important; padding-left:22px !important; }
     /* Floating focus widget */
     #focus-float { position:fixed; bottom:20px; right:20px; background:linear-gradient(135deg,#1e293b,#334155); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:12px 18px; z-index:500; box-shadow:0 8px 32px rgba(0,0,0,0.4); display:none; cursor:pointer; color:#fff; font-family:monospace; min-width:140px; text-align:center; transition:all 0.3s; }
     #focus-float:hover { transform:scale(1.05); box-shadow:0 12px 40px rgba(99,102,241,0.3); }
@@ -560,13 +560,15 @@ LAYOUT = """<!DOCTYPE html>
     .breadcrumb a:hover { color: var(--primary); }
 
     /* Cards */
-    .card { background: var(--card); border-radius: var(--radius); padding: 26px; box-shadow: var(--shadow); margin-bottom: 18px; border: 1px solid var(--border); transition: box-shadow 0.2s ease; }
+    .card { background: var(--card); border-radius: var(--radius); padding: 26px; box-shadow: var(--shadow); margin-bottom: 18px; border: 1px solid var(--border); transition: box-shadow 0.2s ease, transform 0.2s ease; }
+    .card:hover { box-shadow: var(--shadow-md); }
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border-light); }
     .card-header h2 { font-size: 16px; font-weight: 700; }
 
     /* Stats */
     .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 22px; }
-    .stat-card { background: var(--card); border-radius: var(--radius); padding: 20px; text-align: center; box-shadow: var(--shadow); border: 1px solid var(--border); position: relative; overflow: hidden; }
+    .stat-card { background: var(--card); border-radius: var(--radius); padding: 20px; text-align: center; box-shadow: var(--shadow); border: 1px solid var(--border); position: relative; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; cursor: default; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
     .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: var(--radius) var(--radius) 0 0; }
     .stat-purple::before { background: linear-gradient(90deg, var(--primary), #8B5CF6); }
     .stat-green::before { background: linear-gradient(90deg, var(--green), #34D399); }
@@ -872,16 +874,16 @@ LAYOUT = """<!DOCTYPE html>
         <div class="nav-dropdown">
           <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard &#9662;</a>
           <div class="nav-dropdown-menu">
-            <a href="/student/courses">&#128218; Courses</a>
-            <a href="/student/plan">&#128197; Study Plan</a>
             <a href="/student/exams">&#128221; Exams</a>
             <a href="/student/focus">&#127917; Focus Mode</a>
             <a href="/student/gpa">&#127891; GPA Calculator</a>
             <a href="/student/schedule">&#128337; Schedule</a>
-            <a href="/student/youtube">&#127916; YouTube → Notes</a>
-            <a href="/student/weak-topics">&#127919; Weak Topics</a>
           </div>
         </div>
+        <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
+        <a href="/student/plan" {% if active_page == 'student_plan' %}class="active"{% endif %}>&#128197; Plan</a>
+        <a href="/student/weak-topics" {% if active_page == 'student_weak_topics' %}class="active"{% endif %}>&#127919; Weak Topics</a>
+        <div class="nav-divider"></div>
         <a href="/student/flashcards" {% if active_page == 'student_flashcards' %}class="active"{% endif %}>&#127183; Flashcards</a>
         <a href="/student/quizzes" {% if active_page == 'student_quizzes' %}class="active"{% endif %}>&#128221; Quizzes</a>
         <a href="/student/notes" {% if active_page == 'student_notes' %}class="active"{% endif %}>&#128214; Notes</a>
