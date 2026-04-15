@@ -879,6 +879,7 @@ LAYOUT = """<!DOCTYPE html>
             <a href="/student/gpa">&#127891; GPA Calculator</a>
             <a href="/student/schedule">&#128337; Schedule</a>
             <a href="/student/weak-topics">&#127919; Weak Topics</a>
+            <a href="/student/leaderboard">&#127942; Leaderboard</a>
           </div>
         </div>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
@@ -1244,6 +1245,143 @@ LAYOUT = """<!DOCTYPE html>
     document.getElementById('focus-float').style.display='none';
   }
   </script>
+
+  <!-- Student i18n: Spanish translations (client-side) -->
+  {% if lang == 'es' and account_type|default('business') == 'student' %}
+  <script>
+  (function(){
+    var T = {
+      // Nav
+      "Dashboard": "Panel", "Courses": "Cursos", "Plan": "Plan", "Flashcards": "Tarjetas",
+      "Quizzes": "Exámenes", "Notes": "Apuntes", "Tutor": "Tutor", "XP": "XP",
+      "Mail": "Correo", "Focus Mode": "Modo Enfoque", "Exams": "Exámenes",
+      "GPA Calculator": "Calculadora GPA", "Schedule": "Horario", "Weak Topics": "Temas Débiles",
+      "Settings": "Ajustes", "Leaderboard": "Clasificación",
+      // Achievements page
+      "Achievements & Progress": "Logros y Progreso", "Level": "Nivel",
+      "XP to next level": "XP para el siguiente nivel", "Day Streak": "Racha de Días",
+      "Badges Earned": "Insignias Obtenidas", "Your Badges": "Tus Insignias",
+      "All Badges": "Todas las Insignias", "Recent Activity": "Actividad Reciente",
+      "No badges yet — keep studying!": "¡Aún no tienes insignias — sigue estudiando!",
+      "No activity yet.": "Aún no hay actividad.",
+      "Earned!": "¡Obtenida!", "Not yet earned": "Aún no obtenida",
+      // Badge names
+      "Welcome!": "¡Bienvenido!", "Quiz Rookie": "Novato en Exámenes",
+      "Quiz Master": "Maestro de Exámenes", "Flashcard Fan": "Fan de Tarjetas",
+      "On Fire!": "¡En Llamas!", "Unstoppable": "¡Imparable!",
+      "Diamond Student": "Estudiante Diamante", "Note Taker": "Tomador de Apuntes",
+      "Rising Star": "Estrella Naciente", "Shining Star": "Estrella Brillante",
+      "Superstar": "Superestrella", "Focused": "Enfocado", "Deep Focus": "Enfoque Profundo",
+      "Focus Master": "Maestro del Enfoque", "Page Turner": "Lector Ávido",
+      "Quiz Pro": "Pro de Exámenes",
+      // Badge descriptions
+      "Logged in for the first time": "Iniciaste sesión por primera vez",
+      "Completed your first quiz": "Completaste tu primer examen",
+      "Scored 100% on a quiz": "Obtuviste 100% en un examen",
+      "Reviewed 100 flashcards": "Revisaste 100 tarjetas",
+      "3-day study streak": "Racha de estudio de 3 días",
+      "7-day study streak": "Racha de estudio de 7 días",
+      "30-day study streak": "Racha de estudio de 30 días",
+      "Created 10 notes": "Creaste 10 apuntes",
+      "Earned 100 XP": "Ganaste 100 XP", "Earned 500 XP": "Ganaste 500 XP",
+      "Earned 1000 XP": "Ganaste 1000 XP",
+      "1 hour of total focus time": "1 hora de tiempo de enfoque total",
+      "10 hours of total focus time": "10 horas de tiempo de enfoque total",
+      "50 hours of total focus time": "50 horas de tiempo de enfoque total",
+      "Read 100 pages": "Leíste 100 páginas",
+      "Completed 10 quizzes": "Completaste 10 exámenes",
+      // Levels
+      "Freshman": "Novato", "Sophomore": "Aprendiz", "Junior": "Intermedio",
+      "Senior": "Avanzado", "Scholar": "Erudito", "Master": "Maestro", "Professor": "Profesor",
+      // Focus page
+      "Study Timer": "Temporizador de Estudio", "Pomodoro": "Pomodoro",
+      "Page Method": "Método de Páginas", "Custom": "Personalizado",
+      "Work (min)": "Trabajo (min)", "Break (min)": "Descanso (min)",
+      "Long break (min)": "Descanso largo (min)",
+      "Long break after every 4 sessions.": "Descanso largo después de cada 4 sesiones.",
+      "Target pages": "Páginas objetivo", "Page Completed!": "¡Página Completada!",
+      "Ready to focus": "Listo para enfocarte", "Start": "Iniciar", "Pause": "Pausar",
+      "Reset": "Reiniciar", "Study Music": "Música de Estudio",
+      "Quick Flashcards": "Tarjetas Rápidas", "Quick Notes": "Notas Rápidas",
+      "Hours Focused": "Horas Enfocado", "Sessions": "Sesiones",
+      "Pages Read": "Páginas Leídas",
+      // Settings
+      "Profile": "Perfil", "Name": "Nombre", "Email": "Correo",
+      "Email cannot be changed.": "El correo no se puede cambiar.",
+      "Save Changes": "Guardar Cambios",
+      "University & Studies": "Universidad y Estudios",
+      "University": "Universidad", "Field of Study": "Carrera",
+      "View Leaderboard": "Ver Clasificación",
+      "Canvas LMS": "Canvas LMS", "Connected": "Conectado",
+      "Not connected": "No conectado", "Manage Connection": "Administrar Conexión",
+      "Connect Canvas": "Conectar Canvas",
+      "Email Accounts": "Cuentas de Correo", "Manage in Mail Hub": "Administrar en Correo",
+      "Daily Study Email": "Email Diario de Estudio",
+      "Get a morning email with your study plan, upcoming exams, and weak topics to review.":
+        "Recibe un email matutino con tu plan de estudio, próximos exámenes y temas a repasar.",
+      "Enable daily study email": "Activar email diario de estudio",
+      "Send at (hour)": "Enviar a las (hora)", "Timezone": "Zona Horaria",
+      "Save Preferences": "Guardar Preferencias", "Saved!": "¡Guardado!",
+      "Error saving.": "Error al guardar.",
+      // Leaderboard
+      "Student Rankings": "Clasificación de Estudiantes",
+      "Compete with other students! Earn XP from focus sessions, quizzes, and flashcards.":
+        "¡Compite con otros estudiantes! Gana XP con sesiones de enfoque, exámenes y tarjetas.",
+      "Your Rank": "Tu Posición", "Total XP": "XP Total", "All Students": "Todos",
+      "Rank": "Posición", "Student": "Estudiante",
+      "No students on the leaderboard yet. Start earning XP!":
+        "Aún no hay estudiantes en la clasificación. ¡Empieza a ganar XP!",
+      // Dashboard
+      "Today's Plan": "Plan de Hoy", "Upcoming Exams": "Próximos Exámenes",
+      "Study Stats": "Estadísticas de Estudio", "Quick Actions": "Acciones Rápidas",
+      // Quizzes
+      "Generate Quiz": "Generar Examen", "Take Quiz": "Hacer Examen",
+      "Your Quizzes": "Tus Exámenes", "Score": "Puntuación", "Attempts": "Intentos",
+      "Best Score": "Mejor Puntuación", "Delete": "Eliminar",
+      // Flashcards
+      "Your Flashcard Decks": "Tus Mazos de Tarjetas", "Study": "Estudiar",
+      "cards": "tarjetas", "Generate Flashcards": "Generar Tarjetas",
+      // Notes
+      "Your Notes": "Tus Apuntes", "Generate Notes": "Generar Apuntes",
+      // Common
+      "Loading...": "Cargando...", "Error": "Error", "Success": "Éxito",
+      "Cancel": "Cancelar", "Confirm": "Confirmar", "Save": "Guardar",
+      "Back": "Volver", "Next": "Siguiente", "Previous": "Anterior",
+      "Search": "Buscar", "Filter": "Filtrar", "Sort": "Ordenar",
+      "Select a course": "Selecciona un curso", "No courses yet": "Aún no hay cursos",
+    };
+    function translate(el) {
+      if (el.childElementCount === 0) {
+        var txt = el.textContent.trim();
+        if (T[txt]) el.textContent = T[txt];
+        else {
+          // Partial match for strings like "5 / 100 XP to next level"
+          for (var k in T) {
+            if (txt.indexOf(k) !== -1 && k.length > 3) {
+              el.textContent = txt.replace(k, T[k]);
+            }
+          }
+        }
+      }
+      // Translate placeholders
+      if (el.placeholder && T[el.placeholder]) el.placeholder = T[el.placeholder];
+      // Translate title attributes (tooltips)
+      if (el.title && T[el.title]) el.title = T[el.title];
+    }
+    // Translate all text nodes
+    var walker = document.createTreeWalker(
+      document.querySelector('.container') || document.body,
+      NodeFilter.SHOW_ELEMENT, null, false
+    );
+    while(walker.nextNode()) translate(walker.currentNode);
+    // Also translate h2, h3, labels, buttons, a tags specifically
+    document.querySelectorAll('h1,h2,h3,h4,label,button,a,.card-header,.stat-card .label').forEach(translate);
+    // Translate alert messages
+    var origAlert = window.alert;
+    window.alert = function(msg) { origAlert(T[msg] || msg); };
+  })();
+  </script>
+  {% endif %}
 
 </body>
 </html>"""

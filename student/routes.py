@@ -619,13 +619,56 @@ def register_student_routes(app, csrf, limiter):
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
-        sdb.save_focus_session(
-            _cid(),
-            mode=data.get("mode", "pomodoro"),
-            minutes=int(data.get("minutes", 0)),
-            pages=int(data.get("pages", 0)),
-            course_name=data.get("course_name", ""),
-        )
+        cid = _cid()
+        mode = data.get("mode", "pomodoro")
+        minutes = int(data.get("minutes", 0))
+        pages = int(data.get("pages", 0))
+        course_name = data.get("course_name", "")
+
+        sdb.save_focus_session(cid, mode=mode, minutes=minutes, pages=pages, course_name=course_name)
+
+        # Award XP based on time, difficulty, and mode
+        if minutes > 0:
+            # Look up course difficulty (1-5)
+            difficulty = 3  # default medium
+            if course_name:
+                courses = sdb.get_courses(cid)
+                for c in courses:
+                    if c["name"] == course_name:
+                        difficulty = c.get("difficulty", 3) or 3
+                        break
+            # XP formula: 1 XP per 5 min, multiplied by difficulty and mode
+            diff_mult = {1: 1.0, 2: 1.25, 3: 1.5, 4: 1.75, 5: 2.0}.get(difficulty, 1.5)
+            mode_mult = 1.2 if mode == "pomodoro" else 1.0
+            xp = max(2, int(minutes / 5 * diff_mult * mode_mult + 0.5))
+            detail = f"{mode.title()} {minutes}min"
+            if course_name:
+                detail += f" — {course_name}"
+            sdb.award_xp(cid, "focus_session", xp, detail)
+
+        if pages > 0:
+            page_xp = max(1, pages)
+            sdb.award_xp(cid, "pages_read", page_xp, f"Read {pages} pages")
+
+        # Auto-award focus badges
+        stats = sdb.get_focus_stats(cid)
+        total_hours = stats.get("total_hours", 0)
+        if isinstance(total_hours, str):
+            total_hours = float(total_hours.replace("h", "").replace(",", ""))
+        else:
+            total_hours = float(total_hours)
+        if total_hours >= 1:
+            sdb.earn_badge(cid, "focus_1h")
+        if total_hours >= 10:
+            sdb.earn_badge(cid, "focus_10h")
+        if total_hours >= 50:
+            sdb.earn_badge(cid, "focus_50h")
+        total_pages = stats.get("total_pages", 0)
+        if isinstance(total_pages, str):
+            total_pages = int(total_pages)
+        if total_pages >= 100:
+            sdb.earn_badge(cid, "page_100")
+
         return jsonify({"ok": True})
 
     @app.route("/api/student/focus/stats", methods=["GET"])
@@ -3027,6 +3070,12 @@ def register_student_routes(app, csrf, limiter):
             sdb.earn_badge(_cid(), "quiz_master")
         if not sdb.get_badges(_cid()) or not any(b["badge_key"] == "first_quiz" for b in sdb.get_badges(_cid())):
             sdb.earn_badge(_cid(), "first_quiz")
+        # Check quiz_10 badge
+        from outreach.db import _fetchval, get_db
+        with get_db() as db:
+            quiz_count = _fetchval(db, "SELECT COUNT(*) FROM student_quizzes WHERE client_id = %s AND attempts > 0", (_cid(),)) or 0
+        if quiz_count >= 10:
+            sdb.earn_badge(_cid(), "quiz_10")
         return jsonify({"ok": True})
 
     @app.route("/api/student/quizzes/<int:quiz_id>", methods=["DELETE"])
@@ -3076,7 +3125,6 @@ def register_student_routes(app, csrf, limiter):
 
         note_id = sdb.create_note(_cid(), result["title"], result["content_html"],
                                   course_id=course_id)
-        sdb.award_xp(_cid(), "notes_create", 10, f"Created: {result['title'][:40]}")
         return jsonify({"note_id": note_id, "title": result["title"]})
 
     @app.route("/api/student/notes", methods=["GET"])
@@ -4003,13 +4051,6 @@ def register_student_routes(app, csrf, limiter):
         # Save assistant reply
         sdb.add_chat_message(cid, "assistant", reply, int(course_id) if course_id else None)
 
-        # Award XP
-        sdb.award_xp(cid, "chat_question", 2, f"Asked: {msg[:50]}")
-        # Check badge
-        total_msgs = len(sdb.get_chat_history(cid, limit=1000))
-        if total_msgs >= 10:
-            sdb.earn_badge(cid, "chat_curious")
-
         return jsonify(reply=reply)
 
     @app.route("/api/student/chat/clear", methods=["POST"])
@@ -4238,29 +4279,52 @@ def register_student_routes(app, csrf, limiter):
 
         badges_html = ""
         for b in badges:
+            earned_date = str(b.get("earned_at", ""))[:10]
             badges_html += f"""
-            <div style="text-align:center;padding:16px 12px;background:var(--card);border-radius:var(--radius);
+            <div class="badge-card" style="text-align:center;padding:16px 12px;background:var(--card);border-radius:var(--radius);
                         border:1px solid var(--border);min-width:110px;flex:1;max-width:160px;
-                        transition:transform 0.2s,box-shadow 0.2s;cursor:default"
-                 onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-md)'"
-                 onmouseout="this.style.transform='';this.style.boxShadow=''">
+                        transition:transform 0.2s,box-shadow 0.2s;cursor:default;position:relative"
+                 onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-md)';this.querySelector('.badge-tooltip').style.opacity='1';this.querySelector('.badge-tooltip').style.visibility='visible'"
+                 onmouseout="this.style.transform='';this.style.boxShadow='';this.querySelector('.badge-tooltip').style.opacity='0';this.querySelector('.badge-tooltip').style.visibility='hidden'">
               <div style="font-size:2.2em;margin-bottom:4px">{b.get('emoji','🏅')}</div>
               <div style="font-weight:700;font-size:13px;color:var(--text)">{_esc(b.get('name',''))}</div>
               <div style="font-size:11px;color:var(--text-muted);margin-top:2px">{_esc(b.get('desc',''))}</div>
+              <div class="badge-tooltip" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+                          background:var(--text);color:var(--bg);padding:8px 12px;border-radius:8px;font-size:12px;
+                          white-space:nowrap;opacity:0;visibility:hidden;transition:opacity 0.2s;z-index:10;
+                          pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.2)">
+                <div style="font-weight:700;margin-bottom:2px">{_esc(b.get('name',''))}</div>
+                <div>{_esc(b.get('desc',''))}</div>
+                <div style="opacity:0.7;margin-top:3px">Earned: {earned_date}</div>
+                <div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--text)"></div>
+              </div>
             </div>"""
 
-        # All possible badges
+        # All possible badges with tooltips
         all_badges_html = ""
         for key, info in sdb.BADGE_DEFS.items():
             earned = any(b["badge_key"] == key for b in badges)
             opacity = "1" if earned else "0.25"
             border = "var(--primary)" if earned else "var(--border)"
+            status_text = "Earned!" if earned else "Not yet earned"
+            status_color = "#22c55e" if earned else "#94a3b8"
             all_badges_html += f"""
             <div style="text-align:center;padding:10px 8px;opacity:{opacity};min-width:90px;flex:1;max-width:120px;
                         border:1px solid {border};border-radius:var(--radius-sm);background:var(--card);
-                        transition:opacity 0.2s" title="{_esc(info['desc'])}">
+                        transition:all 0.2s;cursor:default;position:relative"
+                 onmouseover="this.style.opacity='1';this.querySelector('.badge-tooltip').style.opacity='1';this.querySelector('.badge-tooltip').style.visibility='visible'"
+                 onmouseout="this.style.opacity='{opacity}';this.querySelector('.badge-tooltip').style.opacity='0';this.querySelector('.badge-tooltip').style.visibility='hidden'">
               <div style="font-size:1.6em">{info['emoji']}</div>
               <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:2px">{_esc(info['name'])}</div>
+              <div class="badge-tooltip" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+                          background:var(--text);color:var(--bg);padding:8px 12px;border-radius:8px;font-size:12px;
+                          white-space:nowrap;opacity:0;visibility:hidden;transition:opacity 0.2s;z-index:10;
+                          pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.2)">
+                <div style="font-weight:700;margin-bottom:2px">{_esc(info['name'])}</div>
+                <div>{_esc(info['desc'])}</div>
+                <div style="color:{status_color};margin-top:3px;font-weight:600">{status_text}</div>
+                <div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--text)"></div>
+              </div>
             </div>"""
 
         history_html = ""
@@ -4340,11 +4404,14 @@ def register_student_routes(app, csrf, limiter):
         if request.method == "GET":
             prefs = sdb.get_email_prefs(cid)
             if not prefs:
-                return jsonify(daily_email=True, email_hour=7, timezone="America/Mexico_City")
+                return jsonify(daily_email=True, email_hour=7, timezone="America/Mexico_City",
+                               university="", field_of_study="")
             return jsonify(
                 daily_email=bool(prefs.get("daily_email")),
                 email_hour=prefs.get("email_hour", 7),
                 timezone=prefs.get("timezone", "America/Mexico_City"),
+                university=prefs.get("university", ""),
+                field_of_study=prefs.get("field_of_study", ""),
             )
         data = request.get_json(force=True)
         sdb.upsert_email_prefs(
@@ -4352,8 +4419,115 @@ def register_student_routes(app, csrf, limiter):
             daily_email=data.get("daily_email", True),
             email_hour=data.get("email_hour", 7),
             timezone=data.get("timezone", "America/Mexico_City"),
+            university=data.get("university", ""),
+            field_of_study=data.get("field_of_study", ""),
+            lang=session.get("lang", "en"),
         )
         return jsonify(ok=True)
+
+    # ================================================================
+    #  LEADERBOARD / RANKINGS
+    # ================================================================
+
+    @app.route("/student/leaderboard")
+    def student_leaderboard_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        prefs = sdb.get_email_prefs(cid) or {}
+        my_uni = prefs.get("university", "")
+        filter_uni = request.args.get("university", "")
+
+        leaders = sdb.get_leaderboard(limit=50, university=filter_uni)
+        my_rank = sdb.get_student_rank(cid)
+        my_xp = sdb.get_total_xp(cid)
+        my_level, _, _ = sdb.get_level(my_xp)
+
+        rows_html = ""
+        for i, r in enumerate(leaders, 1):
+            is_me = (r["client_id"] == cid)
+            bg = "background:rgba(99,102,241,0.08);" if is_me else ""
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"#{i}")
+            lvl_name, _, _ = sdb.get_level(r["total_xp"])
+            name_display = _esc(r["name"] or "Student")
+            uni_display = _esc(r.get("university", "") or "")
+            field_display = _esc(r.get("field_of_study", "") or "")
+            sub_text = f"{uni_display}" if uni_display else ""
+            if field_display:
+                sub_text += f" — {field_display}" if sub_text else field_display
+            rows_html += f"""
+            <tr style="{bg}">
+              <td style="padding:12px 16px;font-size:18px;font-weight:700;text-align:center;width:60px">{medal}</td>
+              <td style="padding:12px 16px">
+                <div style="font-weight:600;color:var(--text)">{name_display}{"  ← you" if is_me else ""}</div>
+                {"<div style='font-size:12px;color:var(--text-muted)'>" + sub_text + "</div>" if sub_text else ""}
+              </td>
+              <td style="padding:12px 16px;text-align:center">
+                <span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">{lvl_name}</span>
+              </td>
+              <td style="padding:12px 16px;text-align:right;font-weight:700;color:#22c55e;font-size:16px">{r['total_xp']} XP</td>
+            </tr>"""
+
+        if not rows_html:
+            rows_html = '<tr><td colspan="4" style="padding:32px;text-align:center;color:var(--text-muted)">No students on the leaderboard yet. Start earning XP!</td></tr>'
+
+        # Filter options
+        filter_html = ""
+        if my_uni:
+            active_all = "" if filter_uni else "background:var(--primary);color:#fff;"
+            active_uni = "background:var(--primary);color:#fff;" if filter_uni == my_uni else ""
+            filter_html = f"""
+            <div style="display:flex;gap:8px;margin-bottom:20px">
+              <a href="/student/leaderboard" class="btn btn-sm" style="border:1px solid var(--border);border-radius:8px;padding:6px 16px;text-decoration:none;font-size:13px;{active_all}">🌍 All Students</a>
+              <a href="/student/leaderboard?university={_esc(my_uni)}" class="btn btn-sm" style="border:1px solid var(--border);border-radius:8px;padding:6px 16px;text-decoration:none;font-size:13px;{active_uni}">🏫 {_esc(my_uni)}</a>
+            </div>"""
+
+        return _s_render("Leaderboard", f"""
+        <div style="max-width:800px;margin:0 auto">
+          <h2 style="margin-bottom:8px">🏆 Student Rankings</h2>
+          <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px">
+            Compete with other students! Earn XP from focus sessions, quizzes, and flashcards.
+          </p>
+
+          <!-- My rank card -->
+          <div style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%);color:#fff;
+                      border-radius:var(--radius);padding:20px 28px;margin-bottom:24px;
+                      display:flex;align-items:center;justify-content:space-between;
+                      box-shadow:0 8px 32px rgba(99,102,241,0.3)">
+            <div>
+              <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1px;font-weight:600">Your Rank</div>
+              <div style="font-size:2.4em;font-weight:800">#{my_rank if my_rank else '—'}</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1px;font-weight:600">Level</div>
+              <div style="font-size:1.3em;font-weight:700">{_esc(my_level)}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1px;font-weight:600">Total XP</div>
+              <div style="font-size:2.4em;font-weight:800">{my_xp}</div>
+            </div>
+          </div>
+
+          {filter_html}
+
+          <!-- Leaderboard table -->
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+            <table style="width:100%;border-collapse:collapse">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border)">
+                  <th style="padding:12px 16px;text-align:center;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Rank</th>
+                  <th style="padding:12px 16px;text-align:left;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Student</th>
+                  <th style="padding:12px 16px;text-align:center;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Level</th>
+                  <th style="padding:12px 16px;text-align:right;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">XP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows_html}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        """, active_page="student_leaderboard")
 
     @app.route("/student/settings", methods=["GET", "POST"])
     def student_settings_page():
@@ -4379,6 +4553,8 @@ def register_student_routes(app, csrf, limiter):
         de = prefs.get("daily_email", 1)
         hour = prefs.get("email_hour", 7)
         tz = prefs.get("timezone", "America/Mexico_City")
+        university = prefs.get("university", "") or ""
+        field_of_study = prefs.get("field_of_study", "") or ""
         canvas_tok = sdb.get_canvas_token(cid)
         canvas_status = "Connected" if canvas_tok else "Not connected"
         canvas_color = "#10B981" if canvas_tok else "#EF4444"
@@ -4434,6 +4610,25 @@ def register_student_routes(app, csrf, limiter):
             </form>
           </div>
 
+          <!-- University & Studies -->
+          <div class="card">
+            <div class="card-header"><h2>🏫 University & Studies</h2></div>
+            <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
+              Set your university and field of study to appear on the leaderboard and connect with classmates.
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
+              <div>
+                <label style="font-size:12px">University</label>
+                <input id="pref-university" value="{_esc(university)}" placeholder="e.g. MIT, Stanford, UNAM..." class="edit-input">
+              </div>
+              <div>
+                <label style="font-size:12px">Field of Study</label>
+                <input id="pref-field" value="{_esc(field_of_study)}" placeholder="e.g. Computer Science, Medicine..." class="edit-input">
+              </div>
+            </div>
+            <a href="/student/leaderboard" class="btn btn-outline btn-sm">🏆 View Leaderboard</a>
+          </div>
+
           <!-- Canvas Connection -->
           <div class="card">
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -4476,14 +4671,91 @@ def register_student_routes(app, csrf, limiter):
               <div>
                 <label style="font-size:12px">Timezone</label>
                 <select id="pref-tz">
-                  <option value="America/Mexico_City" {"selected" if tz=="America/Mexico_City" else ""}>Mexico City</option>
-                  <option value="America/New_York" {"selected" if tz=="America/New_York" else ""}>New York</option>
-                  <option value="America/Chicago" {"selected" if tz=="America/Chicago" else ""}>Chicago</option>
-                  <option value="America/Los_Angeles" {"selected" if tz=="America/Los_Angeles" else ""}>Los Angeles</option>
-                  <option value="America/Bogota" {"selected" if tz=="America/Bogota" else ""}>Bogotá</option>
-                  <option value="America/Sao_Paulo" {"selected" if tz=="America/Sao_Paulo" else ""}>São Paulo</option>
-                  <option value="Europe/Madrid" {"selected" if tz=="Europe/Madrid" else ""}>Madrid</option>
-                  <option value="Europe/London" {"selected" if tz=="Europe/London" else ""}>London</option>
+                  <optgroup label="Americas">
+                    <option value="America/Mexico_City" {"selected" if tz=="America/Mexico_City" else ""}>Mexico City (CST)</option>
+                    <option value="America/Cancun" {"selected" if tz=="America/Cancun" else ""}>Cancún (EST)</option>
+                    <option value="America/Tijuana" {"selected" if tz=="America/Tijuana" else ""}>Tijuana (PST)</option>
+                    <option value="America/Monterrey" {"selected" if tz=="America/Monterrey" else ""}>Monterrey (CST)</option>
+                    <option value="America/New_York" {"selected" if tz=="America/New_York" else ""}>New York (EST)</option>
+                    <option value="America/Chicago" {"selected" if tz=="America/Chicago" else ""}>Chicago (CST)</option>
+                    <option value="America/Denver" {"selected" if tz=="America/Denver" else ""}>Denver (MST)</option>
+                    <option value="America/Los_Angeles" {"selected" if tz=="America/Los_Angeles" else ""}>Los Angeles (PST)</option>
+                    <option value="America/Anchorage" {"selected" if tz=="America/Anchorage" else ""}>Anchorage (AKST)</option>
+                    <option value="Pacific/Honolulu" {"selected" if tz=="Pacific/Honolulu" else ""}>Honolulu (HST)</option>
+                    <option value="America/Toronto" {"selected" if tz=="America/Toronto" else ""}>Toronto (EST)</option>
+                    <option value="America/Vancouver" {"selected" if tz=="America/Vancouver" else ""}>Vancouver (PST)</option>
+                    <option value="America/Bogota" {"selected" if tz=="America/Bogota" else ""}>Bogotá (COT)</option>
+                    <option value="America/Lima" {"selected" if tz=="America/Lima" else ""}>Lima (PET)</option>
+                    <option value="America/Santiago" {"selected" if tz=="America/Santiago" else ""}>Santiago (CLT)</option>
+                    <option value="America/Buenos_Aires" {"selected" if tz=="America/Buenos_Aires" else ""}>Buenos Aires (ART)</option>
+                    <option value="America/Sao_Paulo" {"selected" if tz=="America/Sao_Paulo" else ""}>São Paulo (BRT)</option>
+                    <option value="America/Caracas" {"selected" if tz=="America/Caracas" else ""}>Caracas (VET)</option>
+                    <option value="America/Costa_Rica" {"selected" if tz=="America/Costa_Rica" else ""}>Costa Rica (CST)</option>
+                    <option value="America/Panama" {"selected" if tz=="America/Panama" else ""}>Panama (EST)</option>
+                    <option value="America/Guayaquil" {"selected" if tz=="America/Guayaquil" else ""}>Guayaquil (ECT)</option>
+                    <option value="America/Montevideo" {"selected" if tz=="America/Montevideo" else ""}>Montevideo (UYT)</option>
+                    <option value="America/Asuncion" {"selected" if tz=="America/Asuncion" else ""}>Asunción (PYT)</option>
+                    <option value="America/La_Paz" {"selected" if tz=="America/La_Paz" else ""}>La Paz (BOT)</option>
+                    <option value="America/Santo_Domingo" {"selected" if tz=="America/Santo_Domingo" else ""}>Santo Domingo (AST)</option>
+                    <option value="America/Havana" {"selected" if tz=="America/Havana" else ""}>Havana (CST)</option>
+                    <option value="America/Guatemala" {"selected" if tz=="America/Guatemala" else ""}>Guatemala (CST)</option>
+                    <option value="America/El_Salvador" {"selected" if tz=="America/El_Salvador" else ""}>El Salvador (CST)</option>
+                    <option value="America/Tegucigalpa" {"selected" if tz=="America/Tegucigalpa" else ""}>Tegucigalpa (CST)</option>
+                    <option value="America/Managua" {"selected" if tz=="America/Managua" else ""}>Managua (CST)</option>
+                  </optgroup>
+                  <optgroup label="Europe">
+                    <option value="Europe/London" {"selected" if tz=="Europe/London" else ""}>London (GMT)</option>
+                    <option value="Europe/Madrid" {"selected" if tz=="Europe/Madrid" else ""}>Madrid (CET)</option>
+                    <option value="Europe/Paris" {"selected" if tz=="Europe/Paris" else ""}>Paris (CET)</option>
+                    <option value="Europe/Berlin" {"selected" if tz=="Europe/Berlin" else ""}>Berlin (CET)</option>
+                    <option value="Europe/Rome" {"selected" if tz=="Europe/Rome" else ""}>Rome (CET)</option>
+                    <option value="Europe/Amsterdam" {"selected" if tz=="Europe/Amsterdam" else ""}>Amsterdam (CET)</option>
+                    <option value="Europe/Lisbon" {"selected" if tz=="Europe/Lisbon" else ""}>Lisbon (WET)</option>
+                    <option value="Europe/Brussels" {"selected" if tz=="Europe/Brussels" else ""}>Brussels (CET)</option>
+                    <option value="Europe/Zurich" {"selected" if tz=="Europe/Zurich" else ""}>Zurich (CET)</option>
+                    <option value="Europe/Vienna" {"selected" if tz=="Europe/Vienna" else ""}>Vienna (CET)</option>
+                    <option value="Europe/Warsaw" {"selected" if tz=="Europe/Warsaw" else ""}>Warsaw (CET)</option>
+                    <option value="Europe/Stockholm" {"selected" if tz=="Europe/Stockholm" else ""}>Stockholm (CET)</option>
+                    <option value="Europe/Oslo" {"selected" if tz=="Europe/Oslo" else ""}>Oslo (CET)</option>
+                    <option value="Europe/Helsinki" {"selected" if tz=="Europe/Helsinki" else ""}>Helsinki (EET)</option>
+                    <option value="Europe/Athens" {"selected" if tz=="Europe/Athens" else ""}>Athens (EET)</option>
+                    <option value="Europe/Bucharest" {"selected" if tz=="Europe/Bucharest" else ""}>Bucharest (EET)</option>
+                    <option value="Europe/Moscow" {"selected" if tz=="Europe/Moscow" else ""}>Moscow (MSK)</option>
+                    <option value="Europe/Istanbul" {"selected" if tz=="Europe/Istanbul" else ""}>Istanbul (TRT)</option>
+                    <option value="Europe/Dublin" {"selected" if tz=="Europe/Dublin" else ""}>Dublin (GMT)</option>
+                    <option value="Europe/Prague" {"selected" if tz=="Europe/Prague" else ""}>Prague (CET)</option>
+                    <option value="Europe/Budapest" {"selected" if tz=="Europe/Budapest" else ""}>Budapest (CET)</option>
+                    <option value="Europe/Copenhagen" {"selected" if tz=="Europe/Copenhagen" else ""}>Copenhagen (CET)</option>
+                  </optgroup>
+                  <optgroup label="Asia & Pacific">
+                    <option value="Asia/Dubai" {"selected" if tz=="Asia/Dubai" else ""}>Dubai (GST)</option>
+                    <option value="Asia/Kolkata" {"selected" if tz=="Asia/Kolkata" else ""}>India (IST)</option>
+                    <option value="Asia/Shanghai" {"selected" if tz=="Asia/Shanghai" else ""}>Shanghai (CST)</option>
+                    <option value="Asia/Tokyo" {"selected" if tz=="Asia/Tokyo" else ""}>Tokyo (JST)</option>
+                    <option value="Asia/Seoul" {"selected" if tz=="Asia/Seoul" else ""}>Seoul (KST)</option>
+                    <option value="Asia/Singapore" {"selected" if tz=="Asia/Singapore" else ""}>Singapore (SGT)</option>
+                    <option value="Asia/Hong_Kong" {"selected" if tz=="Asia/Hong_Kong" else ""}>Hong Kong (HKT)</option>
+                    <option value="Asia/Bangkok" {"selected" if tz=="Asia/Bangkok" else ""}>Bangkok (ICT)</option>
+                    <option value="Asia/Jakarta" {"selected" if tz=="Asia/Jakarta" else ""}>Jakarta (WIB)</option>
+                    <option value="Asia/Kuala_Lumpur" {"selected" if tz=="Asia/Kuala_Lumpur" else ""}>Kuala Lumpur (MYT)</option>
+                    <option value="Asia/Manila" {"selected" if tz=="Asia/Manila" else ""}>Manila (PHT)</option>
+                    <option value="Asia/Taipei" {"selected" if tz=="Asia/Taipei" else ""}>Taipei (CST)</option>
+                    <option value="Asia/Karachi" {"selected" if tz=="Asia/Karachi" else ""}>Karachi (PKT)</option>
+                    <option value="Asia/Dhaka" {"selected" if tz=="Asia/Dhaka" else ""}>Dhaka (BST)</option>
+                    <option value="Asia/Riyadh" {"selected" if tz=="Asia/Riyadh" else ""}>Riyadh (AST)</option>
+                    <option value="Asia/Tehran" {"selected" if tz=="Asia/Tehran" else ""}>Tehran (IRST)</option>
+                    <option value="Australia/Sydney" {"selected" if tz=="Australia/Sydney" else ""}>Sydney (AEST)</option>
+                    <option value="Australia/Melbourne" {"selected" if tz=="Australia/Melbourne" else ""}>Melbourne (AEST)</option>
+                    <option value="Australia/Perth" {"selected" if tz=="Australia/Perth" else ""}>Perth (AWST)</option>
+                    <option value="Pacific/Auckland" {"selected" if tz=="Pacific/Auckland" else ""}>Auckland (NZST)</option>
+                  </optgroup>
+                  <optgroup label="Africa">
+                    <option value="Africa/Cairo" {"selected" if tz=="Africa/Cairo" else ""}>Cairo (EET)</option>
+                    <option value="Africa/Lagos" {"selected" if tz=="Africa/Lagos" else ""}>Lagos (WAT)</option>
+                    <option value="Africa/Johannesburg" {"selected" if tz=="Africa/Johannesburg" else ""}>Johannesburg (SAST)</option>
+                    <option value="Africa/Nairobi" {"selected" if tz=="Africa/Nairobi" else ""}>Nairobi (EAT)</option>
+                    <option value="Africa/Casablanca" {"selected" if tz=="Africa/Casablanca" else ""}>Casablanca (WET)</option>
+                  </optgroup>
                 </select>
               </div>
             </div>
@@ -4497,7 +4769,9 @@ def register_student_routes(app, csrf, limiter):
             body: JSON.stringify({{
               daily_email: document.getElementById('pref-daily').checked,
               email_hour: parseInt(document.getElementById('pref-hour').value),
-              timezone: document.getElementById('pref-tz').value
+              timezone: document.getElementById('pref-tz').value,
+              university: document.getElementById('pref-university').value.trim(),
+              field_of_study: document.getElementById('pref-field').value.trim()
             }})
           }});
           if (r.ok) alert('Saved!'); else alert('Error saving.');

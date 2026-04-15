@@ -470,6 +470,9 @@ def _student_migrations():
         ("student_study_progress", "focus_minutes", "INTEGER DEFAULT 0"),
         ("student_study_progress", "pages_read", "INTEGER DEFAULT 0"),
         ("student_courses", "difficulty", "INTEGER DEFAULT 3"),
+        ("student_email_prefs", "university", "TEXT DEFAULT ''"),
+        ("student_email_prefs", "field_of_study", "TEXT DEFAULT ''"),
+        ("student_email_prefs", "lang", "TEXT DEFAULT 'en'"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -1395,11 +1398,14 @@ BADGE_DEFS = {
     "streak_7":        {"emoji": "⚡", "name": "Unstoppable",      "desc": "7-day study streak"},
     "streak_30":       {"emoji": "💎", "name": "Diamond Student",  "desc": "30-day study streak"},
     "note_taker":      {"emoji": "📒", "name": "Note Taker",      "desc": "Created 10 notes"},
-    "youtube_scholar": {"emoji": "🎬", "name": "YouTube Scholar", "desc": "Imported 5 YouTube videos"},
     "xp_100":          {"emoji": "⭐", "name": "Rising Star",     "desc": "Earned 100 XP"},
     "xp_500":          {"emoji": "🌟", "name": "Shining Star",    "desc": "Earned 500 XP"},
     "xp_1000":         {"emoji": "💫", "name": "Superstar",       "desc": "Earned 1000 XP"},
-    "chat_curious":    {"emoji": "💬", "name": "Curious Mind",    "desc": "Asked 10 questions to AI tutor"},
+    "focus_1h":        {"emoji": "⏱️", "name": "Focused",         "desc": "1 hour of total focus time"},
+    "focus_10h":       {"emoji": "🧘", "name": "Deep Focus",      "desc": "10 hours of total focus time"},
+    "focus_50h":       {"emoji": "🧠", "name": "Focus Master",    "desc": "50 hours of total focus time"},
+    "page_100":        {"emoji": "📖", "name": "Page Turner",     "desc": "Read 100 pages"},
+    "quiz_10":         {"emoji": "🎯", "name": "Quiz Pro",        "desc": "Completed 10 quizzes"},
 }
 
 LEVEL_THRESHOLDS = [
@@ -1459,21 +1465,24 @@ def get_email_prefs(client_id: int) -> dict | None:
 
 
 def upsert_email_prefs(client_id: int, daily_email: bool = True, email_hour: int = 7,
-                        timezone: str = "America/Mexico_City"):
+                        timezone: str = "America/Mexico_City",
+                        university: str = "", field_of_study: str = "",
+                        lang: str = "en"):
     with get_db() as db:
         existing = _fetchone(db, "SELECT id FROM student_email_prefs WHERE client_id = %s",
                              (client_id,))
         de = 1 if daily_email else 0
         if existing:
             _exec(db,
-                  "UPDATE student_email_prefs SET daily_email = %s, email_hour = %s, timezone = %s "
+                  "UPDATE student_email_prefs SET daily_email = %s, email_hour = %s, timezone = %s, "
+                  "university = %s, field_of_study = %s, lang = %s "
                   "WHERE client_id = %s",
-                  (de, email_hour, timezone, client_id))
+                  (de, email_hour, timezone, university, field_of_study, lang, client_id))
         else:
             _exec(db,
-                  "INSERT INTO student_email_prefs (client_id, daily_email, email_hour, timezone) "
-                  "VALUES (%s, %s, %s, %s)",
-                  (client_id, de, email_hour, timezone))
+                  "INSERT INTO student_email_prefs (client_id, daily_email, email_hour, timezone, university, field_of_study, lang) "
+                  "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                  (client_id, de, email_hour, timezone, university, field_of_study, lang))
 
 
 # ── Weak topics ─────────────────────────────────────────────
@@ -1510,3 +1519,56 @@ def get_quiz_scores(client_id: int) -> list[dict]:
             "ORDER BY q.best_score ASC",
             (client_id,),
         )
+
+
+# ── Leaderboard ─────────────────────────────────────────────
+
+def get_leaderboard(limit: int = 50, university: str = "") -> list[dict]:
+    """Get top students by XP. Optionally filter by university."""
+    with get_db() as db:
+        if university:
+            return _fetchall(
+                db,
+                "SELECT c.id as client_id, c.name, "
+                "COALESCE(ep.university, '') as university, "
+                "COALESCE(ep.field_of_study, '') as field_of_study, "
+                "COALESCE(SUM(x.xp), 0) as total_xp "
+                "FROM clients c "
+                "LEFT JOIN student_email_prefs ep ON ep.client_id = c.id "
+                "LEFT JOIN student_xp x ON x.client_id = c.id "
+                "WHERE c.account_type = 'student' AND LOWER(COALESCE(ep.university, '')) = LOWER(%s) "
+                "GROUP BY c.id, c.name, ep.university, ep.field_of_study "
+                "HAVING COALESCE(SUM(x.xp), 0) > 0 "
+                "ORDER BY total_xp DESC LIMIT %s",
+                (university, limit),
+            )
+        return _fetchall(
+            db,
+            "SELECT c.id as client_id, c.name, "
+            "COALESCE(ep.university, '') as university, "
+            "COALESCE(ep.field_of_study, '') as field_of_study, "
+            "COALESCE(SUM(x.xp), 0) as total_xp "
+            "FROM clients c "
+            "LEFT JOIN student_email_prefs ep ON ep.client_id = c.id "
+            "LEFT JOIN student_xp x ON x.client_id = c.id "
+            "WHERE c.account_type = 'student' "
+            "GROUP BY c.id, c.name, ep.university, ep.field_of_study "
+            "HAVING COALESCE(SUM(x.xp), 0) > 0 "
+            "ORDER BY total_xp DESC LIMIT %s",
+            (limit,),
+        )
+
+
+def get_student_rank(client_id: int) -> int:
+    """Get the rank of a specific student."""
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT client_id, SUM(xp) as total_xp FROM student_xp "
+            "GROUP BY client_id ORDER BY total_xp DESC",
+            (),
+        )
+    for i, r in enumerate(rows, 1):
+        if r["client_id"] == client_id:
+            return i
+    return 0
