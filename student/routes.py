@@ -2830,6 +2830,54 @@ def register_student_routes(app, csrf, limiter):
         sdb.update_flashcard_progress(data["card_id"], data.get("correct", False))
         return jsonify({"ok": True})
 
+    @app.route("/api/student/flashcards/<int:card_id>", methods=["PUT"])
+    def student_update_flashcard(card_id):
+        """Edit a single flashcard's front/back text."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        front = (data.get("front") or "").strip()
+        back = (data.get("back") or "").strip()
+        deck_id = data.get("deck_id")
+        if not front or not back or not deck_id:
+            return jsonify({"error": "front, back, and deck_id required"}), 400
+        deck = sdb.get_flashcard_deck(deck_id, _cid())
+        if not deck:
+            return jsonify({"error": "Not found"}), 404
+        sdb.update_flashcard(card_id, deck_id, front, back)
+        return jsonify({"ok": True})
+
+    @app.route("/api/student/flashcards/add", methods=["POST"])
+    def student_add_flashcard():
+        """Add a new flashcard to an existing deck."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        front = (data.get("front") or "").strip()
+        back = (data.get("back") or "").strip()
+        deck_id = data.get("deck_id")
+        if not front or not back or not deck_id:
+            return jsonify({"error": "front, back, and deck_id required"}), 400
+        deck = sdb.get_flashcard_deck(deck_id, _cid())
+        if not deck:
+            return jsonify({"error": "Not found"}), 404
+        card_id = sdb.add_flashcard(deck_id, front, back)
+        return jsonify({"ok": True, "card_id": card_id})
+
+    @app.route("/api/student/flashcards/<int:card_id>", methods=["DELETE"])
+    def student_delete_flashcard(card_id):
+        """Delete a single flashcard."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        deck_id = request.args.get("deck_id", type=int)
+        if not deck_id:
+            return jsonify({"error": "deck_id required"}), 400
+        deck = sdb.get_flashcard_deck(deck_id, _cid())
+        if not deck:
+            return jsonify({"error": "Not found"}), 404
+        sdb.delete_flashcard(card_id, deck_id)
+        return jsonify({"ok": True})
+
     # ── Quiz API routes ─────────────────────────────────────
 
     @app.route("/api/student/quizzes/generate", methods=["POST"])
@@ -3107,7 +3155,7 @@ def register_student_routes(app, csrf, limiter):
 
     @app.route("/student/flashcards/<int:deck_id>")
     def student_flashcard_study_page(deck_id):
-        """Interactive flashcard study page with flip animation."""
+        """Interactive flashcard study page with flip animation and edit mode."""
         if not _logged_in():
             return redirect(url_for("login"))
         deck = sdb.get_flashcard_deck(deck_id, _cid())
@@ -3124,61 +3172,92 @@ def register_student_routes(app, csrf, limiter):
           <div>
             <a href="/student/flashcards" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Decks</a>
             <h1 style="margin:4px 0 0;font-size:24px;">{_esc(deck.get('title',''))}</h1>
-            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">{_esc(deck.get('course_name',''))} &middot; {deck.get('card_count',0)} cards</p>
+            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">{_esc(deck.get('course_name',''))} &middot; <span id="card-count-txt">{deck.get('card_count',0)}</span> cards</p>
           </div>
-          <div id="progress-txt" style="font-size:14px;color:var(--text-muted);">1 / {len(cards)}</div>
-        </div>
-
-        <!-- Progress bar -->
-        <div style="background:var(--bg);border-radius:8px;height:8px;margin-bottom:24px;overflow:hidden;">
-          <div id="fc-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:{100/max(len(cards),1):.1f}%;transition:width 0.4s ease;border-radius:8px;"></div>
-        </div>
-
-        <!-- Flashcard -->
-        <div style="max-width:600px;margin:0 auto;">
-          <div id="fc-card" onclick="flipCard()" style="
-            min-height:250px;background:var(--card);border:2px solid var(--border);border-radius:16px;
-            padding:40px 32px;text-align:center;cursor:pointer;display:flex;align-items:center;
-            justify-content:center;flex-direction:column;user-select:none;
-            transition:transform 0.5s ease,box-shadow 0.3s ease;
-            box-shadow:0 4px 20px rgba(0,0,0,0.08);position:relative;
-          ">
-            <div id="fc-side-label" style="position:absolute;top:16px;left:20px;font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:1px;">Question</div>
-            <div id="fc-content" style="font-size:20px;line-height:1.5;color:var(--text);"></div>
-            <div style="position:absolute;bottom:16px;font-size:12px;color:var(--text-muted);">Click to flip</div>
-          </div>
-
-          <!-- Controls -->
-          <div style="display:flex;justify-content:center;gap:16px;margin-top:24px;">
-            <button onclick="prevCard()" class="btn btn-outline" style="min-width:100px;">&larr; Prev</button>
-            <button onclick="markCard(false)" class="btn" style="min-width:100px;background:#EF4444;color:#fff;border:none;">&#10007; Wrong</button>
-            <button onclick="markCard(true)" class="btn" style="min-width:100px;background:#10B981;color:#fff;border:none;">&#10003; Got it</button>
-            <button onclick="nextCard()" class="btn btn-outline" style="min-width:100px;">Next &rarr;</button>
-          </div>
-
-          <!-- Keyboard hint -->
-          <p style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:12px;">
-            <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Space</kbd> flip
-            &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">&larr;</kbd> prev
-            &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">&rarr;</kbd> next
-            &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">1</kbd> wrong
-            &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">2</kbd> got it
-          </p>
-
-          <!-- Score summary (hidden until completion) -->
-          <div id="fc-summary" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;margin-top:24px;">
-            <div style="font-size:48px;margin-bottom:12px;">&#127881;</div>
-            <h2 style="margin:0 0 8px;">Session Complete!</h2>
-            <div id="fc-score" style="font-size:28px;font-weight:700;color:var(--primary);"></div>
-            <div id="fc-score-detail" style="font-size:14px;color:var(--text-muted);margin-top:4px;"></div>
-            <button onclick="restartStudy()" class="btn btn-primary" style="margin-top:16px;">&#128260; Study Again</button>
+          <div style="display:flex;gap:8px;">
+            <button onclick="switchMode('study')" class="btn btn-primary btn-sm" id="mode-study-btn">&#127183; Study</button>
+            <button onclick="switchMode('edit')" class="btn btn-outline btn-sm" id="mode-edit-btn">&#9999;&#65039; Edit Cards</button>
           </div>
         </div>
 
+        <!-- ===== STUDY MODE ===== -->
+        <div id="study-mode">
+          <div id="progress-txt" style="font-size:14px;color:var(--text-muted);text-align:right;margin-bottom:8px;">1 / {len(cards)}</div>
+          <div style="background:var(--bg);border-radius:8px;height:8px;margin-bottom:24px;overflow:hidden;">
+            <div id="fc-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:{100/max(len(cards),1):.1f}%;transition:width 0.4s ease;border-radius:8px;"></div>
+          </div>
+
+          <div style="max-width:600px;margin:0 auto;">
+            <div id="fc-card" onclick="flipCard()" style="
+              min-height:250px;background:var(--card);border:2px solid var(--border);border-radius:16px;
+              padding:40px 32px;text-align:center;cursor:pointer;display:flex;align-items:center;
+              justify-content:center;flex-direction:column;user-select:none;
+              transition:transform 0.5s ease,box-shadow 0.3s ease;
+              box-shadow:0 4px 20px rgba(0,0,0,0.08);position:relative;
+            ">
+              <div id="fc-side-label" style="position:absolute;top:16px;left:20px;font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:1px;">Question</div>
+              <div id="fc-content" style="font-size:20px;line-height:1.5;color:var(--text);"></div>
+              <div style="position:absolute;bottom:16px;font-size:12px;color:var(--text-muted);">Click to flip</div>
+            </div>
+
+            <div style="display:flex;justify-content:center;gap:16px;margin-top:24px;">
+              <button onclick="prevCard()" class="btn btn-outline" style="min-width:100px;">&larr; Prev</button>
+              <button onclick="markCard(false)" class="btn" style="min-width:100px;background:#EF4444;color:#fff;border:none;">&#10007; Wrong</button>
+              <button onclick="markCard(true)" class="btn" style="min-width:100px;background:#10B981;color:#fff;border:none;">&#10003; Got it</button>
+              <button onclick="nextCard()" class="btn btn-outline" style="min-width:100px;">Next &rarr;</button>
+            </div>
+
+            <p style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:12px;">
+              <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Space</kbd> flip
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">&larr;</kbd> prev
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">&rarr;</kbd> next
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">1</kbd> wrong
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">2</kbd> got it
+            </p>
+
+            <div id="fc-summary" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;margin-top:24px;">
+              <div style="font-size:48px;margin-bottom:12px;">&#127881;</div>
+              <h2 style="margin:0 0 8px;">Session Complete!</h2>
+              <div id="fc-score" style="font-size:28px;font-weight:700;color:var(--primary);"></div>
+              <div id="fc-score-detail" style="font-size:14px;color:var(--text-muted);margin-top:4px;"></div>
+              <button onclick="restartStudy()" class="btn btn-primary" style="margin-top:16px;">&#128260; Study Again</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== EDIT MODE ===== -->
+        <div id="edit-mode" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <p style="color:var(--text-muted);font-size:14px;margin:0;">Click any card to edit. Changes save automatically.</p>
+            <button onclick="addCard()" class="btn btn-primary btn-sm">&#10133; Add Card</button>
+          </div>
+          <div id="card-list"></div>
+        </div>
+
+        <style>
+        .fc-edit-card {{ background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;margin-bottom:10px;transition:border-color 0.2s; }}
+        .fc-edit-card:hover {{ border-color:var(--primary); }}
+        .fc-edit-input {{ width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;resize:vertical; }}
+        .fc-edit-input:focus {{ border-color:var(--primary);outline:none; }}
+        .fc-label {{ font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px; }}
+        </style>
         <script>
         var cards = {cards_json};
+        var deckId = {deck_id};
         var idx = 0, flipped = false, correct = 0, seen = 0;
+        var currentMode = 'study';
 
+        function switchMode(mode) {{
+          currentMode = mode;
+          document.getElementById('study-mode').style.display = mode === 'study' ? '' : 'none';
+          document.getElementById('edit-mode').style.display = mode === 'edit' ? '' : 'none';
+          document.getElementById('mode-study-btn').className = mode === 'study' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+          document.getElementById('mode-edit-btn').className = mode === 'edit' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+          if (mode === 'edit') renderCardList();
+          if (mode === 'study') {{ idx = 0; correct = 0; seen = 0; document.getElementById('fc-card').style.display = 'flex'; document.getElementById('fc-summary').style.display = 'none'; renderCard(); }}
+        }}
+
+        // ── Study functions ──
         function renderCard() {{
           if (idx >= cards.length) {{ showSummary(); return; }}
           var c = cards[idx];
@@ -3234,7 +3313,85 @@ def register_student_routes(app, csrf, limiter):
           renderCard();
         }}
 
+        // ── Edit functions ──
+        function renderCardList() {{
+          var html = '';
+          cards.forEach(function(c, i) {{
+            html += '<div class="fc-edit-card" id="ec-' + c.id + '">'
+              + '<div style="display:flex;justify-content:space-between;align-items:start;gap:12px;">'
+              + '<div style="flex:1;">'
+              + '<div class="fc-label">Front (Question)</div>'
+              + '<textarea class="fc-edit-input" rows="2" data-id="' + c.id + '" data-side="front" onblur="saveCard(' + c.id + ')">' + escHtml(c.front) + '</textarea>'
+              + '</div>'
+              + '<div style="flex:1;">'
+              + '<div class="fc-label">Back (Answer)</div>'
+              + '<textarea class="fc-edit-input" rows="2" data-id="' + c.id + '" data-side="back" onblur="saveCard(' + c.id + ')">' + escHtml(c.back) + '</textarea>'
+              + '</div>'
+              + '<button onclick="removeCard(' + c.id + ',' + i + ')" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:16px;padding:4px;margin-top:16px;" title="Delete card">&#128465;</button>'
+              + '</div></div>';
+          }});
+          if (!cards.length) html = '<div style="text-align:center;padding:40px;color:var(--text-muted);"><p>No cards yet. Click "Add Card" to create one.</p></div>';
+          document.getElementById('card-list').innerHTML = html;
+        }}
+
+        function escHtml(t) {{ var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }}
+
+        var saveTimers = {{}};
+        async function saveCard(cardId) {{
+          var frontEl = document.querySelector('[data-id="' + cardId + '"][data-side="front"]');
+          var backEl = document.querySelector('[data-id="' + cardId + '"][data-side="back"]');
+          if (!frontEl || !backEl) return;
+          var front = frontEl.value.trim(), back = backEl.value.trim();
+          if (!front || !back) return;
+          // Update local
+          var c = cards.find(function(x) {{ return x.id === cardId; }});
+          if (c) {{ c.front = front; c.back = back; }}
+          // Save to server
+          try {{
+            var el = document.getElementById('ec-' + cardId);
+            el.style.borderColor = '#F59E0B';
+            await fetch('/api/student/flashcards/' + cardId, {{
+              method: 'PUT', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ deck_id: deckId, front: front, back: back }})
+            }});
+            el.style.borderColor = '#10B981';
+            setTimeout(function() {{ el.style.borderColor = 'var(--border)'; }}, 1000);
+          }} catch(e) {{ }}
+        }}
+
+        async function addCard() {{
+          try {{
+            var r = await fetch('/api/student/flashcards/add', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ deck_id: deckId, front: 'New question', back: 'Answer' }})
+            }});
+            var d = await r.json();
+            if (d.ok) {{
+              cards.push({{ id: d.card_id, front: 'New question', back: 'Answer', times_seen: 0, times_correct: 0 }});
+              document.getElementById('card-count-txt').textContent = cards.length;
+              renderCardList();
+              // Scroll to new card
+              var last = document.getElementById('card-list').lastElementChild;
+              if (last) last.scrollIntoView({{ behavior: 'smooth' }});
+              // Focus the front input
+              var inputs = last.querySelectorAll('textarea');
+              if (inputs.length) {{ inputs[0].focus(); inputs[0].select(); }}
+            }}
+          }} catch(e) {{ alert('Failed to add card'); }}
+        }}
+
+        async function removeCard(cardId, index) {{
+          if (!confirm('Delete this card?')) return;
+          try {{
+            await fetch('/api/student/flashcards/' + cardId + '?deck_id=' + deckId, {{ method: 'DELETE' }});
+            cards.splice(index, 1);
+            document.getElementById('card-count-txt').textContent = cards.length;
+            renderCardList();
+          }} catch(e) {{ alert('Failed to delete'); }}
+        }}
+
         document.addEventListener('keydown', function(e) {{
+          if (currentMode !== 'study') return;
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           if (e.code === 'Space') {{ e.preventDefault(); flipCard(); }}
           if (e.code === 'ArrowLeft') {{ e.preventDefault(); prevCard(); }}
@@ -3644,19 +3801,41 @@ def register_student_routes(app, csrf, limiter):
         <div class="card" style="padding:30px;">
           <div id="note-view">{note.get('content_html','')}</div>
           <div id="note-edit" style="display:none;">
-            <textarea id="note-html" class="edit-input" rows="20" style="font-family:monospace;font-size:13px;resize:vertical;">{_esc(note.get('content_html',''))}</textarea>
-            <button onclick="saveNote()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="save-note-btn">&#128190; Save</button>
+            <!-- Formatting toolbar -->
+            <div id="editor-toolbar" style="display:flex;gap:4px;flex-wrap:wrap;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-bottom:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0;">
+              <button type="button" onclick="fmt('bold')" class="tb" title="Bold"><b>B</b></button>
+              <button type="button" onclick="fmt('italic')" class="tb" title="Italic"><i>I</i></button>
+              <button type="button" onclick="fmt('underline')" class="tb" title="Underline"><u>U</u></button>
+              <span style="width:1px;background:var(--border);margin:0 4px;"></span>
+              <button type="button" onclick="fmt('formatBlock','<h2>')" class="tb" title="Heading 2">H2</button>
+              <button type="button" onclick="fmt('formatBlock','<h3>')" class="tb" title="Heading 3">H3</button>
+              <button type="button" onclick="fmt('formatBlock','<p>')" class="tb" title="Paragraph">P</button>
+              <span style="width:1px;background:var(--border);margin:0 4px;"></span>
+              <button type="button" onclick="fmt('insertUnorderedList')" class="tb" title="Bullet list">&#8226; List</button>
+              <button type="button" onclick="fmt('insertOrderedList')" class="tb" title="Numbered list">1. List</button>
+              <span style="width:1px;background:var(--border);margin:0 4px;"></span>
+              <button type="button" onclick="fmt('removeFormat')" class="tb" title="Clear formatting">&#10005; Clear</button>
+            </div>
+            <!-- WYSIWYG editor -->
+            <div id="note-editor" contenteditable="true" style="
+              min-height:350px;padding:20px;border:1px solid var(--border);border-radius:0 0 var(--radius-sm) var(--radius-sm);
+              background:var(--card);color:var(--text);font-size:15px;line-height:1.7;outline:none;overflow-y:auto;
+            ">{note.get('content_html','')}</div>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+              <button onclick="saveNote()" class="btn btn-primary btn-sm" id="save-note-btn">&#128190; Save</button>
+              <button onclick="toggleEdit()" class="btn btn-outline btn-sm">Cancel</button>
+            </div>
           </div>
         </div>
 
         <style>
-        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
-        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
-        #note-view h2 {{ color:var(--text);margin:24px 0 12px;font-size:20px;border-bottom:2px solid var(--border);padding-bottom:6px; }}
-        #note-view h3 {{ color:var(--text);margin:18px 0 8px;font-size:17px; }}
-        #note-view p {{ color:var(--text-secondary);line-height:1.7;margin:8px 0; }}
-        #note-view ul, #note-view ol {{ color:var(--text-secondary);line-height:1.8;padding-left:24px; }}
-        #note-view strong {{ color:var(--text); }}
+        .tb {{ background:var(--card);border:1px solid var(--border);border-radius:4px;padding:4px 10px;cursor:pointer;font-size:13px;color:var(--text);transition:all 0.15s; }}
+        .tb:hover {{ background:var(--primary-light);color:var(--primary); }}
+        #note-view h2, #note-editor h2 {{ color:var(--text);margin:24px 0 12px;font-size:20px;border-bottom:2px solid var(--border);padding-bottom:6px; }}
+        #note-view h3, #note-editor h3 {{ color:var(--text);margin:18px 0 8px;font-size:17px; }}
+        #note-view p, #note-editor p {{ color:var(--text-secondary);line-height:1.7;margin:8px 0; }}
+        #note-view ul, #note-view ol, #note-editor ul, #note-editor ol {{ color:var(--text-secondary);line-height:1.8;padding-left:24px; }}
+        #note-view strong, #note-editor strong {{ color:var(--text); }}
         @media print {{
           body * {{ visibility: hidden; }}
           #note-view, #note-view * {{ visibility: visible; }}
@@ -3665,16 +3844,24 @@ def register_student_routes(app, csrf, limiter):
         </style>
         <script>
         var editing = false;
+        function fmt(cmd, val) {{
+          document.execCommand(cmd, false, val || null);
+          document.getElementById('note-editor').focus();
+        }}
         function toggleEdit() {{
           editing = !editing;
           document.getElementById('note-view').style.display = editing ? 'none' : '';
           document.getElementById('note-edit').style.display = editing ? '' : 'none';
           document.getElementById('edit-toggle').innerHTML = editing ? '&#128065; View' : '&#9999;&#65039; Edit';
+          if (editing) {{
+            document.getElementById('note-editor').innerHTML = document.getElementById('note-view').innerHTML;
+            document.getElementById('note-editor').focus();
+          }}
         }}
         async function saveNote() {{
           var btn = document.getElementById('save-note-btn');
           btn.disabled = true; btn.innerHTML = '&#9203; Saving...';
-          var html = document.getElementById('note-html').value;
+          var html = document.getElementById('note-editor').innerHTML;
           try {{
             var r = await fetch('/api/student/notes/{note_id}', {{
               method: 'PUT', headers: {{'Content-Type':'application/json'}},

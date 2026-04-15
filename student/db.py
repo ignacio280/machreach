@@ -960,6 +960,41 @@ def delete_flashcard_deck(deck_id: int, client_id: int):
               (deck_id, client_id))
 
 
+def update_flashcard(card_id: int, deck_id: int, front: str, back: str):
+    """Update a single flashcard's front/back text."""
+    with get_db() as db:
+        _exec(db,
+              "UPDATE student_flashcards SET front = %s, back = %s WHERE id = %s AND deck_id = %s",
+              (front, back, card_id, deck_id))
+
+
+def add_flashcard(deck_id: int, front: str, back: str) -> int:
+    """Add a single flashcard to a deck and bump card_count."""
+    with get_db() as db:
+        card_id = _insert_returning_id(
+            db,
+            "INSERT INTO student_flashcards (deck_id, front, back) VALUES (%s, %s, %s) RETURNING id",
+            (deck_id, front, back),
+            "INSERT INTO student_flashcards (deck_id, front, back) VALUES (?, ?, ?)",
+        )
+        _exec(db,
+              "UPDATE student_flashcard_decks SET card_count = "
+              "(SELECT COUNT(*) FROM student_flashcards WHERE deck_id = %s) WHERE id = %s",
+              (deck_id, deck_id))
+        return card_id
+
+
+def delete_flashcard(card_id: int, deck_id: int):
+    """Delete a single flashcard and update deck count."""
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_flashcards WHERE id = %s AND deck_id = %s",
+              (card_id, deck_id))
+        _exec(db,
+              "UPDATE student_flashcard_decks SET card_count = "
+              "(SELECT COUNT(*) FROM student_flashcards WHERE deck_id = %s) WHERE id = %s",
+              (deck_id, deck_id))
+
+
 # ── Quizzes ─────────────────────────────────────────────────
 
 def create_quiz(client_id: int, title: str, difficulty: str = "medium",

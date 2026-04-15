@@ -860,6 +860,9 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/exams" {% if active_page == 'student_exams' %}class="active"{% endif %}>&#128221; Exams</a>
         <a href="/student/plan" {% if active_page == 'student_plan' %}class="active"{% endif %}>&#128197; Study Plan</a>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127917; Focus</a>
+        <a href="/student/flashcards" {% if active_page == 'student_flashcards' %}class="active"{% endif %}>&#127183; Flashcards</a>
+        <a href="/student/quizzes" {% if active_page == 'student_quizzes' %}class="active"{% endif %}>&#128221; Quizzes</a>
+        <a href="/student/notes" {% if active_page == 'student_notes' %}class="active"{% endif %}>&#128214; Notes</a>
         <a href="/student/gpa" {% if active_page == 'student_gpa' %}class="active"{% endif %}>&#127891; GPA</a>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; {{nav.mail_hub}}</a>
         <a href="/student/canvas-settings" {% if active_page == 'student_canvas' %}class="active"{% endif %}>&#128279; Canvas</a>
