@@ -4355,86 +4355,127 @@ def register_student_routes(app, csrf, limiter):
         )
         return jsonify(ok=True)
 
-    @app.route("/student/settings")
+    @app.route("/student/settings", methods=["GET", "POST"])
     def student_settings_page():
         if not _logged_in():
             return redirect(url_for("login"))
         cid = _cid()
+
+        # Handle profile update
+        from outreach.db import get_client, update_client, get_email_accounts, get_subscription
+        from outreach.config import PLAN_LIMITS
+        client = get_client(cid)
+
+        if request.method == "POST":
+            name = request.form.get("name", "").strip()
+            business = request.form.get("business", "").strip()
+            physical_address = request.form.get("physical_address", "").strip()
+            if name:
+                update_client(cid, name, business, physical_address)
+                session["client_name"] = name
+            return redirect(url_for("student_settings_page"))
+
         prefs = sdb.get_email_prefs(cid) or {}
         de = prefs.get("daily_email", 1)
         hour = prefs.get("email_hour", 7)
         tz = prefs.get("timezone", "America/Mexico_City")
         canvas_tok = sdb.get_canvas_token(cid)
-        canvas_status = "✅ Connected" if canvas_tok else "❌ Not connected"
+        canvas_status = "Connected" if canvas_tok else "Not connected"
+        canvas_color = "#10B981" if canvas_tok else "#EF4444"
+
+        # Email accounts
+        accounts = get_email_accounts(cid)
+        sub = get_subscription(cid)
+        plan = sub.get("plan", "free") if sub else "free"
+        limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
+        max_mailboxes = limits.get("mailboxes", 1)
+        can_add = max_mailboxes == -1 or len(accounts) < max_mailboxes
+        limit_text = "Unlimited" if max_mailboxes == -1 else str(max_mailboxes)
+
+        accounts_html = ""
+        for a in accounts:
+            default_badge = '<span style="background:var(--blue);color:#fff;padding:2px 8px;border-radius:8px;font-size:10px;margin-left:6px;">Default</span>' if a["is_default"] else ""
+            accounts_html += f"""
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--border);">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#8B5CF6);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;">
+                  {_esc(a['email'][:1].upper())}
+                </div>
+                <div>
+                  <div style="font-weight:600;color:var(--text)">{_esc(a['label'] or a['email'])}{default_badge}</div>
+                  <div style="font-size:13px;color:var(--text-muted)">{_esc(a['email'])}</div>
+                </div>
+              </div>
+            </div>"""
+
+        if not accounts_html:
+            accounts_html = '<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">No email accounts connected yet.</p>'
 
         return _s_render("Settings", f"""
-        <div style="max-width:700px;margin:0 auto">
-          <h2>⚙️ Settings</h2>
+        <div style="max-width:720px;margin:0 auto">
+          <h2 style="margin-bottom:24px">⚙️ Settings</h2>
 
-          <!-- Quick links to pages not in nav -->
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:24px">
-            <a href="/student/canvas-settings" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
-              <div style="font-size:24px">🔗</div>
-              <div style="font-weight:600;font-size:13px;color:#1e293b">Canvas</div>
-              <div style="font-size:11px;color:#64748b">{canvas_status}</div>
-            </a>
-            <a href="/student/focus" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
-              <div style="font-size:24px">🎯</div>
-              <div style="font-weight:600;font-size:13px;color:#1e293b">Focus Mode</div>
-              <div style="font-size:11px;color:#64748b">Pomodoro timer</div>
-            </a>
-            <a href="/student/youtube" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
-              <div style="font-size:24px">🎬</div>
-              <div style="font-weight:600;font-size:13px;color:#1e293b">YouTube</div>
-              <div style="font-size:11px;color:#64748b">Video → Notes</div>
-            </a>
-            <a href="/student/weak-topics" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
-              <div style="font-size:24px">🎯</div>
-              <div style="font-weight:600;font-size:13px;color:#1e293b">Weak Topics</div>
-              <div style="font-size:11px;color:#64748b">Focus areas</div>
-            </a>
-            <a href="/student/gpa" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
-              <div style="font-size:24px">🎓</div>
-              <div style="font-weight:600;font-size:13px;color:#1e293b">GPA</div>
-              <div style="font-size:11px;color:#64748b">Grade calculator</div>
-            </a>
-            <a href="/student/exams" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
-              <div style="font-size:24px">📋</div>
-              <div style="font-weight:600;font-size:13px;color:#1e293b">Exams</div>
-              <div style="font-size:11px;color:#64748b">Upcoming dates</div>
-            </a>
-            <a href="/student/schedule" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
-              <div style="font-size:24px">🕐</div>
-              <div style="font-weight:600;font-size:13px;color:#1e293b">Schedule</div>
-              <div style="font-size:11px;color:#64748b">Times & difficulty</div>
-            </a>
-            <a href="/mail-hub" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
-              <div style="font-size:24px">📧</div>
-              <div style="font-weight:600;font-size:13px;color:#1e293b">Mail Hub</div>
-              <div style="font-size:11px;color:#64748b">Email config</div>
-            </a>
+          <!-- Profile -->
+          <div class="card">
+            <div class="card-header"><h2>👤 Profile</h2></div>
+            <form method="post">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div>
+                  <label>Name</label>
+                  <input name="name" value="{_esc(client.get('name','') if client else '')}" required>
+                </div>
+                <div>
+                  <label>Email</label>
+                  <input value="{_esc(client.get('email','') if client else '')}" disabled style="background:var(--border-light);color:var(--text-muted);cursor:not-allowed">
+                  <p style="font-size:11px;color:var(--text-muted);margin-top:-10px">Email cannot be changed.</p>
+                </div>
+              </div>
+              <button class="btn btn-primary" type="submit" style="margin-top:8px">Save Changes</button>
+            </form>
           </div>
 
-          <!-- Email prefs -->
-          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px">
-            <h3>📧 Daily Study Email</h3>
-            <p style="color:#64748b;font-size:14px;margin-bottom:12px">
+          <!-- Canvas Connection -->
+          <div class="card">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <h2>🔗 Canvas LMS</h2>
+              <span style="color:{canvas_color};font-weight:600;font-size:13px">● {canvas_status}</span>
+            </div>
+            <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px">
+              Connect your Canvas LMS to sync courses, exams, and study materials.
+            </p>
+            <a href="/student/canvas-settings" class="btn btn-outline btn-sm">{"Manage Connection" if canvas_tok else "Connect Canvas"}</a>
+          </div>
+
+          <!-- Email Accounts -->
+          <div class="card">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <h2>📧 Email Accounts</h2>
+              <span style="font-size:13px;color:var(--text-muted)">{len(accounts)}/{limit_text} mailboxes</span>
+            </div>
+            <div>{accounts_html}</div>
+            {"<div style='margin-top:12px'><a href='/mail-hub' class='btn btn-outline btn-sm'>Manage in Mail Hub</a></div>" if accounts else "<div style='margin-top:12px'><a href='/settings' class='btn btn-primary btn-sm'>+ Add Email Account</a></div>"}
+          </div>
+
+          <!-- Daily Study Email -->
+          <div class="card">
+            <div class="card-header"><h2>📬 Daily Study Email</h2></div>
+            <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
               Get a morning email with your study plan, upcoming exams, and weak topics to review.
             </p>
-            <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer">
-              <input type="checkbox" id="pref-daily" {'checked' if de else ''}>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="pref-daily" {'checked' if de else ''} style="width:18px;height:18px;accent-color:var(--primary)">
               <span>Enable daily study email</span>
             </label>
-            <div style="display:flex;gap:12px;margin-bottom:12px">
+            <div style="display:flex;gap:16px;margin-bottom:16px">
               <div>
-                <label style="font-size:13px;color:#64748b">Send at (hour)</label>
-                <select id="pref-hour" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;width:80px">
+                <label style="font-size:12px">Send at (hour)</label>
+                <select id="pref-hour">
                   {"".join(f'<option value="{h}" {"selected" if h==hour else ""}>{h:02d}:00</option>' for h in range(5,23))}
                 </select>
               </div>
               <div>
-                <label style="font-size:13px;color:#64748b">Timezone</label>
-                <select id="pref-tz" style="padding:6px;border:1px solid #d1d5db;border-radius:6px">
+                <label style="font-size:12px">Timezone</label>
+                <select id="pref-tz">
                   <option value="America/Mexico_City" {"selected" if tz=="America/Mexico_City" else ""}>Mexico City</option>
                   <option value="America/New_York" {"selected" if tz=="America/New_York" else ""}>New York</option>
                   <option value="America/Chicago" {"selected" if tz=="America/Chicago" else ""}>Chicago</option>
@@ -4446,9 +4487,7 @@ def register_student_routes(app, csrf, limiter):
                 </select>
               </div>
             </div>
-            <button onclick="savePrefs()"
-              style="padding:8px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;
-                     font-weight:600;cursor:pointer">Save Preferences</button>
+            <button onclick="savePrefs()" class="btn btn-primary btn-sm">Save Preferences</button>
           </div>
         </div>
         <script>

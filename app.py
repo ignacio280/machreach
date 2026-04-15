@@ -890,7 +890,9 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/chat" {% if active_page == 'student_chat' %}class="active"{% endif %}>&#129302; Tutor</a>
         <a href="/student/achievements" {% if active_page == 'student_achievements' %}class="active"{% endif %}>&#127942; XP</a>
         <div class="nav-divider"></div>
-        <a href="/student/settings" {% if active_page == 'student_settings' or active_page == 'student_canvas' %}class="active"{% endif %}>&#9881;</a>
+        <a href="/student/canvas-settings" {% if active_page == 'student_canvas' %}class="active"{% endif %}>&#128279; Canvas</a>
+        <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; Mail</a>
+        <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881;</a>
         {% else %}
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>{{nav.dashboard}}</a>
         <a href="/campaign/new" {% if active_page == 'new_campaign' %}class="active"{% endif %}>{{nav.new_campaign}}</a>
