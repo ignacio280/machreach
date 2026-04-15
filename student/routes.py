@@ -4488,11 +4488,58 @@ def register_student_routes(app, csrf, limiter):
         de = prefs.get("daily_email", 1)
         hour = prefs.get("email_hour", 7)
         tz = prefs.get("timezone", "America/Mexico_City")
+        canvas_tok = sdb.get_canvas_token(cid)
+        canvas_status = "✅ Connected" if canvas_tok else "❌ Not connected"
 
         return _s_render("Settings", f"""
-        <div style="max-width:600px;margin:0 auto">
+        <div style="max-width:700px;margin:0 auto">
           <h2>⚙️ Settings</h2>
 
+          <!-- Quick links to pages not in nav -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:24px">
+            <a href="/student/canvas-settings" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
+              <div style="font-size:24px">🔗</div>
+              <div style="font-weight:600;font-size:13px;color:#1e293b">Canvas</div>
+              <div style="font-size:11px;color:#64748b">{canvas_status}</div>
+            </a>
+            <a href="/student/focus" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
+              <div style="font-size:24px">🎯</div>
+              <div style="font-weight:600;font-size:13px;color:#1e293b">Focus Mode</div>
+              <div style="font-size:11px;color:#64748b">Pomodoro timer</div>
+            </a>
+            <a href="/student/youtube" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
+              <div style="font-size:24px">🎬</div>
+              <div style="font-weight:600;font-size:13px;color:#1e293b">YouTube</div>
+              <div style="font-size:11px;color:#64748b">Video → Notes</div>
+            </a>
+            <a href="/student/weak-topics" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
+              <div style="font-size:24px">🎯</div>
+              <div style="font-weight:600;font-size:13px;color:#1e293b">Weak Topics</div>
+              <div style="font-size:11px;color:#64748b">Focus areas</div>
+            </a>
+            <a href="/student/gpa" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
+              <div style="font-size:24px">🎓</div>
+              <div style="font-weight:600;font-size:13px;color:#1e293b">GPA</div>
+              <div style="font-size:11px;color:#64748b">Grade calculator</div>
+            </a>
+            <a href="/student/exams" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
+              <div style="font-size:24px">📋</div>
+              <div style="font-weight:600;font-size:13px;color:#1e293b">Exams</div>
+              <div style="font-size:11px;color:#64748b">Upcoming dates</div>
+            </a>
+            <a href="/student/schedule" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
+              <div style="font-size:24px">🕐</div>
+              <div style="font-weight:600;font-size:13px;color:#1e293b">Schedule</div>
+              <div style="font-size:11px;color:#64748b">Times & difficulty</div>
+            </a>
+            <a href="/mail-hub" style="text-decoration:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center">
+              <div style="font-size:24px">📧</div>
+              <div style="font-weight:600;font-size:13px;color:#1e293b">Mail Hub</div>
+              <div style="font-size:11px;color:#64748b">Email config</div>
+            </a>
+          </div>
+
+          <!-- Email prefs -->
           <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px">
             <h3>📧 Daily Study Email</h3>
             <p style="color:#64748b;font-size:14px;margin-bottom:12px">

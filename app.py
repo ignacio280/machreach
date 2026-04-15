@@ -857,22 +857,14 @@ LAYOUT = """<!DOCTYPE html>
         {% if account_type|default('business') == 'student' %}
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
-        <a href="/student/exams" {% if active_page == 'student_exams' %}class="active"{% endif %}>&#128221; Exams</a>
-        <a href="/student/plan" {% if active_page == 'student_plan' %}class="active"{% endif %}>&#128197; Study Plan</a>
-        <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127917; Focus</a>
+        <a href="/student/plan" {% if active_page == 'student_plan' or active_page == 'student_exams' %}class="active"{% endif %}>&#128197; Plan</a>
         <a href="/student/flashcards" {% if active_page == 'student_flashcards' %}class="active"{% endif %}>&#127183; Flashcards</a>
         <a href="/student/quizzes" {% if active_page == 'student_quizzes' %}class="active"{% endif %}>&#128221; Quizzes</a>
         <a href="/student/notes" {% if active_page == 'student_notes' %}class="active"{% endif %}>&#128214; Notes</a>
-        <a href="/student/chat" {% if active_page == 'student_chat' %}class="active"{% endif %}>&#129302; AI Tutor</a>
-        <a href="/student/youtube" {% if active_page == 'student_youtube' %}class="active"{% endif %}>&#127916; YouTube</a>
-        <a href="/student/weak-topics" {% if active_page == 'student_weak_topics' %}class="active"{% endif %}>&#127919; Weak Topics</a>
-        <a href="/student/achievements" {% if active_page == 'student_achievements' %}class="active"{% endif %}>&#127942; Achievements</a>
-        <a href="/student/gpa" {% if active_page == 'student_gpa' %}class="active"{% endif %}>&#127891; GPA</a>
-        <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; {{nav.mail_hub}}</a>
-        <a href="/student/canvas-settings" {% if active_page == 'student_canvas' %}class="active"{% endif %}>&#128279; Canvas</a>
-        <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881; Settings</a>
+        <a href="/student/chat" {% if active_page == 'student_chat' %}class="active"{% endif %}>&#129302; Tutor</a>
+        <a href="/student/achievements" {% if active_page == 'student_achievements' %}class="active"{% endif %}>&#127942; XP</a>
         <div class="nav-divider"></div>
-        <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %}>{{nav.settings}}</a>
+        <a href="/student/settings" {% if active_page == 'student_settings' or active_page == 'student_canvas' %}class="active"{% endif %}>&#9881; Settings</a>
         {% else %}
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>{{nav.dashboard}}</a>
         <a href="/campaign/new" {% if active_page == 'new_campaign' %}class="active"{% endif %}>{{nav.new_campaign}}</a>
