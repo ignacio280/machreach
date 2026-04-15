@@ -2241,13 +2241,55 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('skip-btn').style.display = currentMode === 'pomodoro' ? '' : 'none';
 
           if (currentMode === 'pages') {{
-            document.getElementById('timer-label').textContent = '&#128214; Reading \u2014 click the big button for each page';
+            document.getElementById('timer-label').textContent = '📖 Reading — click the big button for each page';
+            // Persist floating widget
+            localStorage.setItem('focus_float', JSON.stringify({{
+              active:true, mode:'stopwatch', startAt:Date.now(), label:'📖 Reading'
+            }}));
+            showFloatWidget();
             timerInterval = setInterval(function() {{
               totalFocusSeconds++;
               updateDisplay();
+              updateFloatFromLocal();
             }}, 1000);
           }} else {{
-            document.getElementById('timer-label').textContent = isBreak ? '&#9749; Break time!' : '&#128293; Focus!';
+            document.getElementById('timer-label').textContent = isBreak ? '☕ Break time!' : '🔥 Focus!';
+            // Persist floating widget
+            var endAt = Date.now() + timeLeft * 1000;
+            var label = isBreak ? '☕ Break' : '🔥 Focus';
+            var nextPhase = null;
+            if (currentMode === 'pomodoro') {{
+              // Pre-compute next phase for auto-cycle
+              if (!isBreak) {{
+                var nextPomoCount = pomoCount + 1;
+                var nextBreakMins = (nextPomoCount % 4 === 0)
+                  ? parseInt(document.getElementById('pomo-long').value)
+                  : parseInt(document.getElementById('pomo-break').value);
+                nextPhase = {{
+                  active:true, mode:'countdown',
+                  endAt: endAt + nextBreakMins*60*1000,
+                  label: (nextPomoCount % 4 === 0) ? '🎉 Long Break' : '☕ Break',
+                  nextPhase: {{
+                    active:true, mode:'countdown',
+                    endAt: endAt + nextBreakMins*60*1000 + parseInt(document.getElementById('pomo-work').value)*60*1000,
+                    label: '🔥 Focus',
+                    nextPhase: null
+                  }}
+                }};
+              }} else {{
+                var workMins = parseInt(document.getElementById('pomo-work').value);
+                nextPhase = {{
+                  active:true, mode:'countdown',
+                  endAt: endAt + workMins*60*1000,
+                  label: '🔥 Focus',
+                  nextPhase: null
+                }};
+              }}
+            }}
+            localStorage.setItem('focus_float', JSON.stringify({{
+              active:true, mode:'countdown', endAt:endAt, label:label, nextPhase:nextPhase
+            }}));
+            showFloatWidget();
             timerInterval = setInterval(function() {{
               timeLeft--;
               if (!isBreak) totalFocusSeconds++;
@@ -2261,12 +2303,42 @@ def register_student_routes(app, csrf, limiter):
           }}
         }}
 
+        function showFloatWidget() {{
+          var el = document.getElementById('focus-float');
+          if (el) el.style.display = 'block';
+        }}
+        function updateFloatFromLocal() {{
+          // Update the float on this page too
+          var el = document.getElementById('focus-float');
+          if (!el) return;
+          var ff = JSON.parse(localStorage.getItem('focus_float')||'null');
+          if (!ff || !ff.active) {{ el.style.display='none'; return; }}
+          el.style.display='block';
+          var ffTime = document.getElementById('ff-time');
+          var ffLabel = document.getElementById('ff-label');
+          if (ff.mode==='countdown') {{
+            var left = ff.endAt - Date.now();
+            if (left<0) left=0;
+            var m=Math.floor(left/60000), s=Math.floor((left%60000)/1000);
+            ffTime.textContent = String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+          }} else {{
+            var elapsed = Math.floor((Date.now()-ff.startAt)/1000);
+            var m=Math.floor(elapsed/60), s=elapsed%60;
+            ffTime.textContent = String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+          }}
+          ffLabel.textContent = ff.label||'Focus';
+        }}
+
         function pauseTimer() {{
           clearInterval(timerInterval);
           isRunning = false;
           document.getElementById('start-btn').style.display = '';
           document.getElementById('pause-btn').style.display = 'none';
           document.getElementById('timer-label').textContent = 'Paused';
+          // Pause floating widget
+          localStorage.removeItem('focus_float');
+          var el = document.getElementById('focus-float');
+          if (el) el.style.display = 'none';
         }}
 
         function resetTimer() {{
@@ -2283,6 +2355,10 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('start-btn').style.display = '';
           document.getElementById('pause-btn').style.display = 'none';
           document.getElementById('skip-btn').style.display = 'none';
+          // Clear floating widget
+          localStorage.removeItem('focus_float');
+          var el = document.getElementById('focus-float');
+          if (el) el.style.display = 'none';
           if (currentMode === 'pomodoro') {{
             timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
             document.getElementById('pomo-count').textContent = 'Session 1 of 4';
@@ -2311,26 +2387,31 @@ def register_student_routes(app, csrf, limiter):
               document.getElementById('pomo-count').textContent = 'Completed ' + pomoCount + ' of 4';
               if (pomoCount % 4 === 0) {{
                 timeLeft = parseInt(document.getElementById('pomo-long').value) * 60;
-                document.getElementById('timer-label').textContent = '&#127881; Long break!';
+                document.getElementById('timer-label').textContent = '🎉 Long break!';
               }} else {{
                 timeLeft = parseInt(document.getElementById('pomo-break').value) * 60;
-                document.getElementById('timer-label').textContent = '&#9749; Short break';
+                document.getElementById('timer-label').textContent = '☕ Short break';
               }}
               isBreak = true;
             }} else {{
               timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
-              document.getElementById('timer-label').textContent = 'Ready for next session';
+              document.getElementById('timer-label').textContent = '🔥 Starting next session...';
               isBreak = false;
             }}
             totalTime = timeLeft;
             updateDisplay();
-            document.getElementById('start-btn').style.display = '';
-            document.getElementById('pause-btn').style.display = 'none';
+            // Auto-start next phase after 2 seconds
+            setTimeout(function() {{
+              startTimer();
+            }}, 2000);
           }} else {{
             saveFocusSession();
-            document.getElementById('timer-label').textContent = '&#10003; Session complete!';
+            document.getElementById('timer-label').textContent = '✓ Session complete!';
             document.getElementById('start-btn').style.display = '';
             document.getElementById('pause-btn').style.display = 'none';
+            localStorage.removeItem('focus_float');
+            var el = document.getElementById('focus-float');
+            if (el) el.style.display = 'none';
           }}
         }}
 
@@ -4014,24 +4095,26 @@ def register_student_routes(app, csrf, limiter):
           <h2 style="display:flex;align-items:center;gap:8px">
             <span style="font-size:1.5em">🤖</span> AI Study Tutor
           </h2>
-          <p style="color:#64748b;margin-bottom:16px">
+          <p style="color:var(--text-muted);margin-bottom:16px">
             Ask anything about your courses — your AI tutor uses your own notes and course material to help.
           </p>
           <div style="margin-bottom:12px">
             <select id="chat-course" onchange="loadHistory()"
-              style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;width:100%">
+              style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;width:100%;
+                     background:var(--bg);color:var(--text)">
               <option value="">General (no specific course)</option>
               {course_opts}
             </select>
           </div>
-          <div id="chat-box" style="border:1px solid #e2e8f0;border-radius:12px;height:450px;
-               overflow-y:auto;padding:16px;background:#f8fafc;margin-bottom:12px"></div>
+          <div id="chat-box" style="border:1px solid var(--border);border-radius:12px;height:450px;
+               overflow-y:auto;padding:16px;background:var(--bg);margin-bottom:12px"></div>
           <div style="display:flex;gap:8px">
             <input id="chat-input" type="text" placeholder="Ask your tutor..."
-              style="flex:1;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:15px"
+              style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;
+                     background:var(--card);color:var(--text)"
               onkeydown="if(event.key==='Enter')sendMsg()">
             <button onclick="sendMsg()"
-              style="padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;
+              style="padding:10px 20px;background:var(--primary);color:#fff;border:none;border-radius:8px;
                      font-weight:600;cursor:pointer">Send</button>
             <button onclick="clearChat()" title="Clear history"
               style="padding:10px 12px;background:#ef4444;color:#fff;border:none;border-radius:8px;
@@ -4046,8 +4129,8 @@ def register_student_routes(app, csrf, limiter):
           var b = document.createElement('div');
           b.style.cssText = 'max-width:75%;padding:10px 14px;border-radius:12px;line-height:1.5;white-space:pre-wrap;' +
             (role==='user'
-              ? 'background:#6366f1;color:#fff;border-bottom-right-radius:4px'
-              : 'background:#e2e8f0;color:#1e293b;border-bottom-left-radius:4px');
+              ? 'background:var(--primary);color:#fff;border-bottom-right-radius:4px'
+              : 'background:var(--card);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px');
           b.textContent = text;
           d.appendChild(b);
           chatBox.appendChild(d);

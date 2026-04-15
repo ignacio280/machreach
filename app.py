@@ -534,6 +534,20 @@ LAYOUT = """<!DOCTYPE html>
     .nav-links a.active { color: #fff; background: rgba(255,255,255,0.13); }
     .nav-links .nav-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.1); margin: 0 6px; }
     .nav-links .nav-user { color: #64748B; font-size: 12px; margin-right: 4px; }
+    /* Nav dropdown */
+    .nav-dropdown { position: relative; }
+    .nav-dropdown > a { cursor: pointer; }
+    .nav-dropdown-menu { display:none; position:absolute; top:100%; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:8px 0; min-width:180px; z-index:300; box-shadow:0 8px 32px rgba(0,0,0,0.4); margin-top:6px; }
+    .nav-dropdown:hover .nav-dropdown-menu { display:block; }
+    .nav-dropdown-menu a { display:block; padding:8px 16px !important; font-size:13px !important; color:#94a3b8 !important; border-radius:0 !important; }
+    .nav-dropdown-menu a:hover { color:#fff !important; background:rgba(255,255,255,0.08) !important; }
+    /* Floating focus widget */
+    #focus-float { position:fixed; bottom:20px; right:20px; background:linear-gradient(135deg,#1e293b,#334155); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:12px 18px; z-index:500; box-shadow:0 8px 32px rgba(0,0,0,0.4); display:none; cursor:pointer; color:#fff; font-family:monospace; min-width:140px; text-align:center; transition:all 0.3s; }
+    #focus-float:hover { transform:scale(1.05); box-shadow:0 12px 40px rgba(99,102,241,0.3); }
+    #focus-float .ff-time { font-size:28px; font-weight:800; letter-spacing:1px; }
+    #focus-float .ff-label { font-size:11px; color:#94a3b8; margin-top:2px; }
+    #focus-float .ff-close { position:absolute; top:4px; right:8px; font-size:14px; color:#64748b; cursor:pointer; }
+    #focus-float .ff-close:hover { color:#ef4444; }
 
     /* Layout — edge-to-edge with comfortable padding */
     .container { max-width: 1600px; margin: 0 auto; padding: 32px 48px; }
@@ -855,16 +869,26 @@ LAYOUT = """<!DOCTYPE html>
     <div class="nav-links">
       {% if logged_in %}
         {% if account_type|default('business') == 'student' %}
-        <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
-        <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
-        <a href="/student/plan" {% if active_page == 'student_plan' or active_page == 'student_exams' %}class="active"{% endif %}>&#128197; Plan</a>
+        <div class="nav-dropdown">
+          <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard &#9662;</a>
+          <div class="nav-dropdown-menu">
+            <a href="/student/courses">&#128218; Courses</a>
+            <a href="/student/plan">&#128197; Study Plan</a>
+            <a href="/student/exams">&#128221; Exams</a>
+            <a href="/student/focus">&#127917; Focus Mode</a>
+            <a href="/student/gpa">&#127891; GPA Calculator</a>
+            <a href="/student/schedule">&#128337; Schedule</a>
+            <a href="/student/youtube">&#127916; YouTube → Notes</a>
+            <a href="/student/weak-topics">&#127919; Weak Topics</a>
+          </div>
+        </div>
         <a href="/student/flashcards" {% if active_page == 'student_flashcards' %}class="active"{% endif %}>&#127183; Flashcards</a>
         <a href="/student/quizzes" {% if active_page == 'student_quizzes' %}class="active"{% endif %}>&#128221; Quizzes</a>
         <a href="/student/notes" {% if active_page == 'student_notes' %}class="active"{% endif %}>&#128214; Notes</a>
         <a href="/student/chat" {% if active_page == 'student_chat' %}class="active"{% endif %}>&#129302; Tutor</a>
         <a href="/student/achievements" {% if active_page == 'student_achievements' %}class="active"{% endif %}>&#127942; XP</a>
         <div class="nav-divider"></div>
-        <a href="/student/settings" {% if active_page == 'student_settings' or active_page == 'student_canvas' %}class="active"{% endif %}>&#9881; Settings</a>
+        <a href="/student/settings" {% if active_page == 'student_settings' or active_page == 'student_canvas' %}class="active"{% endif %}>&#9881;</a>
         {% else %}
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>{{nav.dashboard}}</a>
         <a href="/campaign/new" {% if active_page == 'new_campaign' %}class="active"{% endif %}>{{nav.new_campaign}}</a>
@@ -1166,6 +1190,55 @@ LAYOUT = """<!DOCTYPE html>
     document.cookie='cookie_consent=1;path=/;max-age=31536000;SameSite=Lax';
     var el=document.getElementById('cookie-consent');
     if(el) el.style.display='none';
+  }
+  </script>
+
+  <!-- Floating focus timer widget (persists across pages) -->
+  <div id="focus-float" onclick="window.location='/student/focus'">
+    <span class="ff-close" onclick="event.stopPropagation();closeFocusFloat();">&times;</span>
+    <div class="ff-time" id="ff-time">--:--</div>
+    <div class="ff-label" id="ff-label">Focus</div>
+  </div>
+  <script>
+  (function(){
+    // Restore floating timer from localStorage
+    var d = JSON.parse(localStorage.getItem('focus_float')||'null');
+    if(d && d.active){
+      var el=document.getElementById('focus-float');
+      el.style.display='block';
+      function tick(){
+        var dd=JSON.parse(localStorage.getItem('focus_float')||'null');
+        if(!dd||!dd.active){el.style.display='none';return;}
+        if(dd.mode==='countdown'){
+          var left=dd.endAt-Date.now();
+          if(left<0) left=0;
+          var m=Math.floor(left/60000), s=Math.floor((left%60000)/1000);
+          document.getElementById('ff-time').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+          document.getElementById('ff-label').textContent=dd.label||'Focus';
+          if(left<=0){
+            // timer ended — check if auto-cycle
+            if(dd.nextPhase){
+              localStorage.setItem('focus_float',JSON.stringify(dd.nextPhase));
+            } else {
+              dd.active=false; localStorage.setItem('focus_float',JSON.stringify(dd));
+              el.style.display='none';
+            }
+            return;
+          }
+        } else {
+          var elapsed=Math.floor((Date.now()-dd.startAt)/1000);
+          var m=Math.floor(elapsed/60), s=elapsed%60;
+          document.getElementById('ff-time').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+          document.getElementById('ff-label').textContent=dd.label||'Reading';
+        }
+        requestAnimationFrame(tick);
+      }
+      tick(); setInterval(tick,1000);
+    }
+  })();
+  function closeFocusFloat(){
+    localStorage.removeItem('focus_float');
+    document.getElementById('focus-float').style.display='none';
   }
   </script>
 
