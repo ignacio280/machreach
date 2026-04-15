@@ -2157,6 +2157,9 @@ def admin_broadcast():
 def settings():
     if not _logged_in():
         return redirect(url_for("login"))
+    # Student accounts use their own settings page
+    if session.get("account_type") == "student":
+        return redirect("/student/settings")
     client = get_client(session["client_id"])
     if request.method == "POST":
         name = request.form.get("name", "").strip()
