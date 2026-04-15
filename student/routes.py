@@ -26,6 +26,11 @@ def register_student_routes(app, csrf, limiter):
     from student import db as sdb
 
     # ── helpers ─────────────────────────────────────────────
+    def _esc(s) -> str:
+        """HTML-escape a string."""
+        import html as html_module
+        return html_module.escape(str(s)) if s else ""
+
     def _logged_in() -> bool:
         return "client_id" in session
 
@@ -3685,8 +3690,5 @@ def register_student_routes(app, csrf, limiter):
         function printNote() {{ window.print(); }}
         </script>
         """, active_page="student_notes")
-        """HTML-escape a string."""
-        import html as html_module
-        return html_module.escape(str(s)) if s else ""
 
     log.info("Student routes registered.")
