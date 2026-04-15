@@ -116,6 +116,71 @@ CREATE TABLE IF NOT EXISTS student_assignment_progress (
 );
 
 CREATE INDEX IF NOT EXISTS idx_student_assignment_client ON student_assignment_progress(client_id, plan_date);
+
+CREATE TABLE IF NOT EXISTS student_flashcard_decks (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id   INTEGER REFERENCES student_courses(id) ON DELETE CASCADE,
+    exam_id     INTEGER REFERENCES student_exams(id) ON DELETE SET NULL,
+    title       TEXT NOT NULL,
+    source_type TEXT DEFAULT 'ai',
+    card_count  INTEGER DEFAULT 0,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_flashcard_decks_client ON student_flashcard_decks(client_id);
+
+CREATE TABLE IF NOT EXISTS student_flashcards (
+    id          SERIAL PRIMARY KEY,
+    deck_id     INTEGER NOT NULL REFERENCES student_flashcard_decks(id) ON DELETE CASCADE,
+    front       TEXT NOT NULL,
+    back        TEXT NOT NULL,
+    difficulty  INTEGER DEFAULT 0,
+    times_seen  INTEGER DEFAULT 0,
+    times_correct INTEGER DEFAULT 0,
+    next_review TIMESTAMP,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_flashcards_deck ON student_flashcards(deck_id);
+
+CREATE TABLE IF NOT EXISTS student_quizzes (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id   INTEGER REFERENCES student_courses(id) ON DELETE CASCADE,
+    exam_id     INTEGER REFERENCES student_exams(id) ON DELETE SET NULL,
+    title       TEXT NOT NULL,
+    difficulty  TEXT DEFAULT 'medium',
+    question_count INTEGER DEFAULT 0,
+    best_score  INTEGER DEFAULT 0,
+    attempts    INTEGER DEFAULT 0,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_quizzes_client ON student_quizzes(client_id);
+
+CREATE TABLE IF NOT EXISTS student_quiz_questions (
+    id          SERIAL PRIMARY KEY,
+    quiz_id     INTEGER NOT NULL REFERENCES student_quizzes(id) ON DELETE CASCADE,
+    question    TEXT NOT NULL,
+    option_a    TEXT NOT NULL,
+    option_b    TEXT NOT NULL,
+    option_c    TEXT NOT NULL,
+    option_d    TEXT NOT NULL,
+    correct     TEXT NOT NULL,
+    explanation TEXT DEFAULT '',
+    sort_order  INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_quiz_questions ON student_quiz_questions(quiz_id);
+
+CREATE TABLE IF NOT EXISTS student_notes (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id   INTEGER REFERENCES student_courses(id) ON DELETE CASCADE,
+    title       TEXT NOT NULL,
+    content_html TEXT NOT NULL DEFAULT '',
+    source_type TEXT DEFAULT 'ai',
+    created_at  TIMESTAMP DEFAULT NOW(),
+    updated_at  TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notes_client ON student_notes(client_id);
 """
 
 STUDENT_SQLITE_SCHEMA = """
@@ -211,6 +276,71 @@ CREATE TABLE IF NOT EXISTS student_assignment_progress (
 );
 
 CREATE INDEX IF NOT EXISTS idx_student_assignment_client ON student_assignment_progress(client_id, plan_date);
+
+CREATE TABLE IF NOT EXISTS student_flashcard_decks (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id   INTEGER REFERENCES student_courses(id) ON DELETE CASCADE,
+    exam_id     INTEGER REFERENCES student_exams(id) ON DELETE SET NULL,
+    title       TEXT NOT NULL,
+    source_type TEXT DEFAULT 'ai',
+    card_count  INTEGER DEFAULT 0,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_flashcard_decks_client ON student_flashcard_decks(client_id);
+
+CREATE TABLE IF NOT EXISTS student_flashcards (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    deck_id     INTEGER NOT NULL REFERENCES student_flashcard_decks(id) ON DELETE CASCADE,
+    front       TEXT NOT NULL,
+    back        TEXT NOT NULL,
+    difficulty  INTEGER DEFAULT 0,
+    times_seen  INTEGER DEFAULT 0,
+    times_correct INTEGER DEFAULT 0,
+    next_review TEXT,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_flashcards_deck ON student_flashcards(deck_id);
+
+CREATE TABLE IF NOT EXISTS student_quizzes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id   INTEGER REFERENCES student_courses(id) ON DELETE CASCADE,
+    exam_id     INTEGER REFERENCES student_exams(id) ON DELETE SET NULL,
+    title       TEXT NOT NULL,
+    difficulty  TEXT DEFAULT 'medium',
+    question_count INTEGER DEFAULT 0,
+    best_score  INTEGER DEFAULT 0,
+    attempts    INTEGER DEFAULT 0,
+    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_quizzes_client ON student_quizzes(client_id);
+
+CREATE TABLE IF NOT EXISTS student_quiz_questions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    quiz_id     INTEGER NOT NULL REFERENCES student_quizzes(id) ON DELETE CASCADE,
+    question    TEXT NOT NULL,
+    option_a    TEXT NOT NULL,
+    option_b    TEXT NOT NULL,
+    option_c    TEXT NOT NULL,
+    option_d    TEXT NOT NULL,
+    correct     TEXT NOT NULL,
+    explanation TEXT DEFAULT '',
+    sort_order  INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_quiz_questions ON student_quiz_questions(quiz_id);
+
+CREATE TABLE IF NOT EXISTS student_notes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id   INTEGER REFERENCES student_courses(id) ON DELETE CASCADE,
+    title       TEXT NOT NULL,
+    content_html TEXT NOT NULL DEFAULT '',
+    source_type TEXT DEFAULT 'ai',
+    created_at  TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at  TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_notes_client ON student_notes(client_id);
 """
 
 
@@ -732,6 +862,11 @@ def get_all_student_client_ids() -> list[int]:
 def delete_student_data(client_id: int):
     """Remove all student data for a client (account deletion)."""
     with get_db() as db:
+        _exec(db, "DELETE FROM student_quiz_questions WHERE quiz_id IN (SELECT id FROM student_quizzes WHERE client_id = %s)", (client_id,))
+        _exec(db, "DELETE FROM student_quizzes WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM student_flashcards WHERE deck_id IN (SELECT id FROM student_flashcard_decks WHERE client_id = %s)", (client_id,))
+        _exec(db, "DELETE FROM student_flashcard_decks WHERE client_id = %s", (client_id,))
+        _exec(db, "DELETE FROM student_notes WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_assignment_progress WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_schedule_settings WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_study_progress WHERE client_id = %s", (client_id,))
@@ -740,3 +875,228 @@ def delete_student_data(client_id: int):
         _exec(db, "DELETE FROM student_course_files WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_courses WHERE client_id = %s", (client_id,))
         _exec(db, "DELETE FROM student_canvas_tokens WHERE client_id = %s", (client_id,))
+
+
+# ── Flashcard decks & cards ─────────────────────────────────
+
+def create_flashcard_deck(client_id: int, title: str, course_id: int | None = None,
+                          exam_id: int | None = None, source_type: str = "ai") -> int:
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_flashcard_decks (client_id, course_id, exam_id, title, source_type) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (client_id, course_id, exam_id, title, source_type),
+            "INSERT INTO student_flashcard_decks (client_id, course_id, exam_id, title, source_type) "
+            "VALUES (?, ?, ?, ?, ?)",
+        )
+
+
+def add_flashcards(deck_id: int, cards: list[dict]):
+    """Insert a batch of flashcards into a deck."""
+    with get_db() as db:
+        for c in cards:
+            _exec(db,
+                  "INSERT INTO student_flashcards (deck_id, front, back) VALUES (%s, %s, %s)",
+                  (deck_id, c["front"], c["back"]))
+        _exec(db, "UPDATE student_flashcard_decks SET card_count = %s WHERE id = %s",
+              (len(cards), deck_id))
+
+
+def get_flashcard_decks(client_id: int, course_id: int | None = None) -> list[dict]:
+    with get_db() as db:
+        if course_id:
+            return _fetchall(
+                db,
+                "SELECT d.*, c.name as course_name FROM student_flashcard_decks d "
+                "LEFT JOIN student_courses c ON d.course_id = c.id "
+                "WHERE d.client_id = %s AND d.course_id = %s ORDER BY d.created_at DESC",
+                (client_id, course_id),
+            )
+        return _fetchall(
+            db,
+            "SELECT d.*, c.name as course_name FROM student_flashcard_decks d "
+            "LEFT JOIN student_courses c ON d.course_id = c.id "
+            "WHERE d.client_id = %s ORDER BY d.created_at DESC",
+            (client_id,),
+        )
+
+
+def get_flashcard_deck(deck_id: int, client_id: int) -> dict | None:
+    with get_db() as db:
+        return _fetchone(
+            db,
+            "SELECT d.*, c.name as course_name FROM student_flashcard_decks d "
+            "LEFT JOIN student_courses c ON d.course_id = c.id "
+            "WHERE d.id = %s AND d.client_id = %s",
+            (deck_id, client_id),
+        )
+
+
+def get_flashcards(deck_id: int) -> list[dict]:
+    with get_db() as db:
+        return _fetchall(
+            db, "SELECT * FROM student_flashcards WHERE deck_id = %s ORDER BY id",
+            (deck_id,),
+        )
+
+
+def update_flashcard_progress(card_id: int, correct: bool):
+    with get_db() as db:
+        if correct:
+            _exec(db,
+                  "UPDATE student_flashcards SET times_seen = times_seen + 1, "
+                  "times_correct = times_correct + 1 WHERE id = %s", (card_id,))
+        else:
+            _exec(db,
+                  "UPDATE student_flashcards SET times_seen = times_seen + 1 WHERE id = %s",
+                  (card_id,))
+
+
+def delete_flashcard_deck(deck_id: int, client_id: int):
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_flashcards WHERE deck_id = %s", (deck_id,))
+        _exec(db, "DELETE FROM student_flashcard_decks WHERE id = %s AND client_id = %s",
+              (deck_id, client_id))
+
+
+# ── Quizzes ─────────────────────────────────────────────────
+
+def create_quiz(client_id: int, title: str, difficulty: str = "medium",
+                course_id: int | None = None, exam_id: int | None = None) -> int:
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_quizzes (client_id, course_id, exam_id, title, difficulty) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (client_id, course_id, exam_id, title, difficulty),
+            "INSERT INTO student_quizzes (client_id, course_id, exam_id, title, difficulty) "
+            "VALUES (?, ?, ?, ?, ?)",
+        )
+
+
+def add_quiz_questions(quiz_id: int, questions: list[dict]):
+    """Insert a batch of quiz questions."""
+    with get_db() as db:
+        for idx, q in enumerate(questions):
+            _exec(db,
+                  "INSERT INTO student_quiz_questions "
+                  "(quiz_id, question, option_a, option_b, option_c, option_d, correct, explanation, sort_order) "
+                  "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                  (quiz_id, q["question"], q.get("option_a", ""), q.get("option_b", ""),
+                   q.get("option_c", ""), q.get("option_d", ""), q["correct"],
+                   q.get("explanation", ""), idx))
+        _exec(db, "UPDATE student_quizzes SET question_count = %s WHERE id = %s",
+              (len(questions), quiz_id))
+
+
+def get_quizzes(client_id: int, course_id: int | None = None) -> list[dict]:
+    with get_db() as db:
+        if course_id:
+            return _fetchall(
+                db,
+                "SELECT q.*, c.name as course_name FROM student_quizzes q "
+                "LEFT JOIN student_courses c ON q.course_id = c.id "
+                "WHERE q.client_id = %s AND q.course_id = %s ORDER BY q.created_at DESC",
+                (client_id, course_id),
+            )
+        return _fetchall(
+            db,
+            "SELECT q.*, c.name as course_name FROM student_quizzes q "
+            "LEFT JOIN student_courses c ON q.course_id = c.id "
+            "WHERE q.client_id = %s ORDER BY q.created_at DESC",
+            (client_id,),
+        )
+
+
+def get_quiz(quiz_id: int, client_id: int) -> dict | None:
+    with get_db() as db:
+        return _fetchone(
+            db,
+            "SELECT q.*, c.name as course_name FROM student_quizzes q "
+            "LEFT JOIN student_courses c ON q.course_id = c.id "
+            "WHERE q.id = %s AND q.client_id = %s",
+            (quiz_id, client_id),
+        )
+
+
+def get_quiz_questions(quiz_id: int) -> list[dict]:
+    with get_db() as db:
+        return _fetchall(
+            db, "SELECT * FROM student_quiz_questions WHERE quiz_id = %s ORDER BY sort_order",
+            (quiz_id,),
+        )
+
+
+def update_quiz_score(quiz_id: int, score: int):
+    with get_db() as db:
+        _exec(db,
+              "UPDATE student_quizzes SET attempts = attempts + 1, "
+              "best_score = CASE WHEN %s > best_score THEN %s ELSE best_score END "
+              "WHERE id = %s",
+              (score, score, quiz_id))
+
+
+def delete_quiz(quiz_id: int, client_id: int):
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_quiz_questions WHERE quiz_id = %s", (quiz_id,))
+        _exec(db, "DELETE FROM student_quizzes WHERE id = %s AND client_id = %s",
+              (quiz_id, client_id))
+
+
+# ── Notes ───────────────────────────────────────────────────
+
+def create_note(client_id: int, title: str, content_html: str,
+                course_id: int | None = None, source_type: str = "ai") -> int:
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_notes (client_id, course_id, title, content_html, source_type) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (client_id, course_id, title, content_html, source_type),
+            "INSERT INTO student_notes (client_id, course_id, title, content_html, source_type) "
+            "VALUES (?, ?, ?, ?, ?)",
+        )
+
+
+def get_notes(client_id: int, course_id: int | None = None) -> list[dict]:
+    with get_db() as db:
+        if course_id:
+            return _fetchall(
+                db,
+                "SELECT n.*, c.name as course_name FROM student_notes n "
+                "LEFT JOIN student_courses c ON n.course_id = c.id "
+                "WHERE n.client_id = %s AND n.course_id = %s ORDER BY n.created_at DESC",
+                (client_id, course_id),
+            )
+        return _fetchall(
+            db,
+            "SELECT n.*, c.name as course_name FROM student_notes n "
+            "LEFT JOIN student_courses c ON n.course_id = c.id "
+            "WHERE n.client_id = %s ORDER BY n.created_at DESC",
+            (client_id,),
+        )
+
+
+def get_note(note_id: int, client_id: int) -> dict | None:
+    with get_db() as db:
+        return _fetchone(
+            db, "SELECT * FROM student_notes WHERE id = %s AND client_id = %s",
+            (note_id, client_id),
+        )
+
+
+def update_note(note_id: int, client_id: int, content_html: str):
+    with get_db() as db:
+        _exec(db,
+              "UPDATE student_notes SET content_html = %s, updated_at = %s WHERE id = %s AND client_id = %s"
+              if _USE_PG else
+              "UPDATE student_notes SET content_html = ?, updated_at = datetime('now','localtime') WHERE id = ? AND client_id = ?",
+              (content_html, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), note_id, client_id)
+              if _USE_PG else (content_html, note_id, client_id))
+
+
+def delete_note(note_id: int, client_id: int):
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_notes WHERE id = %s AND client_id = %s",
+              (note_id, client_id))

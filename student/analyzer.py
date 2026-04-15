@@ -372,3 +372,197 @@ def _empty_result(course_name: str) -> dict:
         "key_dates": [],
         "study_tips": [],
     }
+
+
+# ── Flashcard generation ────────────────────────────────────
+
+def generate_flashcards(
+    course_name: str,
+    topics: list[str] | None = None,
+    source_text: str = "",
+    count: int = 15,
+) -> list[dict]:
+    """
+    Generate flashcards from course material using AI.
+
+    Returns:
+        [{"front": "question", "back": "answer"}, ...]
+    """
+    context = ""
+    if source_text:
+        context = f"\n\nSOURCE MATERIAL:\n{source_text[:10000]}"
+    topics_str = ", ".join(topics) if topics else "all key concepts"
+
+    prompt = f"""You are creating study flashcards for the course "{course_name}".
+Topics to cover: {topics_str}
+{context}
+
+Generate exactly {count} flashcards. Each flashcard should:
+- Have a clear, specific question on the front
+- Have a concise but complete answer on the back
+- Cover different aspects of the topics
+- Progress from basic concepts to more advanced ones
+- If the source material is in Spanish or another language, keep the flashcards in that language
+
+Return ONLY valid JSON array:
+[
+  {{"front": "What is ...?", "back": "It is ..."}},
+  ...
+]
+
+No markdown fences, no explanation. ONLY the JSON array."""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=4000,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        cards = json.loads(raw)
+        if isinstance(cards, list):
+            return [{"front": c.get("front", ""), "back": c.get("back", "")}
+                    for c in cards if c.get("front") and c.get("back")]
+        return []
+    except Exception as e:
+        log.error("Flashcard generation failed for %s: %s", course_name, e)
+        return []
+
+
+# ── Quiz generation ─────────────────────────────────────────
+
+def generate_quiz(
+    course_name: str,
+    topics: list[str] | None = None,
+    source_text: str = "",
+    difficulty: str = "medium",
+    count: int = 10,
+) -> list[dict]:
+    """
+    Generate multiple-choice quiz questions from course material using AI.
+
+    Returns:
+        [{"question": "...", "option_a": "...", "option_b": "...",
+          "option_c": "...", "option_d": "...", "correct": "a",
+          "explanation": "..."}, ...]
+    """
+    context = ""
+    if source_text:
+        context = f"\n\nSOURCE MATERIAL:\n{source_text[:10000]}"
+    topics_str = ", ".join(topics) if topics else "all key concepts"
+
+    diff_desc = {
+        "easy": "basic recall and definitions — suitable for initial review",
+        "medium": "application and understanding — typical exam-level questions",
+        "hard": "analysis, edge cases, and tricky scenarios — challenge-level"
+    }.get(difficulty, "typical exam-level questions")
+
+    prompt = f"""You are creating a practice quiz for the course "{course_name}".
+Topics: {topics_str}
+Difficulty: {difficulty} — {diff_desc}
+{context}
+
+Generate exactly {count} multiple-choice questions. Each question should:
+- Be clear and unambiguous
+- Have exactly 4 options (a, b, c, d) where only ONE is correct
+- Include a brief explanation of why the correct answer is right
+- Vary in the concepts tested
+- If the source material is in Spanish or another language, keep the quiz in that language
+
+Return ONLY valid JSON array:
+[
+  {{
+    "question": "Which of the following ...?",
+    "option_a": "First option",
+    "option_b": "Second option",
+    "option_c": "Third option",
+    "option_d": "Fourth option",
+    "correct": "b",
+    "explanation": "Option B is correct because ..."
+  }},
+  ...
+]
+
+No markdown fences, no explanation. ONLY the JSON array."""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=6000,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        questions = json.loads(raw)
+        if isinstance(questions, list):
+            return [q for q in questions
+                    if q.get("question") and q.get("correct") in ("a", "b", "c", "d")]
+        return []
+    except Exception as e:
+        log.error("Quiz generation failed for %s: %s", course_name, e)
+        return []
+
+
+# ── Notes / Summary generation ──────────────────────────────
+
+def generate_notes(
+    course_name: str,
+    topics: list[str] | None = None,
+    source_text: str = "",
+) -> dict:
+    """
+    Generate structured study notes from course material using AI.
+
+    Returns:
+        {"title": "...", "content_html": "<h2>...</h2><p>...</p>..."}
+    """
+    context = ""
+    if source_text:
+        context = f"\n\nSOURCE MATERIAL:\n{source_text[:12000]}"
+    topics_str = ", ".join(topics) if topics else "all key concepts"
+
+    prompt = f"""You are creating comprehensive study notes for the course "{course_name}".
+Topics to cover: {topics_str}
+{context}
+
+Create well-structured study notes in HTML format. The notes should:
+- Use <h2> for major sections and <h3> for subsections
+- Use <ul>/<li> for lists of key points
+- Use <strong> for important terms and definitions
+- Use <p> for explanatory paragraphs
+- Include key formulas using plain text notation
+- Add a brief summary section at the end
+- Be thorough but concise — focus on what a student needs to know for exams
+- If the source material is in Spanish or another language, keep the notes in that language
+
+Return ONLY valid JSON:
+{{
+  "title": "Notes: Topic Name",
+  "content_html": "<h2>Section 1</h2><p>...</p>..."
+}}
+
+No markdown fences. ONLY the JSON object."""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=8000,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        return {
+            "title": data.get("title", f"Notes: {course_name}"),
+            "content_html": data.get("content_html", ""),
+        }
+    except Exception as e:
+        log.error("Notes generation failed for %s: %s", course_name, e)
+        return {"title": f"Notes: {course_name}", "content_html": "<p>Generation failed. Please try again.</p>"}

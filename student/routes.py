@@ -21,7 +21,8 @@ def register_student_routes(app, csrf, limiter):
 
     # Import here to avoid circular imports at module level
     from student.canvas import CanvasClient, extract_text_from_pdf, extract_text_from_docx
-    from student.analyzer import analyze_course_material, generate_study_plan
+    from student.analyzer import (analyze_course_material, generate_study_plan,
+                                  generate_flashcards, generate_quiz, generate_notes)
     from student import db as sdb
 
     # ── helpers ─────────────────────────────────────────────
@@ -853,6 +854,21 @@ def register_student_routes(app, csrf, limiter):
             <div style="font-size:28px;margin-bottom:6px;">&#128337;</div>
             <div style="font-weight:600;font-size:13px;color:var(--text);">Schedule</div>
             <div style="font-size:11px;color:var(--text-muted);">Times & Difficulty</div>
+          </a>
+          <a href="/student/flashcards" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#127183;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">Flashcards</div>
+            <div style="font-size:11px;color:var(--text-muted);">AI-generated</div>
+          </a>
+          <a href="/student/quizzes" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#128221;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">Quizzes</div>
+            <div style="font-size:11px;color:var(--text-muted);">Practice exams</div>
+          </a>
+          <a href="/student/notes" style="text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;">
+            <div style="font-size:28px;margin-bottom:6px;">&#128214;</div>
+            <div style="font-weight:600;font-size:13px;color:var(--text);">AI Notes</div>
+            <div style="font-size:11px;color:var(--text-muted);">Study summaries</div>
           </a>
         </div>
 
@@ -2728,7 +2744,947 @@ def register_student_routes(app, csrf, limiter):
         </script>
         """, active_page="student_schedule")
 
-    def _esc(s):
+    # ── Flashcard API routes ────────────────────────────────
+
+    @app.route("/api/student/flashcards/generate", methods=["POST"])
+    @limiter.limit("5 per minute")
+    def student_generate_flashcards():
+        """Generate AI flashcards for a course."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        course_id = data.get("course_id")
+        if not course_id:
+            return jsonify({"error": "course_id required"}), 400
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Course not found"}), 404
+
+        # Gather source material
+        analysis = json.loads(course["analysis_json"]) if isinstance(course["analysis_json"], str) else (course["analysis_json"] or {})
+        topics = data.get("topics", [])
+        exam_id = data.get("exam_id")
+        count = min(int(data.get("count", 15)), 30)
+
+        source_text = ""
+        files = sdb.get_course_files(_cid(), course_id, exam_id=exam_id)
+        for f in files[:3]:
+            if f.get("extracted_text"):
+                source_text += f["extracted_text"][:4000] + "\n\n"
+
+        if not topics and analysis.get("weekly_schedule"):
+            topics = []
+            for w in analysis["weekly_schedule"]:
+                topics.extend(w.get("topics", []))
+
+        cards = generate_flashcards(
+            course_name=course["name"],
+            topics=topics or None,
+            source_text=source_text,
+            count=count,
+        )
+        if not cards:
+            return jsonify({"error": "Failed to generate flashcards. Try again."}), 500
+
+        title = data.get("title", f"Flashcards: {course['name']}")
+        deck_id = sdb.create_flashcard_deck(_cid(), title, course_id=course_id, exam_id=exam_id)
+        sdb.add_flashcards(deck_id, cards)
+
+        return jsonify({"deck_id": deck_id, "card_count": len(cards)})
+
+    @app.route("/api/student/flashcards/decks", methods=["GET"])
+    def student_get_flashcard_decks():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        course_id = request.args.get("course_id", type=int)
+        decks = sdb.get_flashcard_decks(_cid(), course_id)
+        return jsonify({"decks": [dict(d) for d in decks]})
+
+    @app.route("/api/student/flashcards/decks/<int:deck_id>", methods=["GET"])
+    def student_get_flashcard_deck(deck_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        deck = sdb.get_flashcard_deck(deck_id, _cid())
+        if not deck:
+            return jsonify({"error": "Not found"}), 404
+        cards = sdb.get_flashcards(deck_id)
+        return jsonify({"deck": dict(deck), "cards": [dict(c) for c in cards]})
+
+    @app.route("/api/student/flashcards/decks/<int:deck_id>", methods=["DELETE"])
+    def student_delete_flashcard_deck(deck_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        sdb.delete_flashcard_deck(deck_id, _cid())
+        return jsonify({"ok": True})
+
+    @app.route("/api/student/flashcards/progress", methods=["POST"])
+    def student_flashcard_progress():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        sdb.update_flashcard_progress(data["card_id"], data.get("correct", False))
+        return jsonify({"ok": True})
+
+    # ── Quiz API routes ─────────────────────────────────────
+
+    @app.route("/api/student/quizzes/generate", methods=["POST"])
+    @limiter.limit("5 per minute")
+    def student_generate_quiz():
+        """Generate AI quiz for a course."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        course_id = data.get("course_id")
+        if not course_id:
+            return jsonify({"error": "course_id required"}), 400
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Course not found"}), 404
+
+        analysis = json.loads(course["analysis_json"]) if isinstance(course["analysis_json"], str) else (course["analysis_json"] or {})
+        topics = data.get("topics", [])
+        exam_id = data.get("exam_id")
+        difficulty = data.get("difficulty", "medium")
+        if difficulty not in ("easy", "medium", "hard"):
+            difficulty = "medium"
+        count = min(int(data.get("count", 10)), 20)
+
+        source_text = ""
+        files = sdb.get_course_files(_cid(), course_id, exam_id=exam_id)
+        for f in files[:3]:
+            if f.get("extracted_text"):
+                source_text += f["extracted_text"][:4000] + "\n\n"
+
+        if not topics and analysis.get("weekly_schedule"):
+            topics = []
+            for w in analysis["weekly_schedule"]:
+                topics.extend(w.get("topics", []))
+
+        questions = generate_quiz(
+            course_name=course["name"],
+            topics=topics or None,
+            source_text=source_text,
+            difficulty=difficulty,
+            count=count,
+        )
+        if not questions:
+            return jsonify({"error": "Failed to generate quiz. Try again."}), 500
+
+        title = data.get("title", f"Quiz: {course['name']} ({difficulty})")
+        quiz_id = sdb.create_quiz(_cid(), title, difficulty, course_id=course_id, exam_id=exam_id)
+        sdb.add_quiz_questions(quiz_id, questions)
+
+        return jsonify({"quiz_id": quiz_id, "question_count": len(questions)})
+
+    @app.route("/api/student/quizzes", methods=["GET"])
+    def student_get_quizzes():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        course_id = request.args.get("course_id", type=int)
+        quizzes = sdb.get_quizzes(_cid(), course_id)
+        return jsonify({"quizzes": [dict(q) for q in quizzes]})
+
+    @app.route("/api/student/quizzes/<int:quiz_id>", methods=["GET"])
+    def student_get_quiz(quiz_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        quiz = sdb.get_quiz(quiz_id, _cid())
+        if not quiz:
+            return jsonify({"error": "Not found"}), 404
+        questions = sdb.get_quiz_questions(quiz_id)
+        return jsonify({"quiz": dict(quiz), "questions": [dict(q) for q in questions]})
+
+    @app.route("/api/student/quizzes/<int:quiz_id>/score", methods=["POST"])
+    def student_submit_quiz_score(quiz_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        score = int(data.get("score", 0))
+        sdb.update_quiz_score(quiz_id, score)
+        return jsonify({"ok": True})
+
+    @app.route("/api/student/quizzes/<int:quiz_id>", methods=["DELETE"])
+    def student_delete_quiz(quiz_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        sdb.delete_quiz(quiz_id, _cid())
+        return jsonify({"ok": True})
+
+    # ── Notes API routes ────────────────────────────────────
+
+    @app.route("/api/student/notes/generate", methods=["POST"])
+    @limiter.limit("5 per minute")
+    def student_generate_notes():
+        """Generate AI study notes for a course."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        course_id = data.get("course_id")
+        if not course_id:
+            return jsonify({"error": "course_id required"}), 400
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Course not found"}), 404
+
+        analysis = json.loads(course["analysis_json"]) if isinstance(course["analysis_json"], str) else (course["analysis_json"] or {})
+        topics = data.get("topics", [])
+
+        source_text = ""
+        files = sdb.get_course_files(_cid(), course_id)
+        for f in files[:5]:
+            if f.get("extracted_text"):
+                source_text += f["extracted_text"][:4000] + "\n\n"
+
+        if not topics and analysis.get("weekly_schedule"):
+            topics = []
+            for w in analysis["weekly_schedule"]:
+                topics.extend(w.get("topics", []))
+
+        result = generate_notes(
+            course_name=course["name"],
+            topics=topics or None,
+            source_text=source_text,
+        )
+        if not result.get("content_html"):
+            return jsonify({"error": "Failed to generate notes. Try again."}), 500
+
+        note_id = sdb.create_note(_cid(), result["title"], result["content_html"],
+                                  course_id=course_id)
+        return jsonify({"note_id": note_id, "title": result["title"]})
+
+    @app.route("/api/student/notes", methods=["GET"])
+    def student_get_notes():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        course_id = request.args.get("course_id", type=int)
+        notes = sdb.get_notes(_cid(), course_id)
+        return jsonify({"notes": [dict(n) for n in notes]})
+
+    @app.route("/api/student/notes/<int:note_id>", methods=["GET"])
+    def student_get_note(note_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        note = sdb.get_note(note_id, _cid())
+        if not note:
+            return jsonify({"error": "Not found"}), 404
+        return jsonify(dict(note))
+
+    @app.route("/api/student/notes/<int:note_id>", methods=["PUT"])
+    def student_update_note(note_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        sdb.update_note(note_id, _cid(), data.get("content_html", ""))
+        return jsonify({"ok": True})
+
+    @app.route("/api/student/notes/<int:note_id>", methods=["DELETE"])
+    def student_delete_note(note_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        sdb.delete_note(note_id, _cid())
+        return jsonify({"ok": True})
+
+    # ── Flashcards Frontend Page ────────────────────────────
+
+    @app.route("/student/flashcards")
+    def student_flashcards_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        courses = sdb.get_courses(_cid())
+        decks = sdb.get_flashcard_decks(_cid())
+
+        course_options = '<option value="">Select a course...</option>'
+        for c in courses:
+            course_options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
+
+        decks_html = ""
+        for d in decks:
+            decks_html += f"""
+            <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/flashcards/{d['id']}'">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <h3 style="margin:0;font-size:16px;">{_esc(d.get('title','Untitled'))}</h3>
+                  <span style="font-size:13px;color:var(--text-muted);">{_esc(d.get('course_name',''))} &middot; {d.get('card_count',0)} cards</span>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <span style="font-size:12px;color:var(--text-muted);">{d.get('created_at','')[:10]}</span>
+                  <button onclick="event.stopPropagation();deleteDeck({d['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
+                </div>
+              </div>
+            </div>"""
+        if not decks_html:
+            decks_html = """<div style="text-align:center;padding:40px;color:var(--text-muted);">
+              <div style="font-size:48px;margin-bottom:12px;">&#127183;</div>
+              <p>No flashcard decks yet. Generate your first set from a course!</p>
+            </div>"""
+
+        return _s_render("Flashcards", f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1 style="margin:0;">&#127183; AI Flashcards</h1>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Smart spaced repetition &middot; Generated from your course materials</p>
+          </div>
+          <button onclick="document.getElementById('gen-form').style.display=document.getElementById('gen-form').style.display==='none'?'block':'none'" class="btn btn-primary btn-sm">&#10024; Generate Flashcards</button>
+        </div>
+
+        <div id="gen-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
+          <h3 style="margin:0 0 14px;">Generate AI Flashcards</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div class="form-group">
+              <label>Course</label>
+              <select id="fc-course" class="edit-input" onchange="loadExams(this.value,'fc-exam')">{course_options}</select>
+            </div>
+            <div class="form-group">
+              <label>Exam (optional)</label>
+              <select id="fc-exam" class="edit-input"><option value="">All topics</option></select>
+            </div>
+            <div class="form-group">
+              <label>Number of cards</label>
+              <input type="number" id="fc-count" value="15" min="5" max="30" class="edit-input">
+            </div>
+            <div class="form-group">
+              <label>Custom title (optional)</label>
+              <input type="text" id="fc-title" class="edit-input" placeholder="Auto-generated if empty">
+            </div>
+          </div>
+          <button onclick="genFlashcards()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="fc-gen-btn">&#10024; Generate</button>
+        </div>
+
+        {decks_html}
+
+        <style>
+        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
+        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        </style>
+        <script>
+        async function loadExams(courseId, selectId) {{
+          var sel = document.getElementById(selectId);
+          sel.innerHTML = '<option value="">All topics</option>';
+          if (!courseId) return;
+          try {{
+            var r = await fetch('/api/student/courses/' + courseId + '/exams');
+            var d = await r.json();
+            (d.exams || []).forEach(function(e) {{
+              sel.innerHTML += '<option value="' + e.id + '">' + e.name + '</option>';
+            }});
+          }} catch(e) {{}}
+        }}
+        async function genFlashcards() {{
+          var courseId = document.getElementById('fc-course').value;
+          if (!courseId) {{ alert('Select a course'); return; }}
+          var btn = document.getElementById('fc-gen-btn');
+          btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
+          try {{
+            var r = await fetch('/api/student/flashcards/generate', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{
+                course_id: parseInt(courseId),
+                exam_id: document.getElementById('fc-exam').value ? parseInt(document.getElementById('fc-exam').value) : null,
+                count: parseInt(document.getElementById('fc-count').value),
+                title: document.getElementById('fc-title').value || undefined
+              }})
+            }});
+            var d = await r.json();
+            if (r.ok) {{
+              alert('Generated ' + d.card_count + ' flashcards!');
+              window.location = '/student/flashcards/' + d.deck_id;
+            }} else {{ alert(d.error || 'Generation failed'); }}
+          }} catch(e) {{ alert('Network error'); }}
+          btn.disabled = false; btn.innerHTML = '&#10024; Generate';
+        }}
+        async function deleteDeck(id) {{
+          if (!confirm('Delete this flashcard deck?')) return;
+          await fetch('/api/student/flashcards/decks/' + id, {{method:'DELETE'}});
+          location.reload();
+        }}
+        </script>
+        """, active_page="student_flashcards")
+
+    @app.route("/student/flashcards/<int:deck_id>")
+    def student_flashcard_study_page(deck_id):
+        """Interactive flashcard study page with flip animation."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+        deck = sdb.get_flashcard_deck(deck_id, _cid())
+        if not deck:
+            return redirect(url_for("student_flashcards_page"))
+        cards = sdb.get_flashcards(deck_id)
+        cards_json = json.dumps([{"id": c["id"], "front": c["front"], "back": c["back"],
+                                  "times_seen": c.get("times_seen", 0),
+                                  "times_correct": c.get("times_correct", 0)} for c in cards],
+                                ensure_ascii=False)
+
+        return _s_render(f"Study: {deck.get('title','')}", f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <div>
+            <a href="/student/flashcards" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Decks</a>
+            <h1 style="margin:4px 0 0;font-size:24px;">{_esc(deck.get('title',''))}</h1>
+            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">{_esc(deck.get('course_name',''))} &middot; {deck.get('card_count',0)} cards</p>
+          </div>
+          <div id="progress-txt" style="font-size:14px;color:var(--text-muted);">1 / {len(cards)}</div>
+        </div>
+
+        <!-- Progress bar -->
+        <div style="background:var(--bg);border-radius:8px;height:8px;margin-bottom:24px;overflow:hidden;">
+          <div id="fc-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:{100/max(len(cards),1):.1f}%;transition:width 0.4s ease;border-radius:8px;"></div>
+        </div>
+
+        <!-- Flashcard -->
+        <div style="max-width:600px;margin:0 auto;">
+          <div id="fc-card" onclick="flipCard()" style="
+            min-height:250px;background:var(--card);border:2px solid var(--border);border-radius:16px;
+            padding:40px 32px;text-align:center;cursor:pointer;display:flex;align-items:center;
+            justify-content:center;flex-direction:column;user-select:none;
+            transition:transform 0.5s ease,box-shadow 0.3s ease;
+            box-shadow:0 4px 20px rgba(0,0,0,0.08);position:relative;
+          ">
+            <div id="fc-side-label" style="position:absolute;top:16px;left:20px;font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:1px;">Question</div>
+            <div id="fc-content" style="font-size:20px;line-height:1.5;color:var(--text);"></div>
+            <div style="position:absolute;bottom:16px;font-size:12px;color:var(--text-muted);">Click to flip</div>
+          </div>
+
+          <!-- Controls -->
+          <div style="display:flex;justify-content:center;gap:16px;margin-top:24px;">
+            <button onclick="prevCard()" class="btn btn-outline" style="min-width:100px;">&larr; Prev</button>
+            <button onclick="markCard(false)" class="btn" style="min-width:100px;background:#EF4444;color:#fff;border:none;">&#10007; Wrong</button>
+            <button onclick="markCard(true)" class="btn" style="min-width:100px;background:#10B981;color:#fff;border:none;">&#10003; Got it</button>
+            <button onclick="nextCard()" class="btn btn-outline" style="min-width:100px;">Next &rarr;</button>
+          </div>
+
+          <!-- Keyboard hint -->
+          <p style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:12px;">
+            <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Space</kbd> flip
+            &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">&larr;</kbd> prev
+            &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">&rarr;</kbd> next
+            &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">1</kbd> wrong
+            &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">2</kbd> got it
+          </p>
+
+          <!-- Score summary (hidden until completion) -->
+          <div id="fc-summary" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;margin-top:24px;">
+            <div style="font-size:48px;margin-bottom:12px;">&#127881;</div>
+            <h2 style="margin:0 0 8px;">Session Complete!</h2>
+            <div id="fc-score" style="font-size:28px;font-weight:700;color:var(--primary);"></div>
+            <div id="fc-score-detail" style="font-size:14px;color:var(--text-muted);margin-top:4px;"></div>
+            <button onclick="restartStudy()" class="btn btn-primary" style="margin-top:16px;">&#128260; Study Again</button>
+          </div>
+        </div>
+
+        <script>
+        var cards = {cards_json};
+        var idx = 0, flipped = false, correct = 0, seen = 0;
+
+        function renderCard() {{
+          if (idx >= cards.length) {{ showSummary(); return; }}
+          var c = cards[idx];
+          document.getElementById('fc-content').textContent = c.front;
+          document.getElementById('fc-side-label').textContent = 'Question';
+          document.getElementById('fc-side-label').style.color = 'var(--primary)';
+          document.getElementById('fc-card').style.borderColor = 'var(--border)';
+          document.getElementById('progress-txt').textContent = (idx + 1) + ' / ' + cards.length;
+          document.getElementById('fc-progress-bar').style.width = ((idx + 1) / cards.length * 100) + '%';
+          flipped = false;
+        }}
+
+        function flipCard() {{
+          if (idx >= cards.length) return;
+          flipped = !flipped;
+          var c = cards[idx];
+          document.getElementById('fc-content').textContent = flipped ? c.back : c.front;
+          document.getElementById('fc-side-label').textContent = flipped ? 'Answer' : 'Question';
+          document.getElementById('fc-side-label').style.color = flipped ? '#10B981' : 'var(--primary)';
+          document.getElementById('fc-card').style.borderColor = flipped ? '#10B981' : 'var(--border)';
+          document.getElementById('fc-card').style.transform = 'scale(0.97)';
+          setTimeout(function() {{ document.getElementById('fc-card').style.transform = 'scale(1)'; }}, 150);
+        }}
+
+        function markCard(isCorrect) {{
+          if (idx >= cards.length) return;
+          if (!flipped) flipCard();
+          seen++;
+          if (isCorrect) correct++;
+          fetch('/api/student/flashcards/progress', {{
+            method: 'POST', headers: {{'Content-Type':'application/json'}},
+            body: JSON.stringify({{ card_id: cards[idx].id, correct: isCorrect }})
+          }}).catch(function(){{}});
+          idx++;
+          renderCard();
+        }}
+
+        function nextCard() {{ if (idx < cards.length - 1) {{ idx++; renderCard(); }} }}
+        function prevCard() {{ if (idx > 0) {{ idx--; renderCard(); }} }}
+
+        function showSummary() {{
+          document.getElementById('fc-card').style.display = 'none';
+          document.getElementById('fc-summary').style.display = 'block';
+          var pct = seen > 0 ? Math.round(correct / seen * 100) : 0;
+          document.getElementById('fc-score').textContent = pct + '% correct';
+          document.getElementById('fc-score-detail').textContent = correct + ' of ' + seen + ' cards';
+        }}
+
+        function restartStudy() {{
+          idx = 0; correct = 0; seen = 0;
+          document.getElementById('fc-card').style.display = 'flex';
+          document.getElementById('fc-summary').style.display = 'none';
+          renderCard();
+        }}
+
+        document.addEventListener('keydown', function(e) {{
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (e.code === 'Space') {{ e.preventDefault(); flipCard(); }}
+          if (e.code === 'ArrowLeft') {{ e.preventDefault(); prevCard(); }}
+          if (e.code === 'ArrowRight') {{ e.preventDefault(); nextCard(); }}
+          if (e.code === 'Digit1' || e.code === 'Numpad1') {{ e.preventDefault(); markCard(false); }}
+          if (e.code === 'Digit2' || e.code === 'Numpad2') {{ e.preventDefault(); markCard(true); }}
+        }});
+
+        renderCard();
+        </script>
+        """, active_page="student_flashcards")
+
+    # ── Quiz Frontend Page ──────────────────────────────────
+
+    @app.route("/student/quizzes")
+    def student_quizzes_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        courses = sdb.get_courses(_cid())
+        quizzes = sdb.get_quizzes(_cid())
+
+        course_options = '<option value="">Select a course...</option>'
+        for c in courses:
+            course_options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
+
+        quizzes_html = ""
+        for q in quizzes:
+            diff_color = {"easy": "#10B981", "medium": "#F59E0B", "hard": "#EF4444"}.get(q.get("difficulty", "medium"), "#94A3B8")
+            score_txt = f"{q.get('best_score',0)}%" if q.get("attempts", 0) > 0 else "Not taken"
+            quizzes_html += f"""
+            <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/quizzes/{q['id']}'">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <h3 style="margin:0;font-size:16px;">{_esc(q.get('title','Untitled'))}</h3>
+                  <span style="font-size:13px;color:var(--text-muted);">{_esc(q.get('course_name',''))} &middot; {q.get('question_count',0)} questions</span>
+                </div>
+                <div style="display:flex;gap:10px;align-items:center;">
+                  <span style="background:{diff_color}18;color:{diff_color};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;">{q.get('difficulty','medium').upper()}</span>
+                  <span style="font-size:13px;font-weight:600;color:var(--text);">{score_txt}</span>
+                  <span style="font-size:12px;color:var(--text-muted);">{q.get('attempts',0)} attempts</span>
+                  <button onclick="event.stopPropagation();deleteQuiz({q['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
+                </div>
+              </div>
+            </div>"""
+        if not quizzes_html:
+            quizzes_html = """<div style="text-align:center;padding:40px;color:var(--text-muted);">
+              <div style="font-size:48px;margin-bottom:12px;">&#128221;</div>
+              <p>No quizzes yet. Generate your first practice quiz from a course!</p>
+            </div>"""
+
+        return _s_render("Quizzes", f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1 style="margin:0;">&#128221; Practice Quizzes</h1>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Unlimited AI-generated questions &middot; Adjustable difficulty</p>
+          </div>
+          <button onclick="document.getElementById('qz-form').style.display=document.getElementById('qz-form').style.display==='none'?'block':'none'" class="btn btn-primary btn-sm">&#10024; Generate Quiz</button>
+        </div>
+
+        <div id="qz-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
+          <h3 style="margin:0 0 14px;">Generate AI Quiz</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div class="form-group">
+              <label>Course</label>
+              <select id="qz-course" class="edit-input" onchange="loadExams(this.value,'qz-exam')">{course_options}</select>
+            </div>
+            <div class="form-group">
+              <label>Exam (optional)</label>
+              <select id="qz-exam" class="edit-input"><option value="">All topics</option></select>
+            </div>
+            <div class="form-group">
+              <label>Difficulty</label>
+              <select id="qz-diff" class="edit-input">
+                <option value="easy">&#127793; Easy &mdash; Basic recall</option>
+                <option value="medium" selected>&#128170; Medium &mdash; Exam-level</option>
+                <option value="hard">&#128293; Hard &mdash; Challenge</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Number of questions</label>
+              <input type="number" id="qz-count" value="10" min="5" max="20" class="edit-input">
+            </div>
+          </div>
+          <button onclick="genQuiz()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="qz-gen-btn">&#10024; Generate</button>
+        </div>
+
+        {quizzes_html}
+
+        <style>
+        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
+        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        </style>
+        <script>
+        async function loadExams(courseId, selectId) {{
+          var sel = document.getElementById(selectId);
+          sel.innerHTML = '<option value="">All topics</option>';
+          if (!courseId) return;
+          try {{
+            var r = await fetch('/api/student/courses/' + courseId + '/exams');
+            var d = await r.json();
+            (d.exams || []).forEach(function(e) {{
+              sel.innerHTML += '<option value="' + e.id + '">' + e.name + '</option>';
+            }});
+          }} catch(e) {{}}
+        }}
+        async function genQuiz() {{
+          var courseId = document.getElementById('qz-course').value;
+          if (!courseId) {{ alert('Select a course'); return; }}
+          var btn = document.getElementById('qz-gen-btn');
+          btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
+          try {{
+            var r = await fetch('/api/student/quizzes/generate', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{
+                course_id: parseInt(courseId),
+                exam_id: document.getElementById('qz-exam').value ? parseInt(document.getElementById('qz-exam').value) : null,
+                difficulty: document.getElementById('qz-diff').value,
+                count: parseInt(document.getElementById('qz-count').value)
+              }})
+            }});
+            var d = await r.json();
+            if (r.ok) {{
+              alert('Generated ' + d.question_count + ' questions!');
+              window.location = '/student/quizzes/' + d.quiz_id;
+            }} else {{ alert(d.error || 'Generation failed'); }}
+          }} catch(e) {{ alert('Network error'); }}
+          btn.disabled = false; btn.innerHTML = '&#10024; Generate';
+        }}
+        async function deleteQuiz(id) {{
+          if (!confirm('Delete this quiz?')) return;
+          await fetch('/api/student/quizzes/' + id, {{method:'DELETE'}});
+          location.reload();
+        }}
+        </script>
+        """, active_page="student_quizzes")
+
+    @app.route("/student/quizzes/<int:quiz_id>")
+    def student_quiz_take_page(quiz_id):
+        """Interactive quiz-taking page."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+        quiz = sdb.get_quiz(quiz_id, _cid())
+        if not quiz:
+            return redirect(url_for("student_quizzes_page"))
+        questions = sdb.get_quiz_questions(quiz_id)
+        questions_json = json.dumps([{
+            "id": q["id"], "question": q["question"],
+            "option_a": q.get("option_a", ""), "option_b": q.get("option_b", ""),
+            "option_c": q.get("option_c", ""), "option_d": q.get("option_d", ""),
+            "correct": q["correct"], "explanation": q.get("explanation", "")
+        } for q in questions], ensure_ascii=False)
+
+        diff_color = {"easy": "#10B981", "medium": "#F59E0B", "hard": "#EF4444"}.get(quiz.get("difficulty", "medium"), "#94A3B8")
+
+        return _s_render(f"Quiz: {quiz.get('title','')}", f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <div>
+            <a href="/student/quizzes" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Quizzes</a>
+            <h1 style="margin:4px 0 0;font-size:24px;">{_esc(quiz.get('title',''))}</h1>
+            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">
+              {_esc(quiz.get('course_name',''))} &middot;
+              <span style="color:{diff_color};font-weight:600;">{quiz.get('difficulty','').upper()}</span> &middot;
+              {quiz.get('question_count',0)} questions
+            </p>
+          </div>
+          <div id="qz-progress-txt" style="font-size:14px;color:var(--text-muted);">Question 1 of {len(questions)}</div>
+        </div>
+
+        <!-- Progress bar -->
+        <div style="background:var(--bg);border-radius:8px;height:8px;margin-bottom:24px;overflow:hidden;">
+          <div id="qz-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.4s ease;border-radius:8px;"></div>
+        </div>
+
+        <div style="max-width:700px;margin:0 auto;">
+          <!-- Question card -->
+          <div id="qz-card" class="card" style="padding:30px;">
+            <div id="qz-question" style="font-size:18px;font-weight:600;margin-bottom:20px;line-height:1.5;"></div>
+            <div id="qz-options"></div>
+            <div id="qz-explanation" style="display:none;margin-top:16px;padding:14px;border-radius:var(--radius-sm);font-size:14px;line-height:1.5;"></div>
+            <div style="display:flex;justify-content:flex-end;margin-top:20px;">
+              <button id="qz-next-btn" onclick="nextQuestion()" class="btn btn-primary" style="display:none;">Next &rarr;</button>
+            </div>
+          </div>
+
+          <!-- Summary (hidden until done) -->
+          <div id="qz-summary" style="display:none;" class="card">
+            <div style="text-align:center;padding:30px;">
+              <div style="font-size:48px;margin-bottom:12px;" id="qz-emoji">&#127881;</div>
+              <h2 style="margin:0 0 8px;">Quiz Complete!</h2>
+              <div id="qz-final-score" style="font-size:40px;font-weight:800;color:var(--primary);"></div>
+              <div id="qz-final-detail" style="font-size:14px;color:var(--text-muted);margin-top:4px;"></div>
+              <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;">
+                <button onclick="restartQuiz()" class="btn btn-primary">&#128260; Retake Quiz</button>
+                <a href="/student/quizzes" class="btn btn-outline">Back to Quizzes</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <style>
+        .qz-option {{
+          display:block;width:100%;text-align:left;padding:14px 18px;margin-bottom:10px;
+          background:var(--bg);border:2px solid var(--border);border-radius:12px;
+          cursor:pointer;font-size:15px;color:var(--text);transition:all 0.2s ease;
+        }}
+        .qz-option:hover {{ border-color:var(--primary);background:var(--card); }}
+        .qz-option.selected {{ border-color:var(--primary);background:var(--primary-light,#EDE9FE); }}
+        .qz-option.correct {{ border-color:#10B981;background:#D1FAE5;color:#065F46; }}
+        .qz-option.wrong {{ border-color:#EF4444;background:#FEE2E2;color:#991B1B; }}
+        .qz-option.disabled {{ pointer-events:none;opacity:0.7; }}
+        </style>
+
+        <script>
+        var questions = {questions_json};
+        var qIdx = 0, score = 0, answered = false;
+
+        function renderQuestion() {{
+          if (qIdx >= questions.length) {{ showResults(); return; }}
+          var q = questions[qIdx];
+          answered = false;
+          document.getElementById('qz-question').textContent = 'Q' + (qIdx + 1) + '. ' + q.question;
+          document.getElementById('qz-progress-txt').textContent = 'Question ' + (qIdx + 1) + ' of ' + questions.length;
+          document.getElementById('qz-bar').style.width = (qIdx / questions.length * 100) + '%';
+          document.getElementById('qz-explanation').style.display = 'none';
+          document.getElementById('qz-next-btn').style.display = 'none';
+          var opts = document.getElementById('qz-options');
+          opts.innerHTML = '';
+          ['a','b','c','d'].forEach(function(key) {{
+            var btn = document.createElement('button');
+            btn.className = 'qz-option';
+            btn.textContent = key.toUpperCase() + '. ' + q['option_' + key];
+            btn.dataset.key = key;
+            btn.onclick = function() {{ selectAnswer(key); }};
+            opts.appendChild(btn);
+          }});
+        }}
+
+        function selectAnswer(key) {{
+          if (answered) return;
+          answered = true;
+          var q = questions[qIdx];
+          var isCorrect = key === q.correct;
+          if (isCorrect) score++;
+
+          document.querySelectorAll('.qz-option').forEach(function(btn) {{
+            btn.classList.add('disabled');
+            if (btn.dataset.key === q.correct) btn.classList.add('correct');
+            if (btn.dataset.key === key && !isCorrect) btn.classList.add('wrong');
+          }});
+
+          var exp = document.getElementById('qz-explanation');
+          exp.style.display = 'block';
+          exp.style.background = isCorrect ? '#D1FAE5' : '#FEE2E2';
+          exp.style.color = isCorrect ? '#065F46' : '#991B1B';
+          exp.innerHTML = (isCorrect ? '&#10003; Correct! ' : '&#10007; Incorrect. ') + q.explanation;
+
+          document.getElementById('qz-next-btn').style.display = '';
+          document.getElementById('qz-next-btn').textContent = qIdx === questions.length - 1 ? 'See Results' : 'Next \\u2192';
+        }}
+
+        function nextQuestion() {{
+          qIdx++;
+          renderQuestion();
+        }}
+
+        function showResults() {{
+          document.getElementById('qz-card').style.display = 'none';
+          document.getElementById('qz-summary').style.display = 'block';
+          var pct = Math.round(score / questions.length * 100);
+          document.getElementById('qz-final-score').textContent = pct + '%';
+          document.getElementById('qz-final-detail').textContent = score + ' of ' + questions.length + ' correct';
+          document.getElementById('qz-bar').style.width = '100%';
+          document.getElementById('qz-emoji').innerHTML = pct >= 90 ? '&#127942;' : pct >= 70 ? '&#127881;' : pct >= 50 ? '&#128170;' : '&#128218;';
+          fetch('/api/student/quizzes/{quiz_id}/score', {{
+            method: 'POST', headers: {{'Content-Type':'application/json'}},
+            body: JSON.stringify({{ score: pct }})
+          }}).catch(function(){{}});
+        }}
+
+        function restartQuiz() {{
+          qIdx = 0; score = 0;
+          document.getElementById('qz-card').style.display = '';
+          document.getElementById('qz-summary').style.display = 'none';
+          renderQuestion();
+        }}
+
+        document.addEventListener('keydown', function(e) {{
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (!answered) {{
+            if (e.code === 'KeyA' || e.code === 'Digit1') {{ e.preventDefault(); selectAnswer('a'); }}
+            if (e.code === 'KeyB' || e.code === 'Digit2') {{ e.preventDefault(); selectAnswer('b'); }}
+            if (e.code === 'KeyC' || e.code === 'Digit3') {{ e.preventDefault(); selectAnswer('c'); }}
+            if (e.code === 'KeyD' || e.code === 'Digit4') {{ e.preventDefault(); selectAnswer('d'); }}
+          }} else {{
+            if (e.code === 'Enter' || e.code === 'Space') {{ e.preventDefault(); nextQuestion(); }}
+          }}
+        }});
+
+        renderQuestion();
+        </script>
+        """, active_page="student_quizzes")
+
+    # ── Notes Frontend Page ─────────────────────────────────
+
+    @app.route("/student/notes")
+    def student_notes_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        courses = sdb.get_courses(_cid())
+        notes = sdb.get_notes(_cid())
+
+        course_options = '<option value="">Select a course...</option>'
+        for c in courses:
+            course_options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
+
+        notes_html = ""
+        for n in notes:
+            notes_html += f"""
+            <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/notes/{n['id']}'">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <h3 style="margin:0;font-size:16px;">{_esc(n.get('title','Untitled'))}</h3>
+                  <span style="font-size:13px;color:var(--text-muted);">{_esc(n.get('course_name',''))} &middot; {_esc(n.get('source_type','ai'))} &middot; {n.get('created_at','')[:10]}</span>
+                </div>
+                <button onclick="event.stopPropagation();deleteNote({n['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
+              </div>
+            </div>"""
+        if not notes_html:
+            notes_html = """<div style="text-align:center;padding:40px;color:var(--text-muted);">
+              <div style="font-size:48px;margin-bottom:12px;">&#128221;</div>
+              <p>No notes yet. Generate AI study notes from your course materials!</p>
+            </div>"""
+
+        return _s_render("Notes", f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1 style="margin:0;">&#128221; AI Study Notes</h1>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Comprehensive notes generated from your course materials</p>
+          </div>
+          <button onclick="document.getElementById('note-form').style.display=document.getElementById('note-form').style.display==='none'?'block':'none'" class="btn btn-primary btn-sm">&#10024; Generate Notes</button>
+        </div>
+
+        <div id="note-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
+          <h3 style="margin:0 0 14px;">Generate AI Study Notes</h3>
+          <div class="form-group">
+            <label>Course</label>
+            <select id="note-course" class="edit-input">{course_options}</select>
+          </div>
+          <p style="font-size:12px;color:var(--text-muted);margin:8px 0 12px;">The AI will analyze your uploaded files and syllabus to create comprehensive study notes.</p>
+          <button onclick="genNotes()" class="btn btn-primary btn-sm" id="note-gen-btn">&#10024; Generate</button>
+        </div>
+
+        {notes_html}
+
+        <style>
+        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
+        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        </style>
+        <script>
+        async function genNotes() {{
+          var courseId = document.getElementById('note-course').value;
+          if (!courseId) {{ alert('Select a course'); return; }}
+          var btn = document.getElementById('note-gen-btn');
+          btn.disabled = true; btn.innerHTML = '&#9203; Generating (may take ~15s)...';
+          try {{
+            var r = await fetch('/api/student/notes/generate', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ course_id: parseInt(courseId) }})
+            }});
+            var d = await r.json();
+            if (r.ok) {{
+              window.location = '/student/notes/' + d.note_id;
+            }} else {{ alert(d.error || 'Generation failed'); }}
+          }} catch(e) {{ alert('Network error'); }}
+          btn.disabled = false; btn.innerHTML = '&#10024; Generate';
+        }}
+        async function deleteNote(id) {{
+          if (!confirm('Delete this note?')) return;
+          await fetch('/api/student/notes/' + id, {{method:'DELETE'}});
+          location.reload();
+        }}
+        </script>
+        """, active_page="student_notes")
+
+    @app.route("/student/notes/<int:note_id>")
+    def student_note_view_page(note_id):
+        """View and edit a study note."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+        note = sdb.get_note(note_id, _cid())
+        if not note:
+            return redirect(url_for("student_notes_page"))
+
+        return _s_render(f"Note: {note.get('title','')}", f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <div>
+            <a href="/student/notes" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Notes</a>
+            <h1 style="margin:4px 0 0;font-size:24px;">{_esc(note.get('title',''))}</h1>
+            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">Created {note.get('created_at','')[:10]} &middot; {_esc(note.get('source_type','ai'))}</p>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="toggleEdit()" class="btn btn-outline btn-sm" id="edit-toggle">&#9999;&#65039; Edit</button>
+            <button onclick="printNote()" class="btn btn-outline btn-sm">&#128424; Print</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:30px;">
+          <div id="note-view">{note.get('content_html','')}</div>
+          <div id="note-edit" style="display:none;">
+            <textarea id="note-html" class="edit-input" rows="20" style="font-family:monospace;font-size:13px;resize:vertical;">{_esc(note.get('content_html',''))}</textarea>
+            <button onclick="saveNote()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="save-note-btn">&#128190; Save</button>
+          </div>
+        </div>
+
+        <style>
+        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
+        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        #note-view h2 {{ color:var(--text);margin:24px 0 12px;font-size:20px;border-bottom:2px solid var(--border);padding-bottom:6px; }}
+        #note-view h3 {{ color:var(--text);margin:18px 0 8px;font-size:17px; }}
+        #note-view p {{ color:var(--text-secondary);line-height:1.7;margin:8px 0; }}
+        #note-view ul, #note-view ol {{ color:var(--text-secondary);line-height:1.8;padding-left:24px; }}
+        #note-view strong {{ color:var(--text); }}
+        @media print {{
+          body * {{ visibility: hidden; }}
+          #note-view, #note-view * {{ visibility: visible; }}
+          #note-view {{ position: absolute; left: 0; top: 0; width: 100%; }}
+        }}
+        </style>
+        <script>
+        var editing = false;
+        function toggleEdit() {{
+          editing = !editing;
+          document.getElementById('note-view').style.display = editing ? 'none' : '';
+          document.getElementById('note-edit').style.display = editing ? '' : 'none';
+          document.getElementById('edit-toggle').innerHTML = editing ? '&#128065; View' : '&#9999;&#65039; Edit';
+        }}
+        async function saveNote() {{
+          var btn = document.getElementById('save-note-btn');
+          btn.disabled = true; btn.innerHTML = '&#9203; Saving...';
+          var html = document.getElementById('note-html').value;
+          try {{
+            var r = await fetch('/api/student/notes/{note_id}', {{
+              method: 'PUT', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ content_html: html }})
+            }});
+            if (r.ok) {{
+              document.getElementById('note-view').innerHTML = html;
+              toggleEdit();
+            }} else {{ alert('Save failed'); }}
+          }} catch(e) {{ alert('Network error'); }}
+          btn.disabled = false; btn.innerHTML = '&#128190; Save';
+        }}
+        function printNote() {{ window.print(); }}
+        </script>
+        """, active_page="student_notes")
         """HTML-escape a string."""
         import html as html_module
         return html_module.escape(str(s)) if s else ""
