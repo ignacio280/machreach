@@ -1728,7 +1728,7 @@ def register_student_routes(app, csrf, limiter):
                 </div>"""
             content = f"""
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <span style="font-size:13px;color:var(--text-muted);">Generated: {plan_row.get('generated_at','?')}</span>
+              <span style="font-size:13px;color:var(--text-muted);">Generated: {str(plan_row.get('generated_at','?'))[:16]}</span>
               <div style="display:flex;gap:8px;">
                 <a href="/student/schedule" class="btn btn-outline btn-sm">&#128337; Schedule & Difficulty</a>
                 <button onclick="generatePlan()" class="btn btn-outline btn-sm" id="plan-btn">&#128260; Regenerate</button>
@@ -3012,7 +3012,7 @@ def register_student_routes(app, csrf, limiter):
                   <span style="font-size:13px;color:var(--text-muted);">{_esc(d.get('course_name',''))} &middot; {d.get('card_count',0)} cards</span>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-muted);">{d.get('created_at','')[:10]}</span>
+                  <span style="font-size:12px;color:var(--text-muted);">{str(d.get('created_at',''))[:10]}</span>
                   <button onclick="event.stopPropagation();deleteDeck({d['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
                 </div>
               </div>
@@ -3557,7 +3557,7 @@ def register_student_routes(app, csrf, limiter):
               <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div>
                   <h3 style="margin:0;font-size:16px;">{_esc(n.get('title','Untitled'))}</h3>
-                  <span style="font-size:13px;color:var(--text-muted);">{_esc(n.get('course_name',''))} &middot; {_esc(n.get('source_type','ai'))} &middot; {n.get('created_at','')[:10]}</span>
+                  <span style="font-size:13px;color:var(--text-muted);">{_esc(n.get('course_name',''))} &middot; {_esc(n.get('source_type','ai'))} &middot; {str(n.get('created_at',''))[:10]}</span>
                 </div>
                 <button onclick="event.stopPropagation();deleteNote({n['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
               </div>
@@ -3633,7 +3633,7 @@ def register_student_routes(app, csrf, limiter):
           <div>
             <a href="/student/notes" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Notes</a>
             <h1 style="margin:4px 0 0;font-size:24px;">{_esc(note.get('title',''))}</h1>
-            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">Created {note.get('created_at','')[:10]} &middot; {_esc(note.get('source_type','ai'))}</p>
+            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">Created {str(note.get('created_at',''))[:10]} &middot; {_esc(note.get('source_type','ai'))}</p>
           </div>
           <div style="display:flex;gap:8px;">
             <button onclick="toggleEdit()" class="btn btn-outline btn-sm" id="edit-toggle">&#9999;&#65039; Edit</button>
