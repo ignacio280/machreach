@@ -886,13 +886,6 @@ def register_student_routes(app, csrf, limiter):
           </div>
         </div>
 
-        <!-- Motivational quote -->
-        <div id="daily-quote" style="background:linear-gradient(135deg,var(--primary),#8B5CF6);color:#fff;border-radius:var(--radius-sm);padding:16px 24px;margin-bottom:20px;position:relative;overflow:hidden;">
-          <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:48px;opacity:0.15;">&#128161;</div>
-          <div style="font-style:italic;font-size:15px;max-width:85%;" id="quote-text"></div>
-          <div style="font-size:12px;margin-top:4px;opacity:0.8;" id="quote-author"></div>
-        </div>
-
         <!-- XP / Level Bar -->
         <a href="/student/achievements" style="text-decoration:none;display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px;margin-bottom:20px;transition:all 0.2s" onmouseover="this.style.borderColor='var(--primary)';this.style.boxShadow='0 4px 12px rgba(99,102,241,0.12)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -947,27 +940,6 @@ def register_student_routes(app, csrf, limiter):
         <style>@keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}</style>
 
         <script>
-        // Daily motivational quote
-        var quotes = [
-          ["The secret of getting ahead is getting started.", "Mark Twain"],
-          ["It always seems impossible until it's done.", "Nelson Mandela"],
-          ["Success is the sum of small efforts repeated day in and day out.", "Robert Collier"],
-          ["Don't watch the clock; do what it does. Keep going.", "Sam Levenson"],
-          ["The expert in anything was once a beginner.", "Helen Hayes"],
-          ["Education is the passport to the future.", "Malcolm X"],
-          ["A little progress each day adds up to big results.", "Satya Nani"],
-          ["The beautiful thing about learning is nobody can take it away from you.", "B.B. King"],
-          ["You don't have to be great to start, but you have to start to be great.", "Zig Ziglar"],
-          ["Study hard, for the well is deep, and our brains are shallow.", "Richard Baxter"],
-          ["Push yourself, because no one else is going to do it for you.", "Unknown"],
-          ["There are no shortcuts to any place worth going.", "Beverly Sills"],
-          ["The mind is not a vessel to be filled, but a fire to be kindled.", "Plutarch"],
-          ["Motivation is what gets you started. Habit is what keeps you going.", "Jim Ryun"]
-        ];
-        var dayIdx = Math.floor(Date.now() / 86400000) % quotes.length;
-        document.getElementById('quote-text').textContent = '"' + quotes[dayIdx][0] + '"';
-        document.getElementById('quote-author').textContent = '\u2014 ' + quotes[dayIdx][1];
-
         async function syncCourses() {{
           var btn = document.getElementById('sync-btn');
           btn.disabled = true; btn.innerHTML = '&#9203; Starting...';

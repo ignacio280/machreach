@@ -1309,9 +1309,10 @@ LAYOUT = """<!DOCTYPE html>
       {sel:'a[href="/student/notes"]',title:'AI Notes',desc:'Drop a PDF or DOCX and get clean, organized study notes extracted automatically. You can also generate notes from course files with AI.',pos:'bottom'},
       {sel:'a[href="/student/chat"]',title:'AI Tutor',desc:'Chat with an AI tutor that ONLY uses your uploaded files — no hallucination. Ask questions, get explanations, and study smarter.',pos:'bottom'},
       {sel:'a[href="/student/exchange"]',title:'Study Exchange',desc:'Share your notes with other students and discover shared materials. Build a study community.',pos:'bottom'},
+      {sel:'a[href="/student/leaderboard"]',title:'Leaderboard',desc:'See how you rank against other students. Earn XP from flashcards, quizzes, focus sessions, and more to climb the board.',pos:'bottom'},
+      {sel:'a[href="/mail-hub"]',title:'Mail Hub',desc:'Your email dashboard. Read, reply, and manage all your connected email accounts with AI-powered sorting and prioritization.',pos:'bottom'},
       {sel:'#sync-btn',title:'Sync Canvas',desc:'Connect your Canvas LMS account to automatically import all your courses, assignments, and syllabi.',pos:'bottom'},
       {sel:'#plan-btn',title:'Generate Plan',desc:'Click to generate a personalized AI study plan. The AI considers your exams, course load, and priorities.',pos:'bottom'},
-      {sel:'#daily-quote',title:'Daily Motivation',desc:'A fresh motivational quote every day to keep you focused and inspired.',pos:'bottom'},
       {sel:'.stat-card',title:'Your Stats',desc:'Track your courses, upcoming exams, plan completion, and total focus hours at a glance.',pos:'bottom'},
     ];
 
@@ -1416,13 +1417,20 @@ LAYOUT = """<!DOCTYPE html>
 
       // Position tooltip below or above the element
       var ttW = 350;
+      // Force layout so offsetHeight is accurate
+      tp.style.left = '0px';
+      tp.style.top = '0px';
+      tp.style.width = ttW + 'px';
+      tp.style.visibility = 'hidden';
       var ttH = tp.offsetHeight || 200;
+      tp.style.visibility = '';
       var ttLeft = Math.max(12, Math.min(rect.left + rect.width / 2 - ttW / 2, window.innerWidth - ttW - 12));
       var ttTop;
-      if (step.pos === 'bottom' && rect.bottom + 16 + ttH < window.innerHeight) {
-        ttTop = rect.bottom + 16;
+      var gap = 20;
+      if (step.pos === 'bottom' && rect.bottom + pad + gap + ttH < window.innerHeight) {
+        ttTop = rect.bottom + pad + gap;
       } else {
-        ttTop = Math.max(12, rect.top - ttH - 16);
+        ttTop = Math.max(12, rect.top - pad - gap - ttH);
       }
       tp.style.left = ttLeft + 'px';
       tp.style.top = ttTop + 'px';
