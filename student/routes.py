@@ -5888,6 +5888,46 @@ def register_student_routes(app, csrf, limiter):
           </div>
         </div>
 
+        <!-- Change Password -->
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header"><h2>&#128274; Change Password</h2></div>
+          <form method="post" action="/settings/change-password" style="padding:20px;">
+            <div class="form-group" style="margin-bottom:12px;">
+              <label style="font-size:12px;font-weight:600;color:var(--text);">Current Password</label>
+              <input name="current_password" type="password" required class="edit-input" autocomplete="current-password">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+              <div class="form-group">
+                <label style="font-size:12px;font-weight:600;color:var(--text);">New Password</label>
+                <input name="new_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px;font-weight:600;color:var(--text);">Confirm Password</label>
+                <input name="confirm_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
+              </div>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;">Minimum 6 characters.</p>
+            <button class="btn btn-outline btn-sm" type="submit">Update Password</button>
+          </form>
+        </div>
+
+        <!-- Delete Account -->
+        <div class="card" style="margin-top:16px;border-color:var(--red);">
+          <div class="card-header"><h2 style="color:var(--red);">&#9888;&#65039; Danger Zone</h2></div>
+          <div style="padding:20px;">
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action <strong>cannot be undone</strong>.</p>
+            <button class="btn btn-ghost btn-sm" style="color:var(--red);border:1px solid var(--red);" onclick="document.getElementById('delete-confirm-box').style.display='block';this.style.display='none';">Delete My Account</button>
+            <div id="delete-confirm-box" style="display:none;margin-top:14px;padding:16px;border:1px solid var(--red);border-radius:var(--radius-sm);background:var(--red-light);">
+              <form method="post" action="/settings/delete-account">
+                <p style="font-size:13px;color:var(--text);margin:0 0 10px;font-weight:600;">Type <code style="background:var(--border);padding:2px 6px;border-radius:4px;">DELETE</code> to confirm:</p>
+                <input name="confirm" placeholder="DELETE" required autocomplete="off" class="edit-input" style="border-color:var(--red);max-width:200px;margin-bottom:10px;">
+                <br>
+                <button class="btn btn-primary btn-sm" type="submit" style="background:var(--red);border-color:var(--red);">Permanently Delete Account</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
         <script>
         async function savePrefs() {{
           var r = await fetch('/api/student/email-prefs', {{
