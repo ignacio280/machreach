@@ -390,7 +390,7 @@ def generate_flashcards(
     """
     context = ""
     if source_text:
-        context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text[:14000]}"
+        context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text}"
     topics_str = ", ".join(topics) if topics else "all key concepts from the material"
 
     prompt = f"""You are creating study flashcards for the course "{course_name}".
@@ -457,7 +457,7 @@ def generate_quiz(
     """
     context = ""
     if source_text:
-        context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text[:14000]}"
+        context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text}"
     topics_str = ", ".join(topics) if topics else "all key concepts from the material"
 
     diff_desc = {
@@ -535,7 +535,7 @@ def generate_notes(
     """
     context = ""
     if source_text:
-        context = f"\n\nSOURCE MATERIAL:\n{source_text[:12000]}"
+        context = f"\n\nSOURCE MATERIAL:\n{source_text}"
     topics_str = ", ".join(topics) if topics else "all key concepts"
 
     prompt = f"""You are creating comprehensive study notes for the course "{course_name}".
@@ -599,7 +599,7 @@ def generate_practice_problems(
     """
     context = ""
     if source_text:
-        context = f"\n\nSOURCE MATERIAL (use this to create relevant problems):\n{source_text[:8000]}"
+        context = f"\n\nSOURCE MATERIAL (use this to create relevant problems):\n{source_text}"
 
     prompt = f"""You are creating {count} practice problems for "{course_name}".
 Topic: {topic or "general course content"}
@@ -678,7 +678,7 @@ STRICT RULES:
 - Be encouraging and supportive"""
 
     if context_text:
-        system += f"\n\nSTUDENT'S COURSE MATERIAL (uploaded documents and notes):\n{context_text[:12000]}"
+        system += f"\n\nSTUDENT'S COURSE MATERIAL (uploaded documents and notes):\n{context_text}"
     else:
         system += "\n\nNOTE: The student has not uploaded any documents for this course yet. Ask them to upload their course material (PDFs, notes) so you can help them effectively."
 

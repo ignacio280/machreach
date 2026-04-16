@@ -2686,11 +2686,11 @@ def register_student_routes(app, csrf, limiter):
         files = sdb.get_course_files(_cid(), course_id)
         for f in files:
             if f.get("extracted_text"):
-                source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text'][:6000]}\n\n"
+                source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text']}\n\n"
         notes = sdb.get_notes(_cid(), course_id)
-        for n in notes[:5]:
+        for n in notes:
             if n.get("content_html"):
-                source_text += (n["content_html"])[:4000] + "\n\n"
+                source_text += n["content_html"] + "\n\n"
 
         if not source_text.strip():
             return jsonify({"error": "No files uploaded for this course. Please upload your study material first."}), 400
@@ -3035,12 +3035,12 @@ def register_student_routes(app, csrf, limiter):
         files = sdb.get_course_files(_cid(), course_id, exam_id=exam_id)
         for f in files:
             if f.get("extracted_text"):
-                source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text'][:6000]}\n\n"
+                source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text']}\n\n"
         # Also include AI-generated notes for this course
         notes = sdb.get_notes(_cid(), course_id)
-        for n in notes[:5]:
+        for n in notes:
             if n.get("content_html"):
-                source_text += (n["content_html"])[:4000] + "\n\n"
+                source_text += n["content_html"] + "\n\n"
 
         if not source_text.strip():
             return jsonify({"error": "No files uploaded for this course/exam. Please upload your study material first."}), 400
@@ -3176,12 +3176,12 @@ def register_student_routes(app, csrf, limiter):
         files = sdb.get_course_files(_cid(), course_id, exam_id=exam_id)
         for f in files:
             if f.get("extracted_text"):
-                source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text'][:6000]}\n\n"
+                source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text']}\n\n"
         # Also include AI-generated notes
         notes = sdb.get_notes(_cid(), course_id)
-        for n in notes[:5]:
+        for n in notes:
             if n.get("content_html"):
-                source_text += (n["content_html"])[:4000] + "\n\n"
+                source_text += n["content_html"] + "\n\n"
 
         if not source_text.strip():
             return jsonify({"error": "No files uploaded for this course/exam. Please upload your study material first."}), 400
@@ -3270,9 +3270,9 @@ def register_student_routes(app, csrf, limiter):
 
         source_text = ""
         files = sdb.get_course_files(_cid(), course_id)
-        for f in files[:5]:
+        for f in files:
             if f.get("extracted_text"):
-                source_text += f["extracted_text"][:4000] + "\n\n"
+                source_text += f["extracted_text"] + "\n\n"
 
         if not topics and analysis.get("weekly_schedule"):
             topics = []
@@ -4856,10 +4856,10 @@ def register_student_routes(app, csrf, limiter):
                 files = sdb.get_course_files(cid, int(course_id))
                 for f in files:
                     if f.get("extracted_text"):
-                        context_text += f"--- File: {f.get('original_name','')} ---\n{f['extracted_text'][:6000]}\n\n"
+                        context_text += f"--- File: {f.get('original_name','')} ---\n{f['extracted_text']}\n\n"
                 # SECONDARY: AI-generated notes
                 notes = sdb.get_notes(cid, int(course_id))
-                for n in notes[:3]:
+                for n in notes:
                     context_text += (n.get("content_html") or "") + "\n"
 
         # Get recent history
