@@ -403,6 +403,9 @@ LAYOUT = """<!DOCTYPE html>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="if(typeof renderMathInElement==='function')renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}],throwOnError:false});"></script>
   <script>
     // Apply saved theme immediately to prevent flash
     (function(){var t=localStorage.getItem('machreach-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
@@ -877,6 +880,7 @@ LAYOUT = """<!DOCTYPE html>
             <a href="/student/exams">&#128221; Exams</a>
             <a href="/student/focus">&#127917; Focus Mode</a>
             <a href="/student/gpa">&#127891; GPA Calculator</a>
+            <a href="/student/practice">&#128736; Practice</a>
             <a href="/student/schedule">&#128337; Schedule</a>
             <a href="/student/weak-topics">&#127919; Weak Topics</a>
             <a href="/student/smart-import">&#128640; Import</a>

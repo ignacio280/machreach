@@ -535,7 +535,9 @@ Create well-structured study notes in HTML format. The notes should:
 - Use <ul>/<li> for lists of key points
 - Use <strong> for important terms and definitions
 - Use <p> for explanatory paragraphs
-- Include key formulas using plain text notation
+- For math equations, use LaTeX notation: inline math with $...$ and display math with $$...$$
+- Example: <p>The derivative of $x^n$ is $nx^{{n-1}}$</p>
+- Example display: <p>$$\\int_a^b f(x)\\,dx = F(b) - F(a)$$</p>
 - Add a brief summary section at the end
 - Be thorough but concise — focus on what a student needs to know for exams
 - If the source material is in Spanish or another language, keep the notes in that language
@@ -566,6 +568,68 @@ No markdown fences. ONLY the JSON object."""
     except Exception as e:
         log.error("Notes generation failed for %s: %s", course_name, e)
         return {"title": f"Notes: {course_name}", "content_html": "<p>Generation failed. Please try again.</p>"}
+
+
+# ── Practice Problems generation ────────────────────────────
+
+def generate_practice_problems(
+    course_name: str,
+    topic: str = "",
+    difficulty: str = "medium",
+    count: int = 5,
+    source_text: str = "",
+) -> list[dict]:
+    """
+    Generate math/STEM practice problems with step-by-step solutions.
+
+    Returns list of: {"problem": "...", "solution": "...", "answer": "..."}
+    Uses LaTeX notation with $ delimiters for math expressions.
+    """
+    context = ""
+    if source_text:
+        context = f"\n\nSOURCE MATERIAL (use this to create relevant problems):\n{source_text[:8000]}"
+
+    prompt = f"""You are creating {count} practice problems for "{course_name}".
+Topic: {topic or "general course content"}
+Difficulty: {difficulty}
+{context}
+
+Create {count} practice problems with DETAILED step-by-step solutions.
+
+IMPORTANT RULES:
+- Use LaTeX math notation wrapped in $ for inline math and $$ for display math
+- For example: $\\int_0^1 x^2 dx$ or $$\\frac{{d}}{{dx}}[x^n] = nx^{{n-1}}$$
+- Each problem should test a different concept or technique
+- Solutions must show EVERY step clearly — students learn from the process
+- If the source material is in Spanish, write problems and solutions in Spanish
+- Include the final answer separately for quick checking
+- Problems should be exam-level difficulty for the specified level
+
+Return ONLY valid JSON array:
+[
+  {{
+    "problem": "Calculate $\\\\int_0^\\\\infty e^{{-x}} dx$",
+    "solution": "We evaluate using the definition of improper integrals:\\n$$\\\\int_0^\\\\infty e^{{-x}} dx = \\\\lim_{{b \\\\to \\\\infty}} \\\\int_0^b e^{{-x}} dx$$\\nStep 1: ...",
+    "answer": "$1$"
+  }}
+]
+
+No markdown fences. ONLY the JSON array."""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=8000,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        return json.loads(raw)
+    except Exception as e:
+        log.error("Practice problems generation failed for %s: %s", course_name, e)
+        return []
 
 
 # ── AI Study Chat (Tutor) ──────────────────────────────────

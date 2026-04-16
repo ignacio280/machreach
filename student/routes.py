@@ -24,7 +24,8 @@ def register_student_routes(app, csrf, limiter):
     from student.analyzer import (analyze_course_material, generate_study_plan,
                                   generate_flashcards, generate_quiz, generate_notes,
                                   chat_with_tutor, notes_from_transcript,
-                                  flashcards_from_transcript, detect_weak_topics)
+                                  flashcards_from_transcript, detect_weak_topics,
+                                  generate_practice_problems)
     from student import db as sdb
 
     # ── helpers ─────────────────────────────────────────────
@@ -2526,6 +2527,178 @@ def register_student_routes(app, csrf, limiter):
         </script>
         """, active_page="student_gpa")
 
+    # ── Practice Problems (STEM/Math) ───────────────────────
+
+    @app.route("/student/practice")
+    def student_practice_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        courses = sdb.get_courses(_cid())
+        course_options = '<option value="">Select a course...</option>'
+        for c in courses:
+            course_options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
+
+        return _s_render("Practice Problems", f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <div>
+            <h1 style="margin:0;">&#128736; Practice Problems</h1>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">AI-generated problems with step-by-step solutions — perfect for math &amp; STEM</p>
+          </div>
+          <button onclick="document.getElementById('gen-form').style.display=document.getElementById('gen-form').style.display==='none'?'block':'none'" class="btn btn-primary btn-sm">&#10024; Generate Problems</button>
+        </div>
+
+        <div id="gen-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
+          <h3 style="margin:0 0 14px;">Generate Practice Problems</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group">
+              <label>Course</label>
+              <select id="prac-course" class="edit-input">{course_options}</select>
+            </div>
+            <div class="form-group">
+              <label>Topic (optional)</label>
+              <input type="text" id="prac-topic" class="edit-input" placeholder="e.g. Improper integrals, derivatives...">
+            </div>
+            <div class="form-group">
+              <label>Difficulty</label>
+              <select id="prac-diff" class="edit-input">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Number of problems</label>
+              <select id="prac-count" class="edit-input">
+                <option value="3">3</option>
+                <option value="5" selected>5</option>
+                <option value="8">8</option>
+                <option value="10">10</option>
+              </select>
+            </div>
+          </div>
+          <button onclick="genProblems()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="gen-btn">&#10024; Generate</button>
+        </div>
+
+        <div id="problems-area"></div>
+
+        <style>
+        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
+        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        .problem-card {{ background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:16px; }}
+        .problem-card h3 {{ margin:0 0 12px;font-size:16px;color:var(--primary); }}
+        .problem-text {{ font-size:15px;line-height:1.7;color:var(--text); }}
+        .solution-area {{ margin-top:12px;padding:16px;background:var(--bg);border-radius:var(--radius-sm);border-left:4px solid var(--primary); }}
+        .solution-area h4 {{ margin:0 0 8px;font-size:14px;color:var(--primary); }}
+        .solution-text {{ font-size:14px;line-height:1.8;color:var(--text);white-space:pre-wrap; }}
+        .answer-box {{ display:inline-block;margin-top:8px;padding:6px 14px;background:var(--primary);color:#fff;border-radius:var(--radius-sm);font-weight:600;font-size:14px; }}
+        </style>
+        <script>
+        async function genProblems() {{
+          var courseId = document.getElementById('prac-course').value;
+          if (!courseId) {{ alert('Select a course'); return; }}
+          var btn = document.getElementById('gen-btn');
+          btn.disabled = true; btn.innerHTML = '&#9203; Generating problems...';
+          try {{
+            var r = await fetch('/api/student/practice/generate', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{
+                course_id: parseInt(courseId),
+                topic: document.getElementById('prac-topic').value,
+                difficulty: document.getElementById('prac-diff').value,
+                count: parseInt(document.getElementById('prac-count').value)
+              }})
+            }});
+            var d = await r.json();
+            if (r.ok && d.problems) {{
+              renderProblems(d.problems);
+            }} else {{ alert(d.error || 'Generation failed'); }}
+          }} catch(e) {{ alert('Network error'); }}
+          btn.disabled = false; btn.innerHTML = '&#10024; Generate';
+        }}
+
+        function renderProblems(problems) {{
+          var html = '';
+          problems.forEach(function(p, i) {{
+            html += '<div class="problem-card">'
+              + '<h3>Problem ' + (i+1) + '</h3>'
+              + '<div class="problem-text">' + escHtml(p.problem) + '</div>'
+              + '<button onclick="toggleSol(' + i + ')" class="btn btn-outline btn-sm" style="margin-top:12px;" id="sol-btn-' + i + '">&#128161; Show Solution</button>'
+              + '<div id="sol-' + i + '" style="display:none;">'
+              + '<div class="solution-area">'
+              + '<h4>Step-by-step Solution</h4>'
+              + '<div class="solution-text">' + escHtml(p.solution) + '</div>'
+              + '</div>'
+              + '<div style="margin-top:8px;"><span class="answer-box">Answer: ' + escHtml(p.answer) + '</span></div>'
+              + '</div></div>';
+          }});
+          document.getElementById('problems-area').innerHTML = html;
+          // Render math
+          if (typeof renderMathInElement === 'function') {{
+            renderMathInElement(document.getElementById('problems-area'), {{
+              delimiters: [
+                {{left:'$$',right:'$$',display:true}},
+                {{left:'$',right:'$',display:false}},
+                {{left:'\\\\(',right:'\\\\)',display:false}},
+                {{left:'\\\\[',right:'\\\\]',display:true}}
+              ], throwOnError: false
+            }});
+          }}
+        }}
+
+        function toggleSol(i) {{
+          var el = document.getElementById('sol-' + i);
+          var btn = document.getElementById('sol-btn-' + i);
+          if (el.style.display === 'none') {{
+            el.style.display = 'block';
+            btn.innerHTML = '&#128064; Hide Solution';
+            if (typeof renderMathInElement === 'function') {{
+              renderMathInElement(el, {{
+                delimiters: [
+                  {{left:'$$',right:'$$',display:true}},
+                  {{left:'$',right:'$',display:false}}
+                ], throwOnError: false
+              }});
+            }}
+          }} else {{
+            el.style.display = 'none';
+            btn.innerHTML = '&#128161; Show Solution';
+          }}
+        }}
+
+        function escHtml(t) {{ var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }}
+        </script>
+        """, active_page="student_practice")
+
+    @app.route("/api/student/practice/generate", methods=["POST"])
+    @limiter.limit("5 per minute")
+    def student_generate_practice():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        course_id = data.get("course_id")
+        if not course_id:
+            return jsonify({"error": "course_id required"}), 400
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Course not found"}), 404
+
+        source_text = ""
+        files = sdb.get_course_files(_cid(), course_id)
+        for f in files[:5]:
+            if f.get("extracted_text"):
+                source_text += f["extracted_text"][:4000] + "\n\n"
+
+        problems = generate_practice_problems(
+            course_name=course["name"],
+            topic=data.get("topic", ""),
+            difficulty=data.get("difficulty", "medium"),
+            count=min(int(data.get("count", 5)), 10),
+            source_text=source_text,
+        )
+        if not problems:
+            return jsonify({"error": "Failed to generate problems. Try again."}), 500
+        return jsonify({"problems": problems})
+
     @app.route("/student/canvas-settings")
     def student_canvas_settings_page():
         if not _logged_in():
@@ -3135,11 +3308,37 @@ def register_student_routes(app, csrf, limiter):
         if not text or len(text.strip()) < 20:
             return jsonify({"error": "Could not extract enough readable text from this file"}), 400
         title = fname.rsplit(".", 1)[0]
+        # Clean up common PyPDF2 math artifacts
+        import re as _re
+        # Remove duplicate whitespace but preserve newlines
+        text = _re.sub(r'[^\S\n]+', ' ', text)
+        # Fix common PyPDF2 garbled math tokens
+        text = text.replace('/integraldisplay', '∫')
+        text = text.replace('integraldisplay', '∫')
+        text = text.replace('/vextendsingle', '|')
+        text = text.replace('vextendsingle', '|')
+        text = text.replace('→!', '→∞')
+        text = text.replace('↑', '→')
+        text = text.replace('\x00', '')
+        # Build HTML with better structure
         html = "<h1>" + _esc(title) + "</h1>\n"
-        for para in text.split("\n"):
-            p = para.strip()
-            if p:
-                html += "<p>" + _esc(p) + "</p>\n"
+        lines = text.split("\n")
+        for line in lines:
+            p = line.strip()
+            if not p:
+                continue
+            # Detect heading-like lines (short, no period, possibly caps)
+            if len(p) < 100 and not p.endswith('.') and (p[0].isupper() or p[0].isdigit()):
+                words = p.split()
+                if len(words) <= 12 and any(c.isalpha() for c in p):
+                    # Check if it looks like a section/chapter heading
+                    if _re.match(r'^(\d+[\.\)]\s*|Cap[ií]tulo|Secci[oó]n|Definici[oó]n|Teorema|Proposici[oó]n|Ejemplo|Lema|Corolario|Observaci[oó]n)', p, _re.IGNORECASE):
+                        html += "<h2>" + _esc(p) + "</h2>\n"
+                        continue
+                    elif _re.match(r'^\d+\.\d+', p):
+                        html += "<h3>" + _esc(p) + "</h3>\n"
+                        continue
+            html += "<p>" + _esc(p) + "</p>\n"
         note_id = sdb.create_note(_cid(), title, html, source_type="pdf-upload")
         return jsonify({"note_id": note_id, "title": title})
 
@@ -3538,23 +3737,12 @@ def register_student_routes(app, csrf, limiter):
         if not deck:
             return redirect(url_for("student_flashcards_page"))
 
-        # SRS mode — show only due cards; fallback to all cards if none due
-        srs_mode = request.args.get("srs", "1") == "1"
-        if srs_mode:
-            cards = sdb.get_due_flashcards(deck_id)
-            if not cards:
-                cards = sdb.get_flashcards(deck_id)
-                srs_mode = False  # no due cards, show all
-        else:
-            cards = sdb.get_flashcards(deck_id)
-
-        all_count = sdb.get_flashcards(deck_id)
-        due_count = sdb.count_due_flashcards(deck_id)
+        # Load all cards for cycling study
+        cards = sdb.get_flashcards(deck_id)
 
         cards_json = json.dumps([{"id": c["id"], "front": c["front"], "back": c["back"],
                                   "times_seen": c.get("times_seen", 0),
-                                  "times_correct": c.get("times_correct", 0),
-                                  "interval_days": c.get("interval_days", 0)} for c in cards],
+                                  "times_correct": c.get("times_correct", 0)} for c in cards],
                                 ensure_ascii=False)
 
         return _s_render(f"Study: {deck.get('title','')}", f"""
@@ -3562,9 +3750,7 @@ def register_student_routes(app, csrf, limiter):
           <div>
             <a href="/student/flashcards" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Decks</a>
             <h1 style="margin:4px 0 0;font-size:24px;">{_esc(deck.get('title',''))}</h1>
-            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">{_esc(deck.get('course_name',''))} &middot; <span id="card-count-txt">{len(all_count)}</span> cards
-              {'&middot; <span style="color:#F59E0B;font-weight:600;">' + str(due_count) + ' due</span>' if due_count > 0 else ''}
-            </p>
+            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">{_esc(deck.get('course_name',''))} &middot; <span id="card-count-txt">{len(cards)}</span> cards</p>
           </div>
           <div style="display:flex;gap:8px;">
             <button onclick="switchMode('study')" class="btn btn-primary btn-sm" id="mode-study-btn">&#127183; Study</button>
@@ -3573,15 +3759,7 @@ def register_student_routes(app, csrf, limiter):
         </div>
 
         <!-- SRS toggle -->
-        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);">
-          <span style="font-size:13px;font-weight:600;color:var(--text);">&#128257; Spaced Repetition</span>
-          <label style="position:relative;display:inline-block;width:40px;height:22px;cursor:pointer;">
-            <input type="checkbox" id="srs-toggle" {'checked' if srs_mode else ''} onchange="toggleSRS()" style="opacity:0;width:0;height:0;">
-            <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--border);border-radius:22px;transition:0.3s;"></span>
-            <span style="position:absolute;top:2px;left:{'20' if srs_mode else '2'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:0.3s;box-shadow:0 1px 3px rgba(0,0,0,0.2);" id="srs-knob"></span>
-          </label>
-          <span style="font-size:12px;color:var(--text-muted);" id="srs-label">{'Showing ' + str(len(cards)) + ' due cards' if srs_mode else 'Showing all cards'}</span>
-        </div>
+        <div style="display:none;"></div>
 
         <!-- ===== STUDY MODE ===== -->
         <div id="study-mode">
@@ -3603,31 +3781,17 @@ def register_student_routes(app, csrf, limiter):
               <div style="position:absolute;bottom:16px;font-size:12px;color:var(--text-muted);">Click to flip</div>
             </div>
 
-            <div style="display:flex;justify-content:center;gap:16px;margin-top:24px;" id="classic-btns">
-              <button onclick="prevCard()" class="btn btn-outline" style="min-width:100px;">&larr; Prev</button>
-              <button onclick="markCard(false)" class="btn" style="min-width:100px;background:#EF4444;color:#fff;border:none;">&#10007; Wrong</button>
-              <button onclick="markCard(true)" class="btn" style="min-width:100px;background:#10B981;color:#fff;border:none;">&#10003; Got it</button>
-              <button onclick="nextCard()" class="btn btn-outline" style="min-width:100px;">Next &rarr;</button>
-            </div>
-
-            <!-- SRS quality buttons (shown when SRS is on) -->
-            <div style="display:none;margin-top:24px;" id="srs-btns">
-              <p style="text-align:center;font-size:12px;color:var(--text-muted);margin-bottom:8px;" id="srs-hint">Flip the card first, then rate your recall</p>
-              <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">
-                <button onclick="markSRS(0)" class="btn srs-btn" style="background:#EF4444;color:#fff;border:none;min-width:80px;font-size:13px;" title="No idea at all">&#128565; Again<br><span style="font-size:10px;opacity:0.8;">now</span></button>
-                <button onclick="markSRS(2)" class="btn srs-btn" style="background:#F97316;color:#fff;border:none;min-width:80px;font-size:13px;" title="Barely recalled">&#128528; Hard<br><span style="font-size:10px;opacity:0.8;">soon</span></button>
-                <button onclick="markSRS(4)" class="btn srs-btn" style="background:#3B82F6;color:#fff;border:none;min-width:80px;font-size:13px;" title="Recalled with effort">&#128578; Good<br><span id="srs-good-days" style="font-size:10px;opacity:0.8;"></span></button>
-                <button onclick="markSRS(5)" class="btn srs-btn" style="background:#10B981;color:#fff;border:none;min-width:80px;font-size:13px;" title="Instant recall">&#129321; Easy<br><span id="srs-easy-days" style="font-size:10px;opacity:0.8;"></span></button>
-              </div>
+            <div style="display:flex;justify-content:center;gap:16px;margin-top:24px;" id="answer-btns">
+              <button onclick="markCard(false)" class="btn" style="min-width:140px;background:#EF4444;color:#fff;border:none;font-size:15px;padding:12px 24px;">&#10007; Incorrect</button>
+              <button onclick="markCard(true)" class="btn" style="min-width:140px;background:#10B981;color:#fff;border:none;font-size:15px;padding:12px 24px;">&#10003; Correct</button>
             </div>
 
             <p style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:12px;">
               <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Space</kbd> flip
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">1</kbd> again
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">2</kbd> hard
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">3</kbd> good
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">4</kbd> easy
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">1</kbd> incorrect
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">2</kbd> correct
             </p>
+            <div id="round-info" style="text-align:center;font-size:13px;color:var(--text-muted);margin-top:8px;"></div>
 
             <div id="fc-summary" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;margin-top:24px;">
               <div style="font-size:48px;margin-bottom:12px;">&#127881;</div>
@@ -3660,26 +3824,14 @@ def register_student_routes(app, csrf, limiter):
         var deckId = {deck_id};
         var idx = 0, flipped = false, correct = 0, seen = 0;
         var currentMode = 'study';
-        var srsEnabled = {'true' if srs_mode else 'false'};
+        var srsEnabled = false;
+        // Cycling logic: remaining = cards not yet correct this round
+        var remaining = cards.map(function(c) {{ return c; }});
+        var roundNum = 1;
+        var totalCorrectThisRound = 0;
 
-        function toggleSRS() {{
-          srsEnabled = document.getElementById('srs-toggle').checked;
-          var knob = document.getElementById('srs-knob');
-          knob.style.left = srsEnabled ? '20px' : '2px';
-          knob.parentElement.previousElementSibling.nextElementSibling.style.background = srsEnabled ? 'var(--primary)' : 'var(--border)';
-          document.getElementById('classic-btns').style.display = srsEnabled ? 'none' : 'flex';
-          document.getElementById('srs-btns').style.display = srsEnabled ? 'block' : 'none';
-          document.getElementById('srs-label').textContent = srsEnabled ? 'Review due cards with spaced repetition' : 'Showing all cards';
-          // Reload with SRS mode
-          window.location = '/student/flashcards/{deck_id}?srs=' + (srsEnabled ? '1' : '0');
-        }}
-
-        function updateSRSBtnLabels() {{
-          if (idx >= cards.length) return;
-          var c = cards[idx];
-          var interval = c.interval_days || 0;
-          document.getElementById('srs-good-days').textContent = interval < 1 ? '1d' : Math.max(1, Math.round(interval * 2.5)) + 'd';
-          document.getElementById('srs-easy-days').textContent = interval < 1 ? '4d' : Math.max(4, Math.round(interval * 2.5 * 1.3)) + 'd';
+        function updateRoundInfo() {{
+          document.getElementById('round-info').textContent = 'Round ' + roundNum + ' \u2014 ' + remaining.length + ' cards remaining';
         }}
 
         function switchMode(mode) {{
@@ -3689,83 +3841,94 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('mode-study-btn').className = mode === 'study' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
           document.getElementById('mode-edit-btn').className = mode === 'edit' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
           if (mode === 'edit') renderCardList();
-          if (mode === 'study') {{ idx = 0; correct = 0; seen = 0; document.getElementById('fc-card').style.display = 'flex'; document.getElementById('fc-summary').style.display = 'none'; renderCard(); }}
+          if (mode === 'study') {{ idx = 0; correct = 0; seen = 0; remaining = cards.map(function(c){{return c;}}); roundNum = 1; totalCorrectThisRound = 0; document.getElementById('fc-card').style.display = 'flex'; document.getElementById('fc-summary').style.display = 'none'; renderCard(); }}
         }}
 
-        // Show/hide SRS buttons based on initial state
-        document.getElementById('classic-btns').style.display = srsEnabled ? 'none' : 'flex';
-        document.getElementById('srs-btns').style.display = srsEnabled ? 'block' : 'none';
-        var toggleInput = document.getElementById('srs-toggle');
-        toggleInput.parentElement.querySelector('span:last-child').style.left = srsEnabled ? '20px' : '2px';
-        if (srsEnabled) toggleInput.nextElementSibling.style.background = 'var(--primary)';
-
-        // ── Study functions ──
+        // ── Study functions (cycling) ──
         function renderCard() {{
-          if (idx >= cards.length) {{ showSummary(); return; }}
-          var c = cards[idx];
-          document.getElementById('fc-content').textContent = c.front;
+          if (remaining.length === 0) {{ showSummary(); return; }}
+          if (idx >= remaining.length) {{
+            // End of round: all remaining cards were incorrect
+            idx = 0;
+            roundNum++;
+            totalCorrectThisRound = 0;
+          }}
+          var c = remaining[idx];
+          document.getElementById('fc-content').innerHTML = escHtml(c.front);
           document.getElementById('fc-side-label').textContent = 'Question';
           document.getElementById('fc-side-label').style.color = 'var(--primary)';
           document.getElementById('fc-card').style.borderColor = 'var(--border)';
-          document.getElementById('progress-txt').textContent = (idx + 1) + ' / ' + cards.length;
-          document.getElementById('fc-progress-bar').style.width = ((idx + 1) / cards.length * 100) + '%';
+          document.getElementById('progress-txt').textContent = (idx + 1) + ' / ' + remaining.length;
+          document.getElementById('fc-progress-bar').style.width = ((cards.length - remaining.length) / cards.length * 100) + '%';
           flipped = false;
-          if (srsEnabled) updateSRSBtnLabels();
+          updateRoundInfo();
+          if (typeof renderMathInElement === 'function') renderMathInElement(document.getElementById('fc-content'), {{delimiters:[{{left:'$$',right:'$$',display:true}},{{left:'$',right:'$',display:false}}],throwOnError:false}});
         }}
 
         function flipCard() {{
-          if (idx >= cards.length) return;
+          if (remaining.length === 0) return;
           flipped = !flipped;
-          var c = cards[idx];
-          document.getElementById('fc-content').textContent = flipped ? c.back : c.front;
+          var c = remaining[idx];
+          document.getElementById('fc-content').innerHTML = flipped ? escHtml(c.back) : escHtml(c.front);
           document.getElementById('fc-side-label').textContent = flipped ? 'Answer' : 'Question';
           document.getElementById('fc-side-label').style.color = flipped ? '#10B981' : 'var(--primary)';
           document.getElementById('fc-card').style.borderColor = flipped ? '#10B981' : 'var(--border)';
           document.getElementById('fc-card').style.transform = 'scale(0.97)';
-          setTimeout(function() {{ document.getElementById('fc-card').style.transform = 'scale(1)'; }}, 150);
+          setTimeout(function() {{
+            document.getElementById('fc-card').style.transform = 'scale(1)';
+            if (typeof renderMathInElement === 'function') renderMathInElement(document.getElementById('fc-content'), {{delimiters:[{{left:'$$',right:'$$',display:true}},{{left:'$',right:'$',display:false}}],throwOnError:false}});
+          }}, 150);
         }}
 
         function markCard(isCorrect) {{
-          if (idx >= cards.length) return;
+          if (remaining.length === 0) return;
           if (!flipped) flipCard();
           seen++;
-          if (isCorrect) correct++;
           fetch('/api/student/flashcards/progress', {{
             method: 'POST', headers: {{'Content-Type':'application/json'}},
-            body: JSON.stringify({{ card_id: cards[idx].id, correct: isCorrect }})
+            body: JSON.stringify({{ card_id: remaining[idx].id, correct: isCorrect }})
           }}).catch(function(){{}});
-          idx++;
+          if (isCorrect) {{
+            correct++;
+            // Remove card from remaining — it's correct for this cycle
+            remaining.splice(idx, 1);
+            if (remaining.length === 0) {{
+              // All cards correct! Cycle complete
+              showSummary();
+              return;
+            }}
+            // Don't increment idx since we removed the element
+            if (idx >= remaining.length) idx = 0;
+          }} else {{
+            // Card stays, move to next
+            idx++;
+            if (idx >= remaining.length) {{
+              // Finished this round of remaining cards, loop back
+              idx = 0;
+              roundNum++;
+            }}
+          }}
           renderCard();
         }}
-
-        function markSRS(quality) {{
-          if (idx >= cards.length) return;
-          if (!flipped) flipCard();
-          seen++;
-          if (quality >= 3) correct++;
-          fetch('/api/student/flashcards/progress', {{
-            method: 'POST', headers: {{'Content-Type':'application/json'}},
-            body: JSON.stringify({{ card_id: cards[idx].id, quality: quality, correct: quality >= 3 }})
-          }}).catch(function(){{}});
-          idx++;
-          renderCard();
-        }}
-
-        function nextCard() {{ if (idx < cards.length - 1) {{ idx++; renderCard(); }} }}
-        function prevCard() {{ if (idx > 0) {{ idx--; renderCard(); }} }}
 
         function showSummary() {{
           document.getElementById('fc-card').style.display = 'none';
           document.getElementById('fc-summary').style.display = 'block';
-          var pct = seen > 0 ? Math.round(correct / seen * 100) : 0;
-          document.getElementById('fc-score').textContent = pct + '% correct';
-          document.getElementById('fc-score-detail').textContent = correct + ' of ' + seen + ' cards';
+          document.getElementById('answer-btns').style.display = 'none';
+          document.getElementById('round-info').style.display = 'none';
+          document.getElementById('fc-score').textContent = cards.length + ' / ' + cards.length + ' correct!';
+          document.getElementById('fc-score-detail').textContent = 'Completed in ' + roundNum + ' round' + (roundNum > 1 ? 's' : '') + ' (' + seen + ' total reviews)';
+          document.getElementById('fc-progress-bar').style.width = '100%';
         }}
 
         function restartStudy() {{
           idx = 0; correct = 0; seen = 0;
+          remaining = cards.map(function(c){{return c;}});
+          roundNum = 1; totalCorrectThisRound = 0;
           document.getElementById('fc-card').style.display = 'flex';
           document.getElementById('fc-summary').style.display = 'none';
+          document.getElementById('answer-btns').style.display = 'flex';
+          document.getElementById('round-info').style.display = '';
           renderCard();
         }}
 
@@ -3850,17 +4013,8 @@ def register_student_routes(app, csrf, limiter):
           if (currentMode !== 'study') return;
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           if (e.code === 'Space') {{ e.preventDefault(); flipCard(); }}
-          if (srsEnabled) {{
-            if (e.code === 'Digit1' || e.code === 'Numpad1') {{ e.preventDefault(); markSRS(0); }}
-            if (e.code === 'Digit2' || e.code === 'Numpad2') {{ e.preventDefault(); markSRS(2); }}
-            if (e.code === 'Digit3' || e.code === 'Numpad3') {{ e.preventDefault(); markSRS(4); }}
-            if (e.code === 'Digit4' || e.code === 'Numpad4') {{ e.preventDefault(); markSRS(5); }}
-          }} else {{
-            if (e.code === 'ArrowLeft') {{ e.preventDefault(); prevCard(); }}
-            if (e.code === 'ArrowRight') {{ e.preventDefault(); nextCard(); }}
-            if (e.code === 'Digit1' || e.code === 'Numpad1') {{ e.preventDefault(); markCard(false); }}
-            if (e.code === 'Digit2' || e.code === 'Numpad2') {{ e.preventDefault(); markCard(true); }}
-          }}
+          if (e.code === 'Digit1' || e.code === 'Numpad1') {{ e.preventDefault(); markCard(false); }}
+          if (e.code === 'Digit2' || e.code === 'Numpad2') {{ e.preventDefault(); markCard(true); }}
         }});
 
         renderCard();
@@ -4656,6 +4810,17 @@ def register_student_routes(app, csrf, limiter):
           btn.disabled = false; btn.innerHTML = '&#128190; Save';
         }}
         function printNote() {{ window.print(); }}
+        // Re-render math in notes
+        if (typeof renderMathInElement === 'function') {{
+          renderMathInElement(document.getElementById('note-view'), {{
+            delimiters: [
+              {{left: '$$', right: '$$', display: true}},
+              {{left: '$', right: '$', display: false}},
+              {{left: '\\\\(', right: '\\\\)', display: false}},
+              {{left: '\\\\[', right: '\\\\]', display: true}}
+            ], throwOnError: false
+          }});
+        }}
         </script>
         """, active_page="student_notes")
 
