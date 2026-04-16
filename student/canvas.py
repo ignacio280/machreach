@@ -197,16 +197,22 @@ class CanvasClient:
 # ── standalone helpers ──────────────────────────────────────
 
 def extract_text_from_pdf(content: bytes) -> str:
-    """Best-effort PDF → plain text (uses PyPDF2 if available)."""
+    """Best-effort PDF → plain text (uses pdfplumber for high-quality extraction)."""
     try:
-        from PyPDF2 import PdfReader
-        reader = PdfReader(io.BytesIO(content))
-        text = "\n".join(
-            page.extract_text() or "" for page in reader.pages
-        )
-        return text.strip()
+        import pdfplumber
+        pages = []
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text(
+                    x_tolerance=2,
+                    y_tolerance=3,
+                    layout=True,
+                )
+                if text:
+                    pages.append(text)
+        return "\n\n".join(pages).strip()
     except ImportError:
-        log.warning("PyPDF2 not installed — skipping PDF extraction")
+        log.warning("pdfplumber not installed — skipping PDF extraction")
         return ""
     except Exception as e:
         log.warning("PDF extraction failed: %s", e)

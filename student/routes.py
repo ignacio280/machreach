@@ -3308,30 +3308,23 @@ def register_student_routes(app, csrf, limiter):
         if not text or len(text.strip()) < 20:
             return jsonify({"error": "Could not extract enough readable text from this file"}), 400
         title = fname.rsplit(".", 1)[0]
-        # Clean up common PyPDF2 math artifacts
         import re as _re
-        # Remove duplicate whitespace but preserve newlines
-        text = _re.sub(r'[^\S\n]+', ' ', text)
-        # Fix common PyPDF2 garbled math tokens
-        text = text.replace('/integraldisplay', '∫')
-        text = text.replace('integraldisplay', '∫')
-        text = text.replace('/vextendsingle', '|')
-        text = text.replace('vextendsingle', '|')
-        text = text.replace('→!', '→∞')
-        text = text.replace('↑', '→')
+        # Clean null bytes and collapse extra whitespace within lines
         text = text.replace('\x00', '')
-        # Build HTML with better structure
+        text = _re.sub(r'[^\S\n]+', ' ', text)
+        # Collapse 3+ consecutive blank lines to 2
+        text = _re.sub(r'\n{3,}', '\n\n', text)
+        # Build HTML with structure detection
         html = "<h1>" + _esc(title) + "</h1>\n"
         lines = text.split("\n")
         for line in lines:
             p = line.strip()
             if not p:
                 continue
-            # Detect heading-like lines (short, no period, possibly caps)
-            if len(p) < 100 and not p.endswith('.') and (p[0].isupper() or p[0].isdigit()):
+            # Detect heading-like lines
+            if len(p) < 120 and not p.endswith('.') and (p[0].isupper() or p[0].isdigit()):
                 words = p.split()
-                if len(words) <= 12 and any(c.isalpha() for c in p):
-                    # Check if it looks like a section/chapter heading
+                if len(words) <= 14 and any(c.isalpha() for c in p):
                     if _re.match(r'^(\d+[\.\)]\s*|Cap[ií]tulo|Secci[oó]n|Definici[oó]n|Teorema|Proposici[oó]n|Ejemplo|Lema|Corolario|Observaci[oó]n)', p, _re.IGNORECASE):
                         html += "<h2>" + _esc(p) + "</h2>\n"
                         continue
