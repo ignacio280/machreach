@@ -1257,6 +1257,196 @@ LAYOUT = """<!DOCTYPE html>
   }
   </script>
 
+  <!-- Interactive student tutorial -->
+  {% if account_type|default('business') == 'student' %}
+  <style>
+  #mr-tut-overlay{position:fixed;inset:0;z-index:999990;pointer-events:none;transition:opacity .3s}
+  #mr-tut-overlay.active{pointer-events:auto}
+  #mr-tut-backdrop{position:fixed;inset:0;z-index:999991;background:rgba(0,0,0,0.55);transition:opacity .3s}
+  #mr-tut-highlight{position:fixed;z-index:999992;border-radius:10px;box-shadow:0 0 0 4000px rgba(0,0,0,0.55),0 0 0 3px #7C3AED,0 0 20px rgba(124,58,237,0.4);transition:all .35s cubic-bezier(.4,0,.2,1);pointer-events:none}
+  #mr-tut-tooltip{position:fixed;z-index:999993;background:#1E1B4B;color:#E0E7FF;border-radius:14px;padding:22px 26px 18px;max-width:370px;min-width:280px;box-shadow:0 12px 40px rgba(0,0,0,0.4),0 0 0 1px rgba(124,58,237,0.3);font-family:'Inter',sans-serif;transition:all .35s cubic-bezier(.4,0,.2,1);opacity:0;transform:translateY(8px)}
+  #mr-tut-tooltip.show{opacity:1;transform:translateY(0)}
+  #mr-tut-tooltip .tut-step{font-size:11px;color:#A5B4FC;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;font-weight:600}
+  #mr-tut-tooltip .tut-title{font-size:17px;font-weight:700;margin-bottom:6px;color:#fff}
+  #mr-tut-tooltip .tut-desc{font-size:13px;line-height:1.55;color:#C7D2FE;margin-bottom:16px}
+  #mr-tut-tooltip .tut-btns{display:flex;gap:8px;justify-content:flex-end;align-items:center}
+  #mr-tut-tooltip .tut-btns button{border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+  #mr-tut-tooltip .tut-next{background:#7C3AED;color:#fff}
+  #mr-tut-tooltip .tut-next:hover{background:#6D28D9}
+  #mr-tut-tooltip .tut-skip{background:transparent;color:#A5B4FC;text-decoration:underline}
+  #mr-tut-tooltip .tut-skip:hover{color:#fff}
+  #mr-tut-tooltip .tut-back{background:rgba(165,180,252,0.15);color:#A5B4FC}
+  #mr-tut-tooltip .tut-back:hover{background:rgba(165,180,252,0.25)}
+  #mr-tut-arrow{position:fixed;z-index:999993;width:0;height:0;transition:all .35s cubic-bezier(.4,0,.2,1)}
+  #mr-tut-progress{display:flex;gap:4px;margin-right:auto}
+  #mr-tut-progress span{width:8px;height:8px;border-radius:50%;background:rgba(165,180,252,0.25);transition:background .2s}
+  #mr-tut-progress span.active{background:#7C3AED}
+  #mr-tut-progress span.done{background:#A5B4FC}
+  .mr-tut-pulse{animation:mr-pulse 2s ease-in-out infinite}
+  @keyframes mr-pulse{0%,100%{box-shadow:0 0 0 4000px rgba(0,0,0,0.55),0 0 0 3px #7C3AED,0 0 20px rgba(124,58,237,0.4)}50%{box-shadow:0 0 0 4000px rgba(0,0,0,0.55),0 0 0 5px #7C3AED,0 0 30px rgba(124,58,237,0.6)}}
+  #mr-tut-welcome{position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center}
+  #mr-tut-welcome .welcome-card{background:linear-gradient(135deg,#1E1B4B,#312E81);border-radius:20px;padding:40px 48px;max-width:460px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);color:#E0E7FF;font-family:'Inter',sans-serif}
+  #mr-tut-welcome .welcome-card h2{font-size:24px;color:#fff;margin:12px 0 8px}
+  #mr-tut-welcome .welcome-card p{font-size:14px;line-height:1.6;color:#C7D2FE;margin-bottom:24px}
+  #mr-tut-welcome .welcome-card .wbtn{display:inline-block;padding:12px 32px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;border:none;transition:all .15s}
+  #mr-tut-welcome .welcome-card .wbtn-start{background:#7C3AED;color:#fff;margin-right:12px}
+  #mr-tut-welcome .welcome-card .wbtn-start:hover{background:#6D28D9;transform:translateY(-1px)}
+  #mr-tut-welcome .welcome-card .wbtn-skip{background:transparent;color:#A5B4FC;text-decoration:underline}
+  </style>
+  <div id="mr-tut-overlay"><div id="mr-tut-backdrop" style="display:none"></div><div id="mr-tut-highlight" style="display:none"></div><div id="mr-tut-arrow" style="display:none"></div><div id="mr-tut-tooltip" style="display:none"></div></div>
+  <script>
+  (function(){
+    if (localStorage.getItem('mr-tutorial-done')) return;
+    var isDashboard = (window.location.pathname === '/student' || window.location.pathname === '/student/');
+    if (!isDashboard) return;
+
+    var steps = [
+      {sel:'.nav-dropdown',title:'Dashboard & Tools',desc:'Your command center. Click this dropdown to access Exams, Focus Mode, GPA Calculator, Practice Problems, Schedule, Weak Topics, Smart Import, and your XP & Achievements.',pos:'bottom'},
+      {sel:'a[href="/student/courses"]',title:'Courses',desc:'Add your courses here — manually or by syncing Canvas. Upload your syllabus, PDFs, and notes. Everything the AI needs starts here.',pos:'bottom'},
+      {sel:'a[href="/student/plan"]',title:'Study Plan',desc:'AI-generated daily study plan based on your courses, exams, and priorities. Check off sessions as you go.',pos:'bottom'},
+      {sel:'a[href="/student/flashcards"]',title:'Flashcards',desc:'AI creates flashcards from your uploaded files. Uses spaced repetition (SRS) to help you memorize efficiently.',pos:'bottom'},
+      {sel:'a[href="/student/quizzes"]',title:'Quizzes',desc:'Practice quizzes generated from your course materials. Great for exam prep — all questions come from your uploads.',pos:'bottom'},
+      {sel:'a[href="/student/notes"]',title:'AI Notes',desc:'Drop a PDF or DOCX and get clean, organized study notes extracted automatically. You can also generate notes from course files with AI.',pos:'bottom'},
+      {sel:'a[href="/student/chat"]',title:'AI Tutor',desc:'Chat with an AI tutor that ONLY uses your uploaded files — no hallucination. Ask questions, get explanations, and study smarter.',pos:'bottom'},
+      {sel:'a[href="/student/exchange"]',title:'Study Exchange',desc:'Share your notes with other students and discover shared materials. Build a study community.',pos:'bottom'},
+      {sel:'#sync-btn',title:'Sync Canvas',desc:'Connect your Canvas LMS account to automatically import all your courses, assignments, and syllabi.',pos:'bottom'},
+      {sel:'#plan-btn',title:'Generate Plan',desc:'Click to generate a personalized AI study plan. The AI considers your exams, course load, and priorities.',pos:'bottom'},
+      {sel:'#daily-quote',title:'Daily Motivation',desc:'A fresh motivational quote every day to keep you focused and inspired.',pos:'bottom'},
+      {sel:'.stat-card',title:'Your Stats',desc:'Track your courses, upcoming exams, plan completion, and total focus hours at a glance.',pos:'bottom'},
+    ];
+
+    var current = 0;
+
+    // Show welcome modal
+    var welcome = document.createElement('div');
+    welcome.id = 'mr-tut-welcome';
+    welcome.innerHTML = '<div class="welcome-card">'
+      + '<div style="font-size:52px;">&#127891;</div>'
+      + '<h2>Welcome to MachReach!</h2>'
+      + '<p>Let\\'s take a quick tour of your study dashboard. We\\'ll show you all the tools available to help you ace your courses.</p>'
+      + '<button class="wbtn wbtn-start" onclick="window._mrTutStart()">Start Tour</button>'
+      + '<button class="wbtn wbtn-skip" onclick="window._mrTutEnd()">Skip</button>'
+      + '</div>';
+    document.body.appendChild(welcome);
+
+    window._mrTutStart = function() {
+      welcome.remove();
+      current = 0;
+      showStep(current);
+    };
+
+    window._mrTutEnd = function() {
+      localStorage.setItem('mr-tutorial-done','1');
+      welcome.remove();
+      cleanup();
+    };
+
+    function cleanup() {
+      var ov = document.getElementById('mr-tut-overlay');
+      if (ov) ov.classList.remove('active');
+      var hl = document.getElementById('mr-tut-highlight');
+      if (hl) hl.style.display = 'none';
+      var tp = document.getElementById('mr-tut-tooltip');
+      if (tp) { tp.style.display = 'none'; tp.classList.remove('show'); }
+      var bk = document.getElementById('mr-tut-backdrop');
+      if (bk) bk.style.display = 'none';
+    }
+
+    function showStep(idx) {
+      if (idx >= steps.length) {
+        localStorage.setItem('mr-tutorial-done','1');
+        cleanup();
+        // Show completion toast
+        var fin = document.createElement('div');
+        fin.id = 'mr-tut-welcome';
+        fin.innerHTML = '<div class="welcome-card">'
+          + '<div style="font-size:52px;">&#127881;</div>'
+          + '<h2>You\\'re All Set!</h2>'
+          + '<p>You now know all the tools at your disposal. Start by adding a course or syncing Canvas — the AI will take it from there.</p>'
+          + '<p style="font-size:12px;color:#A5B4FC;">Tip: You can restart this tour anytime from Settings.</p>'
+          + '<button class="wbtn wbtn-start" onclick="this.closest(\'#mr-tut-welcome\').remove()">Let\\'s Go!</button>'
+          + '</div>';
+        document.body.appendChild(fin);
+        return;
+      }
+
+      var step = steps[idx];
+      var el = document.querySelector(step.sel);
+      if (!el) { current++; showStep(current); return; }
+
+      // Make sure nav dropdown is visible for first steps
+      var navLinks = document.querySelector('.nav-links');
+      if (navLinks && window.innerWidth <= 768) navLinks.classList.add('open');
+
+      var ov = document.getElementById('mr-tut-overlay');
+      ov.classList.add('active');
+      document.getElementById('mr-tut-backdrop').style.display = 'block';
+
+      var rect = el.getBoundingClientRect();
+      var pad = 6;
+
+      // Position highlight
+      var hl = document.getElementById('mr-tut-highlight');
+      hl.style.display = 'block';
+      hl.classList.add('mr-tut-pulse');
+      hl.style.top = (rect.top - pad) + 'px';
+      hl.style.left = (rect.left - pad) + 'px';
+      hl.style.width = (rect.width + pad * 2) + 'px';
+      hl.style.height = (rect.height + pad * 2) + 'px';
+
+      // Build tooltip content
+      var progressDots = '';
+      for (var i = 0; i < steps.length; i++) {
+        var cls = i < idx ? 'done' : (i === idx ? 'active' : '');
+        progressDots += '<span class="' + cls + '"></span>';
+      }
+
+      var tp = document.getElementById('mr-tut-tooltip');
+      tp.style.display = 'block';
+      tp.classList.remove('show');
+      tp.innerHTML = '<div class="tut-step">Step ' + (idx + 1) + ' of ' + steps.length + '</div>'
+        + '<div class="tut-title">' + step.title + '</div>'
+        + '<div class="tut-desc">' + step.desc + '</div>'
+        + '<div class="tut-btns">'
+        + '<div id="mr-tut-progress">' + progressDots + '</div>'
+        + (idx > 0 ? '<button class="tut-back" onclick="window._mrTutPrev()">Back</button>' : '')
+        + '<button class="tut-skip" onclick="window._mrTutEnd()">Skip</button>'
+        + '<button class="tut-next" onclick="window._mrTutNext()">' + (idx === steps.length - 1 ? 'Finish &#10003;' : 'Next &#8594;') + '</button>'
+        + '</div>';
+
+      // Position tooltip below or above the element
+      var ttW = 350;
+      var ttH = tp.offsetHeight || 200;
+      var ttLeft = Math.max(12, Math.min(rect.left + rect.width / 2 - ttW / 2, window.innerWidth - ttW - 12));
+      var ttTop;
+      if (step.pos === 'bottom' && rect.bottom + 16 + ttH < window.innerHeight) {
+        ttTop = rect.bottom + 16;
+      } else {
+        ttTop = Math.max(12, rect.top - ttH - 16);
+      }
+      tp.style.left = ttLeft + 'px';
+      tp.style.top = ttTop + 'px';
+      tp.style.width = ttW + 'px';
+
+      requestAnimationFrame(function() { tp.classList.add('show'); });
+
+      // Scroll element into view
+      el.scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
+
+    window._mrTutNext = function() { current++; showStep(current); };
+    window._mrTutPrev = function() { if (current > 0) { current--; showStep(current); } };
+
+    // Close on Escape
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && document.getElementById('mr-tut-overlay').classList.contains('active')) {
+        window._mrTutEnd();
+      }
+    });
+  })();
+  </script>
+  {% endif %}
+
   <!-- Student i18n: Spanish translations (client-side) -->
   {% if lang == 'es' and account_type|default('business') == 'student' %}
   <script>

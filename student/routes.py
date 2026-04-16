@@ -5878,6 +5878,16 @@ def register_student_routes(app, csrf, limiter):
             <button onclick="savePrefs()" class="btn btn-primary btn-sm">Save Preferences</button>
           </div>
         </div>
+
+        <!-- Restart Tutorial -->
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header"><h2>&#127891; Interactive Tutorial</h2></div>
+          <div style="padding:20px;">
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Replay the guided walkthrough to rediscover all the features available to you.</p>
+            <button onclick="localStorage.removeItem('mr-tutorial-done');window.location='/student'" class="btn btn-outline btn-sm">&#128260; Restart Tutorial</button>
+          </div>
+        </div>
+
         <script>
         async function savePrefs() {{
           var r = await fetch('/api/student/email-prefs', {{
