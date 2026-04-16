@@ -1269,7 +1269,7 @@ LAYOUT = """<!DOCTYPE html>
   #mr-tut-tooltip .tut-step{font-size:11px;color:#A5B4FC;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;font-weight:600}
   #mr-tut-tooltip .tut-title{font-size:17px;font-weight:700;margin-bottom:6px;color:#fff}
   #mr-tut-tooltip .tut-desc{font-size:13px;line-height:1.55;color:#C7D2FE;margin-bottom:16px}
-  #mr-tut-tooltip .tut-btns{display:flex;gap:8px;justify-content:flex-end;align-items:center}
+  #mr-tut-tooltip .tut-btns{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
   #mr-tut-tooltip .tut-btns button{border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
   #mr-tut-tooltip .tut-next{background:#7C3AED;color:#fff}
   #mr-tut-tooltip .tut-next:hover{background:#6D28D9}
@@ -1278,8 +1278,8 @@ LAYOUT = """<!DOCTYPE html>
   #mr-tut-tooltip .tut-back{background:rgba(165,180,252,0.15);color:#A5B4FC}
   #mr-tut-tooltip .tut-back:hover{background:rgba(165,180,252,0.25)}
   #mr-tut-arrow{position:fixed;z-index:999993;width:0;height:0;transition:all .35s cubic-bezier(.4,0,.2,1)}
-  #mr-tut-progress{display:flex;gap:4px;margin-right:auto}
-  #mr-tut-progress span{width:8px;height:8px;border-radius:50%;background:rgba(165,180,252,0.25);transition:background .2s}
+  #mr-tut-progress{display:flex;gap:3px;width:100%;margin-bottom:4px}
+  #mr-tut-progress span{width:6px;height:6px;border-radius:50%;background:rgba(165,180,252,0.25);transition:background .2s}
   #mr-tut-progress span.active{background:#7C3AED}
   #mr-tut-progress span.done{background:#A5B4FC}
   .mr-tut-pulse{animation:mr-pulse 2s ease-in-out infinite}
