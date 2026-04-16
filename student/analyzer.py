@@ -390,19 +390,25 @@ def generate_flashcards(
     """
     context = ""
     if source_text:
-        context = f"\n\nSOURCE MATERIAL:\n{source_text[:10000]}"
-    topics_str = ", ".join(topics) if topics else "all key concepts"
+        context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text[:14000]}"
+    topics_str = ", ".join(topics) if topics else "all key concepts from the material"
 
     prompt = f"""You are creating study flashcards for the course "{course_name}".
 Topics to cover: {topics_str}
 {context}
 
+STRICT RULES:
+- Create flashcards ONLY from the source material provided above
+- Do NOT add information from outside the provided material
+- Every question and answer must be directly based on the content above
+
 Generate exactly {count} flashcards. Each flashcard should:
 - Have a clear, specific question on the front
 - Have a concise but complete answer on the back
-- Cover different aspects of the topics
+- Cover different aspects of the material
 - Progress from basic concepts to more advanced ones
-- If the source material is in Spanish or another language, keep the flashcards in that language
+- For math equations, use LaTeX notation: inline with $...$ and display with $$...$$
+- Keep the same language as the source material
 
 Return ONLY valid JSON array:
 [
@@ -451,8 +457,8 @@ def generate_quiz(
     """
     context = ""
     if source_text:
-        context = f"\n\nSOURCE MATERIAL:\n{source_text[:10000]}"
-    topics_str = ", ".join(topics) if topics else "all key concepts"
+        context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text[:14000]}"
+    topics_str = ", ".join(topics) if topics else "all key concepts from the material"
 
     diff_desc = {
         "easy": "basic recall and definitions — suitable for initial review",
@@ -465,12 +471,18 @@ Topics: {topics_str}
 Difficulty: {difficulty} — {diff_desc}
 {context}
 
+STRICT RULES:
+- Create questions ONLY from the source material provided above
+- Do NOT add information from outside the provided material
+- Every question, option, and explanation must be directly based on the content above
+
 Generate exactly {count} multiple-choice questions. Each question should:
 - Be clear and unambiguous
 - Have exactly 4 options (a, b, c, d) where only ONE is correct
 - Include a brief explanation of why the correct answer is right
 - Vary in the concepts tested
-- If the source material is in Spanish or another language, keep the quiz in that language
+- For math equations, use LaTeX notation: inline with $...$ and display with $$...$$
+- Keep the same language as the source material
 
 Return ONLY valid JSON array:
 [
@@ -653,17 +665,22 @@ def chat_with_tutor(
         The tutor's reply as a string.
     """
     system = f"""You are a friendly, expert AI tutor for the course "{course_name}".
-Your role:
-- Answer the student's questions clearly and helpfully
-- Use the provided course material to give accurate, relevant answers
-- If you don't know or the material doesn't cover it, say so honestly
-- Use examples when helpful
+
+STRICT RULES:
+- You MUST answer ONLY based on the course material provided below
+- ALL your knowledge must come from the student's uploaded documents and notes
+- If the material doesn't cover a topic, say: "That topic is not covered in your uploaded documents. Try uploading more material about it."
+- NEVER make up information or use external knowledge outside the provided material
+- Use examples from the material when possible
 - Keep answers concise but thorough
+- For math equations, use LaTeX notation: inline with $...$ and display with $$...$$
 - Match the language of the student (if they write in Spanish, reply in Spanish)
-- Encourage the student and be supportive"""
+- Be encouraging and supportive"""
 
     if context_text:
-        system += f"\n\nCOURSE MATERIAL FOR REFERENCE:\n{context_text[:8000]}"
+        system += f"\n\nSTUDENT'S COURSE MATERIAL (uploaded documents and notes):\n{context_text[:12000]}"
+    else:
+        system += "\n\nNOTE: The student has not uploaded any documents for this course yet. Ask them to upload their course material (PDFs, notes) so you can help them effectively."
 
     messages = [{"role": "system", "content": system}]
     if history:
