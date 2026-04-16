@@ -4837,7 +4837,7 @@ def register_student_routes(app, csrf, limiter):
         context_text = ""
         course_name = "General"
         if course_id:
-            course = sdb.get_course(int(course_id), cid)
+            course = sdb.get_course(int(course_id))
             if course:
                 course_name = course.get("name", "General")
                 notes = sdb.get_notes(cid, int(course_id))
