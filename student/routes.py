@@ -3423,29 +3423,76 @@ def register_student_routes(app, csrf, limiter):
         if not note:
             return jsonify({"error": "Not found"}), 404
         from io import BytesIO
-        from xhtml2pdf import pisa
+        import re as _re
+        from fpdf import FPDF
+
         title = note.get("title", "Note")
-        html_content = f"""<!DOCTYPE html>
-        <html><head><meta charset="utf-8">
-        <style>
-          body {{ font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; line-height: 1.7; padding: 30px; }}
-          h1 {{ font-size: 24px; margin-bottom: 6px; color: #111; }}
-          h2 {{ font-size: 20px; margin: 24px 0 10px; border-bottom: 2px solid #e5e7eb; padding-bottom: 4px; }}
-          h3 {{ font-size: 17px; margin: 18px 0 8px; }}
-          p {{ margin: 8px 0; }}
-          ul, ol {{ padding-left: 24px; line-height: 1.8; }}
-          code {{ background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 13px; }}
-          .meta {{ font-size: 12px; color: #6b7280; margin-bottom: 20px; }}
-        </style>
-        </head><body>
-        <h1>{_esc(title)}</h1>
-        <div class="meta">Exported from MachReach &middot; {str(note.get('created_at',''))[:10]}</div>
-        {note.get('content_html', '')}
-        </body></html>"""
-        buf = BytesIO()
-        pisa_status = pisa.CreatePDF(html_content, dest=buf)
-        if pisa_status.err:
-            return jsonify({"error": "PDF generation failed"}), 500
+        html = note.get("content_html", "")
+        # Strip HTML tags for clean text, preserve structure
+        def strip_html(s):
+            s = _re.sub(r'<br\s*/?>', '\n', s)
+            s = _re.sub(r'</p>|</div>|</li>|</h[1-6]>', '\n', s)
+            s = _re.sub(r'<[^>]+>', '', s)
+            s = s.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+            s = s.replace('&nbsp;', ' ').replace('&#39;', "'").replace('&quot;', '"')
+            s = s.replace('&middot;', '·')
+            return s.strip()
+
+        # Extract structured blocks from HTML
+        blocks = []
+        parts = _re.split(r'(<h[1-3][^>]*>.*?</h[1-3]>)', html, flags=_re.DOTALL)
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            if _re.match(r'<h1[^>]*>', part):
+                blocks.append(('h1', strip_html(part)))
+            elif _re.match(r'<h2[^>]*>', part):
+                blocks.append(('h2', strip_html(part)))
+            elif _re.match(r'<h3[^>]*>', part):
+                blocks.append(('h3', strip_html(part)))
+            else:
+                text = strip_html(part)
+                if text:
+                    blocks.append(('p', text))
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=20)
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 20)
+        pdf.cell(0, 12, title, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(120, 120, 120)
+        pdf.cell(0, 6, f"Exported from MachReach  -  {str(note.get('created_at',''))[:10]}", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(6)
+
+        for btype, text in blocks:
+            if btype == 'h1':
+                pdf.set_font("Helvetica", "B", 18)
+                pdf.ln(4)
+                pdf.multi_cell(0, 8, text)
+                pdf.ln(2)
+            elif btype == 'h2':
+                pdf.set_font("Helvetica", "B", 15)
+                pdf.ln(4)
+                pdf.multi_cell(0, 7, text)
+                pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 170, pdf.get_y())
+                pdf.ln(3)
+            elif btype == 'h3':
+                pdf.set_font("Helvetica", "B", 13)
+                pdf.ln(3)
+                pdf.multi_cell(0, 7, text)
+                pdf.ln(2)
+            else:
+                pdf.set_font("Helvetica", "", 11)
+                for line in text.split('\n'):
+                    line = line.strip()
+                    if line:
+                        pdf.multi_cell(0, 6, line)
+                        pdf.ln(1)
+
+        buf = BytesIO(pdf.output())
         buf.seek(0)
         safe_title = "".join(c for c in title if c.isalnum() or c in " -_").strip()[:80] or "note"
         return send_file(buf, mimetype="application/pdf",
