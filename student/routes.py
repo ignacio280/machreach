@@ -5652,7 +5652,7 @@ def register_student_routes(app, csrf, limiter):
         cid = _cid()
 
         # Handle profile update
-        from outreach.db import get_client, update_client, get_email_accounts, get_subscription
+        from outreach.db import get_client, update_client, get_email_accounts, get_subscription, get_mail_preferences
         from outreach.config import PLAN_LIMITS
         client = get_client(cid)
 
@@ -5674,6 +5674,7 @@ def register_student_routes(app, csrf, limiter):
         canvas_tok = sdb.get_canvas_token(cid)
         canvas_status = "Connected" if canvas_tok else "Not connected"
         canvas_color = "#10B981" if canvas_tok else "#EF4444"
+        mail_rules = get_mail_preferences(cid) or ""
 
         # Email accounts
         accounts = get_email_accounts(cid)
@@ -5765,6 +5766,25 @@ def register_student_routes(app, csrf, limiter):
             </div>
             <div>{accounts_html}</div>
             {"<div style='margin-top:12px'><a href='/mail-hub' class='btn btn-outline btn-sm'>Manage in Mail Hub</a></div>" if accounts else "<div style='margin-top:12px'><a href='/settings' class='btn btn-primary btn-sm'>+ Add Email Account</a></div>"}
+          </div>
+
+          <!-- Mail Sorting Rules -->
+          <div class="card">
+            <div class="card-header"><h2>&#128340; Mail Sorting Rules</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:6px;">Tell the AI how to sort your inbox. Write both <strong>prioritize</strong> and <strong>deprioritize</strong> rules in plain English.</p>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.7;background:var(--bg);padding:12px 14px;border-radius:var(--radius-xs);">
+              <strong>Examples:</strong><br>
+              &#128314; Emails from my professors are always urgent<br>
+              &#128314; Meeting invites from @university.edu are important<br>
+              &#128315; Do NOT mark no-reply@render.com as urgent<br>
+              &#128315; Newsletters and marketing emails are always low priority<br>
+              &#128315; Ignore all emails from noreply@github.com
+            </div>
+            <div class="form-group">
+              <textarea id="settings-mail-rules" placeholder="Write your mail sorting rules here..." style="height:120px;font-size:13px;width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);resize:vertical;">{_esc(mail_rules)}</textarea>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="saveMailRules()" id="save-rules-btn">Save Rules</button>
+            <span id="rules-save-status" style="margin-left:10px;font-size:13px;"></span>
           </div>
 
           <!-- Daily Study Email -->
@@ -5941,6 +5961,26 @@ def register_student_routes(app, csrf, limiter):
             }})
           }});
           if (r.ok) alert('Saved!'); else alert('Error saving.');
+        }}
+        function saveMailRules() {{
+          var text = document.getElementById('settings-mail-rules').value.trim();
+          var btn = document.getElementById('save-rules-btn');
+          var status = document.getElementById('rules-save-status');
+          if (!text) {{ status.innerHTML = '<span style="color:var(--red);">Please enter at least one rule</span>'; return; }}
+          btn.disabled = true; btn.textContent = 'Saving...';
+          fetch('/api/mail-preferences', {{
+            method: 'POST', headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{preferences: text}})
+          }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
+            btn.disabled = false; btn.textContent = 'Save Rules';
+            if (data.ok) {{
+              status.innerHTML = '<span style="color:var(--green);">&#10003; Saved!</span>';
+              setTimeout(function() {{ status.innerHTML = ''; }}, 4000);
+            }} else {{ status.innerHTML = '<span style="color:var(--red);">' + (data.error || 'Failed') + '</span>'; }}
+          }}).catch(function() {{
+            btn.disabled = false; btn.textContent = 'Save Rules';
+            status.innerHTML = '<span style="color:var(--red);">Connection error</span>';
+          }});
         }}
         </script>
         """, active_page="student_settings")

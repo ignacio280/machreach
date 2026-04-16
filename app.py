@@ -1323,7 +1323,7 @@ LAYOUT = """<!DOCTYPE html>
     welcome.innerHTML = '<div class="welcome-card">'
       + '<div style="font-size:52px;">&#127891;</div>'
       + '<h2>Welcome to MachReach!</h2>'
-      + '<p>Let\\'s take a quick tour of your study dashboard. We\\'ll show you all the tools available to help you ace your courses.</p>'
+      + '<p>Let&#39;s take a quick tour of your study dashboard. We&#39;ll show you all the tools available to help you ace your courses.</p>'
       + '<button class="wbtn wbtn-start" onclick="window._mrTutStart()">Start Tour</button>'
       + '<button class="wbtn wbtn-skip" onclick="window._mrTutEnd()">Skip</button>'
       + '</div>';
@@ -1361,10 +1361,10 @@ LAYOUT = """<!DOCTYPE html>
         fin.id = 'mr-tut-welcome';
         fin.innerHTML = '<div class="welcome-card">'
           + '<div style="font-size:52px;">&#127881;</div>'
-          + '<h2>You\\'re All Set!</h2>'
+          + '<h2>You&#39;re All Set!</h2>'
           + '<p>You now know all the tools at your disposal. Start by adding a course or syncing Canvas — the AI will take it from there.</p>'
           + '<p style="font-size:12px;color:#A5B4FC;">Tip: You can restart this tour anytime from Settings.</p>'
-          + '<button class="wbtn wbtn-start" onclick="this.closest(\'#mr-tut-welcome\').remove()">Let\\'s Go!</button>'
+          + '<button class="wbtn wbtn-start" onclick="document.getElementById(&#39;mr-tut-welcome&#39;).remove()">Let&#39;s Go!</button>'
           + '</div>';
         document.body.appendChild(fin);
         return;
