@@ -878,7 +878,7 @@ def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
             db,
             "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
             "VALUES (%s, %s, 1, %s, %s, %s) RETURNING id",
-            (client_id, datetime.now().strftime("%Y-%m-%d"),
+            (client_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
              f"{mode}: {course_name}" if course_name else mode, minutes, pages),
             "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
             "VALUES (?, ?, 1, ?, ?, ?)",
@@ -907,8 +907,13 @@ def get_focus_stats(client_id: int) -> dict:
         )
         streak = 0
         today = datetime.now().date()
+        seen_dates = set()
         for r in rows:
-            d = datetime.strptime(r["plan_date"], "%Y-%m-%d").date()
+            d_str = r["plan_date"][:10]
+            if d_str in seen_dates:
+                continue
+            seen_dates.add(d_str)
+            d = datetime.strptime(d_str, "%Y-%m-%d").date()
             expected = today - __import__('datetime').timedelta(days=streak)
             if d == expected:
                 streak += 1

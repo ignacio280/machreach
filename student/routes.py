@@ -700,7 +700,7 @@ def register_student_routes(app, csrf, limiter):
             if hour_now >= 23:
                 sdb.earn_badge(cid, "night_owl")
 
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "stats": stats})
 
     @app.route("/api/student/focus/stats", methods=["GET"])
     def student_focus_stats():
@@ -814,30 +814,38 @@ def register_student_routes(app, csrf, limiter):
         if today_plan:
             sessions = today_plan.get("sessions", [])
             for idx, s in enumerate(sessions):
-                prio_colors = {"high": "#EF4444", "medium": "#F59E0B", "low": "#10B981"}
-                pc = prio_colors.get(s.get("priority", "medium"), "#94A3B8")
+                prio_map = {
+                    "high": ("var(--red)", "var(--red-light)", "#991B1B"),
+                    "medium": ("var(--yellow)", "var(--yellow-light)", "#92400E"),
+                    "low": ("var(--green)", "var(--green-light)", "var(--green-dark)"),
+                }
+                pc, pc_bg, pc_fg = prio_map.get(s.get("priority", "medium"), ("var(--text-muted)", "var(--border-light)", "var(--text-secondary)"))
                 checked = "checked" if today_assignment_progress.get(idx, False) else ""
-                strike = "text-decoration:line-through;opacity:0.6;" if today_assignment_progress.get(idx, False) else ""
+                strike_cls = "strike-done" if today_assignment_progress.get(idx, False) else ""
                 today_sessions_html += f"""
-                <div style="background:var(--card);border:1px solid var(--border);border-left:4px solid {pc};border-radius:var(--radius-sm);padding:14px 18px;margin-bottom:10px;{strike}" id="dash-session-{idx}">
-                  <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div style="display:flex;align-items:center;gap:8px;">
+                <div class="{strike_cls}" style="background:var(--card);border:1px solid var(--border);border-left:4px solid {pc};border-radius:var(--radius-sm);padding:14px 18px;margin-bottom:10px;transition:all 0.25s;" id="dash-session-{idx}">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
                       <input type="checkbox" {checked} onchange="toggleDashAssignment({idx},this.checked)"
-                        style="width:18px;height:18px;cursor:pointer;accent-color:var(--primary);">
+                        style="width:18px;height:18px;cursor:pointer;accent-color:var(--primary);flex-shrink:0;">
                       <span style="font-weight:700;color:var(--text);">{_esc(s.get('course',''))}</span>
                       <span style="color:var(--text-muted);font-size:13px;">{s.get('hours',0)}h &middot; {s.get('type','study')}</span>
                     </div>
-                    <span style="background:{pc}18;color:{pc};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;">{s.get('priority','').upper()}</span>
+                    <span style="background:{pc_bg};color:{pc_fg};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">{s.get('priority','').upper()}</span>
                   </div>
-                  <div style="color:var(--text-secondary);font-size:14px;margin-top:6px;margin-left:26px;">{_esc(s.get('topic',''))}</div>
-                  {"<div style='color:var(--text-muted);font-size:12px;margin-top:4px;margin-left:26px;font-style:italic;'>" + _esc(s.get('reason','')) + "</div>" if s.get('reason') else ""}
+                  <div style="color:var(--text-secondary);font-size:14px;margin-top:6px;margin-left:28px;">{_esc(s.get('topic',''))}</div>
+                  {"<div style='color:var(--text-muted);font-size:12px;margin-top:4px;margin-left:28px;font-style:italic;'>" + _esc(s.get('reason','')) + "</div>" if s.get('reason') else ""}
                 </div>"""
         else:
             today_sessions_html = """
-            <div style="text-align:center;padding:32px;color:var(--text-muted);">
-              <div style="font-size:40px;margin-bottom:12px;">&#128218;</div>
-              <p>No study sessions for today.</p>
-              <p style="font-size:13px;">Sync your courses and generate a plan to get started.</p>
+            <div class="empty">
+              <div class="empty-icon">&#128218;</div>
+              <h3>No study sessions yet</h3>
+              <p>Sync your courses and generate a plan to get a personalized study schedule for today.</p>
+              <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+                <a href="/student/canvas-settings" class="btn btn-outline btn-sm">&#128279; Connect Canvas</a>
+                <button onclick="generatePlan()" class="btn btn-primary btn-sm">&#129302; Generate Plan</button>
+              </div>
             </div>"""
 
         # Upcoming exams HTML
@@ -850,17 +858,27 @@ def register_student_routes(app, csrf, limiter):
                     days_until = (ed - datetime.now().date()).days
                 except ValueError:
                     pass
-            urgency = "#EF4444" if (days_until is not None and days_until <= 7) else "#F59E0B" if (days_until is not None and days_until <= 14) else "#10B981"
+            urg_map = {
+                "red": ("var(--red)", "var(--red-light)", "#991B1B"),
+                "yellow": ("var(--yellow)", "var(--yellow-light)", "#92400E"),
+                "green": ("var(--green)", "var(--green-light)", "var(--green-dark)"),
+            }
+            if days_until is not None and days_until <= 7:
+                u_border, u_bg, u_fg = urg_map["red"]
+            elif days_until is not None and days_until <= 14:
+                u_border, u_bg, u_fg = urg_map["yellow"]
+            else:
+                u_border, u_bg, u_fg = urg_map["green"]
             topics = json.loads(e["topics_json"]) if isinstance(e.get("topics_json"), str) else []
             topics_str = ", ".join(topics[:3]) + ("..." if len(topics) > 3 else "") if topics else "No topics listed"
             exams_html += f"""
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 18px;margin-bottom:10px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="background:var(--card);border:1px solid var(--border);border-left:3px solid {u_border};border-radius:var(--radius-sm);padding:14px 18px;margin-bottom:10px;transition:all 0.25s;" onmouseover="this.style.transform='translateX(3px)';this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
                 <div>
                   <span style="font-weight:700;">{_esc(e.get('course_name',''))}</span>
                   <span style="color:var(--text-muted);font-size:13px;margin-left:6px;">&middot; {_esc(e.get('name','Exam'))}</span>
                 </div>
-                <span style="background:{urgency}18;color:{urgency};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;">
+                <span style="background:{u_bg};color:{u_fg};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;">
                   {str(days_until) + 'd' if days_until is not None else '?'} left
                 </span>
               </div>
@@ -870,7 +888,7 @@ def register_student_routes(app, csrf, limiter):
             </div>"""
 
         if not exams_html:
-            exams_html = "<p style='color:var(--text-muted);text-align:center;padding:20px;'>No upcoming exams. Sync your courses to detect them.</p>"
+            exams_html = """<div class="empty"><div class="empty-icon">&#128221;</div><h3>No upcoming exams</h3><p>Sync your courses to automatically detect exam dates from Canvas.</p></div>"""
 
         # Recommendations
         recs_html = ""
@@ -892,7 +910,7 @@ def register_student_routes(app, csrf, limiter):
         return _s_render("Dashboard", f"""
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
           <div>
-            <h1 style="margin:0;font-size:28px;">&#127891; MachReach Student</h1>
+            <h1 style="margin:0;font-size:28px;">&#127891; <span class="gradient-text">MachReach</span> Student</h1>
             <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">AI-powered study planner &middot; Canvas integration</p>
           </div>
           <div style="display:flex;gap:10px;">
@@ -902,22 +920,22 @@ def register_student_routes(app, csrf, limiter):
         </div>
 
         <!-- XP / Level Bar -->
-        <a href="/student/achievements" style="text-decoration:none;display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px;margin-bottom:20px;transition:all 0.2s" onmouseover="this.style.borderColor='var(--primary)';this.style.boxShadow='0 4px 12px rgba(99,102,241,0.12)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:1.4em">🏆</span>
-              <span style="font-weight:700;color:var(--text)">{_esc(level_name)}</span>
-              <span style="color:var(--text-muted);font-size:13px">{total_xp} XP</span>
+        <a href="/student/achievements" class="hover-lift" style="text-decoration:none;display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 22px;margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:1.5em">&#127942;</span>
+              <span style="font-weight:800;color:var(--text);font-size:15px;">{_esc(level_name)}</span>
+              <span style="color:var(--text-muted);font-size:13px;">{total_xp} XP</span>
             </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="color:#ea580c;font-weight:700;font-size:15px">🔥 {streak_days}</span>
-              <span style="color:var(--text-muted);font-size:12px">day streak</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="color:var(--yellow);font-weight:700;font-size:15px;"><span class="streak-flame">&#128293;</span> {streak_days}</span>
+              <span style="color:var(--text-muted);font-size:12px;">day streak</span>
             </div>
           </div>
-          <div style="background:var(--border);border-radius:6px;height:8px;overflow:hidden">
-            <div style="background:linear-gradient(90deg,#6366f1,#8b5cf6);height:100%;width:{xp_pct}%;border-radius:6px;transition:width 0.5s"></div>
+          <div class="progress-wrap" style="height:10px;">
+            <div class="progress-bar bar-purple" style="width:{xp_pct}%;"></div>
           </div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;text-align:right">{total_xp - level_floor}/{level_ceil - level_floor} XP to next level</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:right;">{total_xp - level_floor}/{level_ceil - level_floor} XP to next level</div>
         </a>
 
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
@@ -1006,8 +1024,9 @@ def register_student_routes(app, csrf, limiter):
                 var s = await r2.json();
                 if (s.status === 'done') {{
                   clearInterval(iv);
-                  alert('Study plan generated!');
-                  location.reload();
+                  if (window.showToast) window.showToast('Study plan generated!', 'success'); else alert('Study plan generated!');
+                  if (window.confettiBurst) window.confettiBurst(60);
+                  setTimeout(function(){{ location.reload(); }}, 900);
                 }} else if (s.status === 'error') {{
                   clearInterval(iv);
                   alert(s.progress || 'Plan generation failed');
@@ -1769,8 +1788,9 @@ def register_student_routes(app, csrf, limiter):
                 var s = await r2.json();
                 if (s.status === 'done') {{
                   clearInterval(iv);
-                  alert('Study plan generated!');
-                  location.reload();
+                  if (window.showToast) window.showToast('Study plan generated!', 'success'); else alert('Study plan generated!');
+                  if (window.confettiBurst) window.confettiBurst(60);
+                  setTimeout(function(){{ location.reload(); }}, 900);
                 }} else if (s.status === 'error') {{
                   clearInterval(iv);
                   alert(s.progress || 'Plan generation failed');
@@ -1801,10 +1821,10 @@ def register_student_routes(app, csrf, limiter):
 
         <!-- Stats bar -->
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px;">
-          <div class="stat-card stat-purple"><div class="num">{focus_stats['total_hours']}</div><div class="label">Hours Focused</div></div>
-          <div class="stat-card stat-blue"><div class="num">{focus_stats['sessions']}</div><div class="label">Sessions</div></div>
-          <div class="stat-card stat-green"><div class="num">{focus_stats['total_pages']}</div><div class="label">Pages Read</div></div>
-          <div class="stat-card stat-red"><div class="num">{focus_stats['streak_days']}</div><div class="label">Day Streak &#128293;</div></div>
+          <div class="stat-card stat-purple"><div class="num" id="stat-hours">{focus_stats['total_hours']}</div><div class="label">Hours Focused</div></div>
+          <div class="stat-card stat-blue"><div class="num" id="stat-sessions">{focus_stats['sessions']}</div><div class="label">Sessions</div></div>
+          <div class="stat-card stat-green"><div class="num" id="stat-pages">{focus_stats['total_pages']}</div><div class="label">Pages Read</div></div>
+          <div class="stat-card stat-red"><div class="num" id="stat-streak">{focus_stats['streak_days']}</div><div class="label">Day Streak &#128293;</div></div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
@@ -2003,6 +2023,18 @@ def register_student_routes(app, csrf, limiter):
         var totalFocusSeconds = 0;
         var sessionStarted = false;
         var pageDone = 0;
+        var phaseStartFocusSeconds = 0;
+
+        function saveFocusTimerState() {{
+          localStorage.setItem('focus_timer_state', JSON.stringify({{
+            currentMode: currentMode, isBreak: isBreak, pomoCount: pomoCount,
+            totalFocusSeconds: totalFocusSeconds, phaseStartFocusSeconds: phaseStartFocusSeconds,
+            totalTime: totalTime, course: document.getElementById('focus-course').value
+          }}));
+        }}
+        function clearFocusTimerState() {{
+          localStorage.removeItem('focus_timer_state');
+        }}
 
         /* === Mode switching === */
         function setMode(mode) {{
@@ -2091,7 +2123,7 @@ def register_student_routes(app, csrf, limiter):
         }}
 
         /* === Timer controls === */
-        function startTimer() {{
+        function startTimer(isRestore) {{
           if (isRunning) return;
           isRunning = true;
           sessionStarted = true;
@@ -2099,26 +2131,32 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('pause-btn').style.display = '';
           document.getElementById('skip-btn').style.display = currentMode === 'pomodoro' ? '' : 'none';
 
+          if (!isBreak && !isRestore) phaseStartFocusSeconds = totalFocusSeconds;
+          saveFocusTimerState();
+
           if (currentMode === 'pages') {{
             document.getElementById('timer-label').textContent = '📖 Reading — click the big button for each page';
-            // Persist floating widget
+            var swStart = Date.now();
+            var swInitial = totalFocusSeconds;
             localStorage.setItem('focus_float', JSON.stringify({{
-              active:true, mode:'stopwatch', startAt:Date.now(), label:'📖 Reading'
+              active:true, mode:'stopwatch', startAt: isRestore ? (Date.now() - totalFocusSeconds * 1000) : swStart, label:'📖 Reading'
             }}));
             showFloatWidget();
             timerInterval = setInterval(function() {{
-              totalFocusSeconds++;
+              var elapsed = Math.floor((Date.now() - swStart) / 1000);
+              totalFocusSeconds = swInitial + elapsed;
               updateDisplay();
               updateFloatFromLocal();
             }}, 1000);
           }} else {{
             document.getElementById('timer-label').textContent = isBreak ? '☕ Break time!' : '🔥 Focus!';
-            // Persist floating widget
-            var endAt = Date.now() + timeLeft * 1000;
+            var phaseStart = Date.now();
+            var initialTimeLeft = timeLeft;
+            var focusAtStart = totalFocusSeconds;
+            var endAt = phaseStart + initialTimeLeft * 1000;
             var label = isBreak ? '☕ Break' : '🔥 Focus';
             var nextPhase = null;
             if (currentMode === 'pomodoro') {{
-              // Pre-compute next phase for auto-cycle
               if (!isBreak) {{
                 var nextPomoCount = pomoCount + 1;
                 var nextBreakMins = (nextPomoCount % 4 === 0)
@@ -2150,12 +2188,14 @@ def register_student_routes(app, csrf, limiter):
             }}));
             showFloatWidget();
             timerInterval = setInterval(function() {{
-              timeLeft--;
-              if (!isBreak) totalFocusSeconds++;
+              var elapsed = Math.floor((Date.now() - phaseStart) / 1000);
+              timeLeft = Math.max(0, initialTimeLeft - elapsed);
+              if (!isBreak) totalFocusSeconds = focusAtStart + elapsed;
               updateDisplay();
               if (timeLeft <= 0) {{
                 clearInterval(timerInterval);
                 isRunning = false;
+                if (!isBreak) totalFocusSeconds = focusAtStart + initialTimeLeft;
                 onTimerEnd();
               }}
             }}, 1000);
@@ -2194,8 +2234,8 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('start-btn').style.display = '';
           document.getElementById('pause-btn').style.display = 'none';
           document.getElementById('timer-label').textContent = 'Paused';
-          // Pause floating widget
           localStorage.removeItem('focus_float');
+          clearFocusTimerState();
           var el = document.getElementById('focus-float');
           if (el) el.style.display = 'none';
         }}
@@ -2208,14 +2248,15 @@ def register_student_routes(app, csrf, limiter):
             saveFocusSession();
           }}
           totalFocusSeconds = 0;
+          phaseStartFocusSeconds = 0;
           sessionStarted = false;
           pomoCount = 0;
           pageDone = 0;
           document.getElementById('start-btn').style.display = '';
           document.getElementById('pause-btn').style.display = 'none';
           document.getElementById('skip-btn').style.display = 'none';
-          // Clear floating widget
           localStorage.removeItem('focus_float');
+          clearFocusTimerState();
           var el = document.getElementById('focus-float');
           if (el) el.style.display = 'none';
           if (currentMode === 'pomodoro') {{
@@ -2242,6 +2283,9 @@ def register_student_routes(app, csrf, limiter):
           playAlarm();
           if (currentMode === 'pomodoro') {{
             if (!isBreak) {{
+              // Work phase completed — save this session
+              var phaseMinutes = Math.round((totalFocusSeconds - phaseStartFocusSeconds) / 60);
+              if (phaseMinutes > 0) saveFocusSession(phaseMinutes);
               pomoCount++;
               document.getElementById('pomo-count').textContent = 'Completed ' + pomoCount + ' of 4';
               if (pomoCount % 4 === 0) {{
@@ -2259,6 +2303,7 @@ def register_student_routes(app, csrf, limiter):
             }}
             totalTime = timeLeft;
             updateDisplay();
+            saveFocusTimerState();
             // Auto-start next phase after 2 seconds
             setTimeout(function() {{
               startTimer();
@@ -2269,21 +2314,38 @@ def register_student_routes(app, csrf, limiter):
             document.getElementById('start-btn').style.display = '';
             document.getElementById('pause-btn').style.display = 'none';
             localStorage.removeItem('focus_float');
+            clearFocusTimerState();
             var el = document.getElementById('focus-float');
             if (el) el.style.display = 'none';
           }}
         }}
 
-        async function saveFocusSession() {{
-          var minutes = Math.round(totalFocusSeconds / 60);
+        async function saveFocusSession(overrideMinutes) {{
+          var minutes = overrideMinutes !== undefined ? overrideMinutes : Math.round(totalFocusSeconds / 60);
           var pages = currentMode === 'pages' ? pageDone : 0;
           var course = document.getElementById('focus-course').value;
           try {{
-            await fetch('/api/student/focus/save', {{
+            var resp = await fetch('/api/student/focus/save', {{
               method: 'POST',
               headers: {{'Content-Type':'application/json'}},
               body: JSON.stringify({{ mode: currentMode, minutes: minutes, pages: pages, course_name: course }})
             }});
+            if (resp.ok) {{
+              var result = await resp.json();
+              if (result.stats) {{
+                if (window.popNumber) {{
+                  window.popNumber(document.getElementById('stat-hours'), result.stats.total_hours);
+                  window.popNumber(document.getElementById('stat-sessions'), result.stats.sessions);
+                  window.popNumber(document.getElementById('stat-pages'), result.stats.total_pages);
+                  window.popNumber(document.getElementById('stat-streak'), result.stats.streak_days);
+                }} else {{
+                  document.getElementById('stat-hours').textContent = result.stats.total_hours;
+                  document.getElementById('stat-sessions').textContent = result.stats.sessions;
+                  document.getElementById('stat-pages').textContent = result.stats.total_pages;
+                  document.getElementById('stat-streak').textContent = result.stats.streak_days;
+                }}
+              }}
+            }}
           }} catch(e) {{}}
         }}
 
@@ -2308,6 +2370,65 @@ def register_student_routes(app, csrf, limiter):
           if (e.code === 'KeyS' && !e.ctrlKey) {{ e.preventDefault(); skipPhase(); }}
           if (e.code === 'KeyP' && currentMode === 'pages') {{ e.preventDefault(); clickPage(); }}
         }});
+
+        // Restore timer if it was running when user navigated away or switched tabs
+        (function restoreTimer() {{
+          var ff = JSON.parse(localStorage.getItem('focus_float') || 'null');
+          var ts = JSON.parse(localStorage.getItem('focus_timer_state') || 'null');
+          if (!ff || !ff.active || !ts) return;
+
+          // Restore mode UI without calling setMode (which resets timer)
+          currentMode = ts.currentMode;
+          document.querySelectorAll('.mode-btn').forEach(function(b) {{ b.classList.remove('active'); b.classList.add('btn-outline'); }});
+          var modeBtn = document.getElementById('mode-' + currentMode);
+          if (modeBtn) {{ modeBtn.classList.add('active'); modeBtn.classList.remove('btn-outline'); }}
+          document.getElementById('settings-pomodoro').style.display = currentMode === 'pomodoro' ? '' : 'none';
+          document.getElementById('settings-pages').style.display = currentMode === 'pages' ? '' : 'none';
+          document.getElementById('settings-custom').style.display = currentMode === 'custom' ? '' : 'none';
+          document.getElementById('pomo-count').style.display = currentMode === 'pomodoro' ? '' : 'none';
+
+          isBreak = ts.isBreak;
+          pomoCount = ts.pomoCount;
+          phaseStartFocusSeconds = ts.phaseStartFocusSeconds;
+          totalTime = ts.totalTime;
+          sessionStarted = true;
+          if (ts.course) document.getElementById('focus-course').value = ts.course;
+
+          if (ff.mode === 'countdown') {{
+            var msLeft = ff.endAt - Date.now();
+            if (msLeft > 0) {{
+              timeLeft = Math.ceil(msLeft / 1000);
+              var elapsedInPhase = ts.totalTime - timeLeft;
+              if (!isBreak) {{
+                totalFocusSeconds = ts.phaseStartFocusSeconds + elapsedInPhase;
+              }} else {{
+                totalFocusSeconds = ts.totalFocusSeconds;
+              }}
+              if (currentMode === 'pomodoro') {{
+                document.getElementById('pomo-count').textContent = isBreak
+                  ? 'Completed ' + pomoCount + ' of 4'
+                  : 'Session ' + (pomoCount + 1) + ' of 4';
+              }}
+              updateDisplay();
+              startTimer(true);
+            }} else {{
+              // Timer ended while user was away
+              if (!isBreak) {{
+                totalFocusSeconds = ts.phaseStartFocusSeconds + ts.totalTime;
+              }} else {{
+                totalFocusSeconds = ts.totalFocusSeconds;
+              }}
+              timeLeft = 0;
+              updateDisplay();
+              onTimerEnd();
+            }}
+          }} else if (ff.mode === 'stopwatch') {{
+            var elapsed = Math.floor((Date.now() - ff.startAt) / 1000);
+            totalFocusSeconds = elapsed;
+            updateDisplay();
+            startTimer(true);
+          }}
+        }})();
         </script>
         """, active_page="student_focus")
 
@@ -4408,6 +4529,7 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('qz-final-detail').textContent = score + ' of ' + questions.length + ' correct';
           document.getElementById('qz-bar').style.width = '100%';
           document.getElementById('qz-emoji').innerHTML = pct >= 90 ? '&#127942;' : pct >= 70 ? '&#127881;' : pct >= 50 ? '&#128170;' : '&#128218;';
+          if (pct >= 80 && window.confettiBurst) {{ window.confettiBurst(pct >= 95 ? 80 : 50); }}
           fetch('/api/student/quizzes/{quiz_id}/score', {{
             method: 'POST', headers: {{'Content-Type':'application/json'}},
             body: JSON.stringify({{ score: pct }})
@@ -4651,6 +4773,7 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('exam-final-detail').textContent = eScore + ' of ' + questions.length + ' correct';
           document.getElementById('exam-time-taken').textContent = 'Time: ' + Math.floor(elapsedSeconds / 60) + 'm ' + (elapsedSeconds % 60) + 's';
           document.getElementById('exam-emoji').innerHTML = pct >= 90 ? '&#127942;' : pct >= 70 ? '&#127881;' : pct >= 50 ? '&#128170;' : '&#128218;';
+          if (pct >= 80 && window.confettiBurst) {{ window.confettiBurst(pct >= 95 ? 100 : 60); }}
 
           // Analytics
           var times = answers.map(function(a) {{ return a.time; }});
@@ -5049,7 +5172,7 @@ def register_student_routes(app, csrf, limiter):
               style="padding:10px 20px;background:var(--primary);color:#fff;border:none;border-radius:8px;
                      font-weight:600;cursor:pointer">Send</button>
             <button onclick="clearChat()" title="Clear history"
-              style="padding:10px 12px;background:#ef4444;color:#fff;border:none;border-radius:8px;
+              style="padding:10px 12px;background:var(--red);color:#fff;border:none;border-radius:8px;
                      cursor:pointer">🗑</button>
           </div>
         </div>
@@ -5130,12 +5253,17 @@ def register_student_routes(app, csrf, limiter):
         weak_html = ""
         for t in result.get("weak_topics", []):
             score = t.get("score", 0)
-            color = "#ef4444" if score < 50 else "#f59e0b" if score < 75 else "#22c55e"
+            if score < 50:
+                color = "var(--red)"
+            elif score < 75:
+                color = "var(--yellow)"
+            else:
+                color = "var(--green)"
             weak_html += f"""
-            <div style="padding:14px 18px;border-left:4px solid {color};background:var(--card);
+            <div style="padding:14px 18px;background:var(--card);
                         border:1px solid var(--border);border-left:4px solid {color};
-                        border-radius:var(--radius-sm);margin-bottom:10px;transition:transform 0.15s"
-                 onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform=''">
+                        border-radius:var(--radius-sm);margin-bottom:10px;transition:transform 0.15s, box-shadow 0.2s"
+                 onmouseover="this.style.transform='translateX(4px)';this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div style="display:flex;justify-content:space-between;align-items:center">
                 <strong style="color:var(--text)">{_esc(t.get('topic',''))}</strong>
                 <span style="background:{color};color:#fff;padding:3px 12px;border-radius:12px;
