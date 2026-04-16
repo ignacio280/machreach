@@ -353,6 +353,21 @@ def register_student_routes(app, csrf, limiter):
 
         return jsonify({"id": file_id, "filename": fname, "text_length": len(text)})
 
+    @app.route("/api/student/files/<int:file_id>", methods=["GET"])
+    def student_get_file_text(file_id):
+        """Get the extracted text of an uploaded file for preview."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        cid = _cid()
+        from student.db import get_db, _fetchone
+        with get_db() as db:
+            f = _fetchone(db, "SELECT id, original_name, file_type, extracted_text, uploaded_at FROM student_course_files WHERE id = %s AND client_id = %s",
+                          (file_id, cid),
+                          "SELECT id, original_name, file_type, extracted_text, uploaded_at FROM student_course_files WHERE id = ? AND client_id = ?")
+        if not f:
+            return jsonify({"error": "Not found"}), 404
+        return jsonify({"id": f["id"], "name": f["original_name"], "type": f["file_type"], "text": f.get("extracted_text", ""), "uploaded_at": str(f.get("uploaded_at", ""))})
+
     @app.route("/api/student/files/<int:file_id>", methods=["DELETE"])
     def student_delete_file(file_id):
         if not _logged_in():
@@ -1069,8 +1084,8 @@ def register_student_routes(app, csrf, limiter):
               <td>{has_sched}</td>
               <td style="font-size:12px;">{_esc(grading_str)}</td>
               <td style="font-size:11px;color:var(--text-muted);">{n_files} file{'s' if n_files != 1 else ''}
-                <button onclick="document.getElementById('upload-{c['id']}').click()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;margin-left:4px;" title="Upload file">&#128206;</button>
-                <input type="file" id="upload-{c['id']}" style="display:none;" accept=".pdf,.docx,.doc" onchange="uploadFile({c['id']},this)">
+                <button onclick="document.getElementById('upload-{c['id']}').click()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;margin-left:4px;" title="Upload files">&#128206;</button>
+                <input type="file" id="upload-{c['id']}" style="display:none;" accept=".pdf,.docx,.doc" multiple onchange="uploadFiles({c['id']},this)">
                 {('<div style=\"margin-top:4px;border-top:1px solid var(--border);padding-top:4px;\">' + files_list_html + '</div>') if files_list_html else ''}
               </td>
               <td style="font-size:12px;color:var(--text-muted);">{synced}</td>
@@ -1168,46 +1183,35 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('upload-bar-pct').textContent = '0%';
           bar.style.display = 'block';
         }}
-        function updateUploadBar(pct) {{
+        function updateUploadBar(pct, msg) {{
           document.getElementById('upload-bar-fill').style.width = pct + '%';
-          document.getElementById('upload-bar-pct').textContent = Math.round(pct) + '%';
+          document.getElementById('upload-bar-pct').textContent = msg || (Math.round(pct) + '%');
         }}
         function hideUploadBar(msg) {{
           document.getElementById('upload-bar-fill').style.width = '100%';
           document.getElementById('upload-bar-pct').textContent = msg || 'Done!';
           setTimeout(function(){{ document.getElementById('upload-bar').style.display = 'none'; }}, 1500);
         }}
-        async function uploadFile(courseId, input) {{
-          if (!input.files[0]) return;
-          var fd = new FormData();
-          fd.append('file', input.files[0]);
-          var csrfToken = document.querySelector('meta[name="csrf-token"]');
-          showUploadBar(input.files[0].name);
-          try {{
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/student/courses/' + courseId + '/upload');
-            if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
-            xhr.upload.onprogress = function(e) {{
-              if (e.lengthComputable) updateUploadBar((e.loaded / e.total) * 80);
-            }};
-            xhr.onload = function() {{
-              updateUploadBar(90);
-              try {{
-                var d = JSON.parse(xhr.responseText);
-                if (xhr.status >= 200 && xhr.status < 300) {{
-                  hideUploadBar('&#10003; Uploaded!');
-                  setTimeout(function(){{ location.reload(); }}, 1000);
-                }} else {{
-                  hideUploadBar('Failed');
-                  alert(d.error || 'Upload failed');
-                }}
-              }} catch(e) {{ hideUploadBar('Failed'); alert('Upload failed'); }}
-            }};
-            xhr.onerror = function() {{ hideUploadBar('Failed'); alert('Network error'); }};
-            updateUploadBar(5);
-            xhr.send(fd);
-          }} catch(e) {{ hideUploadBar('Failed'); alert('Network error'); }}
+        async function uploadFiles(courseId, input) {{
+          if (!input.files.length) return;
+          var fileList = Array.from(input.files);
+          showUploadBar(fileList.length + ' file(s)');
+          var done = 0;
+          for (var i = 0; i < fileList.length; i++) {{
+            updateUploadBar(((i)/fileList.length)*90, fileList[i].name);
+            var fd = new FormData();
+            fd.append('file', fileList[i]);
+            try {{
+              var r = await fetch('/api/student/courses/' + courseId + '/upload', {{method:'POST', body:fd}});
+              var d = await _safeJson(r);
+              if (!r.ok) console.warn('Upload failed:', fileList[i].name, d.error);
+            }} catch(e) {{ console.warn('Upload error:', fileList[i].name); }}
+            done++;
+            updateUploadBar((done/fileList.length)*90, done + '/' + fileList.length + ' done');
+          }}
+          hideUploadBar(done + '/' + fileList.length + ' uploaded');
           input.value = '';
+          setTimeout(function(){{ location.reload(); }}, 1000);
         }}
         async function deleteFile(fileId) {{
           if (!confirm('Delete this file?')) return;
@@ -1255,7 +1259,7 @@ def register_student_routes(app, csrf, limiter):
                 {ef_html}
                 <label class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;cursor:pointer;" title="Upload file for this exam">
                   &#128206;
-                  <input type="file" style="display:none;" accept=".pdf,.docx,.doc" onchange="try{{uploadExamFile({course_id},{e['id']},this)}}catch(err){{alert('Upload error: '+err.message)}}">
+                  <input type="file" style="display:none;" accept=".pdf,.docx,.doc" multiple onchange="try{{uploadExamFiles({course_id},{e['id']},this)}}catch(err){{alert('Upload error: '+err.message)}}">
                 </label>
               </td>
               <td>
@@ -1288,9 +1292,12 @@ def register_student_routes(app, csrf, limiter):
         # Files list
         files_html = ""
         for uf in uploaded_files:
-            files_html += f"""<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
+            files_html += f"""<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
               <span>&#128196; {_esc(uf['original_name'])} <span style="color:var(--text-muted);font-size:11px;">({uf.get('file_type','?')})</span></span>
-              <button onclick="deleteFile({uf['id']})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;">&#128465; Remove</button>
+              <div style="display:flex;gap:8px;">
+                <button onclick="viewFileText({uf['id']})" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px;" title="Preview extracted text">&#128065; View</button>
+                <button onclick="deleteFile({uf['id']})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;" title="Delete file">&#128465; Remove</button>
+              </div>
             </div>"""
         if not files_html:
             files_html = "<p style='color:var(--text-muted);font-size:13px;'>No files uploaded yet.</p>"
@@ -1332,17 +1339,25 @@ def register_student_routes(app, csrf, limiter):
           <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0;">Separate topics with commas. Click &#128190; to save each exam individually.</p>
         </div>
 
-        <!-- Global upload toast (fixed position, always visible) -->
-        <div id="upload-toast" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#1E1B4B;border-bottom:3px solid #7C3AED;padding:14px 24px;box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+        <!-- Multi-file upload queue (fixed position) -->
+        <div id="upload-queue" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#1E1B4B;border-bottom:3px solid #7C3AED;padding:14px 24px;box-shadow:0 4px 24px rgba(0,0,0,0.4);">
           <div style="max-width:800px;margin:0 auto;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <span style="color:#E0E7FF;font-size:14px;font-weight:600;">&#128206; Uploading <span id="upload-toast-name" style="color:#A5B4FC;"></span></span>
-              <span id="upload-toast-pct" style="color:#A5B4FC;font-size:14px;font-weight:700;">0%</span>
+              <span style="color:#E0E7FF;font-size:14px;font-weight:600;">&#128206; Uploading files</span>
+              <span id="upload-queue-count" style="color:#A5B4FC;font-size:14px;font-weight:700;">0/0</span>
             </div>
-            <div style="background:#312E81;border-radius:8px;height:12px;overflow:hidden;">
-              <div id="upload-toast-fill" style="height:100%;background:linear-gradient(90deg,#7C3AED,#A78BFA,#C4B5FD);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
+            <div id="upload-queue-list" style="max-height:200px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <!-- File preview modal -->
+        <div id="file-preview-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);justify-content:center;align-items:center;" onclick="if(event.target===this)this.style.display='none'">
+          <div style="background:var(--card);border-radius:var(--radius);width:90%;max-width:800px;max-height:85vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);">
+              <h3 id="file-preview-name" style="font-size:15px;margin:0;">File Preview</h3>
+              <button onclick="document.getElementById('file-preview-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);">&#10005;</button>
             </div>
-            <div id="upload-toast-status" style="color:#A5B4FC;font-size:12px;margin-top:6px;">Starting upload...</div>
+            <pre id="file-preview-text" style="padding:20px;margin:0;overflow:auto;flex:1;font-size:13px;line-height:1.6;white-space:pre-wrap;word-wrap:break-word;font-family:'Inter',monospace;color:var(--text);background:var(--bg);"></pre>
           </div>
         </div>
 
@@ -1373,8 +1388,8 @@ def register_student_routes(app, csrf, limiter):
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
             <h2>&#128206; Uploaded Files</h2>
             <label class="btn btn-outline btn-sm" style="cursor:pointer;">
-              + Upload File
-              <input type="file" style="display:none;" accept=".pdf,.docx,.doc" onchange="try{{uploadFile({course_id},this)}}catch(err){{alert('Upload error: '+err.message)}}">
+              + Upload Files
+              <input type="file" style="display:none;" accept=".pdf,.docx,.doc" multiple onchange="try{{uploadFiles({course_id},this)}}catch(err){{alert('Upload error: '+err.message)}}">
             </label>
           </div>
           {files_html}
@@ -1385,80 +1400,90 @@ def register_student_routes(app, csrf, limiter):
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
         </style>
 
-        <!-- Upload functions in isolated script block -->
+        <!-- Upload functions -->
         <script>
-        function showUploadToast(name) {{
-          var t = document.getElementById('upload-toast');
-          document.getElementById('upload-toast-name').textContent = name;
-          document.getElementById('upload-toast-fill').style.width = '0%';
-          document.getElementById('upload-toast-pct').textContent = '0%';
-          document.getElementById('upload-toast-status').textContent = 'Starting upload...';
-          t.style.display = 'block';
-        }}
-        function updateUploadToast(pct, status) {{
-          document.getElementById('upload-toast-fill').style.width = pct + '%';
-          document.getElementById('upload-toast-pct').textContent = Math.round(pct) + '%';
-          if (status) document.getElementById('upload-toast-status').textContent = status;
-        }}
-        function hideUploadToast(msg, success) {{
-          document.getElementById('upload-toast-fill').style.width = '100%';
-          document.getElementById('upload-toast-pct').textContent = success ? '&#10003;' : '&#10007;';
-          document.getElementById('upload-toast-status').textContent = msg || 'Done!';
-          var delay = success ? 1500 : 3000;
-          setTimeout(function(){{ document.getElementById('upload-toast').style.display = 'none'; }}, delay);
-        }}
         function doUpload(cid, fd, fileName) {{
-          showUploadToast(fileName);
-          updateUploadToast(5, 'Preparing upload...');
-          var csrfToken = document.querySelector('meta[name="csrf-token"]');
-          var xhr = new XMLHttpRequest();
-          xhr.open('POST', '/api/student/courses/' + cid + '/upload');
-          if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
-          xhr.upload.onprogress = function(e) {{
-            if (e.lengthComputable) {{
-              var pct = Math.round((e.loaded / e.total) * 80);
-              updateUploadToast(pct, 'Uploading ' + fileName + '...');
-            }}
-          }};
-          xhr.onload = function() {{
-            updateUploadToast(90, 'Processing file...');
-            try {{
-              var d = JSON.parse(xhr.responseText);
-              if (xhr.status >= 200 && xhr.status < 300) {{
-                hideUploadToast('File uploaded successfully!', true);
-                setTimeout(function(){{ location.reload(); }}, 1200);
-              }} else {{
-                var errMsg = d.error || 'Upload failed (status ' + xhr.status + ')';
-                hideUploadToast(errMsg, false);
-                alert('Upload failed: ' + errMsg);
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;';
+          row.innerHTML = '<span style="color:#E0E7FF;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;">&#128196; ' + fileName + '</span>'
+            + '<div style="display:flex;align-items:center;gap:8px;flex:1;margin-left:12px;">'
+            + '<div style="flex:1;background:#312E81;border-radius:6px;height:8px;overflow:hidden;"><div class="uf-bar" style="height:100%;background:linear-gradient(90deg,#7C3AED,#A78BFA);width:0%;transition:width 0.3s;border-radius:6px;"></div></div>'
+            + '<span class="uf-pct" style="color:#A5B4FC;font-size:12px;font-weight:600;min-width:40px;text-align:right;">0%</span>'
+            + '</div>';
+          var list = document.getElementById('upload-queue-list');
+          list.appendChild(row);
+          document.getElementById('upload-queue').style.display = 'block';
+          var bar = row.querySelector('.uf-bar');
+          var pct = row.querySelector('.uf-pct');
+          return new Promise(function(resolve) {{
+            var csrfToken = document.querySelector('meta[name="csrf-token"]');
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/student/courses/' + cid + '/upload');
+            if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
+            xhr.upload.onprogress = function(e) {{
+              if (e.lengthComputable) {{
+                var p = Math.round((e.loaded / e.total) * 80);
+                bar.style.width = p + '%'; pct.textContent = p + '%';
               }}
-            }} catch(e) {{
-              hideUploadToast('Upload failed - server error (status ' + xhr.status + ')', false);
-              alert('Upload failed - server returned status ' + xhr.status);
-              console.error('Upload response:', xhr.status, xhr.responseText);
-            }}
-          }};
-          xhr.onerror = function() {{
-            hideUploadToast('Network error - check connection', false);
-            alert('Upload network error - check your internet connection.');
-          }};
-          xhr.send(fd);
+            }};
+            xhr.onload = function() {{
+              bar.style.width = '100%';
+              try {{
+                var d = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300) {{
+                  pct.textContent = '\\u2713'; pct.style.color = '#6EE7B7';
+                }} else {{
+                  pct.textContent = '\\u2717'; pct.style.color = '#FCA5A5';
+                  row.title = d.error || 'Upload failed';
+                }}
+              }} catch(e) {{ pct.textContent = '\\u2717'; pct.style.color = '#FCA5A5'; }}
+              resolve();
+            }};
+            xhr.onerror = function() {{ pct.textContent = '\\u2717'; pct.style.color = '#FCA5A5'; resolve(); }};
+            bar.style.width = '5%'; pct.textContent = '5%';
+            xhr.send(fd);
+          }});
         }}
-        function uploadFile(cid, input) {{
-          if (!input.files[0]) return;
-          var fd = new FormData();
-          fd.append('file', input.files[0]);
-          doUpload(cid, fd, input.files[0].name);
+        async function uploadFiles(cid, input) {{
+          if (!input.files.length) return;
+          document.getElementById('upload-queue-list').innerHTML = '';
+          var fileList = Array.from(input.files);
+          document.getElementById('upload-queue-count').textContent = '0/' + fileList.length;
+          for (var i = 0; i < fileList.length; i++) {{
+            var fd = new FormData();
+            fd.append('file', fileList[i]);
+            await doUpload(cid, fd, fileList[i].name);
+            document.getElementById('upload-queue-count').textContent = (i+1) + '/' + fileList.length;
+          }}
           input.value = '';
+          setTimeout(function(){{ location.reload(); }}, 1200);
         }}
-        function uploadExamFile(cid, examId, input) {{
-          if (!input.files[0]) return;
-          var fileName = input.files[0].name;
-          var fd = new FormData();
-          fd.append('file', input.files[0]);
-          fd.append('exam_id', examId);
-          doUpload(cid, fd, fileName);
+        async function uploadExamFiles(cid, examId, input) {{
+          if (!input.files.length) return;
+          document.getElementById('upload-queue-list').innerHTML = '';
+          var fileList = Array.from(input.files);
+          document.getElementById('upload-queue-count').textContent = '0/' + fileList.length;
+          for (var i = 0; i < fileList.length; i++) {{
+            var fd = new FormData();
+            fd.append('file', fileList[i]);
+            fd.append('exam_id', examId);
+            await doUpload(cid, fd, fileList[i].name);
+            document.getElementById('upload-queue-count').textContent = (i+1) + '/' + fileList.length;
+          }}
           input.value = '';
+          setTimeout(function(){{ location.reload(); }}, 1200);
+        }}
+        async function viewFileText(fileId) {{
+          var modal = document.getElementById('file-preview-modal');
+          document.getElementById('file-preview-name').textContent = 'Loading...';
+          document.getElementById('file-preview-text').textContent = '';
+          modal.style.display = 'flex';
+          try {{
+            var r = await fetch('/api/student/files/' + fileId);
+            var d = await _safeJson(r);
+            if (d.name) document.getElementById('file-preview-name').textContent = d.name;
+            document.getElementById('file-preview-text').textContent = d.text || '(No text extracted)';
+          }} catch(e) {{ document.getElementById('file-preview-text').textContent = 'Error loading file'; }}
         }}
         function deleteFile(fileId) {{
           if (!confirm('Delete this file?')) return;
@@ -4641,9 +4666,9 @@ def register_student_routes(app, csrf, limiter):
           ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--card)';handlePDFDrop(event.dataTransfer.files)"
           onclick="document.getElementById('pdf-file-input').click()">
           <div style="font-size:36px;margin-bottom:8px;">&#128196;</div>
-          <p style="margin:0;font-weight:600;color:var(--text);">Drag & drop a PDF or DOCX file here</p>
+          <p style="margin:0;font-weight:600;color:var(--text);">Drag & drop PDF or DOCX files here</p>
           <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">or click to browse &middot; your notes will be extracted automatically</p>
-          <input type="file" id="pdf-file-input" style="display:none;" accept=".pdf,.docx,.doc" onchange="handlePDFDrop(this.files)">
+          <input type="file" id="pdf-file-input" style="display:none;" accept=".pdf,.docx,.doc" multiple onchange="handlePDFDrop(this.files)">
         </div>
         <div id="pdf-upload-status" style="display:none;margin-bottom:16px;padding:12px;border-radius:var(--radius-sm);background:var(--card);border:1px solid var(--border);text-align:center;color:var(--text-muted);font-size:14px;"></div>
 
@@ -4692,26 +4717,33 @@ def register_student_routes(app, csrf, limiter):
         }}
         async function handlePDFDrop(files) {{
           if (!files || files.length === 0) return;
-          var file = files[0];
-          var name = file.name.toLowerCase();
-          if (!name.endsWith('.pdf') && !name.endsWith('.docx') && !name.endsWith('.doc')) {{
-            alert('Only PDF and DOCX files are supported'); return;
+          var valid = [];
+          for (var i = 0; i < files.length; i++) {{
+            var name = files[i].name.toLowerCase();
+            if (!name.endsWith('.pdf') && !name.endsWith('.docx') && !name.endsWith('.doc')) continue;
+            if (files[i].size > 15 * 1024 * 1024) {{ alert(files[i].name + ' is too large (max 15MB)'); continue; }}
+            valid.push(files[i]);
           }}
-          if (file.size > 15 * 1024 * 1024) {{
-            alert('File too large (max 15MB)'); return;
-          }}
+          if (valid.length === 0) {{ alert('Only PDF and DOCX files are supported'); return; }}
           var status = document.getElementById('pdf-upload-status');
           status.style.display = 'block';
-          status.innerHTML = '&#9203; Uploading and extracting notes from <b>' + file.name + '</b>...';
-          var fd = new FormData();
-          fd.append('file', file);
-          try {{
-            var r = await fetch('/api/student/notes/upload-pdf', {{method:'POST', body:fd}});
-            var d = await _safeJson(r);
-            if (r.ok && d.note_id) {{
-              window.location = '/student/notes/' + d.note_id;
-            }} else {{ status.innerHTML = '&#10060; ' + (d.error || 'Upload failed'); }}
-          }} catch(e) {{ status.innerHTML = '&#10060; Network error'; }}
+          var lastNoteId = null;
+          var ok = 0, fail = 0;
+          for (var i = 0; i < valid.length; i++) {{
+            var file = valid[i];
+            status.innerHTML = '&#9203; Uploading ' + (i+1) + '/' + valid.length + ': <b>' + file.name + '</b>...';
+            var fd = new FormData();
+            fd.append('file', file);
+            try {{
+              var r = await fetch('/api/student/notes/upload-pdf', {{method:'POST', body:fd}});
+              var d = await _safeJson(r);
+              if (r.ok && d.note_id) {{ lastNoteId = d.note_id; ok++; }}
+              else {{ fail++; }}
+            }} catch(e) {{ fail++; }}
+          }}
+          if (ok > 0 && valid.length === 1) {{ window.location = '/student/notes/' + lastNoteId; }}
+          else if (ok > 0) {{ status.innerHTML = '&#9989; ' + ok + ' notes created' + (fail ? ', ' + fail + ' failed' : '') + '. Reloading...'; setTimeout(function(){{ location.reload(); }}, 1200); }}
+          else {{ status.innerHTML = '&#10060; All uploads failed'; }}
         }}
         </script>
         """, active_page="student_notes")
