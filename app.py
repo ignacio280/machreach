@@ -2073,9 +2073,9 @@ def delete_account():
     client_id = session["client_id"]
     from outreach.db import get_db, _exec
     with get_db() as db:
-        # Student data
-        for tbl in ["student_chat_messages", "student_quiz_questions", "student_quizzes",
-                     "student_flashcards", "student_flashcard_decks", "student_notes",
+        # Student data (flashcards & quiz_questions cascade-delete via their parent tables)
+        for tbl in ["student_chat_messages", "student_quizzes",
+                     "student_flashcard_decks", "student_notes",
                      "student_course_files", "student_exams", "student_study_progress",
                      "student_study_plans", "student_assignment_progress",
                      "student_schedule_settings", "student_youtube_imports",
@@ -2085,24 +2085,34 @@ def delete_account():
                 _exec(db, f"DELETE FROM {tbl} WHERE client_id = %s", (client_id,))
             except Exception:
                 pass
-        _exec(db, "DELETE FROM password_reset_tokens WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM email_verification_tokens WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM email_accounts WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM subscriptions WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM usage_tracking WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM team_members WHERE owner_id = %s OR member_client_id = %s", (client_id, client_id))
+        # Business data
+        for tbl2 in ["password_reset_tokens", "email_verification_tokens",
+                      "email_accounts", "subscriptions", "usage_tracking"]:
+            try:
+                _exec(db, f"DELETE FROM {tbl2} WHERE client_id = %s", (client_id,))
+            except Exception:
+                pass
+        try:
+            _exec(db, "DELETE FROM team_members WHERE owner_id = %s OR member_client_id = %s", (client_id, client_id))
+        except Exception:
+            pass
         # Delete campaigns and related data
-        camp_ids = [r["id"] for r in _exec(db, "SELECT id FROM campaigns WHERE client_id = %s", (client_id,)).fetchall()]
-        for cid in camp_ids:
-            contact_ids = [r["id"] for r in _exec(db, "SELECT id FROM contacts WHERE campaign_id = %s", (cid,)).fetchall()]
-            for ct_id in contact_ids:
-                _exec(db, "DELETE FROM sent_emails WHERE contact_id = %s", (ct_id,))
-            _exec(db, "DELETE FROM email_sequences WHERE campaign_id = %s", (cid,))
-            _exec(db, "DELETE FROM contacts WHERE campaign_id = %s", (cid,))
-        _exec(db, "DELETE FROM campaigns WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM contacts_book WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM mail_inbox WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM scheduled_emails WHERE client_id = %s", (client_id,))
+        try:
+            camp_ids = [r["id"] for r in _exec(db, "SELECT id FROM campaigns WHERE client_id = %s", (client_id,)).fetchall()]
+            for cid in camp_ids:
+                contact_ids = [r["id"] for r in _exec(db, "SELECT id FROM contacts WHERE campaign_id = %s", (cid,)).fetchall()]
+                for ct_id in contact_ids:
+                    _exec(db, "DELETE FROM sent_emails WHERE contact_id = %s", (ct_id,))
+                _exec(db, "DELETE FROM email_sequences WHERE campaign_id = %s", (cid,))
+                _exec(db, "DELETE FROM contacts WHERE campaign_id = %s", (cid,))
+            _exec(db, "DELETE FROM campaigns WHERE client_id = %s", (client_id,))
+        except Exception:
+            pass
+        for tbl3 in ["contacts_book", "mail_inbox", "scheduled_emails"]:
+            try:
+                _exec(db, f"DELETE FROM {tbl3} WHERE client_id = %s", (client_id,))
+            except Exception:
+                pass
         _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
     session.clear()
     flash(("success", t("settings.account_deleted")))
