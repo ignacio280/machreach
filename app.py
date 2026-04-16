@@ -1257,8 +1257,8 @@ LAYOUT = """<!DOCTYPE html>
   }
   </script>
 
-  <!-- Interactive student tutorial -->
-  {% if account_type|default('business') == 'student' %}
+  <!-- Interactive tutorial -->
+  {% if logged_in %}
   <style>
   #mr-tut-overlay{position:fixed;inset:0;z-index:999990;pointer-events:none;transition:opacity .3s}
   #mr-tut-overlay.active{pointer-events:auto}
@@ -1294,6 +1294,7 @@ LAYOUT = """<!DOCTYPE html>
   #mr-tut-welcome .welcome-card .wbtn-skip{background:transparent;color:#A5B4FC;text-decoration:underline}
   </style>
   <div id="mr-tut-overlay"><div id="mr-tut-backdrop" style="display:none"></div><div id="mr-tut-highlight" style="display:none"></div><div id="mr-tut-arrow" style="display:none"></div><div id="mr-tut-tooltip" style="display:none"></div></div>
+  {% if account_type|default('business') == 'student' %}
   <script>
   (function(){
     if (localStorage.getItem('mr-tutorial-done')) return;
@@ -1340,6 +1341,7 @@ LAYOUT = """<!DOCTYPE html>
       localStorage.setItem('mr-tutorial-done','1');
       welcome.remove();
       cleanup();
+      window.location='/student/canvas-settings';
     };
 
     function cleanup() {
@@ -1365,7 +1367,7 @@ LAYOUT = """<!DOCTYPE html>
           + '<h2>You&#39;re All Set!</h2>'
           + '<p>You now know all the tools at your disposal. Start by adding a course or syncing Canvas — the AI will take it from there.</p>'
           + '<p style="font-size:12px;color:#A5B4FC;">Tip: You can restart this tour anytime from Settings.</p>'
-          + '<button class="wbtn wbtn-start" onclick="document.getElementById(&#39;mr-tut-welcome&#39;).remove()">Let&#39;s Go!</button>'
+          + '<button class="wbtn wbtn-start" onclick="window.location=&#39;/student/canvas-settings&#39;">Let&#39;s Go!</button>'
           + '</div>';
         document.body.appendChild(fin);
         return;
@@ -1453,6 +1455,154 @@ LAYOUT = """<!DOCTYPE html>
     });
   })();
   </script>
+  {% else %}
+  <script>
+  (function(){
+    if (localStorage.getItem('mr-biz-tutorial-done')) return;
+    var isDashboard = (window.location.pathname === '/dashboard' || window.location.pathname === '/dashboard/');
+    if (!isDashboard) return;
+
+    var steps = [
+      {sel:'a[href="/dashboard"]',title:'Dashboard',desc:'Your command center. View campaign stats, recent activity, and quick actions — all in one place.',pos:'bottom'},
+      {sel:'a[href="/campaign/new"]',title:'New Campaign',desc:'Create a new email outreach campaign. Set your target audience, craft your message, and schedule sends.',pos:'bottom'},
+      {sel:'a[href="/inbox"]',title:'Inbox',desc:'All replies from your campaigns land here. Track responses, mark interested leads, and follow up.',pos:'bottom'},
+      {sel:'a[href="/ab-tests"]',title:'A/B Tests',desc:'Test different subject lines, email copy, and send times. Find what gets the best open and reply rates.',pos:'bottom'},
+      {sel:'a[href="/smart-times"]',title:'Smart Send Times',desc:'AI analyzes when your recipients are most likely to open emails and optimizes your send schedule.',pos:'bottom'},
+      {sel:'a[href="/calendar"]',title:'Calendar',desc:'See all your scheduled campaigns and follow-ups on a calendar view. Stay organized and never miss a send.',pos:'bottom'},
+      {sel:'a[href="/export"]',title:'Export',desc:'Download your campaign data, contacts, and analytics. Export to CSV for reporting or CRM import.',pos:'bottom'},
+      {sel:'a[href="/mail-hub"]',title:'Mail Hub',desc:'Connect and manage all your email accounts. Monitor deliverability, warm-up status, and sending limits.',pos:'bottom'},
+      {sel:'a[href="/contacts"]',title:'Contacts',desc:'Your contact database. Import leads, tag them, segment by industry or status, and manage your lists.',pos:'bottom'},
+      {sel:'a[href="/billing"]',title:'Billing',desc:'Manage your subscription, view invoices, and update your payment method.',pos:'bottom'},
+      {sel:'a[href="/settings"]',title:'Settings',desc:'Configure your account — connect your email provider, set up tracking, manage templates, and more.',pos:'bottom'},
+    ];
+
+    var current = 0;
+
+    var welcome = document.createElement('div');
+    welcome.id = 'mr-tut-welcome';
+    welcome.innerHTML = '<div class="welcome-card">'
+      + '<div style="font-size:52px;">&#128640;</div>'
+      + '<h2>Welcome to MachReach!</h2>'
+      + '<p>Let&#39;s take a quick tour of your outreach dashboard. We&#39;ll show you every tool you need to run successful email campaigns.</p>'
+      + '<button class="wbtn wbtn-start" onclick="window._mrTutStart()">Start Tour</button>'
+      + '<button class="wbtn wbtn-skip" onclick="window._mrTutEnd()">Skip</button>'
+      + '</div>';
+    document.body.appendChild(welcome);
+
+    window._mrTutStart = function() {
+      welcome.remove();
+      current = 0;
+      showStep(current);
+    };
+
+    window._mrTutEnd = function() {
+      localStorage.setItem('mr-biz-tutorial-done','1');
+      welcome.remove();
+      cleanup();
+      window.location='/settings';
+    };
+
+    function cleanup() {
+      var ov = document.getElementById('mr-tut-overlay');
+      if (ov) ov.classList.remove('active');
+      var hl = document.getElementById('mr-tut-highlight');
+      if (hl) hl.style.display = 'none';
+      var tp = document.getElementById('mr-tut-tooltip');
+      if (tp) { tp.style.display = 'none'; tp.classList.remove('show'); }
+      var bk = document.getElementById('mr-tut-backdrop');
+      if (bk) bk.style.display = 'none';
+    }
+
+    function showStep(idx) {
+      if (idx >= steps.length) {
+        localStorage.setItem('mr-biz-tutorial-done','1');
+        cleanup();
+        var fin = document.createElement('div');
+        fin.id = 'mr-tut-welcome';
+        fin.innerHTML = '<div class="welcome-card">'
+          + '<div style="font-size:52px;">&#127881;</div>'
+          + '<h2>You&#39;re All Set!</h2>'
+          + '<p>You now know all the tools at your disposal. Start by connecting your email in Settings — the AI will handle the rest.</p>'
+          + '<p style="font-size:12px;color:#A5B4FC;">Tip: You can restart this tour anytime from Settings.</p>'
+          + '<button class="wbtn wbtn-start" onclick="window.location=&#39;/settings&#39;">Let&#39;s Go!</button>'
+          + '</div>';
+        document.body.appendChild(fin);
+        return;
+      }
+
+      var step = steps[idx];
+      var el = document.querySelector(step.sel);
+      if (!el) { current++; showStep(current); return; }
+
+      var ov = document.getElementById('mr-tut-overlay');
+      ov.classList.add('active');
+      document.getElementById('mr-tut-backdrop').style.display = 'block';
+
+      var rect = el.getBoundingClientRect();
+      var pad = 6;
+
+      var hl = document.getElementById('mr-tut-highlight');
+      hl.style.display = 'block';
+      hl.classList.add('mr-tut-pulse');
+      hl.style.top = (rect.top - pad) + 'px';
+      hl.style.left = (rect.left - pad) + 'px';
+      hl.style.width = (rect.width + pad * 2) + 'px';
+      hl.style.height = (rect.height + pad * 2) + 'px';
+
+      var progressDots = '';
+      for (var i = 0; i < steps.length; i++) {
+        var cls = i < idx ? 'done' : (i === idx ? 'active' : '');
+        progressDots += '<span class="' + cls + '"></span>';
+      }
+
+      var tp = document.getElementById('mr-tut-tooltip');
+      tp.style.display = 'block';
+      tp.classList.remove('show');
+      tp.innerHTML = '<div class="tut-step">Step ' + (idx + 1) + ' of ' + steps.length + '</div>'
+        + '<div class="tut-title">' + step.title + '</div>'
+        + '<div class="tut-desc">' + step.desc + '</div>'
+        + '<div class="tut-btns">'
+        + '<div id="mr-tut-progress">' + progressDots + '</div>'
+        + (idx > 0 ? '<button class="tut-back" onclick="window._mrTutPrev()">Back</button>' : '')
+        + '<button class="tut-skip" onclick="window._mrTutEnd()">Skip</button>'
+        + '<button class="tut-next" onclick="window._mrTutNext()">' + (idx === steps.length - 1 ? 'Finish &#10003;' : 'Next &#8594;') + '</button>'
+        + '</div>';
+
+      var ttW = 350;
+      tp.style.left = '0px';
+      tp.style.top = '0px';
+      tp.style.width = ttW + 'px';
+      tp.style.visibility = 'hidden';
+      var ttH = tp.offsetHeight || 200;
+      tp.style.visibility = '';
+      var ttLeft = Math.max(12, Math.min(rect.left + rect.width / 2 - ttW / 2, window.innerWidth - ttW - 12));
+      var ttTop;
+      var gap = 20;
+      if (step.pos === 'bottom' && rect.bottom + pad + gap + ttH < window.innerHeight) {
+        ttTop = rect.bottom + pad + gap;
+      } else {
+        ttTop = Math.max(12, rect.top - pad - gap - ttH);
+      }
+      tp.style.left = ttLeft + 'px';
+      tp.style.top = ttTop + 'px';
+      tp.style.width = ttW + 'px';
+
+      requestAnimationFrame(function() { tp.classList.add('show'); });
+
+      el.scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
+
+    window._mrTutNext = function() { current++; showStep(current); };
+    window._mrTutPrev = function() { if (current > 0) { current--; showStep(current); } };
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && document.getElementById('mr-tut-overlay').classList.contains('active')) {
+        window._mrTutEnd();
+      }
+    });
+  })();
+  </script>
+  {% endif %}
   {% endif %}
 
   <!-- Student i18n: Spanish translations (client-side) -->
@@ -2966,6 +3116,13 @@ def settings():
     {prefs_card}
 
     {team_card}
+
+    <!-- Restart Tutorial -->
+    <div class="card">
+      <div class="card-header"><h2>&#127891; Interactive Tutorial</h2></div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Restart the guided tour to learn about all the features available in your dashboard.</p>
+      <button onclick="localStorage.removeItem('mr-biz-tutorial-done');window.location='/dashboard'" class="btn btn-outline btn-sm">&#128260; Restart Tutorial</button>
+    </div>
 
     <div class="card">
       <div class="card-header"><h2>&#128230; Your Data (GDPR)</h2></div>
