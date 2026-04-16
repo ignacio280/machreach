@@ -521,6 +521,52 @@ def _student_migrations():
         "created_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
         "UNIQUE(client_id, note_id))",
     )
+    # Personal leaderboard groups
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_lb_groups ("
+        "id SERIAL PRIMARY KEY, "
+        "name TEXT NOT NULL, "
+        "owner_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "invite_code TEXT NOT NULL UNIQUE, "
+        "created_at TIMESTAMP DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS student_lb_groups ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "name TEXT NOT NULL, "
+        "owner_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "invite_code TEXT NOT NULL UNIQUE, "
+        "created_at TIMESTAMP DEFAULT (datetime('now','localtime')))",
+    )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_lb_members ("
+        "id SERIAL PRIMARY KEY, "
+        "group_id INTEGER NOT NULL REFERENCES student_lb_groups(id) ON DELETE CASCADE, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "joined_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(group_id, client_id))",
+        "CREATE TABLE IF NOT EXISTS student_lb_members ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "group_id INTEGER NOT NULL REFERENCES student_lb_groups(id) ON DELETE CASCADE, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "joined_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(group_id, client_id))",
+    )
+    # Track unique users who forked/used a shared note (for XP)
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_note_forks ("
+        "id SERIAL PRIMARY KEY, "
+        "note_id INTEGER NOT NULL, "
+        "forker_id INTEGER NOT NULL, "
+        "author_id INTEGER NOT NULL, "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(note_id, forker_id))",
+        "CREATE TABLE IF NOT EXISTS student_note_forks ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "note_id INTEGER NOT NULL, "
+        "forker_id INTEGER NOT NULL, "
+        "author_id INTEGER NOT NULL, "
+        "created_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(note_id, forker_id))",
+    )
 
 
 # ── Canvas tokens ───────────────────────────────────────────
@@ -1508,6 +1554,32 @@ BADGE_DEFS = {
     "focus_50h":       {"emoji": "🧠", "name": "Focus Master",    "desc": "50 hours of total focus time"},
     "page_100":        {"emoji": "📖", "name": "Page Turner",     "desc": "Read 100 pages"},
     "quiz_10":         {"emoji": "🎯", "name": "Quiz Pro",        "desc": "Completed 10 quizzes"},
+    # New badges
+    "flashcard_500":   {"emoji": "🗂️", "name": "Card Shark",     "desc": "Reviewed 500 flashcards"},
+    "flashcard_1000":  {"emoji": "🎰", "name": "Flashcard Legend", "desc": "Reviewed 1,000 flashcards"},
+    "note_taker_25":   {"emoji": "📚", "name": "Prolific Writer", "desc": "Created 25 notes"},
+    "note_taker_50":   {"emoji": "✍️", "name": "Note Machine",   "desc": "Created 50 notes"},
+    "quiz_25":         {"emoji": "🧪", "name": "Quiz Veteran",    "desc": "Completed 25 quizzes"},
+    "quiz_50":         {"emoji": "🏅", "name": "Quiz Legend",     "desc": "Completed 50 quizzes"},
+    "xp_2500":         {"emoji": "🚀", "name": "Rocket Student",  "desc": "Earned 2,500 XP"},
+    "xp_5000":         {"emoji": "👑", "name": "XP King",         "desc": "Earned 5,000 XP"},
+    "streak_14":       {"emoji": "🔱", "name": "Two-Week Warrior", "desc": "14-day study streak"},
+    "streak_60":       {"emoji": "🏛️", "name": "Iron Will",      "desc": "60-day study streak"},
+    "streak_100":      {"emoji": "💯", "name": "The 100 Club",    "desc": "100-day study streak"},
+    "sharer":          {"emoji": "🤝", "name": "Sharer",          "desc": "Published a note to Study Exchange"},
+    "popular_note":    {"emoji": "❤️", "name": "Popular Note",    "desc": "One of your shared notes got 5 likes"},
+    "viral_note":      {"emoji": "🔥", "name": "Viral Note",      "desc": "One of your shared notes got 25 likes"},
+    "helper_5":        {"emoji": "🙌", "name": "Helpful",         "desc": "5 students used your shared notes"},
+    "helper_25":       {"emoji": "🌍", "name": "Community Hero",  "desc": "25 students used your shared notes"},
+    "helper_100":      {"emoji": "🏆", "name": "Knowledge Legend", "desc": "100 students used your shared notes"},
+    "first_course":    {"emoji": "📕", "name": "First Course",    "desc": "Added your first course"},
+    "five_courses":    {"emoji": "📚", "name": "Course Collector", "desc": "Added 5 courses"},
+    "focus_100h":      {"emoji": "⏳", "name": "Time Lord",       "desc": "100 hours of total focus time"},
+    "page_500":        {"emoji": "📗", "name": "Bookworm",        "desc": "Read 500 pages"},
+    "page_1000":       {"emoji": "📘", "name": "Library Regular", "desc": "Read 1,000 pages"},
+    "perfect_week":    {"emoji": "🌟", "name": "Perfect Week",    "desc": "Earned XP every day for a week"},
+    "early_bird":      {"emoji": "🌅", "name": "Early Bird",      "desc": "Studied before 7 AM"},
+    "night_owl":       {"emoji": "🦉", "name": "Night Owl",       "desc": "Studied after 11 PM"},
 }
 
 LEVEL_THRESHOLDS = [
@@ -1798,3 +1870,124 @@ def fork_note(client_id: int, note_id: int) -> int | None:
             "INSERT INTO student_notes (client_id, title, content_html, source_type) "
             "VALUES (?, ?, ?, ?)",
         )
+
+
+# ── Personal Leaderboards ──────────────────────────────────
+
+def create_lb_group(owner_id: int, name: str) -> dict:
+    """Create a personal leaderboard group with a random invite code."""
+    import secrets
+    code = secrets.token_urlsafe(8)
+    with get_db() as db:
+        gid = _insert_returning_id(
+            db,
+            "INSERT INTO student_lb_groups (name, owner_id, invite_code) VALUES (%s, %s, %s) RETURNING id",
+            (name, owner_id, code),
+            "INSERT INTO student_lb_groups (name, owner_id, invite_code) VALUES (?, ?, ?)",
+        )
+        # Owner auto-joins
+        _exec(db, "INSERT INTO student_lb_members (group_id, client_id) VALUES (%s, %s)",
+              (gid, owner_id))
+    return {"id": gid, "invite_code": code}
+
+
+def join_lb_group(client_id: int, invite_code: str) -> dict | None:
+    """Join a personal leaderboard group via invite code. Returns group or None."""
+    with get_db() as db:
+        group = _fetchone(db, "SELECT * FROM student_lb_groups WHERE invite_code = %s", (invite_code,))
+        if not group:
+            return None
+        try:
+            _exec(db, "INSERT INTO student_lb_members (group_id, client_id) VALUES (%s, %s)",
+                  (group["id"], client_id))
+        except Exception:
+            pass  # already a member
+        return group
+
+
+def leave_lb_group(client_id: int, group_id: int):
+    """Leave a personal leaderboard group."""
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_lb_members WHERE group_id = %s AND client_id = %s",
+              (group_id, client_id))
+
+
+def delete_lb_group(group_id: int, owner_id: int):
+    """Delete a leaderboard group (owner only)."""
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_lb_groups WHERE id = %s AND owner_id = %s",
+              (group_id, owner_id))
+
+
+def get_my_lb_groups(client_id: int) -> list[dict]:
+    """Get all leaderboard groups the user is a member of."""
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT g.*, (g.owner_id = %s) as is_owner, "
+            "(SELECT COUNT(*) FROM student_lb_members WHERE group_id = g.id) as member_count "
+            "FROM student_lb_groups g "
+            "JOIN student_lb_members m ON m.group_id = g.id "
+            "WHERE m.client_id = %s "
+            "ORDER BY g.created_at DESC",
+            (client_id, client_id),
+        )
+
+
+def get_lb_group_leaderboard(group_id: int) -> list[dict]:
+    """Get leaderboard for a specific group."""
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT c.id as client_id, c.name, "
+            "COALESCE(ep.university, '') as university, "
+            "COALESCE(ep.field_of_study, '') as field_of_study, "
+            "COALESCE(SUM(x.xp), 0) as total_xp "
+            "FROM student_lb_members m "
+            "JOIN clients c ON c.id = m.client_id "
+            "LEFT JOIN student_email_prefs ep ON ep.client_id = c.id "
+            "LEFT JOIN student_xp x ON x.client_id = c.id "
+            "WHERE m.group_id = %s "
+            "GROUP BY c.id, c.name, ep.university, ep.field_of_study "
+            "ORDER BY total_xp DESC",
+            (group_id,),
+        )
+
+
+def get_lb_group(group_id: int) -> dict | None:
+    with get_db() as db:
+        return _fetchone(db, "SELECT * FROM student_lb_groups WHERE id = %s", (group_id,))
+
+
+def is_lb_member(client_id: int, group_id: int) -> bool:
+    with get_db() as db:
+        return bool(_fetchval(
+            db, "SELECT id FROM student_lb_members WHERE group_id = %s AND client_id = %s",
+            (group_id, client_id),
+        ))
+
+
+# ── Note fork tracking (XP for shared notes) ───────────────
+
+def record_note_fork(note_id: int, forker_id: int, author_id: int) -> bool:
+    """Record that a user forked/used a note. Returns True if new (first time)."""
+    if forker_id == author_id:
+        return False
+    with get_db() as db:
+        try:
+            _exec(db,
+                  "INSERT INTO student_note_forks (note_id, forker_id, author_id) VALUES (%s, %s, %s)",
+                  (note_id, forker_id, author_id))
+            return True
+        except Exception:
+            return False
+
+
+def get_note_fork_count(author_id: int) -> int:
+    """Count unique users who have forked any of this author's notes."""
+    with get_db() as db:
+        return _fetchval(
+            db,
+            "SELECT COUNT(DISTINCT forker_id) FROM student_note_forks WHERE author_id = %s",
+            (author_id,),
+        ) or 0

@@ -10,7 +10,7 @@ import json
 import logging
 from datetime import datetime
 
-from flask import jsonify, redirect, request, session, url_for, render_template_string
+from flask import jsonify, redirect, request, session, url_for, render_template_string, send_file
 from markupsafe import Markup
 
 log = logging.getLogger(__name__)
@@ -679,11 +679,26 @@ def register_student_routes(app, csrf, limiter):
             sdb.earn_badge(cid, "focus_10h")
         if total_hours >= 50:
             sdb.earn_badge(cid, "focus_50h")
+        if total_hours >= 100:
+            sdb.earn_badge(cid, "focus_100h")
         total_pages = stats.get("total_pages", 0)
         if isinstance(total_pages, str):
             total_pages = int(total_pages)
         if total_pages >= 100:
             sdb.earn_badge(cid, "page_100")
+        if total_pages >= 500:
+            sdb.earn_badge(cid, "page_500")
+        if total_pages >= 1000:
+            sdb.earn_badge(cid, "page_1000")
+
+        # Early bird / Night owl badges based on current time
+        from datetime import datetime
+        hour_now = datetime.now().hour
+        if minutes > 0:
+            if hour_now < 7:
+                sdb.earn_badge(cid, "early_bird")
+            if hour_now >= 23:
+                sdb.earn_badge(cid, "night_owl")
 
         return jsonify({"ok": True})
 
@@ -3095,6 +3110,13 @@ def register_student_routes(app, csrf, limiter):
         sdb.update_flashcard_progress(data["card_id"], correct, quality=quality)
         # Gamification — 1 XP per flashcard review
         sdb.award_xp(_cid(), "flashcard_review", 1, "Reviewed a flashcard")
+        # Check flashcard badges
+        from outreach.db import _fetchval, get_db
+        with get_db() as db:
+            fc_count = _fetchval(db, "SELECT COUNT(*) FROM student_xp WHERE client_id = %s AND action = 'flashcard_review'", (_cid(),)) or 0
+        for key, threshold in [("flashcard_fan", 100), ("flashcard_500", 500), ("flashcard_1000", 1000)]:
+            if fc_count >= threshold:
+                sdb.earn_badge(_cid(), key)
         return jsonify({"ok": True})
 
     @app.route("/api/student/flashcards/<int:card_id>", methods=["PUT"])
@@ -3237,6 +3259,10 @@ def register_student_routes(app, csrf, limiter):
             quiz_count = _fetchval(db, "SELECT COUNT(*) FROM student_quizzes WHERE client_id = %s AND attempts > 0", (_cid(),)) or 0
         if quiz_count >= 10:
             sdb.earn_badge(_cid(), "quiz_10")
+        if quiz_count >= 25:
+            sdb.earn_badge(_cid(), "quiz_25")
+        if quiz_count >= 50:
+            sdb.earn_badge(_cid(), "quiz_50")
         return jsonify({"ok": True})
 
     @app.route("/api/student/quizzes/<int:quiz_id>", methods=["DELETE"])
@@ -3286,6 +3312,12 @@ def register_student_routes(app, csrf, limiter):
 
         note_id = sdb.create_note(_cid(), result["title"], result["content_html"],
                                   course_id=course_id)
+        # Check note badges
+        all_notes = sdb.get_notes(_cid())
+        nc = len(all_notes) if all_notes else 0
+        for key, threshold in [("note_taker", 10), ("note_taker_25", 25), ("note_taker_50", 50)]:
+            if nc >= threshold:
+                sdb.earn_badge(_cid(), key)
         return jsonify({"note_id": note_id, "title": result["title"]})
 
     @app.route("/api/student/notes/upload-pdf", methods=["POST"])
@@ -3342,6 +3374,12 @@ def register_student_routes(app, csrf, limiter):
                         continue
             html += "<p>" + _esc(p) + "</p>\n"
         note_id = sdb.create_note(_cid(), title, html, source_type="pdf-upload")
+        # Check note badges
+        all_notes = sdb.get_notes(_cid())
+        nc = len(all_notes) if all_notes else 0
+        for key, threshold in [("note_taker", 10), ("note_taker_25", 25), ("note_taker_50", 50)]:
+            if nc >= threshold:
+                sdb.earn_badge(_cid(), key)
         return jsonify({"note_id": note_id, "title": title})
 
     @app.route("/api/student/notes", methods=["GET"])
@@ -3375,6 +3413,44 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "Unauthorized"}), 401
         sdb.delete_note(note_id, _cid())
         return jsonify({"ok": True})
+
+    @app.route("/api/student/notes/<int:note_id>/pdf")
+    def student_export_note_pdf(note_id):
+        """Export a note as PDF."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        note = sdb.get_note(note_id, _cid())
+        if not note:
+            return jsonify({"error": "Not found"}), 404
+        from io import BytesIO
+        from xhtml2pdf import pisa
+        title = note.get("title", "Note")
+        html_content = f"""<!DOCTYPE html>
+        <html><head><meta charset="utf-8">
+        <style>
+          body {{ font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; line-height: 1.7; padding: 30px; }}
+          h1 {{ font-size: 24px; margin-bottom: 6px; color: #111; }}
+          h2 {{ font-size: 20px; margin: 24px 0 10px; border-bottom: 2px solid #e5e7eb; padding-bottom: 4px; }}
+          h3 {{ font-size: 17px; margin: 18px 0 8px; }}
+          p {{ margin: 8px 0; }}
+          ul, ol {{ padding-left: 24px; line-height: 1.8; }}
+          code {{ background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 13px; }}
+          .meta {{ font-size: 12px; color: #6b7280; margin-bottom: 20px; }}
+        </style>
+        </head><body>
+        <h1>{_esc(title)}</h1>
+        <div class="meta">Exported from MachReach &middot; {str(note.get('created_at',''))[:10]}</div>
+        {note.get('content_html', '')}
+        </body></html>"""
+        buf = BytesIO()
+        pisa_status = pisa.CreatePDF(html_content, dest=buf)
+        if pisa_status.err:
+            return jsonify({"error": "PDF generation failed"}), 500
+        buf.seek(0)
+        safe_title = "".join(c for c in title if c.isalnum() or c in " -_").strip()[:80] or "note"
+        return send_file(buf, mimetype="application/pdf",
+                         as_attachment=True,
+                         download_name=f"{safe_title}.pdf")
 
     # ── Smart Import (PDF Auto-Processing) ──────────────────
 
@@ -4738,6 +4814,7 @@ def register_student_routes(app, csrf, limiter):
           </div>
           <div style="display:flex;gap:8px;">
             <button onclick="toggleEdit()" class="btn btn-outline btn-sm" id="edit-toggle">&#9999;&#65039; Edit</button>
+            <a href="/api/student/notes/{note_id}/pdf" class="btn btn-outline btn-sm">&#128196; Export PDF</a>
             <button onclick="printNote()" class="btn btn-outline btn-sm">&#128424; Print</button>
           </div>
         </div>
@@ -5058,18 +5135,22 @@ def register_student_routes(app, csrf, limiter):
         history = sdb.get_xp_history(cid)
 
         # Auto-award streak badges
-        if streak >= 3:
-            sdb.earn_badge(cid, "streak_3")
+        for key, threshold in [("streak_3", 3), ("streak_7", 7), ("streak_14", 14), ("streak_30", 30), ("streak_60", 60), ("streak_100", 100)]:
+            if streak >= threshold:
+                sdb.earn_badge(cid, key)
+        for key, threshold in [("xp_100", 100), ("xp_500", 500), ("xp_1000", 1000), ("xp_2500", 2500), ("xp_5000", 5000)]:
+            if total_xp >= threshold:
+                sdb.earn_badge(cid, key)
+        # Course badges
+        courses = sdb.get_courses(cid)
+        n_courses = len(courses) if courses else 0
+        if n_courses >= 1:
+            sdb.earn_badge(cid, "first_course")
+        if n_courses >= 5:
+            sdb.earn_badge(cid, "five_courses")
+        # Perfect week = streak >= 7
         if streak >= 7:
-            sdb.earn_badge(cid, "streak_7")
-        if streak >= 30:
-            sdb.earn_badge(cid, "streak_30")
-        if total_xp >= 100:
-            sdb.earn_badge(cid, "xp_100")
-        if total_xp >= 500:
-            sdb.earn_badge(cid, "xp_500")
-        if total_xp >= 1000:
-            sdb.earn_badge(cid, "xp_1000")
+            sdb.earn_badge(cid, "perfect_week")
 
         return jsonify(
             total_xp=total_xp,
@@ -5313,6 +5394,7 @@ def register_student_routes(app, csrf, limiter):
         author = prefs.get("name", "Anonymous") if prefs else "Anonymous"
         uni = prefs.get("university", "") if prefs else ""
         sdb.publish_note(note_id, _cid(), author, uni)
+        sdb.earn_badge(_cid(), "sharer")
         return jsonify({"ok": True})
 
     @app.route("/api/student/exchange/unpublish", methods=["POST"])
@@ -5331,6 +5413,14 @@ def register_student_routes(app, csrf, limiter):
         note_id = data.get("note_id")
         liked = sdb.toggle_note_like(_cid(), note_id)
         note = sdb.get_public_note(note_id)
+        # Award popular/viral note badges to the author
+        if liked and note and note.get("client_id"):
+            likes = note.get("likes", 0)
+            author_id = note["client_id"]
+            if likes >= 5:
+                sdb.earn_badge(author_id, "popular_note")
+            if likes >= 25:
+                sdb.earn_badge(author_id, "viral_note")
         return jsonify({"ok": True, "liked": liked, "likes": note.get("likes", 0) if note else 0})
 
     @app.route("/api/student/exchange/fork", methods=["POST"])
@@ -5338,9 +5428,23 @@ def register_student_routes(app, csrf, limiter):
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
-        new_id = sdb.fork_note(_cid(), data.get("note_id"))
+        note_id = data.get("note_id")
+        # Get public note to find author
+        pub_note = sdb.get_public_note(note_id)
+        new_id = sdb.fork_note(_cid(), note_id)
         if not new_id:
             return jsonify({"error": "Note not found or not public"}), 404
+        # Award XP to the original author (once per unique forker)
+        if pub_note and pub_note.get("client_id"):
+            author_id = pub_note["client_id"]
+            is_new = sdb.record_note_fork(note_id, _cid(), author_id)
+            if is_new and author_id != _cid():
+                sdb.award_xp(author_id, "note_used", 5, f"Your note was used by a student")
+                # Check helper badges
+                fork_count = sdb.get_note_fork_count(author_id)
+                for key, threshold in [("helper_5", 5), ("helper_25", 25), ("helper_100", 100)]:
+                    if fork_count >= threshold:
+                        sdb.earn_badge(author_id, key)
         return jsonify({"ok": True, "note_id": new_id})
 
     @app.route("/student/achievements")
@@ -5355,11 +5459,16 @@ def register_student_routes(app, csrf, limiter):
         history = sdb.get_xp_history(cid, limit=20)
 
         # Auto-award streak/XP badges
-        for key, threshold in [("streak_3", 3), ("streak_7", 7), ("streak_30", 30)]:
+        for key, threshold in [("streak_3", 3), ("streak_7", 7), ("streak_14", 14), ("streak_30", 30), ("streak_60", 60), ("streak_100", 100)]:
             if streak >= threshold:
                 sdb.earn_badge(cid, key)
-        for key, threshold in [("xp_100", 100), ("xp_500", 500), ("xp_1000", 1000)]:
+        for key, threshold in [("xp_100", 100), ("xp_500", 500), ("xp_1000", 1000), ("xp_2500", 2500), ("xp_5000", 5000)]:
             if total_xp >= threshold:
+                sdb.earn_badge(cid, key)
+        # Auto-check helper badges
+        fork_count = sdb.get_note_fork_count(cid)
+        for key, threshold in [("helper_5", 5), ("helper_25", 25), ("helper_100", 100)]:
+            if fork_count >= threshold:
                 sdb.earn_badge(cid, key)
         badges = sdb.get_badges(cid)
 
@@ -5530,6 +5639,7 @@ def register_student_routes(app, csrf, limiter):
         my_rank = sdb.get_student_rank(cid)
         my_xp = sdb.get_total_xp(cid)
         my_level, _, _ = sdb.get_level(my_xp)
+        my_groups = sdb.get_my_lb_groups(cid)
 
         rows_html = ""
         for i, r in enumerate(leaders, 1):
@@ -5569,6 +5679,32 @@ def register_student_routes(app, csrf, limiter):
               <a href="/student/leaderboard" class="btn btn-sm" style="border:1px solid var(--border);border-radius:8px;padding:6px 16px;text-decoration:none;font-size:13px;{active_all}">🌍 All Students</a>
               <a href="/student/leaderboard?university={_esc(my_uni)}" class="btn btn-sm" style="border:1px solid var(--border);border-radius:8px;padding:6px 16px;text-decoration:none;font-size:13px;{active_uni}">🏫 {_esc(my_uni)}</a>
             </div>"""
+
+        # Build personal groups HTML
+        groups_html = ""
+        for g in my_groups:
+            gname = _esc(g.get("name", ""))
+            gcode = _esc(g.get("invite_code", ""))
+            gid = g["id"]
+            is_owner = g.get("is_owner")
+            mc = g.get("member_count", 0)
+            actions = f'<button class="btn btn-ghost btn-sm" onclick="copyInvite(\'{gcode}\')" style="font-size:12px">&#128279; Copy Invite</button>'
+            if is_owner:
+                actions += f' <button class="btn btn-ghost btn-sm" onclick="deleteLbGroup({gid})" style="font-size:12px;color:var(--red)">&#128465; Delete</button>'
+            else:
+                actions += f' <button class="btn btn-ghost btn-sm" onclick="leaveLbGroup({gid})" style="font-size:12px;color:var(--red)">Leave</button>'
+            groups_html += f"""
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <div>
+                  <a href="/student/leaderboard/group/{gid}" style="font-weight:700;font-size:16px;color:var(--text);text-decoration:none">{gname}</a>
+                  <div style="font-size:12px;color:var(--text-muted)">{mc} member{'s' if mc != 1 else ''} &middot; Code: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:11px">{gcode}</code></div>
+                </div>
+                <div style="display:flex;gap:4px">{actions}</div>
+              </div>
+            </div>"""
+        if not groups_html:
+            groups_html = '<p style="color:var(--text-muted);text-align:center;padding:20px 0;font-size:14px">No groups yet. Create one and invite your friends!</p>'
 
         return _s_render("Leaderboard", f"""
         <div style="max-width:800px;margin:0 auto">
@@ -5614,8 +5750,187 @@ def register_student_routes(app, csrf, limiter):
               </tbody>
             </table>
           </div>
+
+          <!-- Personal Leaderboards -->
+          <h2 style="margin-top:40px;margin-bottom:8px">&#128101; Personal Leaderboards</h2>
+          <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px">
+            Create private leaderboards and invite friends to compete together!
+          </p>
+
+          <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+            <button onclick="document.getElementById('create-group-form').style.display='block'" class="btn btn-primary btn-sm">&#43; Create Group</button>
+            <button onclick="document.getElementById('join-group-form').style.display='block'" class="btn btn-outline btn-sm">&#128279; Join with Code</button>
+          </div>
+
+          <!-- Create group form -->
+          <div id="create-group-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+            <h3 style="font-size:16px;margin-bottom:12px">Create a Group</h3>
+            <div class="form-group"><label>Group Name</label><input id="lb-group-name" placeholder="e.g. Study Squad, CS101 Friends" maxlength="60"></div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm" onclick="createLbGroup()">Create</button>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('create-group-form').style.display='none'">Cancel</button>
+            </div>
+          </div>
+
+          <!-- Join group form -->
+          <div id="join-group-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+            <h3 style="font-size:16px;margin-bottom:12px">Join a Group</h3>
+            <div class="form-group"><label>Invite Code</label><input id="lb-join-code" placeholder="Paste invite code here" maxlength="20"></div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm" onclick="joinLbGroup()">Join</button>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('join-group-form').style.display='none'">Cancel</button>
+            </div>
+          </div>
+
+          {groups_html}
+
+          <script>
+          async function createLbGroup() {{
+            var name = document.getElementById('lb-group-name').value.trim();
+            if (!name) return alert('Please enter a group name');
+            var r = await fetch('/api/student/leaderboard/groups', {{
+              method:'POST',headers:{{'Content-Type':'application/json'}},
+              body:JSON.stringify({{name:name}})
+            }});
+            var d = await r.json();
+            if (d.ok) {{ window.location.reload(); }} else {{ alert(d.error || 'Failed'); }}
+          }}
+          async function joinLbGroup() {{
+            var code = document.getElementById('lb-join-code').value.trim();
+            if (!code) return alert('Please enter an invite code');
+            var r = await fetch('/api/student/leaderboard/join', {{
+              method:'POST',headers:{{'Content-Type':'application/json'}},
+              body:JSON.stringify({{invite_code:code}})
+            }});
+            var d = await r.json();
+            if (d.ok) {{ window.location.reload(); }} else {{ alert(d.error || 'Invalid invite code'); }}
+          }}
+          async function leaveLbGroup(gid) {{
+            if (!confirm('Leave this group?')) return;
+            var r = await fetch('/api/student/leaderboard/leave', {{
+              method:'POST',headers:{{'Content-Type':'application/json'}},
+              body:JSON.stringify({{group_id:gid}})
+            }});
+            if ((await r.json()).ok) window.location.reload();
+          }}
+          async function deleteLbGroup(gid) {{
+            if (!confirm('Delete this group? All members will be removed.')) return;
+            var r = await fetch('/api/student/leaderboard/groups/' + gid, {{method:'DELETE'}});
+            if ((await r.json()).ok) window.location.reload();
+          }}
+          function copyInvite(code) {{
+            navigator.clipboard.writeText(code).then(function(){{
+              alert('Invite code copied!');
+            }});
+          }}
+          </script>
         </div>
         """, active_page="student_leaderboard")
+
+    @app.route("/student/leaderboard/group/<int:group_id>")
+    def student_lb_group_page(group_id):
+        """View a personal leaderboard group."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        group = sdb.get_lb_group(group_id)
+        if not group or not sdb.is_lb_member(cid, group_id):
+            return redirect(url_for("student_leaderboard_page"))
+        members = sdb.get_lb_group_leaderboard(group_id)
+        rows_html = ""
+        for i, r in enumerate(members, 1):
+            is_me = (r["client_id"] == cid)
+            bg = "background:rgba(99,102,241,0.08);" if is_me else ""
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"#{i}")
+            lvl_name, _, _ = sdb.get_level(r["total_xp"])
+            name_display = _esc(r["name"] or "Student")
+            rows_html += f"""
+            <tr style="{bg}">
+              <td style="padding:12px 16px;font-size:18px;font-weight:700;text-align:center;width:60px">{medal}</td>
+              <td style="padding:12px 16px"><div style="font-weight:600;color:var(--text)">{name_display}{"  ← you" if is_me else ""}</div></td>
+              <td style="padding:12px 16px;text-align:center"><span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">{lvl_name}</span></td>
+              <td style="padding:12px 16px;text-align:right;font-weight:700;color:#22c55e;font-size:16px">{r['total_xp']} XP</td>
+            </tr>"""
+        if not rows_html:
+            rows_html = '<tr><td colspan="4" style="padding:32px;text-align:center;color:var(--text-muted)">No members yet!</td></tr>'
+        is_owner = group["owner_id"] == cid
+        return _s_render(f"Group: {_esc(group['name'])}", f"""
+        <div style="max-width:800px;margin:0 auto">
+          <a href="/student/leaderboard" style="color:var(--text-muted);font-size:13px;text-decoration:none">&larr; Back to Leaderboard</a>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 20px;flex-wrap:wrap;gap:12px">
+            <div>
+              <h2 style="margin:0">{_esc(group['name'])}</h2>
+              <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">
+                Invite code: <code style="background:var(--bg);padding:2px 8px;border-radius:4px">{_esc(group['invite_code'])}</code>
+                <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('{_esc(group['invite_code'])}').then(function(){{alert('Copied!')}})" style="font-size:11px;padding:2px 8px">Copy</button>
+              </p>
+            </div>
+          </div>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr style="border-bottom:2px solid var(--border)">
+                <th style="padding:12px 16px;text-align:center;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Rank</th>
+                <th style="padding:12px 16px;text-align:left;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Student</th>
+                <th style="padding:12px 16px;text-align:center;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Level</th>
+                <th style="padding:12px 16px;text-align:right;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">XP</th>
+              </tr></thead>
+              <tbody>{rows_html}</tbody>
+            </table>
+          </div>
+        </div>
+        """, active_page="student_leaderboard")
+
+    # ── Personal Leaderboard API ────────────────────────────
+
+    @app.route("/api/student/leaderboard/groups", methods=["POST"])
+    def student_create_lb_group():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        name = (data.get("name") or "").strip()
+        if not name or len(name) > 60:
+            return jsonify({"error": "Group name required (max 60 chars)"}), 400
+        # Limit to 10 groups per user
+        existing = sdb.get_my_lb_groups(_cid())
+        if len(existing) >= 10:
+            return jsonify({"error": "Maximum 10 groups reached"}), 400
+        result = sdb.create_lb_group(_cid(), name)
+        return jsonify({"ok": True, "group_id": result["id"], "invite_code": result["invite_code"]})
+
+    @app.route("/api/student/leaderboard/join", methods=["POST"])
+    def student_join_lb_group():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        code = (data.get("invite_code") or "").strip()
+        if not code:
+            return jsonify({"error": "Invite code required"}), 400
+        group = sdb.join_lb_group(_cid(), code)
+        if not group:
+            return jsonify({"error": "Invalid invite code"}), 404
+        return jsonify({"ok": True, "group_id": group["id"]})
+
+    @app.route("/api/student/leaderboard/leave", methods=["POST"])
+    def student_leave_lb_group():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        group_id = data.get("group_id")
+        if not group_id:
+            return jsonify({"error": "group_id required"}), 400
+        # Can't leave if owner
+        group = sdb.get_lb_group(group_id)
+        if group and group["owner_id"] == _cid():
+            return jsonify({"error": "Owners can't leave. Delete the group instead."}), 400
+        sdb.leave_lb_group(_cid(), group_id)
+        return jsonify({"ok": True})
+
+    @app.route("/api/student/leaderboard/groups/<int:group_id>", methods=["DELETE"])
+    def student_delete_lb_group(group_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        sdb.delete_lb_group(group_id, _cid())
+        return jsonify({"ok": True})
 
     @app.route("/student/settings", methods=["GET", "POST"])
     def student_settings_page():
