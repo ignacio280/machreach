@@ -431,6 +431,11 @@ LAYOUT = """<!DOCTYPE html>
         return _fetch.call(this, url, opts);
       };
     })();
+    // Safe JSON helper: avoids crashes when server returns non-JSON (502, HTML error pages)
+    window._safeJson = async function(r) {
+      try { var t = await r.text(); return JSON.parse(t); }
+      catch(e) { return {error: 'Server error (status ' + r.status + '). Please try again.'}; }
+    };
   </script>
   <style>
     :root {

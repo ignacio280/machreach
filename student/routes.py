@@ -959,7 +959,7 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('sync-progress').style.display = 'block';
           try {{
             var r = await fetch('/api/student/sync', {{method: 'POST'}});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (!r.ok) {{ alert(d.error || 'Sync failed'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; return; }}
             pollSync(btn);
           }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; }}
@@ -968,7 +968,7 @@ def register_student_routes(app, csrf, limiter):
           var iv = setInterval(async function() {{
             try {{
               var r = await fetch('/api/student/sync/status');
-              var d = await r.json();
+              var d = await _safeJson(r);
               document.getElementById('sync-msg').textContent = d.progress || 'Syncing...';
               document.getElementById('sync-courses').textContent = (d.courses_done||0) + '/' + (d.courses_total||0);
               document.getElementById('sync-files').textContent = d.files_downloaded || 0;
@@ -996,7 +996,7 @@ def register_student_routes(app, csrf, limiter):
           btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
           try {{
             var r = await fetch('/api/student/plan/generate', {{method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({{preferences: {{hours_per_day: 5}}}}) }});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (!r.ok) {{ alert(d.error || 'Generation failed'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; return; }}
             var iv = setInterval(async function() {{
               try {{
@@ -1136,7 +1136,7 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('sync-progress').style.display = 'block';
           try {{
             var r = await fetch('/api/student/sync', {{method: 'POST'}});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (!r.ok) {{ alert(d.error || 'Sync failed'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; return; }}
             var iv = setInterval(async function() {{
               try {{
@@ -1219,7 +1219,7 @@ def register_student_routes(app, csrf, limiter):
           try {{
             var r = await fetch('/api/student/courses/' + courseId, {{method:'DELETE'}});
             if (r.ok) {{ location.reload(); }}
-            else {{ var d = await r.json(); alert(d.error || 'Failed to remove course'); }}
+            else {{ var d = await _safeJson(r); alert(d.error || 'Failed to remove course'); }}
           }} catch(e) {{ alert('Network error'); }}
         }}
         </script>
@@ -1505,7 +1505,7 @@ def register_student_routes(app, csrf, limiter):
               }})
             }});
             if (r.ok) {{ alert('Course info saved!'); location.reload(); }}
-            else {{ var d = await r.json(); alert(d.error || 'Save failed'); }}
+            else {{ var d = await _safeJson(r); alert(d.error || 'Save failed'); }}
           }} catch(e) {{ alert('Network error'); }}
           btn.disabled = false; btn.innerHTML = '&#128190; Save All Changes';
         }}
@@ -1549,7 +1549,7 @@ def register_student_routes(app, csrf, limiter):
               body: JSON.stringify({{ name: name, exam_date: exam_date, weight_pct: weight_pct, topics: topics, course_id: courseId }})
             }});
             if (r.ok) {{ alert('Exam saved!'); location.reload(); }}
-            else {{ var d = await r.json(); alert(d.error || 'Failed'); }}
+            else {{ var d = await _safeJson(r); alert(d.error || 'Failed'); }}
           }} catch(e) {{ alert('Network error'); }}
         }}
 
@@ -1749,7 +1749,7 @@ def register_student_routes(app, csrf, limiter):
           btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
           try {{
             var r = await fetch('/api/student/plan/generate', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{preferences:{{hours_per_day:5}}}}) }});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (!r.ok) {{ alert(d.error || 'Failed'); btn.disabled = false; btn.innerHTML = '&#128260; Regenerate'; return; }}
             var iv = setInterval(async function() {{
               try {{
@@ -2608,7 +2608,7 @@ def register_student_routes(app, csrf, limiter):
                 count: parseInt(document.getElementById('prac-count').value)
               }})
             }});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (r.ok && d.problems) {{
               renderProblems(d.problems);
             }} else {{ alert(d.error || 'Generation failed'); }}
@@ -2742,7 +2742,7 @@ def register_student_routes(app, csrf, limiter):
           btn.disabled = true; btn.innerHTML = '&#9203; Connecting...';
           try {{
             var r = await fetch('/api/student/canvas/connect', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{canvas_url:document.getElementById('canvas-url').value,token:document.getElementById('canvas-token').value}})}});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (r.ok) {{ alert('Connected! Found ' + d.courses_found + ' courses.'); location.reload(); }}
             else {{ alert(d.error || 'Connection failed'); }}
           }} catch(e) {{ alert('Network error'); }}
@@ -3577,7 +3577,7 @@ def register_student_routes(app, csrf, limiter):
             var r = await fetch('/api/student/smart-import', {{ method: 'POST', body: fd }});
             clearInterval(progressInterval);
             bar.style.width = '100%';
-            var d = await r.json();
+            var d = await _safeJson(r);
 
             if (r.ok) {{
               document.getElementById('import-progress').style.display = 'none';
@@ -3684,7 +3684,7 @@ def register_student_routes(app, csrf, limiter):
           if (!courseId) return;
           try {{
             var r = await fetch('/api/student/courses/' + courseId + '/exams');
-            var d = await r.json();
+            var d = await _safeJson(r);
             (d.exams || []).forEach(function(e) {{
               sel.innerHTML += '<option value="' + e.id + '">' + e.name + '</option>';
             }});
@@ -3705,7 +3705,7 @@ def register_student_routes(app, csrf, limiter):
                 title: document.getElementById('fc-title').value || undefined
               }})
             }});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (r.ok) {{
               alert('Generated ' + d.card_count + ' flashcards!');
               window.location = '/student/flashcards/' + d.deck_id;
@@ -3977,7 +3977,7 @@ def register_student_routes(app, csrf, limiter):
               method: 'POST', headers: {{'Content-Type':'application/json'}},
               body: JSON.stringify({{ deck_id: deckId, front: 'New question', back: 'Answer' }})
             }});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (d.ok) {{
               cards.push({{ id: d.card_id, front: 'New question', back: 'Answer', times_seen: 0, times_correct: 0 }});
               document.getElementById('card-count-txt').textContent = cards.length;
@@ -4102,7 +4102,7 @@ def register_student_routes(app, csrf, limiter):
           if (!courseId) return;
           try {{
             var r = await fetch('/api/student/courses/' + courseId + '/exams');
-            var d = await r.json();
+            var d = await _safeJson(r);
             (d.exams || []).forEach(function(e) {{
               sel.innerHTML += '<option value="' + e.id + '">' + e.name + '</option>';
             }});
@@ -4123,7 +4123,7 @@ def register_student_routes(app, csrf, limiter):
                 count: parseInt(document.getElementById('qz-count').value)
               }})
             }});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (r.ok) {{
               alert('Generated ' + d.question_count + ' questions!');
               window.location = '/student/quizzes/' + d.quiz_id;
@@ -4652,7 +4652,7 @@ def register_student_routes(app, csrf, limiter):
               method: 'POST', headers: {{'Content-Type':'application/json'}},
               body: JSON.stringify({{ course_id: parseInt(courseId) }})
             }});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (r.ok) {{
               window.location = '/student/notes/' + d.note_id;
             }} else {{ alert(d.error || 'Generation failed'); }}
@@ -4695,7 +4695,7 @@ def register_student_routes(app, csrf, limiter):
           fd.append('file', file);
           try {{
             var r = await fetch('/api/student/notes/upload-pdf', {{method:'POST', body:fd}});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (r.ok && d.note_id) {{
               window.location = '/student/notes/' + d.note_id;
             }} else {{ status.innerHTML = '&#10060; ' + (d.error || 'Upload failed'); }}
@@ -4953,7 +4953,7 @@ def register_student_routes(app, csrf, limiter):
               body: JSON.stringify({{message: msg, course_id: document.getElementById('chat-course').value || null}})
             }});
             chatBox.removeChild(chatBox.lastChild);
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (r.ok) {{ addBubble('assistant', d.reply); }}
             else {{ addBubble('assistant', '❌ ' + (d.error || 'Error')); }}
           }} catch(e) {{ chatBox.removeChild(chatBox.lastChild); addBubble('assistant', '❌ Network error'); }}
@@ -5245,7 +5245,7 @@ def register_student_routes(app, csrf, limiter):
               method: 'POST', headers: {{'Content-Type':'application/json'}},
               body: JSON.stringify({{ note_id: {note_id} }})
             }});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (r.ok) {{
               document.getElementById('like-count').textContent = d.likes;
               var btn = document.getElementById('like-btn');
@@ -5261,7 +5261,7 @@ def register_student_routes(app, csrf, limiter):
               method: 'POST', headers: {{'Content-Type':'application/json'}},
               body: JSON.stringify({{ note_id: {note_id} }})
             }});
-            var d = await r.json();
+            var d = await _safeJson(r);
             if (r.ok && d.note_id) {{
               window.location = '/student/notes/' + d.note_id;
             }} else {{ alert(d.error || 'Fork failed'); }}
