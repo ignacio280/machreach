@@ -1263,16 +1263,6 @@ def register_student_routes(app, csrf, limiter):
               </td>
             </tr>"""
 
-        # Grading rows
-        grading = analysis.get("grading", {})
-        grading_rows = ""
-        for k, v in grading.items():
-            grading_rows += f"""<div class="grading-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">
-              <input type="text" value="{_esc(k)}" class="edit-input" style="flex:2;" placeholder="Component name">
-              <input type="number" value="{v}" class="edit-input" style="width:70px;" min="0" max="100">%
-              <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>
-            </div>"""
-
         # Weekly schedule rows
         schedule = analysis.get("weekly_schedule", [])
         schedule_rows = ""
@@ -1353,18 +1343,6 @@ def register_student_routes(app, csrf, limiter):
             </div>
             <div id="upload-toast-status" style="color:#A5B4FC;font-size:12px;margin-top:6px;">Starting upload...</div>
           </div>
-        </div>
-
-        <!-- Grading -->
-        <div class="card" style="margin-bottom:16px;">
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-            <h2>&#128202; Grading Breakdown</h2>
-            <button onclick="addGradingRow()" class="btn btn-outline btn-sm">+ Add Component</button>
-          </div>
-          <div id="grading-container">
-            {grading_rows}
-          </div>
-          <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0;">Make sure percentages add up to 100%.</p>
         </div>
 
         <!-- Weekly schedule -->
@@ -1494,15 +1472,6 @@ def register_student_routes(app, csrf, limiter):
           var btn = document.getElementById('save-btn');
           btn.disabled = true; btn.innerHTML = '&#9203; Saving...';
 
-          // Collect grading
-          var grading = {{}};
-          document.querySelectorAll('#grading-container .grading-row').forEach(function(row) {{
-            var inputs = row.querySelectorAll('input');
-            var k = inputs[0].value.trim();
-            var v = parseInt(inputs[1].value) || 0;
-            if (k) grading[k] = v;
-          }});
-
           // Collect schedule
           var schedule = [];
           document.querySelectorAll('#schedule-container .sched-row').forEach(function(row) {{
@@ -1530,7 +1499,6 @@ def register_student_routes(app, csrf, limiter):
               body: JSON.stringify({{
                 name: document.getElementById('course-name').value.trim(),
                 code: document.getElementById('course-code').value.trim(),
-                grading: grading,
                 weekly_schedule: schedule,
                 study_tips: tips
               }})
@@ -1590,17 +1558,6 @@ def register_student_routes(app, csrf, limiter):
             await fetch('/api/student/exams/' + examId, {{method:'DELETE'}});
             location.reload();
           }} catch(e) {{ alert('Network error'); }}
-        }}
-
-        function addGradingRow() {{
-          var c = document.getElementById('grading-container');
-          var div = document.createElement('div');
-          div.className = 'grading-row';
-          div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;align-items:center;';
-          div.innerHTML = '<input type="text" class="edit-input" style="flex:2;" placeholder="Component name">'
-            + '<input type="number" class="edit-input" style="width:70px;" value="0" min="0" max="100">%'
-            + '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>';
-          c.appendChild(div);
         }}
 
         function addScheduleRow() {{
@@ -1968,46 +1925,6 @@ def register_student_routes(app, csrf, limiter):
               </div>
             </div>
 
-            <!-- Flashcard quick-review -->
-            <div class="card" style="margin-bottom:16px;">
-              <div class="card-header"><h2>&#127183; Quick Flashcards</h2></div>
-              <div id="flashcard-area">
-                <div id="flashcard-box" onclick="flipCard()" style="
-                  min-height:120px;background:var(--bg);border-radius:12px;padding:24px;
-                  text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;
-                  font-size:16px;font-weight:500;border:2px dashed var(--border);transition:all 0.3s ease;
-                  user-select:none;
-                ">
-                  <span style="color:var(--text-muted);">Click + Add Flashcard to start, then click to flip</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
-                  <div style="display:flex;gap:6px;">
-                    <button onclick="prevCard()" class="btn btn-ghost btn-sm">&larr; Prev</button>
-                    <button onclick="nextCard()" class="btn btn-ghost btn-sm">Next &rarr;</button>
-                  </div>
-                  <span id="card-counter" style="font-size:12px;color:var(--text-muted);">0 / 0</span>
-                  <div style="display:flex;gap:6px;">
-                    <button onclick="deleteCard()" class="btn btn-ghost btn-sm" style="color:var(--red);" title="Delete current card">&#128465;</button>
-                    <button onclick="showAddCard()" class="btn btn-outline btn-sm">+ Add</button>
-                  </div>
-                </div>
-                <div id="add-card-form" style="display:none;margin-top:10px;background:var(--bg);border-radius:8px;padding:12px;">
-                  <input type="text" id="card-front" class="edit-input" placeholder="Front (question)" style="margin-bottom:6px;">
-                  <input type="text" id="card-back" class="edit-input" placeholder="Back (answer)" style="margin-bottom:8px;">
-                  <div style="display:flex;gap:6px;">
-                    <button onclick="addCard()" class="btn btn-primary btn-sm">Add Card</button>
-                    <button onclick="document.getElementById('add-card-form').style.display='none'" class="btn btn-ghost btn-sm">Cancel</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Quick notes -->
-            <div class="card">
-              <div class="card-header"><h2>&#128221; Quick Notes</h2></div>
-              <textarea id="focus-notes" class="edit-input" rows="5" placeholder="Jot down notes while studying..." style="resize:vertical;"></textarea>
-              <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Notes are saved in your browser.</p>
-            </div>
           </div>
         </div>
 
@@ -2073,59 +1990,6 @@ def register_student_routes(app, csrf, limiter):
         var totalFocusSeconds = 0;
         var sessionStarted = false;
         var pageDone = 0;
-
-        // Load saved notes
-        var savedNotes = localStorage.getItem('focus_notes');
-        if (savedNotes) document.getElementById('focus-notes').value = savedNotes;
-        document.getElementById('focus-notes').addEventListener('input', function() {{
-          localStorage.setItem('focus_notes', this.value);
-        }});
-
-        /* === Flashcards (localStorage) === */
-        var flashcards = JSON.parse(localStorage.getItem('focus_flashcards') || '[]');
-        var cardIndex = 0;
-        var cardFlipped = false;
-        function renderCard() {{
-          var box = document.getElementById('flashcard-box');
-          var counter = document.getElementById('card-counter');
-          if (flashcards.length === 0) {{
-            box.innerHTML = '<span style="color:var(--text-muted);">Click + Add Flashcard to start, then click to flip</span>';
-            counter.textContent = '0 / 0';
-            return;
-          }}
-          var c = flashcards[cardIndex];
-          box.innerHTML = cardFlipped
-            ? '<div style="color:var(--green);font-size:14px;margin-bottom:4px;">ANSWER</div><div>' + c.back + '</div>'
-            : '<div style="color:var(--primary);font-size:14px;margin-bottom:4px;">QUESTION</div><div>' + c.front + '</div>';
-          box.style.borderColor = cardFlipped ? 'var(--green)' : 'var(--border)';
-          counter.textContent = (cardIndex + 1) + ' / ' + flashcards.length;
-        }}
-        function flipCard() {{ if (flashcards.length > 0) {{ cardFlipped = !cardFlipped; renderCard(); }} }}
-        function nextCard() {{ if (flashcards.length > 0) {{ cardIndex = (cardIndex + 1) % flashcards.length; cardFlipped = false; renderCard(); }} }}
-        function prevCard() {{ if (flashcards.length > 0) {{ cardIndex = (cardIndex - 1 + flashcards.length) % flashcards.length; cardFlipped = false; renderCard(); }} }}
-        function showAddCard() {{ document.getElementById('add-card-form').style.display = ''; document.getElementById('card-front').focus(); }}
-        function deleteCard() {{
-          if (flashcards.length === 0) return;
-          if (!confirm('Delete this flashcard?')) return;
-          flashcards.splice(cardIndex, 1);
-          localStorage.setItem('focus_flashcards', JSON.stringify(flashcards));
-          if (cardIndex >= flashcards.length) cardIndex = Math.max(0, flashcards.length - 1);
-          cardFlipped = false;
-          renderCard();
-        }}
-        function addCard() {{
-          var f = document.getElementById('card-front').value.trim();
-          var b = document.getElementById('card-back').value.trim();
-          if (!f || !b) {{ alert('Both sides required'); return; }}
-          flashcards.push({{front: f, back: b}});
-          localStorage.setItem('focus_flashcards', JSON.stringify(flashcards));
-          cardIndex = flashcards.length - 1; cardFlipped = false;
-          document.getElementById('card-front').value = '';
-          document.getElementById('card-back').value = '';
-          document.getElementById('add-card-form').style.display = 'none';
-          renderCard();
-        }}
-        renderCard();
 
         /* === Mode switching === */
         function setMode(mode) {{
@@ -2441,19 +2305,15 @@ def register_student_routes(app, csrf, limiter):
         if not _logged_in():
             return redirect(url_for("login"))
         courses = sdb.get_courses(_cid())
+        prefs = sdb.get_email_prefs(_cid())
+        saved_country = prefs.get("gpa_country", "us") if prefs else "us"
 
         course_rows = ""
         for c in courses:
-            analysis = json.loads(c["analysis_json"]) if isinstance(c.get("analysis_json"), str) else c.get("analysis_json", {})
             course_rows += f"""<div class="gpa-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
               <input type="text" value="{_esc(c['name'])}" class="edit-input" style="flex:2;" placeholder="Course name">
               <input type="number" value="3" class="edit-input" style="width:70px;" min="1" max="10" placeholder="Credits">
-              <select class="edit-input" style="width:80px;">
-                <option value="4.0">A</option><option value="3.7">A-</option>
-                <option value="3.3">B+</option><option value="3.0" selected>B</option><option value="2.7">B-</option>
-                <option value="2.3">C+</option><option value="2.0">C</option><option value="1.7">C-</option>
-                <option value="1.3">D+</option><option value="1.0">D</option><option value="0.0">F</option>
-              </select>
+              <select class="edit-input grade-select" style="width:100px;"></select>
               <button onclick="this.parentElement.remove();calcGPA();" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>
             </div>"""
 
@@ -2463,10 +2323,27 @@ def register_student_routes(app, csrf, limiter):
           <div class="card">
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
               <h2>&#128218; Courses</h2>
-              <button onclick="addGPARow()" class="btn btn-outline btn-sm">+ Add Course</button>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="country-select" class="edit-input" style="width:180px;" onchange="changeCountry(this.value)">
+                  <option value="us" {"selected" if saved_country == "us" else ""}>&#127482;&#127480; United States (4.0)</option>
+                  <option value="uk" {"selected" if saved_country == "uk" else ""}>&#127468;&#127463; United Kingdom</option>
+                  <option value="mx" {"selected" if saved_country == "mx" else ""}>&#127474;&#127485; Mexico (0-10)</option>
+                  <option value="ar" {"selected" if saved_country == "ar" else ""}>&#127462;&#127479; Argentina (0-10)</option>
+                  <option value="co" {"selected" if saved_country == "co" else ""}>&#127464;&#127476; Colombia (0-5)</option>
+                  <option value="cl" {"selected" if saved_country == "cl" else ""}>&#127464;&#127473; Chile (1-7)</option>
+                  <option value="br" {"selected" if saved_country == "br" else ""}>&#127463;&#127479; Brazil (0-10)</option>
+                  <option value="de" {"selected" if saved_country == "de" else ""}>&#127465;&#127466; Germany (1-6)</option>
+                  <option value="fr" {"selected" if saved_country == "fr" else ""}>&#127467;&#127479; France (0-20)</option>
+                  <option value="es" {"selected" if saved_country == "es" else ""}>&#127466;&#127480; Spain (0-10)</option>
+                  <option value="in" {"selected" if saved_country == "in" else ""}>&#127470;&#127475; India (10-point)</option>
+                  <option value="au" {"selected" if saved_country == "au" else ""}>&#127462;&#127482; Australia (7-point)</option>
+                  <option value="jp" {"selected" if saved_country == "jp" else ""}>&#127471;&#127477; Japan (S-F)</option>
+                </select>
+                <button onclick="addGPARow()" class="btn btn-outline btn-sm">+ Add Course</button>
+              </div>
             </div>
             <div style="display:flex;gap:8px;margin-bottom:8px;font-size:12px;font-weight:600;color:var(--text-muted);padding:0 4px;">
-              <span style="flex:2;">Course</span><span style="width:70px;">Credits</span><span style="width:80px;">Grade</span><span style="width:20px;"></span>
+              <span style="flex:2;">Course</span><span style="width:70px;">Credits</span><span style="width:100px;">Grade</span><span style="width:20px;"></span>
             </div>
             <div id="gpa-rows">
               {course_rows}
@@ -2477,7 +2354,7 @@ def register_student_routes(app, csrf, limiter):
             <div class="card" style="text-align:center;">
               <div class="card-header"><h2>Your GPA</h2></div>
               <div id="gpa-result" style="font-size:56px;font-weight:800;color:var(--primary);padding:20px 0;">-</div>
-              <div id="gpa-scale" style="font-size:14px;color:var(--text-muted);">out of 4.0</div>
+              <div id="gpa-scale" style="font-size:14px;color:var(--text-muted);">-</div>
               <div id="gpa-credits" style="font-size:13px;color:var(--text-muted);margin-top:8px;"></div>
             </div>
             <div class="card" style="margin-top:16px;">
@@ -2486,7 +2363,7 @@ def register_student_routes(app, csrf, limiter):
               <div style="display:flex;gap:8px;margin-top:8px;">
                 <div class="form-group" style="flex:1;">
                   <label style="font-size:12px;">Current GPA</label>
-                  <input type="number" id="cum-gpa" step="0.01" min="0" max="4" value="0" class="edit-input">
+                  <input type="number" id="cum-gpa" step="0.01" min="0" max="20" value="0" class="edit-input">
                 </div>
                 <div class="form-group" style="flex:1;">
                   <label style="font-size:12px;">Total credits</label>
@@ -2503,6 +2380,77 @@ def register_student_routes(app, csrf, limiter):
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
         </style>
         <script>
+        var gradingSystems = {{
+          us: {{ name: 'United States', scale: 'out of 4.0', max: 4.0, grades: [
+            ['A+',4.0],['A',4.0],['A-',3.7],['B+',3.3],['B',3.0],['B-',2.7],['C+',2.3],['C',2.0],['C-',1.7],['D+',1.3],['D',1.0],['F',0.0]
+          ]}},
+          uk: {{ name: 'United Kingdom', scale: 'classification', max: 4.0, grades: [
+            ['1st (70+)',4.0],['2:1 (60-69)',3.3],['2:2 (50-59)',2.5],['3rd (40-49)',1.5],['Fail (<40)',0.0]
+          ]}},
+          mx: {{ name: 'Mexico', scale: 'out of 10', max: 10, grades: [
+            ['10',10],['9',9],['8',8],['7',7],['6',6],['5 (Fail)',5],['NA',0]
+          ]}},
+          ar: {{ name: 'Argentina', scale: 'out of 10', max: 10, grades: [
+            ['10',10],['9',9],['8',8],['7',7],['6',6],['5',5],['4 (Fail)',4],['3',3],['2',2],['1',1]
+          ]}},
+          co: {{ name: 'Colombia', scale: 'out of 5.0', max: 5.0, grades: [
+            ['5.0',5.0],['4.5',4.5],['4.0',4.0],['3.5',3.5],['3.0',3.0],['2.5',2.5],['2.0',2.0],['1.0',1.0],['0',0]
+          ]}},
+          cl: {{ name: 'Chile', scale: 'out of 7.0', max: 7.0, grades: [
+            ['7.0',7.0],['6.5',6.5],['6.0',6.0],['5.5',5.5],['5.0',5.0],['4.5',4.5],['4.0',4.0],['3.5',3.5],['3.0',3.0],['2.0',2.0],['1.0',1.0]
+          ]}},
+          br: {{ name: 'Brazil', scale: 'out of 10', max: 10, grades: [
+            ['10',10],['9',9],['8',8],['7',7],['6',6],['5',5],['4 (Fail)',4],['3',3],['2',2],['1',1],['0',0]
+          ]}},
+          de: {{ name: 'Germany', scale: '1.0 (best) to 5.0 (worst)', max: 5.0, inverted: true, grades: [
+            ['1.0 (sehr gut)',1.0],['1.3',1.3],['1.7',1.7],['2.0 (gut)',2.0],['2.3',2.3],['2.7',2.7],['3.0 (befriedigend)',3.0],['3.3',3.3],['3.7',3.7],['4.0 (ausreichend)',4.0],['5.0 (fail)',5.0]
+          ]}},
+          fr: {{ name: 'France', scale: 'out of 20', max: 20, grades: [
+            ['20',20],['19',19],['18',18],['17',17],['16',16],['15',15],['14',14],['13',13],['12',12],['11',11],['10',10],['9 (Fail)',9],['8',8],['5',5],['0',0]
+          ]}},
+          es: {{ name: 'Spain', scale: 'out of 10', max: 10, grades: [
+            ['MH (10)',10],['SB (9)',9],['NT (8)',8],['NT (7)',7],['AP (6)',6],['AP (5)',5],['SS (4)',4],['SS (3)',3],['SS (0)',0]
+          ]}},
+          'in': {{ name: 'India', scale: 'out of 10', max: 10, grades: [
+            ['O (10)',10],['A+ (9)',9],['A (8)',8],['B+ (7)',7],['B (6)',6],['C (5)',5],['P (4)',4],['F (0)',0]
+          ]}},
+          au: {{ name: 'Australia', scale: 'out of 7.0', max: 7.0, grades: [
+            ['HD (7)',7],['D (6)',6],['CR (5)',5],['P (4)',4],['F (0)',0]
+          ]}},
+          jp: {{ name: 'Japan', scale: 'out of 4.0', max: 4.0, grades: [
+            ['S (4)',4.0],['A (3)',3.0],['B (2)',2.0],['C (1)',1.0],['F (0)',0.0]
+          ]}}
+        }};
+
+        var currentCountry = '{saved_country}';
+
+        function getGradeOptions(country) {{
+          var sys = gradingSystems[country];
+          if (!sys) return '';
+          return sys.grades.map(function(g, i) {{
+            return '<option value="' + g[1] + '"' + (i === 3 ? ' selected' : '') + '>' + g[0] + '</option>';
+          }}).join('');
+        }}
+
+        function populateGradeSelects() {{
+          var opts = getGradeOptions(currentCountry);
+          document.querySelectorAll('.grade-select').forEach(function(sel) {{
+            sel.innerHTML = opts;
+          }});
+          var sys = gradingSystems[currentCountry];
+          document.getElementById('gpa-scale').textContent = sys ? sys.scale : '';
+        }}
+
+        function changeCountry(country) {{
+          currentCountry = country;
+          populateGradeSelects();
+          calcGPA();
+          fetch('/api/student/settings/gpa-country', {{
+            method:'POST', headers:{{'Content-Type':'application/json'}},
+            body:JSON.stringify({{country:country}})
+          }});
+        }}
+
         function addGPARow() {{
           var c = document.getElementById('gpa-rows');
           var div = document.createElement('div');
@@ -2510,7 +2458,7 @@ def register_student_routes(app, csrf, limiter):
           div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;';
           div.innerHTML = '<input type="text" class="edit-input" style="flex:2;" placeholder="Course name">'
             + '<input type="number" class="edit-input" style="width:70px;" value="3" min="1" max="10" placeholder="Credits">'
-            + '<select class="edit-input" style="width:80px;"><option value="4.0">A</option><option value="3.7">A-</option><option value="3.3">B+</option><option value="3.0" selected>B</option><option value="2.7">B-</option><option value="2.3">C+</option><option value="2.0">C</option><option value="1.7">C-</option><option value="1.3">D+</option><option value="1.0">D</option><option value="0.0">F</option></select>'
+            + '<select class="edit-input grade-select" style="width:100px;">' + getGradeOptions(currentCountry) + '</select>'
             + '<button onclick="this.parentElement.remove();calcGPA();" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>';
           c.appendChild(div);
         }}
@@ -2518,23 +2466,40 @@ def register_student_routes(app, csrf, limiter):
         function calcGPA() {{
           var rows = document.querySelectorAll('#gpa-rows .gpa-row');
           var totalPts = 0, totalCreds = 0;
+          var sys = gradingSystems[currentCountry];
           rows.forEach(function(row) {{
             var inputs = row.querySelectorAll('input');
             var sel = row.querySelector('select');
             var credits = parseFloat(inputs[1].value) || 0;
             var grade = parseFloat(sel.value);
-            totalPts += credits * grade;
-            totalCreds += credits;
+            if (sys && sys.inverted) {{
+              // German system: lower is better, invert for weighted calc
+              totalPts += credits * (sys.max + 1 - grade);
+              totalCreds += credits;
+            }} else {{
+              totalPts += credits * grade;
+              totalCreds += credits;
+            }}
           }});
-          var gpa = totalCreds > 0 ? (totalPts / totalCreds).toFixed(2) : '0.00';
+          var gpa;
+          if (sys && sys.inverted) {{
+            gpa = totalCreds > 0 ? (sys.max + 1 - totalPts / totalCreds).toFixed(2) : '0.00';
+          }} else {{
+            gpa = totalCreds > 0 ? (totalPts / totalCreds).toFixed(2) : '0.00';
+          }}
           document.getElementById('gpa-result').textContent = gpa;
           document.getElementById('gpa-credits').textContent = totalCreds + ' credits this semester';
           var g = parseFloat(gpa);
-          document.getElementById('gpa-result').style.color = g >= 3.5 ? 'var(--green)' : g >= 2.5 ? 'var(--primary)' : g >= 2.0 ? '#F59E0B' : 'var(--red)';
+          var maxG = sys ? sys.max : 4.0;
+          if (sys && sys.inverted) {{
+            document.getElementById('gpa-result').style.color = g <= 1.5 ? 'var(--green)' : g <= 2.5 ? 'var(--primary)' : g <= 3.5 ? '#F59E0B' : 'var(--red)';
+          }} else {{
+            var ratio = g / maxG;
+            document.getElementById('gpa-result').style.color = ratio >= 0.85 ? 'var(--green)' : ratio >= 0.65 ? 'var(--primary)' : ratio >= 0.5 ? '#F59E0B' : 'var(--red)';
+          }}
         }}
 
         function calcCumGPA() {{
-          // Get current semester GPA first
           calcGPA();
           var semGPA = parseFloat(document.getElementById('gpa-result').textContent) || 0;
           var semRows = document.querySelectorAll('#gpa-rows .gpa-row');
@@ -2542,12 +2507,21 @@ def register_student_routes(app, csrf, limiter):
           semRows.forEach(function(row) {{ semCredits += parseFloat(row.querySelectorAll('input')[1].value) || 0; }});
           var cumGPA = parseFloat(document.getElementById('cum-gpa').value) || 0;
           var cumCredits = parseInt(document.getElementById('cum-credits').value) || 0;
-          var totalPts = (cumGPA * cumCredits) + (semGPA * semCredits);
-          var totalCreds = cumCredits + semCredits;
-          var result = totalCreds > 0 ? (totalPts / totalCreds).toFixed(2) : '0.00';
+          var sys = gradingSystems[currentCountry];
+          var totalPts, totalCreds, result;
+          if (sys && sys.inverted) {{
+            totalPts = (((sys.max + 1 - cumGPA) * cumCredits) + ((sys.max + 1 - semGPA) * semCredits));
+            totalCreds = cumCredits + semCredits;
+            result = totalCreds > 0 ? (sys.max + 1 - totalPts / totalCreds).toFixed(2) : '0.00';
+          }} else {{
+            totalPts = (cumGPA * cumCredits) + (semGPA * semCredits);
+            totalCreds = cumCredits + semCredits;
+            result = totalCreds > 0 ? (totalPts / totalCreds).toFixed(2) : '0.00';
+          }}
           document.getElementById('cum-result').textContent = 'Cumulative GPA: ' + result;
         }}
 
+        populateGradeSelects();
         calcGPA();
         </script>
         """, active_page="student_gpa")
@@ -3131,6 +3105,43 @@ def register_student_routes(app, csrf, limiter):
         note_id = sdb.create_note(_cid(), result["title"], result["content_html"],
                                   course_id=course_id)
         return jsonify({"note_id": note_id, "title": result["title"]})
+
+    @app.route("/api/student/notes/upload-pdf", methods=["POST"])
+    @limiter.limit("10 per minute")
+    def student_upload_pdf_note():
+        """Upload a PDF/DOCX and create a note from extracted text."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        if "file" not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        f = request.files["file"]
+        if not f.filename:
+            return jsonify({"error": "Empty filename"}), 400
+        fname = f.filename
+        fl = fname.lower()
+        if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
+            return jsonify({"error": "Only PDF and DOCX files are supported"}), 400
+        content = f.read(15 * 1024 * 1024 + 1)
+        if len(content) > 15 * 1024 * 1024:
+            return jsonify({"error": "File too large (max 15MB)"}), 400
+        text = ""
+        try:
+            if fl.endswith(".pdf"):
+                text = extract_text_from_pdf(content)
+            elif fl.endswith((".docx", ".doc")):
+                text = extract_text_from_docx(content)
+        except Exception as e:
+            return jsonify({"error": f"Could not extract text: {e}"}), 400
+        if not text or len(text.strip()) < 20:
+            return jsonify({"error": "Could not extract enough readable text from this file"}), 400
+        title = fname.rsplit(".", 1)[0]
+        html = "<h1>" + _esc(title) + "</h1>\n"
+        for para in text.split("\n"):
+            p = para.strip()
+            if p:
+                html += "<p>" + _esc(p) + "</p>\n"
+        note_id = sdb.create_note(_cid(), title, html, source_type="pdf-upload")
+        return jsonify({"note_id": note_id, "title": title})
 
     @app.route("/api/student/notes", methods=["GET"])
     def student_get_notes():
@@ -4422,6 +4433,10 @@ def register_student_routes(app, csrf, limiter):
 
         notes_html = ""
         for n in notes:
+            is_pub = n.get("is_public", False)
+            share_icon = "&#127760;" if is_pub else "&#128274;"
+            share_label = "Public" if is_pub else "Share"
+            share_color = "color:var(--green);" if is_pub else ""
             notes_html += f"""
             <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/notes/{n['id']}'">
               <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -4429,7 +4444,10 @@ def register_student_routes(app, csrf, limiter):
                   <h3 style="margin:0;font-size:16px;">{_esc(n.get('title','Untitled'))}</h3>
                   <span style="font-size:13px;color:var(--text-muted);">{_esc(n.get('course_name',''))} &middot; {_esc(n.get('source_type','ai'))} &middot; {str(n.get('created_at',''))[:10]}</span>
                 </div>
-                <button onclick="event.stopPropagation();deleteNote({n['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <button onclick="event.stopPropagation();toggleShare({n['id']},{'true' if is_pub else 'false'})" class="btn btn-ghost btn-sm" style="font-size:12px;{share_color}" title="{'Unpublish from Exchange' if is_pub else 'Share to Exchange'}">{share_icon} {share_label}</button>
+                  <button onclick="event.stopPropagation();deleteNote({n['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
+                </div>
               </div>
             </div>"""
         if not notes_html:
@@ -4456,6 +4474,19 @@ def register_student_routes(app, csrf, limiter):
           <p style="font-size:12px;color:var(--text-muted);margin:8px 0 12px;">The AI will analyze your uploaded files and syllabus to create comprehensive study notes.</p>
           <button onclick="genNotes()" class="btn btn-primary btn-sm" id="note-gen-btn">&#10024; Generate</button>
         </div>
+
+        <!-- Drag-drop PDF upload zone -->
+        <div id="pdf-drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius-sm);padding:32px;text-align:center;margin-bottom:20px;cursor:pointer;transition:all 0.3s ease;background:var(--card);"
+          ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='rgba(139,92,246,0.05)'"
+          ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--card)'"
+          ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--card)';handlePDFDrop(event.dataTransfer.files)"
+          onclick="document.getElementById('pdf-file-input').click()">
+          <div style="font-size:36px;margin-bottom:8px;">&#128196;</div>
+          <p style="margin:0;font-weight:600;color:var(--text);">Drag & drop a PDF or DOCX file here</p>
+          <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">or click to browse &middot; your notes will be extracted automatically</p>
+          <input type="file" id="pdf-file-input" style="display:none;" accept=".pdf,.docx,.doc" onchange="handlePDFDrop(this.files)">
+        </div>
+        <div id="pdf-upload-status" style="display:none;margin-bottom:16px;padding:12px;border-radius:var(--radius-sm);background:var(--card);border:1px solid var(--border);text-align:center;color:var(--text-muted);font-size:14px;"></div>
 
         {notes_html}
 
@@ -4485,6 +4516,43 @@ def register_student_routes(app, csrf, limiter):
           if (!confirm('Delete this note?')) return;
           await fetch('/api/student/notes/' + id, {{method:'DELETE'}});
           location.reload();
+        }}
+        async function toggleShare(noteId, isPublic) {{
+          if (isPublic) {{
+            await fetch('/api/student/exchange/unpublish', {{
+              method:'POST', headers:{{'Content-Type':'application/json'}},
+              body:JSON.stringify({{note_id:noteId}})
+            }});
+          }} else {{
+            await fetch('/api/student/exchange/publish', {{
+              method:'POST', headers:{{'Content-Type':'application/json'}},
+              body:JSON.stringify({{note_id:noteId}})
+            }});
+          }}
+          location.reload();
+        }}
+        async function handlePDFDrop(files) {{
+          if (!files || files.length === 0) return;
+          var file = files[0];
+          var name = file.name.toLowerCase();
+          if (!name.endsWith('.pdf') && !name.endsWith('.docx') && !name.endsWith('.doc')) {{
+            alert('Only PDF and DOCX files are supported'); return;
+          }}
+          if (file.size > 15 * 1024 * 1024) {{
+            alert('File too large (max 15MB)'); return;
+          }}
+          var status = document.getElementById('pdf-upload-status');
+          status.style.display = 'block';
+          status.innerHTML = '&#9203; Uploading and extracting notes from <b>' + file.name + '</b>...';
+          var fd = new FormData();
+          fd.append('file', file);
+          try {{
+            var r = await fetch('/api/student/notes/upload-pdf', {{method:'POST', body:fd}});
+            var d = await r.json();
+            if (r.ok && d.note_id) {{
+              window.location = '/student/notes/' + d.note_id;
+            }} else {{ status.innerHTML = '&#10060; ' + (d.error || 'Upload failed'); }}
+          }} catch(e) {{ status.innerHTML = '&#10060; Network error'; }}
         }}
         </script>
         """, active_page="student_notes")
@@ -5043,6 +5111,20 @@ def register_student_routes(app, csrf, limiter):
         }}
         </script>
         """, active_page="student_exchange")
+
+    # ── GPA Country Setting API ─────────────────────────────
+
+    @app.route("/api/student/settings/gpa-country", methods=["POST"])
+    def student_set_gpa_country():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True)
+        country = data.get("country", "us")
+        allowed = {"us","uk","mx","ar","co","cl","br","de","fr","es","in","au","jp"}
+        if country not in allowed:
+            country = "us"
+        sdb.set_gpa_country(_cid(), country)
+        return jsonify({"ok": True})
 
     # ── Study Exchange API ──────────────────────────────────
 

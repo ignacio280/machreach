@@ -879,7 +879,8 @@ LAYOUT = """<!DOCTYPE html>
             <a href="/student/gpa">&#127891; GPA Calculator</a>
             <a href="/student/schedule">&#128337; Schedule</a>
             <a href="/student/weak-topics">&#127919; Weak Topics</a>
-            <a href="/student/leaderboard">&#127942; Leaderboard</a>
+            <a href="/student/smart-import">&#128640; Import</a>
+            <a href="/student/achievements">&#127942; XP</a>
           </div>
         </div>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
@@ -889,9 +890,8 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/quizzes" {% if active_page == 'student_quizzes' %}class="active"{% endif %}>&#128221; Quizzes</a>
         <a href="/student/notes" {% if active_page == 'student_notes' %}class="active"{% endif %}>&#128214; Notes</a>
         <a href="/student/chat" {% if active_page == 'student_chat' %}class="active"{% endif %}>&#129302; Tutor</a>
-        <a href="/student/smart-import" {% if active_page == 'student_smart_import' %}class="active"{% endif %}>&#128640; Import</a>
         <a href="/student/exchange" {% if active_page == 'student_exchange' %}class="active"{% endif %}>&#128218; Exchange</a>
-        <a href="/student/achievements" {% if active_page == 'student_achievements' %}class="active"{% endif %}>&#127942; XP</a>
+        <a href="/student/leaderboard" {% if active_page == 'student_leaderboard' %}class="active"{% endif %}>&#127942; Leaderboard</a>
         <div class="nav-divider"></div>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; Mail</a>
         <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881;</a>

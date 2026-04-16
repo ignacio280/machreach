@@ -494,6 +494,8 @@ def _student_migrations():
         ("student_notes", "likes", "INTEGER DEFAULT 0"),
         ("student_notes", "university", "TEXT DEFAULT ''"),
         ("student_notes", "author_name", "TEXT DEFAULT ''"),
+        # GPA country preference
+        ("student_email_prefs", "gpa_country", "TEXT DEFAULT 'us'"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -1583,6 +1585,20 @@ def upsert_email_prefs(client_id: int, daily_email: bool = True, email_hour: int
                   "INSERT INTO student_email_prefs (client_id, daily_email, email_hour, timezone, university, field_of_study, lang) "
                   "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                   (client_id, de, email_hour, timezone, university, field_of_study, lang))
+
+
+def set_gpa_country(client_id: int, country: str):
+    with get_db() as db:
+        existing = _fetchone(db, "SELECT id FROM student_email_prefs WHERE client_id = %s",
+                             (client_id,))
+        if existing:
+            _exec(db,
+                  "UPDATE student_email_prefs SET gpa_country = %s WHERE client_id = %s",
+                  (country, client_id))
+        else:
+            _exec(db,
+                  "INSERT INTO student_email_prefs (client_id, gpa_country) VALUES (%s, %s)",
+                  (client_id, country))
 
 
 # ── Weak topics ─────────────────────────────────────────────
