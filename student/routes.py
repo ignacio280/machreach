@@ -1545,7 +1545,7 @@ def register_student_routes(app, csrf, limiter):
             + '<td><input type="text" class="edit-input" data-field="topics" placeholder="Topic 1, Topic 2, ..."></td>'
             + '<td style="font-size:11px;color:var(--text-muted);">Save first</td>'
             + '<td><button onclick="saveExam(null,this)" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;">&#128190;</button>'
-            + ' <button onclick="this.closest(\'tr\').remove()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;color:var(--red);">&#128465;</button></td>';
+            + ' <button onclick="this.closest(\\'tr\\').remove()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;color:var(--red);">&#128465;</button></td>';
           tbody.appendChild(tr);
         }}
 
