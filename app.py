@@ -627,6 +627,23 @@ LAYOUT = """<!DOCTYPE html>
     :root[data-theme="mr-mono"] body { background:#0a0a0a; }
     :root[data-theme="mr-mono"] input, :root[data-theme="mr-mono"] textarea, :root[data-theme="mr-mono"] select { background:#171717; color:#fafafa; border-color:#262626; }
     :root[data-theme="mr-mono"] .btn-primary { background:#fff; color:#000; }
+
+    /* Nav theming — each theme gets its own gradient so the top bar matches */
+    :root[data-theme="mr-midnight"] .nav { background: linear-gradient(135deg,#020617 0%,#0f172a 100%); }
+    :root[data-theme="mr-forest"]   .nav { background: linear-gradient(135deg,#052e1a 0%,#0f2a20 100%); }
+    :root[data-theme="mr-ocean"]    .nav { background: linear-gradient(135deg,#0c1e38 0%,#082f49 100%); }
+    :root[data-theme="mr-rose"]     .nav { background: linear-gradient(135deg,#2a0612 0%,#500724 100%); }
+    :root[data-theme="mr-sunset"]   .nav { background: linear-gradient(135deg,#7c2d12 0%,#b45309 100%); }
+    :root[data-theme="mr-mono"]     .nav { background: linear-gradient(135deg,#000 0%,#0a0a0a 100%); }
+    :root[data-theme="mr-light"]    .nav { background: linear-gradient(135deg,#ffffff 0%,#f1f5f9 100%); border-bottom:1px solid #e2e8f0; }
+    :root[data-theme="mr-light"]    .nav-links a { color:#475569; }
+    :root[data-theme="mr-light"]    .nav-links a:hover { color:#0f172a; background: rgba(15,23,42,0.06); }
+    :root[data-theme="mr-light"]    .nav-links a.active { color:#0f172a; background: rgba(99,102,241,0.12); }
+    :root[data-theme="mr-light"]    .nav-dropdown-menu { background:#ffffff; border-color:#e2e8f0; box-shadow:0 12px 40px rgba(15,23,42,.12); }
+    :root[data-theme="mr-light"]    .nav-dropdown-menu a { color:#475569 !important; }
+    :root[data-theme="mr-light"]    .nav-dropdown-menu a:hover { color:#0f172a !important; background:rgba(99,102,241,.1) !important; }
+    :root[data-theme="mr-light"]    .nav-user { color:#64748b; }
+    :root[data-theme="mr-light"]    .nav-logo { color:#0f172a; }
     /* ─── end themes ─── */
 
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -1117,7 +1134,6 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %}>{{nav.settings}}</a>
         {% endif %}
         {% if is_admin %}<a href="/admin/broadcast" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
-        <button onclick="toggleDarkMode()" class="btn btn-ghost btn-sm" id="theme-toggle" title="Toggle dark mode" style="font-size:16px;padding:4px 8px;cursor:pointer;background:none;border:none;color:#94A3B8;">&#127769;</button>
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
         <div class="nav-divider"></div>
         <span class="nav-user">{{client_name}}</span>
@@ -1729,6 +1745,33 @@ LAYOUT = """<!DOCTYPE html>
     var state = loadState();
     var path = window.location.pathname.replace(/\\/$/, '') || '/';
 
+    /* Define tour controls UP FRONT so inline onclick handlers always resolve,
+       even on the very first step after clicking "Start Tour". */
+    window._mrTutNext = function() {
+      if (!state) state = { type: ACCOUNT_TYPE, step: 0, running: true };
+      state.step++;
+      saveState(state);
+      if (state.step >= STEPS.length) {
+        finishTour();
+      } else {
+        showStep(state.step);
+      }
+    };
+    window._mrTutPrev = function() {
+      if (state && state.step > 0) {
+        state.step--;
+        saveState(state);
+        showStep(state.step);
+      }
+    };
+    window._mrTutEnd = function() {
+      localStorage.setItem(DONE_KEY, '1');
+      clearState();
+      var w = document.getElementById('mr-tut-welcome');
+      if (w && w.parentNode) w.remove();
+      cleanup();
+    };
+
     /* ---------- WELCOME MODAL (only shown on start page, first time) ---------- */
     function isStartPage() {
       if (ACCOUNT_TYPE === 'student') return path === '/student' || path === '/student/';
@@ -1758,40 +1801,11 @@ LAYOUT = """<!DOCTYPE html>
         saveState(state);
         showStep(0);
       };
-      window._mrTutEnd = function() {
-        localStorage.setItem(DONE_KEY, '1');
-        clearState();
-        if (welcome && welcome.parentNode) welcome.remove();
-        cleanup();
-      };
       return;
     }
 
     /* Tour is running. Either we're on the right page (show step) or we need to resume after navigation. */
     if (state.type !== ACCOUNT_TYPE) return; /* different account — ignore */
-
-    /* Expose controls so they work across pages */
-    window._mrTutNext = function() {
-      state.step++;
-      saveState(state);
-      if (state.step >= STEPS.length) {
-        finishTour();
-      } else {
-        showStep(state.step);
-      }
-    };
-    window._mrTutPrev = function() {
-      if (state.step > 0) {
-        state.step--;
-        saveState(state);
-        showStep(state.step);
-      }
-    };
-    window._mrTutEnd = function() {
-      localStorage.setItem(DONE_KEY, '1');
-      clearState();
-      cleanup();
-    };
 
     /* Auto-resume: wait for DOM to be ready-ish, then show step */
     if (document.readyState === 'loading') {

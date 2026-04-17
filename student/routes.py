@@ -3492,7 +3492,9 @@ def register_student_routes(app, csrf, limiter):
             quality = max(0, min(5, int(quality)))
             correct = quality >= 3
         sdb.update_flashcard_progress(data["card_id"], correct, quality=quality)
-        # XP is now only awarded from Focus Mode and Exchange notes usage.
+        # Award XP: 2 XP for correct review, 1 XP for attempt
+        xp_amount = 2 if correct else 1
+        sdb.award_xp(_cid(), "flashcard_review", xp_amount, f"card:{data.get('card_id')}")
         # Check flashcard badges
         from outreach.db import _fetchval, get_db
         with get_db() as db:
@@ -3638,7 +3640,9 @@ def register_student_routes(app, csrf, limiter):
         data = request.get_json(force=True)
         score = int(data.get("score", 0))
         sdb.update_quiz_score(quiz_id, score)
-        # XP is now only awarded from Focus Mode and Exchange notes usage.
+        # Award XP: base 10 XP for completing + bonus scaled by score (up to +15 for 100%)
+        xp_amount = 10 + int(score * 0.15)
+        sdb.award_xp(_cid(), "quiz_completed", xp_amount, f"quiz:{quiz_id} score:{score}")
         if score == 100:
             sdb.earn_badge(_cid(), "quiz_master")
         if not sdb.get_badges(_cid()) or not any(b["badge_key"] == "first_quiz" for b in sdb.get_badges(_cid())):
@@ -7170,56 +7174,30 @@ No markdown, no code fences. ONLY JSON.
             <script>
               (function() {{
                 var current = localStorage.getItem('mr_theme') || 'default';
-                var pending = current;
-                var statusEl = document.getElementById('theme-status');
                 function mark() {{
                   document.querySelectorAll('.theme-chip').forEach(function(b) {{
-                    var isPending = b.dataset.theme === pending;
-                    var isSaved = b.dataset.theme === current;
-                    b.style.outline = isPending ? '3px solid #6366f1' : 'none';
-                    b.style.outlineOffset = isPending ? '2px' : '0';
-                    var badge = b.querySelector('.theme-saved-badge');
-                    if (badge) badge.style.display = (isSaved && isPending) ? 'inline-block' : 'none';
+                    b.style.outline = (b.dataset.theme === current) ? '3px solid #6366f1' : 'none';
+                    b.style.outlineOffset = (b.dataset.theme === current) ? '2px' : '0';
                   }});
-                  var saveBtn = document.getElementById('theme-save-btn');
-                  if (saveBtn) {{
-                    saveBtn.disabled = (pending === current);
-                    saveBtn.textContent = (pending === current) ? '&#10003; Saved' : 'Save theme';
-                    saveBtn.innerHTML = (pending === current) ? '&#10003; Saved' : 'Save theme';
-                  }}
                 }}
                 document.querySelectorAll('.theme-chip').forEach(function(b) {{
                   b.addEventListener('click', function() {{
-                    pending = b.dataset.theme;
-                    // Instant preview
-                    if (window.applyMrTheme) window.applyMrTheme(pending);
-                    if (statusEl) statusEl.textContent = 'Previewing &mdash; click Save to keep it.';
+                    current = b.dataset.theme;
+                    localStorage.setItem('mr_theme', current);
+                    if (window.applyMrTheme) window.applyMrTheme(current);
                     mark();
+                    var s = document.getElementById('theme-status');
+                    if (s) {{
+                      s.textContent = 'Saved! This theme now applies everywhere.';
+                      setTimeout(function(){{ if(s) s.textContent=''; }}, 2200);
+                    }}
                   }});
-                }});
-                var saveBtn = document.getElementById('theme-save-btn');
-                if (saveBtn) saveBtn.addEventListener('click', function() {{
-                  current = pending;
-                  localStorage.setItem('mr_theme', current);
-                  if (statusEl) statusEl.textContent = 'Saved! This theme will apply everywhere.';
-                  mark();
-                  setTimeout(function(){{ if(statusEl) statusEl.textContent=''; }}, 2500);
-                }});
-                var resetBtn = document.getElementById('theme-reset-btn');
-                if (resetBtn) resetBtn.addEventListener('click', function() {{
-                  pending = current;
-                  if (window.applyMrTheme) window.applyMrTheme(current);
-                  mark();
                 }});
                 mark();
               }})();
             </script>
-            <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
-              <button id="theme-save-btn" class="btn btn-primary btn-sm" disabled>&#10003; Saved</button>
-              <button id="theme-reset-btn" class="btn btn-outline btn-sm">Revert preview</button>
-              <span id="theme-status" style="color:var(--text-muted);font-size:13px"></span>
-            </div>
-            <p style="color:var(--text-muted);font-size:12px;margin-top:10px">&#128161; Click any theme to preview it instantly. Hit Save when you find one you like.</p>
+            <span id="theme-status" style="color:var(--text-muted);font-size:13px;display:inline-block;margin-top:10px"></span>
+            <p style="color:var(--text-muted);font-size:12px;margin-top:6px">&#128161; Click any theme to switch instantly. Your choice is saved automatically.</p>
           </div>
 
           <!-- Daily Study Email -->
