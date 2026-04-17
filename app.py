@@ -1149,7 +1149,6 @@ LAYOUT = """<!DOCTYPE html>
         <div class="nav-divider"></div>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %} style="{% if active_page == 'mail_hub' %}color:var(--primary);{% endif %}">&#128233; {{nav.mail_hub}}</a>
         <a href="/contacts" {% if active_page == 'contacts' %}class="active"{% endif %} style="{% if active_page == 'contacts' %}color:var(--primary);{% endif %}">&#128101; {{nav.contacts}}</a>
-        <a href="/billing" {% if active_page == 'billing' %}class="active"{% endif %}>&#128179; {{nav.billing}}</a>
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %}>{{nav.settings}}</a>
         {% endif %}
         {% if is_admin %}<a href="/admin/broadcast" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
@@ -3578,6 +3577,31 @@ def settings():
 
     {team_card}
 
+    <!-- Theme picker -->
+    <div class="card">
+      <div class="card-header"><h2>&#127912; Theme</h2></div>
+      <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">Personalize how MachReach looks. Saved on this device.</p>
+      <div id="theme-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
+        <button type="button" class="theme-chip" data-theme="default" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#0f172a;color:#fff;text-align:left"><div style="font-weight:700">Default</div><div style="font-size:11px;opacity:.7">Indigo / Slate</div></button>
+        <button type="button" class="theme-chip" data-theme="light" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#f8fafc;color:#111827;text-align:left"><div style="font-weight:700">Light</div><div style="font-size:11px;opacity:.7">Clean &amp; bright</div></button>
+        <button type="button" class="theme-chip" data-theme="midnight" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#050816;color:#e2e8f0;text-align:left"><div style="font-weight:700">Midnight</div><div style="font-size:11px;opacity:.7">Deep black</div></button>
+        <button type="button" class="theme-chip" data-theme="forest" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#0b2018;color:#d1fae5;text-align:left"><div style="font-weight:700">Forest</div><div style="font-size:11px;opacity:.7">Calm green</div></button>
+        <button type="button" class="theme-chip" data-theme="ocean" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#082f49;color:#e0f2fe;text-align:left"><div style="font-weight:700">Ocean</div><div style="font-size:11px;opacity:.7">Deep blue</div></button>
+        <button type="button" class="theme-chip" data-theme="rose" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#3f0a1a;color:#fecdd3;text-align:left"><div style="font-weight:700">Rose</div><div style="font-size:11px;opacity:.7">Warm crimson</div></button>
+        <button type="button" class="theme-chip" data-theme="sunset" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:linear-gradient(135deg,#7c2d12,#ea580c);color:#fff;text-align:left"><div style="font-weight:700">Sunset</div><div style="font-size:11px;opacity:.7">Orange / amber</div></button>
+        <button type="button" class="theme-chip" data-theme="mono" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#111;color:#fff;text-align:left"><div style="font-weight:700">Mono</div><div style="font-size:11px;opacity:.7">Pure black &amp; white</div></button>
+      </div>
+      <span id="theme-status" style="color:var(--text-muted);font-size:13px;display:inline-block;margin-top:10px"></span>
+      <p style="color:var(--text-muted);font-size:12px;margin-top:6px">&#128161; Click any theme to switch instantly.</p>
+    </div>
+
+    <!-- Billing & Plan -->
+    <div class="card">
+      <div class="card-header"><h2>&#128179; Billing &amp; Plan</h2></div>
+      <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">Manage your subscription, view invoices, and change payment method.</p>
+      <a href="/billing" class="btn btn-primary">&#128179; Open Billing</a>
+    </div>
+
     <div class="card">
       <div class="card-header"><h2>&#128230; Your Data (GDPR)</h2></div>
       <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">Download a copy of all your personal data stored in MachReach (profile, campaigns, contacts, emails). The export is in JSON format.</p>
@@ -3790,6 +3814,66 @@ def settings():
           else alert(data.error || 'Failed to remove');
         }});
     }}
+
+    // Theme picker behavior
+    (function(){{
+      var current = localStorage.getItem('mr_theme') || 'default';
+      function mark(){{
+        document.querySelectorAll('.theme-chip').forEach(function(b){{
+          b.style.outline = (b.dataset.theme === current) ? '3px solid #6366f1' : 'none';
+          b.style.outlineOffset = (b.dataset.theme === current) ? '2px' : '0';
+        }});
+      }}
+      document.querySelectorAll('.theme-chip').forEach(function(b){{
+        b.addEventListener('click', function(){{
+          current = b.dataset.theme;
+          localStorage.setItem('mr_theme', current);
+          if (window.applyMrTheme) window.applyMrTheme(current);
+          mark();
+          var s = document.getElementById('theme-status');
+          if (s) {{ s.textContent = 'Saved!'; setTimeout(function(){{ if(s) s.textContent=''; }}, 1800); }}
+        }});
+      }});
+      mark();
+    }})();
+
+    // Settings side nav (auto-generated from card headings)
+    (function(){{
+      function build(){{
+        var headers = document.querySelectorAll('.card .card-header h2');
+        if (!headers.length) return;
+        var nav = document.createElement('div');
+        nav.id = 'mr-settings-nav';
+        nav.innerHTML = '<div class="mr-snav-inner"><div class="mr-snav-title">Jump to</div></div>';
+        var inner = nav.querySelector('.mr-snav-inner');
+        headers.forEach(function(h, i){{
+          var card = h.closest('.card');
+          if (!card) return;
+          if (!card.id) card.id = 'sec-' + i;
+          var a = document.createElement('a');
+          a.textContent = h.textContent.replace(/[\\u{{1F300}}-\\u{{1FAFF}}\\u{{2600}}-\\u{{27BF}}]/gu,'').trim();
+          a.href = '#' + card.id;
+          a.className = 'mr-snav-link';
+          a.addEventListener('click', function(e){{
+            e.preventDefault();
+            card.scrollIntoView({{behavior:'smooth', block:'start'}});
+            history.replaceState(null,'','#'+card.id);
+          }});
+          inner.appendChild(a);
+        }});
+        document.body.appendChild(nav);
+        var style = document.createElement('style');
+        style.textContent = '#mr-settings-nav{{position:fixed;top:120px;right:max(12px,calc((100vw - 1100px) / 2 - 220px));width:200px;z-index:90;}}'
+          + '.mr-snav-inner{{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,.06);max-height:calc(100vh - 160px);overflow-y:auto;}}'
+          + '.mr-snav-title{{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;padding:0 4px;}}'
+          + '.mr-snav-link{{display:block;padding:5px 8px;border-radius:6px;color:var(--text);text-decoration:none;font-size:12px;line-height:1.3;}}'
+          + '.mr-snav-link:hover{{background:var(--bg);color:var(--primary);}}'
+          + '@media (max-width: 1280px) {{ #mr-settings-nav{{display:none;}} }}';
+        document.head.appendChild(style);
+      }}
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
+      else build();
+    }})();
     </script>
     """, active_page="settings", client=client, sender_name=SENDER_NAME,
         daily_limit="Unlimited" if limits["emails_per_day"] == -1 else str(limits["emails_per_day"]))
@@ -6189,6 +6273,7 @@ def mail_hub():
               .then(function(s) {{
                 if (s.status === 'done') {{
                   clearInterval(_syncPoll);
+                  peekAutoSynced = false;  // re-arm so next peek can trigger again
                   if (s.new_emails > 0) {{
                     btn.innerHTML = '&#9989; ' + s.new_emails + ' new! Refreshing...';
                     showToast(s.new_emails + ' new email(s) synced &amp; classified.', 'success');
@@ -6199,6 +6284,7 @@ def mail_hub():
                   }}
                 }} else if (s.status === 'error') {{
                   clearInterval(_syncPoll);
+                  peekAutoSynced = false;
                   btn.innerHTML = '&#9888; ' + (s.error || 'Sync failed');
                   setTimeout(function() {{ btn.innerHTML = '&#128260; Sync Inbox'; btn.disabled = false; }}, 3000);
                 }}
@@ -6214,7 +6300,7 @@ def mail_hub():
 
     // --- Peek for new mail (lightweight, no sync cost) ---
     const isPaid = {'true' if is_paid else 'false'};
-    let peekAutoSynced = false;
+    let peekAutoSynced = false;  // re-armed after each sync completes
 
     function peekInbox() {{
       fetch('/api/mail-hub/peek', {{method: 'POST'}})
@@ -6231,7 +6317,7 @@ def mail_hub():
             badge.style.display = 'inline-block';
             badge.style.background = '';
             badge.style.color = '';
-            // Auto-sync (once per page load)
+            // Auto-sync immediately on every detection (re-armed after each sync)
             if (!peekAutoSynced) {{
               peekAutoSynced = true;
               syncInbox();
@@ -6243,9 +6329,9 @@ def mail_hub():
         .catch(() => {{}});
     }}
 
-    // Peek immediately on page load, then every 60s
+    // Peek immediately on page load, then every 20s for near-real-time delivery
     peekInbox();
-    setInterval(peekInbox, 60000);
+    setInterval(peekInbox, 20000);
 
     // Convert scheduled email times from UTC to local
     document.querySelectorAll('.sched-utc').forEach(function(el) {{

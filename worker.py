@@ -495,6 +495,17 @@ if __name__ == "__main__":
     scheduler.add_job(sync_mail_hub, "interval", minutes=3, id="sync_mail_hub")
     scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
 
+    def _apply_recurring_income_all():
+        try:
+            from professional import db as pdb
+            n = pdb.apply_recurring_income(None)
+            if n:
+                print(f"Auto-credited recurring income on {n} card(s).")
+        except Exception as e:
+            print(f"apply_recurring_income error (non-fatal): {e}")
+
+    scheduler.add_job(_apply_recurring_income_all, "cron", hour=2, minute=0, id="apply_recurring_income")
+
     # Run once immediately
     send_batch()
     process_snoozes()

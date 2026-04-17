@@ -179,7 +179,20 @@ def init_professional_db():
             db.cursor().execute(PRO_PG_SCHEMA)
         else:
             db.executescript(PRO_SQLITE_SCHEMA)
+        # Additive migrations (safe to re-run)
+        _safe_add_column(db, "pro_bank_connections", "monthly_income", "REAL DEFAULT 0")
+        _safe_add_column(db, "pro_bank_connections", "income_day", "INTEGER DEFAULT 1")
+        _safe_add_column(db, "pro_bank_connections", "last_income_date", "TEXT DEFAULT ''")
     log.info("Professional toolkit tables initialized.")
+
+
+def _safe_add_column(db, table: str, col: str, decl: str) -> None:
+    """Idempotent ALTER TABLE ADD COLUMN — works on PG and SQLite."""
+    try:
+        cur = db.cursor()
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    except Exception:
+        pass  # already exists
 
 
 # ── Tasks ──────────────────────────────────────────────────
@@ -672,6 +685,75 @@ def update_bank_balance(conn_id: int, client_id: int, balance: float) -> None:
     with get_db() as db:
         _exec(db, "UPDATE pro_bank_connections SET balance = %s WHERE id = %s AND client_id = %s",
               (float(balance), conn_id, client_id))
+
+
+def update_bank_income_settings(conn_id: int, client_id: int, monthly_income: float, income_day: int) -> None:
+    """Set per-card recurring monthly income amount + day of month to credit it."""
+    income_day = max(1, min(28, int(income_day or 1)))  # 28 = safe last day all months
+    with get_db() as db:
+        _exec(db,
+              "UPDATE pro_bank_connections SET monthly_income = %s, income_day = %s "
+              "WHERE id = %s AND client_id = %s",
+              (float(monthly_income or 0), income_day, conn_id, client_id))
+
+
+def apply_recurring_income(client_id: int | None = None) -> int:
+    """
+    For every bank account with monthly_income > 0, credit the income on/after its
+    income_day each month. Idempotent — uses last_income_date to avoid double-crediting.
+
+    Returns number of income deposits created.
+    """
+    from datetime import date
+    today = date.today()
+    today_iso = today.strftime("%Y-%m-%d")
+    period_key = today.strftime("%Y-%m")
+
+    with get_db() as db:
+        sql = "SELECT * FROM pro_bank_connections WHERE COALESCE(monthly_income, 0) > 0"
+        params: tuple = ()
+        if client_id is not None:
+            sql += " AND client_id = %s"
+            params = (client_id,)
+        accounts = _fetchall(db, sql, params)
+
+    created = 0
+    for a in accounts:
+        try:
+            day = int(a.get("income_day") or 1)
+        except Exception:
+            day = 1
+        if today.day < day:
+            continue  # not yet this month
+
+        last = (a.get("last_income_date") or "")[:7]  # YYYY-MM
+        if last == period_key:
+            continue  # already credited this month
+
+        amount = float(a.get("monthly_income") or 0)
+        if amount <= 0:
+            continue
+
+        merchant = "Recurring income · " + (a.get("institution_name") or "Account")
+        create_transaction(
+            client_id=int(a["client_id"]),
+            amount=amount,
+            merchant=merchant,
+            category="income",
+            tx_date=today_iso,
+            bank_connection_id=int(a["id"]),
+            description="Auto-credited monthly income",
+            currency=(a.get("currency") or "USD"),
+        )
+        # Bump card balance + mark as credited this month
+        new_balance = float(a.get("balance") or 0) + amount
+        with get_db() as db:
+            _exec(db,
+                  "UPDATE pro_bank_connections SET balance = %s, last_income_date = %s "
+                  "WHERE id = %s",
+                  (new_balance, today_iso, int(a["id"])))
+        created += 1
+    return created
 
 
 def list_transactions(client_id: int, days: int = 90, connection_id: int | None = None) -> list[dict]:

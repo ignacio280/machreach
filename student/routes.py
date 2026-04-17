@@ -7508,6 +7508,44 @@ No markdown, no code fences. ONLY JSON.
             status.innerHTML = '<span style="color:var(--red);">Connection error</span>';
           }});
         }}
+
+        // Settings side nav (auto-generated from card headings)
+        (function(){{
+          function build(){{
+            var headers = document.querySelectorAll('.card .card-header h2');
+            if (!headers.length) return;
+            var nav = document.createElement('div');
+            nav.id = 'mr-settings-nav';
+            nav.innerHTML = '<div class="mr-snav-inner"><div class="mr-snav-title">Jump to</div></div>';
+            var inner = nav.querySelector('.mr-snav-inner');
+            headers.forEach(function(h, i){{
+              var card = h.closest('.card');
+              if (!card) return;
+              if (!card.id) card.id = 'sec-' + i;
+              var a = document.createElement('a');
+              a.textContent = h.textContent.replace(/[\\u{{1F300}}-\\u{{1FAFF}}\\u{{2600}}-\\u{{27BF}}]/gu,'').trim();
+              a.href = '#' + card.id;
+              a.className = 'mr-snav-link';
+              a.addEventListener('click', function(e){{
+                e.preventDefault();
+                card.scrollIntoView({{behavior:'smooth', block:'start'}});
+                history.replaceState(null,'','#'+card.id);
+              }});
+              inner.appendChild(a);
+            }});
+            document.body.appendChild(nav);
+            var style = document.createElement('style');
+            style.textContent = '#mr-settings-nav{{position:fixed;top:120px;right:max(12px,calc((100vw - 1100px) / 2 - 220px));width:200px;z-index:90;}}'
+              + '.mr-snav-inner{{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,.06);max-height:calc(100vh - 160px);overflow-y:auto;}}'
+              + '.mr-snav-title{{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;padding:0 4px;}}'
+              + '.mr-snav-link{{display:block;padding:5px 8px;border-radius:6px;color:var(--text);text-decoration:none;font-size:12px;line-height:1.3;}}'
+              + '.mr-snav-link:hover{{background:var(--bg);color:var(--primary);}}'
+              + '@media (max-width: 1280px) {{ #mr-settings-nav{{display:none;}} }}';
+            document.head.appendChild(style);
+          }}
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
+          else build();
+        }})();
         </script>
         """, active_page="student_settings")
 

@@ -317,6 +317,11 @@ def register_professional_routes(app, csrf, limiter):
     def pro_finance_page():
         if not _logged_in():
             return redirect(url_for("login"))
+        # Auto-credit recurring monthly income on every visit (idempotent)
+        try:
+            pdb.apply_recurring_income(_cid())
+        except Exception:
+            log.exception("apply_recurring_income failed")
         banks = pdb.list_bank_connections(_cid())
         txs = pdb.list_transactions(_cid(), days=60)
         summary = pdb.spending_summary(_cid(), days=30)
@@ -328,18 +333,35 @@ def register_professional_routes(app, csrf, limiter):
         # Bank connections
         banks_html = ""
         for b in banks:
+            mi = float(b.get("monthly_income") or 0)
+            iday = int(b.get("income_day") or 1)
+            last_inc = b.get("last_income_date") or ""
+            last_inc_html = f'<div style="font-size:11px;color:var(--text-muted);">Last credited: {_esc(last_inc)}</div>' if last_inc else ""
             banks_html += f"""
             <div class="card" style="padding:14px 16px;background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.08));border-left:3px solid var(--primary);margin-bottom:8px;">
               <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
                 <div>
                   <div style="font-weight:700;">{_esc(b.get('institution_name',''))} <span style="color:var(--text-muted);font-weight:400;font-size:12px;">&middot; {_esc(b.get('account_type',''))}{' &middot; ****' + _esc(b.get('last_4','')) if b.get('last_4') else ''}</span></div>
                   {"<div style='font-size:12px;color:var(--text-muted);'>" + _esc(b.get('account_name','')) + "</div>" if b.get('account_name') else ""}
+                  {last_inc_html}
                 </div>
                 <div style="text-align:right;">
-                  <div style="font-family:monospace;font-size:18px;font-weight:700;">{_esc(b.get('currency','USD'))} {float(b.get('balance') or 0):,.2f}</div>
+                  <div style="font-family:monospace;font-size:18px;font-weight:700;">{_esc(b.get('currency','USD'))} <input type="number" step="0.01" id="bal-{b['id']}" value="{float(b.get('balance') or 0):.2f}" style="width:120px;background:transparent;border:none;color:var(--text);font-family:monospace;font-size:18px;font-weight:700;text-align:right;" onchange="saveBalance({b['id']})"></div>
                   <button onclick="delBank({b['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px;">Remove</button>
                 </div>
               </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);align-items:end;">
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);">Monthly income for this card</label>
+                  <input type="number" step="0.01" id="inc-{b['id']}" value="{mi:.2f}" placeholder="0.00" class="edit-input" style="font-family:monospace;">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);">Day of month to credit</label>
+                  <input type="number" min="1" max="28" id="incday-{b['id']}" value="{iday}" class="edit-input">
+                </div>
+                <button onclick="saveIncome({b['id']})" class="btn btn-primary btn-sm">Save</button>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Set this once and your card balance auto-updates each month. Then just import statements to log spending.</div>
             </div>"""
         if not banks_html:
             banks_html = """<div style="padding:24px;text-align:center;color:var(--text-muted);border:2px dashed var(--border);border-radius:10px;">
@@ -364,7 +386,7 @@ def register_professional_routes(app, csrf, limiter):
               <td><button onclick="delTx({t['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px;">&#10005;</button></td>
             </tr>"""
         if not rows:
-            rows = "<tr><td colspan='6' style='text-align:center;padding:24px;color:var(--text-muted);'>No transactions yet. Add one manually or connect a bank (demo mode).</td></tr>"
+            rows = "<tr><td colspan='6' style='text-align:center;padding:24px;color:var(--text-muted);'>No transactions yet. Import a bank statement (PDF/CSV/OFX) or add one manually.</td></tr>"
 
         # Spending by category
         cat_html = ""
@@ -433,7 +455,7 @@ def register_professional_routes(app, csrf, limiter):
               <button onclick="document.getElementById('bank-form').style.display='block'" class="btn btn-primary btn-sm">+ Add</button>
             </div>
             <div id="bank-form" style="display:none;margin-bottom:12px;padding:12px;border:1px dashed var(--border);border-radius:8px;">
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Connect manually. Secure real-bank integration (Plaid) coming next — same data, same flow.</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Add a card or account manually. Use the bank-statement importer below to bring in transactions — your data stays on our servers, no third-party login.</div>
               <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:6px;">
                 <input id="bk-name" placeholder="Institution (Chase, Wells Fargo...)" class="edit-input">
                 <select id="bk-type" class="edit-input"><option value="checking">Checking</option><option value="savings">Savings</option><option value="credit_card">Credit Card</option><option value="investment">Investment</option></select>
@@ -475,11 +497,11 @@ def register_professional_routes(app, csrf, limiter):
           </div>
           <div id="import-form" style="display:none;margin-bottom:12px;padding:12px;border:1px dashed var(--primary);border-radius:8px;background:linear-gradient(135deg,rgba(99,102,241,.05),rgba(139,92,246,.05));">
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
-              Upload a statement export from ANY bank. We support <b>CSV</b> (every bank) and <b>OFX/QFX</b> (most US/UK/EU/LatAm banks).
+              Upload a statement export from ANY bank. We support <b>PDF</b>, <b>CSV</b> (every bank) and <b>OFX/QFX</b> (most US/UK/EU/LatAm banks).
               Download your statement from your online banking, then drop the file here &mdash; no bank login required.
             </div>
             <div style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;align-items:end;">
-              <div><label style="font-size:11px;">File (.csv, .ofx, .qfx)</label><input type="file" id="imp-file" accept=".csv,.ofx,.qfx,.txt" class="edit-input"></div>
+              <div><label style="font-size:11px;">File (.pdf, .csv, .ofx, .qfx)</label><input type="file" id="imp-file" accept=".pdf,.csv,.ofx,.qfx,.txt" class="edit-input"></div>
               <div><label style="font-size:11px;">Link to account (optional)</label>
                 <select id="imp-bank" class="edit-input">
                   <option value="">(no account)</option>
@@ -534,6 +556,19 @@ def register_professional_routes(app, csrf, limiter):
           if(!confirm('Remove this account? Transactions linked to it will stay but lose the account link.')) return;
           await fetch('/api/pro/banks/'+id,{{method:'DELETE',headers:csrfHeader()}});
           location.reload();
+        }}
+        async function saveBalance(id){{
+          var v=parseFloat(document.getElementById('bal-'+id).value||'0');
+          var r=await fetch('/api/pro/banks/'+id+'/balance',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{balance:v}})}});
+          if(!r.ok) alert('Failed to save balance');
+        }}
+        async function saveIncome(id){{
+          var amt=parseFloat(document.getElementById('inc-'+id).value||'0');
+          var day=parseInt(document.getElementById('incday-'+id).value||'1');
+          if(day<1) day=1; if(day>28) day=28;
+          var r=await fetch('/api/pro/banks/'+id+'/income',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{monthly_income:amt,income_day:day}})}});
+          if(r.ok){{ if(amt>0) alert('Saved! This card will auto-credit '+amt.toFixed(2)+' each month on day '+day+'.'); else alert('Auto-income disabled for this card.'); location.reload(); }}
+          else alert('Failed to save');
         }}
         async function addTx(){{
           var amt=parseFloat(document.getElementById('tx-amount').value);
@@ -617,6 +652,34 @@ def register_professional_routes(app, csrf, limiter):
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
         pdb.delete_bank_connection(bank_id, _cid())
+        return jsonify({"ok": True})
+
+    @app.route("/api/pro/banks/<int:bank_id>/balance", methods=["POST"])
+    def pro_bank_set_balance(bank_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        d = request.get_json(force=True) or {}
+        try:
+            pdb.update_bank_balance(bank_id, _cid(), float(d.get("balance") or 0))
+        except Exception as e:
+            log.warning("update_bank_balance failed: %s", e)
+            return jsonify({"error": "update failed"}), 500
+        return jsonify({"ok": True})
+
+    @app.route("/api/pro/banks/<int:bank_id>/income", methods=["POST"])
+    def pro_bank_set_income(bank_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        d = request.get_json(force=True) or {}
+        try:
+            pdb.update_bank_income_settings(
+                bank_id, _cid(),
+                float(d.get("monthly_income") or 0),
+                int(d.get("income_day") or 1),
+            )
+        except Exception as e:
+            log.warning("update_bank_income_settings failed: %s", e)
+            return jsonify({"error": "update failed"}), 500
         return jsonify({"ok": True})
 
     @app.route("/api/pro/transactions", methods=["POST"])

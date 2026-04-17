@@ -4,6 +4,7 @@ Bank statement importer. No third-party services required.
 Supports:
 - CSV (auto-detects common header names across banks worldwide)
 - OFX / QFX (open standard used by most US, CA, AU, NZ, UK banks)
+- PDF (best-effort text extraction, line heuristics)
 - Plain-text / tab-separated export
 
 Returns a list of normalized dicts ready for pdb.create_transaction().
@@ -333,11 +334,116 @@ def parse_ofx(content: str) -> List[dict]:
 
 
 # ─────────────────────────────────────────────────────────────
+# PDF parser (best-effort)
+# ─────────────────────────────────────────────────────────────
+def parse_pdf(content: bytes) -> List[dict]:
+    """
+    Extract transactions from a PDF bank statement using line heuristics.
+
+    PDFs are unstructured — we look for lines that contain a date + amount.
+    Works on most major US/EU/LatAm bank PDF statements where each tx is
+    on its own line. Falls back to returning [] if extraction fails.
+    """
+    try:
+        from pdfminer.high_level import extract_text
+    except Exception:
+        log.warning("pdfminer.six not installed — cannot parse PDF")
+        return []
+
+    try:
+        text = extract_text(io.BytesIO(content)) or ""
+    except Exception as e:
+        log.warning("PDF extraction failed: %s", e)
+        return []
+
+    if not text.strip():
+        return []
+
+    # Date patterns in many formats
+    date_re = re.compile(
+        r"\b("
+        r"\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}"  # 12/03/2024, 12-3-24
+        r"|\d{4}[/\-\.]\d{1,2}[/\-\.]\d{1,2}"   # 2024-03-12
+        r"|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Ene|Abr|Ago|Dic)[a-z]*\s+\d{2,4}"
+        r")\b",
+        re.IGNORECASE,
+    )
+    # Amount at end of line: 1,234.56 / -1.234,56 / (123.45) optional currency
+    amount_re = re.compile(
+        r"(?P<sign>-)?\s*(?P<paren>\()?"
+        r"(?:[A-Z$€£¥]{1,4}\s*)?"
+        r"(?P<num>\d{1,3}(?:[.,\s]\d{3})*[.,]\d{2}|\d+[.,]\d{2})"
+        r"(?P<paren2>\))?"
+        r"\s*(?:[A-Z]{3})?\s*$"
+    )
+
+    out: List[dict] = []
+    seen = set()
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or len(line) < 8:
+            continue
+        dm = date_re.search(line)
+        if not dm:
+            continue
+        am = amount_re.search(line)
+        if not am:
+            continue
+
+        iso = _norm_date(dm.group(1))
+        if not iso:
+            continue
+        amt = _to_float(am.group("num"))
+        if amt is None or amt == 0:
+            continue
+        is_negative = bool(am.group("sign") or am.group("paren"))
+
+        # Description: text between date and amount
+        try:
+            desc = line[dm.end():am.start()].strip(" \t-:|")
+        except Exception:
+            desc = line
+        desc = re.sub(r"\s+", " ", desc)[:140] or "Statement entry"
+
+        # Heuristic: lines with "credit", "deposit", "abono", "ingreso", "salary",
+        # "payroll", "nomina" → income; otherwise expense.
+        income_kw = ("credit", "deposit", "abono", "ingreso", "salary", "payroll",
+                     "nomina", "nómina", "transfer in", "refund", "reembolso")
+        is_income = any(k in desc.lower() for k in income_kw)
+        if is_negative and is_income:
+            is_income = False  # explicit minus wins
+
+        cat = "income" if is_income else _guess_category(desc, "")
+
+        key = (iso, round(abs(amt), 2), desc[:40].lower())
+        if key in seen:
+            continue
+        seen.add(key)
+
+        out.append({
+            "tx_date": iso,
+            "merchant": desc,
+            "description": line[:500],
+            "amount": abs(amt),
+            "category": cat,
+            "currency": None,
+        })
+
+    log.info("PDF parser extracted %d transactions", len(out))
+    return out
+
+
+# ─────────────────────────────────────────────────────────────
 # Dispatcher
 # ─────────────────────────────────────────────────────────────
 def parse_statement(filename: str, content: bytes) -> List[dict]:
     """Auto-detect format from filename + content, return list of tx dicts."""
     name = (filename or "").lower()
+
+    # PDF first — binary, can't decode as text
+    if name.endswith(".pdf") or content[:5] == b"%PDF-":
+        return parse_pdf(content)
+
     # Decode bytes with best-effort
     try:
         text = content.decode("utf-8")
