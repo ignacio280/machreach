@@ -7238,7 +7238,7 @@ No markdown, no code fences. ONLY JSON.
             accounts_html = f'<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">{_T("No email accounts connected yet.")}</p>'
 
         return _s_render("Settings", f"""
-        <div style="max-width:720px;margin:0 auto">
+        <div>
           <h2 style="margin-bottom:24px">⚙️ {_T("Settings")}</h2>
 
           <!-- Profile -->
