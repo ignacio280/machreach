@@ -7135,128 +7135,191 @@ No markdown, no code fences. ONLY JSON.
         if not accounts_html:
             accounts_html = '<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">No email accounts connected yet.</p>'
 
+        # ── Translations ──
+        _lang = session.get("lang", "en")
+        _ES = {
+            "Settings": "Configuración",
+            "Profile": "Perfil",
+            "Name": "Nombre",
+            "Email": "Correo electrónico",
+            "Email cannot be changed.": "El correo no se puede cambiar.",
+            "Save Changes": "Guardar cambios",
+            "University & Studies": "Universidad y Estudios",
+            "Set your university and field of study to appear on the leaderboard and connect with classmates.": "Define tu universidad y carrera para aparecer en la clasificación y conectarte con compañeros.",
+            "University": "Universidad",
+            "Field of Study": "Carrera",
+            "View Leaderboard": "Ver clasificación",
+            "Canvas LMS": "Canvas LMS",
+            "Connected": "Conectado",
+            "Not connected": "No conectado",
+            "Connect your Canvas LMS to sync courses, exams, and study materials.": "Conecta tu Canvas LMS para sincronizar cursos, exámenes y material de estudio.",
+            "Manage Connection": "Administrar conexión",
+            "Connect Canvas": "Conectar Canvas",
+            "Email Accounts": "Cuentas de correo",
+            "mailboxes": "buzones",
+            "Manage in Mail Hub": "Administrar en Centro de Correo",
+            "+ Add Email Account": "+ Agregar cuenta de correo",
+            "No email accounts connected yet.": "Aún no hay cuentas de correo conectadas.",
+            "Mail Sorting Rules": "Reglas de ordenado de correo",
+            "Tell the AI how to sort your inbox. Write both <strong>prioritize</strong> and <strong>deprioritize</strong> rules in plain English.": "Indícale a la IA cómo ordenar tu bandeja. Escribe reglas para <strong>priorizar</strong> y <strong>despriorizar</strong> en lenguaje natural.",
+            "Examples:": "Ejemplos:",
+            "Emails from my professors are always urgent": "Los correos de mis profesores son siempre urgentes",
+            "Meeting invites from @university.edu are important": "Las invitaciones a reuniones de @universidad.edu son importantes",
+            "Do NOT mark no-reply@render.com as urgent": "NO marques no-reply@render.com como urgente",
+            "Newsletters and marketing emails are always low priority": "Los boletines y correos de marketing son de baja prioridad",
+            "Ignore all emails from noreply@github.com": "Ignora todos los correos de noreply@github.com",
+            "Write your mail sorting rules here...": "Escribe aquí tus reglas de ordenado de correo...",
+            "Save Rules": "Guardar reglas",
+            "Theme": "Tema",
+            "Personalize how the app looks. Your choice is saved on this device.": "Personaliza cómo se ve la app. Tu elección se guarda en este dispositivo.",
+            "Click any theme to switch instantly. Your choice is saved automatically.": "Haz clic en cualquier tema para cambiar al instante. Se guarda automáticamente.",
+            "Daily Study Email": "Correo de estudio diario",
+            "Get a morning email with your study plan, upcoming exams, and weak topics to review.": "Recibe un correo matutino con tu plan de estudio, exámenes próximos y temas débiles para repasar.",
+            "Enable daily study email": "Habilitar correo diario de estudio",
+            "Send at (hour)": "Enviar a (hora)",
+            "Timezone": "Zona horaria",
+            "Save Preferences": "Guardar preferencias",
+            "Interactive Tutorial": "Tutorial interactivo",
+            "Replay the guided walkthrough to rediscover all the features available to you.": "Vuelve a ver el recorrido guiado para redescubrir todas las funciones disponibles.",
+            "Restart Tutorial": "Reiniciar tutorial",
+            "Account Security": "Seguridad de la cuenta",
+            "Your account is secure": "Tu cuenta está segura",
+            "Password protected with bcrypt encryption. You can change your password below if needed.": "Protegida con cifrado bcrypt. Puedes cambiar tu contraseña abajo si lo necesitas.",
+            "Change password": "Cambiar contraseña",
+            "(optional)": "(opcional)",
+            "Current Password": "Contraseña actual",
+            "New Password": "Nueva contraseña",
+            "Confirm Password": "Confirmar contraseña",
+            "Minimum 6 characters.": "Mínimo 6 caracteres.",
+            "Update Password": "Actualizar contraseña",
+            "Danger Zone": "Zona de peligro",
+            "Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action <strong>cannot be undone</strong>.": "Elimina permanentemente tu cuenta y todos los datos asociados (cursos, exámenes, notas, flashcards, quizzes, historial de chat, XP, insignias). Esta acción <strong>no se puede deshacer</strong>.",
+            "Delete My Account": "Eliminar mi cuenta",
+            "Type": "Escribe",
+            "to confirm:": "para confirmar:",
+            "Permanently Delete Account": "Eliminar cuenta permanentemente",
+            "Saved!": "¡Guardado!",
+            "Saving...": "Guardando...",
+            "Please enter at least one rule": "Ingresa al menos una regla",
+            "Failed": "Falló",
+            "Connection error": "Error de conexión",
+            "Error saving.": "Error al guardar.",
+        }
+        def _T(s):
+            return _ES.get(s, s) if _lang == "es" else s
+
+        if not accounts:
+            # localize empty-state text after translation dict is defined
+            accounts_html = f'<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">{_T("No email accounts connected yet.")}</p>'
+
         return _s_render("Settings", f"""
         <div style="max-width:720px;margin:0 auto">
-          <h2 style="margin-bottom:24px">⚙️ Settings</h2>
+          <h2 style="margin-bottom:24px">⚙️ {_T("Settings")}</h2>
 
           <!-- Profile -->
           <div class="card">
-            <div class="card-header"><h2>👤 Profile</h2></div>
+            <div class="card-header"><h2>👤 {_T("Profile")}</h2></div>
             <form method="post">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
                 <div>
-                  <label>Name</label>
-                  <input name="name" value="{_esc(client.get('name','') if client else '')}" required>
+                  <label>{_T("Name")}</label>
+                  <input name="name" value="{_esc(client.get('name','') if client else '')}" required class="edit-input">
                 </div>
                 <div>
-                  <label>Email</label>
-                  <input value="{_esc(client.get('email','') if client else '')}" disabled style="background:var(--border-light);color:var(--text-muted);cursor:not-allowed">
-                  <p style="font-size:11px;color:var(--text-muted);margin-top:-10px">Email cannot be changed.</p>
+                  <label>{_T("Email")}</label>
+                  <input value="{_esc(client.get('email','') if client else '')}" disabled class="edit-input" style="background:var(--border-light);color:var(--text-muted);cursor:not-allowed">
+                  <p style="font-size:11px;color:var(--text-muted);margin-top:6px">{_T("Email cannot be changed.")}</p>
                 </div>
               </div>
-              <button class="btn btn-primary" type="submit" style="margin-top:8px">Save Changes</button>
+              <button class="btn btn-primary" type="submit" style="margin-top:14px">{_T("Save Changes")}</button>
             </form>
           </div>
 
           <!-- University & Studies -->
           <div class="card">
-            <div class="card-header"><h2>🏫 University & Studies</h2></div>
+            <div class="card-header"><h2>🏫 {_T("University & Studies")}</h2></div>
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
-              Set your university and field of study to appear on the leaderboard and connect with classmates.
+              {_T("Set your university and field of study to appear on the leaderboard and connect with classmates.")}
             </p>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
               <div>
-                <label style="font-size:12px">University</label>
+                <label style="font-size:12px">{_T("University")}</label>
                 <input id="pref-university" value="{_esc(university)}" placeholder="e.g. MIT, Stanford, UNAM..." class="edit-input">
               </div>
               <div>
-                <label style="font-size:12px">Field of Study</label>
+                <label style="font-size:12px">{_T("Field of Study")}</label>
                 <input id="pref-field" value="{_esc(field_of_study)}" placeholder="e.g. Computer Science, Medicine..." class="edit-input">
               </div>
             </div>
-            <a href="/student/leaderboard" class="btn btn-outline btn-sm">🏆 View Leaderboard</a>
+            <a href="/student/leaderboard" class="btn btn-outline btn-sm">🏆 {_T("View Leaderboard")}</a>
           </div>
 
           <!-- Canvas Connection -->
           <div class="card">
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-              <h2>🔗 Canvas LMS</h2>
-              <span style="color:{canvas_color};font-weight:600;font-size:13px">● {canvas_status}</span>
+              <h2>🔗 {_T("Canvas LMS")}</h2>
+              <span style="color:{canvas_color};font-weight:600;font-size:13px">● {_T(canvas_status)}</span>
             </div>
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px">
-              Connect your Canvas LMS to sync courses, exams, and study materials.
+              {_T("Connect your Canvas LMS to sync courses, exams, and study materials.")}
             </p>
-            <a href="/student/canvas-settings" class="btn btn-outline btn-sm">{"Manage Connection" if canvas_tok else "Connect Canvas"}</a>
+            <a href="/student/canvas-settings" class="btn btn-outline btn-sm">{_T("Manage Connection") if canvas_tok else _T("Connect Canvas")}</a>
           </div>
 
           <!-- Email Accounts -->
           <div class="card">
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-              <h2>📧 Email Accounts</h2>
-              <span style="font-size:13px;color:var(--text-muted)">{len(accounts)}/{limit_text} mailboxes</span>
+              <h2>📧 {_T("Email Accounts")}</h2>
+              <span style="font-size:13px;color:var(--text-muted)">{len(accounts)}/{limit_text} {_T("mailboxes")}</span>
             </div>
             <div>{accounts_html}</div>
-            {"<div style='margin-top:12px'><a href='/mail-hub' class='btn btn-outline btn-sm'>Manage in Mail Hub</a></div>" if accounts else "<div style='margin-top:12px'><a href='/settings' class='btn btn-primary btn-sm'>+ Add Email Account</a></div>"}
+            {f"<div style='margin-top:12px'><a href='/mail-hub' class='btn btn-outline btn-sm'>{_T('Manage in Mail Hub')}</a></div>" if accounts else f"<div style='margin-top:12px'><a href='/settings' class='btn btn-primary btn-sm'>{_T('+ Add Email Account')}</a></div>"}
           </div>
 
           <!-- Mail Sorting Rules -->
           <div class="card">
-            <div class="card-header"><h2>&#128340; Mail Sorting Rules</h2></div>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:6px;">Tell the AI how to sort your inbox. Write both <strong>prioritize</strong> and <strong>deprioritize</strong> rules in plain English.</p>
+            <div class="card-header"><h2>&#128340; {_T("Mail Sorting Rules")}</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:6px;">{_T("Tell the AI how to sort your inbox. Write both <strong>prioritize</strong> and <strong>deprioritize</strong> rules in plain English.")}</p>
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.7;background:var(--bg);padding:12px 14px;border-radius:var(--radius-xs);">
-              <strong>Examples:</strong><br>
-              &#128314; Emails from my professors are always urgent<br>
-              &#128314; Meeting invites from @university.edu are important<br>
-              &#128315; Do NOT mark no-reply@render.com as urgent<br>
-              &#128315; Newsletters and marketing emails are always low priority<br>
-              &#128315; Ignore all emails from noreply@github.com
+              <strong>{_T("Examples:")}</strong><br>
+              &#128314; {_T("Emails from my professors are always urgent")}<br>
+              &#128314; {_T("Meeting invites from @university.edu are important")}<br>
+              &#128315; {_T("Do NOT mark no-reply@render.com as urgent")}<br>
+              &#128315; {_T("Newsletters and marketing emails are always low priority")}<br>
+              &#128315; {_T("Ignore all emails from noreply@github.com")}
             </div>
             <div class="form-group">
-              <textarea id="settings-mail-rules" placeholder="Write your mail sorting rules here..." style="height:120px;font-size:13px;width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);resize:vertical;">{_esc(mail_rules)}</textarea>
+              <textarea id="settings-mail-rules" placeholder="{_T('Write your mail sorting rules here...')}" style="height:120px;font-size:13px;width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);resize:vertical;">{_esc(mail_rules)}</textarea>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="saveMailRules()" id="save-rules-btn">Save Rules</button>
+            <button class="btn btn-primary btn-sm" onclick="saveMailRules()" id="save-rules-btn">{_T("Save Rules")}</button>
             <span id="rules-save-status" style="margin-left:10px;font-size:13px;"></span>
           </div>
 
           <!-- Theme Selector -->
           <div class="card">
-            <div class="card-header"><h2>🎨 Theme</h2></div>
+            <div class="card-header"><h2>🎨 {_T("Theme")}</h2></div>
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
-              Personalize how the app looks. Your choice is saved on this device.
+              {_T("Personalize how the app looks. Your choice is saved on this device.")}
             </p>
-            <div id="theme-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
-              <button type="button" class="theme-chip" data-theme="default" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#0f172a;color:#fff;text-align:left">
-                <div style="font-weight:700">Default</div>
-                <div style="font-size:11px;opacity:.7">Indigo / Slate</div>
-              </button>
-              <button type="button" class="theme-chip" data-theme="light" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#f8fafc;color:#111827;text-align:left">
-                <div style="font-weight:700">Light</div>
-                <div style="font-size:11px;opacity:.7">Clean & bright</div>
-              </button>
-              <button type="button" class="theme-chip" data-theme="midnight" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#050816;color:#e2e8f0;text-align:left">
-                <div style="font-weight:700">Midnight</div>
-                <div style="font-size:11px;opacity:.7">Deep black</div>
-              </button>
-              <button type="button" class="theme-chip" data-theme="forest" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#0b2018;color:#d1fae5;text-align:left">
-                <div style="font-weight:700">Forest</div>
-                <div style="font-size:11px;opacity:.7">Calm green</div>
-              </button>
-              <button type="button" class="theme-chip" data-theme="ocean" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#082f49;color:#e0f2fe;text-align:left">
-                <div style="font-weight:700">Ocean</div>
-                <div style="font-size:11px;opacity:.7">Deep blue</div>
-              </button>
-              <button type="button" class="theme-chip" data-theme="rose" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#3f0a1a;color:#fecdd3;text-align:left">
-                <div style="font-weight:700">Rose</div>
-                <div style="font-size:11px;opacity:.7">Warm crimson</div>
-              </button>
-              <button type="button" class="theme-chip" data-theme="sunset" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:linear-gradient(135deg,#7c2d12,#ea580c);color:#fff;text-align:left">
-                <div style="font-weight:700">Sunset</div>
-                <div style="font-size:11px;opacity:.7">Orange / amber</div>
-              </button>
-              <button type="button" class="theme-chip" data-theme="mono" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#111;color:#fff;text-align:left">
-                <div style="font-weight:700">Mono</div>
-                <div style="font-size:11px;opacity:.7">Pure black & white</div>
-              </button>
+            <div id="theme-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+              <button type="button" class="theme-chip" data-theme="default" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#0f172a;color:#fff;text-align:left"><div style="font-weight:700">Default</div><div style="font-size:11px;opacity:.7">Indigo / Slate</div></button>
+              <button type="button" class="theme-chip" data-theme="midnight" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#050816;color:#e2e8f0;text-align:left"><div style="font-weight:700">Midnight</div><div style="font-size:11px;opacity:.7">Deep black</div></button>
+              <button type="button" class="theme-chip" data-theme="forest" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#0b2018;color:#d1fae5;text-align:left"><div style="font-weight:700">Forest</div><div style="font-size:11px;opacity:.7">Calm green</div></button>
+              <button type="button" class="theme-chip" data-theme="ocean" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#082f49;color:#e0f2fe;text-align:left"><div style="font-weight:700">Ocean</div><div style="font-size:11px;opacity:.7">Deep blue</div></button>
+              <button type="button" class="theme-chip" data-theme="rose" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#3f0a1a;color:#fecdd3;text-align:left"><div style="font-weight:700">Rose</div><div style="font-size:11px;opacity:.7">Warm crimson</div></button>
+              <button type="button" class="theme-chip" data-theme="sunset" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:linear-gradient(135deg,#7c2d12,#ea580c);color:#fff;text-align:left"><div style="font-weight:700">Sunset</div><div style="font-size:11px;opacity:.7">Orange / amber</div></button>
+              <button type="button" class="theme-chip" data-theme="mono" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#111;color:#fff;text-align:left"><div style="font-weight:700">Mono</div><div style="font-size:11px;opacity:.7">Pure black &amp; white</div></button>
+              <button type="button" class="theme-chip" data-theme="light" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#f8fafc;color:#111827;text-align:left"><div style="font-weight:700">Light</div><div style="font-size:11px;opacity:.7">Clean &amp; bright</div></button>
+              <button type="button" class="theme-chip" data-theme="lavender" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#f5f3ff;color:#3b0764;text-align:left"><div style="font-weight:700">Lavender</div><div style="font-size:11px;opacity:.7">Soft purple</div></button>
+              <button type="button" class="theme-chip" data-theme="mint" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#f0fdf4;color:#14532d;text-align:left"><div style="font-weight:700">Mint</div><div style="font-size:11px;opacity:.7">Fresh pastel green</div></button>
+              <button type="button" class="theme-chip" data-theme="peach" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#fff7ed;color:#7c2d12;text-align:left"><div style="font-weight:700">Peach</div><div style="font-size:11px;opacity:.7">Warm pastel orange</div></button>
+              <button type="button" class="theme-chip" data-theme="sky" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#f0f9ff;color:#0c4a6e;text-align:left"><div style="font-weight:700">Sky</div><div style="font-size:11px;opacity:.7">Pastel blue</div></button>
+              <button type="button" class="theme-chip" data-theme="butter" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#fefce8;color:#713f12;text-align:left"><div style="font-weight:700">Butter</div><div style="font-size:11px;opacity:.7">Soft pastel yellow</div></button>
+              <button type="button" class="theme-chip" data-theme="lilac" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#fdf4ff;color:#581c87;text-align:left"><div style="font-weight:700">Lilac</div><div style="font-size:11px;opacity:.7">Pastel violet</div></button>
+              <button type="button" class="theme-chip" data-theme="blush" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#fff1f2;color:#881337;text-align:left"><div style="font-weight:700">Blush</div><div style="font-size:11px;opacity:.7">Soft pastel pink</div></button>
+              <button type="button" class="theme-chip" data-theme="sand" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#faf5ee;color:#44342a;text-align:left"><div style="font-weight:700">Sand</div><div style="font-size:11px;opacity:.7">Warm beige</div></button>
+              <button type="button" class="theme-chip" data-theme="cottoncandy" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#fdf2f8;color:#831843;text-align:left"><div style="font-weight:700">Cotton Candy</div><div style="font-size:11px;opacity:.7">Bubblegum pink</div></button>
+              <button type="button" class="theme-chip" data-theme="seafoam" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#ecfeff;color:#164e63;text-align:left"><div style="font-weight:700">Seafoam</div><div style="font-size:11px;opacity:.7">Pastel cyan</div></button>
             </div>
             <script>
               (function() {{
@@ -7275,7 +7338,7 @@ No markdown, no code fences. ONLY JSON.
                     mark();
                     var s = document.getElementById('theme-status');
                     if (s) {{
-                      s.textContent = 'Saved! This theme now applies everywhere.';
+                      s.textContent = '{_T("Saved!")} ';
                       setTimeout(function(){{ if(s) s.textContent=''; }}, 2200);
                     }}
                   }});
@@ -7284,28 +7347,28 @@ No markdown, no code fences. ONLY JSON.
               }})();
             </script>
             <span id="theme-status" style="color:var(--text-muted);font-size:13px;display:inline-block;margin-top:10px"></span>
-            <p style="color:var(--text-muted);font-size:12px;margin-top:6px">&#128161; Click any theme to switch instantly. Your choice is saved automatically.</p>
+            <p style="color:var(--text-muted);font-size:12px;margin-top:6px">&#128161; {_T("Click any theme to switch instantly. Your choice is saved automatically.")}</p>
           </div>
 
           <!-- Daily Study Email -->
           <div class="card">
-            <div class="card-header"><h2>📬 Daily Study Email</h2></div>
+            <div class="card-header"><h2>📬 {_T("Daily Study Email")}</h2></div>
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
-              Get a morning email with your study plan, upcoming exams, and weak topics to review.
+              {_T("Get a morning email with your study plan, upcoming exams, and weak topics to review.")}
             </p>
             <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;color:var(--text)">
               <input type="checkbox" id="pref-daily" {'checked' if de else ''} style="width:18px;height:18px;accent-color:var(--primary)">
-              <span>Enable daily study email</span>
+              <span>{_T("Enable daily study email")}</span>
             </label>
             <div style="display:flex;gap:16px;margin-bottom:16px">
               <div>
-                <label style="font-size:12px">Send at (hour)</label>
+                <label style="font-size:12px">{_T("Send at (hour)")}</label>
                 <select id="pref-hour">
                   {"".join(f'<option value="{h}" {"selected" if h==hour else ""}>{h:02d}:00</option>' for h in range(5,23))}
                 </select>
               </div>
               <div>
-                <label style="font-size:12px">Timezone</label>
+                <label style="font-size:12px">{_T("Timezone")}</label>
                 <select id="pref-tz">
                   <optgroup label="Americas">
                     <option value="America/Mexico_City" {"selected" if tz=="America/Mexico_City" else ""}>Mexico City (CST)</option>
@@ -7395,53 +7458,53 @@ No markdown, no code fences. ONLY JSON.
                 </select>
               </div>
             </div>
-            <button onclick="savePrefs()" class="btn btn-primary btn-sm">Save Preferences</button>
+            <button onclick="savePrefs()" class="btn btn-primary btn-sm">{_T("Save Preferences")}</button>
           </div>
         </div>
 
         <!-- Restart Tutorial -->
         <div class="card" style="margin-top:16px;">
-          <div class="card-header"><h2>&#127891; Interactive Tutorial</h2></div>
+          <div class="card-header"><h2>&#127891; {_T("Interactive Tutorial")}</h2></div>
           <div style="padding:20px;">
-            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Replay the guided walkthrough to rediscover all the features available to you.</p>
-            <button onclick="localStorage.removeItem('mr-tutorial-done');window.location='/student'" class="btn btn-outline btn-sm">&#128260; Restart Tutorial</button>
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">{_T("Replay the guided walkthrough to rediscover all the features available to you.")}</p>
+            <button onclick="localStorage.removeItem('mr-tutorial-done');window.location='/student'" class="btn btn-outline btn-sm">&#128260; {_T("Restart Tutorial")}</button>
           </div>
         </div>
 
         <!-- Account Security (mirrors business settings — optional change) -->
         <div class="card" style="margin-top:16px;">
-          <div class="card-header"><h2>&#128272; Account Security</h2></div>
+          <div class="card-header"><h2>&#128272; {_T("Account Security")}</h2></div>
           <div style="padding:20px;">
             <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--green-light,rgba(16,185,129,.12));border-radius:var(--radius-sm);margin-bottom:16px;">
               <span style="font-size:22px;">&#9989;</span>
               <div>
-                <div style="font-weight:600;font-size:14px;color:var(--green-dark,#059669);">Your account is secure</div>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Password protected with bcrypt encryption. You can change your password below if needed.</div>
+                <div style="font-weight:600;font-size:14px;color:var(--green-dark,#059669);">{_T("Your account is secure")}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">{_T("Password protected with bcrypt encryption. You can change your password below if needed.")}</div>
               </div>
             </div>
             <details style="cursor:pointer;">
               <summary style="font-size:14px;font-weight:600;color:var(--text);padding:10px 0;list-style:none;display:flex;align-items:center;gap:8px;">
                 <span style="transition:transform 0.2s;display:inline-block;" class="pw-arrow">&#9654;</span>
-                Change password <span style="font-size:12px;font-weight:400;color:var(--text-muted);">(optional)</span>
+                {_T("Change password")} <span style="font-size:12px;font-weight:400;color:var(--text-muted);">{_T("(optional)")}</span>
               </summary>
               <div style="padding:16px 0 4px;">
                 <form method="post" action="/settings/change-password">
                   <div class="form-group" style="margin-bottom:12px;">
-                    <label style="font-size:12px;font-weight:600;color:var(--text);">Current Password</label>
+                    <label style="font-size:12px;font-weight:600;color:var(--text);">{_T("Current Password")}</label>
                     <input name="current_password" type="password" required class="edit-input" autocomplete="current-password">
                   </div>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
                     <div class="form-group">
-                      <label style="font-size:12px;font-weight:600;color:var(--text);">New Password</label>
+                      <label style="font-size:12px;font-weight:600;color:var(--text);">{_T("New Password")}</label>
                       <input name="new_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
                     </div>
                     <div class="form-group">
-                      <label style="font-size:12px;font-weight:600;color:var(--text);">Confirm Password</label>
+                      <label style="font-size:12px;font-weight:600;color:var(--text);">{_T("Confirm Password")}</label>
                       <input name="confirm_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
                     </div>
                   </div>
-                  <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;">Minimum 6 characters.</p>
-                  <button class="btn btn-outline btn-sm" type="submit">Update Password</button>
+                  <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;">{_T("Minimum 6 characters.")}</p>
+                  <button class="btn btn-outline btn-sm" type="submit">{_T("Update Password")}</button>
                 </form>
               </div>
             </details>
@@ -7453,16 +7516,16 @@ No markdown, no code fences. ONLY JSON.
 
         <!-- Delete Account -->
         <div class="card" style="margin-top:16px;border-color:var(--red);">
-          <div class="card-header"><h2 style="color:var(--red);">&#9888;&#65039; Danger Zone</h2></div>
+          <div class="card-header"><h2 style="color:var(--red);">&#9888;&#65039; {_T("Danger Zone")}</h2></div>
           <div style="padding:20px;">
-            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action <strong>cannot be undone</strong>.</p>
-            <button class="btn btn-ghost btn-sm" style="color:var(--red);border:1px solid var(--red);" onclick="document.getElementById('delete-confirm-box').style.display='block';this.style.display='none';">Delete My Account</button>
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">{_T("Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action <strong>cannot be undone</strong>.")}</p>
+            <button class="btn btn-ghost btn-sm" style="color:var(--red);border:1px solid var(--red);" onclick="document.getElementById('delete-confirm-box').style.display='block';this.style.display='none';">{_T("Delete My Account")}</button>
             <div id="delete-confirm-box" style="display:none;margin-top:14px;padding:16px;border:1px solid var(--red);border-radius:var(--radius-sm);background:var(--red-light);">
               <form method="post" action="/settings/delete-account">
-                <p style="font-size:13px;color:var(--text);margin:0 0 10px;font-weight:600;">Type <code style="background:var(--border);padding:2px 6px;border-radius:4px;">DELETE</code> to confirm:</p>
+                <p style="font-size:13px;color:var(--text);margin:0 0 10px;font-weight:600;">{_T("Type")} <code style="background:var(--border);padding:2px 6px;border-radius:4px;">DELETE</code> {_T("to confirm:")}</p>
                 <input name="confirm" placeholder="DELETE" required autocomplete="off" class="edit-input" style="border-color:var(--red);max-width:200px;margin-bottom:10px;">
                 <br>
-                <button class="btn btn-primary btn-sm" type="submit" style="background:var(--red);border-color:var(--red);">Permanently Delete Account</button>
+                <button class="btn btn-primary btn-sm" type="submit" style="background:var(--red);border-color:var(--red);">{_T("Permanently Delete Account")}</button>
               </form>
             </div>
           </div>
@@ -7481,9 +7544,9 @@ No markdown, no code fences. ONLY JSON.
             }})
           }});
           if (r.ok) {{
-            alert('Saved!');
+            alert('{_T("Saved!")}');
           }} else {{
-            var msg = 'Error saving.';
+            var msg = '{_T("Error saving.")}';
             try {{ var j = await r.json(); if (j && j.error) msg = j.error; }} catch(e) {{}}
             alert(msg);
           }}
@@ -7492,20 +7555,20 @@ No markdown, no code fences. ONLY JSON.
           var text = document.getElementById('settings-mail-rules').value.trim();
           var btn = document.getElementById('save-rules-btn');
           var status = document.getElementById('rules-save-status');
-          if (!text) {{ status.innerHTML = '<span style="color:var(--red);">Please enter at least one rule</span>'; return; }}
-          btn.disabled = true; btn.textContent = 'Saving...';
+          if (!text) {{ status.innerHTML = '<span style="color:var(--red);">{_T("Please enter at least one rule")}</span>'; return; }}
+          btn.disabled = true; btn.textContent = '{_T("Saving...")}';
           fetch('/api/mail-preferences', {{
             method: 'POST', headers: {{'Content-Type': 'application/json'}},
             body: JSON.stringify({{preferences: text}})
           }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
-            btn.disabled = false; btn.textContent = 'Save Rules';
+            btn.disabled = false; btn.textContent = '{_T("Save Rules")}';
             if (data.ok) {{
-              status.innerHTML = '<span style="color:var(--green);">&#10003; Saved!</span>';
+              status.innerHTML = '<span style="color:var(--green);">&#10003; {_T("Saved!")}</span>';
               setTimeout(function() {{ status.innerHTML = ''; }}, 4000);
-            }} else {{ status.innerHTML = '<span style="color:var(--red);">' + (data.error || 'Failed') + '</span>'; }}
+            }} else {{ status.innerHTML = '<span style="color:var(--red);">' + (data.error || '{_T("Failed")}') + '</span>'; }}
           }}).catch(function() {{
-            btn.disabled = false; btn.textContent = 'Save Rules';
-            status.innerHTML = '<span style="color:var(--red);">Connection error</span>';
+            btn.disabled = false; btn.textContent = '{_T("Save Rules")}';
+            status.innerHTML = '<span style="color:var(--red);">{_T("Connection error")}</span>';
           }});
         }}
 
@@ -7516,12 +7579,12 @@ No markdown, no code fences. ONLY JSON.
             if (!headers.length) return;
             var nav = document.createElement('nav');
             nav.id = 'mr-settings-nav';
-            nav.setAttribute('aria-label','On this page');
+            nav.setAttribute('aria-label','{"En esta página" if _lang == "es" else "On this page"}');
             var inner = document.createElement('div');
             inner.className = 'mr-snav-inner';
             var title = document.createElement('div');
             title.className = 'mr-snav-title';
-            title.textContent = 'On this page';
+            title.textContent = '{"En esta página" if _lang == "es" else "On this page"}';
             inner.appendChild(title);
             var links = [];
             headers.forEach(function(h, i){{
