@@ -681,16 +681,19 @@ def generate_notes(
     topics_str = ", ".join(topics) if topics else "all key concepts"
 
     # ── Chunking: detect chapters/sections and split, with size cap ──
-    def _split_into_chunks(txt: str, max_chars: int = 14000) -> list[tuple[str, str]]:
-        """Returns list of (chunk_label, chunk_text). Splits on Chapter/Capítulo/Section headings."""
+    def _split_into_chunks(txt: str, max_chars: int = 18000, hard_cap_chunks: int = 12) -> list[tuple[str, str]]:
+        """Returns list of (chunk_label, chunk_text). Splits on Chapter/Capítulo/Section headings.
+
+        Caps total chunks at `hard_cap_chunks` to keep total AI time bounded
+        (each chunk ≈ 30-60s; even with parallelism we want a sane upper bound).
+        """
         if not txt:
             return []
-        # Find heading positions (Chapter N / Capítulo N / Section N / Unit N / 1. Title etc.)
+        # Find heading positions — only "real" chapter/section markers.
+        # We deliberately exclude bare "1." numbered lines because legal/
+        # academic PDFs have them inside footnotes and sub-sub-sections.
         heading_re = re.compile(
-            r'^\s*(?:'
-            r'(?:Chapter|Cap[ií]tulo|Section|Secci[oó]n|Unit|Unidad|Tema|Lecci[oó]n|Lesson|Part|Parte)\s+[\dIVXLC]+'
-            r'|(?:\d+\.\s+[A-Z\u00C0-\u017F][^\n]{2,80})'
-            r')\s*[:\-\u2014]?\s*[^\n]*$',
+            r'^\s*(?:Chapter|Cap[ií]tulo|Unit|Unidad|Tema|Lecci[oó]n|Lesson|Part(?:e)?)\s+[\dIVXLC]+\b[^\n]*$',
             re.MULTILINE | re.IGNORECASE,
         )
         positions = [(m.start(), m.group().strip()) for m in heading_re.finditer(txt)]
@@ -711,6 +714,18 @@ def generate_notes(
             # No clear chapter structure — split by size
             for j in range(0, len(txt), max_chars):
                 chunks.append((f"Part {j // max_chars + 1}", txt[j:j + max_chars]))
+
+        # Bound total chunks: if too many, merge adjacent ones
+        if len(chunks) > hard_cap_chunks:
+            target = hard_cap_chunks
+            group_size = (len(chunks) + target - 1) // target
+            merged: list[tuple[str, str]] = []
+            for i in range(0, len(chunks), group_size):
+                grp = chunks[i:i + group_size]
+                label = f"{grp[0][0]} → {grp[-1][0]}" if len(grp) > 1 else grp[0][0]
+                body = "\n\n".join(b for _, b in grp)
+                merged.append((label, body))
+            chunks = merged
         return chunks
 
     chunks = _split_into_chunks(source_text) if source_text else [("", "")]
@@ -767,7 +782,15 @@ No markdown fences. ONLY the JSON object."""
         if not source_text:
             html_parts = [_gen_chunk("", "")]
         else:
-            html_parts = [_gen_chunk(label, body) for label, body in chunks]
+            # Process chunks in parallel to avoid request-timeout issues with
+            # very long PDFs (each AI call can take 30-60s; 10+ sequential
+            # chunks would exceed gateway timeouts).
+            from concurrent.futures import ThreadPoolExecutor
+            max_workers = min(8, max(1, len(chunks)))
+            log.info("Notes generation: %d chunks, %d parallel workers (course=%s)",
+                     len(chunks), max_workers, course_name)
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                html_parts = list(ex.map(lambda lb: _gen_chunk(lb[0], lb[1]), chunks))
         merged = "\n".join(p for p in html_parts if p)
         if not merged.strip():
             merged = "<p>Generation failed. Please try again.</p>"

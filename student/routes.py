@@ -5854,16 +5854,17 @@ No markdown, no code fences. ONLY JSON.
           status.style.display = 'block';
           var lastNoteId = null;
           var ok = 0, fail = 0;
+          var lastError = '';
           for (var i = 0; i < valid.length; i++) {{
             var file = valid[i];
-            status.innerHTML = (aiMode ? '&#129504; AI-summarizing ' : '&#9203; Uploading ') + (i+1) + '/' + valid.length + ': <b>' + file.name + '</b>' + (aiMode ? ' (multi-chapter, may take 30-60s)...' : '...');
+            status.innerHTML = (aiMode ? '&#129504; AI-summarizing ' : '&#9203; Uploading ') + (i+1) + '/' + valid.length + ': <b>' + file.name + '</b>' + (aiMode ? ' (multi-chapter, may take 1-3 min)...' : '...');
             try {{
               if (aiMode) {{
                 // 1) extract text
                 var fd1 = new FormData(); fd1.append('file', file);
                 var rx = await fetch('/api/student/extract-file', {{ method:'POST', body: fd1 }});
                 var dx = await _safeJson(rx);
-                if (!rx.ok) {{ fail++; continue; }}
+                if (!rx.ok) {{ lastError = 'Extract failed (' + rx.status + '): ' + (dx.error || 'unknown'); fail++; continue; }}
                 // 2) AI generate notes from extracted text
                 var rg = await fetch('/api/student/notes/generate', {{
                   method:'POST', headers:{{'Content-Type':'application/json'}},
@@ -5871,20 +5872,20 @@ No markdown, no code fences. ONLY JSON.
                 }});
                 var dg = await _safeJson(rg);
                 if (rg.ok && dg.note_id) {{ lastNoteId = dg.note_id; ok++; }}
-                else {{ fail++; }}
+                else {{ lastError = 'AI notes failed (' + rg.status + '): ' + (dg.error || 'timeout or server error'); fail++; }}
               }} else {{
                 var fd = new FormData();
                 fd.append('file', file);
                 var r = await fetch('/api/student/notes/upload-pdf', {{method:'POST', body:fd}});
                 var d = await _safeJson(r);
                 if (r.ok && d.note_id) {{ lastNoteId = d.note_id; ok++; }}
-                else {{ fail++; }}
+                else {{ lastError = 'Upload failed (' + r.status + '): ' + (d.error || 'unknown'); fail++; }}
               }}
-            }} catch(e) {{ fail++; }}
+            }} catch(e) {{ lastError = 'Network: ' + (e && e.message ? e.message : e); fail++; }}
           }}
           if (ok > 0 && valid.length === 1) {{ window.location = '/student/notes/' + lastNoteId; }}
           else if (ok > 0) {{ status.innerHTML = '&#9989; ' + ok + ' notes created' + (fail ? ', ' + fail + ' failed' : '') + '. Reloading...'; setTimeout(function(){{ location.reload(); }}, 1200); }}
-          else {{ status.innerHTML = '&#10060; All uploads failed'; }}
+          else {{ status.innerHTML = '&#10060; All uploads failed' + (lastError ? '<br><span style="font-size:12px;color:var(--text-muted);">' + lastError + '</span>' : ''); }}
         }}
         </script>
         """, active_page="student_notes")
