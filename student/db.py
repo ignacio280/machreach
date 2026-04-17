@@ -980,7 +980,7 @@ def save_schedule_settings(client_id: int, settings: list[dict]):
             _exec(db,
                   "INSERT INTO student_schedule_settings (client_id, day_of_week, available_hours, is_free_day) "
                   "VALUES (%s, %s, %s, %s)",
-                  (client_id, s["day"], s.get("hours", 0), 1 if s.get("free") else 0))
+                  (client_id, s["day"], s.get("hours", 0), bool(s.get("free"))))
 
 
 def get_schedule_settings(client_id: int) -> list[dict]:
@@ -1026,12 +1026,12 @@ def toggle_assignment_complete(client_id: int, plan_date: str, session_index: in
         if existing:
             _exec(db,
                   "UPDATE student_assignment_progress SET completed = %s, completed_at = %s WHERE id = %s",
-                  (1 if completed else 0, now_str if completed else None, existing))
+                  (bool(completed), now_str if completed else None, existing))
         else:
             _exec(db,
                   "INSERT INTO student_assignment_progress (client_id, plan_date, session_index, completed, completed_at) "
                   "VALUES (%s, %s, %s, %s, %s)",
-                  (client_id, plan_date, session_index, 1 if completed else 0,
+                  (client_id, plan_date, session_index, bool(completed),
                    now_str if completed else None))
 
 
@@ -1803,7 +1803,7 @@ def upsert_email_prefs(client_id: int, daily_email: bool = True, email_hour: int
     with get_db() as db:
         existing = _fetchone(db, "SELECT id FROM student_email_prefs WHERE client_id = %s",
                              (client_id,))
-        de = 1 if daily_email else 0
+        de = bool(daily_email)
         if existing:
             _exec(db,
                   "UPDATE student_email_prefs SET daily_email = %s, email_hour = %s, timezone = %s, "
