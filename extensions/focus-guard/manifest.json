@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "MachReach Focus Guard",
+  "version": "1.0.0",
+  "description": "Blocks Instagram, TikTok, Twitter/X and other distractions while you have a focus session active in MachReach. YouTube stays allowed — you can still study with it.",
+  "permissions": ["storage", "webNavigation", "tabs"],
+  "host_permissions": [
+    "https://machreach.com/*",
+    "https://www.machreach.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "*://*.instagram.com/*",
+    "*://*.tiktok.com/*",
+    "*://*.twitter.com/*",
+    "*://*.x.com/*",
+    "*://*.facebook.com/*",
+    "*://*.reddit.com/*",
+    "*://*.snapchat.com/*",
+    "*://*.pinterest.com/*",
+    "*://*.twitch.tv/*",
+    "*://*.9gag.com/*",
+    "*://*.netflix.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://machreach.com/*",
+        "https://www.machreach.com/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "MachReach Focus Guard"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["blocked.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

@@ -3,10 +3,15 @@ AI-powered email generation — uses OpenAI GPT to write personalized sequences.
 """
 from __future__ import annotations
 
+import json
+import logging
+import re
+
 from openai import OpenAI
 
 from outreach.config import OPENAI_API_KEY
 
+log = logging.getLogger(__name__)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
@@ -322,3 +327,352 @@ def get_optimal_send_hour(send_time_data: list[dict]) -> dict:
         "best_days": best_days,
         "recommendation": recommendation,
     }
+
+
+# ── Subject Line Optimizer ───────────────────────────────────
+
+SPAM_TRIGGERS = [
+    "free", "guarantee", "guaranteed", "act now", "click here", "limited time",
+    "risk-free", "no obligation", "winner", "cash", "prize", "earn money",
+    "make money", "double your", "100%", "100 percent", "%%", "$$$", "!!", "!!!",
+    "urgent", "asap", "order now", "buy now", "sale", "discount", "cheap",
+    "amazing", "incredible", "best price", "unbelievable", "miracle",
+]
+
+
+def optimize_subject_line(
+    subject: str,
+    body_preview: str = "",
+    audience: str = "",
+    goal: str = "open",  # "open" | "reply" | "book_meeting"
+) -> dict:
+    """
+    Score a subject line and suggest improvements.
+
+    Returns:
+        {
+          "score": 0-100,
+          "predicted_open_rate": "35-45%",
+          "length_score": ..., "personalization_score": ..., "urgency_score": ...,
+          "spam_risk": 0-100,
+          "spam_triggers": ["free", "guarantee"],
+          "issues": [...],
+          "strengths": [...],
+          "suggestions": ["subject A", "subject B", "subject C"],
+          "analysis": "..."
+        }
+    """
+    subject_lower = (subject or "").lower()
+    triggers = [w for w in SPAM_TRIGGERS if w in subject_lower]
+    length = len(subject or "")
+    has_personalization = "{{name}}" in subject or "{{company}}" in subject or "{{role}}" in subject
+    has_question = "?" in subject
+    excessive_caps = sum(1 for c in subject if c.isupper()) > max(4, len(subject) * 0.35) if subject else False
+
+    prompt = f"""You are a cold-email deliverability expert. Score this subject line.
+
+Subject: "{subject}"
+Audience: {audience or 'general B2B'}
+Goal: {goal}
+Body preview (first 200 chars): {body_preview[:200]}
+
+Heuristic signals already detected:
+- Length: {length} chars ({'ideal' if 30 <= length <= 55 else 'too short' if length < 30 else 'too long'})
+- Spam triggers found: {triggers or 'none'}
+- Personalization placeholders: {'yes' if has_personalization else 'no'}
+- Excessive caps: {excessive_caps}
+- Ends with question: {has_question}
+
+Return ONLY valid JSON:
+{{
+  "score": 82,
+  "predicted_open_rate": "38-48%",
+  "length_score": 90,
+  "personalization_score": 70,
+  "urgency_score": 60,
+  "curiosity_score": 75,
+  "spam_risk": 15,
+  "spam_triggers": {json.dumps(triggers)},
+  "issues": ["Specific weakness", "..."],
+  "strengths": ["What works", "..."],
+  "suggestions": [
+    "Higher-performing rewrite 1 (use {{{{name}}}} or {{{{company}}}} when helpful)",
+    "Different angle rewrite 2",
+    "Shorter punchier rewrite 3"
+  ],
+  "analysis": "1-2 sentence summary of why this will or won't perform"
+}}
+
+Rules for suggestions:
+- Keep under 55 characters when possible
+- No spam trigger words
+- Use placeholders {{{{name}}}}, {{{{company}}}}, {{{{role}}}} when personalization helps
+- Natural, human, conversational — never salesy"""
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+            max_tokens=900,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        data["length"] = length
+        data.setdefault("spam_triggers", triggers)
+        data.setdefault("suggestions", [])
+        return data
+    except Exception as e:
+        log.error("Subject line optimize failed: %s", e)
+        return {
+            "score": 50, "predicted_open_rate": "—", "length_score": 0,
+            "personalization_score": 0, "urgency_score": 0, "curiosity_score": 0,
+            "spam_risk": len(triggers) * 15, "spam_triggers": triggers,
+            "issues": ["Analysis unavailable — please try again."],
+            "strengths": [], "suggestions": [], "analysis": "",
+            "length": length,
+        }
+
+
+# ── Reply Intelligence ───────────────────────────────────────
+
+def classify_reply(
+    reply_body: str,
+    original_subject: str = "",
+    original_body: str = "",
+) -> dict:
+    """
+    Classify an inbound email reply for intent, sentiment, urgency, and recommended action.
+
+    Returns:
+        {
+          "intent": "interested" | "not_interested" | "needs_info" | "unsubscribe" | "out_of_office" | "wrong_person" | "neutral",
+          "sentiment": "positive" | "neutral" | "negative",
+          "urgency": "high" | "medium" | "low",
+          "buying_signal": 0-100,
+          "detected_objections": ["price", "timing", "authority", "need"],
+          "mentions_meeting": bool,
+          "meeting_time_hint": "...",
+          "recommended_action": "Reply within 2 hours with a calendar link",
+          "one_line_summary": "Interested but wants pricing first",
+          "red_flags": [],
+          "next_steps": ["Send case study", "..."]
+        }
+    """
+    prompt = f"""You are a B2B sales reply analyzer. Classify this reply precisely.
+
+Original subject: {original_subject}
+Original email body (first 600 chars):
+{(original_body or '')[:600]}
+
+Reply body:
+{(reply_body or '')[:2000]}
+
+Return ONLY valid JSON with these exact keys:
+{{
+  "intent": "interested|not_interested|needs_info|unsubscribe|out_of_office|wrong_person|neutral",
+  "sentiment": "positive|neutral|negative",
+  "urgency": "high|medium|low",
+  "buying_signal": 0,
+  "detected_objections": [],
+  "mentions_meeting": false,
+  "meeting_time_hint": "",
+  "recommended_action": "Concrete next step (1 sentence)",
+  "one_line_summary": "Very concise takeaway",
+  "red_flags": [],
+  "next_steps": []
+}}
+
+Rules:
+- buying_signal: 0-100, where 100 means ready to close the deal
+- detected_objections: any of "price", "timing", "authority", "need", "trust", "existing_vendor"
+- mentions_meeting: true if they ask to schedule, book, call, chat, demo, meet
+- red_flags: things like "already using competitor", "budget frozen", "not the decision maker"
+- If reply is automated (OOO, auto-reply), intent = "out_of_office"
+- If reply asks to unsubscribe, stop, remove me → intent = "unsubscribe", urgency = "high"
+"""
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=600,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        data.setdefault("intent", "neutral")
+        data.setdefault("sentiment", "neutral")
+        data.setdefault("urgency", "medium")
+        data.setdefault("buying_signal", 0)
+        data.setdefault("detected_objections", [])
+        data.setdefault("mentions_meeting", False)
+        data.setdefault("meeting_time_hint", "")
+        data.setdefault("recommended_action", "")
+        data.setdefault("one_line_summary", "")
+        data.setdefault("red_flags", [])
+        data.setdefault("next_steps", [])
+        return data
+    except Exception as e:
+        log.error("Reply classify failed: %s", e)
+        return {
+            "intent": "neutral", "sentiment": "neutral", "urgency": "medium",
+            "buying_signal": 0, "detected_objections": [], "mentions_meeting": False,
+            "meeting_time_hint": "", "recommended_action": "Analysis unavailable",
+            "one_line_summary": "", "red_flags": [], "next_steps": [],
+        }
+
+
+# ── Deliverability / Content Analyzer ────────────────────────
+
+def analyze_email_content(subject: str, body: str) -> dict:
+    """
+    Analyze an email's content for spam risk and deliverability signals.
+
+    Pure heuristics (no AI call) so it is instant and free. The AI-assisted
+    subject_optimizer can be used for deeper analysis.
+
+    Returns:
+        {
+          "spam_score": 0-100 (higher = worse),
+          "checks": [{"name": "...", "pass": bool, "severity": "high/med/low", "detail": "..."}],
+          "word_count": int,
+          "link_count": int,
+          "image_count": int,
+          "caps_ratio": 0-1,
+          "exclamation_count": int,
+          "has_unsubscribe": bool,
+          "recommendations": [...]
+        }
+    """
+    b = body or ""
+    s = subject or ""
+    combined = (s + " " + b).lower()
+
+    checks: list[dict] = []
+    score = 0
+    recommendations: list[str] = []
+
+    # Spam trigger words
+    triggers = [w for w in SPAM_TRIGGERS if w in combined]
+    if triggers:
+        score += min(30, len(triggers) * 6)
+        checks.append({
+            "name": f"Spam trigger words ({len(triggers)})",
+            "pass": False,
+            "severity": "high" if len(triggers) >= 3 else "medium",
+            "detail": ", ".join(triggers[:6]),
+        })
+        recommendations.append(f"Remove or replace spam triggers: {', '.join(triggers[:5])}")
+    else:
+        checks.append({"name": "Spam trigger words", "pass": True, "severity": "low", "detail": "No common triggers found"})
+
+    # Caps ratio
+    letters = [c for c in s + b if c.isalpha()]
+    caps_ratio = (sum(1 for c in letters if c.isupper()) / len(letters)) if letters else 0
+    if caps_ratio > 0.30:
+        score += 15
+        checks.append({"name": "Excessive capitals", "pass": False, "severity": "high",
+                       "detail": f"{int(caps_ratio*100)}% of letters are uppercase"})
+        recommendations.append("Reduce ALL-CAPS words — they look shouty and trigger spam filters.")
+    else:
+        checks.append({"name": "Capitalization", "pass": True, "severity": "low",
+                       "detail": f"{int(caps_ratio*100)}% uppercase"})
+
+    # Exclamation marks
+    excl = s.count("!") + b.count("!")
+    if excl > 3:
+        score += min(10, excl * 2)
+        checks.append({"name": "Exclamation marks", "pass": False, "severity": "medium",
+                       "detail": f"{excl} exclamation marks"})
+        recommendations.append("Limit exclamation marks — 0-1 per email is ideal.")
+    else:
+        checks.append({"name": "Exclamation marks", "pass": True, "severity": "low", "detail": str(excl)})
+
+    # Link count
+    links = re.findall(r"https?://\S+", b)
+    link_count = len(links)
+    if link_count > 3:
+        score += (link_count - 3) * 5
+        checks.append({"name": "Links", "pass": False, "severity": "medium",
+                       "detail": f"{link_count} links (>3 hurts deliverability)"})
+        recommendations.append("Reduce to 1-2 links max per email.")
+    else:
+        checks.append({"name": "Links", "pass": True, "severity": "low", "detail": f"{link_count} link(s)"})
+
+    # Image count
+    img_count = len(re.findall(r"<img", b, re.I)) + len(re.findall(r"!\[", b))
+    if img_count > 2:
+        score += 5
+        checks.append({"name": "Images", "pass": False, "severity": "low",
+                       "detail": f"{img_count} images — text-heavy emails deliver better"})
+    else:
+        checks.append({"name": "Images", "pass": True, "severity": "low", "detail": f"{img_count} image(s)"})
+
+    # Word count
+    words = len(re.findall(r"\w+", b))
+    if words < 40:
+        score += 8
+        checks.append({"name": "Length", "pass": False, "severity": "low",
+                       "detail": f"{words} words — too short, may seem template-y"})
+        recommendations.append("Expand body to at least 50-120 words for cold outreach.")
+    elif words > 200:
+        score += 10
+        checks.append({"name": "Length", "pass": False, "severity": "medium",
+                       "detail": f"{words} words — cold emails >200 words drop reply rates"})
+        recommendations.append("Trim to 80-150 words. Shorter = more replies in cold outreach.")
+    else:
+        checks.append({"name": "Length", "pass": True, "severity": "low", "detail": f"{words} words"})
+
+    # Unsubscribe link
+    has_unsub = bool(re.search(r"unsubscribe|opt.?out|stop.?receiving", combined))
+    if not has_unsub:
+        score += 8
+        checks.append({"name": "Unsubscribe / opt-out", "pass": False, "severity": "medium",
+                       "detail": "No opt-out mechanism detected"})
+        recommendations.append("Add a clear unsubscribe footer — required by CAN-SPAM / GDPR.")
+    else:
+        checks.append({"name": "Unsubscribe / opt-out", "pass": True, "severity": "low", "detail": "Detected"})
+
+    # Personalization
+    has_personal = bool(re.search(r"\{\{\s*(name|first_name|company|role)\s*\}\}", s + b))
+    if not has_personal:
+        score += 5
+        checks.append({"name": "Personalization", "pass": False, "severity": "low",
+                       "detail": "No {{name}} / {{company}} placeholders found"})
+        recommendations.append("Add {{name}} or {{company}} placeholders for higher reply rates.")
+    else:
+        checks.append({"name": "Personalization", "pass": True, "severity": "low",
+                       "detail": "Placeholders detected"})
+
+    # Subject length
+    sl = len(s)
+    if sl > 60:
+        score += 8
+        checks.append({"name": "Subject length", "pass": False, "severity": "medium",
+                       "detail": f"{sl} chars — gets truncated on mobile"})
+    elif sl < 10:
+        score += 8
+        checks.append({"name": "Subject length", "pass": False, "severity": "medium",
+                       "detail": f"{sl} chars — too short to be interesting"})
+    else:
+        checks.append({"name": "Subject length", "pass": True, "severity": "low",
+                       "detail": f"{sl} chars"})
+
+    return {
+        "spam_score": min(100, score),
+        "deliverability_score": max(0, 100 - min(100, score)),
+        "checks": checks,
+        "word_count": words,
+        "link_count": link_count,
+        "image_count": img_count,
+        "caps_ratio": round(caps_ratio, 3),
+        "exclamation_count": excl,
+        "has_unsubscribe": has_unsub,
+        "recommendations": recommendations,
+    }
+

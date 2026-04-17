@@ -69,7 +69,14 @@ app.secret_key = SECRET_KEY
 # ── Security: session cookie hardening ──
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"] = os.getenv("RENDER", "") != ""  # HTTPS-only in production
+# HTTPS-only cookies in production (Render always runs behind TLS)
+_IS_PRODUCTION = bool(os.getenv("RENDER", "")) or os.getenv("FLASK_ENV") == "production"
+app.config["SESSION_COOKIE_SECURE"] = _IS_PRODUCTION
+app.config["SESSION_COOKIE_NAME"] = "machreach_sess"
+# Trust Render/Heroku-style proxy headers so secure-cookie detection works
+if _IS_PRODUCTION:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours max session
 
 # ── Security: CSRF protection ──
@@ -374,13 +381,40 @@ def _esc(text: str) -> str:
 
 @app.after_request
 def _set_security_headers(response):
+    # Core hardening
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["X-XSS-Protection"] = "0"  # modern browsers: CSP is authoritative, legacy header can introduce issues
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    if os.getenv("RENDER", ""):
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Permissions-Policy"] = (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
+        "magnetometer=(), accelerometer=(), gyroscope=(), interest-cohort=()"
+    )
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    response.headers["X-Download-Options"] = "noopen"
+    # Content Security Policy — restricts where scripts/styles/images/frames can load from.
+    # 'unsafe-inline' is required because MachReach renders heavy inline HTML/CSS/JS
+    # via Jinja/f-strings. Everything else is locked down.
+    _CSP = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data: blob: https:; "
+        "connect-src 'self' https://api.openai.com https://*.instructure.com; "
+        "frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.sandbox.paypal.com; "
+        "frame-ancestors 'self'; "
+        "base-uri 'self'; "
+        "form-action 'self' https://www.paypal.com https://www.sandbox.paypal.com; "
+        "object-src 'none'; "
+        "upgrade-insecure-requests"
+    )
+    response.headers["Content-Security-Policy"] = _CSP
+    # HSTS with preload in production
+    if _IS_PRODUCTION:
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
     return response
 
 
@@ -970,6 +1004,9 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <a href="/student/plan" {% if active_page == 'student_plan' %}class="active"{% endif %}>&#128197; Plan</a>
         <div class="nav-divider"></div>
+        <a href="/student/essay" {% if active_page == 'student_essay' %}class="active"{% endif %}>&#9999;&#65039; Essay</a>
+        <a href="/student/panic" {% if active_page == 'student_panic' %}class="active" style="color:#EF4444;"{% else %}style="color:#EF4444;"{% endif %}>&#128680; Panic</a>
+        <div class="nav-divider"></div>
         <a href="/student/flashcards" {% if active_page == 'student_flashcards' %}class="active"{% endif %}>&#127183; Flashcards</a>
         <a href="/student/quizzes" {% if active_page == 'student_quizzes' %}class="active"{% endif %}>&#128221; Quizzes</a>
         <a href="/student/notes" {% if active_page == 'student_notes' %}class="active"{% endif %}>&#128214; Notes</a>
@@ -985,6 +1022,9 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/inbox" {% if active_page == 'inbox' %}class="active"{% endif %}>{{nav.inbox}}</a>
         <a href="/ab-tests" {% if active_page == 'ab_tests' %}class="active"{% endif %}>{{nav.ab_tests}}</a>
         <a href="/smart-times" {% if active_page == 'smart_times' %}class="active"{% endif %}>&#9201; {{nav.send_times}}</a>
+        <a href="/subject-optimizer" {% if active_page == 'subject_optimizer' %}class="active"{% endif %}>&#10024; Subject</a>
+        <a href="/reply-intel" {% if active_page == 'reply_intel' %}class="active"{% endif %}>&#129504; Replies</a>
+        <a href="/deliverability" {% if active_page == 'deliverability' %}class="active"{% endif %}>&#128737;&#65039; Inbox</a>
         <a href="/calendar" {% if active_page == 'calendar' %}class="active"{% endif %}>{{nav.calendar}}</a>
         <a href="/export" {% if active_page == 'export' %}class="active"{% endif %}>&#128202; {{nav.export}}</a>
         <div class="nav-divider"></div>
@@ -1082,6 +1122,112 @@ LAYOUT = """<!DOCTYPE html>
       void el.offsetWidth;
       el.classList.add('num-pop');
     };
+    // Promotion toast — shown when a user ranks up
+    window.showPromotionToast = function(promo) {
+      if (!promo || !promo.promoted || !promo.rank_after) return;
+      var r = promo.rank_after;
+      var title = promo.reached_elite ? 'Elite Rank Achieved!'
+                : (promo.tier_up ? 'Tier Promotion!' : 'Rank Up!');
+      var toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;top:24px;right:24px;z-index:99999;'
+        + 'background:linear-gradient(135deg,' + r.color + ',#111827);'
+        + 'color:#fff;padding:18px 22px;border-radius:14px;'
+        + 'box-shadow:0 18px 40px rgba(0,0,0,.4);min-width:280px;'
+        + 'border:2px solid ' + r.color + ';font-family:inherit;'
+        + 'animation:promoSlide .5s ease-out;';
+      toast.innerHTML =
+        '<div style="font-size:12px;opacity:.85;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">' + title + '</div>'
+        + '<div style="font-size:22px;font-weight:700;margin-bottom:2px">' + r.full_name + '</div>'
+        + '<div style="font-size:13px;opacity:.9">You\'ve earned a new rank. Keep grinding.</div>';
+      if (!document.getElementById('promo-toast-style')) {
+        var st = document.createElement('style');
+        st.id = 'promo-toast-style';
+        st.textContent = '@keyframes promoSlide{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}'
+          + '@keyframes promoFade{to{opacity:0;transform:translateX(120%)}}';
+        document.head.appendChild(st);
+      }
+      document.body.appendChild(toast);
+      setTimeout(function(){ toast.style.animation='promoFade .5s ease-in forwards'; }, 5500);
+      setTimeout(function(){ toast.remove(); }, 6100);
+    };
+    // Theme system — applies named themes via CSS variables on <body>
+    window.MR_THEMES = {
+      default: { bg:'#0f172a', card:'#1e293b', border:'#334155', text:'#f1f5f9', textMuted:'#94a3b8', primary:'#6366f1' },
+      light:   { bg:'#f8fafc', card:'#ffffff', border:'#e2e8f0', text:'#0f172a', textMuted:'#64748b', primary:'#6366f1' },
+      midnight:{ bg:'#050816', card:'#0c1026', border:'#1e1b4b', text:'#e2e8f0', textMuted:'#94a3b8', primary:'#8b5cf6' },
+      forest:  { bg:'#0b2018', card:'#11322a', border:'#14532d', text:'#d1fae5', textMuted:'#6ee7b7', primary:'#10b981' },
+      ocean:   { bg:'#082f49', card:'#0c4a6e', border:'#075985', text:'#e0f2fe', textMuted:'#7dd3fc', primary:'#06b6d4' },
+      rose:    { bg:'#3f0a1a', card:'#581132', border:'#9f1239', text:'#fecdd3', textMuted:'#fda4af', primary:'#f43f5e' },
+      sunset:  { bg:'#431407', card:'#7c2d12', border:'#9a3412', text:'#ffedd5', textMuted:'#fdba74', primary:'#f97316' },
+      mono:    { bg:'#0a0a0a', card:'#171717', border:'#262626', text:'#fafafa', textMuted:'#a3a3a3', primary:'#fafafa' },
+    };
+    window.applyMrTheme = function(name) {
+      var t = window.MR_THEMES[name] || window.MR_THEMES['default'];
+      var r = document.documentElement;
+      r.style.setProperty('--bg', t.bg);
+      r.style.setProperty('--card', t.card);
+      r.style.setProperty('--border', t.border);
+      r.style.setProperty('--text', t.text);
+      r.style.setProperty('--text-muted', t.textMuted);
+      r.style.setProperty('--primary', t.primary);
+      document.body && document.body.setAttribute('data-theme', name);
+    };
+    // Apply saved theme on load
+    try { window.applyMrTheme(localStorage.getItem('mr_theme') || 'default'); } catch(e) {}
+
+    // ── FOCUS SHIELD (in-app distraction blocker) ──
+    // When a focus session is running (localStorage.focus_float.active),
+    // any non-focus MachReach page is replaced with a full-screen shield
+    // urging the user back to the timer. Prevents using MachReach itself
+    // as a distraction.
+    (function() {
+      function isActive() {
+        try {
+          var ff = JSON.parse(localStorage.getItem('focus_float') || 'null');
+          return !!(ff && ff.active);
+        } catch(e) { return false; }
+      }
+      function onFocusPage() {
+        return location.pathname === '/student/focus' || location.pathname === '/student/focus/';
+      }
+      function mountShield() {
+        if (document.getElementById('mr-focus-shield')) return;
+        var s = document.createElement('div');
+        s.id = 'mr-focus-shield';
+        s.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:radial-gradient(circle at top,#1e1b4b,#050816);color:#fff;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;animation:mrFsIn .35s ease-out';
+        s.innerHTML = '<style>@keyframes mrFsIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}</style>'
+          + '<div style="max-width:520px;padding:40px 32px;text-align:center">'
+          +   '<div style="font-size:72px;margin-bottom:12px">🎯</div>'
+          +   '<div style="font-size:12px;letter-spacing:3px;color:#A78BFA;text-transform:uppercase;font-weight:700;margin-bottom:8px">Focus session active</div>'
+          +   '<h1 style="font-size:30px;margin:0 0 14px;font-weight:800;line-height:1.15">Stay locked in.</h1>'
+          +   '<p style="color:#C7D2FE;font-size:15px;line-height:1.6;margin:0 0 26px">You started a focus session. This page is blocked until you finish or pause the timer. No shortcuts.</p>'
+          +   '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
+          +     '<a href="/student/focus" style="background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;padding:14px 26px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(99,102,241,.4)">⟵ Back to Focus Timer</a>'
+          +     '<button id="mr-focus-shield-break" style="background:transparent;border:1px solid rgba(255,255,255,.2);color:#A5B4FC;padding:14px 20px;border-radius:12px;cursor:pointer;font-weight:600;font-size:13px">End session (lose progress)</button>'
+          +   '</div>'
+          + '</div>';
+        document.body.appendChild(s);
+        document.getElementById('mr-focus-shield-break').onclick = function() {
+          if (!confirm('End your focus session and forfeit unsaved XP?')) return;
+          localStorage.removeItem('focus_float');
+          localStorage.removeItem('focus_timer_state');
+          location.reload();
+        };
+      }
+      function unmount() {
+        var s = document.getElementById('mr-focus-shield');
+        if (s) s.remove();
+      }
+      function tick() {
+        if (isActive() && !onFocusPage()) mountShield();
+        else unmount();
+      }
+      // Run immediately + every 2s
+      tick();
+      setInterval(tick, 2000);
+      // React instantly to storage changes across tabs
+      window.addEventListener('storage', function(e){ if (e.key === 'focus_float') tick(); });
+    })();
     // Loading button handler
     document.querySelectorAll('form[data-loading]').forEach(form => {
       form.addEventListener('submit', () => {
@@ -1396,56 +1542,182 @@ LAYOUT = """<!DOCTYPE html>
   #mr-tut-welcome .welcome-card .wbtn-skip{background:transparent;color:#A5B4FC;text-decoration:underline}
   </style>
   <div id="mr-tut-overlay"><div id="mr-tut-backdrop" style="display:none"></div><div id="mr-tut-highlight" style="display:none"></div><div id="mr-tut-arrow" style="display:none"></div><div id="mr-tut-tooltip" style="display:none"></div></div>
-  {% if account_type|default('business') == 'student' %}
   <script>
+  /* =============================================================
+     Multi-page Interactive Tutorial — auto-navigates between pages,
+     highlights the real element on each page, explains what it does.
+     State persists in localStorage so the tour survives navigation.
+     ============================================================= */
   (function(){
-    if (localStorage.getItem('mr-tutorial-done')) return;
-    var isDashboard = (window.location.pathname === '/student' || window.location.pathname === '/student/');
-    if (!isDashboard) return;
+    var ACCOUNT_TYPE = {% if account_type|default('business') == 'student' %}'student'{% else %}'business'{% endif %};
+    var DONE_KEY  = ACCOUNT_TYPE === 'student' ? 'mr-tutorial-done' : 'mr-biz-tutorial-done';
+    var STATE_KEY = 'mr-tour-state';
+    var START_PAGE = ACCOUNT_TYPE === 'student' ? '/student' : '/dashboard';
+    var END_PAGE   = ACCOUNT_TYPE === 'student' ? '/student/settings' : '/settings';
 
-    var steps = [
-      {sel:'.nav-dropdown',title:'Dashboard & Tools',desc:'Your command center. Click this dropdown to access Exams, Focus Mode, GPA Calculator, Practice Problems, Schedule, Weak Topics, Smart Import, and your XP & Achievements.',pos:'bottom'},
-      {sel:'a[href="/student/courses"]',title:'Courses',desc:'Add your courses here — manually or by syncing Canvas. Upload your syllabus, PDFs, and notes. Everything the AI needs starts here.',pos:'bottom'},
-      {sel:'a[href="/student/plan"]',title:'Study Plan',desc:'AI-generated daily study plan based on your courses, exams, and priorities. Check off sessions as you go.',pos:'bottom'},
-      {sel:'a[href="/student/flashcards"]',title:'Flashcards',desc:'AI creates flashcards from your uploaded files. Uses spaced repetition (SRS) to help you memorize efficiently.',pos:'bottom'},
-      {sel:'a[href="/student/quizzes"]',title:'Quizzes',desc:'Practice quizzes generated from your course materials. Great for exam prep — all questions come from your uploads.',pos:'bottom'},
-      {sel:'a[href="/student/notes"]',title:'AI Notes',desc:'Drop a PDF or DOCX and get clean, organized study notes extracted automatically. You can also generate notes from course files with AI.',pos:'bottom'},
-      {sel:'a[href="/student/chat"]',title:'AI Tutor',desc:'Chat with an AI tutor that ONLY uses your uploaded files — no hallucination. Ask questions, get explanations, and study smarter.',pos:'bottom'},
-      {sel:'a[href="/student/exchange"]',title:'Study Exchange',desc:'Share your notes with other students and discover shared materials. Build a study community.',pos:'bottom'},
-      {sel:'a[href="/student/leaderboard"]',title:'Leaderboard',desc:'See how you rank against other students. Earn XP from flashcards, quizzes, focus sessions, and more to climb the board.',pos:'bottom'},
-      {sel:'a[href="/mail-hub"]',title:'Mail Hub',desc:'Your email dashboard. Read, reply, and manage all your connected email accounts with AI-powered sorting and prioritization.',pos:'bottom'},
-      {sel:'#sync-btn',title:'Sync Canvas',desc:'Connect your Canvas LMS account to automatically import all your courses, assignments, and syllabi.',pos:'bottom'},
-      {sel:'#plan-btn',title:'Generate Plan',desc:'Click to generate a personalized AI study plan. The AI considers your exams, course load, and priorities.',pos:'bottom'},
-      {sel:'.stat-card',title:'Your Stats',desc:'Track your courses, upcoming exams, plan completion, and total focus hours at a glance.',pos:'bottom'},
+    /* ---------- STEP LISTS ---------- */
+    var STUDENT_STEPS = [
+      {url:'/student', sel:'h1,h2', title:'Your Student Dashboard', desc:'This is home base. Every stat, upcoming exam, and daily plan item lives here. We\\'ll walk through every feature you have — and take you to each page so you can see it in action.', pos:'bottom'},
+      {url:'/student', sel:'.stat-card,.nav-dropdown', title:'Stats at a glance', desc:'Total courses, upcoming exams, focus hours, and streak — always in the header so you know where you stand.', pos:'bottom'},
+
+      {url:'/student/courses', sel:'h1', title:'Courses — your source of truth', desc:'Everything starts with a course. You can sync from Canvas with one click or create courses manually with the "+ New Course" button.', pos:'bottom'},
+      {url:'/student/courses', sel:'button[onclick*="showNewCourseModal"],button[onclick*="syncCourses"]', title:'Add courses two ways', desc:'Sync Canvas to pull in everything automatically, or hit "+ New Course" to add one by hand. Upload PDFs and syllabi to each course — the AI needs them to build flashcards, quizzes, and notes.', pos:'bottom'},
+
+      {url:'/student/plan', sel:'h1', title:'AI Study Plan', desc:'Your personalized daily plan. The AI weighs every exam, course difficulty, and weak topic, then schedules exactly what to study today.', pos:'bottom'},
+
+      {url:'/student/focus', sel:'h1', title:'Focus Mode — where XP is earned', desc:'Pomodoro, pages-read, and custom sessions. This is the ONLY way to earn XP now (along with Exchange). The harder the course, the more XP per session.', pos:'bottom'},
+      {url:'/student/focus', sel:'.mode-btn,#start-btn', title:'Pick a mode, start the timer', desc:'Pomodoro gives a 1.2× XP multiplier. Pages-read mode earns XP per page. All sessions feed your focus-hour badges.', pos:'bottom'},
+      {url:'/student/focus', sel:'#focus-guard-card', title:'Focus Guard — block distractions for real', desc:'Install the free browser extension and the moment you start a timer, Instagram, TikTok, Twitter, Reddit and more get blocked automatically. YouTube stays allowed — because you might be studying.', pos:'top'},
+
+      {url:'/student/flashcards', sel:'h1', title:'AI Flashcards (SRS)', desc:'Flashcards auto-generated from your uploaded course files, scheduled with spaced-repetition. Review daily and you literally cannot forget.', pos:'bottom'},
+
+      {url:'/student/quizzes', sel:'h1', title:'AI Quizzes', desc:'Practice quizzes built from your course materials — perfect exam prep. Every question traces back to your own uploads, not random internet fluff.', pos:'bottom'},
+
+      {url:'/student/notes', sel:'h1', title:'AI Notes', desc:'Drop any PDF or DOCX and get clean, organized study notes in seconds. You can also generate notes from course files with one click.', pos:'bottom'},
+
+      {url:'/student/chat', sel:'h1', title:'AI Tutor (grounded)', desc:'Unlike ChatGPT, this tutor can ONLY answer using the files you uploaded. Zero hallucinations. Ask it to explain chapter 4, quiz you, or walk through a problem.', pos:'bottom'},
+
+      {url:'/student/essay', sel:'h1', title:'Essay Assistant', desc:'Paste any draft. Get brutally honest feedback on thesis strength, structure, grammar, and flow — plus a rewritten intro you can actually use.', pos:'bottom'},
+
+      {url:'/student/panic', sel:'h1', title:'Panic Mode — for exam emergencies', desc:'Exam tomorrow and nothing\\'s done? Fill in hours-available and topics, and get a ruthless, minute-by-minute cram plan. Use it, not abuse it.', pos:'bottom'},
+
+      {url:'/student/exchange', sel:'h1', title:'Study Exchange', desc:'Share your best notes with other students. Fork theirs. Every time someone uses your note, you earn XP. Great notes = great rank.', pos:'bottom'},
+
+      {url:'/student/leaderboard', sel:'h1', title:'Leaderboards & Ranks', desc:'You\\'re looking at the global leaderboard. Filter by your university, or create a private group with friends using the invite codes below.', pos:'bottom'},
+      {url:'/student/leaderboard', sel:'table,[class*="card"]', title:'35 ranks to climb', desc:'Initiates IV → Apprentices → Scholars → Researchers → Academics → Masterminds → Grand Scholars → Legends — then the elite tier (Arch Scholars, High Sages, Oracles of Knowledge). Every rank-up pops a toast notification.', pos:'top'},
+
+      {url:'/student/schedule', sel:'h1', title:'Weekly Schedule', desc:'Drag-and-drop your weekly schedule — classes, study blocks, deadlines. Changes save automatically.', pos:'bottom'},
+
+      {url:'/student/exams', sel:'h1', title:'Exams Dashboard', desc:'Every upcoming exam across every course, sorted by urgency. Never blindsided again.', pos:'bottom'},
+
+      {url:'/student/weak-topics', sel:'h1', title:'Weak Topics Radar', desc:'The AI tracks which topics you score lowest on in quizzes and surfaces them here. Focus your review where it matters.', pos:'bottom'},
+
+      {url:'/student/gpa', sel:'h1', title:'GPA Calculator', desc:'Track your current GPA and forecast what grades you need to hit your target. Essential at midterms.', pos:'bottom'},
+
+      {url:'/student/achievements', sel:'h1', title:'XP & Achievements', desc:'Full XP history, earned badges, and your current rank with progress to the next one. Shareable.', pos:'bottom'},
+
+      {url:'/mail-hub', sel:'h1', title:'Mail Hub', desc:'Connect your Gmail/Outlook. AI sorts emails by priority so you don\\'t miss anything from your professors.', pos:'bottom'},
+
+      {url:'/student/settings', sel:'h1', title:'Settings — you\\'re home', desc:'Change your theme, language, daily-email time, and restart this tour anytime. You\\'re ready to crush this semester.', pos:'bottom'}
     ];
 
-    var current = 0;
+    var BUSINESS_STEPS = [
+      {url:'/dashboard', sel:'h1,h2', title:'Your Outreach Dashboard', desc:'Command center for every campaign. Pipeline metrics, recent activity, and quick actions all live here. We\\'ll tour every feature and show you each page for real.', pos:'bottom'},
+      {url:'/dashboard', sel:'[class*="stat"]', title:'Live metrics', desc:'Total sent, open rate, reply rate, bounced — updated every 15 seconds so you always know campaign health.', pos:'bottom'},
 
-    // Show welcome modal
-    var welcome = document.createElement('div');
-    welcome.id = 'mr-tut-welcome';
-    welcome.innerHTML = '<div class="welcome-card">'
-      + '<div style="font-size:52px;">&#127891;</div>'
-      + '<h2>Welcome to MachReach!</h2>'
-      + '<p>Let&#39;s take a quick tour of your study dashboard. We&#39;ll show you all the tools available to help you ace your courses.</p>'
-      + '<button class="wbtn wbtn-start" onclick="window._mrTutStart()">Start Tour</button>'
-      + '<button class="wbtn wbtn-skip" onclick="window._mrTutEnd()">Skip</button>'
-      + '</div>';
-    document.body.appendChild(welcome);
+      {url:'/campaigns', sel:'h1', title:'Campaigns', desc:'Every campaign you\\'ve built lives here. Draft, active, paused, or finished — all in one list with live stats.', pos:'bottom'},
 
-    window._mrTutStart = function() {
-      welcome.remove();
-      current = 0;
-      showStep(current);
+      {url:'/campaign/new', sel:'h1', title:'New Campaign — the AI writer', desc:'Describe your audience, tone, and offer. The AI drafts a multi-step sequence with follow-ups and A/B variants. Edit anything before launch.', pos:'bottom'},
+
+      {url:'/contacts', sel:'h1', title:'Contacts', desc:'Your CRM. Import leads via CSV, tag them, segment by industry or status. Bad addresses get auto-flagged before they hurt your deliverability.', pos:'bottom'},
+
+      {url:'/inbox', sel:'h1', title:'Unified Inbox', desc:'Every reply from every campaign lands here. Mark interested leads, snooze, or jump straight to the contact record.', pos:'bottom'},
+
+      {url:'/mail-hub', sel:'h1', title:'Mail Hub', desc:'Connect Gmail, Outlook, or any IMAP account. Monitor deliverability, warm-up status, and sending limits per inbox.', pos:'bottom'},
+
+      {url:'/subject-optimizer', sel:'h1', title:'Subject-Line Optimizer', desc:'Paste a subject line and get an open-rate score, spam risk, and hook-strength rating. Fix it before you send 1,000 emails with a dud.', pos:'bottom'},
+
+      {url:'/reply-intel', sel:'h1', title:'Reply Intelligence', desc:'Paste any reply you got. The AI classifies it as interested / objection / not-a-fit and drafts the perfect follow-up in your tone.', pos:'bottom'},
+
+      {url:'/deliverability', sel:'h1', title:'Deliverability Checker', desc:'Scan any email for spam-trigger words, broken links, SPF/DKIM issues, and HTML problems before you hit send.', pos:'bottom'},
+
+      {url:'/ab-tests', sel:'h1', title:'A/B Tests', desc:'Test subject lines, openers, or CTAs. MachReach picks the winner automatically once it has statistical significance.', pos:'bottom'},
+
+      {url:'/smart-times', sel:'h1', title:'Smart Send Times', desc:'The AI learns when each recipient opens emails and schedules sends to match. Massive open-rate lift, zero effort.', pos:'bottom'},
+
+      {url:'/calendar', sel:'h1', title:'Calendar', desc:'Every scheduled campaign, follow-up, and queued send on a single calendar. Never double-book an audience.', pos:'bottom'},
+
+      {url:'/export', sel:'h1', title:'Export', desc:'Pull your campaigns, contacts, or analytics to CSV for reporting or CRM import. Raw data, no lock-in.', pos:'bottom'},
+
+      {url:'/billing', sel:'h1', title:'Billing', desc:'Manage your plan, view invoices, and update payment methods. Upgrade/downgrade anytime.', pos:'bottom'},
+
+      {url:'/settings', sel:'h1', title:'Settings — you\\'re home', desc:'Connect your email provider, set tracking preferences, manage templates, and restart this tour. You\\'re ready to launch.', pos:'bottom'}
+    ];
+
+    var STEPS = ACCOUNT_TYPE === 'student' ? STUDENT_STEPS : BUSINESS_STEPS;
+
+    /* ---------- STATE HELPERS ---------- */
+    function loadState() {
+      try { return JSON.parse(localStorage.getItem(STATE_KEY) || 'null'); } catch(e) { return null; }
+    }
+    function saveState(s) { localStorage.setItem(STATE_KEY, JSON.stringify(s)); }
+    function clearState() { localStorage.removeItem(STATE_KEY); }
+
+    var state = loadState();
+    var path = window.location.pathname.replace(/\\/$/, '') || '/';
+
+    /* ---------- WELCOME MODAL (only shown on start page, first time) ---------- */
+    function isStartPage() {
+      if (ACCOUNT_TYPE === 'student') return path === '/student' || path === '/student/';
+      return path === '/dashboard' || path === '/dashboard/';
+    }
+
+    if (!state || !state.running) {
+      if (localStorage.getItem(DONE_KEY)) return;
+      if (!isStartPage()) return;
+
+      var welcome = document.createElement('div');
+      welcome.id = 'mr-tut-welcome';
+      var emoji = ACCOUNT_TYPE === 'student' ? '&#127891;' : '&#128640;';
+      var kind  = ACCOUNT_TYPE === 'student' ? 'study dashboard' : 'outreach dashboard';
+      welcome.innerHTML = '<div class="welcome-card">'
+        + '<div style="font-size:52px;">' + emoji + '</div>'
+        + '<h2>Welcome to MachReach!</h2>'
+        + '<p>This is a <strong>guided tour</strong> — we\\'ll walk you through every feature of your ' + kind + ' by actually taking you to each page. Takes ~2 minutes.</p>'
+        + '<button class="wbtn wbtn-start" onclick="window._mrTutStart()">Start Tour</button>'
+        + '<button class="wbtn wbtn-skip" onclick="window._mrTutEnd()">Skip</button>'
+        + '</div>';
+      document.body.appendChild(welcome);
+
+      window._mrTutStart = function() {
+        welcome.remove();
+        state = { type: ACCOUNT_TYPE, step: 0, running: true };
+        saveState(state);
+        showStep(0);
+      };
+      window._mrTutEnd = function() {
+        localStorage.setItem(DONE_KEY, '1');
+        clearState();
+        if (welcome && welcome.parentNode) welcome.remove();
+        cleanup();
+      };
+      return;
+    }
+
+    /* Tour is running. Either we're on the right page (show step) or we need to resume after navigation. */
+    if (state.type !== ACCOUNT_TYPE) return; /* different account — ignore */
+
+    /* Expose controls so they work across pages */
+    window._mrTutNext = function() {
+      state.step++;
+      saveState(state);
+      if (state.step >= STEPS.length) {
+        finishTour();
+      } else {
+        showStep(state.step);
+      }
     };
-
+    window._mrTutPrev = function() {
+      if (state.step > 0) {
+        state.step--;
+        saveState(state);
+        showStep(state.step);
+      }
+    };
     window._mrTutEnd = function() {
-      localStorage.setItem('mr-tutorial-done','1');
-      welcome.remove();
+      localStorage.setItem(DONE_KEY, '1');
+      clearState();
       cleanup();
-      window.location='/student/canvas-settings';
     };
 
+    /* Auto-resume: wait for DOM to be ready-ish, then show step */
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ showStep(state.step); }, 250); });
+    } else {
+      setTimeout(function(){ showStep(state.step); }, 250);
+    }
+
+    /* ---------- CORE ENGINE ---------- */
     function cleanup() {
       var ov = document.getElementById('mr-tut-overlay');
       if (ov) ov.classList.remove('active');
@@ -1457,184 +1729,58 @@ LAYOUT = """<!DOCTYPE html>
       if (bk) bk.style.display = 'none';
     }
 
-    function showStep(idx) {
-      if (idx >= steps.length) {
-        localStorage.setItem('mr-tutorial-done','1');
-        cleanup();
-        // Show completion toast
-        var fin = document.createElement('div');
-        fin.id = 'mr-tut-welcome';
-        fin.innerHTML = '<div class="welcome-card">'
-          + '<div style="font-size:52px;">&#127881;</div>'
-          + '<h2>You&#39;re All Set!</h2>'
-          + '<p>You now know all the tools at your disposal. Start by adding a course or syncing Canvas — the AI will take it from there.</p>'
-          + '<p style="font-size:12px;color:#A5B4FC;">Tip: You can restart this tour anytime from Settings.</p>'
-          + '<button class="wbtn wbtn-start" onclick="window.location=&#39;/student/canvas-settings&#39;">Let&#39;s Go!</button>'
-          + '</div>';
-        document.body.appendChild(fin);
-        return;
-      }
-
-      var step = steps[idx];
-      var el = document.querySelector(step.sel);
-      if (!el) { current++; showStep(current); return; }
-
-      // Make sure nav dropdown is visible for first steps
-      var navLinks = document.querySelector('.nav-links');
-      if (navLinks && window.innerWidth <= 768) navLinks.classList.add('open');
-
-      var ov = document.getElementById('mr-tut-overlay');
-      ov.classList.add('active');
-      document.getElementById('mr-tut-backdrop').style.display = 'block';
-
-      var rect = el.getBoundingClientRect();
-      var pad = 6;
-
-      // Position highlight
-      var hl = document.getElementById('mr-tut-highlight');
-      hl.style.display = 'block';
-      hl.classList.add('mr-tut-pulse');
-      hl.style.top = (rect.top - pad) + 'px';
-      hl.style.left = (rect.left - pad) + 'px';
-      hl.style.width = (rect.width + pad * 2) + 'px';
-      hl.style.height = (rect.height + pad * 2) + 'px';
-
-      // Build tooltip content
-      var progressDots = '';
-      for (var i = 0; i < steps.length; i++) {
-        var cls = i < idx ? 'done' : (i === idx ? 'active' : '');
-        progressDots += '<span class="' + cls + '"></span>';
-      }
-
-      var tp = document.getElementById('mr-tut-tooltip');
-      tp.style.display = 'block';
-      tp.classList.remove('show');
-      tp.innerHTML = '<div class="tut-step">Step ' + (idx + 1) + ' of ' + steps.length + '</div>'
-        + '<div class="tut-title">' + step.title + '</div>'
-        + '<div class="tut-desc">' + step.desc + '</div>'
-        + '<div class="tut-btns">'
-        + '<div id="mr-tut-progress">' + progressDots + '</div>'
-        + (idx > 0 ? '<button class="tut-back" onclick="window._mrTutPrev()">Back</button>' : '')
-        + '<button class="tut-skip" onclick="window._mrTutEnd()">Skip</button>'
-        + '<button class="tut-next" onclick="window._mrTutNext()">' + (idx === steps.length - 1 ? 'Finish &#10003;' : 'Next &#8594;') + '</button>'
-        + '</div>';
-
-      // Position tooltip below or above the element
-      var ttW = 350;
-      // Force layout so offsetHeight is accurate
-      tp.style.left = '0px';
-      tp.style.top = '0px';
-      tp.style.width = ttW + 'px';
-      tp.style.visibility = 'hidden';
-      var ttH = tp.offsetHeight || 200;
-      tp.style.visibility = '';
-      var ttLeft = Math.max(12, Math.min(rect.left + rect.width / 2 - ttW / 2, window.innerWidth - ttW - 12));
-      var ttTop;
-      var gap = 20;
-      if (step.pos === 'bottom' && rect.bottom + pad + gap + ttH < window.innerHeight) {
-        ttTop = rect.bottom + pad + gap;
-      } else {
-        ttTop = Math.max(12, rect.top - pad - gap - ttH);
-      }
-      tp.style.left = ttLeft + 'px';
-      tp.style.top = ttTop + 'px';
-      tp.style.width = ttW + 'px';
-
-      requestAnimationFrame(function() { tp.classList.add('show'); });
-
-      // Scroll element into view
-      el.scrollIntoView({behavior:'smooth',block:'nearest'});
-    }
-
-    window._mrTutNext = function() { current++; showStep(current); };
-    window._mrTutPrev = function() { if (current > 0) { current--; showStep(current); } };
-
-    // Close on Escape
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && document.getElementById('mr-tut-overlay').classList.contains('active')) {
-        window._mrTutEnd();
-      }
-    });
-  })();
-  </script>
-  {% else %}
-  <script>
-  (function(){
-    if (localStorage.getItem('mr-biz-tutorial-done')) return;
-    var isDashboard = (window.location.pathname === '/dashboard' || window.location.pathname === '/dashboard/');
-    if (!isDashboard) return;
-
-    var steps = [
-      {sel:'a[href="/dashboard"]',title:'Dashboard',desc:'Your command center. View campaign stats, recent activity, and quick actions — all in one place.',pos:'bottom'},
-      {sel:'a[href="/campaign/new"]',title:'New Campaign',desc:'Create a new email outreach campaign. Set your target audience, craft your message, and schedule sends.',pos:'bottom'},
-      {sel:'a[href="/inbox"]',title:'Inbox',desc:'All replies from your campaigns land here. Track responses, mark interested leads, and follow up.',pos:'bottom'},
-      {sel:'a[href="/ab-tests"]',title:'A/B Tests',desc:'Test different subject lines, email copy, and send times. Find what gets the best open and reply rates.',pos:'bottom'},
-      {sel:'a[href="/smart-times"]',title:'Smart Send Times',desc:'AI analyzes when your recipients are most likely to open emails and optimizes your send schedule.',pos:'bottom'},
-      {sel:'a[href="/calendar"]',title:'Calendar',desc:'See all your scheduled campaigns and follow-ups on a calendar view. Stay organized and never miss a send.',pos:'bottom'},
-      {sel:'a[href="/export"]',title:'Export',desc:'Download your campaign data, contacts, and analytics. Export to CSV for reporting or CRM import.',pos:'bottom'},
-      {sel:'a[href="/mail-hub"]',title:'Mail Hub',desc:'Connect and manage all your email accounts. Monitor deliverability, warm-up status, and sending limits.',pos:'bottom'},
-      {sel:'a[href="/contacts"]',title:'Contacts',desc:'Your contact database. Import leads, tag them, segment by industry or status, and manage your lists.',pos:'bottom'},
-      {sel:'a[href="/billing"]',title:'Billing',desc:'Manage your subscription, view invoices, and update your payment method.',pos:'bottom'},
-      {sel:'a[href="/settings"]',title:'Settings',desc:'Configure your account — connect your email provider, set up tracking, manage templates, and more.',pos:'bottom'},
-    ];
-
-    var current = 0;
-
-    var welcome = document.createElement('div');
-    welcome.id = 'mr-tut-welcome';
-    welcome.innerHTML = '<div class="welcome-card">'
-      + '<div style="font-size:52px;">&#128640;</div>'
-      + '<h2>Welcome to MachReach!</h2>'
-      + '<p>Let&#39;s take a quick tour of your outreach dashboard. We&#39;ll show you every tool you need to run successful email campaigns.</p>'
-      + '<button class="wbtn wbtn-start" onclick="window._mrTutStart()">Start Tour</button>'
-      + '<button class="wbtn wbtn-skip" onclick="window._mrTutEnd()">Skip</button>'
-      + '</div>';
-    document.body.appendChild(welcome);
-
-    window._mrTutStart = function() {
-      welcome.remove();
-      current = 0;
-      showStep(current);
-    };
-
-    window._mrTutEnd = function() {
-      localStorage.setItem('mr-biz-tutorial-done','1');
-      welcome.remove();
+    function finishTour() {
+      localStorage.setItem(DONE_KEY, '1');
+      clearState();
       cleanup();
-      window.location='/settings';
-    };
+      var fin = document.createElement('div');
+      fin.id = 'mr-tut-welcome';
+      fin.innerHTML = '<div class="welcome-card">'
+        + '<div style="font-size:52px;">&#127881;</div>'
+        + '<h2>You\\'re all set!</h2>'
+        + '<p>You\\'ve seen every major feature. Time to actually use them.</p>'
+        + '<p style="font-size:12px;color:#A5B4FC;">Tip: restart this tour anytime from Settings.</p>'
+        + '<button class="wbtn wbtn-start" onclick="window.location=\\'' + END_PAGE + '\\'">Let\\'s Go!</button>'
+        + '</div>';
+      document.body.appendChild(fin);
+    }
 
-    function cleanup() {
-      var ov = document.getElementById('mr-tut-overlay');
-      if (ov) ov.classList.remove('active');
-      var hl = document.getElementById('mr-tut-highlight');
-      if (hl) hl.style.display = 'none';
-      var tp = document.getElementById('mr-tut-tooltip');
-      if (tp) { tp.style.display = 'none'; tp.classList.remove('show'); }
-      var bk = document.getElementById('mr-tut-backdrop');
-      if (bk) bk.style.display = 'none';
+    function stepPathMatches(step) {
+      var want = (step.url || '').replace(/\\/$/, '') || '/';
+      return path === want || path.indexOf(want + '/') === 0;
     }
 
     function showStep(idx) {
-      if (idx >= steps.length) {
-        localStorage.setItem('mr-biz-tutorial-done','1');
-        cleanup();
-        var fin = document.createElement('div');
-        fin.id = 'mr-tut-welcome';
-        fin.innerHTML = '<div class="welcome-card">'
-          + '<div style="font-size:52px;">&#127881;</div>'
-          + '<h2>You&#39;re All Set!</h2>'
-          + '<p>You now know all the tools at your disposal. Start by connecting your email in Settings — the AI will handle the rest.</p>'
-          + '<p style="font-size:12px;color:#A5B4FC;">Tip: You can restart this tour anytime from Settings.</p>'
-          + '<button class="wbtn wbtn-start" onclick="window.location=&#39;/settings&#39;">Let&#39;s Go!</button>'
-          + '</div>';
-        document.body.appendChild(fin);
+      if (idx >= STEPS.length) { finishTour(); return; }
+      var step = STEPS[idx];
+
+      /* Navigate if we're on the wrong page */
+      if (!stepPathMatches(step)) {
+        window.location = step.url;
         return;
       }
 
-      var step = steps[idx];
-      var el = document.querySelector(step.sel);
-      if (!el) { current++; showStep(current); return; }
+      var el = null;
+      var sels = (step.sel || '').split(',');
+      for (var i = 0; i < sels.length; i++) {
+        var s = sels[i].trim();
+        if (!s) continue;
+        el = document.querySelector(s);
+        if (el) break;
+      }
+      /* If selector didn't match, retry a few times (page might still be rendering) */
+      if (!el && !step._retries) {
+        step._retries = 0;
+      }
+      if (!el) {
+        step._retries = (step._retries || 0) + 1;
+        if (step._retries < 10) {
+          setTimeout(function(){ showStep(idx); }, 300);
+          return;
+        }
+        /* Give up: skip to next */
+        state.step++; saveState(state); showStep(state.step); return;
+      }
 
       var ov = document.getElementById('mr-tut-overlay');
       ov.classList.add('active');
@@ -1652,50 +1798,46 @@ LAYOUT = """<!DOCTYPE html>
       hl.style.height = (rect.height + pad * 2) + 'px';
 
       var progressDots = '';
-      for (var i = 0; i < steps.length; i++) {
-        var cls = i < idx ? 'done' : (i === idx ? 'active' : '');
+      for (var j = 0; j < STEPS.length; j++) {
+        var cls = j < idx ? 'done' : (j === idx ? 'active' : '');
         progressDots += '<span class="' + cls + '"></span>';
       }
 
       var tp = document.getElementById('mr-tut-tooltip');
       tp.style.display = 'block';
       tp.classList.remove('show');
-      tp.innerHTML = '<div class="tut-step">Step ' + (idx + 1) + ' of ' + steps.length + '</div>'
+      tp.innerHTML = '<div class="tut-step">Step ' + (idx + 1) + ' of ' + STEPS.length + '</div>'
         + '<div class="tut-title">' + step.title + '</div>'
         + '<div class="tut-desc">' + step.desc + '</div>'
         + '<div class="tut-btns">'
         + '<div id="mr-tut-progress">' + progressDots + '</div>'
         + (idx > 0 ? '<button class="tut-back" onclick="window._mrTutPrev()">Back</button>' : '')
-        + '<button class="tut-skip" onclick="window._mrTutEnd()">Skip</button>'
-        + '<button class="tut-next" onclick="window._mrTutNext()">' + (idx === steps.length - 1 ? 'Finish &#10003;' : 'Next &#8594;') + '</button>'
+        + '<button class="tut-skip" onclick="window._mrTutEnd()">Skip tour</button>'
+        + '<button class="tut-next" onclick="window._mrTutNext()">' + (idx === STEPS.length - 1 ? 'Finish &#10003;' : 'Next &#8594;') + '</button>'
         + '</div>';
 
-      var ttW = 350;
-      tp.style.left = '0px';
-      tp.style.top = '0px';
-      tp.style.width = ttW + 'px';
+      var ttW = 360;
+      tp.style.left = '0px'; tp.style.top = '0px'; tp.style.width = ttW + 'px';
       tp.style.visibility = 'hidden';
-      var ttH = tp.offsetHeight || 200;
+      var ttH = tp.offsetHeight || 220;
       tp.style.visibility = '';
       var ttLeft = Math.max(12, Math.min(rect.left + rect.width / 2 - ttW / 2, window.innerWidth - ttW - 12));
       var ttTop;
       var gap = 20;
       if (step.pos === 'bottom' && rect.bottom + pad + gap + ttH < window.innerHeight) {
         ttTop = rect.bottom + pad + gap;
+      } else if (step.pos === 'top' && rect.top - pad - gap - ttH > 12) {
+        ttTop = rect.top - pad - gap - ttH;
       } else {
-        ttTop = Math.max(12, rect.top - pad - gap - ttH);
+        ttTop = Math.max(12, Math.min(rect.bottom + pad + gap, window.innerHeight - ttH - 12));
       }
       tp.style.left = ttLeft + 'px';
       tp.style.top = ttTop + 'px';
       tp.style.width = ttW + 'px';
-
       requestAnimationFrame(function() { tp.classList.add('show'); });
 
-      el.scrollIntoView({behavior:'smooth',block:'nearest'});
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-
-    window._mrTutNext = function() { current++; showStep(current); };
-    window._mrTutPrev = function() { if (current > 0) { current--; showStep(current); } };
 
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape' && document.getElementById('mr-tut-overlay').classList.contains('active')) {
@@ -1704,7 +1846,6 @@ LAYOUT = """<!DOCTYPE html>
     });
   })();
   </script>
-  {% endif %}
   {% endif %}
 
   <!-- Student i18n: Spanish translations (client-side) -->
@@ -1915,93 +2056,194 @@ def index():
         if session.get("account_type") == "student":
             return redirect(url_for("student_dashboard_page"))
         return redirect(url_for("dashboard"))
-    return render_template_string(LAYOUT, title="AI Email Outreach", logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), wide=True, content=Markup(f"""
-    <div class="hero" style="padding:100px 24px 60px;">
-      <h1 style="font-size:56px;max-width:700px;margin:0 auto 20px;"><span>AI-powered</span> email outreach that actually gets replies</h1>
-      <p style="max-width:560px;">MachReach writes personalized multi-step email sequences, sends them on your schedule, and tracks every open, click, and reply &mdash; all on autopilot.</p>
-      <div class="btn-group" style="justify-content:center;gap:12px;">
-        <a href="/register" class="btn btn-primary btn-lg" style="font-size:16px;padding:14px 32px;">{t("landing.start_free")} &rarr;</a>
-        <a href="/pricing" class="btn btn-outline btn-lg">{t("landing.see_pricing")}</a>
+    return render_template_string(LAYOUT, title="MachReach — Study smarter. Sell faster.", logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), wide=True, content=Markup(f"""
+    <style>
+      .mr-hero{{padding:110px 24px 60px;text-align:center}}
+      .mr-hero h1{{font-size:60px;max-width:820px;margin:0 auto 20px;line-height:1.05;font-weight:900;letter-spacing:-1.5px}}
+      .mr-hero h1 .g1{{background:linear-gradient(90deg,#A78BFA,#6366F1);-webkit-background-clip:text;background-clip:text;color:transparent}}
+      .mr-hero h1 .g2{{background:linear-gradient(90deg,#F472B6,#F59E0B);-webkit-background-clip:text;background-clip:text;color:transparent}}
+      .mr-hero p.sub{{max-width:640px;margin:0 auto 28px;color:var(--text-muted);font-size:18px;line-height:1.55}}
+      .mr-switch{{display:inline-flex;background:rgba(148,163,184,.08);border:1px solid var(--border);border-radius:999px;padding:4px;margin:0 auto 40px;gap:4px}}
+      .mr-switch button{{border:none;background:transparent;color:var(--text-muted);padding:10px 22px;border-radius:999px;cursor:pointer;font-weight:700;font-size:14px;transition:all .2s}}
+      .mr-switch button.on{{color:#fff}}
+      .mr-switch button.on.biz{{background:linear-gradient(135deg,#6366F1,#8B5CF6);box-shadow:0 8px 24px rgba(99,102,241,.35)}}
+      .mr-switch button.on.stu{{background:linear-gradient(135deg,#F472B6,#F59E0B);box-shadow:0 8px 24px rgba(244,114,182,.35)}}
+      .mr-panel{{display:none}}
+      .mr-panel.on{{display:block;animation:mrFade .4s ease-out}}
+      @keyframes mrFade{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:translateY(0)}}}}
+      .mr-cards{{max-width:1100px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}}
+      .mr-card{{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px;transition:all .2s;position:relative;overflow:hidden}}
+      .mr-card:hover{{transform:translateY(-3px);border-color:var(--primary);box-shadow:0 16px 40px rgba(99,102,241,.12)}}
+      .mr-card .icon{{font-size:28px;margin-bottom:10px}}
+      .mr-card h3{{font-size:17px;margin:0 0 6px;font-weight:700}}
+      .mr-card p{{font-size:13.5px;line-height:1.55;color:var(--text-muted);margin:0}}
+      .mr-card.biz{{background:linear-gradient(135deg,rgba(99,102,241,.06),transparent)}}
+      .mr-card.stu{{background:linear-gradient(135deg,rgba(244,114,182,.06),transparent)}}
+      .mr-section-title{{text-align:center;margin:80px 0 8px;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted)}}
+      .mr-section-h{{text-align:center;font-size:34px;font-weight:800;margin:0 0 14px;max-width:720px;margin-left:auto;margin-right:auto;letter-spacing:-.5px}}
+      .mr-dual-cta{{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:18px}}
+      .mr-pill-biz,.mr-pill-stu{{padding:16px 28px;border-radius:14px;font-weight:700;font-size:15px;text-decoration:none;transition:all .2s;display:inline-flex;align-items:center;gap:8px}}
+      .mr-pill-biz{{background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;box-shadow:0 10px 30px rgba(99,102,241,.35)}}
+      .mr-pill-stu{{background:linear-gradient(135deg,#F472B6,#F59E0B);color:#fff;box-shadow:0 10px 30px rgba(244,114,182,.35)}}
+      .mr-pill-biz:hover,.mr-pill-stu:hover{{transform:translateY(-2px);filter:brightness(1.08)}}
+      .mr-stat-row{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;max-width:900px;margin:0 auto;padding:32px 24px 0}}
+      .mr-stat{{text-align:center}}
+      .mr-stat .num{{font-size:36px;font-weight:900;background:linear-gradient(135deg,#A78BFA,#F472B6);-webkit-background-clip:text;background-clip:text;color:transparent}}
+      .mr-stat .lbl{{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-top:4px}}
+    </style>
+
+    <div class="mr-hero">
+      <h1>Two products, <span class="g1">one mission</span>.<br>Be the <span class="g2">best</span> at what you do.</h1>
+      <p class="sub">MachReach runs AI-powered email outreach for businesses <strong>and</strong> an AI-powered study OS for students. Pick your side.</p>
+      <div class="mr-dual-cta">
+        <a href="/register?type=business" class="mr-pill-biz">&#128188; I'm a Business &rarr;</a>
+        <a href="/register?type=student" class="mr-pill-stu">&#127891; I'm a Student &rarr;</a>
       </div>
       <p style="font-size:12px;color:var(--text-muted);margin-top:14px;">No credit card required &bull; Free plan available forever</p>
     </div>
 
-    <!-- Social proof -->
-    <div style="text-align:center;padding:20px 0 48px;border-bottom:1px solid var(--border-light);">
-      <p style="font-size:13px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;font-weight:600;">Trusted by sales teams, agencies &amp; founders</p>
+    <!-- Stat row -->
+    <div class="mr-stat-row">
+      <div class="mr-stat"><div class="num">40+</div><div class="lbl">AI-powered tools</div></div>
+      <div class="mr-stat"><div class="num">2</div><div class="lbl">Complete products</div></div>
+      <div class="mr-stat"><div class="num">0$</div><div class="lbl">To get started</div></div>
+      <div class="mr-stat"><div class="num">24/7</div><div class="lbl">On autopilot</div></div>
     </div>
 
-    <!-- How it works -->
-    <div style="max-width:900px;margin:0 auto;padding:72px 24px;">
-      <h2 style="text-align:center;font-size:32px;font-weight:800;margin-bottom:8px;">How it works</h2>
-      <p style="text-align:center;color:var(--text-muted);margin-bottom:48px;font-size:16px;">Three steps to your first campaign. Takes under 5 minutes.</p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:32px;">
-        <div style="text-align:center;">
-          <div style="width:56px;height:56px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 16px;">1</div>
-          <h3 style="font-size:18px;margin-bottom:6px;">Describe your audience</h3>
-          <p style="font-size:14px;color:var(--text-muted);line-height:1.6;">Tell us your business type, target audience, and preferred tone. Our AI handles the rest.</p>
-        </div>
-        <div style="text-align:center;">
-          <div style="width:56px;height:56px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 16px;">2</div>
-          <h3 style="font-size:18px;margin-bottom:6px;">AI writes your sequence</h3>
-          <p style="font-size:14px;color:var(--text-muted);line-height:1.6;">GPT-4 generates a multi-step email sequence with A/B variants, follow-ups, and personalization.</p>
-        </div>
-        <div style="text-align:center;">
-          <div style="width:56px;height:56px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 16px;">3</div>
-          <h3 style="font-size:18px;margin-bottom:6px;">Add contacts &amp; send</h3>
-          <p style="font-size:14px;color:var(--text-muted);line-height:1.6;">Import contacts via CSV or your CRM. MachReach sends, tracks, and follows up automatically.</p>
-        </div>
+    <!-- Product switch -->
+    <div style="text-align:center;margin-top:60px">
+      <div class="mr-switch">
+        <button id="sw-biz" class="on biz" onclick="mrShowPanel('biz')">&#128188; For Business</button>
+        <button id="sw-stu" onclick="mrShowPanel('stu')">&#127891; For Students</button>
       </div>
     </div>
 
-    <!-- Features grid -->
-    <div style="background:var(--border-light);padding:72px 24px;">
-      <div style="max-width:960px;margin:0 auto;">
-        <h2 style="text-align:center;font-size:32px;font-weight:800;margin-bottom:8px;">Everything you need for outreach</h2>
-        <p style="text-align:center;color:var(--text-muted);margin-bottom:48px;font-size:16px;">No patchwork of tools. One platform, zero fluff.</p>
-        <div class="features" style="max-width:none;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;">
-          <div class="feature"><div class="feature-icon">&#129302;</div><h3>{t("landing.ai_emails")}</h3><p>{t("landing.ai_emails_desc")}</p></div>
-          <div class="feature"><div class="feature-icon">&#128233;</div><h3>{t("landing.mail_hub")}</h3><p>{t("landing.mail_hub_desc")}</p></div>
-          <div class="feature"><div class="feature-icon">&#128200;</div><h3>{t("landing.track")}</h3><p>{t("landing.track_desc")}</p></div>
-          <div class="feature"><div class="feature-icon">&#9889;</div><h3>{t("landing.automated")}</h3><p>{t("landing.automated_desc")}</p></div>
-          <div class="feature"><div class="feature-icon">&#128101;</div><h3>CRM &amp; Contacts</h3><p>Manage your contacts book, tag leads, import/export, and track relationships.</p></div>
-          <div class="feature"><div class="feature-icon">&#128272;</div><h3>A/B Testing</h3><p>Test subject lines and body copy. MachReach picks the winner automatically.</p></div>
-          <div class="feature"><div class="feature-icon">&#128197;</div><h3>Campaign Scheduling</h3><p>Schedule campaigns to start at the perfect time. No manual activation needed.</p></div>
-          <div class="feature"><div class="feature-icon">&#128101;</div><h3>Team Collaboration</h3><p>Invite teammates to share campaigns, contacts, and inbox. Everyone stays in sync.</p></div>
+    <!-- BUSINESS panel -->
+    <div id="panel-biz" class="mr-panel on" style="max-width:1100px;margin:0 auto;padding:0 24px 40px">
+      <div class="mr-section-title">For sales teams, agencies &amp; founders</div>
+      <h2 class="mr-section-h">Email outreach that <span class="g1">actually gets replies</span>.</h2>
+      <p style="text-align:center;color:var(--text-muted);font-size:16px;max-width:640px;margin:0 auto 28px;line-height:1.55">Write, send, track, and follow up on personalized multi-step email campaigns — all on autopilot.</p>
+
+      <div class="mr-cards" style="margin-top:32px">
+        <div class="mr-card biz"><div class="icon">&#129302;</div><h3>AI Campaign Writer</h3><p>Describe your audience. GPT-4 drafts a multi-step sequence with A/B variants, follow-ups, and personalization.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128233;</div><h3>Unified Mail Hub</h3><p>Connect Gmail, Outlook, and IMAP. Read, reply, and triage every inbox from one screen with AI sorting.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128200;</div><h3>Opens, Clicks &amp; Replies</h3><p>Track every interaction. See what's working and what to cut — in real time.</p></div>
+        <div class="mr-card biz"><div class="icon">&#9889;</div><h3>Smart Send Times</h3><p>AI learns when each recipient is most likely to open, then schedules sends automatically.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128101;</div><h3>CRM &amp; Contacts</h3><p>Import via CSV or CRM, tag leads, segment by industry, and keep relationships organized.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128272;</div><h3>A/B Testing</h3><p>Test subject lines and body copy. MachReach picks the winner automatically.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128196;</div><h3>Subject-Line Optimizer</h3><p>Rate any subject line for open-rate, spam risk, and hook strength before you hit send.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128172;</div><h3>Reply Intelligence</h3><p>Auto-classify replies as interested / objection / not-a-fit and draft the perfect follow-up.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128737;</div><h3>Deliverability Checker</h3><p>Scan your message for spam triggers, SPF/DKIM issues, and link problems before it goes out.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128197;</div><h3>Scheduled Campaigns</h3><p>Queue campaigns to start at the perfect time. No manual activation, no missed windows.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128101;</div><h3>Team Collaboration</h3><p>Invite teammates to share campaigns, inbox, and contacts. Everyone stays in sync.</p></div>
+        <div class="mr-card biz"><div class="icon">&#128736;</div><h3>CSV + CRM Import</h3><p>Drop in a spreadsheet or sync from your CRM. MachReach handles dedup, validation, and tagging.</p></div>
+      </div>
+
+      <div style="text-align:center;margin-top:32px">
+        <a href="/register?type=business" class="mr-pill-biz">Start your first campaign free &rarr;</a>
+      </div>
+    </div>
+
+    <!-- STUDENT panel -->
+    <div id="panel-stu" class="mr-panel" style="max-width:1100px;margin:0 auto;padding:0 24px 40px">
+      <div class="mr-section-title">For students who refuse to fail</div>
+      <h2 class="mr-section-h">The <span class="g2">AI study OS</span> built for how you actually learn.</h2>
+      <p style="text-align:center;color:var(--text-muted);font-size:16px;max-width:640px;margin:0 auto 28px;line-height:1.55">Sync Canvas. Upload your PDFs. Let AI build your plan, quizzes, flashcards, notes — and tutor you through the hard parts.</p>
+
+      <div class="mr-cards" style="margin-top:32px">
+        <div class="mr-card stu"><div class="icon">&#128218;</div><h3>Courses + Canvas Sync</h3><p>Auto-import every course, assignment, and due date. Or create courses manually. Upload syllabi &amp; PDFs.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128197;</div><h3>AI Study Plan</h3><p>Personalized daily plan built from your exams, workload, and priorities. Ticked off as you go.</p></div>
+        <div class="mr-card stu"><div class="icon">&#127917;</div><h3>Focus Mode</h3><p>Pomodoro, pages-read, and custom sessions. Earn XP. Climb the rank ladder.</p></div>
+        <div class="mr-card stu"><div class="icon">&#127183;</div><h3>AI Flashcards (SRS)</h3><p>Auto-generated from your uploads. Spaced-repetition so you never forget.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128221;</div><h3>AI Quizzes</h3><p>Practice quizzes built from your course files. Real exam prep, no fluff.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128214;</div><h3>AI Notes</h3><p>Drop a PDF or DOCX and get clean, organized study notes extracted automatically.</p></div>
+        <div class="mr-card stu"><div class="icon">&#129302;</div><h3>AI Tutor (grounded)</h3><p>Chats only from YOUR uploaded files. No hallucinations, no random answers.</p></div>
+        <div class="mr-card stu"><div class="icon">&#9999;&#65039;</div><h3>Essay Assistant</h3><p>Brutally honest feedback on thesis, structure, grammar, and flow. Rewritten intros included.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128680;</div><h3>Panic Mode</h3><p>Exam tomorrow? Get a ruthless cram plan in 10 seconds. Topic by topic, minute by minute.</p></div>
+        <div class="mr-card stu"><div class="icon">&#127942;</div><h3>Leaderboards + Ranks</h3><p>Initiates &rarr; Apprentices &rarr; Scholars &rarr; Masterminds &rarr; Legends. 35 ranks to chase.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128218;</div><h3>Study Exchange</h3><p>Publish your notes. Fork other students' notes. Earn XP when yours get used.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128337;</div><h3>Schedule &amp; Weekly Planner</h3><p>Drag-and-drop weekly schedule. Block classes, study sessions, and deadlines.</p></div>
+        <div class="mr-card stu"><div class="icon">&#127891;</div><h3>GPA Calculator</h3><p>Track current GPA, forecast what grades you need, and plan your semester.</p></div>
+        <div class="mr-card stu"><div class="icon">&#127919;</div><h3>Weak Topics Radar</h3><p>AI spots what you struggle with based on quiz performance and focuses your review.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128221;</div><h3>Exams Dashboard</h3><p>Every upcoming exam, weighted by difficulty and days remaining. Never blindsided.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128736;</div><h3>Practice Problems</h3><p>Unlimited AI-generated practice, graded and explained step by step.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128233;</div><h3>Daily Study Email</h3><p>Morning briefing with today's plan, weak topics, and upcoming exams. Delivered to your inbox.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128640;</div><h3>Smart Import</h3><p>Drop in any file — syllabus, slides, notes — and MachReach turns it into study material.</p></div>
+      </div>
+
+      <div style="text-align:center;margin-top:32px">
+        <a href="/register?type=student" class="mr-pill-stu">Study smarter, free &rarr;</a>
+      </div>
+    </div>
+
+    <!-- How it works -->
+    <div style="max-width:1000px;margin:0 auto;padding:80px 24px 40px;">
+      <h2 style="text-align:center;font-size:32px;font-weight:800;margin-bottom:8px;">How it works</h2>
+      <p style="text-align:center;color:var(--text-muted);margin-bottom:48px;font-size:16px;">Same simple flow — whether you're selling or studying.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:32px;">
+        <div style="text-align:center;">
+          <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;margin:0 auto 16px;box-shadow:0 10px 30px rgba(99,102,241,.3)">1</div>
+          <h3 style="font-size:18px;margin-bottom:6px;">Tell us what you're doing</h3>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.6;">Your target audience — or your courses and exams. Two minutes, tops.</p>
+        </div>
+        <div style="text-align:center;">
+          <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#F472B6,#F59E0B);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;margin:0 auto 16px;box-shadow:0 10px 30px rgba(244,114,182,.3)">2</div>
+          <h3 style="font-size:18px;margin-bottom:6px;">AI builds everything</h3>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.6;">Campaigns, flashcards, quizzes, notes, plans, feedback — all generated for you.</p>
+        </div>
+        <div style="text-align:center;">
+          <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#22D3EE,#6366F1);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;margin:0 auto 16px;box-shadow:0 10px 30px rgba(34,211,238,.3)">3</div>
+          <h3 style="font-size:18px;margin-bottom:6px;">You win</h3>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.6;">Replies roll in. Grades go up. MachReach tracks everything in the background.</p>
         </div>
       </div>
     </div>
 
     <!-- Pricing teaser -->
-    <div style="max-width:700px;margin:0 auto;padding:72px 24px;text-align:center;">
+    <div style="max-width:700px;margin:0 auto;padding:40px 24px 72px;text-align:center;">
       <h2 style="font-size:32px;font-weight:800;margin-bottom:8px;">Simple, transparent pricing</h2>
       <p style="color:var(--text-muted);font-size:16px;margin-bottom:32px;">Start free. Upgrade when you're ready.</p>
-      <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap;">
+      <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
         <div class="card" style="flex:1;min-width:180px;max-width:220px;text-align:center;padding:28px;">
           <div style="font-size:14px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Free</div>
           <div style="font-size:40px;font-weight:800;margin:8px 0;">$0</div>
-          <div style="font-size:13px;color:var(--text-muted);">200 emails/mo</div>
+          <div style="font-size:13px;color:var(--text-muted);">Core features, limited AI</div>
         </div>
         <div class="card" style="flex:1;min-width:180px;max-width:220px;text-align:center;padding:28px;border:2px solid var(--primary);">
           <div style="font-size:14px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:1px;">Pro</div>
           <div style="font-size:40px;font-weight:800;margin:8px 0;">$20</div>
-          <div style="font-size:13px;color:var(--text-muted);">10,000 emails/mo</div>
+          <div style="font-size:13px;color:var(--text-muted);">Unlock everything</div>
         </div>
         <div class="card" style="flex:1;min-width:180px;max-width:220px;text-align:center;padding:28px;">
           <div style="font-size:14px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Unlimited</div>
           <div style="font-size:40px;font-weight:800;margin:8px 0;">$40</div>
-          <div style="font-size:13px;color:var(--text-muted);">No limits, ever</div>
+          <div style="font-size:13px;color:var(--text-muted);">Zero limits, ever</div>
         </div>
       </div>
       <a href="/pricing" class="btn btn-outline" style="margin-top:24px;">See all plans &rarr;</a>
     </div>
 
     <!-- Final CTA -->
-    <div style="background:linear-gradient(135deg,var(--primary),#8B5CF6);padding:72px 24px;text-align:center;border-radius:var(--radius);margin:0 24px 48px;">
-      <h2 style="font-size:32px;font-weight:800;color:#fff;margin-bottom:12px;">Ready to send emails that get replies?</h2>
-      <p style="color:rgba(255,255,255,0.8);font-size:16px;margin-bottom:28px;">Join during beta and get all features free. No credit card needed.</p>
-      <a href="/register" class="btn btn-lg" style="background:#fff;color:var(--primary);font-weight:700;font-size:16px;padding:14px 36px;">Create Free Account &rarr;</a>
+    <div style="background:linear-gradient(135deg,#6366F1,#8B5CF6 50%,#F472B6);padding:72px 24px;text-align:center;border-radius:var(--radius);margin:0 24px 48px;">
+      <h2 style="font-size:36px;font-weight:900;color:#fff;margin-bottom:12px;letter-spacing:-.5px">Pick your side. Start winning.</h2>
+      <p style="color:rgba(255,255,255,0.85);font-size:16px;margin-bottom:28px;">Free during beta. No credit card. Full access.</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <a href="/register?type=business" class="btn btn-lg" style="background:#fff;color:#6366F1;font-weight:700;font-size:15px;padding:14px 28px;">&#128188; Business account &rarr;</a>
+        <a href="/register?type=student" class="btn btn-lg" style="background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:15px;padding:14px 28px;border:1px solid rgba(255,255,255,.3)">&#127891; Student account &rarr;</a>
+      </div>
     </div>
+
+    <script>
+      window.mrShowPanel = function(which) {{
+        document.getElementById('panel-biz').classList.toggle('on', which === 'biz');
+        document.getElementById('panel-stu').classList.toggle('on', which === 'stu');
+        var bb = document.getElementById('sw-biz'), sb = document.getElementById('sw-stu');
+        bb.classList.toggle('on', which === 'biz');
+        bb.classList.toggle('biz', which === 'biz');
+        sb.classList.toggle('on', which === 'stu');
+        sb.classList.toggle('stu', which === 'stu');
+      }};
+    </script>
     """))
 
 @app.route("/register", methods=["GET", "POST"])
@@ -8316,6 +8558,31 @@ def pricing_page():
 
 
 # ---------------------------------------------------------------------------
+# Focus Guard (browser extension) download
+# ---------------------------------------------------------------------------
+
+@app.route("/download/focus-guard.zip")
+def download_focus_guard():
+    """Ship the Focus Guard Chrome extension as a zip the user can load-unpack."""
+    import io, os, zipfile
+    ext_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "extensions", "focus-guard")
+    if not os.path.isdir(ext_dir):
+        return "Focus Guard extension bundle not found on this server.", 404
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _dirs, files in os.walk(ext_dir):
+            for name in files:
+                full = os.path.join(root, name)
+                rel = os.path.relpath(full, ext_dir)
+                zf.write(full, arcname=rel)
+    buf.seek(0)
+    resp = make_response(buf.read())
+    resp.headers["Content-Type"] = "application/zip"
+    resp.headers["Content-Disposition"] = 'attachment; filename="machreach-focus-guard.zip"'
+    return resp
+
+
+# ---------------------------------------------------------------------------
 # Privacy Policy & Terms of Service
 # ---------------------------------------------------------------------------
 
@@ -8324,84 +8591,113 @@ def privacy_page():
     return _render("Privacy Policy", Markup("""
     <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
       <h1 style="font-size:32px;margin-bottom:8px;">Privacy Policy</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 10, 2026</p>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 17, 2026</p>
 
       <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
+        <p style="background:rgba(139,92,246,.08);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:24px;"><strong>Plain-English summary:</strong> MachReach has two sides &mdash; a <em>Business</em> outreach platform and a <em>Student</em> study platform. We collect only what the features require, we never sell your data, passwords are hashed with bcrypt, email credentials are encrypted with AES-256, and you can export or delete everything at any time from Settings.</p>
+
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Information We Collect</h2>
-        <p><strong>Account Information:</strong> When you register, we collect your name, email address, and password (stored with bcrypt encryption).</p>
-        <p><strong>Email Account Credentials:</strong> When you connect an email account, we store your email address and app password. App passwords are encrypted at rest using AES-256 (Fernet) encryption and are never stored in plaintext.</p>
-        <p><strong>Email Content:</strong> We access your email via IMAP solely to sync your inbox for the Mail Hub feature and to detect replies to your outreach campaigns. We do not read, analyze, or sell your email content for advertising purposes.</p>
-        <p><strong>Contact Data:</strong> You may upload or enter contact information (names, emails, companies) for your outreach campaigns. You are responsible for ensuring you have proper consent or legitimate interest to contact those individuals.</p>
-        <p><strong>Usage Data:</strong> We collect information about how you use MachReach, including campaigns created, emails sent, and feature usage, to improve our service.</p>
+        <p><strong>Account information:</strong> name, email address, and password (hashed with bcrypt cost&nbsp;12 &mdash; we cannot read it).</p>
+        <p><strong>Business side &mdash; email account credentials:</strong> when you connect an email account we store the email address and app password. App passwords are encrypted at rest using AES-256 (Fernet) and are never stored in plaintext.</p>
+        <p><strong>Business side &mdash; email content:</strong> we access your email via IMAP solely to sync your inbox for Mail Hub and to detect replies to your outreach campaigns. We do not read, analyze, or sell your email content for advertising purposes.</p>
+        <p><strong>Business side &mdash; contact data:</strong> names, emails, and companies you upload for your campaigns. You are responsible for ensuring you have proper consent or legitimate interest to contact those individuals.</p>
+        <p><strong>Student side &mdash; Canvas LMS data:</strong> when you connect Canvas we fetch your courses, assignments, and exam dates via OAuth. Your Canvas access token is encrypted at rest. You can disconnect Canvas at any time in Settings, which immediately deletes the token.</p>
+        <p><strong>Student side &mdash; uploaded study materials:</strong> PDFs, DOCX files, notes, and text you provide for flashcards, quizzes, AI notes, and the AI tutor. These are stored in your account and used only to generate study features for you.</p>
+        <p><strong>Student side &mdash; gamification data:</strong> XP events, study streak, badges, quiz scores, flashcard reviews, and focus-session data (duration, type of timer). This feeds your level, global leaderboard, personal (fair-play) leaderboards, and progress charts.</p>
+        <p><strong>Student side &mdash; study exchange:</strong> notes you explicitly mark as shared become viewable to other MachReach students. You can unshare them at any time. Other users' forks of your notes are tracked only as anonymous counters for XP.</p>
+        <p><strong>Focus Shield browser extension:</strong> the Focus Guard extension runs locally in your browser. It stores your blocklist and active-session state in <code>chrome.storage</code> on your device. It does <strong>not</strong> send your browsing history to our servers.</p>
+        <p><strong>Usage data:</strong> aggregate metrics about how you use MachReach (features opened, campaigns created, quizzes generated) to improve the service. We do not use third-party advertising analytics.</p>
+        <p><strong>Payment data:</strong> billing is processed by PayPal. We receive only a subscription ID and status &mdash; never card numbers.</p>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. How We Use Your Information</h2>
         <ul style="padding-left:20px;">
-          <li>To provide and maintain the MachReach service</li>
-          <li>To send outreach emails on your behalf through your connected email accounts</li>
+          <li>To provide the MachReach service (outreach campaigns, study plans, quizzes, chat, exchange)</li>
+          <li>To send outreach emails on your behalf through <em>your</em> connected email accounts</li>
           <li>To sync and classify your inbox in Mail Hub</li>
-          <li>To track email opens, replies, and campaign performance</li>
+          <li>To generate AI-powered study plans, flashcards, quizzes, and tutor answers based on your own materials</li>
+          <li>To track XP, streaks, and leaderboard rankings</li>
           <li>To process payments and manage your subscription</li>
-          <li>To send you service-related notifications (password resets, security alerts)</li>
+          <li>To send you service-related notifications (password resets, security alerts, daily study emails you opted into)</li>
         </ul>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Data Security</h2>
         <p>We take security seriously:</p>
         <ul style="padding-left:20px;">
-          <li>Passwords are hashed with <strong>bcrypt</strong> (cost factor 12)</li>
-          <li>Email credentials are encrypted with <strong>AES-256</strong> at rest</li>
-          <li>All connections use <strong>HTTPS/TLS</strong></li>
-          <li>CSRF protection on all forms and API endpoints</li>
-          <li>Rate limiting on authentication endpoints</li>
-          <li>Security headers (HSTS, X-Frame-Options, etc.)</li>
+          <li>Passwords hashed with <strong>bcrypt</strong> (cost factor 12)</li>
+          <li>Email credentials and Canvas OAuth tokens encrypted with <strong>AES-256</strong> (Fernet) at rest</li>
+          <li>All connections use <strong>HTTPS/TLS</strong> (HSTS with 2-year max-age, preload-ready)</li>
+          <li><strong>CSRF</strong> protection on every form and state-changing API endpoint</li>
+          <li><strong>Rate limiting</strong> on authentication, password-reset, registration, and AI endpoints</li>
+          <li><strong>Content-Security-Policy</strong>, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and a strict Permissions-Policy on every response</li>
+          <li>Cookies set with <strong>HttpOnly</strong>, <strong>SameSite=Lax</strong>, and <strong>Secure</strong> flags in production</li>
+          <li>Parameterized SQL queries everywhere &mdash; no string concatenation &mdash; to prevent SQL injection</li>
+          <li>All user-rendered text is HTML-escaped before output to prevent XSS</li>
         </ul>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Data Sharing &amp; Sub-processors</h2>
         <p>We do <strong>not</strong> sell, rent, or share your personal information with third parties, except:</p>
         <ul style="padding-left:20px;">
-          <li><strong>OpenAI:</strong> Email subjects and snippets may be sent to OpenAI's API for AI-powered classification and reply generation. No full email bodies are sent unless you use AI compose features.</li>
-          <li><strong>PayPal:</strong> Payment information is processed by PayPal. We do not store credit card numbers.</li>
-          <li><strong>Render:</strong> Our application and database are hosted on Render's infrastructure.</li>
-          <li><strong>Legal requirements:</strong> We may disclose information if required by law or to protect our rights.</li>
+          <li><strong>OpenAI (US):</strong> Business side &mdash; email subjects and snippets may be sent for classification and reply generation. Student side &mdash; excerpts of your uploaded study materials and your questions are sent to generate plans, quizzes, flashcards, notes, tutor answers, essay feedback, and panic-mode plans. OpenAI does not train on API data per its API data-usage policy.</li>
+          <li><strong>Instructure / Canvas LMS:</strong> OAuth provider for importing your courses and exams. We request only read scopes.</li>
+          <li><strong>Google (Gmail OAuth) / Microsoft (Outlook OAuth):</strong> used only if you connect those accounts for Mail Hub or email sending.</li>
+          <li><strong>PayPal:</strong> processes payments. We do not store card numbers.</li>
+          <li><strong>Render (US):</strong> our application server and PostgreSQL database are hosted on Render's US infrastructure.</li>
+          <li><strong>Sentry:</strong> error reporting. Stack traces may include request paths but we scrub form fields and secrets.</li>
+          <li><strong>Legal requirements:</strong> we may disclose information if required by law or to protect our rights.</li>
         </ul>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Data Storage &amp; Location</h2>
-        <p>Your data is stored on servers located in the <strong>United States</strong>, operated by Render Inc. By using MachReach, you consent to the transfer and storage of your data in the United States. We take appropriate safeguards to protect your data during international transfers.</p>
+        <p>Your data is stored on servers located in the <strong>United States</strong>, operated by Render Inc. By using MachReach, you consent to the transfer and storage of your data in the United States. We take appropriate safeguards to protect your data during international transfers (standard contractual clauses with our sub-processors where applicable).</p>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. Data Retention</h2>
-        <p>Your data is retained as long as your account is active. When you delete your account, all associated data (campaigns, contacts, email accounts, synced emails) is permanently deleted within 30 days.</p>
+        <p>Your data is retained as long as your account is active. When you delete your account, all associated data (campaigns, contacts, email accounts, synced emails, study materials, notes, quizzes, flashcards, XP history, Canvas tokens) is permanently deleted within 30 days. Encrypted backups roll off within 35 days.</p>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. Your Rights</h2>
         <p>You can:</p>
         <ul style="padding-left:20px;">
-          <li>Access and export your data at any time via Settings &gt; Export My Data</li>
+          <li>Access and export your data at any time via Settings &gt; Export My Data (machine-readable JSON)</li>
           <li>Update or correct your personal information in Settings</li>
           <li>Delete your account and all associated data</li>
-          <li>Disconnect email accounts at any time (credentials are immediately deleted)</li>
-          <li>Request a copy of your personal data in JSON format</li>
+          <li>Disconnect email or Canvas accounts at any time (credentials/tokens are immediately deleted)</li>
+          <li>Unshare or delete any note you previously shared in Study Exchange</li>
+          <li>Leave or delete any personal leaderboard you created</li>
+          <li>Opt out of daily study-email digests in Settings</li>
         </ul>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. International Users (GDPR)</h2>
-        <p>If you are located in the European Economic Area (EEA), you have additional rights under the General Data Protection Regulation (GDPR):</p>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. International Users (GDPR / UK&nbsp;GDPR)</h2>
+        <p>If you are located in the European Economic Area, United Kingdom, or Switzerland, you have additional rights under the GDPR / UK GDPR:</p>
         <ul style="padding-left:20px;">
-          <li><strong>Right of access:</strong> Request a copy of your personal data</li>
-          <li><strong>Right to rectification:</strong> Correct inaccurate personal data</li>
-          <li><strong>Right to erasure:</strong> Request deletion of your personal data</li>
-          <li><strong>Right to data portability:</strong> Receive your data in a machine-readable format (JSON export)</li>
-          <li><strong>Right to object:</strong> Object to processing of your personal data</li>
+          <li><strong>Right of access:</strong> request a copy of your personal data</li>
+          <li><strong>Right to rectification:</strong> correct inaccurate personal data</li>
+          <li><strong>Right to erasure ("right to be forgotten"):</strong> request deletion of your personal data</li>
+          <li><strong>Right to data portability:</strong> receive your data in JSON format</li>
+          <li><strong>Right to object:</strong> object to processing of your personal data</li>
+          <li><strong>Right to restrict processing:</strong> limit how we use your data</li>
+          <li><strong>Right to lodge a complaint</strong> with your local data-protection authority</li>
         </ul>
-        <p>To exercise any of these rights, contact us at <a href="mailto:support@machreach.com">support@machreach.com</a> or use the in-app data export feature.</p>
+        <p>Our lawful bases for processing are <strong>contract</strong> (to provide the service you signed up for), <strong>legitimate interest</strong> (security, fraud prevention, product improvement), and <strong>consent</strong> (for optional features like Canvas sync or daily emails, which you can revoke at any time).</p>
+        <p>To exercise any right, email <a href="mailto:support@machreach.com">support@machreach.com</a> or use the in-app export/delete tools.</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">9. Cookies</h2>
-        <p>We use session cookies for authentication only. We do not use tracking cookies or third-party analytics. Cookies are set with <strong>HttpOnly</strong> and <strong>SameSite=Lax</strong> flags for security.</p>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">9. California Residents (CCPA / CPRA)</h2>
+        <p>California residents have the right to know what personal information we collect, to request deletion, to opt out of any "sale" or "sharing" of personal information, and to non-discrimination for exercising these rights. <strong>MachReach does not sell or share personal information</strong> as those terms are defined under the CCPA/CPRA.</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">10. Changes to This Policy</h2>
-        <p>We may update this policy from time to time. We will notify you of significant changes via email or an in-app notice.</p>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">10. Children's Privacy</h2>
+        <p>MachReach is intended for users <strong>16 or older</strong>. We do not knowingly collect personal information from children under 16. If you believe a child has provided us with information, contact us and we will delete it.</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">11. Governing Law</h2>
-        <p>This Privacy Policy is governed by the laws of the Republic of Chile, including Ley 19.628 on the Protection of Private Life. Any disputes will be resolved in the courts of Santiago, Chile.</p>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">11. Cookies &amp; Local Storage</h2>
+        <p>We use <strong>essential cookies only</strong> for authentication and remembering your preferences (theme, language). No tracking or advertising cookies. Cookies are set with <strong>HttpOnly</strong>, <strong>SameSite=Lax</strong>, and <strong>Secure</strong> (in production). The Focus Guard extension uses <code>chrome.storage.local</code> on your device only.</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">12. Contact</h2>
-        <p>If you have questions about this Privacy Policy, contact us at <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">12. Breach Notification</h2>
+        <p>If we become aware of a security incident that compromises your personal data, we will notify affected users by email within 72&nbsp;hours of confirmation and, where required, notify the relevant supervisory authority.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">13. Changes to This Policy</h2>
+        <p>We may update this policy from time to time. We will notify you of material changes via email or an in-app notice at least 7&nbsp;days before they take effect.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">14. Governing Law</h2>
+        <p>This Privacy Policy is governed by the laws of the Republic of Chile, including Ley&nbsp;19.628 on the Protection of Private Life and Ley&nbsp;21.719 (2024). For users in the EU/UK we also comply with the GDPR / UK GDPR. Any disputes will be resolved in the courts of Santiago, Chile, without prejudice to the mandatory consumer-protection rights you may have in your country of residence.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">15. Contact</h2>
+        <p>Questions or data-rights requests: <a href="mailto:support@machreach.com">support@machreach.com</a>. Data Protection Contact: same address.</p>
       </div>
     </div>
     """), active_page="privacy")
@@ -8412,22 +8708,27 @@ def terms_page():
     return _render("Terms of Service", Markup("""
     <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
       <h1 style="font-size:32px;margin-bottom:8px;">Terms of Service</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 10, 2026</p>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 17, 2026</p>
 
       <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. Description of Service</h2>
-        <p>MachReach is an email outreach platform that allows you to create and manage email campaigns, sync your inbox, track engagement, and use AI-assisted features. The service connects to your email accounts via IMAP/SMTP using credentials you provide.</p>
+        <p>MachReach is a dual-purpose platform:</p>
+        <ul style="padding-left:20px;">
+          <li><strong>Business side:</strong> email outreach, campaign management, inbox sync via IMAP/SMTP, AI-assisted writing and reply classification.</li>
+          <li><strong>Student side:</strong> Canvas LMS integration, AI-generated study plans, flashcards, practice quizzes, AI tutor, essay feedback, panic-mode cram plans, weekly schedule, focus-mode timers, XP/leaderboards, and the optional Focus Guard browser extension.</li>
+        </ul>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Account Responsibilities</h2>
         <ul style="padding-left:20px;">
           <li>You must provide accurate information when registering</li>
           <li>You are responsible for maintaining the security of your account credentials</li>
           <li>You must not share your account with others</li>
-          <li>You must be at least 18 years old to use MachReach</li>
+          <li>You must be at least 16 years old to use MachReach</li>
           <li>You are responsible for all activity under your account</li>
+          <li>You must not attempt to probe, scan, or exploit vulnerabilities in the service. Responsible disclosure is welcome at <a href="mailto:security@machreach.com">security@machreach.com</a>.</li>
         </ul>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Acceptable Use</h2>
@@ -8462,7 +8763,16 @@ def terms_page():
         </ul>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. AI Features</h2>
-        <p>MachReach uses AI (powered by OpenAI) for email classification, reply generation, and other features. AI-generated content is provided as suggestions — you are responsible for reviewing and approving all content before sending.</p>
+        <p>MachReach uses AI (powered by OpenAI) for email classification, reply generation, study plans, quizzes, flashcards, notes, the AI tutor, essay feedback, and panic-mode plans. AI output is provided as <em>suggestion</em> &mdash; you are responsible for reviewing and approving all content before sending, submitting, or using it academically. The AI tutor is grounded on materials you upload; it is not a substitute for professional advice, and MachReach does not guarantee factual accuracy.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7a. Academic Integrity</h2>
+        <p>You are solely responsible for complying with your institution&rsquo;s academic-integrity policies. MachReach is a study aid; using its output to commit plagiarism, cheat on exams, or violate honor codes is a breach of these Terms and of your relationship with your institution.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7b. Study Exchange &amp; Shared Content</h2>
+        <p>When you publish a note to Study Exchange, you grant other MachReach students a non-exclusive, revocable license to view and fork that note. You must own the content or have the right to share it. You can unshare or delete any note at any time. Leaderboards (global, university, and fair-play personal) display only your first name, university, and XP totals.</p>
+
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7c. Focus Guard Browser Extension</h2>
+        <p>The Focus Guard Chrome extension is provided free of charge and runs locally in your browser. You install it at your own discretion and may uninstall it at any time. It does not transmit your browsing history to MachReach.</p>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. Limitation of Liability</h2>
         <p>MachReach is provided "as is" without warranties of any kind. We are not liable for:</p>
@@ -8691,6 +9001,258 @@ def api_export_my_data():
     resp.headers["Content-Type"] = "application/json"
     resp.headers["Content-Disposition"] = "attachment; filename=machreach-my-data.json"
     return resp
+
+
+# ---------------------------------------------------------------------------
+# KILLER BUSINESS FEATURES — Subject Line Optimizer, Reply Intel, Deliverability
+# ---------------------------------------------------------------------------
+
+@app.route("/subject-optimizer", methods=["GET", "POST"])
+def subject_optimizer():
+    if not _logged_in():
+        return redirect(url_for("login"))
+    from outreach.ai import optimize_subject_line
+    result = None
+    original_subject = ""
+    body_preview = ""
+    audience = "cold_prospects"
+    goal = "get_opened"
+    if request.method == "POST":
+        original_subject = (request.form.get("subject") or "").strip()
+        body_preview = (request.form.get("body") or "").strip()
+        audience = request.form.get("audience") or "cold_prospects"
+        goal = request.form.get("goal") or "get_opened"
+        if original_subject:
+            try:
+                result = optimize_subject_line(original_subject, body_preview[:300], audience, goal)
+            except Exception as e:
+                result = {"error": str(e)}
+
+    result_html = ""
+    if result:
+        if result.get("error"):
+            result_html = f'<div class="card" style="padding:20px;color:#EF4444;">{result["error"]}</div>'
+        else:
+            score = result.get("score", 0)
+            color = "#10B981" if score >= 80 else "#F59E0B" if score >= 60 else "#EF4444"
+            suggestions_html = ""
+            for s in (result.get("suggestions") or []):
+                subj = (s.get("subject") or "").replace("<", "&lt;")
+                why = (s.get("why") or "").replace("<", "&lt;")
+                sc = s.get("predicted_score", 0)
+                suggestions_html += f"""
+                <div style="padding:14px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">
+                  <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+                    <strong style="font-size:15px;">{subj}</strong>
+                    <span style="background:#10B981;color:#fff;padding:2px 10px;border-radius:12px;font-size:12px;">{sc}/100</span>
+                  </div>
+                  <div style="font-size:13px;color:var(--gray);margin-top:4px;">{why}</div>
+                  <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="navigator.clipboard.writeText({subj!r});this.textContent='Copied!'">Copy</button>
+                </div>
+                """
+            issues_html = ""
+            for iss in (result.get("issues") or []):
+                issues_html += f'<li>{iss}</li>'
+            result_html = f"""
+            <div class="card" style="padding:24px;margin-top:20px;">
+              <div style="display:flex;align-items:center;gap:20px;margin-bottom:18px;">
+                <div style="font-size:64px;font-weight:800;color:{color};line-height:1;">{score}<span style="font-size:22px;color:var(--gray);">/100</span></div>
+                <div><div style="font-size:14px;color:var(--gray);">Current subject score</div><div style="font-weight:600;">{original_subject}</div></div>
+              </div>
+              {'<div style="margin-bottom:16px;"><strong>Issues:</strong><ul>' + issues_html + '</ul></div>' if issues_html else ''}
+              <h3 style="margin:0 0 12px;">&#10024; Optimized suggestions</h3>
+              {suggestions_html}
+            </div>
+            """
+
+    html = f"""
+    <div style="max-width:900px;margin:0 auto;">
+      <div style="text-align:center;margin-bottom:30px;">
+        <h1 style="font-size:36px;margin:0;background:linear-gradient(135deg,#8B5CF6,#3B82F6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">&#10024; Subject Line Optimizer</h1>
+        <p style="color:var(--gray);font-size:16px;margin-top:8px;">AI scores your subject and rewrites it for higher open rates.</p>
+      </div>
+
+      <form method="POST" class="card" style="padding:24px;">
+        <input type="hidden" name="csrf_token" value="{session.get('csrf_token','')}" />
+        <label style="font-weight:600;display:block;margin-bottom:8px;">Your subject line</label>
+        <input name="subject" value="{original_subject}" type="text" required style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:16px;" />
+
+        <label style="font-weight:600;display:block;margin-bottom:8px;">First lines of email body (for context)</label>
+        <textarea name="body" rows="4" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:16px;resize:vertical;">{body_preview}</textarea>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div>
+            <label style="font-weight:600;display:block;margin-bottom:8px;">Audience</label>
+            <select name="audience" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);">
+              <option value="cold_prospects" {'selected' if audience=='cold_prospects' else ''}>Cold prospects</option>
+              <option value="warm_leads" {'selected' if audience=='warm_leads' else ''}>Warm leads</option>
+              <option value="existing_customers" {'selected' if audience=='existing_customers' else ''}>Existing customers</option>
+              <option value="executives" {'selected' if audience=='executives' else ''}>Executives / C-level</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-weight:600;display:block;margin-bottom:8px;">Goal</label>
+            <select name="goal" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);">
+              <option value="get_opened" {'selected' if goal=='get_opened' else ''}>Maximize open rate</option>
+              <option value="get_reply" {'selected' if goal=='get_reply' else ''}>Maximize reply rate</option>
+              <option value="book_meeting" {'selected' if goal=='book_meeting' else ''}>Book a meeting</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;"><button type="submit" class="btn btn-primary">&#9889; Optimize</button></div>
+      </form>
+      {result_html}
+    </div>
+    """
+    return _render("Subject Optimizer", html, active_page="subject_optimizer")
+
+
+@app.route("/reply-intel")
+def reply_intel_page():
+    if not _logged_in():
+        return redirect(url_for("login"))
+    from outreach.db import get_replies
+    from outreach.ai import classify_reply
+    cid = session["client_id"]
+    try:
+        replies = get_replies(cid, limit=25)
+    except Exception:
+        replies = []
+
+    analyzed = []
+    for r in (replies or [])[:15]:
+        body = r.get("reply_body") or r.get("body") or ""
+        if not body:
+            continue
+        try:
+            cls = classify_reply(body[:1500], r.get("subject", ""), r.get("original_body", "")[:500])
+        except Exception:
+            cls = {"intent": "unknown", "sentiment": "neutral", "urgency": "normal", "buying_signal": 0}
+        analyzed.append({"reply": r, "cls": cls})
+
+    def badge(label, color):
+        return f'<span style="display:inline-block;padding:3px 10px;background:{color};color:#fff;border-radius:12px;font-size:11px;font-weight:600;">{label}</span>'
+
+    intent_colors = {"interested": "#10B981", "not_interested": "#EF4444", "objection": "#F59E0B", "question": "#3B82F6", "out_of_office": "#64748b", "referral": "#8B5CF6", "unsubscribe": "#991B1B"}
+
+    cards_html = ""
+    for item in analyzed:
+        r = item["reply"]
+        c = item["cls"]
+        intent = c.get("intent", "unknown")
+        senti = c.get("sentiment", "neutral")
+        urg = c.get("urgency", "normal")
+        buying = int(c.get("buying_signal", 0))
+        email = r.get("from_email", "") or r.get("contact_email", "")
+        subj = r.get("subject", "(no subject)")
+        preview = (r.get("reply_body") or r.get("body") or "")[:200].replace("<", "&lt;")
+        next_action = c.get("next_action") or ""
+        objections = c.get("objections") or []
+        obj_html = ""
+        if objections:
+            obj_html = '<div style="margin-top:6px;font-size:12px;"><strong>Objections:</strong> ' + ", ".join(objections) + '</div>'
+        cards_html += f"""
+        <div class="card" style="padding:16px;margin-bottom:12px;border-left:4px solid {intent_colors.get(intent,'#64748b')};">
+          <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+            <div><strong>{email}</strong> <span style="color:var(--gray);font-size:13px;">— {subj}</span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              {badge(intent.replace('_',' '), intent_colors.get(intent,'#64748b'))}
+              {badge(senti, '#10B981' if senti=='positive' else '#EF4444' if senti=='negative' else '#64748b')}
+              {badge(urg, '#EF4444' if urg=='high' else '#F59E0B' if urg=='normal' else '#64748b')}
+              <span style="background:var(--bg);padding:3px 10px;border-radius:12px;font-size:11px;">&#128176; buying: {buying}/10</span>
+            </div>
+          </div>
+          <div style="color:var(--gray);font-size:13px;margin-bottom:8px;">{preview}...</div>
+          {f'<div style="padding:8px 12px;background:var(--bg);border-radius:6px;font-size:13px;"><strong>&#128073; Next action:</strong> {next_action}</div>' if next_action else ''}
+          {obj_html}
+        </div>
+        """
+
+    if not cards_html:
+        cards_html = '<div class="card" style="padding:24px;text-align:center;color:var(--gray);">No replies yet. Once prospects reply, they\'ll be classified here.</div>'
+
+    html = f"""
+    <div style="max-width:1000px;margin:0 auto;">
+      <div style="text-align:center;margin-bottom:30px;">
+        <h1 style="font-size:36px;margin:0;background:linear-gradient(135deg,#10B981,#3B82F6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">&#129504; Reply Intelligence</h1>
+        <p style="color:var(--gray);font-size:16px;margin-top:8px;">Auto-classified replies with intent, sentiment, buying signal, and next action.</p>
+      </div>
+      {cards_html}
+    </div>
+    """
+    return _render("Reply Intelligence", html, active_page="reply_intel")
+
+
+@app.route("/deliverability", methods=["GET", "POST"])
+def deliverability_page():
+    if not _logged_in():
+        return redirect(url_for("login"))
+    from outreach.ai import analyze_email_content
+    subject = ""
+    body = ""
+    result = None
+    if request.method == "POST":
+        subject = (request.form.get("subject") or "").strip()
+        body = (request.form.get("body") or "").strip()
+        if subject or body:
+            try:
+                result = analyze_email_content(subject, body)
+            except Exception as e:
+                result = {"error": str(e)}
+
+    result_html = ""
+    if result:
+        if result.get("error"):
+            result_html = f'<div class="card" style="padding:20px;color:#EF4444;">{result["error"]}</div>'
+        else:
+            spam = int(result.get("spam_score", 0))
+            color = "#10B981" if spam < 30 else "#F59E0B" if spam < 60 else "#EF4444"
+            verdict = "&#9989; Likely to land in inbox" if spam < 30 else "&#9888;&#65039; May hit promotions" if spam < 60 else "&#128680; Likely spam"
+            issues = result.get("issues") or []
+            suggestions = result.get("suggestions") or []
+            triggers = result.get("spam_triggers") or []
+            iss_html = "".join(f'<li>{i}</li>' for i in issues) or '<li style="color:var(--gray);">No issues found</li>'
+            sug_html = "".join(f'<li>{s}</li>' for s in suggestions) or ''
+            trig_html = ""
+            if triggers:
+                trig_html = '<div style="margin-top:12px;"><strong>Spam trigger words:</strong> ' + ", ".join(f'<code style="background:rgba(239,68,68,0.15);padding:2px 6px;border-radius:4px;">{t}</code>' for t in triggers) + '</div>'
+            metrics = result.get("metrics") or {}
+            metric_html = "".join(f'<div style="padding:10px;background:var(--bg);border-radius:6px;text-align:center;"><div style="font-size:22px;font-weight:700;">{v}</div><div style="font-size:11px;color:var(--gray);">{k.replace("_"," ")}</div></div>' for k, v in metrics.items())
+            result_html = f"""
+            <div class="card" style="padding:24px;margin-top:20px;">
+              <div style="display:flex;align-items:center;gap:20px;margin-bottom:18px;">
+                <div style="font-size:64px;font-weight:800;color:{color};line-height:1;">{spam}<span style="font-size:22px;color:var(--gray);">/100</span></div>
+                <div><div style="font-size:13px;color:var(--gray);">Spam score (lower is better)</div><div style="font-size:18px;font-weight:700;color:{color};">{verdict}</div></div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:18px;">{metric_html}</div>
+              <div style="margin-bottom:14px;"><strong>Issues found</strong><ul>{iss_html}</ul></div>
+              {'<div><strong>Suggestions</strong><ul>' + sug_html + '</ul></div>' if sug_html else ''}
+              {trig_html}
+            </div>
+            """
+
+    html = f"""
+    <div style="max-width:900px;margin:0 auto;">
+      <div style="text-align:center;margin-bottom:30px;">
+        <h1 style="font-size:36px;margin:0;background:linear-gradient(135deg,#10B981,#059669);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">&#128737;&#65039; Deliverability Checker</h1>
+        <p style="color:var(--gray);font-size:16px;margin-top:8px;">Paste your email. Get an instant spam score with specific fixes. Free. No AI cost.</p>
+      </div>
+
+      <form method="POST" class="card" style="padding:24px;">
+        <input type="hidden" name="csrf_token" value="{session.get('csrf_token','')}" />
+        <label style="font-weight:600;display:block;margin-bottom:8px;">Subject</label>
+        <input name="subject" type="text" value="{subject}" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:16px;" />
+
+        <label style="font-weight:600;display:block;margin-bottom:8px;">Body (HTML or plain text)</label>
+        <textarea name="body" rows="12" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);font-family:inherit;resize:vertical;">{body}</textarea>
+
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;"><button type="submit" class="btn btn-primary">&#128269; Check Deliverability</button></div>
+      </form>
+      {result_html}
+    </div>
+    """
+    return _render("Deliverability", html, active_page="deliverability")
 
 
 if __name__ == "__main__":

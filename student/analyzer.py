@@ -440,6 +440,134 @@ No markdown fences, no explanation. ONLY the JSON array."""
 
 # ── Quiz generation ─────────────────────────────────────────
 
+_QUIZ_BATCH_SIZE = 20  # keep each AI call below token limits
+
+
+def _generate_quiz_batch(
+    course_name: str,
+    topics_str: str,
+    difficulty: str,
+    diff_desc: str,
+    context: str,
+    count: int,
+    batch_idx: int,
+    total_batches: int,
+    existing_questions: list[str],
+) -> list[dict]:
+    """Generate one batch of quiz questions."""
+    avoid_block = ""
+    if existing_questions:
+        # Show a trimmed sample so the model doesn't duplicate
+        sample = existing_questions[-30:]
+        avoid_block = (
+            "\n\nAVOID DUPLICATING these questions already generated:\n- "
+            + "\n- ".join(s[:120] for s in sample)
+        )
+
+    batch_note = ""
+    if total_batches > 1:
+        batch_note = (
+            f"\nThis is batch {batch_idx + 1} of {total_batches}. "
+            "Cover DIFFERENT sub-topics and angles than earlier batches."
+        )
+
+    prompt = f"""You are creating a practice quiz for the course "{course_name}".
+Topics: {topics_str}
+Difficulty: {difficulty} — {diff_desc}{batch_note}
+{context}{avoid_block}
+
+STRICT RULES:
+- Create questions ONLY from the source material provided above
+- Do NOT add information from outside the provided material
+- Every question, option, and explanation must be directly based on the content above
+
+Generate exactly {count} multiple-choice questions. Each question must have:
+- A short "topic" tag (2-5 words) naming the concept tested (e.g. "Photosynthesis", "Big-O notation", "French Revolution causes")
+- Exactly 4 options (a, b, c, d) where only ONE is correct
+- A brief explanation of why the correct answer is right
+- Varied concepts across the batch
+- For math equations, use LaTeX notation: inline with $...$ and display with $$...$$
+- Keep the same language as the source material
+
+Return ONLY a valid JSON array — no markdown fences, no commentary:
+[
+  {{
+    "topic": "Short concept tag",
+    "question": "Which of the following ...?",
+    "option_a": "First option",
+    "option_b": "Second option",
+    "option_c": "Third option",
+    "option_d": "Fourth option",
+    "correct": "b",
+    "explanation": "Option B is correct because ..."
+  }}
+]"""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=8000,
+            response_format={"type": "json_object"},
+        )
+        raw = resp.choices[0].message.content.strip()
+    except Exception:
+        # Fallback without json_object (older / incompatible models)
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=8000,
+        )
+        raw = resp.choices[0].message.content.strip()
+
+    raw = re.sub(r"^```json?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        # Try to salvage an array from within an object
+        m = re.search(r"\[\s*\{.*\}\s*\]", raw, re.DOTALL)
+        if not m:
+            return []
+        try:
+            parsed = json.loads(m.group(0))
+        except Exception:
+            return []
+
+    # Accept either a bare list or an object wrapping a list
+    if isinstance(parsed, dict):
+        for key in ("questions", "quiz", "data", "items"):
+            if isinstance(parsed.get(key), list):
+                parsed = parsed[key]
+                break
+    if not isinstance(parsed, list):
+        return []
+
+    cleaned = []
+    for q in parsed:
+        if not isinstance(q, dict):
+            continue
+        if not q.get("question"):
+            continue
+        if q.get("correct") not in ("a", "b", "c", "d"):
+            continue
+        if not all(q.get(f"option_{k}") for k in ("a", "b", "c", "d")):
+            continue
+        cleaned.append({
+            "topic": (q.get("topic") or "General").strip()[:80],
+            "question": q["question"],
+            "option_a": q["option_a"],
+            "option_b": q["option_b"],
+            "option_c": q["option_c"],
+            "option_d": q["option_d"],
+            "correct": q["correct"],
+            "explanation": q.get("explanation", ""),
+        })
+    return cleaned
+
+
 def generate_quiz(
     course_name: str,
     topics: list[str] | None = None,
@@ -450,74 +578,87 @@ def generate_quiz(
     """
     Generate multiple-choice quiz questions from course material using AI.
 
-    Returns:
-        [{"question": "...", "option_a": "...", "option_b": "...",
-          "option_c": "...", "option_d": "...", "correct": "a",
-          "explanation": "..."}, ...]
+    Batches large requests so the model can reliably produce >20 questions.
+    Honors the exact `count` requested (will retry up to 2 times for short fills).
     """
-    context = ""
-    if source_text:
-        context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text}"
-    topics_str = ", ".join(topics) if topics else "all key concepts from the material"
+    try:
+        count = int(count)
+    except Exception:
+        count = 10
+    count = max(1, min(count, 100))  # hard safety ceiling
 
+    context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text}" if source_text else ""
+    topics_str = ", ".join(topics) if topics else "all key concepts from the material"
     diff_desc = {
         "easy": "basic recall and definitions — suitable for initial review",
         "medium": "application and understanding — typical exam-level questions",
-        "hard": "analysis, edge cases, and tricky scenarios — challenge-level"
+        "hard": "analysis, edge cases, and tricky scenarios — challenge-level",
     }.get(difficulty, "typical exam-level questions")
 
-    prompt = f"""You are creating a practice quiz for the course "{course_name}".
-Topics: {topics_str}
-Difficulty: {difficulty} — {diff_desc}
-{context}
+    # Plan batches
+    total_batches = (count + _QUIZ_BATCH_SIZE - 1) // _QUIZ_BATCH_SIZE
+    all_questions: list[dict] = []
+    seen_questions: list[str] = []
 
-STRICT RULES:
-- Create questions ONLY from the source material provided above
-- Do NOT add information from outside the provided material
-- Every question, option, and explanation must be directly based on the content above
+    remaining = count
+    for batch_idx in range(total_batches):
+        batch_target = min(_QUIZ_BATCH_SIZE, remaining)
+        if batch_target <= 0:
+            break
+        try:
+            batch = _generate_quiz_batch(
+                course_name=course_name,
+                topics_str=topics_str,
+                difficulty=difficulty,
+                diff_desc=diff_desc,
+                context=context,
+                count=batch_target,
+                batch_idx=batch_idx,
+                total_batches=total_batches,
+                existing_questions=seen_questions,
+            )
+        except Exception as e:
+            log.error("Quiz batch %d failed for %s: %s", batch_idx, course_name, e)
+            batch = []
+        # Dedup by question text
+        existing_set = {q["question"].strip().lower() for q in all_questions}
+        for q in batch:
+            key = q["question"].strip().lower()
+            if key in existing_set:
+                continue
+            existing_set.add(key)
+            all_questions.append(q)
+            seen_questions.append(q["question"])
+        remaining = count - len(all_questions)
 
-Generate exactly {count} multiple-choice questions. Each question should:
-- Be clear and unambiguous
-- Have exactly 4 options (a, b, c, d) where only ONE is correct
-- Include a brief explanation of why the correct answer is right
-- Vary in the concepts tested
-- For math equations, use LaTeX notation: inline with $...$ and display with $$...$$
-- Keep the same language as the source material
+    # One retry to top up if the model under-delivered
+    if len(all_questions) < count:
+        try:
+            short = count - len(all_questions)
+            top_up = _generate_quiz_batch(
+                course_name=course_name,
+                topics_str=topics_str,
+                difficulty=difficulty,
+                diff_desc=diff_desc,
+                context=context,
+                count=min(short, _QUIZ_BATCH_SIZE),
+                batch_idx=total_batches,
+                total_batches=total_batches + 1,
+                existing_questions=seen_questions,
+            )
+            existing_set = {q["question"].strip().lower() for q in all_questions}
+            for q in top_up:
+                key = q["question"].strip().lower()
+                if key in existing_set:
+                    continue
+                existing_set.add(key)
+                all_questions.append(q)
+                if len(all_questions) >= count:
+                    break
+        except Exception as e:
+            log.warning("Quiz top-up failed for %s: %s", course_name, e)
 
-Return ONLY valid JSON array:
-[
-  {{
-    "question": "Which of the following ...?",
-    "option_a": "First option",
-    "option_b": "Second option",
-    "option_c": "Third option",
-    "option_d": "Fourth option",
-    "correct": "b",
-    "explanation": "Option B is correct because ..."
-  }},
-  ...
-]
-
-No markdown fences, no explanation. ONLY the JSON array."""
-
-    try:
-        resp = _ai().chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=6000,
-        )
-        raw = resp.choices[0].message.content.strip()
-        raw = re.sub(r"^```json?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-        questions = json.loads(raw)
-        if isinstance(questions, list):
-            return [q for q in questions
-                    if q.get("question") and q.get("correct") in ("a", "b", "c", "d")]
-        return []
-    except Exception as e:
-        log.error("Quiz generation failed for %s: %s", course_name, e)
-        return []
+    return all_questions[:count]
 
 
 # ── Notes / Summary generation ──────────────────────────────
@@ -853,3 +994,239 @@ Sort weak_topics from weakest to strongest. Keep recommendations in the same lan
     except Exception as e:
         log.error("Weak topic detection failed: %s", e)
         return {"weak_topics": [], "recommendations_html": "<p>Analysis failed. Try again.</p>"}
+
+
+# ── Homework Helper ─────────────────────────────────────────
+
+def solve_homework(
+    problem: str,
+    subject: str = "",
+    course_context: str = "",
+    show_steps: bool = True,
+) -> dict:
+    """
+    Solve a homework problem with step-by-step explanation.
+
+    Returns:
+        {
+          "steps": [{"title": "Step 1", "explanation": "...", "math": "optional LaTeX"}],
+          "final_answer": "...",
+          "concept": "Name of the underlying concept",
+          "common_mistakes": ["...", "..."],
+          "related_topics": ["...", "..."]
+        }
+    """
+    subject_hint = f"Subject: {subject}\n" if subject else ""
+    ctx_hint = f"Course context (use this terminology):\n{course_context[:3000]}\n\n" if course_context else ""
+    prompt = f"""You are an expert tutor. A student needs help solving this problem.
+{subject_hint}{ctx_hint}Problem:
+{problem}
+
+Explain the solution like a great teacher would — clear, concise, zero fluff.
+Use LaTeX notation (e.g. $x^2$, $\\frac{{a}}{{b}}$) for math expressions.
+
+Return ONLY valid JSON:
+{{
+  "steps": [
+    {{"title": "Step 1: Identify what's given", "explanation": "...", "math": "$x = 5$"}},
+    {{"title": "Step 2: Apply the formula", "explanation": "...", "math": ""}}
+  ],
+  "final_answer": "The final answer with units if applicable",
+  "concept": "The key concept being tested (e.g. Quadratic formula, Photosynthesis)",
+  "common_mistakes": ["Mistake 1 students often make", "Mistake 2"],
+  "related_topics": ["Topic A", "Topic B"]
+}}
+
+Rules:
+- 3-7 steps maximum, each focused on ONE idea
+- Include intermediate reasoning, not just the final calculation
+- If the problem is ambiguous, state your assumption in step 1
+- For essay/analysis questions, structure steps as: (1) thesis/claim, (2) evidence, (3) analysis, (4) conclusion
+- Keep the language in the same language the problem was asked in
+- Never hallucinate sources or citations"""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=2500,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        if not isinstance(data.get("steps"), list):
+            data["steps"] = []
+        data.setdefault("final_answer", "")
+        data.setdefault("concept", "")
+        data.setdefault("common_mistakes", [])
+        data.setdefault("related_topics", [])
+        return data
+    except Exception as e:
+        log.error("Homework solver failed: %s", e)
+        return {"steps": [], "final_answer": "Unable to solve — please try rephrasing the problem.",
+                "concept": "", "common_mistakes": [], "related_topics": []}
+
+
+# ── Essay / Writing Assistant ───────────────────────────────
+
+def analyze_essay(
+    essay_text: str,
+    assignment_prompt: str = "",
+    target_audience: str = "academic",
+) -> dict:
+    """
+    Analyze an essay for thesis strength, structure, grammar, and flow.
+
+    Returns:
+        {
+          "overall_score": 0-100,
+          "thesis_strength": 0-100,
+          "structure_score": 0-100,
+          "grammar_score": 0-100,
+          "clarity_score": 0-100,
+          "strengths": [...],
+          "weaknesses": [...],
+          "grammar_issues": [{"original": "...", "suggestion": "...", "reason": "..."}],
+          "thesis_feedback": "...",
+          "improved_intro": "...",
+          "word_count": int,
+          "reading_level": "..."
+        }
+    """
+    prompt_ctx = f"Assignment prompt: {assignment_prompt}\n\n" if assignment_prompt else ""
+    prompt = f"""You are an expert writing coach. Analyze this {target_audience} essay.
+{prompt_ctx}Essay:
+{essay_text[:8000]}
+
+Give sharp, specific feedback like a tough-but-fair professor would.
+Return ONLY valid JSON:
+{{
+  "overall_score": 78,
+  "thesis_strength": 70,
+  "structure_score": 80,
+  "grammar_score": 85,
+  "clarity_score": 75,
+  "strengths": ["Specific strength 1", "Specific strength 2"],
+  "weaknesses": ["Specific weakness 1", "Specific weakness 2"],
+  "grammar_issues": [
+    {{"original": "exact sentence fragment from essay", "suggestion": "improved version", "reason": "passive voice / run-on / etc"}}
+  ],
+  "thesis_feedback": "Direct critique of the thesis — is it arguable? clear? specific?",
+  "improved_intro": "A rewritten, stronger introduction paragraph",
+  "word_count": 523,
+  "reading_level": "College freshman"
+}}
+
+Be HONEST — do not inflate scores. A score of 70 is average, 85+ is genuinely strong.
+Max 5 grammar issues (the worst ones). Keep feedback in the essay's language."""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=2500,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        data.setdefault("overall_score", 0)
+        data.setdefault("strengths", [])
+        data.setdefault("weaknesses", [])
+        data.setdefault("grammar_issues", [])
+        data.setdefault("word_count", len(essay_text.split()))
+        return data
+    except Exception as e:
+        log.error("Essay analysis failed: %s", e)
+        return {"overall_score": 0, "thesis_strength": 0, "structure_score": 0,
+                "grammar_score": 0, "clarity_score": 0, "strengths": [],
+                "weaknesses": ["Analysis failed — please try again."],
+                "grammar_issues": [], "thesis_feedback": "",
+                "improved_intro": "", "word_count": len(essay_text.split()),
+                "reading_level": ""}
+
+
+# ── Panic Mode / Cram Plan ──────────────────────────────────
+
+def generate_cram_plan(
+    hours_available: float,
+    exam_topics: list[str],
+    exam_name: str = "Exam",
+    course_name: str = "",
+    known_weak_areas: list[str] | None = None,
+    course_context: str = "",
+) -> dict:
+    """
+    Generate an emergency cram schedule for a student with limited time before an exam.
+
+    Returns:
+        {
+          "blocks": [
+            {"duration_min": 45, "topic": "...", "focus": "...", "technique": "active recall", "why": "..."}
+          ],
+          "quick_wins": ["...", "..."],
+          "skip_these": ["Topics not worth studying in this time"],
+          "strategy_summary": "...",
+          "total_minutes": int
+        }
+    """
+    weak_str = ", ".join(known_weak_areas or []) or "none specified"
+    ctx_hint = f"Course material excerpts:\n{course_context[:2500]}\n\n" if course_context else ""
+    topics_str = "\n".join(f"- {t}" for t in exam_topics[:30]) if exam_topics else "Not provided"
+    prompt = f"""A student has only {hours_available} hours to prepare for {exam_name} in {course_name or "their course"}.
+
+Topics to cover:
+{topics_str}
+
+Known weak areas: {weak_str}
+
+{ctx_hint}Design a realistic cram schedule. Be ruthless — cut low-ROI topics.
+Include 10-minute breaks every 50 minutes of study. Use active-recall techniques
+(practice problems, self-quiz, teach-it-back) over passive re-reading.
+
+Return ONLY valid JSON:
+{{
+  "blocks": [
+    {{
+      "duration_min": 45,
+      "topic": "Specific topic name",
+      "focus": "Concrete what-to-do (e.g. 'Practice 5 differentiation problems')",
+      "technique": "active_recall | practice_problems | concept_map | flashcards | summary | break",
+      "why": "Why this topic now (e.g. 'Highest-weight on exam', 'Prerequisite for next block')"
+    }}
+  ],
+  "quick_wins": ["Topic that gives max points for min effort", "..."],
+  "skip_these": ["Topic not worth cramming in this time"],
+  "strategy_summary": "2-3 sentence overview of the approach",
+  "total_minutes": 180
+}}
+
+Total block duration must roughly equal {hours_available} hours * 60 minutes.
+Keep language in the same language as the topics provided."""
+
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=2500,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        data.setdefault("blocks", [])
+        data.setdefault("quick_wins", [])
+        data.setdefault("skip_these", [])
+        data.setdefault("strategy_summary", "")
+        data.setdefault("total_minutes", int(hours_available * 60))
+        return data
+    except Exception as e:
+        log.error("Cram plan failed: %s", e)
+        return {"blocks": [], "quick_wins": [], "skip_these": [],
+                "strategy_summary": "Generation failed — please try again.",
+                "total_minutes": int(hours_available * 60)}
+

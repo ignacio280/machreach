@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 
 from flask import jsonify, redirect, request, session, url_for, render_template_string, send_file
@@ -25,7 +26,8 @@ def register_student_routes(app, csrf, limiter):
                                   generate_flashcards, generate_quiz, generate_notes,
                                   chat_with_tutor, notes_from_transcript,
                                   flashcards_from_transcript, detect_weak_topics,
-                                  generate_practice_problems)
+                                  generate_practice_problems,
+                                  analyze_essay, generate_cram_plan)
     from student import db as sdb
 
     # ── helpers ─────────────────────────────────────────────
@@ -281,6 +283,23 @@ def register_student_routes(app, csrf, limiter):
             c["analysis_json"] = json.loads(c["analysis_json"]) if isinstance(c["analysis_json"], str) else c["analysis_json"]
             result.append(c)
         return jsonify({"courses": result})
+
+    @app.route("/api/student/courses/manual", methods=["POST"])
+    def student_create_manual_course():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True) or {}
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "name required"}), 400
+        code = (data.get("code") or "").strip()
+        term = (data.get("term") or "").strip()
+        try:
+            course_id = sdb.create_manual_course(_cid(), name, code, term)
+            return jsonify({"ok": True, "course_id": course_id})
+        except Exception as e:
+            log.exception("create_manual_course failed")
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/student/courses/<int:course_id>", methods=["GET"])
     def student_get_course(course_id):
@@ -661,10 +680,15 @@ def register_student_routes(app, csrf, limiter):
             if course_name:
                 detail += f" — {course_name}"
             sdb.award_xp(cid, "focus_session", xp, detail)
+            _focus_xp_awarded = xp
+        else:
+            _focus_xp_awarded = 0
 
+        _page_xp_awarded = 0
         if pages > 0:
             page_xp = max(1, pages)
             sdb.award_xp(cid, "pages_read", page_xp, f"Read {pages} pages")
+            _page_xp_awarded = page_xp
 
         # Auto-award focus badges
         stats = sdb.get_focus_stats(cid)
@@ -700,7 +724,22 @@ def register_student_routes(app, csrf, limiter):
             if hour_now >= 23:
                 sdb.earn_badge(cid, "night_owl")
 
-        return jsonify({"ok": True, "stats": stats})
+        # Build promotion payload based on total XP change during this call.
+        # We compute after all XP additions above (focus + pages) are done.
+        _new_total = sdb.get_total_xp(cid)
+        _rank_after = sdb.get_study_rank(_new_total)
+        _xp_delta = _focus_xp_awarded + _page_xp_awarded
+        _rank_before = sdb.get_study_rank(max(0, _new_total - _xp_delta))
+        promotion = None
+        if _rank_after["index"] > _rank_before["index"]:
+            promotion = {
+                "promoted": True,
+                "tier_up": _rank_after["tier"] != _rank_before["tier"],
+                "reached_elite": _rank_after["division"] == "" and _rank_before["division"] != "",
+                "rank_after": _rank_after,
+            }
+
+        return jsonify({"ok": True, "stats": stats, "promotion": promotion})
 
     @app.route("/api/student/focus/stats", methods=["GET"])
     def student_focus_stats():
@@ -919,6 +958,84 @@ def register_student_routes(app, csrf, limiter):
           </div>
         </div>
 
+        <!-- Feature Explorer — always discoverable, collapsible -->
+        <div id="feature-explorer" class="card" style="margin-bottom:20px;padding:0;position:relative;overflow:hidden;border:1px solid var(--border);">
+          <div aria-hidden="true" style="position:absolute;inset:0;background:radial-gradient(900px 180px at -10% -30%,rgba(139,92,246,.12),transparent 60%),radial-gradient(700px 160px at 120% 120%,rgba(99,102,241,.10),transparent 60%);pointer-events:none;"></div>
+          <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;" onclick="toggleExplorer()">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:20px;">&#129504;</span>
+              <div>
+                <div style="font-weight:700;font-size:15px;">What can I do here?</div>
+                <div style="font-size:12px;color:var(--text-muted);">A visual map of every feature &mdash; click any card to jump there.</div>
+              </div>
+            </div>
+            <span id="fx-caret" style="color:var(--text-muted);font-size:13px;">Show &#9660;</span>
+          </div>
+          <div id="fx-body" style="position:relative;z-index:1;display:none;padding:4px 18px 18px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+              <a href="/student/courses" class="fx-tile"><span class="fx-ico">&#128218;</span><b>Courses</b><span>Sync Canvas or add courses by hand. Upload PDFs so the AI knows your material.</span></a>
+              <a href="/student/plan" class="fx-tile"><span class="fx-ico">&#128197;</span><b>AI Study Plan</b><span>Personalized daily plan based on every exam, weight, and deadline.</span></a>
+              <a href="/student/focus" class="fx-tile"><span class="fx-ico">&#127919;</span><b>Focus Mode</b><span>Pomodoro, page-count, and custom timers. Earn XP every session.</span></a>
+              <a href="/student/flashcards" class="fx-tile"><span class="fx-ico">&#127183;</span><b>Flashcards</b><span>AI-generated, spaced-repetition review scheduled by difficulty.</span></a>
+              <a href="/student/quizzes" class="fx-tile"><span class="fx-ico">&#128221;</span><b>Practice Quizzes</b><span>Up to 100 questions with timer, per-topic analytics, and action plan.</span></a>
+              <a href="/student/notes" class="fx-tile"><span class="fx-ico">&#128196;</span><b>AI Notes</b><span>Drop any PDF/DOCX and get organized study notes in seconds.</span></a>
+              <a href="/student/chat" class="fx-tile"><span class="fx-ico">&#129302;</span><b>AI Tutor</b><span>Grounded in your uploads only &mdash; zero hallucinations.</span></a>
+              <a href="/student/essay" class="fx-tile"><span class="fx-ico">&#9999;&#65039;</span><b>Essay Assistant</b><span>Honest feedback on thesis, structure, flow, grammar.</span></a>
+              <a href="/student/panic" class="fx-tile"><span class="fx-ico">&#128680;</span><b>Panic Mode</b><span>Exam tomorrow? Get a minute-by-minute cram plan.</span></a>
+              <a href="/student/exchange" class="fx-tile"><span class="fx-ico">&#128257;</span><b>Study Exchange</b><span>Share & fork notes from other students. Earn XP when yours get used.</span></a>
+              <a href="/student/leaderboard" class="fx-tile"><span class="fx-ico">&#127942;</span><b>Leaderboards</b><span>Global & university ranks, plus fair-play private groups where everyone starts at 0.</span></a>
+              <a href="/student/schedule" class="fx-tile"><span class="fx-ico">&#128197;</span><b>Weekly Schedule</b><span>Drag-and-drop classes and study blocks. Auto-saves.</span></a>
+              <a href="/student/exams" class="fx-tile"><span class="fx-ico">&#128203;</span><b>Exams Dashboard</b><span>Every upcoming exam, sorted by urgency.</span></a>
+              <a href="/student/weak-topics" class="fx-tile"><span class="fx-ico">&#127919;</span><b>Weak Topics</b><span>AI spots what you struggle with from your quiz scores.</span></a>
+              <a href="/student/gpa" class="fx-tile"><span class="fx-ico">&#128200;</span><b>GPA Calculator</b><span>Track GPA and forecast what grades you need.</span></a>
+              <a href="/student/achievements" class="fx-tile"><span class="fx-ico">&#127881;</span><b>XP & Achievements</b><span>Full XP history, badges, rank, and progress.</span></a>
+              <a href="/mail-hub" class="fx-tile"><span class="fx-ico">&#128231;</span><b>Mail Hub</b><span>Connect Gmail / Outlook. AI sorts professor emails by priority.</span></a>
+              <a href="/student/settings" class="fx-tile"><span class="fx-ico">&#9881;&#65039;</span><b>Settings</b><span>Theme, language, daily-email time, and replay the tutorial.</span></a>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+              <button onclick="localStorage.removeItem('mr-tutorial-done');location.reload();" class="btn btn-outline btn-sm">&#127891; Run guided tour</button>
+              <button onclick="localStorage.setItem('mr-fx-hidden','1');document.getElementById('feature-explorer').style.display='none';" class="btn btn-ghost btn-sm">I've got it &mdash; hide this</button>
+            </div>
+          </div>
+        </div>
+        <style>
+          .fx-tile {{
+            display:flex;flex-direction:column;gap:4px;padding:14px;border:1px solid var(--border);border-radius:12px;
+            background:var(--bg);text-decoration:none;color:var(--text);transition:all .18s ease;
+          }}
+          .fx-tile:hover {{ border-color:var(--primary);transform:translateY(-2px);box-shadow:0 8px 20px rgba(99,102,241,.15); }}
+          .fx-tile .fx-ico {{ font-size:22px; }}
+          .fx-tile b {{ font-size:14px;font-weight:700; }}
+          .fx-tile span:last-child {{ font-size:12px;color:var(--text-muted);line-height:1.45; }}
+        </style>
+        <script>
+          (function() {{
+            if (localStorage.getItem('mr-fx-hidden') === '1') {{
+              var el = document.getElementById('feature-explorer');
+              if (el) el.style.display = 'none';
+            }} else {{
+              // Auto-open for new users who haven't taken the tutorial yet
+              var firstVisit = !localStorage.getItem('mr-tutorial-done') && !localStorage.getItem('mr-fx-seen');
+              if (firstVisit) {{
+                document.getElementById('fx-body').style.display = 'block';
+                document.getElementById('fx-caret').innerHTML = 'Hide &#9650;';
+                localStorage.setItem('mr-fx-seen', '1');
+              }}
+            }}
+          }})();
+          function toggleExplorer() {{
+            var body = document.getElementById('fx-body');
+            var caret = document.getElementById('fx-caret');
+            if (body.style.display === 'none' || !body.style.display) {{
+              body.style.display = 'block';
+              caret.innerHTML = 'Hide &#9650;';
+            }} else {{
+              body.style.display = 'none';
+              caret.innerHTML = 'Show &#9660;';
+            }}
+          }}
+        </script>
+
         <!-- XP / Level Bar -->
         <a href="/student/achievements" class="hover-lift" style="text-decoration:none;display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 22px;margin-bottom:20px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
@@ -1110,9 +1227,35 @@ def register_student_routes(app, csrf, limiter):
             upload_buttons += f"<button onclick=\"document.getElementById('upload-{cid}').click()\" class=\"btn btn-outline btn-sm\">{cname}</button>"
 
         return _s_render("Courses", f"""
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px">
           <h1>&#128218; My Courses</h1>
-          <button onclick="syncCourses()" class="btn btn-primary btn-sm" id="sync-btn">&#128260; Sync Canvas</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="showNewCourseModal()" class="btn btn-outline btn-sm">&#43; New Course</button>
+            <button onclick="syncCourses()" class="btn btn-primary btn-sm" id="sync-btn">&#128260; Sync Canvas</button>
+          </div>
+        </div>
+
+        <div id="new-course-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;width:92%;max-width:440px">
+            <h3 style="margin:0 0 6px">Create a course</h3>
+            <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px">For classes outside Canvas. You can add exams and files to it just like a synced course.</p>
+            <div class="form-group">
+              <label>Course name *</label>
+              <input id="nc-name" type="text" placeholder="Intro to Microeconomics" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+            </div>
+            <div class="form-group">
+              <label>Code</label>
+              <input id="nc-code" type="text" placeholder="ECON 101" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+            </div>
+            <div class="form-group">
+              <label>Term</label>
+              <input id="nc-term" type="text" placeholder="Spring 2026" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+              <button onclick="hideNewCourseModal()" class="btn btn-ghost btn-sm">Cancel</button>
+              <button onclick="saveNewCourse()" class="btn btn-primary btn-sm" id="nc-save">Create</button>
+            </div>
+          </div>
         </div>
         <div class="card">
           <table>
@@ -1231,6 +1374,35 @@ def register_student_routes(app, csrf, limiter):
             if (r.ok) {{ location.reload(); }}
             else {{ var d = await _safeJson(r); alert(d.error || 'Failed to remove course'); }}
           }} catch(e) {{ alert('Network error'); }}
+        }}
+        function showNewCourseModal() {{
+          document.getElementById('new-course-modal').style.display = 'flex';
+          setTimeout(function(){{ document.getElementById('nc-name').focus(); }}, 50);
+        }}
+        function hideNewCourseModal() {{
+          document.getElementById('new-course-modal').style.display = 'none';
+          document.getElementById('nc-name').value = '';
+          document.getElementById('nc-code').value = '';
+          document.getElementById('nc-term').value = '';
+        }}
+        async function saveNewCourse() {{
+          var name = document.getElementById('nc-name').value.trim();
+          if (!name) {{ alert('Course name is required'); return; }}
+          var code = document.getElementById('nc-code').value.trim();
+          var term = document.getElementById('nc-term').value.trim();
+          var btn = document.getElementById('nc-save');
+          btn.disabled = true; btn.textContent = 'Creating...';
+          try {{
+            var meta = document.querySelector('meta[name="csrf-token"]');
+            var headers = {{'Content-Type':'application/json'}};
+            if (meta) headers['X-CSRFToken'] = meta.getAttribute('content');
+            var r = await fetch('/api/student/courses/manual', {{
+              method:'POST', headers: headers,
+              body: JSON.stringify({{name:name, code:code, term:term}})
+            }});
+            if (r.ok) {{ location.reload(); }}
+            else {{ var d = await _safeJson(r); alert(d.error || 'Failed to create course'); btn.disabled=false; btn.textContent='Create'; }}
+          }} catch(e) {{ alert('Network error'); btn.disabled=false; btn.textContent='Create'; }}
         }}
         </script>
         """, active_page="student_courses")
@@ -1958,10 +2130,61 @@ def register_student_routes(app, csrf, limiter):
               </div>
             </div>
 
+            <!-- Focus Guard card -->
+            <div class="card" id="focus-guard-card" style="position:relative;overflow:hidden;">
+              <div aria-hidden="true" style="position:absolute;inset:0;background:radial-gradient(1200px 220px at -10% -20%, rgba(139,92,246,.12), transparent 60%), radial-gradient(900px 200px at 120% 120%, rgba(99,102,241,.10), transparent 60%);pointer-events:none;"></div>
+              <div class="card-header" style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <h2 style="margin:0;">&#128737;&#65039; Focus Guard</h2>
+                <span id="fg-status" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:rgba(148,163,184,.12);color:var(--text-muted);border:1px solid rgba(148,163,184,.2);">
+                  <span id="fg-dot" style="width:8px;height:8px;border-radius:50%;background:#64748b;display:inline-block;"></span>
+                  <span id="fg-label">Idle</span>
+                </span>
+              </div>
+              <div style="position:relative;z-index:1;">
+                <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;line-height:1.55;">
+                  Block Instagram, TikTok, Twitter/X and other time-sinks automatically while a session is running.
+                  <b style="color:var(--text);">YouTube stays allowed</b> — because you might actually be studying.
+                </p>
+
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+                  <span class="fg-chip">Instagram</span>
+                  <span class="fg-chip">TikTok</span>
+                  <span class="fg-chip">Twitter/X</span>
+                  <span class="fg-chip">Facebook</span>
+                  <span class="fg-chip">Reddit</span>
+                  <span class="fg-chip">Snapchat</span>
+                  <span class="fg-chip">Twitch</span>
+                  <span class="fg-chip">Netflix</span>
+                  <span class="fg-chip fg-chip-allow">YouTube &#10003;</span>
+                </div>
+
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+                  <a href="/download/focus-guard.zip" class="btn btn-primary btn-sm" download>&#11015; Download extension</a>
+                  <button onclick="document.getElementById('fg-how').style.display='block';this.style.display='none';" class="btn btn-outline btn-sm">How to install</button>
+                </div>
+
+                <div id="fg-how" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-muted);line-height:1.7;">
+                  <b style="color:var(--text);">Install in 30 seconds:</b>
+                  <ol style="margin:6px 0 0 18px;padding:0;">
+                    <li>Unzip the downloaded file.</li>
+                    <li>Open <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">chrome://extensions</code> (or <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">edge://extensions</code>).</li>
+                    <li>Toggle <b>Developer mode</b> on (top-right).</li>
+                    <li>Click <b>Load unpacked</b> and select the unzipped <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">focus-guard</code> folder.</li>
+                    <li>Start a timer here — external distractions get blocked automatically.</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
         <style>
+        .fg-chip {{ font-size:11px;padding:3px 8px;border-radius:999px;background:rgba(239,68,68,.10);color:#fca5a5;border:1px solid rgba(239,68,68,.2);font-weight:600; }}
+        .fg-chip-allow {{ background:rgba(34,197,94,.10);color:#86efac;border-color:rgba(34,197,94,.25); }}
+        #fg-status.active {{ background:linear-gradient(135deg,rgba(139,92,246,.18),rgba(99,102,241,.18));color:#C7D2FE;border-color:rgba(139,92,246,.35); }}
+        #fg-status.active #fg-dot {{ background:#22c55e;box-shadow:0 0 10px #22c55e;animation:fgPulse 1.4s infinite; }}
+        @keyframes fgPulse {{ 50% {{ opacity:.4; }} }}
         .mode-btn.active {{ background:var(--primary);color:#fff;border-color:var(--primary); }}
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
@@ -2345,6 +2568,9 @@ def register_student_routes(app, csrf, limiter):
                   document.getElementById('stat-streak').textContent = result.stats.streak_days;
                 }}
               }}
+              if (result.promotion && window.showPromotionToast) {{
+                window.showPromotionToast(result.promotion);
+              }}
             }}
           }} catch(e) {{}}
         }}
@@ -2428,6 +2654,33 @@ def register_student_routes(app, csrf, limiter):
             updateDisplay();
             startTimer(true);
           }}
+        }})();
+
+        /* === Focus Guard status badge === */
+        (function() {{
+          function readActive() {{
+            try {{
+              var ff = localStorage.getItem('focus_float');
+              if (!ff) return false;
+              var d = JSON.parse(ff);
+              return !!(d && d.active);
+            }} catch(e) {{ return false; }}
+          }}
+          function render() {{
+            var s = document.getElementById('fg-status');
+            var l = document.getElementById('fg-label');
+            if (!s || !l) return;
+            if (readActive()) {{
+              s.classList.add('active');
+              l.textContent = 'Active — sites blocked';
+            }} else {{
+              s.classList.remove('active');
+              l.textContent = 'Idle';
+            }}
+          }}
+          render();
+          setInterval(render, 1500);
+          window.addEventListener('storage', function(e) {{ if (e.key === 'focus_float') render(); }});
         }})();
         </script>
         """, active_page="student_focus")
@@ -2927,6 +3180,7 @@ def register_student_routes(app, csrf, limiter):
         return jsonify({"schedule": result})
 
     @app.route("/api/student/schedule", methods=["PUT"])
+    @csrf.exempt
     def student_set_schedule():
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
@@ -3109,16 +3363,20 @@ def register_student_routes(app, csrf, limiter):
             schedule.push({{ day: i, hours: free ? 0 : hours, free: free }});
           }}
           try {{
+            var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            var csrfTok = csrfMeta ? csrfMeta.content : '';
             var r = await fetch('/api/student/schedule', {{
               method: 'PUT',
-              headers: {{'Content-Type':'application/json'}},
+              headers: {{'Content-Type':'application/json', 'X-CSRFToken': csrfTok}},
               body: JSON.stringify({{ schedule: schedule }})
             }});
             if (r.ok) {{
               btn.innerHTML = '&#10003; Saved!';
               setTimeout(function() {{ btn.disabled = false; btn.innerHTML = 'Save Schedule'; }}, 1500);
             }} else {{
-              alert('Failed to save'); btn.disabled = false; btn.innerHTML = 'Save Schedule';
+              var errTxt = 'Failed to save';
+              try {{ var j = await r.json(); if (j.error) errTxt = j.error; }} catch(e) {{}}
+              alert(errTxt); btn.disabled = false; btn.innerHTML = 'Save Schedule';
             }}
           }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = 'Save Schedule'; }}
         }}
@@ -3229,8 +3487,7 @@ def register_student_routes(app, csrf, limiter):
             quality = max(0, min(5, int(quality)))
             correct = quality >= 3
         sdb.update_flashcard_progress(data["card_id"], correct, quality=quality)
-        # Gamification — 1 XP per flashcard review
-        sdb.award_xp(_cid(), "flashcard_review", 1, "Reviewed a flashcard")
+        # XP is now only awarded from Focus Mode and Exchange notes usage.
         # Check flashcard badges
         from outreach.db import _fetchval, get_db
         with get_db() as db:
@@ -3309,7 +3566,11 @@ def register_student_routes(app, csrf, limiter):
         difficulty = data.get("difficulty", "medium")
         if difficulty not in ("easy", "medium", "hard"):
             difficulty = "medium"
-        count = min(int(data.get("count", 10)), 20)
+        try:
+            count = int(data.get("count", 10))
+        except (TypeError, ValueError):
+            count = 10
+        count = max(1, min(count, 100))  # hard ceiling — generation batches under the hood
 
         # Gather source material — ONLY from student's uploaded files
         source_text = ""
@@ -3340,7 +3601,12 @@ def register_student_routes(app, csrf, limiter):
         quiz_id = sdb.create_quiz(_cid(), title, difficulty, course_id=course_id, exam_id=exam_id)
         sdb.add_quiz_questions(quiz_id, questions)
 
-        return jsonify({"quiz_id": quiz_id, "question_count": len(questions)})
+        return jsonify({
+            "quiz_id": quiz_id,
+            "question_count": len(questions),
+            "requested": count,
+            "short": len(questions) < count,
+        })
 
     @app.route("/api/student/quizzes", methods=["GET"])
     def student_get_quizzes():
@@ -3367,9 +3633,7 @@ def register_student_routes(app, csrf, limiter):
         data = request.get_json(force=True)
         score = int(data.get("score", 0))
         sdb.update_quiz_score(quiz_id, score)
-        # Gamification
-        xp = max(5, score // 10)
-        sdb.award_xp(_cid(), "quiz_complete", xp, f"Quiz score: {score}%")
+        # XP is now only awarded from Focus Mode and Exchange notes usage.
         if score == 100:
             sdb.earn_badge(_cid(), "quiz_master")
         if not sdb.get_badges(_cid()) or not any(b["badge_key"] == "first_quiz" for b in sdb.get_badges(_cid())):
@@ -3392,6 +3656,186 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "Unauthorized"}), 401
         sdb.delete_quiz(quiz_id, _cid())
         return jsonify({"ok": True})
+
+    @app.route("/api/student/quizzes/<int:quiz_id>/analyze", methods=["POST"])
+    @limiter.limit("10 per minute")
+    def student_analyze_quiz(quiz_id):
+        """
+        Deep post-quiz AI analysis. Takes the user's per-question answers +
+        per-question time-taken and returns topic breakdown, strengths,
+        weaknesses, mistake patterns, and a prioritized action plan.
+        """
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        quiz = sdb.get_quiz(quiz_id, _cid())
+        if not quiz:
+            return jsonify({"error": "Not found"}), 404
+
+        data = request.get_json(force=True) or {}
+        answers = data.get("answers", [])  # [{q_id, selected, time}]
+        if not answers:
+            return jsonify({"error": "No answers provided"}), 400
+
+        questions = {q["id"]: dict(q) for q in sdb.get_quiz_questions(quiz_id)}
+
+        # Build structured payload for the AI
+        items = []
+        topic_stats: dict[str, dict] = {}
+        correct_count = 0
+        total_time = 0.0
+        times: list[float] = []
+
+        for a in answers:
+            q = questions.get(int(a.get("q_id", -1)))
+            if not q:
+                continue
+            sel = (a.get("selected") or "").lower()
+            is_correct = sel == q["correct"]
+            if is_correct:
+                correct_count += 1
+            t = float(a.get("time", 0) or 0)
+            total_time += t
+            times.append(t)
+            topic = (q.get("topic") or "General").strip() or "General"
+            ts = topic_stats.setdefault(topic, {"correct": 0, "total": 0, "time": 0.0})
+            ts["total"] += 1
+            ts["time"] += t
+            if is_correct:
+                ts["correct"] += 1
+            items.append({
+                "topic": topic,
+                "question": q["question"],
+                "your_answer": sel.upper() if sel else "—",
+                "your_answer_text": q.get(f"option_{sel}", "") if sel in ("a", "b", "c", "d") else "",
+                "correct_answer": q["correct"].upper(),
+                "correct_answer_text": q.get(f"option_{q['correct']}", ""),
+                "explanation": q.get("explanation", ""),
+                "is_correct": is_correct,
+                "seconds": round(t, 1),
+            })
+
+        total = len(items)
+        score_pct = round(100 * correct_count / total) if total else 0
+        avg_time = round(total_time / total, 1) if total else 0.0
+
+        # Topic breakdown (deterministic, not AI)
+        breakdown = []
+        for topic, s in topic_stats.items():
+            pct = round(100 * s["correct"] / s["total"]) if s["total"] else 0
+            breakdown.append({
+                "topic": topic,
+                "correct": s["correct"],
+                "total": s["total"],
+                "percent": pct,
+                "avg_time": round(s["time"] / s["total"], 1) if s["total"] else 0,
+            })
+        breakdown.sort(key=lambda x: (x["percent"], -x["total"]))
+
+        # AI narrative analysis
+        try:
+            import json as _json
+            from outreach.ai import _ai
+            wrong_items = [i for i in items if not i["is_correct"]]
+            right_items = [i for i in items if i["is_correct"]]
+            wrong_sample = wrong_items[:25]
+            right_sample = right_items[:10]
+            prompt = f"""You are an elite tutor analyzing a student's quiz results.
+Course: {quiz.get('course_name') or 'General'}
+Quiz: {quiz.get('title') or ''}
+Difficulty: {quiz.get('difficulty') or 'medium'}
+Overall score: {score_pct}% ({correct_count}/{total})
+Average time per question: {avg_time}s
+
+TOPIC BREAKDOWN (what they got in each concept):
+{_json.dumps(breakdown, indent=2)}
+
+QUESTIONS THEY GOT WRONG:
+{_json.dumps(wrong_sample, indent=2, default=str)}
+
+QUESTIONS THEY GOT RIGHT (sample):
+{_json.dumps(right_sample, indent=2, default=str)}
+
+Produce a student-facing analysis that is blunt, specific, and actionable — BETTER than Gemini's quiz feedback.
+Return ONLY valid JSON with this exact shape:
+{{
+  "headline": "One sharp sentence summarizing performance (no fluff).",
+  "verdict": "mastery" | "solid" | "shaky" | "struggling",
+  "strengths": [
+    {{"topic": "Short concept name", "detail": "Why they clearly understand this, citing a question if useful"}}
+  ],
+  "weaknesses": [
+    {{"topic": "Short concept name", "detail": "What exactly they're missing — specific misconception, not generic advice",
+      "fix": "One concrete fix: re-read X, practice Y, watch Z-type resource"}}
+  ],
+  "mistake_patterns": ["Pattern 1 (e.g. 'confuses mitosis phases', 'guesses on calculations')"],
+  "time_insight": "Short note on their pacing — too fast/slow, where they rushed, etc.",
+  "next_actions": [
+    "Concrete step 1 (e.g. 'Redo questions 3, 7, 12 — all about X')",
+    "Concrete step 2",
+    "Concrete step 3"
+  ],
+  "study_plan_30min": [
+    {{"minutes": 10, "task": "Specific focused task"}},
+    {{"minutes": 15, "task": "Specific focused task"}},
+    {{"minutes": 5,  "task": "Specific focused task"}}
+  ],
+  "encouragement": "One honest, specific, non-patronizing sentence."
+}}
+
+RULES:
+- 3-6 strengths max. 3-6 weaknesses max. Skip sections if genuinely empty (empty arrays fine).
+- Quote specific topics / question numbers when relevant.
+- Never say "review the material" — be concrete.
+- Keep it in the same language as the quiz content.
+No markdown, no code fences. ONLY JSON.
+"""
+            try:
+                resp = _ai().chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.4,
+                    max_tokens=2000,
+                    response_format={"type": "json_object"},
+                )
+            except Exception:
+                resp = _ai().chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.4,
+                    max_tokens=2000,
+                )
+            raw = (resp.choices[0].message.content or "").strip()
+            raw = re.sub(r"^```json?\s*", "", raw, flags=re.IGNORECASE)
+            raw = re.sub(r"\s*```$", "", raw)
+            try:
+                ai = _json.loads(raw)
+            except Exception:
+                ai = {"headline": "Quiz analyzed.", "verdict": "solid", "strengths": [],
+                      "weaknesses": [], "mistake_patterns": [], "time_insight": "",
+                      "next_actions": [], "study_plan_30min": [], "encouragement": ""}
+        except Exception as e:
+            log.error("Quiz analysis failed: %s", e)
+            ai = {"headline": "Analysis unavailable.", "verdict": "solid", "strengths": [],
+                  "weaknesses": [], "mistake_patterns": [], "time_insight": "",
+                  "next_actions": [], "study_plan_30min": [], "encouragement": ""}
+
+        # Simple pacing stats
+        pacing = {
+            "avg_time": avg_time,
+            "fastest": round(min(times), 1) if times else 0,
+            "slowest": round(max(times), 1) if times else 0,
+            "total_time": round(total_time, 1),
+        }
+
+        return jsonify({
+            "score": score_pct,
+            "correct": correct_count,
+            "total": total,
+            "breakdown": breakdown,
+            "pacing": pacing,
+            "items": items,
+            "ai": ai,
+        })
 
     # ── Notes API routes ────────────────────────────────────
 
@@ -4336,7 +4780,8 @@ def register_student_routes(app, csrf, limiter):
             </div>
             <div class="form-group">
               <label>Number of questions</label>
-              <input type="number" id="qz-count" value="10" min="5" max="20" class="edit-input">
+              <input type="number" id="qz-count" value="10" min="5" max="100" class="edit-input">
+              <small style="display:block;color:var(--text-muted);font-size:11px;margin-top:4px;">Up to 100. Large quizzes generate in batches — give it a few seconds.</small>
             </div>
           </div>
           <button onclick="genQuiz()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="qz-gen-btn">&#10024; Generate</button>
@@ -4378,7 +4823,9 @@ def register_student_routes(app, csrf, limiter):
             }});
             var d = await _safeJson(r);
             if (r.ok) {{
-              alert('Generated ' + d.question_count + ' questions!');
+              var msg = 'Generated ' + d.question_count + ' questions!';
+              if (d.short) {{ msg += '\n(You requested ' + d.requested + ' but the source material only supported ' + d.question_count + ' unique questions.)'; }}
+              alert(msg);
               window.location = '/student/quizzes/' + d.quiz_id;
             }} else {{ alert(d.error || 'Generation failed'); }}
           }} catch(e) {{ alert('Network error'); }}
@@ -4405,13 +4852,14 @@ def register_student_routes(app, csrf, limiter):
             "id": q["id"], "question": q["question"],
             "option_a": q.get("option_a", ""), "option_b": q.get("option_b", ""),
             "option_c": q.get("option_c", ""), "option_d": q.get("option_d", ""),
-            "correct": q["correct"], "explanation": q.get("explanation", "")
+            "correct": q["correct"], "explanation": q.get("explanation", ""),
+            "topic": q.get("topic", "") or ""
         } for q in questions], ensure_ascii=False)
 
         diff_color = {"easy": "#10B981", "medium": "#F59E0B", "hard": "#EF4444"}.get(quiz.get("difficulty", "medium"), "#94A3B8")
 
         return _s_render(f"Quiz: {quiz.get('title','')}", f"""
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:12px;flex-wrap:wrap;">
           <div>
             <a href="/student/quizzes" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Quizzes</a>
             <h1 style="margin:4px 0 0;font-size:24px;">{_esc(quiz.get('title',''))}</h1>
@@ -4421,7 +4869,13 @@ def register_student_routes(app, csrf, limiter):
               {quiz.get('question_count',0)} questions
             </p>
           </div>
-          <div id="qz-progress-txt" style="font-size:14px;color:var(--text-muted);">Question 1 of {len(questions)}</div>
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div id="qz-timer-wrap" style="display:none;text-align:right;">
+              <div id="qz-timer" style="font-size:22px;font-weight:700;font-family:monospace;letter-spacing:1px;color:var(--text);">00:00</div>
+              <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;">Remaining</div>
+            </div>
+            <div id="qz-progress-txt" style="font-size:14px;color:var(--text-muted);">Question 1 of {len(questions)}</div>
+          </div>
         </div>
 
         <!-- Progress bar -->
@@ -4430,8 +4884,47 @@ def register_student_routes(app, csrf, limiter):
         </div>
 
         <div style="max-width:700px;margin:0 auto;">
+          <!-- Pre-start setup -->
+          <div id="qz-setup" class="card" style="padding:28px;">
+            <h2 style="margin:0 0 6px;font-size:20px;">&#9889; Ready to start?</h2>
+            <p style="color:var(--text-muted);font-size:13px;margin:0 0 18px;">{len(questions)} questions coming up. You can add a timer to simulate exam pressure.</p>
+
+            <div style="border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;background:var(--bg);">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;">
+                <input type="checkbox" id="qz-timer-toggle" style="width:18px;height:18px;cursor:pointer;">
+                <span>&#9201;&#65039; Enable timer</span>
+              </label>
+              <div id="qz-timer-config" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+                  <div>
+                    <label style="font-size:12px;color:var(--text-muted);font-weight:600;">Mode</label>
+                    <select id="qz-timer-mode" class="edit-input">
+                      <option value="total">Total time for whole quiz</option>
+                      <option value="per">Time per question</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:12px;color:var(--text-muted);font-weight:600;">
+                      <span id="qz-timer-unit-label">Minutes total</span>
+                    </label>
+                    <input type="number" id="qz-timer-minutes" value="{max(5, len(questions) * 1)}" min="1" max="300" class="edit-input">
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <button type="button" onclick="setQuizPreset(60,'per')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#128165; 60s / question</button>
+                  <button type="button" onclick="setQuizPreset(90,'per')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#9203; 90s / question</button>
+                  <button type="button" onclick="setQuizPreset(120,'per')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#128336; 2m / question</button>
+                  <button type="button" onclick="setQuizPreset({max(5,len(questions)*2)},'total')" class="btn btn-ghost btn-sm" style="font-size:11px;">&#128221; Realistic exam</button>
+                </div>
+                <p style="font-size:11px;color:var(--text-muted);margin:10px 0 0;">When the timer runs out, the quiz auto-finishes with whatever's answered.</p>
+              </div>
+            </div>
+
+            <button onclick="beginQuiz()" class="btn btn-primary" style="padding:10px 26px;font-size:15px;">&#9654; Start Quiz</button>
+          </div>
+
           <!-- Question card -->
-          <div id="qz-card" class="card" style="padding:30px;">
+          <div id="qz-card" class="card" style="padding:30px;display:none;">
             <div id="qz-question" style="font-size:18px;font-weight:600;margin-bottom:20px;line-height:1.5;"></div>
             <div id="qz-options"></div>
             <div id="qz-explanation" style="display:none;margin-top:16px;padding:14px;border-radius:var(--radius-sm);font-size:14px;line-height:1.5;"></div>
@@ -4441,17 +4934,84 @@ def register_student_routes(app, csrf, limiter):
           </div>
 
           <!-- Summary (hidden until done) -->
-          <div id="qz-summary" style="display:none;" class="card">
-            <div style="text-align:center;padding:30px;">
-              <div style="font-size:48px;margin-bottom:12px;" id="qz-emoji">&#127881;</div>
-              <h2 style="margin:0 0 8px;">Quiz Complete!</h2>
-              <div id="qz-final-score" style="font-size:40px;font-weight:800;color:var(--primary);"></div>
-              <div id="qz-final-detail" style="font-size:14px;color:var(--text-muted);margin-top:4px;"></div>
-              <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;">
-                <button onclick="restartQuiz()" class="btn btn-primary">&#128260; Retake Quiz</button>
-                <a href="/student/quizzes" class="btn btn-outline">Back to Quizzes</a>
+          <div id="qz-summary" style="display:none;">
+            <!-- Hero -->
+            <div class="card" style="position:relative;overflow:hidden;text-align:center;padding:32px 24px;margin-bottom:18px;">
+              <div aria-hidden="true" style="position:absolute;inset:0;background:radial-gradient(800px 200px at 50% -20%,rgba(139,92,246,.18),transparent 70%);pointer-events:none;"></div>
+              <div style="position:relative;z-index:1;">
+                <div style="font-size:56px;margin-bottom:8px;" id="qz-emoji">&#127881;</div>
+                <div id="qz-verdict" style="display:inline-block;font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:700;padding:4px 12px;border-radius:999px;background:rgba(99,102,241,.15);color:#A78BFA;margin-bottom:10px;">Analyzing...</div>
+                <h2 style="margin:0 0 4px;font-size:18px;font-weight:600;color:var(--text-muted);">Quiz complete</h2>
+                <div id="qz-final-score" style="font-size:64px;font-weight:800;line-height:1;background:linear-gradient(135deg,#6366F1,#8B5CF6,#EC4899);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;"></div>
+                <div id="qz-final-detail" style="font-size:14px;color:var(--text-muted);margin-top:6px;"></div>
+                <div id="qz-headline" style="font-size:15px;margin-top:14px;max-width:560px;margin-left:auto;margin-right:auto;line-height:1.5;"></div>
               </div>
             </div>
+
+            <!-- Pacing stats -->
+            <div class="card" style="padding:18px;margin-bottom:18px;">
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+                <div style="text-align:center;"><div id="qz-pace-total" style="font-size:20px;font-weight:700;">0:00</div><div style="font-size:11px;color:var(--text-muted);">Total time</div></div>
+                <div style="text-align:center;"><div id="qz-pace-avg" style="font-size:20px;font-weight:700;">0s</div><div style="font-size:11px;color:var(--text-muted);">Avg / question</div></div>
+                <div style="text-align:center;"><div id="qz-pace-fast" style="font-size:20px;font-weight:700;color:#10B981;">0s</div><div style="font-size:11px;color:var(--text-muted);">Fastest</div></div>
+                <div style="text-align:center;"><div id="qz-pace-slow" style="font-size:20px;font-weight:700;color:#EF4444;">0s</div><div style="font-size:11px;color:var(--text-muted);">Slowest</div></div>
+              </div>
+              <div id="qz-pace-insight" style="margin-top:12px;padding:10px 14px;background:var(--bg);border-radius:8px;font-size:13px;color:var(--text-muted);display:none;"></div>
+            </div>
+
+            <!-- Topic breakdown -->
+            <div class="card" style="padding:20px;margin-bottom:18px;">
+              <h3 style="margin:0 0 14px;font-size:16px;">&#128202; Topic breakdown</h3>
+              <div id="qz-topics"></div>
+            </div>
+
+            <!-- AI analysis grid -->
+            <div id="qz-ai-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+              <div class="card" style="padding:18px;">
+                <h3 style="margin:0 0 10px;font-size:15px;color:#10B981;">&#9989; Strengths</h3>
+                <div id="qz-strengths" style="font-size:13px;color:var(--text-muted);">Analyzing...</div>
+              </div>
+              <div class="card" style="padding:18px;">
+                <h3 style="margin:0 0 10px;font-size:15px;color:#EF4444;">&#10060; Needs work</h3>
+                <div id="qz-weaknesses" style="font-size:13px;color:var(--text-muted);">Analyzing...</div>
+              </div>
+            </div>
+
+            <!-- Mistake patterns -->
+            <div class="card" id="qz-patterns-card" style="padding:18px;margin-bottom:18px;display:none;">
+              <h3 style="margin:0 0 10px;font-size:15px;">&#128269; Mistake patterns</h3>
+              <div id="qz-patterns" style="font-size:13px;"></div>
+            </div>
+
+            <!-- Action plan -->
+            <div class="card" style="padding:20px;margin-bottom:18px;border-left:4px solid #8B5CF6;">
+              <h3 style="margin:0 0 10px;font-size:16px;">&#127919; Do this next</h3>
+              <div id="qz-actions" style="font-size:14px;line-height:1.7;">Analyzing...</div>
+            </div>
+
+            <!-- 30-min study plan -->
+            <div class="card" id="qz-plan-card" style="padding:20px;margin-bottom:18px;display:none;">
+              <h3 style="margin:0 0 10px;font-size:16px;">&#9201; 30-minute follow-up plan</h3>
+              <div id="qz-plan"></div>
+            </div>
+
+            <!-- Per-question review (collapsible) -->
+            <div class="card" style="padding:20px;margin-bottom:18px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleReview()">
+                <h3 style="margin:0;font-size:16px;">&#128214; Question-by-question review</h3>
+                <span id="qz-review-toggle" style="font-size:12px;color:var(--text-muted);">Show &#9660;</span>
+              </div>
+              <div id="qz-review-body" style="display:none;margin-top:14px;"></div>
+            </div>
+
+            <!-- Actions row -->
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:40px;">
+              <button onclick="restartQuiz()" class="btn btn-primary">&#128260; Retake quiz</button>
+              <button id="qz-retake-wrong" onclick="retakeWrong()" class="btn btn-outline" style="display:none;">&#9998; Retake wrong only</button>
+              <a href="/student/quizzes" class="btn btn-outline">Back to quizzes</a>
+            </div>
+
+            <div id="qz-encouragement" style="text-align:center;font-size:13px;color:var(--text-muted);font-style:italic;margin-bottom:20px;"></div>
           </div>
         </div>
 
@@ -4466,11 +5026,121 @@ def register_student_routes(app, csrf, limiter):
         .qz-option.correct {{ border-color:#10B981;background:#D1FAE5;color:#065F46; }}
         .qz-option.wrong {{ border-color:#EF4444;background:#FEE2E2;color:#991B1B; }}
         .qz-option.disabled {{ pointer-events:none;opacity:0.7; }}
+        .qz-topic-row {{ display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:13px; }}
+        .qz-topic-name {{ flex:0 0 32%;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }}
+        .qz-topic-bar {{ flex:1;background:var(--bg);border-radius:6px;height:10px;overflow:hidden;border:1px solid var(--border); }}
+        .qz-topic-fill {{ height:100%;border-radius:6px;transition:width .6s ease; }}
+        .qz-topic-pct {{ flex:0 0 72px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums; }}
+        .qz-review-item {{ padding:14px;margin-bottom:10px;border-radius:10px;border-left:4px solid;background:var(--bg); }}
+        .qz-review-item.correct {{ border-color:#10B981; }}
+        .qz-review-item.wrong {{ border-color:#EF4444; }}
+        .qz-ai-item {{ padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;line-height:1.55; }}
+        .qz-ai-item:last-child {{ border-bottom:none; }}
+        .qz-ai-topic {{ font-weight:700;color:var(--text);display:block;margin-bottom:2px; }}
+        .qz-ai-fix {{ display:block;margin-top:4px;color:#A78BFA;font-size:12px; }}
+        @media (max-width: 700px) {{ #qz-ai-grid {{ grid-template-columns:1fr; }} }}
         </style>
 
         <script>
         var questions = {questions_json};
         var qIdx = 0, score = 0, answered = false;
+        var answerLog = [];        // [{{q_id, selected, time, is_correct}}]
+        var questionStart = 0;
+        var quizStarted = Date.now();
+
+        /* ───── Optional timer ───── */
+        var qzTimerEnabled = false;
+        var qzTimerInterval = null;
+        var qzTimerRemaining = 0;
+        var qzTimerTotal = 0;
+        var qzTimerPerQuestion = false;
+
+        (function bindSetup() {{
+          var toggle = document.getElementById('qz-timer-toggle');
+          var cfg = document.getElementById('qz-timer-config');
+          var modeSel = document.getElementById('qz-timer-mode');
+          var minsInput = document.getElementById('qz-timer-minutes');
+          var unitLabel = document.getElementById('qz-timer-unit-label');
+          toggle.addEventListener('change', function() {{
+            cfg.style.display = toggle.checked ? 'block' : 'none';
+          }});
+          modeSel.addEventListener('change', function() {{
+            if (modeSel.value === 'per') {{
+              unitLabel.textContent = 'Seconds per question';
+              minsInput.value = 90; minsInput.min = 10; minsInput.max = 600;
+            }} else {{
+              unitLabel.textContent = 'Minutes total';
+              minsInput.value = Math.max(5, questions.length * 1);
+              minsInput.min = 1; minsInput.max = 300;
+            }}
+          }});
+        }})();
+
+        window.setQuizPreset = function(val, mode) {{
+          document.getElementById('qz-timer-toggle').checked = true;
+          document.getElementById('qz-timer-config').style.display = 'block';
+          document.getElementById('qz-timer-mode').value = mode;
+          var label = document.getElementById('qz-timer-unit-label');
+          var input = document.getElementById('qz-timer-minutes');
+          if (mode === 'per') {{
+            label.textContent = 'Seconds per question';
+            input.min = 10; input.max = 600; input.value = val;
+          }} else {{
+            label.textContent = 'Minutes total';
+            input.min = 1; input.max = 300; input.value = val;
+          }}
+        }};
+
+        function formatMMSS(totalSec) {{
+          totalSec = Math.max(0, Math.floor(totalSec));
+          var m = Math.floor(totalSec / 60);
+          var s = totalSec % 60;
+          return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+        }}
+
+        function tickQuizTimer() {{
+          qzTimerRemaining--;
+          var el = document.getElementById('qz-timer');
+          if (!el) return;
+          el.textContent = formatMMSS(qzTimerRemaining);
+          // Color shift
+          var frac = qzTimerRemaining / (qzTimerTotal || 1);
+          if (qzTimerRemaining <= 10) el.style.color = '#EF4444';
+          else if (frac <= 0.25) el.style.color = '#F59E0B';
+          else el.style.color = 'var(--text)';
+          if (qzTimerRemaining <= 0) {{
+            clearInterval(qzTimerInterval);
+            qzTimerInterval = null;
+            // Auto-finish: log a blank for current question if not answered yet
+            if (!answered && qIdx < questions.length) {{
+              answerLog.push({{ q_id: questions[qIdx].id, selected: '', time: (Date.now() - questionStart) / 1000, is_correct: false }});
+            }}
+            showResults();
+          }}
+        }}
+
+        function beginQuiz() {{
+          qzTimerEnabled = document.getElementById('qz-timer-toggle').checked;
+          if (qzTimerEnabled) {{
+            var mode = document.getElementById('qz-timer-mode').value;
+            var val = parseInt(document.getElementById('qz-timer-minutes').value, 10) || 0;
+            if (mode === 'per') {{
+              qzTimerPerQuestion = true;
+              qzTimerTotal = Math.max(10, val) * questions.length;
+            }} else {{
+              qzTimerPerQuestion = false;
+              qzTimerTotal = Math.max(1, val) * 60;
+            }}
+            qzTimerRemaining = qzTimerTotal;
+            document.getElementById('qz-timer-wrap').style.display = 'block';
+            document.getElementById('qz-timer').textContent = formatMMSS(qzTimerRemaining);
+            qzTimerInterval = setInterval(tickQuizTimer, 1000);
+          }}
+          document.getElementById('qz-setup').style.display = 'none';
+          document.getElementById('qz-card').style.display = '';
+          quizStarted = Date.now();
+          renderQuestion();
+        }}
 
         function renderQuestion() {{
           if (qIdx >= questions.length) {{ showResults(); return; }}
@@ -4491,6 +5161,7 @@ def register_student_routes(app, csrf, limiter):
             btn.onclick = function() {{ selectAnswer(key); }};
             opts.appendChild(btn);
           }});
+          questionStart = Date.now();
         }}
 
         function selectAnswer(key) {{
@@ -4498,7 +5169,9 @@ def register_student_routes(app, csrf, limiter):
           answered = true;
           var q = questions[qIdx];
           var isCorrect = key === q.correct;
+          var timeSpent = (Date.now() - questionStart) / 1000;
           if (isCorrect) score++;
+          answerLog.push({{ q_id: q.id, selected: key, time: timeSpent, is_correct: isCorrect }});
 
           document.querySelectorAll('.qz-option').forEach(function(btn) {{
             btn.classList.add('disabled');
@@ -4510,18 +5183,24 @@ def register_student_routes(app, csrf, limiter):
           exp.style.display = 'block';
           exp.style.background = isCorrect ? '#D1FAE5' : '#FEE2E2';
           exp.style.color = isCorrect ? '#065F46' : '#991B1B';
-          exp.innerHTML = (isCorrect ? '&#10003; Correct! ' : '&#10007; Incorrect. ') + q.explanation;
+          exp.innerHTML = (isCorrect ? '&#10003; Correct! ' : '&#10007; Incorrect. ') + (q.explanation || '');
 
           document.getElementById('qz-next-btn').style.display = '';
           document.getElementById('qz-next-btn').textContent = qIdx === questions.length - 1 ? 'See Results' : 'Next \\u2192';
         }}
 
-        function nextQuestion() {{
-          qIdx++;
-          renderQuestion();
+        function nextQuestion() {{ qIdx++; renderQuestion(); }}
+
+        function fmtTime(s) {{
+          s = Math.round(s);
+          if (s < 60) return s + 's';
+          return Math.floor(s/60) + 'm ' + (s%60) + 's';
         }}
+        function escH(t) {{ var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }}
 
         function showResults() {{
+          if (qzTimerInterval) {{ clearInterval(qzTimerInterval); qzTimerInterval = null; }}
+          document.getElementById('qz-timer-wrap').style.display = 'none';
           document.getElementById('qz-card').style.display = 'none';
           document.getElementById('qz-summary').style.display = 'block';
           var pct = Math.round(score / questions.length * 100);
@@ -4530,21 +5209,192 @@ def register_student_routes(app, csrf, limiter):
           document.getElementById('qz-bar').style.width = '100%';
           document.getElementById('qz-emoji').innerHTML = pct >= 90 ? '&#127942;' : pct >= 70 ? '&#127881;' : pct >= 50 ? '&#128170;' : '&#128218;';
           if (pct >= 80 && window.confettiBurst) {{ window.confettiBurst(pct >= 95 ? 80 : 50); }}
+
           fetch('/api/student/quizzes/{quiz_id}/score', {{
             method: 'POST', headers: {{'Content-Type':'application/json'}},
             body: JSON.stringify({{ score: pct }})
           }}).catch(function(){{}});
+
+          // Per-question review (always available immediately)
+          renderReview();
+          // Show retake-wrong if any wrong
+          if (answerLog.some(function(a){{ return !a.is_correct; }})) {{
+            document.getElementById('qz-retake-wrong').style.display = '';
+          }}
+
+          // Rich analytics (AI)
+          fetch('/api/student/quizzes/{quiz_id}/analyze', {{
+            method: 'POST', headers: {{'Content-Type':'application/json'}},
+            body: JSON.stringify({{ answers: answerLog }})
+          }})
+          .then(function(r) {{ return r.json(); }})
+          .then(renderAnalytics)
+          .catch(function() {{
+            document.getElementById('qz-headline').textContent = 'Detailed analysis unavailable — try again later.';
+            document.getElementById('qz-strengths').textContent = '—';
+            document.getElementById('qz-weaknesses').textContent = '—';
+            document.getElementById('qz-actions').textContent = '—';
+          }});
+        }}
+
+        function verdictStyle(v) {{
+          var m = {{
+            mastery: {{ label:'Mastery', bg:'rgba(16,185,129,.15)', color:'#10B981' }},
+            solid:   {{ label:'Solid', bg:'rgba(99,102,241,.15)', color:'#A78BFA' }},
+            shaky:   {{ label:'Shaky', bg:'rgba(245,158,11,.15)', color:'#F59E0B' }},
+            struggling:{{ label:'Struggling', bg:'rgba(239,68,68,.15)', color:'#EF4444' }},
+          }};
+          return m[v] || m.solid;
+        }}
+
+        function renderAnalytics(data) {{
+          if (!data) return;
+          var ai = data.ai || {{}};
+
+          // Verdict pill
+          var vs = verdictStyle(ai.verdict);
+          var vp = document.getElementById('qz-verdict');
+          vp.textContent = vs.label;
+          vp.style.background = vs.bg;
+          vp.style.color = vs.color;
+
+          // Headline
+          if (ai.headline) document.getElementById('qz-headline').textContent = ai.headline;
+
+          // Pacing
+          if (data.pacing) {{
+            document.getElementById('qz-pace-total').textContent = fmtTime(data.pacing.total_time);
+            document.getElementById('qz-pace-avg').textContent = fmtTime(data.pacing.avg_time);
+            document.getElementById('qz-pace-fast').textContent = fmtTime(data.pacing.fastest);
+            document.getElementById('qz-pace-slow').textContent = fmtTime(data.pacing.slowest);
+          }}
+          if (ai.time_insight) {{
+            var pi = document.getElementById('qz-pace-insight');
+            pi.style.display = 'block';
+            pi.textContent = ai.time_insight;
+          }}
+
+          // Topic breakdown
+          var topicsEl = document.getElementById('qz-topics');
+          topicsEl.innerHTML = '';
+          (data.breakdown || []).forEach(function(t) {{
+            var color = t.percent >= 80 ? '#10B981' : t.percent >= 50 ? '#F59E0B' : '#EF4444';
+            var row = document.createElement('div');
+            row.className = 'qz-topic-row';
+            row.innerHTML =
+              '<span class="qz-topic-name" title="' + escH(t.topic) + '">' + escH(t.topic) + '</span>'
+              + '<span class="qz-topic-bar"><span class="qz-topic-fill" style="width:' + t.percent + '%;background:' + color + ';"></span></span>'
+              + '<span class="qz-topic-pct" style="color:' + color + ';">' + t.percent + '% <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(' + t.correct + '/' + t.total + ')</span></span>';
+            topicsEl.appendChild(row);
+          }});
+          if (!topicsEl.children.length) {{
+            topicsEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">No topic data.</div>';
+          }}
+
+          // Strengths
+          var sEl = document.getElementById('qz-strengths');
+          if ((ai.strengths || []).length) {{
+            sEl.innerHTML = ai.strengths.map(function(s) {{
+              return '<div class="qz-ai-item"><span class="qz-ai-topic">&#10003; ' + escH(s.topic || '') + '</span>' + escH(s.detail || '') + '</div>';
+            }}).join('');
+          }} else {{
+            sEl.innerHTML = '<span style="font-style:italic;">Nothing stood out yet. Keep building.</span>';
+          }}
+
+          // Weaknesses
+          var wEl = document.getElementById('qz-weaknesses');
+          if ((ai.weaknesses || []).length) {{
+            wEl.innerHTML = ai.weaknesses.map(function(w) {{
+              return '<div class="qz-ai-item"><span class="qz-ai-topic">&#9888;&#65039; ' + escH(w.topic || '') + '</span>'
+                + escH(w.detail || '')
+                + (w.fix ? '<span class="qz-ai-fix">&#8594; ' + escH(w.fix) + '</span>' : '')
+                + '</div>';
+            }}).join('');
+          }} else {{
+            wEl.innerHTML = '<span style="font-style:italic;color:#10B981;">Clean sweep \u2014 no clear weak spots. Try a harder quiz.</span>';
+          }}
+
+          // Mistake patterns
+          if ((ai.mistake_patterns || []).length) {{
+            document.getElementById('qz-patterns-card').style.display = '';
+            document.getElementById('qz-patterns').innerHTML = ai.mistake_patterns.map(function(p) {{
+              return '<div style="padding:6px 0;color:var(--text-muted);">&#8226; ' + escH(p) + '</div>';
+            }}).join('');
+          }}
+
+          // Actions
+          var aEl = document.getElementById('qz-actions');
+          if ((ai.next_actions || []).length) {{
+            aEl.innerHTML = '<ol style="margin:0;padding-left:20px;">' + ai.next_actions.map(function(x) {{
+              return '<li style="margin-bottom:6px;">' + escH(x) + '</li>';
+            }}).join('') + '</ol>';
+          }} else {{
+            aEl.textContent = 'Take another quiz on the same material to reinforce what just clicked.';
+          }}
+
+          // 30-min plan
+          if ((ai.study_plan_30min || []).length) {{
+            document.getElementById('qz-plan-card').style.display = '';
+            document.getElementById('qz-plan').innerHTML = ai.study_plan_30min.map(function(step) {{
+              return '<div style="display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--border);">'
+                + '<div style="flex:0 0 56px;font-weight:700;color:#A78BFA;">' + (step.minutes || 0) + ' min</div>'
+                + '<div style="font-size:13px;line-height:1.5;">' + escH(step.task || '') + '</div>'
+                + '</div>';
+            }}).join('');
+          }}
+
+          // Encouragement
+          if (ai.encouragement) document.getElementById('qz-encouragement').textContent = ai.encouragement;
+        }}
+
+        function renderReview() {{
+          var body = document.getElementById('qz-review-body');
+          body.innerHTML = answerLog.map(function(a, i) {{
+            var q = questions[i];
+            var sel = a.selected || '';
+            return '<div class="qz-review-item ' + (a.is_correct ? 'correct' : 'wrong') + '">'
+              + '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">'
+              +   '<div><strong>Q' + (i+1) + '.</strong> ' + escH(q.question) + '</div>'
+              +   '<span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">' + fmtTime(a.time) + '</span>'
+              + '</div>'
+              + (q.topic ? '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Topic: ' + escH(q.topic) + '</div>' : '')
+              + '<div style="font-size:13px;margin-top:8px;">Your answer: <b>' + sel.toUpperCase() + '.</b> ' + escH(q['option_' + sel] || '')
+              +   (a.is_correct ? ' &#10003;' : ' &#10007;')
+              + '</div>'
+              + (!a.is_correct ? '<div style="font-size:13px;margin-top:4px;color:#10B981;">Correct: <b>' + q.correct.toUpperCase() + '.</b> ' + escH(q['option_' + q.correct] || '') + '</div>' : '')
+              + (q.explanation ? '<div style="font-size:12px;margin-top:6px;color:var(--text-muted);font-style:italic;">' + escH(q.explanation) + '</div>' : '')
+              + '</div>';
+          }}).join('');
+        }}
+
+        function toggleReview() {{
+          var b = document.getElementById('qz-review-body');
+          var t = document.getElementById('qz-review-toggle');
+          if (b.style.display === 'none') {{ b.style.display = 'block'; t.innerHTML = 'Hide &#9650;'; }}
+          else {{ b.style.display = 'none'; t.innerHTML = 'Show &#9660;'; }}
         }}
 
         function restartQuiz() {{
-          qIdx = 0; score = 0;
-          document.getElementById('qz-card').style.display = '';
+          if (qzTimerInterval) {{ clearInterval(qzTimerInterval); qzTimerInterval = null; }}
+          qIdx = 0; score = 0; answerLog = [];
+          // Show setup again so user can re-configure timer
+          document.getElementById('qz-setup').style.display = '';
+          document.getElementById('qz-card').style.display = 'none';
           document.getElementById('qz-summary').style.display = 'none';
-          renderQuestion();
+          document.getElementById('qz-timer-wrap').style.display = 'none';
+          document.getElementById('qz-bar').style.width = '0%';
+        }}
+
+        function retakeWrong() {{
+          var wrongIdx = answerLog.map(function(a,i){{return a.is_correct?null:i;}}).filter(function(x){{return x!==null;}});
+          if (!wrongIdx.length) return;
+          questions = wrongIdx.map(function(i) {{ return questions[i]; }});
+          restartQuiz();
         }}
 
         document.addEventListener('keydown', function(e) {{
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (document.getElementById('qz-setup').style.display !== 'none') return; // still on setup
           if (!answered) {{
             if (e.code === 'KeyA' || e.code === 'Digit1') {{ e.preventDefault(); selectAnswer('a'); }}
             if (e.code === 'KeyB' || e.code === 'Digit2') {{ e.preventDefault(); selectAnswer('b'); }}
@@ -4555,7 +5405,7 @@ def register_student_routes(app, csrf, limiter):
           }}
         }});
 
-        renderQuestion();
+        // Quiz starts from the setup screen via beginQuiz(). No auto-start.
         </script>
         """, active_page="student_quizzes")
 
@@ -4574,7 +5424,8 @@ def register_student_routes(app, csrf, limiter):
             "id": q["id"], "question": q["question"],
             "option_a": q.get("option_a", ""), "option_b": q.get("option_b", ""),
             "option_c": q.get("option_c", ""), "option_d": q.get("option_d", ""),
-            "correct": q["correct"], "explanation": q.get("explanation", "")
+            "correct": q["correct"], "explanation": q.get("explanation", ""),
+            "topic": q.get("topic", "") or ""
         } for q in questions], ensure_ascii=False)
 
         # Default: 2 min per question
@@ -5813,7 +6664,8 @@ def register_student_routes(app, csrf, limiter):
         leaders = sdb.get_leaderboard(limit=50, university=filter_uni)
         my_rank = sdb.get_student_rank(cid)
         my_xp = sdb.get_total_xp(cid)
-        my_level, _, _ = sdb.get_level(my_xp)
+        my_study_rank = sdb.get_study_rank(my_xp)
+        my_level = my_study_rank["full_name"]
         my_groups = sdb.get_my_lb_groups(cid)
 
         rows_html = ""
@@ -5821,7 +6673,9 @@ def register_student_routes(app, csrf, limiter):
             is_me = (r["client_id"] == cid)
             bg = "background:rgba(99,102,241,0.08);" if is_me else ""
             medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"#{i}")
-            lvl_name, _, _ = sdb.get_level(r["total_xp"])
+            rank_info = sdb.get_study_rank(r["total_xp"])
+            lvl_name = rank_info["full_name"]
+            lvl_color = rank_info["color"]
             name_display = _esc(r["name"] or "Student")
             uni_display = _esc(r.get("university", "") or "")
             field_display = _esc(r.get("field_of_study", "") or "")
@@ -5836,7 +6690,7 @@ def register_student_routes(app, csrf, limiter):
                 {"<div style='font-size:12px;color:var(--text-muted)'>" + sub_text + "</div>" if sub_text else ""}
               </td>
               <td style="padding:12px 16px;text-align:center">
-                <span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">{lvl_name}</span>
+                <span style="background:linear-gradient(135deg,{lvl_color},#111827);color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;border:1px solid {lvl_color}">{lvl_name}</span>
               </td>
               <td style="padding:12px 16px;text-align:right;font-weight:700;color:#22c55e;font-size:16px">{r['total_xp']} XP</td>
             </tr>"""
@@ -5927,9 +6781,9 @@ def register_student_routes(app, csrf, limiter):
           </div>
 
           <!-- Personal Leaderboards -->
-          <h2 style="margin-top:40px;margin-bottom:8px">&#128101; Personal Leaderboards</h2>
-          <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px">
-            Create private leaderboards and invite friends to compete together!
+          <h2 style="margin-top:40px;margin-bottom:8px">&#128101; Personal Leaderboards <span style="font-size:12px;background:rgba(34,197,94,.15);color:#22c55e;padding:3px 10px;border-radius:10px;font-weight:600;vertical-align:middle">Fair&#8209;play</span></h2>
+          <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px;line-height:1.6">
+            Create a private group and invite friends. <b style="color:var(--text)">Everyone starts at 0 XP</b> the moment they join &mdash; the scoreboard only counts XP gained inside the group, so older accounts don&rsquo;t have an unfair head start. No levels, no ranks: just who&rsquo;s grinding hardest right now.
           </p>
 
           <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
@@ -6013,22 +6867,32 @@ def register_student_routes(app, csrf, limiter):
             return redirect(url_for("student_leaderboard_page"))
         members = sdb.get_lb_group_leaderboard(group_id)
         rows_html = ""
+        top_xp = max((r["total_xp"] for r in members), default=0)
         for i, r in enumerate(members, 1):
             is_me = (r["client_id"] == cid)
             bg = "background:rgba(99,102,241,0.08);" if is_me else ""
             medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"#{i}")
-            lvl_name, _, _ = sdb.get_level(r["total_xp"])
             name_display = _esc(r["name"] or "Student")
+            xp_val = int(r.get("total_xp") or 0)
+            bar_pct = int(100 * xp_val / top_xp) if top_xp > 0 else 0
             rows_html += f"""
             <tr style="{bg}">
               <td style="padding:12px 16px;font-size:18px;font-weight:700;text-align:center;width:60px">{medal}</td>
               <td style="padding:12px 16px"><div style="font-weight:600;color:var(--text)">{name_display}{"  ← you" if is_me else ""}</div></td>
-              <td style="padding:12px 16px;text-align:center"><span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">{lvl_name}</span></td>
-              <td style="padding:12px 16px;text-align:right;font-weight:700;color:#22c55e;font-size:16px">{r['total_xp']} XP</td>
+              <td style="padding:12px 16px;min-width:160px"><div style="background:var(--bg);border-radius:8px;height:10px;overflow:hidden"><div style="width:{bar_pct}%;height:100%;background:linear-gradient(90deg,#8b5cf6,#22c55e)"></div></div></td>
+              <td style="padding:12px 16px;text-align:right;font-weight:700;color:#22c55e;font-size:16px">+{xp_val} XP</td>
             </tr>"""
         if not rows_html:
             rows_html = '<tr><td colspan="4" style="padding:32px;text-align:center;color:var(--text-muted)">No members yet!</td></tr>'
         is_owner = group["owner_id"] == cid
+        # Format group creation date for the "since" label
+        created_str = ""
+        try:
+            _ca = group.get("created_at")
+            if _ca:
+                created_str = _ca.strftime("%b %d, %Y") if hasattr(_ca, "strftime") else str(_ca)[:10]
+        except Exception:
+            created_str = ""
         return _s_render(f"Group: {_esc(group['name'])}", f"""
         <div style="max-width:800px;margin:0 auto">
           <a href="/student/leaderboard" style="color:var(--text-muted);font-size:13px;text-decoration:none">&larr; Back to Leaderboard</a>
@@ -6041,13 +6905,16 @@ def register_student_routes(app, csrf, limiter):
               </p>
             </div>
           </div>
+          <div style="background:linear-gradient(135deg,rgba(139,92,246,.12),rgba(34,197,94,.08));border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;font-size:13px;color:var(--text-muted)">
+            &#128161; <b style="color:var(--text)">Fair-play group.</b> Everyone starts at 0 XP the moment they join. This scoreboard only counts XP earned <i>inside</i> the group &mdash; separate from the global ranking. {('Created ' + created_str) if created_str else ''}
+          </div>
           <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
             <table style="width:100%;border-collapse:collapse">
               <thead><tr style="border-bottom:2px solid var(--border)">
-                <th style="padding:12px 16px;text-align:center;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Rank</th>
+                <th style="padding:12px 16px;text-align:center;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Place</th>
                 <th style="padding:12px 16px;text-align:left;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Student</th>
-                <th style="padding:12px 16px;text-align:center;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Level</th>
-                <th style="padding:12px 16px;text-align:right;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">XP</th>
+                <th style="padding:12px 16px;text-align:left;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Progress</th>
+                <th style="padding:12px 16px;text-align:right;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">XP&nbsp;Gained</th>
               </tr></thead>
               <tbody>{rows_html}</tbody>
             </table>
@@ -6249,6 +7116,67 @@ def register_student_routes(app, csrf, limiter):
             <span id="rules-save-status" style="margin-left:10px;font-size:13px;"></span>
           </div>
 
+          <!-- Theme Selector -->
+          <div class="card">
+            <div class="card-header"><h2>🎨 Theme</h2></div>
+            <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
+              Personalize how the app looks. Your choice is saved on this device.
+            </p>
+            <div id="theme-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
+              <button type="button" class="theme-chip" data-theme="default" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#0f172a;color:#fff;text-align:left">
+                <div style="font-weight:700">Default</div>
+                <div style="font-size:11px;opacity:.7">Indigo / Slate</div>
+              </button>
+              <button type="button" class="theme-chip" data-theme="light" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#f8fafc;color:#111827;text-align:left">
+                <div style="font-weight:700">Light</div>
+                <div style="font-size:11px;opacity:.7">Clean & bright</div>
+              </button>
+              <button type="button" class="theme-chip" data-theme="midnight" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#050816;color:#e2e8f0;text-align:left">
+                <div style="font-weight:700">Midnight</div>
+                <div style="font-size:11px;opacity:.7">Deep black</div>
+              </button>
+              <button type="button" class="theme-chip" data-theme="forest" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#0b2018;color:#d1fae5;text-align:left">
+                <div style="font-weight:700">Forest</div>
+                <div style="font-size:11px;opacity:.7">Calm green</div>
+              </button>
+              <button type="button" class="theme-chip" data-theme="ocean" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#082f49;color:#e0f2fe;text-align:left">
+                <div style="font-weight:700">Ocean</div>
+                <div style="font-size:11px;opacity:.7">Deep blue</div>
+              </button>
+              <button type="button" class="theme-chip" data-theme="rose" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#3f0a1a;color:#fecdd3;text-align:left">
+                <div style="font-weight:700">Rose</div>
+                <div style="font-size:11px;opacity:.7">Warm crimson</div>
+              </button>
+              <button type="button" class="theme-chip" data-theme="sunset" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:linear-gradient(135deg,#7c2d12,#ea580c);color:#fff;text-align:left">
+                <div style="font-weight:700">Sunset</div>
+                <div style="font-size:11px;opacity:.7">Orange / amber</div>
+              </button>
+              <button type="button" class="theme-chip" data-theme="mono" style="cursor:pointer;border:2px solid var(--border);border-radius:12px;padding:12px;background:#111;color:#fff;text-align:left">
+                <div style="font-weight:700">Mono</div>
+                <div style="font-size:11px;opacity:.7">Pure black & white</div>
+              </button>
+            </div>
+            <script>
+              (function() {{
+                var current = localStorage.getItem('mr_theme') || 'default';
+                function mark() {{
+                  document.querySelectorAll('.theme-chip').forEach(function(b) {{
+                    b.style.outline = (b.dataset.theme === current) ? '3px solid #6366f1' : 'none';
+                  }});
+                }}
+                document.querySelectorAll('.theme-chip').forEach(function(b) {{
+                  b.addEventListener('click', function() {{
+                    current = b.dataset.theme;
+                    localStorage.setItem('mr_theme', current);
+                    if (window.applyMrTheme) window.applyMrTheme(current);
+                    mark();
+                  }});
+                }});
+                mark();
+              }})();
+            </script>
+          </div>
+
           <!-- Daily Study Email -->
           <div class="card">
             <div class="card-header"><h2>📬 Daily Study Email</h2></div>
@@ -6370,28 +7298,48 @@ def register_student_routes(app, csrf, limiter):
           </div>
         </div>
 
-        <!-- Change Password -->
+        <!-- Account Security (mirrors business settings — optional change) -->
         <div class="card" style="margin-top:16px;">
-          <div class="card-header"><h2>&#128274; Change Password</h2></div>
-          <form method="post" action="/settings/change-password" style="padding:20px;">
-            <div class="form-group" style="margin-bottom:12px;">
-              <label style="font-size:12px;font-weight:600;color:var(--text);">Current Password</label>
-              <input name="current_password" type="password" required class="edit-input" autocomplete="current-password">
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
-              <div class="form-group">
-                <label style="font-size:12px;font-weight:600;color:var(--text);">New Password</label>
-                <input name="new_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
-              </div>
-              <div class="form-group">
-                <label style="font-size:12px;font-weight:600;color:var(--text);">Confirm Password</label>
-                <input name="confirm_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
+          <div class="card-header"><h2>&#128272; Account Security</h2></div>
+          <div style="padding:20px;">
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--green-light,rgba(16,185,129,.12));border-radius:var(--radius-sm);margin-bottom:16px;">
+              <span style="font-size:22px;">&#9989;</span>
+              <div>
+                <div style="font-weight:600;font-size:14px;color:var(--green-dark,#059669);">Your account is secure</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Password protected with bcrypt encryption. You can change your password below if needed.</div>
               </div>
             </div>
-            <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;">Minimum 6 characters.</p>
-            <button class="btn btn-outline btn-sm" type="submit">Update Password</button>
-          </form>
+            <details style="cursor:pointer;">
+              <summary style="font-size:14px;font-weight:600;color:var(--text);padding:10px 0;list-style:none;display:flex;align-items:center;gap:8px;">
+                <span style="transition:transform 0.2s;display:inline-block;" class="pw-arrow">&#9654;</span>
+                Change password <span style="font-size:12px;font-weight:400;color:var(--text-muted);">(optional)</span>
+              </summary>
+              <div style="padding:16px 0 4px;">
+                <form method="post" action="/settings/change-password">
+                  <div class="form-group" style="margin-bottom:12px;">
+                    <label style="font-size:12px;font-weight:600;color:var(--text);">Current Password</label>
+                    <input name="current_password" type="password" required class="edit-input" autocomplete="current-password">
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+                    <div class="form-group">
+                      <label style="font-size:12px;font-weight:600;color:var(--text);">New Password</label>
+                      <input name="new_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                      <label style="font-size:12px;font-weight:600;color:var(--text);">Confirm Password</label>
+                      <input name="confirm_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
+                    </div>
+                  </div>
+                  <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;">Minimum 6 characters.</p>
+                  <button class="btn btn-outline btn-sm" type="submit">Update Password</button>
+                </form>
+              </div>
+            </details>
+          </div>
         </div>
+        <style>
+          details[open] .pw-arrow {{ transform: rotate(90deg); }}
+        </style>
 
         <!-- Delete Account -->
         <div class="card" style="margin-top:16px;border-color:var(--red);">
@@ -6446,5 +7394,233 @@ def register_student_routes(app, csrf, limiter):
         }}
         </script>
         """, active_page="student_settings")
+
+    # ── Essay Assistant ──────────────────────────────────────
+    @app.route("/student/essay")
+    def student_essay_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        return _s_render("Essay Assistant", f"""
+        <div style="max-width:900px;margin:0 auto">
+          <h1 style="margin:0 0 6px">✏️ Essay Assistant</h1>
+          <p style="color:var(--text-muted);margin:0 0 18px">Paste your draft. Get brutally honest feedback on thesis, structure, grammar, and flow.</p>
+          <div class="card">
+            <div class="form-group">
+              <label>Assignment prompt <span style="color:var(--text-muted);font-size:12px">(optional)</span></label>
+              <input id="ea-prompt" type="text" placeholder="What was the essay supposed to answer?" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+            </div>
+            <div class="form-group">
+              <label>Your essay</label>
+              <textarea id="ea-essay" placeholder="Paste your draft here..." style="width:100%;min-height:260px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button onclick="analyzeEssay()" class="btn btn-primary" id="ea-btn">Analyze</button>
+              <span id="ea-status" style="color:var(--text-muted);font-size:13px"></span>
+            </div>
+          </div>
+          <div id="ea-result" style="margin-top:18px"></div>
+        </div>
+        <script>
+        async function analyzeEssay() {{
+          var essay = document.getElementById('ea-essay').value.trim();
+          if (essay.length < 80) {{ alert('Paste at least a couple of paragraphs.'); return; }}
+          var btn = document.getElementById('ea-btn');
+          var status = document.getElementById('ea-status');
+          btn.disabled = true; btn.textContent = 'Analyzing...';
+          status.textContent = 'This takes ~10 seconds.';
+          var meta = document.querySelector('meta[name="csrf-token"]');
+          var headers = {{'Content-Type':'application/json'}};
+          if (meta) headers['X-CSRFToken'] = meta.getAttribute('content');
+          try {{
+            var r = await fetch('/api/student/essay/analyze', {{
+              method:'POST', headers: headers,
+              body: JSON.stringify({{essay: essay, prompt: document.getElementById('ea-prompt').value}})
+            }});
+            var d = await r.json();
+            if (!r.ok) throw new Error(d.error || 'Analyze failed');
+            renderEssay(d);
+          }} catch(e) {{ status.innerHTML = '<span style="color:var(--red)">' + e.message + '</span>'; }}
+          finally {{ btn.disabled = false; btn.textContent = 'Analyze'; }}
+        }}
+        function renderEssay(d) {{
+          var out = document.getElementById('ea-result');
+          function bar(label, val) {{
+            var color = val >= 85 ? '#22c55e' : (val >= 70 ? '#eab308' : '#ef4444');
+            return '<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><span>' + label + '</span><span style="font-weight:700">' + val + '</span></div>'
+              + '<div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden"><div style="width:' + val + '%;height:100%;background:' + color + '"></div></div></div>';
+          }}
+          var strengths = (d.strengths || []).map(function(s){{ return '<li>' + s + '</li>'; }}).join('');
+          var weaknesses = (d.weaknesses || []).map(function(s){{ return '<li>' + s + '</li>'; }}).join('');
+          var grammar = (d.grammar_issues || []).map(function(g){{
+            return '<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">'
+              + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">' + (g.reason || '') + '</div>'
+              + '<div style="text-decoration:line-through;color:#ef4444">' + (g.original || '') + '</div>'
+              + '<div style="color:#22c55e;margin-top:4px">→ ' + (g.suggestion || '') + '</div></div>';
+          }}).join('') || '<p style="color:var(--text-muted);font-size:13px">No major grammar issues detected.</p>';
+          out.innerHTML =
+            '<div class="card"><h2 style="margin:0 0 10px">Overall: ' + (d.overall_score || 0) + '/100</h2>'
+            + bar('Thesis', d.thesis_strength || 0)
+            + bar('Structure', d.structure_score || 0)
+            + bar('Grammar', d.grammar_score || 0)
+            + bar('Clarity', d.clarity_score || 0)
+            + '<div style="margin-top:14px;font-size:13px;color:var(--text-muted)">Words: ' + (d.word_count || 0) + ' · Level: ' + (d.reading_level || '—') + '</div></div>'
+            + (d.thesis_feedback ? '<div class="card"><h3 style="margin:0 0 8px">Thesis Feedback</h3><p style="margin:0">' + d.thesis_feedback + '</p></div>' : '')
+            + (strengths ? '<div class="card"><h3 style="margin:0 0 8px;color:#22c55e">Strengths</h3><ul style="margin:0;padding-left:20px">' + strengths + '</ul></div>' : '')
+            + (weaknesses ? '<div class="card"><h3 style="margin:0 0 8px;color:#ef4444">Weaknesses</h3><ul style="margin:0;padding-left:20px">' + weaknesses + '</ul></div>' : '')
+            + '<div class="card"><h3 style="margin:0 0 8px">Grammar & Style</h3>' + grammar + '</div>'
+            + (d.improved_intro ? '<div class="card"><h3 style="margin:0 0 8px">Rewritten Intro</h3><p style="margin:0;white-space:pre-wrap">' + d.improved_intro + '</p></div>' : '');
+        }}
+        </script>
+        """, active_page="student_essay")
+
+    @app.route("/api/student/essay/analyze", methods=["POST"])
+    def student_essay_analyze_api():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True) or {}
+        essay = (data.get("essay") or "").strip()
+        if len(essay) < 50:
+            return jsonify({"error": "Essay too short"}), 400
+        try:
+            result = analyze_essay(essay, data.get("prompt", ""))
+            return jsonify(result)
+        except Exception as e:
+            log.exception("essay analyze failed")
+            return jsonify({"error": str(e)}), 500
+
+    # ── Panic Mode ───────────────────────────────────────────
+    @app.route("/student/panic")
+    def student_panic_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        courses = sdb.get_courses(_cid())
+        options = '<option value="">— pick a course —</option>'
+        for c in courses:
+            options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
+        return _s_render("Panic Mode", f"""
+        <div style="max-width:820px;margin:0 auto">
+          <h1 style="margin:0 0 6px;color:#ef4444">🚨 Panic Mode</h1>
+          <p style="color:var(--text-muted);margin:0 0 18px">Exam tomorrow and nothing's done? Get a ruthless cram plan in 10 seconds.</p>
+          <div class="card">
+            <div class="form-group">
+              <label>Course</label>
+              <select id="pm-course" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">{options}</select>
+            </div>
+            <div class="form-group">
+              <label>Exam name</label>
+              <input id="pm-exam" type="text" placeholder="Midterm / Final / Quiz 3" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+            </div>
+            <div class="form-group">
+              <label>Hours available</label>
+              <input id="pm-hours" type="number" step="0.5" min="0.5" value="4" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+            </div>
+            <div class="form-group">
+              <label>Topics (one per line)</label>
+              <textarea id="pm-topics" placeholder="Ch 1: derivatives&#10;Ch 2: integrals&#10;Ch 3: limits" style="width:100%;min-height:140px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Weak areas <span style="color:var(--text-muted);font-size:12px">(optional, comma-separated)</span></label>
+              <input id="pm-weak" type="text" placeholder="integration by parts, chain rule" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+            </div>
+            <button onclick="buildPlan()" class="btn" id="pm-btn" style="background:#ef4444;color:#fff;border:none">Generate Cram Plan</button>
+            <span id="pm-status" style="margin-left:10px;color:var(--text-muted);font-size:13px"></span>
+          </div>
+          <div id="pm-result" style="margin-top:18px"></div>
+        </div>
+        <script>
+        async function buildPlan() {{
+          var hours = parseFloat(document.getElementById('pm-hours').value || '0');
+          if (!hours || hours <= 0) {{ alert('Hours required'); return; }}
+          var topics = document.getElementById('pm-topics').value.split('\\n').map(function(s){{return s.trim();}}).filter(Boolean);
+          if (!topics.length) {{ alert('List at least one topic'); return; }}
+          var btn = document.getElementById('pm-btn');
+          var status = document.getElementById('pm-status');
+          btn.disabled = true; btn.textContent = 'Thinking...';
+          status.textContent = 'Building plan...';
+          var meta = document.querySelector('meta[name="csrf-token"]');
+          var headers = {{'Content-Type':'application/json'}};
+          if (meta) headers['X-CSRFToken'] = meta.getAttribute('content');
+          try {{
+            var r = await fetch('/api/student/panic/plan', {{
+              method:'POST', headers: headers,
+              body: JSON.stringify({{
+                hours: hours,
+                topics: topics,
+                exam_name: document.getElementById('pm-exam').value || 'Exam',
+                course_id: document.getElementById('pm-course').value,
+                weak: document.getElementById('pm-weak').value.split(',').map(function(s){{return s.trim();}}).filter(Boolean)
+              }})
+            }});
+            var d = await r.json();
+            if (!r.ok) throw new Error(d.error || 'Failed');
+            renderPlan(d);
+          }} catch(e) {{ status.innerHTML = '<span style="color:var(--red)">' + e.message + '</span>'; }}
+          finally {{ btn.disabled = false; btn.textContent = 'Generate Cram Plan'; }}
+        }}
+        function renderPlan(d) {{
+          var out = document.getElementById('pm-result');
+          var blocks = (d.blocks || []).map(function(b, i){{
+            var isBreak = (b.technique || '').indexOf('break') >= 0;
+            var bg = isBreak ? 'background:rgba(34,197,94,.08)' : '';
+            return '<div class="card" style="margin-bottom:10px;' + bg + '">'
+              + '<div style="display:flex;justify-content:space-between;align-items:center">'
+              + '<div style="font-weight:700">' + (i+1) + '. ' + (b.topic || '') + '</div>'
+              + '<div style="color:var(--text-muted);font-size:13px">' + (b.duration_min || 0) + ' min</div></div>'
+              + '<div style="font-size:14px;margin-top:4px">' + (b.focus || '') + '</div>'
+              + '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">Technique: ' + (b.technique || '') + ' · ' + (b.why || '') + '</div></div>';
+          }}).join('');
+          var qw = (d.quick_wins || []).map(function(s){{return '<li>' + s + '</li>';}}).join('');
+          var skip = (d.skip_these || []).map(function(s){{return '<li>' + s + '</li>';}}).join('');
+          out.innerHTML =
+            (d.strategy_summary ? '<div class="card"><h3 style="margin:0 0 8px">Strategy</h3><p style="margin:0">' + d.strategy_summary + '</p></div>' : '')
+            + (qw ? '<div class="card"><h3 style="margin:0 0 8px;color:#22c55e">Quick Wins</h3><ul style="margin:0;padding-left:20px">' + qw + '</ul></div>' : '')
+            + (skip ? '<div class="card"><h3 style="margin:0 0 8px;color:#ef4444">Skip These</h3><ul style="margin:0;padding-left:20px">' + skip + '</ul></div>' : '')
+            + '<h3 style="margin:18px 0 10px">Schedule (' + (d.total_minutes || 0) + ' min)</h3>' + blocks;
+        }}
+        </script>
+        """, active_page="student_panic")
+
+    @app.route("/api/student/panic/plan", methods=["POST"])
+    def student_panic_plan_api():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True) or {}
+        try:
+            hours = float(data.get("hours") or 0)
+        except Exception:
+            hours = 0
+        topics = data.get("topics") or []
+        if hours <= 0 or not topics:
+            return jsonify({"error": "hours and topics required"}), 400
+        course_name = ""
+        course_ctx = ""
+        cid_val = data.get("course_id")
+        if cid_val:
+            try:
+                course = sdb.get_course(int(cid_val))
+                if course and course["client_id"] == _cid():
+                    course_name = course.get("name", "") or ""
+                    analysis = course.get("analysis_json") or {}
+                    if isinstance(analysis, str):
+                        try:
+                            analysis = json.loads(analysis)
+                        except Exception:
+                            analysis = {}
+                    course_ctx = (analysis.get("summary") or "")[:2500]
+            except Exception:
+                pass
+        try:
+            plan = generate_cram_plan(
+                hours_available=hours,
+                exam_topics=topics,
+                exam_name=data.get("exam_name") or "Exam",
+                course_name=course_name,
+                known_weak_areas=data.get("weak") or [],
+                course_context=course_ctx,
+            )
+            return jsonify(plan)
+        except Exception as e:
+            log.exception("panic plan failed")
+            return jsonify({"error": str(e)}), 500
 
     log.info("Student routes registered.")

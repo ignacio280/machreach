@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS student_quiz_questions (
     option_d    TEXT NOT NULL,
     correct     TEXT NOT NULL,
     explanation TEXT DEFAULT '',
+    topic       TEXT DEFAULT '',
     sort_order  INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_quiz_questions ON student_quiz_questions(quiz_id);
@@ -378,6 +379,7 @@ CREATE TABLE IF NOT EXISTS student_quiz_questions (
     option_d    TEXT NOT NULL,
     correct     TEXT NOT NULL,
     explanation TEXT DEFAULT '',
+    topic       TEXT DEFAULT '',
     sort_order  INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_quiz_questions ON student_quiz_questions(quiz_id);
@@ -496,6 +498,8 @@ def _student_migrations():
         ("student_notes", "author_name", "TEXT DEFAULT ''"),
         # GPA country preference
         ("student_email_prefs", "gpa_country", "TEXT DEFAULT 'us'"),
+        # Quiz per-question topic tag (for analytics)
+        ("student_quiz_questions", "topic", "TEXT DEFAULT ''"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -627,6 +631,42 @@ def upsert_course(client_id: int, canvas_course_id: int, name: str,
             "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term) "
             "VALUES (?, ?, ?, ?, ?)",
         )
+
+
+def create_manual_course(client_id: int, name: str, code: str = "", term: str = "") -> int:
+    """Create a course not tied to Canvas. Uses a negative synthetic
+    canvas_course_id so the UNIQUE(client_id, canvas_course_id) index stays happy."""
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT MIN(canvas_course_id) AS min_id FROM student_courses "
+            "WHERE client_id = %s AND canvas_course_id < 0",
+            (client_id,),
+        )
+        next_id = -1
+        if row and row.get("min_id") is not None:
+            try:
+                next_id = int(row["min_id"]) - 1
+            except Exception:
+                next_id = -1
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (client_id, next_id, name, code, term),
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term) "
+            "VALUES (?, ?, ?, ?, ?)",
+        )
+
+
+def delete_course(client_id: int, course_db_id: int) -> bool:
+    with get_db() as db:
+        _exec(
+            db,
+            "DELETE FROM student_courses WHERE id = %s AND client_id = %s",
+            (course_db_id, client_id),
+        )
+    return True
 
 
 def update_course_analysis(course_db_id: int, analysis: dict):
@@ -1276,11 +1316,11 @@ def add_quiz_questions(quiz_id: int, questions: list[dict]):
         for idx, q in enumerate(questions):
             _exec(db,
                   "INSERT INTO student_quiz_questions "
-                  "(quiz_id, question, option_a, option_b, option_c, option_d, correct, explanation, sort_order) "
-                  "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                  "(quiz_id, question, option_a, option_b, option_c, option_d, correct, explanation, topic, sort_order) "
+                  "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                   (quiz_id, q["question"], q.get("option_a", ""), q.get("option_b", ""),
                    q.get("option_c", ""), q.get("option_d", ""), q["correct"],
-                   q.get("explanation", ""), idx))
+                   q.get("explanation", ""), q.get("topic", ""), idx))
         _exec(db, "UPDATE student_quizzes SET question_count = %s WHERE id = %s",
               (len(questions), quiz_id))
 
@@ -1488,6 +1528,38 @@ def award_xp(client_id: int, action: str, xp: int, detail: str = "") -> int:
         )
 
 
+def award_xp_with_rank_change(client_id: int, action: str, xp: int, detail: str = "") -> dict:
+    """Award XP and return rank-change info for promotion notifications.
+
+    Returns dict with keys:
+        xp_awarded        — int
+        total_xp          — new total
+        promoted          — bool (rank index increased)
+        rank_before       — study-rank dict before award
+        rank_after        — study-rank dict after award
+        tier_up           — bool (tier name changed, e.g. Apprentices -> Scholars)
+        reached_elite     — bool (entered first elite rank)
+    """
+    before_total = get_total_xp(client_id)
+    rank_before = get_study_rank(before_total)
+    award_xp(client_id, action, xp, detail)
+    after_total = before_total + xp
+    rank_after = get_study_rank(after_total)
+    promoted = rank_after["index"] > rank_before["index"]
+    tier_up = promoted and rank_after["tier"] != rank_before["tier"]
+    # Entered elite: before was in a divisioned rank, after has no division
+    reached_elite = promoted and rank_after["division"] == "" and rank_before["division"] != ""
+    return {
+        "xp_awarded": xp,
+        "total_xp": after_total,
+        "promoted": promoted,
+        "rank_before": rank_before,
+        "rank_after": rank_after,
+        "tier_up": tier_up,
+        "reached_elite": reached_elite,
+    }
+
+
 def get_total_xp(client_id: int) -> int:
     with get_db() as db:
         return _fetchval(
@@ -1596,6 +1668,87 @@ LEVEL_THRESHOLDS = [
     (2000, "Master"),
     (5000, "Professor"),
 ]
+
+
+# ── Study Rank System ───────────────────────────────────────
+# Tiered ladder inspired by competitive rank systems.
+# Each main tier has 4 sub-divisions (IV=lowest, I=highest).
+# Elite ranks at the top have no divisions and are rare globally.
+STUDY_RANKS = [
+    # (xp_floor, "Full rank name", "Short tier", "division or ''", "emoji/color")
+    (0,      "Initiates IV",       "Initiates",    "IV", "#94A3B8"),
+    (50,     "Initiates III",      "Initiates",    "III","#94A3B8"),
+    (120,    "Initiates II",       "Initiates",    "II", "#94A3B8"),
+    (200,    "Initiates I",        "Initiates",    "I",  "#94A3B8"),
+    (300,    "Apprentices IV",     "Apprentices",  "IV", "#A3A380"),
+    (450,    "Apprentices III",    "Apprentices",  "III","#A3A380"),
+    (650,    "Apprentices II",     "Apprentices",  "II", "#A3A380"),
+    (900,    "Apprentices I",      "Apprentices",  "I",  "#A3A380"),
+    (1200,   "Scholars IV",        "Scholars",     "IV", "#10B981"),
+    (1600,   "Scholars III",       "Scholars",     "III","#10B981"),
+    (2100,   "Scholars II",        "Scholars",     "II", "#10B981"),
+    (2700,   "Scholars I",         "Scholars",     "I",  "#10B981"),
+    (3400,   "Researchers IV",     "Researchers",  "IV", "#3B82F6"),
+    (4200,   "Researchers III",    "Researchers",  "III","#3B82F6"),
+    (5100,   "Researchers II",     "Researchers",  "II", "#3B82F6"),
+    (6100,   "Researchers I",      "Researchers",  "I",  "#3B82F6"),
+    (7200,   "Academics IV",       "Academics",    "IV", "#8B5CF6"),
+    (8500,   "Academics III",      "Academics",    "III","#8B5CF6"),
+    (10000,  "Academics II",       "Academics",    "II", "#8B5CF6"),
+    (11800,  "Academics I",        "Academics",    "I",  "#8B5CF6"),
+    (13800,  "Masterminds IV",     "Masterminds",  "IV", "#EC4899"),
+    (16200,  "Masterminds III",    "Masterminds",  "III","#EC4899"),
+    (18800,  "Masterminds II",     "Masterminds",  "II", "#EC4899"),
+    (21800,  "Masterminds I",      "Masterminds",  "I",  "#EC4899"),
+    (25200,  "Grand Scholars IV",  "Grand Scholars","IV","#F59E0B"),
+    (29000,  "Grand Scholars III", "Grand Scholars","III","#F59E0B"),
+    (33200,  "Grand Scholars II",  "Grand Scholars","II", "#F59E0B"),
+    (37800,  "Grand Scholars I",   "Grand Scholars","I",  "#F59E0B"),
+    (43000,  "Legends IV",         "Legends",      "IV", "#EF4444"),
+    (49000,  "Legends III",        "Legends",      "III","#EF4444"),
+    (55800,  "Legends II",         "Legends",      "II", "#EF4444"),
+    (63500,  "Legends I",          "Legends",      "I",  "#EF4444"),
+    # Elite ranks — no divisions, extremely rare
+    (72000,  "Arch Scholars",      "Arch Scholars","",   "#FBBF24"),
+    (90000,  "High Sages",         "High Sages",   "",   "#E879F9"),
+    (120000, "Oracles of Knowledge", "Oracles",    "",   "#22D3EE"),
+]
+
+
+def get_study_rank(xp: int) -> dict:
+    """Return the study-rank dict for the given XP.
+
+    Dict keys:
+        full_name   — e.g. "Scholars II"
+        tier        — e.g. "Scholars"  (used for promotion-tier detection)
+        division    — e.g. "II"  ('' for elite ranks)
+        color       — hex color for UI badge
+        index       — 0-based index into STUDY_RANKS
+        xp_floor    — XP at which this rank starts
+        xp_ceil     — XP at which the next rank starts (None for max rank)
+        progress_pct — 0-100 progress within the current rank
+    """
+    idx = 0
+    for i in range(len(STUDY_RANKS) - 1, -1, -1):
+        if xp >= STUDY_RANKS[i][0]:
+            idx = i
+            break
+    floor, full, tier, div, color = STUDY_RANKS[idx]
+    ceil_xp = STUDY_RANKS[idx + 1][0] if idx + 1 < len(STUDY_RANKS) else None
+    if ceil_xp is not None and ceil_xp > floor:
+        progress = int(((xp - floor) / (ceil_xp - floor)) * 100)
+    else:
+        progress = 100
+    return {
+        "full_name": full,
+        "tier": tier,
+        "division": div,
+        "color": color,
+        "index": idx,
+        "xp_floor": floor,
+        "xp_ceil": ceil_xp,
+        "progress_pct": max(0, min(100, progress)),
+    }
 
 
 def get_level(xp: int) -> tuple[str, int, int]:
@@ -1940,21 +2093,27 @@ def get_my_lb_groups(client_id: int) -> list[dict]:
 
 
 def get_lb_group_leaderboard(group_id: int) -> list[dict]:
-    """Get leaderboard for a specific group."""
+    """Get leaderboard for a specific group.
+
+    Personal leaderboards compare XP *gained since each member joined* — every
+    member starts at 0 the moment they join so the group is a fair head-to-head
+    comparison, independent of the global ranking.
+    """
     with get_db() as db:
         return _fetchall(
             db,
             "SELECT c.id as client_id, c.name, "
             "COALESCE(ep.university, '') as university, "
             "COALESCE(ep.field_of_study, '') as field_of_study, "
-            "COALESCE(SUM(x.xp), 0) as total_xp "
+            "COALESCE(SUM(x.xp), 0) as total_xp, "
+            "m.joined_at as joined_at "
             "FROM student_lb_members m "
             "JOIN clients c ON c.id = m.client_id "
             "LEFT JOIN student_email_prefs ep ON ep.client_id = c.id "
-            "LEFT JOIN student_xp x ON x.client_id = c.id "
+            "LEFT JOIN student_xp x ON x.client_id = c.id AND x.created_at >= m.joined_at "
             "WHERE m.group_id = %s "
-            "GROUP BY c.id, c.name, ep.university, ep.field_of_study "
-            "ORDER BY total_xp DESC",
+            "GROUP BY c.id, c.name, ep.university, ep.field_of_study, m.joined_at "
+            "ORDER BY total_xp DESC, c.name ASC",
             (group_id,),
         )
 

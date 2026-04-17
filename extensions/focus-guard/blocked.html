@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Blocked — Focus session active</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: radial-gradient(circle at top, #1e1b4b, #050816);
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .wrap {
+      max-width: 560px;
+      text-align: center;
+      animation: in .4s ease-out;
+    }
+    @keyframes in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .emoji { font-size: 82px; margin-bottom: 12px; }
+    .kicker {
+      font-size: 12px;
+      letter-spacing: 3px;
+      color: #A78BFA;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    h1 { font-size: 36px; font-weight: 800; margin: 0 0 12px; letter-spacing: -.5px; }
+    p  { color: #C7D2FE; font-size: 16px; line-height: 1.6; margin: 0 0 24px; }
+    .src {
+      background: rgba(148,163,184,.12);
+      border: 1px solid rgba(167,139,250,.25);
+      color: #A5B4FC;
+      padding: 8px 14px;
+      border-radius: 8px;
+      display: inline-block;
+      font-family: ui-monospace, "SF Mono", monospace;
+      font-size: 12px;
+      margin-bottom: 20px;
+      word-break: break-all;
+      max-width: 100%;
+    }
+    .btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    a.primary, button.ghost {
+      padding: 13px 22px;
+      border-radius: 11px;
+      font-weight: 700;
+      font-size: 14px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform .15s;
+    }
+    a.primary {
+      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      color: #fff;
+      border: none;
+      box-shadow: 0 10px 30px rgba(99,102,241,.4);
+    }
+    a.primary:hover { transform: translateY(-2px); }
+    button.ghost {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,.18);
+      color: #A5B4FC;
+    }
+    button.ghost:hover { background: rgba(255,255,255,.05); }
+    .note { margin-top: 28px; font-size: 12px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="emoji">🛡️</div>
+    <div class="kicker">Focus session active</div>
+    <h1>This site is blocked right now.</h1>
+    <p>You're in a MachReach focus session. No Instagram, no TikTok, no doomscroll. Come back here after your timer ends.</p>
+    <div class="src" id="src"></div>
+    <div class="btns">
+      <a class="primary" href="https://machreach.com/student/focus">⟵ Back to Focus Timer</a>
+      <button class="ghost" id="history-back">Go back</button>
+    </div>
+    <div class="note">Your future self thanks you.</div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const src = params.get("src");
+    const el = document.getElementById("src");
+    if (src) { el.textContent = src; } else { el.style.display = "none"; }
+    document.getElementById("history-back").onclick = () => history.back();
+  </script>
+</body>
+</html>
