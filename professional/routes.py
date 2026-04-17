@@ -442,7 +442,7 @@ def register_professional_routes(app, csrf, limiter):
               <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;">
                 <input id="bk-account" placeholder="Nickname (e.g. Main Checking)" class="edit-input">
                 <input id="bk-balance" type="number" step="0.01" placeholder="Balance" class="edit-input" value="0">
-                <select id="bk-currency" class="edit-input"><option>USD</option><option>EUR</option><option>GBP</option><option>MXN</option></select>
+                <select id="bk-currency" class="edit-input">{_currency_options(default='USD')}</select>
                 <button onclick="addBank()" class="btn btn-primary btn-sm">Save</button>
               </div>
               <div style="margin-top:8px;font-size:11px;">

@@ -2151,9 +2151,8 @@ def register_student_routes(app, csrf, limiter):
                   <input type="text" id="spotify-url" class="edit-input" placeholder="https://open.spotify.com/playlist/..."
                     value="https://open.spotify.com/playlist/0vvXsWCC9xrXsKd4FyS8kM">
                   <button onclick="loadSpotify()" class="btn btn-outline btn-sm">Load</button>
-                  <button onclick="popoutSpotify()" class="btn btn-primary btn-sm" title="Open music in a popup window so it keeps playing while you browse MachReach">&#128279; Pop out</button>
                 </div>
-                <small style="display:block;margin-top:6px;color:var(--text-muted);font-size:11px;">Tip: click <b>Pop out</b> to open music in a small window that keeps playing when you switch pages.</small>
+                <small style="display:block;margin-top:6px;color:var(--text-muted);font-size:11px;">Music plays while you're on this page. For uninterrupted background music, use the Spotify desktop app or a separate browser tab.</small>
               </div>
               <div id="spotify-embed">
                 <iframe id="spotify-iframe" style="border-radius:12px;width:100%;height:352px;border:0;"
@@ -2631,25 +2630,8 @@ def register_student_routes(app, csrf, limiter):
           var inp = document.getElementById('spotify-url');
           if (inp) inp.value = fullUrl;
           try {{ localStorage.setItem('focus_input_spotify-url', fullUrl); }} catch(e) {{}}
-          try {{ localStorage.setItem('mr_music_url', fullUrl); }} catch(e) {{}}
           var ifr = document.getElementById('spotify-iframe');
           if (ifr) ifr.src = embed;
-          // If popup is already open, update its iframe in-place (keeps playing across pages)
-          if (window.__mrMusicWin && !window.__mrMusicWin.closed) {{
-            try {{
-              var popIfr = window.__mrMusicWin.document.querySelector('iframe');
-              if (popIfr) popIfr.src = embed;
-            }} catch(e) {{}}
-          }}
-        }}
-
-        function popoutSpotify() {{
-          var url = document.getElementById('spotify-url').value.trim();
-          if (!url) {{ alert('Paste a Spotify link first'); return; }}
-          if (window.mrMusicSet) {{
-            var ok = window.mrMusicSet(url);
-            if (!ok) alert('Popup blocked. Allow popups for this site to keep music playing across pages.');
-          }}
         }}
 
         // Keyboard shortcuts
