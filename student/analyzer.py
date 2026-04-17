@@ -671,16 +671,62 @@ def generate_notes(
     """
     Generate structured study notes from course material using AI.
 
+    For long source material (multi-chapter PDFs), splits into chunks
+    and processes each separately so NOTHING gets dropped — the AI's
+    8K output cap would otherwise cause later chapters to be skipped.
+
     Returns:
         {"title": "...", "content_html": "<h2>...</h2><p>...</p>..."}
     """
-    context = ""
-    if source_text:
-        context = f"\n\nSOURCE MATERIAL:\n{source_text}"
     topics_str = ", ".join(topics) if topics else "all key concepts"
 
-    prompt = f"""You are creating comprehensive study notes for the course "{course_name}".
-Topics to cover: {topics_str}
+    # ── Chunking: detect chapters/sections and split, with size cap ──
+    def _split_into_chunks(txt: str, max_chars: int = 14000) -> list[tuple[str, str]]:
+        """Returns list of (chunk_label, chunk_text). Splits on Chapter/Capítulo/Section headings."""
+        if not txt:
+            return []
+        # Find heading positions (Chapter N / Capítulo N / Section N / Unit N / 1. Title etc.)
+        heading_re = re.compile(
+            r'^\s*(?:'
+            r'(?:Chapter|Cap[ií]tulo|Section|Secci[oó]n|Unit|Unidad|Tema|Lecci[oó]n|Lesson|Part|Parte)\s+[\dIVXLC]+'
+            r'|(?:\d+\.\s+[A-Z\u00C0-\u017F][^\n]{2,80})'
+            r')\s*[:\-\u2014]?\s*[^\n]*$',
+            re.MULTILINE | re.IGNORECASE,
+        )
+        positions = [(m.start(), m.group().strip()) for m in heading_re.finditer(txt)]
+        chunks: list[tuple[str, str]] = []
+        if positions and len(positions) >= 2:
+            # Split on heading boundaries
+            for i, (pos, label) in enumerate(positions):
+                end = positions[i + 1][0] if i + 1 < len(positions) else len(txt)
+                body = txt[pos:end].strip()
+                if len(body) > max_chars:
+                    # Sub-chunk a long chapter
+                    for j in range(0, len(body), max_chars):
+                        sub = body[j:j + max_chars]
+                        chunks.append((f"{label} (part {j // max_chars + 1})", sub))
+                elif body:
+                    chunks.append((label, body))
+        else:
+            # No clear chapter structure — split by size
+            for j in range(0, len(txt), max_chars):
+                chunks.append((f"Part {j // max_chars + 1}", txt[j:j + max_chars]))
+        return chunks
+
+    chunks = _split_into_chunks(source_text) if source_text else [("", "")]
+    multi = len(chunks) > 1
+
+    def _gen_chunk(chunk_label: str, chunk_body: str) -> str:
+        context = f"\n\nSOURCE MATERIAL{(' — ' + chunk_label) if chunk_label else ''}:\n{chunk_body}" if chunk_body else ""
+        scope_hint = ""
+        if multi and chunk_label:
+            scope_hint = (
+                f"\nIMPORTANT: This is ONE PART of a multi-chapter document. "
+                f"Generate notes ONLY for this section ({chunk_label}). Do NOT skip ANY topic in this section. "
+                f"Other parts will be processed separately and merged."
+            )
+        prompt = f"""You are creating comprehensive study notes for the course "{course_name}".
+Topics to cover: {topics_str}{scope_hint}
 {context}
 
 Create well-structured study notes in HTML format. The notes should:
@@ -689,34 +735,45 @@ Create well-structured study notes in HTML format. The notes should:
 - Use <strong> for important terms and definitions
 - Use <p> for explanatory paragraphs
 - For math equations, use LaTeX notation: inline math with $...$ and display math with $$...$$
-- Example: <p>The derivative of $x^n$ is $nx^{{n-1}}$</p>
-- Example display: <p>$$\\int_a^b f(x)\\,dx = F(b) - F(a)$$</p>
-- Add a brief summary section at the end
-- Be thorough but concise — focus on what a student needs to know for exams
+- Cover EVERY topic, definition, theorem, and example present in the source — do not skip ANY chapter or section
+- Be thorough — students need exam-ready coverage of the full material
 - If the source material is in Spanish or another language, keep the notes in that language
 
 Return ONLY valid JSON:
 {{
-  "title": "Notes: Topic Name",
+  "title": "Notes: {chunk_label or course_name}",
   "content_html": "<h2>Section 1</h2><p>...</p>..."
 }}
 
 No markdown fences. ONLY the JSON object."""
 
+        try:
+            resp = _ai().chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=12000,
+            )
+            raw = resp.choices[0].message.content.strip()
+            raw = re.sub(r"^```json?\s*", "", raw)
+            raw = re.sub(r"\s*```$", "", raw)
+            data = json.loads(raw)
+            return data.get("content_html", "")
+        except Exception as e:
+            log.error("Notes generation chunk failed (%s): %s", chunk_label, e)
+            return f"<h2>{chunk_label or 'Section'}</h2><p><em>Generation failed for this section. Please try again.</em></p>"
+
     try:
-        resp = _ai().chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=8000,
-        )
-        raw = resp.choices[0].message.content.strip()
-        raw = re.sub(r"^```json?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-        data = json.loads(raw)
+        if not source_text:
+            html_parts = [_gen_chunk("", "")]
+        else:
+            html_parts = [_gen_chunk(label, body) for label, body in chunks]
+        merged = "\n".join(p for p in html_parts if p)
+        if not merged.strip():
+            merged = "<p>Generation failed. Please try again.</p>"
         return {
-            "title": data.get("title", f"Notes: {course_name}"),
-            "content_html": data.get("content_html", ""),
+            "title": f"Notes: {course_name}",
+            "content_html": merged,
         }
     except Exception as e:
         log.error("Notes generation failed for %s: %s", course_name, e)

@@ -3507,6 +3507,29 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
         course_id = data.get("course_id")
+        ad_hoc_source = (data.get("source_text") or "").strip()
+        ad_hoc_title = (data.get("title") or "").strip()
+        topics = data.get("topics", [])
+        exam_id = data.get("exam_id")
+        count = min(int(data.get("count", 15)), 30)
+
+        # Drag-and-drop / paste path: caller supplied raw source text — no course needed.
+        if ad_hoc_source:
+            course_name = ad_hoc_title or "Custom Material"
+            cards = generate_flashcards(
+                course_name=course_name,
+                topics=topics or None,
+                source_text=ad_hoc_source,
+                count=count,
+            )
+            if not cards:
+                return jsonify({"error": "Failed to generate flashcards. Try again."}), 500
+            title = ad_hoc_title or f"Flashcards: {course_name}"
+            deck_id = sdb.create_flashcard_deck(_cid(), title, course_id=course_id or None,
+                                                exam_id=exam_id, source_type="drop")
+            sdb.add_flashcards(deck_id, cards)
+            return jsonify({"deck_id": deck_id, "card_count": len(cards)})
+
         if not course_id:
             return jsonify({"error": "course_id required"}), 400
         course = sdb.get_course(course_id)
@@ -3514,10 +3537,6 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "Course not found"}), 404
 
         # Gather source material — ONLY from student's uploaded files
-        topics = data.get("topics", [])
-        exam_id = data.get("exam_id")
-        count = min(int(data.get("count", 15)), 30)
-
         source_text = ""
         files = sdb.get_course_files(_cid(), course_id, exam_id=exam_id)
         for f in files:
@@ -3541,7 +3560,7 @@ def register_student_routes(app, csrf, limiter):
         if not cards:
             return jsonify({"error": "Failed to generate flashcards. Try again."}), 500
 
-        title = data.get("title", f"Flashcards: {course['name']}")
+        title = ad_hoc_title or f"Flashcards: {course['name']}"
         deck_id = sdb.create_flashcard_deck(_cid(), title, course_id=course_id, exam_id=exam_id)
         sdb.add_flashcards(deck_id, cards)
 
@@ -3651,12 +3670,8 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
         course_id = data.get("course_id")
-        if not course_id:
-            return jsonify({"error": "course_id required"}), 400
-        course = sdb.get_course(course_id)
-        if not course or course["client_id"] != _cid():
-            return jsonify({"error": "Course not found"}), 404
-
+        ad_hoc_source = (data.get("source_text") or "").strip()
+        ad_hoc_title = (data.get("title") or "").strip()
         topics = data.get("topics", [])
         exam_id = data.get("exam_id")
         difficulty = data.get("difficulty", "medium")
@@ -3667,6 +3682,34 @@ def register_student_routes(app, csrf, limiter):
         except (TypeError, ValueError):
             count = 10
         count = max(1, min(count, 100))  # hard ceiling — generation batches under the hood
+
+        # Drag-and-drop / paste path: caller supplied raw source text — no course needed.
+        if ad_hoc_source:
+            course_name = ad_hoc_title or "Custom Material"
+            questions = generate_quiz(
+                course_name=course_name,
+                topics=topics or None,
+                source_text=ad_hoc_source,
+                difficulty=difficulty,
+                count=count,
+            )
+            if not questions:
+                return jsonify({"error": "Failed to generate quiz. Try again."}), 500
+            title = ad_hoc_title or f"Quiz: {course_name} ({difficulty})"
+            quiz_id = sdb.create_quiz(_cid(), title, difficulty, course_id=course_id or None, exam_id=exam_id)
+            sdb.add_quiz_questions(quiz_id, questions)
+            return jsonify({
+                "quiz_id": quiz_id,
+                "question_count": len(questions),
+                "requested": count,
+                "short": len(questions) < count,
+            })
+
+        if not course_id:
+            return jsonify({"error": "course_id required"}), 400
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Course not found"}), 404
 
         # Gather source material — ONLY from student's uploaded files
         source_text = ""
@@ -3943,6 +3986,26 @@ No markdown, no code fences. ONLY JSON.
             return jsonify({"error": "Unauthorized"}), 401
         data = request.get_json(force=True)
         course_id = data.get("course_id")
+        ad_hoc_source = (data.get("source_text") or "").strip()
+        ad_hoc_title = (data.get("title") or "").strip()
+        topics = data.get("topics", [])
+
+        # Drag-and-drop / paste path: caller supplied raw source text — no course required.
+        if ad_hoc_source:
+            course_name = ad_hoc_title or "Custom Material"
+            result = generate_notes(
+                course_name=course_name,
+                topics=topics or None,
+                source_text=ad_hoc_source,
+            )
+            if not result.get("content_html"):
+                return jsonify({"error": "Failed to generate notes. Try again."}), 500
+            title = ad_hoc_title or result.get("title") or f"Notes: {course_name}"
+            note_id = sdb.create_note(_cid(), title, result["content_html"],
+                                      course_id=course_id or None,
+                                      source_type="drop")
+            return jsonify({"note_id": note_id, "title": title})
+
         if not course_id:
             return jsonify({"error": "course_id required"}), 400
         course = sdb.get_course(course_id)
@@ -3950,7 +4013,6 @@ No markdown, no code fences. ONLY JSON.
             return jsonify({"error": "Course not found"}), 404
 
         analysis = json.loads(course["analysis_json"]) if isinstance(course["analysis_json"], str) else (course["analysis_json"] or {})
-        topics = data.get("topics", [])
 
         source_text = ""
         files = sdb.get_course_files(_cid(), course_id)
@@ -4160,240 +4222,48 @@ No markdown, no code fences. ONLY JSON.
                          as_attachment=True,
                          download_name=f"{safe_title}.pdf")
 
-    # ── Smart Import (PDF Auto-Processing) ──────────────────
-
-    @app.route("/api/student/smart-import", methods=["POST"])
-    @limiter.limit("5 per minute")
-    def student_smart_import():
-        """Upload a PDF/DOCX and auto-generate notes + flashcards + quiz."""
+    # ── Shared file-extract endpoint (used by drag-drop on
+    #    quizzes / flashcards / essays / tutor / notes) ──────
+    @app.route("/api/student/extract-file", methods=["POST"])
+    @limiter.limit("20 per minute")
+    def student_extract_file():
+        """Accept a PDF/DOCX/TXT upload, return extracted plain text."""
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
-
         if "file" not in request.files:
             return jsonify({"error": "No file provided"}), 400
         f = request.files["file"]
         if not f.filename:
             return jsonify({"error": "Empty filename"}), 400
-
         fname = f.filename
         fl = fname.lower()
-        if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
-            return jsonify({"error": "Only PDF and DOCX files are supported"}), 400
-
+        if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc") or fl.endswith(".txt")):
+            return jsonify({"error": "Only PDF, DOCX, and TXT files are supported"}), 400
         content = f.read(15 * 1024 * 1024 + 1)
         if len(content) > 15 * 1024 * 1024:
             return jsonify({"error": "File too large (max 15MB)"}), 400
-
         text = ""
         try:
             if fl.endswith(".pdf"):
                 text = extract_text_from_pdf(content)
             elif fl.endswith((".docx", ".doc")):
                 text = extract_text_from_docx(content)
+            else:
+                try:
+                    text = content.decode("utf-8", errors="ignore")
+                except Exception:
+                    text = ""
         except Exception as e:
             return jsonify({"error": f"Could not extract text: {e}"}), 400
-
-        if not text or len(text.strip()) < 50:
+        if not text or len(text.strip()) < 10:
             return jsonify({"error": "Could not extract enough readable text from this file"}), 400
-
-        subject = request.form.get("subject", fname.rsplit(".", 1)[0])
-        course_id = request.form.get("course_id")
-        course_id = int(course_id) if course_id else None
-
-        # Optionally save to course files
-        if course_id:
-            ftype = "pdf" if fl.endswith(".pdf") else "docx"
-            sdb.save_course_file(_cid(), course_id, fname, ftype, text)
-
-        results = {}
-
-        # 1) Generate notes
-        try:
-            note_result = generate_notes(course_name=subject, source_text=text[:12000])
-            if note_result.get("content_html"):
-                note_id = sdb.create_note(_cid(), note_result["title"], note_result["content_html"],
-                                          course_id=course_id, source_type="pdf-import")
-                results["note_id"] = note_id
-                results["note_title"] = note_result["title"]
-        except Exception as e:
-            log.warning("Smart import notes failed: %s", e)
-
-        # 2) Generate flashcards
-        try:
-            cards = generate_flashcards(course_name=subject, source_text=text[:12000], count=15)
-            if cards:
-                deck_id = sdb.create_flashcard_deck(_cid(), f"Flashcards: {subject}", course_id=course_id,
-                                                     source_type="pdf-import")
-                sdb.add_flashcards(deck_id, cards)
-                results["deck_id"] = deck_id
-                results["card_count"] = len(cards)
-        except Exception as e:
-            log.warning("Smart import flashcards failed: %s", e)
-
-        # 3) Generate quiz
-        try:
-            questions = generate_quiz(course_name=subject, source_text=text[:12000], difficulty="medium", count=10)
-            if questions:
-                quiz_id = sdb.create_quiz(_cid(), f"Quiz: {subject}", "medium", course_id=course_id)
-                sdb.add_quiz_questions(quiz_id, questions)
-                results["quiz_id"] = quiz_id
-                results["question_count"] = len(questions)
-        except Exception as e:
-            log.warning("Smart import quiz failed: %s", e)
-
-        if not results:
-            return jsonify({"error": "Failed to generate study materials. The file might not contain enough content."}), 500
-
-        return jsonify(results)
-
-    @app.route("/student/smart-import")
-    def student_smart_import_page():
-        """Smart Import page — drag & drop PDF to auto-generate everything."""
-        if not _logged_in():
-            return redirect(url_for("login"))
-        courses = sdb.get_courses(_cid())
-        course_options = '<option value="">No specific course</option>'
-        for c in courses:
-            course_options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
-
-        return _s_render("Smart Import", f"""
-        <div style="max-width:700px;margin:0 auto;">
-          <h1 style="margin:0;">&#128640; Smart Import</h1>
-          <p style="color:var(--text-muted);margin:4px 0 24px;font-size:14px;">Drop a PDF or DOCX — we'll auto-generate notes, flashcards, and a quiz</p>
-
-          <!-- Drop zone -->
-          <div id="drop-zone" style="
-            border:3px dashed var(--border);border-radius:16px;padding:60px 40px;text-align:center;
-            cursor:pointer;transition:all 0.3s;background:var(--card);
-          " ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='var(--primary-light,#EDE9FE)'"
-             ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--card)'"
-             ondrop="handleDrop(event)"
-             onclick="document.getElementById('file-input').click()">
-            <div style="font-size:64px;margin-bottom:16px;">&#128196;</div>
-            <h2 style="margin:0 0 8px;font-size:20px;">Drag & Drop your file here</h2>
-            <p style="color:var(--text-muted);margin:0;">or click to browse &middot; PDF, DOCX up to 15MB</p>
-            <input type="file" id="file-input" accept=".pdf,.docx,.doc" style="display:none;" onchange="handleFile(this.files[0])">
-          </div>
-
-          <!-- Options -->
-          <div id="import-options" style="display:none;margin-top:20px;">
-            <div class="card" style="padding:20px;">
-              <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-                <span style="font-size:24px;">&#128196;</span>
-                <div>
-                  <div id="file-name" style="font-weight:600;font-size:15px;"></div>
-                  <div id="file-size" style="font-size:12px;color:var(--text-muted);"></div>
-                </div>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                <div class="form-group">
-                  <label style="font-weight:600;font-size:13px;">Subject / Title</label>
-                  <input type="text" id="import-subject" class="edit-input" placeholder="e.g. Organic Chemistry Ch.5" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);">
-                </div>
-                <div class="form-group">
-                  <label style="font-weight:600;font-size:13px;">Link to Course (optional)</label>
-                  <select id="import-course" class="edit-input" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);">{course_options}</select>
-                </div>
-              </div>
-              <button onclick="startImport()" class="btn btn-primary" style="margin-top:16px;width:100%;padding:12px;font-size:15px;" id="import-btn">&#10024; Generate Notes + Flashcards + Quiz</button>
-            </div>
-          </div>
-
-          <!-- Progress -->
-          <div id="import-progress" style="display:none;margin-top:20px;">
-            <div class="card" style="padding:30px;text-align:center;">
-              <div style="font-size:48px;margin-bottom:16px;" id="progress-emoji">&#9203;</div>
-              <h2 id="progress-title" style="margin:0 0 8px;">Processing your document...</h2>
-              <p id="progress-detail" style="color:var(--text-muted);margin:0;">Extracting text and generating AI study materials. This may take 15-30 seconds.</p>
-              <div style="margin-top:20px;background:var(--border);border-radius:8px;height:8px;overflow:hidden;">
-                <div id="import-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:10%;transition:width 0.5s;border-radius:8px;"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Results -->
-          <div id="import-results" style="display:none;margin-top:20px;">
-            <div class="card" style="padding:24px;">
-              <div style="text-align:center;margin-bottom:20px;">
-                <div style="font-size:48px;">&#127881;</div>
-                <h2 style="margin:0;">Study materials created!</h2>
-              </div>
-              <div id="result-links" style="display:grid;gap:12px;"></div>
-            </div>
-          </div>
-        </div>
-
-        <script>
-        var selectedFile = null;
-
-        function handleDrop(e) {{
-          e.preventDefault();
-          e.currentTarget.style.borderColor = 'var(--border)';
-          e.currentTarget.style.background = 'var(--card)';
-          if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-        }}
-
-        function handleFile(file) {{
-          if (!file) return;
-          var ext = file.name.split('.').pop().toLowerCase();
-          if (!['pdf','docx','doc'].includes(ext)) {{ alert('Only PDF and DOCX files are supported'); return; }}
-          if (file.size > 15 * 1024 * 1024) {{ alert('File too large (max 15MB)'); return; }}
-          selectedFile = file;
-          document.getElementById('file-name').textContent = file.name;
-          document.getElementById('file-size').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
-          document.getElementById('import-subject').value = file.name.split('.').slice(0,-1).join('.').replace(/[_-]/g, ' ');
-          document.getElementById('drop-zone').style.display = 'none';
-          document.getElementById('import-options').style.display = '';
-        }}
-
-        async function startImport() {{
-          if (!selectedFile) return;
-          var btn = document.getElementById('import-btn');
-          btn.disabled = true;
-          document.getElementById('import-options').style.display = 'none';
-          document.getElementById('import-progress').style.display = '';
-
-          var bar = document.getElementById('import-bar');
-          var steps = [20, 40, 60, 80];
-          var si = 0;
-          var progressInterval = setInterval(function() {{
-            if (si < steps.length) {{ bar.style.width = steps[si] + '%'; si++; }}
-          }}, 4000);
-
-          var fd = new FormData();
-          fd.append('file', selectedFile);
-          fd.append('subject', document.getElementById('import-subject').value);
-          var courseId = document.getElementById('import-course').value;
-          if (courseId) fd.append('course_id', courseId);
-
-          try {{
-            var r = await fetch('/api/student/smart-import', {{ method: 'POST', body: fd }});
-            clearInterval(progressInterval);
-            bar.style.width = '100%';
-            var d = await _safeJson(r);
-
-            if (r.ok) {{
-              document.getElementById('import-progress').style.display = 'none';
-              document.getElementById('import-results').style.display = '';
-              var links = '';
-              if (d.note_id) links += '<a href="/student/notes/' + d.note_id + '" class="card" style="padding:16px;text-decoration:none;display:flex;align-items:center;gap:12px;"><span style="font-size:24px;">&#128214;</span><div><strong>AI Study Notes</strong><br><span style="font-size:13px;color:var(--text-muted);">' + (d.note_title || 'Generated notes') + '</span></div></a>';
-              if (d.deck_id) links += '<a href="/student/flashcards/' + d.deck_id + '" class="card" style="padding:16px;text-decoration:none;display:flex;align-items:center;gap:12px;"><span style="font-size:24px;">&#127183;</span><div><strong>' + d.card_count + ' Flashcards</strong><br><span style="font-size:13px;color:var(--text-muted);">Ready to study with spaced repetition</span></div></a>';
-              if (d.quiz_id) links += '<a href="/student/quizzes/' + d.quiz_id + '" class="card" style="padding:16px;text-decoration:none;display:flex;align-items:center;gap:12px;"><span style="font-size:24px;">&#128221;</span><div><strong>' + d.question_count + '-Question Quiz</strong><br><span style="font-size:13px;color:var(--text-muted);">Test your understanding</span></div></a>';
-              document.getElementById('result-links').innerHTML = links;
-            }} else {{
-              document.getElementById('progress-emoji').innerHTML = '&#128532;';
-              document.getElementById('progress-title').textContent = 'Import failed';
-              document.getElementById('progress-detail').textContent = d.error || 'Something went wrong';
-            }}
-          }} catch(e) {{
-            clearInterval(progressInterval);
-            document.getElementById('progress-emoji').innerHTML = '&#128532;';
-            document.getElementById('progress-title').textContent = 'Network error';
-            document.getElementById('progress-detail').textContent = 'Please try again';
-          }}
-        }}
-        </script>
-        """, active_page="student_smart_import")
+        text = text.replace("\x00", "")
+        return jsonify({
+            "text": text,
+            "filename": fname,
+            "title": fname.rsplit(".", 1)[0],
+            "char_count": len(text),
+        })
 
     # ── Flashcards Frontend Page ────────────────────────────
 
@@ -4443,6 +4313,18 @@ No markdown, no code fences. ONLY JSON.
 
         <div id="gen-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
           <h3 style="margin:0 0 14px;">Generate AI Flashcards</h3>
+
+          <!-- Drag-and-drop zone -->
+          <div id="fc-drop" class="dropzone" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="fcHandleDrop(event)" onclick="document.getElementById('fc-file').click()">
+            <div style="font-size:32px;">&#128206;</div>
+            <div style="font-weight:600;margin-top:6px;">Drop a PDF / DOCX / TXT here</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">or click to browse &middot; we'll generate flashcards directly from the file (no course needed)</div>
+            <input type="file" id="fc-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="fcHandleFile(this.files[0])">
+            <div id="fc-file-info" style="margin-top:8px;font-size:13px;color:var(--primary);"></div>
+          </div>
+
+          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">— or pick from your courses —</div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
             <div class="form-group">
               <label>Course</label>
@@ -4469,8 +4351,33 @@ No markdown, no code fences. ONLY JSON.
         <style>
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        .dropzone {{ border:2px dashed var(--border); border-radius:12px; padding:18px; text-align:center; cursor:pointer; transition:all .2s; background:var(--bg); }}
+        .dropzone.drag {{ border-color:var(--primary); background:var(--card); }}
         </style>
         <script>
+        var fcDropText = "";
+        async function fcHandleDrop(e) {{
+          e.preventDefault();
+          e.currentTarget.classList.remove('drag');
+          if (e.dataTransfer.files.length) await fcHandleFile(e.dataTransfer.files[0]);
+        }}
+        async function fcHandleFile(file) {{
+          if (!file) return;
+          var ext = file.name.split('.').pop().toLowerCase();
+          if (!['pdf','docx','doc','txt'].includes(ext)) {{ alert('Only PDF, DOCX, and TXT files'); return; }}
+          if (file.size > 15*1024*1024) {{ alert('File too large (max 15MB)'); return; }}
+          var info = document.getElementById('fc-file-info');
+          info.textContent = '⏳ Extracting text from ' + file.name + '...';
+          var fd = new FormData(); fd.append('file', file);
+          try {{
+            var r = await fetch('/api/student/extract-file', {{ method:'POST', body: fd }});
+            var d = await _safeJson(r);
+            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
+            fcDropText = d.text;
+            info.innerHTML = '✅ ' + d.filename + ' — ' + d.char_count.toLocaleString() + ' chars ready';
+            if (!document.getElementById('fc-title').value) document.getElementById('fc-title').value = 'Flashcards: ' + d.title;
+          }} catch(e) {{ info.textContent = '❌ Network error'; }}
+        }}
         async function loadExams(courseId, selectId) {{
           var sel = document.getElementById(selectId);
           sel.innerHTML = '<option value="">All topics</option>';
@@ -4485,18 +4392,23 @@ No markdown, no code fences. ONLY JSON.
         }}
         async function genFlashcards() {{
           var courseId = document.getElementById('fc-course').value;
-          if (!courseId) {{ alert('Select a course'); return; }}
+          if (!courseId && !fcDropText) {{ alert('Drop a file or select a course'); return; }}
           var btn = document.getElementById('fc-gen-btn');
           btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
           try {{
+            var body = {{
+              count: parseInt(document.getElementById('fc-count').value),
+              title: document.getElementById('fc-title').value || undefined
+            }};
+            if (fcDropText) {{
+              body.source_text = fcDropText;
+            }} else {{
+              body.course_id = parseInt(courseId);
+              body.exam_id = document.getElementById('fc-exam').value ? parseInt(document.getElementById('fc-exam').value) : null;
+            }}
             var r = await fetch('/api/student/flashcards/generate', {{
               method: 'POST', headers: {{'Content-Type':'application/json'}},
-              body: JSON.stringify({{
-                course_id: parseInt(courseId),
-                exam_id: document.getElementById('fc-exam').value ? parseInt(document.getElementById('fc-exam').value) : null,
-                count: parseInt(document.getElementById('fc-count').value),
-                title: document.getElementById('fc-title').value || undefined
-              }})
+              body: JSON.stringify(body)
             }});
             var d = await _safeJson(r);
             if (r.ok) {{
@@ -4857,6 +4769,18 @@ No markdown, no code fences. ONLY JSON.
 
         <div id="qz-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
           <h3 style="margin:0 0 14px;">Generate AI Quiz</h3>
+
+          <!-- Drag-and-drop zone -->
+          <div id="qz-drop" class="dropzone" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="qzHandleDrop(event)" onclick="document.getElementById('qz-file').click()">
+            <div style="font-size:32px;">&#128206;</div>
+            <div style="font-weight:600;margin-top:6px;">Drop a PDF / DOCX / TXT here</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">or click to browse &middot; we'll generate quiz questions directly from the file (no course needed)</div>
+            <input type="file" id="qz-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="qzHandleFile(this.files[0])">
+            <div id="qz-file-info" style="margin-top:8px;font-size:13px;color:var(--primary);"></div>
+          </div>
+
+          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">— or pick from your courses —</div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
             <div class="form-group">
               <label>Course</label>
@@ -4888,8 +4812,34 @@ No markdown, no code fences. ONLY JSON.
         <style>
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
+        .dropzone {{ border:2px dashed var(--border); border-radius:12px; padding:18px; text-align:center; cursor:pointer; transition:all .2s; background:var(--bg); }}
+        .dropzone.drag {{ border-color:var(--primary); background:var(--card); }}
         </style>
         <script>
+        var qzDropText = "";
+        async function qzHandleDrop(e) {{
+          e.preventDefault();
+          e.currentTarget.classList.remove('drag');
+          if (e.dataTransfer.files.length) await qzHandleFile(e.dataTransfer.files[0]);
+        }}
+        async function qzHandleFile(file) {{
+          if (!file) return;
+          var ext = file.name.split('.').pop().toLowerCase();
+          if (!['pdf','docx','doc','txt'].includes(ext)) {{ alert('Only PDF, DOCX, and TXT files'); return; }}
+          if (file.size > 15*1024*1024) {{ alert('File too large (max 15MB)'); return; }}
+          var info = document.getElementById('qz-file-info');
+          info.textContent = '⏳ Extracting text from ' + file.name + '...';
+          var fd = new FormData(); fd.append('file', file);
+          try {{
+            var r = await fetch('/api/student/extract-file', {{ method:'POST', body: fd }});
+            var d = await _safeJson(r);
+            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
+            qzDropText = d.text;
+            qzDropTitle = d.title;
+            info.innerHTML = '✅ ' + d.filename + ' — ' + d.char_count.toLocaleString() + ' chars ready';
+          }} catch(e) {{ info.textContent = '❌ Network error'; }}
+        }}
+        var qzDropTitle = '';
         async function loadExams(courseId, selectId) {{
           var sel = document.getElementById(selectId);
           sel.innerHTML = '<option value="">All topics</option>';
@@ -4904,18 +4854,24 @@ No markdown, no code fences. ONLY JSON.
         }}
         async function genQuiz() {{
           var courseId = document.getElementById('qz-course').value;
-          if (!courseId) {{ alert('Select a course'); return; }}
+          if (!courseId && !qzDropText) {{ alert('Drop a file or select a course'); return; }}
           var btn = document.getElementById('qz-gen-btn');
           btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
           try {{
+            var body = {{
+              difficulty: document.getElementById('qz-diff').value,
+              count: parseInt(document.getElementById('qz-count').value)
+            }};
+            if (qzDropText) {{
+              body.source_text = qzDropText;
+              body.title = 'Quiz: ' + qzDropTitle;
+            }} else {{
+              body.course_id = parseInt(courseId);
+              body.exam_id = document.getElementById('qz-exam').value ? parseInt(document.getElementById('qz-exam').value) : null;
+            }}
             var r = await fetch('/api/student/quizzes/generate', {{
               method: 'POST', headers: {{'Content-Type':'application/json'}},
-              body: JSON.stringify({{
-                course_id: parseInt(courseId),
-                exam_id: document.getElementById('qz-exam').value ? parseInt(document.getElementById('qz-exam').value) : null,
-                difficulty: document.getElementById('qz-diff').value,
-                count: parseInt(document.getElementById('qz-count').value)
-              }})
+              body: JSON.stringify(body)
             }});
             var d = await _safeJson(r);
             if (r.ok) {{
@@ -5825,15 +5781,18 @@ No markdown, no code fences. ONLY JSON.
         </div>
 
         <!-- Drag-drop PDF upload zone -->
-        <div id="pdf-drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius-sm);padding:32px;text-align:center;margin-bottom:20px;cursor:pointer;transition:all 0.3s ease;background:var(--card);"
+        <div id="pdf-drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius-sm);padding:32px;text-align:center;margin-bottom:8px;cursor:pointer;transition:all 0.3s ease;background:var(--card);"
           ondragover="event.preventDefault();this.style.borderColor='var(--primary)';this.style.background='rgba(139,92,246,0.05)'"
           ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--card)'"
           ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--card)';handlePDFDrop(event.dataTransfer.files)"
           onclick="document.getElementById('pdf-file-input').click()">
           <div style="font-size:36px;margin-bottom:8px;">&#128196;</div>
           <p style="margin:0;font-weight:600;color:var(--text);">Drag & drop PDF or DOCX files here</p>
-          <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">or click to browse &middot; your notes will be extracted automatically</p>
-          <input type="file" id="pdf-file-input" style="display:none;" accept=".pdf,.docx,.doc" multiple onchange="handlePDFDrop(this.files)">
+          <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">or click to browse &middot; multi-chapter PDFs fully supported</p>
+          <input type="file" id="pdf-file-input" style="display:none;" accept=".pdf,.docx,.doc,.txt" multiple onchange="handlePDFDrop(this.files)">
+        </div>
+        <div style="text-align:center;margin-bottom:16px;font-size:13px;color:var(--text-muted);">
+          <label style="cursor:pointer;"><input type="checkbox" id="ai-summarize" checked style="vertical-align:middle;"> AI-summarize into structured notes (recommended for textbooks &amp; multi-chapter PDFs)</label>
         </div>
         <div id="pdf-upload-status" style="display:none;margin-bottom:16px;padding:12px;border-radius:var(--radius-sm);background:var(--card);border:1px solid var(--border);text-align:center;color:var(--text-muted);font-size:14px;"></div>
 
@@ -5885,25 +5844,42 @@ No markdown, no code fences. ONLY JSON.
           var valid = [];
           for (var i = 0; i < files.length; i++) {{
             var name = files[i].name.toLowerCase();
-            if (!name.endsWith('.pdf') && !name.endsWith('.docx') && !name.endsWith('.doc')) continue;
+            if (!name.endsWith('.pdf') && !name.endsWith('.docx') && !name.endsWith('.doc') && !name.endsWith('.txt')) continue;
             if (files[i].size > 15 * 1024 * 1024) {{ alert(files[i].name + ' is too large (max 15MB)'); continue; }}
             valid.push(files[i]);
           }}
-          if (valid.length === 0) {{ alert('Only PDF and DOCX files are supported'); return; }}
+          if (valid.length === 0) {{ alert('Only PDF, DOCX, and TXT files are supported'); return; }}
+          var aiMode = document.getElementById('ai-summarize').checked;
           var status = document.getElementById('pdf-upload-status');
           status.style.display = 'block';
           var lastNoteId = null;
           var ok = 0, fail = 0;
           for (var i = 0; i < valid.length; i++) {{
             var file = valid[i];
-            status.innerHTML = '&#9203; Uploading ' + (i+1) + '/' + valid.length + ': <b>' + file.name + '</b>...';
-            var fd = new FormData();
-            fd.append('file', file);
+            status.innerHTML = (aiMode ? '&#129504; AI-summarizing ' : '&#9203; Uploading ') + (i+1) + '/' + valid.length + ': <b>' + file.name + '</b>' + (aiMode ? ' (multi-chapter, may take 30-60s)...' : '...');
             try {{
-              var r = await fetch('/api/student/notes/upload-pdf', {{method:'POST', body:fd}});
-              var d = await _safeJson(r);
-              if (r.ok && d.note_id) {{ lastNoteId = d.note_id; ok++; }}
-              else {{ fail++; }}
+              if (aiMode) {{
+                // 1) extract text
+                var fd1 = new FormData(); fd1.append('file', file);
+                var rx = await fetch('/api/student/extract-file', {{ method:'POST', body: fd1 }});
+                var dx = await _safeJson(rx);
+                if (!rx.ok) {{ fail++; continue; }}
+                // 2) AI generate notes from extracted text
+                var rg = await fetch('/api/student/notes/generate', {{
+                  method:'POST', headers:{{'Content-Type':'application/json'}},
+                  body: JSON.stringify({{ source_text: dx.text, title: dx.title }})
+                }});
+                var dg = await _safeJson(rg);
+                if (rg.ok && dg.note_id) {{ lastNoteId = dg.note_id; ok++; }}
+                else {{ fail++; }}
+              }} else {{
+                var fd = new FormData();
+                fd.append('file', file);
+                var r = await fetch('/api/student/notes/upload-pdf', {{method:'POST', body:fd}});
+                var d = await _safeJson(r);
+                if (r.ok && d.note_id) {{ lastNoteId = d.note_id; ok++; }}
+                else {{ fail++; }}
+              }}
             }} catch(e) {{ fail++; }}
           }}
           if (ok > 0 && valid.length === 1) {{ window.location = '/student/notes/' + lastNoteId; }}
@@ -6109,9 +6085,19 @@ No markdown, no code fences. ONLY JSON.
             </select>
           </div>
           <div id="chat-box" style="border:1px solid var(--border);border-radius:12px;height:450px;
-               overflow-y:auto;padding:16px;background:var(--bg);margin-bottom:12px"></div>
+               overflow-y:auto;padding:16px;background:var(--bg);margin-bottom:12px"
+               ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
+               ondragleave="this.style.borderColor='var(--border)'"
+               ondrop="chatHandleDrop(event)"></div>
+          <div id="chat-attached" style="display:none;margin-bottom:8px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <span id="chat-attached-info">📄 No file attached</span>
+            <button onclick="chatClearAttached()" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:16px;">✕</button>
+          </div>
           <div style="display:flex;gap:8px">
-            <input id="chat-input" type="text" placeholder="Ask your tutor..."
+            <button onclick="document.getElementById('chat-file').click()" title="Attach a file (PDF/DOCX/TXT)"
+              style="padding:10px 12px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer">📎</button>
+            <input type="file" id="chat-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="chatHandleFile(this.files[0])">
+            <input id="chat-input" type="text" placeholder="Ask your tutor... (or drag a PDF onto the chat)"
               style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;
                      background:var(--card);color:var(--text)"
               onkeydown="if(event.key==='Enter')sendMsg()">
@@ -6125,6 +6111,36 @@ No markdown, no code fences. ONLY JSON.
         </div>
         <script>
         var chatBox = document.getElementById('chat-box');
+        var chatAttachedText = "";
+        var chatAttachedName = "";
+        async function chatHandleDrop(e) {{
+          e.preventDefault();
+          e.currentTarget.style.borderColor = 'var(--border)';
+          if (e.dataTransfer.files.length) await chatHandleFile(e.dataTransfer.files[0]);
+        }}
+        async function chatHandleFile(file) {{
+          if (!file) return;
+          var ext = file.name.split('.').pop().toLowerCase();
+          if (!['pdf','docx','doc','txt'].includes(ext)) {{ alert('PDF, DOCX, or TXT only'); return; }}
+          if (file.size > 15*1024*1024) {{ alert('File too large (max 15MB)'); return; }}
+          var bar = document.getElementById('chat-attached');
+          var info = document.getElementById('chat-attached-info');
+          bar.style.display = 'flex';
+          info.textContent = '⏳ Extracting ' + file.name + '...';
+          var fd = new FormData(); fd.append('file', file);
+          try {{
+            var r = await fetch('/api/student/extract-file', {{ method:'POST', body: fd }});
+            var d = await _safeJson(r);
+            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
+            chatAttachedText = d.text;
+            chatAttachedName = d.filename;
+            info.textContent = '📄 Attached: ' + d.filename + ' (' + d.char_count.toLocaleString() + ' chars) — your next message will use this as context';
+          }} catch(e) {{ info.textContent = '❌ Network error'; }}
+        }}
+        function chatClearAttached() {{
+          chatAttachedText = ""; chatAttachedName = "";
+          document.getElementById('chat-attached').style.display = 'none';
+        }}
         function addBubble(role, text) {{
           var d = document.createElement('div');
           d.style.cssText = 'margin-bottom:10px;display:flex;' + (role==='user'?'justify-content:flex-end':'');
@@ -6148,14 +6164,22 @@ No markdown, no code fences. ONLY JSON.
         async function sendMsg() {{
           var inp = document.getElementById('chat-input');
           var msg = inp.value.trim();
-          if (!msg) return;
+          if (!msg && !chatAttachedText) return;
+          if (!msg) msg = "Please summarize and explain the attached document.";
           inp.value = '';
-          addBubble('user', msg);
+          var displayMsg = msg + (chatAttachedText ? ' [📄 ' + chatAttachedName + ']' : '');
+          addBubble('user', displayMsg);
           addBubble('assistant', '💭 Thinking...');
+          // Build payload: prepend attached doc as context if present
+          var payloadMsg = msg;
+          if (chatAttachedText) {{
+            payloadMsg = "I am attaching a document called \\"" + chatAttachedName + "\\". Use its contents as the primary source for your answer.\\n\\n=== DOCUMENT START ===\\n" + chatAttachedText + "\\n=== DOCUMENT END ===\\n\\nMy question: " + msg;
+            chatClearAttached();
+          }}
           try {{
             var r = await fetch('/api/student/chat', {{
               method:'POST', headers:{{'Content-Type':'application/json'}},
-              body: JSON.stringify({{message: msg, course_id: document.getElementById('chat-course').value || null}})
+              body: JSON.stringify({{message: payloadMsg, course_id: document.getElementById('chat-course').value || null}})
             }});
             chatBox.removeChild(chatBox.lastChild);
             var d = await _safeJson(r);
@@ -7360,16 +7384,16 @@ No markdown, no code fences. ONLY JSON.
               <input type="checkbox" id="pref-daily" {'checked' if de else ''} style="width:18px;height:18px;accent-color:var(--primary)">
               <span>{_T("Enable daily study email")}</span>
             </label>
-            <div style="display:flex;gap:16px;margin-bottom:16px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
               <div>
                 <label style="font-size:12px">{_T("Send at (hour)")}</label>
-                <select id="pref-hour">
+                <select id="pref-hour" class="edit-input" style="width:100%">
                   {"".join(f'<option value="{h}" {"selected" if h==hour else ""}>{h:02d}:00</option>' for h in range(5,23))}
                 </select>
               </div>
               <div>
                 <label style="font-size:12px">{_T("Timezone")}</label>
-                <select id="pref-tz">
+                <select id="pref-tz" class="edit-input" style="width:100%">
                   <optgroup label="Americas">
                     <option value="America/Mexico_City" {"selected" if tz=="America/Mexico_City" else ""}>Mexico City (CST)</option>
                     <option value="America/Cancun" {"selected" if tz=="America/Cancun" else ""}>Cancún (EST)</option>
@@ -7646,6 +7670,22 @@ No markdown, no code fences. ONLY JSON.
               <label>Assignment prompt <span style="color:var(--text-muted);font-size:12px">(optional)</span></label>
               <input id="ea-prompt" type="text" placeholder="What was the essay supposed to answer?" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
             </div>
+
+            <!-- Drag & drop file -->
+            <div class="form-group">
+              <label>Or drop your essay file</label>
+              <div id="ea-drop" style="border:2px dashed var(--border);border-radius:10px;padding:18px;text-align:center;cursor:pointer;background:var(--bg);transition:all .2s"
+                ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
+                ondragleave="this.style.borderColor='var(--border)'"
+                ondrop="eaHandleDrop(event)" onclick="document.getElementById('ea-file').click()">
+                <div style="font-size:28px">📄</div>
+                <div style="font-weight:600;margin-top:4px;font-size:14px">Drop a PDF / DOCX / TXT</div>
+                <div style="font-size:12px;color:var(--text-muted)">we'll extract the text into the editor below</div>
+                <input type="file" id="ea-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="eaHandleFile(this.files[0])">
+                <div id="ea-file-info" style="margin-top:6px;font-size:12px;color:var(--primary)"></div>
+              </div>
+            </div>
+
             <div class="form-group">
               <label>Your essay</label>
               <textarea id="ea-essay" placeholder="Paste your draft here..." style="width:100%;min-height:260px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
@@ -7658,6 +7698,27 @@ No markdown, no code fences. ONLY JSON.
           <div id="ea-result" style="margin-top:18px"></div>
         </div>
         <script>
+        async function eaHandleDrop(e) {{
+          e.preventDefault();
+          e.currentTarget.style.borderColor = 'var(--border)';
+          if (e.dataTransfer.files.length) await eaHandleFile(e.dataTransfer.files[0]);
+        }}
+        async function eaHandleFile(file) {{
+          if (!file) return;
+          var ext = file.name.split('.').pop().toLowerCase();
+          if (!['pdf','docx','doc','txt'].includes(ext)) {{ alert('PDF, DOCX, or TXT only'); return; }}
+          if (file.size > 15*1024*1024) {{ alert('File too large (max 15MB)'); return; }}
+          var info = document.getElementById('ea-file-info');
+          info.textContent = '⏳ Extracting ' + file.name + '...';
+          var fd = new FormData(); fd.append('file', file);
+          try {{
+            var r = await fetch('/api/student/extract-file', {{ method:'POST', body: fd }});
+            var d = await r.json();
+            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
+            document.getElementById('ea-essay').value = d.text;
+            info.textContent = '✅ Loaded ' + d.filename + ' (' + d.char_count.toLocaleString() + ' chars)';
+          }} catch(e) {{ info.textContent = '❌ Network error'; }}
+        }}
         async function analyzeEssay() {{
           var essay = document.getElementById('ea-essay').value.trim();
           if (essay.length < 80) {{ alert('Paste at least a couple of paragraphs.'); return; }}

@@ -1107,13 +1107,12 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/panic" {% if active_page == 'student_panic' %}class="active" style="color:#EF4444;"{% else %}style="color:#EF4444;"{% endif %}>&#128680; Panic</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="#" onclick="return false" {% if active_page in ['student_exams','student_schedule','student_weak','student_gpa','student_smart_import','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
+          <a href="#" onclick="return false" {% if active_page in ['student_exams','student_schedule','student_weak','student_gpa','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/exams">&#128221; Exams</a>
             <a href="/student/schedule">&#128337; Schedule</a>
             <a href="/student/weak-topics">&#127919; Weak Topics</a>
             <a href="/student/gpa">&#128200; GPA</a>
-            <a href="/student/smart-import">&#128640; Import</a>
             <a href="/student/achievements">&#127942; XP &amp; Badges</a>
           </div>
         </div>
@@ -1277,18 +1276,18 @@ LAYOUT = """<!DOCTYPE html>
       rose:    { bg:'#3f0a1a', card:'#581132', border:'#9f1239', text:'#fecdd3', textMuted:'#fda4af', primary:'#f43f5e' },
       sunset:  { bg:'#431407', card:'#7c2d12', border:'#9a3412', text:'#ffedd5', textMuted:'#fdba74', primary:'#f97316' },
       mono:    { bg:'#0a0a0a', card:'#171717', border:'#262626', text:'#fafafa', textMuted:'#a3a3a3', primary:'#fafafa' },
-      // ── Light / Pastel ──
+      // ── Light / Pastel ── (bumped saturation + colored cards so the pastel actually shows)
       light:    { bg:'#f8fafc', card:'#ffffff', border:'#e2e8f0', text:'#0f172a', textMuted:'#64748b', primary:'#6366f1' },
-      lavender: { bg:'#f5f3ff', card:'#faf7ff', border:'#e9d5ff', text:'#3b0764', textMuted:'#7c3aed', primary:'#a78bfa' },
-      mint:     { bg:'#f0fdf4', card:'#ffffff', border:'#bbf7d0', text:'#14532d', textMuted:'#15803d', primary:'#86efac' },
-      peach:    { bg:'#fff7ed', card:'#ffffff', border:'#fed7aa', text:'#7c2d12', textMuted:'#c2410c', primary:'#fb923c' },
-      sky:      { bg:'#f0f9ff', card:'#ffffff', border:'#bae6fd', text:'#0c4a6e', textMuted:'#0369a1', primary:'#7dd3fc' },
-      butter:   { bg:'#fefce8', card:'#ffffff', border:'#fef08a', text:'#713f12', textMuted:'#a16207', primary:'#fde047' },
-      lilac:    { bg:'#fdf4ff', card:'#ffffff', border:'#f5d0fe', text:'#581c87', textMuted:'#9333ea', primary:'#e879f9' },
-      blush:    { bg:'#fff1f2', card:'#ffffff', border:'#fecdd3', text:'#881337', textMuted:'#be123c', primary:'#fda4af' },
-      sand:     { bg:'#faf5ee', card:'#ffffff', border:'#e7d9c2', text:'#44342a', textMuted:'#7c5e44', primary:'#c8a47a' },
-      cottoncandy:{ bg:'#fdf2f8', card:'#ffffff', border:'#fbcfe8', text:'#831843', textMuted:'#be185d', primary:'#f472b6' },
-      seafoam:  { bg:'#ecfeff', card:'#ffffff', border:'#a5f3fc', text:'#164e63', textMuted:'#0e7490', primary:'#67e8f9' },
+      lavender: { bg:'#ede9fe', card:'#f5f3ff', border:'#c4b5fd', text:'#3b0764', textMuted:'#6d28d9', primary:'#7c3aed' },
+      mint:     { bg:'#bbf7d0', card:'#dcfce7', border:'#86efac', text:'#14532d', textMuted:'#15803d', primary:'#16a34a' },
+      peach:    { bg:'#fed7aa', card:'#ffedd5', border:'#fdba74', text:'#7c2d12', textMuted:'#c2410c', primary:'#ea580c' },
+      sky:      { bg:'#bae6fd', card:'#e0f2fe', border:'#7dd3fc', text:'#0c4a6e', textMuted:'#0369a1', primary:'#0284c7' },
+      butter:   { bg:'#fef9c3', card:'#fefce8', border:'#fde047', text:'#713f12', textMuted:'#a16207', primary:'#ca8a04' },
+      lilac:    { bg:'#f5d0fe', card:'#fae8ff', border:'#e879f9', text:'#581c87', textMuted:'#9333ea', primary:'#c026d3' },
+      blush:    { bg:'#fecdd3', card:'#ffe4e6', border:'#fda4af', text:'#881337', textMuted:'#be123c', primary:'#e11d48' },
+      sand:     { bg:'#e7d9c2', card:'#f4ead7', border:'#c8a47a', text:'#44342a', textMuted:'#78603e', primary:'#a16207' },
+      cottoncandy:{ bg:'#fbcfe8', card:'#fce7f3', border:'#f9a8d4', text:'#831843', textMuted:'#be185d', primary:'#db2777' },
+      seafoam:  { bg:'#a5f3fc', card:'#cffafe', border:'#67e8f9', text:'#164e63', textMuted:'#0e7490', primary:'#0891b2' },
     };
     window.applyMrTheme = function(name) {
       var t = window.MR_THEMES[name] || window.MR_THEMES['default'];
@@ -2116,6 +2115,195 @@ LAYOUT = """<!DOCTYPE html>
       "Back": "Volver", "Next": "Siguiente", "Previous": "Anterior",
       "Search": "Buscar", "Filter": "Filtrar", "Sort": "Ordenar",
       "Select a course": "Selecciona un curso", "No courses yet": "Aún no hay cursos",
+
+      // ── Extended UI vocabulary ──
+      // Generic actions
+      "Edit": "Editar", "Update": "Actualizar", "Add": "Agregar", "Create": "Crear",
+      "Remove": "Quitar", "Submit": "Enviar", "Send": "Enviar", "Close": "Cerrar",
+      "Open": "Abrir", "Continue": "Continuar", "Finish": "Finalizar", "Done": "Listo",
+      "Apply": "Aplicar", "Reload": "Recargar", "Refresh": "Actualizar", "Generate": "Generar",
+      "Analyze": "Analizar", "Upload": "Subir", "Download": "Descargar",
+      "Browse": "Examinar", "Choose": "Elegir", "Select": "Seleccionar",
+      "Yes": "Sí", "No": "No", "OK": "OK", "Got it": "Entendido",
+      "Logout": "Cerrar Sesión", "Login": "Iniciar Sesión", "Sign in": "Iniciar Sesión",
+      "Sign up": "Registrarse", "Register": "Registrarse",
+      "Free": "Gratis", "Pro": "Pro", "Premium": "Premium", "Upgrade": "Mejorar",
+      "Active": "Activo", "Inactive": "Inactivo", "Pending": "Pendiente",
+      "Completed": "Completado", "Failed": "Falló", "Sent": "Enviado",
+      "Draft": "Borrador", "Archive": "Archivar", "Archived": "Archivado",
+      "All": "Todos", "None": "Ninguno", "Other": "Otro",
+      "Today": "Hoy", "Yesterday": "Ayer", "Tomorrow": "Mañana",
+      "This Week": "Esta Semana", "This Month": "Este Mes",
+      "Date": "Fecha", "Time": "Hora", "Duration": "Duración",
+      "Created": "Creado", "Updated": "Actualizado", "Last Updated": "Última Actualización",
+      "Type": "Tipo", "Title": "Título", "Description": "Descripción",
+      "Notes": "Apuntes", "Tags": "Etiquetas", "Category": "Categoría",
+      "Public": "Público", "Private": "Privado",
+
+      // Drag & drop / files
+      "Drop a PDF / DOCX / TXT here": "Suelta un PDF / DOCX / TXT aquí",
+      "or click to browse": "o haz clic para buscar",
+      "Drag & drop PDF or DOCX files here": "Arrastra y suelta PDF o DOCX aquí",
+      "we'll generate flashcards directly from the file (no course needed)":
+        "generaremos tarjetas directamente del archivo (no se necesita curso)",
+      "we'll generate quiz questions directly from the file (no course needed)":
+        "generaremos preguntas directamente del archivo (no se necesita curso)",
+      "— or pick from your courses —": "— o elige de tus cursos —",
+      "multi-chapter PDFs fully supported": "PDFs con múltiples capítulos totalmente soportados",
+      "AI-summarize into structured notes (recommended for textbooks & multi-chapter PDFs)":
+        "Resumir con IA en apuntes estructurados (recomendado para libros y PDFs con varios capítulos)",
+      "Drop a PDF / DOCX / TXT": "Suelta un PDF / DOCX / TXT",
+      "we'll extract the text into the editor below": "extraeremos el texto en el editor de abajo",
+      "Or drop your essay file": "O suelta tu archivo de ensayo",
+      "Attach a file (PDF/DOCX/TXT)": "Adjuntar un archivo (PDF/DOCX/TXT)",
+      "Ask your tutor... (or drag a PDF onto the chat)":
+        "Pregúntale a tu tutor... (o arrastra un PDF al chat)",
+      "Drag & Drop Anywhere": "Arrastra y Suelta en Cualquier Lugar",
+      "Drop a PDF onto Notes, Flashcards, Quizzes, or the AI Tutor — instant study material from your files.":
+        "Suelta un PDF en Apuntes, Tarjetas, Exámenes o el Tutor IA — material de estudio al instante.",
+
+      // Course / Exam / Quiz / Flashcard / Notes shared labels
+      "Course": "Curso", "Courses": "Cursos", "Exam": "Examen", "Topic": "Tema", "Topics": "Temas",
+      "Question": "Pregunta", "Questions": "Preguntas", "Answer": "Respuesta", "Answers": "Respuestas",
+      "Number of cards": "Cantidad de tarjetas", "Number of questions": "Cantidad de preguntas",
+      "Custom title (optional)": "Título personalizado (opcional)",
+      "Auto-generated if empty": "Generado automáticamente si está vacío",
+      "Difficulty": "Dificultad",
+      "Easy — Basic recall": "Fácil — Recuerdo básico",
+      "Medium — Exam-level": "Medio — Nivel de examen",
+      "Hard — Challenge": "Difícil — Desafío",
+      "Generate AI Flashcards": "Generar Tarjetas con IA",
+      "Generate AI Quiz": "Generar Examen con IA",
+      "Generate AI Notes": "Generar Apuntes con IA",
+      "AI Flashcards": "Tarjetas IA",
+      "AI Study Tutor": "Tutor de Estudio IA",
+      "Practice Quizzes": "Exámenes de Práctica",
+      "Smart spaced repetition · Generated from your course materials":
+        "Repetición espaciada · Generadas desde tus materiales de curso",
+      "Unlimited AI-generated questions · Adjustable difficulty":
+        "Preguntas ilimitadas con IA · Dificultad ajustable",
+      "Ask anything about your courses — your AI tutor uses your own notes and course material to help.":
+        "Pregunta lo que sea sobre tus cursos — tu tutor IA usa tus propios apuntes para ayudarte.",
+      "General (no specific course)": "General (sin curso específico)",
+      "Up to 100. Large quizzes generate in batches — give it a few seconds.":
+        "Hasta 100. Los exámenes grandes se generan por lotes — dale unos segundos.",
+      "All topics": "Todos los temas",
+      "Exam (optional)": "Examen (opcional)",
+      "Not taken": "No realizado",
+      "attempts": "intentos", "attempt": "intento",
+      "questions": "preguntas", "question": "pregunta",
+      "due": "pendientes",
+      "Drop a file or select a course": "Suelta un archivo o selecciona un curso",
+      "Generated %d flashcards!": "¡%d tarjetas generadas!",
+      "Generation failed": "Falló la generación",
+      "Network error": "Error de red",
+      "Failed to add card": "Error al agregar tarjeta",
+      "Failed to delete": "Error al eliminar",
+      "Delete this flashcard deck?": "¿Eliminar este mazo de tarjetas?",
+      "Delete this card?": "¿Eliminar esta tarjeta?",
+      "Delete this note?": "¿Eliminar este apunte?",
+      "Delete this quiz?": "¿Eliminar este examen?",
+      "Clear chat history?": "¿Borrar historial de chat?",
+      "No flashcard decks yet. Generate your first set from a course!":
+        "Aún no tienes mazos. ¡Genera el primero desde un curso!",
+      "No quizzes yet. Generate your first practice quiz from a course!":
+        "Aún no tienes exámenes. ¡Genera el primero desde un curso!",
+      "Hi! I'm your AI study tutor. Ask me anything about your course material! 📚":
+        "¡Hola! Soy tu tutor IA. ¡Pregúntame lo que sea sobre tus materiales! 📚",
+      "Please summarize and explain the attached document.":
+        "Por favor resume y explica el documento adjunto.",
+      "PDF, DOCX, or TXT only": "Solo PDF, DOCX, o TXT",
+      "File too large (max 15MB)": "Archivo demasiado grande (máx 15MB)",
+      "Only PDF, DOCX, and TXT files": "Solo archivos PDF, DOCX y TXT",
+
+      // Essay assistant
+      "Essay Assistant": "Asistente de Ensayos",
+      "Paste your draft. Get brutally honest feedback on thesis, structure, grammar, and flow.":
+        "Pega tu borrador. Recibe feedback honesto sobre tesis, estructura, gramática y flujo.",
+      "Assignment prompt": "Enunciado del trabajo",
+      "What was the essay supposed to answer?": "¿Qué debía responder el ensayo?",
+      "Your essay": "Tu ensayo",
+      "Paste your draft here...": "Pega tu borrador aquí...",
+      "This takes ~10 seconds.": "Esto tarda ~10 segundos.",
+      "Thesis": "Tesis", "Structure": "Estructura", "Grammar": "Gramática",
+      "Clarity": "Claridad", "Words": "Palabras", "Level": "Nivel",
+      "Strengths": "Fortalezas", "Weaknesses": "Debilidades",
+      "Grammar & Style": "Gramática y Estilo", "Rewritten Intro": "Introducción Reescrita",
+      "Thesis Feedback": "Feedback de Tesis", "Overall": "General",
+      "No major grammar issues detected.": "No se detectaron problemas graves de gramática.",
+      "Paste at least a couple of paragraphs.": "Pega al menos un par de párrafos.",
+      "Analyzing...": "Analizando...",
+
+      // Panic mode
+      "Panic Mode": "Modo Pánico",
+      "Exam tomorrow and nothing's done? Get a ruthless cram plan in 10 seconds.":
+        "¿Examen mañana y nada hecho? Obtén un plan de estudio en 10 segundos.",
+
+      // Notes page
+      "Generated notes": "Apuntes generados",
+      "AI Study Notes": "Apuntes de Estudio IA",
+
+      // Tutor
+      "AI Tutor": "Tutor IA",
+
+      // Mail Hub / Inbox common
+      "Inbox": "Bandeja", "Sent": "Enviados", "Outbox": "Salida",
+      "Trash": "Papelera", "Spam": "Spam", "Drafts": "Borradores",
+      "Reply": "Responder", "Reply All": "Responder a Todos", "Forward": "Reenviar",
+      "Compose": "Redactar", "New Email": "Nuevo Correo",
+      "From": "De", "To": "Para", "Cc": "Cc", "Bcc": "Cco", "Subject": "Asunto",
+      "Body": "Cuerpo", "Attachments": "Adjuntos",
+      "Mail Hub": "Centro de Correo",
+
+      // Contacts
+      "Contacts": "Contactos", "Add Contact": "Agregar Contacto",
+      "First Name": "Nombre", "Last Name": "Apellido",
+      "Company": "Empresa", "Phone": "Teléfono", "Notes": "Notas",
+
+      // Campaigns
+      "Campaigns": "Campañas", "New Campaign": "Nueva Campaña",
+      "Campaign Name": "Nombre de Campaña", "Recipients": "Destinatarios",
+      "Templates": "Plantillas", "Sequence": "Secuencia",
+      "Open Rate": "Tasa de Apertura", "Reply Rate": "Tasa de Respuesta",
+      "Sent at": "Enviado a las", "Scheduled": "Programado",
+      "Send Now": "Enviar Ahora", "Schedule": "Programar",
+
+      // Pricing / Billing
+      "Pricing": "Precios", "Billing": "Facturación",
+      "Plan": "Plan", "Current Plan": "Plan Actual",
+      "Upgrade Plan": "Mejorar Plan", "Downgrade": "Bajar Plan",
+      "Cancel Subscription": "Cancelar Suscripción",
+      "per month": "por mes", "per year": "por año",
+      "Free Forever": "Gratis Para Siempre",
+      "Most Popular": "Más Popular",
+
+      // Dashboard widgets
+      "Today's Tasks": "Tareas de Hoy", "Recent Activity": "Actividad Reciente",
+      "Quick Stats": "Estadísticas Rápidas", "Performance": "Rendimiento",
+      "Welcome back": "Bienvenido de vuelta",
+
+      // GPA / Schedule / Weak topics
+      "GPA Calculator": "Calculadora GPA", "Add Course": "Agregar Curso",
+      "Weight": "Peso", "Grade": "Nota", "Credit": "Crédito",
+      "Total GPA": "GPA Total", "Semester": "Semestre",
+      "Class Schedule": "Horario de Clases",
+      "Add to Schedule": "Agregar al Horario",
+      "Weak Topics": "Temas Débiles",
+      "Topics you've struggled with": "Temas con los que has tenido dificultad",
+
+      // Achievements
+      "Achievements": "Logros", "XP & Badges": "XP e Insignias",
+      "Earn XP by studying!": "¡Gana XP estudiando!",
+
+      // Settings sections
+      "Theme": "Tema", "Language": "Idioma", "Currency": "Moneda",
+      "Notifications": "Notificaciones", "Privacy": "Privacidad",
+      "Account": "Cuenta", "Danger Zone": "Zona de Peligro",
+
+      // Empty states
+      "Nothing here yet.": "Nada por aquí todavía.",
+      "Get started by creating one": "Empieza creando uno",
+      "Coming soon": "Próximamente",
     };
     function translate(el) {
       if (el.childElementCount === 0) {
@@ -2296,7 +2484,7 @@ def index():
         <div class="mr-card stu"><div class="icon">&#128221;</div><h3>Exams Dashboard</h3><p>Every upcoming exam, weighted by difficulty and days remaining. Never blindsided.</p></div>
         <div class="mr-card stu"><div class="icon">&#128736;</div><h3>Practice Problems</h3><p>Unlimited AI-generated practice, graded and explained step by step.</p></div>
         <div class="mr-card stu"><div class="icon">&#128233;</div><h3>Daily Study Email</h3><p>Morning briefing with today's plan, weak topics, and upcoming exams. Delivered to your inbox.</p></div>
-        <div class="mr-card stu"><div class="icon">&#128640;</div><h3>Smart Import</h3><p>Drop in any file — syllabus, slides, notes — and MachReach turns it into study material.</p></div>
+        <div class="mr-card stu"><div class="icon">&#128206;</div><h3>Drag &amp; Drop Anywhere</h3><p>Drop a PDF onto Notes, Flashcards, Quizzes, or the AI Tutor — instant study material from your files.</p></div>
       </div>
 
       <div style="text-align:center;margin-top:32px">
