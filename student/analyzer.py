@@ -384,14 +384,46 @@ def generate_flashcards(
 ) -> list[dict]:
     """
     Generate flashcards from course material using AI.
+    For long documents, chunks the text and generates in parallel.
 
     Returns:
         [{"front": "question", "back": "answer"}, ...]
     """
+    topics_str = ", ".join(topics) if topics else "all key concepts from the material"
+
+    # For very long texts, chunk and distribute card counts across chunks
+    MAX_CHARS_SINGLE = 60000  # safe single-call limit (~15K tokens)
+    if source_text and len(source_text) > MAX_CHARS_SINGLE:
+        from concurrent.futures import ThreadPoolExecutor
+        chunks = _split_into_chunks(source_text, max_chars=MAX_CHARS_SINGLE, hard_cap_chunks=10)
+        if len(chunks) > 1:
+            cards_per_chunk = max(5, count // len(chunks))
+            remainder = count - cards_per_chunk * len(chunks)
+            targets = [cards_per_chunk + (1 if i < remainder else 0) for i in range(len(chunks))]
+            log.info("Flashcard gen: %d chunks, %d total cards (course=%s)", len(chunks), count, course_name)
+
+            def _gen_chunk_fc(args):
+                label, body, n = args
+                return generate_flashcards(
+                    course_name=course_name, topics=topics,
+                    source_text=body, count=n,
+                )
+
+            with ThreadPoolExecutor(max_workers=min(6, len(chunks))) as ex:
+                results = list(ex.map(_gen_chunk_fc, [(l, b, t) for (l, b), t in zip(chunks, targets)]))
+            all_cards = []
+            seen = set()
+            for batch in results:
+                for c in batch:
+                    key = c["front"].strip().lower()
+                    if key not in seen:
+                        seen.add(key)
+                        all_cards.append(c)
+            return all_cards[:count]
+
     context = ""
     if source_text:
         context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text}"
-    topics_str = ", ".join(topics) if topics else "all key concepts from the material"
 
     prompt = f"""You are creating study flashcards for the course "{course_name}".
 Topics to cover: {topics_str}
@@ -423,7 +455,7 @@ No markdown fences, no explanation. ONLY the JSON array."""
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_tokens=4000,
+            max_tokens=8000,
         )
         raw = resp.choices[0].message.content.strip()
         raw = re.sub(r"^```json?\s*", "", raw)
@@ -577,15 +609,43 @@ def generate_quiz(
 ) -> list[dict]:
     """
     Generate multiple-choice quiz questions from course material using AI.
-
-    Batches large requests so the model can reliably produce >20 questions.
-    Honors the exact `count` requested (will retry up to 2 times for short fills).
+    For long documents, chunks the text and generates in parallel.
     """
     try:
         count = int(count)
     except Exception:
         count = 10
     count = max(1, min(count, 100))  # hard safety ceiling
+
+    # For very long texts, chunk and distribute question counts
+    MAX_CHARS_SINGLE = 60000
+    if source_text and len(source_text) > MAX_CHARS_SINGLE:
+        from concurrent.futures import ThreadPoolExecutor
+        chunks = _split_into_chunks(source_text, max_chars=MAX_CHARS_SINGLE, hard_cap_chunks=10)
+        if len(chunks) > 1:
+            qs_per_chunk = max(3, count // len(chunks))
+            remainder = count - qs_per_chunk * len(chunks)
+            targets = [qs_per_chunk + (1 if i < remainder else 0) for i in range(len(chunks))]
+            log.info("Quiz gen: %d chunks, %d total questions (course=%s)", len(chunks), count, course_name)
+
+            def _gen_chunk_qz(args):
+                label, body, n = args
+                return generate_quiz(
+                    course_name=course_name, topics=topics,
+                    source_text=body, difficulty=difficulty, count=n,
+                )
+
+            with ThreadPoolExecutor(max_workers=min(6, len(chunks))) as ex:
+                results = list(ex.map(_gen_chunk_qz, [(l, b, t) for (l, b), t in zip(chunks, targets)]))
+            all_qs = []
+            seen = set()
+            for batch in results:
+                for q in batch:
+                    key = q["question"].strip().lower()
+                    if key not in seen:
+                        seen.add(key)
+                        all_qs.append(q)
+            return all_qs[:count]
 
     context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text}" if source_text else ""
     topics_str = ", ".join(topics) if topics else "all key concepts from the material"
@@ -661,6 +721,49 @@ def generate_quiz(
     return all_questions[:count]
 
 
+# ── Shared chunking utility ─────────────────────────────────
+
+def _split_into_chunks(txt: str, max_chars: int = 18000, hard_cap_chunks: int = 12) -> list[tuple[str, str]]:
+    """Returns list of (chunk_label, chunk_text). Splits on Chapter/Capítulo/Section headings.
+
+    Caps total chunks at `hard_cap_chunks` to keep total AI time bounded
+    (each chunk ≈ 30-60s; even with parallelism we want a sane upper bound).
+    """
+    if not txt:
+        return []
+    heading_re = re.compile(
+        r'^\s*(?:Chapter|Cap[ií]tulo|Unit|Unidad|Tema|Lecci[oó]n|Lesson|Part(?:e)?)\s+[\dIVXLC]+\b[^\n]*$',
+        re.MULTILINE | re.IGNORECASE,
+    )
+    positions = [(m.start(), m.group().strip()) for m in heading_re.finditer(txt)]
+    chunks: list[tuple[str, str]] = []
+    if positions and len(positions) >= 2:
+        for i, (pos, label) in enumerate(positions):
+            end = positions[i + 1][0] if i + 1 < len(positions) else len(txt)
+            body = txt[pos:end].strip()
+            if len(body) > max_chars:
+                for j in range(0, len(body), max_chars):
+                    sub = body[j:j + max_chars]
+                    chunks.append((f"{label} (part {j // max_chars + 1})", sub))
+            elif body:
+                chunks.append((label, body))
+    else:
+        for j in range(0, len(txt), max_chars):
+            chunks.append((f"Part {j // max_chars + 1}", txt[j:j + max_chars]))
+
+    if len(chunks) > hard_cap_chunks:
+        target = hard_cap_chunks
+        group_size = (len(chunks) + target - 1) // target
+        merged: list[tuple[str, str]] = []
+        for i in range(0, len(chunks), group_size):
+            grp = chunks[i:i + group_size]
+            label = f"{grp[0][0]} → {grp[-1][0]}" if len(grp) > 1 else grp[0][0]
+            body = "\n\n".join(b for _, b in grp)
+            merged.append((label, body))
+        chunks = merged
+    return chunks
+
+
 # ── Notes / Summary generation ──────────────────────────────
 
 def generate_notes(
@@ -680,54 +783,7 @@ def generate_notes(
     """
     topics_str = ", ".join(topics) if topics else "all key concepts"
 
-    # ── Chunking: detect chapters/sections and split, with size cap ──
-    def _split_into_chunks(txt: str, max_chars: int = 18000, hard_cap_chunks: int = 12) -> list[tuple[str, str]]:
-        """Returns list of (chunk_label, chunk_text). Splits on Chapter/Capítulo/Section headings.
-
-        Caps total chunks at `hard_cap_chunks` to keep total AI time bounded
-        (each chunk ≈ 30-60s; even with parallelism we want a sane upper bound).
-        """
-        if not txt:
-            return []
-        # Find heading positions — only "real" chapter/section markers.
-        # We deliberately exclude bare "1." numbered lines because legal/
-        # academic PDFs have them inside footnotes and sub-sub-sections.
-        heading_re = re.compile(
-            r'^\s*(?:Chapter|Cap[ií]tulo|Unit|Unidad|Tema|Lecci[oó]n|Lesson|Part(?:e)?)\s+[\dIVXLC]+\b[^\n]*$',
-            re.MULTILINE | re.IGNORECASE,
-        )
-        positions = [(m.start(), m.group().strip()) for m in heading_re.finditer(txt)]
-        chunks: list[tuple[str, str]] = []
-        if positions and len(positions) >= 2:
-            # Split on heading boundaries
-            for i, (pos, label) in enumerate(positions):
-                end = positions[i + 1][0] if i + 1 < len(positions) else len(txt)
-                body = txt[pos:end].strip()
-                if len(body) > max_chars:
-                    # Sub-chunk a long chapter
-                    for j in range(0, len(body), max_chars):
-                        sub = body[j:j + max_chars]
-                        chunks.append((f"{label} (part {j // max_chars + 1})", sub))
-                elif body:
-                    chunks.append((label, body))
-        else:
-            # No clear chapter structure — split by size
-            for j in range(0, len(txt), max_chars):
-                chunks.append((f"Part {j // max_chars + 1}", txt[j:j + max_chars]))
-
-        # Bound total chunks: if too many, merge adjacent ones
-        if len(chunks) > hard_cap_chunks:
-            target = hard_cap_chunks
-            group_size = (len(chunks) + target - 1) // target
-            merged: list[tuple[str, str]] = []
-            for i in range(0, len(chunks), group_size):
-                grp = chunks[i:i + group_size]
-                label = f"{grp[0][0]} → {grp[-1][0]}" if len(grp) > 1 else grp[0][0]
-                body = "\n\n".join(b for _, b in grp)
-                merged.append((label, body))
-            chunks = merged
-        return chunks
-
+    # Use module-level _split_into_chunks
     chunks = _split_into_chunks(source_text) if source_text else [("", "")]
     multi = len(chunks) > 1
 

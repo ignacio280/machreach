@@ -78,6 +78,7 @@ if _IS_PRODUCTION:
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours max session
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB upload limit
 
 # ── Security: CSRF protection ──
 from flask_wtf.csrf import CSRFProtect, generate_csrf
