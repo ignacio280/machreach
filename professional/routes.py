@@ -468,7 +468,27 @@ def register_professional_routes(app, csrf, limiter):
         <div class="card" style="margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
             <h3 style="margin:0;font-size:15px;">&#128181; Transactions</h3>
-            <button onclick="document.getElementById('tx-form').style.display=document.getElementById('tx-form').style.display==='none'?'flex':'none'" class="btn btn-outline btn-sm">+ Add manually</button>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button onclick="document.getElementById('import-form').style.display=document.getElementById('import-form').style.display==='none'?'block':'none'" class="btn btn-primary btn-sm">&#128228; Import statement</button>
+              <button onclick="document.getElementById('tx-form').style.display=document.getElementById('tx-form').style.display==='none'?'flex':'none'" class="btn btn-outline btn-sm">+ Add manually</button>
+            </div>
+          </div>
+          <div id="import-form" style="display:none;margin-bottom:12px;padding:12px;border:1px dashed var(--primary);border-radius:8px;background:linear-gradient(135deg,rgba(99,102,241,.05),rgba(139,92,246,.05));">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
+              Upload a statement export from ANY bank. We support <b>CSV</b> (every bank) and <b>OFX/QFX</b> (most US/UK/EU/LatAm banks).
+              Download your statement from your online banking, then drop the file here &mdash; no bank login required.
+            </div>
+            <div style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;align-items:end;">
+              <div><label style="font-size:11px;">File (.csv, .ofx, .qfx)</label><input type="file" id="imp-file" accept=".csv,.ofx,.qfx,.txt" class="edit-input"></div>
+              <div><label style="font-size:11px;">Link to account (optional)</label>
+                <select id="imp-bank" class="edit-input">
+                  <option value="">(no account)</option>
+                  {"".join(f'<option value="{b["id"]}">{_esc(b.get("institution_name",""))}{" · ****" + _esc(b.get("last_4","")) if b.get("last_4") else ""}</option>' for b in banks)}
+                </select>
+              </div>
+              <button onclick="importStatement()" class="btn btn-primary btn-sm" id="imp-btn">Import</button>
+            </div>
+            <div id="imp-status" style="margin-top:8px;font-size:12px;"></div>
           </div>
           <div id="tx-form" style="display:none;gap:6px;margin-bottom:12px;padding:10px;border:1px dashed var(--border);border-radius:8px;flex-wrap:wrap;align-items:end;">
             <div style="flex:0 0 130px;"><label style="font-size:11px;">Date</label><input id="tx-date" type="date" class="edit-input" value="{today}"></div>
@@ -520,6 +540,32 @@ def register_professional_routes(app, csrf, limiter):
           if(!amt||amt<=0){{alert('Enter an amount');return;}}
           var r=await fetch('/api/pro/transactions',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{amount:amt,merchant:document.getElementById('tx-merchant').value,category:document.getElementById('tx-cat').value,tx_date:document.getElementById('tx-date').value}})}});
           if(r.ok) location.reload(); else alert('Failed');
+        }}
+        async function importStatement(){{
+          var f=document.getElementById('imp-file').files[0];
+          if(!f){{alert('Choose a file');return;}}
+          var btn=document.getElementById('imp-btn');
+          var status=document.getElementById('imp-status');
+          btn.disabled=true; btn.textContent='Importing...';
+          status.innerHTML='<span style="color:var(--text-muted);">Parsing '+f.name+'...</span>';
+          var fd=new FormData();
+          fd.append('file',f);
+          var bankId=document.getElementById('imp-bank').value;
+          if(bankId) fd.append('bank_connection_id',bankId);
+          try{{
+            var r=await fetch('/api/pro/transactions/import',{{method:'POST',headers:csrfHeader(),body:fd}});
+            var d=await r.json();
+            if(r.ok){{
+              status.innerHTML='<span style="color:#10B981;">&#10003; Imported '+d.imported+' transactions. Skipped '+d.skipped+' duplicates.</span>';
+              setTimeout(function(){{location.reload();}},1400);
+            }} else {{
+              status.innerHTML='<span style="color:#EF4444;">'+(d.error||'Import failed')+'</span>';
+              btn.disabled=false; btn.textContent='Import';
+            }}
+          }} catch(e){{
+            status.innerHTML='<span style="color:#EF4444;">Network error</span>';
+            btn.disabled=false; btn.textContent='Import';
+          }}
         }}
         async function delTx(id){{
           if(!confirm('Delete transaction?')) return;
@@ -608,6 +654,78 @@ def register_professional_routes(app, csrf, limiter):
             return jsonify({"error": "Unauthorized"}), 401
         pdb.delete_transaction(tx_id, _cid())
         return jsonify({"ok": True})
+
+    @app.route("/api/pro/transactions/import", methods=["POST"])
+    @limiter.limit("10 per minute")
+    def pro_tx_import():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        from professional import statement_import as si
+        f = request.files.get("file")
+        if not f or not f.filename:
+            return jsonify({"error": "No file uploaded"}), 400
+        raw = f.read()
+        if len(raw) > 10 * 1024 * 1024:
+            return jsonify({"error": "File too large (max 10 MB)"}), 400
+        try:
+            txs = si.parse_statement(f.filename, raw)
+        except Exception as e:
+            log.exception("Statement parse failed")
+            return jsonify({"error": f"Parse error: {e}"}), 400
+        if not txs:
+            return jsonify({"error": "No transactions found in file. Make sure it's a CSV or OFX/QFX export."}), 400
+
+        bank_id = request.form.get("bank_connection_id")
+        try:
+            bank_id = int(bank_id) if bank_id else None
+        except (TypeError, ValueError):
+            bank_id = None
+
+        # Default currency from linked bank or user's budget, else first tx's, else USD
+        default_ccy = "USD"
+        if bank_id:
+            for b in pdb.list_bank_connections(_cid()):
+                if b["id"] == bank_id:
+                    default_ccy = b.get("currency") or "USD"
+                    break
+
+        # Fetch existing transactions (same date + amount + merchant) to dedupe
+        from outreach.db import get_db, _fetchall
+        with get_db() as db:
+            existing = _fetchall(db,
+                "SELECT tx_date, amount, merchant FROM pro_transactions WHERE client_id = %s",
+                (_cid(),))
+        seen = set()
+        for e in existing:
+            key = (str(e.get("tx_date") or "")[:10],
+                   round(float(e.get("amount") or 0), 2),
+                   (e.get("merchant") or "").strip().lower()[:80])
+            seen.add(key)
+
+        imported = 0
+        skipped = 0
+        for tx in txs:
+            key = (tx["tx_date"], round(float(tx["amount"]), 2),
+                   (tx["merchant"] or "").strip().lower()[:80])
+            if key in seen:
+                skipped += 1
+                continue
+            try:
+                pdb.create_transaction(
+                    _cid(), tx["amount"],
+                    merchant=tx["merchant"],
+                    category=tx["category"],
+                    tx_date=tx["tx_date"],
+                    description=tx.get("description", ""),
+                    currency=(tx.get("currency") or default_ccy or "USD"),
+                    bank_connection_id=bank_id,
+                    is_manual=False,
+                )
+                seen.add(key)
+                imported += 1
+            except Exception as e:
+                log.warning("import insert failed: %s", e)
+        return jsonify({"ok": True, "imported": imported, "skipped": skipped, "total": len(txs)})
 
     @app.route("/api/pro/budget/generate", methods=["POST"])
     @limiter.limit("6 per minute")
