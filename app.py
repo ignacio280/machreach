@@ -2400,36 +2400,90 @@ LAYOUT = """<!DOCTYPE html>
       "Nothing here yet.": "Nada por aquí todavía.",
       "Get started by creating one": "Empieza creando uno",
       "Coming soon": "Próximamente",
+
+      // ── Dashboard headings (whole phrases — must come BEFORE word-level keys) ──
+      "Today's Study Plan": "Plan de Estudio de Hoy",
+      "Today's Plan": "Plan de Hoy",
+      "Upcoming Exams": "Próximos Exámenes",
+      "Upcoming Examens": "Próximos Exámenes",
+      "Plan Progress": "Progreso del Plan",
+      "Hours Focused": "Horas de Estudio",
+      "Focus Hours": "Horas de Estudio",
+      "day streak": "días de racha",
+      "Day Streak": "Racha de Días",
+      "XP to next level": "XP para el siguiente nivel",
+      "What can I do here?": "¿Qué puedo hacer aquí?",
+      "A visual map of every feature — click any card to jump there.":
+        "Un mapa visual de cada función — haz clic en cualquier tarjeta para ir.",
+      "Show": "Mostrar", "Hide": "Ocultar",
+      "No study sessions yet": "Aún no hay sesiones de estudio",
+      "Sync your courses and generate a plan to get a personalized study schedule for today.":
+        "Sincroniza tus cursos y genera un plan para obtener un horario de estudio personalizado para hoy.",
+      "No upcoming exams": "No hay exámenes próximos",
+      "Sync your courses to automatically detect exam dates from Canvas.":
+        "Sincroniza tus cursos para detectar automáticamente las fechas de examen desde Canvas.",
+      "Connect Canvas": "Conectar Canvas",
+      "Generate Plan": "Generar Plan",
+      "Sync Canvas": "Sincronizar Canvas",
+      "Mark Today Complete": "Marcar Hoy Como Completo",
+      "AI Recommendations": "Recomendaciones de IA",
+      "Starting sync...": "Iniciando sincronización...",
+      "Syncing...": "Sincronizando...",
+      "Take a break — this may take a while depending on how many files your courses have.":
+        "Tómate un descanso — esto puede tardar dependiendo de cuántos archivos tengan tus cursos.",
+      "Sync complete!": "¡Sincronización completada!",
+      "Sync failed": "La sincronización falló",
+      "Network error": "Error de red",
+      "Stats at a glance": "Estadísticas de un vistazo",
+      "Your Student Dashboard": "Tu Panel de Estudiante",
+      "Exams Dashboard": "Panel de Exámenes",
+      "Every upcoming exam, sorted by urgency.": "Todos los exámenes próximos, ordenados por urgencia.",
     };
+
+    // Build a single regex of all phrase keys (longest first) — replaces whole
+    // phrases only, with word boundaries, so we never mangle untranslated text
+    // like "Today's Study Plan" -> "Hoy's Estudiar Plan".
+    function _esc(s){ return s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'); }
+    var _keys = Object.keys(T).sort(function(a,b){ return b.length - a.length; });
+    var _re = new RegExp(
+      '(^|[^A-Za-zÀ-ÿ0-9_])(' + _keys.map(_esc).join('|') + ')(?![A-Za-zÀ-ÿ0-9_])',
+      'g'
+    );
+    function _replaceAll(txt){
+      return txt.replace(_re, function(_m, pre, key){ return pre + (T[key] || key); });
+    }
+
     function translate(el) {
       if (el.childElementCount === 0) {
-        var txt = el.textContent.trim();
-        if (T[txt]) el.textContent = T[txt];
-        else {
-          // Partial match for strings like "5 / 100 XP to next level"
-          for (var k in T) {
-            if (txt.indexOf(k) !== -1 && k.length > 3) {
-              el.textContent = txt.replace(k, T[k]);
-            }
-          }
+        var raw = el.textContent;
+        var txt = raw.trim();
+        if (!txt) return;
+        if (T[txt]) {
+          el.textContent = raw.replace(txt, T[txt]);
+          return;
         }
+        var translated = _replaceAll(txt);
+        if (translated !== txt) el.textContent = raw.replace(txt, translated);
       }
-      // Translate placeholders
       if (el.placeholder && T[el.placeholder]) el.placeholder = T[el.placeholder];
-      // Translate title attributes (tooltips)
       if (el.title && T[el.title]) el.title = T[el.title];
     }
-    // Translate all text nodes
-    var walker = document.createTreeWalker(
-      document.querySelector('.container') || document.body,
-      NodeFilter.SHOW_ELEMENT, null, false
-    );
-    while(walker.nextNode()) translate(walker.currentNode);
-    // Also translate h2, h3, labels, buttons, a tags specifically
-    document.querySelectorAll('h1,h2,h3,h4,label,button,a,.card-header,.stat-card .label').forEach(translate);
-    // Translate alert messages
+
+    function runTranslate(){
+      var walker = document.createTreeWalker(
+        document.querySelector('.container') || document.body,
+        NodeFilter.SHOW_ELEMENT, null, false
+      );
+      while(walker.nextNode()) translate(walker.currentNode);
+      document.querySelectorAll('h1,h2,h3,h4,label,button,a,.card-header,.stat-card .label,.empty h3,.empty p,p,span,div').forEach(translate);
+    }
+    runTranslate();
+    // Re-run after dynamic content (e.g. Show/Hide toggles, async loads)
+    setTimeout(runTranslate, 800);
+    setTimeout(runTranslate, 2000);
+
     var origAlert = window.alert;
-    window.alert = function(msg) { origAlert(T[msg] || msg); };
+    window.alert = function(msg) { origAlert(T[msg] || _replaceAll(String(msg))); };
   })();
   </script>
   {% endif %}
