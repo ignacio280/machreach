@@ -3184,22 +3184,27 @@ def register_student_routes(app, csrf, limiter):
     def student_set_schedule():
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
-        data = request.get_json(force=True)
-        settings = data.get("schedule", [])
-        if not isinstance(settings, list):
-            return jsonify({"error": "schedule must be a list"}), 400
-        cleaned = []
-        for s in settings:
-            day = int(s.get("day", -1))
-            if day < 0 or day > 6:
-                continue
-            cleaned.append({
-                "day": day,
-                "hours": max(0, min(24, float(s.get("hours", 0)))),
-                "free": bool(s.get("free", False)),
-            })
-        sdb.save_schedule_settings(_cid(), cleaned)
-        return jsonify({"ok": True})
+        try:
+            data = request.get_json(force=True) or {}
+            settings = data.get("schedule", [])
+            if not isinstance(settings, list):
+                return jsonify({"error": "schedule must be a list"}), 400
+            cleaned = []
+            for s in settings:
+                day = int(s.get("day", -1))
+                if day < 0 or day > 6:
+                    continue
+                cleaned.append({
+                    "day": day,
+                    "hours": max(0, min(24, float(s.get("hours", 0)))),
+                    "free": bool(s.get("free", False)),
+                })
+            sdb.save_schedule_settings(_cid(), cleaned)
+            return jsonify({"ok": True})
+        except Exception as e:
+            import logging, traceback
+            logging.getLogger("student.routes").error("schedule save failed: %s\n%s", e, traceback.format_exc())
+            return jsonify({"error": f"Could not save schedule: {str(e)[:120]}"}), 500
 
     # ── Course difficulty ───────────────────────────────────
 
@@ -6620,6 +6625,7 @@ No markdown, no code fences. ONLY JSON.
     # ================================================================
 
     @app.route("/api/student/email-prefs", methods=["GET", "POST"])
+    @csrf.exempt
     def student_email_prefs_api():
         if not _logged_in():
             return jsonify(error="Login required"), 401
@@ -6636,17 +6642,22 @@ No markdown, no code fences. ONLY JSON.
                 university=prefs.get("university", ""),
                 field_of_study=prefs.get("field_of_study", ""),
             )
-        data = request.get_json(force=True)
-        sdb.upsert_email_prefs(
-            cid,
-            daily_email=data.get("daily_email", True),
-            email_hour=data.get("email_hour", 7),
-            timezone=data.get("timezone", "America/Mexico_City"),
-            university=data.get("university", ""),
-            field_of_study=data.get("field_of_study", ""),
-            lang=session.get("lang", "en"),
-        )
-        return jsonify(ok=True)
+        try:
+            data = request.get_json(force=True) or {}
+            sdb.upsert_email_prefs(
+                cid,
+                daily_email=bool(data.get("daily_email", True)),
+                email_hour=int(data.get("email_hour", 7)),
+                timezone=str(data.get("timezone", "America/Mexico_City"))[:64],
+                university=str(data.get("university", ""))[:120],
+                field_of_study=str(data.get("field_of_study", ""))[:120],
+                lang=session.get("lang", "en"),
+            )
+            return jsonify(ok=True)
+        except Exception as e:
+            import logging, traceback
+            logging.getLogger("student.routes").error("email-prefs save failed: %s\n%s", e, traceback.format_exc())
+            return jsonify(error=f"Could not save preferences: {str(e)[:120]}"), 500
 
     # ================================================================
     #  LEADERBOARD / RANKINGS
@@ -7159,22 +7170,56 @@ No markdown, no code fences. ONLY JSON.
             <script>
               (function() {{
                 var current = localStorage.getItem('mr_theme') || 'default';
+                var pending = current;
+                var statusEl = document.getElementById('theme-status');
                 function mark() {{
                   document.querySelectorAll('.theme-chip').forEach(function(b) {{
-                    b.style.outline = (b.dataset.theme === current) ? '3px solid #6366f1' : 'none';
+                    var isPending = b.dataset.theme === pending;
+                    var isSaved = b.dataset.theme === current;
+                    b.style.outline = isPending ? '3px solid #6366f1' : 'none';
+                    b.style.outlineOffset = isPending ? '2px' : '0';
+                    var badge = b.querySelector('.theme-saved-badge');
+                    if (badge) badge.style.display = (isSaved && isPending) ? 'inline-block' : 'none';
                   }});
+                  var saveBtn = document.getElementById('theme-save-btn');
+                  if (saveBtn) {{
+                    saveBtn.disabled = (pending === current);
+                    saveBtn.textContent = (pending === current) ? '&#10003; Saved' : 'Save theme';
+                    saveBtn.innerHTML = (pending === current) ? '&#10003; Saved' : 'Save theme';
+                  }}
                 }}
                 document.querySelectorAll('.theme-chip').forEach(function(b) {{
                   b.addEventListener('click', function() {{
-                    current = b.dataset.theme;
-                    localStorage.setItem('mr_theme', current);
-                    if (window.applyMrTheme) window.applyMrTheme(current);
+                    pending = b.dataset.theme;
+                    // Instant preview
+                    if (window.applyMrTheme) window.applyMrTheme(pending);
+                    if (statusEl) statusEl.textContent = 'Previewing &mdash; click Save to keep it.';
                     mark();
                   }});
+                }});
+                var saveBtn = document.getElementById('theme-save-btn');
+                if (saveBtn) saveBtn.addEventListener('click', function() {{
+                  current = pending;
+                  localStorage.setItem('mr_theme', current);
+                  if (statusEl) statusEl.textContent = 'Saved! This theme will apply everywhere.';
+                  mark();
+                  setTimeout(function(){{ if(statusEl) statusEl.textContent=''; }}, 2500);
+                }});
+                var resetBtn = document.getElementById('theme-reset-btn');
+                if (resetBtn) resetBtn.addEventListener('click', function() {{
+                  pending = current;
+                  if (window.applyMrTheme) window.applyMrTheme(current);
+                  mark();
                 }});
                 mark();
               }})();
             </script>
+            <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+              <button id="theme-save-btn" class="btn btn-primary btn-sm" disabled>&#10003; Saved</button>
+              <button id="theme-reset-btn" class="btn btn-outline btn-sm">Revert preview</button>
+              <span id="theme-status" style="color:var(--text-muted);font-size:13px"></span>
+            </div>
+            <p style="color:var(--text-muted);font-size:12px;margin-top:10px">&#128161; Click any theme to preview it instantly. Hit Save when you find one you like.</p>
           </div>
 
           <!-- Daily Study Email -->
@@ -7370,7 +7415,13 @@ No markdown, no code fences. ONLY JSON.
               field_of_study: document.getElementById('pref-field').value.trim()
             }})
           }});
-          if (r.ok) alert('Saved!'); else alert('Error saving.');
+          if (r.ok) {{
+            alert('Saved!');
+          }} else {{
+            var msg = 'Error saving.';
+            try {{ var j = await r.json(); if (j && j.error) msg = j.error; }} catch(e) {{}}
+            alert(msg);
+          }}
         }}
         function saveMailRules() {{
           var text = document.getElementById('settings-mail-rules').value.trim();

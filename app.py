@@ -390,7 +390,7 @@ def _set_security_headers(response):
         "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
         "magnetometer=(), accelerometer=(), gyroscope=(), interest-cohort=()"
     )
-    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     response.headers["X-Download-Options"] = "noopen"
@@ -399,12 +399,13 @@ def _set_security_headers(response):
     # via Jinja/f-strings. Everything else is locked down.
     _CSP = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com data:; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+        "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
         "img-src 'self' data: blob: https:; "
-        "connect-src 'self' https://api.openai.com https://*.instructure.com; "
-        "frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.sandbox.paypal.com; "
+        "media-src 'self' https:; "
+        "connect-src 'self' https://api.openai.com https://*.instructure.com https://cdn.jsdelivr.net; "
+        "frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.sandbox.paypal.com https://open.spotify.com https://www.youtube.com https://www.youtube-nocookie.com; "
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
         "form-action 'self' https://www.paypal.com https://www.sandbox.paypal.com; "
@@ -442,7 +443,28 @@ LAYOUT = """<!DOCTYPE html>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="if(typeof renderMathInElement==='function')renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}],throwOnError:false});"></script>
   <script>
     // Apply saved theme immediately to prevent flash
-    (function(){var t=localStorage.getItem('machreach-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+    (function(){
+      // Legacy dark-mode toggle
+      var t = localStorage.getItem('machreach-theme');
+      if (t) document.documentElement.setAttribute('data-theme', t);
+      // MachReach student theme picker
+      var mr = localStorage.getItem('mr_theme');
+      if (mr && mr !== 'default') document.documentElement.setAttribute('data-theme', 'mr-' + mr);
+    })();
+    // Allow the settings page (and anywhere else) to switch themes instantly
+    window.applyMrTheme = function(name) {
+      try {
+        var root = document.documentElement;
+        if (!name || name === 'default') {
+          // Default = saved dark-mode value or light
+          var leg = localStorage.getItem('machreach-theme') || '';
+          root.setAttribute('data-theme', leg);
+        } else {
+          root.setAttribute('data-theme', 'mr-' + name);
+        }
+        localStorage.setItem('mr_theme', name || 'default');
+      } catch (e) { console.error('applyMrTheme failed', e); }
+    };
     // Auto-inject CSRF token into all fetch requests
     (function(){
       var _fetch = window.fetch;
@@ -555,6 +577,57 @@ LAYOUT = """<!DOCTYPE html>
     :root[data-theme="dark"] input::placeholder, :root[data-theme="dark"] textarea::placeholder {
       color: #475569;
     }
+
+    /* ─── MachReach student themes ─── */
+    /* mr-default = light default; mr-dark inherits dark mode vars */
+    :root[data-theme="mr-light"] {
+      --bg:#F8FAFC; --card:#FFFFFF; --text:#0F172A; --text-muted:#64748B;
+      --border:#E2E8F0; --primary:#6366F1; --primary-hover:#4F46E5;
+    }
+    :root[data-theme="mr-midnight"] {
+      --bg:#050816; --card:#0F172A; --text:#E2E8F0; --text-secondary:#CBD5E1; --text-muted:#94A3B8;
+      --border:#1E293B; --border-light:#0F172A; --primary:#8B5CF6; --primary-hover:#7C3AED; --primary-light:#1E1B4B;
+      --card-bg:#0F172A;
+    }
+    :root[data-theme="mr-midnight"] body { background:#050816; }
+    :root[data-theme="mr-midnight"] input, :root[data-theme="mr-midnight"] textarea, :root[data-theme="mr-midnight"] select { background:#0F172A; color:#E2E8F0; border-color:#1E293B; }
+
+    :root[data-theme="mr-forest"] {
+      --bg:#0b2018; --card:#0f2a20; --text:#d1fae5; --text-secondary:#a7f3d0; --text-muted:#6ee7b7;
+      --border:#14532d; --border-light:#0f2a20; --primary:#10B981; --primary-hover:#059669; --primary-light:#064e3b;
+    }
+    :root[data-theme="mr-forest"] body { background:#0b2018; }
+    :root[data-theme="mr-forest"] input, :root[data-theme="mr-forest"] textarea, :root[data-theme="mr-forest"] select { background:#0f2a20; color:#d1fae5; border-color:#14532d; }
+
+    :root[data-theme="mr-ocean"] {
+      --bg:#082f49; --card:#0c4a6e; --text:#e0f2fe; --text-secondary:#bae6fd; --text-muted:#7dd3fc;
+      --border:#075985; --border-light:#0c4a6e; --primary:#0ea5e9; --primary-hover:#0284c7; --primary-light:#0c4a6e;
+    }
+    :root[data-theme="mr-ocean"] body { background:#082f49; }
+    :root[data-theme="mr-ocean"] input, :root[data-theme="mr-ocean"] textarea, :root[data-theme="mr-ocean"] select { background:#0c4a6e; color:#e0f2fe; border-color:#075985; }
+
+    :root[data-theme="mr-rose"] {
+      --bg:#3f0a1a; --card:#500724; --text:#fecdd3; --text-secondary:#fda4af; --text-muted:#fb7185;
+      --border:#881337; --border-light:#500724; --primary:#f43f5e; --primary-hover:#e11d48; --primary-light:#4c0519;
+    }
+    :root[data-theme="mr-rose"] body { background:#3f0a1a; }
+    :root[data-theme="mr-rose"] input, :root[data-theme="mr-rose"] textarea, :root[data-theme="mr-rose"] select { background:#500724; color:#fecdd3; border-color:#881337; }
+
+    :root[data-theme="mr-sunset"] {
+      --bg:#431407; --card:#7c2d12; --text:#fff7ed; --text-secondary:#fed7aa; --text-muted:#fdba74;
+      --border:#9a3412; --border-light:#7c2d12; --primary:#f97316; --primary-hover:#ea580c; --primary-light:#7c2d12;
+    }
+    :root[data-theme="mr-sunset"] body { background:linear-gradient(135deg,#7c2d12,#431407); }
+    :root[data-theme="mr-sunset"] input, :root[data-theme="mr-sunset"] textarea, :root[data-theme="mr-sunset"] select { background:#7c2d12; color:#fff7ed; border-color:#9a3412; }
+
+    :root[data-theme="mr-mono"] {
+      --bg:#0a0a0a; --card:#171717; --text:#fafafa; --text-secondary:#d4d4d4; --text-muted:#a3a3a3;
+      --border:#262626; --border-light:#171717; --primary:#ffffff; --primary-hover:#e5e5e5; --primary-light:#262626;
+    }
+    :root[data-theme="mr-mono"] body { background:#0a0a0a; }
+    :root[data-theme="mr-mono"] input, :root[data-theme="mr-mono"] textarea, :root[data-theme="mr-mono"] select { background:#171717; color:#fafafa; border-color:#262626; }
+    :root[data-theme="mr-mono"] .btn-primary { background:#fff; color:#000; }
+    /* ─── end themes ─── */
 
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
@@ -961,7 +1034,7 @@ LAYOUT = """<!DOCTYPE html>
     }
     /* Mobile hamburger */
     .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #94A3B8; font-size: 24px; line-height: 1; z-index: 201; }
-    @media (max-width: 1024px) {
+    @media (max-width: 1280px) {
       .nav { backdrop-filter: none; }
       .hamburger { display: block; }
       .nav-links { display: none; position: fixed; top: 58px; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); flex-direction: column; padding: 20px 24px; gap: 4px; overflow-y: auto; z-index: 200; }
@@ -970,6 +1043,11 @@ LAYOUT = """<!DOCTYPE html>
       .nav-links a.active { background: rgba(255,255,255,0.13); }
       .nav-links .nav-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 8px 0; width: 100%; }
       .nav-links .nav-user { font-size: 14px; padding: 12px 16px; }
+      /* On mobile, dropdowns expand inline so every link is reachable by tap */
+      .nav-dropdown { width: 100%; position: static; }
+      .nav-dropdown > a { display: block; }
+      .nav-dropdown-menu { display: block !important; position: static !important; opacity: 1 !important; transform: none !important; background: rgba(255,255,255,0.04) !important; border: none !important; box-shadow: none !important; padding: 4px 0 8px 12px !important; margin-top: 0 !important; min-width: 0 !important; }
+      .nav-dropdown-menu a { font-size: 14px !important; padding: 10px 14px !important; }
       .toast-container { right: 12px; left: 12px; max-width: none; }
       table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
       thead, tbody, tr { display: table; width: 100%; table-layout: auto; }
@@ -988,30 +1066,35 @@ LAYOUT = """<!DOCTYPE html>
     <div class="nav-links">
       {% if logged_in %}
         {% if account_type|default('business') == 'student' %}
-        <div class="nav-dropdown">
-          <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard &#9662;</a>
-          <div class="nav-dropdown-menu">
-            <a href="/student/exams">&#128221; Exams</a>
-            <a href="/student/focus">&#127917; Focus Mode</a>
-            <a href="/student/gpa">&#127891; GPA Calculator</a>
-            <a href="/student/practice">&#128736; Practice</a>
-            <a href="/student/schedule">&#128337; Schedule</a>
-            <a href="/student/weak-topics">&#127919; Weak Topics</a>
-            <a href="/student/smart-import">&#128640; Import</a>
-            <a href="/student/achievements">&#127942; XP</a>
-          </div>
-        </div>
+        <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <a href="/student/plan" {% if active_page == 'student_plan' %}class="active"{% endif %}>&#128197; Plan</a>
-        <div class="nav-divider"></div>
-        <a href="/student/essay" {% if active_page == 'student_essay' %}class="active"{% endif %}>&#9999;&#65039; Essay</a>
+        <div class="nav-dropdown">
+          <a href="#" onclick="return false" {% if active_page in ['student_flashcards','student_quizzes','student_notes','student_chat','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
+          <div class="nav-dropdown-menu">
+            <a href="/student/flashcards">&#127183; Flashcards</a>
+            <a href="/student/quizzes">&#128221; Quizzes</a>
+            <a href="/student/notes">&#128214; Notes</a>
+            <a href="/student/chat">&#129302; AI Tutor</a>
+            <a href="/student/essay">&#9999;&#65039; Essay</a>
+            <a href="/student/practice">&#128736; Practice</a>
+          </div>
+        </div>
+        <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
         <a href="/student/panic" {% if active_page == 'student_panic' %}class="active" style="color:#EF4444;"{% else %}style="color:#EF4444;"{% endif %}>&#128680; Panic</a>
         <div class="nav-divider"></div>
-        <a href="/student/flashcards" {% if active_page == 'student_flashcards' %}class="active"{% endif %}>&#127183; Flashcards</a>
-        <a href="/student/quizzes" {% if active_page == 'student_quizzes' %}class="active"{% endif %}>&#128221; Quizzes</a>
-        <a href="/student/notes" {% if active_page == 'student_notes' %}class="active"{% endif %}>&#128214; Notes</a>
-        <a href="/student/chat" {% if active_page == 'student_chat' %}class="active"{% endif %}>&#129302; Tutor</a>
-        <a href="/student/exchange" {% if active_page == 'student_exchange' %}class="active"{% endif %}>&#128218; Exchange</a>
+        <div class="nav-dropdown">
+          <a href="#" onclick="return false" {% if active_page in ['student_exams','student_schedule','student_weak','student_gpa','student_smart_import','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
+          <div class="nav-dropdown-menu">
+            <a href="/student/exams">&#128221; Exams</a>
+            <a href="/student/schedule">&#128337; Schedule</a>
+            <a href="/student/weak-topics">&#127919; Weak Topics</a>
+            <a href="/student/gpa">&#128200; GPA</a>
+            <a href="/student/smart-import">&#128640; Import</a>
+            <a href="/student/achievements">&#127942; XP &amp; Badges</a>
+          </div>
+        </div>
+        <a href="/student/exchange" {% if active_page == 'student_exchange' %}class="active"{% endif %}>&#128257; Exchange</a>
         <a href="/student/leaderboard" {% if active_page == 'student_leaderboard' %}class="active"{% endif %}>&#127942; Leaderboard</a>
         <div class="nav-divider"></div>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; Mail</a>
