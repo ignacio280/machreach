@@ -1581,20 +1581,14 @@ LAYOUT = """<!DOCTYPE html>
     <div class="ff-label" id="ff-label">Focus</div>
   </div>
 
-  <!-- Persistent Spotify mini-player — survives navigation between pages -->
+  <!-- Persistent Spotify player — opens as a popup window so it survives MachReach page navigations -->
   {% if logged_in and account_type|default('business') == 'student' %}
   <div id="mr-music-wrap" style="position:fixed;bottom:20px;left:20px;z-index:499;display:none;">
-    <div id="mr-music-bar" onclick="toggleMrMusic()" style="cursor:pointer;background:linear-gradient(135deg,#1DB954,#169c46);color:#fff;padding:10px 14px;border-radius:999px;box-shadow:0 8px 24px rgba(29,185,84,.35);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;">
+    <div id="mr-music-bar" onclick="mrMusicReopen()" title="Reopen music popup" style="cursor:pointer;background:linear-gradient(135deg,#1DB954,#169c46);color:#fff;padding:10px 14px;border-radius:999px;box-shadow:0 8px 24px rgba(29,185,84,.35);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;">
       <span style="font-size:16px;">&#127925;</span>
-      <span id="mr-music-label">Music</span>
-      <span id="mr-music-chev" style="opacity:.8;">&#9650;</span>
-    </div>
-    <div id="mr-music-panel" style="display:none;margin-top:8px;background:#0b1020;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:6px;box-shadow:0 20px 40px rgba(0,0,0,.5);width:340px;">
-      <iframe id="mr-music-iframe" src="about:blank" style="border-radius:8px;width:100%;height:160px;border:0;" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px 2px;font-size:10px;color:#94a3b8;">
-        <span>Playing across MachReach pages</span>
-        <button onclick="event.stopPropagation();mrMusicClose();" style="background:none;border:none;color:#94a3b8;cursor:pointer;">Stop</button>
-      </div>
+      <span id="mr-music-label">Music playing</span>
+      <span style="opacity:.8;font-size:11px;">(popup)</span>
+      <span onclick="event.stopPropagation();mrMusicClose();" style="margin-left:4px;opacity:.9;cursor:pointer;padding:0 4px;">&times;</span>
     </div>
   </div>
   <script>
@@ -1604,49 +1598,86 @@ LAYOUT = """<!DOCTYPE html>
       if(!m) return null;
       return {type:m[1], id:m[2]};
     }
+    function embedUrl(p){
+      return 'https://open.spotify.com/embed/' + p.type + '/' + p.id + '?utm_source=generator&theme=0';
+    }
+    function popupHtml(src, label){
+      return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>MachReach Music</title>' +
+        '<style>html,body{margin:0;padding:0;background:#0b1020;color:#fff;font-family:system-ui,sans-serif;height:100%;}' +
+        'iframe{border:0;width:100%;height:calc(100% - 28px);display:block;}' +
+        '.bar{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:11px;color:#94a3b8;background:#0b1020;border-bottom:1px solid rgba(255,255,255,.08);}' +
+        '</style></head><body>' +
+        '<div class="bar"><span>&#127925; ' + (label||'MachReach Music') + '</span><span>Keep this window open</span></div>' +
+        '<iframe src="' + src + '" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>' +
+        '</body></html>';
+    }
+    function showBadge(label){
+      var w = document.getElementById('mr-music-wrap');
+      if(w) w.style.display='block';
+      var l = document.getElementById('mr-music-label');
+      if(l && label) l.textContent = label;
+    }
+    function hideBadge(){
+      var w = document.getElementById('mr-music-wrap');
+      if(w) w.style.display='none';
+    }
+    function openPopup(url, label){
+      var p = parseUrl(url);
+      if(!p) return null;
+      var src = embedUrl(p);
+      // If existing popup still open, just update its src
+      if(window.__mrMusicWin && !window.__mrMusicWin.closed){
+        try {
+          var ifr = window.__mrMusicWin.document.querySelector('iframe');
+          if(ifr) ifr.src = src;
+          window.__mrMusicWin.focus();
+          return window.__mrMusicWin;
+        } catch(e){}
+      }
+      var w = window.open('', 'mr_music_popup', 'width=400,height=220,left=40,top=' + (screen.height-320) + ',menubar=no,toolbar=no,location=no,status=no,resizable=yes');
+      if(!w) return null;
+      w.document.open();
+      w.document.write(popupHtml(src, label || (p.type.charAt(0).toUpperCase()+p.type.slice(1))));
+      w.document.close();
+      window.__mrMusicWin = w;
+      return w;
+    }
     window.mrMusicSet = function(url){
       var p = parseUrl(url);
       if(!p) return false;
       try { localStorage.setItem('mr_music_url', url); } catch(e){}
-      var src = 'https://open.spotify.com/embed/' + p.type + '/' + p.id + '?utm_source=generator&theme=0';
-      var iframe = document.getElementById('mr-music-iframe');
-      if(iframe && iframe.getAttribute('data-src') !== src){
-        iframe.setAttribute('data-src', src);
-        iframe.src = src;
+      var label = p.type.charAt(0).toUpperCase() + p.type.slice(1);
+      var w = openPopup(url, label);
+      if(!w){
+        showBadge('Popup blocked — allow popups for music');
+        return false;
       }
-      showMrMusic();
+      showBadge(label);
       return true;
+    };
+    window.mrMusicReopen = function(){
+      try {
+        var saved = localStorage.getItem('mr_music_url');
+        if(!saved) return;
+        window.mrMusicSet(saved);
+      } catch(e){}
     };
     window.mrMusicClose = function(){
       try { localStorage.removeItem('mr_music_url'); } catch(e){}
-      var iframe = document.getElementById('mr-music-iframe');
-      if(iframe){ iframe.src = 'about:blank'; iframe.removeAttribute('data-src'); }
-      var w = document.getElementById('mr-music-wrap');
-      if(w) w.style.display = 'none';
+      if(window.__mrMusicWin && !window.__mrMusicWin.closed){
+        try { window.__mrMusicWin.close(); } catch(e){}
+      }
+      window.__mrMusicWin = null;
+      hideBadge();
     };
-    function showMrMusic(){
-      var w = document.getElementById('mr-music-wrap');
-      if(w) w.style.display = 'block';
-    }
-    window.toggleMrMusic = function(){
-      var p = document.getElementById('mr-music-panel');
-      var c = document.getElementById('mr-music-chev');
-      if(!p) return;
-      if(p.style.display === 'none'){ p.style.display='block'; c.innerHTML='&#9660;'; }
-      else { p.style.display='none'; c.innerHTML='&#9650;'; }
-    };
-    // Restore on every page load
+    // On each page load: if a URL is saved and an existing popup is still alive (rare — popups lose
+    // their opener reference on navigation), just show the badge so user can reopen with one click.
     try {
       var saved = localStorage.getItem('mr_music_url');
       if(saved){
         var p = parseUrl(saved);
         if(p){
-          var src = 'https://open.spotify.com/embed/' + p.type + '/' + p.id + '?utm_source=generator&theme=0';
-          var iframe = document.getElementById('mr-music-iframe');
-          if(iframe){ iframe.src = src; iframe.setAttribute('data-src', src); }
-          var label = document.getElementById('mr-music-label');
-          if(label) label.textContent = p.type.charAt(0).toUpperCase() + p.type.slice(1);
-          showMrMusic();
+          showBadge(p.type.charAt(0).toUpperCase()+p.type.slice(1) + ' ready');
         }
       }
     } catch(e){}
