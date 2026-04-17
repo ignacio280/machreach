@@ -2438,6 +2438,221 @@ LAYOUT = """<!DOCTYPE html>
       "Your Student Dashboard": "Tu Panel de Estudiante",
       "Exams Dashboard": "Panel de Exámenes",
       "Every upcoming exam, sorted by urgency.": "Todos los exámenes próximos, ordenados por urgencia.",
+
+      // ── Courses page ──
+      "My Courses": "Mis Cursos", "Canvas Integration": "Integración con Canvas",
+      "Course Sync": "Sincronización de Cursos", "New Course": "Nuevo Curso",
+      "Create Course": "Crear Curso", "Create a course": "Crear un curso",
+      "Create course manually": "Crear curso manualmente",
+      "Send to Canvas": "Enviar a Canvas",
+      "Sync Now": "Sincronizar Ahora", "View Materials": "Ver Materiales",
+      "Course name": "Nombre del curso", "Code": "Código", "Term": "Periodo",
+      "Last Synced": "Última sincronización",
+      "Files": "Archivos", "Grading": "Calificación",
+      "No courses yet": "Aún no tienes cursos",
+      "No courses synced yet": "Aún no se han sincronizado cursos",
+      "Sync your courses first": "Sincroniza tus cursos primero",
+      "No files uploaded": "No hay archivos subidos",
+
+      // ── Study Plan page ──
+      "Study Plan": "Plan de Estudio",
+      "Weekly Schedule": "Horario Semanal",
+      "Course Difficulty": "Dificultad del Curso",
+      "Edit Schedule": "Editar Horario",
+      "Free day": "Día libre",
+      "Check off each assignment as you complete it":
+        "Marca cada tarea a medida que la completes",
+      "No study plan yet": "Aún no hay plan de estudio",
+      "Sync your Canvas courses first to generate a plan.":
+        "Sincroniza tus cursos de Canvas primero para generar un plan.",
+      "Complete": "Completar", "Remaining": "Restante",
+
+      // ── Focus Mode page ──
+      "Focus Mode": "Modo Enfoque", "Focus Guard": "Guardián de Enfoque",
+      "Quick Access": "Acceso Rápido", "Studying for:": "Estudiando para:",
+      "Long break after every 4 sessions": "Descanso largo cada 4 sesiones",
+      "Space flip": "Espacio para voltear",
+      "1 incorrect": "1 incorrecto", "2 correct": "2 correcto",
+      "Pages Read": "Páginas Leídas",
+
+      // ── Flashcards page ──
+      "Smart spaced repetition": "Repetición espaciada inteligente",
+      "Study Mode": "Modo de Estudio", "Edit Cards": "Editar Tarjetas",
+      "Add Card": "Agregar Tarjeta", "Study Again": "Estudiar de Nuevo",
+      "Start Studying": "Comenzar a Estudiar",
+      "Undo last": "Deshacer último",
+      "Click to flip": "Haz clic para voltear",
+      "Incorrect": "Incorrecto", "Correct": "Correcto",
+      "Reviewing again tomorrow": "Repasando de nuevo mañana",
+      "Good learning pace": "Buen ritmo de aprendizaje",
+      "No flashcard decks yet": "Aún no tienes mazos de tarjetas",
+      "Generate your first set from a course!":
+        "¡Genera tu primer conjunto desde un curso!",
+      "Exam (optional)": "Examen (opcional)",
+      "Custom title": "Título personalizado",
+
+      // ── Quizzes page ──
+      "Ready to start?": "¿Listo para empezar?",
+      "Quiz complete": "Examen completado",
+      "Start Quiz": "Iniciar Examen", "See Results": "Ver Resultados",
+      "Retake quiz": "Repetir examen", "Retake wrong only": "Repetir solo errores",
+      "Back to quizzes": "Volver a exámenes",
+      "Enable timer": "Activar temporizador", "Mode": "Modo",
+      "Total time for whole quiz": "Tiempo total para el examen",
+      "Time per question": "Tiempo por pregunta",
+      "60s / question": "60s / pregunta", "90s / question": "90s / pregunta",
+      "2m / question": "2m / pregunta", "Realistic exam": "Examen realista",
+      "Total time": "Tiempo total", "Avg / question": "Prom. / pregunta",
+      "Fastest": "Más rápida", "Slowest": "Más lenta",
+      "Mastery": "Dominio", "Solid": "Sólido", "Shaky": "Inestable",
+      "Struggling": "Con dificultad",
+      "Strengths": "Fortalezas", "Needs work": "Necesita trabajo",
+      "Mistake patterns": "Patrones de error", "Do this next": "Haz esto a continuación",
+      "30-minute follow-up plan": "Plan de seguimiento de 30 minutos",
+      "Question-by-question review": "Revisión pregunta por pregunta",
+      "Analyzing...": "Analizando...", "Topic breakdown": "Desglose por tema",
+
+      // ── Exam Simulator ──
+      "Time Limit (minutes)": "Tiempo Límite (minutos)",
+      "You cannot go back to previous questions":
+        "No puedes regresar a preguntas anteriores",
+      "Timer runs continuously — no pausing":
+        "El temporizador corre sin parar — sin pausas",
+      "Answers are final once submitted":
+        "Las respuestas son finales al enviarse",
+      "Detailed analytics provided at the end":
+        "Análisis detallado al finalizar",
+      "Back to Quizzes": "Volver a Exámenes",
+
+      // ── Notes page ──
+      "AI Study Notes": "Apuntes de Estudio con IA",
+      "Comprehensive notes generated from your course materials":
+        "Apuntes completos generados desde tus materiales de curso",
+      "Generate AI Study Notes": "Generar Apuntes con IA",
+      "Export PDF": "Exportar PDF", "Print": "Imprimir",
+      "Uploading...": "Subiendo...", "AI-summarizing...": "Resumiendo con IA...",
+      "No notes yet": "Aún no hay apuntes",
+      "Generate AI study notes from your course materials!":
+        "¡Genera apuntes con IA desde tus materiales de curso!",
+      "Back to Notes": "Volver a Apuntes",
+      "Bold (B)": "Negrita (B)", "Italic (I)": "Cursiva (I)",
+      "Underline (U)": "Subrayado (U)",
+      "Heading 2 (H2)": "Encabezado 2 (H2)", "Heading 3 (H3)": "Encabezado 3 (H3)",
+      "Paragraph (P)": "Párrafo (P)",
+      "Bullet list": "Lista con viñetas", "Numbered list": "Lista numerada",
+      "Clear formatting": "Quitar formato",
+
+      // ── AI Tutor Chat ──
+      "Ask anything about your courses — your AI tutor uses your own notes and course material to help":
+        "Pregunta lo que quieras sobre tus cursos — tu tutor de IA usa tus apuntes y materiales para ayudarte",
+      "General (no specific course)": "General (sin curso específico)",
+      "Select a course...": "Selecciona un curso...",
+      "Send": "Enviar", "Clear history": "Borrar historial",
+      "Extracting...": "Extrayendo...",
+      "Attached:": "Adjuntado:", "No file attached": "Sin archivo adjunto",
+      "Hi! I'm your AI study tutor. Ask me anything about your course material!":
+        "¡Hola! Soy tu tutor de estudio con IA. ¡Pregúntame lo que quieras sobre tus materiales!",
+      "Thinking...": "Pensando...",
+      "Please summarize and explain the attached document":
+        "Por favor resume y explica el documento adjunto",
+
+      // ── Weak Topics ──
+      "Weak Topic Detector": "Detector de Temas Débiles",
+      "Based on your flashcard accuracy and quiz scores, here are the topics that need more attention":
+        "Basado en tu precisión en tarjetas y exámenes, estos son los temas que necesitan más atención",
+      "Recommendations": "Recomendaciones",
+      "Next steps to improve": "Próximos pasos para mejorar",
+      "Not enough data yet": "Aún no hay suficientes datos",
+      "Complete some quizzes and review flashcards to see your weak spots":
+        "Completa algunos exámenes y repasa tarjetas para ver tus puntos débiles",
+
+      // ── Achievements ──
+      "XP / Total": "XP / Total",
+
+      // ── Leaderboard ──
+      "Personal Leaderboards": "Clasificaciones Personales",
+      "Fair-play": "Juego Limpio", "Fair-play group": "Grupo de juego limpio",
+      "Everyone starts at 0 XP": "Todos comienzan en 0 XP",
+      "Create a Group": "Crear un Grupo", "Join with Code": "Unirse con Código",
+      "Group Name": "Nombre del Grupo", "Enter group name": "Ingresa el nombre del grupo",
+      "Invite Code": "Código de Invitación", "Members": "Miembros",
+      "Copy Invite": "Copiar Invitación", "Delete Group": "Eliminar Grupo",
+      "Leave": "Salir", "Join": "Unirse",
+
+      // ── Study Exchange ──
+      "Share to Exchange": "Compartir al Intercambio",
+      "Unpublish from Exchange": "Despublicar del Intercambio",
+      "Back to Exchange": "Volver al Intercambio",
+      "No notes to share": "No hay apuntes para compartir",
+      "Create notes first!": "¡Crea apuntes primero!",
+
+      // ── Settings page ──
+      "Mail Sorting Rules": "Reglas de Clasificación de Correo",
+      "Interactive Tutorial": "Tutorial Interactivo",
+      "Account Security": "Seguridad de la Cuenta",
+      "Add Email Account": "Agregar Cuenta de Correo",
+      "Save Rules": "Guardar Reglas",
+      "Restart Tutorial": "Reiniciar Tutorial",
+      "Change password": "Cambiar contraseña",
+      "Update Password": "Actualizar Contraseña",
+      "Delete My Account": "Eliminar Mi Cuenta",
+      "Connected": "Conectado", "Not connected": "No conectado",
+      "Your account is secure": "Tu cuenta está segura",
+      "mailboxes": "buzones",
+      "Write your mail sorting rules here...":
+        "Escribe aquí tus reglas de clasificación de correo...",
+      "e.g. MIT, Stanford, UNAM...": "ej. MIT, Stanford, UNAM...",
+      "e.g. Computer Science, Medicine...": "ej. Ingeniería, Medicina...",
+      "Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action cannot be undone":
+        "Eliminar permanentemente tu cuenta y todos los datos asociados (cursos, exámenes, apuntes, tarjetas, exámenes, historial de chat, XP, insignias). Esta acción no se puede deshacer",
+      "Permanently Delete Account": "Eliminar Cuenta Permanentemente",
+      "Current Password": "Contraseña Actual",
+      "New Password": "Contraseña Nueva",
+      "Confirm Password": "Confirmar Contraseña",
+      "Minimum 6 characters": "Mínimo 6 caracteres",
+      "Replay the guided walkthrough to rediscover all the features available to you":
+        "Reproduce el recorrido guiado para redescubrir todas las funciones disponibles",
+      "Emails from my professors are always urgent":
+        "Los correos de mis profesores siempre son urgentes",
+      "Meeting invites from @university.edu are important":
+        "Las invitaciones de reuniones desde @university.edu son importantes",
+      "Newsletters and marketing emails are always low priority":
+        "Los boletines y correos de marketing siempre son de baja prioridad",
+
+      // ── Canvas settings ──
+      "Canvas Connection": "Conexión con Canvas",
+      "Canvas LMS Integration": "Integración con Canvas LMS",
+      "Canvas URL": "URL de Canvas",
+      "API Access Token": "Token de Acceso API",
+      "Disconnect": "Desconectar", "Test Connection": "Probar Conexión",
+
+      // ── GPA Calculator ──
+      "Your GPA": "Tu GPA", "What-If": "Simulador",
+      "Credits": "Créditos", "Calculate GPA": "Calcular GPA",
+      "GPA Scale": "Escala de GPA",
+
+      // ── Practice / Schedule ──
+      "Practice Problems": "Ejercicios de Práctica",
+      "AI-Generated Exercises": "Ejercicios Generados por IA",
+      "Schedule & Study Time": "Horario y Tiempo de Estudio",
+      "Weekly Availability": "Disponibilidad Semanal",
+      "Time slots for study": "Bloques de tiempo para estudiar",
+      "Days of the week": "Días de la semana",
+      "Hours per day": "Horas por día",
+
+      // ── Headers / brand ──
+      "MachReach Student": "MachReach Estudiante",
+      "AI-powered study planner · Canvas integration":
+        "Planificador de estudio con IA · Integración con Canvas",
+      "View All": "Ver Todos",
+
+      // ── Themes ──
+      "Default": "Predeterminado", "Midnight": "Medianoche", "Forest": "Bosque",
+      "Ocean": "Océano", "Rose": "Rosa", "Sunset": "Atardecer",
+      "Mono": "Monocromo", "Light": "Claro", "Lavender": "Lavanda",
+      "Mint": "Menta", "Peach": "Durazno", "Sky": "Cielo",
+      "Butter": "Mantequilla", "Lilac": "Lila", "Blush": "Rubor",
+      "Sand": "Arena", "Cotton Candy": "Algodón de Azúcar", "Seafoam": "Espuma",
     };
 
     // Build a single regex of all phrase keys (longest first) — replaces whole
@@ -2470,17 +2685,31 @@ LAYOUT = """<!DOCTYPE html>
     }
 
     function runTranslate(){
-      var walker = document.createTreeWalker(
-        document.querySelector('.container') || document.body,
-        NodeFilter.SHOW_ELEMENT, null, false
-      );
+      var root = document.querySelector('.container') || document.body;
+      var walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null, false);
       while(walker.nextNode()) translate(walker.currentNode);
-      document.querySelectorAll('h1,h2,h3,h4,label,button,a,.card-header,.stat-card .label,.empty h3,.empty p,p,span,div').forEach(translate);
+      // Belt-and-suspenders pass for common containers
+      document.querySelectorAll('h1,h2,h3,h4,h5,label,button,a,th,td,li,p,span,div,option,summary,figcaption,small,strong,em,b,i').forEach(translate);
+      // Translate <input type=button|submit value="...">
+      document.querySelectorAll('input[type="button"],input[type="submit"]').forEach(function(el){
+        if (el.value && T[el.value]) el.value = T[el.value];
+      });
     }
     runTranslate();
-    // Re-run after dynamic content (e.g. Show/Hide toggles, async loads)
-    setTimeout(runTranslate, 800);
-    setTimeout(runTranslate, 2000);
+    setTimeout(runTranslate, 400);
+    setTimeout(runTranslate, 1200);
+    setTimeout(runTranslate, 3000);
+    // Re-translate when DOM changes (modals, async loads, tab switches)
+    try {
+      var _mo = new MutationObserver(function(muts){
+        var any = false;
+        for (var i=0; i<muts.length; i++){
+          if (muts[i].addedNodes && muts[i].addedNodes.length){ any = true; break; }
+        }
+        if (any) { clearTimeout(window._mrTrTimer); window._mrTrTimer = setTimeout(runTranslate, 150); }
+      });
+      _mo.observe(document.body, {childList:true, subtree:true});
+    } catch(_){}
 
     var origAlert = window.alert;
     window.alert = function(msg) { origAlert(T[msg] || _replaceAll(String(msg))); };
