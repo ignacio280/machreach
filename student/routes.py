@@ -2617,15 +2617,21 @@ def register_student_routes(app, csrf, limiter):
 
         function loadSpotify() {{
           var url = document.getElementById('spotify-url').value.trim();
-          var match = url.match(/open\\.spotify\\.com\\/(playlist|album|track)\\/([a-zA-Z0-9]+)/);
+          var match = url.match(/open\\.spotify\\.com\\/(playlist|album|track|episode|show)\\/([a-zA-Z0-9]+)/);
           if (!match) {{ alert('Paste a valid Spotify link'); return; }}
           setPlaylist(match[2], match[1]);
         }}
 
         function setPlaylist(id, type) {{
           type = type || 'playlist';
-          document.getElementById('spotify-iframe').src =
-            'https://open.spotify.com/embed/' + type + '/' + id + '?utm_source=generator&theme=0';
+          var fullUrl = 'https://open.spotify.com/' + type + '/' + id;
+          var embed = 'https://open.spotify.com/embed/' + type + '/' + id + '?utm_source=generator&theme=0';
+          var inp = document.getElementById('spotify-url');
+          if (inp) inp.value = fullUrl;
+          try {{ localStorage.setItem('focus_input_spotify-url', fullUrl); }} catch(e) {{}}
+          var ifr = document.getElementById('spotify-iframe');
+          if (ifr) ifr.src = embed;
+          if (window.mrMusicSet) window.mrMusicSet(fullUrl);
         }}
 
         // Keyboard shortcuts
@@ -2636,6 +2642,56 @@ def register_student_routes(app, csrf, limiter):
           if (e.code === 'KeyS' && !e.ctrlKey) {{ e.preventDefault(); skipPhase(); }}
           if (e.code === 'KeyP' && currentMode === 'pages') {{ e.preventDefault(); clickPage(); }}
         }});
+
+        // Persist input field values across navigation + live-update timer display when idle
+        (function wireFocusInputs() {{
+          var ids = ['pomo-work','pomo-break','pomo-long','custom-mins','page-target','focus-course','spotify-url'];
+          // Restore saved values first
+          ids.forEach(function(id) {{
+            var el = document.getElementById(id);
+            if (!el) return;
+            try {{
+              var saved = localStorage.getItem('focus_input_' + id);
+              if (saved !== null && saved !== '') el.value = saved;
+            }} catch(e) {{}}
+          }});
+          // Recompute timer display from current inputs (only when idle)
+          function liveUpdate() {{
+            if (isRunning || sessionStarted) return;
+            if (isBreak) return;
+            var mins = null;
+            if (currentMode === 'pomodoro') {{
+              mins = parseInt(document.getElementById('pomo-work').value, 10);
+            }} else if (currentMode === 'custom') {{
+              var c = document.getElementById('custom-mins');
+              if (c) mins = parseInt(c.value, 10);
+            }}
+            if (mins && mins > 0) {{
+              timeLeft = mins * 60;
+              totalTime = timeLeft;
+              updateDisplay();
+            }}
+          }}
+          ids.forEach(function(id) {{
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', function() {{
+              try {{ localStorage.setItem('focus_input_' + id, el.value); }} catch(e) {{}}
+              liveUpdate();
+            }});
+            el.addEventListener('change', function() {{
+              try {{ localStorage.setItem('focus_input_' + id, el.value); }} catch(e) {{}}
+              liveUpdate();
+            }});
+          }});
+          // Apply restored values to timer display on load
+          liveUpdate();
+          // If a Spotify URL is saved, hand it to the persistent player
+          var sUrl = document.getElementById('spotify-url');
+          if (sUrl && sUrl.value && window.mrMusicSet) {{
+            try {{ window.mrMusicSet(sUrl.value); }} catch(e) {{}}
+          }}
+        }})();
 
         // Restore timer if it was running when user navigated away or switched tabs
         (function restoreTimer() {{
