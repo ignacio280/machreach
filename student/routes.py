@@ -1694,10 +1694,46 @@ def register_student_routes(app, csrf, limiter):
             if (v) tips.push(v);
           }});
 
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var headers = {{'Content-Type':'application/json'}};
+          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+
           try {{
-            var csrfToken = document.querySelector('meta[name="csrf-token"]');
-            var headers = {{'Content-Type':'application/json'}};
-            if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+            // 1. Save all exam rows (existing and new)
+            var examRows = document.querySelectorAll('#exams-table tbody tr');
+            var examErrors = [];
+            for (var i = 0; i < examRows.length; i++) {{
+              var tr = examRows[i];
+              var nameEl = tr.querySelector('[data-field="name"]');
+              if (!nameEl) continue;
+              var name = nameEl.value.trim();
+              if (!name) continue; // skip empty rows silently
+              var exam_date = (tr.querySelector('[data-field="exam_date"]') || {{}}).value || '';
+              var weightEl = tr.querySelector('[data-field="weight_pct"]');
+              var weight_pct = weightEl ? (parseInt(weightEl.value) || 0) : 0;
+              var topicsEl = tr.querySelector('[data-field="topics"]');
+              var topicsRaw = topicsEl ? topicsEl.value : '';
+              var topics = topicsRaw.split(',').map(function(t){{ return t.trim(); }}).filter(Boolean);
+              var examId = tr.dataset.examId;
+              var url, method;
+              if (examId && examId !== 'new') {{
+                url = '/api/student/exams/' + examId; method = 'PUT';
+              }} else {{
+                url = '/api/student/courses/' + courseId + '/exams'; method = 'POST';
+              }}
+              try {{
+                var er = await fetch(url, {{
+                  method: method, headers: headers,
+                  body: JSON.stringify({{ name: name, exam_date: exam_date, weight_pct: weight_pct, topics: topics, course_id: courseId }})
+                }});
+                if (!er.ok) {{
+                  var ed = await _safeJson(er);
+                  examErrors.push(name + ': ' + (ed.error || 'save failed'));
+                }}
+              }} catch(e) {{ examErrors.push(name + ': network error'); }}
+            }}
+
+            // 2. Save course info + schedule + tips
             var r = await fetch('/api/student/courses/' + courseId, {{
               method:'PUT', headers: headers,
               body: JSON.stringify({{
@@ -1707,9 +1743,13 @@ def register_student_routes(app, csrf, limiter):
                 study_tips: tips
               }})
             }});
-            if (r.ok) {{ alert('Course info saved!'); location.reload(); }}
+            if (r.ok) {{
+              if (examErrors.length) alert('Saved with some exam errors:\\n' + examErrors.join('\\n'));
+              else alert('All changes saved!');
+              location.reload();
+            }}
             else {{ var d = await _safeJson(r); alert(d.error || 'Save failed'); }}
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Network error: ' + e.message); }}
           btn.disabled = false; btn.innerHTML = '&#128190; Save All Changes';
         }}
 
