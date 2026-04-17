@@ -3492,9 +3492,7 @@ def register_student_routes(app, csrf, limiter):
             quality = max(0, min(5, int(quality)))
             correct = quality >= 3
         sdb.update_flashcard_progress(data["card_id"], correct, quality=quality)
-        # Award XP: 2 XP for correct review, 1 XP for attempt
-        xp_amount = 2 if correct else 1
-        sdb.award_xp(_cid(), "flashcard_review", xp_amount, f"card:{data.get('card_id')}")
+        # XP is only awarded from Focus Mode and Exchange notes usage.
         # Check flashcard badges
         from outreach.db import _fetchval, get_db
         with get_db() as db:
@@ -3640,9 +3638,7 @@ def register_student_routes(app, csrf, limiter):
         data = request.get_json(force=True)
         score = int(data.get("score", 0))
         sdb.update_quiz_score(quiz_id, score)
-        # Award XP: base 10 XP for completing + bonus scaled by score (up to +15 for 100%)
-        xp_amount = 10 + int(score * 0.15)
-        sdb.award_xp(_cid(), "quiz_completed", xp_amount, f"quiz:{quiz_id} score:{score}")
+        # XP is only awarded from Focus Mode and Exchange notes usage.
         if score == 100:
             sdb.earn_badge(_cid(), "quiz_master")
         if not sdb.get_badges(_cid()) or not any(b["badge_key"] == "first_quiz" for b in sdb.get_badges(_cid())):
