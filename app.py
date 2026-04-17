@@ -650,6 +650,92 @@ LAYOUT = """<!DOCTYPE html>
     :root[data-theme="mr-light"]    .nav-dropdown-menu a:hover { color:#0f172a !important; background:rgba(99,102,241,.1) !important; }
     :root[data-theme="mr-light"]    .nav-user { color:#64748b; }
     :root[data-theme="mr-light"]    .nav-logo { color:#0f172a; }
+
+    /* ── Pastel themes (light, colored) ── */
+    /* Each pastel sets vars + body bg + inputs + nav gradient + nav link colors. */
+    :root[data-theme="mr-lavender"] {
+      --bg:#ede9fe; --card:#f5f3ff; --text:#3b0764; --text-secondary:#5b21b6; --text-muted:#6d28d9;
+      --border:#c4b5fd; --border-light:#ddd6fe; --primary:#7c3aed; --primary-hover:#6d28d9; --primary-light:#ede9fe;
+    }
+    :root[data-theme="mr-mint"] {
+      --bg:#bbf7d0; --card:#dcfce7; --text:#14532d; --text-secondary:#166534; --text-muted:#15803d;
+      --border:#86efac; --border-light:#bbf7d0; --primary:#16a34a; --primary-hover:#15803d; --primary-light:#dcfce7;
+    }
+    :root[data-theme="mr-peach"] {
+      --bg:#fed7aa; --card:#ffedd5; --text:#7c2d12; --text-secondary:#9a3412; --text-muted:#c2410c;
+      --border:#fdba74; --border-light:#fed7aa; --primary:#ea580c; --primary-hover:#c2410c; --primary-light:#ffedd5;
+    }
+    :root[data-theme="mr-sky"] {
+      --bg:#bae6fd; --card:#e0f2fe; --text:#0c4a6e; --text-secondary:#075985; --text-muted:#0369a1;
+      --border:#7dd3fc; --border-light:#bae6fd; --primary:#0284c7; --primary-hover:#0369a1; --primary-light:#e0f2fe;
+    }
+    :root[data-theme="mr-butter"] {
+      --bg:#fef9c3; --card:#fefce8; --text:#713f12; --text-secondary:#854d0e; --text-muted:#a16207;
+      --border:#fde047; --border-light:#fef08a; --primary:#ca8a04; --primary-hover:#a16207; --primary-light:#fefce8;
+    }
+    :root[data-theme="mr-lilac"] {
+      --bg:#f5d0fe; --card:#fae8ff; --text:#581c87; --text-secondary:#7e22ce; --text-muted:#9333ea;
+      --border:#e879f9; --border-light:#f0abfc; --primary:#c026d3; --primary-hover:#a21caf; --primary-light:#fae8ff;
+    }
+    :root[data-theme="mr-blush"] {
+      --bg:#fecdd3; --card:#ffe4e6; --text:#881337; --text-secondary:#9f1239; --text-muted:#be123c;
+      --border:#fda4af; --border-light:#fecdd3; --primary:#e11d48; --primary-hover:#be123c; --primary-light:#ffe4e6;
+    }
+    :root[data-theme="mr-sand"] {
+      --bg:#e7d9c2; --card:#f4ead7; --text:#44342a; --text-secondary:#5b4636; --text-muted:#78603e;
+      --border:#c8a47a; --border-light:#d4be99; --primary:#a16207; --primary-hover:#78603e; --primary-light:#f4ead7;
+    }
+    :root[data-theme="mr-cottoncandy"] {
+      --bg:#fbcfe8; --card:#fce7f3; --text:#831843; --text-secondary:#9d174d; --text-muted:#be185d;
+      --border:#f9a8d4; --border-light:#fbcfe8; --primary:#db2777; --primary-hover:#be185d; --primary-light:#fce7f3;
+    }
+    :root[data-theme="mr-seafoam"] {
+      --bg:#a5f3fc; --card:#cffafe; --text:#164e63; --text-secondary:#155e75; --text-muted:#0e7490;
+      --border:#67e8f9; --border-light:#a5f3fc; --primary:#0891b2; --primary-hover:#0e7490; --primary-light:#cffafe;
+    }
+    /* Body backgrounds */
+    :root[data-theme="mr-lavender"]    body { background:#ede9fe; }
+    :root[data-theme="mr-mint"]        body { background:#bbf7d0; }
+    :root[data-theme="mr-peach"]       body { background:#fed7aa; }
+    :root[data-theme="mr-sky"]         body { background:#bae6fd; }
+    :root[data-theme="mr-butter"]      body { background:#fef9c3; }
+    :root[data-theme="mr-lilac"]       body { background:#f5d0fe; }
+    :root[data-theme="mr-blush"]       body { background:#fecdd3; }
+    :root[data-theme="mr-sand"]        body { background:#e7d9c2; }
+    :root[data-theme="mr-cottoncandy"] body { background:#fbcfe8; }
+    :root[data-theme="mr-seafoam"]     body { background:#a5f3fc; }
+    /* Inputs */
+    :root[data-theme="mr-lavender"]    input, :root[data-theme="mr-lavender"]    textarea, :root[data-theme="mr-lavender"]    select { background:#f5f3ff; color:#3b0764; border-color:#c4b5fd; }
+    :root[data-theme="mr-mint"]        input, :root[data-theme="mr-mint"]        textarea, :root[data-theme="mr-mint"]        select { background:#dcfce7; color:#14532d; border-color:#86efac; }
+    :root[data-theme="mr-peach"]       input, :root[data-theme="mr-peach"]       textarea, :root[data-theme="mr-peach"]       select { background:#ffedd5; color:#7c2d12; border-color:#fdba74; }
+    :root[data-theme="mr-sky"]         input, :root[data-theme="mr-sky"]         textarea, :root[data-theme="mr-sky"]         select { background:#e0f2fe; color:#0c4a6e; border-color:#7dd3fc; }
+    :root[data-theme="mr-butter"]      input, :root[data-theme="mr-butter"]      textarea, :root[data-theme="mr-butter"]      select { background:#fefce8; color:#713f12; border-color:#fde047; }
+    :root[data-theme="mr-lilac"]       input, :root[data-theme="mr-lilac"]       textarea, :root[data-theme="mr-lilac"]       select { background:#fae8ff; color:#581c87; border-color:#e879f9; }
+    :root[data-theme="mr-blush"]       input, :root[data-theme="mr-blush"]       textarea, :root[data-theme="mr-blush"]       select { background:#ffe4e6; color:#881337; border-color:#fda4af; }
+    :root[data-theme="mr-sand"]        input, :root[data-theme="mr-sand"]        textarea, :root[data-theme="mr-sand"]        select { background:#f4ead7; color:#44342a; border-color:#c8a47a; }
+    :root[data-theme="mr-cottoncandy"] input, :root[data-theme="mr-cottoncandy"] textarea, :root[data-theme="mr-cottoncandy"] select { background:#fce7f3; color:#831843; border-color:#f9a8d4; }
+    :root[data-theme="mr-seafoam"]     input, :root[data-theme="mr-seafoam"]     textarea, :root[data-theme="mr-seafoam"]     select { background:#cffafe; color:#164e63; border-color:#67e8f9; }
+    /* Pastel nav: tinted gradient + dark text on light bg */
+    :root[data-theme="mr-lavender"]    .nav { background: linear-gradient(135deg,#ddd6fe 0%,#ede9fe 100%); border-bottom:1px solid #c4b5fd; }
+    :root[data-theme="mr-mint"]        .nav { background: linear-gradient(135deg,#86efac 0%,#bbf7d0 100%); border-bottom:1px solid #86efac; }
+    :root[data-theme="mr-peach"]       .nav { background: linear-gradient(135deg,#fdba74 0%,#fed7aa 100%); border-bottom:1px solid #fdba74; }
+    :root[data-theme="mr-sky"]         .nav { background: linear-gradient(135deg,#7dd3fc 0%,#bae6fd 100%); border-bottom:1px solid #7dd3fc; }
+    :root[data-theme="mr-butter"]      .nav { background: linear-gradient(135deg,#fde047 0%,#fef9c3 100%); border-bottom:1px solid #fde047; }
+    :root[data-theme="mr-lilac"]       .nav { background: linear-gradient(135deg,#e879f9 0%,#f5d0fe 100%); border-bottom:1px solid #e879f9; }
+    :root[data-theme="mr-blush"]       .nav { background: linear-gradient(135deg,#fda4af 0%,#fecdd3 100%); border-bottom:1px solid #fda4af; }
+    :root[data-theme="mr-sand"]        .nav { background: linear-gradient(135deg,#c8a47a 0%,#e7d9c2 100%); border-bottom:1px solid #c8a47a; }
+    :root[data-theme="mr-cottoncandy"] .nav { background: linear-gradient(135deg,#f9a8d4 0%,#fbcfe8 100%); border-bottom:1px solid #f9a8d4; }
+    :root[data-theme="mr-seafoam"]     .nav { background: linear-gradient(135deg,#67e8f9 0%,#a5f3fc 100%); border-bottom:1px solid #67e8f9; }
+    /* Pastel nav: dark text on light backgrounds + dropdown menu styling */
+    :root[data-theme="mr-lavender"]    .brand, :root[data-theme="mr-mint"] .brand, :root[data-theme="mr-peach"] .brand, :root[data-theme="mr-sky"] .brand, :root[data-theme="mr-butter"] .brand, :root[data-theme="mr-lilac"] .brand, :root[data-theme="mr-blush"] .brand, :root[data-theme="mr-sand"] .brand, :root[data-theme="mr-cottoncandy"] .brand, :root[data-theme="mr-seafoam"] .brand { color: var(--text); }
+    :root[data-theme="mr-lavender"]    .nav-links a, :root[data-theme="mr-mint"] .nav-links a, :root[data-theme="mr-peach"] .nav-links a, :root[data-theme="mr-sky"] .nav-links a, :root[data-theme="mr-butter"] .nav-links a, :root[data-theme="mr-lilac"] .nav-links a, :root[data-theme="mr-blush"] .nav-links a, :root[data-theme="mr-sand"] .nav-links a, :root[data-theme="mr-cottoncandy"] .nav-links a, :root[data-theme="mr-seafoam"] .nav-links a { color: var(--text-secondary); }
+    :root[data-theme="mr-lavender"]    .nav-links a:hover, :root[data-theme="mr-mint"] .nav-links a:hover, :root[data-theme="mr-peach"] .nav-links a:hover, :root[data-theme="mr-sky"] .nav-links a:hover, :root[data-theme="mr-butter"] .nav-links a:hover, :root[data-theme="mr-lilac"] .nav-links a:hover, :root[data-theme="mr-blush"] .nav-links a:hover, :root[data-theme="mr-sand"] .nav-links a:hover, :root[data-theme="mr-cottoncandy"] .nav-links a:hover, :root[data-theme="mr-seafoam"] .nav-links a:hover { color: var(--text); background: rgba(0,0,0,0.06); }
+    :root[data-theme="mr-lavender"]    .nav-links a.active, :root[data-theme="mr-mint"] .nav-links a.active, :root[data-theme="mr-peach"] .nav-links a.active, :root[data-theme="mr-sky"] .nav-links a.active, :root[data-theme="mr-butter"] .nav-links a.active, :root[data-theme="mr-lilac"] .nav-links a.active, :root[data-theme="mr-blush"] .nav-links a.active, :root[data-theme="mr-sand"] .nav-links a.active, :root[data-theme="mr-cottoncandy"] .nav-links a.active, :root[data-theme="mr-seafoam"] .nav-links a.active { color: var(--text); background: rgba(0,0,0,0.1); }
+    :root[data-theme="mr-lavender"]    .nav-dropdown-menu, :root[data-theme="mr-mint"] .nav-dropdown-menu, :root[data-theme="mr-peach"] .nav-dropdown-menu, :root[data-theme="mr-sky"] .nav-dropdown-menu, :root[data-theme="mr-butter"] .nav-dropdown-menu, :root[data-theme="mr-lilac"] .nav-dropdown-menu, :root[data-theme="mr-blush"] .nav-dropdown-menu, :root[data-theme="mr-sand"] .nav-dropdown-menu, :root[data-theme="mr-cottoncandy"] .nav-dropdown-menu, :root[data-theme="mr-seafoam"] .nav-dropdown-menu { background: var(--card); border-color: var(--border); box-shadow: 0 12px 40px rgba(0,0,0,0.12); }
+    :root[data-theme="mr-lavender"]    .nav-dropdown-menu a, :root[data-theme="mr-mint"] .nav-dropdown-menu a, :root[data-theme="mr-peach"] .nav-dropdown-menu a, :root[data-theme="mr-sky"] .nav-dropdown-menu a, :root[data-theme="mr-butter"] .nav-dropdown-menu a, :root[data-theme="mr-lilac"] .nav-dropdown-menu a, :root[data-theme="mr-blush"] .nav-dropdown-menu a, :root[data-theme="mr-sand"] .nav-dropdown-menu a, :root[data-theme="mr-cottoncandy"] .nav-dropdown-menu a, :root[data-theme="mr-seafoam"] .nav-dropdown-menu a { color: var(--text-secondary) !important; }
+    :root[data-theme="mr-lavender"]    .nav-dropdown-menu a:hover, :root[data-theme="mr-mint"] .nav-dropdown-menu a:hover, :root[data-theme="mr-peach"] .nav-dropdown-menu a:hover, :root[data-theme="mr-sky"] .nav-dropdown-menu a:hover, :root[data-theme="mr-butter"] .nav-dropdown-menu a:hover, :root[data-theme="mr-lilac"] .nav-dropdown-menu a:hover, :root[data-theme="mr-blush"] .nav-dropdown-menu a:hover, :root[data-theme="mr-sand"] .nav-dropdown-menu a:hover, :root[data-theme="mr-cottoncandy"] .nav-dropdown-menu a:hover, :root[data-theme="mr-seafoam"] .nav-dropdown-menu a:hover { color: var(--text) !important; background: rgba(0,0,0,0.08) !important; }
+    :root[data-theme="mr-lavender"]    .nav-user, :root[data-theme="mr-mint"] .nav-user, :root[data-theme="mr-peach"] .nav-user, :root[data-theme="mr-sky"] .nav-user, :root[data-theme="mr-butter"] .nav-user, :root[data-theme="mr-lilac"] .nav-user, :root[data-theme="mr-blush"] .nav-user, :root[data-theme="mr-sand"] .nav-user, :root[data-theme="mr-cottoncandy"] .nav-user, :root[data-theme="mr-seafoam"] .nav-user { color: var(--text-muted); }
+
     /* ─── end themes ─── */
 
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -1298,6 +1384,16 @@ LAYOUT = """<!DOCTYPE html>
       r.style.setProperty('--text', t.text);
       r.style.setProperty('--text-muted', t.textMuted);
       r.style.setProperty('--primary', t.primary);
+      // Also set the data-theme attribute so the CSS rules
+      // (:root[data-theme="mr-lavender"] body { ... } etc.) kick in
+      // for nav background, body bg, input colors, etc.
+      if (!name || name === 'default') {
+        var leg = localStorage.getItem('machreach-theme') || '';
+        r.setAttribute('data-theme', leg);
+      } else {
+        r.setAttribute('data-theme', 'mr-' + name);
+      }
+      try { localStorage.setItem('mr_theme', name || 'default'); } catch(e) {}
       document.body && document.body.setAttribute('data-theme', name);
     };
     // Apply saved theme on load
