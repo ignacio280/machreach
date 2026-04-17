@@ -113,6 +113,12 @@ from student.routes import register_student_routes
 init_student_db()
 register_student_routes(app, csrf, limiter)
 
+# ── MachReach Pro module (productivity toolkit for business accounts) ──
+from professional.db import init_professional_db
+from professional.routes import register_professional_routes
+init_professional_db()
+register_professional_routes(app, csrf, limiter)
+
 
 # ---------------------------------------------------------------------------
 # System email helper — sends transactional emails from support@machreach.com
@@ -1127,6 +1133,21 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/deliverability" {% if active_page == 'deliverability' %}class="active"{% endif %}>&#128737;&#65039; Inbox</a>
         <a href="/calendar" {% if active_page == 'calendar' %}class="active"{% endif %}>{{nav.calendar}}</a>
         <a href="/export" {% if active_page == 'export' %}class="active"{% endif %}>&#128202; {{nav.export}}</a>
+        <div class="nav-dropdown">
+          <a href="/pro" {% if active_page in ['pro','pro_tasks','pro_time','pro_invoices','pro_expenses','pro_goals','pro_assistant'] %}class="active"{% endif %}>&#128188; Pro Tools &#9662;</a>
+          <div class="nav-dropdown-menu">
+            <a href="/pro/tasks">&#9989; Tasks</a>
+            <a href="/pro/time">&#9201;&#65039; Time Tracker</a>
+            <a href="/pro/invoices">&#128196; Invoices</a>
+            <a href="/pro/expenses">&#128176; Expenses</a>
+            <a href="/pro/goals">&#127919; Goals &amp; OKRs</a>
+            <a href="/pro/assistant">&#129504; AI Assistant</a>
+            <a href="/pro/meeting-agenda">&#128197; Meeting Agenda</a>
+            <a href="/pro/cold-call">&#128222; Cold Call Script</a>
+            <a href="/pro/linkedin-post">&#128100; LinkedIn Post</a>
+            <a href="/pro/proposal">&#128221; Proposal Outline</a>
+          </div>
+        </div>
         <div class="nav-divider"></div>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %} style="{% if active_page == 'mail_hub' %}color:var(--primary);{% endif %}">&#128233; {{nav.mail_hub}}</a>
         <a href="/contacts" {% if active_page == 'contacts' %}class="active"{% endif %} style="{% if active_page == 'contacts' %}color:var(--primary);{% endif %}">&#128101; {{nav.contacts}}</a>
