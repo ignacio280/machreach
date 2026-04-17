@@ -516,8 +516,10 @@ def register_professional_routes(app, csrf, limiter):
             <div style="flex:0 0 130px;"><label style="font-size:11px;">Date</label><input id="tx-date" type="date" class="edit-input" value="{today}"></div>
             <div style="flex:1 1 160px;"><label style="font-size:11px;">Merchant</label><input id="tx-merchant" class="edit-input" placeholder="Starbucks"></div>
             <div style="flex:0 0 150px;"><label style="font-size:11px;">Category</label><select id="tx-cat" class="edit-input">{cat_opts}</select></div>
-            <div style="flex:0 0 120px;"><label style="font-size:11px;">Amount</label><input id="tx-amount" type="number" step="0.01" class="edit-input"></div>
+            <div style="flex:0 0 110px;"><label style="font-size:11px;">Amount</label><input id="tx-amount" type="number" step="0.01" class="edit-input"></div>
+            <div style="flex:0 0 100px;"><label style="font-size:11px;">Currency</label><select id="tx-currency" class="edit-input"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="MXN">MXN</option><option value="CLP">CLP</option><option value="COP">COP</option><option value="ARS">ARS</option><option value="BRL">BRL</option><option value="PEN">PEN</option><option value="UYU">UYU</option><option value="CAD">CAD</option><option value="AUD">AUD</option><option value="JPY">JPY</option><option value="CHF">CHF</option><option value="INR">INR</option><option value="CNY">CNY</option></select></div>
             <button onclick="addTx()" class="btn btn-primary btn-sm">Save</button>
+            <button onclick="document.getElementById('tx-form').style.display='none'" class="btn btn-ghost btn-sm">Cancel</button>
           </div>
           <div style="overflow:auto;">
             <table><thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th>Account</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>{rows}</tbody></table>
@@ -573,8 +575,10 @@ def register_professional_routes(app, csrf, limiter):
         async function addTx(){{
           var amt=parseFloat(document.getElementById('tx-amount').value);
           if(!amt||amt<=0){{alert('Enter an amount');return;}}
-          var r=await fetch('/api/pro/transactions',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{amount:amt,merchant:document.getElementById('tx-merchant').value,category:document.getElementById('tx-cat').value,tx_date:document.getElementById('tx-date').value}})}});
-          if(r.ok) location.reload(); else alert('Failed');
+          var ccyEl=document.getElementById('tx-currency');
+          var ccy=ccyEl?ccyEl.value:'USD';
+          var r=await fetch('/api/pro/transactions',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{amount:amt,merchant:document.getElementById('tx-merchant').value,category:document.getElementById('tx-cat').value,tx_date:document.getElementById('tx-date').value,currency:ccy}})}});
+          if(r.ok) location.reload(); else {{ var d={{}}; try{{d=await r.json();}}catch(e){{}} alert(d.error||'Failed'); }}
         }}
         async function importStatement(){{
           var f=document.getElementById('imp-file').files[0];

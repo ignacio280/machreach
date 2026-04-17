@@ -173,105 +173,202 @@ def _find_col(headers: list, candidates: set) -> Optional[int]:
 
 
 def parse_csv(content: str) -> List[dict]:
-    """Parse CSV (any delimiter, any locale) → list of transaction dicts."""
-    # Try to sniff delimiter
-    sample = content[:4096]
+    """Parse CSV (any delimiter, any locale) → list of transaction dicts.
+
+    Strategy:
+      1. Strip BOM, sniff delimiter (fallback to comma/semicolon/tab).
+      2. Find a header row in the first 30 rows by keyword match.
+      3. Map columns by header keywords.
+      4. If steps 2-3 yield nothing, fall back to ANY-ROW scan: walk every cell,
+         match a date in one column and an amount in another. Works on bank
+         exports with metadata header garbage and no obvious column names.
+    """
+    # Strip UTF-8 BOM if present
+    if content.startswith("\ufeff"):
+        content = content[1:]
+
+    # Try sniffing; if it fails try common delimiters by counting hits
+    sample = content[:8192]
+    delimiter = ","
     try:
         dialect = csv.Sniffer().sniff(sample, delimiters=[",", ";", "\t", "|"])
+        delimiter = dialect.delimiter
     except csv.Error:
-        class _D:
-            delimiter = ","
-            quotechar = '"'
-        dialect = _D()
+        # Pick the delimiter that produces the most consistent column count
+        candidates = [",", ";", "\t", "|"]
+        best_d, best_score = ",", -1
+        for d in candidates:
+            counts = [line.count(d) for line in sample.splitlines()[:25] if line.strip()]
+            if not counts:
+                continue
+            # Score = median count if it's > 0
+            counts.sort()
+            med = counts[len(counts)//2]
+            if med > best_score:
+                best_score, best_d = med, d
+        delimiter = best_d
 
-    reader = csv.reader(io.StringIO(content), delimiter=dialect.delimiter,
-                        quotechar=getattr(dialect, "quotechar", '"'))
+    reader = csv.reader(io.StringIO(content), delimiter=delimiter, quotechar='"')
     rows = [r for r in reader if any((c or "").strip() for c in r)]
     if len(rows) < 2:
+        log.info("CSV: only %d non-empty rows", len(rows))
         return []
 
-    # Find the header row — first row with at least 3 non-empty cells
-    # containing at least one known keyword
-    header_idx = 0
-    for i, r in enumerate(rows[:10]):
+    HEADER_HINTS = ("date", "fecha", "amount", "importe", "monto", "debit",
+                    "credit", "description", "descripcion", "descripción",
+                    "payee", "datum", "betrag", "concepto", "cargo", "abono",
+                    "saldo", "movimiento", "operacion", "operación", "valor",
+                    "moneda", "currency", "transaction", "merchant", "memo")
+
+    header_idx = -1
+    for i, r in enumerate(rows[:30]):
         lowered = " ".join((c or "").lower() for c in r)
-        if any(k in lowered for k in ("date", "fecha", "amount", "importe", "monto",
-                                      "debit", "credit", "description", "descripcion",
-                                      "payee", "datum", "betrag")):
+        if any(k in lowered for k in HEADER_HINTS):
             header_idx = i
             break
-    headers = [h.strip() for h in rows[header_idx]]
-    body = rows[header_idx + 1:]
 
-    date_col = _find_col(headers, DATE_KEYS)
-    desc_col = _find_col(headers, DESC_KEYS)
-    amount_col = _find_col(headers, AMOUNT_KEYS)
-    debit_col = _find_col(headers, DEBIT_KEYS)
-    credit_col = _find_col(headers, CREDIT_KEYS)
-    ccy_col = _find_col(headers, CURRENCY_KEYS)
+    out: List[dict] = []
+    if header_idx >= 0:
+        headers = [h.strip() for h in rows[header_idx]]
+        body = rows[header_idx + 1:]
+        date_col = _find_col(headers, DATE_KEYS)
+        desc_col = _find_col(headers, DESC_KEYS)
+        amount_col = _find_col(headers, AMOUNT_KEYS)
+        debit_col = _find_col(headers, DEBIT_KEYS)
+        credit_col = _find_col(headers, CREDIT_KEYS)
+        ccy_col = _find_col(headers, CURRENCY_KEYS)
 
-    if date_col is None:
-        # fallback: use first col
-        date_col = 0
-    if desc_col is None:
-        # Pick the widest text column that's not date/amount
-        for i in range(len(headers)):
-            if i in {date_col, amount_col, debit_col, credit_col}:
-                continue
-            desc_col = i
-            break
+        if date_col is None and amount_col is None and debit_col is None and credit_col is None:
+            log.info("CSV: header row matched no known columns (%s)", headers)
+        else:
+            if date_col is None:
+                date_col = 0
+            if desc_col is None:
+                for i in range(len(headers)):
+                    if i in {date_col, amount_col, debit_col, credit_col}:
+                        continue
+                    desc_col = i
+                    break
 
-    out = []
-    for row in body:
-        if not row or len(row) <= date_col:
+            for row in body:
+                if not row or len(row) <= date_col:
+                    continue
+                iso_date = _parse_date(row[date_col])
+                if not iso_date:
+                    continue
+                description = (row[desc_col] if desc_col is not None and desc_col < len(row) else "").strip()
+
+                amt = None
+                is_income = False
+                amount_value = None
+                if amount_col is not None and amount_col < len(row):
+                    amt = _parse_amount(row[amount_col])
+                    if amt is None:
+                        continue
+                    if amt > 0:
+                        is_income = True
+                        amount_value = amt
+                    else:
+                        amount_value = -amt
+                else:
+                    debit_val = _parse_amount(row[debit_col]) if debit_col is not None and debit_col < len(row) else None
+                    credit_val = _parse_amount(row[credit_col]) if credit_col is not None and credit_col < len(row) else None
+                    if credit_val and credit_val != 0:
+                        is_income = True
+                        amount_value = abs(credit_val)
+                    elif debit_val and debit_val != 0:
+                        amount_value = abs(debit_val)
+                    else:
+                        continue
+
+                if amount_value is None or abs(amount_value) < 0.005:
+                    continue
+
+                currency = ""
+                if ccy_col is not None and ccy_col < len(row):
+                    currency = (row[ccy_col] or "").strip().upper()[:3]
+
+                merchant = re.sub(r"\s+", " ", description)[:140]
+                cat = "income" if is_income else _guess_category(merchant, description)
+                out.append({
+                    "tx_date": iso_date,
+                    "merchant": merchant,
+                    "description": description[:500],
+                    "amount": abs(amount_value),
+                    "category": cat,
+                    "currency": currency or None,
+                })
+
+    if out:
+        return out
+
+    # ── Fallback: any-row scan ──
+    # Walk every row. If any cell parses as a date AND any other cell parses
+    # as a non-zero amount, treat as a transaction. This rescues exports with
+    # metadata header garbage, missing column names, or unusual layouts.
+    log.info("CSV: structured parse empty, trying any-row scan over %d rows", len(rows))
+    seen = set()
+    for row in rows:
+        if not row or len(row) < 2:
             continue
-        iso_date = _parse_date(row[date_col])
+        # Find first cell that's a valid date
+        date_idx = -1
+        iso_date = None
+        for i, cell in enumerate(row):
+            iso_date = _parse_date(cell)
+            if iso_date:
+                date_idx = i
+                break
         if not iso_date:
             continue
-        description = (row[desc_col] if desc_col is not None and desc_col < len(row) else "").strip()
-
-        # Amount logic
-        amt = None
-        is_income = False
-        if amount_col is not None and amount_col < len(row):
-            amt = _parse_amount(row[amount_col])
-            if amt is not None and amt > 0:
-                is_income = True  # positive in single-column files are usually deposits
-                amount_value = amt
-            elif amt is not None:
-                amount_value = -amt  # flip sign for expenses
-            else:
+        # Find amount: look for cells that parse as a non-trivial number
+        # Prefer the LAST numeric cell (typical bank layout: ...desc, amount, balance).
+        # Avoid picking the date column or things that look like balances if we can.
+        numeric_cells = []
+        for i, cell in enumerate(row):
+            if i == date_idx:
                 continue
-        else:
-            # Two-column (debit/credit) format
-            debit_val = _parse_amount(row[debit_col]) if debit_col is not None and debit_col < len(row) else None
-            credit_val = _parse_amount(row[credit_col]) if credit_col is not None and credit_col < len(row) else None
-            if credit_val and credit_val != 0:
-                is_income = True
-                amount_value = abs(credit_val)
-            elif debit_val and debit_val != 0:
-                amount_value = abs(debit_val)
-            else:
-                continue
-
-        if amount_value is None or abs(amount_value) < 0.005:
+            val = _parse_amount(cell)
+            if val is not None and abs(val) >= 0.005 and abs(val) < 1e9:
+                numeric_cells.append((i, val))
+        if not numeric_cells:
             continue
-
-        currency = ""
-        if ccy_col is not None and ccy_col < len(row):
-            currency = (row[ccy_col] or "").strip().upper()[:3]
-
+        # Heuristic: if 3+ numeric cells, drop the largest (likely a running balance).
+        if len(numeric_cells) >= 3:
+            numeric_cells.sort(key=lambda x: abs(x[1]))
+            numeric_cells = numeric_cells[:-1]
+        # Use the rightmost remaining numeric as the transaction amount
+        amt_idx, amt_val = numeric_cells[-1]
+        is_income = amt_val > 0
+        # Description = longest non-numeric cell that isn't the date
+        desc_candidates = []
+        for i, cell in enumerate(row):
+            if i in {date_idx, amt_idx}:
+                continue
+            text = (cell or "").strip()
+            if not text:
+                continue
+            if _parse_amount(text) is not None and len(text) < 20:
+                continue  # skip pure numbers
+            desc_candidates.append(text)
+        description = max(desc_candidates, key=len) if desc_candidates else ""
         merchant = re.sub(r"\s+", " ", description)[:140]
+        # Dedupe within this file
+        key = (iso_date, round(abs(amt_val), 2), merchant[:40])
+        if key in seen:
+            continue
+        seen.add(key)
         cat = "income" if is_income else _guess_category(merchant, description)
-
         out.append({
             "tx_date": iso_date,
-            "merchant": merchant,
+            "merchant": merchant or "Transaction",
             "description": description[:500],
-            "amount": abs(amount_value),
+            "amount": abs(amt_val),
             "category": cat,
-            "currency": currency or None,
+            "currency": None,
         })
+
+    log.info("CSV: any-row scan recovered %d transactions", len(out))
     return out
 
 

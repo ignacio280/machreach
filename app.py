@@ -3842,10 +3842,16 @@ def settings():
       function build(){{
         var headers = document.querySelectorAll('.card .card-header h2');
         if (!headers.length) return;
-        var nav = document.createElement('div');
+        var nav = document.createElement('nav');
         nav.id = 'mr-settings-nav';
-        nav.innerHTML = '<div class="mr-snav-inner"><div class="mr-snav-title">Jump to</div></div>';
-        var inner = nav.querySelector('.mr-snav-inner');
+        nav.setAttribute('aria-label','On this page');
+        var inner = document.createElement('div');
+        inner.className = 'mr-snav-inner';
+        var title = document.createElement('div');
+        title.className = 'mr-snav-title';
+        title.textContent = 'On this page';
+        inner.appendChild(title);
+        var links = [];
         headers.forEach(function(h, i){{
           var card = h.closest('.card');
           if (!card) return;
@@ -3854,22 +3860,38 @@ def settings():
           a.textContent = h.textContent.replace(/[\\u{{1F300}}-\\u{{1FAFF}}\\u{{2600}}-\\u{{27BF}}]/gu,'').trim();
           a.href = '#' + card.id;
           a.className = 'mr-snav-link';
+          a.dataset.target = card.id;
           a.addEventListener('click', function(e){{
             e.preventDefault();
             card.scrollIntoView({{behavior:'smooth', block:'start'}});
             history.replaceState(null,'','#'+card.id);
           }});
           inner.appendChild(a);
+          links.push({{a:a, card:card}});
         }});
+        nav.appendChild(inner);
         document.body.appendChild(nav);
         var style = document.createElement('style');
-        style.textContent = '#mr-settings-nav{{position:fixed;top:120px;right:max(12px,calc((100vw - 1100px) / 2 - 220px));width:200px;z-index:90;}}'
-          + '.mr-snav-inner{{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,.06);max-height:calc(100vh - 160px);overflow-y:auto;}}'
-          + '.mr-snav-title{{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;padding:0 4px;}}'
-          + '.mr-snav-link{{display:block;padding:5px 8px;border-radius:6px;color:var(--text);text-decoration:none;font-size:12px;line-height:1.3;}}'
-          + '.mr-snav-link:hover{{background:var(--bg);color:var(--primary);}}'
-          + '@media (max-width: 1280px) {{ #mr-settings-nav{{display:none;}} }}';
+        style.textContent = ''
+          + '#mr-settings-nav{{position:fixed;top:140px;right:24px;width:180px;z-index:50;pointer-events:none;}}'
+          + '.mr-snav-inner{{pointer-events:auto;border-left:1px solid var(--border);padding:2px 0 2px 14px;max-height:calc(100vh - 200px);overflow-y:auto;}}'
+          + '.mr-snav-title{{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-muted);margin-bottom:8px;opacity:.7;}}'
+          + '.mr-snav-link{{display:block;padding:4px 0;color:var(--text-muted);text-decoration:none;font-size:12.5px;line-height:1.4;transition:color .15s, transform .15s;}}'
+          + '.mr-snav-link:hover{{color:var(--primary);transform:translateX(2px);}}'
+          + '.mr-snav-link.active{{color:var(--primary);font-weight:600;}}'
+          + '@media (max-width: 1400px) {{ #mr-settings-nav{{display:none;}} }}';
         document.head.appendChild(style);
+        // Active section highlighting
+        function onScroll(){{
+          var y = window.scrollY + 200;
+          var current = links[0];
+          for (var i=0;i<links.length;i++){{
+            if (links[i].card.offsetTop <= y) current = links[i];
+          }}
+          links.forEach(function(l){{ l.a.classList.toggle('active', l===current); }});
+        }}
+        window.addEventListener('scroll', onScroll, {{passive:true}});
+        onScroll();
       }}
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
       else build();
