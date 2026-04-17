@@ -1,6 +1,7 @@
 """
 MachReach Pro routes — productivity suite for business accounts:
-Tasks, Time Tracker, Invoices, Expenses, Goals/OKRs, AI Writing Assistant.
+Tasks, Finance (banking + AI budget), Goals/OKRs, Meeting Agenda,
+AI Assistant (polish, LinkedIn), Relationship Intelligence.
 
 Call register_professional_routes(app, csrf, limiter) from app.py.
 """
@@ -55,39 +56,67 @@ def register_professional_routes(app, csrf, limiter):
             account_type="business",
         )
 
+    def _today_tasks_banner() -> str:
+        """Returns HTML banner showing today's + overdue tasks (empty if none)."""
+        if not _logged_in():
+            return ""
+        try:
+            due = pdb.tasks_due_today(_cid())
+            overdue = pdb.tasks_overdue(_cid())
+        except Exception:
+            return ""
+        if not due and not overdue:
+            return ""
+        parts = []
+        for t in due:
+            parts.append(f"<li><b>Today:</b> {_esc(t['title'])}</li>")
+        for t in overdue[:3]:
+            parts.append(f"<li style='color:#EF4444;'><b>Overdue ({_esc(t.get('due_date',''))}):</b> {_esc(t['title'])}</li>")
+        return f"""
+        <div class="card" style="background:linear-gradient(135deg,rgba(239,68,68,.10),rgba(245,158,11,.10));
+             border-left:4px solid #F59E0B;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;font-size:14px;margin-bottom:6px;">&#9888;&#65039; You have {len(due)} task(s) due today{' + ' + str(len(overdue)) + ' overdue' if overdue else ''}</div>
+              <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">{''.join(parts)}</ul>
+            </div>
+            <a href="/pro/tasks" class="btn btn-primary btn-sm">Open Tasks</a>
+          </div>
+        </div>"""
+
     # ─────────────────────────────────────────────────────────
-    # HUB PAGE
+    # HUB
     # ─────────────────────────────────────────────────────────
     @app.route("/pro")
     def pro_hub():
         if not _logged_in():
             return redirect(url_for("login"))
-        return _p_render("Pro Toolkit", """
+        banner = _today_tasks_banner()
+        return _p_render("Pro Toolkit", f"""
+        {banner}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
           <div>
             <h1 style="margin:0;font-size:28px;">&#128188; <span class="gradient-text">Pro Toolkit</span></h1>
-            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Everything you need to run the business side of work &mdash; alongside your email outreach.</p>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Your second brain for work &mdash; tasks, money, meetings, and relationships.</p>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">
-          <a href="/pro/tasks" class="fx-tile"><span class="fx-ico">&#9989;</span><b>Tasks</b><span>Prioritized to-dos, projects, due dates.</span></a>
-          <a href="/pro/time" class="fx-tile"><span class="fx-ico">&#9201;&#65039;</span><b>Time Tracker</b><span>Billable hours by project + weekly summary.</span></a>
-          <a href="/pro/invoices" class="fx-tile"><span class="fx-ico">&#128196;</span><b>Invoices</b><span>Create, email and print professional invoices.</span></a>
-          <a href="/pro/expenses" class="fx-tile"><span class="fx-ico">&#128176;</span><b>Expenses</b><span>Track spending by category with monthly totals.</span></a>
+          <a href="/pro/tasks" class="fx-tile"><span class="fx-ico">&#9989;</span><b>Tasks</b><span>Urgent tasks auto-sent to your inbox with reminders.</span></a>
+          <a href="/pro/finance" class="fx-tile"><span class="fx-ico">&#128176;</span><b>Finance</b><span>Connect bank accounts, track spending, AI budget.</span></a>
           <a href="/pro/goals" class="fx-tile"><span class="fx-ico">&#127919;</span><b>Goals & OKRs</b><span>Quarterly objectives with measurable key results.</span></a>
-          <a href="/pro/assistant" class="fx-tile"><span class="fx-ico">&#129504;</span><b>AI Assistant</b><span>Polish text, draft posts, agendas, proposals.</span></a>
-          <a href="/pro/meeting-agenda" class="fx-tile"><span class="fx-ico">&#128197;</span><b>Meeting Agenda</b><span>Generate a tight agenda for any meeting.</span></a>
-          <a href="/pro/cold-call" class="fx-tile"><span class="fx-ico">&#128222;</span><b>Cold Call Script</b><span>Ready-to-use B2B script with objection handling.</span></a>
+          <a href="/pro/relationships" class="fx-tile"><span class="fx-ico">&#129504;</span><b>Relationship Intelligence</b><span>Your AI memory for every contact and conversation.</span></a>
+          <a href="/pro/meeting-agenda" class="fx-tile"><span class="fx-ico">&#128197;</span><b>Meeting Agenda</b><span>AI scans your inbox for meetings + preps you.</span></a>
+          <a href="/pro/invoices" class="fx-tile"><span class="fx-ico">&#128196;</span><b>Invoices</b><span>Create, send, and track professional invoices.</span></a>
+          <a href="/pro/assistant" class="fx-tile"><span class="fx-ico">&#9997;</span><b>Text Polish</b><span>Rewrite any text with the right tone.</span></a>
           <a href="/pro/linkedin-post" class="fx-tile"><span class="fx-ico">&#128100;</span><b>LinkedIn Post</b><span>High-performing posts in your voice.</span></a>
-          <a href="/pro/proposal" class="fx-tile"><span class="fx-ico">&#128221;</span><b>Proposal Outline</b><span>Full proposal skeleton in seconds.</span></a>
         </div>
         <style>
-          .fx-tile { display:flex;flex-direction:column;gap:4px;padding:16px;border:1px solid var(--border);border-radius:14px;
-            background:var(--card);text-decoration:none;color:var(--text);transition:all .18s ease; }
-          .fx-tile:hover { border-color:var(--primary);transform:translateY(-2px);box-shadow:0 8px 20px rgba(99,102,241,.15); }
-          .fx-tile .fx-ico { font-size:22px; }
-          .fx-tile b { font-size:14px;font-weight:700; }
-          .fx-tile span:last-child { font-size:12px;color:var(--text-muted);line-height:1.45; }
+          .fx-tile {{ display:flex;flex-direction:column;gap:4px;padding:16px;border:1px solid var(--border);border-radius:14px;
+            background:var(--card);text-decoration:none;color:var(--text);transition:all .18s ease; }}
+          .fx-tile:hover {{ border-color:var(--primary);transform:translateY(-2px);box-shadow:0 8px 20px rgba(99,102,241,.15); }}
+          .fx-tile .fx-ico {{ font-size:22px; }}
+          .fx-tile b {{ font-size:14px;font-weight:700; }}
+          .fx-tile span:last-child {{ font-size:12px;color:var(--text-muted);line-height:1.45; }}
         </style>
         """, active_page="pro")
 
@@ -99,6 +128,7 @@ def register_professional_routes(app, csrf, limiter):
         if not _logged_in():
             return redirect(url_for("login"))
         tasks = pdb.list_tasks(_cid())
+        banner = _today_tasks_banner()
         def task_card(t):
             prio_colors = {"high": "#EF4444", "medium": "#F59E0B", "low": "#10B981"}
             pc = prio_colors.get(t.get("priority", "medium"), "#94A3B8")
@@ -127,7 +157,9 @@ def register_professional_routes(app, csrf, limiter):
           <div class="empty"><div class="empty-icon">&#128221;</div><h3>No tasks yet</h3><p>Add your first task above.</p></div>"""
 
         return _p_render("Tasks", f"""
-        <h1 style="margin-bottom:20px;">&#9989; Tasks</h1>
+        {banner}
+        <h1 style="margin-bottom:8px;">&#9989; Tasks</h1>
+        <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Every task you create is emailed to you and pinned as urgent in your Mail Hub so it shows up alongside your most important inbox items.</p>
         <div class="card" style="margin-bottom:16px;">
           <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;align-items:end;">
             <div><label style="font-size:12px;">Title</label><input id="nt-title" class="edit-input" placeholder="What needs doing?"></div>
@@ -140,6 +172,9 @@ def register_professional_routes(app, csrf, limiter):
             <div><label style="font-size:12px;">Project</label><input id="nt-proj" class="edit-input" placeholder="tag"></div>
             <button onclick="addTask()" class="btn btn-primary btn-sm">+ Add</button>
           </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">
+            <label style="cursor:pointer;"><input type="checkbox" id="nt-email" checked> Email me this task & add it to Mail Hub as urgent</label>
+          </div>
         </div>
         <div id="task-list">{tasks_html}</div>
         <style>.edit-input{{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;}}.edit-input:focus{{border-color:var(--primary);outline:none;}}</style>
@@ -148,7 +183,7 @@ def register_professional_routes(app, csrf, limiter):
         async function addTask(){{
           var title=document.getElementById('nt-title').value.trim();
           if(!title){{alert('Title required');return;}}
-          var r=await fetch('/api/pro/tasks',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{title:title,priority:document.getElementById('nt-prio').value,due_date:document.getElementById('nt-due').value,project_tag:document.getElementById('nt-proj').value}})}});
+          var r=await fetch('/api/pro/tasks',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{title:title,priority:document.getElementById('nt-prio').value,due_date:document.getElementById('nt-due').value,project_tag:document.getElementById('nt-proj').value,email_me:document.getElementById('nt-email').checked}})}});
           if(r.ok) location.reload();
           else alert('Failed');
         }}
@@ -180,7 +215,60 @@ def register_professional_routes(app, csrf, limiter):
             due_date=d.get("due_date", ""),
             project_tag=d.get("project_tag", ""),
         )
+        # Side effects: email the user + insert into mail_inbox as urgent
+        if d.get("email_me", True):
+            try:
+                _send_task_email_and_inbox(_cid(), title, d)
+            except Exception as e:
+                log.warning("Task email/inbox insert failed: %s", e)
         return jsonify({"ok": True, "id": tid})
+
+    def _send_task_email_and_inbox(client_id: int, title: str, d: dict):
+        """Send task as email to user and insert as urgent in mail_inbox."""
+        from outreach.db import get_client, get_db, _exec, _fetchone
+        c = get_client(client_id)
+        if not c:
+            return
+        email = c.get("email") or ""
+        if not email:
+            return
+        due = d.get("due_date") or "No due date"
+        prio = d.get("priority", "medium").upper()
+        body = (f"You just created a task in MachReach Pro:\n\n"
+                f"Title: {title}\n"
+                f"Priority: {prio}\n"
+                f"Due: {due}\n"
+                f"Project: {d.get('project_tag') or '-'}\n"
+                f"Notes: {d.get('description') or '-'}\n\n"
+                f"This task is pinned as URGENT in your Mail Hub. Open MachReach to mark it complete.\n\n"
+                f"— MachReach Pro")
+        subject = f"[Task] {title}"
+        try:
+            from app import _send_system_email
+            _send_system_email(email, subject, body)
+        except Exception as e:
+            log.warning("Task email send failed: %s", e)
+
+        # Insert into mail_inbox as urgent so it appears in Mail Hub
+        try:
+            import secrets
+            msg_id = f"pro-task-{secrets.token_hex(8)}@machreach"
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            preview = (f"Task created in MachReach Pro. Priority {prio}. "
+                       f"Due {due}. {d.get('description') or ''}")[:300]
+            with get_db() as db:
+                existing = _fetchone(db, "SELECT id FROM mail_inbox WHERE client_id = %s AND message_id = %s",
+                                     (client_id, msg_id))
+                if not existing:
+                    _exec(db,
+                        "INSERT INTO mail_inbox (client_id, message_id, from_name, from_email, to_email, "
+                        "subject, body_preview, received_at, priority, category, ai_summary) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                        (client_id, msg_id, "MachReach Pro", "tasks@machreach.com", email,
+                         subject, preview, now, "urgent", "task",
+                         f"Task due {due} - priority {prio}"))
+        except Exception as e:
+            log.warning("Mail hub task insert failed: %s", e)
 
     @app.route("/api/pro/tasks/<int:task_id>", methods=["PUT"])
     def pro_task_update(task_id):
@@ -201,160 +289,326 @@ def register_professional_routes(app, csrf, limiter):
         return jsonify({"ok": True})
 
     # ─────────────────────────────────────────────────────────
-    # TIME TRACKER
+    # FINANCE (banking + transactions + AI budget)
     # ─────────────────────────────────────────────────────────
-    @app.route("/pro/time")
-    def pro_time_page():
+    @app.route("/pro/finance")
+    def pro_finance_page():
         if not _logged_in():
             return redirect(url_for("login"))
-        running = pdb.get_running_timer(_cid())
-        entries = pdb.list_time_entries(_cid(), days=30)
-        summary = pdb.time_summary(_cid(), days=7)
+        banks = pdb.list_bank_connections(_cid())
+        txs = pdb.list_transactions(_cid(), days=60)
+        summary = pdb.spending_summary(_cid(), days=30)
+        budget = pdb.get_budget(_cid())
+        banner = _today_tasks_banner()
 
-        def fmt_dur(sec):
-            sec = int(sec or 0)
-            h, rem = divmod(sec, 3600)
-            m, s = divmod(rem, 60)
-            return f"{h:02d}:{m:02d}:{s:02d}"
+        total_bal = sum(float(b.get("balance") or 0) for b in banks)
 
-        rows_html = ""
-        for e in entries:
-            dur = fmt_dur(e.get("duration_seconds", 0))
-            started = str(e.get("started_at", ""))[:16]
-            ended = str(e.get("ended_at", ""))[:16] if e.get("ended_at") else "<em>running</em>"
-            rate = float(e.get("hourly_rate") or 0)
-            amount = rate * (int(e.get("duration_seconds") or 0) / 3600.0) if rate else 0
-            rows_html += f"""<tr>
-              <td>{_esc(e.get('project',''))}</td>
-              <td style="font-size:13px;">{_esc(e.get('description',''))}</td>
-              <td>{started}</td>
-              <td>{ended}</td>
-              <td style="font-family:monospace;">{dur}</td>
-              <td>{'Yes' if e.get('billable') else 'No'}</td>
-              <td>{('$' + f'{amount:,.2f}') if amount else '-'}</td>
-              <td><button onclick="delEntry({e['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px;">&#10005;</button></td>
-            </tr>"""
-        if not rows_html:
-            rows_html = "<tr><td colspan='8' style='text-align:center;padding:24px;color:var(--text-muted);'>No time entries yet.</td></tr>"
-
-        by_proj_html = ""
-        for p in (summary.get("by_project") or []):
-            by_proj_html += f"<div style='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;'><span>{_esc(p['project'])}</span><span style='font-family:monospace;'>{fmt_dur(p['seconds'])}</span></div>"
-
-        running_html = ""
-        if running:
-            running_html = f"""
-            <div class="card" style="background:linear-gradient(135deg,rgba(139,92,246,.12),rgba(99,102,241,.10));border-left:4px solid var(--primary);margin-bottom:16px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        # Bank connections
+        banks_html = ""
+        for b in banks:
+            banks_html += f"""
+            <div class="card" style="padding:14px 16px;background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.08));border-left:3px solid var(--primary);margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
                 <div>
-                  <div style="font-size:12px;color:var(--text-muted);font-weight:600;">&#9199; RUNNING</div>
-                  <div style="font-weight:700;font-size:16px;">{_esc(running.get('project','(no project)'))}</div>
-                  <div style="color:var(--text-muted);font-size:13px;">{_esc(running.get('description',''))}</div>
+                  <div style="font-weight:700;">{_esc(b.get('institution_name',''))} <span style="color:var(--text-muted);font-weight:400;font-size:12px;">&middot; {_esc(b.get('account_type',''))}{' &middot; ****' + _esc(b.get('last_4','')) if b.get('last_4') else ''}</span></div>
+                  {"<div style='font-size:12px;color:var(--text-muted);'>" + _esc(b.get('account_name','')) + "</div>" if b.get('account_name') else ""}
                 </div>
                 <div style="text-align:right;">
-                  <div id="live-timer" data-started="{running.get('started_at','')}" style="font-family:monospace;font-size:26px;font-weight:700;color:var(--primary);">00:00:00</div>
-                  <button onclick="stopTimer({running['id']})" class="btn btn-outline btn-sm" style="margin-top:4px;">&#9724; Stop</button>
+                  <div style="font-family:monospace;font-size:18px;font-weight:700;">{_esc(b.get('currency','USD'))} {float(b.get('balance') or 0):,.2f}</div>
+                  <button onclick="delBank({b['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px;">Remove</button>
                 </div>
               </div>
             </div>"""
+        if not banks_html:
+            banks_html = """<div style="padding:24px;text-align:center;color:var(--text-muted);border:2px dashed var(--border);border-radius:10px;">
+              <div style="font-size:32px;margin-bottom:6px;">&#127974;</div>
+              <div style="font-weight:700;color:var(--text);">Connect your first account</div>
+              <div style="font-size:12px;margin-top:4px;">Add bank accounts & cards to see total balance + spending in one place.</div>
+            </div>"""
 
-        return _p_render("Time Tracker", f"""
-        <h1 style="margin-bottom:20px;">&#9201;&#65039; Time Tracker</h1>
-        {running_html}
-        <div class="card" style="margin-bottom:16px;">
-          <h3 style="margin:0 0 10px;font-size:15px;">Start a new timer</h3>
-          <div style="display:grid;grid-template-columns:2fr 3fr 1fr 1fr auto;gap:8px;align-items:end;">
-            <div><label style="font-size:12px;">Project</label><input id="tm-project" class="edit-input" placeholder="Acme Corp"></div>
-            <div><label style="font-size:12px;">What are you working on?</label><input id="tm-desc" class="edit-input" placeholder="Design review"></div>
-            <div><label style="font-size:12px;">Hourly rate ($)</label><input id="tm-rate" type="number" step="0.01" value="0" class="edit-input"></div>
-            <div><label style="font-size:12px;">Billable</label>
-              <select id="tm-bill" class="edit-input"><option value="1" selected>Yes</option><option value="0">No</option></select>
+        # Transactions table
+        rows = ""
+        for t in txs[:50]:
+            cat = (t.get("category") or "other").replace("_", " ").title()
+            amt = float(t.get("amount") or 0)
+            color = "#10B981" if t.get("category") == "income" else "var(--text)"
+            sign = "+" if t.get("category") == "income" else "-"
+            rows += f"""<tr>
+              <td>{_esc(str(t.get('tx_date','') or '')[:10])}</td>
+              <td style="font-weight:500;">{_esc(t.get('merchant') or '-')}</td>
+              <td><span style="background:var(--bg);padding:2px 8px;border-radius:10px;font-size:11px;">{_esc(cat)}</span></td>
+              <td style="font-size:12px;color:var(--text-muted);">{_esc(t.get('institution_name','') or 'Manual')}{' &middot; ****' + _esc(t.get('last_4','')) if t.get('last_4') else ''}</td>
+              <td style="font-family:monospace;text-align:right;color:{color};font-weight:600;">{sign} {_esc(t.get('currency','USD'))} {amt:,.2f}</td>
+              <td><button onclick="delTx({t['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px;">&#10005;</button></td>
+            </tr>"""
+        if not rows:
+            rows = "<tr><td colspan='6' style='text-align:center;padding:24px;color:var(--text-muted);'>No transactions yet. Add one manually or connect a bank (demo mode).</td></tr>"
+
+        # Spending by category
+        cat_html = ""
+        total_spent = summary["total_spent"] or 1
+        for cat in summary.get("by_category", []):
+            pct = (float(cat["total"]) / total_spent) * 100
+            cat_html += f"""
+            <div style="margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+                <span>{_esc(cat['category'].replace('_',' ').title())}</span>
+                <span style="font-family:monospace;">${float(cat['total']):,.2f} <span style="color:var(--text-muted);">({pct:.0f}%)</span></span>
+              </div>
+              <div style="background:var(--bg);height:6px;border-radius:4px;overflow:hidden;">
+                <div style="background:linear-gradient(90deg,var(--primary),#8B5CF6);height:100%;width:{pct:.1f}%;"></div>
+              </div>
+            </div>"""
+
+        merchants_html = ""
+        for m in summary.get("top_merchants", []):
+            merchants_html += f"<div style='display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;'><span>{_esc(m['merchant'])} <span style='color:var(--text-muted);'>({m['count']}x)</span></span><span style='font-family:monospace;'>${float(m['total']):,.2f}</span></div>"
+
+        # Budget card
+        if budget:
+            budget_html = f"""
+              <div class="form-group"><label>Monthly income</label><input id="bd-income" type="number" class="edit-input" value="{float(budget.get('income') or 0):.2f}" step="0.01"></div>
+              <div class="form-group"><label>Savings goal / month</label><input id="bd-savings" type="number" class="edit-input" value="{float(budget.get('savings_goal') or 0):.2f}" step="0.01"></div>
+              <div class="form-group"><label>Currency</label>
+                <select id="bd-currency" class="edit-input">
+                  {"".join([f'<option value="{c}" {"selected" if budget.get("currency","USD") == c else ""}>{c}</option>' for c in ["USD","EUR","GBP","MXN","CAD","AUD"]])}
+                </select>
+              </div>
+              <div class="form-group"><label>Preferences (tell the AI about your lifestyle)</label>
+                <textarea id="bd-prefs" rows="4" class="edit-input" placeholder="I'm a freelancer, variable income. Want to travel once a quarter. Prefer to save 25%...">{_esc(budget.get('preferences',''))}</textarea>
+              </div>"""
+            ai_plan = budget.get("ai_plan") or ""
+            plan_html = (f"<pre style='white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;margin:0;'>{_esc(ai_plan)}</pre>"
+                         if ai_plan else "<div style='color:var(--text-muted);font-size:13px;'>Click &ldquo;Generate AI Plan&rdquo; to build your personalized budget from your spending.</div>")
+        else:
+            budget_html = """
+              <div class="form-group"><label>Monthly income</label><input id="bd-income" type="number" class="edit-input" value="0" step="0.01"></div>
+              <div class="form-group"><label>Savings goal / month</label><input id="bd-savings" type="number" class="edit-input" value="0" step="0.01"></div>
+              <div class="form-group"><label>Currency</label>
+                <select id="bd-currency" class="edit-input"><option>USD</option><option>EUR</option><option>GBP</option><option>MXN</option><option>CAD</option></select>
+              </div>
+              <div class="form-group"><label>Preferences (tell the AI about your lifestyle)</label>
+                <textarea id="bd-prefs" rows="4" class="edit-input" placeholder="I'm a freelancer, variable income. Want to travel once a quarter..."></textarea>
+              </div>"""
+            plan_html = "<div style='color:var(--text-muted);font-size:13px;'>Set your income and preferences, then click &ldquo;Generate AI Plan&rdquo;.</div>"
+
+        cat_opts = "".join(f'<option value="{c}">{c.replace("_"," ").title()}</option>' for c in pdb.TRANSACTION_CATEGORIES)
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        return _p_render("Finance", f"""
+        {banner}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:10px;">
+          <h1 style="margin:0;">&#128176; Finance</h1>
+          <div style="text-align:right;">
+            <div style="font-size:12px;color:var(--text-muted);">Total balance</div>
+            <div style="font-family:monospace;font-size:22px;font-weight:700;color:var(--primary);">${total_bal:,.2f}</div>
+          </div>
+        </div>
+        <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Connect your accounts to see every transaction, spot overspending, and let AI build a budget for you.</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <h3 style="margin:0;font-size:15px;">&#127974; Accounts & Cards</h3>
+              <button onclick="document.getElementById('bank-form').style.display='block'" class="btn btn-primary btn-sm">+ Add</button>
             </div>
-            <button onclick="startTimer()" class="btn btn-primary btn-sm">&#9654; Start</button>
+            <div id="bank-form" style="display:none;margin-bottom:12px;padding:12px;border:1px dashed var(--border);border-radius:8px;">
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Connect manually. Secure real-bank integration (Plaid) coming next — same data, same flow.</div>
+              <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:6px;">
+                <input id="bk-name" placeholder="Institution (Chase, Wells Fargo...)" class="edit-input">
+                <select id="bk-type" class="edit-input"><option value="checking">Checking</option><option value="savings">Savings</option><option value="credit_card">Credit Card</option><option value="investment">Investment</option></select>
+                <input id="bk-last4" placeholder="Last 4" maxlength="4" class="edit-input">
+              </div>
+              <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;">
+                <input id="bk-account" placeholder="Nickname (e.g. Main Checking)" class="edit-input">
+                <input id="bk-balance" type="number" step="0.01" placeholder="Balance" class="edit-input" value="0">
+                <select id="bk-currency" class="edit-input"><option>USD</option><option>EUR</option><option>GBP</option><option>MXN</option></select>
+                <button onclick="addBank()" class="btn btn-primary btn-sm">Save</button>
+              </div>
+              <div style="margin-top:8px;font-size:11px;">
+                <label style="cursor:pointer;"><input type="checkbox" id="bk-seed" checked> Populate with 30 days of realistic demo transactions</label>
+              </div>
+            </div>
+            {banks_html}
+          </div>
+
+          <div class="card">
+            <h3 style="margin:0 0 10px;font-size:15px;">&#128202; Last 30 Days</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+              <div><div style="font-size:11px;color:var(--text-muted);">Spent</div><div style="font-family:monospace;font-size:18px;font-weight:700;color:#EF4444;">${summary['total_spent']:,.2f}</div></div>
+              <div><div style="font-size:11px;color:var(--text-muted);">Income</div><div style="font-family:monospace;font-size:18px;font-weight:700;color:#10B981;">${summary['total_income']:,.2f}</div></div>
+              <div><div style="font-size:11px;color:var(--text-muted);">Net</div><div style="font-family:monospace;font-size:18px;font-weight:700;color:{'#10B981' if summary['net']>=0 else '#EF4444'};">${summary['net']:,.2f}</div></div>
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">By category</div>
+            {cat_html or "<div style='color:var(--text-muted);font-size:12px;'>No spending data yet.</div>"}
+            {f'<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin:14px 0 6px;">Top merchants</div>{merchants_html}' if merchants_html else ''}
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:3fr 1fr;gap:16px;">
-          <div class="card" style="overflow:auto;">
-            <h3 style="margin:0 0 10px;font-size:15px;">Last 30 days</h3>
-            <table><thead><tr><th>Project</th><th>Description</th><th>Started</th><th>Ended</th><th>Duration</th><th>Billable</th><th>Amount</th><th></th></tr></thead><tbody>{rows_html}</tbody></table>
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <h3 style="margin:0;font-size:15px;">&#128181; Transactions</h3>
+            <button onclick="document.getElementById('tx-form').style.display=document.getElementById('tx-form').style.display==='none'?'flex':'none'" class="btn btn-outline btn-sm">+ Add manually</button>
           </div>
-          <div class="card">
-            <h3 style="margin:0 0 10px;font-size:15px;">Last 7 days</h3>
-            <div style="font-size:12px;color:var(--text-muted);">Total</div>
-            <div style="font-family:monospace;font-size:22px;font-weight:700;">{fmt_dur(summary['total_seconds'])}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:10px;">Billable</div>
-            <div style="font-family:monospace;font-size:18px;font-weight:700;color:var(--green);">{fmt_dur(summary['billable_seconds'])}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:14px;">By project</div>
-            {by_proj_html or "<div style='color:var(--text-muted);font-size:12px;'>No data yet</div>"}
+          <div id="tx-form" style="display:none;gap:6px;margin-bottom:12px;padding:10px;border:1px dashed var(--border);border-radius:8px;flex-wrap:wrap;align-items:end;">
+            <div style="flex:0 0 130px;"><label style="font-size:11px;">Date</label><input id="tx-date" type="date" class="edit-input" value="{today}"></div>
+            <div style="flex:1 1 160px;"><label style="font-size:11px;">Merchant</label><input id="tx-merchant" class="edit-input" placeholder="Starbucks"></div>
+            <div style="flex:0 0 150px;"><label style="font-size:11px;">Category</label><select id="tx-cat" class="edit-input">{cat_opts}</select></div>
+            <div style="flex:0 0 120px;"><label style="font-size:11px;">Amount</label><input id="tx-amount" type="number" step="0.01" class="edit-input"></div>
+            <button onclick="addTx()" class="btn btn-primary btn-sm">Save</button>
+          </div>
+          <div style="overflow:auto;">
+            <table><thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th>Account</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>{rows}</tbody></table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 10px;font-size:15px;">&#129504; AI Budget Plan</h3>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">We combine your real spending with your goals to build a personalized plan &mdash; with specific cuts to make and a savings schedule.</p>
+          <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:20px;">
+            <div>{budget_html}
+              <button onclick="genBudget()" class="btn btn-primary btn-sm" id="gen-budget-btn" style="margin-top:8px;">&#10024; Generate AI Plan</button>
+            </div>
+            <div id="plan-box" style="padding:14px;background:var(--bg);border-radius:10px;max-height:480px;overflow:auto;">
+              {plan_html}
+            </div>
           </div>
         </div>
 
         <style>.edit-input{{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;}}.edit-input:focus{{border-color:var(--primary);outline:none;}}</style>
         <script>
         function csrfHeader(){{var m=document.querySelector('meta[name="csrf-token"]');return m?{{'X-CSRFToken':m.content}}:{{}};}}
-        async function startTimer(){{
-          var proj=document.getElementById('tm-project').value.trim();
-          var r=await fetch('/api/pro/time/start',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{project:proj,description:document.getElementById('tm-desc').value,hourly_rate:parseFloat(document.getElementById('tm-rate').value)||0,billable:document.getElementById('tm-bill').value==='1'}})}});
+        async function addBank(){{
+          var r=await fetch('/api/pro/banks',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{
+            institution_name:document.getElementById('bk-name').value,
+            account_name:document.getElementById('bk-account').value,
+            account_type:document.getElementById('bk-type').value,
+            last_4:document.getElementById('bk-last4').value,
+            balance:parseFloat(document.getElementById('bk-balance').value)||0,
+            currency:document.getElementById('bk-currency').value,
+            seed_demo:document.getElementById('bk-seed').checked
+          }})}});
           if(r.ok) location.reload(); else alert('Failed');
         }}
-        async function stopTimer(id){{
-          var r=await fetch('/api/pro/time/'+id+'/stop',{{method:'POST',headers:csrfHeader()}});
-          if(r.ok) location.reload();
-        }}
-        async function delEntry(id){{
-          if(!confirm('Delete this entry?')) return;
-          await fetch('/api/pro/time/'+id,{{method:'DELETE',headers:csrfHeader()}});
+        async function delBank(id){{
+          if(!confirm('Remove this account? Transactions linked to it will stay but lose the account link.')) return;
+          await fetch('/api/pro/banks/'+id,{{method:'DELETE',headers:csrfHeader()}});
           location.reload();
         }}
-        // Live running timer
-        var live=document.getElementById('live-timer');
-        if(live){{
-          var startedStr=live.dataset.started;
-          var started=new Date(startedStr.replace(' ','T'));
-          function tick(){{
-            var s=Math.floor((Date.now()-started.getTime())/1000);
-            if(s<0) s=0;
-            var h=String(Math.floor(s/3600)).padStart(2,'0');
-            var m=String(Math.floor((s%3600)/60)).padStart(2,'0');
-            var ss=String(s%60).padStart(2,'0');
-            live.textContent=h+':'+m+':'+ss;
-          }}
-          tick(); setInterval(tick,1000);
+        async function addTx(){{
+          var amt=parseFloat(document.getElementById('tx-amount').value);
+          if(!amt||amt<=0){{alert('Enter an amount');return;}}
+          var r=await fetch('/api/pro/transactions',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{amount:amt,merchant:document.getElementById('tx-merchant').value,category:document.getElementById('tx-cat').value,tx_date:document.getElementById('tx-date').value}})}});
+          if(r.ok) location.reload(); else alert('Failed');
+        }}
+        async function delTx(id){{
+          if(!confirm('Delete transaction?')) return;
+          await fetch('/api/pro/transactions/'+id,{{method:'DELETE',headers:csrfHeader()}});
+          location.reload();
+        }}
+        async function genBudget(){{
+          var btn=document.getElementById('gen-budget-btn');
+          btn.disabled=true; btn.innerHTML='&#9203; Analyzing...';
+          var r=await fetch('/api/pro/budget/generate',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{
+            income:parseFloat(document.getElementById('bd-income').value)||0,
+            savings_goal:parseFloat(document.getElementById('bd-savings').value)||0,
+            currency:document.getElementById('bd-currency').value,
+            preferences:document.getElementById('bd-prefs').value
+          }})}});
+          var d=await r.json();
+          if(r.ok){{ document.getElementById('plan-box').innerHTML='<pre style=\\'white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;margin:0;\\'></pre>'; document.querySelector('#plan-box pre').textContent=d.plan; }}
+          else alert(d.error||'Failed');
+          btn.disabled=false; btn.innerHTML='&#10024; Generate AI Plan';
         }}
         </script>
-        """, active_page="pro_time")
+        """, active_page="pro_finance")
 
-    @app.route("/api/pro/time/start", methods=["POST"])
-    def pro_time_start():
+    @app.route("/api/pro/banks", methods=["POST"])
+    def pro_bank_create():
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
         d = request.get_json(force=True) or {}
-        eid = pdb.start_timer(
-            _cid(),
-            project=d.get("project", ""),
-            description=d.get("description", ""),
-            billable=bool(d.get("billable", True)),
-            hourly_rate=float(d.get("hourly_rate") or 0),
+        name = (d.get("institution_name") or "").strip()
+        if not name:
+            return jsonify({"error": "institution name required"}), 400
+        bid = pdb.create_bank_connection(
+            _cid(), institution_name=name,
+            account_name=d.get("account_name", ""),
+            account_type=d.get("account_type", "checking"),
+            last_4=(d.get("last_4") or "")[:4],
+            balance=float(d.get("balance") or 0),
+            currency=d.get("currency", "USD"),
         )
-        return jsonify({"ok": True, "id": eid})
+        if d.get("seed_demo"):
+            try:
+                pdb.seed_demo_transactions(_cid(), bid)
+            except Exception as e:
+                log.warning("seed_demo failed: %s", e)
+        return jsonify({"ok": True, "id": bid})
 
-    @app.route("/api/pro/time/<int:entry_id>/stop", methods=["POST"])
-    def pro_time_stop(entry_id):
+    @app.route("/api/pro/banks/<int:bank_id>", methods=["DELETE"])
+    def pro_bank_delete(bank_id):
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
-        pdb.stop_timer(_cid(), entry_id)
+        pdb.delete_bank_connection(bank_id, _cid())
         return jsonify({"ok": True})
 
-    @app.route("/api/pro/time/<int:entry_id>", methods=["DELETE"])
-    def pro_time_delete(entry_id):
+    @app.route("/api/pro/transactions", methods=["POST"])
+    def pro_tx_create():
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
-        pdb.delete_time_entry(entry_id, _cid())
+        d = request.get_json(force=True) or {}
+        try:
+            amt = float(d.get("amount") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid amount"}), 400
+        if amt <= 0:
+            return jsonify({"error": "amount > 0 required"}), 400
+        cat = d.get("category") or "other"
+        if not cat:
+            try:
+                cat = pai.categorize_transaction(d.get("merchant", ""), d.get("description", ""))
+            except Exception:
+                cat = "other"
+        tid = pdb.create_transaction(
+            _cid(), amt,
+            merchant=d.get("merchant", ""),
+            category=cat,
+            tx_date=d.get("tx_date", ""),
+            description=d.get("description", ""),
+            currency=d.get("currency", "USD"),
+            bank_connection_id=d.get("bank_connection_id"),
+            is_manual=True,
+        )
+        return jsonify({"ok": True, "id": tid})
+
+    @app.route("/api/pro/transactions/<int:tx_id>", methods=["DELETE"])
+    def pro_tx_delete(tx_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        pdb.delete_transaction(tx_id, _cid())
         return jsonify({"ok": True})
+
+    @app.route("/api/pro/budget/generate", methods=["POST"])
+    @limiter.limit("6 per minute")
+    def pro_budget_generate():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        d = request.get_json(force=True) or {}
+        try:
+            income = float(d.get("income") or 0)
+            savings = float(d.get("savings_goal") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid income/savings"}), 400
+        currency = d.get("currency", "USD")
+        prefs = (d.get("preferences") or "").strip()
+        summary = pdb.spending_summary(_cid(), days=30)
+        plan = pai.generate_budget_plan(income, savings, currency, prefs, summary)
+        pdb.upsert_budget(_cid(), income, savings, preferences=prefs, ai_plan=plan, currency=currency)
+        return jsonify({"ok": True, "plan": plan})
 
     # ─────────────────────────────────────────────────────────
-    # INVOICES
+    # INVOICES (unchanged from v1, condensed reuse)
     # ─────────────────────────────────────────────────────────
     @app.route("/pro/invoices")
     def pro_invoices_page():
@@ -385,6 +639,7 @@ def register_professional_routes(app, csrf, limiter):
             rows_html = "<tr><td colspan='7' style='text-align:center;padding:24px;color:var(--text-muted);'>No invoices yet.</td></tr>"
 
         return _p_render("Invoices", f"""
+        {_today_tasks_banner()}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px;">
           <h1>&#128196; Invoices</h1>
           <a href="/pro/invoices/new" class="btn btn-primary btn-sm">+ New Invoice</a>
@@ -537,7 +792,6 @@ def register_professional_routes(app, csrf, limiter):
             else{{ btn.textContent='Saved \\u2713'; setTimeout(function(){{btn.textContent='\\ud83d\\udcbe Save';btn.disabled=false;}},1500); }}
           }} else {{ alert(d.error||'Save failed'); btn.disabled=false; btn.textContent='\\ud83d\\udcbe Save'; }}
         }}
-        // Load existing items
         var existing = {items_json};
         if(existing.length){{
           existing.forEach(function(it){{ document.getElementById('items-body').appendChild(itemRow(it)); }});
@@ -571,107 +825,7 @@ def register_professional_routes(app, csrf, limiter):
         return jsonify({"ok": True})
 
     # ─────────────────────────────────────────────────────────
-    # EXPENSES
-    # ─────────────────────────────────────────────────────────
-    @app.route("/pro/expenses")
-    def pro_expenses_page():
-        if not _logged_in():
-            return redirect(url_for("login"))
-        expenses = pdb.list_expenses(_cid(), days=90)
-        summary = pdb.expense_summary(_cid(), days=30)
-        rows = ""
-        for x in expenses:
-            rows += f"""<tr>
-              <td>{_esc(x.get('expense_date','') or '-')}</td>
-              <td>{_esc(x.get('category',''))}</td>
-              <td>{_esc(x.get('vendor',''))}</td>
-              <td>{_esc(x.get('description',''))}</td>
-              <td style="font-family:monospace;text-align:right;">{x.get('currency','USD')} {float(x.get('amount') or 0):,.2f}</td>
-              <td><button onclick="delExp({x['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px;">&#10005;</button></td>
-            </tr>"""
-        if not rows:
-            rows = "<tr><td colspan='6' style='text-align:center;padding:24px;color:var(--text-muted);'>No expenses yet.</td></tr>"
-
-        cat_html = ""
-        for cat in summary.get("by_category", []):
-            cat_html += f"<div style='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;'><span>{_esc(cat['category'].title())}</span><span style='font-family:monospace;'>${float(cat['total']):,.2f}</span></div>"
-
-        cat_opts = "".join(f'<option value="{c}">{c.title()}</option>' for c in pdb.EXPENSE_CATEGORIES)
-        today = datetime.now().strftime("%Y-%m-%d")
-
-        return _p_render("Expenses", f"""
-        <h1 style="margin-bottom:20px;">&#128176; Expenses</h1>
-        <div class="card" style="margin-bottom:16px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr 1fr 1fr auto;gap:8px;align-items:end;">
-            <div><label style="font-size:12px;">Date</label><input id="ex-date" type="date" class="edit-input" value="{today}"></div>
-            <div><label style="font-size:12px;">Category</label><select id="ex-cat" class="edit-input">{cat_opts}</select></div>
-            <div><label style="font-size:12px;">Vendor</label><input id="ex-vendor" class="edit-input" placeholder="Notion"></div>
-            <div><label style="font-size:12px;">Description</label><input id="ex-desc" class="edit-input" placeholder="Team plan subscription"></div>
-            <div><label style="font-size:12px;">Amount</label><input id="ex-amount" type="number" step="0.01" class="edit-input" placeholder="0.00"></div>
-            <div><label style="font-size:12px;">Currency</label><select id="ex-currency" class="edit-input"><option>USD</option><option>EUR</option><option>GBP</option><option>MXN</option><option>CAD</option></select></div>
-            <button onclick="addExpense()" class="btn btn-primary btn-sm">+ Add</button>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:3fr 1fr;gap:16px;">
-          <div class="card" style="overflow:auto;">
-            <h3 style="margin:0 0 10px;font-size:15px;">Last 90 days</h3>
-            <table><thead><tr><th>Date</th><th>Category</th><th>Vendor</th><th>Description</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>{rows}</tbody></table>
-          </div>
-          <div class="card">
-            <h3 style="margin:0 0 10px;font-size:15px;">Last 30 days</h3>
-            <div style="font-size:12px;color:var(--text-muted);">Total</div>
-            <div style="font-family:monospace;font-size:22px;font-weight:700;">${summary['total']:,.2f}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:14px;">By category</div>
-            {cat_html or "<div style='color:var(--text-muted);font-size:12px;'>No data yet</div>"}
-          </div>
-        </div>
-        <style>.edit-input{{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;}}.edit-input:focus{{border-color:var(--primary);outline:none;}}</style>
-        <script>
-        function csrfHeader(){{var m=document.querySelector('meta[name="csrf-token"]');return m?{{'X-CSRFToken':m.content}}:{{}};}}
-        async function addExpense(){{
-          var amt=parseFloat(document.getElementById('ex-amount').value);
-          if(!amt||amt<=0){{alert('Enter an amount');return;}}
-          var r=await fetch('/api/pro/expenses',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{amount:amt,category:document.getElementById('ex-cat').value,vendor:document.getElementById('ex-vendor').value,description:document.getElementById('ex-desc').value,expense_date:document.getElementById('ex-date').value,currency:document.getElementById('ex-currency').value}})}});
-          if(r.ok) location.reload(); else alert('Failed');
-        }}
-        async function delExp(id){{
-          if(!confirm('Delete?')) return;
-          await fetch('/api/pro/expenses/'+id,{{method:'DELETE',headers:csrfHeader()}});
-          location.reload();
-        }}
-        </script>
-        """, active_page="pro_expenses")
-
-    @app.route("/api/pro/expenses", methods=["POST"])
-    def pro_expense_create():
-        if not _logged_in():
-            return jsonify({"error": "Unauthorized"}), 401
-        d = request.get_json(force=True) or {}
-        try:
-            amt = float(d.get("amount") or 0)
-        except (TypeError, ValueError):
-            return jsonify({"error": "invalid amount"}), 400
-        if amt <= 0:
-            return jsonify({"error": "amount must be > 0"}), 400
-        eid = pdb.create_expense(
-            _cid(), amt,
-            category=d.get("category", "other"),
-            description=d.get("description", ""),
-            expense_date=d.get("expense_date", ""),
-            vendor=d.get("vendor", ""),
-            currency=d.get("currency", "USD"),
-        )
-        return jsonify({"ok": True, "id": eid})
-
-    @app.route("/api/pro/expenses/<int:exp_id>", methods=["DELETE"])
-    def pro_expense_delete(exp_id):
-        if not _logged_in():
-            return jsonify({"error": "Unauthorized"}), 401
-        pdb.delete_expense(exp_id, _cid())
-        return jsonify({"ok": True})
-
-    # ─────────────────────────────────────────────────────────
-    # GOALS / OKRs
+    # GOALS / OKRs (unchanged)
     # ─────────────────────────────────────────────────────────
     @app.route("/pro/goals")
     def pro_goals_page():
@@ -719,6 +873,7 @@ def register_professional_routes(app, csrf, limiter):
         q = (datetime.now().month - 1) // 3 + 1
 
         return _p_render("Goals & OKRs", f"""
+        {_today_tasks_banner()}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px;">
           <h1>&#127919; Goals & OKRs</h1>
           <button onclick="document.getElementById('gform').style.display='block'" class="btn btn-primary btn-sm">+ New Goal</button>
@@ -815,10 +970,322 @@ def register_professional_routes(app, csrf, limiter):
         return jsonify({"ok": True})
 
     # ─────────────────────────────────────────────────────────
-    # AI ASSISTANT (simple text tools)
+    # MEETING AGENDA — auto-detect from inbox
+    # ─────────────────────────────────────────────────────────
+    @app.route("/pro/meeting-agenda")
+    def pro_agenda_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        return _p_render("Meeting Agenda", f"""
+        {_today_tasks_banner()}
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <a href="/pro" style="color:var(--text-muted);text-decoration:none;font-size:13px;">&larr; Pro Toolkit</a>
+        </div>
+        <h1 style="margin-bottom:6px;">&#128197; Meeting Agenda</h1>
+        <p style="color:var(--text-muted);margin-bottom:16px;">We scan your recent emails for any scheduled meeting or call and prep you with a timed agenda.</p>
+
+        <div class="card">
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-bottom:12px;">
+            <div class="form-group" style="margin:0;"><label>Topic (optional, for manual agenda)</label><input id="mt-topic" class="edit-input" placeholder="e.g. Q2 marketing kickoff"></div>
+            <div class="form-group" style="margin:0;"><label>Duration (min)</label><input id="mt-dur" type="number" class="edit-input" value="30"></div>
+            <button onclick="genManual()" class="btn btn-outline btn-sm" id="manual-btn">Generate Manual</button>
+          </div>
+          <div style="border-top:1px solid var(--border);padding-top:12px;">
+            <button onclick="scanInbox()" class="btn btn-primary btn-sm" id="scan-btn">&#128225; Scan Inbox for Upcoming Meetings</button>
+            <span style="color:var(--text-muted);font-size:12px;margin-left:10px;">Looks at your last 30 emails and extracts any meeting.</span>
+          </div>
+        </div>
+
+        <div id="output-card" class="card" style="display:none;margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 id="output-title" style="margin:0;">Result</h3>
+            <button onclick="copyOutput()" class="btn btn-outline btn-sm">&#128203; Copy</button>
+          </div>
+          <pre id="ai-output" style="white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:14px;line-height:1.6;margin:0;color:var(--text);"></pre>
+        </div>
+        <style>.edit-input{{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;}}.edit-input:focus{{border-color:var(--primary);outline:none;}}</style>
+        <script>
+        function csrfHeader(){{var m=document.querySelector('meta[name="csrf-token"]');return m?{{'X-CSRFToken':m.content}}:{{}};}}
+        function showResult(title, text){{
+          document.getElementById('output-title').textContent=title;
+          document.getElementById('ai-output').textContent=text;
+          document.getElementById('output-card').style.display='block';
+          document.getElementById('output-card').scrollIntoView({{behavior:'smooth'}});
+        }}
+        async function scanInbox(){{
+          var btn=document.getElementById('scan-btn');
+          btn.disabled=true; btn.innerHTML='&#9203; Scanning inbox...';
+          var r=await fetch('/api/pro/meetings/scan',{{method:'POST',headers:csrfHeader()}});
+          var d=await r.json();
+          if(r.ok) showResult('Meetings found in your inbox', d.result);
+          else alert(d.error||'Failed');
+          btn.disabled=false; btn.innerHTML='&#128225; Scan Inbox for Upcoming Meetings';
+        }}
+        async function genManual(){{
+          var topic=document.getElementById('mt-topic').value.trim();
+          if(!topic){{alert('Enter a topic');return;}}
+          var btn=document.getElementById('manual-btn');
+          btn.disabled=true;
+          var r=await fetch('/api/pro/ai/agenda',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{topic:topic,duration_min:parseInt(document.getElementById('mt-dur').value)||30}})}});
+          var d=await r.json();
+          if(r.ok) showResult('Agenda', d.result);
+          else alert(d.error||'Failed');
+          btn.disabled=false;
+        }}
+        function copyOutput(){{
+          navigator.clipboard.writeText(document.getElementById('ai-output').textContent);
+          alert('Copied!');
+        }}
+        </script>
+        """, active_page="pro_meetings")
+
+    @app.route("/api/pro/meetings/scan", methods=["POST"])
+    @limiter.limit("6 per minute")
+    def pro_meetings_scan():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        from outreach.db import get_mail_inbox
+        try:
+            emails = get_mail_inbox(_cid(), filter_by="all", limit=30)
+        except TypeError:
+            emails = get_mail_inbox(_cid())[:30]
+        result = pai.extract_meetings_from_emails(emails or [])
+        return jsonify({"result": result})
+
+    @app.route("/api/pro/ai/agenda", methods=["POST"])
+    @limiter.limit("15 per minute")
+    def pro_ai_agenda():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        d = request.get_json(force=True) or {}
+        topic = (d.get("topic") or "").strip()
+        if not topic:
+            return jsonify({"error": "Topic required"}), 400
+        try:
+            dur = int(d.get("duration_min") or 30)
+        except (TypeError, ValueError):
+            dur = 30
+        return jsonify({"result": pai.meeting_agenda(topic, duration_min=dur, context=d.get("context", ""))})
+
+    # ─────────────────────────────────────────────────────────
+    # RELATIONSHIP INTELLIGENCE
+    # ─────────────────────────────────────────────────────────
+    @app.route("/pro/relationships")
+    def pro_relationships_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        contacts = pdb.list_relationship_contacts(_cid(), limit=100)
+        rows = ""
+        for c in contacts:
+            last = str(c.get("last_at","") or "")[:10] or "—"
+            summary = (c.get("ai_summary") or "").strip()
+            has_summary = bool(summary)
+            icon = "&#9989;" if has_summary else "&#128373;"
+            rows += f"""<tr onclick="openContact('{_esc(c['email'])}')" style="cursor:pointer;">
+              <td>{icon}</td>
+              <td style="font-weight:600;">{_esc(c.get('name','') or c['email'])}</td>
+              <td style="font-size:12px;color:var(--text-muted);">{_esc(c['email'])}</td>
+              <td style="font-size:12px;">{_esc(c.get('role',''))}{' @ ' + _esc(c.get('company','')) if c.get('company') else ''}</td>
+              <td style="text-align:center;">{c.get('msg_count',0)}</td>
+              <td style="font-size:12px;color:var(--text-muted);">{last}</td>
+            </tr>"""
+        if not rows:
+            rows = "<tr><td colspan='6' style='text-align:center;padding:24px;color:var(--text-muted);'>No contacts in your inbox yet. Connect your email in Mail Hub.</td></tr>"
+
+        return _p_render("Relationship Intelligence", f"""
+        {_today_tasks_banner()}
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <a href="/pro" style="color:var(--text-muted);text-decoration:none;font-size:13px;">&larr; Pro Toolkit</a>
+        </div>
+        <h1 style="margin-bottom:6px;">&#129504; Relationship Intelligence</h1>
+        <p style="color:var(--text-muted);margin-bottom:16px;">Your AI memory for every professional relationship. Open any contact to see a living summary &mdash; then ask AI who to reach out to for any goal.</p>
+
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
+          <div class="card" style="overflow:auto;">
+            <h3 style="margin:0 0 10px;font-size:15px;">People you've talked to</h3>
+            <table><thead><tr><th></th><th>Name</th><th>Email</th><th>Role / Company</th><th style="text-align:center;">Msgs</th><th>Last</th></tr></thead><tbody>{rows}</tbody></table>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:10px;">
+              <h3 style="margin:0 0 10px;font-size:15px;">&#128226; Ask your network</h3>
+              <p style="color:var(--text-muted);font-size:12px;margin-bottom:10px;">E.g. "Who should I talk to if I want to raise money?"</p>
+              <textarea id="goal-prompt" class="edit-input" rows="3" placeholder="Who should I talk to if I need help with..."></textarea>
+              <button onclick="askNetwork()" class="btn btn-primary btn-sm" id="ask-btn" style="margin-top:8px;width:100%;">&#128269; Ask AI</button>
+              <pre id="network-out" style="display:none;margin-top:10px;padding:10px;background:var(--bg);border-radius:8px;white-space:pre-wrap;font-family:inherit;font-size:12px;line-height:1.5;"></pre>
+            </div>
+            <div class="card">
+              <h3 style="margin:0 0 10px;font-size:15px;">&#128197; Reconnect this week</h3>
+              <button onclick="reconnectSuggest()" class="btn btn-outline btn-sm" id="rec-btn" style="width:100%;">Suggest people to reach out to</button>
+              <pre id="rec-out" style="display:none;margin-top:10px;padding:10px;background:var(--bg);border-radius:8px;white-space:pre-wrap;font-family:inherit;font-size:12px;line-height:1.5;"></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contact modal -->
+        <div id="c-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+          <div class="card" style="max-width:720px;width:100%;max-height:88vh;overflow:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <h3 id="c-title" style="margin:0;"></h3>
+              <button onclick="closeContact()" class="btn btn-ghost btn-sm">&#10005;</button>
+            </div>
+            <div id="c-meta" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;"></div>
+            <div style="display:flex;gap:8px;margin-bottom:14px;">
+              <button onclick="rebuildSummary()" class="btn btn-primary btn-sm" id="rebuild-btn">&#10024; Build AI Summary</button>
+            </div>
+            <pre id="c-summary" style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;background:var(--bg);padding:12px;border-radius:8px;min-height:60px;margin-bottom:14px;">(no summary yet — click &quot;Build AI Summary&quot;)</pre>
+
+            <h4 style="margin:12px 0 6px;font-size:13px;">Your private notes</h4>
+            <textarea id="c-notes" class="edit-input" rows="3"></textarea>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px;">
+              <input id="c-name" class="edit-input" placeholder="Name">
+              <input id="c-role" class="edit-input" placeholder="Role">
+              <input id="c-company" class="edit-input" placeholder="Company">
+            </div>
+            <button onclick="saveContact()" class="btn btn-primary btn-sm" style="margin-top:8px;">&#128190; Save</button>
+          </div>
+        </div>
+
+        <style>.edit-input{{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;}}.edit-input:focus{{border-color:var(--primary);outline:none;}}</style>
+        <script>
+        function csrfHeader(){{var m=document.querySelector('meta[name="csrf-token"]');return m?{{'X-CSRFToken':m.content}}:{{}};}}
+        var currentEmail=null;
+        async function openContact(email){{
+          currentEmail=email;
+          var r=await fetch('/api/pro/relationships/'+encodeURIComponent(email));
+          var d=await r.json();
+          document.getElementById('c-title').textContent=d.name||email;
+          document.getElementById('c-meta').textContent=email+' &middot; '+(d.msg_count||0)+' emails exchanged';
+          document.getElementById('c-meta').innerHTML=document.getElementById('c-meta').textContent;
+          document.getElementById('c-summary').textContent=d.ai_summary||'(no summary yet — click \\"Build AI Summary\\")';
+          document.getElementById('c-notes').value=d.notes||'';
+          document.getElementById('c-name').value=d.name||'';
+          document.getElementById('c-role').value=d.role||'';
+          document.getElementById('c-company').value=d.company||'';
+          document.getElementById('c-modal').style.display='flex';
+        }}
+        function closeContact(){{ document.getElementById('c-modal').style.display='none'; }}
+        async function rebuildSummary(){{
+          if(!currentEmail) return;
+          var btn=document.getElementById('rebuild-btn');
+          btn.disabled=true; btn.innerHTML='&#9203; Analyzing emails...';
+          var r=await fetch('/api/pro/relationships/'+encodeURIComponent(currentEmail)+'/summary',{{method:'POST',headers:csrfHeader()}});
+          var d=await r.json();
+          if(r.ok) document.getElementById('c-summary').textContent=d.summary;
+          else alert(d.error||'Failed');
+          btn.disabled=false; btn.innerHTML='&#10024; Rebuild AI Summary';
+        }}
+        async function saveContact(){{
+          if(!currentEmail) return;
+          await fetch('/api/pro/relationships/'+encodeURIComponent(currentEmail),{{method:'PUT',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{
+            notes:document.getElementById('c-notes').value,
+            contact_name:document.getElementById('c-name').value,
+            contact_role:document.getElementById('c-role').value,
+            company:document.getElementById('c-company').value
+          }})}});
+          alert('Saved');
+          location.reload();
+        }}
+        async function askNetwork(){{
+          var goal=document.getElementById('goal-prompt').value.trim();
+          if(!goal){{alert('Enter a goal');return;}}
+          var btn=document.getElementById('ask-btn');
+          btn.disabled=true; btn.innerHTML='&#9203; Thinking...';
+          var r=await fetch('/api/pro/relationships/suggest',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{goal:goal}})}});
+          var d=await r.json();
+          if(r.ok){{
+            document.getElementById('network-out').textContent=d.result;
+            document.getElementById('network-out').style.display='block';
+          }} else alert(d.error||'Failed');
+          btn.disabled=false; btn.innerHTML='&#128269; Ask AI';
+        }}
+        async function reconnectSuggest(){{
+          var btn=document.getElementById('rec-btn');
+          btn.disabled=true; btn.innerHTML='&#9203; Thinking...';
+          var r=await fetch('/api/pro/relationships/reconnect',{{method:'POST',headers:csrfHeader()}});
+          var d=await r.json();
+          if(r.ok){{
+            document.getElementById('rec-out').textContent=d.result;
+            document.getElementById('rec-out').style.display='block';
+          }} else alert(d.error||'Failed');
+          btn.disabled=false; btn.innerHTML='Suggest people to reach out to';
+        }}
+        </script>
+        """, active_page="pro_relationships")
+
+    @app.route("/api/pro/relationships/<path:email>", methods=["GET"])
+    def pro_rel_get(email):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        from outreach.db import get_contact_email_history, get_db, _fetchval
+        note = pdb.get_relationship_note(_cid(), email) or {}
+        with get_db() as db:
+            msg_count = _fetchval(db,
+                "SELECT COUNT(*) FROM mail_inbox WHERE client_id = %s AND from_email = %s",
+                (_cid(), email)) or 0
+        return jsonify({
+            "email": email,
+            "name": note.get("contact_name", ""),
+            "role": note.get("contact_role", ""),
+            "company": note.get("company", ""),
+            "notes": note.get("notes", ""),
+            "ai_summary": note.get("ai_summary", ""),
+            "msg_count": msg_count,
+        })
+
+    @app.route("/api/pro/relationships/<path:email>", methods=["PUT"])
+    def pro_rel_update(email):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        d = request.get_json(force=True) or {}
+        pdb.upsert_relationship_note(
+            _cid(), email,
+            contact_name=d.get("contact_name", ""),
+            contact_role=d.get("contact_role", ""),
+            company=d.get("company", ""),
+            notes=d.get("notes", ""),
+        )
+        return jsonify({"ok": True})
+
+    @app.route("/api/pro/relationships/<path:email>/summary", methods=["POST"])
+    @limiter.limit("10 per minute")
+    def pro_rel_summary(email):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        from outreach.db import get_contact_email_history
+        emails = get_contact_email_history(_cid(), email, limit=20) or []
+        note = pdb.get_relationship_note(_cid(), email) or {}
+        name = note.get("contact_name") or (emails[0].get("from_name") if emails and emails[0].get("from_name") else "")
+        summary = pai.relationship_summary(name, email, emails)
+        pdb.upsert_relationship_note(_cid(), email, ai_summary=summary,
+                                     last_summary_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        return jsonify({"summary": summary})
+
+    @app.route("/api/pro/relationships/suggest", methods=["POST"])
+    @limiter.limit("6 per minute")
+    def pro_rel_suggest():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        d = request.get_json(force=True) or {}
+        goal = (d.get("goal") or "").strip()
+        if not goal:
+            return jsonify({"error": "goal required"}), 400
+        contacts = pdb.list_relationship_contacts(_cid(), limit=80)
+        return jsonify({"result": pai.suggest_contacts_for_goal(goal, contacts)})
+
+    @app.route("/api/pro/relationships/reconnect", methods=["POST"])
+    @limiter.limit("6 per minute")
+    def pro_rel_reconnect():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        contacts = pdb.list_relationship_contacts(_cid(), limit=100)
+        return jsonify({"result": pai.weekly_reconnect_suggestions(contacts)})
+
+    # ─────────────────────────────────────────────────────────
+    # AI TEXT POLISH + LINKEDIN
     # ─────────────────────────────────────────────────────────
     def _ai_tool_page(title, icon, description, form_html, endpoint, active="pro_assistant"):
         return _p_render(title, f"""
+        {_today_tasks_banner()}
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
           <a href="/pro" style="color:var(--text-muted);text-decoration:none;font-size:13px;">&larr; Pro Toolkit</a>
         </div>
@@ -881,27 +1348,6 @@ def register_professional_routes(app, csrf, limiter):
         return _ai_tool_page("Text Polish", "&#9997;", "Rewrite any text with better grammar, clarity, and tone.",
                              form, "/api/pro/ai/polish", active="pro_assistant")
 
-    @app.route("/pro/meeting-agenda")
-    def pro_agenda_page():
-        if not _logged_in():
-            return redirect(url_for("login"))
-        form = """
-          <div class="form-group"><label>Meeting topic</label><input data-field="topic" class="edit-input" placeholder="Q2 marketing kickoff"></div>
-          <div class="form-group"><label>Duration (minutes)</label><input data-field="duration_min" type="number" class="edit-input" value="30"></div>
-          <div class="form-group"><label>Context / goals</label><textarea data-field="context" rows="3" class="edit-input" placeholder="What do you want to come out of the meeting?"></textarea></div>"""
-        return _ai_tool_page("Meeting Agenda", "&#128197;", "Get a tight, timed agenda with participants, pre-reads, and decisions to make.",
-                             form, "/api/pro/ai/agenda")
-
-    @app.route("/pro/cold-call")
-    def pro_coldcall_page():
-        if not _logged_in():
-            return redirect(url_for("login"))
-        form = """
-          <div class="form-group"><label>What are you offering?</label><textarea data-field="offer" rows="3" class="edit-input" placeholder="B2B SaaS that automates cold email campaigns..."></textarea></div>
-          <div class="form-group"><label>Target persona</label><input data-field="target" class="edit-input" placeholder="Head of Sales at 50-200 employee SaaS companies"></div>"""
-        return _ai_tool_page("Cold Call Script", "&#128222;", "Get an opener, value prop, discovery question, CTA, plus the 3 most likely objections.",
-                             form, "/api/pro/ai/coldcall")
-
     @app.route("/pro/linkedin-post")
     def pro_linkedin_page():
         if not _logged_in():
@@ -911,20 +1357,8 @@ def register_professional_routes(app, csrf, limiter):
           <div class="form-group"><label>Key points (optional)</label><textarea data-field="key_points" rows="3" class="edit-input"></textarea></div>
           <div class="form-group"><label>Audience</label><input data-field="audience" class="edit-input" value="founders and operators"></div>"""
         return _ai_tool_page("LinkedIn Post", "&#128100;", "High-performing LinkedIn post with a hook, structure, and 3 relevant hashtags.",
-                             form, "/api/pro/ai/linkedin")
+                             form, "/api/pro/ai/linkedin", active="pro_linkedin")
 
-    @app.route("/pro/proposal")
-    def pro_proposal_page():
-        if not _logged_in():
-            return redirect(url_for("login"))
-        form = """
-          <div class="form-group"><label>Project</label><textarea data-field="project" rows="2" class="edit-input" placeholder="Redesign the checkout flow for an e-commerce client"></textarea></div>
-          <div class="form-group"><label>Deliverables</label><textarea data-field="deliverables" rows="3" class="edit-input"></textarea></div>
-          <div class="form-group"><label>Budget (optional)</label><input data-field="budget" class="edit-input" placeholder="$12,000 - $18,000"></div>"""
-        return _ai_tool_page("Proposal Outline", "&#128221;", "Full proposal skeleton: summary, scope, deliverables, timeline, investment, terms.",
-                             form, "/api/pro/ai/proposal")
-
-    # AI JSON endpoints (rate limited)
     @app.route("/api/pro/ai/polish", methods=["POST"])
     @limiter.limit("20 per minute")
     def pro_ai_polish():
@@ -936,32 +1370,6 @@ def register_professional_routes(app, csrf, limiter):
             return jsonify({"error": "Paste some text first"}), 400
         return jsonify({"result": pai.polish_text(text, tone=d.get("tone", "professional"))})
 
-    @app.route("/api/pro/ai/agenda", methods=["POST"])
-    @limiter.limit("15 per minute")
-    def pro_ai_agenda():
-        if not _logged_in():
-            return jsonify({"error": "Unauthorized"}), 401
-        d = request.get_json(force=True) or {}
-        topic = (d.get("topic") or "").strip()
-        if not topic:
-            return jsonify({"error": "Topic required"}), 400
-        try:
-            dur = int(d.get("duration_min") or 30)
-        except (TypeError, ValueError):
-            dur = 30
-        return jsonify({"result": pai.meeting_agenda(topic, duration_min=dur, context=d.get("context", ""))})
-
-    @app.route("/api/pro/ai/coldcall", methods=["POST"])
-    @limiter.limit("10 per minute")
-    def pro_ai_coldcall():
-        if not _logged_in():
-            return jsonify({"error": "Unauthorized"}), 401
-        d = request.get_json(force=True) or {}
-        offer = (d.get("offer") or "").strip()
-        if not offer:
-            return jsonify({"error": "What are you offering?"}), 400
-        return jsonify({"result": pai.cold_call_script(offer, target=d.get("target", "decision-maker"))})
-
     @app.route("/api/pro/ai/linkedin", methods=["POST"])
     @limiter.limit("15 per minute")
     def pro_ai_linkedin():
@@ -972,16 +1380,5 @@ def register_professional_routes(app, csrf, limiter):
         if not topic:
             return jsonify({"error": "Topic required"}), 400
         return jsonify({"result": pai.linkedin_post(topic, key_points=d.get("key_points", ""), audience=d.get("audience", "professionals"))})
-
-    @app.route("/api/pro/ai/proposal", methods=["POST"])
-    @limiter.limit("10 per minute")
-    def pro_ai_proposal():
-        if not _logged_in():
-            return jsonify({"error": "Unauthorized"}), 401
-        d = request.get_json(force=True) or {}
-        project = (d.get("project") or "").strip()
-        if not project:
-            return jsonify({"error": "Project description required"}), 400
-        return jsonify({"result": pai.proposal_outline(project, deliverables=d.get("deliverables", ""), budget=d.get("budget", ""))})
 
     log.info("Professional routes registered.")

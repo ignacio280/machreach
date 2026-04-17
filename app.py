@@ -1134,18 +1134,16 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/calendar" {% if active_page == 'calendar' %}class="active"{% endif %}>{{nav.calendar}}</a>
         <a href="/export" {% if active_page == 'export' %}class="active"{% endif %}>&#128202; {{nav.export}}</a>
         <div class="nav-dropdown">
-          <a href="/pro" {% if active_page in ['pro','pro_tasks','pro_time','pro_invoices','pro_expenses','pro_goals','pro_assistant'] %}class="active"{% endif %}>&#128188; Pro Tools &#9662;</a>
+          <a href="/pro" {% if active_page in ['pro','pro_tasks','pro_invoices','pro_finance','pro_goals','pro_assistant','pro_linkedin','pro_meetings','pro_relationships'] %}class="active"{% endif %}>&#128188; Pro Tools &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/pro/tasks">&#9989; Tasks</a>
-            <a href="/pro/time">&#9201;&#65039; Time Tracker</a>
-            <a href="/pro/invoices">&#128196; Invoices</a>
-            <a href="/pro/expenses">&#128176; Expenses</a>
-            <a href="/pro/goals">&#127919; Goals &amp; OKRs</a>
-            <a href="/pro/assistant">&#129504; AI Assistant</a>
+            <a href="/pro/finance">&#128176; Finance</a>
+            <a href="/pro/relationships">&#129504; Relationships</a>
             <a href="/pro/meeting-agenda">&#128197; Meeting Agenda</a>
-            <a href="/pro/cold-call">&#128222; Cold Call Script</a>
+            <a href="/pro/goals">&#127919; Goals &amp; OKRs</a>
+            <a href="/pro/invoices">&#128196; Invoices</a>
+            <a href="/pro/assistant">&#9997; Text Polish</a>
             <a href="/pro/linkedin-post">&#128100; LinkedIn Post</a>
-            <a href="/pro/proposal">&#128221; Proposal Outline</a>
           </div>
         </div>
         <div class="nav-divider"></div>
@@ -1625,8 +1623,8 @@ LAYOUT = """<!DOCTYPE html>
   }
   </script>
 
-  <!-- Interactive tutorial -->
-  {% if logged_in %}
+  <!-- Interactive tutorial (students only) -->
+  {% if logged_in and account_type|default('business') == 'student' %}
   <style>
   #mr-tut-overlay{position:fixed;inset:0;z-index:999990;pointer-events:none;transition:opacity .3s}
   #mr-tut-overlay.active{pointer-events:auto}
@@ -3578,13 +3576,6 @@ def settings():
     {prefs_card}
 
     {team_card}
-
-    <!-- Restart Tutorial -->
-    <div class="card">
-      <div class="card-header"><h2>&#127891; Interactive Tutorial</h2></div>
-      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Restart the guided tour to learn about all the features available in your dashboard.</p>
-      <button onclick="localStorage.removeItem('mr-biz-tutorial-done');window.location='/dashboard'" class="btn btn-outline btn-sm">&#128260; Restart Tutorial</button>
-    </div>
 
     <div class="card">
       <div class="card-header"><h2>&#128230; Your Data (GDPR)</h2></div>
