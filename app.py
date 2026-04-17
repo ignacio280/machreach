@@ -9349,7 +9349,7 @@ def deliverability_page():
       </div>
 
       <form method="POST" class="card" style="padding:24px;">
-        <input type="hidden" name="csrf_token" value="{session.get('csrf_token','')}" />
+        <input type="hidden" name="csrf_token" value="{generate_csrf()}" />
         <label style="font-weight:600;display:block;margin-bottom:8px;">Subject</label>
         <input name="subject" type="text" value="{subject}" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:16px;" />
 

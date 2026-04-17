@@ -18,6 +18,28 @@ from markupsafe import Markup
 log = logging.getLogger(__name__)
 
 
+# Comprehensive currency list (ISO 4217 codes) — grouped by region for UX
+CURRENCY_OPTIONS = [
+    ("Common", ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD"]),
+    ("Latin America", ["MXN", "BRL", "ARS", "CLP", "COP", "PEN", "UYU", "VES", "BOB", "PYG", "CRC", "DOP", "GTQ", "HNL", "NIO", "PAB"]),
+    ("Europe", ["NOK", "SEK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "ISK", "HRK", "RSD", "TRY", "UAH", "RUB"]),
+    ("Asia-Pacific", ["CNY", "HKD", "TWD", "KRW", "SGD", "THB", "IDR", "MYR", "PHP", "VND", "INR", "PKR", "BDT", "LKR", "NPR"]),
+    ("Middle East & Africa", ["AED", "SAR", "QAR", "KWD", "BHD", "OMR", "JOD", "ILS", "EGP", "ZAR", "NGN", "KES", "MAD", "TND", "GHS"]),
+    ("Crypto", ["BTC", "ETH", "USDT", "USDC"]),
+]
+
+
+def _currency_options(default: str = "USD") -> str:
+    out = []
+    for group_label, codes in CURRENCY_OPTIONS:
+        out.append(f'<optgroup label="{group_label}">')
+        for c in codes:
+            sel = ' selected' if c == default else ''
+            out.append(f'<option value="{c}"{sel}>{c}</option>')
+        out.append('</optgroup>')
+    return "".join(out)
+
+
 def register_professional_routes(app, csrf, limiter):
     from professional import db as pdb
     from professional import ai as pai
@@ -370,9 +392,7 @@ def register_professional_routes(app, csrf, limiter):
               <div class="form-group"><label>Monthly income</label><input id="bd-income" type="number" class="edit-input" value="{float(budget.get('income') or 0):.2f}" step="0.01"></div>
               <div class="form-group"><label>Savings goal / month</label><input id="bd-savings" type="number" class="edit-input" value="{float(budget.get('savings_goal') or 0):.2f}" step="0.01"></div>
               <div class="form-group"><label>Currency</label>
-                <select id="bd-currency" class="edit-input">
-                  {"".join([f'<option value="{c}" {"selected" if budget.get("currency","USD") == c else ""}>{c}</option>' for c in ["USD","EUR","GBP","MXN","CAD","AUD"]])}
-                </select>
+                <select id="bd-currency" class="edit-input">{_currency_options(default=budget.get('currency','USD'))}</select>
               </div>
               <div class="form-group"><label>Preferences (tell the AI about your lifestyle)</label>
                 <textarea id="bd-prefs" rows="4" class="edit-input" placeholder="I'm a freelancer, variable income. Want to travel once a quarter. Prefer to save 25%...">{_esc(budget.get('preferences',''))}</textarea>
@@ -385,7 +405,7 @@ def register_professional_routes(app, csrf, limiter):
               <div class="form-group"><label>Monthly income</label><input id="bd-income" type="number" class="edit-input" value="0" step="0.01"></div>
               <div class="form-group"><label>Savings goal / month</label><input id="bd-savings" type="number" class="edit-input" value="0" step="0.01"></div>
               <div class="form-group"><label>Currency</label>
-                <select id="bd-currency" class="edit-input"><option>USD</option><option>EUR</option><option>GBP</option><option>MXN</option><option>CAD</option></select>
+                <select id="bd-currency" class="edit-input">{_currency_options(default='USD')}</select>
               </div>
               <div class="form-group"><label>Preferences (tell the AI about your lifestyle)</label>
                 <textarea id="bd-prefs" rows="4" class="edit-input" placeholder="I'm a freelancer, variable income. Want to travel once a quarter..."></textarea>
@@ -691,9 +711,7 @@ def register_professional_routes(app, csrf, limiter):
               <div class="form-group"><label>Issue Date</label><input id="inv-issue" type="date" class="edit-input" value="{_esc((inv or {}).get('issue_date', today) or today)}"></div>
               <div class="form-group"><label>Due Date</label><input id="inv-due" type="date" class="edit-input" value="{_esc((inv or {}).get('due_date','') or '')}"></div>
               <div class="form-group"><label>Currency</label>
-                <select id="inv-currency" class="edit-input">
-                  {"".join([f'<option value="{c}" {"selected" if (inv or {}).get("currency", "USD") == c else ""}>{c}</option>' for c in ["USD","EUR","GBP","MXN","CAD","AUD","JPY","BRL","COP","CLP","ARS"]])}
-                </select>
+                <select id="inv-currency" class="edit-input">{_currency_options(default=(inv or {}).get('currency', 'USD'))}</select>
               </div>
               <div class="form-group"><label>Status</label>
                 <select id="inv-status" class="edit-input">

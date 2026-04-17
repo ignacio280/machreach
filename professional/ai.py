@@ -184,6 +184,13 @@ Recent email history (most recent first):
 
 def suggest_contacts_for_goal(goal: str, contacts: list) -> str:
     """Given a user goal, recommend contacts from their network + draft a message."""
+    if not contacts:
+        return ("I can't make a recommendation because your network is empty.\n\n"
+                "To enable this feature, either:\n"
+                "- Connect your email inbox in Mail Hub so I can see who you've been talking to, or\n"
+                "- Import your contacts via the Contacts page.\n\n"
+                "Once you have contacts, come back and I'll tell you exactly who to reach out to for: \""
+                + (goal[:200]) + "\".")
     lines = []
     for c in contacts[:40]:
         name = c.get("name") or c.get("email","")
@@ -192,16 +199,19 @@ def suggest_contacts_for_goal(goal: str, contacts: list) -> str:
         summary = (c.get("ai_summary") or "").replace("\n"," ")[:180]
         last = str(c.get("last_at","") or "")[:10]
         lines.append(f"- {name} <{c.get('email','')}> | {role} @ {company} | last: {last} | {summary}")
-    network = "\n".join(lines) or "(no contacts yet)"
+    network = "\n".join(lines)
     prompt = f'''User goal: {goal}
 
-User's network:
+User's network (these are the ONLY people you may recommend; do NOT invent or guess anyone else):
 {network}'''
     return _chat(
-        "You are the user's chief of staff. Given their goal and network, recommend the best 3-5 contacts "
-        "to reach out to (with reasoning), then draft a short, personalized message the user could send to the top 1-2. "
-        "Output plain text:\n\nPossible contacts:\n- Name - why they're a fit\n\nSuggested message draft:\n<draft>\n",
-        prompt, max_tokens=800, temperature=0.6,
+        "You are the user's chief of staff. You recommend ONLY from the contacts provided below; "
+        "you MUST NOT invent, guess, or pull names from outside the provided list. "
+        "If none of the provided contacts are a clear fit, say so honestly and suggest what kind of "
+        "person they should look for instead. Output plain text:\n\n"
+        "Possible contacts:\n- Name - why they're a fit (based only on info provided)\n\n"
+        "Suggested message draft:\n<draft using only real info from the list>\n",
+        prompt, max_tokens=800, temperature=0.4,
     )
 
 
@@ -212,12 +222,17 @@ def weekly_reconnect_suggestions(contacts: list) -> str:
         if not c.get("last_at"): continue
         last = str(c["last_at"])[:10]
         lines.append(f"- {c.get('name') or c.get('email','')} ({c.get('email','')}) - last contact {last}")
-    block = "\n".join(lines) or "(no contacts)"
+    if not lines:
+        return ("No contacts with email history yet.\n\n"
+                "Connect your inbox in Mail Hub so I can analyze who you've been talking to, "
+                "then I'll suggest who to reconnect with each week.")
+    block = "\n".join(lines)
     return _chat(
-        "Suggest 3-5 people the user should reconnect with this week, prioritizing older contacts and those "
-        "with potential value. For each, give a one-line reason and a short suggested opening message. Plain text only.",
+        "Suggest 3-5 people the user should reconnect with this week from the list provided. "
+        "You MUST only reference names and emails that appear in the list. Do NOT invent anyone. "
+        "For each, give a one-line reason based only on the data shown and a short suggested opening message. Plain text only.",
         f"Contacts ordered by most recent contact (top = recent, bottom = stale):\n{block}",
-        max_tokens=600, temperature=0.6,
+        max_tokens=600, temperature=0.4,
     )
 
 
