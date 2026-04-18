@@ -1096,11 +1096,37 @@ def register_student_routes(app, csrf, limiter):
 
                                 material_files.append(f.get("original_name", ""))
 
-                                # NO cap — send the FULL extracted text so every chapter reaches the AI
+                                # Send only METADATA (page count + short preview) — the AI only needs the page count
 
-                                chunks.append(f"=== FILE: {f.get('original_name','')} ===\n{txt}")
+                                # to assign reading segments. Sending the full PDF blows the context window.
 
-                            # NO per-exam cap either — full material goes through
+                                import re as _re
+
+                                m = _re.search(r"TOTAL PAGES:\s*(\d+)", txt)
+
+                                page_count = m.group(1) if m else None
+
+                                # Take the first 2000 chars as a topical preview (table of contents, intro)
+
+                                preview = txt[:2000]
+
+                                meta_block = f"=== FILE: {f.get('original_name','')} ==="
+
+                                if page_count:
+
+                                    meta_block += f"\nTOTAL PAGES: {page_count}"
+
+                                else:
+
+                                    # Estimate from char count if no markers (DOCX, etc.)
+
+                                    est_pages = max(1, len(txt) // 3000)
+
+                                    meta_block += f"\nESTIMATED PAGES: {est_pages} (no markers, estimated from text length)"
+
+                                meta_block += f"\n--- FIRST 2000 CHARS PREVIEW (for topic/section context only) ---\n{preview}"
+
+                                chunks.append(meta_block)
 
                             materials_text = "\n\n".join(chunks)
 
