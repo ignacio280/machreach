@@ -105,6 +105,18 @@ CREATE TABLE IF NOT EXISTS student_schedule_settings (
     UNIQUE(client_id, day_of_week)
 );
 
+CREATE TABLE IF NOT EXISTS student_date_overrides (
+    id          SERIAL PRIMARY KEY,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    override_date DATE NOT NULL,
+    available_hours REAL DEFAULT 0,
+    is_free_day BOOLEAN DEFAULT FALSE,
+    note        TEXT DEFAULT '',
+    created_at  TIMESTAMP DEFAULT NOW(),
+    UNIQUE(client_id, override_date)
+);
+CREATE INDEX IF NOT EXISTS idx_student_date_overrides_client ON student_date_overrides(client_id, override_date);
+
 CREATE TABLE IF NOT EXISTS student_assignment_progress (
     id              SERIAL PRIMARY KEY,
     client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -317,6 +329,18 @@ CREATE TABLE IF NOT EXISTS student_schedule_settings (
     created_at  TEXT DEFAULT (datetime('now', 'localtime')),
     UNIQUE(client_id, day_of_week)
 );
+
+CREATE TABLE IF NOT EXISTS student_date_overrides (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    override_date TEXT NOT NULL,
+    available_hours REAL DEFAULT 0,
+    is_free_day INTEGER DEFAULT 0,
+    note        TEXT DEFAULT '',
+    created_at  TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(client_id, override_date)
+);
+CREATE INDEX IF NOT EXISTS idx_student_date_overrides_client ON student_date_overrides(client_id, override_date);
 
 CREATE TABLE IF NOT EXISTS student_assignment_progress (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -990,6 +1014,53 @@ def get_schedule_settings(client_id: int) -> list[dict]:
             (client_id,),
         )
         return [dict(r) for r in rows]
+
+
+# ── Date overrides (per-date availability — overrides weekly defaults) ──
+
+def save_date_override(client_id: int, override_date: str, hours: float, is_free: bool, note: str = "") -> None:
+    """Upsert a per-date availability override.
+    override_date: ISO 'YYYY-MM-DD'.
+    """
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_date_overrides WHERE client_id = %s AND override_date = %s",
+              (client_id, override_date))
+        _exec(db,
+              "INSERT INTO student_date_overrides (client_id, override_date, available_hours, is_free_day, note) "
+              "VALUES (%s, %s, %s, %s, %s)",
+              (client_id, override_date, hours, bool(is_free), note))
+
+
+def delete_date_override(client_id: int, override_date: str) -> None:
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_date_overrides WHERE client_id = %s AND override_date = %s",
+              (client_id, override_date))
+
+
+def get_date_overrides(client_id: int, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
+    with get_db() as db:
+        if start_date and end_date:
+            rows = _fetchall(
+                db,
+                "SELECT * FROM student_date_overrides WHERE client_id = %s AND override_date >= %s AND override_date <= %s ORDER BY override_date",
+                (client_id, start_date, end_date),
+            )
+        else:
+            rows = _fetchall(
+                db, "SELECT * FROM student_date_overrides WHERE client_id = %s ORDER BY override_date",
+                (client_id,),
+            )
+        out = []
+        for r in rows:
+            d = dict(r)
+            # normalize override_date to ISO string
+            od = d.get("override_date")
+            if hasattr(od, "isoformat"):
+                d["override_date"] = od.isoformat()[:10]
+            elif isinstance(od, str):
+                d["override_date"] = od[:10]
+            out.append(d)
+        return out
 
 
 # ── Course difficulty ────────────────────────────────────────

@@ -1761,6 +1761,48 @@ LAYOUT = """<!DOCTYPE html>
       if (!alarmDataUri){ alarmDataUri = buildAlarmWavDataUri(); alarmEl.src = alarmDataUri; alarmEl.volume = 0.7; }
     }
 
+    // WebAudio fallback alarm — much more reliable than HTML5 Audio when
+    // it comes to autoplay policies, because once the AudioContext is
+    // resumed via a user gesture it stays unlocked for the whole document.
+    var alarmCtx = null;
+    function ensureAlarmCtx(){
+      try {
+        if (!alarmCtx) alarmCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch(e){}
+      return alarmCtx;
+    }
+    function resumeAlarmCtx(){
+      try {
+        var c = ensureAlarmCtx();
+        if (c && c.state === 'suspended' && c.resume) c.resume().catch(function(){});
+      } catch(e){}
+    }
+    function playAlarmWebAudio(){
+      try {
+        var ctx = ensureAlarmCtx();
+        if (!ctx) return false;
+        if (ctx.state === 'suspended') {
+          // Try to resume; if blocked the bell won't play but no-op is fine.
+          ctx.resume().catch(function(){});
+        }
+        var now = ctx.currentTime;
+        var freqs = [523.25, 659.25, 783.99]; // C5 E5 G5
+        freqs.forEach(function(f, i){
+          var osc = ctx.createOscillator();
+          var g = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = f;
+          var t0 = now + i*0.5;
+          g.gain.setValueAtTime(0, t0);
+          g.gain.linearRampToValueAtTime(0.3, t0 + 0.05);
+          g.gain.exponentialRampToValueAtTime(0.001, t0 + 1.5);
+          osc.connect(g); g.connect(ctx.destination);
+          osc.start(t0); osc.stop(t0 + 1.6);
+        });
+        return true;
+      } catch(e){ return false; }
+    }
+
     function startKeepalive(){
       try {
         ensureAudioReady();
@@ -1772,6 +1814,10 @@ LAYOUT = """<!DOCTYPE html>
       try { keepEl.pause(); keepEl.currentTime = 0; } catch(e){}
     }
     function playAlarm(){
+      // Belt-and-suspenders: fire BOTH the WebAudio bell AND the HTML5 audio
+      // sample so at least one of them produces sound regardless of which
+      // unlock path the browser honored on this page.
+      playAlarmWebAudio();
       try {
         ensureAudioReady();
         alarmEl.currentTime = 0;
@@ -1787,19 +1833,39 @@ LAYOUT = """<!DOCTYPE html>
       } catch(e){}
     }
 
-    // Try to ensure audio is primed via any user gesture on any page.
+    // Re-prime audio on EVERY user gesture on EVERY page.
+    // We don't remove the listeners after one trigger because the audio
+    // context can become suspended again (e.g. after long idle).
     function primeOnGesture(){
       ensureAudioReady();
-      try { keepEl.muted = true; var p = keepEl.play(); if (p && p.then) p.then(function(){ keepEl.pause(); keepEl.currentTime=0; keepEl.muted=false; }).catch(function(){ keepEl.muted=false; }); } catch(e){}
-      try { alarmEl.muted = true; var p2 = alarmEl.play(); if (p2 && p2.then) p2.then(function(){ alarmEl.pause(); alarmEl.currentTime=0; alarmEl.muted=false; }).catch(function(){ alarmEl.muted=false; }); } catch(e){}
-      // Also re-start keepalive if a session is active (in case browser had paused it).
-      var d = readState();
-      if (d && d.active) startKeepalive();
-      window.removeEventListener('click', primeOnGesture, true);
-      window.removeEventListener('keydown', primeOnGesture, true);
+      // Resume WebAudio context (this is what actually unlocks the alarm).
+      resumeAlarmCtx();
+      // Briefly play+pause keepalive at audible volume to mark it as a
+      // genuine user-initiated playback (mute trick is unreliable in Chrome).
+      try {
+        var prev = keepEl.volume;
+        keepEl.volume = 0.001;
+        var p = keepEl.play();
+        if (p && p.then) p.then(function(){
+          // If a session is active, leave it playing as the keepalive.
+          var d = readState();
+          if (!(d && d.active)) {
+            keepEl.pause(); keepEl.currentTime = 0;
+          }
+          keepEl.volume = prev;
+        }).catch(function(){ keepEl.volume = prev; });
+      } catch(e){}
+      // If a session is active, ensure keepalive is running.
+      var d2 = readState();
+      if (d2 && d2.active) startKeepalive();
+      // Request notification permission once.
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default'){
+        try { Notification.requestPermission().catch(function(){}); } catch(e){}
+      }
     }
     window.addEventListener('click', primeOnGesture, true);
     window.addEventListener('keydown', primeOnGesture, true);
+    window.addEventListener('touchstart', primeOnGesture, true);
 
     function readState(){
       try { return JSON.parse(localStorage.getItem('focus_float')||'null'); } catch(e){ return null; }

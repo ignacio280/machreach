@@ -1168,6 +1168,46 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+        # Per-date availability overrides (next 30 days)
+
+        from datetime import timedelta as _td
+
+        _today_d = datetime.now().date()
+
+        try:
+
+            date_overrides_raw = sdb.get_date_overrides(
+
+                client_id,
+
+                _today_d.isoformat(),
+
+                (_today_d + _td(days=30)).isoformat(),
+
+            )
+
+        except Exception:
+
+            date_overrides_raw = []
+
+        date_overrides_list = []
+
+        for o in date_overrides_raw:
+
+            date_overrides_list.append({
+
+                "date": o.get("override_date"),
+
+                "hours": o.get("available_hours", 0),
+
+                "free": bool(o.get("is_free_day")),
+
+                "note": o.get("note", "") or "",
+
+            })
+
+
+
         # Gather incomplete assignments from previous days
 
         today_str = datetime.now().strftime("%Y-%m-%d")
@@ -1216,6 +1256,8 @@ def register_student_routes(app, csrf, limiter):
                     incomplete_assignments=incomplete or None,
 
                     calendar_events=gcal_summary,
+
+                    date_overrides=date_overrides_list or None,
 
                 )
 
@@ -7043,6 +7085,58 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+    # ── Per-date availability overrides ─────────────────────
+
+    @app.route("/api/student/date-overrides", methods=["GET"])
+    def student_get_date_overrides():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        start = request.args.get("start") or None
+        end = request.args.get("end") or None
+        try:
+            rows = sdb.get_date_overrides(_cid(), start, end)
+            return jsonify({"overrides": rows})
+        except Exception as e:
+            return jsonify({"error": str(e)[:200]}), 500
+
+    @app.route("/api/student/date-overrides", methods=["POST"])
+    @csrf.exempt
+    def student_save_date_override():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        try:
+            data = request.get_json(force=True) or {}
+            d = (data.get("date") or "").strip()[:10]
+            if not d or len(d) != 10:
+                return jsonify({"error": "Valid 'date' (YYYY-MM-DD) required"}), 400
+            from datetime import date as _date
+            try:
+                _date.fromisoformat(d)
+            except Exception:
+                return jsonify({"error": "Invalid date format"}), 400
+            hours = max(0.0, min(24.0, float(data.get("hours", 0))))
+            is_free = bool(data.get("free", False))
+            note = (data.get("note", "") or "")[:200]
+            sdb.save_date_override(_cid(), d, hours, is_free, note)
+            return jsonify({"ok": True})
+        except Exception as e:
+            import logging, traceback
+            logging.getLogger("student.routes").error("date-override save failed: %s\n%s", e, traceback.format_exc())
+            return jsonify({"error": str(e)[:200]}), 500
+
+    @app.route("/api/student/date-overrides/<date_str>", methods=["DELETE"])
+    @csrf.exempt
+    def student_delete_date_override(date_str):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        try:
+            sdb.delete_date_override(_cid(), date_str[:10])
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)[:200]}), 500
+
+
+
     # ── Course difficulty ───────────────────────────────────
 
 
@@ -7291,11 +7385,63 @@ def register_student_routes(app, csrf, limiter):
 
         <div class="card" style="margin-top:20px;">
 
+          <div class="card-header">
+
+            <h2>&#128467; Per-Date Availability Overrides</h2>
+
+            <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0;">Override your weekly schedule for SPECIFIC dates. e.g. you have a doctor appointment on the 22nd so you only get 3h that day. The AI plan will respect these as hard limits.</p>
+
+          </div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:14px 0;padding:14px;background:var(--bg);border-radius:var(--radius-sm);">
+
+            <div>
+
+              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">Date</label>
+
+              <input type="date" id="ov-date" class="edit-input" style="width:160px;">
+
+            </div>
+
+            <div>
+
+              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">Hours available</label>
+
+              <input type="number" id="ov-hours" min="0" max="24" step="0.5" value="2" class="edit-input" style="width:90px;">
+
+            </div>
+
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding-bottom:6px;">
+
+              <input type="checkbox" id="ov-free"> <span style="font-size:13px;">Free day (0h)</span>
+
+            </label>
+
+            <div style="flex:1;min-width:160px;">
+
+              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">Note (optional)</label>
+
+              <input type="text" id="ov-note" placeholder="e.g. Doctor appointment" maxlength="200" class="edit-input">
+
+            </div>
+
+            <button onclick="addOverride()" class="btn btn-primary btn-sm" id="add-ov-btn">Add / Update</button>
+
+          </div>
+
+          <div id="ov-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+
+        </div>
+
+
+
+        <div class="card" style="margin-top:20px;">
+
           <div style="background:var(--bg);border-radius:var(--radius-sm);padding:14px 18px;">
 
             <p style="font-size:13px;color:var(--text-muted);margin:0;">
 
-              &#128161; <b>How it works:</b> When you generate a study plan, the AI will respect your schedule &mdash; only assigning study time on days you're available, for the number of hours you set. Harder courses get proportionally more study time. If you don't configure a day, it's considered a free day (no study).
+              &#128161; <b>How it works:</b> When you generate a study plan, the AI will respect your weekly schedule, your per-date overrides (which take priority for the dates you specify), and course difficulty. Per-date overrides are HARD limits &mdash; the plan will never exceed them.
 
             </p>
 
@@ -7437,6 +7583,54 @@ def register_student_routes(app, csrf, limiter):
 
         }}
 
+        // ── Per-date overrides ──
+        function escHtml(s) {{ return String(s||'').replace(/[&<>"']/g, function(c){{ return ({{ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }})[c]; }}); }}
+        async function loadOverrides() {{
+          try {{
+            var r = await fetch('/api/student/date-overrides');
+            var j = await r.json();
+            var rows = (j.overrides || []).map(function(o) {{
+              var label = o.is_free_day ? '<b>Free day</b>' : ('<b>' + o.available_hours + 'h</b>');
+              var note = o.note ? (' &mdash; <span style="color:var(--text-muted);">' + escHtml(o.note) + '</span>') : '';
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);">' +
+                '<div><span style="font-family:monospace;color:var(--primary);">' + escHtml(o.override_date) + '</span> &middot; ' + label + note + '</div>' +
+                '<button onclick="delOverride(\\''+escHtml(o.override_date)+'\\')" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:12px;">Remove</button>' +
+                '</div>';
+            }}).join('');
+            document.getElementById('ov-list').innerHTML = rows || '<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:8px;">No date overrides yet.</p>';
+          }} catch(e) {{}}
+        }}
+        async function addOverride() {{
+          var d = document.getElementById('ov-date').value;
+          if (!d) {{ alert('Pick a date'); return; }}
+          var free = document.getElementById('ov-free').checked;
+          var hours = parseFloat(document.getElementById('ov-hours').value) || 0;
+          var note = document.getElementById('ov-note').value || '';
+          var btn = document.getElementById('add-ov-btn');
+          btn.disabled = true; btn.textContent = 'Saving...';
+          try {{
+            var r = await fetch('/api/student/date-overrides', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ date: d, hours: free ? 0 : hours, free: free, note: note }})
+            }});
+            if (r.ok) {{
+              document.getElementById('ov-note').value = '';
+              loadOverrides();
+            }} else {{
+              var j = {{}}; try {{ j = await r.json(); }} catch(e){{}}
+              alert(j.error || 'Failed to save override');
+            }}
+          }} catch(e) {{ alert('Network error'); }}
+          btn.disabled = false; btn.textContent = 'Add / Update';
+        }}
+        async function delOverride(d) {{
+          if (!confirm('Remove override for ' + d + '?')) return;
+          try {{
+            var r = await fetch('/api/student/date-overrides/' + encodeURIComponent(d), {{ method: 'DELETE' }});
+            if (r.ok) loadOverrides();
+          }} catch(e) {{}}
+        }}
+        loadOverrides();
         </script>
 
         """, active_page="student_schedule")

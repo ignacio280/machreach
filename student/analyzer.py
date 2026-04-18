@@ -163,6 +163,7 @@ def generate_study_plan(
     course_difficulties: dict | None = None,
     incomplete_assignments: list[dict] | None = None,
     calendar_events: str = "",
+    date_overrides: list[dict] | None = None,
 ) -> dict:
     """
     Given analyzed data for ALL courses, generate a unified study plan.
@@ -298,6 +299,27 @@ def generate_study_plan(
             + "\nWork around these. If a study block conflicts, move it earlier or to a free slot the same day."
         )
 
+    overrides_ctx = ""
+    if date_overrides:
+        lines = []
+        for o in date_overrides:
+            d = o.get("date")
+            if not d:
+                continue
+            if o.get("free"):
+                lines.append(f"  - {d}: FREE DAY (override) — schedule 0 hours of study, no sessions")
+            else:
+                hrs = o.get("hours", 0)
+                note = o.get("note", "")
+                extra = f" ({note})" if note else ""
+                lines.append(f"  - {d}: ONLY {hrs}h available (override){extra} — do NOT exceed this")
+        if lines:
+            overrides_ctx = (
+                "\nPER-DATE AVAILABILITY OVERRIDES (these REPLACE the weekly default for those specific dates — they are HARD limits):\n"
+                + "\n".join(lines)
+                + "\nFor any date NOT listed here, use the weekly schedule above."
+            )
+
     prompt = f"""You are an expert academic study planner. Today is {today}.
 
 A student has these courses with their exam schedules and topics:
@@ -310,6 +332,7 @@ Student preferences: {prefs_str}
 {diff_ctx}
 {incomplete_ctx}
 {calendar_ctx}
+{overrides_ctx}
 {materials_ctx}
 
 Create a detailed daily study plan for the NEXT 14 DAYS ONLY (from {today}).
@@ -364,6 +387,7 @@ Rules:
 - COMPLETE COVERAGE: when an exam has FULL STUDY MATERIALS attached above, your sessions for that exam MUST walk through EVERY chapter / section / unit / heading / problem set found in that material before the exam date. Do NOT skip sections. Break large chapters into multiple sessions across multiple days. Each session's "topic" field must name the specific chapter or section being studied (e.g. "Chapter 4.2 — Definite Integrals" or "Unit 3: Kinematics problem set"). Allocate study days proportionally to material length so the student finishes 100% of the document at least 1 day before the exam.
 - HARD RULE — NEVER schedule study sessions for an exam AFTER its exam date. Once the exam date passes, that exam is DONE — do not include any further sessions for it. If the exam is on YYYY-MM-DD, your last session for that exam's material must be on YYYY-MM-DD or earlier (ideally the day BEFORE the exam for final review). Sessions on the exam date itself should be light review only, not new material.
 - HARD RULE — Front-load study so all material is covered BEFORE the exam, not after. If you only have 6 days until the exam, compress the material into those 6 days.
+- HARD RULE — The student must be FULLY PREPARED by the END of the day BEFORE the exam. If the exam is on day D, the day-D−1 plan must include a final FULL REVIEW session (type "review", priority "high") covering the entire material, and ALL new-material study must be completed by day D−1. The exam date itself (D) should have NO study unless explicitly a quick warm-up review.
 - Mark priority based on how close the exam is, its weight, AND course difficulty
 - Keep each session description concise (under 15 words)
 - Return ONLY JSON, no markdown fences"""
@@ -386,18 +410,18 @@ Rules:
             # Try to close any open arrays/objects
             for closer in [']}]}', ']}', '}]}'  , ']}]}']:
                 try:
-                    return _post_process_plan(json.loads(raw + closer), courses_data)
+                    return _post_process_plan(json.loads(raw + closer), courses_data, date_overrides)
                 except json.JSONDecodeError:
                     continue
             raise ValueError("AI response was truncated and could not be repaired")
 
-        return _post_process_plan(json.loads(raw), courses_data)
+        return _post_process_plan(json.loads(raw), courses_data, date_overrides)
     except Exception as e:
         log.error("Study plan generation failed: %s", e)
         raise RuntimeError(f"Plan generation failed: {e}")
 
 
-def _post_process_plan(plan: dict, courses_data: list[dict]) -> dict:
+def _post_process_plan(plan: dict, courses_data: list[dict], date_overrides: list[dict] | None = None) -> dict:
     """Strip out sessions scheduled AFTER an exam's date — the AI sometimes
     forgets that an exam ends, and schedules continued study afterwards."""
     if not isinstance(plan, dict):
@@ -423,13 +447,32 @@ def _post_process_plan(plan: dict, courses_data: list[dict]) -> dict:
                 latest = ed_obj
         if latest:
             exam_dates[cname.lower().strip()] = latest
-    if not exam_dates:
+    # Build override index by ISO date string.
+    overrides_by_date = {}
+    for o in date_overrides or []:
+        d = (o.get("date") or "")[:10]
+        if not d:
+            continue
+        overrides_by_date[d] = {
+            "free": bool(o.get("free")),
+            "hours": float(o.get("hours") or 0),
+            "note": o.get("note", ""),
+        }
+    if not exam_dates and not overrides_by_date:
         return plan
     new_daily = []
     for day in plan.get("daily_plan", []) or []:
         try:
             day_date = _date.fromisoformat((day.get("date") or "")[:10])
         except Exception:
+            new_daily.append(day)
+            continue
+        # Apply date overrides — these are HARD limits.
+        ov = (overrides_by_date.get(day_date.isoformat())
+              if date_overrides else None)
+        if ov and ov.get("free"):
+            day["sessions"] = []
+            day["total_hours"] = 0
             new_daily.append(day)
             continue
         kept_sessions = []
@@ -440,6 +483,25 @@ def _post_process_plan(plan: dict, courses_data: list[dict]) -> dict:
                 # Skip — this study session is scheduled AFTER the course's last exam.
                 continue
             kept_sessions.append(s)
+        # If a date override caps hours, trim sessions proportionally from the END
+        if ov and not ov.get("free"):
+            cap = float(ov.get("hours") or 0)
+            running = 0.0
+            trimmed = []
+            for s in kept_sessions:
+                h = float(s.get("hours", 0) or 0)
+                if running + h <= cap + 0.01:
+                    trimmed.append(s)
+                    running += h
+                else:
+                    remaining = max(0.0, cap - running)
+                    if remaining >= 0.25:
+                        s2 = dict(s)
+                        s2["hours"] = round(remaining, 2)
+                        trimmed.append(s2)
+                        running = cap
+                    break
+            kept_sessions = trimmed
         day["sessions"] = kept_sessions
         # Recompute total_hours if it was set
         if "total_hours" in day:
