@@ -206,10 +206,26 @@ def generate_study_plan(
     difficulties = course_difficulties or {}
     incomplete = incomplete_assignments or []
 
-    # Build exam timeline
+    # Build exam timeline + extract per-exam study materials so the AI plans
+    # coverage of the WHOLE document, not just the topic list.
     all_exams = []
+    materials_blocks = []  # one big text block per exam with full material
+    # We strip "materials" out of courses_data before JSON-dumping so the dump
+    # stays compact AND the AI gets the full text in a dedicated section.
+    courses_for_summary = []
     for cd in courses_data:
+        slim_course = {k: v for k, v in cd.items() if k != "exams"}
+        slim_exams = []
         for exam in cd.get("exams", []):
+            slim_exam = {
+                "name": exam.get("name", "Exam"),
+                "date": exam.get("date"),
+                "weight_pct": exam.get("weight_pct", 0),
+                "topics": exam.get("topics", []),
+                "material_files": exam.get("material_files", []),
+                "has_full_material": bool(exam.get("materials")),
+            }
+            slim_exams.append(slim_exam)
             all_exams.append({
                 "course": cd["course_name"],
                 "name": exam.get("name", "Exam"),
@@ -217,8 +233,29 @@ def generate_study_plan(
                 "weight_pct": exam.get("weight_pct", 0),
                 "topics": exam.get("topics", []),
             })
+            mat = (exam.get("materials") or "").strip()
+            if mat:
+                materials_blocks.append(
+                    f"### {cd['course_name']} — {exam.get('name','Exam')} (date: {exam.get('date') or 'TBD'})\n"
+                    f"Files: {', '.join(exam.get('material_files', [])) or '(unnamed)'}\n"
+                    f"--- FULL MATERIAL BELOW ---\n{mat}\n--- END MATERIAL ---"
+                )
+        slim_course["exams"] = slim_exams
+        courses_for_summary.append(slim_course)
 
-    courses_summary = json.dumps(courses_data, ensure_ascii=False, indent=2)[:12000]
+    courses_summary = json.dumps(courses_for_summary, ensure_ascii=False, indent=2)[:30000]
+    materials_section = "\n\n".join(materials_blocks)
+    if materials_section:
+        # Hard cap to keep prompt under model context — but very generous (~250k chars ≈ 60k tokens)
+        materials_section = materials_section[:250000]
+        materials_ctx = (
+            "\n\n=========================\n"
+            "FULL STUDY MATERIALS PER EXAM (you MUST cover EVERY chapter, section, and topic appearing below)\n"
+            "=========================\n"
+            + materials_section
+        )
+    else:
+        materials_ctx = ""
     prefs_str = json.dumps(prefs, ensure_ascii=False)
 
     today = date.today().isoformat()
@@ -273,6 +310,7 @@ Student preferences: {prefs_str}
 {diff_ctx}
 {incomplete_ctx}
 {calendar_ctx}
+{materials_ctx}
 
 Create a detailed daily study plan for the NEXT 14 DAYS ONLY (from {today}).
 Return ONLY valid JSON:
@@ -323,6 +361,7 @@ Rules:
 - If there are incomplete assignments from previous days, schedule them FIRST with high priority
 - Alternate between subjects to avoid burnout (max 3h same subject)
 - Include specific topics, not just "study for exam"
+- COMPLETE COVERAGE: when an exam has FULL STUDY MATERIALS attached above, your sessions for that exam MUST walk through EVERY chapter / section / unit / heading / problem set found in that material before the exam date. Do NOT skip sections. Break large chapters into multiple sessions across multiple days. Each session's "topic" field must name the specific chapter or section being studied (e.g. "Chapter 4.2 — Definite Integrals" or "Unit 3: Kinematics problem set"). Allocate study days proportionally to material length so the student finishes 100% of the document at least 1 day before the exam.
 - Mark priority based on how close the exam is, its weight, AND course difficulty
 - Keep each session description concise (under 15 words)
 - Return ONLY JSON, no markdown fences"""

@@ -1060,21 +1060,73 @@ def register_student_routes(app, csrf, limiter):
 
                 # Override stale analysis exams with live student_exams (canonical source)
 
+                # AND attach the FULL extracted text of every uploaded file per exam,
+
+                # so the AI plans coverage of the entire study material — not just the topic list.
+
                 try:
 
                     live_exams = sdb.get_course_exams(c["id"]) or []
 
-                    analysis["exams"] = [{
+                    merged_exams = []
 
-                        "name": ex.get("name", "Exam"),
+                    for ex in live_exams:
 
-                        "date": ex.get("exam_date"),
+                        topics = json.loads(ex["topics_json"]) if isinstance(ex.get("topics_json"), str) else (ex.get("topics_json") or [])
 
-                        "weight_pct": ex.get("weight_pct", 0),
+                        # Pull every file uploaded for THIS exam and concatenate its text
 
-                        "topics": json.loads(ex["topics_json"]) if isinstance(ex.get("topics_json"), str) else (ex.get("topics_json") or []),
+                        materials_text = ""
 
-                    } for ex in live_exams]
+                        material_files = []
+
+                        try:
+
+                            ex_files = sdb.get_course_files(client_id, c["id"], exam_id=ex["id"]) or []
+
+                            chunks = []
+
+                            for f in ex_files:
+
+                                txt = (f.get("extracted_text") or "").strip()
+
+                                if not txt:
+
+                                    continue
+
+                                material_files.append(f.get("original_name", ""))
+
+                                # Cap each individual file at 60k chars to avoid one huge file starving others
+
+                                chunks.append(f"=== FILE: {f.get('original_name','')} ===\n{txt[:60000]}")
+
+                            # Cap the per-exam total at 120k chars (≈ 30k tokens worth)
+
+                            materials_text = ("\n\n".join(chunks))[:120000]
+
+                        except Exception as _fe:
+
+                            print(f"[plan] failed to load files for exam {ex.get('id')}: {_fe}")
+
+                        merged_exams.append({
+
+                            "id": ex.get("id"),
+
+                            "name": ex.get("name", "Exam"),
+
+                            "date": ex.get("exam_date"),
+
+                            "weight_pct": ex.get("weight_pct", 0),
+
+                            "topics": topics,
+
+                            "material_files": material_files,
+
+                            "materials": materials_text,
+
+                        })
+
+                    analysis["exams"] = merged_exams
 
                 except Exception as _e:
 
