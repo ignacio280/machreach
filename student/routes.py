@@ -1058,6 +1058,28 @@ def register_student_routes(app, csrf, limiter):
 
             if analysis and analysis.get("course_name"):
 
+                # Override stale analysis exams with live student_exams (canonical source)
+
+                try:
+
+                    live_exams = sdb.get_course_exams(c["id"]) or []
+
+                    analysis["exams"] = [{
+
+                        "name": ex.get("name", "Exam"),
+
+                        "date": ex.get("exam_date"),
+
+                        "weight_pct": ex.get("weight_pct", 0),
+
+                        "topics": json.loads(ex["topics_json"]) if isinstance(ex.get("topics_json"), str) else (ex.get("topics_json") or []),
+
+                    } for ex in live_exams]
+
+                except Exception as _e:
+
+                    print(f"[plan] failed to merge live exams for course {c['id']}: {_e}")
+
                 courses_data.append(analysis)
 
                 diff = c.get("difficulty", 3) or 3
@@ -1310,6 +1332,8 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/api/student/focus/save", methods=["POST"])
+
+    @csrf.exempt
 
     def student_save_focus():
 
@@ -2383,7 +2407,13 @@ def register_student_routes(app, csrf, limiter):
 
             analysis = json.loads(c["analysis_json"]) if isinstance(c.get("analysis_json"), str) else c.get("analysis_json", {})
 
-            n_exams = len(analysis.get("exams", []))
+            try:
+
+                n_exams = len(sdb.get_course_exams(c["id"]) or [])
+
+            except Exception:
+
+                n_exams = len(analysis.get("exams", []))
 
             has_sched = "Yes" if analysis.get("weekly_schedule") else "No"
 
@@ -4485,32 +4515,118 @@ def register_student_routes(app, csrf, limiter):
 
         <script>
 
-        /* === Calming alarm audio === */
+        /* === Background-safe alarm =========================================
+
+           We use BOTH:
+           1) A pre-loaded HTML5 <audio> element with a base64 WAV. HTML5 audio
+              continues to work in background tabs (unlike WebAudio which is
+              suspended). It must be primed by a user gesture (start button)
+              once per session so browsers allow background playback.
+           2) WebAudio chime as a fallback for when the page IS focused.
+           3) Desktop Notification when permission has been granted, so the
+              user gets an alert even if the tab is hidden and audio is muted.
+        */
 
         var alarmCtx = null;
+        var alarmAudio = null;          // HTML5 <audio> element (background-safe)
+        var alarmPrimed = false;
+        var notifPermission = (typeof Notification !== 'undefined') ? Notification.permission : 'denied';
+
+        function buildAlarmWavDataUri() {{
+          // Generate a short 3-tone bell as a 16-bit PCM WAV, encode as data URI.
+          // (~1.2s @ 22050Hz mono = ~26KB base64.)
+          var sampleRate = 22050;
+          var duration = 1.4;
+          var n = Math.floor(sampleRate * duration);
+          var buffer = new ArrayBuffer(44 + n * 2);
+          var view = new DataView(buffer);
+          function writeStr(off, s){{ for(var i=0;i<s.length;i++) view.setUint8(off+i, s.charCodeAt(i)); }}
+          writeStr(0,'RIFF'); view.setUint32(4, 36 + n*2, true);
+          writeStr(8,'WAVEfmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+          view.setUint16(22,1,true); view.setUint32(24,sampleRate,true);
+          view.setUint32(28,sampleRate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
+          writeStr(36,'data'); view.setUint32(40, n*2, true);
+          var freqs = [523.25, 659.25, 783.99];  // C5 E5 G5
+          for (var i=0; i<n; i++) {{
+            var t = i / sampleRate;
+            // Three staggered chimes
+            var s = 0;
+            for (var k=0; k<3; k++) {{
+              var start = k * 0.35;
+              if (t >= start && t < start + 0.6) {{
+                var local = t - start;
+                var env = Math.exp(-local * 5);
+                s += Math.sin(2 * Math.PI * freqs[k] * local) * env * 0.3;
+              }}
+            }}
+            var v = Math.max(-1, Math.min(1, s));
+            view.setInt16(44 + i*2, v * 0x7FFF, true);
+          }}
+          // Convert to base64
+          var bytes = new Uint8Array(buffer);
+          var binary = '';
+          for (var j=0; j<bytes.length; j++) binary += String.fromCharCode(bytes[j]);
+          return 'data:audio/wav;base64,' + btoa(binary);
+        }}
+
+        function primeAlarm() {{
+          // MUST be called from a user-gesture handler (e.g. Start button) to
+          // unlock both WebAudio and HTML5 audio for later background playback.
+          if (alarmPrimed) return;
+          try {{
+            if (!alarmAudio) {{
+              alarmAudio = new Audio(buildAlarmWavDataUri());
+              alarmAudio.preload = 'auto';
+              alarmAudio.volume = 0.7;
+              // Play silently to unlock autoplay policy
+              alarmAudio.muted = true;
+              var p = alarmAudio.play();
+              if (p && p.then) p.then(function(){{
+                alarmAudio.pause();
+                alarmAudio.currentTime = 0;
+                alarmAudio.muted = false;
+              }}).catch(function(){{
+                alarmAudio.muted = false;
+              }});
+            }}
+            if (!alarmCtx) alarmCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (alarmCtx.state === 'suspended') alarmCtx.resume().catch(function(){{}});
+          }} catch(e) {{}}
+          // Ask for notification permission once, so we can alert when hidden
+          if (typeof Notification !== 'undefined' && Notification.permission === 'default') {{
+            Notification.requestPermission().then(function(p){{ notifPermission = p; }}).catch(function(){{}});
+          }}
+          alarmPrimed = true;
+        }}
+
+        function showNotification(title, body) {{
+          try {{
+            if (typeof Notification === 'undefined') return;
+            if (Notification.permission !== 'granted') return;
+            var n = new Notification(title, {{ body: body, silent: false, tag: 'machreach-focus' }});
+            n.onclick = function(){{ window.focus(); n.close(); }};
+          }} catch(e) {{}}
+        }}
 
         function playAlarm() {{
-
+          // 1) HTML5 audio (works in background)
           try {{
-
-            if (!alarmCtx) alarmCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-            var ctx = alarmCtx;
-
-            // Resume context if browser suspended it (e.g. tab was hidden)
-
-            if (ctx.state === 'suspended' && ctx.resume) {{
-
-              ctx.resume().then(function(){{ playAlarmTones(ctx); }}).catch(function(){{ playAlarmTones(ctx); }});
-
-              return;
-
+            if (alarmAudio) {{
+              alarmAudio.currentTime = 0;
+              var p = alarmAudio.play();
+              if (p && p.catch) p.catch(function(){{}});
             }}
-
-            playAlarmTones(ctx);
-
           }} catch(e) {{}}
-
+          // 2) WebAudio (richer sound when tab is focused)
+          try {{
+            if (!alarmCtx) alarmCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var ctx = alarmCtx;
+            if (ctx.state === 'suspended' && ctx.resume) {{
+              ctx.resume().then(function(){{ playAlarmTones(ctx); }}).catch(function(){{}});
+            }} else {{
+              playAlarmTones(ctx);
+            }}
+          }} catch(e) {{}}
         }}
 
         function playAlarmTones(ctx) {{
@@ -4813,6 +4929,10 @@ def register_student_routes(app, csrf, limiter):
 
           if (isRunning) return;
 
+          // Prime the alarm INSIDE the user-gesture handler so audio can play
+          // later even when the tab is hidden.
+          primeAlarm();
+
           isRunning = true;
 
           sessionStarted = true;
@@ -4940,6 +5060,23 @@ def register_student_routes(app, csrf, limiter):
             }}));
 
             showFloatWidget();
+
+            // ─── Hard-end timer (fires once at exact phase end) ───
+            // setTimeout(0) is more reliably scheduled than setInterval ticks
+            // when the tab is throttled, but is ALSO throttled when hidden.
+            // Combined with the visibilitychange handler below this gives us
+            // belt-and-suspenders coverage.
+            if (window.__focusEndTimeout) {{ clearTimeout(window.__focusEndTimeout); }}
+            window.__focusEndTimeout = setTimeout(function() {{
+              if (phaseEnded) return;
+              phaseEnded = true;
+              if (timerInterval) {{ clearInterval(timerInterval); timerInterval = null; }}
+              isRunning = false;
+              timeLeft = 0;
+              if (!isBreak) totalFocusSeconds = focusAtStart + initialTimeLeft;
+              updateDisplay();
+              onTimerEnd();
+            }}, Math.max(0, endAt - Date.now()));
 
             timerInterval = setInterval(function() {{
 
@@ -5173,6 +5310,15 @@ def register_student_routes(app, csrf, limiter):
 
           playAlarm();
 
+          // Desktop notification works even when tab is hidden / muted
+          if (currentMode === 'pomodoro' && !isBreak) {{
+            showNotification('Focus session complete', 'Time for a break!');
+          }} else if (currentMode === 'pomodoro' && isBreak) {{
+            showNotification('Break over', 'Back to focus!');
+          }} else {{
+            showNotification('Focus session complete', 'Great work — XP awarded.');
+          }}
+
           if (currentMode === 'pomodoro') {{
 
             if (!isBreak) {{
@@ -5259,6 +5405,20 @@ def register_student_routes(app, csrf, limiter):
 
           var course = document.getElementById('focus-course').value;
 
+          var payload = {{ mode: currentMode, minutes: minutes, pages: pages, course_name: course }};
+
+          // Always fire-and-forget via sendBeacon FIRST so XP gets credited
+          // even if the tab is hidden, throttled, or the user navigates away.
+          // sendBeacon survives tab close and is not blocked by background throttling.
+          try {{
+            if (navigator.sendBeacon) {{
+              var blob = new Blob([JSON.stringify(payload)], {{ type: 'application/json' }});
+              navigator.sendBeacon('/api/student/focus/save', blob);
+            }}
+          }} catch(e) {{}}
+
+          // Also fire a regular fetch so we can update the on-screen stats
+          // (sendBeacon doesn't return a response).
           try {{
 
             var resp = await fetch('/api/student/focus/save', {{
@@ -5269,7 +5429,7 @@ def register_student_routes(app, csrf, limiter):
 
               keepalive: true,
 
-              body: JSON.stringify({{ mode: currentMode, minutes: minutes, pages: pages, course_name: course }})
+              body: JSON.stringify(payload)
 
             }});
 
