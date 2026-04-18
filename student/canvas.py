@@ -197,7 +197,33 @@ class CanvasClient:
 # ── standalone helpers ──────────────────────────────────────
 
 def extract_text_from_pdf(content: bytes) -> str:
-    """Best-effort PDF → plain text (uses pdfminer.six for high-quality extraction)."""
+    """Best-effort PDF → plain text with explicit page markers so downstream AI
+    knows the exact page count and which page each passage belongs to."""
+    # First, try pdfminer page-by-page so we can insert real page markers.
+    try:
+        from pdfminer.high_level import extract_text_to_fp
+        from pdfminer.layout import LAParams
+        from pypdf import PdfReader  # used only for accurate page count
+        reader = PdfReader(io.BytesIO(content))
+        total_pages = len(reader.pages)
+        pages_text = []
+        for i in range(total_pages):
+            buf = io.StringIO()
+            try:
+                extract_text_to_fp(io.BytesIO(content), buf, page_numbers=[i], laparams=LAParams())
+                pages_text.append(buf.getvalue().strip())
+            except Exception:
+                pages_text.append("")
+        body = "\n\n".join(
+            f"--- PAGE {i+1} of {total_pages} ---\n{txt}" for i, txt in enumerate(pages_text)
+        )
+        header = f"[PDF DOCUMENT — TOTAL PAGES: {total_pages}]\n\n"
+        return (header + body).strip()
+    except ImportError:
+        pass
+    except Exception as e:
+        log.warning("Per-page PDF extraction failed, falling back: %s", e)
+    # Fallback: bulk pdfminer (no page markers)
     try:
         from pdfminer.high_level import extract_text as _pdfminer_extract
         text = _pdfminer_extract(io.BytesIO(content))

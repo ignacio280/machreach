@@ -247,11 +247,10 @@ def generate_study_plan(
     courses_summary = json.dumps(courses_for_summary, ensure_ascii=False, indent=2)[:30000]
     materials_section = "\n\n".join(materials_blocks)
     if materials_section:
-        # Hard cap to keep prompt under model context — but very generous (~250k chars ≈ 60k tokens)
-        materials_section = materials_section[:250000]
+        # NO cap — full materials are sent to the AI so every chapter is covered
         materials_ctx = (
             "\n\n=========================\n"
-            "FULL STUDY MATERIALS PER EXAM (you MUST cover EVERY chapter, section, and topic appearing below)\n"
+            "FULL STUDY MATERIALS PER EXAM (you MUST cover EVERY chapter, section, and topic appearing below — do NOT stop after chapter 1)\n"
             "=========================\n"
             + materials_section
         )
@@ -339,6 +338,17 @@ Create a detailed daily study plan for the NEXT 14 DAYS ONLY (from {today}).
 Return ONLY valid JSON:
 
 {{
+  "material_breakdown": [
+    {{
+      "course": "Course Name",
+      "exam": "Midterm 1",
+      "exam_date": "YYYY-MM-DD",
+      "total_pages_estimate": 120,
+      "segments": [
+        {{"pages": "1-30", "estimated_hours": 2.5, "assigned_dates": ["YYYY-MM-DD"]}}
+      ]
+    }}
+  ],
   "daily_plan": [
     {{
       "date": "YYYY-MM-DD",
@@ -347,11 +357,11 @@ Return ONLY valid JSON:
       "sessions": [
         {{
           "course": "Course Name",
-          "topic": "Specific topic to study",
+          "topic": "Read pages 1-30 (~30 pages)",
           "hours": 2.0,
           "type": "study",
           "priority": "high",
-          "reason": "Exam in 5 days, covers this topic"
+          "reason": "Exam in 5 days"
         }}
       ]
     }}
@@ -384,7 +394,9 @@ Rules:
 - If there are incomplete assignments from previous days, schedule them FIRST with high priority
 - Alternate between subjects to avoid burnout (max 3h same subject)
 - Include specific topics, not just "study for exam"
-- COMPLETE COVERAGE: when an exam has FULL STUDY MATERIALS attached above, your sessions for that exam MUST walk through EVERY chapter / section / unit / heading / problem set found in that material before the exam date. Do NOT skip sections. Break large chapters into multiple sessions across multiple days. Each session's "topic" field must name the specific chapter or section being studied (e.g. "Chapter 4.2 — Definite Integrals" or "Unit 3: Kinematics problem set"). Allocate study days proportionally to material length so the student finishes 100% of the document at least 1 day before the exam.
+- ABSOLUTE HARD RULE — PAGE-BASED COVERAGE: For EVERY exam that has FULL STUDY MATERIALS attached above, the document text contains EXPLICIT page markers in the form `--- PAGE N of TOTAL ---` and a header `[PDF DOCUMENT — TOTAL PAGES: X]`. You MUST use the EXACT TOTAL page count shown in the header — never guess, never estimate from text length. Put that exact number in `material_breakdown.total_pages_estimate`. Then split the document into reading segments by page range and assign each segment to a study date in `material_breakdown.segments`. Every page from 1 to the last page MUST be covered by exactly one segment — no gaps, no overlaps. The sum of all segment page-ranges must equal the total page count. If a document has no `--- PAGE N ---` markers (e.g. a DOCX), then and only then estimate pages from text length (~3000 chars per page).
+- TOPIC LABELS — Each session's "topic" field must use a PAGE-BASED label only, NEVER chapter names. Required format examples: "Read pages 1-30 (~30 pages)", "Pages 31-55 (~25 pages)", "Final review pages 1-120". FORBIDDEN labels: "Chapter 1", "Capítulo 1", "Introducción", "Introduction", "Unit 2", "Unidad 2", "Solemne preparation", "Review chapter X", or any chapter / section / unit / lesson name. If you do not know the page count exactly, estimate it (~3000 chars per page) and STILL use page-range labels — never fall back to chapter names. The student must always see a page range, never a chapter title.
+- COMPLETE COVERAGE: Distribute pages proportionally across the available study days so the student finishes 100% of the document at least 1 day before the exam. Aim for a steady reading pace (e.g. 20–40 pages per study hour depending on subject difficulty).
 - HARD RULE — NEVER schedule study sessions for an exam AFTER its exam date. Once the exam date passes, that exam is DONE — do not include any further sessions for it. If the exam is on YYYY-MM-DD, your last session for that exam's material must be on YYYY-MM-DD or earlier (ideally the day BEFORE the exam for final review). Sessions on the exam date itself should be light review only, not new material.
 - HARD RULE — Front-load study so all material is covered BEFORE the exam, not after. If you only have 6 days until the exam, compress the material into those 6 days.
 - HARD RULE — The student must be FULLY PREPARED by the END of the day BEFORE the exam. If the exam is on day D, the day-D−1 plan must include a final FULL REVIEW session (type "review", priority "high") covering the entire material, and ALL new-material study must be completed by day D−1. The exam date itself (D) should have NO study unless explicitly a quick warm-up review.
@@ -394,7 +406,7 @@ Rules:
 
     try:
         resp = _ai().chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=16000,
@@ -426,6 +438,60 @@ def _post_process_plan(plan: dict, courses_data: list[dict], date_overrides: lis
     forgets that an exam ends, and schedules continued study afterwards."""
     if not isinstance(plan, dict):
         return plan
+    # ── Force page-based topic labels ──────────────────────────
+    # The AI sometimes ignores the "no chapter names" rule. Rewrite every
+    # session topic that contains chapter/section words into a page-range
+    # label using the AI's own `material_breakdown.segments` if available.
+    import re as _re
+    chapter_pat = _re.compile(
+        r"\b(chapter|cap[ií]tulo|cap\.|ch\.|unit|unidad|section|secci[oó]n|"
+        r"introducci[oó]n|introduction|lesson|lecci[oó]n|topic|tema|"
+        r"solemne|review chapter|repaso cap)\b",
+        _re.IGNORECASE,
+    )
+    page_pat = _re.compile(r"\bp(ages?|p|gs?|ágs?)\.?\s*\d", _re.IGNORECASE)
+
+    # Build {(course_lower, date_iso) -> "pages X-Y"} from material_breakdown
+    seg_lookup: dict[tuple, list[str]] = {}
+    for mb in plan.get("material_breakdown", []) or []:
+        course = (mb.get("course") or "").lower().strip()
+        for seg in mb.get("segments", []) or []:
+            pages = seg.get("pages") or seg.get("page_range") or ""
+            if not pages:
+                continue
+            for d in seg.get("assigned_dates", []) or []:
+                d10 = (d or "")[:10]
+                if not d10:
+                    continue
+                seg_lookup.setdefault((course, d10), []).append(str(pages))
+
+    seg_consumed: dict[tuple, int] = {}
+    for day in plan.get("daily_plan", []) or []:
+        d10 = (day.get("date") or "")[:10]
+        for s in day.get("sessions", []) or []:
+            topic = (s.get("topic") or "").strip()
+            if page_pat.search(topic):
+                continue  # already page-based
+            if not chapter_pat.search(topic):
+                continue  # neutral label, leave alone
+            cn = (s.get("course") or "").lower().strip()
+            key = (cn, d10)
+            segs = seg_lookup.get(key) or []
+            if segs:
+                idx = seg_consumed.get(key, 0)
+                if idx < len(segs):
+                    s["topic"] = f"Read pages {segs[idx]}"
+                    seg_consumed[key] = idx + 1
+                    continue
+                else:
+                    s["topic"] = f"Continue reading pages {segs[-1]}"
+                    continue
+            # No segment info — fall back to a neutral label
+            stype = (s.get("type") or "study").lower()
+            if "review" in stype:
+                s["topic"] = "Full review of all material"
+            else:
+                s["topic"] = "Read assigned pages"
     # Build {course_name -> {exam_name_lower -> exam_date_str}} index
     exam_dates = {}  # course_name -> last_exam_date (date)
     course_exam_dates = {}  # (course_name, exam_topic_keyword) -> date

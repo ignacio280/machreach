@@ -1096,13 +1096,13 @@ def register_student_routes(app, csrf, limiter):
 
                                 material_files.append(f.get("original_name", ""))
 
-                                # Cap each individual file at 60k chars to avoid one huge file starving others
+                                # NO cap — send the FULL extracted text so every chapter reaches the AI
 
-                                chunks.append(f"=== FILE: {f.get('original_name','')} ===\n{txt[:60000]}")
+                                chunks.append(f"=== FILE: {f.get('original_name','')} ===\n{txt}")
 
-                            # Cap the per-exam total at 120k chars (≈ 30k tokens worth)
+                            # NO per-exam cap either — full material goes through
 
-                            materials_text = ("\n\n".join(chunks))[:120000]
+                            materials_text = "\n\n".join(chunks)
 
                         except Exception as _fe:
 
@@ -4002,8 +4002,6 @@ def register_student_routes(app, csrf, limiter):
                             style="width:18px;height:18px;cursor:pointer;accent-color:var(--primary);">
 
                           <span style="font-weight:600;color:var(--text);">{_esc(s.get('course',''))}</span>
-
-                          <span style="color:var(--text-secondary);font-size:13px;">{_esc(s.get('topic',''))}</span>
 
                           <span style="margin-left:auto;font-size:12px;color:var(--text-muted);">{s.get('hours',0)}h</span>
 
