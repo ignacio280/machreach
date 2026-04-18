@@ -4581,6 +4581,7 @@ def register_student_routes(app, csrf, limiter):
 
         var alarmCtx = null;
         var alarmAudio = null;          // HTML5 <audio> element (background-safe)
+        var keepaliveAudio = null;      // silent looping audio — keeps tab UNTHROTTLED
         var alarmPrimed = false;
         var notifPermission = (typeof Notification !== 'undefined') ? Notification.permission : 'denied';
 
@@ -4619,6 +4620,51 @@ def register_student_routes(app, csrf, limiter):
           var binary = '';
           for (var j=0; j<bytes.length; j++) binary += String.fromCharCode(bytes[j]);
           return 'data:audio/wav;base64,' + btoa(binary);
+        }}
+
+        function buildSilenceWavDataUri() {{
+          // 1-second mono silent 16-bit PCM WAV (very small).
+          // Looping this in an <audio> element prevents Chrome from suspending
+          // / throttling the tab — tabs marked "playing audio" are never throttled.
+          var sampleRate = 8000;
+          var n = sampleRate;
+          var buffer = new ArrayBuffer(44 + n * 2);
+          var view = new DataView(buffer);
+          function w(off, s){{ for(var i=0;i<s.length;i++) view.setUint8(off+i, s.charCodeAt(i)); }}
+          w(0,'RIFF'); view.setUint32(4, 36+n*2, true);
+          w(8,'WAVEfmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+          view.setUint16(22,1,true); view.setUint32(24,sampleRate,true);
+          view.setUint32(28,sampleRate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
+          w(36,'data'); view.setUint32(40, n*2, true);
+          // body is already zeroed = silence
+          var bytes = new Uint8Array(buffer);
+          var binary = '';
+          for (var j=0; j<bytes.length; j++) binary += String.fromCharCode(bytes[j]);
+          return 'data:audio/wav;base64,' + btoa(binary);
+        }}
+
+        function startKeepalive() {{
+          // Keep tab unthrottled by playing a silent looping audio track.
+          try {{
+            if (!keepaliveAudio) {{
+              keepaliveAudio = new Audio(buildSilenceWavDataUri());
+              keepaliveAudio.loop = true;
+              keepaliveAudio.preload = 'auto';
+              keepaliveAudio.volume = 0.001; // effectively silent but counts as "playing audio"
+            }}
+            keepaliveAudio.currentTime = 0;
+            var p = keepaliveAudio.play();
+            if (p && p.catch) p.catch(function(){{}});
+          }} catch(e) {{}}
+        }}
+
+        function stopKeepalive() {{
+          try {{
+            if (keepaliveAudio) {{
+              keepaliveAudio.pause();
+              keepaliveAudio.currentTime = 0;
+            }}
+          }} catch(e) {{}}
         }}
 
         function primeAlarm() {{
@@ -4985,6 +5031,12 @@ def register_student_routes(app, csrf, limiter):
           // later even when the tab is hidden.
           primeAlarm();
 
+          // Start a silent looping audio track so Chrome treats the tab as
+          // "playing audio" and does NOT throttle/freeze it in the background.
+          // This is what makes the timer fire on time and the alarm play even
+          // when the user is on another tab for 25+ minutes.
+          startKeepalive();
+
           isRunning = true;
 
           sessionStarted = true;
@@ -5260,6 +5312,10 @@ def register_student_routes(app, csrf, limiter):
 
           clearInterval(timerInterval);
 
+          if (window.__focusEndTimeout) {{ clearTimeout(window.__focusEndTimeout); window.__focusEndTimeout = null; }}
+
+          stopKeepalive();
+
           isRunning = false;
 
           document.getElementById('start-btn').style.display = '';
@@ -5283,6 +5339,10 @@ def register_student_routes(app, csrf, limiter):
         function resetTimer() {{
 
           clearInterval(timerInterval);
+
+          if (window.__focusEndTimeout) {{ clearTimeout(window.__focusEndTimeout); window.__focusEndTimeout = null; }}
+
+          stopKeepalive();
 
           isRunning = false;
 
@@ -5359,6 +5419,8 @@ def register_student_routes(app, csrf, limiter):
 
 
         function onTimerEnd() {{
+
+          stopKeepalive();
 
           playAlarm();
 
