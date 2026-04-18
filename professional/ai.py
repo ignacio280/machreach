@@ -51,13 +51,28 @@ def shorten_text(text: str, target_words: int = 50) -> str:
     )
 
 
-def meeting_agenda(topic: str, duration_min: int = 30, context: str = "") -> str:
+def meeting_agenda(topic: str, duration_min: int = 30, context: str = "",
+                   attendees: str = "", goals: str = "") -> str:
     return _chat(
-        "You create clear, actionable meeting agendas for professionals. "
-        "Output plain text with: title, objective, timed sections, participants-needed, pre-reads, "
-        "and a 'Decisions to make' list. No emojis.",
-        f"Topic: {topic}\nDuration: {duration_min} minutes\nContext: {context or 'n/a'}",
-        max_tokens=800,
+        "You create polished, executive-grade meeting agendas. Output Markdown with this exact structure:\n"
+        "# {Title}\n\n"
+        "**Objective:** one-sentence goal of the meeting.\n\n"
+        "**Attendees:** comma-separated list (use what's given, otherwise infer roles).\n\n"
+        "## Agenda\n"
+        "Numbered list of timed sections. Each item: `**N. Section name** _(MM min)_` followed by 1-2 short bullets describing what happens.\n\n"
+        "## Pre-reads\n"
+        "Bullet list of materials attendees should review beforehand (skip if context doesn't suggest any).\n\n"
+        "## Decisions to make\n"
+        "Bullet list of explicit decisions the meeting must produce.\n\n"
+        "## Success criteria\n"
+        "Bullet list of how we'll know the meeting succeeded.\n\n"
+        "Section minutes must sum to the requested duration. Be concrete, not generic. No emojis.",
+        f"Topic: {topic}\n"
+        f"Duration: {duration_min} minutes\n"
+        f"Attendees: {attendees or 'unspecified'}\n"
+        f"Goals / desired outcomes: {goals or 'unspecified'}\n"
+        f"Context: {context or 'n/a'}",
+        max_tokens=1100,
     )
 
 

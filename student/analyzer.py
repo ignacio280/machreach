@@ -162,6 +162,7 @@ def generate_study_plan(
     schedule_settings: list[dict] | None = None,
     course_difficulties: dict | None = None,
     incomplete_assignments: list[dict] | None = None,
+    calendar_events: str = "",
 ) -> dict:
     """
     Given analyzed data for ALL courses, generate a unified study plan.
@@ -252,6 +253,14 @@ def generate_study_plan(
         incomplete_ctx = "\nINCOMPLETE ASSIGNMENTS FROM PREVIOUS DAYS (must be rescheduled):\n" + "\n".join(inc_lines)
         incomplete_ctx += "\nThese MUST be included in the new plan — prioritize them."
 
+    calendar_ctx = ""
+    if calendar_events:
+        calendar_ctx = (
+            "\nGOOGLE CALENDAR EVENTS (real commitments — do NOT schedule study during these blocks):\n"
+            + calendar_events
+            + "\nWork around these. If a study block conflicts, move it earlier or to a free slot the same day."
+        )
+
     prompt = f"""You are an expert academic study planner. Today is {today}.
 
 A student has these courses with their exam schedules and topics:
@@ -263,6 +272,7 @@ Student preferences: {prefs_str}
 {schedule_ctx}
 {diff_ctx}
 {incomplete_ctx}
+{calendar_ctx}
 
 Create a detailed daily study plan for the NEXT 14 DAYS ONLY (from {today}).
 Return ONLY valid JSON:
@@ -801,7 +811,10 @@ Topics to cover: {topics_str}{scope_hint}
 {context}
 
 Create well-structured study notes in HTML format. The notes should:
-- Use <h2> for major sections and <h3> for subsections
+- Use <h2> for major sections and <h3> for subsections (NEVER go deeper than h3 — no h4, h5, h6)
+- DO NOT preserve deep legal/academic numbering like "4.1.1.1.3.3" or "Article 23.4.2.1.5". Strip these numbers entirely.
+  Use clean, descriptive heading text instead. At most a single level of numbering is allowed (e.g. "1. Topic name" or "Chapter 4: Topic name").
+- Group fragmented sub-sub-sub-points together into coherent paragraphs or bullet lists rather than mirroring the source's nested outline structure
 - Use <ul>/<li> for lists of key points
 - Use <strong> for important terms and definitions
 - Use <p> for explanatory paragraphs
@@ -848,6 +861,17 @@ No markdown fences. ONLY the JSON object."""
             with ThreadPoolExecutor(max_workers=max_workers) as ex:
                 html_parts = list(ex.map(lambda lb: _gen_chunk(lb[0], lb[1]), chunks))
         merged = "\n".join(p for p in html_parts if p)
+        # Safety net: strip deep numbering like "4.1.1.1.3.3" from headings
+        # in case the AI ignored the prompt instruction. Keeps at most one level
+        # (e.g. "4." or "4.1") and removes the rest.
+        def _clean_heading(m):
+            inner = m.group(2)
+            # Match leading number patterns of 3+ levels (e.g. "1.2.3", "4.1.1.1.3.3")
+            inner = re.sub(r'^\s*\d+(?:\.\d+){2,}\.?\s*', '', inner)
+            return f"<{m.group(1)}>{inner}</{m.group(1)}>"
+        merged = re.sub(r'<(h[1-6])>([^<]*)</\1>', _clean_heading, merged)
+        # Demote any h4/h5/h6 the AI produced down to h3 to keep the outline shallow
+        merged = re.sub(r'<(/?)h[4-6]>', r'<\1h3>', merged)
         if not merged.strip():
             merged = "<p>Generation failed. Please try again.</p>"
         return {

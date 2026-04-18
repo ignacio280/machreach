@@ -4434,6 +4434,123 @@ def settings():
 
 
 # ---------------------------------------------------------------------------
+# Google Calendar — OAuth + API (shared by student + business)
+# ---------------------------------------------------------------------------
+from outreach import gcal as _gcal
+
+
+@app.route("/gcal/connect")
+def gcal_connect():
+    if not _logged_in():
+        return redirect(url_for("login"))
+    if not _gcal.is_configured():
+        flash("Google Calendar is not configured on this server. Set GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI.", "error")
+        return redirect(request.referrer or url_for("settings"))
+    state = hashlib.sha256(f"{session['client_id']}-{os.urandom(16).hex()}".encode()).hexdigest()
+    session["gcal_oauth_state"] = state
+    session["gcal_oauth_return"] = request.args.get("return", request.referrer or url_for("settings"))
+    return redirect(_gcal.build_auth_url(state))
+
+
+@app.route("/gcal/callback")
+def gcal_callback():
+    if not _logged_in():
+        return redirect(url_for("login"))
+    code = request.args.get("code", "")
+    state = request.args.get("state", "")
+    expected_state = session.pop("gcal_oauth_state", "")
+    return_to = session.pop("gcal_oauth_return", url_for("settings"))
+    if not code or state != expected_state:
+        flash("Google Calendar connection failed (invalid state).", "error")
+        return redirect(return_to)
+    try:
+        tokens = _gcal.exchange_code(code)
+        access = tokens["access_token"]
+        refresh = tokens.get("refresh_token", "")
+        expires_in = int(tokens.get("expires_in") or 3600)
+        scopes = tokens.get("scope", "")
+        info = _gcal.fetch_userinfo(access)
+        google_email = info.get("email", "")
+        _gcal.save_tokens(
+            session["client_id"],
+            access_token=access,
+            refresh_token=refresh,
+            expires_in=expires_in,
+            google_email=google_email,
+            scopes=scopes,
+        )
+        flash(f"Connected Google Calendar ({google_email}).", "success")
+    except Exception as e:
+        log = logging.getLogger("machreach.gcal")
+        log.warning("gcal callback failed: %s", e)
+        flash("Could not complete Google Calendar connection.", "error")
+    return redirect(return_to)
+
+
+@app.route("/gcal/disconnect", methods=["POST"])
+def gcal_disconnect():
+    if not _logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+    _gcal.delete_tokens(session["client_id"])
+    return jsonify({"ok": True})
+
+
+@app.route("/api/gcal/status")
+def gcal_status():
+    if not _logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify({
+        "configured": _gcal.is_configured(),
+        "connected": _gcal.is_connected(session["client_id"]),
+        "email": _gcal.get_connected_email(session["client_id"]),
+    })
+
+
+@app.route("/api/gcal/events")
+def gcal_events():
+    if not _logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        days = int(request.args.get("days", "14"))
+    except ValueError:
+        days = 14
+    events = _gcal.list_events(session["client_id"], days_ahead=days)
+    return jsonify({"events": events, "count": len(events)})
+
+
+@app.route("/api/gcal/events", methods=["POST"])
+def gcal_create_event():
+    if not _logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+    d = request.get_json(force=True) or {}
+    title = (d.get("title") or "").strip()
+    start = (d.get("start") or "").strip()
+    end = (d.get("end") or "").strip()
+    if not (title and start and end):
+        return jsonify({"error": "title, start, end required (ISO 8601)"}), 400
+    ev = _gcal.create_event(
+        session["client_id"],
+        title=title,
+        start_iso=start,
+        end_iso=end,
+        description=d.get("description", ""),
+        location=d.get("location", ""),
+        attendee_emails=d.get("attendees") or [],
+    )
+    if not ev:
+        return jsonify({"error": "Could not create event (check Google Calendar connection)"}), 500
+    return jsonify({"ok": True, "event": {"id": ev.get("id"), "htmlLink": ev.get("htmlLink")}})
+
+
+@app.route("/api/gcal/events/<event_id>", methods=["DELETE"])
+def gcal_delete_event(event_id):
+    if not _logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+    ok = _gcal.delete_event(session["client_id"], event_id)
+    return jsonify({"ok": ok})
+
+
+# ---------------------------------------------------------------------------
 # Routes — Reply Inbox
 # ---------------------------------------------------------------------------
 

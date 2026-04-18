@@ -128,6 +128,7 @@ def register_professional_routes(app, csrf, limiter):
           <a href="/pro/goals" class="fx-tile"><span class="fx-ico">&#127919;</span><b>Goals & OKRs</b><span>Quarterly objectives with measurable key results.</span></a>
           <a href="/pro/relationships" class="fx-tile"><span class="fx-ico">&#129504;</span><b>Relationship Intelligence</b><span>Your AI memory for every contact and conversation.</span></a>
           <a href="/pro/meeting-agenda" class="fx-tile"><span class="fx-ico">&#128197;</span><b>Meeting Agenda</b><span>AI scans your inbox for meetings + preps you.</span></a>
+          <a href="/pro/calendar" class="fx-tile"><span class="fx-ico">&#128467;</span><b>Calendar</b><span>Sync Google Calendar so the AI plans around your real schedule.</span></a>
           <a href="/pro/invoices" class="fx-tile"><span class="fx-ico">&#128196;</span><b>Invoices</b><span>Create, send, and track professional invoices.</span></a>
           <a href="/pro/assistant" class="fx-tile"><span class="fx-ico">&#9997;</span><b>Text Polish</b><span>Rewrite any text with the right tone.</span></a>
           <a href="/pro/linkedin-post" class="fx-tile"><span class="fx-ico">&#128100;</span><b>LinkedIn Post</b><span>High-performing posts in your voice.</span></a>
@@ -467,9 +468,6 @@ def register_professional_routes(app, csrf, limiter):
                 <select id="bk-currency" class="edit-input">{_currency_options(default='USD')}</select>
                 <button onclick="addBank()" class="btn btn-primary btn-sm">Save</button>
               </div>
-              <div style="margin-top:8px;font-size:11px;">
-                <label style="cursor:pointer;"><input type="checkbox" id="bk-seed" checked> Populate with 30 days of realistic demo transactions</label>
-              </div>
             </div>
             {banks_html}
           </div>
@@ -549,8 +547,7 @@ def register_professional_routes(app, csrf, limiter):
             account_type:document.getElementById('bk-type').value,
             last_4:document.getElementById('bk-last4').value,
             balance:parseFloat(document.getElementById('bk-balance').value)||0,
-            currency:document.getElementById('bk-currency').value,
-            seed_demo:document.getElementById('bk-seed').checked
+            currency:document.getElementById('bk-currency').value
           }})}});
           if(r.ok) location.reload(); else alert('Failed');
         }}
@@ -644,11 +641,6 @@ def register_professional_routes(app, csrf, limiter):
             balance=float(d.get("balance") or 0),
             currency=d.get("currency", "USD"),
         )
-        if d.get("seed_demo"):
-            try:
-                pdb.seed_demo_transactions(_cid(), bid)
-            except Exception as e:
-                log.warning("seed_demo failed: %s", e)
         return jsonify({"ok": True, "id": bid})
 
     @app.route("/api/pro/banks/<int:bank_id>", methods=["DELETE"])
@@ -1185,60 +1177,194 @@ def register_professional_routes(app, csrf, limiter):
           <a href="/pro" style="color:var(--text-muted);text-decoration:none;font-size:13px;">&larr; Pro Toolkit</a>
         </div>
         <h1 style="margin-bottom:6px;">&#128197; Meeting Agenda</h1>
-        <p style="color:var(--text-muted);margin-bottom:16px;">We scan your recent emails for any scheduled meeting or call and prep you with a timed agenda.</p>
+        <p style="color:var(--text-muted);margin-bottom:16px;">Build polished, timed agendas in seconds &mdash; or scan your inbox to auto-detect upcoming meetings.</p>
 
-        <div class="card">
-          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-bottom:12px;">
-            <div class="form-group" style="margin:0;"><label>Topic (optional, for manual agenda)</label><input id="mt-topic" class="edit-input" placeholder="e.g. Q2 marketing kickoff"></div>
-            <div class="form-group" style="margin:0;"><label>Duration (min)</label><input id="mt-dur" type="number" class="edit-input" value="30"></div>
-            <button onclick="genManual()" class="btn btn-outline btn-sm" id="manual-btn">Generate Manual</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
+          <div class="card">
+            <h3 style="margin:0 0 10px;font-size:15px;">&#128296; Build an Agenda</h3>
+            <div class="form-group" style="margin-bottom:8px;">
+              <label>Topic</label>
+              <input id="mt-topic" class="edit-input" placeholder="e.g. Q2 marketing kickoff">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+              <div class="form-group" style="margin:0;"><label>Duration (min)</label><input id="mt-dur" type="number" class="edit-input" value="30" min="5" max="240"></div>
+              <div class="form-group" style="margin:0;"><label>Attendees</label><input id="mt-attendees" class="edit-input" placeholder="e.g. Sarah (PM), Marcus (Eng)"></div>
+            </div>
+            <div class="form-group" style="margin-bottom:8px;">
+              <label>Goals / desired outcomes</label>
+              <input id="mt-goals" class="edit-input" placeholder="e.g. Approve final budget, assign owners">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Context (optional)</label>
+              <textarea id="mt-context" class="edit-input" rows="3" placeholder="Background, prior decisions, links to docs..." style="resize:vertical;"></textarea>
+            </div>
+            <button onclick="genManual()" class="btn btn-primary btn-sm" id="manual-btn" style="width:100%;">&#9889; Generate Agenda</button>
           </div>
-          <div style="border-top:1px solid var(--border);padding-top:12px;">
-            <button onclick="scanInbox()" class="btn btn-primary btn-sm" id="scan-btn">&#128225; Scan Inbox for Upcoming Meetings</button>
-            <span style="color:var(--text-muted);font-size:12px;margin-left:10px;">Looks at your last 30 emails and extracts any meeting.</span>
+
+          <div class="card">
+            <h3 style="margin:0 0 10px;font-size:15px;">&#128225; Detect from Inbox</h3>
+            <p style="color:var(--text-muted);font-size:12px;margin-bottom:10px;">Scans your last 30 emails for any scheduled meeting or call mention.</p>
+            <button onclick="scanInbox()" class="btn btn-outline btn-sm" id="scan-btn" style="width:100%;">&#128269; Scan Inbox for Meetings</button>
+            <div id="scan-result" style="margin-top:12px;font-size:13px;line-height:1.6;"></div>
+            <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:10px;">
+              <h4 style="margin:0 0 8px;font-size:13px;">Recent agendas</h4>
+              <div id="recent-list" style="font-size:12px;color:var(--text-muted);">None yet.</div>
+            </div>
           </div>
         </div>
 
-        <div id="output-card" class="card" style="display:none;margin-top:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div id="output-card" class="card" style="display:none;margin-top:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap;">
             <h3 id="output-title" style="margin:0;">Result</h3>
-            <button onclick="copyOutput()" class="btn btn-outline btn-sm">&#128203; Copy</button>
+            <div style="display:flex;gap:6px;">
+              <button onclick="copyOutput()" class="btn btn-outline btn-sm">&#128203; Copy</button>
+              <button onclick="downloadOutput()" class="btn btn-outline btn-sm">&#11015; Download .md</button>
+              <button onclick="clearOutput()" class="btn btn-outline btn-sm">&times; Close</button>
+            </div>
           </div>
-          <pre id="ai-output" style="white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:14px;line-height:1.6;margin:0;color:var(--text);"></pre>
+          <div id="ai-output" style="font-size:14px;line-height:1.7;color:var(--text);"></div>
         </div>
-        <style>.edit-input{{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;}}.edit-input:focus{{border-color:var(--primary);outline:none;}}</style>
+
+        <style>
+          .edit-input{{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;}}
+          .edit-input:focus{{border-color:var(--primary);outline:none;}}
+          #ai-output h1{{font-size:20px;margin:0 0 12px;border-bottom:2px solid var(--border);padding-bottom:8px;}}
+          #ai-output h2{{font-size:15px;margin:18px 0 8px;color:var(--primary);}}
+          #ai-output ul{{margin:6px 0 12px 20px;padding:0;}}
+          #ai-output li{{margin-bottom:4px;}}
+          #ai-output p{{margin:4px 0 10px;}}
+          #ai-output strong{{color:var(--text);}}
+          #ai-output em{{color:var(--text-muted);font-style:normal;font-size:12px;}}
+          #recent-list .recent-item{{cursor:pointer;padding:6px 8px;border-radius:6px;margin-bottom:3px;color:var(--text);}}
+          #recent-list .recent-item:hover{{background:var(--bg-elev);}}
+        </style>
         <script>
+        var lastAgendaText = '';
+        var lastAgendaTitle = 'Agenda';
+        var RECENT_KEY = 'pro_recent_agendas';
         function csrfHeader(){{var m=document.querySelector('meta[name="csrf-token"]');return m?{{'X-CSRFToken':m.content}}:{{}};}}
+
+        function renderMarkdown(md){{
+          // Minimal safe markdown renderer (h1, h2, **bold**, _italic_, lists, paragraphs)
+          var esc = function(s){{return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}};
+          var lines = md.split(/\\r?\\n/);
+          var html = '';
+          var inList = false;
+          for (var i=0; i<lines.length; i++) {{
+            var ln = lines[i];
+            if (/^#\\s+/.test(ln)) {{ if(inList){{html+='</ul>';inList=false;}} html += '<h1>' + esc(ln.replace(/^#\\s+/,'')) + '</h1>'; continue; }}
+            if (/^##\\s+/.test(ln)) {{ if(inList){{html+='</ul>';inList=false;}} html += '<h2>' + esc(ln.replace(/^##\\s+/,'')) + '</h2>'; continue; }}
+            if (/^\\s*[-*]\\s+/.test(ln)) {{
+              if(!inList){{ html += '<ul>'; inList=true; }}
+              html += '<li>' + inlineFmt(esc(ln.replace(/^\\s*[-*]\\s+/,''))) + '</li>';
+              continue;
+            }}
+            if(inList){{html+='</ul>';inList=false;}}
+            if (ln.trim() === '') {{ html += ''; continue; }}
+            html += '<p>' + inlineFmt(esc(ln)) + '</p>';
+          }}
+          if(inList) html+='</ul>';
+          return html;
+        }}
+        function inlineFmt(s){{
+          s = s.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+          s = s.replace(/_([^_]+)_/g, '<em>$1</em>');
+          return s;
+        }}
+
         function showResult(title, text){{
-          document.getElementById('output-title').textContent=title;
-          document.getElementById('ai-output').textContent=text;
-          document.getElementById('output-card').style.display='block';
+          lastAgendaText = text;
+          lastAgendaTitle = title;
+          document.getElementById('output-title').textContent = title;
+          document.getElementById('ai-output').innerHTML = renderMarkdown(text);
+          document.getElementById('output-card').style.display = 'block';
           document.getElementById('output-card').scrollIntoView({{behavior:'smooth'}});
+          saveRecent(title, text);
         }}
-        async function scanInbox(){{
-          var btn=document.getElementById('scan-btn');
-          btn.disabled=true; btn.innerHTML='&#9203; Scanning inbox...';
-          var r=await fetch('/api/pro/meetings/scan',{{method:'POST',headers:csrfHeader()}});
-          var d=await r.json();
-          if(r.ok) showResult('Meetings found in your inbox', d.result);
-          else alert(d.error||'Failed');
-          btn.disabled=false; btn.innerHTML='&#128225; Scan Inbox for Upcoming Meetings';
-        }}
-        async function genManual(){{
-          var topic=document.getElementById('mt-topic').value.trim();
-          if(!topic){{alert('Enter a topic');return;}}
-          var btn=document.getElementById('manual-btn');
-          btn.disabled=true;
-          var r=await fetch('/api/pro/ai/agenda',{{method:'POST',headers:Object.assign({{'Content-Type':'application/json'}},csrfHeader()),body:JSON.stringify({{topic:topic,duration_min:parseInt(document.getElementById('mt-dur').value)||30}})}});
-          var d=await r.json();
-          if(r.ok) showResult('Agenda', d.result);
-          else alert(d.error||'Failed');
-          btn.disabled=false;
-        }}
+        function clearOutput(){{ document.getElementById('output-card').style.display='none'; }}
         function copyOutput(){{
-          navigator.clipboard.writeText(document.getElementById('ai-output').textContent);
-          alert('Copied!');
+          navigator.clipboard.writeText(lastAgendaText).then(function(){{
+            var b = event.target; var orig = b.innerHTML; b.innerHTML = '&#10003; Copied'; setTimeout(function(){{b.innerHTML=orig;}},1500);
+          }});
         }}
+        function downloadOutput(){{
+          var blob = new Blob([lastAgendaText], {{type:'text/markdown'}});
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = (lastAgendaTitle.replace(/[^\\w]+/g,'_').slice(0,40) || 'agenda') + '.md';
+          a.click(); URL.revokeObjectURL(a.href);
+        }}
+
+        function saveRecent(title, text){{
+          try {{
+            var arr = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+            arr.unshift({{ t:title, x:text, d:new Date().toISOString() }});
+            arr = arr.slice(0, 8);
+            localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
+            renderRecent();
+          }} catch(e) {{}}
+        }}
+        function renderRecent(){{
+          var el = document.getElementById('recent-list');
+          if (!el) return;
+          var arr = [];
+          try {{ arr = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); }} catch(e){{}}
+          if (!arr.length) {{ el.innerHTML = 'None yet.'; return; }}
+          el.innerHTML = arr.map(function(item, i){{
+            var when = new Date(item.d); var ts = when.toLocaleString();
+            return '<div class="recent-item" onclick="loadRecent('+i+')">'
+                 + '<div style="color:var(--text);font-weight:600;">' + (item.t || 'Agenda') + '</div>'
+                 + '<div style="font-size:11px;">' + ts + '</div></div>';
+          }}).join('');
+        }}
+        function loadRecent(i){{
+          try {{
+            var arr = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+            if (arr[i]) showResult(arr[i].t, arr[i].x);
+          }} catch(e) {{}}
+        }}
+
+        async function scanInbox(){{
+          var btn = document.getElementById('scan-btn');
+          btn.disabled = true; btn.innerHTML = '&#9203; Scanning...';
+          document.getElementById('scan-result').innerHTML = '';
+          try {{
+            var r = await fetch('/api/pro/meetings/scan', {{ method:'POST', headers:csrfHeader() }});
+            var d = await r.json();
+            if (r.ok) {{
+              document.getElementById('scan-result').innerHTML = renderMarkdown(d.result || 'No meetings found.');
+            }} else {{
+              alert(d.error || 'Failed');
+            }}
+          }} catch(e) {{ alert('Network error'); }}
+          btn.disabled = false; btn.innerHTML = '&#128269; Scan Inbox for Meetings';
+        }}
+
+        async function genManual(){{
+          var topic = document.getElementById('mt-topic').value.trim();
+          if (!topic) {{ alert('Enter a topic'); return; }}
+          var btn = document.getElementById('manual-btn');
+          btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
+          try {{
+            var r = await fetch('/api/pro/ai/agenda', {{
+              method:'POST',
+              headers:Object.assign({{'Content-Type':'application/json'}}, csrfHeader()),
+              body: JSON.stringify({{
+                topic: topic,
+                duration_min: parseInt(document.getElementById('mt-dur').value) || 30,
+                attendees: document.getElementById('mt-attendees').value.trim(),
+                goals: document.getElementById('mt-goals').value.trim(),
+                context: document.getElementById('mt-context').value.trim()
+              }})
+            }});
+            var d = await r.json();
+            if (r.ok) showResult(topic, d.result);
+            else alert(d.error || 'Failed');
+          }} catch(e) {{ alert('Network error'); }}
+          btn.disabled = false; btn.innerHTML = '&#9889; Generate Agenda';
+        }}
+
+        renderRecent();
         </script>
         """, active_page="pro_meetings")
 
@@ -1268,7 +1394,171 @@ def register_professional_routes(app, csrf, limiter):
             dur = int(d.get("duration_min") or 30)
         except (TypeError, ValueError):
             dur = 30
-        return jsonify({"result": pai.meeting_agenda(topic, duration_min=dur, context=d.get("context", ""))})
+        return jsonify({"result": pai.meeting_agenda(
+            topic,
+            duration_min=dur,
+            context=d.get("context", ""),
+            attendees=d.get("attendees", ""),
+            goals=d.get("goals", ""),
+        )})
+
+    # ─────────────────────────────────────────────────────────
+    # GOOGLE CALENDAR
+    # ─────────────────────────────────────────────────────────
+    @app.route("/pro/calendar")
+    def pro_calendar_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        return _p_render("Calendar", f"""
+        {_today_tasks_banner()}
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <a href="/pro" style="color:var(--text-muted);text-decoration:none;font-size:13px;">&larr; Pro Toolkit</a>
+        </div>
+        <h1 style="margin-bottom:6px;">&#128467; Google Calendar</h1>
+        <p style="color:var(--text-muted);margin-bottom:16px;">Connect your Google Calendar so the AI can plan around your real schedule and add new events directly.</p>
+
+        <div class="card" id="gcal-card-status">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div>
+              <h3 style="margin:0 0 4px;font-size:15px;" id="gcal-title">Status</h3>
+              <div id="gcal-sub" style="color:var(--text-muted);font-size:13px;">Checking...</div>
+            </div>
+            <div id="gcal-action"></div>
+          </div>
+        </div>
+
+        <div class="card" id="gcal-card-create" style="margin-top:14px;display:none;">
+          <h3 style="margin:0 0 10px;font-size:15px;">&#10133; Add Event</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+            <input id="ev-title" class="edit-input" placeholder="Event title">
+            <input id="ev-start" type="datetime-local" class="edit-input">
+            <input id="ev-end" type="datetime-local" class="edit-input">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+            <input id="ev-loc" class="edit-input" placeholder="Location (optional)">
+            <input id="ev-att" class="edit-input" placeholder="Attendees (comma-separated emails)">
+          </div>
+          <textarea id="ev-desc" class="edit-input" rows="2" placeholder="Description (optional)" style="resize:vertical;"></textarea>
+          <button onclick="createEvent()" id="ev-create-btn" class="btn btn-primary btn-sm" style="margin-top:10px;">Add to Google Calendar</button>
+        </div>
+
+        <div class="card" id="gcal-card-list" style="margin-top:14px;display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 style="margin:0;font-size:15px;">Upcoming events</h3>
+            <button onclick="loadEvents()" class="btn btn-outline btn-sm">&#8635; Refresh</button>
+          </div>
+          <div id="gcal-events" style="font-size:13px;line-height:1.6;">Loading...</div>
+        </div>
+
+        <style>
+          .edit-input{{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;}}
+          .edit-input:focus{{border-color:var(--primary);outline:none;}}
+          .ev-row{{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}}
+          .ev-row:last-child{{border-bottom:none;}}
+          .ev-when{{font-family:monospace;font-size:12px;color:var(--text-muted);min-width:130px;}}
+          .ev-title{{font-weight:600;color:var(--text);flex:1;}}
+          .ev-loc{{font-size:12px;color:var(--text-muted);}}
+        </style>
+        <script>
+        function csrfHeader(){{var m=document.querySelector('meta[name="csrf-token"]');return m?{{'X-CSRFToken':m.content}}:{{}};}}
+        function fmtDate(s){{
+          if(!s) return '';
+          var d = new Date(s);
+          if(isNaN(d.getTime())) return s;
+          return d.toLocaleString([], {{month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}});
+        }}
+
+        async function refreshStatus(){{
+          var r = await fetch('/api/gcal/status');
+          var d = await r.json();
+          var sub = document.getElementById('gcal-sub');
+          var act = document.getElementById('gcal-action');
+          if(!d.configured){{
+            sub.textContent = 'Server admin must set GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REDIRECT_URI environment variables.';
+            act.innerHTML = '';
+            return;
+          }}
+          if(d.connected){{
+            sub.innerHTML = '<span style="color:#10B981;font-weight:600;">&#9679; Connected</span> as ' + (d.email || 'Google account');
+            act.innerHTML = '<button onclick="disconnect()" class="btn btn-outline btn-sm">Disconnect</button>';
+            document.getElementById('gcal-card-create').style.display = 'block';
+            document.getElementById('gcal-card-list').style.display = 'block';
+            loadEvents();
+          }} else {{
+            sub.innerHTML = '<span style="color:#9CA3AF;font-weight:600;">&#9679; Not connected</span>';
+            act.innerHTML = '<a href="/gcal/connect?return=/pro/calendar" class="btn btn-primary btn-sm">Connect Google Calendar</a>';
+            document.getElementById('gcal-card-create').style.display = 'none';
+            document.getElementById('gcal-card-list').style.display = 'none';
+          }}
+        }}
+
+        async function disconnect(){{
+          if(!confirm('Disconnect Google Calendar?')) return;
+          await fetch('/gcal/disconnect', {{method:'POST', headers:csrfHeader()}});
+          refreshStatus();
+        }}
+
+        async function loadEvents(){{
+          var el = document.getElementById('gcal-events');
+          el.textContent = 'Loading...';
+          var r = await fetch('/api/gcal/events?days=14');
+          var d = await r.json();
+          if(!d.events || !d.events.length){{
+            el.innerHTML = '<div style="color:var(--text-muted);">No events in the next 14 days.</div>';
+            return;
+          }}
+          el.innerHTML = d.events.map(function(e){{
+            var loc = e.location ? '<div class="ev-loc">' + e.location + '</div>' : '';
+            return '<div class="ev-row">'
+              + '<div class="ev-when">' + fmtDate(e.start) + '</div>'
+              + '<div style="flex:1;"><div class="ev-title">' + (e.title||'(no title)') + '</div>' + loc + '</div>'
+              + '<button onclick="delEvent(\\''+ e.id +'\\')" class="btn btn-outline btn-sm" title="Delete">&times;</button>'
+              + '</div>';
+          }}).join('');
+        }}
+
+        async function delEvent(id){{
+          if(!confirm('Delete this event from Google Calendar?')) return;
+          await fetch('/api/gcal/events/' + id, {{method:'DELETE', headers:csrfHeader()}});
+          loadEvents();
+        }}
+
+        async function createEvent(){{
+          var title = document.getElementById('ev-title').value.trim();
+          var start = document.getElementById('ev-start').value;
+          var end = document.getElementById('ev-end').value;
+          if(!title || !start || !end){{ alert('Title, start, and end are required.'); return; }}
+          var att = document.getElementById('ev-att').value.split(',').map(function(s){{return s.trim();}}).filter(Boolean);
+          var btn = document.getElementById('ev-create-btn');
+          btn.disabled = true; btn.textContent = 'Adding...';
+          var r = await fetch('/api/gcal/events', {{
+            method:'POST',
+            headers:Object.assign({{'Content-Type':'application/json'}}, csrfHeader()),
+            body: JSON.stringify({{
+              title: title,
+              start: new Date(start).toISOString(),
+              end: new Date(end).toISOString(),
+              location: document.getElementById('ev-loc').value.trim(),
+              description: document.getElementById('ev-desc').value.trim(),
+              attendees: att
+            }})
+          }});
+          var d = await r.json();
+          if(r.ok){{
+            document.getElementById('ev-title').value='';
+            document.getElementById('ev-loc').value='';
+            document.getElementById('ev-att').value='';
+            document.getElementById('ev-desc').value='';
+            loadEvents();
+          }} else {{
+            alert(d.error || 'Failed');
+          }}
+          btn.disabled = false; btn.textContent = 'Add to Google Calendar';
+        }}
+
+        refreshStatus();
+        </script>
+        """, active_page="pro_calendar")
 
     # ─────────────────────────────────────────────────────────
     # RELATIONSHIP INTELLIGENCE
