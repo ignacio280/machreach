@@ -438,60 +438,6 @@ def _post_process_plan(plan: dict, courses_data: list[dict], date_overrides: lis
     forgets that an exam ends, and schedules continued study afterwards."""
     if not isinstance(plan, dict):
         return plan
-    # ── Force page-based topic labels ──────────────────────────
-    # The AI sometimes ignores the "no chapter names" rule. Rewrite every
-    # session topic that contains chapter/section words into a page-range
-    # label using the AI's own `material_breakdown.segments` if available.
-    import re as _re
-    chapter_pat = _re.compile(
-        r"\b(chapter|cap[ií]tulo|cap\.|ch\.|unit|unidad|section|secci[oó]n|"
-        r"introducci[oó]n|introduction|lesson|lecci[oó]n|topic|tema|"
-        r"solemne|review chapter|repaso cap)\b",
-        _re.IGNORECASE,
-    )
-    page_pat = _re.compile(r"\bp(ages?|p|gs?|ágs?)\.?\s*\d", _re.IGNORECASE)
-
-    # Build {(course_lower, date_iso) -> "pages X-Y"} from material_breakdown
-    seg_lookup: dict[tuple, list[str]] = {}
-    for mb in plan.get("material_breakdown", []) or []:
-        course = (mb.get("course") or "").lower().strip()
-        for seg in mb.get("segments", []) or []:
-            pages = seg.get("pages") or seg.get("page_range") or ""
-            if not pages:
-                continue
-            for d in seg.get("assigned_dates", []) or []:
-                d10 = (d or "")[:10]
-                if not d10:
-                    continue
-                seg_lookup.setdefault((course, d10), []).append(str(pages))
-
-    seg_consumed: dict[tuple, int] = {}
-    for day in plan.get("daily_plan", []) or []:
-        d10 = (day.get("date") or "")[:10]
-        for s in day.get("sessions", []) or []:
-            topic = (s.get("topic") or "").strip()
-            if page_pat.search(topic):
-                continue  # already page-based
-            if not chapter_pat.search(topic):
-                continue  # neutral label, leave alone
-            cn = (s.get("course") or "").lower().strip()
-            key = (cn, d10)
-            segs = seg_lookup.get(key) or []
-            if segs:
-                idx = seg_consumed.get(key, 0)
-                if idx < len(segs):
-                    s["topic"] = f"Read pages {segs[idx]}"
-                    seg_consumed[key] = idx + 1
-                    continue
-                else:
-                    s["topic"] = f"Continue reading pages {segs[-1]}"
-                    continue
-            # No segment info — fall back to a neutral label
-            stype = (s.get("type") or "study").lower()
-            if "review" in stype:
-                s["topic"] = "Full review of all material"
-            else:
-                s["topic"] = "Read assigned pages"
     # Build {course_name -> {exam_name_lower -> exam_date_str}} index
     exam_dates = {}  # course_name -> last_exam_date (date)
     course_exam_dates = {}  # (course_name, exam_topic_keyword) -> date

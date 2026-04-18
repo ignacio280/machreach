@@ -4003,6 +4003,8 @@ def register_student_routes(app, csrf, limiter):
 
                           <span style="font-weight:600;color:var(--text);">{_esc(s.get('course',''))}</span>
 
+                          <span style="color:var(--text-secondary);font-size:13px;">{_esc(s.get('topic',''))}</span>
+
                           <span style="margin-left:auto;font-size:12px;color:var(--text-muted);">{s.get('hours',0)}h</span>
 
                           <span style="background:{pc}18;color:{pc};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">{s.get('priority','').upper()}</span>
