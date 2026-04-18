@@ -362,6 +362,8 @@ Rules:
 - Alternate between subjects to avoid burnout (max 3h same subject)
 - Include specific topics, not just "study for exam"
 - COMPLETE COVERAGE: when an exam has FULL STUDY MATERIALS attached above, your sessions for that exam MUST walk through EVERY chapter / section / unit / heading / problem set found in that material before the exam date. Do NOT skip sections. Break large chapters into multiple sessions across multiple days. Each session's "topic" field must name the specific chapter or section being studied (e.g. "Chapter 4.2 — Definite Integrals" or "Unit 3: Kinematics problem set"). Allocate study days proportionally to material length so the student finishes 100% of the document at least 1 day before the exam.
+- HARD RULE — NEVER schedule study sessions for an exam AFTER its exam date. Once the exam date passes, that exam is DONE — do not include any further sessions for it. If the exam is on YYYY-MM-DD, your last session for that exam's material must be on YYYY-MM-DD or earlier (ideally the day BEFORE the exam for final review). Sessions on the exam date itself should be light review only, not new material.
+- HARD RULE — Front-load study so all material is covered BEFORE the exam, not after. If you only have 6 days until the exam, compress the material into those 6 days.
 - Mark priority based on how close the exam is, its weight, AND course difficulty
 - Keep each session description concise (under 15 words)
 - Return ONLY JSON, no markdown fences"""
@@ -384,15 +386,70 @@ Rules:
             # Try to close any open arrays/objects
             for closer in [']}]}', ']}', '}]}'  , ']}]}']:
                 try:
-                    return json.loads(raw + closer)
+                    return _post_process_plan(json.loads(raw + closer), courses_data)
                 except json.JSONDecodeError:
                     continue
             raise ValueError("AI response was truncated and could not be repaired")
 
-        return json.loads(raw)
+        return _post_process_plan(json.loads(raw), courses_data)
     except Exception as e:
         log.error("Study plan generation failed: %s", e)
         raise RuntimeError(f"Plan generation failed: {e}")
+
+
+def _post_process_plan(plan: dict, courses_data: list[dict]) -> dict:
+    """Strip out sessions scheduled AFTER an exam's date — the AI sometimes
+    forgets that an exam ends, and schedules continued study afterwards."""
+    if not isinstance(plan, dict):
+        return plan
+    # Build {course_name -> {exam_name_lower -> exam_date_str}} index
+    exam_dates = {}  # course_name -> last_exam_date (date)
+    course_exam_dates = {}  # (course_name, exam_topic_keyword) -> date
+    from datetime import date as _date
+    for cd in courses_data or []:
+        cname = cd.get("course_name")
+        if not cname:
+            continue
+        latest = None
+        for ex in cd.get("exams", []):
+            ed = ex.get("date")
+            if not ed:
+                continue
+            try:
+                ed_obj = _date.fromisoformat(ed[:10])
+            except Exception:
+                continue
+            if latest is None or ed_obj > latest:
+                latest = ed_obj
+        if latest:
+            exam_dates[cname.lower().strip()] = latest
+    if not exam_dates:
+        return plan
+    new_daily = []
+    for day in plan.get("daily_plan", []) or []:
+        try:
+            day_date = _date.fromisoformat((day.get("date") or "")[:10])
+        except Exception:
+            new_daily.append(day)
+            continue
+        kept_sessions = []
+        for s in day.get("sessions", []) or []:
+            cn = (s.get("course") or "").lower().strip()
+            last_exam = exam_dates.get(cn)
+            if last_exam and day_date > last_exam:
+                # Skip — this study session is scheduled AFTER the course's last exam.
+                continue
+            kept_sessions.append(s)
+        day["sessions"] = kept_sessions
+        # Recompute total_hours if it was set
+        if "total_hours" in day:
+            try:
+                day["total_hours"] = round(sum(float(s.get("hours", 0) or 0) for s in kept_sessions), 2)
+            except Exception:
+                pass
+        new_daily.append(day)
+    plan["daily_plan"] = new_daily
+    return plan
 
 
 # ── helpers ─────────────────────────────────────────────────

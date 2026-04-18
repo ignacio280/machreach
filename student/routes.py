@@ -5065,7 +5065,9 @@ def register_student_routes(app, csrf, limiter):
 
             localStorage.setItem('focus_float', JSON.stringify({{
 
-              active:true, mode:'stopwatch', startAt: isRestore ? (Date.now() - totalFocusSeconds * 1000) : swStart, label:'📖 Reading'
+              active:true, mode:'stopwatch', startAt: isRestore ? (Date.now() - totalFocusSeconds * 1000) : swStart, label:'📖 Reading',
+
+              originalMode:'pages', course: document.getElementById('focus-course').value || ''
 
             }}));
 
@@ -5101,6 +5103,16 @@ def register_student_routes(app, csrf, limiter):
 
             var label = isBreak ? '☕ Break' : '🔥 Focus';
 
+            var courseName = document.getElementById('focus-course').value || '';
+
+            // Minutes of WORK this phase will credit when it ends (0 for breaks).
+
+            var phaseWorkMinutes = isBreak ? 0 : Math.round(initialTimeLeft / 60);
+
+            // Unique id so we never double-credit a phase across page/global controllers.
+
+            var phaseId = 'p_' + Date.now() + '_' + Math.floor(Math.random()*1e9);
+
             var nextPhase = null;
 
             if (currentMode === 'pomodoro') {{
@@ -5115,6 +5127,8 @@ def register_student_routes(app, csrf, limiter):
 
                   : parseInt(document.getElementById('pomo-break').value);
 
+                var followingWorkMins = parseInt(document.getElementById('pomo-work').value);
+
                 nextPhase = {{
 
                   active:true, mode:'countdown',
@@ -5123,13 +5137,21 @@ def register_student_routes(app, csrf, limiter):
 
                   label: (nextPomoCount % 4 === 0) ? '🎉 Long Break' : '☕ Break',
 
+                  originalMode:'pomodoro', isBreak:true, course:courseName, workMinutes:0,
+
+                  phaseId: 'p_' + (Date.now()+1) + '_' + Math.floor(Math.random()*1e9),
+
                   nextPhase: {{
 
                     active:true, mode:'countdown',
 
-                    endAt: endAt + nextBreakMins*60*1000 + parseInt(document.getElementById('pomo-work').value)*60*1000,
+                    endAt: endAt + nextBreakMins*60*1000 + followingWorkMins*60*1000,
 
                     label: '🔥 Focus',
+
+                    originalMode:'pomodoro', isBreak:false, course:courseName, workMinutes: followingWorkMins,
+
+                    phaseId: 'p_' + (Date.now()+2) + '_' + Math.floor(Math.random()*1e9),
 
                     nextPhase: null
 
@@ -5149,6 +5171,10 @@ def register_student_routes(app, csrf, limiter):
 
                   label: '🔥 Focus',
 
+                  originalMode:'pomodoro', isBreak:false, course:courseName, workMinutes: workMins,
+
+                  phaseId: 'p_' + (Date.now()+1) + '_' + Math.floor(Math.random()*1e9),
+
                   nextPhase: null
 
                 }};
@@ -5159,7 +5185,11 @@ def register_student_routes(app, csrf, limiter):
 
             localStorage.setItem('focus_float', JSON.stringify({{
 
-              active:true, mode:'countdown', endAt:endAt, label:label, nextPhase:nextPhase
+              active:true, mode:'countdown', endAt:endAt, label:label, nextPhase:nextPhase,
+
+              originalMode: currentMode, isBreak: isBreak, course: courseName,
+
+              workMinutes: phaseWorkMinutes, phaseId: phaseId
 
             }}));
 
@@ -5519,6 +5549,58 @@ def register_student_routes(app, csrf, limiter):
 
           var course = document.getElementById('focus-course').value;
 
+          // Dedupe by phaseId so the global widget controller doesn't also credit the same phase.
+
+          try {{
+
+            var ff = JSON.parse(localStorage.getItem('focus_float')||'null');
+
+            if (ff && ff.phaseId) {{
+
+              var saved = JSON.parse(localStorage.getItem('focus_saved_phases')||'[]');
+
+              if (saved.indexOf(ff.phaseId) !== -1) {{
+
+                // Already credited by global controller — just refresh stats.
+
+                try {{
+
+                  var r2 = await fetch('/api/student/focus/stats');
+
+                  if (r2.ok) {{
+
+                    var s = await r2.json();
+
+                    if (s && s.stats) {{
+
+                      document.getElementById('stat-hours').textContent = s.stats.total_hours;
+
+                      document.getElementById('stat-sessions').textContent = s.stats.sessions;
+
+                      document.getElementById('stat-pages').textContent = s.stats.total_pages;
+
+                      document.getElementById('stat-streak').textContent = s.stats.streak_days;
+
+                    }}
+
+                  }}
+
+                }} catch(e) {{}}
+
+                return;
+
+              }}
+
+              saved.push(ff.phaseId);
+
+              if (saved.length > 200) saved = saved.slice(-200);
+
+              localStorage.setItem('focus_saved_phases', JSON.stringify(saved));
+
+            }}
+
+          }} catch(e) {{}}
+
           var payload = {{ mode: currentMode, minutes: minutes, pages: pages, course_name: course }};
 
           // Always fire-and-forget via sendBeacon FIRST so XP gets credited
@@ -5778,6 +5860,14 @@ def register_student_routes(app, csrf, limiter):
           sessionStarted = true;
 
           if (ts.course) document.getElementById('focus-course').value = ts.course;
+
+          // The global focus controller may have advanced the phase while the
+
+          // user was on another tab — sync local state from focus_float.
+
+          if (typeof ff.isBreak === 'boolean') isBreak = ff.isBreak;
+
+          if (ff.course) document.getElementById('focus-course').value = ff.course;
 
 
 

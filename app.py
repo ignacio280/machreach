@@ -1688,46 +1688,250 @@ LAYOUT = """<!DOCTYPE html>
     <div class="ff-label" id="ff-label">Focus</div>
   </div>
 
+  <!-- Persistent silent <audio> element used for keepalive (prevents Chrome
+       from throttling/freezing this tab while a focus session is running on
+       another MachReach tab). The actual src is set programmatically. -->
+  <audio id="focus-keepalive" loop preload="auto" style="display:none"></audio>
+  <audio id="focus-alarm" preload="auto" style="display:none"></audio>
+
   <script>
+  /* ============================================================
+   * GLOBAL FOCUS CONTROLLER
+   * Runs on EVERY page so that when the user navigates away from
+   * /student/focus the timer keeps ticking, the alarm fires, XP
+   * gets credited, and pomodoro phases auto-advance — even though
+   * the focus page itself has been unloaded.
+   * ============================================================ */
   (function(){
-    // Restore floating timer from localStorage
-    var d = JSON.parse(localStorage.getItem('focus_float')||'null');
-    if(d && d.active){
-      var el=document.getElementById('focus-float');
-      el.style.display='block';
-      function tick(){
-        var dd=JSON.parse(localStorage.getItem('focus_float')||'null');
-        if(!dd||!dd.active){el.style.display='none';return;}
-        if(dd.mode==='countdown'){
-          var left=dd.endAt-Date.now();
-          if(left<0) left=0;
-          var m=Math.floor(left/60000), s=Math.floor((left%60000)/1000);
-          document.getElementById('ff-time').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-          document.getElementById('ff-label').textContent=dd.label||'Focus';
-          if(left<=0){
-            // timer ended — check if auto-cycle
-            if(dd.nextPhase){
-              localStorage.setItem('focus_float',JSON.stringify(dd.nextPhase));
-            } else {
-              dd.active=false; localStorage.setItem('focus_float',JSON.stringify(dd));
-              el.style.display='none';
-            }
-            return;
-          }
-        } else {
-          var elapsed=Math.floor((Date.now()-dd.startAt)/1000);
-          var m=Math.floor(elapsed/60), s=elapsed%60;
-          document.getElementById('ff-time').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-          document.getElementById('ff-label').textContent=dd.label||'Reading';
-        }
-        requestAnimationFrame(tick);
-      }
-      tick(); setInterval(tick,1000);
+    if (window.__focusGlobalCtrl) return; // singleton
+    window.__focusGlobalCtrl = true;
+
+    var keepEl = document.getElementById('focus-keepalive');
+    var alarmEl = document.getElementById('focus-alarm');
+    var widget = document.getElementById('focus-float');
+    if (!widget) return;
+
+    var alarmDataUri = null;
+    var silenceDataUri = null;
+
+    function buildSilenceWavDataUri(){
+      var sr = 8000, n = sr;
+      var buf = new ArrayBuffer(44 + n*2);
+      var v = new DataView(buf);
+      function w(o,s){ for(var i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); }
+      w(0,'RIFF'); v.setUint32(4, 36+n*2, true);
+      w(8,'WAVEfmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
+      v.setUint16(22,1,true); v.setUint32(24,sr,true);
+      v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+      w(36,'data'); v.setUint32(40, n*2, true);
+      var b = new Uint8Array(buf), s = '';
+      for (var j=0; j<b.length; j++) s += String.fromCharCode(b[j]);
+      return 'data:audio/wav;base64,' + btoa(s);
     }
+    function buildAlarmWavDataUri(){
+      var sr = 22050, dur = 1.4, n = Math.floor(sr*dur);
+      var buf = new ArrayBuffer(44 + n*2);
+      var v = new DataView(buf);
+      function w(o,s){ for(var i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); }
+      w(0,'RIFF'); v.setUint32(4, 36+n*2, true);
+      w(8,'WAVEfmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
+      v.setUint16(22,1,true); v.setUint32(24,sr,true);
+      v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+      w(36,'data'); v.setUint32(40, n*2, true);
+      var freqs = [523.25, 659.25, 783.99];
+      for (var i=0; i<n; i++){
+        var t = i/sr, sa = 0;
+        for (var k=0;k<3;k++){
+          var st = k*0.35;
+          if (t>=st && t<st+0.6){
+            var lo = t-st, env = Math.exp(-lo*5);
+            sa += Math.sin(2*Math.PI*freqs[k]*lo)*env*0.3;
+          }
+        }
+        var val = Math.max(-1, Math.min(1, sa));
+        v.setInt16(44 + i*2, val*0x7FFF, true);
+      }
+      var b = new Uint8Array(buf), s = '';
+      for (var j=0; j<b.length; j++) s += String.fromCharCode(b[j]);
+      return 'data:audio/wav;base64,' + btoa(s);
+    }
+
+    function ensureAudioReady(){
+      if (!silenceDataUri){ silenceDataUri = buildSilenceWavDataUri(); keepEl.src = silenceDataUri; keepEl.volume = 0.001; }
+      if (!alarmDataUri){ alarmDataUri = buildAlarmWavDataUri(); alarmEl.src = alarmDataUri; alarmEl.volume = 0.7; }
+    }
+
+    function startKeepalive(){
+      try {
+        ensureAudioReady();
+        var p = keepEl.play();
+        if (p && p.catch) p.catch(function(){});
+      } catch(e){}
+    }
+    function stopKeepalive(){
+      try { keepEl.pause(); keepEl.currentTime = 0; } catch(e){}
+    }
+    function playAlarm(){
+      try {
+        ensureAudioReady();
+        alarmEl.currentTime = 0;
+        var p = alarmEl.play();
+        if (p && p.catch) p.catch(function(){});
+      } catch(e){}
+    }
+    function showNotif(title, body){
+      try {
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+        var n = new Notification(title, { body: body, tag: 'machreach-focus' });
+        n.onclick = function(){ window.focus(); window.location='/student/focus'; n.close(); };
+      } catch(e){}
+    }
+
+    // Try to ensure audio is primed via any user gesture on any page.
+    function primeOnGesture(){
+      ensureAudioReady();
+      try { keepEl.muted = true; var p = keepEl.play(); if (p && p.then) p.then(function(){ keepEl.pause(); keepEl.currentTime=0; keepEl.muted=false; }).catch(function(){ keepEl.muted=false; }); } catch(e){}
+      try { alarmEl.muted = true; var p2 = alarmEl.play(); if (p2 && p2.then) p2.then(function(){ alarmEl.pause(); alarmEl.currentTime=0; alarmEl.muted=false; }).catch(function(){ alarmEl.muted=false; }); } catch(e){}
+      // Also re-start keepalive if a session is active (in case browser had paused it).
+      var d = readState();
+      if (d && d.active) startKeepalive();
+      window.removeEventListener('click', primeOnGesture, true);
+      window.removeEventListener('keydown', primeOnGesture, true);
+    }
+    window.addEventListener('click', primeOnGesture, true);
+    window.addEventListener('keydown', primeOnGesture, true);
+
+    function readState(){
+      try { return JSON.parse(localStorage.getItem('focus_float')||'null'); } catch(e){ return null; }
+    }
+    function writeState(s){
+      try { localStorage.setItem('focus_float', JSON.stringify(s)); } catch(e){}
+    }
+    function markPhaseSaved(id){
+      try {
+        var arr = JSON.parse(localStorage.getItem('focus_saved_phases')||'[]');
+        if (arr.indexOf(id) === -1) arr.push(id);
+        if (arr.length > 200) arr = arr.slice(-200);
+        localStorage.setItem('focus_saved_phases', JSON.stringify(arr));
+      } catch(e){}
+    }
+    function isPhaseSaved(id){
+      try {
+        var arr = JSON.parse(localStorage.getItem('focus_saved_phases')||'[]');
+        return arr.indexOf(id) !== -1;
+      } catch(e){ return false; }
+    }
+
+    function creditPhase(d){
+      // d: a focus_float phase object that just ended.
+      if (!d || !d.phaseId) return;
+      if (isPhaseSaved(d.phaseId)) return;
+      if (!d.workMinutes || d.workMinutes <= 0) return; // breaks don't credit
+      markPhaseSaved(d.phaseId);
+      var payload = {
+        mode: d.originalMode || 'pomodoro',
+        minutes: d.workMinutes,
+        pages: 0,
+        course_name: d.course || ''
+      };
+      try {
+        if (navigator.sendBeacon){
+          var blob = new Blob([JSON.stringify(payload)], { type:'application/json' });
+          navigator.sendBeacon('/api/student/focus/save', blob);
+        } else {
+          fetch('/api/student/focus/save', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            keepalive:true, body: JSON.stringify(payload)
+          }).catch(function(){});
+        }
+      } catch(e){}
+    }
+
+    var phaseEndedFlag = {}; // {phaseId: true}
+    function tick(){
+      var d = readState();
+      if (!d || !d.active){
+        widget.style.display = 'none';
+        stopKeepalive();
+        return;
+      }
+      widget.style.display = 'block';
+      // Make sure keepalive stays running (browser may have paused it).
+      if (keepEl && keepEl.paused) startKeepalive();
+
+      if (d.mode === 'countdown'){
+        var left = d.endAt - Date.now();
+        if (left < 0) left = 0;
+        var m = Math.floor(left/60000), s = Math.floor((left%60000)/1000);
+        var t = document.getElementById('ff-time');
+        var l = document.getElementById('ff-label');
+        if (t) t.textContent = String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+        if (l) l.textContent = d.label || 'Focus';
+        if (left <= 0 && d.phaseId && !phaseEndedFlag[d.phaseId]){
+          phaseEndedFlag[d.phaseId] = true;
+          // Credit XP for work phases.
+          creditPhase(d);
+          // Audible + visual alert (works in background because keepalive kept us unthrottled).
+          playAlarm();
+          if (d.workMinutes > 0){
+            showNotif('Focus session complete', 'Time for a break!');
+          } else {
+            showNotif('Break over', 'Back to focus!');
+          }
+          // Advance to next phase or end.
+          if (d.nextPhase){
+            // Re-base nextPhase.endAt off NOW so a long pause doesn't make it instantly expire.
+            var np = d.nextPhase;
+            // The original endAt was relative to the previous phase's endAt; preserve duration.
+            // We don't know the duration directly — recompute from workMinutes (work) or label (best-effort 5min default for break is wrong).
+            // Safer: nextPhase.endAt was already absolute; if it's already in the past, just skip ahead.
+            if (np.endAt && np.endAt > Date.now()){
+              writeState(np);
+            } else {
+              // Compute a sensible new endAt: workMinutes for work phases, fall back to 5min.
+              var dur = (np.workMinutes && np.workMinutes>0) ? np.workMinutes*60*1000 : 5*60*1000;
+              np.endAt = Date.now() + dur;
+              writeState(np);
+            }
+            startKeepalive();
+          } else {
+            d.active = false;
+            writeState(d);
+            widget.style.display = 'none';
+            stopKeepalive();
+          }
+        }
+      } else {
+        // stopwatch
+        var elapsed = Math.floor((Date.now()-d.startAt)/1000);
+        var m2 = Math.floor(elapsed/60), s2 = elapsed%60;
+        var t2 = document.getElementById('ff-time');
+        var l2 = document.getElementById('ff-label');
+        if (t2) t2.textContent = String(m2).padStart(2,'0')+':'+String(s2).padStart(2,'0');
+        if (l2) l2.textContent = d.label || 'Reading';
+      }
+    }
+
+    // Boot: if a session is already active when this page loads, start keepalive immediately.
+    var initial = readState();
+    if (initial && initial.active){
+      ensureAudioReady();
+      startKeepalive();
+      widget.style.display = 'block';
+    }
+
+    setInterval(tick, 1000);
+    tick();
+
+    window.addEventListener('storage', function(e){ if (e.key === 'focus_float') tick(); });
   })();
+
   function closeFocusFloat(){
-    localStorage.removeItem('focus_float');
-    document.getElementById('focus-float').style.display='none';
+    try { localStorage.removeItem('focus_float'); } catch(e){}
+    var el = document.getElementById('focus-float');
+    if (el) el.style.display='none';
+    var k = document.getElementById('focus-keepalive');
+    if (k){ try { k.pause(); k.currentTime = 0; } catch(e){} }
   }
   </script>
 
