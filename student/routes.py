@@ -7385,51 +7385,121 @@ def register_student_routes(app, csrf, limiter):
 
         <div class="card" style="margin-top:20px;">
 
-          <div class="card-header">
-
-            <h2>&#128467; Per-Date Availability Overrides</h2>
-
-            <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0;">Override your weekly schedule for SPECIFIC dates. e.g. you have a doctor appointment on the 22nd so you only get 3h that day. The AI plan will respect these as hard limits.</p>
-
-          </div>
-
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:14px 0;padding:14px;background:var(--bg);border-radius:var(--radius-sm);">
+          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
 
             <div>
 
-              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">Date</label>
+              <h2 style="margin:0;">&#128197; Per-Date Availability</h2>
 
-              <input type="date" id="ov-date" class="edit-input" style="width:160px;">
-
-            </div>
-
-            <div>
-
-              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">Hours available</label>
-
-              <input type="number" id="ov-hours" min="0" max="24" step="0.5" value="2" class="edit-input" style="width:90px;">
+              <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0;">Click any date to set custom hours for that specific day. Overrides your weekly schedule. The AI plan respects these as hard limits.</p>
 
             </div>
 
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:6px;">
 
-              <input type="checkbox" id="ov-free"> <span style="font-size:13px;">Free day (0h)</span>
+              <button onclick="ovPrevMonth()" class="btn btn-outline btn-sm" style="padding:4px 10px;">&#9664;</button>
 
-            </label>
+              <span id="ov-month-label" style="font-weight:700;min-width:160px;text-align:center;">&mdash;</span>
 
-            <div style="flex:1;min-width:160px;">
-
-              <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">Note (optional)</label>
-
-              <input type="text" id="ov-note" placeholder="e.g. Doctor appointment" maxlength="200" class="edit-input">
+              <button onclick="ovNextMonth()" class="btn btn-outline btn-sm" style="padding:4px 10px;">&#9654;</button>
 
             </div>
-
-            <button onclick="addOverride()" class="btn btn-primary btn-sm" id="add-ov-btn">Add / Update</button>
 
           </div>
 
-          <div id="ov-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-muted);margin-top:8px;">
+
+            <span><span style="display:inline-block;width:12px;height:12px;background:var(--bg);border:1px solid var(--border);border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Default (weekly)</span>
+
+            <span><span style="display:inline-block;width:12px;height:12px;background:rgba(99,102,241,0.25);border:1px solid var(--primary);border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Custom hours</span>
+
+            <span><span style="display:inline-block;width:12px;height:12px;background:rgba(239,68,68,0.25);border:1px solid #ef4444;border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Free day</span>
+
+            <span><span style="display:inline-block;width:12px;height:12px;border:2px solid var(--primary);border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Today</span>
+
+          </div>
+
+          <div id="ov-calendar" class="ov-cal" style="margin-top:14px;"></div>
+
+        </div>
+
+        <!-- Override editor modal -->
+
+        <div id="ov-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.4);">
+
+            <h3 style="margin:0 0 4px;">&#128197; <span id="ov-modal-date">Set availability</span></h3>
+
+            <p id="ov-modal-weekday" style="font-size:13px;color:var(--text-muted);margin:0 0 16px;"></p>
+
+            <div style="display:flex;flex-direction:column;gap:12px;">
+
+              <div>
+
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);">
+
+                  <input type="radio" name="ov-mode" value="default" id="ov-mode-default">
+
+                  <span><b>Use weekly default</b><br><span style="font-size:12px;color:var(--text-muted);">Remove any override for this date</span></span>
+
+                </label>
+
+              </div>
+
+              <div>
+
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);">
+
+                  <input type="radio" name="ov-mode" value="hours" id="ov-mode-hours" checked>
+
+                  <span style="flex:1;"><b>Custom hours</b>
+
+                    <div style="margin-top:6px;display:flex;align-items:center;gap:6px;">
+
+                      <input type="number" id="ov-hours" min="0" max="24" step="0.5" value="2" class="edit-input" style="width:90px;">
+
+                      <span style="font-size:13px;color:var(--text-muted);">hours of study</span>
+
+                    </div>
+
+                  </span>
+
+                </label>
+
+              </div>
+
+              <div>
+
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);">
+
+                  <input type="radio" name="ov-mode" value="free" id="ov-mode-free">
+
+                  <span><b>Free day</b><br><span style="font-size:12px;color:var(--text-muted);">No study scheduled this day</span></span>
+
+                </label>
+
+              </div>
+
+              <div>
+
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">Note (optional)</label>
+
+                <input type="text" id="ov-note" placeholder="e.g. Doctor appointment" maxlength="200" class="edit-input">
+
+              </div>
+
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+
+              <button onclick="ovCloseModal()" class="btn btn-outline btn-sm">Cancel</button>
+
+              <button onclick="ovSaveModal()" class="btn btn-primary btn-sm" id="ov-save-btn">Save</button>
+
+            </div>
+
+          </div>
 
         </div>
 
@@ -7458,6 +7528,32 @@ def register_student_routes(app, csrf, limiter):
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
 
         .diff-star:hover {{ transform:scale(1.2); }}
+
+        /* Calendar */
+        .ov-cal {{ width:100%; }}
+        .ov-cal-head {{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:6px; }}
+        .ov-cal-dow {{ font-size:11px; color:var(--text-muted); text-align:center; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; padding:6px 0; }}
+        .ov-cal-grid {{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }}
+        .ov-cal-cell {{ min-height:78px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 8px; background:var(--card); cursor:pointer; transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease; display:flex; flex-direction:column; gap:2px; position:relative; }}
+        .ov-cal-cell:hover {{ transform:translateY(-1px); border-color:var(--primary); box-shadow:0 4px 12px rgba(99,102,241,0.15); }}
+        .ov-cal-empty {{ background:transparent; border:none; cursor:default; }}
+        .ov-cal-empty:hover {{ transform:none; box-shadow:none; }}
+        .ov-cal-day {{ font-weight:700; color:var(--text); font-size:14px; }}
+        .ov-cal-hours {{ font-size:12px; color:var(--text-muted); margin-top:auto; font-weight:600; }}
+        .ov-cal-note {{ font-size:10px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }}
+        .ov-default {{ background:var(--bg); }}
+        .ov-default .ov-cal-hours {{ color:var(--text-muted); opacity:0.7; }}
+        .ov-custom {{ background:rgba(99,102,241,0.18); border-color:var(--primary); }}
+        .ov-custom .ov-cal-hours {{ color:var(--primary); }}
+        .ov-free {{ background:rgba(239,68,68,0.18); border-color:#ef4444; }}
+        .ov-free .ov-cal-hours {{ color:#ef4444; }}
+        .ov-today {{ box-shadow:0 0 0 2px var(--primary) inset; }}
+        @media (max-width: 720px) {{
+          .ov-cal-cell {{ min-height:62px; padding:4px 5px; }}
+          .ov-cal-day {{ font-size:12px; }}
+          .ov-cal-hours {{ font-size:11px; }}
+          .ov-cal-note {{ display:none; }}
+        }}
 
         </style>
 
@@ -7583,54 +7679,168 @@ def register_student_routes(app, csrf, limiter):
 
         }}
 
-        // ── Per-date overrides ──
+        // ── Per-date overrides (calendar UI) ──
         function escHtml(s) {{ return String(s||'').replace(/[&<>"']/g, function(c){{ return ({{ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }})[c]; }}); }}
-        async function loadOverrides() {{
+        var ovState = {{
+          year: new Date().getFullYear(),
+          month: new Date().getMonth(), // 0-indexed
+          overrides: {{}}, // {{ 'YYYY-MM-DD': {{ available_hours, is_free_day, note }} }}
+          weekly: {{}},   // {{ 0..6: {{ hours, free }} }} from saved schedule
+          editingDate: null
+        }};
+        // Read weekly schedule from the inputs at the top so the calendar can show it
+        function ovReadWeekly() {{
+          ovState.weekly = {{}};
+          for (var i = 0; i < 7; i++) {{
+            var freeEl = document.querySelector('.free-day-check[data-day="' + i + '"]');
+            var hrsEl = document.getElementById('hours-' + i);
+            if (!freeEl || !hrsEl) continue;
+            ovState.weekly[i] = {{ free: freeEl.checked, hours: parseFloat(hrsEl.value) || 0 }};
+          }}
+        }}
+        function ovPad(n) {{ return n < 10 ? '0' + n : '' + n; }}
+        function ovIso(y, m, d) {{ return y + '-' + ovPad(m+1) + '-' + ovPad(d); }}
+        function ovMonthLabel(y, m) {{
+          var names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+          return names[m] + ' ' + y;
+        }}
+        function ovWeekdayName(jsDay) {{
+          // jsDay: 0=Sun..6=Sat. We display Mon-first.
+          return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][jsDay];
+        }}
+        async function ovLoadOverrides() {{
           try {{
+            // Fetch a wide range so navigating months doesn't refetch
             var r = await fetch('/api/student/date-overrides');
             var j = await r.json();
-            var rows = (j.overrides || []).map(function(o) {{
-              var label = o.is_free_day ? '<b>Free day</b>' : ('<b>' + o.available_hours + 'h</b>');
-              var note = o.note ? (' &mdash; <span style="color:var(--text-muted);">' + escHtml(o.note) + '</span>') : '';
-              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);">' +
-                '<div><span style="font-family:monospace;color:var(--primary);">' + escHtml(o.override_date) + '</span> &middot; ' + label + note + '</div>' +
-                '<button onclick="delOverride(\\''+escHtml(o.override_date)+'\\')" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:12px;">Remove</button>' +
-                '</div>';
-            }}).join('');
-            document.getElementById('ov-list').innerHTML = rows || '<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:8px;">No date overrides yet.</p>';
-          }} catch(e) {{}}
-        }}
-        async function addOverride() {{
-          var d = document.getElementById('ov-date').value;
-          if (!d) {{ alert('Pick a date'); return; }}
-          var free = document.getElementById('ov-free').checked;
-          var hours = parseFloat(document.getElementById('ov-hours').value) || 0;
-          var note = document.getElementById('ov-note').value || '';
-          var btn = document.getElementById('add-ov-btn');
-          btn.disabled = true; btn.textContent = 'Saving...';
-          try {{
-            var r = await fetch('/api/student/date-overrides', {{
-              method: 'POST', headers: {{'Content-Type':'application/json'}},
-              body: JSON.stringify({{ date: d, hours: free ? 0 : hours, free: free, note: note }})
+            ovState.overrides = {{}};
+            (j.overrides || []).forEach(function(o) {{
+              ovState.overrides[o.override_date] = {{
+                hours: o.available_hours,
+                free: !!o.is_free_day,
+                note: o.note || ''
+              }};
             }});
-            if (r.ok) {{
-              document.getElementById('ov-note').value = '';
-              loadOverrides();
+          }} catch(e) {{}}
+          ovRender();
+        }}
+        function ovRender() {{
+          ovReadWeekly();
+          document.getElementById('ov-month-label').textContent = ovMonthLabel(ovState.year, ovState.month);
+          var firstDow = new Date(ovState.year, ovState.month, 1).getDay(); // 0=Sun
+          // Convert to Mon-first index: Mon=0..Sun=6
+          var leading = (firstDow + 6) % 7;
+          var daysInMonth = new Date(ovState.year, ovState.month + 1, 0).getDate();
+          var todayIso = (function() {{ var d = new Date(); return ovIso(d.getFullYear(), d.getMonth(), d.getDate()); }})();
+          var html = '<div class="ov-cal-head">';
+          ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(function(n) {{
+            html += '<div class="ov-cal-dow">' + n + '</div>';
+          }});
+          html += '</div><div class="ov-cal-grid">';
+          for (var i = 0; i < leading; i++) html += '<div class="ov-cal-cell ov-cal-empty"></div>';
+          for (var d = 1; d <= daysInMonth; d++) {{
+            var iso = ovIso(ovState.year, ovState.month, d);
+            var ov = ovState.overrides[iso];
+            // Compute weekday (Mon=0..Sun=6) for default
+            var jsDay = new Date(ovState.year, ovState.month, d).getDay();
+            var monIdx = (jsDay + 6) % 7;
+            var def = ovState.weekly[monIdx] || {{ free: true, hours: 0 }};
+            var cls = 'ov-cal-cell';
+            var label = '';
+            var noteHtml = '';
+            if (ov) {{
+              if (ov.free) {{ cls += ' ov-free'; label = 'Free'; }}
+              else {{ cls += ' ov-custom'; label = ov.hours + 'h'; }}
+              if (ov.note) noteHtml = '<div class="ov-cal-note" title="'+escHtml(ov.note)+'">' + escHtml(ov.note) + '</div>';
             }} else {{
-              var j = {{}}; try {{ j = await r.json(); }} catch(e){{}}
-              alert(j.error || 'Failed to save override');
+              if (def.free) label = 'Free';
+              else label = def.hours + 'h';
+              cls += ' ov-default';
+            }}
+            if (iso === todayIso) cls += ' ov-today';
+            html += '<div class="' + cls + '" onclick="ovOpenModal(\\''+iso+'\\')">' +
+              '<div class="ov-cal-day">' + d + '</div>' +
+              '<div class="ov-cal-hours">' + label + '</div>' +
+              noteHtml + '</div>';
+          }}
+          html += '</div>';
+          document.getElementById('ov-calendar').innerHTML = html;
+        }}
+        function ovPrevMonth() {{
+          ovState.month--;
+          if (ovState.month < 0) {{ ovState.month = 11; ovState.year--; }}
+          ovRender();
+        }}
+        function ovNextMonth() {{
+          ovState.month++;
+          if (ovState.month > 11) {{ ovState.month = 0; ovState.year++; }}
+          ovRender();
+        }}
+        function ovOpenModal(iso) {{
+          ovState.editingDate = iso;
+          var parts = iso.split('-').map(function(x){{ return parseInt(x,10); }});
+          var dt = new Date(parts[0], parts[1]-1, parts[2]);
+          document.getElementById('ov-modal-date').textContent = iso;
+          document.getElementById('ov-modal-weekday').textContent = ovWeekdayName(dt.getDay());
+          var ov = ovState.overrides[iso];
+          if (ov) {{
+            if (ov.free) {{
+              document.getElementById('ov-mode-free').checked = true;
+            }} else {{
+              document.getElementById('ov-mode-hours').checked = true;
+              document.getElementById('ov-hours').value = ov.hours;
+            }}
+            document.getElementById('ov-note').value = ov.note || '';
+          }} else {{
+            document.getElementById('ov-mode-hours').checked = true;
+            // Pre-fill from weekly default
+            var monIdx = (dt.getDay() + 6) % 7;
+            var def = ovState.weekly[monIdx];
+            document.getElementById('ov-hours').value = (def && !def.free) ? def.hours : 2;
+            document.getElementById('ov-note').value = '';
+          }}
+          document.getElementById('ov-modal').style.display = 'flex';
+        }}
+        function ovCloseModal() {{
+          document.getElementById('ov-modal').style.display = 'none';
+          ovState.editingDate = null;
+        }}
+        async function ovSaveModal() {{
+          var iso = ovState.editingDate;
+          if (!iso) return;
+          var btn = document.getElementById('ov-save-btn');
+          btn.disabled = true; btn.textContent = 'Saving...';
+          var mode = document.querySelector('input[name="ov-mode"]:checked').value;
+          try {{
+            if (mode === 'default') {{
+              // Delete the override
+              await fetch('/api/student/date-overrides/' + encodeURIComponent(iso), {{ method: 'DELETE' }});
+              delete ovState.overrides[iso];
+            }} else {{
+              var hours = mode === 'free' ? 0 : (parseFloat(document.getElementById('ov-hours').value) || 0);
+              var free = mode === 'free';
+              var note = document.getElementById('ov-note').value || '';
+              var r = await fetch('/api/student/date-overrides', {{
+                method: 'POST', headers: {{'Content-Type':'application/json'}},
+                body: JSON.stringify({{ date: iso, hours: hours, free: free, note: note }})
+              }});
+              if (r.ok) {{
+                ovState.overrides[iso] = {{ hours: hours, free: free, note: note }};
+              }} else {{
+                var j = {{}}; try {{ j = await r.json(); }} catch(e){{}}
+                alert(j.error || 'Failed to save');
+              }}
             }}
           }} catch(e) {{ alert('Network error'); }}
-          btn.disabled = false; btn.textContent = 'Add / Update';
+          btn.disabled = false; btn.textContent = 'Save';
+          ovCloseModal();
+          ovRender();
         }}
-        async function delOverride(d) {{
-          if (!confirm('Remove override for ' + d + '?')) return;
-          try {{
-            var r = await fetch('/api/student/date-overrides/' + encodeURIComponent(d), {{ method: 'DELETE' }});
-            if (r.ok) loadOverrides();
-          }} catch(e) {{}}
-        }}
-        loadOverrides();
+        // Close modal on backdrop click
+        document.getElementById('ov-modal').addEventListener('click', function(e) {{
+          if (e.target === this) ovCloseModal();
+        }});
+        ovLoadOverrides();
         </script>
 
         """, active_page="student_schedule")
