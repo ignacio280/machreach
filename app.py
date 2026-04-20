@@ -1315,12 +1315,58 @@ LAYOUT = """<!DOCTYPE html>
     .empty-state.compact { padding: 36px 22px; margin: 20px 0; }
     .empty-state.compact h3 { font-size: 17px; }
     .empty-state.compact p { font-size: 13.5px; }
+
+    /* ─── Top progress bar ─── */
+    #topbar-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: transparent; z-index: 10000; pointer-events: none; }
+    #topbar-progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, #6366F1, #A78BFA, #F472B6); background-size: 200% 100%; transition: width .35s var(--ease), opacity .25s var(--ease); box-shadow: 0 0 10px rgba(124,58,237,.55), 0 0 4px rgba(99,102,241,.45); animation: topbarShimmer 2s linear infinite; }
+    #topbar-progress.done .bar { opacity: 0; }
+    @keyframes topbarShimmer { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
   </style>
 </head>
 <body>
+  <div id="topbar-progress"><div class="bar"></div></div>
   <script>
     window.__IS_LOGGED_IN__ = {% if logged_in %}true{% else %}false{% endif %};
     window.__ACCOUNT_TYPE__ = "{{ account_type|default('business') }}";
+    // Top progress bar controller
+    (function(){
+      var tp = null, bar = null, timer = null, progress = 0;
+      function init(){ tp = document.getElementById('topbar-progress'); bar = tp && tp.querySelector('.bar'); }
+      if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
+      window.topbarStart = function(){
+        if (!bar) init();
+        if (!bar) return;
+        progress = 8; tp.classList.remove('done'); bar.style.width = '8%';
+        clearInterval(timer);
+        timer = setInterval(function(){
+          // Asymptotic approach to 90%
+          progress += (92 - progress) * 0.08;
+          if (bar) bar.style.width = progress.toFixed(1) + '%';
+          if (progress > 91.5) clearInterval(timer);
+        }, 220);
+      };
+      window.topbarDone = function(){
+        if (!bar) return;
+        clearInterval(timer);
+        bar.style.width = '100%';
+        setTimeout(function(){ tp.classList.add('done'); setTimeout(function(){ bar.style.width = '0%'; }, 260); }, 180);
+      };
+      // Trigger on link clicks (same-origin, non-modifier)
+      document.addEventListener('click', function(e){
+        var a = e.target.closest && e.target.closest('a[href]');
+        if (!a) return;
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        var href = a.getAttribute('href') || '';
+        if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return;
+        if (a.target === '_blank') return;
+        try { var u = new URL(a.href, location.href); if (u.origin !== location.origin) return; } catch(_) {}
+        window.topbarStart();
+      }, true);
+      // Trigger on form submissions
+      document.addEventListener('submit', function(){ window.topbarStart(); }, true);
+      // Complete on pageshow (also handles back-forward cache)
+      window.addEventListener('pageshow', function(){ window.topbarDone(); });
+    })();
   </script>
   <div class="nav">
     <a href="/" class="brand">
@@ -1875,50 +1921,50 @@ LAYOUT = """<!DOCTYPE html>
 
       // 4) Command palette (Cmd+K / Ctrl+K)
       var CMDK_ITEMS = (window.__IS_LOGGED_IN__ && window.__ACCOUNT_TYPE__ === 'student') ? [
-        {t:'Student Dashboard', u:'/student', i:'\uD83C\uDF93', s:'Main'},
-        {t:'Courses', u:'/student/courses', i:'\uD83D\uDCDA', s:'Main'},
-        {t:'Study Plan', u:'/student/plan', i:'\uD83D\uDCC5', s:'Main'},
-        {t:'Flashcards', u:'/student/flashcards', i:'\uD83D\uDCC7', s:'Study'},
-        {t:'Quizzes', u:'/student/quizzes', i:'\uD83D\uDCDD', s:'Study'},
-        {t:'Notes', u:'/student/notes', i:'\uD83D\uDCD6', s:'Study'},
-        {t:'AI Tutor', u:'/student/chat', i:'\uD83E\uDD16', s:'Study'},
+        {t:'Student Dashboard', u:'/student', i:'\\U0001F393', s:'Main'},
+        {t:'Courses', u:'/student/courses', i:'\\U0001F4DA', s:'Main'},
+        {t:'Study Plan', u:'/student/plan', i:'\\U0001F4C5', s:'Main'},
+        {t:'Flashcards', u:'/student/flashcards', i:'\\U0001F4C7', s:'Study'},
+        {t:'Quizzes', u:'/student/quizzes', i:'\\U0001F4DD', s:'Study'},
+        {t:'Notes', u:'/student/notes', i:'\\U0001F4D6', s:'Study'},
+        {t:'AI Tutor', u:'/student/chat', i:'\\U0001F916', s:'Study'},
         {t:'Essay Assistant', u:'/student/essay', i:'\u270F\uFE0F', s:'Study'},
-        {t:'Practice Problems', u:'/student/practice', i:'\uD83D\uDEE0\uFE0F', s:'Study'},
-        {t:'Focus Mode', u:'/student/focus', i:'\uD83C\uDFAF', s:'Tools'},
-        {t:'Panic Mode', u:'/student/panic', i:'\uD83D\uDEA8', s:'Tools'},
-        {t:'Exams', u:'/student/exams', i:'\uD83D\uDCDD', s:'Tools'},
-        {t:'Schedule', u:'/student/schedule', i:'\uD83D\uDDD3\uFE0F', s:'Tools'},
-        {t:'Weak Topics', u:'/student/weak-topics', i:'\uD83C\uDFAF', s:'Tools'},
-        {t:'GPA Calculator', u:'/student/gpa', i:'\uD83D\uDCC8', s:'Tools'},
-        {t:'Leaderboard', u:'/student/leaderboard', i:'\uD83C\uDFC6', s:'Social'},
-        {t:'Study Exchange', u:'/student/exchange', i:'\uD83D\uDD01', s:'Social'},
-        {t:'Mail Hub', u:'/mail-hub', i:'\uD83D\uDCE9', s:'Other'},
+        {t:'Practice Problems', u:'/student/practice', i:'\\U0001F6E0\uFE0F', s:'Study'},
+        {t:'Focus Mode', u:'/student/focus', i:'\\U0001F3AF', s:'Tools'},
+        {t:'Panic Mode', u:'/student/panic', i:'\\U0001F6A8', s:'Tools'},
+        {t:'Exams', u:'/student/exams', i:'\\U0001F4DD', s:'Tools'},
+        {t:'Schedule', u:'/student/schedule', i:'\\U0001F5D3\uFE0F', s:'Tools'},
+        {t:'Weak Topics', u:'/student/weak-topics', i:'\\U0001F3AF', s:'Tools'},
+        {t:'GPA Calculator', u:'/student/gpa', i:'\\U0001F4C8', s:'Tools'},
+        {t:'Leaderboard', u:'/student/leaderboard', i:'\\U0001F3C6', s:'Social'},
+        {t:'Study Exchange', u:'/student/exchange', i:'\\U0001F501', s:'Social'},
+        {t:'Mail Hub', u:'/mail-hub', i:'\\U0001F4E9', s:'Other'},
         {t:'Settings', u:'/student/settings', i:'\u2699\uFE0F', s:'Other'},
-        {t:'Log out', u:'/logout', i:'\uD83D\uDEAA', s:'Other'},
+        {t:'Log out', u:'/logout', i:'\\U0001F6AA', s:'Other'},
       ] : (window.__IS_LOGGED_IN__ ? [
-        {t:'Dashboard', u:'/dashboard', i:'\uD83C\uDFE0', s:'Main'},
+        {t:'Dashboard', u:'/dashboard', i:'\\U0001F3E0', s:'Main'},
         {t:'New Campaign', u:'/campaign/new', i:'\u2795', s:'Campaigns'},
-        {t:'Inbox', u:'/inbox', i:'\uD83D\uDCE5', s:'Campaigns'},
-        {t:'A/B Tests', u:'/ab-tests', i:'\uD83E\uDDEA', s:'Campaigns'},
+        {t:'Inbox', u:'/inbox', i:'\\U0001F4E5', s:'Campaigns'},
+        {t:'A/B Tests', u:'/ab-tests', i:'\\U0001F9EA', s:'Campaigns'},
         {t:'Smart Send Times', u:'/smart-times', i:'\u23F1\uFE0F', s:'Intelligence'},
         {t:'Subject Optimizer', u:'/subject-optimizer', i:'\u2728', s:'Intelligence'},
-        {t:'Reply Intelligence', u:'/reply-intel', i:'\uD83E\uDDE0', s:'Intelligence'},
-        {t:'Deliverability Checker', u:'/deliverability', i:'\uD83D\uDEE1\uFE0F', s:'Intelligence'},
-        {t:'Calendar', u:'/calendar', i:'\uD83D\uDCC5', s:'Tools'},
-        {t:'Export', u:'/export', i:'\uD83D\uDCCA', s:'Tools'},
-        {t:'Mail Hub', u:'/mail-hub', i:'\uD83D\uDCE9', s:'Mail'},
-        {t:'Contacts', u:'/contacts', i:'\uD83D\uDC65', s:'Mail'},
+        {t:'Reply Intelligence', u:'/reply-intel', i:'\\U0001F9E0', s:'Intelligence'},
+        {t:'Deliverability Checker', u:'/deliverability', i:'\\U0001F6E1\uFE0F', s:'Intelligence'},
+        {t:'Calendar', u:'/calendar', i:'\\U0001F4C5', s:'Tools'},
+        {t:'Export', u:'/export', i:'\\U0001F4CA', s:'Tools'},
+        {t:'Mail Hub', u:'/mail-hub', i:'\\U0001F4E9', s:'Mail'},
+        {t:'Contacts', u:'/contacts', i:'\\U0001F465', s:'Mail'},
         {t:'Pro Tools: Tasks', u:'/pro/tasks', i:'\u2705', s:'Pro'},
-        {t:'Pro Tools: Finance', u:'/pro/finance', i:'\uD83D\uDCB0', s:'Pro'},
-        {t:'Pro Tools: Relationships', u:'/pro/relationships', i:'\uD83E\uDDE0', s:'Pro'},
-        {t:'Pro Tools: Goals & OKRs', u:'/pro/goals', i:'\uD83C\uDFAF', s:'Pro'},
-        {t:'Pro Tools: Invoices', u:'/pro/invoices', i:'\uD83D\uDCC4', s:'Pro'},
+        {t:'Pro Tools: Finance', u:'/pro/finance', i:'\\U0001F4B0', s:'Pro'},
+        {t:'Pro Tools: Relationships', u:'/pro/relationships', i:'\\U0001F9E0', s:'Pro'},
+        {t:'Pro Tools: Goals & OKRs', u:'/pro/goals', i:'\\U0001F3AF', s:'Pro'},
+        {t:'Pro Tools: Invoices', u:'/pro/invoices', i:'\\U0001F4C4', s:'Pro'},
         {t:'Settings', u:'/settings', i:'\u2699\uFE0F', s:'Other'},
-        {t:'Log out', u:'/logout', i:'\uD83D\uDEAA', s:'Other'},
+        {t:'Log out', u:'/logout', i:'\\U0001F6AA', s:'Other'},
       ] : [
-        {t:'Home', u:'/', i:'\uD83C\uDFE0', s:'Public'},
-        {t:'Pricing', u:'/pricing', i:'\uD83D\uDCB3', s:'Public'},
-        {t:'Log in', u:'/login', i:'\uD83D\uDD11', s:'Public'},
+        {t:'Home', u:'/', i:'\\U0001F3E0', s:'Public'},
+        {t:'Pricing', u:'/pricing', i:'\\U0001F4B3', s:'Public'},
+        {t:'Log in', u:'/login', i:'\\U0001F511', s:'Public'},
         {t:'Sign up', u:'/register', i:'\u2728', s:'Public'},
       ]);
 
@@ -1930,7 +1976,7 @@ LAYOUT = """<!DOCTYPE html>
         o.innerHTML =
           '<div class="cmdk-panel" role="dialog" aria-label="Command palette">'
           + '<div class="cmdk-input-wrap">'
-          + '<span style="color:var(--text-muted);">\uD83D\uDD0D</span>'
+          + '<span style="color:var(--text-muted);">\\U0001F50D</span>'
           + '<input id="cmdk-input" type="text" placeholder="Jump to a page or feature…" autocomplete="off" />'
           + '<span class="cmdk-kbd">ESC</span>'
           + '</div>'
@@ -11124,7 +11170,15 @@ def reply_intel_page():
         """
 
     if not cards_html:
-        cards_html = '<div class="card" style="padding:24px;text-align:center;color:var(--gray);">No replies yet. Once prospects reply, they\'ll be classified here.</div>'
+        cards_html = """<div class="empty-state reveal">
+          <div class="empty-icon">&#128172;</div>
+          <h3>No replies to triage yet</h3>
+          <p>As prospects respond, MachReach will auto-classify each reply by <b>intent</b>, <b>sentiment</b>, and <b>buying signal</b> so you see the hot ones first.</p>
+          <div class="empty-actions">
+            <a href="/inbox" class="primary">Open Inbox</a>
+            <a href="/campaign/new" class="ghost">Start a campaign</a>
+          </div>
+        </div>"""
 
     html = f"""
     <div style="max-width:1000px;margin:0 auto;">
@@ -11207,6 +11261,97 @@ def deliverability_page():
     </div>
     """
     return _render("Deliverability", html, active_page="deliverability")
+
+
+# ─────────────────────────────────────────────────────────────
+# Error handlers — polished 404 / 500 / generic error pages
+# ─────────────────────────────────────────────────────────────
+def _render_error_page(code, heading, message, sub=""):
+    """Render a friendly, branded error page."""
+    body = f"""
+    <style>
+      .err-wrap {{ min-height: 70vh; display: flex; align-items: center; justify-content: center; padding: 60px 24px; position: relative; overflow: hidden; }}
+      .err-mesh {{ position: absolute; inset: -30% -20%; z-index: 0; pointer-events: none; }}
+      .err-blob {{ position: absolute; border-radius: 50%; filter: blur(90px); opacity: .28; animation: errDrift 14s ease-in-out infinite; }}
+      .err-blob.b1 {{ width: 420px; height: 420px; background: #A78BFA; top: 10%; left: 12%; }}
+      .err-blob.b2 {{ width: 380px; height: 380px; background: #F472B6; top: 30%; right: 14%; animation-delay: -5s; }}
+      .err-blob.b3 {{ width: 340px; height: 340px; background: #6366F1; bottom: 8%; left: 40%; animation-delay: -9s; }}
+      @keyframes errDrift {{ 0%,100% {{ transform: translate(0,0) scale(1); }} 50% {{ transform: translate(30px,-20px) scale(1.06); }} }}
+      .err-card {{ position: relative; z-index: 1; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 48px 44px; max-width: 560px; text-align: center; box-shadow: var(--shadow-lg); }}
+      .err-code {{ font-size: 88px; font-weight: 900; line-height: 1; letter-spacing: -4px; background: linear-gradient(135deg,#6366F1,#A78BFA,#F472B6); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 8px; animation: errFloat 4s ease-in-out infinite; }}
+      @keyframes errFloat {{ 0%,100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-8px); }} }}
+      .err-head {{ font-size: 26px; font-weight: 800; letter-spacing: -.5px; margin: 0 0 8px; }}
+      .err-msg {{ color: var(--text-secondary); font-size: 15px; line-height: 1.6; margin: 0 0 10px; }}
+      .err-sub {{ color: var(--text-muted); font-size: 12.5px; margin: 0 0 28px; font-family: ui-monospace,SFMono-Regular,Menlo,monospace; background: var(--border-light); display: inline-block; padding: 4px 10px; border-radius: 6px; }}
+      .err-actions {{ display: inline-flex; gap: 10px; flex-wrap: wrap; justify-content: center; }}
+      .err-actions a, .err-actions button {{ padding: 11px 22px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; border: none; cursor: pointer; transition: transform .2s var(--ease), box-shadow .2s var(--ease); }}
+      .err-actions a.primary {{ background: linear-gradient(135deg,#6366F1,#8B5CF6); color: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.14), inset 0 1px 0 rgba(255,255,255,.14); }}
+      .err-actions a.primary:hover {{ transform: translateY(-2px); box-shadow: 0 10px 24px rgba(99,102,241,.32); }}
+      .err-actions a.ghost, .err-actions button.ghost {{ background: transparent; color: var(--text); border: 1px solid var(--border); }}
+      .err-actions a.ghost:hover {{ background: var(--border-light); }}
+    </style>
+    <div class="err-wrap">
+      <div class="err-mesh" aria-hidden="true">
+        <div class="err-blob b1"></div>
+        <div class="err-blob b2"></div>
+        <div class="err-blob b3"></div>
+      </div>
+      <div class="err-card reveal in-view">
+        <div class="err-code">{code}</div>
+        <h1 class="err-head">{heading}</h1>
+        <p class="err-msg">{message}</p>
+        {f'<div class="err-sub">{sub}</div>' if sub else ''}
+        <div class="err-actions" style="margin-top: 18px;">
+          <a href="/" class="primary">&larr; Back to home</a>
+          <button class="ghost" onclick="history.back()">Go back</button>
+        </div>
+      </div>
+    </div>
+    """
+    return render_template_string(
+        LAYOUT,
+        title=f"{code} — {heading}",
+        logged_in=_logged_in(),
+        messages=[],
+        active_page="",
+        client_name=session.get("client_name", "") if _logged_in() else "",
+        nav=t_dict("nav"),
+        lang=session.get("lang", "en"),
+        wide=True,
+        content=Markup(body),
+    ), code
+
+
+@app.errorhandler(404)
+def _handle_404(e):
+    return _render_error_page(
+        404,
+        "This page wandered off.",
+        "The link you followed may be broken, or the page has moved. Try heading back home or using ⌘K for quick navigation.",
+        sub=request.path[:80],
+    )
+
+
+@app.errorhandler(500)
+def _handle_500(e):
+    try:
+        app.logger.error("500 error at %s: %s", request.path, e)
+    except Exception:
+        pass
+    return _render_error_page(
+        500,
+        "Something broke on our end.",
+        "This one's on us. We've logged the error — in most cases a quick retry will fix it. If not, send us a note at support@machreach.com and we'll dig in.",
+    )
+
+
+@app.errorhandler(403)
+def _handle_403(e):
+    return _render_error_page(
+        403,
+        "That area is off-limits.",
+        "You don't have permission to access this page. If you think this is a mistake, contact your account admin or support.",
+    )
 
 
 if __name__ == "__main__":
