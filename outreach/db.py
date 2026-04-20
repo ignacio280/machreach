@@ -610,6 +610,7 @@ def _run_migrations():
         ("clients", "physical_address", "TEXT DEFAULT ''"),
         ("clients", "email_verified", "INTEGER DEFAULT 0"),
         ("clients", "account_type", "TEXT DEFAULT 'business'"),
+        ("team_members", "campaign_id", "INTEGER REFERENCES campaigns(id)"),
     ]
     # Each migration runs in its own connection so a failed ALTER TABLE
     # (column already exists) doesn't poison the PG transaction for the rest.
