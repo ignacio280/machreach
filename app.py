@@ -1921,50 +1921,50 @@ LAYOUT = """<!DOCTYPE html>
 
       // 4) Command palette (Cmd+K / Ctrl+K)
       var CMDK_ITEMS = (window.__IS_LOGGED_IN__ && window.__ACCOUNT_TYPE__ === 'student') ? [
-        {t:'Student Dashboard', u:'/student', i:'\\U0001F393', s:'Main'},
-        {t:'Courses', u:'/student/courses', i:'\\U0001F4DA', s:'Main'},
-        {t:'Study Plan', u:'/student/plan', i:'\\U0001F4C5', s:'Main'},
-        {t:'Flashcards', u:'/student/flashcards', i:'\\U0001F4C7', s:'Study'},
-        {t:'Quizzes', u:'/student/quizzes', i:'\\U0001F4DD', s:'Study'},
-        {t:'Notes', u:'/student/notes', i:'\\U0001F4D6', s:'Study'},
-        {t:'AI Tutor', u:'/student/chat', i:'\\U0001F916', s:'Study'},
+        {t:'Student Dashboard', u:'/student', i:'🎓', s:'Main'},
+        {t:'Courses', u:'/student/courses', i:'📚', s:'Main'},
+        {t:'Study Plan', u:'/student/plan', i:'📅', s:'Main'},
+        {t:'Flashcards', u:'/student/flashcards', i:'📇', s:'Study'},
+        {t:'Quizzes', u:'/student/quizzes', i:'📝', s:'Study'},
+        {t:'Notes', u:'/student/notes', i:'📖', s:'Study'},
+        {t:'AI Tutor', u:'/student/chat', i:'🤖', s:'Study'},
         {t:'Essay Assistant', u:'/student/essay', i:'\u270F\uFE0F', s:'Study'},
-        {t:'Practice Problems', u:'/student/practice', i:'\\U0001F6E0\uFE0F', s:'Study'},
-        {t:'Focus Mode', u:'/student/focus', i:'\\U0001F3AF', s:'Tools'},
-        {t:'Panic Mode', u:'/student/panic', i:'\\U0001F6A8', s:'Tools'},
-        {t:'Exams', u:'/student/exams', i:'\\U0001F4DD', s:'Tools'},
-        {t:'Schedule', u:'/student/schedule', i:'\\U0001F5D3\uFE0F', s:'Tools'},
-        {t:'Weak Topics', u:'/student/weak-topics', i:'\\U0001F3AF', s:'Tools'},
-        {t:'GPA Calculator', u:'/student/gpa', i:'\\U0001F4C8', s:'Tools'},
-        {t:'Leaderboard', u:'/student/leaderboard', i:'\\U0001F3C6', s:'Social'},
-        {t:'Study Exchange', u:'/student/exchange', i:'\\U0001F501', s:'Social'},
-        {t:'Mail Hub', u:'/mail-hub', i:'\\U0001F4E9', s:'Other'},
+        {t:'Practice Problems', u:'/student/practice', i:'🛠\uFE0F', s:'Study'},
+        {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
+        {t:'Panic Mode', u:'/student/panic', i:'🚨', s:'Tools'},
+        {t:'Exams', u:'/student/exams', i:'📝', s:'Tools'},
+        {t:'Schedule', u:'/student/schedule', i:'🗓\uFE0F', s:'Tools'},
+        {t:'Weak Topics', u:'/student/weak-topics', i:'🎯', s:'Tools'},
+        {t:'GPA Calculator', u:'/student/gpa', i:'📈', s:'Tools'},
+        {t:'Leaderboard', u:'/student/leaderboard', i:'🏆', s:'Social'},
+        {t:'Study Exchange', u:'/student/exchange', i:'🔁', s:'Social'},
+        {t:'Mail Hub', u:'/mail-hub', i:'📩', s:'Other'},
         {t:'Settings', u:'/student/settings', i:'\u2699\uFE0F', s:'Other'},
-        {t:'Log out', u:'/logout', i:'\\U0001F6AA', s:'Other'},
+        {t:'Log out', u:'/logout', i:'🚪', s:'Other'},
       ] : (window.__IS_LOGGED_IN__ ? [
-        {t:'Dashboard', u:'/dashboard', i:'\\U0001F3E0', s:'Main'},
+        {t:'Dashboard', u:'/dashboard', i:'🏠', s:'Main'},
         {t:'New Campaign', u:'/campaign/new', i:'\u2795', s:'Campaigns'},
-        {t:'Inbox', u:'/inbox', i:'\\U0001F4E5', s:'Campaigns'},
-        {t:'A/B Tests', u:'/ab-tests', i:'\\U0001F9EA', s:'Campaigns'},
+        {t:'Inbox', u:'/inbox', i:'📥', s:'Campaigns'},
+        {t:'A/B Tests', u:'/ab-tests', i:'🧪', s:'Campaigns'},
         {t:'Smart Send Times', u:'/smart-times', i:'\u23F1\uFE0F', s:'Intelligence'},
         {t:'Subject Optimizer', u:'/subject-optimizer', i:'\u2728', s:'Intelligence'},
-        {t:'Reply Intelligence', u:'/reply-intel', i:'\\U0001F9E0', s:'Intelligence'},
-        {t:'Deliverability Checker', u:'/deliverability', i:'\\U0001F6E1\uFE0F', s:'Intelligence'},
-        {t:'Calendar', u:'/calendar', i:'\\U0001F4C5', s:'Tools'},
-        {t:'Export', u:'/export', i:'\\U0001F4CA', s:'Tools'},
-        {t:'Mail Hub', u:'/mail-hub', i:'\\U0001F4E9', s:'Mail'},
-        {t:'Contacts', u:'/contacts', i:'\\U0001F465', s:'Mail'},
+        {t:'Reply Intelligence', u:'/reply-intel', i:'🧠', s:'Intelligence'},
+        {t:'Deliverability Checker', u:'/deliverability', i:'🛡\uFE0F', s:'Intelligence'},
+        {t:'Calendar', u:'/calendar', i:'📅', s:'Tools'},
+        {t:'Export', u:'/export', i:'📊', s:'Tools'},
+        {t:'Mail Hub', u:'/mail-hub', i:'📩', s:'Mail'},
+        {t:'Contacts', u:'/contacts', i:'👥', s:'Mail'},
         {t:'Pro Tools: Tasks', u:'/pro/tasks', i:'\u2705', s:'Pro'},
-        {t:'Pro Tools: Finance', u:'/pro/finance', i:'\\U0001F4B0', s:'Pro'},
-        {t:'Pro Tools: Relationships', u:'/pro/relationships', i:'\\U0001F9E0', s:'Pro'},
-        {t:'Pro Tools: Goals & OKRs', u:'/pro/goals', i:'\\U0001F3AF', s:'Pro'},
-        {t:'Pro Tools: Invoices', u:'/pro/invoices', i:'\\U0001F4C4', s:'Pro'},
+        {t:'Pro Tools: Finance', u:'/pro/finance', i:'💰', s:'Pro'},
+        {t:'Pro Tools: Relationships', u:'/pro/relationships', i:'🧠', s:'Pro'},
+        {t:'Pro Tools: Goals & OKRs', u:'/pro/goals', i:'🎯', s:'Pro'},
+        {t:'Pro Tools: Invoices', u:'/pro/invoices', i:'📄', s:'Pro'},
         {t:'Settings', u:'/settings', i:'\u2699\uFE0F', s:'Other'},
-        {t:'Log out', u:'/logout', i:'\\U0001F6AA', s:'Other'},
+        {t:'Log out', u:'/logout', i:'🚪', s:'Other'},
       ] : [
-        {t:'Home', u:'/', i:'\\U0001F3E0', s:'Public'},
-        {t:'Pricing', u:'/pricing', i:'\\U0001F4B3', s:'Public'},
-        {t:'Log in', u:'/login', i:'\\U0001F511', s:'Public'},
+        {t:'Home', u:'/', i:'🏠', s:'Public'},
+        {t:'Pricing', u:'/pricing', i:'💳', s:'Public'},
+        {t:'Log in', u:'/login', i:'🔑', s:'Public'},
         {t:'Sign up', u:'/register', i:'\u2728', s:'Public'},
       ]);
 
@@ -1976,7 +1976,7 @@ LAYOUT = """<!DOCTYPE html>
         o.innerHTML =
           '<div class="cmdk-panel" role="dialog" aria-label="Command palette">'
           + '<div class="cmdk-input-wrap">'
-          + '<span style="color:var(--text-muted);">\\U0001F50D</span>'
+          + '<span style="color:var(--text-muted);">🔍</span>'
           + '<input id="cmdk-input" type="text" placeholder="Jump to a page or feature…" autocomplete="off" />'
           + '<span class="cmdk-kbd">ESC</span>'
           + '</div>'
@@ -5073,7 +5073,7 @@ def settings():
       <div id="accounts-list">
         {accounts_html}
       </div>
-      {'<div style="margin-top:16px;"><button class="btn btn-primary" onclick="showAddAccount()" id="add-account-btn">&#43; Add Email Account</button></div>' if can_add else '<p style="margin-top:12px;font-size:13px;color:var(--text-muted);">Mailbox limit reached. <a href="/billing">Upgrade your plan</a> for more.</p>'}
+      {'<div style="margin-top:16px;"><button type="button" class="btn btn-primary" onclick="showAddAccount()" id="add-account-btn">&#43; Add Email Account</button></div>' if can_add else '<p style="margin-top:12px;font-size:13px;color:var(--text-muted);">Mailbox limit reached. <a href="/billing">Upgrade your plan</a> for more.</p>'}
 
       <div id="add-account-form" style="display:none;margin-top:16px;padding:20px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border-light);">
         <h3 style="font-size:16px;margin-bottom:14px;">Add Email Account</h3>
