@@ -1909,19 +1909,19 @@ def register_student_routes(app, csrf, limiter):
 
             today_sessions_html = """
 
-            <div class="empty">
+            <div class="empty-state compact reveal">
 
               <div class="empty-icon">&#128218;</div>
 
-              <h3>No study sessions yet</h3>
+              <h3>Nothing scheduled for today yet</h3>
 
-              <p>Sync your courses and generate a plan to get a personalized study schedule for today.</p>
+              <p>Sync your Canvas courses and let MachReach build a personalized day-by-day study plan around your assignments and exams.</p>
 
-              <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+              <div class="empty-actions">
 
-                <a href="/student/canvas-settings" class="btn btn-outline btn-sm">&#128279; Connect Canvas</a>
+                <a href="/student/canvas-settings" class="ghost">&#128279; Connect Canvas</a>
 
-                <button onclick="generatePlan()" class="btn btn-primary btn-sm">&#129302; Generate Plan</button>
+                <button class="primary" onclick="generatePlan()">&#129302; Generate Plan</button>
 
               </div>
 
@@ -2009,7 +2009,7 @@ def register_student_routes(app, csrf, limiter):
 
         if not exams_html:
 
-            exams_html = """<div class="empty"><div class="empty-icon">&#128221;</div><h3>No upcoming exams</h3><p>Sync your courses to automatically detect exam dates from Canvas.</p></div>"""
+            exams_html = """<div class="empty-state compact reveal"><div class="empty-icon">&#128221;</div><h3>No upcoming exams</h3><p>Sync your Canvas courses and MachReach will auto-detect exam dates and add them to your study plan.</p><div class="empty-actions"><a href="/student/canvas-settings" class="primary">&#128279; Connect Canvas</a></div></div>"""
 
 
 
@@ -2049,7 +2049,7 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Dashboard", f"""
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <div class="reveal" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
 
           <div>
 
@@ -2073,7 +2073,7 @@ def register_student_routes(app, csrf, limiter):
 
         <!-- Feature Explorer — always discoverable, collapsible -->
 
-        <div id="feature-explorer" class="card" style="margin-bottom:20px;padding:0;position:relative;overflow:hidden;border:1px solid var(--border);">
+        <div id="feature-explorer" class="card reveal r-delay-1" style="margin-bottom:20px;padding:0;position:relative;overflow:hidden;border:1px solid var(--border);">
 
           <div aria-hidden="true" style="position:absolute;inset:0;background:radial-gradient(900px 180px at -10% -30%,rgba(139,92,246,.12),transparent 60%),radial-gradient(700px 160px at 120% 120%,rgba(99,102,241,.10),transparent 60%);pointer-events:none;"></div>
 
@@ -15141,6 +15141,8 @@ No markdown, no code fences. ONLY JSON.
 
             default_badge = '<span style="background:var(--blue);color:#fff;padding:2px 8px;border-radius:8px;font-size:10px;margin-left:6px;">Default</span>' if a["is_default"] else ""
 
+            set_default_btn = '' if a["is_default"] else f'<button class="btn btn-ghost btn-sm" onclick="setDefault({a["id"]})" style="font-size:12px;">Set Default</button>'
+
             accounts_html += f"""
 
             <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--border);">
@@ -15160,6 +15162,14 @@ No markdown, no code fences. ONLY JSON.
                   <div style="font-size:13px;color:var(--text-muted)">{_esc(a['email'])}</div>
 
                 </div>
+
+              </div>
+
+              <div style="display:flex;gap:8px;">
+
+                {set_default_btn}
+
+                <button class="btn btn-ghost btn-sm" onclick="deleteAccount({a['id']})" style="font-size:12px;color:var(--red);">&#128465;</button>
 
               </div>
 
@@ -15537,7 +15547,41 @@ No markdown, no code fences. ONLY JSON.
 
             <div>{accounts_html}</div>
 
-            {f"<div style='margin-top:12px'><a href='/mail-hub' class='btn btn-outline btn-sm'>{_T('Manage in Mail Hub')}</a></div>" if accounts else f"<div style='margin-top:12px'><a href='/settings' class='btn btn-primary btn-sm'>{_T('+ Add Email Account')}</a></div>"}
+            {f"<div style='margin-top:12px'><a href='/mail-hub' class='btn btn-outline btn-sm'>{_T('Manage in Mail Hub')}</a></div>" if accounts else ""}
+
+            {'<div style="margin-top:12px;"><button type="button" class="btn btn-primary btn-sm" onclick="showAddAccount()" id="add-account-btn">&#43; ' + _T("+ Add Email Account") + '</button></div>' if can_add else '<p style="margin-top:12px;font-size:13px;color:var(--text-muted);">Mailbox limit reached. <a href="/billing">Upgrade your plan</a> for more.</p>'}
+
+            <div id="add-account-form" style="display:none;margin-top:16px;padding:20px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border);">
+              <h3 style="font-size:16px;margin-bottom:14px;">{_T("+ Add Email Account")}</h3>
+              <div class="form-row">
+                <div class="form-group"><label>Label</label><input id="acct-label" placeholder="School Gmail, Personal, etc." autocomplete="off"></div>
+                <div class="form-group"><label>{_T("Email")}</label><input id="acct-email" type="email" placeholder="you@example.com" required autocomplete="off" oninput="detectProvider(this.value)"></div>
+              </div>
+              <div id="provider-badge" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:var(--radius-xs);font-size:13px;background:#EFF6FF;color:#1E40AF;align-items:center;gap:8px;"></div>
+              <div class="form-group">
+                <label>App Password</label>
+                <input id="acct-password" type="password" placeholder="Paste your App Password here" required autocomplete="new-password">
+                <p class="form-hint" id="password-hint">For Gmail, generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>. For Outlook, use your account password.</p>
+              </div>
+              <details style="margin-bottom:14px;">
+                <summary style="font-size:13px;color:var(--text-muted);cursor:pointer;">Advanced Settings (IMAP/SMTP)</summary>
+                <div style="margin-top:10px;">
+                  <div class="form-row">
+                    <div class="form-group"><label>IMAP Host</label><input id="acct-imap-host" value="imap.gmail.com"></div>
+                    <div class="form-group"><label>IMAP Port</label><input id="acct-imap-port" value="993" type="number"></div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group"><label>SMTP Host</label><input id="acct-smtp-host" value="smtp.gmail.com"></div>
+                    <div class="form-group"><label>SMTP Port</label><input id="acct-smtp-port" value="465" type="number"></div>
+                  </div>
+                </div>
+              </details>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-primary btn-sm" onclick="addAccount()" id="save-account-btn">&#128274; Test &amp; Add Account</button>
+                <button class="btn btn-ghost btn-sm" onclick="hideAddAccount()">Cancel</button>
+              </div>
+              <div id="add-account-status" style="margin-top:10px;font-size:13px;"></div>
+            </div>
 
           </div>
 
@@ -16130,6 +16174,200 @@ No markdown, no code fences. ONLY JSON.
             status.innerHTML = '<span style="color:var(--red);">{_T("Connection error")}</span>';
 
           }});
+
+        }}
+
+
+
+        // ── Email account management ──
+
+        var EMAIL_PROVIDERS = {{
+
+          'gmail.com': {{imap:'imap.gmail.com', smtp:'smtp.gmail.com', imap_port:993, smtp_port:465, name:'Gmail', color:'#EA4335',
+
+            hint:'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a> in your Google account.'}},
+
+          'googlemail.com': {{imap:'imap.gmail.com', smtp:'smtp.gmail.com', imap_port:993, smtp_port:465, name:'Gmail', color:'#EA4335',
+
+            hint:'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>.'}},
+
+          'yahoo.com': {{imap:'imap.mail.yahoo.com', smtp:'smtp.mail.yahoo.com', imap_port:993, smtp_port:465, name:'Yahoo', color:'#6001D2',
+
+            hint:'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a>.'}},
+
+          'outlook.com': {{imap:'imap-mail.outlook.com', smtp:'smtp-mail.outlook.com', imap_port:993, smtp_port:587, name:'Outlook', color:'#0078D4',
+
+            hint:'Use your regular password or an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
+
+          'hotmail.com': {{imap:'imap-mail.outlook.com', smtp:'smtp-mail.outlook.com', imap_port:993, smtp_port:587, name:'Outlook', color:'#0078D4',
+
+            hint:'Use your regular password or an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
+
+          'live.com': {{imap:'imap-mail.outlook.com', smtp:'smtp-mail.outlook.com', imap_port:993, smtp_port:587, name:'Outlook', color:'#0078D4',
+
+            hint:'Use your regular password or an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}}
+
+        }};
+
+        var _mxTimeout = null;
+
+        function _applyProvider(p, badge, hint) {{
+
+          document.getElementById('acct-imap-host').value = p.imap;
+
+          document.getElementById('acct-imap-port').value = p.imap_port;
+
+          document.getElementById('acct-smtp-host').value = p.smtp;
+
+          document.getElementById('acct-smtp-port').value = p.smtp_port;
+
+          badge.innerHTML = '<span style="font-weight:600;">' + p.name + ' detected</span> — IMAP/SMTP settings filled automatically.';
+
+          badge.style.display = 'flex'; badge.style.borderLeft = '3px solid ' + p.color;
+
+          hint.innerHTML = p.hint;
+
+        }}
+
+        function detectProvider(email) {{
+
+          var badge = document.getElementById('provider-badge');
+
+          var hint = document.getElementById('password-hint');
+
+          var at = email.indexOf('@');
+
+          if (at < 0) {{ badge.style.display = 'none'; return; }}
+
+          var domain = email.substring(at + 1).toLowerCase().trim();
+
+          if (!domain || domain.indexOf('.') < 0) {{ badge.style.display = 'none'; return; }}
+
+          var p = EMAIL_PROVIDERS[domain];
+
+          if (p) {{ _applyProvider(p, badge, hint); return; }}
+
+          clearTimeout(_mxTimeout);
+
+          badge.innerHTML = '<span style="color:var(--text-muted);">&#8987; Detecting provider for <b>' + domain + '</b>...</span>';
+
+          badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--border)';
+
+          _mxTimeout = setTimeout(function() {{
+
+            fetch('/api/detect-provider?domain=' + encodeURIComponent(domain))
+
+              .then(function(r) {{ return r.json(); }})
+
+              .then(function(data) {{
+
+                if (data.provider) {{ _applyProvider(data, badge, hint); }}
+
+                else {{
+
+                  badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> and enter IMAP/SMTP details.';
+
+                  badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--yellow)';
+
+                  hint.innerHTML = 'Enter the password for this email account.';
+
+                }}
+
+              }}).catch(function() {{
+
+                badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> and enter IMAP/SMTP details.';
+
+                badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--yellow)';
+
+              }});
+
+          }}, 600);
+
+        }}
+
+        function showAddAccount() {{
+
+          document.getElementById('add-account-form').style.display = 'block';
+
+          document.getElementById('add-account-btn').style.display = 'none';
+
+        }}
+
+        function hideAddAccount() {{
+
+          document.getElementById('add-account-form').style.display = 'none';
+
+          document.getElementById('add-account-btn').style.display = '';
+
+        }}
+
+        function addAccount() {{
+
+          var btn = document.getElementById('save-account-btn');
+
+          var status = document.getElementById('add-account-status');
+
+          btn.disabled = true; btn.innerHTML = '&#8987; Testing connection...';
+
+          status.innerHTML = '';
+
+          fetch('/api/email-accounts', {{
+
+            method: 'POST',
+
+            headers: {{'Content-Type': 'application/json'}},
+
+            body: JSON.stringify({{
+
+              label: document.getElementById('acct-label').value,
+
+              email: document.getElementById('acct-email').value,
+
+              password: document.getElementById('acct-password').value,
+
+              imap_host: document.getElementById('acct-imap-host').value,
+
+              imap_port: parseInt(document.getElementById('acct-imap-port').value),
+
+              smtp_host: document.getElementById('acct-smtp-host').value,
+
+              smtp_port: parseInt(document.getElementById('acct-smtp-port').value)
+
+            }})
+
+          }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
+
+            if (data.id) {{ window.location.reload(); }}
+
+            else {{
+
+              status.innerHTML = '<span style="color:var(--red);">&#9888; ' + (data.error || 'Failed to add account') + '</span>';
+
+              btn.disabled = false; btn.innerHTML = '&#128274; Test &amp; Add Account';
+
+            }}
+
+          }}).catch(function() {{
+
+            status.innerHTML = '<span style="color:var(--red);">&#9888; Connection error</span>';
+
+            btn.disabled = false; btn.innerHTML = '&#128274; Test &amp; Add Account';
+
+          }});
+
+        }}
+
+        function setDefault(id) {{
+
+          fetch('/api/email-accounts/' + id + '/default', {{method: 'POST'}}).then(function() {{ window.location.reload(); }});
+
+        }}
+
+        function deleteAccount(id) {{
+
+          if (!confirm('Remove this email account?')) return;
+
+          fetch('/api/email-accounts/' + id, {{method: 'DELETE'}}).then(function() {{ window.location.reload(); }});
 
         }}
 
