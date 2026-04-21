@@ -2071,6 +2071,60 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+        <!-- Academic Ranks strip — live hierarchical leaderboard preview -->
+        <div id="mr-ranks-strip" class="card reveal r-delay-1" style="margin-bottom:20px;padding:20px;position:relative;overflow:hidden;border:1px solid var(--border);background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.04));">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:22px;">&#127942;</span>
+              <div>
+                <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Your ranks</div>
+                <div style="font-size:12px;color:var(--text-muted);" id="mr-ranks-league">Loading…</div>
+              </div>
+            </div>
+            <a href="/student/leaderboards" class="btn btn-outline btn-sm">View full leaderboards &rarr;</a>
+          </div>
+          <div id="mr-ranks-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+            <div class="mr-rank-cell"><div class="mr-rank-label">Global</div><div class="mr-rank-val" id="mr-rank-global">—</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">Country</div><div class="mr-rank-val" id="mr-rank-country">—</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">University</div><div class="mr-rank-val" id="mr-rank-university">—</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">Major</div><div class="mr-rank-val" id="mr-rank-major">—</div></div>
+          </div>
+          <div id="mr-league-progress" style="margin-top:14px;height:6px;background:rgba(148,163,184,.15);border-radius:999px;overflow:hidden;">
+            <div id="mr-league-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7C9CFF,#C084FC);transition:width .6s cubic-bezier(.22,.61,.36,1);"></div>
+          </div>
+        </div>
+        <style>
+          .mr-rank-cell {{ background:rgba(255,255,255,.4); border:1px solid var(--border); border-radius:10px; padding:10px 12px; }}
+          :root[data-theme="dark"] .mr-rank-cell {{ background:rgba(15,23,42,.5); }}
+          .mr-rank-label {{ font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; }}
+          .mr-rank-val {{ font-size:20px; font-weight:700; letter-spacing:-.02em; margin-top:2px; }}
+          .mr-rank-val .of {{ color:var(--text-muted); font-size:13px; font-weight:500; }}
+          @media (max-width: 640px) {{ #mr-ranks-grid {{ grid-template-columns:repeat(2,1fr); }} }}
+        </style>
+        <script>
+          (async function(){{
+            try {{
+              const r = await fetch('/api/academic/ranks');
+              if (!r.ok) return;
+              const j = await r.json();
+              const fmt = (obj) => obj ? ('#' + obj.rank + ' <span class="of">/ ' + obj.total + '</span>') : '—';
+              document.getElementById('mr-rank-global').innerHTML = fmt(j.ranks.global);
+              document.getElementById('mr-rank-country').innerHTML = fmt(j.ranks.country);
+              document.getElementById('mr-rank-university').innerHTML = fmt(j.ranks.university);
+              document.getElementById('mr-rank-major').innerHTML = fmt(j.ranks.major);
+              if (j.league) {{
+                var nextTxt = j.league.next_name
+                  ? (' &rarr; ' + j.league.next_name + ' in ' + (j.league.next_min_xp - ((j.ranks.global && j.ranks.global.xp) || 0)).toLocaleString() + ' XP')
+                  : ' &middot; Max league achieved!';
+                document.getElementById('mr-ranks-league').innerHTML =
+                  ('<span style="color:' + j.league.color + ';font-weight:600;">' + j.league.name + '</span>') + nextTxt;
+                document.getElementById('mr-league-bar').style.width = (j.league.progress_pct||0) + '%';
+                document.getElementById('mr-league-bar').style.background = 'linear-gradient(90deg,' + j.league.color + ',' + (j.league.glow||j.league.color) + ')';
+              }}
+            }} catch(e) {{ /* silent */ }}
+          }})();
+        </script>
+
         <!-- Feature Explorer — always discoverable, collapsible -->
 
         <div id="feature-explorer" class="card reveal r-delay-1" style="margin-bottom:20px;padding:0;position:relative;overflow:hidden;border:1px solid var(--border);">

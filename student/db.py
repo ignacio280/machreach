@@ -486,6 +486,13 @@ def init_student_db():
             db.executescript(STUDENT_SQLITE_SCHEMA)
     # Migrations
     _student_migrations()
+    # Academic identity layer (countries, universities, majors, leagues).
+    # Imported lazily so a bad seed file can't take down the whole app.
+    try:
+        from student.academic import init_academic_db
+        init_academic_db()
+    except Exception as e:
+        log.exception("init_academic_db failed: %s", e)
     log.info("Student tables initialized.")
 
 
