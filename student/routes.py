@@ -16189,6 +16189,270 @@ No markdown, no code fences. ONLY JSON.
 
 
 
+        <!-- Academic Profile (country / university / major) -->
+        <div class="card" style="margin-top:16px;" id="acad-profile-card">
+          <div class="card-header"><h2>&#127891; {_T("Academic Profile")}</h2></div>
+          <div style="padding:20px;">
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 16px;">{_T("Used to rank you on the country, university, and major leaderboards. You can change these at any time.")}</p>
+
+            <div id="acad-current" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:16px;font-size:13px;color:var(--text-muted);">
+              <div><strong style="color:var(--text);">{_T("Country")}:</strong> <span id="acad-cur-country">&mdash;</span></div>
+              <div><strong style="color:var(--text);">{_T("University")}:</strong> <span id="acad-cur-uni">&mdash;</span></div>
+              <div><strong style="color:var(--text);">{_T("Major")}:</strong> <span id="acad-cur-major">&mdash;</span></div>
+            </div>
+
+            <div style="display:grid;gap:12px;">
+              <div>
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("Country")}</label>
+                <select id="acad-country" class="input" style="width:100%;"><option value="">{_T("Loading...")}</option></select>
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("University")}</label>
+                <input id="acad-uni-search" class="input" type="text" placeholder="{_T('Type to search your university...')}" autocomplete="off" style="width:100%;" disabled>
+                <div id="acad-uni-results" style="display:none;max-height:180px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:6px;"></div>
+                <div id="acad-uni-selected" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid var(--primary);border-radius:var(--radius-sm);font-size:13px;align-items:center;justify-content:space-between;gap:10px;">
+                  <span id="acad-uni-selected-name"></span>
+                  <button type="button" onclick="acadClearUni()" class="btn btn-ghost btn-sm" style="padding:4px 10px;">&times;</button>
+                </div>
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("Major")}</label>
+                <input id="acad-major-search" class="input" type="text" placeholder="{_T('Type to search your major...')}" autocomplete="off" style="width:100%;" disabled>
+                <div id="acad-major-results" style="display:none;max-height:180px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:6px;"></div>
+                <div id="acad-major-selected" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid var(--primary);border-radius:var(--radius-sm);font-size:13px;align-items:center;justify-content:space-between;gap:10px;">
+                  <span id="acad-major-selected-name"></span>
+                  <button type="button" onclick="acadClearMajor()" class="btn btn-ghost btn-sm" style="padding:4px 10px;">&times;</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
+              <button onclick="acadSave()" id="acad-save-btn" class="btn btn-primary btn-sm" disabled>&#128190; {_T("Save Academic Profile")}</button>
+              <span id="acad-status" style="font-size:13px;color:var(--text-muted);"></span>
+            </div>
+          </div>
+        </div>
+
+        <script>
+        (function(){{
+          var acState = {{ country: "", universityId: null, universityName: "", majorId: null, majorName: "" }};
+          var $ = function(id){{ return document.getElementById(id); }};
+          var debounceTimer = null;
+
+          function setStatus(msg, isErr){{
+            var el = $('acad-status');
+            el.textContent = msg || '';
+            el.style.color = isErr ? 'var(--danger,#ef4444)' : 'var(--text-muted)';
+          }}
+          function refreshSaveBtn(){{
+            $('acad-save-btn').disabled = !(acState.country && acState.universityId && acState.majorId);
+          }}
+
+          Promise.all([
+            fetch('/api/academic/countries').then(function(r){{ return r.json(); }}).catch(function(){{ return {{countries:[]}}; }}),
+            fetch('/api/academic/profile').then(function(r){{ return r.json(); }}).catch(function(){{ return {{}}; }})
+          ]).then(function(results){{
+            var countries = (results[0] && results[0].countries) || [];
+            var prof = results[1] || {{}};
+
+            var sel = $('acad-country');
+            sel.innerHTML = '<option value="">- {_T("Select a country")} -</option>' +
+              countries.map(function(c){{
+                return '<option value="' + c.iso + '">' + (c.flag || '') + ' ' + c.name + '</option>';
+              }}).join('');
+            sel.disabled = false;
+
+            if (prof.country_iso) {{
+              sel.value = prof.country_iso;
+              acState.country = prof.country_iso;
+              $('acad-uni-search').disabled = false;
+              $('acad-major-search').disabled = false;
+            }}
+            if (prof.university && prof.university.id) {{
+              acState.universityId = prof.university.id;
+              acState.universityName = prof.university.name;
+              $('acad-uni-selected-name').textContent = prof.university.name;
+              $('acad-uni-selected').style.display = 'flex';
+              $('acad-uni-search').style.display = 'none';
+            }}
+            if (prof.major && prof.major.id) {{
+              acState.majorId = prof.major.id;
+              acState.majorName = prof.major.name;
+              $('acad-major-selected-name').textContent = prof.major.name;
+              $('acad-major-selected').style.display = 'flex';
+              $('acad-major-search').style.display = 'none';
+            }}
+            if (prof.country_iso || prof.university || prof.major) {{
+              var countryName = '';
+              for (var i=0; i<countries.length; i++) {{ if (countries[i].iso === prof.country_iso) {{ countryName = (countries[i].flag || '') + ' ' + countries[i].name; break; }} }}
+              $('acad-cur-country').textContent = countryName || (prof.country_iso || '-');
+              $('acad-cur-uni').textContent = (prof.university && prof.university.name) || '-';
+              $('acad-cur-major').textContent = (prof.major && prof.major.name) || '-';
+              $('acad-current').style.display = 'block';
+            }}
+            refreshSaveBtn();
+          }});
+
+          $('acad-country').addEventListener('change', function(e){{
+            acState.country = e.target.value;
+            $('acad-uni-search').disabled = !acState.country;
+            $('acad-major-search').disabled = !acState.country;
+            if (acState.universityName) {{ acadClearUni(); }}
+            refreshSaveBtn();
+          }});
+
+          $('acad-uni-search').addEventListener('input', function(e){{
+            var q = e.target.value.trim();
+            clearTimeout(debounceTimer);
+            if (q.length < 2 || !acState.country) {{ $('acad-uni-results').style.display = 'none'; return; }}
+            debounceTimer = setTimeout(function(){{
+              fetch('/api/academic/universities?country=' + encodeURIComponent(acState.country) + '&q=' + encodeURIComponent(q))
+                .then(function(r){{ return r.json(); }})
+                .then(function(j){{
+                  var unis = (j && j.universities) || [];
+                  var box = $('acad-uni-results');
+                  if (!unis.length) {{
+                    box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No universities found.")} <a href="#" id="acad-uni-create" style="color:var(--primary);">{_T("Add")} \\u201C' + escapeHtml(q) + '\\u201D</a></div>';
+                    box.style.display = 'block';
+                    var addLink = document.getElementById('acad-uni-create');
+                    if (addLink) addLink.addEventListener('click', function(ev){{
+                      ev.preventDefault();
+                      fetch('/api/academic/universities', {{
+                        method:'POST', headers:{{'Content-Type':'application/json'}},
+                        body: JSON.stringify({{ name: q, country_iso: acState.country }})
+                      }}).then(function(r){{ return r.json(); }}).then(function(j2){{
+                        if (j2 && j2.university) acadPickUni(j2.university);
+                      }});
+                    }});
+                    return;
+                  }}
+                  box.innerHTML = unis.map(function(u){{
+                    return '<div class="acad-pick" data-id="' + u.id + '" data-name="' + escapeAttr(u.name) + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">' + escapeHtml(u.name) + '</div>';
+                  }}).join('');
+                  box.style.display = 'block';
+                  Array.prototype.forEach.call(box.querySelectorAll('.acad-pick'), function(el){{
+                    el.addEventListener('click', function(){{
+                      acadPickUni({{ id: parseInt(el.dataset.id, 10), name: el.dataset.name }});
+                    }});
+                    el.addEventListener('mouseenter', function(){{ el.style.background = 'rgba(99,102,241,.08)'; }});
+                    el.addEventListener('mouseleave', function(){{ el.style.background = ''; }});
+                  }});
+                }});
+            }}, 250);
+          }});
+
+          $('acad-major-search').addEventListener('input', function(e){{
+            var q = e.target.value.trim();
+            clearTimeout(debounceTimer);
+            if (q.length < 2) {{ $('acad-major-results').style.display = 'none'; return; }}
+            debounceTimer = setTimeout(function(){{
+              var url = '/api/academic/majors?q=' + encodeURIComponent(q);
+              if (acState.universityId) url += '&university_id=' + acState.universityId;
+              fetch(url).then(function(r){{ return r.json(); }}).then(function(j){{
+                var majors = (j && j.majors) || [];
+                var box = $('acad-major-results');
+                if (!majors.length) {{
+                  box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No majors found.")} <a href="#" id="acad-major-create" style="color:var(--primary);">{_T("Add")} \\u201C' + escapeHtml(q) + '\\u201D</a></div>';
+                  box.style.display = 'block';
+                  var addLink = document.getElementById('acad-major-create');
+                  if (addLink) addLink.addEventListener('click', function(ev){{
+                    ev.preventDefault();
+                    if (!acState.universityId) {{ setStatus('{_T("Pick a university first before adding a new major.")}', true); return; }}
+                    fetch('/api/academic/majors', {{
+                      method:'POST', headers:{{'Content-Type':'application/json'}},
+                      body: JSON.stringify({{ name: q, university_id: acState.universityId }})
+                    }}).then(function(r){{ return r.json(); }}).then(function(j2){{
+                      if (j2 && j2.major) acadPickMajor(j2.major);
+                    }});
+                  }});
+                  return;
+                }}
+                box.innerHTML = majors.map(function(m){{
+                  return '<div class="acad-pick" data-id="' + m.id + '" data-name="' + escapeAttr(m.name) + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">' + escapeHtml(m.name) + '</div>';
+                }}).join('');
+                box.style.display = 'block';
+                Array.prototype.forEach.call(box.querySelectorAll('.acad-pick'), function(el){{
+                  el.addEventListener('click', function(){{
+                    acadPickMajor({{ id: parseInt(el.dataset.id, 10), name: el.dataset.name }});
+                  }});
+                  el.addEventListener('mouseenter', function(){{ el.style.background = 'rgba(99,102,241,.08)'; }});
+                  el.addEventListener('mouseleave', function(){{ el.style.background = ''; }});
+                }});
+              }});
+            }}, 250);
+          }});
+
+          function acadPickUni(u){{
+            acState.universityId = u.id;
+            acState.universityName = u.name;
+            $('acad-uni-selected-name').textContent = u.name;
+            $('acad-uni-selected').style.display = 'flex';
+            $('acad-uni-results').style.display = 'none';
+            $('acad-uni-search').style.display = 'none';
+            $('acad-uni-search').value = '';
+            refreshSaveBtn();
+          }}
+          function acadPickMajor(m){{
+            acState.majorId = m.id;
+            acState.majorName = m.name;
+            $('acad-major-selected-name').textContent = m.name;
+            $('acad-major-selected').style.display = 'flex';
+            $('acad-major-results').style.display = 'none';
+            $('acad-major-search').style.display = 'none';
+            $('acad-major-search').value = '';
+            refreshSaveBtn();
+          }}
+          window.acadClearUni = function(){{
+            acState.universityId = null; acState.universityName = "";
+            $('acad-uni-selected').style.display = 'none';
+            $('acad-uni-search').style.display = 'block';
+            $('acad-uni-search').value = '';
+            refreshSaveBtn();
+          }};
+          window.acadClearMajor = function(){{
+            acState.majorId = null; acState.majorName = "";
+            $('acad-major-selected').style.display = 'none';
+            $('acad-major-search').style.display = 'block';
+            $('acad-major-search').value = '';
+            refreshSaveBtn();
+          }};
+          window.acadSave = function(){{
+            if (!(acState.country && acState.universityId && acState.majorId)) return;
+            setStatus('{_T("Saving...")}');
+            $('acad-save-btn').disabled = true;
+            fetch('/api/academic/profile', {{
+              method:'POST', headers:{{'Content-Type':'application/json'}},
+              body: JSON.stringify({{
+                country_iso: acState.country,
+                university_id: acState.universityId,
+                major_id: acState.majorId
+              }})
+            }}).then(function(r){{ return r.json().then(function(j){{ return {{ ok: r.ok, body: j }}; }}); }})
+              .then(function(res){{
+                if (!res.ok || !res.body.ok) {{
+                  setStatus(res.body.error || '{_T("Save failed.")}', true);
+                  $('acad-save-btn').disabled = false;
+                  return;
+                }}
+                setStatus('{_T("Saved!")} \\u2713');
+                $('acad-cur-country').textContent = $('acad-country').selectedOptions[0].textContent;
+                $('acad-cur-uni').textContent = acState.universityName;
+                $('acad-cur-major').textContent = acState.majorName;
+                $('acad-current').style.display = 'block';
+                $('acad-save-btn').disabled = false;
+              }}).catch(function(){{
+                setStatus('{_T("Save failed.")}', true);
+                $('acad-save-btn').disabled = false;
+              }});
+          }};
+
+          function escapeHtml(s){{ return (s||'').replace(/[&<>"']/g, function(c){{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }}
+          function escapeAttr(s){{ return escapeHtml(s).replace(/"/g, '&quot;'); }}
+        }})();
+        </script>
+
+
+
         <!-- Account Security (mirrors business settings â€” optional change) -->
 
         <div class="card" style="margin-top:16px;">
