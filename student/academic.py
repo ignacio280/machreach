@@ -198,11 +198,37 @@ def _seed_countries() -> None:
 
 
 def _seed_universities() -> None:
-    """Insert the top-universities seed list if not already present."""
+    """Insert the top-universities seed list (idempotent via slug UNIQUE).
+
+    Always runs — inserts are cheap (~340 rows) and the slug uniqueness
+    constraint prevents duplicates. This guarantees production picks up
+    new entries without manual intervention. Also backfills name_norm for
+    any pre-existing rows that have NULL/empty values (which would silently
+    break the LIKE-based search).
+    """
     with get_db() as db:
-        existing = _fetchval(db, "SELECT COUNT(*) FROM universities", ()) or 0
-        if existing >= len(UNIVERSITIES) * 0.9:
-            return
+        # Backfill name_norm for any rows missing it (root cause of empty searches)
+        try:
+            broken = _fetchall(
+                db,
+                "SELECT id, name FROM universities "
+                "WHERE name_norm IS NULL OR name_norm = ''",
+                (),
+            )
+            for r in broken:
+                try:
+                    _exec(
+                        db,
+                        "UPDATE universities SET name_norm = %s WHERE id = %s",
+                        (normalize_name(r["name"]), r["id"]),
+                    )
+                except Exception:
+                    pass
+            if broken:
+                log.info("Backfilled name_norm on %d university rows", len(broken))
+        except Exception as e:
+            log.warning("name_norm backfill failed: %s", e)
+
         for name, country_iso, short in UNIVERSITIES:
             slug = _slugify(name)
             norm = normalize_name(name)
@@ -239,13 +265,27 @@ def _seed_majors() -> None:
         + [(name, normalize_name(name)) for name in GLOBAL_MAJORS_ES]
     )
     with get_db() as db:
-        existing = _fetchval(
-            db,
-            "SELECT COUNT(*) FROM majors WHERE university_id IS NULL",
-            (),
-        ) or 0
-        if existing >= len(entries) * 0.9:
-            return
+        # Backfill name_norm for existing majors rows missing it
+        try:
+            broken = _fetchall(
+                db,
+                "SELECT id, name FROM majors WHERE name_norm IS NULL OR name_norm = ''",
+                (),
+            )
+            for r in broken:
+                try:
+                    _exec(
+                        db,
+                        "UPDATE majors SET name_norm = %s WHERE id = %s",
+                        (normalize_major(r["name"]), r["id"]),
+                    )
+                except Exception:
+                    pass
+            if broken:
+                log.info("Backfilled name_norm on %d major rows", len(broken))
+        except Exception as e:
+            log.warning("majors name_norm backfill failed: %s", e)
+
         for name, norm in entries:
             slug = _slugify(name) + "-global"
             try:
@@ -360,23 +400,25 @@ def search_universities(country_iso: str, query: str, limit: int = 20) -> list[d
             )
     like = f"%{q_norm}%"
     prefix = f"{q_norm}%"
+    # Also match against short_name (e.g., "USM" → Universidad Técnica Federico Santa María)
+    short_like = f"%{query.strip().lower()}%" if query else "%"
     with get_db() as db:
         # Prefix matches first (highest relevance)
         rows = _fetchall(
             db,
             "SELECT id, name, short_name, country_iso, status FROM universities "
-            "WHERE country_iso = %s AND name_norm LIKE %s "
+            "WHERE country_iso = %s AND (name_norm LIKE %s OR LOWER(short_name) LIKE %s) "
             "ORDER BY LENGTH(name), name LIMIT %s",
-            (country_iso, prefix, limit),
+            (country_iso, prefix, short_like, limit),
         )
         seen_ids = {r["id"] for r in rows}
         if len(rows) < limit:
             extra = _fetchall(
                 db,
                 "SELECT id, name, short_name, country_iso, status FROM universities "
-                "WHERE country_iso = %s AND name_norm LIKE %s "
+                "WHERE country_iso = %s AND (name_norm LIKE %s OR LOWER(short_name) LIKE %s) "
                 "ORDER BY LENGTH(name), name LIMIT %s",
-                (country_iso, like, limit),
+                (country_iso, like, short_like, limit),
             )
             for r in extra:
                 if r["id"] not in seen_ids:
