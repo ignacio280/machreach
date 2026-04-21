@@ -14874,11 +14874,178 @@ No markdown, no code fences. ONLY JSON.
 
     @app.route("/student/leaderboard")
     def student_leaderboard_page():
-        # Consolidated: serves the premium dark leaderboards page.
-        from flask import redirect
         if not _logged_in():
             return redirect(url_for("login"))
-        return redirect("/student/leaderboards")
+        # Premium hierarchical leaderboards (global / country / university / major)
+        # rendered INSIDE the main MachReach student shell — same nav, same chrome.
+        # Data comes from /api/academic/ranks and /api/academic/leaderboard.
+        content = """
+<style>
+  #mr-lb-page { --lb-panel: #10172A; --lb-panel-2: #141C36; --lb-border: rgba(148,163,184,.12);
+    --lb-text: #E5EAF5; --lb-muted: #8B93A7; --lb-accent: #7C9CFF; --lb-accent-2: #C084FC; }
+  #mr-lb-page .lb-hero {
+    background: linear-gradient(135deg, rgba(124,156,255,.12), rgba(192,132,252,.08));
+    border: 1px solid var(--border); border-radius: 20px; padding: 28px 32px; margin-bottom: 24px;
+    position: relative; overflow: hidden;
+  }
+  #mr-lb-page .lb-hero::after {
+    content:""; position:absolute; inset:auto -50px -80px auto; width:300px; height:300px;
+    background: radial-gradient(circle, rgba(124,156,255,.35), transparent 70%);
+    filter: blur(10px); pointer-events:none;
+  }
+  #mr-lb-page .lb-hero h2 { margin:0 0 8px; font-size: 28px; letter-spacing:-.03em; }
+  #mr-lb-page .lb-hero p  { margin:0; color: var(--text-muted); }
+  #mr-lb-page .lb-rank-strip {
+    display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 20px; position:relative; z-index:1;
+  }
+  #mr-lb-page .lb-rank-card {
+    background: rgba(255,255,255,.02); border:1px solid var(--border);
+    border-radius: 14px; padding: 14px 16px;
+  }
+  #mr-lb-page .lb-rank-card .label { color: var(--text-muted); font-size:12px; text-transform:uppercase; letter-spacing:.1em;}
+  #mr-lb-page .lb-rank-card .rank-big { font-size: 28px; font-weight:700; letter-spacing:-.02em; margin-top:4px;}
+  #mr-lb-page .lb-rank-card .of { color: var(--text-muted); font-size: 14px;}
+  #mr-lb-page .lb-tabs {
+    display:flex; gap:6px; background: var(--card);
+    border:1px solid var(--border); border-radius: 14px; padding:6px; margin-bottom:16px;
+  }
+  #mr-lb-page .lb-tab {
+    flex:1; padding: 10px 14px; border-radius: 10px; text-align:center; cursor:pointer;
+    color: var(--text-muted); font-weight:500; transition: all .18s; user-select:none;
+  }
+  #mr-lb-page .lb-tab:hover { color: var(--text); }
+  #mr-lb-page .lb-tab.active {
+    background: linear-gradient(135deg, rgba(124,156,255,.25), rgba(192,132,252,.2));
+    color: var(--text);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  #mr-lb-page .lb-board {
+    background: var(--card); border:1px solid var(--border); border-radius:18px; overflow:hidden;
+  }
+  #mr-lb-page .lb-row {
+    display:grid; grid-template-columns: 56px 1fr 110px 110px;
+    align-items:center; padding: 14px 20px; border-top:1px solid var(--border);
+    transition: background .15s;
+  }
+  #mr-lb-page .lb-row:first-child { border-top:none;}
+  #mr-lb-page .lb-row:hover { background: rgba(255,255,255,.02);}
+  #mr-lb-page .lb-row.me {
+    background: linear-gradient(90deg, rgba(124,156,255,.15), transparent);
+    border-left: 3px solid #7C9CFF;
+  }
+  #mr-lb-page .lb-medal { font-size: 22px; text-align:center;}
+  #mr-lb-page .lb-pos { font-weight:700; text-align:center; color: var(--text-muted);}
+  #mr-lb-page .lb-who { display:flex; align-items:center; gap:10px;}
+  #mr-lb-page .lb-avatar {
+    width:38px; height:38px; border-radius:50%;
+    background: linear-gradient(135deg, #3B4A7A, #5B4694); display:flex;
+    align-items:center; justify-content:center; font-weight:600; color:#fff;
+  }
+  #mr-lb-page .lb-xp { font-variant-numeric: tabular-nums; color: var(--text); font-weight:600;}
+  #mr-lb-page .lb-pill {
+    display:inline-block; padding: 3px 9px; font-size:11px; border-radius:999px;
+    font-weight:600; letter-spacing:.02em;
+  }
+  #mr-lb-page .lb-empty, #mr-lb-page .lb-loading { padding: 36px 20px; text-align:center; color: var(--text-muted);}
+  #mr-lb-page .lb-skeleton { display:flex; flex-direction:column; gap: 10px; padding: 14px 20px;}
+  #mr-lb-page .lb-sk-row { height: 48px; background: linear-gradient(90deg, rgba(148,163,184,.06), rgba(148,163,184,.14), rgba(148,163,184,.06));
+    background-size: 200% 100%; border-radius: 10px; animation: lbShimmer 1.6s infinite linear;}
+  @keyframes lbShimmer { from { background-position: 0 0;} to { background-position: -200% 0;}}
+  @media (max-width: 720px) {
+    #mr-lb-page .lb-rank-strip { grid-template-columns: repeat(2, 1fr); }
+    #mr-lb-page .lb-row { grid-template-columns: 40px 1fr 80px; }
+    #mr-lb-page .lb-row .lb-pill-col { display:none;}
+  }
+</style>
+
+<div id="mr-lb-page">
+  <section class="lb-hero">
+    <h2>🏆 Climb the ranks.</h2>
+    <p>Your XP is live-counted against every other student — globally, and in your country, university, and major.</p>
+    <div class="lb-rank-strip" id="lbRankStrip">
+      <div class="lb-rank-card"><div class="label">Global</div><div class="rank-big" id="lb_r_global">—</div></div>
+      <div class="lb-rank-card"><div class="label">Country</div><div class="rank-big" id="lb_r_country">—</div></div>
+      <div class="lb-rank-card"><div class="label">University</div><div class="rank-big" id="lb_r_university">—</div></div>
+      <div class="lb-rank-card"><div class="label">Major</div><div class="rank-big" id="lb_r_major">—</div></div>
+    </div>
+  </section>
+
+  <div class="lb-tabs" id="lbTabs">
+    <div class="lb-tab active" data-scope="global">🌍 Global</div>
+    <div class="lb-tab" data-scope="country">🏳️ Country</div>
+    <div class="lb-tab" data-scope="university">🎓 University</div>
+    <div class="lb-tab" data-scope="major">📚 Major</div>
+  </div>
+
+  <div class="lb-board" id="lbBoard">
+    <div class="lb-skeleton">
+      <div class="lb-sk-row"></div><div class="lb-sk-row"></div><div class="lb-sk-row"></div>
+      <div class="lb-sk-row"></div><div class="lb-sk-row"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const medal = (rank) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+  const initials = (name) => (name||'?').split(/\\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+  function escapeHtml(s){return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+  async function loadRanks() {
+    try {
+      const r = await fetch('/api/academic/ranks');
+      if (!r.ok) return;
+      const j = await r.json();
+      const fmt = (obj) => obj ? `#${obj.rank} <span class="of">/ ${obj.total}</span>` : '—';
+      document.getElementById('lb_r_global').innerHTML = fmt(j.ranks.global);
+      document.getElementById('lb_r_country').innerHTML = fmt(j.ranks.country);
+      document.getElementById('lb_r_university').innerHTML = fmt(j.ranks.university);
+      document.getElementById('lb_r_major').innerHTML = fmt(j.ranks.major);
+    } catch(e) { console.error(e); }
+  }
+
+  async function loadScope(scope) {
+    const board = document.getElementById('lbBoard');
+    board.innerHTML = '<div class="lb-skeleton"><div class="lb-sk-row"></div><div class="lb-sk-row"></div><div class="lb-sk-row"></div><div class="lb-sk-row"></div></div>';
+    try {
+      const r = await fetch('/api/academic/leaderboard?scope=' + encodeURIComponent(scope));
+      const j = await r.json();
+      const rows = j.rows || [];
+      if (!rows.length) {
+        board.innerHTML = `<div class="lb-empty">No one to compare against yet in this scope. Invite some friends!</div>`;
+        return;
+      }
+      board.innerHTML = rows.map(r => `
+        <div class="lb-row ${r.is_you?'me':''}">
+          <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
+          <div class="lb-who">
+            <div class="lb-avatar">${initials(r.name)}</div>
+            <div><div>${escapeHtml(r.name)}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
+                 <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div></div>
+          </div>
+          <div class="lb-xp">${r.xp.toLocaleString()} XP</div>
+          <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div>
+        </div>
+      `).join('');
+    } catch(e) {
+      board.innerHTML = `<div class="lb-empty">Failed to load. ${e}</div>`;
+    }
+  }
+
+  document.getElementById('lbTabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('.lb-tab');
+    if (!tab) return;
+    document.querySelectorAll('#mr-lb-page .lb-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    loadScope(tab.dataset.scope);
+  });
+
+  loadRanks();
+  loadScope('global');
+})();
+</script>
+"""
+        return _s_render("Leaderboards", content, active_page="student_leaderboard")
 
 
 
