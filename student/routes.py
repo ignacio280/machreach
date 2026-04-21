@@ -2961,11 +2961,11 @@ def register_student_routes(app, csrf, limiter):
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" id="mr-an-charts">
             <div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Last 14 days</div>
-              <div id="an-bars14" style="display:flex;align-items:flex-end;gap:4px;height:110px;"></div>
+              <div id="an-bars14" style="height:130px;"></div>
             </div>
             <div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Hours of day you study</div>
-              <div id="an-bars24" style="display:flex;align-items:flex-end;gap:2px;height:110px;"></div>
+              <div id="an-bars24" style="height:130px;"></div>
             </div>
             <div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Time per course</div>
@@ -2973,7 +2973,7 @@ def register_student_routes(app, csrf, limiter):
             </div>
             <div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Day-of-week</div>
-              <div id="an-bars7" style="display:flex;align-items:flex-end;gap:6px;height:110px;"></div>
+              <div id="an-bars7" style="height:130px;"></div>
             </div>
           </div>
         </div>
@@ -2995,6 +2995,43 @@ def register_student_routes(app, csrf, limiter):
         </style>
         <script>
           (async function(){{
+            function renderLine(points, maxV){{
+              if (!points || !points.length) return '';
+              const W = 320, H = 120, padL = 6, padR = 6, padT = 8, padB = 18;
+              const innerW = W - padL - padR, innerH = H - padT - padB;
+              const n = points.length;
+              const stepX = n > 1 ? innerW / (n - 1) : innerW;
+              const m = Math.max(1, maxV);
+              const xy = points.map((p, i) => {{
+                const x = padL + i * stepX;
+                const y = padT + innerH - (Math.max(0, p.v) / m) * innerH;
+                return [x, y];
+              }});
+              const path = xy.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+              const area = path + ' L' + xy[xy.length-1][0].toFixed(1) + ',' + (padT+innerH) + ' L' + xy[0][0].toFixed(1) + ',' + (padT+innerH) + ' Z';
+              const grid = [0.25, 0.5, 0.75].map(f => {{
+                const y = padT + innerH * f;
+                return '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y+'" y2="'+y+'" stroke="rgba(148,163,184,.15)" stroke-dasharray="2,3" />';
+              }}).join('');
+              const baseline = '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+(padT+innerH)+'" y2="'+(padT+innerH)+'" stroke="rgba(148,163,184,.35)" />';
+              const dots = xy.map((p, i) => '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3" fill="#7C9CFF" stroke="#fff" stroke-width="1"><title>'+(points[i].tip||'')+'</title></circle>').join('');
+              const labels = points.map((p, i) => {{
+                if (!p.label) return '';
+                const x = padL + i * stepX;
+                return '<text x="'+x.toFixed(1)+'" y="'+(H-4)+'" text-anchor="middle" font-size="9" fill="rgba(148,163,184,.9)">'+p.label+'</text>';
+              }}).join('');
+              return ''+
+                '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="100%" preserveAspectRatio="none" style="display:block;overflow:visible;">'+
+                  '<defs><linearGradient id="anFillGrad" x1="0" x2="0" y1="0" y2="1">'+
+                    '<stop offset="0%" stop-color="#7C9CFF" stop-opacity="0.35" />'+
+                    '<stop offset="100%" stop-color="#7C9CFF" stop-opacity="0" />'+
+                  '</linearGradient></defs>'+
+                  grid + baseline +
+                  '<path d="'+area+'" fill="url(#anFillGrad)" stroke="none" />'+
+                  '<path d="'+path+'" fill="none" stroke="#7C9CFF" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'+
+                  dots + labels +
+                '</svg>';
+            }}
             try {{
               const r = await fetch('/api/academic/analytics');
               if (!r.ok) return;
@@ -3007,20 +3044,17 @@ def register_student_routes(app, csrf, limiter):
               document.getElementById('an-besthour').textContent = a.best_hour ? (a.best_hour.hour + ':00') : '—';
               document.getElementById('an-bestdow').textContent = a.best_dow ? a.best_dow.day : '—';
               const max14 = Math.max(1, ...a.last_14_days.map(d => d.minutes));
-              document.getElementById('an-bars14').innerHTML = a.last_14_days.map(d => {{
-                const h = Math.max(2, Math.round((d.minutes/max14)*100));
-                return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div class="mr-an-bar" style="height:'+h+'%;width:100%;"><span class="tip">'+d.date+': '+fmtM(d.minutes)+'</span></div><div class="mr-an-bar-lbl">'+d.label[0]+'</div></div>';
-              }}).join('');
+              document.getElementById('an-bars14').innerHTML = renderLine(a.last_14_days.map(d => ({{
+                v: d.minutes, label: d.label[0], tip: d.date + ': ' + fmtM(d.minutes)
+              }})), max14);
               const max24 = Math.max(1, ...a.hours_dist.map(h => h.minutes));
-              document.getElementById('an-bars24').innerHTML = a.hours_dist.map(h => {{
-                const hp = Math.max(2, Math.round((h.minutes/max24)*100));
-                return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div class="mr-an-bar" style="height:'+hp+'%;width:100%;"><span class="tip">'+h.hour+':00 — '+fmtM(h.minutes)+'</span></div></div>';
-              }}).join('');
+              document.getElementById('an-bars24').innerHTML = renderLine(a.hours_dist.map(h => ({{
+                v: h.minutes, label: (h.hour % 6 === 0 ? String(h.hour) : ''), tip: h.hour + ':00 — ' + fmtM(h.minutes)
+              }})), max24);
               const max7 = Math.max(1, ...a.dow_dist.map(d => d.minutes));
-              document.getElementById('an-bars7').innerHTML = a.dow_dist.map(d => {{
-                const hp = Math.max(2, Math.round((d.minutes/max7)*100));
-                return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div class="mr-an-bar" style="height:'+hp+'%;width:100%;"><span class="tip">'+d.day+': '+fmtM(d.minutes)+'</span></div><div class="mr-an-bar-lbl">'+d.day+'</div></div>';
-              }}).join('');
+              document.getElementById('an-bars7').innerHTML = renderLine(a.dow_dist.map(d => ({{
+                v: d.minutes, label: d.day, tip: d.day + ': ' + fmtM(d.minutes)
+              }})), max7);
               const maxC = Math.max(1, ...a.top_courses.map(c => c.minutes));
               const coursesEl = document.getElementById('an-courses');
               if (a.top_courses.length) {{
@@ -3034,149 +3068,7 @@ def register_student_routes(app, csrf, limiter):
           }})();
         </script>
 
-        <!-- Feature Explorer — always discoverable, collapsible -->
 
-        <div id="feature-explorer" class="card reveal r-delay-1" style="margin-bottom:20px;padding:0;position:relative;overflow:hidden;border:1px solid var(--border);">
-
-          <div aria-hidden="true" style="position:absolute;inset:0;background:radial-gradient(900px 180px at -10% -30%,rgba(139,92,246,.12),transparent 60%),radial-gradient(700px 160px at 120% 120%,rgba(99,102,241,.10),transparent 60%);pointer-events:none;"></div>
-
-          <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;" onclick="toggleExplorer()">
-
-            <div style="display:flex;align-items:center;gap:10px;">
-
-              <span style="font-size:20px;">&#129504;</span>
-
-              <div>
-
-                <div style="font-weight:700;font-size:15px;">What can I do here?</div>
-
-                <div style="font-size:12px;color:var(--text-muted);">A visual map of every feature &mdash; click any card to jump there.</div>
-
-              </div>
-
-            </div>
-
-            <span id="fx-caret" style="color:var(--text-muted);font-size:13px;">Show &#9660;</span>
-
-          </div>
-
-          <div id="fx-body" style="position:relative;z-index:1;display:none;padding:4px 18px 18px;">
-
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
-
-              <a href="/student/courses" class="fx-tile"><span class="fx-ico">&#128218;</span><b>Courses</b><span>Your Canvas-synced courses, plus upcoming exams and dates.</span></a>
-
-              <a href="/student/focus" class="fx-tile"><span class="fx-ico">&#127919;</span><b>Focus Mode</b><span>Pomodoro, page-count, and custom timers. Earn XP every session.</span></a>
-
-              <a href="/student/flashcards" class="fx-tile"><span class="fx-ico">&#127183;</span><b>Flashcards</b><span>AI-generated, spaced-repetition review scheduled by difficulty.</span></a>
-
-              <a href="/student/quizzes" class="fx-tile"><span class="fx-ico">&#128221;</span><b>Practice Quizzes</b><span>Up to 100 questions with timer, per-topic analytics, and action plan.</span></a>
-
-              <a href="/student/essay" class="fx-tile"><span class="fx-ico">&#9999;&#65039;</span><b>Essay Assistant</b><span>Honest feedback on thesis, structure, flow, grammar.</span></a>
-
-              <a href="/student/exchange" class="fx-tile"><span class="fx-ico">&#128257;</span><b>Study Exchange</b><span>Share & fork notes from other students. Earn XP when yours get used.</span></a>
-
-              <a href="/student/leaderboard" class="fx-tile"><span class="fx-ico">&#127942;</span><b>Leaderboards</b><span>Global, country, university, major, and class ranks.</span></a>
-
-              <a href="/student/friends" class="fx-tile"><span class="fx-ico">&#128101;</span><b>Friends &amp; Duels</b><span>Add friends, challenge them to 7-day study duels.</span></a>
-
-              <a href="/student/exams" class="fx-tile"><span class="fx-ico">&#128203;</span><b>Exams Dashboard</b><span>Every upcoming exam, sorted by urgency.</span></a>
-
-              <a href="/student/weak-topics" class="fx-tile"><span class="fx-ico">&#127919;</span><b>Weak Topics</b><span>AI spots what you struggle with from your quiz scores.</span></a>
-
-              <a href="/student/gpa" class="fx-tile"><span class="fx-ico">&#128200;</span><b>GPA Calculator</b><span>Track GPA and forecast what grades you need.</span></a>
-
-              <a href="/student/achievements" class="fx-tile"><span class="fx-ico">&#127881;</span><b>XP & Achievements</b><span>Full XP history, badges, rank, and progress.</span></a>
-
-              <a href="/mail-hub" class="fx-tile"><span class="fx-ico">&#128231;</span><b>Mail Hub</b><span>Connect Gmail / Outlook. AI sorts professor emails by priority.</span></a>
-
-              <a href="/student/settings" class="fx-tile"><span class="fx-ico">&#9881;&#65039;</span><b>Settings</b><span>Theme, language, daily-email time, and replay the tutorial.</span></a>
-
-            </div>
-
-            <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-
-              <button onclick="localStorage.setItem('mr-fx-hidden','1');document.getElementById('feature-explorer').style.display='none';" class="btn btn-ghost btn-sm">I've got it &mdash; hide this</button>
-
-            </div>
-
-          </div>
-
-        </div>
-
-        <style>
-
-          .fx-tile {{
-
-            display:flex;flex-direction:column;gap:4px;padding:14px;border:1px solid var(--border);border-radius:12px;
-
-            background:var(--bg);text-decoration:none;color:var(--text);transition:all .18s ease;
-
-          }}
-
-          .fx-tile:hover {{ border-color:var(--primary);transform:translateY(-2px);box-shadow:0 8px 20px rgba(99,102,241,.15); }}
-
-          .fx-tile .fx-ico {{ font-size:22px; }}
-
-          .fx-tile b {{ font-size:14px;font-weight:700; }}
-
-          .fx-tile span:last-child {{ font-size:12px;color:var(--text-muted);line-height:1.45; }}
-
-        </style>
-
-        <script>
-
-          (function() {{
-
-            if (localStorage.getItem('mr-fx-hidden') === '1') {{
-
-              var el = document.getElementById('feature-explorer');
-
-              if (el) el.style.display = 'none';
-
-            }} else {{
-
-              // Auto-open for new users on their first visit
-
-              var firstVisit = !localStorage.getItem('mr-fx-seen');
-
-              if (firstVisit) {{
-
-                document.getElementById('fx-body').style.display = 'block';
-
-                document.getElementById('fx-caret').innerHTML = 'Hide &#9650;';
-
-                localStorage.setItem('mr-fx-seen', '1');
-
-              }}
-
-            }}
-
-          }})();
-
-          function toggleExplorer() {{
-
-            var body = document.getElementById('fx-body');
-
-            var caret = document.getElementById('fx-caret');
-
-            if (body.style.display === 'none' || !body.style.display) {{
-
-              body.style.display = 'block';
-
-              caret.innerHTML = 'Hide &#9650;';
-
-            }} else {{
-
-              body.style.display = 'none';
-
-              caret.innerHTML = 'Show &#9660;';
-
-            }}
-
-          }}
-
-        </script>
 
 
 

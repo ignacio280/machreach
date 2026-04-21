@@ -361,6 +361,9 @@ def register_academic_routes(app, csrf, limiter):
 
         streak = 0
         cursor = today
+        # Allow today to be missing without breaking — count from yesterday if today empty
+        if per_day_min.get(cursor.strftime("%Y-%m-%d"), 0) <= 0:
+            cursor -= timedelta(days=1)
         while per_day_min.get(cursor.strftime("%Y-%m-%d"), 0) > 0:
             streak += 1
             cursor -= timedelta(days=1)

@@ -1078,18 +1078,20 @@ def get_focus_stats(client_id: int) -> dict:
         )
         streak = 0
         today = datetime.now().date()
-        seen_dates = set()
+        from datetime import timedelta as _td
+        # Build set of unique activity dates
+        activity_dates = set()
         for r in rows:
             d_str = r["plan_date"][:10]
-            if d_str in seen_dates:
+            try:
+                activity_dates.add(datetime.strptime(d_str, "%Y-%m-%d").date())
+            except ValueError:
                 continue
-            seen_dates.add(d_str)
-            d = datetime.strptime(d_str, "%Y-%m-%d").date()
-            expected = today - __import__('datetime').timedelta(days=streak)
-            if d == expected:
-                streak += 1
-            else:
-                break
+        # Allow today to be missing without breaking — start counting from yesterday
+        cur = today if today in activity_dates else (today - _td(days=1))
+        while cur in activity_dates:
+            streak += 1
+            cur -= _td(days=1)
         return {
             "total_minutes": total_min,
             "total_hours": round(total_min / 60, 1),

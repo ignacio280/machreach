@@ -1382,7 +1382,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <a href="/student/exams" {% if active_page == 'student_exams' %}class="active"{% endif %}>&#128221; Exams</a>
-        <a href="/student/analytics" {% if active_page == 'student_analytics' %}class="active"{% endif %}>&#128202; Analytics</a>
+        <a href="/student/friends" {% if active_page == 'student_friends' %}class="active"{% endif %}>&#128101; Friends</a>
         <div class="nav-dropdown">
           <a href="#" onclick="return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
           <div class="nav-dropdown-menu">
@@ -1395,8 +1395,9 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="#" onclick="return false" {% if active_page in ['student_weak','student_gpa','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
+          <a href="#" onclick="return false" {% if active_page in ['student_analytics','student_weak','student_gpa','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
           <div class="nav-dropdown-menu">
+            <a href="/student/analytics">&#128202; Analytics</a>
             <a href="/student/weak-topics">&#127919; Weak Topics</a>
             <a href="/student/gpa">&#128200; GPA</a>
             <a href="/student/achievements">&#127942; XP &amp; Badges</a>
