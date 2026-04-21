@@ -178,6 +178,78 @@ def register_academic_routes(app, csrf, limiter):
         ac.mark_welcome_banner_seen(_cid())
         return jsonify({"ok": True})
 
+    # ── public profile ──────────────────────────────────────
+
+    @app.route("/api/academic/user/<int:user_id>", methods=["GET"])
+    def academic_user_profile(user_id: int):
+        """Return the public-safe profile for any student.
+
+        Includes name, country, university, major, total XP, current rank,
+        retired status, and badge count. Email and other private fields
+        are NEVER exposed.
+        """
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        from outreach.db import get_db, _fetchone
+        with get_db() as db:
+            row = _fetchone(
+                db,
+                "SELECT id, name, country_iso, university_id, major_id, retired, "
+                "       retired_at, profile_bio, created_at "
+                "FROM clients WHERE id = %s AND account_type = 'student'",
+                (user_id,),
+            )
+        if not row:
+            return jsonify({"error": "not found"}), 404
+
+        univ = ac.get_university(int(row["university_id"])) if row.get("university_id") else None
+        major = ac.get_major(int(row["major_id"])) if row.get("major_id") else None
+        country = None
+        if row.get("country_iso"):
+            for c in ac.list_countries():
+                if c.get("iso_code") == row["country_iso"]:
+                    country = c
+                    break
+
+        total_xp = sdb.get_total_xp(user_id) or 0
+        rank_info = sdb.get_study_rank(int(total_xp))
+        badges = sdb.get_badges(user_id) or []
+        retired = bool(row.get("retired") or 0)
+        my_scope = "retirement" if retired else "global"
+        my_rank_obj = ac.my_rank(my_scope, user_id) or {}
+
+        return jsonify({
+            "user_id": int(row["id"]),
+            "name": row.get("name") or "Student",
+            "is_retired": retired,
+            "retired_at": str(row.get("retired_at") or "") if retired else None,
+            "joined_at": str(row.get("created_at") or ""),
+            "bio": (row.get("profile_bio") or "")[:500],
+            "country": country,
+            "university": univ,
+            "major": major,
+            "xp": int(total_xp),
+            "rank": {
+                "full_name": rank_info.get("full_name"),
+                "tier": rank_info.get("tier"),
+                "division": rank_info.get("division"),
+                "color": rank_info.get("color"),
+                "index": rank_info.get("index"),
+                "progress_pct": rank_info.get("progress_pct"),
+            },
+            "leaderboard_position": {
+                "rank": my_rank_obj.get("rank"),
+                "total": my_rank_obj.get("total"),
+                "scope": my_scope,
+            },
+            "badges": [
+                {"key": b.get("badge_key"), "name": b.get("name"),
+                 "icon": b.get("icon"), "earned_at": str(b.get("earned_at") or "")}
+                for b in badges
+            ],
+            "badge_count": len(badges),
+        })
+
     # ── leaderboards ────────────────────────────────────────
 
     @app.route("/api/academic/leaderboard", methods=["GET"])
@@ -190,10 +262,6 @@ def register_academic_routes(app, csrf, limiter):
             return jsonify({"error": "bad scope"}), 400
         if period not in {"all", "week", "month"}:
             period = "all"
-        # Global board is the Duolingo-style "ultimate" rank — only the
-        # current season (weekly) window matters. Ignore any period arg.
-        if scope == "global":
-            period = "week"
         rows = ac.leaderboard(scope, _cid(), limit=100, period=period)
         return jsonify({"scope": scope, "period": period, "rows": rows})
 
@@ -206,40 +274,8 @@ def register_academic_routes(app, csrf, limiter):
         if period not in {"all", "week", "month"}:
             period = "all"
         summary = ac.ranks_summary(cid, period=period)
-        # League badge always reflects all-time XP (Duolingo-style: your
-        # current league is determined by total XP, not just this week).
-        from outreach.db import get_db, _fetchval
-        with get_db() as db:
-            total_xp = int(_fetchval(
-                db, "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s",
-                (cid,),
-            ) or 0)
-            retired = bool(_fetchval(
-                db, "SELECT COALESCE(is_retired,0) FROM clients WHERE id = %s",
-                (cid,),
-            ))
-        return jsonify({
-            "ranks": summary,
-            "period": period,
-            "league": ac.league_for_xp(total_xp),
-            "retired": retired,
-        })
-
-    # ── retirement ──────────────────────────────────────────
-
-    @app.route("/api/academic/retire", methods=["POST"])
-    def academic_retire():
-        if not _logged_in():
-            return jsonify({"error": "unauthorized"}), 401
-        ac.retire_user(_cid())
-        return jsonify({"ok": True, "retired": True})
-
-    @app.route("/api/academic/unretire", methods=["POST"])
-    def academic_unretire():
-        if not _logged_in():
-            return jsonify({"error": "unauthorized"}), 401
-        ac.unretire_user(_cid())
-        return jsonify({"ok": True, "retired": False})
+        xp = summary.get("global", {}).get("xp", 0) if summary.get("global") else 0
+        return jsonify({"ranks": summary, "period": period, "league": ac.league_for_xp(int(xp))})
 
     # ── analytics ───────────────────────────────────────────
 

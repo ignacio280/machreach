@@ -146,10 +146,12 @@ def init_academic_db() -> None:
         ("academic_setup_complete",    "INTEGER DEFAULT 0"),
         ("academic_setup_at",          "TIMESTAMP"),
         ("xp_preserve_banner_seen",    "INTEGER DEFAULT 0"),
-        # Retirement: when set, the user is excluded from all live leaderboards
-        # and instead appears in the dedicated "Retired" board.
-        ("is_retired",                 "INTEGER DEFAULT 0"),
+        # Retired = student opted out of active rankings; only appears
+        # on the dedicated Retirement leaderboard.
+        ("retired",                    "INTEGER DEFAULT 0"),
         ("retired_at",                 "TIMESTAMP"),
+        # Public profile bio (shown on /student/profile/<id>)
+        ("profile_bio",                "TEXT DEFAULT ''"),
     ):
         _add_column_safe("clients", col, coltype)
 
@@ -722,32 +724,9 @@ LEAGUES: list[dict] = [
     {"key": "legend",      "name": "Legend",           "min_xp": 40000,  "color": "#F59E0B", "glow": "#D97706"},
 ]
 
-# Roman-numeral divisions (Duolingo-style). Each league is split into
-# four divisions: IV (lowest) → III → II → I (highest, just below promotion).
-# We compute the division by dividing the user's progress within their
-# current league bracket into four equal slices.
-_DIVISION_NUMERALS = ["IV", "III", "II", "I"]
-
-
-def division_for_progress(progress_pct: int) -> str:
-    """Return the roman numeral division for a 0–100 progress value."""
-    p = max(0, min(100, int(progress_pct or 0)))
-    if p >= 75:
-        return "I"
-    if p >= 50:
-        return "II"
-    if p >= 25:
-        return "III"
-    return "IV"
-
 
 def league_for_xp(xp: int) -> dict:
-    """Return the league dict the given XP total falls into.
-
-    Includes a Duolingo-style Roman-numeral `division` (IV → I) computed
-    from how far through the league's XP bracket the user is, plus a
-    pre-formatted `display_name` like "Scholar III" for the UI.
-    """
+    """Return the league dict the given XP total falls into."""
     chosen = LEAGUES[0]
     for L in LEAGUES:
         if xp >= L["min_xp"]:
@@ -765,43 +744,7 @@ def league_for_xp(xp: int) -> dict:
         result["progress_pct"] = pct
     else:
         result["progress_pct"] = 100
-    # Top league has no further promotion → always division I
-    result["division"] = "I" if not next_lg else division_for_progress(result["progress_pct"])
-    result["display_name"] = f"{result['name']} {result['division']}"
     return result
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  Season system (Duolingo-style weekly reset)
-# ═══════════════════════════════════════════════════════════════════════
-# A "season" is a competitive window. The "weekly" leaderboard ranks XP
-# earned WITHIN the current season. At the end of the season, the global
-# leaderboard's top players are promoted and the bottom demoted (manual
-# for now — Phase 2 adds the cron). XP is NEVER reset, only the rank
-# brackets are.
-#
-# Season 1 starts the moment we deploy this and ends end-of-day Apr 26 2026.
-# After Apr 26 23:59 the rolling 7-day window resumes automatically.
-
-SEASON_1_START = "2026-04-20 00:00:00"
-SEASON_1_END   = "2026-04-26 23:59:59"
-
-
-def _current_week_window_sql() -> str:
-    """Return the SQL fragment that constrains x.created_at to 'this week'.
-
-    While we're inside Season 1 (≤ Apr 26 2026), 'week' means
-    `created_at >= SEASON_1_START`. After that, it falls back to a
-    rolling 7-day window. Postgres syntax is emitted; `_sqlite_port`
-    rewrites it for SQLite below.
-    """
-    from datetime import datetime
-    now = datetime.utcnow()
-    season_end = datetime.strptime(SEASON_1_END, "%Y-%m-%d %H:%M:%S")
-    if now <= season_end:
-        return f" AND x.created_at >= TIMESTAMP '{SEASON_1_START}' "
-    return " AND x.created_at >= NOW() - INTERVAL '7 days' "
-
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -815,15 +758,16 @@ def _period_sql(period: str) -> str:
     """Return a SQL fragment that constrains student_xp.created_at to a
     rolling window. `period` ∈ {"all", "week", "month"}.
 
-    For "week" we use the current Season window (Apr 20 → Apr 26 2026 for
-    Season 1) until the season ends, then revert to the rolling 7-day
-    window. This implements the "ranks reset" semantics the user asked
-    for — XP is preserved, only the weekly bracket starts fresh.
-
-    Postgres syntax is emitted; `_sqlite_port` rewrites it for SQLite.
+    Uses a parameter-free expression because `created_at` default is NOW() on
+    Postgres and CURRENT_TIMESTAMP on SQLite — both accept the interval math
+    below via NOW()/datetime('now', …). To keep the query portable we rely
+    on the hybrid `_exec`/`_fetchall` layer from outreach.db which passes
+    queries through unchanged; both engines understand `created_at >=
+    NOW() - INTERVAL '7 days'` on Postgres, and we fall back to
+    `created_at >= datetime('now','-7 days')` on SQLite via str replace.
     """
     if period == "week":
-        return _current_week_window_sql()
+        return " AND x.created_at >= NOW() - INTERVAL '7 days' "
     if period == "month":
         return " AND x.created_at >= NOW() - INTERVAL '30 days' "
     return ""
@@ -836,21 +780,18 @@ def _sqlite_port(q: str) -> str:
         return q
     q = q.replace("NOW() - INTERVAL '7 days'", "datetime('now','-7 days')")
     q = q.replace("NOW() - INTERVAL '30 days'", "datetime('now','-30 days')")
-    # Season-window constants emitted as Postgres TIMESTAMP literals
-    q = q.replace(f"TIMESTAMP '{SEASON_1_START}'", f"datetime('{SEASON_1_START}')")
     return q
 
 
 def _xp_select(where_extra: str = "", params: Iterable = (), period: str = "all",
-               include_retired: bool = False) -> tuple[str, tuple]:
+               retired_only: bool = False) -> tuple[str, tuple]:
     join_extra = _period_sql(period)
-    # Retired students are walled off from every regular leaderboard so
-    # active competitors aren't gaming themselves against people who have
-    # graduated/quit. The dedicated "retirement" scope flips this flag.
+    # By default the active leaderboards exclude retired students; the
+    # dedicated Retirement leaderboard sets retired_only=True and inverts.
     retired_clause = (
-        " AND COALESCE(c.is_retired, 0) = 1 "
-        if include_retired
-        else " AND COALESCE(c.is_retired, 0) = 0 "
+        " AND COALESCE(c.retired, 0) = 1 "
+        if retired_only
+        else " AND COALESCE(c.retired, 0) = 0 "
     )
     base = (
         "SELECT c.id AS client_id, c.name AS display_name, "
@@ -869,9 +810,6 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
     scope ∈ {"global", "country", "university", "major", "retirement"}.
     period ∈ {"all", "week", "month"} (default "all").
     Returned rows are sorted by total_xp desc and include rank + is_you flag.
-
-    The "retirement" scope shows ONLY retired students (everyone else is
-    excluded). All other scopes exclude retired students.
     """
     if period not in {"all", "week", "month"}:
         period = "all"
@@ -885,7 +823,7 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
 
     extra = ""
     params: list = []
-    include_retired = False
+    retired_only = False
     if scope == "country":
         if not me.get("country_iso"):
             return []
@@ -902,10 +840,10 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
         extra = " AND c.major_id = %s "
         params.append(me["major_id"])
     elif scope == "retirement":
-        include_retired = True
+        retired_only = True
     # global => no extra filter
 
-    q, p = _xp_select(extra, params, period=period, include_retired=include_retired)
+    q, p = _xp_select(extra, params, period=period, retired_only=retired_only)
     q += " ORDER BY total_xp DESC, c.id ASC LIMIT %s "
     p = p + (limit,)
     q = _sqlite_port(q)
@@ -924,8 +862,6 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
             "xp": xp,
             "league_key": lg["key"],
             "league_name": lg["name"],
-            "league_display": lg["display_name"],
-            "league_division": lg["division"],
             "league_color": lg["color"],
             "is_you": r["client_id"] == client_id,
         })
@@ -945,21 +881,14 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
     join_extra = _period_sql(period)
     my_xp_where = ""
     if period == "week":
-        # Mirror the season-aware window used by leaderboards.
-        from datetime import datetime
-        season_end = datetime.strptime(SEASON_1_END, "%Y-%m-%d %H:%M:%S")
-        if datetime.utcnow() <= season_end:
-            my_xp_where = f" AND created_at >= TIMESTAMP '{SEASON_1_START}' "
-        else:
-            my_xp_where = " AND created_at >= NOW() - INTERVAL '7 days' "
+        my_xp_where = " AND created_at >= NOW() - INTERVAL '7 days' "
     elif period == "month":
         my_xp_where = " AND created_at >= NOW() - INTERVAL '30 days' "
 
     with get_db() as db:
         me = _fetchone(
             db,
-            "SELECT country_iso, university_id, major_id, COALESCE(is_retired,0) AS is_retired "
-            "FROM clients WHERE id = %s",
+            "SELECT country_iso, university_id, major_id FROM clients WHERE id = %s",
             (client_id,),
         ) or {}
         my_xp_q = _sqlite_port(
@@ -969,18 +898,7 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
 
     where_extra = ""
     params: list = []
-    # Retired-vs-active wall: retired users only see the retirement board;
-    # all other scopes return None for them so the UI can hide cells.
-    am_retired = bool(me.get("is_retired"))
-    if scope == "retirement":
-        if not am_retired:
-            return None
-        retired_clause = " AND COALESCE(c.is_retired,0) = 1 "
-    else:
-        if am_retired:
-            return None
-        retired_clause = " AND COALESCE(c.is_retired,0) = 0 "
-
+    retired_only = (scope == "retirement")
     if scope == "country":
         if not me.get("country_iso"):
             return None
@@ -997,6 +915,11 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
         where_extra = " AND c.major_id = %s "
         params.append(me["major_id"])
 
+    retired_clause = (
+        " AND COALESCE(c.retired, 0) = 1 "
+        if retired_only
+        else " AND COALESCE(c.retired, 0) = 0 "
+    )
     q = (
         "SELECT COUNT(*) FROM ("
         "  SELECT c.id, COALESCE(SUM(x.xp),0) AS total_xp "
@@ -1020,21 +943,23 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
 def ranks_summary(client_id: int, period: str = "all") -> dict:
     """Compact payload for the dashboard ranking strip.
 
-    For retired users every active scope returns None and only the
-    "retirement" key is populated.
+    For retired students we still surface a "retirement" rank instead of
+    the active scopes (which they're excluded from).
     """
     with get_db() as db:
-        retired = bool(_fetchval(
-            db, "SELECT COALESCE(is_retired,0) FROM clients WHERE id = %s",
+        is_retired = bool(_fetchval(
+            db,
+            "SELECT COALESCE(retired, 0) FROM clients WHERE id = %s",
             (client_id,),
-        ))
-    if retired:
+        ) or 0)
+    if is_retired:
         return {
             "global":     None,
             "country":    None,
             "university": None,
             "major":      None,
-            "retirement": my_rank("retirement", client_id, period="all"),
+            "retirement": my_rank("retirement", client_id, period=period),
+            "is_retired": True,
         }
     return {
         "global":     my_rank("global", client_id, period=period),
@@ -1042,38 +967,5 @@ def ranks_summary(client_id: int, period: str = "all") -> dict:
         "university": my_rank("university", client_id, period=period),
         "major":      my_rank("major", client_id, period=period),
         "retirement": None,
+        "is_retired": False,
     }
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  Retirement
-# ═══════════════════════════════════════════════════════════════════════
-
-def retire_user(client_id: int) -> None:
-    """Mark a user as retired so they're removed from active rankings."""
-    with get_db() as db:
-        _exec(
-            db,
-            "UPDATE clients SET is_retired = 1, "
-            + ("retired_at = NOW() " if _USE_PG else "retired_at = datetime('now') ")
-            + "WHERE id = %s",
-            (client_id,),
-        )
-
-
-def unretire_user(client_id: int) -> None:
-    """Bring a retired user back into the active leaderboards."""
-    with get_db() as db:
-        _exec(
-            db,
-            "UPDATE clients SET is_retired = 0, retired_at = NULL WHERE id = %s",
-            (client_id,),
-        )
-
-
-def is_retired(client_id: int) -> bool:
-    with get_db() as db:
-        return bool(_fetchval(
-            db, "SELECT COALESCE(is_retired,0) FROM clients WHERE id = %s",
-            (client_id,),
-        ))

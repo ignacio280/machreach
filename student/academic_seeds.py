@@ -1361,21 +1361,25 @@ _CHILE_COMMON = [
 
 UNIVERSITY_MAJORS: dict[str, list[str]] = {
     # ─── Pontificia Universidad Católica de Chile (PUC) ───
+    # Includes the actual PUC programs: College (CCSS, Artes y Humanidades,
+    # Ciencias Naturales y Matemáticas), Plan Común de Ingeniería,
+    # Bachillerato, plus all undergraduate carreras as listed by the UC.
     "Pontificia Universidad Católica de Chile": [
-        # College UC — bachillerato común before specialty (PUC-specific)
-        "College UC", "College UC — Artes y Humanidades",
-        "College UC — Ciencias Sociales (CCSS)",
-        "College UC — Ciencias Naturales y Matemáticas",
-        "College UC — Ciencias Económicas y Administrativas (CEA)",
-        # Plan común de Ingeniería (students enter without specialty)
-        "Plan Común Ingeniería UC",
-        # Standard carreras
+        # College (PUC's flexible program — Bachelor's-style)
+        "College en Artes y Humanidades",
+        "College en Ciencias Sociales",
+        "College en Ciencias Naturales y Matemáticas",
+        # General entry programs
+        "Bachillerato",
+        "Plan Común de Ingeniería",
+        # Carreras profesionales
         "Actuación", "Agronomía", "Antropología", "Arqueología", "Arquitectura",
         "Arte", "Astronomía", "Biología", "Bioquímica", "Construcción Civil",
         "Derecho", "Diseño", "Economía", "Enfermería", "Estética",
         "Estadística", "Filosofía", "Física", "Fonoaudiología",
         "Geografía", "Historia", "Ingeniería Biológica",
-        "Ingeniería Civil", "Ingeniería Comercial", "Ingeniería de Ejecución en Minería",
+        "Ingeniería Civil", "Ingeniería Civil de Industrias",
+        "Ingeniería Comercial", "Ingeniería de Ejecución en Minería",
         "Ingeniería en Computación", "Ingeniería Forestal", "Ingeniería Matemática",
         "Ingeniería Mecatrónica", "Kinesiología", "Letras Hispánicas",
         "Letras Inglesas", "Matemática", "Medicina",
@@ -1385,6 +1389,8 @@ UNIVERSITY_MAJORS: dict[str, list[str]] = {
         "Pedagogía en Educación Especial", "Periodismo", "Psicología",
         "Publicidad", "Química", "Química y Farmacia", "Sociología",
         "Teología", "Trabajo Social",
+        # Common alias spellings users may type
+        "CCSS", "College CCSS",
     ],
     # ─── Universidad de Chile ───
     "Universidad de Chile": [

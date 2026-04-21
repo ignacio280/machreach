@@ -1169,10 +1169,7 @@ LAYOUT = """<!DOCTYPE html>
     .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #94A3B8; font-size: 22px; line-height: 1; z-index: 201; border-radius: 8px; transition: background .15s var(--ease), color .15s var(--ease); }
     .hamburger:hover { color: #F8FAFC; background: rgba(255,255,255,0.08); }
     .hamburger:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(129,140,248,0.55); }
-    /* Mobile-nav breakpoint: lowered from 1280px to 1024px so standard
-       laptops (1366x768 ThinkPads, 1080p displays at 125% scale ≈ 1093 CSS px)
-       still get the full desktop navigation instead of the mobile hamburger. */
-    @media (max-width: 1024px) {
+    @media (max-width: 1280px) {
       .nav { padding: 0 20px; backdrop-filter: none; }
       .hamburger { display: block; }
       .nav-links { display: none; position: fixed; top: 60px; left: 0; right: 0; bottom: 0; background: #0B1220; flex-direction: column; padding: 20px 20px; gap: 4px; overflow-y: auto; z-index: 200; border-top: 1px solid rgba(255,255,255,0.06); }
@@ -1528,33 +1525,112 @@ LAYOUT = """<!DOCTYPE html>
       void el.offsetWidth;
       el.classList.add('num-pop');
     };
-    // Promotion toast — shown when a user ranks up
+    // Promotion overlay — fullscreen, center-screen rank-up celebration.
+    // Shown when a user ranks up after a focus session. Dismisses on click,
+    // Escape key, or after ~6 seconds. Includes confetti, glow, scale-in,
+    // and the new rank's full name + tier color.
     window.showPromotionToast = function(promo) {
       if (!promo || !promo.promoted || !promo.rank_after) return;
       var r = promo.rank_after;
-      var title = promo.reached_elite ? 'Elite Rank Achieved!'
-                : (promo.tier_up ? 'Tier Promotion!' : 'Rank Up!');
-      var toast = document.createElement('div');
-      toast.style.cssText = 'position:fixed;top:24px;right:24px;z-index:99999;'
-        + 'background:linear-gradient(135deg,' + r.color + ',#111827);'
-        + 'color:#fff;padding:18px 22px;border-radius:14px;'
-        + 'box-shadow:0 18px 40px rgba(0,0,0,.4);min-width:280px;'
-        + 'border:2px solid ' + r.color + ';font-family:inherit;'
-        + 'animation:promoSlide .5s ease-out;';
-      toast.innerHTML =
-        '<div style="font-size:12px;opacity:.85;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">' + title + '</div>'
-        + '<div style="font-size:22px;font-weight:700;margin-bottom:2px">' + r.full_name + '</div>'
-        + '<div style="font-size:13px;opacity:.9">You\'ve earned a new rank. Keep grinding.</div>';
-      if (!document.getElementById('promo-toast-style')) {
+      var title = promo.reached_elite ? 'ELITE RANK ACHIEVED'
+                : (promo.tier_up ? 'TIER PROMOTION' : 'RANK UP');
+      var subtitle = promo.reached_elite
+        ? "You\'ve broken into the Elite tier. Few ever make it this far."
+        : (promo.tier_up
+            ? "A whole new tier of mastery. Keep going."
+            : "Your dedication is paying off. Onward.");
+
+      // Inject keyframes once
+      if (!document.getElementById('promo-overlay-style')) {
         var st = document.createElement('style');
-        st.id = 'promo-toast-style';
-        st.textContent = '@keyframes promoSlide{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}'
-          + '@keyframes promoFade{to{opacity:0;transform:translateX(120%)}}';
+        st.id = 'promo-overlay-style';
+        st.textContent =
+          '@keyframes promoFadeIn{from{opacity:0}to{opacity:1}}'
+          + '@keyframes promoFadeOut{to{opacity:0}}'
+          + '@keyframes promoZoom{0%{transform:scale(.4) rotate(-8deg);opacity:0}'
+          + '60%{transform:scale(1.08) rotate(2deg);opacity:1}'
+          + '100%{transform:scale(1) rotate(0deg);opacity:1}}'
+          + '@keyframes promoPulse{0%,100%{box-shadow:0 0 60px var(--promo-c, #6366F1),0 0 120px var(--promo-c,#6366F1)}'
+          + '50%{box-shadow:0 0 90px var(--promo-c,#6366F1),0 0 180px var(--promo-c,#6366F1)}}'
+          + '@keyframes promoShine{0%{transform:translateX(-100%) skewX(-20deg)}100%{transform:translateX(220%) skewX(-20deg)}}'
+          + '@keyframes promoTitleSlide{from{transform:translateY(-12px);opacity:0;letter-spacing:.5em}'
+          + 'to{transform:translateY(0);opacity:1;letter-spacing:.4em}}'
+          + '@keyframes promoSubFade{from{opacity:0;transform:translateY(8px)}to{opacity:.85;transform:translateY(0)}}'
+          + '@keyframes promoRayRotate{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}';
         document.head.appendChild(st);
       }
-      document.body.appendChild(toast);
-      setTimeout(function(){ toast.style.animation='promoFade .5s ease-in forwards'; }, 5500);
-      setTimeout(function(){ toast.remove(); }, 6100);
+
+      // Backdrop
+      var overlay = document.createElement('div');
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-label', title);
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;'
+        + 'background:radial-gradient(ellipse at center, rgba(0,0,0,.55) 0%, rgba(0,0,0,.85) 80%);'
+        + 'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);'
+        + 'display:flex;align-items:center;justify-content:center;'
+        + 'animation:promoFadeIn .35s ease-out;cursor:pointer;'
+        + '--promo-c:' + r.color + ';';
+
+      // Spinning rays behind the card
+      var rays = document.createElement('div');
+      rays.style.cssText = 'position:absolute;top:50%;left:50%;width:140vmax;height:140vmax;'
+        + 'background:conic-gradient(from 0deg, transparent 0deg, ' + r.color + '22 12deg, transparent 28deg,'
+        + ' transparent 92deg, ' + r.color + '22 102deg, transparent 118deg,'
+        + ' transparent 184deg, ' + r.color + '22 192deg, transparent 208deg,'
+        + ' transparent 274deg, ' + r.color + '22 282deg, transparent 298deg, transparent 360deg);'
+        + 'animation:promoRayRotate 18s linear infinite;pointer-events:none;opacity:.5;';
+      overlay.appendChild(rays);
+
+      // Card
+      var card = document.createElement('div');
+      card.style.cssText = 'position:relative;text-align:center;color:#fff;'
+        + 'padding:48px 64px;border-radius:28px;'
+        + 'background:linear-gradient(150deg, ' + r.color + ' 0%, #0B1220 110%);'
+        + 'border:2px solid ' + r.color + ';'
+        + 'animation:promoZoom .7s cubic-bezier(.18,.89,.32,1.28) both, promoPulse 2.4s ease-in-out infinite .7s;'
+        + 'max-width:min(560px, 92vw);overflow:hidden;font-family:inherit;';
+
+      // Shine sweep
+      var shine = document.createElement('div');
+      shine.style.cssText = 'position:absolute;inset:0;'
+        + 'background:linear-gradient(110deg, transparent 30%, rgba(255,255,255,.25) 50%, transparent 70%);'
+        + 'animation:promoShine 1.6s ease-out 0.4s both;pointer-events:none;';
+      card.appendChild(shine);
+
+      var inner = document.createElement('div');
+      inner.style.cssText = 'position:relative;';
+      inner.innerHTML =
+        '<div style="font-size:14px;font-weight:700;letter-spacing:.4em;text-transform:uppercase;'
+        + 'opacity:.95;animation:promoTitleSlide .6s ease-out .25s both;color:#fff;">' + title + '</div>'
+        + '<div style="font-size:64px;line-height:1;margin:18px 0 14px;'
+        + 'animation:promoZoom .9s cubic-bezier(.18,.89,.32,1.28) .15s both;">'
+        + (promo.reached_elite ? '👑' : (promo.tier_up ? '✨' : '🌟'))
+        + '</div>'
+        + '<div style="font-size:38px;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin-bottom:10px;'
+        + 'animation:promoZoom .9s cubic-bezier(.18,.89,.32,1.28) .35s both;'
+        + 'text-shadow:0 4px 24px rgba(0,0,0,.4);">' + r.full_name + '</div>'
+        + '<div style="font-size:14px;opacity:.85;max-width:380px;margin:0 auto;line-height:1.55;'
+        + 'animation:promoSubFade .6s ease-out .9s both;">' + subtitle + '</div>'
+        + '<div style="margin-top:22px;font-size:11px;opacity:.55;letter-spacing:.15em;text-transform:uppercase;'
+        + 'animation:promoSubFade .6s ease-out 1.4s both;">tap anywhere to dismiss</div>';
+      card.appendChild(inner);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+
+      // Confetti burst (uses the existing global helper)
+      try { if (typeof window.confettiBurst === 'function') window.confettiBurst(120); } catch(e) {}
+
+      var dismiss = function(){
+        if (overlay._dismissed) return;
+        overlay._dismissed = true;
+        overlay.style.animation = 'promoFadeOut .35s ease-in forwards';
+        setTimeout(function(){ overlay.remove(); }, 380);
+        document.removeEventListener('keydown', onKey);
+      };
+      var onKey = function(e){ if (e.key === 'Escape') dismiss(); };
+      overlay.addEventListener('click', dismiss);
+      document.addEventListener('keydown', onKey);
+      setTimeout(dismiss, 6500);
     };
     // Theme system — applies named themes via CSS variables on <body>
     window.MR_THEMES = {

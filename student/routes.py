@@ -1967,14 +1967,7 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        # Focus Mode page is day-scoped. `?scope=all` returns lifetime totals
-        # for callers like the dashboard strip that still want the big number.
-
-        if (request.args.get("scope") or "today").lower() == "all":
-
-            return jsonify(sdb.get_focus_stats(_cid()))
-
-        return jsonify(sdb.get_focus_stats_today(_cid()))
+        return jsonify(sdb.get_focus_stats(_cid()))
 
 
 
@@ -2488,7 +2481,7 @@ def register_student_routes(app, csrf, limiter):
                   ? (' &rarr; ' + j.league.next_name + ' in ' + (j.league.next_min_xp - ((j.ranks.global && j.ranks.global.xp) || 0)).toLocaleString() + ' XP')
                   : ' &middot; Max league achieved!';
                 document.getElementById('mr-ranks-league').innerHTML =
-                  ('<span style="color:' + j.league.color + ';font-weight:600;">' + (j.league.display_name || j.league.name) + '</span>') + nextTxt;
+                  ('<span style="color:' + j.league.color + ';font-weight:600;">' + j.league.name + '</span>') + nextTxt;
                 document.getElementById('mr-league-bar').style.width = (j.league.progress_pct||0) + '%';
                 document.getElementById('mr-league-bar').style.background = 'linear-gradient(90deg,' + j.league.color + ',' + (j.league.glow||j.league.color) + ')';
               }}
@@ -4675,7 +4668,8 @@ def register_student_routes(app, csrf, limiter):
 
         focus_stats = sdb.get_focus_stats_today(_cid())
 
-
+        # Use a Windows-safe date format (no %-d / %#d) so it renders the same everywhere.
+        _today_label = datetime.now().strftime("%A, %B ") + str(datetime.now().day)
 
         course_options = ""
 
@@ -4687,11 +4681,14 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Focus Mode", f"""
 
-        <h1 style="margin-bottom:20px;">&#127917; Focus Mode <span style="font-size:14px;color:var(--text-muted);font-weight:500;">— Today</span></h1>
+        <h1 style="margin-bottom:6px;">&#127917; Focus Mode</h1>
+        <p style="margin:0 0 20px;color:var(--text-muted);font-size:13px;">
+          Showing what you've studied <b style="color:var(--text);">today</b> &middot; {_today_label}
+        </p>
 
 
 
-        <!-- Stats bar (TODAY only) -->
+        <!-- Stats bar -->
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px;">
 
@@ -14934,6 +14931,7 @@ No markdown, no code fences. ONLY JSON.
     align-items:center; padding: 14px 20px; border-top:1px solid var(--border);
     transition: background .15s;
   }
+  #mr-lb-page a.lb-row { display:grid; }
   #mr-lb-page .lb-row:first-child { border-top:none;}
   #mr-lb-page .lb-row:hover { background: rgba(255,255,255,.02);}
   #mr-lb-page .lb-row.me {
@@ -14958,7 +14956,7 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-sk-row { height: 48px; background: linear-gradient(90deg, rgba(148,163,184,.06), rgba(148,163,184,.14), rgba(148,163,184,.06));
     background-size: 200% 100%; border-radius: 10px; animation: lbShimmer 1.6s infinite linear;}
   @keyframes lbShimmer { from { background-position: 0 0;} to { background-position: -200% 0;}}
-  @media (max-width: 720px) {
+  @media (max-width: 600px) {
     #mr-lb-page .lb-rank-strip { grid-template-columns: repeat(2, 1fr); }
     #mr-lb-page .lb-row { grid-template-columns: 40px 1fr 80px; }
     #mr-lb-page .lb-row .lb-pill-col { display:none;}
@@ -14982,18 +14980,13 @@ No markdown, no code fences. ONLY JSON.
     <div class="lb-tab" data-scope="country">🏳️ Country</div>
     <div class="lb-tab" data-scope="university">🎓 University</div>
     <div class="lb-tab" data-scope="major">📚 Major</div>
-    <div class="lb-tab" data-scope="retirement">🌇 Retirement</div>
+    <div class="lb-tab" data-scope="retirement" title="Retired students only">🏖️ Retired</div>
   </div>
 
   <div class="lb-tabs" id="lbPeriodTabs" style="margin-top:-8px;">
     <div class="lb-tab active" data-period="all">🏛️ All-time</div>
     <div class="lb-tab" data-period="month">📅 Monthly</div>
     <div class="lb-tab" data-period="week">⚡ Weekly</div>
-  </div>
-
-  <div id="lbGlobalBanner" style="display:none;background:linear-gradient(135deg,rgba(124,156,255,.12),rgba(192,132,252,.08));border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--text-muted);">
-    <strong style="color:var(--text);">🏆 The Ultimate Rank.</strong>
-    Season 1 ends <strong>Sun Apr 26, 2026</strong>. Top finishers get <em>promoted</em> to the next league; bottom finishers get <em>demoted</em>. Only the current season's XP counts here.
   </div>
 
   <div class="lb-board" id="lbBoard">
@@ -15045,16 +15038,16 @@ No markdown, no code fences. ONLY JSON.
         return;
       }
       board.innerHTML = rows.map(r => `
-        <div class="lb-row ${r.is_you?'me':''}">
+        <a class="lb-row ${r.is_you?'me':''}" href="/student/profile/${r.client_id}" style="color:inherit;text-decoration:none;cursor:pointer;">
           <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
             <div><div>${escapeHtml(r.name)}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
-                 <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_display || r.league_name}</span></div></div>
+                 <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div></div>
           </div>
           <div class="lb-xp">${r.xp.toLocaleString()} XP</div>
-          <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_display || r.league_name}</span></div>
-        </div>
+          <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div>
+        </a>
       `).join('');
     } catch(e) {
       board.innerHTML = `<div class="lb-empty">Failed to load. ${e}</div>`;
@@ -15067,19 +15060,6 @@ No markdown, no code fences. ONLY JSON.
     document.querySelectorAll('#lbTabs .lb-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     lbState.scope = tab.dataset.scope;
-    // Global is the "ultimate rank" (Duolingo-style) — only the current
-    // season matters, so hide the period switcher. Scoped boards
-    // (country / university / major / retirement) keep all 3 periods.
-    var periodTabs = document.getElementById('lbPeriodTabs');
-    var banner = document.getElementById('lbGlobalBanner');
-    if (lbState.scope === 'global') {
-      periodTabs.style.display = 'none';
-      banner.style.display = 'block';
-      lbState.period = 'week';  // server forces this anyway, kept for UI consistency
-    } else {
-      periodTabs.style.display = '';
-      banner.style.display = 'none';
-    }
     loadBoard();
   });
   document.getElementById('lbPeriodTabs').addEventListener('click', (e) => {
@@ -15092,16 +15072,145 @@ No markdown, no code fences. ONLY JSON.
     loadBoard();
   });
 
-  // Initial state: start on Global (period tabs hidden, banner shown)
-  document.getElementById('lbPeriodTabs').style.display = 'none';
-  document.getElementById('lbGlobalBanner').style.display = 'block';
-
   loadRanks();
   loadBoard();
 })();
 </script>
 """
         return _s_render("Leaderboards", content, active_page="student_leaderboard")
+
+
+
+    # ─── Public student profile (read-only) ────────────────────────────
+    # Anyone logged in can view another student's public stats by clicking
+    # them on the leaderboard. Only PUBLIC fields are exposed (see the
+    # /api/academic/user/<id> endpoint). Email is never shown.
+    @app.route("/student/profile/<int:user_id>")
+    def student_public_profile_page(user_id):
+        if not _logged_in():
+            return redirect(url_for("login"))
+        is_self = (user_id == _cid())
+        title = "Your Profile" if is_self else "Student Profile"
+        content = """
+<style>
+  #mr-prof { --pf-card:#10172A; --pf-border:rgba(148,163,184,.12); }
+  #mr-prof .pf-loading, #mr-prof .pf-error { padding:60px 20px; text-align:center; color:var(--text-muted);}
+  #mr-prof .pf-hero {
+    background: linear-gradient(135deg, rgba(124,156,255,.12), rgba(192,132,252,.08));
+    border: 1px solid var(--border); border-radius: 20px; padding: 32px;
+    display:flex; gap:24px; align-items:center; flex-wrap:wrap;
+  }
+  #mr-prof .pf-avatar {
+    width:96px; height:96px; border-radius:50%; flex-shrink:0;
+    background: linear-gradient(135deg, #3B4A7A, #5B4694);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:36px; font-weight:700;
+    border: 3px solid var(--border);
+  }
+  #mr-prof .pf-name { font-size:28px; font-weight:800; margin:0 0 6px; letter-spacing:-.02em; }
+  #mr-prof .pf-meta { color:var(--text-muted); font-size:14px; display:flex; gap:14px; flex-wrap:wrap; }
+  #mr-prof .pf-rank-card {
+    margin-left:auto; padding:14px 20px; border-radius:14px;
+    background: rgba(255,255,255,.03); border:1px solid var(--border); text-align:center;
+  }
+  #mr-prof .pf-rank-name { font-size:20px; font-weight:700; }
+  #mr-prof .pf-rank-xp { font-size:13px; color:var(--text-muted); margin-top:4px; }
+  #mr-prof .pf-grid {
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap:14px; margin-top:20px;
+  }
+  #mr-prof .pf-stat {
+    background: var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:18px 20px;
+  }
+  #mr-prof .pf-stat .label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; }
+  #mr-prof .pf-stat .value { font-size:22px; font-weight:700; margin-top:6px; }
+  #mr-prof .pf-section {
+    margin-top:24px; background:var(--card); border:1px solid var(--border);
+    border-radius:18px; padding:24px;
+  }
+  #mr-prof .pf-section h3 { margin:0 0 16px; font-size:18px; }
+  #mr-prof .pf-badges { display:flex; flex-wrap:wrap; gap:10px; }
+  #mr-prof .pf-badge {
+    padding:8px 14px; border-radius:999px;
+    background: rgba(124,156,255,.1); border:1px solid rgba(124,156,255,.3);
+    font-size:13px; display:inline-flex; align-items:center; gap:6px;
+  }
+  #mr-prof .pf-empty { color:var(--text-muted); font-size:13px; }
+  #mr-prof .pf-retired-tag {
+    display:inline-block; padding:4px 12px; border-radius:999px;
+    background: rgba(34,197,94,.12); color:#22c55e;
+    font-size:12px; font-weight:600; margin-left:8px;
+  }
+  @media (max-width: 600px) {
+    #mr-prof .pf-hero { padding:20px; }
+    #mr-prof .pf-rank-card { margin-left:0; width:100%; }
+    #mr-prof .pf-name { font-size:22px; }
+  }
+</style>
+<div id="mr-prof"><div class="pf-loading">Loading profile…</div></div>
+<script>
+(function(){
+  var USER_ID = """ + str(int(user_id)) + """;
+  var IS_SELF = """ + ("true" if is_self else "false") + """;
+  function escapeHtml(s){return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function initials(name){return (name||'?').split(/\\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();}
+  fetch('/api/academic/user/' + USER_ID).then(r => r.json()).then(p => {
+    var box = document.getElementById('mr-prof');
+    if (!p || p.error) { box.innerHTML = '<div class="pf-error">Profile not found.</div>'; return; }
+    var country = p.country ? ((p.country.flag_emoji || '') + ' ' + escapeHtml(p.country.name || '')) : '';
+    var uniName = p.university ? escapeHtml(p.university.name || '') : '<span style="color:var(--text-muted);">No university set</span>';
+    var majorName = p.major ? escapeHtml(p.major.name || '') : '<span style="color:var(--text-muted);">No major set</span>';
+    var retiredTag = p.is_retired ? '<span class="pf-retired-tag">🏖️ Retired</span>' : '';
+    var rankColor = (p.rank && p.rank.color) || '#6366F1';
+    var rankName = (p.rank && p.rank.full_name) || 'Unranked';
+    var leaderPos = p.leaderboard_position;
+    var posLine = (leaderPos && leaderPos.rank)
+      ? '#' + leaderPos.rank + ' / ' + (leaderPos.total||'?') + ' (' + (leaderPos.scope==='retirement' ? 'Retired' : 'Global') + ')'
+      : 'Unranked';
+    var bio = p.bio ? '<p style="margin:14px 0 0;color:var(--text-muted);font-size:14px;line-height:1.6;">' + escapeHtml(p.bio) + '</p>' : '';
+    var html = '';
+    html += '<div class="pf-hero">';
+    html +=   '<div class="pf-avatar">' + initials(p.name) + '</div>';
+    html +=   '<div style="flex:1;min-width:200px;">';
+    html +=     '<h1 class="pf-name">' + escapeHtml(p.name) + retiredTag + '</h1>';
+    html +=     '<div class="pf-meta">';
+    if (country)  html += '<span>' + country + '</span>';
+    html +=       '<span>🎓 ' + uniName + '</span>';
+    html +=       '<span>📚 ' + majorName + '</span>';
+    html +=     '</div>';
+    html +=     bio;
+    html +=   '</div>';
+    html +=   '<div class="pf-rank-card" style="border-color:' + rankColor + '44;">';
+    html +=     '<div class="pf-rank-name" style="color:' + rankColor + ';">' + escapeHtml(rankName) + '</div>';
+    html +=     '<div class="pf-rank-xp">' + (p.xp||0).toLocaleString() + ' XP</div>';
+    html +=   '</div>';
+    html += '</div>';
+    html += '<div class="pf-grid">';
+    html +=   '<div class="pf-stat"><div class="label">Total XP</div><div class="value">' + (p.xp||0).toLocaleString() + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">Leaderboard</div><div class="value">' + posLine + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">Badges</div><div class="value">' + (p.badge_count||0) + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">Status</div><div class="value">' + (p.is_retired ? '🏖️ Retired' : '⚡ Active') + '</div></div>';
+    html += '</div>';
+    html += '<div class="pf-section"><h3>🏆 Badges</h3>';
+    if (!p.badges || !p.badges.length) {
+      html += '<div class="pf-empty">No badges earned yet.</div>';
+    } else {
+      html += '<div class="pf-badges">';
+      p.badges.forEach(b => {
+        html += '<span class="pf-badge">' + (b.icon||'🎖️') + ' ' + escapeHtml(b.name||b.key||'Badge') + '</span>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    box.innerHTML = html;
+  }).catch(e => {
+    document.getElementById('mr-prof').innerHTML = '<div class="pf-error">Failed to load profile.</div>';
+  });
+})();
+</script>
+"""
+        return _s_render(title, content, active_page="student_leaderboard")
 
 
 
@@ -15341,6 +15450,43 @@ No markdown, no code fences. ONLY JSON.
 
 
 
+    # ── Retirement (opt out of active rankings) ──────────────
+
+    @app.route("/api/student/retire", methods=["POST"])
+    def student_retire():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        from outreach.db import get_db, _exec
+        try:
+            with get_db() as db:
+                _exec(
+                    db,
+                    "UPDATE clients SET retired = 1, retired_at = CURRENT_TIMESTAMP "
+                    "WHERE id = %s",
+                    (_cid(),),
+                )
+            return jsonify({"ok": True, "retired": True})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+    @app.route("/api/student/unretire", methods=["POST"])
+    def student_unretire():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        from outreach.db import get_db, _exec
+        try:
+            with get_db() as db:
+                _exec(
+                    db,
+                    "UPDATE clients SET retired = 0, retired_at = NULL WHERE id = %s",
+                    (_cid(),),
+                )
+            return jsonify({"ok": True, "retired": False})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+
+
     @app.route("/student/settings", methods=["GET", "POST"])
 
     def student_settings_page():
@@ -15360,6 +15506,9 @@ No markdown, no code fences. ONLY JSON.
         from outreach.config import PLAN_LIMITS
 
         client = get_client(cid)
+
+        # Retirement flag — controls whether the user appears on active leaderboards
+        _is_retired = bool((client or {}).get("retired") or 0)
 
 
 
@@ -16271,100 +16420,51 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        <!-- Retire from rankings -->
-
-        <div class="card" style="margin-top:16px;border-color:rgba(251,191,36,.45);">
-
-          <div class="card-header"><h2 style="color:#D97706;">&#127774; {_T("Retire from rankings")}</h2></div>
-
+        <!-- Retirement -->
+        <div class="card" id="retire-card" style="margin-top:16px;border-color:{('var(--green)' if _is_retired else 'var(--yellow)')};">
+          <div class="card-header"><h2>{('🏖️ ' + _T('Retired')) if _is_retired else ('🎓 ' + _T('Retirement'))}</h2></div>
           <div style="padding:20px;">
-
-            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">{_T("Finished your studies? Retire to leave every active leaderboard (global, country, university, major) and be moved to the dedicated")} <strong>{_T("Retirement Hall")}</strong>{_T(", where veteran students compete on lifetime XP only. Your XP, badges, and history are preserved. You can come back any time.")}</p>
-
-            <div id="retire-status-box" style="display:none;padding:12px 14px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.4);border-radius:var(--radius-sm);margin-bottom:12px;font-size:13px;color:#B45309;"></div>
-
-            <button id="btn-retire" class="btn btn-outline btn-sm" style="color:#D97706;border-color:#D97706;">{_T("Retire from active ranks")}</button>
-
-            <button id="btn-unretire" class="btn btn-outline btn-sm" style="display:none;">{_T("Come back to active ranks")}</button>
-
+            {(
+              '''<p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.55;">'''
+              + _T("You are currently retired from active rankings. Your name only appears on the Retirement leaderboard. You can come back at any time.")
+              + '''</p>
+              <button class="btn btn-primary btn-sm" onclick="unretireMe()">↩️ ''' + _T("Return to active rankings") + '''</button>
+              <span id="retire-status" style="margin-left:10px;font-size:13px;color:var(--text-muted);"></span>'''
+            ) if _is_retired else (
+              '''<p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.55;">'''
+              + _T("When you finish your studies, retire to leave the active rankings with honor. Your XP is preserved and you'll appear on the Retirement leaderboard alongside other graduates. You can return at any time.")
+              + '''</p>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('retire-confirm').style.display='block';this.style.display='none';" style="border:1px solid var(--yellow);color:var(--yellow);">🏖️ ''' + _T("Retire from active rankings") + '''</button>
+              <div id="retire-confirm" style="display:none;margin-top:14px;padding:16px;border:1px solid var(--yellow);border-radius:var(--radius-sm);background:var(--yellow-light);">
+                <p style="font-size:13px;color:var(--text);margin:0 0 10px;">''' + _T("Are you sure? You will be removed from the global, country, university and major leaderboards.") + '''</p>
+                <button class="btn btn-primary btn-sm" onclick="retireMe()" style="background:var(--yellow);border-color:var(--yellow);">''' + _T("Yes, retire me") + '''</button>
+                <span id="retire-status" style="margin-left:10px;font-size:13px;color:var(--text-muted);"></span>
+              </div>'''
+            )}
           </div>
-
         </div>
-
         <script>
-
-        (async function() {{
-
-          var box = document.getElementById('retire-status-box');
-
-          var btnR = document.getElementById('btn-retire');
-
-          var btnU = document.getElementById('btn-unretire');
-
-          async function refreshStatus() {{
-
+          async function retireMe() {{
+            var s = document.getElementById('retire-status');
+            s.textContent = {repr(_T("Retiring..."))};
             try {{
-
-              var r = await fetch('/api/academic/ranks');
-
-              if (!r.ok) return;
-
+              var r = await fetch('/api/student/retire', {{method:'POST'}});
               var j = await r.json();
-
-              if (j.retired) {{
-
-                box.style.display = 'block';
-
-                box.innerHTML = '{_T("You are currently retired. You appear only in the Retirement Hall.")}';
-
-                btnR.style.display = 'none';
-
-                btnU.style.display = 'inline-block';
-
-              }} else {{
-
-                box.style.display = 'none';
-
-                btnR.style.display = 'inline-block';
-
-                btnU.style.display = 'none';
-
-              }}
-
-            }} catch(e) {{}}
-
+              if (j.ok) {{ s.textContent = {repr(_T("Retired. Reloading..."))}; setTimeout(function(){{location.reload();}}, 600); }}
+              else {{ s.textContent = (j.error || 'Failed.'); }}
+            }} catch(e) {{ s.textContent = 'Network error.'; }}
           }}
-
-          btnR.addEventListener('click', async function() {{
-
-            if (!confirm('{_T("Retire from all active leaderboards? You will only appear in the Retirement Hall until you choose to return.")}')) return;
-
-            var r = await fetch('/api/academic/retire', {{method:'POST'}});
-
-            if (r.ok) {{ alert('{_T("Retired. Welcome to the Retirement Hall.")}'); refreshStatus(); }}
-
-            else alert('{_T("Error retiring. Please try again.")}');
-
-          }});
-
-          btnU.addEventListener('click', async function() {{
-
-            if (!confirm('{_T("Come back to the active leaderboards?")}')) return;
-
-            var r = await fetch('/api/academic/unretire', {{method:'POST'}});
-
-            if (r.ok) {{ alert('{_T("Welcome back!")}'); refreshStatus(); }}
-
-            else alert('{_T("Error. Please try again.")}');
-
-          }});
-
-          refreshStatus();
-
-        }})();
-
+          async function unretireMe() {{
+            var s = document.getElementById('retire-status');
+            s.textContent = {repr(_T("Unretiring..."))};
+            try {{
+              var r = await fetch('/api/student/unretire', {{method:'POST'}});
+              var j = await r.json();
+              if (j.ok) {{ s.textContent = {repr(_T("Welcome back! Reloading..."))}; setTimeout(function(){{location.reload();}}, 600); }}
+              else {{ s.textContent = (j.error || 'Failed.'); }}
+            }} catch(e) {{ s.textContent = 'Network error.'; }}
+          }}
         </script>
-
 
 
         <!-- Delete Account -->

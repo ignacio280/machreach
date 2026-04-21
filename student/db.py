@@ -1000,38 +1000,40 @@ def get_focus_stats(client_id: int) -> dict:
 
 
 def get_focus_stats_today(client_id: int) -> dict:
-    """Return focus-mode stats limited to TODAY only.
+    """Focus stats restricted to TODAY (the user's local calendar day).
 
-    The Focus Mode page shows what the user has accomplished in the
-    current study day — not an all-time leaderboard — so every card
-    (hours, sessions, pages) is scoped to today's `plan_date`. The
-    day-streak is still computed all-time because that's a
-    multi-day metric by definition.
+    Used by the Focus Mode page header so the numbers reflect what the
+    student has put in *today*, not their lifetime totals.
     """
-    today = datetime.now().date().strftime("%Y-%m-%d")
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    like_today = today_str + "%"
     with get_db() as db:
         total_min = _fetchval(
-            db, "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress "
-                "WHERE client_id = %s AND plan_date = %s",
-            (client_id, today),
+            db,
+            "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress "
+            "WHERE client_id = %s AND plan_date LIKE %s",
+            (client_id, like_today),
         ) or 0
         total_pages = _fetchval(
-            db, "SELECT COALESCE(SUM(pages_read),0) FROM student_study_progress "
-                "WHERE client_id = %s AND plan_date = %s",
-            (client_id, today),
+            db,
+            "SELECT COALESCE(SUM(pages_read),0) FROM student_study_progress "
+            "WHERE client_id = %s AND plan_date LIKE %s",
+            (client_id, like_today),
         ) or 0
         sessions = _fetchval(
-            db, "SELECT COUNT(*) FROM student_study_progress "
-                "WHERE client_id = %s AND plan_date = %s AND focus_minutes > 0",
-            (client_id, today),
+            db,
+            "SELECT COUNT(*) FROM student_study_progress "
+            "WHERE client_id = %s AND plan_date LIKE %s AND focus_minutes > 0",
+            (client_id, like_today),
         ) or 0
-    all_time = get_focus_stats(client_id)
+    # Reuse the lifetime call only for the streak number (cheap, single query already done)
+    streak = get_focus_stats(client_id).get("streak_days", 0)
     return {
         "total_minutes": total_min,
         "total_hours": round(total_min / 60, 1),
         "total_pages": total_pages,
         "sessions": sessions,
-        "streak_days": all_time.get("streak_days", 0),
+        "streak_days": streak,
     }
 
 
