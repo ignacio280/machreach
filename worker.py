@@ -475,6 +475,60 @@ def refresh_student_plans():
         print(f"[STUDENT] Midnight plan refresh error (non-fatal): {e}")
 
 
+def send_streak_risk_pushes():
+    """8pm cron: email students whose streak >= 5 and have no activity today."""
+    try:
+        from student import db as sdb
+        import smtplib
+        from email.mime.text import MIMEText
+        from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, BASE_URL
+        if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
+            print("[STREAK_RISK] SMTP not configured, skipping.")
+            return
+        recipients = sdb.get_streak_risk_recipients(min_streak=5)
+        print(f"[STREAK_RISK] {len(recipients)} user(s) at risk")
+        for r in recipients:
+            try:
+                streak = int(r["streak"])
+                name = r.get("name") or "there"
+                subject = f"Don't lose your {streak}-day streak"
+                body = (
+                    f"Hi {name},\n\n"
+                    f"You still have time today. Your {streak}-day study streak resets at midnight — "
+                    f"10 minutes of focus saves it.\n\n"
+                    f"Open MachReach: {BASE_URL}/student/dashboard\n\n"
+                    f"— MachReach"
+                )
+                msg = MIMEText(body, "plain", "utf-8")
+                msg["From"] = SMTP_USER
+                msg["To"] = r["email"]
+                msg["Subject"] = subject
+                if int(SMTP_PORT) == 587:
+                    with smtplib.SMTP(SMTP_HOST, int(SMTP_PORT), timeout=30) as srv:
+                        srv.starttls()
+                        srv.login(SMTP_USER, SMTP_PASSWORD)
+                        srv.send_message(msg)
+                else:
+                    with smtplib.SMTP_SSL(SMTP_HOST, int(SMTP_PORT), timeout=30) as srv:
+                        srv.login(SMTP_USER, SMTP_PASSWORD)
+                        srv.send_message(msg)
+                print(f"  [STREAK_RISK] sent to {r['email']} (streak={streak})")
+            except Exception as e:
+                print(f"  [STREAK_RISK] failed for {r.get('email')}: {e}")
+    except Exception as e:
+        print(f"[STREAK_RISK] error (non-fatal): {e}")
+
+
+def settle_student_duels():
+    try:
+        from student import db as sdb
+        n = sdb.settle_due_duels()
+        if n:
+            print(f"[DUELS] settled {n} duel(s)")
+    except Exception as e:
+        print(f"[DUELS] error (non-fatal): {e}")
+
+
 if __name__ == "__main__":
     init_db()
 
@@ -494,6 +548,8 @@ if __name__ == "__main__":
     scheduler.add_job(send_scheduled, "interval", minutes=1, id="send_scheduled")
     scheduler.add_job(sync_mail_hub, "interval", minutes=3, id="sync_mail_hub")
     scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
+    scheduler.add_job(send_streak_risk_pushes, "cron", hour=20, minute=0, id="streak_risk_push")
+    scheduler.add_job(settle_student_duels, "cron", hour="*", minute=15, id="settle_duels")
 
     def _apply_recurring_income_all():
         try:

@@ -602,6 +602,106 @@ def _student_migrations():
         "created_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
         "UNIQUE(note_id, forker_id))",
     )
+    # Streak freezes — 1 free auto-freeze per ISO week
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_streak_freezes ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "freeze_date DATE NOT NULL, "
+        "iso_year INTEGER NOT NULL, "
+        "iso_week INTEGER NOT NULL, "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(client_id, iso_year, iso_week))",
+        "CREATE TABLE IF NOT EXISTS student_streak_freezes ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "freeze_date TEXT NOT NULL, "
+        "iso_year INTEGER NOT NULL, "
+        "iso_week INTEGER NOT NULL, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(client_id, iso_year, iso_week))",
+    )
+    # Daily quests — 3 randomized goals per day
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_daily_quests ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "quest_date DATE NOT NULL, "
+        "quest_key TEXT NOT NULL, "
+        "target INTEGER NOT NULL DEFAULT 1, "
+        "progress INTEGER NOT NULL DEFAULT 0, "
+        "xp_reward INTEGER NOT NULL DEFAULT 10, "
+        "completed_at TIMESTAMP, "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(client_id, quest_date, quest_key))",
+        "CREATE TABLE IF NOT EXISTS student_daily_quests ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "quest_date TEXT NOT NULL, "
+        "quest_key TEXT NOT NULL, "
+        "target INTEGER NOT NULL DEFAULT 1, "
+        "progress INTEGER NOT NULL DEFAULT 0, "
+        "xp_reward INTEGER NOT NULL DEFAULT 10, "
+        "completed_at TEXT, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(client_id, quest_date, quest_key))",
+    )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_daily_quest_bundles ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "quest_date DATE NOT NULL, "
+        "completed_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(client_id, quest_date))",
+        "CREATE TABLE IF NOT EXISTS student_daily_quest_bundles ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "quest_date TEXT NOT NULL, "
+        "completed_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(client_id, quest_date))",
+    )
+    # Friends — undirected after acceptance, but stored as one row per direction
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_friends ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "friend_client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "status TEXT NOT NULL DEFAULT 'pending', "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(client_id, friend_client_id))",
+        "CREATE TABLE IF NOT EXISTS student_friends ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "friend_client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "status TEXT NOT NULL DEFAULT 'pending', "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(client_id, friend_client_id))",
+    )
+    # 7-day duels (head-to-head focus minutes)
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_duels ("
+        "id SERIAL PRIMARY KEY, "
+        "challenger_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "opponent_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "started_at TIMESTAMP DEFAULT NOW(), "
+        "ends_at TIMESTAMP NOT NULL, "
+        "status TEXT NOT NULL DEFAULT 'pending', "
+        "winner_id INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
+        "challenger_minutes INTEGER NOT NULL DEFAULT 0, "
+        "opponent_minutes INTEGER NOT NULL DEFAULT 0, "
+        "settled_at TIMESTAMP)",
+        "CREATE TABLE IF NOT EXISTS student_duels ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "challenger_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "opponent_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "started_at TEXT DEFAULT (datetime('now','localtime')), "
+        "ends_at TEXT NOT NULL, "
+        "status TEXT NOT NULL DEFAULT 'pending', "
+        "winner_id INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
+        "challenger_minutes INTEGER NOT NULL DEFAULT 0, "
+        "opponent_minutes INTEGER NOT NULL DEFAULT 0, "
+        "settled_at TEXT)",
+    )
 
 
 # ── Canvas tokens ───────────────────────────────────────────
@@ -1695,7 +1795,12 @@ def get_xp_history(client_id: int, limit: int = 30) -> list[dict]:
 
 
 def get_streak_days(client_id: int) -> int:
-    """Count consecutive days with XP activity ending today."""
+    """Count consecutive days with XP activity ending today.
+
+    A user gets ONE auto-applied streak freeze per ISO week: a single missed
+    day inside that week does not break the streak. The freeze is recorded
+    in `student_streak_freezes` the first time the gap is observed.
+    """
     with get_db() as db:
         if _USE_PG:
             rows = _fetchall(
@@ -1715,17 +1820,96 @@ def get_streak_days(client_id: int) -> int:
         return 0
     from datetime import date as _date, timedelta
     today = _date.today()
-    streak = 0
+    # Build set of activity dates
+    activity = set()
     for r in rows:
         d = r["d"]
         if isinstance(d, str):
             d = _date.fromisoformat(d)
-        expected = today - timedelta(days=streak)
-        if d == expected:
+        activity.add(d)
+    # Pull existing freezes (last 120 days)
+    existing_freezes = _get_recent_freeze_dates(client_id, today - timedelta(days=120))
+    # Track freezes already used per ISO week
+    weeks_used = {(d.isocalendar()[0], d.isocalendar()[1]) for d in existing_freezes}
+    new_freezes: list = []  # tuples (date, year, week)
+    streak = 0
+    cur = today
+    # Allow today to be missing without breaking — streak shows yesterday's count
+    if cur not in activity and cur not in existing_freezes:
+        cur = cur - timedelta(days=1)
+    while True:
+        if cur in activity or cur in existing_freezes:
             streak += 1
-        else:
-            break
+            cur = cur - timedelta(days=1)
+            continue
+        # Try to consume a freeze for this week
+        iso = cur.isocalendar()
+        wk = (iso[0], iso[1])
+        if wk not in weeks_used:
+            weeks_used.add(wk)
+            new_freezes.append((cur, iso[0], iso[1]))
+            streak += 1
+            cur = cur - timedelta(days=1)
+            continue
+        break
+    # Persist any newly-applied freezes
+    if new_freezes:
+        _record_freezes(client_id, new_freezes)
     return streak
+
+
+def _get_recent_freeze_dates(client_id: int, since) -> set:
+    from datetime import date as _date
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT freeze_date FROM student_streak_freezes "
+            "WHERE client_id = %s AND freeze_date >= %s",
+            (client_id, since.isoformat() if not _USE_PG else since),
+        ) or []
+    out = set()
+    for r in rows:
+        d = r["freeze_date"]
+        if isinstance(d, str):
+            d = _date.fromisoformat(d[:10])
+        out.add(d)
+    return out
+
+
+def _record_freezes(client_id: int, freezes: list) -> None:
+    with get_db() as db:
+        for d, y, w in freezes:
+            try:
+                _exec(
+                    db,
+                    "INSERT INTO student_streak_freezes "
+                    "(client_id, freeze_date, iso_year, iso_week) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (client_id, d.isoformat() if not _USE_PG else d, y, w),
+                )
+            except Exception:
+                pass  # UNIQUE constraint — week already used
+
+
+def get_freeze_status(client_id: int) -> dict:
+    """Return whether this ISO week's freeze has been used."""
+    from datetime import date as _date
+    iso = _date.today().isocalendar()
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT freeze_date FROM student_streak_freezes "
+            "WHERE client_id = %s AND iso_year = %s AND iso_week = %s",
+            (client_id, iso[0], iso[1]),
+        )
+    if row:
+        d = row["freeze_date"]
+        if isinstance(d, str):
+            d = d[:10]
+        else:
+            d = d.isoformat()
+        return {"available": False, "used_on": d}
+    return {"available": True, "used_on": None}
 
 
 # ── Badges ──────────────────────────────────────────────────
@@ -2271,3 +2455,438 @@ def get_note_fork_count(author_id: int) -> int:
             "SELECT COUNT(DISTINCT forker_id) FROM student_note_forks WHERE author_id = %s",
             (author_id,),
         ) or 0
+
+# -- Daily Quests --------------------------------------------
+
+QUEST_POOL = [
+    {"key": "focus_25",    "label": "Focus for 25 minutes",         "target": 25,  "xp": 15, "metric": "focus_minutes"},
+    {"key": "focus_60",    "label": "Focus for 60 minutes",         "target": 60,  "xp": 25, "metric": "focus_minutes"},
+    {"key": "flashcards_20","label": "Review 20 flashcards",        "target": 20,  "xp": 15, "metric": "flashcards_reviewed"},
+    {"key": "quiz_1",      "label": "Complete 1 quiz",              "target": 1,   "xp": 20, "metric": "quizzes_completed"},
+    {"key": "session_3",   "label": "Finish 3 study sessions",      "target": 3,   "xp": 20, "metric": "sessions_completed"},
+    {"key": "pages_15",    "label": "Read 15 pages of material",    "target": 15,  "xp": 15, "metric": "pages_read"},
+    {"key": "note_1",      "label": "Create 1 note",                "target": 1,   "xp": 10, "metric": "notes_created"},
+    {"key": "exam_review_15","label": "15 min reviewing for an exam","target": 15, "xp": 15, "metric": "focus_minutes"},
+]
+
+QUEST_BUNDLE_BONUS_XP = 30  # awarded when all 3 daily quests complete
+
+
+def get_or_create_daily_quests(client_id: int) -> list[dict]:
+    """Return today's 3 quests, generating them on first call of the day."""
+    import random
+    from datetime import date as _date
+    today = _date.today()
+    today_s = today.isoformat()
+    with get_db() as db:
+        if _USE_PG:
+            rows = _fetchall(
+                db,
+                "SELECT * FROM student_daily_quests WHERE client_id = %s AND quest_date = %s ORDER BY id",
+                (client_id, today),
+            )
+        else:
+            rows = _fetchall(
+                db,
+                "SELECT * FROM student_daily_quests WHERE client_id = %s AND quest_date = %s ORDER BY id",
+                (client_id, today_s),
+            )
+    if rows:
+        return [dict(r) for r in rows]
+    # Pick 3 distinct quests deterministically per (client, day)
+    rng = random.Random(f"{client_id}-{today_s}")
+    picks = rng.sample(QUEST_POOL, 3)
+    out = []
+    with get_db() as db:
+        for q in picks:
+            try:
+                _exec(
+                    db,
+                    "INSERT INTO student_daily_quests "
+                    "(client_id, quest_date, quest_key, target, progress, xp_reward) "
+                    "VALUES (%s, %s, %s, %s, 0, %s)",
+                    (client_id, today if _USE_PG else today_s, q["key"], q["target"], q["xp"]),
+                )
+            except Exception:
+                pass
+        if _USE_PG:
+            out = _fetchall(
+                db,
+                "SELECT * FROM student_daily_quests WHERE client_id = %s AND quest_date = %s ORDER BY id",
+                (client_id, today),
+            )
+        else:
+            out = _fetchall(
+                db,
+                "SELECT * FROM student_daily_quests WHERE client_id = %s AND quest_date = %s ORDER BY id",
+                (client_id, today_s),
+            )
+    return [dict(r) for r in out]
+
+
+def progress_quests_by_metric(client_id: int, metric: str, amount: int = 1) -> list[dict]:
+    """Increment today's quests whose metric matches. Returns list of newly-completed quests."""
+    if amount <= 0:
+        return []
+    quests = get_or_create_daily_quests(client_id)
+    newly_completed: list[dict] = []
+    matching_keys = {q["key"] for q in QUEST_POOL if q["metric"] == metric}
+    from datetime import date as _date
+    today = _date.today()
+    today_s = today.isoformat()
+    with get_db() as db:
+        for row in quests:
+            if row["quest_key"] not in matching_keys:
+                continue
+            if row.get("completed_at"):
+                continue
+            new_prog = min(int(row["target"]), int(row["progress"]) + amount)
+            done_now = new_prog >= int(row["target"])
+            if done_now:
+                _exec(
+                    db,
+                    "UPDATE student_daily_quests SET progress = %s, completed_at = "
+                    + ("NOW()" if _USE_PG else "datetime('now','localtime')")
+                    + " WHERE id = %s",
+                    (new_prog, row["id"]),
+                )
+                # Award XP for the quest itself
+                _insert_returning_id(
+                    db,
+                    "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s) RETURNING id",
+                    (client_id, "daily_quest", int(row["xp_reward"]), f"Quest: {row['quest_key']}"),
+                    "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (?, ?, ?, ?)",
+                )
+                newly_completed.append(dict(row, progress=new_prog, completed_at="just now"))
+            else:
+                _exec(
+                    db,
+                    "UPDATE student_daily_quests SET progress = %s WHERE id = %s",
+                    (new_prog, row["id"]),
+                )
+    # Bundle bonus when ALL 3 done
+    if newly_completed:
+        with get_db() as db:
+            done_count = _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_daily_quests "
+                "WHERE client_id = %s AND quest_date = %s AND completed_at IS NOT NULL",
+                (client_id, today if _USE_PG else today_s),
+            ) or 0
+            total = _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_daily_quests "
+                "WHERE client_id = %s AND quest_date = %s",
+                (client_id, today if _USE_PG else today_s),
+            ) or 0
+            already = _fetchval(
+                db,
+                "SELECT id FROM student_daily_quest_bundles "
+                "WHERE client_id = %s AND quest_date = %s",
+                (client_id, today if _USE_PG else today_s),
+            )
+            if total >= 3 and done_count >= total and not already:
+                try:
+                    _exec(
+                        db,
+                        "INSERT INTO student_daily_quest_bundles (client_id, quest_date) VALUES (%s, %s)",
+                        (client_id, today if _USE_PG else today_s),
+                    )
+                    _insert_returning_id(
+                        db,
+                        "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s) RETURNING id",
+                        (client_id, "quest_bundle", QUEST_BUNDLE_BONUS_XP, "All 3 daily quests complete"),
+                        "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (?, ?, ?, ?)",
+                    )
+                except Exception:
+                    pass
+    return newly_completed
+
+
+# -- Friends -------------------------------------------------
+
+def search_users(query: str, exclude_client_id: int | None = None, limit: int = 20) -> list[dict]:
+    """Search clients by name or numeric ID. Returns id, name, email."""
+    q = (query or "").strip()
+    if not q:
+        return []
+    rows: list = []
+    with get_db() as db:
+        # Numeric ID lookup
+        if q.lstrip("#").isdigit():
+            cid = int(q.lstrip("#"))
+            r = _fetchone(db, "SELECT id, name, email FROM clients WHERE id = %s", (cid,))
+            if r:
+                rows.append(r)
+        # Name/email LIKE
+        like = f"%{q}%"
+        more = _fetchall(
+            db,
+            "SELECT id, name, email FROM clients "
+            "WHERE (name ILIKE %s OR email ILIKE %s) "
+            "ORDER BY id ASC LIMIT %s" if _USE_PG else
+            "SELECT id, name, email FROM clients "
+            "WHERE (name LIKE ? OR email LIKE ?) "
+            "ORDER BY id ASC LIMIT ?",
+            (like, like, limit),
+        ) or []
+        rows.extend(more)
+    seen = set()
+    out = []
+    for r in rows:
+        rid = r["id"]
+        if rid in seen:
+            continue
+        if exclude_client_id and rid == exclude_client_id:
+            continue
+        seen.add(rid)
+        out.append({"id": rid, "name": r.get("name") or "", "email": r.get("email") or ""})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def add_friend(client_id: int, friend_id: int) -> str:
+    """Send/accept a friend request. Returns 'requested', 'accepted', 'already', 'self'."""
+    if client_id == friend_id:
+        return "self"
+    with get_db() as db:
+        # If the other side already requested, accept both directions
+        reverse = _fetchone(
+            db,
+            "SELECT id, status FROM student_friends WHERE client_id = %s AND friend_client_id = %s",
+            (friend_id, client_id),
+        )
+        existing = _fetchone(
+            db,
+            "SELECT id, status FROM student_friends WHERE client_id = %s AND friend_client_id = %s",
+            (client_id, friend_id),
+        )
+        if existing and existing["status"] == "accepted":
+            return "already"
+        if reverse:
+            # Accept both directions
+            _exec(db, "UPDATE student_friends SET status = 'accepted' WHERE id = %s", (reverse["id"],))
+            if existing:
+                _exec(db, "UPDATE student_friends SET status = 'accepted' WHERE id = %s", (existing["id"],))
+            else:
+                _exec(
+                    db,
+                    "INSERT INTO student_friends (client_id, friend_client_id, status) VALUES (%s, %s, 'accepted')",
+                    (client_id, friend_id),
+                )
+            return "accepted"
+        if existing:
+            return "already"
+        _exec(
+            db,
+            "INSERT INTO student_friends (client_id, friend_client_id, status) VALUES (%s, %s, 'pending')",
+            (client_id, friend_id),
+        )
+        return "requested"
+
+
+def remove_friend(client_id: int, friend_id: int) -> None:
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_friends WHERE client_id = %s AND friend_client_id = %s",
+              (client_id, friend_id))
+        _exec(db, "DELETE FROM student_friends WHERE client_id = %s AND friend_client_id = %s",
+              (friend_id, client_id))
+
+
+def list_friends(client_id: int) -> dict:
+    """Return {'friends': [...accepted...], 'incoming': [...pending TO me...], 'outgoing': [...pending FROM me...]}."""
+    with get_db() as db:
+        accepted = _fetchall(
+            db,
+            "SELECT c.id, c.name, c.email FROM student_friends sf "
+            "JOIN clients c ON c.id = sf.friend_client_id "
+            "WHERE sf.client_id = %s AND sf.status = 'accepted'",
+            (client_id,),
+        ) or []
+        incoming = _fetchall(
+            db,
+            "SELECT c.id, c.name, c.email FROM student_friends sf "
+            "JOIN clients c ON c.id = sf.client_id "
+            "WHERE sf.friend_client_id = %s AND sf.status = 'pending'",
+            (client_id,),
+        ) or []
+        outgoing = _fetchall(
+            db,
+            "SELECT c.id, c.name, c.email FROM student_friends sf "
+            "JOIN clients c ON c.id = sf.friend_client_id "
+            "WHERE sf.client_id = %s AND sf.status = 'pending'",
+            (client_id,),
+        ) or []
+    return {
+        "friends":  [{"id": r["id"], "name": r.get("name") or "", "email": r.get("email") or ""} for r in accepted],
+        "incoming": [{"id": r["id"], "name": r.get("name") or "", "email": r.get("email") or ""} for r in incoming],
+        "outgoing": [{"id": r["id"], "name": r.get("name") or "", "email": r.get("email") or ""} for r in outgoing],
+    }
+
+
+# -- 7-day Duels ---------------------------------------------
+
+def start_duel(challenger_id: int, opponent_id: int) -> int:
+    """Create a 7-day duel. Returns the duel id."""
+    from datetime import datetime, timedelta
+    ends = datetime.now() + timedelta(days=7)
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_duels (challenger_id, opponent_id, ends_at, status) "
+            "VALUES (%s, %s, %s, 'active') RETURNING id",
+            (challenger_id, opponent_id, ends),
+            "INSERT INTO student_duels (challenger_id, opponent_id, ends_at, status) "
+            "VALUES (?, ?, ?, 'active')",
+        )
+
+
+def get_active_duels(client_id: int) -> list[dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT d.*, "
+            "  cc.name AS challenger_name, "
+            "  oc.name AS opponent_name "
+            "FROM student_duels d "
+            "JOIN clients cc ON cc.id = d.challenger_id "
+            "JOIN clients oc ON oc.id = d.opponent_id "
+            "WHERE (d.challenger_id = %s OR d.opponent_id = %s) AND d.status = 'active' "
+            "ORDER BY d.ends_at ASC",
+            (client_id, client_id),
+        ) or []
+    return [dict(r) for r in rows]
+
+
+def get_duel_history(client_id: int, limit: int = 50) -> list[dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT d.*, "
+            "  cc.name AS challenger_name, "
+            "  oc.name AS opponent_name "
+            "FROM student_duels d "
+            "JOIN clients cc ON cc.id = d.challenger_id "
+            "JOIN clients oc ON oc.id = d.opponent_id "
+            "WHERE (d.challenger_id = %s OR d.opponent_id = %s) AND d.status IN ('settled','tied') "
+            "ORDER BY d.settled_at DESC LIMIT %s",
+            (client_id, client_id, limit),
+        ) or []
+    return [dict(r) for r in rows]
+
+
+def get_head_to_head(client_id: int, friend_id: int) -> dict:
+    """Return {wins, losses, ties} between two users."""
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT winner_id, status FROM student_duels "
+            "WHERE status IN ('settled','tied') "
+            "AND ((challenger_id = %s AND opponent_id = %s) OR (challenger_id = %s AND opponent_id = %s))",
+            (client_id, friend_id, friend_id, client_id),
+        ) or []
+    wins = losses = ties = 0
+    for r in rows:
+        if r.get("status") == "tied" or r.get("winner_id") is None:
+            ties += 1
+        elif r.get("winner_id") == client_id:
+            wins += 1
+        else:
+            losses += 1
+    return {"wins": wins, "losses": losses, "ties": ties}
+
+
+def settle_due_duels() -> int:
+    """Find duels past their end-time, compute focus minutes for both sides,
+    and mark as settled. Returns number of duels settled."""
+    from datetime import datetime
+    settled = 0
+    with get_db() as db:
+        if _USE_PG:
+            rows = _fetchall(
+                db,
+                "SELECT * FROM student_duels WHERE status = 'active' AND ends_at <= NOW()",
+            ) or []
+        else:
+            rows = _fetchall(
+                db,
+                "SELECT * FROM student_duels WHERE status = 'active' "
+                "AND ends_at <= datetime('now','localtime')",
+            ) or []
+    for d in rows:
+        c_min = _focus_minutes_between(d["challenger_id"], d["started_at"], d["ends_at"])
+        o_min = _focus_minutes_between(d["opponent_id"], d["started_at"], d["ends_at"])
+        if c_min > o_min:
+            winner = d["challenger_id"]; status = "settled"
+        elif o_min > c_min:
+            winner = d["opponent_id"]; status = "settled"
+        else:
+            winner = None; status = "tied"
+        with get_db() as db2:
+            _exec(
+                db2,
+                "UPDATE student_duels SET challenger_minutes = %s, opponent_minutes = %s, "
+                "winner_id = %s, status = %s, settled_at = "
+                + ("NOW()" if _USE_PG else "datetime('now','localtime')")
+                + " WHERE id = %s",
+                (c_min, o_min, winner, status, d["id"]),
+            )
+        settled += 1
+    return settled
+
+
+def _focus_minutes_between(client_id: int, start, end) -> int:
+    """Sum focus_minutes from student_study_progress between two timestamps (using created_at)."""
+    with get_db() as db:
+        v = _fetchval(
+            db,
+            "SELECT COALESCE(SUM(focus_minutes), 0) FROM student_study_progress "
+            "WHERE client_id = %s AND created_at >= %s AND created_at <= %s",
+            (client_id, start, end),
+        )
+    try:
+        return int(v or 0)
+    except Exception:
+        return 0
+
+
+# -- Streak Risk Push (8pm cron) -----------------------------
+
+def get_streak_risk_recipients(min_streak: int = 5) -> list[dict]:
+    """Return active students whose streak >= min_streak AND have no XP today.
+    Each item: {client_id, email, name, streak}."""
+    from datetime import date as _date
+    today = _date.today()
+    out: list[dict] = []
+    with get_db() as db:
+        clients = _fetchall(
+            db,
+            "SELECT id, name, email FROM clients "
+            "WHERE COALESCE(retired, FALSE) = FALSE AND email IS NOT NULL AND email <> ''" if _USE_PG else
+            "SELECT id, name, email FROM clients "
+            "WHERE COALESCE(retired, 0) = 0 AND email IS NOT NULL AND email <> ''",
+        ) or []
+    for c in clients:
+        cid = c["id"]
+        streak = get_streak_days(cid)
+        if streak < min_streak:
+            continue
+        # Did they get XP today already?
+        with get_db() as db2:
+            today_act = _fetchval(
+                db2,
+                ("SELECT id FROM student_xp WHERE client_id = %s AND created_at::date = %s LIMIT 1"
+                 if _USE_PG else
+                 "SELECT id FROM student_xp WHERE client_id = %s AND date(created_at) = %s LIMIT 1"),
+                (cid, today),
+            )
+        if today_act:
+            continue
+        out.append({
+            "client_id": cid,
+            "email":     c.get("email") or "",
+            "name":      c.get("name") or "",
+            "streak":    streak,
+        })
+    return out

@@ -2243,6 +2243,26 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+        # Daily-quest progress (focus minutes + sessions + pages)
+
+        try:
+
+            if minutes > 0:
+
+                sdb.progress_quests_by_metric(cid, "focus_minutes", minutes)
+
+                sdb.progress_quests_by_metric(cid, "sessions_completed", 1)
+
+            if pages > 0:
+
+                sdb.progress_quests_by_metric(cid, "pages_read", pages)
+
+        except Exception:
+
+            pass
+
+
+
         # Award XP based on time, difficulty, and mode
 
         if minutes > 0:
@@ -3058,6 +3078,8 @@ def register_student_routes(app, csrf, limiter):
 
               <a href="/student/leaderboard" class="fx-tile"><span class="fx-ico">&#127942;</span><b>Leaderboards</b><span>Global, country, university, major, and class ranks.</span></a>
 
+              <a href="/student/friends" class="fx-tile"><span class="fx-ico">&#128101;</span><b>Friends &amp; Duels</b><span>Add friends, challenge them to 7-day study duels.</span></a>
+
               <a href="/student/exams" class="fx-tile"><span class="fx-ico">&#128203;</span><b>Exams Dashboard</b><span>Every upcoming exam, sorted by urgency.</span></a>
 
               <a href="/student/weak-topics" class="fx-tile"><span class="fx-ico">&#127919;</span><b>Weak Topics</b><span>AI spots what you struggle with from your quiz scores.</span></a>
@@ -3158,45 +3180,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        <!-- XP / Level Bar -->
-
-        <a href="/student/achievements" class="hover-lift" style="text-decoration:none;display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 22px;margin-bottom:20px;">
-
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-
-            <div style="display:flex;align-items:center;gap:10px;">
-
-              <span style="font-size:1.5em">&#127942;</span>
-
-              <span style="font-weight:800;color:var(--text);font-size:15px;">{_esc(level_name)}</span>
-
-              <span style="color:var(--text-muted);font-size:13px;">{total_xp} XP</span>
-
-            </div>
-
-            <div style="display:flex;align-items:center;gap:8px;">
-
-              <span style="color:var(--yellow);font-weight:700;font-size:15px;"><span class="streak-flame">&#128293;</span> {streak_days}</span>
-
-              <span style="color:var(--text-muted);font-size:12px;">day streak</span>
-
-            </div>
-
-          </div>
-
-          <div class="progress-wrap" style="height:10px;">
-
-            <div class="progress-bar bar-purple" style="width:{xp_pct}%;"></div>
-
-          </div>
-
-          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:right;">{total_xp - level_floor}/{level_ceil - level_floor} XP to next level</div>
-
-        </a>
-
-
-
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
 
           <div class="stat-card stat-purple"><div class="num">{len(courses)}</div><div class="label">Courses</div></div>
 
@@ -3204,9 +3188,83 @@ def register_student_routes(app, csrf, limiter):
 
           <div class="stat-card stat-green"><div class="num">{stats['completion_pct']}%</div><div class="label">Plan Progress</div></div>
 
-          <div class="stat-card stat-blue"><div class="num">{focus_stats['total_hours']}</div><div class="label">Hours Focused</div></div>
+        </div>
+
+
+
+        <!-- Daily Quests -->
+
+        <div class="card" style="margin-bottom:24px">
+
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+
+            <h2 style="margin:0">&#127919; Daily Quests</h2>
+
+            <span id="dq-streak" style="font-size:13px;color:var(--text-muted)"></span>
+
+          </div>
+
+          <div id="dq-list" style="padding:6px 14px 14px 14px">Loading…</div>
 
         </div>
+
+        <script>
+
+        (async function(){{
+
+          try {{
+
+            const r = await fetch('/api/student/quests/today').then(r=>r.json());
+
+            const s = await fetch('/api/student/streak/status').then(r=>r.json());
+
+            const list = document.getElementById('dq-list');
+
+            const sBox = document.getElementById('dq-streak');
+
+            if (s && s.streak !== undefined) {{
+
+              const fz = s.freeze && s.freeze.available ? '&#128737;&#65039; freeze ready' : (s.freeze ? '&#128737;&#65039; freeze used' : '');
+
+              sBox.innerHTML = '&#128293; ' + s.streak + '-day streak' + (fz ? ' &middot; ' + fz : '');
+
+            }}
+
+            if (!r.quests || !r.quests.length) {{ list.textContent = 'No quests yet.'; return; }}
+
+            list.innerHTML = r.quests.map(q => {{
+
+              const pct = Math.min(100, Math.round(100 * q.progress / Math.max(1, q.target)));
+
+              const done = q.completed;
+
+              return `<div style="margin:10px 0">
+
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+
+                  <span style="color:${{done ? 'var(--text-muted)' : 'var(--text)'}};text-decoration:${{done ? 'line-through' : 'none'}}">${{q.label}}</span>
+
+                  <span style="color:#16a34a;font-weight:600">+${{q.xp_reward}} XP</span>
+
+                </div>
+
+                <div style="background:var(--border);border-radius:6px;height:8px;overflow:hidden">
+
+                  <div style="background:${{done ? '#22c55e' : 'var(--primary)'}};height:8px;width:${{pct}}%;transition:width 0.4s"></div>
+
+                </div>
+
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${{q.progress}}/${{q.target}}</div>
+
+              </div>`;
+
+            }}).join('') + `<div style="font-size:12px;color:var(--text-muted);margin-top:10px">Complete all 3 for a <b style="color:#8b5cf6">+${{r.bundle_bonus_xp}} XP</b> bonus.</div>`;
+
+          }} catch(e) {{ document.getElementById('dq-list').textContent = 'Could not load quests.'; }}
+
+        }})();
+
+        </script>
 
 
 
@@ -14498,7 +14556,7 @@ No markdown, no code fences. ONLY JSON.
 
         total_xp = sdb.get_total_xp(cid)
 
-        level_name, level_floor, level_ceil = sdb.get_level(total_xp)
+        rank_info = sdb.get_study_rank(total_xp)
 
         streak = sdb.get_streak_days(cid)
 
@@ -14536,7 +14594,15 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        pct = min(100, int(100 * (total_xp - level_floor) / max(1, level_ceil - level_floor)))
+        pct = int(rank_info.get("progress_pct", 0) or 0)
+
+        rank_color = rank_info.get("color", "#6366f1") or "#6366f1"
+
+        rank_floor = int(rank_info.get("xp_floor", 0) or 0)
+
+        rank_ceil = int(rank_info.get("xp_ceil", max(rank_floor + 1, total_xp + 1)) or (rank_floor + 1))
+
+        rank_full_name = rank_info.get("full_name", "Unranked")
 
 
 
@@ -14666,19 +14732,19 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-          <!-- Level & XP Bar -->
+          <!-- Rank & XP Bar -->
 
-          <div style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%);color:#fff;
+          <div style="background:linear-gradient(135deg,{rank_color} 0%,{rank_color}cc 60%,{rank_color}99 100%);color:#fff;
 
                       border-radius:var(--radius);padding:28px 32px;margin-bottom:24px;text-align:center;
 
-                      box-shadow:0 8px 32px rgba(99,102,241,0.3);position:relative;overflow:hidden">
+                      box-shadow:0 8px 32px {rank_color}55;position:relative;overflow:hidden">
 
             <div style="position:absolute;top:-20px;right:-20px;font-size:120px;opacity:0.08">🏆</div>
 
-            <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1.5px;font-weight:600">Level</div>
+            <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1.5px;font-weight:600">Rank</div>
 
-            <div style="font-size:2.2em;font-weight:800;margin:6px 0;letter-spacing:-1px">{_esc(level_name)}</div>
+            <div style="font-size:2.2em;font-weight:800;margin:6px 0;letter-spacing:-1px">{_esc(rank_full_name)}</div>
 
             <div style="font-size:1.4em;font-weight:600;opacity:0.95">{total_xp} XP</div>
 
@@ -14688,7 +14754,7 @@ No markdown, no code fences. ONLY JSON.
 
             </div>
 
-            <div style="font-size:13px;opacity:0.75">{total_xp - level_floor} / {level_ceil - level_floor} XP to next level</div>
+            <div style="font-size:13px;opacity:0.75">{total_xp - rank_floor} / {max(1, rank_ceil - rank_floor)} XP to next rank</div>
 
           </div>
 
@@ -14845,6 +14911,562 @@ No markdown, no code fences. ONLY JSON.
             logging.getLogger("student.routes").error("email-prefs save failed: %s\n%s", e, traceback.format_exc())
 
             return jsonify(error=f"Could not save preferences: {str(e)[:120]}"), 500
+
+
+
+    # ================================================================
+
+    #  FRIENDS / DUELS / DAILY QUESTS
+
+    # ================================================================
+
+
+
+    @app.route("/api/student/quests/today")
+
+    def student_quests_today_api():
+
+        if not _logged_in():
+
+            return jsonify(error="Login required"), 401
+
+        cid = _cid()
+
+        quests = sdb.get_or_create_daily_quests(cid)
+
+        # Attach human label from QUEST_POOL
+
+        labels = {q["key"]: q["label"] for q in sdb.QUEST_POOL}
+
+        out = []
+
+        for q in quests:
+
+            out.append({
+
+                "id":           q["id"],
+
+                "key":          q["quest_key"],
+
+                "label":        labels.get(q["quest_key"], q["quest_key"]),
+
+                "target":       int(q["target"]),
+
+                "progress":     int(q["progress"]),
+
+                "xp_reward":    int(q["xp_reward"]),
+
+                "completed":    bool(q.get("completed_at")),
+
+            })
+
+        return jsonify(quests=out, bundle_bonus_xp=sdb.QUEST_BUNDLE_BONUS_XP)
+
+
+
+    @app.route("/api/student/streak/status")
+
+    def student_streak_status_api():
+
+        if not _logged_in():
+
+            return jsonify(error="Login required"), 401
+
+        cid = _cid()
+
+        return jsonify(
+
+            streak=sdb.get_streak_days(cid),
+
+            freeze=sdb.get_freeze_status(cid),
+
+        )
+
+
+
+    # ── Friends ─────────────────────────────────────────────
+
+
+
+    @app.route("/student/friends")
+
+    def student_friends_page():
+
+        if not _logged_in():
+
+            return redirect(url_for("login"))
+
+        cid = _cid()
+
+        return _s_render("Friends & Duels", f"""
+
+        <div style="max-width:900px;margin:0 auto">
+
+          <h2 style="margin-bottom:6px"><span style="font-size:1.3em">&#128101;</span> Friends &amp; Duels</h2>
+
+          <div style="color:var(--text-muted);margin-bottom:14px;font-size:13px">
+
+            Your user ID: <b style="color:var(--text)">#{cid}</b> &middot; share this so friends can find you.
+
+          </div>
+
+
+
+          <div class="card" style="margin-bottom:18px;padding:16px">
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+
+              <input id="fr-search" placeholder="Search by name, email, or #ID" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+
+              <button class="btn btn-primary" onclick="frSearch()">Search</button>
+
+            </div>
+
+            <div id="fr-results" style="margin-top:12px"></div>
+
+          </div>
+
+
+
+          <div id="fr-incoming-wrap" class="card" style="margin-bottom:18px;padding:16px;display:none">
+
+            <h3 style="margin:0 0 10px 0">Friend requests</h3>
+
+            <div id="fr-incoming"></div>
+
+          </div>
+
+
+
+          <div class="card" style="margin-bottom:18px;padding:16px">
+
+            <h3 style="margin:0 0 10px 0">Your friends</h3>
+
+            <div id="fr-friends">Loading…</div>
+
+          </div>
+
+
+
+          <div class="card" style="margin-bottom:18px;padding:16px">
+
+            <h3 style="margin:0 0 10px 0">Active duels</h3>
+
+            <div id="fr-active-duels">No active duels.</div>
+
+          </div>
+
+
+
+          <div class="card" style="margin-bottom:18px;padding:16px">
+
+            <h3 style="margin:0 0 10px 0">Duel history</h3>
+
+            <div id="fr-history">No completed duels yet.</div>
+
+          </div>
+
+        </div>
+
+        <script>
+
+        const ME_CID = {cid};
+
+        function esc(s) {{ return (s||'').replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]); }}
+
+        async function frSearch() {{
+
+          const q = document.getElementById('fr-search').value.trim();
+
+          if (!q) return;
+
+          const r = await fetch('/api/student/friends/search?q=' + encodeURIComponent(q)).then(r=>r.json());
+
+          const box = document.getElementById('fr-results');
+
+          if (!r.results || !r.results.length) {{ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No matches.</div>'; return; }}
+
+          box.innerHTML = r.results.map(u =>
+
+            `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+
+              <div><b>${{esc(u.name) || '(no name)'}}</b> <span style="color:var(--text-muted);font-size:12px">#${{u.id}}</span></div>
+
+              <button class="btn btn-sm btn-outline" onclick="frAdd(${{u.id}}, this)">Add friend</button>
+
+            </div>`).join('');
+
+        }}
+
+        async function frAdd(uid, btn) {{
+
+          btn.disabled = true; btn.textContent = '...';
+
+          const r = await fetch('/api/student/friends/add', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{friend_id: uid}})}}).then(r=>r.json());
+
+          btn.textContent = r.status === 'accepted' ? 'Friends!' : (r.status === 'requested' ? 'Requested' : (r.status === 'already' ? 'Already' : 'Self'));
+
+          loadAll();
+
+        }}
+
+        async function frAccept(uid) {{ await frAdd(uid, {{disabled:false,textContent:''}}); loadAll(); }}
+
+        async function frRemove(uid) {{
+
+          if (!confirm('Remove this friend?')) return;
+
+          await fetch('/api/student/friends/remove', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{friend_id: uid}})}});
+
+          loadAll();
+
+        }}
+
+        async function frChallenge(uid) {{
+
+          if (!confirm('Start a 7-day study duel? Most focus minutes wins.')) return;
+
+          const r = await fetch('/api/student/duels/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{opponent_id: uid}})}}).then(r=>r.json());
+
+          if (r.error) {{ alert(r.error); return; }}
+
+          loadAll();
+
+        }}
+
+        async function loadAll() {{
+
+          const f = await fetch('/api/student/friends/list').then(r=>r.json());
+
+          const inc = document.getElementById('fr-incoming');
+
+          const incWrap = document.getElementById('fr-incoming-wrap');
+
+          if (f.incoming && f.incoming.length) {{
+
+            incWrap.style.display = 'block';
+
+            inc.innerHTML = f.incoming.map(u =>
+
+              `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+
+                <div><b>${{esc(u.name)}}</b> <span style="color:var(--text-muted);font-size:12px">#${{u.id}}</span></div>
+
+                <button class="btn btn-sm btn-primary" onclick="frAccept(${{u.id}})">Accept</button>
+
+              </div>`).join('');
+
+          }} else {{ incWrap.style.display = 'none'; }}
+
+          const fl = document.getElementById('fr-friends');
+
+          if (f.friends && f.friends.length) {{
+
+            fl.innerHTML = '';
+
+            for (const u of f.friends) {{
+
+              const h2h = await fetch('/api/student/duels/h2h?friend_id=' + u.id).then(r=>r.json());
+
+              fl.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+
+                <div>
+
+                  <b>${{esc(u.name)}}</b> <span style="color:var(--text-muted);font-size:12px">#${{u.id}}</span>
+
+                  <div style="font-size:12px;color:var(--text-muted)">vs you: ${{h2h.wins}}W &middot; ${{h2h.losses}}L &middot; ${{h2h.ties}}T</div>
+
+                </div>
+
+                <div style="display:flex;gap:6px">
+
+                  <button class="btn btn-sm btn-primary" onclick="frChallenge(${{u.id}})">Challenge</button>
+
+                  <button class="btn btn-sm btn-outline" onclick="frRemove(${{u.id}})">Remove</button>
+
+                </div>
+
+              </div>`;
+
+            }}
+
+          }} else {{ fl.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No friends yet — search above to add some.</div>'; }}
+
+          const d = await fetch('/api/student/duels/list').then(r=>r.json());
+
+          const ad = document.getElementById('fr-active-duels');
+
+          if (d.active && d.active.length) {{
+
+            ad.innerHTML = d.active.map(x => {{
+
+              const meIsChall = x.challenger_id === ME_CID;
+
+              const myMin = meIsChall ? x.challenger_minutes : x.opponent_minutes;
+
+              const themMin = meIsChall ? x.opponent_minutes : x.challenger_minutes;
+
+              const themName = meIsChall ? x.opponent_name : x.challenger_name;
+
+              return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+
+                <div><b>vs ${{esc(themName)}}</b> <span style="color:var(--text-muted);font-size:12px">ends ${{esc(String(x.ends_at).slice(0,16))}}</span></div>
+
+                <div style="font-size:13px;margin-top:4px">You: <b>${{myMin}} min</b> &middot; Them: <b>${{themMin}} min</b></div>
+
+              </div>`;
+
+            }}).join('');
+
+          }} else {{ ad.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No active duels.</div>'; }}
+
+          const hist = document.getElementById('fr-history');
+
+          if (d.history && d.history.length) {{
+
+            hist.innerHTML = d.history.map(x => {{
+
+              const meIsChall = x.challenger_id === ME_CID;
+
+              const themName = meIsChall ? x.opponent_name : x.challenger_name;
+
+              const won = x.winner_id === ME_CID;
+
+              const tie = !x.winner_id;
+
+              const tag = tie ? '<span style="color:#94a3b8">TIE</span>' : (won ? '<span style="color:#22c55e">WIN</span>' : '<span style="color:#ef4444">LOSS</span>');
+
+              return `<div style="padding:6px 0;font-size:13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">
+
+                <div>vs ${{esc(themName)}}</div><div>${{tag}}</div></div>`;
+
+            }}).join('');
+
+          }} else {{ hist.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No completed duels yet.</div>'; }}
+
+        }}
+
+        loadAll();
+
+        </script>
+
+        """, active_page="student_friends")
+
+
+
+    @app.route("/api/student/friends/search")
+
+    def student_friends_search_api():
+
+        if not _logged_in():
+
+            return jsonify(error="Login required"), 401
+
+        cid = _cid()
+
+        q = (request.args.get("q") or "").strip()
+
+        results = sdb.search_users(q, exclude_client_id=cid, limit=20)
+
+        return jsonify(results=results)
+
+
+
+    @app.route("/api/student/friends/list")
+
+    def student_friends_list_api():
+
+        if not _logged_in():
+
+            return jsonify(error="Login required"), 401
+
+        cid = _cid()
+
+        return jsonify(**sdb.list_friends(cid))
+
+
+
+    @app.route("/api/student/friends/add", methods=["POST"])
+
+    def student_friends_add_api():
+
+        if not _logged_in():
+
+            return jsonify(error="Login required"), 401
+
+        cid = _cid()
+
+        data = request.get_json(silent=True) or {}
+
+        try:
+
+            fid = int(data.get("friend_id"))
+
+        except Exception:
+
+            return jsonify(error="Invalid friend_id"), 400
+
+        status = sdb.add_friend(cid, fid)
+
+        return jsonify(status=status)
+
+
+
+    @app.route("/api/student/friends/remove", methods=["POST"])
+
+    def student_friends_remove_api():
+
+        if not _logged_in():
+
+            return jsonify(error="Login required"), 401
+
+        cid = _cid()
+
+        data = request.get_json(silent=True) or {}
+
+        try:
+
+            fid = int(data.get("friend_id"))
+
+        except Exception:
+
+            return jsonify(error="Invalid friend_id"), 400
+
+        sdb.remove_friend(cid, fid)
+
+        return jsonify(ok=True)
+
+
+
+    @app.route("/api/student/duels/start", methods=["POST"])
+
+    def student_duels_start_api():
+
+        if not _logged_in():
+
+            return jsonify(error="Login required"), 401
+
+        cid = _cid()
+
+        data = request.get_json(silent=True) or {}
+
+        try:
+
+            opp = int(data.get("opponent_id"))
+
+        except Exception:
+
+            return jsonify(error="Invalid opponent_id"), 400
+
+        if opp == cid:
+
+            return jsonify(error="Cannot duel yourself"), 400
+
+        # Must be friends
+
+        f = sdb.list_friends(cid)
+
+        if not any(x["id"] == opp for x in f["friends"]):
+
+            return jsonify(error="You must be friends to start a duel"), 400
+
+        # Cap active duels with same opponent
+
+        active = sdb.get_active_duels(cid)
+
+        if any((d["challenger_id"] == opp or d["opponent_id"] == opp) for d in active):
+
+            return jsonify(error="You already have an active duel with this user"), 400
+
+        did = sdb.start_duel(cid, opp)
+
+        return jsonify(ok=True, duel_id=did)
+
+
+
+    @app.route("/api/student/duels/list")
+
+    def student_duels_list_api():
+
+        if not _logged_in():
+
+            return jsonify(error="Login required"), 401
+
+        cid = _cid()
+
+        # Settle any past-due duels first
+
+        try:
+
+            sdb.settle_due_duels()
+
+        except Exception:
+
+            pass
+
+        active = sdb.get_active_duels(cid)
+
+        history = sdb.get_duel_history(cid, limit=20)
+
+        # Live update minutes for active duels
+
+        out_active = []
+
+        for d in active:
+
+            c_min = sdb._focus_minutes_between(d["challenger_id"], d["started_at"], d["ends_at"])
+
+            o_min = sdb._focus_minutes_between(d["opponent_id"],   d["started_at"], d["ends_at"])
+
+            d2 = dict(d)
+
+            d2["challenger_minutes"] = c_min
+
+            d2["opponent_minutes"]   = o_min
+
+            d2["started_at"] = str(d2.get("started_at", ""))
+
+            d2["ends_at"]    = str(d2.get("ends_at", ""))
+
+            out_active.append(d2)
+
+        out_history = []
+
+        for d in history:
+
+            d2 = dict(d)
+
+            d2["started_at"] = str(d2.get("started_at", ""))
+
+            d2["ends_at"]    = str(d2.get("ends_at", ""))
+
+            d2["settled_at"] = str(d2.get("settled_at", ""))
+
+            out_history.append(d2)
+
+        return jsonify(active=out_active, history=out_history)
+
+
+
+    @app.route("/api/student/duels/h2h")
+
+    def student_duels_h2h_api():
+
+        if not _logged_in():
+
+            return jsonify(error="Login required"), 401
+
+        cid = _cid()
+
+        try:
+
+            fid = int(request.args.get("friend_id"))
+
+        except Exception:
+
+            return jsonify(error="Invalid friend_id"), 400
+
+        return jsonify(**sdb.get_head_to_head(cid, fid))
 
 
 
