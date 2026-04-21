@@ -20,7 +20,7 @@ import logging
 
 import re
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 
@@ -32,6 +32,344 @@ from markupsafe import Markup
 
 log = logging.getLogger(__name__)
 
+
+
+
+
+_GPA_PLANILLA_HTML = r"""
+<style>
+  .pl-wrap { max-width: 1200px; margin: 0 auto; }
+  .pl-h { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .pl-h h1 { margin:0; font-size:30px; }
+  .pl-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .pl-btn { background:var(--card); border:1px solid var(--border); color:var(--text); padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; transition: all .15s; }
+  .pl-btn:hover { background:var(--border-light); }
+  .pl-btn.primary { background: linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none; }
+  .pl-summary { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:18px; }
+  .pl-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
+  .pl-card .lbl { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; font-weight:700; }
+  .pl-card .val { font-size:28px; font-weight:800; margin-top:4px; font-variant-numeric: tabular-nums; }
+  .pl-tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:0; }
+  .pl-tab { padding:10px 16px; background:transparent; border:none; cursor:pointer; color:var(--text-muted); font-size:14px; font-weight:600; border-bottom:3px solid transparent; transition:all .12s; border-radius:6px 6px 0 0; }
+  .pl-tab:hover { color:var(--text); background:var(--border-light); }
+  .pl-tab.active { color:var(--primary); border-bottom-color:var(--primary); background:transparent; }
+  .pl-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; }
+  @media (max-width: 820px) { .pl-grid { grid-template-columns: 1fr; } }
+  .pl-course { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .pl-course-h { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .pl-course-h input.cname { flex:1; min-width:0; background:transparent; border:none; color:var(--text); font-size:15px; font-weight:700; padding:4px 6px; border-bottom:2px solid transparent; outline:none; }
+  .pl-course-h input.cname:focus { border-bottom-color: var(--primary); }
+  .pl-course-h input.ccred { width:60px; background:var(--bg); border:1px solid var(--border); color:var(--text); font-size:13px; padding:4px 6px; border-radius:6px; text-align:center; }
+  .pl-course-h .label { font-size:11px; color:var(--text-muted); }
+  .pl-course-h .del { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; }
+  .pl-course-h .del:hover { background:rgba(239,68,68,.12); color:#ef4444; }
+  .pl-evals { width:100%; border-collapse:collapse; font-size:13px; }
+  .pl-evals th { text-align:left; padding:6px 4px; font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid var(--border); }
+  .pl-evals td { padding:4px 4px; }
+  .pl-evals input { width:100%; background:transparent; border:1px solid transparent; border-radius:5px; color:var(--text); padding:5px 7px; font-size:13px; box-sizing:border-box; outline:none; }
+  .pl-evals input:hover { background:var(--bg); }
+  .pl-evals input:focus { background:var(--bg); border-color:var(--primary); }
+  .pl-evals input.w-name { text-align:left; }
+  .pl-evals input.w-pct, .pl-evals input.w-grade { text-align:center; font-variant-numeric: tabular-nums; }
+  .pl-evals .delrow { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px 6px; border-radius:4px; }
+  .pl-evals .delrow:hover { background:rgba(239,68,68,.12); color:#ef4444; }
+  .pl-add-eval { background:transparent; border:1px dashed var(--border); color:var(--text-muted); padding:6px 10px; border-radius:6px; cursor:pointer; font-size:12px; margin-top:6px; width:100%; }
+  .pl-add-eval:hover { border-color:var(--primary); color:var(--primary); }
+  .pl-foot { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; padding-top:10px; margin-top:10px; border-top:1px dashed var(--border); font-size:13px; }
+  .pl-avg { font-weight:700; }
+  .pl-avg .num { font-size:20px; font-variant-numeric: tabular-nums; }
+  .pl-avg .num.pass { color:#10b981; }
+  .pl-avg .num.fail { color:#ef4444; }
+  .pl-avg .num.pending { color:var(--text-muted); }
+  .pl-nmpa { color:var(--text-muted); font-size:12px; }
+  .pl-nmpa strong { color:var(--text); }
+  .pl-warn { color:#ef4444; font-size:11px; padding:2px 6px; background:rgba(239,68,68,.1); border-radius:4px; margin-left:6px; }
+  .pl-ok { color:#10b981; font-size:11px; padding:2px 6px; background:rgba(16,185,129,.1); border-radius:4px; margin-left:6px; }
+  .pl-add-course { display:flex; align-items:center; justify-content:center; min-height:140px; background:transparent; border:2px dashed var(--border); border-radius:12px; cursor:pointer; color:var(--text-muted); font-size:14px; font-weight:600; transition:all .12s; }
+  .pl-add-course:hover { border-color:var(--primary); color:var(--primary); background:rgba(99,102,241,.04); }
+  .pl-help { font-size:12px; color:var(--text-muted); margin-top:18px; padding:12px 14px; background:var(--card); border-radius:8px; border-left:3px solid var(--primary); }
+  .pl-help b { color:var(--text); }
+  .pl-empty { padding:40px; text-align:center; color:var(--text-muted); background:var(--card); border-radius:12px; border:1px dashed var(--border); }
+</style>
+
+<div class="pl-wrap">
+  <div class="pl-h">
+    <div>
+      <h1>📊 Planilla de Notas</h1>
+      <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Calcula tus promedios por semestre y la nota mínima que necesitas para aprobar — basado en la planilla que circula en la PUC.</p>
+    </div>
+    <div class="pl-actions">
+      <button class="pl-btn" onclick="plExport()">⬇ Export</button>
+      <button class="pl-btn" onclick="document.getElementById('pl-import').click()">⬆ Import</button>
+      <input id="pl-import" type="file" accept="application/json" style="display:none" onchange="plImport(this.files[0])">
+      <button class="pl-btn" onclick="plReset()">🗑 Reset</button>
+    </div>
+  </div>
+
+  <div class="pl-summary">
+    <div class="pl-card"><div class="lbl">Semester average</div><div class="val" id="pl-sem-avg">–</div></div>
+    <div class="pl-card"><div class="lbl">Semester credits</div><div class="val" id="pl-sem-cred">0</div></div>
+    <div class="pl-card"><div class="lbl">Career average</div><div class="val" id="pl-car-avg">–</div></div>
+    <div class="pl-card"><div class="lbl">Career credits</div><div class="val" id="pl-car-cred">0</div></div>
+  </div>
+
+  <div class="pl-tabs" id="pl-tabs"></div>
+
+  <div id="pl-body"></div>
+
+  <div class="pl-help">
+    <b>Tips:</b> Notas en escala chilena (1.0 – 7.0; 4.0 = aprobado). Las ponderaciones (%) deben sumar 100. La <b>NMPA</b> es la nota mínima que necesitas en lo que te falta para aprobar el ramo. Todo se guarda automáticamente en tu navegador.
+  </div>
+</div>
+
+<script>
+(function(){
+  var CID = '__CID__';
+  var KEY = 'mr_planilla_v1_' + CID;
+  var SEM_LABELS = ['I','II','III','IV','V','VI','VII','VIII','IX','X'];
+  var PASS = 4.0;        // Chilean passing grade
+  var ROUND_PASS = 3.95; // weighted-average threshold that rounds to 4.0
+
+  function uid(){ return 'e' + Math.random().toString(36).slice(2, 9); }
+
+  function defaultData(){
+    var sems = SEM_LABELS.map(function(lbl, i){
+      return {
+        label: lbl,
+        active: i === 0,
+        courses: i === 0 ? [defaultCourse('Curso 1'), defaultCourse('Curso 2')] : []
+      };
+    });
+    sems[0].active = true;
+    return { current: 0, sems: sems };
+  }
+
+  function defaultCourse(name){
+    return {
+      id: uid(), name: name, credits: 10,
+      evals: [
+        { id: uid(), name: 'Prueba 1',  pct: 30, grade: '' },
+        { id: uid(), name: 'Prueba 2',  pct: 30, grade: '' },
+        { id: uid(), name: 'Examen',    pct: 40, grade: '' }
+      ]
+    };
+  }
+
+  var data;
+  try { data = JSON.parse(localStorage.getItem(KEY)) || defaultData(); }
+  catch(e){ data = defaultData(); }
+  if (!data || !data.sems) data = defaultData();
+
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e){} }
+
+  function num(v){ var n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : NaN; }
+
+  // Returns { avg, weightDone, weightedSum, hasAny, ok, allDone }
+  function courseStats(c){
+    var weightDone = 0, weightedSum = 0, totalWeight = 0, hasAny = false;
+    c.evals.forEach(function(e){
+      var p = num(e.pct);
+      var g = num(e.grade);
+      if (isFinite(p)) totalWeight += p;
+      if (isFinite(p) && isFinite(g) && g > 0) {
+        weightDone += p;
+        weightedSum += (p / 100) * g;
+        hasAny = true;
+      }
+    });
+    var partial = weightDone > 0 ? (weightedSum * 100 / weightDone) : NaN;
+    var allDone = (weightDone >= 99.5);
+    return {
+      hasAny: hasAny,
+      weightDone: weightDone,
+      weightedSum: weightedSum,
+      totalWeight: totalWeight,
+      partial: partial,
+      allDone: allDone,
+      okPct: Math.abs(totalWeight - 100) < 0.5
+    };
+  }
+
+  function nmpa(c){
+    var s = courseStats(c);
+    if (s.allDone) return null;            // already graded
+    var remaining = 100 - s.weightDone;
+    if (remaining < 0.5) return null;
+    // Need weightedSum (decimal scale) >= ROUND_PASS overall to pass
+    // weightedSum_remaining_grade = (ROUND_PASS - weightedSum) / (remaining/100)
+    var needed = (ROUND_PASS - s.weightedSum) / (remaining / 100);
+    return needed;
+  }
+
+  function semStats(sem){
+    var totalWeighted = 0, totalCred = 0, anyDone = false;
+    sem.courses.forEach(function(c){
+      var s = courseStats(c);
+      var cr = num(c.credits) || 0;
+      if (s.hasAny && cr > 0) {
+        totalWeighted += s.partial * cr;
+        totalCred += cr;
+        anyDone = true;
+      }
+    });
+    return { avg: anyDone ? (totalWeighted / totalCred) : null, credits: totalCred };
+  }
+
+  function careerStats(){
+    var totalWeighted = 0, totalCred = 0, anyDone = false;
+    data.sems.forEach(function(sem){
+      sem.courses.forEach(function(c){
+        var s = courseStats(c);
+        var cr = num(c.credits) || 0;
+        if (s.hasAny && cr > 0) {
+          totalWeighted += s.partial * cr;
+          totalCred += cr;
+          anyDone = true;
+        }
+      });
+    });
+    return { avg: anyDone ? (totalWeighted / totalCred) : null, credits: totalCred };
+  }
+
+  function fmt(n){ return (n == null || !isFinite(n)) ? '–' : n.toFixed(2); }
+
+  function escapeHtml(s){
+    return (s == null ? '' : String(s)).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+
+  function renderTabs(){
+    var t = document.getElementById('pl-tabs');
+    t.innerHTML = data.sems.map(function(s, i){
+      var hasAny = s.courses.some(function(c){ return courseStats(c).hasAny; });
+      var dot = hasAny ? ' •' : '';
+      return '<button class="pl-tab' + (i === data.current ? ' active' : '') +
+             '" onclick="plSwitchSem(' + i + ')">Sem ' + s.label + dot + '</button>';
+    }).join('');
+  }
+
+  function renderCourseCard(c, sIdx, cIdx){
+    var st = courseStats(c);
+    var avgClass = 'pending';
+    if (st.hasAny) avgClass = (st.partial >= PASS) ? 'pass' : 'fail';
+    var avgTxt = st.hasAny ? fmt(st.partial) : '–';
+    var pctWarn = st.okPct ? '' :
+      (st.totalWeight > 100 ? '<span class="pl-warn">Σ% > 100</span>' :
+       st.totalWeight < 100 ? '<span class="pl-warn">Σ% &lt; 100 (' + st.totalWeight.toFixed(0) + '%)</span>' : '');
+
+    var nm = nmpa(c);
+    var nmpaTxt;
+    if (st.allDone) nmpaTxt = '<span class="pl-ok">Curso completado</span>';
+    else if (nm == null) nmpaTxt = '';
+    else if (nm <= 1.0) nmpaTxt = '<span class="pl-ok">Ya aprobado ✓</span>';
+    else if (nm > 7.0) nmpaTxt = '<span class="pl-warn">Imposible aprobar</span>';
+    else nmpaTxt = 'Necesitas <strong>' + nm.toFixed(1) + '</strong> en lo que falta para aprobar';
+
+    var rows = c.evals.map(function(e, eIdx){
+      return '<tr>' +
+        '<td><input class="w-name" placeholder="Evaluación" value="' + escapeHtml(e.name) + '" oninput="plSetEval(' + sIdx + ',' + cIdx + ',' + eIdx + ',\'name\',this.value)"></td>' +
+        '<td style="width:70px;"><input class="w-pct" inputmode="decimal" placeholder="%" value="' + escapeHtml(e.pct) + '" oninput="plSetEval(' + sIdx + ',' + cIdx + ',' + eIdx + ',\'pct\',this.value)"></td>' +
+        '<td style="width:70px;"><input class="w-grade" inputmode="decimal" placeholder="—" value="' + escapeHtml(e.grade) + '" oninput="plSetEval(' + sIdx + ',' + cIdx + ',' + eIdx + ',\'grade\',this.value)"></td>' +
+        '<td style="width:32px;"><button class="delrow" title="Eliminar" onclick="plDelEval(' + sIdx + ',' + cIdx + ',' + eIdx + ')">✕</button></td>' +
+      '</tr>';
+    }).join('');
+
+    return '<div class="pl-course">' +
+      '<div class="pl-course-h">' +
+        '<input class="cname" value="' + escapeHtml(c.name) + '" placeholder="Nombre del ramo" oninput="plSetCourse(' + sIdx + ',' + cIdx + ',\'name\',this.value)">' +
+        '<span class="label">Créd:</span>' +
+        '<input class="ccred" inputmode="numeric" value="' + escapeHtml(c.credits) + '" oninput="plSetCourse(' + sIdx + ',' + cIdx + ',\'credits\',this.value)">' +
+        '<button class="del" title="Eliminar ramo" onclick="plDelCourse(' + sIdx + ',' + cIdx + ')">🗑</button>' +
+      '</div>' +
+      '<table class="pl-evals"><thead><tr>' +
+        '<th>Evaluación</th><th style="width:70px;text-align:center;">%</th><th style="width:70px;text-align:center;">Nota</th><th></th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<button class="pl-add-eval" onclick="plAddEval(' + sIdx + ',' + cIdx + ')">+ Agregar evaluación</button>' +
+      '<div class="pl-foot">' +
+        '<div class="pl-avg">Promedio: <span class="num ' + avgClass + '">' + avgTxt + '</span>' + pctWarn + '</div>' +
+        '<div class="pl-nmpa">' + nmpaTxt + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderBody(){
+    var sIdx = data.current;
+    var sem = data.sems[sIdx];
+    var body = document.getElementById('pl-body');
+    if (!sem.courses.length) {
+      body.innerHTML = '<div class="pl-empty">No tienes ramos en este semestre todavía.<br><br><button class="pl-btn primary" onclick="plAddCourse()">+ Agregar primer ramo</button></div>';
+    } else {
+      var grid = sem.courses.map(function(c, cIdx){ return renderCourseCard(c, sIdx, cIdx); }).join('');
+      grid += '<button class="pl-add-course" onclick="plAddCourse()">+ Agregar ramo</button>';
+      body.innerHTML = '<div class="pl-grid">' + grid + '</div>';
+    }
+    var ss = semStats(sem);
+    var cs = careerStats();
+    document.getElementById('pl-sem-avg').textContent = fmt(ss.avg);
+    document.getElementById('pl-sem-cred').textContent = ss.credits || 0;
+    document.getElementById('pl-car-avg').textContent = fmt(cs.avg);
+    document.getElementById('pl-car-cred').textContent = cs.credits || 0;
+  }
+
+  function rerender(){ renderTabs(); renderBody(); save(); }
+
+  // ── Public actions (window-scoped so inline handlers work) ─────────
+  window.plSwitchSem = function(i){ data.current = i; rerender(); };
+  window.plSetCourse = function(s, c, key, val){ data.sems[s].courses[c][key] = val; rerender(); };
+  window.plSetEval = function(s, c, e, key, val){ data.sems[s].courses[c].evals[e][key] = val; rerender(); };
+  window.plAddEval = function(s, c){
+    data.sems[s].courses[c].evals.push({ id: uid(), name: '', pct: '', grade: '' });
+    rerender();
+  };
+  window.plDelEval = function(s, c, e){
+    data.sems[s].courses[c].evals.splice(e, 1);
+    rerender();
+  };
+  window.plAddCourse = function(){
+    var s = data.current;
+    var n = data.sems[s].courses.length + 1;
+    data.sems[s].courses.push(defaultCourse('Curso ' + n));
+    rerender();
+  };
+  window.plDelCourse = function(s, c){
+    if (!confirm('¿Eliminar este ramo?')) return;
+    data.sems[s].courses.splice(c, 1);
+    rerender();
+  };
+  window.plReset = function(){
+    if (!confirm('Esto borrará TODA la planilla. ¿Continuar?')) return;
+    data = defaultData();
+    rerender();
+  };
+  window.plExport = function(){
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'planilla_notas.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  window.plImport = function(file){
+    if (!file) return;
+    var fr = new FileReader();
+    fr.onload = function(){
+      try {
+        var parsed = JSON.parse(fr.result);
+        if (!parsed || !parsed.sems) throw new Error('Invalid file');
+        data = parsed;
+        if (typeof data.current !== 'number') data.current = 0;
+        rerender();
+      } catch(e){ alert('Archivo inválido.'); }
+    };
+    fr.readAsText(file);
+  };
+
+  rerender();
+})();
+</script>
+"""
 
 
 
@@ -152,17 +490,31 @@ def register_student_routes(app, csrf, limiter):
 
         cid = _cid()
 
-        stats = sdb.get_study_stats(cid) or {}
-
         focus = sdb.get_focus_stats(cid) or {}
 
         courses = sdb.get_courses(cid) or []
 
 
 
-        per_course = []
+        # Build {normalized course name -> display name} so we can match the
+
+        # `notes` field which has the format "{mode}: {course_name}".
+
+        def _norm_course(s: str) -> str:
+
+            return (s or "").strip().lower()
+
+
+
+        course_lookup = {_norm_course(c.get("name", "")): c.get("name", "Course") for c in courses}
+
+
+
+        per_course_map: dict[str, int] = {}
 
         hour_hist = [0] * 24
+
+        cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
 
         try:
 
@@ -174,59 +526,79 @@ def register_student_routes(app, csrf, limiter):
 
                     db,
 
-                    "SELECT course_id, COALESCE(SUM(duration_minutes), 0) AS mins "
+                    "SELECT plan_date, COALESCE(focus_minutes,0) AS mins, COALESCE(notes,'') AS notes "
 
-                    "FROM student_focus_sessions WHERE client_id = %s "
+                    "FROM student_study_progress "
 
-                    "GROUP BY course_id ORDER BY mins DESC",
+                    "WHERE client_id = %s AND COALESCE(focus_minutes,0) > 0 "
+
+                    "ORDER BY plan_date DESC",
 
                     (cid,),
 
                 )
-
-                cmap = {c["id"]: c.get("name", "Course") for c in courses}
 
                 for r in rows:
 
-                    per_course.append({
+                    mins = int(r.get("mins") or 0)
 
-                        "name": cmap.get(r.get("course_id"), "Other / Unassigned"),
+                    notes = (r.get("notes") or "").strip()
 
-                        "mins": int(r.get("mins") or 0),
+                    # Per-course bucket — "{mode}: {course_name}" → course_name; fallback to mode/Other
 
-                    })
+                    course_name = "Other / Unassigned"
 
-                hour_rows = _fetchall(
+                    if ":" in notes:
 
-                    db,
+                        right = notes.split(":", 1)[1].strip()
 
-                    "SELECT started_at FROM student_focus_sessions "
+                        if right:
 
-                    "WHERE client_id = %s AND started_at IS NOT NULL",
+                            course_name = course_lookup.get(_norm_course(right), right)
 
-                    (cid,),
+                    elif notes:
 
-                )
+                        course_name = notes.title()
 
-                for r in hour_rows:
+                    per_course_map[course_name] = per_course_map.get(course_name, 0) + mins
 
-                    v = r.get("started_at") or ""
+                    # Hour histogram (last 30 days only) — plan_date is "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DD"
 
-                    try:
+                    pd = str(r.get("plan_date") or "")
 
-                        h = int(str(v)[11:13])
-
-                        if 0 <= h < 24:
-
-                            hour_hist[h] += 1
-
-                    except Exception:
+                    if pd[:10] < cutoff:
 
                         continue
+
+                    if len(pd) >= 13:
+
+                        try:
+
+                            h = int(pd[11:13])
+
+                            if 0 <= h < 24:
+
+                                hour_hist[h] += 1
+
+                        except Exception:
+
+                            pass
 
         except Exception:
 
             pass
+
+
+
+        per_course = sorted(
+
+            ({"name": k, "mins": v} for k, v in per_course_map.items()),
+
+            key=lambda x: x["mins"],
+
+            reverse=True,
+
+        )
 
 
 
@@ -270,13 +642,79 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        total_mins = int(stats.get("total_minutes", 0) or 0)
+        total_mins = int(focus.get("total_minutes", 0) or 0)
 
-        total_sessions = int(stats.get("total_sessions", 0) or 0)
+        total_sessions = int(focus.get("sessions", 0) or 0)
 
-        streak = int(focus.get("current_streak", 0) or 0)
+        streak = int(focus.get("streak_days", 0) or 0)
 
         avg_session = (total_mins // total_sessions) if total_sessions else 0
+
+
+
+        # Rank + leaderboard position card
+
+        rank_html = ""
+
+        try:
+
+            from student import academic as _ac
+
+            total_xp = int(sdb.get_total_xp(cid) or 0)
+
+            rank_info = sdb.get_study_rank(total_xp) or {}
+
+            pos = _ac.my_rank("global", cid) or {}
+
+            rname = _esc(rank_info.get("full_name") or "Unranked")
+
+            rcolor = rank_info.get("color") or "#6366F1"
+
+            pct = max(0, min(100, int(rank_info.get("progress_pct") or 0)))
+
+            pos_rank = pos.get("rank")
+
+            pos_total = pos.get("total")
+
+            pos_text = (f"#{pos_rank} of {pos_total}" if pos_rank and pos_total else "Unranked")
+
+            rank_html = (
+
+                "<div class='card' style='padding:20px;margin-bottom:18px;display:flex;flex-wrap:wrap;align-items:center;gap:18px;border-left:4px solid " + rcolor + "'>"
+
+                "<div style='flex:1;min-width:220px'>"
+
+                "<div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700'>Current rank</div>"
+
+                "<div style='font-size:26px;font-weight:800;margin-top:4px;color:" + rcolor + "'>" + rname + "</div>"
+
+                "<div style='font-size:13px;color:var(--text-muted);margin-top:2px'>" + str(total_xp) + " XP</div>"
+
+                "<div style='background:var(--border);border-radius:8px;height:8px;margin-top:10px;overflow:hidden'>"
+
+                "<div style='background:" + rcolor + ";height:8px;width:" + str(pct) + "%;transition:width .6s ease'></div>"
+
+                "</div>"
+
+                "</div>"
+
+                "<div style='text-align:center;min-width:140px'>"
+
+                "<div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700'>Global position</div>"
+
+                "<div style='font-size:28px;font-weight:800;margin-top:4px'>" + _esc(pos_text) + "</div>"
+
+                "<a href='/student/leaderboard' style='font-size:12px;color:var(--primary);text-decoration:none'>View leaderboard &rarr;</a>"
+
+                "</div>"
+
+                "</div>"
+
+            )
+
+        except Exception:
+
+            rank_html = ""
 
 
 
@@ -285,6 +723,8 @@ def register_student_routes(app, csrf, limiter):
         <h1 style='margin:0 0 8px;font-size:32px'>&#128202; Your study analytics</h1>
 
         <p style='color:var(--text-muted);margin:0 0 24px'>Hours, sessions, courses, and focus rhythm — at a glance.</p>
+
+        __RANK__
 
         <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px'>
 
@@ -317,6 +757,8 @@ def register_student_routes(app, csrf, limiter):
         """
 
         body = (body
+
+            .replace("__RANK__", rank_html)
 
             .replace("__TOTAL__", f"{total_mins//60}h {total_mins%60}m")
 
@@ -2335,18 +2777,6 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Recommendations
-
-        recs_html = ""
-
-        if plan_row:
-
-            for r in plan_row["plan_json"].get("recommendations", [])[:5]:
-
-                recs_html += f"<li style='margin-bottom:6px;color:var(--text-secondary);font-size:14px;'>{_esc(r)}</li>"
-
-
-
         canvas_status = "Connected" if canvas_tok else "Not connected"
 
         canvas_color = "#10B981" if canvas_tok else "#EF4444"
@@ -2787,10 +3217,6 @@ def register_student_routes(app, csrf, limiter):
           {exams_html}
 
         </div>
-
-
-
-        {"<div class='card' style='margin-top:20px;'><div class='card-header'><h2>&#128161; AI Recommendations</h2></div><ul style='padding-left:20px;'>" + recs_html + "</ul></div>" if recs_html else ""}
 
 
 
@@ -6539,454 +6965,12 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/student/gpa")
-
     def student_gpa_page():
-
         if not _logged_in():
-
             return redirect(url_for("login"))
-
-        courses = sdb.get_courses(_cid())
-
-        prefs = sdb.get_email_prefs(_cid())
-
-        saved_country = prefs.get("gpa_country", "us") if prefs else "us"
-
-
-
-        course_rows = ""
-
-        for c in courses:
-
-            course_rows += f"""<div class="gpa-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
-
-              <input type="text" value="{_esc(c['name'])}" class="edit-input" style="flex:2;" placeholder="Course name">
-
-              <input type="number" value="3" class="edit-input" style="width:70px;" min="1" max="10" placeholder="Credits">
-
-              <select class="edit-input grade-select" style="width:100px;"></select>
-
-              <button onclick="this.parentElement.remove();calcGPA();" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>
-
-            </div>"""
-
-
-
-        return _s_render("GPA Calculator", f"""
-
-        <h1 style="margin-bottom:20px;">&#127891; GPA Calculator</h1>
-
-        <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;">
-
-          <div class="card">
-
-            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-
-              <h2>&#128218; Courses</h2>
-
-              <div style="display:flex;gap:8px;align-items:center;">
-
-                <select id="country-select" class="edit-input" style="width:180px;" onchange="changeCountry(this.value)">
-
-                  <option value="us" {"selected" if saved_country == "us" else ""}>&#127482;&#127480; United States (4.0)</option>
-
-                  <option value="uk" {"selected" if saved_country == "uk" else ""}>&#127468;&#127463; United Kingdom</option>
-
-                  <option value="mx" {"selected" if saved_country == "mx" else ""}>&#127474;&#127485; Mexico (0-10)</option>
-
-                  <option value="ar" {"selected" if saved_country == "ar" else ""}>&#127462;&#127479; Argentina (0-10)</option>
-
-                  <option value="co" {"selected" if saved_country == "co" else ""}>&#127464;&#127476; Colombia (0-5)</option>
-
-                  <option value="cl" {"selected" if saved_country == "cl" else ""}>&#127464;&#127473; Chile (1-7)</option>
-
-                  <option value="br" {"selected" if saved_country == "br" else ""}>&#127463;&#127479; Brazil (0-10)</option>
-
-                  <option value="de" {"selected" if saved_country == "de" else ""}>&#127465;&#127466; Germany (1-6)</option>
-
-                  <option value="fr" {"selected" if saved_country == "fr" else ""}>&#127467;&#127479; France (0-20)</option>
-
-                  <option value="es" {"selected" if saved_country == "es" else ""}>&#127466;&#127480; Spain (0-10)</option>
-
-                  <option value="in" {"selected" if saved_country == "in" else ""}>&#127470;&#127475; India (10-point)</option>
-
-                  <option value="au" {"selected" if saved_country == "au" else ""}>&#127462;&#127482; Australia (7-point)</option>
-
-                  <option value="jp" {"selected" if saved_country == "jp" else ""}>&#127471;&#127477; Japan (S-F)</option>
-
-                </select>
-
-                <button onclick="addGPARow()" class="btn btn-outline btn-sm">+ Add Course</button>
-
-              </div>
-
-            </div>
-
-            <div style="display:flex;gap:8px;margin-bottom:8px;font-size:12px;font-weight:600;color:var(--text-muted);padding:0 4px;">
-
-              <span style="flex:2;">Course</span><span style="width:70px;">Credits</span><span style="width:100px;">Grade</span><span style="width:20px;"></span>
-
-            </div>
-
-            <div id="gpa-rows">
-
-              {course_rows}
-
-            </div>
-
-            <button onclick="calcGPA()" class="btn btn-primary btn-sm" style="margin-top:12px;">Calculate GPA</button>
-
-          </div>
-
-          <div>
-
-            <div class="card" style="text-align:center;">
-
-              <div class="card-header"><h2>Your GPA</h2></div>
-
-              <div id="gpa-result" style="font-size:56px;font-weight:800;color:var(--primary);padding:20px 0;">-</div>
-
-              <div id="gpa-scale" style="font-size:14px;color:var(--text-muted);">-</div>
-
-              <div id="gpa-credits" style="font-size:13px;color:var(--text-muted);margin-top:8px;"></div>
-
-            </div>
-
-            <div class="card" style="margin-top:16px;">
-
-              <div class="card-header"><h2>&#128200; What-If</h2></div>
-
-              <p style="font-size:13px;color:var(--text-muted);">Enter your current cumulative GPA to see how this semester affects it:</p>
-
-              <div style="display:flex;gap:8px;margin-top:8px;">
-
-                <div class="form-group" style="flex:1;">
-
-                  <label style="font-size:12px;">Current GPA</label>
-
-                  <input type="number" id="cum-gpa" step="0.01" min="0" max="20" value="0" class="edit-input">
-
-                </div>
-
-                <div class="form-group" style="flex:1;">
-
-                  <label style="font-size:12px;">Total credits</label>
-
-                  <input type="number" id="cum-credits" min="0" value="0" class="edit-input">
-
-                </div>
-
-              </div>
-
-              <button onclick="calcCumGPA()" class="btn btn-outline btn-sm" style="margin-top:8px;width:100%;">Calculate Cumulative</button>
-
-              <div id="cum-result" style="text-align:center;font-size:24px;font-weight:700;color:var(--text);margin-top:12px;">-</div>
-
-            </div>
-
-          </div>
-
-        </div>
-
-        <style>
-
-        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
-
-        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
-
-        </style>
-
-        <script>
-
-        var gradingSystems = {{
-
-          us: {{ name: 'United States', scale: 'out of 4.0', max: 4.0, grades: [
-
-            ['A+',4.0],['A',4.0],['A-',3.7],['B+',3.3],['B',3.0],['B-',2.7],['C+',2.3],['C',2.0],['C-',1.7],['D+',1.3],['D',1.0],['F',0.0]
-
-          ]}},
-
-          uk: {{ name: 'United Kingdom', scale: 'classification', max: 4.0, grades: [
-
-            ['1st (70+)',4.0],['2:1 (60-69)',3.3],['2:2 (50-59)',2.5],['3rd (40-49)',1.5],['Fail (<40)',0.0]
-
-          ]}},
-
-          mx: {{ name: 'Mexico', scale: 'out of 10', max: 10, grades: [
-
-            ['10',10],['9',9],['8',8],['7',7],['6',6],['5 (Fail)',5],['NA',0]
-
-          ]}},
-
-          ar: {{ name: 'Argentina', scale: 'out of 10', max: 10, grades: [
-
-            ['10',10],['9',9],['8',8],['7',7],['6',6],['5',5],['4 (Fail)',4],['3',3],['2',2],['1',1]
-
-          ]}},
-
-          co: {{ name: 'Colombia', scale: 'out of 5.0', max: 5.0, grades: [
-
-            ['5.0',5.0],['4.5',4.5],['4.0',4.0],['3.5',3.5],['3.0',3.0],['2.5',2.5],['2.0',2.0],['1.0',1.0],['0',0]
-
-          ]}},
-
-          cl: {{ name: 'Chile', scale: 'out of 7.0', max: 7.0, grades: [
-
-            ['7.0',7.0],['6.5',6.5],['6.0',6.0],['5.5',5.5],['5.0',5.0],['4.5',4.5],['4.0',4.0],['3.5',3.5],['3.0',3.0],['2.0',2.0],['1.0',1.0]
-
-          ]}},
-
-          br: {{ name: 'Brazil', scale: 'out of 10', max: 10, grades: [
-
-            ['10',10],['9',9],['8',8],['7',7],['6',6],['5',5],['4 (Fail)',4],['3',3],['2',2],['1',1],['0',0]
-
-          ]}},
-
-          de: {{ name: 'Germany', scale: '1.0 (best) to 5.0 (worst)', max: 5.0, inverted: true, grades: [
-
-            ['1.0 (sehr gut)',1.0],['1.3',1.3],['1.7',1.7],['2.0 (gut)',2.0],['2.3',2.3],['2.7',2.7],['3.0 (befriedigend)',3.0],['3.3',3.3],['3.7',3.7],['4.0 (ausreichend)',4.0],['5.0 (fail)',5.0]
-
-          ]}},
-
-          fr: {{ name: 'France', scale: 'out of 20', max: 20, grades: [
-
-            ['20',20],['19',19],['18',18],['17',17],['16',16],['15',15],['14',14],['13',13],['12',12],['11',11],['10',10],['9 (Fail)',9],['8',8],['5',5],['0',0]
-
-          ]}},
-
-          es: {{ name: 'Spain', scale: 'out of 10', max: 10, grades: [
-
-            ['MH (10)',10],['SB (9)',9],['NT (8)',8],['NT (7)',7],['AP (6)',6],['AP (5)',5],['SS (4)',4],['SS (3)',3],['SS (0)',0]
-
-          ]}},
-
-          'in': {{ name: 'India', scale: 'out of 10', max: 10, grades: [
-
-            ['O (10)',10],['A+ (9)',9],['A (8)',8],['B+ (7)',7],['B (6)',6],['C (5)',5],['P (4)',4],['F (0)',0]
-
-          ]}},
-
-          au: {{ name: 'Australia', scale: 'out of 7.0', max: 7.0, grades: [
-
-            ['HD (7)',7],['D (6)',6],['CR (5)',5],['P (4)',4],['F (0)',0]
-
-          ]}},
-
-          jp: {{ name: 'Japan', scale: 'out of 4.0', max: 4.0, grades: [
-
-            ['S (4)',4.0],['A (3)',3.0],['B (2)',2.0],['C (1)',1.0],['F (0)',0.0]
-
-          ]}}
-
-        }};
-
-
-
-        var currentCountry = '{saved_country}';
-
-
-
-        function getGradeOptions(country) {{
-
-          var sys = gradingSystems[country];
-
-          if (!sys) return '';
-
-          return sys.grades.map(function(g, i) {{
-
-            return '<option value="' + g[1] + '"' + (i === 3 ? ' selected' : '') + '>' + g[0] + '</option>';
-
-          }}).join('');
-
-        }}
-
-
-
-        function populateGradeSelects() {{
-
-          var opts = getGradeOptions(currentCountry);
-
-          document.querySelectorAll('.grade-select').forEach(function(sel) {{
-
-            sel.innerHTML = opts;
-
-          }});
-
-          var sys = gradingSystems[currentCountry];
-
-          document.getElementById('gpa-scale').textContent = sys ? sys.scale : '';
-
-        }}
-
-
-
-        function changeCountry(country) {{
-
-          currentCountry = country;
-
-          populateGradeSelects();
-
-          calcGPA();
-
-          fetch('/api/student/settings/gpa-country', {{
-
-            method:'POST', headers:{{'Content-Type':'application/json'}},
-
-            body:JSON.stringify({{country:country}})
-
-          }});
-
-        }}
-
-
-
-        function addGPARow() {{
-
-          var c = document.getElementById('gpa-rows');
-
-          var div = document.createElement('div');
-
-          div.className = 'gpa-row';
-
-          div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;';
-
-          div.innerHTML = '<input type="text" class="edit-input" style="flex:2;" placeholder="Course name">'
-
-            + '<input type="number" class="edit-input" style="width:70px;" value="3" min="1" max="10" placeholder="Credits">'
-
-            + '<select class="edit-input grade-select" style="width:100px;">' + getGradeOptions(currentCountry) + '</select>'
-
-            + '<button onclick="this.parentElement.remove();calcGPA();" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>';
-
-          c.appendChild(div);
-
-        }}
-
-
-
-        function calcGPA() {{
-
-          var rows = document.querySelectorAll('#gpa-rows .gpa-row');
-
-          var totalPts = 0, totalCreds = 0;
-
-          var sys = gradingSystems[currentCountry];
-
-          rows.forEach(function(row) {{
-
-            var inputs = row.querySelectorAll('input');
-
-            var sel = row.querySelector('select');
-
-            var credits = parseFloat(inputs[1].value) || 0;
-
-            var grade = parseFloat(sel.value);
-
-            if (sys && sys.inverted) {{
-
-              // German system: lower is better, invert for weighted calc
-
-              totalPts += credits * (sys.max + 1 - grade);
-
-              totalCreds += credits;
-
-            }} else {{
-
-              totalPts += credits * grade;
-
-              totalCreds += credits;
-
-            }}
-
-          }});
-
-          var gpa;
-
-          if (sys && sys.inverted) {{
-
-            gpa = totalCreds > 0 ? (sys.max + 1 - totalPts / totalCreds).toFixed(2) : '0.00';
-
-          }} else {{
-
-            gpa = totalCreds > 0 ? (totalPts / totalCreds).toFixed(2) : '0.00';
-
-          }}
-
-          document.getElementById('gpa-result').textContent = gpa;
-
-          document.getElementById('gpa-credits').textContent = totalCreds + ' credits this semester';
-
-          var g = parseFloat(gpa);
-
-          var maxG = sys ? sys.max : 4.0;
-
-          if (sys && sys.inverted) {{
-
-            document.getElementById('gpa-result').style.color = g <= 1.5 ? 'var(--green)' : g <= 2.5 ? 'var(--primary)' : g <= 3.5 ? '#F59E0B' : 'var(--red)';
-
-          }} else {{
-
-            var ratio = g / maxG;
-
-            document.getElementById('gpa-result').style.color = ratio >= 0.85 ? 'var(--green)' : ratio >= 0.65 ? 'var(--primary)' : ratio >= 0.5 ? '#F59E0B' : 'var(--red)';
-
-          }}
-
-        }}
-
-
-
-        function calcCumGPA() {{
-
-          calcGPA();
-
-          var semGPA = parseFloat(document.getElementById('gpa-result').textContent) || 0;
-
-          var semRows = document.querySelectorAll('#gpa-rows .gpa-row');
-
-          var semCredits = 0;
-
-          semRows.forEach(function(row) {{ semCredits += parseFloat(row.querySelectorAll('input')[1].value) || 0; }});
-
-          var cumGPA = parseFloat(document.getElementById('cum-gpa').value) || 0;
-
-          var cumCredits = parseInt(document.getElementById('cum-credits').value) || 0;
-
-          var sys = gradingSystems[currentCountry];
-
-          var totalPts, totalCreds, result;
-
-          if (sys && sys.inverted) {{
-
-            totalPts = (((sys.max + 1 - cumGPA) * cumCredits) + ((sys.max + 1 - semGPA) * semCredits));
-
-            totalCreds = cumCredits + semCredits;
-
-            result = totalCreds > 0 ? (sys.max + 1 - totalPts / totalCreds).toFixed(2) : '0.00';
-
-          }} else {{
-
-            totalPts = (cumGPA * cumCredits) + (semGPA * semCredits);
-
-            totalCreds = cumCredits + semCredits;
-
-            result = totalCreds > 0 ? (totalPts / totalCreds).toFixed(2) : '0.00';
-
-          }}
-
-          document.getElementById('cum-result').textContent = 'Cumulative GPA: ' + result;
-
-        }}
-
-
-
-        populateGradeSelects();
-
-        calcGPA();
-
-        </script>
-
-        """, active_page="student_gpa")
+        cid = _cid()
+        return _s_render("GPA Calculator", _GPA_PLANILLA_HTML.replace("__CID__", str(cid)),
+                         active_page="student_gpa")
 
 
 
@@ -13817,10 +13801,6 @@ No markdown, no code fences. ONLY JSON.
         no_data_html = '<div style="text-align:center;padding:40px;color:var(--text-muted);background:var(--card);border:1px solid var(--border);border-radius:var(--radius)"><div style="font-size:48px;margin-bottom:12px">📊</div><p>Not enough data yet</p><p style="font-size:13px;margin-top:4px">Complete some quizzes and review flashcards to see your weak spots.</p></div>'
 
         recs_section = ""
-
-        if recs:
-
-            recs_section = '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:22px"><h3 style="color:var(--text);margin-bottom:12px">💡 Recommendations</h3>' + recs + '</div>'
 
 
 

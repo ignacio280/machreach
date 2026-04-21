@@ -1169,7 +1169,7 @@ LAYOUT = """<!DOCTYPE html>
     .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #94A3B8; font-size: 22px; line-height: 1; z-index: 201; border-radius: 8px; transition: background .15s var(--ease), color .15s var(--ease); }
     .hamburger:hover { color: #F8FAFC; background: rgba(255,255,255,0.08); }
     .hamburger:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(129,140,248,0.55); }
-    @media (max-width: 1280px) {
+    @media (max-width: 820px) {
       .nav { padding: 0 20px; backdrop-filter: none; }
       .hamburger { display: block; }
       .nav-links { display: none; position: fixed; top: 60px; left: 0; right: 0; bottom: 0; background: #0B1220; flex-direction: column; padding: 20px 20px; gap: 4px; overflow-y: auto; z-index: 200; border-top: 1px solid rgba(255,255,255,0.06); }
