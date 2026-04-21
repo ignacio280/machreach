@@ -2445,7 +2445,7 @@ def register_student_routes(app, csrf, limiter):
                 <div style="font-size:12px;color:var(--text-muted);" id="mr-ranks-league">Loading…</div>
               </div>
             </div>
-            <a href="/student/leaderboards" class="btn btn-outline btn-sm">View full leaderboards &rarr;</a>
+            <a href="/student/leaderboard" class="btn btn-outline btn-sm">View full leaderboards &rarr;</a>
           </div>
           <div id="mr-ranks-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
             <div class="mr-rank-cell"><div class="mr-rank-label">Global</div><div class="mr-rank-val" id="mr-rank-global">—</div></div>
@@ -2626,7 +2626,7 @@ def register_student_routes(app, csrf, limiter):
 
               <a href="/student/exchange" class="fx-tile"><span class="fx-ico">&#128257;</span><b>Study Exchange</b><span>Share & fork notes from other students. Earn XP when yours get used.</span></a>
 
-              <a href="/student/leaderboards" class="fx-tile"><span class="fx-ico">&#127942;</span><b>Leaderboards</b><span>Global, country, university, major, and class ranks.</span></a>
+              <a href="/student/leaderboard" class="fx-tile"><span class="fx-ico">&#127942;</span><b>Leaderboards</b><span>Global, country, university, major, and class ranks.</span></a>
 
               <a href="/student/exams" class="fx-tile"><span class="fx-ico">&#128203;</span><b>Exams Dashboard</b><span>Every upcoming exam, sorted by urgency.</span></a>
 
@@ -2643,8 +2643,6 @@ def register_student_routes(app, csrf, limiter):
             </div>
 
             <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-
-              <button onclick="localStorage.removeItem('mr-tutorial-done');location.reload();" class="btn btn-outline btn-sm">&#127891; Run guided tour</button>
 
               <button onclick="localStorage.setItem('mr-fx-hidden','1');document.getElementById('feature-explorer').style.display='none';" class="btn btn-ghost btn-sm">I've got it &mdash; hide this</button>
 
@@ -2686,9 +2684,9 @@ def register_student_routes(app, csrf, limiter):
 
             }} else {{
 
-              // Auto-open for new users who haven't taken the tutorial yet
+              // Auto-open for new users on their first visit
 
-              var firstVisit = !localStorage.getItem('mr-tutorial-done') && !localStorage.getItem('mr-fx-seen');
+              var firstVisit = !localStorage.getItem('mr-fx-seen');
 
               if (firstVisit) {{
 
@@ -2782,27 +2780,11 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="card">
 
-          <div class="card">
+          <div class="card-header"><h2>&#128221; Upcoming Exams</h2></div>
 
-            <div class="card-header"><h2>&#128197; Today's Study Plan</h2></div>
-
-            {today_sessions_html}
-
-            {"<div style='text-align:center;margin-top:12px;'><button onclick='markComplete()' class='btn btn-primary btn-sm'>&#10003; Mark Today Complete</button></div>" if today_plan else ""}
-
-          </div>
-
-
-
-          <div class="card">
-
-            <div class="card-header"><h2>&#128221; Upcoming Exams</h2></div>
-
-            {exams_html}
-
-          </div>
+          {exams_html}
 
         </div>
 
@@ -16431,24 +16413,6 @@ No markdown, no code fences. ONLY JSON.
             </div>
 
             <button onclick="savePrefs()" class="btn btn-primary btn-sm">{_T("Save Preferences")}</button>
-
-          </div>
-
-        </div>
-
-
-
-        <!-- Restart Tutorial -->
-
-        <div class="card" style="margin-top:16px;">
-
-          <div class="card-header"><h2>&#127891; {_T("Interactive Tutorial")}</h2></div>
-
-          <div style="padding:20px;">
-
-            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">{_T("Replay the guided walkthrough to rediscover all the features available to you.")}</p>
-
-            <button onclick="localStorage.removeItem('mr-tutorial-done');window.location='/student'" class="btn btn-outline btn-sm">&#128260; {_T("Restart Tutorial")}</button>
 
           </div>
 
