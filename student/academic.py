@@ -565,6 +565,18 @@ def search_majors(query: str, university_id: Optional[int] = None, limit: int = 
                 (university_id, limit),
             )
             _append(hits)
+            # Fallback: if this university has no seeded catalogue, show the
+            # full global catalogue so students at unseeded schools still get
+            # a browsable list instead of a blank dropdown.
+            if not rows:
+                hits = _fetchall(
+                    db,
+                    "SELECT id, name, university_id FROM majors "
+                    "WHERE university_id IS NULL AND status = 'approved' "
+                    "ORDER BY name LIMIT %s",
+                    (limit,),
+                )
+                _append(hits)
             return rows
 
         # Build query forms, de-duped, preserving order
@@ -736,24 +748,57 @@ def league_for_xp(xp: int) -> dict:
 # clients with the relevant scope column. Cheap at current scale and
 # avoids any duplicate XP storage.
 
-def _xp_select(where_extra: str = "", params: Iterable = ()) -> tuple[str, tuple]:
+def _period_sql(period: str) -> str:
+    """Return a SQL fragment that constrains student_xp.created_at to a
+    rolling window. `period` ∈ {"all", "week", "month"}.
+
+    Uses a parameter-free expression because `created_at` default is NOW() on
+    Postgres and CURRENT_TIMESTAMP on SQLite — both accept the interval math
+    below via NOW()/datetime('now', …). To keep the query portable we rely
+    on the hybrid `_exec`/`_fetchall` layer from outreach.db which passes
+    queries through unchanged; both engines understand `created_at >=
+    NOW() - INTERVAL '7 days'` on Postgres, and we fall back to
+    `created_at >= datetime('now','-7 days')` on SQLite via str replace.
+    """
+    if period == "week":
+        return " AND x.created_at >= NOW() - INTERVAL '7 days' "
+    if period == "month":
+        return " AND x.created_at >= NOW() - INTERVAL '30 days' "
+    return ""
+
+
+def _sqlite_port(q: str) -> str:
+    """If we're on SQLite, translate Postgres interval math to sqlite syntax."""
+    from outreach.db import _USE_PG  # local import to avoid cycles
+    if _USE_PG:
+        return q
+    q = q.replace("NOW() - INTERVAL '7 days'", "datetime('now','-7 days')")
+    q = q.replace("NOW() - INTERVAL '30 days'", "datetime('now','-30 days')")
+    return q
+
+
+def _xp_select(where_extra: str = "", params: Iterable = (), period: str = "all") -> tuple[str, tuple]:
+    join_extra = _period_sql(period)
     base = (
         "SELECT c.id AS client_id, c.name AS display_name, "
         "       c.country_iso, c.university_id, c.major_id, "
         "       COALESCE(SUM(x.xp), 0) AS total_xp "
         "FROM clients c "
-        "LEFT JOIN student_xp x ON x.client_id = c.id "
+        "LEFT JOIN student_xp x ON x.client_id = c.id " + join_extra +
         "WHERE c.account_type = 'student' "
     )
     q = base + where_extra + " GROUP BY c.id, c.name, c.country_iso, c.university_id, c.major_id "
     return q, tuple(params)
 
 
-def leaderboard(scope: str, client_id: int, limit: int = 100) -> list[dict]:
+def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all") -> list[dict]:
     """
     scope ∈ {"global", "country", "university", "major"}.
+    period ∈ {"all", "week", "month"} (default "all").
     Returned rows are sorted by total_xp desc and include rank + is_you flag.
     """
+    if period not in {"all", "week", "month"}:
+        period = "all"
     with get_db() as db:
         # Fetch the requester's scoping values
         me = _fetchone(
@@ -781,9 +826,10 @@ def leaderboard(scope: str, client_id: int, limit: int = 100) -> list[dict]:
         params.append(me["major_id"])
     # global => no extra filter
 
-    q, p = _xp_select(extra, params)
+    q, p = _xp_select(extra, params, period=period)
     q += " ORDER BY total_xp DESC, c.id ASC LIMIT %s "
     p = p + (limit,)
+    q = _sqlite_port(q)
 
     with get_db() as db:
         rows = _fetchall(db, q, p)
@@ -805,22 +851,33 @@ def leaderboard(scope: str, client_id: int, limit: int = 100) -> list[dict]:
     return out
 
 
-def my_rank(scope: str, client_id: int) -> Optional[dict]:
+def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
     """
     Efficient 'where am I in this leaderboard?' lookup without materializing
-    the full list. Returns {rank, total} or None if the scope isn't set.
+    the full list. Returns {rank, total, xp} or None if the scope isn't set.
+
+    `period` ∈ {"all", "week", "month"} — restricts both the candidate XP
+    and my own XP to the matching window, so the rank reflects that period.
     """
+    if period not in {"all", "week", "month"}:
+        period = "all"
+    join_extra = _period_sql(period)
+    my_xp_where = ""
+    if period == "week":
+        my_xp_where = " AND created_at >= NOW() - INTERVAL '7 days' "
+    elif period == "month":
+        my_xp_where = " AND created_at >= NOW() - INTERVAL '30 days' "
+
     with get_db() as db:
         me = _fetchone(
             db,
             "SELECT country_iso, university_id, major_id FROM clients WHERE id = %s",
             (client_id,),
         ) or {}
-        my_xp = _fetchval(
-            db,
-            "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s",
-            (client_id,),
-        ) or 0
+        my_xp_q = _sqlite_port(
+            "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s" + my_xp_where
+        )
+        my_xp = _fetchval(db, my_xp_q, (client_id,)) or 0
 
     where_extra = ""
     params: list = []
@@ -843,12 +900,13 @@ def my_rank(scope: str, client_id: int) -> Optional[dict]:
     q = (
         "SELECT COUNT(*) FROM ("
         "  SELECT c.id, COALESCE(SUM(x.xp),0) AS total_xp "
-        "  FROM clients c LEFT JOIN student_xp x ON x.client_id = c.id "
+        "  FROM clients c LEFT JOIN student_xp x ON x.client_id = c.id " + join_extra +
         "  WHERE c.account_type = 'student' " + where_extra +
         "  GROUP BY c.id "
         "  HAVING COALESCE(SUM(x.xp),0) > %s "
         ") AS ahead"
     )
+    q = _sqlite_port(q)
     total_q = (
         "SELECT COUNT(DISTINCT c.id) FROM clients c "
         "WHERE c.account_type = 'student' " + where_extra
@@ -859,11 +917,11 @@ def my_rank(scope: str, client_id: int) -> Optional[dict]:
     return {"rank": int(ahead) + 1, "total": int(total), "xp": int(my_xp)}
 
 
-def ranks_summary(client_id: int) -> dict:
+def ranks_summary(client_id: int, period: str = "all") -> dict:
     """Compact payload for the dashboard ranking strip."""
     return {
-        "global":     my_rank("global", client_id),
-        "country":    my_rank("country", client_id),
-        "university": my_rank("university", client_id),
-        "major":      my_rank("major", client_id),
+        "global":     my_rank("global", client_id, period=period),
+        "country":    my_rank("country", client_id, period=period),
+        "university": my_rank("university", client_id, period=period),
+        "major":      my_rank("major", client_id, period=period),
     }

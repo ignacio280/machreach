@@ -185,19 +185,25 @@ def register_academic_routes(app, csrf, limiter):
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
         scope = (request.args.get("scope") or "global").lower()
+        period = (request.args.get("period") or "all").lower()
         if scope not in {"global", "country", "university", "major"}:
             return jsonify({"error": "bad scope"}), 400
-        rows = ac.leaderboard(scope, _cid(), limit=100)
-        return jsonify({"scope": scope, "rows": rows})
+        if period not in {"all", "week", "month"}:
+            period = "all"
+        rows = ac.leaderboard(scope, _cid(), limit=100, period=period)
+        return jsonify({"scope": scope, "period": period, "rows": rows})
 
     @app.route("/api/academic/ranks", methods=["GET"])
     def academic_ranks():
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
         cid = _cid()
-        summary = ac.ranks_summary(cid)
+        period = (request.args.get("period") or "all").lower()
+        if period not in {"all", "week", "month"}:
+            period = "all"
+        summary = ac.ranks_summary(cid, period=period)
         xp = summary.get("global", {}).get("xp", 0) if summary.get("global") else 0
-        return jsonify({"ranks": summary, "league": ac.league_for_xp(int(xp))})
+        return jsonify({"ranks": summary, "period": period, "league": ac.league_for_xp(int(xp))})
 
     # ── analytics ───────────────────────────────────────────
 

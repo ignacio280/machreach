@@ -14977,6 +14977,12 @@ No markdown, no code fences. ONLY JSON.
     <div class="lb-tab" data-scope="major">📚 Major</div>
   </div>
 
+  <div class="lb-tabs" id="lbPeriodTabs" style="margin-top:-8px;">
+    <div class="lb-tab active" data-period="all">🏛️ All-time</div>
+    <div class="lb-tab" data-period="month">📅 Monthly</div>
+    <div class="lb-tab" data-period="week">⚡ Weekly</div>
+  </div>
+
   <div class="lb-board" id="lbBoard">
     <div class="lb-skeleton">
       <div class="lb-sk-row"></div><div class="lb-sk-row"></div><div class="lb-sk-row"></div>
@@ -14991,9 +14997,12 @@ No markdown, no code fences. ONLY JSON.
   const initials = (name) => (name||'?').split(/\\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
   function escapeHtml(s){return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
+  // Currently-selected scope + period. Period starts at "all" = all-time.
+  const lbState = { scope: 'global', period: 'all' };
+
   async function loadRanks() {
     try {
-      const r = await fetch('/api/academic/ranks');
+      const r = await fetch('/api/academic/ranks?period=' + encodeURIComponent(lbState.period));
       if (!r.ok) return;
       const j = await r.json();
       const fmt = (obj) => obj ? `#${obj.rank} <span class="of">/ ${obj.total}</span>` : '—';
@@ -15004,15 +15013,22 @@ No markdown, no code fences. ONLY JSON.
     } catch(e) { console.error(e); }
   }
 
-  async function loadScope(scope) {
+  async function loadBoard() {
     const board = document.getElementById('lbBoard');
     board.innerHTML = '<div class="lb-skeleton"><div class="lb-sk-row"></div><div class="lb-sk-row"></div><div class="lb-sk-row"></div><div class="lb-sk-row"></div></div>';
     try {
-      const r = await fetch('/api/academic/leaderboard?scope=' + encodeURIComponent(scope));
+      const url = '/api/academic/leaderboard?scope=' + encodeURIComponent(lbState.scope) +
+                  '&period=' + encodeURIComponent(lbState.period);
+      const r = await fetch(url);
       const j = await r.json();
       const rows = j.rows || [];
       if (!rows.length) {
-        board.innerHTML = `<div class="lb-empty">No one to compare against yet in this scope. Invite some friends!</div>`;
+        const emptyCopy = lbState.period === 'week'
+            ? 'No XP earned in the last 7 days in this scope yet — do a focus block to land on the board!'
+            : (lbState.period === 'month'
+                ? 'No XP earned in the last 30 days in this scope yet.'
+                : 'No one to compare against yet in this scope. Invite some friends!');
+        board.innerHTML = `<div class="lb-empty">${emptyCopy}</div>`;
         return;
       }
       board.innerHTML = rows.map(r => `
@@ -15035,13 +15051,23 @@ No markdown, no code fences. ONLY JSON.
   document.getElementById('lbTabs').addEventListener('click', (e) => {
     const tab = e.target.closest('.lb-tab');
     if (!tab) return;
-    document.querySelectorAll('#mr-lb-page .lb-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#lbTabs .lb-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    loadScope(tab.dataset.scope);
+    lbState.scope = tab.dataset.scope;
+    loadBoard();
+  });
+  document.getElementById('lbPeriodTabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('.lb-tab');
+    if (!tab) return;
+    document.querySelectorAll('#lbPeriodTabs .lb-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    lbState.period = tab.dataset.period;
+    loadRanks();
+    loadBoard();
   });
 
   loadRanks();
-  loadScope('global');
+  loadBoard();
 })();
 </script>
 """
@@ -15613,41 +15639,282 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-          <!-- University & Studies -->
+          <!-- Academic Profile (country / university / major) -->
+          <div class="card" style="margin-top:16px;" id="acad-profile-card">
+            <div class="card-header"><h2>&#127891; {_T("Academic Profile")}</h2></div>
+            <div style="padding:20px;">
+              <p style="font-size:13px;color:var(--text-muted);margin:0 0 16px;">{_T("Used to rank you on the country, university, and major leaderboards. You can change these at any time.")}</p>
 
-          <div class="card">
-
-            <div class="card-header"><h2>🏫 {_T("University & Studies")}</h2></div>
-
-            <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
-
-              {_T("Set your university and field of study to appear on the leaderboard and connect with classmates.")}
-
-            </p>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
-
-              <div>
-
-                <label style="font-size:12px">{_T("University")}</label>
-
-                <input id="pref-university" value="{_esc(university)}" placeholder="e.g. MIT, Stanford, UNAM..." class="edit-input">
-
+              <div id="acad-current" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:16px;font-size:13px;color:var(--text-muted);">
+                <div><strong style="color:var(--text);">{_T("Country")}:</strong> <span id="acad-cur-country">&mdash;</span></div>
+                <div><strong style="color:var(--text);">{_T("University")}:</strong> <span id="acad-cur-uni">&mdash;</span></div>
+                <div><strong style="color:var(--text);">{_T("Major")}:</strong> <span id="acad-cur-major">&mdash;</span></div>
               </div>
 
-              <div>
-
-                <label style="font-size:12px">{_T("Field of Study")}</label>
-
-                <input id="pref-field" value="{_esc(field_of_study)}" placeholder="e.g. Computer Science, Medicine..." class="edit-input">
-
+              <div style="display:grid;gap:12px;">
+                <div>
+                  <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("Country")}</label>
+                  <select id="acad-country" class="input" style="width:100%;"><option value="">{_T("Loading...")}</option></select>
+                </div>
+                <div>
+                  <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("University")}</label>
+                  <input id="acad-uni-search" class="input" type="text" placeholder="{_T('Type to search your university...')}" autocomplete="off" style="width:100%;" disabled>
+                  <div id="acad-uni-results" style="display:none;max-height:180px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:6px;"></div>
+                  <div id="acad-uni-selected" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid var(--primary);border-radius:var(--radius-sm);font-size:13px;align-items:center;justify-content:space-between;gap:10px;">
+                    <span id="acad-uni-selected-name"></span>
+                    <button type="button" onclick="acadClearUni()" class="btn btn-ghost btn-sm" style="padding:4px 10px;">&times;</button>
+                  </div>
+                </div>
+                <div>
+                  <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("Major")}</label>
+                  <input id="acad-major-search" class="input" type="text" placeholder="{_T('Type to search your major...')}" autocomplete="off" style="width:100%;" disabled>
+                  <div id="acad-major-results" style="display:none;max-height:180px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:6px;"></div>
+                  <div id="acad-major-selected" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid var(--primary);border-radius:var(--radius-sm);font-size:13px;align-items:center;justify-content:space-between;gap:10px;">
+                    <span id="acad-major-selected-name"></span>
+                    <button type="button" onclick="acadClearMajor()" class="btn btn-ghost btn-sm" style="padding:4px 10px;">&times;</button>
+                  </div>
+                </div>
               </div>
 
+              <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
+                <button onclick="acadSave()" id="acad-save-btn" class="btn btn-primary btn-sm" disabled>&#128190; {_T("Save Academic Profile")}</button>
+                <span id="acad-status" style="font-size:13px;color:var(--text-muted);"></span>
+              </div>
             </div>
-
-            <a href="/student/leaderboard" class="btn btn-outline btn-sm">🏆 {_T("View Leaderboard")}</a>
-
           </div>
+
+          <script>
+          (function(){{
+            var acState = {{ country: "", universityId: null, universityName: "", majorId: null, majorName: "" }};
+            var $ = function(id){{ return document.getElementById(id); }};
+            var debounceTimer = null;
+
+            function setStatus(msg, isErr){{
+              var el = $('acad-status');
+              el.textContent = msg || '';
+              el.style.color = isErr ? 'var(--danger,#ef4444)' : 'var(--text-muted)';
+            }}
+            function refreshSaveBtn(){{
+              $('acad-save-btn').disabled = !(acState.country && acState.universityId && acState.majorId);
+            }}
+
+            Promise.all([
+              fetch('/api/academic/countries').then(function(r){{ return r.json(); }}).catch(function(){{ return {{countries:[]}}; }}),
+              fetch('/api/academic/profile').then(function(r){{ return r.json(); }}).catch(function(){{ return {{}}; }})
+            ]).then(function(results){{
+              var countries = (results[0] && results[0].countries) || [];
+              var prof = results[1] || {{}};
+
+              var sel = $('acad-country');
+              sel.innerHTML = '<option value="">- {_T("Select a country")} -</option>' +
+                countries.map(function(c){{
+                  var iso = c.iso_code || c.iso || '';
+                  var flag = c.flag_emoji || c.flag || '';
+                  return '<option value="' + iso + '">' + flag + ' ' + c.name + '</option>';
+                }}).join('');
+              sel.disabled = false;
+
+              if (prof.country_iso) {{
+                sel.value = prof.country_iso;
+                acState.country = prof.country_iso;
+                $('acad-uni-search').disabled = false;
+                $('acad-major-search').disabled = false;
+              }}
+              if (prof.university && prof.university.id) {{
+                acState.universityId = prof.university.id;
+                acState.universityName = prof.university.name;
+                $('acad-uni-selected-name').textContent = prof.university.name;
+                $('acad-uni-selected').style.display = 'flex';
+                $('acad-uni-search').style.display = 'none';
+              }}
+              if (prof.major && prof.major.id) {{
+                acState.majorId = prof.major.id;
+                acState.majorName = prof.major.name;
+                $('acad-major-selected-name').textContent = prof.major.name;
+                $('acad-major-selected').style.display = 'flex';
+                $('acad-major-search').style.display = 'none';
+              }}
+              if (prof.country_iso || prof.university || prof.major) {{
+                var countryName = '';
+                for (var i=0; i<countries.length; i++) {{ var ci=countries[i]; if ((ci.iso_code||ci.iso) === prof.country_iso) {{ countryName = (ci.flag_emoji||ci.flag||'') + ' ' + ci.name; break; }} }}
+                $('acad-cur-country').textContent = countryName || (prof.country_iso || '-');
+                $('acad-cur-uni').textContent = (prof.university && prof.university.name) || '-';
+                $('acad-cur-major').textContent = (prof.major && prof.major.name) || '-';
+                $('acad-current').style.display = 'block';
+              }}
+              refreshSaveBtn();
+            }});
+
+            $('acad-country').addEventListener('change', function(e){{
+              acState.country = e.target.value;
+              $('acad-uni-search').disabled = !acState.country;
+              $('acad-major-search').disabled = !acState.country;
+              if (acState.universityName) {{ acadClearUni(); }}
+              refreshSaveBtn();
+            }});
+
+            $('acad-uni-search').addEventListener('input', function(e){{
+              var q = e.target.value.trim();
+              clearTimeout(debounceTimer);
+              if (q.length < 2 || !acState.country) {{ $('acad-uni-results').style.display = 'none'; return; }}
+              debounceTimer = setTimeout(function(){{
+                fetch('/api/academic/universities?country=' + encodeURIComponent(acState.country) + '&q=' + encodeURIComponent(q))
+                  .then(function(r){{ return r.json(); }})
+                  .then(function(j){{
+                    var unis = (j && j.universities) || [];
+                    var box = $('acad-uni-results');
+                    if (!unis.length) {{
+                      box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No universities found.")} <a href="#" id="acad-uni-create" style="color:var(--primary);">{_T("Add")} \\u201C' + escapeHtml(q) + '\\u201D</a></div>';
+                      box.style.display = 'block';
+                      var addLink = document.getElementById('acad-uni-create');
+                      if (addLink) addLink.addEventListener('click', function(ev){{
+                        ev.preventDefault();
+                        fetch('/api/academic/universities', {{
+                          method:'POST', headers:{{'Content-Type':'application/json'}},
+                          body: JSON.stringify({{ name: q, country_iso: acState.country }})
+                        }}).then(function(r){{ return r.json(); }}).then(function(j2){{
+                          if (j2 && j2.university) acadPickUni(j2.university);
+                        }});
+                      }});
+                      return;
+                    }}
+                    box.innerHTML = unis.map(function(u){{
+                      return '<div class="acad-pick" data-id="' + u.id + '" data-name="' + escapeAttr(u.name) + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">' + escapeHtml(u.name) + '</div>';
+                    }}).join('');
+                    box.style.display = 'block';
+                    Array.prototype.forEach.call(box.querySelectorAll('.acad-pick'), function(el){{
+                      el.addEventListener('click', function(){{
+                        acadPickUni({{ id: parseInt(el.dataset.id, 10), name: el.dataset.name }});
+                      }});
+                      el.addEventListener('mouseenter', function(){{ el.style.background = 'rgba(99,102,241,.08)'; }});
+                      el.addEventListener('mouseleave', function(){{ el.style.background = ''; }});
+                    }});
+                  }});
+              }}, 250);
+            }});
+
+            function runMajorSearch(q){{
+                var url = '/api/academic/majors?q=' + encodeURIComponent(q || '');
+                if (acState.universityId) url += '&university_id=' + acState.universityId;
+                fetch(url).then(function(r){{ return r.json(); }}).then(function(j){{
+                  var majors = (j && j.majors) || [];
+                  var box = $('acad-major-results');
+                  if (!majors.length && !q) {{
+                    box.style.display = 'none';
+                    return;
+                  }}
+                  if (!majors.length) {{
+                    box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No majors found.")} <a href="#" id="acad-major-create" style="color:var(--primary);">{_T("Add")} \\u201C' + escapeHtml(q) + '\\u201D</a></div>';
+                    box.style.display = 'block';
+                    var addLink = document.getElementById('acad-major-create');
+                    if (addLink) addLink.addEventListener('click', function(ev){{
+                      ev.preventDefault();
+                      if (!acState.universityId) {{ setStatus('{_T("Pick a university first before adding a new major.")}', true); return; }}
+                      fetch('/api/academic/majors', {{
+                        method:'POST', headers:{{'Content-Type':'application/json'}},
+                        body: JSON.stringify({{ name: q, university_id: acState.universityId }})
+                      }}).then(function(r){{ return r.json(); }}).then(function(j2){{
+                        if (j2 && j2.major) acadPickMajor(j2.major);
+                      }});
+                    }});
+                    return;
+                  }}
+                  box.innerHTML = majors.map(function(m){{
+                    return '<div class="acad-pick" data-id="' + m.id + '" data-name="' + escapeAttr(m.name) + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">' + escapeHtml(m.name) + '</div>';
+                  }}).join('');
+                  box.style.display = 'block';
+                  Array.prototype.forEach.call(box.querySelectorAll('.acad-pick'), function(el){{
+                    el.addEventListener('click', function(){{
+                      acadPickMajor({{ id: parseInt(el.dataset.id, 10), name: el.dataset.name }});
+                    }});
+                    el.addEventListener('mouseenter', function(){{ el.style.background = 'rgba(99,102,241,.08)'; }});
+                    el.addEventListener('mouseleave', function(){{ el.style.background = ''; }});
+                  }});
+                }});
+            }}  // end runMajorSearch
+
+            // Trigger major search on input (debounced) and on focus when a
+            // university is already selected, so users instantly see the full
+            // catalog of that school without having to type.
+            $('acad-major-search').addEventListener('input', function(e){{
+              clearTimeout(window.__majorSearchT);
+              window.__majorSearchT = setTimeout(function(){{
+                runMajorSearch(e.target.value || '');
+              }}, 250);
+            }});
+            $('acad-major-search').addEventListener('focus', function(){{
+              if (acState.universityId) runMajorSearch('');
+            }});
+
+            function acadPickUni(u){{
+              acState.universityId = u.id;
+              acState.universityName = u.name;
+              $('acad-uni-selected-name').textContent = u.name;
+              $('acad-uni-selected').style.display = 'flex';
+              $('acad-uni-results').style.display = 'none';
+              $('acad-uni-search').style.display = 'none';
+              $('acad-uni-search').value = '';
+              refreshSaveBtn();
+            }}
+            function acadPickMajor(m){{
+              acState.majorId = m.id;
+              acState.majorName = m.name;
+              $('acad-major-selected-name').textContent = m.name;
+              $('acad-major-selected').style.display = 'flex';
+              $('acad-major-results').style.display = 'none';
+              $('acad-major-search').style.display = 'none';
+              $('acad-major-search').value = '';
+              refreshSaveBtn();
+            }}
+            window.acadClearUni = function(){{
+              acState.universityId = null; acState.universityName = "";
+              $('acad-uni-selected').style.display = 'none';
+              $('acad-uni-search').style.display = 'block';
+              $('acad-uni-search').value = '';
+              refreshSaveBtn();
+            }};
+            window.acadClearMajor = function(){{
+              acState.majorId = null; acState.majorName = "";
+              $('acad-major-selected').style.display = 'none';
+              $('acad-major-search').style.display = 'block';
+              $('acad-major-search').value = '';
+              refreshSaveBtn();
+            }};
+            window.acadSave = function(){{
+              if (!(acState.country && acState.universityId && acState.majorId)) return;
+              setStatus('{_T("Saving...")}');
+              $('acad-save-btn').disabled = true;
+              fetch('/api/academic/profile', {{
+                method:'POST', headers:{{'Content-Type':'application/json'}},
+                body: JSON.stringify({{
+                  country_iso: acState.country,
+                  university_id: acState.universityId,
+                  major_id: acState.majorId
+                }})
+              }}).then(function(r){{ return r.json().then(function(j){{ return {{ ok: r.ok, body: j }}; }}); }})
+                .then(function(res){{
+                  if (!res.ok || !res.body.ok) {{
+                    setStatus(res.body.error || '{_T("Save failed.")}', true);
+                    $('acad-save-btn').disabled = false;
+                    return;
+                  }}
+                  setStatus('{_T("Saved!")} \\u2713');
+                  $('acad-cur-country').textContent = $('acad-country').selectedOptions[0].textContent;
+                  $('acad-cur-uni').textContent = acState.universityName;
+                  $('acad-cur-major').textContent = acState.majorName;
+                  $('acad-current').style.display = 'block';
+                  $('acad-save-btn').disabled = false;
+                }}).catch(function(){{
+                  setStatus('{_T("Save failed.")}', true);
+                  $('acad-save-btn').disabled = false;
+                }});
+            }};
+
+            function escapeHtml(s){{ return (s||'').replace(/[&<>"']/g, function(c){{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }}
+            function escapeAttr(s){{ return escapeHtml(s).replace(/"/g, '&quot;'); }}
+          }})();
+          </script>
+
 
 
 
@@ -15675,91 +15942,6 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-          <!-- Google Calendar Connection -->
-
-          <div class="card">
-
-            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-
-              <h2>📅 {_T("Google Calendar")}</h2>
-
-              <span id="gcal-status-badge" style="color:var(--text-muted);font-weight:600;font-size:13px">●</span>
-
-            </div>
-
-            <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px">
-
-              {_T("Sync your Google Calendar so the AI schedules study blocks around your real classes, work, and exams &mdash; and can add new events directly to your calendar.")}
-
-            </p>
-
-            <div id="gcal-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-
-              <a href="/gcal/connect?return=/student/settings" class="btn btn-outline btn-sm" id="gcal-connect-btn">{_T("Connect Google Calendar")}</a>
-
-            </div>
-
-            <script>
-
-              (function(){{
-
-                fetch('/api/gcal/status').then(r=>r.json()).then(d=>{{
-
-                  var b = document.getElementById('gcal-status-badge');
-
-                  var a = document.getElementById('gcal-actions');
-
-                  if (!d || !d.configured) {{
-
-                    b.style.color = 'var(--text-muted)';
-
-                    b.textContent = '● Not configured';
-
-                    a.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Server admin must set GOOGLE_OAUTH_* env vars.</span>';
-
-                    return;
-
-                  }}
-
-                  if (d.connected) {{
-
-                    b.style.color = '#10B981';
-
-                    b.textContent = '● Connected';
-
-                    a.innerHTML = '<span style="font-size:13px;color:var(--text);font-weight:600;margin-right:8px;">' + (d.email || '') + '</span>'
-
-                      + '<button onclick="gcalDisconnect()" class="btn btn-outline btn-sm">Disconnect</button>';
-
-                  }} else {{
-
-                    b.style.color = '#9CA3AF';
-
-                    b.textContent = '● Not connected';
-
-                  }}
-
-                }}).catch(()=>{{}});
-
-                window.gcalDisconnect = async function(){{
-
-                  if (!confirm('Disconnect Google Calendar?')) return;
-
-                  var m = document.querySelector('meta[name="csrf-token"]');
-
-                  var h = m ? {{'X-CSRFToken': m.content}} : {{}};
-
-                  await fetch('/gcal/disconnect', {{method:'POST', headers: h}});
-
-                  location.reload();
-
-                }};
-
-              }})();
-
-            </script>
-
-          </div>
 
 
 
@@ -15965,506 +16147,11 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-          <!-- Daily Study Email -->
-
-          <div class="card">
-
-            <div class="card-header"><h2>📬 {_T("Daily Study Email")}</h2></div>
-
-            <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
-
-              {_T("Get a morning email with your study plan, upcoming exams, and weak topics to review.")}
-
-            </p>
-
-            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;color:var(--text)">
-
-              <input type="checkbox" id="pref-daily" {'checked' if de else ''} style="width:18px;height:18px;accent-color:var(--primary)">
-
-              <span>{_T("Enable daily study email")}</span>
-
-            </label>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-
-              <div>
-
-                <label style="font-size:12px">{_T("Send at (hour)")}</label>
-
-                <select id="pref-hour" class="edit-input" style="width:100%">
-
-                  {"".join(f'<option value="{h}" {"selected" if h==hour else ""}>{h:02d}:00</option>' for h in range(5,23))}
-
-                </select>
-
-              </div>
-
-              <div>
-
-                <label style="font-size:12px">{_T("Timezone")}</label>
-
-                <select id="pref-tz" class="edit-input" style="width:100%">
-
-                  <optgroup label="Americas">
-
-                    <option value="America/Mexico_City" {"selected" if tz=="America/Mexico_City" else ""}>Mexico City (CST)</option>
-
-                    <option value="America/Cancun" {"selected" if tz=="America/Cancun" else ""}>Cancún (EST)</option>
-
-                    <option value="America/Tijuana" {"selected" if tz=="America/Tijuana" else ""}>Tijuana (PST)</option>
-
-                    <option value="America/Monterrey" {"selected" if tz=="America/Monterrey" else ""}>Monterrey (CST)</option>
-
-                    <option value="America/New_York" {"selected" if tz=="America/New_York" else ""}>New York (EST)</option>
-
-                    <option value="America/Chicago" {"selected" if tz=="America/Chicago" else ""}>Chicago (CST)</option>
-
-                    <option value="America/Denver" {"selected" if tz=="America/Denver" else ""}>Denver (MST)</option>
-
-                    <option value="America/Los_Angeles" {"selected" if tz=="America/Los_Angeles" else ""}>Los Angeles (PST)</option>
-
-                    <option value="America/Anchorage" {"selected" if tz=="America/Anchorage" else ""}>Anchorage (AKST)</option>
-
-                    <option value="Pacific/Honolulu" {"selected" if tz=="Pacific/Honolulu" else ""}>Honolulu (HST)</option>
-
-                    <option value="America/Toronto" {"selected" if tz=="America/Toronto" else ""}>Toronto (EST)</option>
-
-                    <option value="America/Vancouver" {"selected" if tz=="America/Vancouver" else ""}>Vancouver (PST)</option>
-
-                    <option value="America/Bogota" {"selected" if tz=="America/Bogota" else ""}>Bogotá (COT)</option>
-
-                    <option value="America/Lima" {"selected" if tz=="America/Lima" else ""}>Lima (PET)</option>
-
-                    <option value="America/Santiago" {"selected" if tz=="America/Santiago" else ""}>Santiago (CLT)</option>
-
-                    <option value="America/Buenos_Aires" {"selected" if tz=="America/Buenos_Aires" else ""}>Buenos Aires (ART)</option>
-
-                    <option value="America/Sao_Paulo" {"selected" if tz=="America/Sao_Paulo" else ""}>São Paulo (BRT)</option>
-
-                    <option value="America/Caracas" {"selected" if tz=="America/Caracas" else ""}>Caracas (VET)</option>
-
-                    <option value="America/Costa_Rica" {"selected" if tz=="America/Costa_Rica" else ""}>Costa Rica (CST)</option>
-
-                    <option value="America/Panama" {"selected" if tz=="America/Panama" else ""}>Panama (EST)</option>
-
-                    <option value="America/Guayaquil" {"selected" if tz=="America/Guayaquil" else ""}>Guayaquil (ECT)</option>
-
-                    <option value="America/Montevideo" {"selected" if tz=="America/Montevideo" else ""}>Montevideo (UYT)</option>
-
-                    <option value="America/Asuncion" {"selected" if tz=="America/Asuncion" else ""}>Asunción (PYT)</option>
-
-                    <option value="America/La_Paz" {"selected" if tz=="America/La_Paz" else ""}>La Paz (BOT)</option>
-
-                    <option value="America/Santo_Domingo" {"selected" if tz=="America/Santo_Domingo" else ""}>Santo Domingo (AST)</option>
-
-                    <option value="America/Havana" {"selected" if tz=="America/Havana" else ""}>Havana (CST)</option>
-
-                    <option value="America/Guatemala" {"selected" if tz=="America/Guatemala" else ""}>Guatemala (CST)</option>
-
-                    <option value="America/El_Salvador" {"selected" if tz=="America/El_Salvador" else ""}>El Salvador (CST)</option>
-
-                    <option value="America/Tegucigalpa" {"selected" if tz=="America/Tegucigalpa" else ""}>Tegucigalpa (CST)</option>
-
-                    <option value="America/Managua" {"selected" if tz=="America/Managua" else ""}>Managua (CST)</option>
-
-                  </optgroup>
-
-                  <optgroup label="Europe">
-
-                    <option value="Europe/London" {"selected" if tz=="Europe/London" else ""}>London (GMT)</option>
-
-                    <option value="Europe/Madrid" {"selected" if tz=="Europe/Madrid" else ""}>Madrid (CET)</option>
-
-                    <option value="Europe/Paris" {"selected" if tz=="Europe/Paris" else ""}>Paris (CET)</option>
-
-                    <option value="Europe/Berlin" {"selected" if tz=="Europe/Berlin" else ""}>Berlin (CET)</option>
-
-                    <option value="Europe/Rome" {"selected" if tz=="Europe/Rome" else ""}>Rome (CET)</option>
-
-                    <option value="Europe/Amsterdam" {"selected" if tz=="Europe/Amsterdam" else ""}>Amsterdam (CET)</option>
-
-                    <option value="Europe/Lisbon" {"selected" if tz=="Europe/Lisbon" else ""}>Lisbon (WET)</option>
-
-                    <option value="Europe/Brussels" {"selected" if tz=="Europe/Brussels" else ""}>Brussels (CET)</option>
-
-                    <option value="Europe/Zurich" {"selected" if tz=="Europe/Zurich" else ""}>Zurich (CET)</option>
-
-                    <option value="Europe/Vienna" {"selected" if tz=="Europe/Vienna" else ""}>Vienna (CET)</option>
-
-                    <option value="Europe/Warsaw" {"selected" if tz=="Europe/Warsaw" else ""}>Warsaw (CET)</option>
-
-                    <option value="Europe/Stockholm" {"selected" if tz=="Europe/Stockholm" else ""}>Stockholm (CET)</option>
-
-                    <option value="Europe/Oslo" {"selected" if tz=="Europe/Oslo" else ""}>Oslo (CET)</option>
-
-                    <option value="Europe/Helsinki" {"selected" if tz=="Europe/Helsinki" else ""}>Helsinki (EET)</option>
-
-                    <option value="Europe/Athens" {"selected" if tz=="Europe/Athens" else ""}>Athens (EET)</option>
-
-                    <option value="Europe/Bucharest" {"selected" if tz=="Europe/Bucharest" else ""}>Bucharest (EET)</option>
-
-                    <option value="Europe/Moscow" {"selected" if tz=="Europe/Moscow" else ""}>Moscow (MSK)</option>
-
-                    <option value="Europe/Istanbul" {"selected" if tz=="Europe/Istanbul" else ""}>Istanbul (TRT)</option>
-
-                    <option value="Europe/Dublin" {"selected" if tz=="Europe/Dublin" else ""}>Dublin (GMT)</option>
-
-                    <option value="Europe/Prague" {"selected" if tz=="Europe/Prague" else ""}>Prague (CET)</option>
-
-                    <option value="Europe/Budapest" {"selected" if tz=="Europe/Budapest" else ""}>Budapest (CET)</option>
-
-                    <option value="Europe/Copenhagen" {"selected" if tz=="Europe/Copenhagen" else ""}>Copenhagen (CET)</option>
-
-                  </optgroup>
-
-                  <optgroup label="Asia & Pacific">
-
-                    <option value="Asia/Dubai" {"selected" if tz=="Asia/Dubai" else ""}>Dubai (GST)</option>
-
-                    <option value="Asia/Kolkata" {"selected" if tz=="Asia/Kolkata" else ""}>India (IST)</option>
-
-                    <option value="Asia/Shanghai" {"selected" if tz=="Asia/Shanghai" else ""}>Shanghai (CST)</option>
-
-                    <option value="Asia/Tokyo" {"selected" if tz=="Asia/Tokyo" else ""}>Tokyo (JST)</option>
-
-                    <option value="Asia/Seoul" {"selected" if tz=="Asia/Seoul" else ""}>Seoul (KST)</option>
-
-                    <option value="Asia/Singapore" {"selected" if tz=="Asia/Singapore" else ""}>Singapore (SGT)</option>
-
-                    <option value="Asia/Hong_Kong" {"selected" if tz=="Asia/Hong_Kong" else ""}>Hong Kong (HKT)</option>
-
-                    <option value="Asia/Bangkok" {"selected" if tz=="Asia/Bangkok" else ""}>Bangkok (ICT)</option>
-
-                    <option value="Asia/Jakarta" {"selected" if tz=="Asia/Jakarta" else ""}>Jakarta (WIB)</option>
-
-                    <option value="Asia/Kuala_Lumpur" {"selected" if tz=="Asia/Kuala_Lumpur" else ""}>Kuala Lumpur (MYT)</option>
-
-                    <option value="Asia/Manila" {"selected" if tz=="Asia/Manila" else ""}>Manila (PHT)</option>
-
-                    <option value="Asia/Taipei" {"selected" if tz=="Asia/Taipei" else ""}>Taipei (CST)</option>
-
-                    <option value="Asia/Karachi" {"selected" if tz=="Asia/Karachi" else ""}>Karachi (PKT)</option>
-
-                    <option value="Asia/Dhaka" {"selected" if tz=="Asia/Dhaka" else ""}>Dhaka (BST)</option>
-
-                    <option value="Asia/Riyadh" {"selected" if tz=="Asia/Riyadh" else ""}>Riyadh (AST)</option>
-
-                    <option value="Asia/Tehran" {"selected" if tz=="Asia/Tehran" else ""}>Tehran (IRST)</option>
-
-                    <option value="Australia/Sydney" {"selected" if tz=="Australia/Sydney" else ""}>Sydney (AEST)</option>
-
-                    <option value="Australia/Melbourne" {"selected" if tz=="Australia/Melbourne" else ""}>Melbourne (AEST)</option>
-
-                    <option value="Australia/Perth" {"selected" if tz=="Australia/Perth" else ""}>Perth (AWST)</option>
-
-                    <option value="Pacific/Auckland" {"selected" if tz=="Pacific/Auckland" else ""}>Auckland (NZST)</option>
-
-                  </optgroup>
-
-                  <optgroup label="Africa">
-
-                    <option value="Africa/Cairo" {"selected" if tz=="Africa/Cairo" else ""}>Cairo (EET)</option>
-
-                    <option value="Africa/Lagos" {"selected" if tz=="Africa/Lagos" else ""}>Lagos (WAT)</option>
-
-                    <option value="Africa/Johannesburg" {"selected" if tz=="Africa/Johannesburg" else ""}>Johannesburg (SAST)</option>
-
-                    <option value="Africa/Nairobi" {"selected" if tz=="Africa/Nairobi" else ""}>Nairobi (EAT)</option>
-
-                    <option value="Africa/Casablanca" {"selected" if tz=="Africa/Casablanca" else ""}>Casablanca (WET)</option>
-
-                  </optgroup>
-
-                </select>
-
-              </div>
-
-            </div>
-
-            <button onclick="savePrefs()" class="btn btn-primary btn-sm">{_T("Save Preferences")}</button>
-
-          </div>
 
         </div>
 
 
 
-        <!-- Academic Profile (country / university / major) -->
-        <div class="card" style="margin-top:16px;" id="acad-profile-card">
-          <div class="card-header"><h2>&#127891; {_T("Academic Profile")}</h2></div>
-          <div style="padding:20px;">
-            <p style="font-size:13px;color:var(--text-muted);margin:0 0 16px;">{_T("Used to rank you on the country, university, and major leaderboards. You can change these at any time.")}</p>
-
-            <div id="acad-current" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:16px;font-size:13px;color:var(--text-muted);">
-              <div><strong style="color:var(--text);">{_T("Country")}:</strong> <span id="acad-cur-country">&mdash;</span></div>
-              <div><strong style="color:var(--text);">{_T("University")}:</strong> <span id="acad-cur-uni">&mdash;</span></div>
-              <div><strong style="color:var(--text);">{_T("Major")}:</strong> <span id="acad-cur-major">&mdash;</span></div>
-            </div>
-
-            <div style="display:grid;gap:12px;">
-              <div>
-                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("Country")}</label>
-                <select id="acad-country" class="input" style="width:100%;"><option value="">{_T("Loading...")}</option></select>
-              </div>
-              <div>
-                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("University")}</label>
-                <input id="acad-uni-search" class="input" type="text" placeholder="{_T('Type to search your university...')}" autocomplete="off" style="width:100%;" disabled>
-                <div id="acad-uni-results" style="display:none;max-height:180px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:6px;"></div>
-                <div id="acad-uni-selected" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid var(--primary);border-radius:var(--radius-sm);font-size:13px;align-items:center;justify-content:space-between;gap:10px;">
-                  <span id="acad-uni-selected-name"></span>
-                  <button type="button" onclick="acadClearUni()" class="btn btn-ghost btn-sm" style="padding:4px 10px;">&times;</button>
-                </div>
-              </div>
-              <div>
-                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("Major")}</label>
-                <input id="acad-major-search" class="input" type="text" placeholder="{_T('Type to search your major...')}" autocomplete="off" style="width:100%;" disabled>
-                <div id="acad-major-results" style="display:none;max-height:180px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:6px;"></div>
-                <div id="acad-major-selected" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(99,102,241,.08);border:1px solid var(--primary);border-radius:var(--radius-sm);font-size:13px;align-items:center;justify-content:space-between;gap:10px;">
-                  <span id="acad-major-selected-name"></span>
-                  <button type="button" onclick="acadClearMajor()" class="btn btn-ghost btn-sm" style="padding:4px 10px;">&times;</button>
-                </div>
-              </div>
-            </div>
-
-            <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
-              <button onclick="acadSave()" id="acad-save-btn" class="btn btn-primary btn-sm" disabled>&#128190; {_T("Save Academic Profile")}</button>
-              <span id="acad-status" style="font-size:13px;color:var(--text-muted);"></span>
-            </div>
-          </div>
-        </div>
-
-        <script>
-        (function(){{
-          var acState = {{ country: "", universityId: null, universityName: "", majorId: null, majorName: "" }};
-          var $ = function(id){{ return document.getElementById(id); }};
-          var debounceTimer = null;
-
-          function setStatus(msg, isErr){{
-            var el = $('acad-status');
-            el.textContent = msg || '';
-            el.style.color = isErr ? 'var(--danger,#ef4444)' : 'var(--text-muted)';
-          }}
-          function refreshSaveBtn(){{
-            $('acad-save-btn').disabled = !(acState.country && acState.universityId && acState.majorId);
-          }}
-
-          Promise.all([
-            fetch('/api/academic/countries').then(function(r){{ return r.json(); }}).catch(function(){{ return {{countries:[]}}; }}),
-            fetch('/api/academic/profile').then(function(r){{ return r.json(); }}).catch(function(){{ return {{}}; }})
-          ]).then(function(results){{
-            var countries = (results[0] && results[0].countries) || [];
-            var prof = results[1] || {{}};
-
-            var sel = $('acad-country');
-            sel.innerHTML = '<option value="">- {_T("Select a country")} -</option>' +
-              countries.map(function(c){{
-                var iso = c.iso_code || c.iso || '';
-                var flag = c.flag_emoji || c.flag || '';
-                return '<option value="' + iso + '">' + flag + ' ' + c.name + '</option>';
-              }}).join('');
-            sel.disabled = false;
-
-            if (prof.country_iso) {{
-              sel.value = prof.country_iso;
-              acState.country = prof.country_iso;
-              $('acad-uni-search').disabled = false;
-              $('acad-major-search').disabled = false;
-            }}
-            if (prof.university && prof.university.id) {{
-              acState.universityId = prof.university.id;
-              acState.universityName = prof.university.name;
-              $('acad-uni-selected-name').textContent = prof.university.name;
-              $('acad-uni-selected').style.display = 'flex';
-              $('acad-uni-search').style.display = 'none';
-            }}
-            if (prof.major && prof.major.id) {{
-              acState.majorId = prof.major.id;
-              acState.majorName = prof.major.name;
-              $('acad-major-selected-name').textContent = prof.major.name;
-              $('acad-major-selected').style.display = 'flex';
-              $('acad-major-search').style.display = 'none';
-            }}
-            if (prof.country_iso || prof.university || prof.major) {{
-              var countryName = '';
-              for (var i=0; i<countries.length; i++) {{ var ci=countries[i]; if ((ci.iso_code||ci.iso) === prof.country_iso) {{ countryName = (ci.flag_emoji||ci.flag||'') + ' ' + ci.name; break; }} }}
-              $('acad-cur-country').textContent = countryName || (prof.country_iso || '-');
-              $('acad-cur-uni').textContent = (prof.university && prof.university.name) || '-';
-              $('acad-cur-major').textContent = (prof.major && prof.major.name) || '-';
-              $('acad-current').style.display = 'block';
-            }}
-            refreshSaveBtn();
-          }});
-
-          $('acad-country').addEventListener('change', function(e){{
-            acState.country = e.target.value;
-            $('acad-uni-search').disabled = !acState.country;
-            $('acad-major-search').disabled = !acState.country;
-            if (acState.universityName) {{ acadClearUni(); }}
-            refreshSaveBtn();
-          }});
-
-          $('acad-uni-search').addEventListener('input', function(e){{
-            var q = e.target.value.trim();
-            clearTimeout(debounceTimer);
-            if (q.length < 2 || !acState.country) {{ $('acad-uni-results').style.display = 'none'; return; }}
-            debounceTimer = setTimeout(function(){{
-              fetch('/api/academic/universities?country=' + encodeURIComponent(acState.country) + '&q=' + encodeURIComponent(q))
-                .then(function(r){{ return r.json(); }})
-                .then(function(j){{
-                  var unis = (j && j.universities) || [];
-                  var box = $('acad-uni-results');
-                  if (!unis.length) {{
-                    box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No universities found.")} <a href="#" id="acad-uni-create" style="color:var(--primary);">{_T("Add")} \\u201C' + escapeHtml(q) + '\\u201D</a></div>';
-                    box.style.display = 'block';
-                    var addLink = document.getElementById('acad-uni-create');
-                    if (addLink) addLink.addEventListener('click', function(ev){{
-                      ev.preventDefault();
-                      fetch('/api/academic/universities', {{
-                        method:'POST', headers:{{'Content-Type':'application/json'}},
-                        body: JSON.stringify({{ name: q, country_iso: acState.country }})
-                      }}).then(function(r){{ return r.json(); }}).then(function(j2){{
-                        if (j2 && j2.university) acadPickUni(j2.university);
-                      }});
-                    }});
-                    return;
-                  }}
-                  box.innerHTML = unis.map(function(u){{
-                    return '<div class="acad-pick" data-id="' + u.id + '" data-name="' + escapeAttr(u.name) + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">' + escapeHtml(u.name) + '</div>';
-                  }}).join('');
-                  box.style.display = 'block';
-                  Array.prototype.forEach.call(box.querySelectorAll('.acad-pick'), function(el){{
-                    el.addEventListener('click', function(){{
-                      acadPickUni({{ id: parseInt(el.dataset.id, 10), name: el.dataset.name }});
-                    }});
-                    el.addEventListener('mouseenter', function(){{ el.style.background = 'rgba(99,102,241,.08)'; }});
-                    el.addEventListener('mouseleave', function(){{ el.style.background = ''; }});
-                  }});
-                }});
-            }}, 250);
-          }});
-
-          function runMajorSearch(q){{
-              var url = '/api/academic/majors?q=' + encodeURIComponent(q || '');
-              if (acState.universityId) url += '&university_id=' + acState.universityId;
-              fetch(url).then(function(r){{ return r.json(); }}).then(function(j){{
-                var majors = (j && j.majors) || [];
-                var box = $('acad-major-results');
-                if (!majors.length && !q) {{
-                  box.style.display = 'none';
-                  return;
-                }}
-                if (!majors.length) {{
-                  box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No majors found.")} <a href="#" id="acad-major-create" style="color:var(--primary);">{_T("Add")} \\u201C' + escapeHtml(q) + '\\u201D</a></div>';
-                  box.style.display = 'block';
-                  var addLink = document.getElementById('acad-major-create');
-                  if (addLink) addLink.addEventListener('click', function(ev){{
-                    ev.preventDefault();
-                    if (!acState.universityId) {{ setStatus('{_T("Pick a university first before adding a new major.")}', true); return; }}
-                    fetch('/api/academic/majors', {{
-                      method:'POST', headers:{{'Content-Type':'application/json'}},
-                      body: JSON.stringify({{ name: q, university_id: acState.universityId }})
-                    }}).then(function(r){{ return r.json(); }}).then(function(j2){{
-                      if (j2 && j2.major) acadPickMajor(j2.major);
-                    }});
-                  }});
-                  return;
-                }}
-                box.innerHTML = majors.map(function(m){{
-                  return '<div class="acad-pick" data-id="' + m.id + '" data-name="' + escapeAttr(m.name) + '" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;">' + escapeHtml(m.name) + '</div>';
-                }}).join('');
-                box.style.display = 'block';
-                Array.prototype.forEach.call(box.querySelectorAll('.acad-pick'), function(el){{
-                  el.addEventListener('click', function(){{
-                    acadPickMajor({{ id: parseInt(el.dataset.id, 10), name: el.dataset.name }});
-                  }});
-                  el.addEventListener('mouseenter', function(){{ el.style.background = 'rgba(99,102,241,.08)'; }});
-                  el.addEventListener('mouseleave', function(){{ el.style.background = ''; }});
-                }});
-              }});
-            }});
-          }}
-
-          // Trigger major search on input (debounced) and on focus when a
-          // university is already selected, so users instantly see the full
-          // catalog of that school without having to type.
-          $('acad-major-search').addEventListener('input', function(e){{
-            clearTimeout(window.__majorSearchT);
-            window.__majorSearchT = setTimeout(function(){{
-              runMajorSearch(e.target.value || '');
-            }}, 250);
-          }});
-          $('acad-major-search').addEventListener('focus', function(){{
-            if (acState.universityId) runMajorSearch('');
-          }});
-
-          function acadPickUni(u){{
-            acState.universityId = u.id;
-            acState.universityName = u.name;
-            $('acad-uni-selected-name').textContent = u.name;
-            $('acad-uni-selected').style.display = 'flex';
-            $('acad-uni-results').style.display = 'none';
-            $('acad-uni-search').style.display = 'none';
-            $('acad-uni-search').value = '';
-            refreshSaveBtn();
-          }}
-          function acadPickMajor(m){{
-            acState.majorId = m.id;
-            acState.majorName = m.name;
-            $('acad-major-selected-name').textContent = m.name;
-            $('acad-major-selected').style.display = 'flex';
-            $('acad-major-results').style.display = 'none';
-            $('acad-major-search').style.display = 'none';
-            $('acad-major-search').value = '';
-            refreshSaveBtn();
-          }}
-          window.acadClearUni = function(){{
-            acState.universityId = null; acState.universityName = "";
-            $('acad-uni-selected').style.display = 'none';
-            $('acad-uni-search').style.display = 'block';
-            $('acad-uni-search').value = '';
-            refreshSaveBtn();
-          }};
-          window.acadClearMajor = function(){{
-            acState.majorId = null; acState.majorName = "";
-            $('acad-major-selected').style.display = 'none';
-            $('acad-major-search').style.display = 'block';
-            $('acad-major-search').value = '';
-            refreshSaveBtn();
-          }};
-          window.acadSave = function(){{
-            if (!(acState.country && acState.universityId && acState.majorId)) return;
-            setStatus('{_T("Saving...")}');
-            $('acad-save-btn').disabled = true;
-            fetch('/api/academic/profile', {{
-              method:'POST', headers:{{'Content-Type':'application/json'}},
-              body: JSON.stringify({{
-                country_iso: acState.country,
-                university_id: acState.universityId,
-                major_id: acState.majorId
-              }})
-            }}).then(function(r){{ return r.json().then(function(j){{ return {{ ok: r.ok, body: j }}; }}); }})
-              .then(function(res){{
-                if (!res.ok || !res.body.ok) {{
-                  setStatus(res.body.error || '{_T("Save failed.")}', true);
-                  $('acad-save-btn').disabled = false;
-                  return;
-                }}
-                setStatus('{_T("Saved!")} \\u2713');
-                $('acad-cur-country').textContent = $('acad-country').selectedOptions[0].textContent;
-                $('acad-cur-uni').textContent = acState.universityName;
-                $('acad-cur-major').textContent = acState.majorName;
-                $('acad-current').style.display = 'block';
-                $('acad-save-btn').disabled = false;
-              }}).catch(function(){{
-                setStatus('{_T("Save failed.")}', true);
-                $('acad-save-btn').disabled = false;
-              }});
-          }};
-
-          function escapeHtml(s){{ return (s||'').replace(/[&<>"']/g, function(c){{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }}
-          function escapeAttr(s){{ return escapeHtml(s).replace(/"/g, '&quot;'); }}
-        }})();
-        </script>
 
 
 
@@ -16591,25 +16278,18 @@ No markdown, no code fences. ONLY JSON.
         <script>
 
         async function savePrefs() {{
-
+          // Daily-study email + Google Calendar were removed from settings;
+          // this function only exists so any lingering onclick doesn't throw.
+          var $pick = function(id){{ return document.getElementById(id); }};
+          var body = {{}};
+          if ($pick('pref-daily')) body.daily_email = $pick('pref-daily').checked;
+          if ($pick('pref-hour')) body.email_hour = parseInt($pick('pref-hour').value);
+          if ($pick('pref-tz')) body.timezone = $pick('pref-tz').value;
+          if ($pick('pref-university')) body.university = $pick('pref-university').value.trim();
+          if ($pick('pref-field')) body.field_of_study = $pick('pref-field').value.trim();
           var r = await fetch('/api/student/email-prefs', {{
-
             method:'POST', headers:{{'Content-Type':'application/json'}},
-
-            body: JSON.stringify({{
-
-              daily_email: document.getElementById('pref-daily').checked,
-
-              email_hour: parseInt(document.getElementById('pref-hour').value),
-
-              timezone: document.getElementById('pref-tz').value,
-
-              university: document.getElementById('pref-university').value.trim(),
-
-              field_of_study: document.getElementById('pref-field').value.trim()
-
-            }})
-
+            body: JSON.stringify(body)
           }});
 
           if (r.ok) {{
