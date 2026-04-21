@@ -1362,6 +1362,14 @@ _CHILE_COMMON = [
 UNIVERSITY_MAJORS: dict[str, list[str]] = {
     # ─── Pontificia Universidad Católica de Chile (PUC) ───
     "Pontificia Universidad Católica de Chile": [
+        # College UC — bachillerato común before specialty (PUC-specific)
+        "College UC", "College UC — Artes y Humanidades",
+        "College UC — Ciencias Sociales (CCSS)",
+        "College UC — Ciencias Naturales y Matemáticas",
+        "College UC — Ciencias Económicas y Administrativas (CEA)",
+        # Plan común de Ingeniería (students enter without specialty)
+        "Plan Común Ingeniería UC",
+        # Standard carreras
         "Actuación", "Agronomía", "Antropología", "Arqueología", "Arquitectura",
         "Arte", "Astronomía", "Biología", "Bioquímica", "Construcción Civil",
         "Derecho", "Diseño", "Economía", "Enfermería", "Estética",

@@ -1967,7 +1967,14 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        return jsonify(sdb.get_focus_stats(_cid()))
+        # Focus Mode page is day-scoped. `?scope=all` returns lifetime totals
+        # for callers like the dashboard strip that still want the big number.
+
+        if (request.args.get("scope") or "today").lower() == "all":
+
+            return jsonify(sdb.get_focus_stats(_cid()))
+
+        return jsonify(sdb.get_focus_stats_today(_cid()))
 
 
 
@@ -2481,7 +2488,7 @@ def register_student_routes(app, csrf, limiter):
                   ? (' &rarr; ' + j.league.next_name + ' in ' + (j.league.next_min_xp - ((j.ranks.global && j.ranks.global.xp) || 0)).toLocaleString() + ' XP')
                   : ' &middot; Max league achieved!';
                 document.getElementById('mr-ranks-league').innerHTML =
-                  ('<span style="color:' + j.league.color + ';font-weight:600;">' + j.league.name + '</span>') + nextTxt;
+                  ('<span style="color:' + j.league.color + ';font-weight:600;">' + (j.league.display_name || j.league.name) + '</span>') + nextTxt;
                 document.getElementById('mr-league-bar').style.width = (j.league.progress_pct||0) + '%';
                 document.getElementById('mr-league-bar').style.background = 'linear-gradient(90deg,' + j.league.color + ',' + (j.league.glow||j.league.color) + ')';
               }}
@@ -4666,7 +4673,7 @@ def register_student_routes(app, csrf, limiter):
 
         courses = sdb.get_courses(_cid())
 
-        focus_stats = sdb.get_focus_stats(_cid())
+        focus_stats = sdb.get_focus_stats_today(_cid())
 
 
 
@@ -4680,19 +4687,19 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Focus Mode", f"""
 
-        <h1 style="margin-bottom:20px;">&#127917; Focus Mode</h1>
+        <h1 style="margin-bottom:20px;">&#127917; Focus Mode <span style="font-size:14px;color:var(--text-muted);font-weight:500;">— Today</span></h1>
 
 
 
-        <!-- Stats bar -->
+        <!-- Stats bar (TODAY only) -->
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px;">
 
-          <div class="stat-card stat-purple"><div class="num" id="stat-hours">{focus_stats['total_hours']}</div><div class="label">Hours Focused</div></div>
+          <div class="stat-card stat-purple"><div class="num" id="stat-hours">{focus_stats['total_hours']}</div><div class="label">Hours Today</div></div>
 
-          <div class="stat-card stat-blue"><div class="num" id="stat-sessions">{focus_stats['sessions']}</div><div class="label">Sessions</div></div>
+          <div class="stat-card stat-blue"><div class="num" id="stat-sessions">{focus_stats['sessions']}</div><div class="label">Sessions Today</div></div>
 
-          <div class="stat-card stat-green"><div class="num" id="stat-pages">{focus_stats['total_pages']}</div><div class="label">Pages Read</div></div>
+          <div class="stat-card stat-green"><div class="num" id="stat-pages">{focus_stats['total_pages']}</div><div class="label">Pages Today</div></div>
 
           <div class="stat-card stat-red"><div class="num" id="stat-streak">{focus_stats['streak_days']}</div><div class="label">Day Streak &#128293;</div></div>
 
@@ -14975,12 +14982,18 @@ No markdown, no code fences. ONLY JSON.
     <div class="lb-tab" data-scope="country">🏳️ Country</div>
     <div class="lb-tab" data-scope="university">🎓 University</div>
     <div class="lb-tab" data-scope="major">📚 Major</div>
+    <div class="lb-tab" data-scope="retirement">🌇 Retirement</div>
   </div>
 
   <div class="lb-tabs" id="lbPeriodTabs" style="margin-top:-8px;">
     <div class="lb-tab active" data-period="all">🏛️ All-time</div>
     <div class="lb-tab" data-period="month">📅 Monthly</div>
     <div class="lb-tab" data-period="week">⚡ Weekly</div>
+  </div>
+
+  <div id="lbGlobalBanner" style="display:none;background:linear-gradient(135deg,rgba(124,156,255,.12),rgba(192,132,252,.08));border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--text-muted);">
+    <strong style="color:var(--text);">🏆 The Ultimate Rank.</strong>
+    Season 1 ends <strong>Sun Apr 26, 2026</strong>. Top finishers get <em>promoted</em> to the next league; bottom finishers get <em>demoted</em>. Only the current season's XP counts here.
   </div>
 
   <div class="lb-board" id="lbBoard">
@@ -15037,10 +15050,10 @@ No markdown, no code fences. ONLY JSON.
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
             <div><div>${escapeHtml(r.name)}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
-                 <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div></div>
+                 <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_display || r.league_name}</span></div></div>
           </div>
           <div class="lb-xp">${r.xp.toLocaleString()} XP</div>
-          <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div>
+          <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_display || r.league_name}</span></div>
         </div>
       `).join('');
     } catch(e) {
@@ -15054,6 +15067,19 @@ No markdown, no code fences. ONLY JSON.
     document.querySelectorAll('#lbTabs .lb-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     lbState.scope = tab.dataset.scope;
+    // Global is the "ultimate rank" (Duolingo-style) — only the current
+    // season matters, so hide the period switcher. Scoped boards
+    // (country / university / major / retirement) keep all 3 periods.
+    var periodTabs = document.getElementById('lbPeriodTabs');
+    var banner = document.getElementById('lbGlobalBanner');
+    if (lbState.scope === 'global') {
+      periodTabs.style.display = 'none';
+      banner.style.display = 'block';
+      lbState.period = 'week';  // server forces this anyway, kept for UI consistency
+    } else {
+      periodTabs.style.display = '';
+      banner.style.display = 'none';
+    }
     loadBoard();
   });
   document.getElementById('lbPeriodTabs').addEventListener('click', (e) => {
@@ -15065,6 +15091,10 @@ No markdown, no code fences. ONLY JSON.
     loadRanks();
     loadBoard();
   });
+
+  // Initial state: start on Global (period tabs hidden, banner shown)
+  document.getElementById('lbPeriodTabs').style.display = 'none';
+  document.getElementById('lbGlobalBanner').style.display = 'block';
 
   loadRanks();
   loadBoard();
@@ -16238,6 +16268,102 @@ No markdown, no code fences. ONLY JSON.
           details[open] .pw-arrow {{ transform: rotate(90deg); }}
 
         </style>
+
+
+
+        <!-- Retire from rankings -->
+
+        <div class="card" style="margin-top:16px;border-color:rgba(251,191,36,.45);">
+
+          <div class="card-header"><h2 style="color:#D97706;">&#127774; {_T("Retire from rankings")}</h2></div>
+
+          <div style="padding:20px;">
+
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">{_T("Finished your studies? Retire to leave every active leaderboard (global, country, university, major) and be moved to the dedicated")} <strong>{_T("Retirement Hall")}</strong>{_T(", where veteran students compete on lifetime XP only. Your XP, badges, and history are preserved. You can come back any time.")}</p>
+
+            <div id="retire-status-box" style="display:none;padding:12px 14px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.4);border-radius:var(--radius-sm);margin-bottom:12px;font-size:13px;color:#B45309;"></div>
+
+            <button id="btn-retire" class="btn btn-outline btn-sm" style="color:#D97706;border-color:#D97706;">{_T("Retire from active ranks")}</button>
+
+            <button id="btn-unretire" class="btn btn-outline btn-sm" style="display:none;">{_T("Come back to active ranks")}</button>
+
+          </div>
+
+        </div>
+
+        <script>
+
+        (async function() {{
+
+          var box = document.getElementById('retire-status-box');
+
+          var btnR = document.getElementById('btn-retire');
+
+          var btnU = document.getElementById('btn-unretire');
+
+          async function refreshStatus() {{
+
+            try {{
+
+              var r = await fetch('/api/academic/ranks');
+
+              if (!r.ok) return;
+
+              var j = await r.json();
+
+              if (j.retired) {{
+
+                box.style.display = 'block';
+
+                box.innerHTML = '{_T("You are currently retired. You appear only in the Retirement Hall.")}';
+
+                btnR.style.display = 'none';
+
+                btnU.style.display = 'inline-block';
+
+              }} else {{
+
+                box.style.display = 'none';
+
+                btnR.style.display = 'inline-block';
+
+                btnU.style.display = 'none';
+
+              }}
+
+            }} catch(e) {{}}
+
+          }}
+
+          btnR.addEventListener('click', async function() {{
+
+            if (!confirm('{_T("Retire from all active leaderboards? You will only appear in the Retirement Hall until you choose to return.")}')) return;
+
+            var r = await fetch('/api/academic/retire', {{method:'POST'}});
+
+            if (r.ok) {{ alert('{_T("Retired. Welcome to the Retirement Hall.")}'); refreshStatus(); }}
+
+            else alert('{_T("Error retiring. Please try again.")}');
+
+          }});
+
+          btnU.addEventListener('click', async function() {{
+
+            if (!confirm('{_T("Come back to the active leaderboards?")}')) return;
+
+            var r = await fetch('/api/academic/unretire', {{method:'POST'}});
+
+            if (r.ok) {{ alert('{_T("Welcome back!")}'); refreshStatus(); }}
+
+            else alert('{_T("Error. Please try again.")}');
+
+          }});
+
+          refreshStatus();
+
+        }})();
+
+        </script>
 
 
 

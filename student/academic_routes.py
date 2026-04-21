@@ -186,10 +186,14 @@ def register_academic_routes(app, csrf, limiter):
             return jsonify({"error": "unauthorized"}), 401
         scope = (request.args.get("scope") or "global").lower()
         period = (request.args.get("period") or "all").lower()
-        if scope not in {"global", "country", "university", "major"}:
+        if scope not in {"global", "country", "university", "major", "retirement"}:
             return jsonify({"error": "bad scope"}), 400
         if period not in {"all", "week", "month"}:
             period = "all"
+        # Global board is the Duolingo-style "ultimate" rank — only the
+        # current season (weekly) window matters. Ignore any period arg.
+        if scope == "global":
+            period = "week"
         rows = ac.leaderboard(scope, _cid(), limit=100, period=period)
         return jsonify({"scope": scope, "period": period, "rows": rows})
 
@@ -202,8 +206,40 @@ def register_academic_routes(app, csrf, limiter):
         if period not in {"all", "week", "month"}:
             period = "all"
         summary = ac.ranks_summary(cid, period=period)
-        xp = summary.get("global", {}).get("xp", 0) if summary.get("global") else 0
-        return jsonify({"ranks": summary, "period": period, "league": ac.league_for_xp(int(xp))})
+        # League badge always reflects all-time XP (Duolingo-style: your
+        # current league is determined by total XP, not just this week).
+        from outreach.db import get_db, _fetchval
+        with get_db() as db:
+            total_xp = int(_fetchval(
+                db, "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s",
+                (cid,),
+            ) or 0)
+            retired = bool(_fetchval(
+                db, "SELECT COALESCE(is_retired,0) FROM clients WHERE id = %s",
+                (cid,),
+            ))
+        return jsonify({
+            "ranks": summary,
+            "period": period,
+            "league": ac.league_for_xp(total_xp),
+            "retired": retired,
+        })
+
+    # ── retirement ──────────────────────────────────────────
+
+    @app.route("/api/academic/retire", methods=["POST"])
+    def academic_retire():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        ac.retire_user(_cid())
+        return jsonify({"ok": True, "retired": True})
+
+    @app.route("/api/academic/unretire", methods=["POST"])
+    def academic_unretire():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        ac.unretire_user(_cid())
+        return jsonify({"ok": True, "retired": False})
 
     # ── analytics ───────────────────────────────────────────
 
