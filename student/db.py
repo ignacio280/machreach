@@ -486,6 +486,16 @@ def init_student_db():
             db.executescript(STUDENT_SQLITE_SCHEMA)
     # Migrations
     _student_migrations()
+    # Wallet (coins, freezes, banners)
+    try:
+        init_wallet_table()
+    except Exception as e:
+        log.exception("init_wallet_table failed: %s", e)
+    # Quiz Duels v2 (file-upload + AI-generated, synchronous)
+    try:
+        init_quiz_duels_tables()
+    except Exception as e:
+        log.exception("init_quiz_duels_tables failed: %s", e)
     # Academic identity layer (countries, universities, majors, leagues).
     # Imported lazily so a bad seed file can't take down the whole app.
     try:
@@ -2891,4 +2901,712 @@ def get_streak_risk_recipients(min_streak: int = 5) -> list[dict]:
             "name":      c.get("name") or "",
             "streak":    streak,
         })
+    return out
+
+
+# ── Wallet (coins, streak freezes, banners) ─────────────────
+
+import json as _json
+
+# Banner catalog: key -> { name, price_coins, xp_required }
+BANNERS = {
+    "default":    {"name": "Default",            "price_coins": 0,    "xp_required": 0,     "css": "linear-gradient(135deg,#475569,#1e293b)"},
+    "ocean":      {"name": "Ocean Wave",         "price_coins": 50,   "xp_required": 100,   "css": "linear-gradient(135deg,#06b6d4,#3b82f6)"},
+    "sunset":     {"name": "Sunset",             "price_coins": 50,   "xp_required": 100,   "css": "linear-gradient(135deg,#f97316,#ec4899)"},
+    "forest":     {"name": "Forest",             "price_coins": 75,   "xp_required": 250,   "css": "linear-gradient(135deg,#10b981,#065f46)"},
+    "lavender":   {"name": "Lavender Dream",     "price_coins": 100,  "xp_required": 500,   "css": "linear-gradient(135deg,#a78bfa,#7c3aed)"},
+    "gold":       {"name": "Gold Rush",          "price_coins": 200,  "xp_required": 1000,  "css": "linear-gradient(135deg,#facc15,#b45309)"},
+    "galaxy":     {"name": "Galaxy",             "price_coins": 300,  "xp_required": 2500,  "css": "linear-gradient(135deg,#1e1b4b,#7c3aed,#ec4899)"},
+    "champion":   {"name": "Champion (Elite)",   "price_coins": 500,  "xp_required": 5000,  "css": "linear-gradient(135deg,#f43f5e,#facc15,#10b981)"},
+}
+
+STREAK_FREEZE_PRICE = 10
+
+def init_wallet_table() -> None:
+    """Create the wallet table if missing (called from init_student_db)."""
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_wallet ("
+        "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE, "
+        "coins INTEGER DEFAULT 0, "
+        "streak_freezes INTEGER DEFAULT 0, "
+        "selected_banner TEXT DEFAULT 'default', "
+        "unlocked_banners TEXT DEFAULT '[\"default\"]', "
+        "updated_at TIMESTAMP DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS student_wallet ("
+        "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE, "
+        "coins INTEGER DEFAULT 0, "
+        "streak_freezes INTEGER DEFAULT 0, "
+        "selected_banner TEXT DEFAULT 'default', "
+        "unlocked_banners TEXT DEFAULT '[\"default\"]', "
+        "updated_at TIMESTAMP DEFAULT (datetime('now','localtime')))",
+    )
+
+
+def _ensure_wallet(db, client_id: int) -> None:
+    row = _fetchone(db, "SELECT client_id FROM student_wallet WHERE client_id = %s", (client_id,))
+    if not row:
+        _exec(
+            db,
+            "INSERT INTO student_wallet (client_id, coins, streak_freezes, selected_banner, unlocked_banners) "
+            "VALUES (%s, 0, 0, 'default', %s)",
+            (client_id, '["default"]'),
+        )
+
+
+def get_wallet(client_id: int) -> dict:
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        row = _fetchone(db, "SELECT * FROM student_wallet WHERE client_id = %s", (client_id,))
+    try:
+        unlocked = _json.loads(row.get("unlocked_banners") or '["default"]')
+        if not isinstance(unlocked, list):
+            unlocked = ["default"]
+    except Exception:
+        unlocked = ["default"]
+    if "default" not in unlocked:
+        unlocked.insert(0, "default")
+    return {
+        "coins":            int(row.get("coins") or 0),
+        "streak_freezes":   int(row.get("streak_freezes") or 0),
+        "selected_banner":  row.get("selected_banner") or "default",
+        "unlocked_banners": unlocked,
+    }
+
+
+def add_coins(client_id: int, amount: int, _reason: str = "") -> int:
+    """Add (or subtract) coins. Returns new balance."""
+    if amount == 0:
+        return get_wallet(client_id)["coins"]
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        _exec(db, "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
+              (int(amount), client_id))
+        return _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
+
+
+def buy_streak_freeze(client_id: int, qty: int = 1) -> dict:
+    """Spend coins to buy `qty` streak freezes (max 3 owned at once)."""
+    qty = max(1, min(3, int(qty)))
+    cost = STREAK_FREEZE_PRICE * qty
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        row = _fetchone(db, "SELECT coins, streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,))
+        coins = int(row.get("coins") or 0)
+        owned = int(row.get("streak_freezes") or 0)
+        if owned + qty > 3:
+            return {"ok": False, "error": "Max 3 freezes at a time."}
+        if coins < cost:
+            return {"ok": False, "error": "Not enough coins."}
+        _exec(
+            db,
+            "UPDATE student_wallet SET coins = coins - %s, streak_freezes = streak_freezes + %s WHERE client_id = %s",
+            (cost, qty, client_id),
+        )
+        new = _fetchone(db, "SELECT coins, streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,))
+    return {"ok": True, "coins": int(new.get("coins") or 0), "streak_freezes": int(new.get("streak_freezes") or 0)}
+
+
+def buy_banner(client_id: int, banner_key: str) -> dict:
+    """Buy a banner. Requires both XP threshold and coins."""
+    cfg = BANNERS.get(banner_key)
+    if not cfg:
+        return {"ok": False, "error": "Unknown banner."}
+    total_xp = get_total_xp(client_id)
+    if total_xp < cfg["xp_required"]:
+        return {"ok": False, "error": f"Need {cfg['xp_required']} XP to unlock this banner."}
+    wallet = get_wallet(client_id)
+    if banner_key in wallet["unlocked_banners"]:
+        return {"ok": False, "error": "Already owned."}
+    if wallet["coins"] < cfg["price_coins"]:
+        return {"ok": False, "error": "Not enough coins."}
+    new_unlocked = wallet["unlocked_banners"] + [banner_key]
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        _exec(
+            db,
+            "UPDATE student_wallet SET coins = coins - %s, unlocked_banners = %s WHERE client_id = %s",
+            (cfg["price_coins"], _json.dumps(new_unlocked), client_id),
+        )
+    return {"ok": True, "coins": wallet["coins"] - cfg["price_coins"], "unlocked_banners": new_unlocked}
+
+
+def set_selected_banner(client_id: int, banner_key: str) -> dict:
+    wallet = get_wallet(client_id)
+    if banner_key not in wallet["unlocked_banners"]:
+        return {"ok": False, "error": "Banner not unlocked."}
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        _exec(db, "UPDATE student_wallet SET selected_banner = %s WHERE client_id = %s",
+              (banner_key, client_id))
+    return {"ok": True, "selected_banner": banner_key}
+
+
+def use_streak_freeze(client_id: int) -> dict:
+    """Consume one freeze and log a sentinel focus row for yesterday so the
+    streak chain doesn't break. No-op if no freezes available or yesterday
+    already has activity."""
+    from datetime import timedelta as _td
+    yesterday = (datetime.now().date() - _td(days=1)).strftime("%Y-%m-%d")
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        owned = _fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s",
+                          (client_id,)) or 0
+        if owned <= 0:
+            return {"ok": False, "error": "No freezes."}
+        existing = _fetchval(
+            db,
+            "SELECT id FROM student_study_progress "
+            "WHERE client_id = %s AND plan_date LIKE %s AND focus_minutes > 0 LIMIT 1",
+            (client_id, yesterday + "%"),
+        )
+        if existing:
+            return {"ok": False, "error": "Yesterday already has activity."}
+        # Insert a 1-minute sentinel session so the streak query sees yesterday.
+        _insert_returning_id(
+            db,
+            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
+            "VALUES (%s, %s, 1, %s, %s, %s) RETURNING id",
+            (client_id, yesterday + " 12:00:00", "[streak freeze]", 1, 0),
+            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
+            "VALUES (?, ?, 1, ?, ?, ?)",
+        )
+        _exec(db, "UPDATE student_wallet SET streak_freezes = streak_freezes - 1 WHERE client_id = %s",
+              (client_id,))
+        new_owned = _fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s",
+                              (client_id,)) or 0
+    return {"ok": True, "streak_freezes": new_owned}
+
+
+# ── Quiz Duels v2 (file-upload + AI-generated, synchronous) ─
+
+# Lifecycle: pending -> ready -> playing -> settled
+#                            \-> declined / expired / forfeit
+
+QUIZ_DUEL_INVITE_TTL_MIN  = 10   # opponent must accept within 10 min
+QUIZ_DUEL_PLAY_TTL_MIN    = 15   # match must be finished within 15 min of start
+QUIZ_DUEL_QUESTION_COUNT  = 10
+QUIZ_DUEL_WIN_COINS       = 50
+QUIZ_DUEL_WIN_XP          = 5
+QUIZ_DUEL_TIE_COINS       = 20
+QUIZ_DUEL_TIE_XP          = 2
+QUIZ_DUEL_DAILY_PAY_CAP   = 3    # rewards capped at N matches per opponent per day
+
+
+def init_quiz_duels_tables() -> None:
+    """Create v2 quiz-duel tables. Called from init_student_db."""
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_quiz_duels ("
+        "id SERIAL PRIMARY KEY, "
+        "challenger_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "opponent_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "topic TEXT DEFAULT '', "
+        "file_name TEXT DEFAULT '', "
+        "questions_json TEXT NOT NULL DEFAULT '[]', "
+        "status TEXT NOT NULL DEFAULT 'pending', "
+        "challenger_score INTEGER NOT NULL DEFAULT 0, "
+        "opponent_score INTEGER NOT NULL DEFAULT 0, "
+        "challenger_time_ms INTEGER NOT NULL DEFAULT 0, "
+        "opponent_time_ms INTEGER NOT NULL DEFAULT 0, "
+        "challenger_done BOOLEAN NOT NULL DEFAULT FALSE, "
+        "opponent_done BOOLEAN NOT NULL DEFAULT FALSE, "
+        "winner_id INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
+        "forfeit_by INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "accepted_at TIMESTAMP, "
+        "settled_at TIMESTAMP, "
+        "expires_at TIMESTAMP NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS student_quiz_duels ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "challenger_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "opponent_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "topic TEXT DEFAULT '', "
+        "file_name TEXT DEFAULT '', "
+        "questions_json TEXT NOT NULL DEFAULT '[]', "
+        "status TEXT NOT NULL DEFAULT 'pending', "
+        "challenger_score INTEGER NOT NULL DEFAULT 0, "
+        "opponent_score INTEGER NOT NULL DEFAULT 0, "
+        "challenger_time_ms INTEGER NOT NULL DEFAULT 0, "
+        "opponent_time_ms INTEGER NOT NULL DEFAULT 0, "
+        "challenger_done INTEGER NOT NULL DEFAULT 0, "
+        "opponent_done INTEGER NOT NULL DEFAULT 0, "
+        "winner_id INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
+        "forfeit_by INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), "
+        "accepted_at TEXT, "
+        "settled_at TEXT, "
+        "expires_at TEXT NOT NULL)",
+    )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_quiz_duel_answers ("
+        "id SERIAL PRIMARY KEY, "
+        "duel_id INTEGER NOT NULL REFERENCES student_quiz_duels(id) ON DELETE CASCADE, "
+        "client_id INTEGER NOT NULL, "
+        "question_idx INTEGER NOT NULL, "
+        "answer TEXT DEFAULT '', "
+        "is_correct BOOLEAN NOT NULL DEFAULT FALSE, "
+        "time_ms INTEGER NOT NULL DEFAULT 0, "
+        "submitted_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(duel_id, client_id, question_idx))",
+        "CREATE TABLE IF NOT EXISTS student_quiz_duel_answers ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "duel_id INTEGER NOT NULL REFERENCES student_quiz_duels(id) ON DELETE CASCADE, "
+        "client_id INTEGER NOT NULL, "
+        "question_idx INTEGER NOT NULL, "
+        "answer TEXT DEFAULT '', "
+        "is_correct INTEGER NOT NULL DEFAULT 0, "
+        "time_ms INTEGER NOT NULL DEFAULT 0, "
+        "submitted_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(duel_id, client_id, question_idx))",
+    )
+
+
+def _qd_row(duel_id: int) -> dict | None:
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT d.*, "
+            "  cc.name AS challenger_name, "
+            "  oc.name AS opponent_name "
+            "FROM student_quiz_duels d "
+            "JOIN clients cc ON cc.id = d.challenger_id "
+            "JOIN clients oc ON oc.id = d.opponent_id "
+            "WHERE d.id = %s",
+            (duel_id,),
+        )
+    return dict(row) if row else None
+
+
+def create_quiz_duel(
+    challenger_id: int,
+    opponent_id: int,
+    questions: list[dict],
+    topic: str = "",
+    file_name: str = "",
+) -> int:
+    """Persist a new pending quiz-duel with the AI-generated questions."""
+    from datetime import datetime, timedelta
+    if not questions:
+        raise ValueError("No questions to store.")
+    expires = datetime.now() + timedelta(minutes=QUIZ_DUEL_INVITE_TTL_MIN)
+    payload = json.dumps(questions, ensure_ascii=False)
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_quiz_duels "
+            "(challenger_id, opponent_id, topic, file_name, questions_json, status, expires_at) "
+            "VALUES (%s, %s, %s, %s, %s, 'pending', %s) RETURNING id",
+            (challenger_id, opponent_id, topic[:200], file_name[:200], payload, expires),
+            "INSERT INTO student_quiz_duels "
+            "(challenger_id, opponent_id, topic, file_name, questions_json, status, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?)",
+        )
+
+
+def get_quiz_duel(duel_id: int, viewer_id: int | None = None) -> dict | None:
+    """Return the full duel row + parsed questions. If viewer_id is given,
+    redact the `correct` and `explanation` fields while the duel is still in
+    progress to avoid leaking answers via the network tab."""
+    d = _qd_row(duel_id)
+    if not d:
+        return None
+    try:
+        qs = json.loads(d.get("questions_json") or "[]")
+    except Exception:
+        qs = []
+    settled = d.get("status") in ("settled", "tied", "forfeit", "expired", "declined")
+    if viewer_id is not None and not settled:
+        qs = [
+            {k: v for k, v in q.items() if k not in ("correct", "explanation")}
+            for q in qs
+        ]
+    d["questions"] = qs
+    d.pop("questions_json", None)
+    return d
+
+
+def list_pending_quiz_duels_for(client_id: int) -> list[dict]:
+    """Invites awaiting this user's accept/decline."""
+    expire_pending_quiz_duels()
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT d.*, cc.name AS challenger_name, oc.name AS opponent_name "
+            "FROM student_quiz_duels d "
+            "JOIN clients cc ON cc.id = d.challenger_id "
+            "JOIN clients oc ON oc.id = d.opponent_id "
+            "WHERE d.opponent_id = %s AND d.status = 'pending' "
+            "ORDER BY d.created_at DESC",
+            (client_id,),
+        ) or []
+    out = []
+    for r in rows:
+        d = dict(r)
+        d.pop("questions_json", None)
+        out.append(d)
+    return out
+
+
+def list_active_quiz_duels_for(client_id: int) -> list[dict]:
+    """Duels the user is currently playing or waiting on."""
+    expire_pending_quiz_duels()
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT d.*, cc.name AS challenger_name, oc.name AS opponent_name "
+            "FROM student_quiz_duels d "
+            "JOIN clients cc ON cc.id = d.challenger_id "
+            "JOIN clients oc ON oc.id = d.opponent_id "
+            "WHERE (d.challenger_id = %s OR d.opponent_id = %s) "
+            "AND d.status IN ('pending','ready','playing') "
+            "ORDER BY d.created_at DESC",
+            (client_id, client_id),
+        ) or []
+    out = []
+    for r in rows:
+        d = dict(r)
+        d.pop("questions_json", None)
+        out.append(d)
+    return out
+
+
+def expire_pending_quiz_duels() -> int:
+    """Mark any pending invites whose TTL passed as 'expired'."""
+    with get_db() as db:
+        if _USE_PG:
+            cur = db.cursor()
+            cur.execute(
+                "UPDATE student_quiz_duels SET status = 'expired', settled_at = NOW() "
+                "WHERE status = 'pending' AND expires_at <= NOW()"
+            )
+            return cur.rowcount or 0
+        else:
+            cur = db.execute(
+                "UPDATE student_quiz_duels SET status = 'expired', "
+                "settled_at = datetime('now','localtime') "
+                "WHERE status = 'pending' AND expires_at <= datetime('now','localtime')"
+            )
+            return cur.rowcount or 0
+
+
+def accept_quiz_duel(duel_id: int, opponent_id: int) -> dict:
+    """Opponent accepts -> match goes 'ready' (then 'playing' on first answer).
+    Also extends expires_at to the play TTL."""
+    from datetime import datetime, timedelta
+    d = _qd_row(duel_id)
+    if not d:
+        return {"ok": False, "error": "Duel not found."}
+    if d["opponent_id"] != opponent_id:
+        return {"ok": False, "error": "Not your invite."}
+    if d["status"] != "pending":
+        return {"ok": False, "error": f"Duel is {d['status']}."}
+    new_exp = datetime.now() + timedelta(minutes=QUIZ_DUEL_PLAY_TTL_MIN)
+    with get_db() as db:
+        if _USE_PG:
+            _exec(
+                db,
+                "UPDATE student_quiz_duels SET status = 'ready', accepted_at = NOW(), "
+                "expires_at = %s WHERE id = %s",
+                (new_exp, duel_id),
+            )
+        else:
+            _exec(
+                db,
+                "UPDATE student_quiz_duels SET status = 'ready', "
+                "accepted_at = datetime('now','localtime'), expires_at = ? WHERE id = ?",
+                (new_exp, duel_id),
+            )
+    return {"ok": True}
+
+
+def decline_quiz_duel(duel_id: int, opponent_id: int) -> dict:
+    d = _qd_row(duel_id)
+    if not d:
+        return {"ok": False, "error": "Duel not found."}
+    if d["opponent_id"] != opponent_id:
+        return {"ok": False, "error": "Not your invite."}
+    if d["status"] != "pending":
+        return {"ok": False, "error": f"Duel is {d['status']}."}
+    with get_db() as db:
+        if _USE_PG:
+            _exec(db, "UPDATE student_quiz_duels SET status = 'declined', settled_at = NOW() WHERE id = %s", (duel_id,))
+        else:
+            _exec(db, "UPDATE student_quiz_duels SET status = 'declined', settled_at = datetime('now','localtime') WHERE id = ?", (duel_id,))
+    return {"ok": True}
+
+
+def submit_duel_answer(
+    duel_id: int,
+    client_id: int,
+    question_idx: int,
+    answer: str,
+    time_ms: int,
+) -> dict:
+    """Record one answer. Once a player has answered all questions, mark them
+    done; once both done (or a forfeit happens), settle the duel."""
+    d = _qd_row(duel_id)
+    if not d:
+        return {"ok": False, "error": "Duel not found."}
+    if client_id not in (d["challenger_id"], d["opponent_id"]):
+        return {"ok": False, "error": "Not your duel."}
+    if d["status"] not in ("ready", "playing"):
+        return {"ok": False, "error": f"Duel is {d['status']}."}
+    try:
+        qs = json.loads(d.get("questions_json") or "[]")
+    except Exception:
+        qs = []
+    if question_idx < 0 or question_idx >= len(qs):
+        return {"ok": False, "error": "Bad question index."}
+    correct_letter = (qs[question_idx].get("correct") or "").strip().lower()
+    is_correct = bool(answer) and answer.strip().lower() == correct_letter
+    is_chal = (client_id == d["challenger_id"])
+    time_ms = max(0, min(int(time_ms or 0), 10 * 60 * 1000))
+
+    with get_db() as db:
+        # Insert (idempotent — UNIQUE on (duel,client,q_idx))
+        try:
+            _exec(
+                db,
+                "INSERT INTO student_quiz_duel_answers "
+                "(duel_id, client_id, question_idx, answer, is_correct, time_ms) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (duel_id, client_id, question_idx, (answer or "")[:8], is_correct, time_ms),
+            )
+        except Exception:
+            # Already submitted — treat as no-op for that question
+            return {"ok": True, "duplicate": True}
+
+        # Recount score + total time for this player
+        if is_chal:
+            score = _fetchval(
+                db,
+                "SELECT COALESCE(SUM(CASE WHEN is_correct THEN 1 ELSE 0 END), 0) "
+                "FROM student_quiz_duel_answers WHERE duel_id = %s AND client_id = %s",
+                (duel_id, client_id),
+            ) or 0
+            total_ms = _fetchval(
+                db,
+                "SELECT COALESCE(SUM(time_ms), 0) FROM student_quiz_duel_answers "
+                "WHERE duel_id = %s AND client_id = %s",
+                (duel_id, client_id),
+            ) or 0
+            count = _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_quiz_duel_answers "
+                "WHERE duel_id = %s AND client_id = %s",
+                (duel_id, client_id),
+            ) or 0
+            done_flag = 1 if count >= len(qs) else 0
+            if _USE_PG:
+                _exec(
+                    db,
+                    "UPDATE student_quiz_duels SET status = 'playing', "
+                    "challenger_score = %s, challenger_time_ms = %s, "
+                    "challenger_done = %s WHERE id = %s",
+                    (int(score), int(total_ms), bool(done_flag), duel_id),
+                )
+            else:
+                _exec(
+                    db,
+                    "UPDATE student_quiz_duels SET status = 'playing', "
+                    "challenger_score = ?, challenger_time_ms = ?, "
+                    "challenger_done = ? WHERE id = ?",
+                    (int(score), int(total_ms), int(done_flag), duel_id),
+                )
+        else:
+            score = _fetchval(
+                db,
+                "SELECT COALESCE(SUM(CASE WHEN is_correct THEN 1 ELSE 0 END), 0) "
+                "FROM student_quiz_duel_answers WHERE duel_id = %s AND client_id = %s",
+                (duel_id, client_id),
+            ) or 0
+            total_ms = _fetchval(
+                db,
+                "SELECT COALESCE(SUM(time_ms), 0) FROM student_quiz_duel_answers "
+                "WHERE duel_id = %s AND client_id = %s",
+                (duel_id, client_id),
+            ) or 0
+            count = _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_quiz_duel_answers "
+                "WHERE duel_id = %s AND client_id = %s",
+                (duel_id, client_id),
+            ) or 0
+            done_flag = 1 if count >= len(qs) else 0
+            if _USE_PG:
+                _exec(
+                    db,
+                    "UPDATE student_quiz_duels SET status = 'playing', "
+                    "opponent_score = %s, opponent_time_ms = %s, "
+                    "opponent_done = %s WHERE id = %s",
+                    (int(score), int(total_ms), bool(done_flag), duel_id),
+                )
+            else:
+                _exec(
+                    db,
+                    "UPDATE student_quiz_duels SET status = 'playing', "
+                    "opponent_score = ?, opponent_time_ms = ?, "
+                    "opponent_done = ? WHERE id = ?",
+                    (int(score), int(total_ms), int(done_flag), duel_id),
+                )
+    settle_quiz_duel_if_done(duel_id)
+    return {"ok": True, "is_correct": is_correct}
+
+
+def forfeit_quiz_duel(duel_id: int, loser_id: int, reason: str = "") -> dict:
+    """Instant loss — used by tab-switch anti-cheat."""
+    d = _qd_row(duel_id)
+    if not d:
+        return {"ok": False, "error": "Duel not found."}
+    if loser_id not in (d["challenger_id"], d["opponent_id"]):
+        return {"ok": False, "error": "Not your duel."}
+    if d["status"] in ("settled", "tied", "forfeit", "declined", "expired"):
+        return {"ok": True, "already": True}
+    winner = d["opponent_id"] if loser_id == d["challenger_id"] else d["challenger_id"]
+    with get_db() as db:
+        if _USE_PG:
+            _exec(
+                db,
+                "UPDATE student_quiz_duels SET status = 'forfeit', winner_id = %s, "
+                "forfeit_by = %s, settled_at = NOW() WHERE id = %s",
+                (winner, loser_id, duel_id),
+            )
+        else:
+            _exec(
+                db,
+                "UPDATE student_quiz_duels SET status = 'forfeit', winner_id = ?, "
+                "forfeit_by = ?, settled_at = datetime('now','localtime') WHERE id = ?",
+                (winner, loser_id, duel_id),
+            )
+    _payout_quiz_duel(duel_id, winner, tied=False, reason=reason or "forfeit")
+    return {"ok": True, "winner_id": winner}
+
+
+def settle_quiz_duel_if_done(duel_id: int) -> dict:
+    """If both players are done, decide the winner and pay out."""
+    d = _qd_row(duel_id)
+    if not d:
+        return {"ok": False, "error": "Duel not found."}
+    if d["status"] in ("settled", "tied", "forfeit", "declined", "expired"):
+        return {"ok": True, "already": True}
+    if not (d.get("challenger_done") and d.get("opponent_done")):
+        return {"ok": True, "waiting": True}
+    cs = int(d.get("challenger_score") or 0)
+    os_ = int(d.get("opponent_score") or 0)
+    ct = int(d.get("challenger_time_ms") or 0)
+    ot = int(d.get("opponent_time_ms") or 0)
+    if cs > os_:
+        winner = d["challenger_id"]; status = "settled"; tied = False
+    elif os_ > cs:
+        winner = d["opponent_id"]; status = "settled"; tied = False
+    else:
+        # Tiebreaker: faster total time wins
+        if ct < ot and ct > 0:
+            winner = d["challenger_id"]; status = "settled"; tied = False
+        elif ot < ct and ot > 0:
+            winner = d["opponent_id"]; status = "settled"; tied = False
+        else:
+            winner = None; status = "tied"; tied = True
+    with get_db() as db:
+        if _USE_PG:
+            _exec(
+                db,
+                "UPDATE student_quiz_duels SET status = %s, winner_id = %s, settled_at = NOW() WHERE id = %s",
+                (status, winner, duel_id),
+            )
+        else:
+            _exec(
+                db,
+                "UPDATE student_quiz_duels SET status = ?, winner_id = ?, "
+                "settled_at = datetime('now','localtime') WHERE id = ?",
+                (status, winner, duel_id),
+            )
+    _payout_quiz_duel(duel_id, winner, tied=tied)
+    return {"ok": True, "winner_id": winner, "tied": tied}
+
+
+def _count_paid_quiz_duels_today(winner_id: int, opponent_id: int) -> int:
+    """How many already-paid quiz-duel wins/ties this user has racked up
+    against this specific opponent today (for anti-farm cap)."""
+    with get_db() as db:
+        if _USE_PG:
+            v = _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_quiz_duels "
+                "WHERE settled_at::date = CURRENT_DATE "
+                "AND status IN ('settled','tied','forfeit') "
+                "AND ((challenger_id = %s AND opponent_id = %s) "
+                "  OR (challenger_id = %s AND opponent_id = %s))",
+                (winner_id, opponent_id, opponent_id, winner_id),
+            )
+        else:
+            v = _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_quiz_duels "
+                "WHERE substr(settled_at,1,10) = date('now','localtime') "
+                "AND status IN ('settled','tied','forfeit') "
+                "AND ((challenger_id = ? AND opponent_id = ?) "
+                "  OR (challenger_id = ? AND opponent_id = ?))",
+                (winner_id, opponent_id, opponent_id, winner_id),
+            )
+    try:
+        return int(v or 0)
+    except Exception:
+        return 0
+
+
+def _payout_quiz_duel(duel_id: int, winner_id: int | None, tied: bool, reason: str = "") -> None:
+    """Apply XP + coin rewards with the per-friend per-day cap."""
+    d = _qd_row(duel_id)
+    if not d:
+        return
+    a, b = d["challenger_id"], d["opponent_id"]
+    paid_a = _count_paid_quiz_duels_today(a, b)
+    # The current match itself has already been counted (settled_at was set
+    # before payout), so cap is "<= cap" inclusive.
+    over_cap = paid_a > QUIZ_DUEL_DAILY_PAY_CAP
+    if over_cap:
+        log.info("Quiz-duel %s skipped payout (anti-farm cap, %s vs %s)", duel_id, a, b)
+        return
+    if tied:
+        try:
+            add_coins(a, QUIZ_DUEL_TIE_COINS, "quiz_duel_tie")
+            add_coins(b, QUIZ_DUEL_TIE_COINS, "quiz_duel_tie")
+            award_xp(a, "quiz_duel_tie", QUIZ_DUEL_TIE_XP, f"duel {duel_id}")
+            award_xp(b, "quiz_duel_tie", QUIZ_DUEL_TIE_XP, f"duel {duel_id}")
+        except Exception as e:
+            log.exception("tie payout failed: %s", e)
+    elif winner_id:
+        try:
+            add_coins(winner_id, QUIZ_DUEL_WIN_COINS, f"quiz_duel_win {reason}".strip())
+            award_xp(winner_id, "quiz_duel_win", QUIZ_DUEL_WIN_XP, f"duel {duel_id}")
+        except Exception as e:
+            log.exception("win payout failed: %s", e)
+
+
+def get_quiz_duel_history(client_id: int, limit: int = 20) -> list[dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT d.*, cc.name AS challenger_name, oc.name AS opponent_name "
+            "FROM student_quiz_duels d "
+            "JOIN clients cc ON cc.id = d.challenger_id "
+            "JOIN clients oc ON oc.id = d.opponent_id "
+            "WHERE (d.challenger_id = %s OR d.opponent_id = %s) "
+            "AND d.status IN ('settled','tied','forfeit','declined','expired') "
+            "ORDER BY d.settled_at DESC NULLS LAST LIMIT %s"
+            if _USE_PG else
+            "SELECT d.*, cc.name AS challenger_name, oc.name AS opponent_name "
+            "FROM student_quiz_duels d "
+            "JOIN clients cc ON cc.id = d.challenger_id "
+            "JOIN clients oc ON oc.id = d.opponent_id "
+            "WHERE (d.challenger_id = ? OR d.opponent_id = ?) "
+            "AND d.status IN ('settled','tied','forfeit','declined','expired') "
+            "ORDER BY d.settled_at DESC LIMIT ?",
+            (client_id, client_id, limit),
+        ) or []
+    out = []
+    for r in rows:
+        d = dict(r)
+        d.pop("questions_json", None)
+        out.append(d)
     return out

@@ -768,9 +768,10 @@ LAYOUT = """<!DOCTYPE html>
     .nav-links .nav-user { color: #64748B; font-size: 12px; margin-right: 4px; }
     /* Nav dropdown */
     .nav-dropdown { position: relative; }
-    .nav-dropdown > a { cursor: pointer; }
+    .nav-dropdown > a { cursor: pointer; text-decoration: none; outline: none; user-select: none; }
+    .nav-dropdown > a:focus, .nav-dropdown > a:focus-visible, .nav-dropdown > a:active { outline: none !important; box-shadow: none !important; text-decoration: none !important; }
     .nav-dropdown-menu { display:none; position:absolute; top:100%; left:50%; transform:translateX(-50%) translateY(4px); opacity:0; background:#0F172A; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px; min-width:200px; z-index:300; box-shadow:0 12px 32px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.02); margin-top:4px; transition:opacity .15s var(--ease), transform .15s var(--ease); }
-    .nav-dropdown:hover .nav-dropdown-menu { display:block; opacity:1; transform:translateX(-50%) translateY(0); }
+    .nav-dropdown:hover .nav-dropdown-menu, .nav-dropdown.open .nav-dropdown-menu { display:block; opacity:1; transform:translateX(-50%) translateY(0); }
     .nav-dropdown-menu a { display:block; padding:8px 12px; font-size:13px; color:#A0AAB8; border-radius:8px; transition: color .15s var(--ease), background .15s var(--ease); }
     .nav-dropdown-menu a:hover { color:#fff; background:rgba(99,102,241,0.18); }
     /* Floating focus widget */
@@ -1368,6 +1369,15 @@ LAYOUT = """<!DOCTYPE html>
       document.addEventListener('submit', function(){ window.topbarStart(); }, true);
       // Complete on pageshow (also handles back-forward cache)
       window.addEventListener('pageshow', function(){ window.topbarDone(); });
+      // Close any open nav dropdown when clicking outside or pressing Escape.
+      document.addEventListener('click', function(e){
+        document.querySelectorAll('.nav-dropdown.open').forEach(function(d){
+          if (!d.contains(e.target)) d.classList.remove('open');
+        });
+      });
+      document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape') document.querySelectorAll('.nav-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
+      });
     })();
   </script>
   <div class="nav">
@@ -1384,7 +1394,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/exams" {% if active_page == 'student_exams' %}class="active"{% endif %}>&#128221; Exams</a>
         <a href="/student/friends" {% if active_page == 'student_friends' %}class="active"{% endif %}>&#128101; Friends</a>
         <div class="nav-dropdown">
-          <a href="#" onclick="return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/flashcards">&#127183; Flashcards</a>
             <a href="/student/quizzes">&#128221; Quizzes</a>
@@ -1393,17 +1403,18 @@ LAYOUT = """<!DOCTYPE html>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
+        <a href="/student/shop" {% if active_page == 'student_shop' %}class="active"{% endif %}>&#128722; Shop</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="#" onclick="return false" {% if active_page in ['student_analytics','student_weak','student_gpa','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_analytics','student_weak','student_gpa','student_achievements','student_exchange'] %}class="active"{% endif %}>More &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/analytics">&#128202; Analytics</a>
             <a href="/student/weak-topics">&#127919; Weak Topics</a>
             <a href="/student/gpa">&#128200; GPA</a>
             <a href="/student/achievements">&#127942; XP &amp; Badges</a>
+            <a href="/student/exchange">&#128257; Exchange</a>
           </div>
         </div>
-        <a href="/student/exchange" {% if active_page == 'student_exchange' %}class="active"{% endif %}>&#128257; Exchange</a>
         <a href="/student/leaderboard" {% if active_page == 'student_leaderboard' %}class="active"{% endif %}>&#127942; Leaderboard</a>
         <div class="nav-divider"></div>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; Mail</a>
@@ -1420,7 +1431,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/calendar" {% if active_page == 'calendar' %}class="active"{% endif %}>{{nav.calendar}}</a>
         <a href="/export" {% if active_page == 'export' %}class="active"{% endif %}>&#128202; {{nav.export}}</a>
         <div class="nav-dropdown">
-          <a href="/pro" {% if active_page in ['pro','pro_tasks','pro_invoices','pro_finance','pro_goals','pro_assistant','pro_linkedin','pro_meetings','pro_relationships'] %}class="active"{% endif %}>&#128188; Pro Tools &#9662;</a>
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['pro','pro_tasks','pro_invoices','pro_finance','pro_goals','pro_assistant','pro_linkedin','pro_meetings','pro_relationships'] %}class="active"{% endif %}>&#128188; Pro Tools &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/pro/tasks">&#9989; Tasks</a>
             <a href="/pro/finance">&#128176; Finance</a>
@@ -1440,7 +1451,11 @@ LAYOUT = """<!DOCTYPE html>
         {% if is_admin %}<a href="/admin/broadcast" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
         <div class="nav-divider"></div>
+        {% if account_type|default('business') == 'student' %}
+        <a href="/student/profile" class="nav-user" style="text-decoration:none;cursor:pointer;color:#94A3B8;" title="My profile">{{client_name}}</a>
+        {% else %}
         <span class="nav-user">{{client_name}}</span>
+        {% endif %}
         <a href="/logout" style="color:#EF4444;">{{nav.logout}}</a>
       {% else %}
         <a href="/pricing">{{nav.pricing}}</a>

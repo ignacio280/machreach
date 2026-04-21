@@ -312,7 +312,40 @@ _GPA_PLANILLA_HTML = r"""
     document.getElementById('pl-car-cred').textContent = cs.credits || 0;
   }
 
-  function rerender(){ renderTabs(); renderBody(); save(); }
+  function rerender(){
+    // Preserve focus + cursor across full re-render so typing in any input
+    // (especially course name on the GPA page) doesn't get interrupted.
+    var act = document.activeElement;
+    var snap = null;
+    if (act && (act.tagName === 'INPUT' || act.tagName === 'TEXTAREA') && act.closest('.pl-wrap')) {
+      var path = [];
+      var el = act;
+      while (el && el !== document.body) {
+        var p = el.parentNode;
+        if (!p) break;
+        var idx = Array.prototype.indexOf.call(p.children, el);
+        path.unshift(el.tagName.toLowerCase() + ':nth-child(' + (idx + 1) + ')');
+        el = p;
+      }
+      snap = {
+        sel: path.join(' > '),
+        start: act.selectionStart,
+        end: act.selectionEnd
+      };
+    }
+    renderTabs(); renderBody(); save();
+    if (snap) {
+      try {
+        var restored = document.querySelector(snap.sel);
+        if (restored) {
+          restored.focus();
+          if (snap.start != null && restored.setSelectionRange) {
+            try { restored.setSelectionRange(snap.start, snap.end); } catch(e){}
+          }
+        }
+      } catch(e){}
+    }
+  }
 
   // ── Public actions (window-scoped so inline handlers work) ─────────
   window.plSwitchSem = function(i){ data.current = i; rerender(); };
@@ -2300,6 +2333,13 @@ def register_student_routes(app, csrf, limiter):
             sdb.award_xp(cid, "focus_session", xp, detail)
 
             _focus_xp_awarded = xp
+
+            # Coins: 1 coin per 5 focus minutes (rounded down, min 1)
+            try:
+                coins = max(1, minutes // 5)
+                sdb.add_coins(cid, coins, "focus_session")
+            except Exception:
+                pass
 
         else:
 
@@ -5110,8 +5150,6 @@ def register_student_routes(app, csrf, limiter):
 
           <div class="stat-card stat-blue"><div class="num" id="stat-sessions">{focus_stats['sessions']}</div><div class="label">Sessions Today</div></div>
 
-          <div class="stat-card stat-green"><div class="num" id="stat-pages">{focus_stats['total_pages']}</div><div class="label">Pages Today</div></div>
-
           <div class="stat-card stat-red"><div class="num" id="stat-streak">{focus_stats['streak_days']}</div><div class="label">Day Streak &#128293;</div></div>
 
         </div>
@@ -5133,8 +5171,6 @@ def register_student_routes(app, csrf, limiter):
             <div style="display:flex;gap:8px;margin-bottom:16px;">
 
               <button onclick="setMode('pomodoro')" class="btn btn-sm mode-btn active" id="mode-pomodoro">&#127813; Pomodoro</button>
-
-              <button onclick="setMode('pages')" class="btn btn-outline btn-sm mode-btn" id="mode-pages">&#128214; Page Method</button>
 
               <button onclick="setMode('custom')" class="btn btn-outline btn-sm mode-btn" id="mode-custom">&#9881; Custom</button>
 
@@ -5198,9 +5234,9 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-            <!-- Page method settings -->
+            <!-- Page method settings (removed) -->
 
-            <div id="settings-pages" style="display:none;">
+            <div id="settings-pages" style="display:none;" hidden>
 
               <div class="form-group" style="margin-bottom:12px;">
 
@@ -5800,17 +5836,17 @@ def register_student_routes(app, csrf, limiter):
 
         function setMode(mode) {{
 
+          if (mode === 'pages') {{ mode = 'pomodoro'; }}
+
           currentMode = mode;
 
           document.querySelectorAll('.mode-btn').forEach(function(b) {{ b.classList.remove('active'); b.classList.add('btn-outline'); }});
 
-          document.getElementById('mode-' + mode).classList.add('active');
+          var modeBtn = document.getElementById('mode-' + mode);
 
-          document.getElementById('mode-' + mode).classList.remove('btn-outline');
+          if (modeBtn) {{ modeBtn.classList.add('active'); modeBtn.classList.remove('btn-outline'); }}
 
           document.getElementById('settings-pomodoro').style.display = mode === 'pomodoro' ? '' : 'none';
-
-          document.getElementById('settings-pages').style.display = mode === 'pages' ? '' : 'none';
 
           document.getElementById('settings-custom').style.display = mode === 'custom' ? '' : 'none';
 
@@ -5821,18 +5857,6 @@ def register_student_routes(app, csrf, limiter):
           if (mode === 'pomodoro') {{
 
             timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
-
-          }} else if (mode === 'pages') {{
-
-            timeLeft = 0; totalTime = 0;
-
-            pageDone = 0;
-
-            document.getElementById('page-counter-display').textContent = '0';
-
-            document.getElementById('timer-display').textContent = '00:00';
-
-            document.getElementById('timer-label').textContent = 'Start timer, then click the big button for each page';
 
           }} else {{
 
@@ -5850,25 +5874,11 @@ def register_student_routes(app, csrf, limiter):
 
         function updateDisplay() {{
 
-          if (currentMode === 'pages' && isRunning) {{
+          var m = Math.floor(timeLeft / 60);
 
-            var elapsed = totalFocusSeconds;
+          var s = timeLeft % 60;
 
-            var m = Math.floor(elapsed / 60);
-
-            var s = elapsed % 60;
-
-            document.getElementById('timer-display').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-
-          }} else if (currentMode !== 'pages') {{
-
-            var m = Math.floor(timeLeft / 60);
-
-            var s = timeLeft % 60;
-
-            document.getElementById('timer-display').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-
-          }}
+          document.getElementById('timer-display').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
 
         }}
 
@@ -6550,18 +6560,9 @@ def register_student_routes(app, csrf, limiter):
 
           var payload = {{ mode: currentMode, minutes: minutes, pages: pages, course_name: course }};
 
-          // Always fire-and-forget via sendBeacon FIRST so XP gets credited
-          // even if the tab is hidden, throttled, or the user navigates away.
-          // sendBeacon survives tab close and is not blocked by background throttling.
-          try {{
-            if (navigator.sendBeacon) {{
-              var blob = new Blob([JSON.stringify(payload)], {{ type: 'application/json' }});
-              navigator.sendBeacon('/api/student/focus/save', blob);
-            }}
-          }} catch(e) {{}}
-
-          // Also fire a regular fetch so we can update the on-screen stats
-          // (sendBeacon doesn't return a response).
+          // Use a single keepalive fetch — it survives navigation/tab close and
+          // returns the updated stats. Using sendBeacon AND fetch at the same
+          // time caused duplicate rows in student_study_progress.
           try {{
 
             var resp = await fetch('/api/student/focus/save', {{
@@ -6588,8 +6589,6 @@ def register_student_routes(app, csrf, limiter):
 
                   window.popNumber(document.getElementById('stat-sessions'), result.stats.sessions);
 
-                  window.popNumber(document.getElementById('stat-pages'), result.stats.total_pages);
-
                   window.popNumber(document.getElementById('stat-streak'), result.stats.streak_days);
 
                 }} else {{
@@ -6597,8 +6596,6 @@ def register_student_routes(app, csrf, limiter):
                   document.getElementById('stat-hours').textContent = result.stats.total_hours;
 
                   document.getElementById('stat-sessions').textContent = result.stats.sessions;
-
-                  document.getElementById('stat-pages').textContent = result.stats.total_pages;
 
                   document.getElementById('stat-streak').textContent = result.stats.streak_days;
 
@@ -14980,6 +14977,16 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card" style="margin-bottom:18px;padding:16px">
 
+            <h3 style="margin:0 0 10px 0">⚔️ Quiz duels</h3>
+
+            <div id="fr-quiz-duels" style="font-size:13px;color:var(--text-muted)">Loading…</div>
+
+          </div>
+
+
+
+          <div class="card" style="margin-bottom:18px;padding:16px">
+
             <h3 style="margin:0 0 10px 0">Active duels</h3>
 
             <div id="fr-active-duels">No active duels.</div>
@@ -15040,7 +15047,7 @@ No markdown, no code fences. ONLY JSON.
 
         }}
 
-        async function frAccept(uid) {{ await frAdd(uid, {{disabled:false,textContent:''}}); loadAll(); }}
+        async function frAccept(uid) {{ await frAdd(uid, {{disabled:false,textContent:''}}); }}
 
         async function frRemove(uid) {{
 
@@ -15052,20 +15059,104 @@ No markdown, no code fences. ONLY JSON.
 
         }}
 
-        async function frChallenge(uid) {{
+        async function frChallenge(uid, uname) {{
 
-          if (!confirm('Start a 7-day study duel? Most focus minutes wins.')) return;
-
-          const r = await fetch('/api/student/duels/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{opponent_id: uid}})}}).then(r=>r.json());
-
-          if (r.error) {{ alert(r.error); return; }}
-
-          loadAll();
+          openChallengeModal(uid, uname || ('User #' + uid));
 
         }}
 
+        // ── Challenge modal (Quiz Duel vs Study Marathon) ──────────
+        function openChallengeModal(uid, uname) {{
+          let m = document.getElementById('chal-modal');
+          if (!m) {{
+            m = document.createElement('div');
+            m.id = 'chal-modal';
+            m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
+            document.body.appendChild(m);
+          }}
+          m.innerHTML = `
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;max-width:520px;width:92%;padding:24px;">
+              <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:14px">
+                <div>
+                  <h2 style="margin:0;font-size:20px">⚔️ Challenge ${{esc(uname)}}</h2>
+                  <div style="color:var(--text-muted);font-size:13px;margin-top:2px">Pick a duel format</div>
+                </div>
+                <button onclick="closeChallengeModal()" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1">×</button>
+              </div>
+
+              <div id="chal-pick" style="display:flex;flex-direction:column;gap:10px">
+                <button class="chal-card" onclick="pickQuiz()" style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer;color:var(--text)">
+                  <div style="font-size:16px;font-weight:700">🥊 Quiz Duel</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Upload a study file. AI builds 10 questions. Both must be online — first to finish at the highest score wins. Tab-switch = instant loss.</div>
+                  <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +5 XP · +50 🪙</div>
+                </button>
+                <button class="chal-card" onclick="pickMarathon()" style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer;color:var(--text)">
+                  <div style="font-size:16px;font-weight:700">📅 Study Marathon (7 days)</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Most focus minutes over the next 7 days wins. Asynchronous — focus whenever you can.</div>
+                </button>
+              </div>
+
+              <div id="chal-quiz" style="display:none">
+                <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Upload a PDF, DOCX or TXT (max 8 MB). The AI will generate 10 multiple-choice questions.</div>
+                <input id="chal-topic" type="text" placeholder="Topic (optional, e.g. Cell Biology Ch. 4)" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);margin-bottom:10px;box-sizing:border-box">
+                <input id="chal-file" type="file" accept=".pdf,.docx,.txt,.md" style="width:100%;margin-bottom:14px">
+                <div id="chal-err" style="color:#ef4444;font-size:12px;margin-bottom:8px"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                  <button class="btn btn-sm btn-outline" onclick="closeChallengeModal()">Cancel</button>
+                  <button class="btn btn-sm btn-primary" id="chal-go" onclick="sendQuizDuel(${{uid}})">Send invite</button>
+                </div>
+              </div>
+            </div>`;
+          window.__chalUid = uid;
+          window.__chalName = uname;
+        }}
+        function closeChallengeModal() {{
+          const m = document.getElementById('chal-modal');
+          if (m) m.remove();
+        }}
+        function pickMarathon() {{
+          if (!confirm('Start a 7-day study duel with ' + window.__chalName + '? Most focus minutes wins.')) return;
+          fetch('/api/student/duels/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{opponent_id: window.__chalUid}})}})
+            .then(r=>r.json()).then(r => {{
+              if (r.error) {{ alert(r.error); return; }}
+              closeChallengeModal();
+              loadAll();
+            }});
+        }}
+        function pickQuiz() {{
+          document.getElementById('chal-pick').style.display = 'none';
+          document.getElementById('chal-quiz').style.display = 'block';
+        }}
+        async function sendQuizDuel(uid) {{
+          const fileEl = document.getElementById('chal-file');
+          const topic = document.getElementById('chal-topic').value.trim();
+          const errEl = document.getElementById('chal-err');
+          errEl.textContent = '';
+          if (!fileEl.files || !fileEl.files[0]) {{ errEl.textContent = 'Pick a file.'; return; }}
+          const fd = new FormData();
+          fd.append('opponent_id', uid);
+          fd.append('topic', topic);
+          fd.append('file', fileEl.files[0]);
+          const btn = document.getElementById('chal-go');
+          btn.disabled = true; btn.textContent = 'Generating quiz…';
+          try {{
+            const r = await fetch('/api/student/duels/quiz/create', {{method:'POST', body: fd}}).then(r=>r.json());
+            if (!r.ok) {{ errEl.textContent = r.error || 'Failed.'; btn.disabled = false; btn.textContent = 'Send invite'; return; }}
+            closeChallengeModal();
+            // Take the challenger straight into the play page (it auto-starts when opponent accepts)
+            window.location.href = '/student/duels/quiz/' + r.duel_id + '/play';
+          }} catch(e) {{
+            errEl.textContent = 'Network error.';
+            btn.disabled = false; btn.textContent = 'Send invite';
+          }}
+        }}
+
+        let __loadingAll = false;
         async function loadAll() {{
 
+          if (__loadingAll) return;
+          __loadingAll = true;
+          try {{
           const f = await fetch('/api/student/friends/list').then(r=>r.json());
 
           const inc = document.getElementById('fr-incoming');
@@ -15092,13 +15183,13 @@ No markdown, no code fences. ONLY JSON.
 
           if (f.friends && f.friends.length) {{
 
-            fl.innerHTML = '';
-
-            for (const u of f.friends) {{
-
+            // Build to a local string first so concurrent loads can't interleave appends.
+            // Dedupe by id in case the API ever returns duplicates.
+            const seen = new Set();
+            const uniq = f.friends.filter(u => {{ if (seen.has(u.id)) return false; seen.add(u.id); return true; }});
+            const parts = await Promise.all(uniq.map(async u => {{
               const h2h = await fetch('/api/student/duels/h2h?friend_id=' + u.id).then(r=>r.json());
-
-              fl.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
 
                 <div>
 
@@ -15110,15 +15201,15 @@ No markdown, no code fences. ONLY JSON.
 
                 <div style="display:flex;gap:6px">
 
-                  <button class="btn btn-sm btn-primary" onclick="frChallenge(${{u.id}})">Challenge</button>
+                  <button class="btn btn-sm btn-primary" onclick="frChallenge(${{u.id}}, ${{JSON.stringify(u.name||'')}})">Challenge</button>
 
                   <button class="btn btn-sm btn-outline" onclick="frRemove(${{u.id}})">Remove</button>
 
                 </div>
 
               </div>`;
-
-            }}
+            }}));
+            fl.innerHTML = parts.join('');
 
           }} else {{ fl.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No friends yet — search above to add some.</div>'; }}
 
@@ -15174,9 +15265,55 @@ No markdown, no code fences. ONLY JSON.
 
           }} else {{ hist.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No completed duels yet.</div>'; }}
 
+          // Quiz duels (v2 — file-upload + AI)
+          try {{
+            const qd = await fetch('/api/student/duels/quiz/pending').then(r=>r.json());
+            const qbox = document.getElementById('fr-quiz-duels');
+            const incoming = (qd.pending||[]).map(x =>
+              `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+                <div>
+                  <b>${{esc(x.challenger_name)}}</b> challenged you
+                  <div style="font-size:12px;color:var(--text-muted)">${{esc(x.topic||'No topic')}} · ${{esc(x.file_name||'')}}</div>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-sm btn-primary" onclick="qdAccept(${{x.id}})">Accept &amp; play</button>
+                  <button class="btn btn-sm btn-outline" onclick="qdDecline(${{x.id}})">Decline</button>
+                </div>
+              </div>`).join('');
+            const playable = (qd.playable||[]).map(x => {{
+              const meIsChall = x.challenger_id === ME_CID;
+              const themName = meIsChall ? x.opponent_name : x.challenger_name;
+              const labelStatus = x.status === 'pending' ? 'waiting on opponent' : (x.status === 'ready' ? 'ready' : 'in progress');
+              return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+                <div>
+                  <b>vs ${{esc(themName)}}</b>
+                  <div style="font-size:12px;color:var(--text-muted)">${{esc(x.topic||'')}} · ${{labelStatus}}</div>
+                </div>
+                <a class="btn btn-sm btn-primary" href="/student/duels/quiz/${{x.id}}/play">Open</a>
+              </div>`;
+            }}).join('');
+            const inner = (incoming + playable);
+            qbox.innerHTML = inner || '<div style="color:var(--text-muted);font-size:13px">No quiz duels right now. Click <b>Challenge</b> on a friend to start one.</div>';
+          }} catch(e) {{}}
+
+          }} finally {{ __loadingAll = false; }}
+        }}
+
+        async function qdAccept(id) {{
+          const r = await fetch('/api/student/duels/quiz/' + id + '/accept', {{method:'POST'}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not accept.'); return; }}
+          window.location.href = '/student/duels/quiz/' + id + '/play';
+        }}
+        async function qdDecline(id) {{
+          if (!confirm('Decline this quiz duel?')) return;
+          const r = await fetch('/api/student/duels/quiz/' + id + '/decline', {{method:'POST'}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not decline.'); return; }}
+          loadAll();
         }}
 
         loadAll();
+        // Auto-refresh quiz-duel pending so users see invites quickly
+        setInterval(loadAll, 8000);
 
         </script>
 
@@ -17565,6 +17702,691 @@ No markdown, no code fences. ONLY JSON.
             log.exception("essay analyze failed")
 
             return jsonify({"error": str(e)}), 500
+
+
+    # ── Shop / Wallet / Profile ─────────────────────────────
+
+    @app.route("/student/shop")
+    def student_shop_page():
+        if not _logged_in():
+            return redirect(url_for("student_login"))
+        cid = _cid()
+        wallet = sdb.get_wallet(cid)
+        total_xp = sdb.get_total_xp(cid)
+        # Build banner cards HTML
+        banner_cards = []
+        for key, cfg in sdb.BANNERS.items():
+            owned = key in wallet["unlocked_banners"]
+            xp_ok = total_xp >= cfg["xp_required"]
+            if owned:
+                tag = '<span style="color:#10b981;font-weight:700;">Owned</span>'
+                btn = ''
+            elif not xp_ok:
+                tag = f'<span style="color:#94a3b8;">Reach {cfg["xp_required"]} XP to unlock</span>'
+                btn = ''
+            elif wallet["coins"] < cfg["price_coins"]:
+                tag = f'<span style="color:#ef4444;">Need {cfg["price_coins"]} coins</span>'
+                btn = f'<button class="btn btn-sm btn-outline" disabled>Buy ({cfg["price_coins"]} 🪙)</button>'
+            else:
+                tag = f'<span style="color:#94a3b8;">{cfg["xp_required"]} XP unlocked</span>'
+                btn = f'<button class="btn btn-sm btn-primary" onclick="buyBanner(\'{key}\')">Buy ({cfg["price_coins"]} 🪙)</button>'
+            banner_cards.append(
+                f'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
+                f'<div style="height:90px;background:{cfg["css"]};"></div>'
+                f'<div style="padding:14px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}</div>'
+                f'<div style="font-size:12px;margin-top:4px;">{tag}</div>'
+                f'<div style="margin-top:10px;">{btn}</div></div></div>'
+            )
+        banners_html = "".join(banner_cards)
+        coins = wallet["coins"]
+        freezes = wallet["streak_freezes"]
+        freeze_btn_disabled = "disabled" if (coins < sdb.STREAK_FREEZE_PRICE or freezes >= 3) else ""
+        return _s_render("Shop", f"""
+        <h1 style="margin-bottom:6px;">🛒 Shop</h1>
+        <p style="color:var(--text-muted);margin:0 0 24px;">Spend coins on streak freezes and profile banners. Earn coins by completing focus sessions.</p>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;">
+          <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} 🪙</div><div class="label">Coins</div></div>
+          <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} ❄️</div><div class="label">Streak Freezes</div></div>
+          <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">Total XP</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h2>❄️ Streak Freezes</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;">Use a freeze to save your streak when you miss a day. Max 3 owned at a time.</p>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;">
+            <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} 🪙 each</div>
+            <button class="btn btn-primary btn-sm" id="buy-freeze-btn" onclick="buyFreeze()" {freeze_btn_disabled}>Buy 1 freeze</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h2>🎨 Profile Banners</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Unlock banners by reaching XP tiers, then purchase with coins.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
+            {banners_html}
+          </div>
+        </div>
+
+        <script>
+        async function buyFreeze() {{
+          const r = await fetch('/api/student/wallet/buy-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          location.reload();
+        }}
+        async function buyBanner(key) {{
+          const r = await fetch('/api/student/wallet/buy-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key: key}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          location.reload();
+        }}
+        </script>
+        """, active_page="student_shop")
+
+
+    @app.route("/student/profile")
+    def student_profile_page():
+        if not _logged_in():
+            return redirect(url_for("student_login"))
+        cid = _cid()
+        from outreach.db import get_client
+        c = get_client(cid) or {}
+        wallet = sdb.get_wallet(cid)
+        total_xp = sdb.get_total_xp(cid)
+        focus_stats = sdb.get_focus_stats(cid)
+        try:
+            level_name, floor, ceil = sdb.get_level(total_xp)
+        except Exception:
+            level_name, floor, ceil = "Beginner", 0, 100
+        banner_css = sdb.BANNERS.get(wallet["selected_banner"], sdb.BANNERS["default"])["css"]
+        # Banner picker (only owned)
+        owned_options = []
+        for key in wallet["unlocked_banners"]:
+            cfg = sdb.BANNERS.get(key)
+            if not cfg:
+                continue
+            sel = " selected" if key == wallet["selected_banner"] else ""
+            owned_options.append(f'<option value="{key}"{sel}>{cfg["name"]}</option>')
+        owned_html = "".join(owned_options)
+        name = (c.get("name") or "Student").replace("<", "&lt;")
+        email = (c.get("email") or "").replace("<", "&lt;")
+        progress_pct = 0
+        if ceil > floor:
+            progress_pct = max(0, min(100, int((total_xp - floor) * 100 / (ceil - floor))))
+        return _s_render("My Profile", f"""
+        <div style="max-width:900px;margin:0 auto;">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:18px;overflow:hidden;margin-bottom:22px;">
+            <div id="profile-banner" style="height:160px;background:{banner_css};"></div>
+            <div style="padding:18px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
+              <div>
+                <div style="font-size:24px;font-weight:800;">{name}</div>
+                <div style="color:var(--text-muted);font-size:13px;">{email}</div>
+                <div style="margin-top:6px;font-size:13px;">Level: <b>{level_name}</b> &middot; <b>{total_xp}</b> XP</div>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <div class="stat-card stat-yellow" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['coins']} 🪙</div><div class="label">Coins</div></div>
+                <div class="stat-card stat-blue" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['streak_freezes']} ❄️</div><div class="label">Freezes</div></div>
+                <div class="stat-card stat-red" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{focus_stats.get('streak_days',0)} 🔥</div><div class="label">Streak</div></div>
+              </div>
+            </div>
+            <div style="padding:0 24px 18px;">
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Progress to next level: {progress_pct}%</div>
+              <div style="background:var(--bg);border-radius:8px;height:8px;overflow:hidden;">
+                <div style="height:100%;background:linear-gradient(90deg,var(--primary),#8b5cf6);width:{progress_pct}%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>🎨 Edit profile banner</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:10px;">Pick from banners you've unlocked. <a href="/student/shop" style="color:var(--primary);">Visit the Shop</a> to unlock more.</p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <select id="banner-select" class="edit-input" style="padding:8px;min-width:220px;">{owned_html}</select>
+              <button class="btn btn-primary btn-sm" onclick="saveBanner()">Apply</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>❄️ Use a streak freeze</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;">If you missed yesterday, click below to spend a freeze and keep your streak.</p>
+            <button class="btn btn-outline btn-sm" onclick="useFreeze()" {'disabled' if wallet['streak_freezes']<=0 else ''}>Use 1 freeze</button>
+          </div>
+        </div>
+
+        <script>
+        const BANNER_CSS = {{ {", ".join(f'"{k}":"{v["css"]}"' for k,v in sdb.BANNERS.items())} }};
+        document.getElementById('banner-select').addEventListener('change', function(){{
+          const k = this.value;
+          if (BANNER_CSS[k]) document.getElementById('profile-banner').style.background = BANNER_CSS[k];
+        }});
+        async function saveBanner() {{
+          const k = document.getElementById('banner-select').value;
+          const r = await fetch('/api/student/wallet/set-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key:k}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not apply.'); return; }}
+        }}
+        async function useFreeze() {{
+          if (!confirm('Use one streak freeze?')) return;
+          const r = await fetch('/api/student/wallet/use-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not use freeze.'); return; }}
+          location.reload();
+        }}
+        </script>
+        """, active_page="student_profile")
+
+
+    @app.route("/api/student/wallet/buy-freeze", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_buy_freeze_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        return jsonify(sdb.buy_streak_freeze(_cid(), 1))
+
+
+    @app.route("/api/student/wallet/buy-banner", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_buy_banner_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        return jsonify(sdb.buy_banner(_cid(), str(data.get("banner_key") or "")))
+
+
+    @app.route("/api/student/wallet/set-banner", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_set_banner_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        return jsonify(sdb.set_selected_banner(_cid(), str(data.get("banner_key") or "")))
+
+
+    @app.route("/api/student/wallet/use-freeze", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_use_freeze_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        return jsonify(sdb.use_streak_freeze(_cid()))
+
+
+    # ================================================================
+    #  Quiz Duels v2 — file-upload + AI-generated, synchronous play
+    # ================================================================
+
+    def _qd_can_view(d, cid):
+        return d and cid in (d.get("challenger_id"), d.get("opponent_id"))
+
+    @app.route("/api/student/duels/quiz/create", methods=["POST"])
+    @csrf.exempt
+    def student_duels_quiz_create_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        cid = _cid()
+        try:
+            opp = int(request.form.get("opponent_id") or 0)
+        except Exception:
+            return jsonify(ok=False, error="Invalid opponent_id"), 400
+        topic = (request.form.get("topic") or "").strip()[:200]
+        if opp == cid or opp <= 0:
+            return jsonify(ok=False, error="Pick a friend to challenge."), 400
+        # Must be friends
+        f = sdb.list_friends(cid)
+        if not any(x["id"] == opp for x in f["friends"]):
+            return jsonify(ok=False, error="You must be friends to start a duel."), 400
+        # Avoid duplicate pending invite to same opponent
+        existing = sdb.list_active_quiz_duels_for(cid)
+        if any(
+            x for x in existing
+            if x["status"] in ("pending", "ready", "playing")
+            and ((x["challenger_id"] == cid and x["opponent_id"] == opp)
+                 or (x["opponent_id"] == cid and x["challenger_id"] == opp))
+        ):
+            return jsonify(ok=False, error="You already have an open quiz duel with this user."), 400
+
+        # File upload (PDF / DOCX / TXT). Hard-cap at 8 MB.
+        f_in = request.files.get("file")
+        if not f_in or not f_in.filename:
+            return jsonify(ok=False, error="Upload a study file (PDF, DOCX, or TXT)."), 400
+        raw = f_in.read(8 * 1024 * 1024 + 1)
+        if len(raw) > 8 * 1024 * 1024:
+            return jsonify(ok=False, error="File too large (max 8 MB)."), 400
+        fname = (f_in.filename or "")[:200]
+        lname = fname.lower()
+        try:
+            if lname.endswith(".pdf"):
+                text = extract_text_from_pdf(raw)
+            elif lname.endswith(".docx"):
+                text = extract_text_from_docx(raw)
+            elif lname.endswith(".txt") or lname.endswith(".md"):
+                text = raw.decode("utf-8", errors="ignore")
+            else:
+                return jsonify(ok=False, error="Unsupported file type. Use PDF, DOCX, or TXT."), 400
+        except Exception as e:
+            log.exception("Quiz-duel file extraction failed: %s", e)
+            return jsonify(ok=False, error="Could not read that file."), 400
+        text = (text or "").strip()
+        if len(text) < 200:
+            return jsonify(ok=False, error="The file has too little readable text to build a quiz."), 400
+
+        try:
+            qs = generate_quiz(
+                course_name=topic or "Duel",
+                topics=[topic] if topic else None,
+                source_text=text,
+                difficulty="medium",
+                count=sdb.QUIZ_DUEL_QUESTION_COUNT,
+            ) or []
+        except Exception as e:
+            log.exception("Quiz-duel AI generation failed: %s", e)
+            return jsonify(ok=False, error="Quiz generation failed. Try again."), 500
+        # Trim to exact count and ensure each Q has the expected shape
+        clean = []
+        for q in qs[: sdb.QUIZ_DUEL_QUESTION_COUNT]:
+            if not isinstance(q, dict):
+                continue
+            if (q.get("correct") or "").strip().lower() not in ("a", "b", "c", "d"):
+                continue
+            if not all(q.get("option_" + k) for k in ("a", "b", "c", "d")):
+                continue
+            if not q.get("question"):
+                continue
+            clean.append({
+                "question":    str(q["question"])[:600],
+                "option_a":    str(q["option_a"])[:300],
+                "option_b":    str(q["option_b"])[:300],
+                "option_c":    str(q["option_c"])[:300],
+                "option_d":    str(q["option_d"])[:300],
+                "correct":     q["correct"].strip().lower(),
+                "explanation": str(q.get("explanation") or "")[:500],
+                "topic":       str(q.get("topic") or "")[:80],
+            })
+        if len(clean) < 4:
+            return jsonify(ok=False, error="Could not generate enough quality questions from this file."), 500
+
+        did = sdb.create_quiz_duel(cid, opp, clean, topic=topic, file_name=fname)
+        return jsonify(ok=True, duel_id=did, count=len(clean))
+
+
+    @app.route("/api/student/duels/quiz/<int:duel_id>/accept", methods=["POST"])
+    @csrf.exempt
+    def student_duels_quiz_accept_api(duel_id):
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        return jsonify(sdb.accept_quiz_duel(duel_id, _cid()))
+
+
+    @app.route("/api/student/duels/quiz/<int:duel_id>/decline", methods=["POST"])
+    @csrf.exempt
+    def student_duels_quiz_decline_api(duel_id):
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        return jsonify(sdb.decline_quiz_duel(duel_id, _cid()))
+
+
+    @app.route("/api/student/duels/quiz/<int:duel_id>/submit", methods=["POST"])
+    @csrf.exempt
+    def student_duels_quiz_submit_api(duel_id):
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        try:
+            qi = int(data.get("question_idx"))
+            tm = int(data.get("time_ms") or 0)
+        except Exception:
+            return jsonify(ok=False, error="Bad payload."), 400
+        ans = (data.get("answer") or "").strip().lower()[:1]
+        return jsonify(sdb.submit_duel_answer(duel_id, _cid(), qi, ans, tm))
+
+
+    @app.route("/api/student/duels/quiz/<int:duel_id>/forfeit", methods=["POST"])
+    @csrf.exempt
+    def student_duels_quiz_forfeit_api(duel_id):
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        reason = (data.get("reason") or "")[:80]
+        return jsonify(sdb.forfeit_quiz_duel(duel_id, _cid(), reason=reason))
+
+
+    @app.route("/api/student/duels/quiz/<int:duel_id>/state")
+    def student_duels_quiz_state_api(duel_id):
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        cid = _cid()
+        d = sdb.get_quiz_duel(duel_id, viewer_id=cid)
+        if not d:
+            return jsonify(ok=False, error="Not found."), 404
+        if not _qd_can_view(d, cid):
+            return jsonify(ok=False, error="Not your duel."), 403
+        # Auto-expire ready/pending matches whose play TTL ran out without both
+        # players finishing — counts as a tie.
+        if d["status"] in ("ready", "playing"):
+            try:
+                exp = d.get("expires_at")
+                exp_dt = exp if isinstance(exp, datetime) else datetime.fromisoformat(str(exp).replace(" ", "T")[:19])
+                if datetime.now() > exp_dt and not (d.get("challenger_done") and d.get("opponent_done")):
+                    # Mark whichever side is incomplete as not done -> just settle
+                    # by current scores using settle_quiz_duel_if_done after
+                    # forcing both done flags.
+                    sdb._exec  # noqa: F401 (ensures attr exists)
+                    from student import db as _sdb
+                    with _sdb.get_db() as _db:
+                        _sdb._exec(
+                            _db,
+                            "UPDATE student_quiz_duels SET challenger_done = %s, opponent_done = %s WHERE id = %s",
+                            (True, True, duel_id) if _sdb._USE_PG else (1, 1, duel_id),
+                        )
+                    sdb.settle_quiz_duel_if_done(duel_id)
+                    d = sdb.get_quiz_duel(duel_id, viewer_id=cid)
+            except Exception:
+                pass
+        # Trim sensitive fields
+        out = {
+            "id": d["id"],
+            "status": d["status"],
+            "topic": d.get("topic", ""),
+            "file_name": d.get("file_name", ""),
+            "challenger_id": d["challenger_id"],
+            "opponent_id": d["opponent_id"],
+            "challenger_name": d.get("challenger_name", ""),
+            "opponent_name": d.get("opponent_name", ""),
+            "challenger_score": d.get("challenger_score", 0),
+            "opponent_score": d.get("opponent_score", 0),
+            "challenger_time_ms": d.get("challenger_time_ms", 0),
+            "opponent_time_ms": d.get("opponent_time_ms", 0),
+            "challenger_done": bool(d.get("challenger_done")),
+            "opponent_done": bool(d.get("opponent_done")),
+            "winner_id": d.get("winner_id"),
+            "forfeit_by": d.get("forfeit_by"),
+            "expires_at": str(d.get("expires_at") or ""),
+            "questions": d.get("questions", []),  # already redacted if in-progress
+            "me": cid,
+        }
+        return jsonify(out)
+
+
+    @app.route("/api/student/duels/quiz/pending")
+    def student_duels_quiz_pending_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        cid = _cid()
+        pend = sdb.list_pending_quiz_duels_for(cid)
+        active = sdb.list_active_quiz_duels_for(cid)
+        # Active that the user can resume (status ready/playing where they're
+        # still in the match)
+        playable = [
+            x for x in active
+            if x["status"] in ("ready", "playing")
+            and (cid == x["challenger_id"] or cid == x["opponent_id"])
+        ]
+        return jsonify(
+            pending=[{
+                "id": x["id"],
+                "challenger_id": x["challenger_id"],
+                "challenger_name": x.get("challenger_name", ""),
+                "topic": x.get("topic", ""),
+                "file_name": x.get("file_name", ""),
+                "expires_at": str(x.get("expires_at") or ""),
+            } for x in pend],
+            playable=[{
+                "id": x["id"],
+                "status": x["status"],
+                "challenger_id": x["challenger_id"],
+                "opponent_id": x["opponent_id"],
+                "challenger_name": x.get("challenger_name", ""),
+                "opponent_name": x.get("opponent_name", ""),
+                "topic": x.get("topic", ""),
+            } for x in playable],
+        )
+
+
+    @app.route("/student/duels/quiz/<int:duel_id>/play")
+    def student_duels_quiz_play_page(duel_id):
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        d = sdb.get_quiz_duel(duel_id, viewer_id=cid)
+        if not d or cid not in (d["challenger_id"], d["opponent_id"]):
+            return _s_render("Quiz Duel", "<div class='card' style='padding:40px;text-align:center'>Duel not found.</div>", active_page="student_friends")
+        if d["status"] in ("settled", "tied", "forfeit", "declined", "expired"):
+            return redirect(url_for("student_duels_quiz_result_page", duel_id=duel_id))
+        # Auto-accept on first visit by the opponent (so play page can immediately render)
+        if d["status"] == "pending" and cid == d["opponent_id"]:
+            sdb.accept_quiz_duel(duel_id, cid)
+
+        return _s_render("Quiz Duel", f"""
+        <style>
+          .qd {{ max-width: 760px; margin: 0 auto; }}
+          .qd-h {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }}
+          .qd-bar {{ display:flex; gap:6px; margin-bottom:18px; }}
+          .qd-step {{ flex:1; height:6px; border-radius:3px; background:var(--border); }}
+          .qd-step.done {{ background: linear-gradient(90deg,#22c55e,#16a34a); }}
+          .qd-step.cur {{ background: linear-gradient(90deg,#6366f1,#8b5cf6); }}
+          .qd-q {{ background: var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; }}
+          .qd-q h2 {{ margin:0 0 18px; font-size:18px; }}
+          .qd-opt {{ display:block; width:100%; text-align:left; padding:14px 16px; margin:8px 0; background:var(--bg); border:1px solid var(--border); border-radius:10px; cursor:pointer; font-size:14px; color:var(--text); transition:all .12s; }}
+          .qd-opt:hover {{ border-color:var(--primary); background: rgba(99,102,241,.06); }}
+          .qd-opt.picked {{ border-color:var(--primary); background: rgba(99,102,241,.12); }}
+          .qd-meta {{ display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); margin-bottom:12px; }}
+          .qd-overlay {{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:10000; }}
+          .qd-overlay .box {{ background:var(--card); padding:32px; border-radius:14px; max-width:420px; text-align:center; }}
+          .qd-warn {{ background:rgba(239,68,68,.1); border:1px solid #ef4444; color:#ef4444; padding:8px 12px; border-radius:8px; font-size:12px; margin-bottom:14px; }}
+        </style>
+
+        <div class="qd">
+          <div class="qd-h">
+            <div>
+              <h1 style="margin:0;font-size:22px">⚔️ Quiz Duel</h1>
+              <div style="font-size:12px;color:var(--text-muted)">vs <b id="qd-opp-name">…</b> · {d.get('topic','') or 'No topic'}</div>
+            </div>
+            <div style="text-align:right;font-size:12px;color:var(--text-muted)">
+              <div>Time: <b id="qd-time">0.0s</b></div>
+              <div>Score: <b id="qd-score">0</b> · Theirs: <b id="qd-their-score">0</b></div>
+            </div>
+          </div>
+
+          <div class="qd-warn">⚠️ Anti-cheat: leaving this tab will instantly forfeit the duel.</div>
+
+          <div class="qd-bar" id="qd-bar"></div>
+
+          <div id="qd-stage">
+            <div class="qd-q" style="text-align:center;color:var(--text-muted)">Loading questions…</div>
+          </div>
+        </div>
+
+        <script>
+        (function() {{
+          const DUEL_ID = {duel_id};
+          let questions = [];
+          let idx = 0;
+          let qStart = 0;
+          let myScore = 0;
+          let myDone = false;
+          let busy = false;
+          let forfeited = false;
+
+          function fmtTime(ms) {{ return (ms/1000).toFixed(1) + 's'; }}
+
+          async function poll() {{
+            try {{
+              const r = await fetch('/api/student/duels/quiz/' + DUEL_ID + '/state').then(r=>r.json());
+              if (!r || r.error) return;
+              const meIsChal = r.me === r.challenger_id;
+              document.getElementById('qd-opp-name').textContent =
+                meIsChal ? r.opponent_name : r.challenger_name;
+              const myScore = meIsChal ? r.challenger_score : r.opponent_score;
+              const theirScore = meIsChal ? r.opponent_score : r.challenger_score;
+              document.getElementById('qd-score').textContent = myScore;
+              document.getElementById('qd-their-score').textContent = theirScore;
+              if (questions.length === 0 && r.questions && r.questions.length) {{
+                questions = r.questions;
+                renderBar();
+                renderQ();
+              }}
+              if (r.status === 'settled' || r.status === 'tied' || r.status === 'forfeit') {{
+                window.location.href = '/student/duels/quiz/' + DUEL_ID + '/result';
+              }}
+            }} catch(e) {{}}
+          }}
+
+          function renderBar() {{
+            const bar = document.getElementById('qd-bar');
+            bar.innerHTML = questions.map((_, i) =>
+              `<div class="qd-step ${{i < idx ? 'done' : (i === idx ? 'cur' : '')}}"></div>`
+            ).join('');
+          }}
+
+          function renderQ() {{
+            const stage = document.getElementById('qd-stage');
+            if (idx >= questions.length) {{
+              myDone = true;
+              stage.innerHTML = '<div class="qd-q" style="text-align:center"><h2>✅ You finished!</h2><p style="color:var(--text-muted)">Waiting for your opponent to finish…</p></div>';
+              return;
+            }}
+            const q = questions[idx];
+            qStart = Date.now();
+            stage.innerHTML = `
+              <div class="qd-meta">
+                <span>Question ${{idx+1}} / ${{questions.length}}</span>
+                <span>${{q.topic || ''}}</span>
+              </div>
+              <div class="qd-q">
+                <h2>${{escapeHtml(q.question)}}</h2>
+                <button class="qd-opt" data-k="a">A) ${{escapeHtml(q.option_a)}}</button>
+                <button class="qd-opt" data-k="b">B) ${{escapeHtml(q.option_b)}}</button>
+                <button class="qd-opt" data-k="c">C) ${{escapeHtml(q.option_c)}}</button>
+                <button class="qd-opt" data-k="d">D) ${{escapeHtml(q.option_d)}}</button>
+              </div>`;
+            stage.querySelectorAll('.qd-opt').forEach(b => {{
+              b.addEventListener('click', () => answer(b.dataset.k));
+            }});
+          }}
+
+          async function answer(k) {{
+            if (busy) return;
+            busy = true;
+            const elapsed = Date.now() - qStart;
+            try {{
+              const r = await fetch('/api/student/duels/quiz/' + DUEL_ID + '/submit', {{
+                method:'POST', headers:{{'Content-Type':'application/json'}},
+                body: JSON.stringify({{question_idx: idx, answer: k, time_ms: elapsed}}),
+              }}).then(r=>r.json());
+              if (r && r.is_correct) myScore++;
+            }} catch(e) {{}}
+            idx++;
+            renderBar();
+            renderQ();
+            busy = false;
+          }}
+
+          function escapeHtml(s) {{
+            return String(s||'').replace(/[&<>'\\"]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','\\'':'&#39;','\\"':'&quot;'}}[c]));
+          }}
+
+          // Anti-cheat: leaving the tab = instant loss
+          document.addEventListener('visibilitychange', () => {{
+            if (document.hidden && !myDone && !forfeited) {{
+              forfeited = true;
+              navigator.sendBeacon(
+                '/api/student/duels/quiz/' + DUEL_ID + '/forfeit',
+                new Blob([JSON.stringify({{reason:'tab_hidden'}})], {{type:'application/json'}})
+              );
+              // Also try a normal POST as a backup
+              try {{
+                fetch('/api/student/duels/quiz/' + DUEL_ID + '/forfeit', {{
+                  method:'POST', keepalive:true,
+                  headers:{{'Content-Type':'application/json'}},
+                  body: JSON.stringify({{reason:'tab_hidden'}}),
+                }});
+              }} catch(e) {{}}
+            }}
+          }});
+
+          // Live elapsed-time counter
+          const startedAt = Date.now();
+          setInterval(() => {{
+            document.getElementById('qd-time').textContent = ((Date.now()-startedAt)/1000).toFixed(1) + 's';
+          }}, 100);
+
+          // Poll opponent state every 2s
+          poll();
+          setInterval(poll, 2000);
+        }})();
+        </script>
+        """, active_page="student_duels")
+
+
+    @app.route("/student/duels/quiz/<int:duel_id>/result")
+    def student_duels_quiz_result_page(duel_id):
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        d = sdb.get_quiz_duel(duel_id, viewer_id=cid)
+        if not d or cid not in (d["challenger_id"], d["opponent_id"]):
+            return _s_render("Quiz Duel", "<div class='card' style='padding:40px;text-align:center'>Duel not found.</div>", active_page="student_friends")
+        meIsChal = (cid == d["challenger_id"])
+        my_score = d["challenger_score"] if meIsChal else d["opponent_score"]
+        their_score = d["opponent_score"] if meIsChal else d["challenger_score"]
+        their_name = d["opponent_name"] if meIsChal else d["challenger_name"]
+        won = (d.get("winner_id") == cid)
+        lost = (d.get("winner_id") and d.get("winner_id") != cid)
+        tied = not d.get("winner_id") and d["status"] in ("tied", "settled")
+        forfeit_msg = ""
+        if d["status"] == "forfeit":
+            if d.get("forfeit_by") == cid:
+                forfeit_msg = "<div class='qd-tag' style='background:rgba(239,68,68,.15);color:#ef4444'>You forfeited (left the tab).</div>"
+            else:
+                forfeit_msg = "<div class='qd-tag' style='background:rgba(34,197,94,.15);color:#22c55e'>Opponent forfeited.</div>"
+        if won:
+            head = "<div style='font-size:48px'>🏆</div><h1 style='margin:8px 0'>You won!</h1>"
+            payout = f"<div style='color:#22c55e;margin-top:6px'>+{sdb.QUIZ_DUEL_WIN_XP} XP · +{sdb.QUIZ_DUEL_WIN_COINS} coins</div>"
+        elif lost:
+            head = "<div style='font-size:48px'>💔</div><h1 style='margin:8px 0'>You lost</h1>"
+            payout = "<div style='color:var(--text-muted);margin-top:6px'>No reward this time.</div>"
+        elif tied:
+            head = "<div style='font-size:48px'>🤝</div><h1 style='margin:8px 0'>It's a tie</h1>"
+            payout = f"<div style='color:#f59e0b;margin-top:6px'>+{sdb.QUIZ_DUEL_TIE_XP} XP · +{sdb.QUIZ_DUEL_TIE_COINS} coins each</div>"
+        else:
+            head = "<h1>Duel ended</h1>"
+            payout = ""
+        # Per-question review (questions now include correct + explanation)
+        review_rows = []
+        for i, q in enumerate(d.get("questions", [])):
+            review_rows.append(
+                f"<div style='padding:10px 0;border-bottom:1px solid var(--border)'>"
+                f"<div style='font-size:13px;font-weight:600'>Q{i+1}. {(q.get('question') or '')[:200]}</div>"
+                f"<div style='font-size:12px;color:#22c55e;margin-top:4px'>Correct: {q.get('correct','').upper()}) {q.get('option_'+(q.get('correct') or 'a'),'')}</div>"
+                f"</div>"
+            )
+        review_html = "".join(review_rows) or "<div style='color:var(--text-muted);font-size:13px'>No questions to review.</div>"
+
+        return _s_render("Quiz Duel — Result", f"""
+        <style>
+          .qd-r {{ max-width: 720px; margin:0 auto; text-align:center; }}
+          .qd-r .scorebox {{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; margin:18px 0; }}
+          .qd-r .vs {{ display:flex; justify-content:space-around; align-items:center; margin:14px 0; }}
+          .qd-r .side .num {{ font-size:48px; font-weight:800; }}
+          .qd-r .side .name {{ font-size:13px; color:var(--text-muted); margin-top:4px; }}
+          .qd-tag {{ display:inline-block; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; margin:8px 0; }}
+        </style>
+        <div class="qd-r">
+          {head}
+          {forfeit_msg}
+          {payout}
+          <div class="scorebox">
+            <div class="vs">
+              <div class="side"><div class="num">{my_score}</div><div class="name">You</div></div>
+              <div style="font-size:24px;color:var(--text-muted)">vs</div>
+              <div class="side"><div class="num">{their_score}</div><div class="name">{their_name}</div></div>
+            </div>
+            <div style='font-size:12px;color:var(--text-muted)'>Topic: {d.get('topic','') or '—'} · File: {d.get('file_name','') or '—'}</div>
+          </div>
+          <div style="text-align:left;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:18px">
+            <h3 style="margin:0 0 8px;font-size:15px">Answer key</h3>
+            {review_html}
+          </div>
+          <div style="margin-top:18px">
+            <a class="btn btn-primary" href="/student/friends">Back to friends</a>
+          </div>
+        </div>
+        """, active_page="student_friends")
 
 
     log.info("Student routes registered.")

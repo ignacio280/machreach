@@ -18,7 +18,11 @@ const BLOCKED_HOSTS = [
 // Domains we intentionally DO NOT block (YouTube allowed for study).
 const ALLOWLIST = [
   "youtube.com",
-  "youtu.be"
+  "youtu.be",
+  // Always allow MachReach itself so internal navigation never gets blocked.
+  "machreach.com",
+  "localhost",
+  "127.0.0.1"
 ];
 
 function hostMatches(url, list) {
