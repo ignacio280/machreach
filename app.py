@@ -1381,26 +1381,22 @@ LAYOUT = """<!DOCTYPE html>
         {% if account_type|default('business') == 'student' %}
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
-        <a href="/student/plan" {% if active_page == 'student_plan' %}class="active"{% endif %}>&#128197; Plan</a>
+        <a href="/student/exams" {% if active_page == 'student_exams' %}class="active"{% endif %}>&#128221; Exams</a>
+        <a href="/student/analytics" {% if active_page == 'student_analytics' %}class="active"{% endif %}>&#128202; Analytics</a>
         <div class="nav-dropdown">
-          <a href="#" onclick="return false" {% if active_page in ['student_flashcards','student_quizzes','student_notes','student_chat','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
+          <a href="#" onclick="return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/flashcards">&#127183; Flashcards</a>
             <a href="/student/quizzes">&#128221; Quizzes</a>
-            <a href="/student/notes">&#128214; Notes</a>
-            <a href="/student/chat">&#129302; AI Tutor</a>
             <a href="/student/essay">&#9999;&#65039; Essay</a>
             <a href="/student/practice">&#128736; Practice</a>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
-        <a href="/student/panic" {% if active_page == 'student_panic' %}class="active" style="color:#EF4444;"{% else %}style="color:#EF4444;"{% endif %}>&#128680; Panic</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="#" onclick="return false" {% if active_page in ['student_exams','student_schedule','student_weak','student_gpa','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
+          <a href="#" onclick="return false" {% if active_page in ['student_weak','student_gpa','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
           <div class="nav-dropdown-menu">
-            <a href="/student/exams">&#128221; Exams</a>
-            <a href="/student/schedule">&#128337; Schedule</a>
             <a href="/student/weak-topics">&#127919; Weak Topics</a>
             <a href="/student/gpa">&#128200; GPA</a>
             <a href="/student/achievements">&#127942; XP &amp; Badges</a>
@@ -2446,40 +2442,31 @@ LAYOUT = """<!DOCTYPE html>
 
     /* ---------- STEP LISTS ---------- */
     var STUDENT_STEPS = [
-      {url:'/student', sel:'h1,h2', title:'Your Student Dashboard', desc:'This is home base. Every stat, upcoming exam, and daily plan item lives here. We\\'ll walk through every feature you have — and take you to each page so you can see it in action.', pos:'bottom'},
+      {url:'/student', sel:'h1,h2', title:'Your Student Dashboard', desc:'This is home base. Every stat, upcoming exam, and study insight lives here. We\\'ll walk through every feature and take you to each page so you can see it in action.', pos:'bottom'},
       {url:'/student', sel:'.stat-card,.nav-dropdown', title:'Stats at a glance', desc:'Total courses, upcoming exams, focus hours, and streak — always in the header so you know where you stand.', pos:'bottom'},
 
-      {url:'/student/courses', sel:'h1', title:'Courses — your source of truth', desc:'Everything starts with a course. You can sync from Canvas with one click or create courses manually with the "+ New Course" button.', pos:'bottom'},
-      {url:'/student/courses', sel:'button[onclick*="showNewCourseModal"],button[onclick*="syncCourses"]', title:'Add courses two ways', desc:'Sync Canvas to pull in everything automatically, or hit "+ New Course" to add one by hand. Upload PDFs and syllabi to each course — the AI needs them to build flashcards, quizzes, and notes.', pos:'bottom'},
+      {url:'/student/courses', sel:'h1', title:'Courses — your class list', desc:'Everything starts with a course. Connect Canvas once and your classes appear instantly — no file scanning, no waiting. You can also add courses manually with "+ New Course".', pos:'bottom'},
 
-      {url:'/student/plan', sel:'h1', title:'AI Study Plan', desc:'Your personalized daily plan. The AI weighs every exam, course difficulty, and weak topic, then schedules exactly what to study today.', pos:'bottom'},
+      {url:'/student/exams', sel:'h1', title:'Exams — never get blindsided', desc:'Add every upcoming exam with its date and weight. The dashboard surfaces them sorted by urgency so you always know what\\'s next.', pos:'bottom'},
+
+      {url:'/student/analytics', sel:'h1', title:'Analytics — see your study rhythm', desc:'Total study time, sessions, current streak, when you study (hour-by-hour), and time spent per course. The whole semester at a glance.', pos:'bottom'},
 
       {url:'/student/focus', sel:'h1', title:'Focus Mode — where XP is earned', desc:'Pomodoro, pages-read, and custom sessions. This is the ONLY way to earn XP now (along with Exchange). The harder the course, the more XP per session.', pos:'bottom'},
-      {url:'/student/focus', sel:'.mode-btn,#start-btn', title:'Pick a mode, start the timer', desc:'Pomodoro gives a 1.2× XP multiplier. Pages-read mode earns XP per page. All sessions feed your focus-hour badges.', pos:'bottom'},
+      {url:'/student/focus', sel:'.mode-btn,#start-btn', title:'Pick a mode, start the timer', desc:'Pomodoro gives a 1.2× XP multiplier. Pages-read mode earns XP per page. All sessions feed your focus-hour badges and analytics.', pos:'bottom'},
       {url:'/student/focus', sel:'#focus-guard-card', title:'Focus Guard — block distractions for real', desc:'Install the free browser extension and the moment you start a timer, Instagram, TikTok, Twitter, Reddit and more get blocked automatically. YouTube stays allowed — because you might be studying.', pos:'top'},
 
-      {url:'/student/flashcards', sel:'h1', title:'AI Flashcards (SRS)', desc:'Flashcards auto-generated from your uploaded course files, scheduled with spaced-repetition. Review daily and you literally cannot forget.', pos:'bottom'},
+      {url:'/student/flashcards', sel:'h1', title:'Flashcards (SRS)', desc:'Build flashcard decks per course and review them with spaced-repetition. Review daily and you literally cannot forget.', pos:'bottom'},
 
-      {url:'/student/quizzes', sel:'h1', title:'AI Quizzes', desc:'Practice quizzes built from your course materials — perfect exam prep. Every question traces back to your own uploads, not random internet fluff.', pos:'bottom'},
-
-      {url:'/student/notes', sel:'h1', title:'AI Notes', desc:'Drop any PDF or DOCX and get clean, organized study notes in seconds. You can also generate notes from course files with one click.', pos:'bottom'},
-
-      {url:'/student/chat', sel:'h1', title:'AI Tutor (grounded)', desc:'Unlike ChatGPT, this tutor can ONLY answer using the files you uploaded. Zero hallucinations. Ask it to explain chapter 4, quiz you, or walk through a problem.', pos:'bottom'},
+      {url:'/student/quizzes', sel:'h1', title:'Practice Quizzes', desc:'Build practice quizzes for exam prep. Track which topics give you the most trouble.', pos:'bottom'},
 
       {url:'/student/essay', sel:'h1', title:'Essay Assistant', desc:'Paste any draft. Get brutally honest feedback on thesis strength, structure, grammar, and flow — plus a rewritten intro you can actually use.', pos:'bottom'},
-
-      {url:'/student/panic', sel:'h1', title:'Panic Mode — for exam emergencies', desc:'Exam tomorrow and nothing\\'s done? Fill in hours-available and topics, and get a ruthless, minute-by-minute cram plan. Use it, not abuse it.', pos:'bottom'},
 
       {url:'/student/exchange', sel:'h1', title:'Study Exchange', desc:'Share your best notes with other students. Fork theirs. Every time someone uses your note, you earn XP. Great notes = great rank.', pos:'bottom'},
 
       {url:'/student/leaderboard', sel:'h1', title:'Leaderboards & Ranks', desc:'You\\'re looking at the global leaderboard. Filter by your university, or create a private group with friends using the invite codes below.', pos:'bottom'},
       {url:'/student/leaderboard', sel:'table,[class*="card"]', title:'35 ranks to climb', desc:'Initiates IV → Apprentices → Scholars → Researchers → Academics → Masterminds → Grand Scholars → Legends — then the elite tier (Arch Scholars, High Sages, Oracles of Knowledge). Every rank-up pops a toast notification.', pos:'top'},
 
-      {url:'/student/schedule', sel:'h1', title:'Weekly Schedule', desc:'Drag-and-drop your weekly schedule — classes, study blocks, deadlines. Changes save automatically.', pos:'bottom'},
-
-      {url:'/student/exams', sel:'h1', title:'Exams Dashboard', desc:'Every upcoming exam across every course, sorted by urgency. Never blindsided again.', pos:'bottom'},
-
-      {url:'/student/weak-topics', sel:'h1', title:'Weak Topics Radar', desc:'The AI tracks which topics you score lowest on in quizzes and surfaces them here. Focus your review where it matters.', pos:'bottom'},
+      {url:'/student/weak-topics', sel:'h1', title:'Weak Topics Radar', desc:'We track which topics you score lowest on in quizzes and surface them here. Focus your review where it matters.', pos:'bottom'},
 
       {url:'/student/gpa', sel:'h1', title:'GPA Calculator', desc:'Track your current GPA and forecast what grades you need to hit your target. Essential at midterms.', pos:'bottom'},
 
@@ -3385,7 +3372,7 @@ LAYOUT = """<!DOCTYPE html>
   <!-- ── Academic onboarding modal + preserved-XP welcome banner ── -->
   <div id="mrXpBanner" style="display:none;position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:9998;
        background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;padding:12px 20px;border-radius:12px;
-       box-shadow:0 10px 40px rgba(99,102,241,.4);font-weight:500;display:flex;align-items:center;gap:12px;
+       box-shadow:0 10px 40px rgba(99,102,241,.4);font-weight:500;align-items:center;gap:12px;
        max-width:90vw;animation:mrSlideDown .5s cubic-bezier(.22,.61,.36,1);">
     <span style="font-size:22px;">🎉</span>
     <span>Welcome back — <strong>your previous progress has been preserved.</strong> All your XP is intact.</span>
@@ -3672,26 +3659,41 @@ LAYOUT = """<!DOCTYPE html>
     }
     document.addEventListener('keydown', blockKeys, true);
 
-    // Init: check whether we need to show it
+    // Always wire the close button up front so it works no matter what branch runs
+    const bannerCloseBtn = document.getElementById('mrXpBannerClose');
+    function hideBanner() {
+      // Use setProperty + !important so nothing in the global stylesheet can
+      // accidentally re-show the banner once the user dismisses it.
+      banner.style.setProperty('display', 'none', 'important');
+      banner.setAttribute('hidden', '');
+      try { fetch('/api/academic/banner/seen', { method:'POST' }); } catch(_){}
+    }
+    if (bannerCloseBtn) {
+      ['click','pointerup','touchend'].forEach(ev =>
+        bannerCloseBtn.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); hideBanner(); }, true)
+      );
+    }
+
+    // Init: check whether we need to show the modal / banner
     async function init() {
       try {
         const r = await fetch('/api/academic/profile');
         if (!r.ok) return;
         const j = await r.json();
+        // Priority 1: if setup isn't complete, show modal and hide banner entirely.
         if (j.needs_setup) {
+          banner.style.display = 'none';
           modal.style.display = 'flex';
           document.body.style.overflow = 'hidden';
           go(0);
-        } else if (!j.xp_preserve_banner_seen) {
+          return;
+        }
+        // Setup IS complete. Only show the 'previous progress preserved' banner if
+        // the user has actual prior XP (i.e. a pre-existing account) and hasn't seen it.
+        const hasPriorXp = (j.prior_xp || 0) > 0;
+        if (hasPriorXp && !j.xp_preserve_banner_seen) {
           banner.style.display = 'flex';
-          document.getElementById('mrXpBannerClose').addEventListener('click', () => {
-            banner.style.display = 'none';
-            fetch('/api/academic/banner/seen', { method:'POST' });
-          });
-          setTimeout(() => {
-            banner.style.display = 'none';
-            fetch('/api/academic/banner/seen', { method:'POST' });
-          }, 8000);
+          setTimeout(hideBanner, 8000);
         }
       } catch(_){}
     }

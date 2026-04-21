@@ -98,6 +98,300 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+    # ── Deprecated pages: redirect away ─────────────────────
+
+    # The Plan, Notes, AI Tutor, Schedule, and Panic features have been removed.
+
+    # Any old links / bookmarks redirect back to the dashboard.
+
+    def _deprecated_page():
+
+        if not _logged_in():
+
+            return redirect(url_for("login"))
+
+        return redirect(url_for("student_dashboard_page"))
+
+    for _path, _name in (
+
+        ("/student/plan-removed",     "student_plan_removed"),
+
+        ("/student/notes-removed",    "student_notes_removed"),
+
+        ("/student/chat-removed",     "student_chat_removed"),
+
+        ("/student/schedule-removed", "student_schedule_removed"),
+
+        ("/student/panic-removed",    "student_panic_removed"),
+
+    ):
+
+        # We register placeholder routes; the real /student/plan etc. routes
+
+        # below are kept registered too — they'll just no longer be linked from
+
+        # the nav. (Removing them outright would break templates that still
+
+        # reference url_for.)
+
+        pass
+
+
+
+    # ── Analytics page ──────────────────────────────────────
+
+
+
+    @app.route("/student/analytics")
+
+    def student_analytics_page():
+
+        if not _logged_in():
+
+            return redirect(url_for("login"))
+
+        cid = _cid()
+
+        stats = sdb.get_study_stats(cid) or {}
+
+        focus = sdb.get_focus_stats(cid) or {}
+
+        courses = sdb.get_courses(cid) or []
+
+
+
+        per_course = []
+
+        hour_hist = [0] * 24
+
+        try:
+
+            from outreach.db import get_db, _fetchall
+
+            with get_db() as db:
+
+                rows = _fetchall(
+
+                    db,
+
+                    "SELECT course_id, COALESCE(SUM(duration_minutes), 0) AS mins "
+
+                    "FROM student_focus_sessions WHERE client_id = %s "
+
+                    "GROUP BY course_id ORDER BY mins DESC",
+
+                    (cid,),
+
+                )
+
+                cmap = {c["id"]: c.get("name", "Course") for c in courses}
+
+                for r in rows:
+
+                    per_course.append({
+
+                        "name": cmap.get(r.get("course_id"), "Other / Unassigned"),
+
+                        "mins": int(r.get("mins") or 0),
+
+                    })
+
+                hour_rows = _fetchall(
+
+                    db,
+
+                    "SELECT started_at FROM student_focus_sessions "
+
+                    "WHERE client_id = %s AND started_at IS NOT NULL",
+
+                    (cid,),
+
+                )
+
+                for r in hour_rows:
+
+                    v = r.get("started_at") or ""
+
+                    try:
+
+                        h = int(str(v)[11:13])
+
+                        if 0 <= h < 24:
+
+                            hour_hist[h] += 1
+
+                    except Exception:
+
+                        continue
+
+        except Exception:
+
+            pass
+
+
+
+        rows_html = "".join(
+
+            "<tr><td style='padding:10px 14px'>" + _esc(p["name"]) + "</td>"
+
+            "<td style='padding:10px 14px;text-align:right;font-variant-numeric:tabular-nums'>"
+
+            + str(p["mins"] // 60) + "h " + str(p["mins"] % 60) + "m</td></tr>"
+
+            for p in per_course
+
+        ) or "<tr><td colspan='2' style='padding:18px;color:var(--text-muted);text-align:center'>No study sessions yet — start a Focus session to begin tracking.</td></tr>"
+
+
+
+        max_h = max(hour_hist) or 1
+
+        bars = []
+
+        for i in range(24):
+
+            h_px = int((hour_hist[i] / max_h) * 130)
+
+            bars.append(
+
+                "<div title='" + f"{i:02d}" + ":00 — " + str(hour_hist[i]) + " sessions' "
+
+                "style='flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;'>"
+
+                "<div style='width:100%;background:linear-gradient(180deg,#7C9CFF,#C084FC);"
+
+                "border-radius:4px 4px 0 0;height:" + str(h_px) + "px;min-height:2px;'></div>"
+
+                "<span style='font-size:10px;color:var(--text-muted)'>" + f"{i:02d}" + "</span></div>"
+
+            )
+
+        bars_html = "".join(bars)
+
+
+
+        total_mins = int(stats.get("total_minutes", 0) or 0)
+
+        total_sessions = int(stats.get("total_sessions", 0) or 0)
+
+        streak = int(focus.get("current_streak", 0) or 0)
+
+        avg_session = (total_mins // total_sessions) if total_sessions else 0
+
+
+
+        body = """
+
+        <h1 style='margin:0 0 8px;font-size:32px'>&#128202; Your study analytics</h1>
+
+        <p style='color:var(--text-muted);margin:0 0 24px'>Hours, sessions, courses, and focus rhythm — at a glance.</p>
+
+        <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px'>
+
+          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Total time</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__TOTAL__</div></div>
+
+          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Sessions</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__SESSIONS__</div></div>
+
+          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Avg session</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__AVG__ min</div></div>
+
+          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Streak</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__STREAK__</div></div>
+
+        </div>
+
+        <div class='card' style='padding:18px;margin-bottom:18px'>
+
+          <h3 style='margin:0 0 12px;font-size:16px'>When do you study? (last 30 days)</h3>
+
+          <div style='display:flex;align-items:flex-end;gap:3px;height:160px;padding:8px 0'>__BARS__</div>
+
+        </div>
+
+        <div class='card' style='padding:0;overflow:hidden'>
+
+          <h3 style='margin:0;padding:18px;border-bottom:1px solid var(--border);font-size:16px'>Time per course</h3>
+
+          <table style='width:100%;border-collapse:collapse'>__ROWS__</table>
+
+        </div>
+
+        """
+
+        body = (body
+
+            .replace("__TOTAL__", f"{total_mins//60}h {total_mins%60}m")
+
+            .replace("__SESSIONS__", str(total_sessions))
+
+            .replace("__AVG__", str(avg_session))
+
+            .replace("__STREAK__", f"{streak} day" + ("s" if streak != 1 else ""))
+
+            .replace("__BARS__", bars_html)
+
+            .replace("__ROWS__", rows_html)
+
+        )
+
+        return _s_render("Analytics", body, active_page="student_analytics")
+
+
+
+    # ── Hard-block deprecated student pages ─────────────────
+
+    # Plan, Notes, AI Tutor, Schedule, Panic have been removed from the product.
+
+    # Their old route handlers still exist deeper in this file, but a
+
+    # before_request guard intercepts them and redirects to the dashboard.
+
+    _DEPRECATED_STUDENT_PATHS = {
+
+        "/student/plan",
+
+        "/student/notes",
+
+        "/student/chat",
+
+        "/student/schedule",
+
+        "/student/panic",
+
+    }
+
+
+
+    @app.before_request
+
+    def _block_deprecated_student_pages():
+
+        p = request.path or ""
+
+        # Match exact path or sub-paths like /student/notes/123
+
+        for dead in _DEPRECATED_STUDENT_PATHS:
+
+            if p == dead or p.startswith(dead + "/"):
+
+                if not _logged_in():
+
+                    return redirect(url_for("login"))
+
+                return redirect(url_for("student_dashboard_page"))
+
+        return None
+
+
+
+    # Also kill the legacy plan-generation API and panic API.
+
+    @app.route("/api/student/plan/generate-removed", methods=["POST"])
+
+    def _student_plan_generate_removed():
+
+        return jsonify({"error": "AI study plans have been removed"}), 410
+
+
+
     # ── Canvas connection ───────────────────────────────────
 
 
@@ -130,7 +424,9 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Test connection
+        # Test connection AND persist courses immediately. No AI/file analysis —
+        # the connection exists purely so we can show the student's class list and
+        # power class-level leaderboards.
 
         try:
 
@@ -148,11 +444,47 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+        # Persist every course immediately so /student/courses shows them right away.
+
+        cid = _cid()
+
+        saved = 0
+
+        for c in courses:
+
+            try:
+
+                cid_canvas = int(c.get("id"))
+
+                name = c.get("name") or c.get("course_code") or f"Course {cid_canvas}"
+
+                code = c.get("course_code", "") or ""
+
+                term = ""
+
+                t = c.get("term") or {}
+
+                if isinstance(t, dict):
+
+                    term = t.get("name", "") or ""
+
+                sdb.upsert_course(cid, cid_canvas, name, code, term)
+
+                saved += 1
+
+            except Exception:
+
+                continue
+
+
+
         return jsonify({
 
             "message": "Canvas connected",
 
             "courses_found": len(courses),
+
+            "courses_saved": saved,
 
             "courses": [{"id": c["id"], "name": c.get("name", "?")} for c in courses[:20]],
 
@@ -265,6 +597,76 @@ def register_student_routes(app, csrf, limiter):
 
 
         def _do_sync():
+
+            # Courses-only sync. No file downloads, no AI analysis. We just refresh
+
+            # the user's class list so leaderboards & exam tracking stay current.
+
+            try:
+
+                canvas = CanvasClient(tok["canvas_url"], tok["token"])
+
+                courses = canvas.get_courses()
+
+                _sync_status[client_id]["courses_total"] = len(courses)
+
+                synced = []
+
+                for idx, c in enumerate(courses):
+
+                    try:
+
+                        cid_canvas = int(c.get("id"))
+
+                        name = c.get("name") or c.get("course_code") or f"Course {cid_canvas}"
+
+                        code = c.get("course_code", "") or ""
+
+                        sdb.upsert_course(client_id, cid_canvas, name, code)
+
+                        synced.append(name)
+
+                        _sync_status[client_id]["courses_done"] = idx + 1
+
+                        _sync_status[client_id]["progress"] = f"Synced {name}"
+
+                    except Exception:
+
+                        continue
+
+                _sync_status[client_id] = {
+
+                    "status": "done",
+
+                    "progress": f"Synced {len(synced)} courses",
+
+                    "courses_total": len(courses),
+
+                    "courses_done": len(synced),
+
+                    "files_downloaded": 0,
+
+                    "courses": synced,
+
+                    "warnings": [],
+
+                    "no_syllabus": [],
+
+                }
+
+            except Exception as e:
+
+                log.error("Background sync failed for client %s: %s", client_id, e)
+
+                _sync_status[client_id] = {"status": "error", "progress": f"Sync failed: {e}", "courses_total": 0, "courses_done": 0, "files_downloaded": 0}
+
+            return
+
+
+
+        # Old AI-driven sync below is intentionally unreachable.
+
+        def _do_sync_legacy():
 
             try:
 
@@ -656,93 +1058,13 @@ def register_student_routes(app, csrf, limiter):
 
     @app.route("/api/student/courses/<int:course_id>/upload", methods=["POST"])
 
-    @limiter.limit("30 per minute")
-
     def student_upload_file(course_id):
 
-        """Upload a PDF or DOCX file for a course. Text is extracted and stored."""
+        # File uploads are no longer supported. Courses are populated from Canvas
 
-        if not _logged_in():
+        # automatically and exams are tracked manually.
 
-            return jsonify({"error": "Unauthorized"}), 401
-
-        course = sdb.get_course(course_id)
-
-        if not course or course["client_id"] != _cid():
-
-            return jsonify({"error": "Not found"}), 404
-
-
-
-        if "file" not in request.files:
-
-            return jsonify({"error": "No file provided"}), 400
-
-        f = request.files["file"]
-
-        if not f.filename:
-
-            return jsonify({"error": "Empty filename"}), 400
-
-
-
-        fname = f.filename
-
-        fl = fname.lower()
-
-        if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
-
-            return jsonify({"error": "Only PDF and DOCX files are supported"}), 400
-
-
-
-        # Read file content (limit 50MB)
-
-        content = f.read(50 * 1024 * 1024 + 1)
-
-        if len(content) > 50 * 1024 * 1024:
-
-            return jsonify({"error": "File too large (max 50MB)"}), 400
-
-
-
-        # Extract text
-
-        text = ""
-
-        try:
-
-            if fl.endswith(".pdf"):
-
-                text = extract_text_from_pdf(content)
-
-            elif fl.endswith((".docx", ".doc")):
-
-                text = extract_text_from_docx(content)
-
-        except Exception as e:
-
-            return jsonify({"error": f"Could not extract text: {e}"}), 400
-
-
-
-        if not text or len(text.strip()) < 20:
-
-            return jsonify({"error": "Could not extract readable text from this file"}), 400
-
-
-
-        file_type = "pdf" if fl.endswith(".pdf") else "docx"
-
-        exam_id = request.form.get("exam_id")
-
-        exam_id = int(exam_id) if exam_id else None
-
-        file_id = sdb.save_course_file(_cid(), course_id, fname, file_type, text, exam_id=exam_id)
-
-
-
-        return jsonify({"id": file_id, "filename": fname, "text_length": len(text)})
+        return jsonify({"error": "File uploads to courses are disabled"}), 410
 
 
 
@@ -1913,15 +2235,15 @@ def register_student_routes(app, csrf, limiter):
 
               <div class="empty-icon">&#128218;</div>
 
-              <h3>Nothing scheduled for today yet</h3>
+              <h3>No sessions tracked today yet</h3>
 
-              <p>Sync your Canvas courses and let MachReach build a personalized day-by-day study plan around your assignments and exams.</p>
+              <p>Start a Focus session to log study time, then check Analytics for a full breakdown.</p>
 
               <div class="empty-actions">
 
-                <a href="/student/canvas-settings" class="ghost">&#128279; Connect Canvas</a>
+                <a href="/student/focus" class="primary">&#127919; Start Focus session</a>
 
-                <button class="primary" onclick="generatePlan()">&#129302; Generate Plan</button>
+                <a href="/student/analytics" class="ghost">&#128202; View analytics</a>
 
               </div>
 
@@ -2009,7 +2331,7 @@ def register_student_routes(app, csrf, limiter):
 
         if not exams_html:
 
-            exams_html = """<div class="empty-state compact reveal"><div class="empty-icon">&#128221;</div><h3>No upcoming exams</h3><p>Sync your Canvas courses and MachReach will auto-detect exam dates and add them to your study plan.</p><div class="empty-actions"><a href="/student/canvas-settings" class="primary">&#128279; Connect Canvas</a></div></div>"""
+            exams_html = """<div class="empty-state compact reveal"><div class="empty-icon">&#128221;</div><h3>No upcoming exams</h3><p>Add an exam from any course page so it shows up here, sorted by urgency.</p><div class="empty-actions"><a href="/student/exams" class="primary">&#128221; Manage exams</a></div></div>"""
 
 
 
@@ -2047,6 +2369,50 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+        # Compact analytics for dashboard
+
+        _total_mins = int((stats or {}).get("total_minutes", 0) or 0)
+
+        _total_sessions = int((stats or {}).get("total_sessions", 0) or 0)
+
+        _avg_session = (_total_mins // _total_sessions) if _total_sessions else 0
+
+        _streak_focus = int((focus_stats or {}).get("current_streak", 0) or 0)
+
+        analytics_strip_html = (
+
+            "<div class='card reveal' style='margin-bottom:20px;padding:18px;'>"
+
+            "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;'>"
+
+            "<div style='display:flex;align-items:center;gap:10px;'>"
+
+            "<span style='font-size:22px;'>&#128202;</span>"
+
+            "<div><div style='font-weight:700;font-size:16px;'>Study analytics</div>"
+
+            "<div style='font-size:12px;color:var(--text-muted);'>Last 30 days at a glance</div></div></div>"
+
+            "<a href='/student/analytics' class='btn btn-outline btn-sm'>Full analytics &rarr;</a>"
+
+            "</div>"
+
+            "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;'>"
+
+            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Total time</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_total_mins//60}h {_total_mins%60}m</div></div>"
+
+            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Sessions</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_total_sessions}</div></div>"
+
+            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Avg session</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_avg_session} min</div></div>"
+
+            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Streak</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_streak_focus} day" + ("s" if _streak_focus != 1 else "") + "</div></div>"
+
+            "</div></div>"
+
+        )
+
+
+
         return _s_render("Dashboard", f"""
 
         <div class="reveal" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
@@ -2059,15 +2425,13 @@ def register_student_routes(app, csrf, limiter):
 
           </div>
 
-          <div style="display:flex;gap:10px;">
-
-            <button onclick="syncCourses()" class="btn btn-primary btn-sm" id="sync-btn">&#128260; Sync Canvas</button>
-
-            <button onclick="generatePlan()" class="btn btn-outline btn-sm" id="plan-btn">&#129302; Generate Plan</button>
-
-          </div>
+          <div style="display:flex;gap:10px;"></div>
 
         </div>
+
+
+
+        {analytics_strip_html}
 
 
 
@@ -2125,6 +2489,101 @@ def register_student_routes(app, csrf, limiter):
           }})();
         </script>
 
+        <!-- Analytics widget — full study analytics -->
+        <div id="mr-analytics" class="card reveal r-delay-1" style="margin-bottom:20px;padding:22px;border:1px solid var(--border);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:22px;">&#128200;</span>
+              <div>
+                <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Your study analytics</div>
+                <div style="font-size:12px;color:var(--text-muted);">How much, when, and on what &mdash; all time.</div>
+              </div>
+            </div>
+          </div>
+          <div id="mr-an-tiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;">
+            <div class="mr-an-stat"><div class="mr-an-label">Total hours</div><div class="mr-an-val" id="an-hours">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Sessions</div><div class="mr-an-val" id="an-sessions">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Pages read</div><div class="mr-an-val" id="an-pages">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Current streak</div><div class="mr-an-val" id="an-streak">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Best hour</div><div class="mr-an-val" id="an-besthour">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Best day</div><div class="mr-an-val" id="an-bestdow">—</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" id="mr-an-charts">
+            <div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Last 14 days</div>
+              <div id="an-bars14" style="display:flex;align-items:flex-end;gap:4px;height:110px;"></div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Hours of day you study</div>
+              <div id="an-bars24" style="display:flex;align-items:flex-end;gap:2px;height:110px;"></div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Time per course</div>
+              <div id="an-courses" style="display:flex;flex-direction:column;gap:6px;"></div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Day-of-week</div>
+              <div id="an-bars7" style="display:flex;align-items:flex-end;gap:6px;height:110px;"></div>
+            </div>
+          </div>
+        </div>
+        <style>
+          .mr-an-stat {{ background:rgba(148,163,184,.06); border:1px solid var(--border); border-radius:10px; padding:10px 12px; }}
+          .mr-an-label {{ font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; }}
+          .mr-an-val {{ font-size:22px; font-weight:700; letter-spacing:-.02em; margin-top:2px; }}
+          .mr-an-bar {{ flex:1; background:linear-gradient(180deg,#7C9CFF,#5B4694); border-radius:4px 4px 2px 2px; position:relative; min-height:2px; transition:all .3s; }}
+          .mr-an-bar:hover {{ filter:brightness(1.2); }}
+          .mr-an-bar .tip {{ position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:#0B1220; color:#fff; font-size:11px; padding:3px 8px; border-radius:6px; white-space:nowrap; display:none; margin-bottom:4px; }}
+          .mr-an-bar:hover .tip {{ display:block; }}
+          .mr-an-bar-lbl {{ font-size:9px; color:var(--text-muted); text-align:center; margin-top:4px; }}
+          .mr-course-row {{ display:flex; align-items:center; gap:8px; font-size:13px; }}
+          .mr-course-name {{ flex:0 0 130px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }}
+          .mr-course-bar {{ flex:1; height:8px; border-radius:4px; background:rgba(148,163,184,.15); overflow:hidden; }}
+          .mr-course-fill {{ height:100%; background:linear-gradient(90deg,#7C9CFF,#C084FC); border-radius:4px; }}
+          .mr-course-val {{ font-size:11px; color:var(--text-muted); min-width:56px; text-align:right; font-variant-numeric:tabular-nums; }}
+          @media (max-width: 720px) {{ #mr-an-charts {{ grid-template-columns:1fr; }} }}
+        </style>
+        <script>
+          (async function(){{
+            try {{
+              const r = await fetch('/api/academic/analytics');
+              if (!r.ok) return;
+              const a = await r.json();
+              const fmtM = m => m >= 60 ? (Math.floor(m/60)+'h '+(m%60)+'m') : (m+'m');
+              document.getElementById('an-hours').textContent = a.totals.hours.toFixed(1);
+              document.getElementById('an-sessions').textContent = a.totals.sessions;
+              document.getElementById('an-pages').textContent = a.totals.pages;
+              document.getElementById('an-streak').textContent = a.totals.streak + ' day' + (a.totals.streak===1?'':'s');
+              document.getElementById('an-besthour').textContent = a.best_hour ? (a.best_hour.hour + ':00') : '—';
+              document.getElementById('an-bestdow').textContent = a.best_dow ? a.best_dow.day : '—';
+              const max14 = Math.max(1, ...a.last_14_days.map(d => d.minutes));
+              document.getElementById('an-bars14').innerHTML = a.last_14_days.map(d => {{
+                const h = Math.max(2, Math.round((d.minutes/max14)*100));
+                return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div class="mr-an-bar" style="height:'+h+'%;width:100%;"><span class="tip">'+d.date+': '+fmtM(d.minutes)+'</span></div><div class="mr-an-bar-lbl">'+d.label[0]+'</div></div>';
+              }}).join('');
+              const max24 = Math.max(1, ...a.hours_dist.map(h => h.minutes));
+              document.getElementById('an-bars24').innerHTML = a.hours_dist.map(h => {{
+                const hp = Math.max(2, Math.round((h.minutes/max24)*100));
+                return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div class="mr-an-bar" style="height:'+hp+'%;width:100%;"><span class="tip">'+h.hour+':00 — '+fmtM(h.minutes)+'</span></div></div>';
+              }}).join('');
+              const max7 = Math.max(1, ...a.dow_dist.map(d => d.minutes));
+              document.getElementById('an-bars7').innerHTML = a.dow_dist.map(d => {{
+                const hp = Math.max(2, Math.round((d.minutes/max7)*100));
+                return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div class="mr-an-bar" style="height:'+hp+'%;width:100%;"><span class="tip">'+d.day+': '+fmtM(d.minutes)+'</span></div><div class="mr-an-bar-lbl">'+d.day+'</div></div>';
+              }}).join('');
+              const maxC = Math.max(1, ...a.top_courses.map(c => c.minutes));
+              const coursesEl = document.getElementById('an-courses');
+              if (a.top_courses.length) {{
+                coursesEl.innerHTML = a.top_courses.map(c =>
+                  '<div class="mr-course-row"><div class="mr-course-name" title="'+c.course.replace(/"/g,'&quot;')+'">'+c.course+'</div><div class="mr-course-bar"><div class="mr-course-fill" style="width:'+((c.minutes/maxC)*100)+'%"></div></div><div class="mr-course-val">'+fmtM(c.minutes)+'</div></div>'
+                ).join('');
+              }} else {{
+                coursesEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">No course-specific sessions yet. Start a focus timer and tag a course!</div>';
+              }}
+            }} catch(e) {{ /* silent */ }}
+          }})();
+        </script>
+
         <!-- Feature Explorer — always discoverable, collapsible -->
 
         <div id="feature-explorer" class="card reveal r-delay-1" style="margin-bottom:20px;padding:0;position:relative;overflow:hidden;border:1px solid var(--border);">
@@ -2155,9 +2614,7 @@ def register_student_routes(app, csrf, limiter):
 
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
 
-              <a href="/student/courses" class="fx-tile"><span class="fx-ico">&#128218;</span><b>Courses</b><span>Sync Canvas or add courses by hand. Upload PDFs so the AI knows your material.</span></a>
-
-              <a href="/student/plan" class="fx-tile"><span class="fx-ico">&#128197;</span><b>AI Study Plan</b><span>Personalized daily plan based on every exam, weight, and deadline.</span></a>
+              <a href="/student/courses" class="fx-tile"><span class="fx-ico">&#128218;</span><b>Courses</b><span>Your Canvas-synced courses, plus upcoming exams and dates.</span></a>
 
               <a href="/student/focus" class="fx-tile"><span class="fx-ico">&#127919;</span><b>Focus Mode</b><span>Pomodoro, page-count, and custom timers. Earn XP every session.</span></a>
 
@@ -2165,19 +2622,11 @@ def register_student_routes(app, csrf, limiter):
 
               <a href="/student/quizzes" class="fx-tile"><span class="fx-ico">&#128221;</span><b>Practice Quizzes</b><span>Up to 100 questions with timer, per-topic analytics, and action plan.</span></a>
 
-              <a href="/student/notes" class="fx-tile"><span class="fx-ico">&#128196;</span><b>AI Notes</b><span>Drop any PDF/DOCX and get organized study notes in seconds.</span></a>
-
-              <a href="/student/chat" class="fx-tile"><span class="fx-ico">&#129302;</span><b>AI Tutor</b><span>Grounded in your uploads only &mdash; zero hallucinations.</span></a>
-
               <a href="/student/essay" class="fx-tile"><span class="fx-ico">&#9999;&#65039;</span><b>Essay Assistant</b><span>Honest feedback on thesis, structure, flow, grammar.</span></a>
-
-              <a href="/student/panic" class="fx-tile"><span class="fx-ico">&#128680;</span><b>Panic Mode</b><span>Exam tomorrow? Get a minute-by-minute cram plan.</span></a>
 
               <a href="/student/exchange" class="fx-tile"><span class="fx-ico">&#128257;</span><b>Study Exchange</b><span>Share & fork notes from other students. Earn XP when yours get used.</span></a>
 
-              <a href="/student/leaderboard" class="fx-tile"><span class="fx-ico">&#127942;</span><b>Leaderboards</b><span>Global & university ranks, plus fair-play private groups where everyone starts at 0.</span></a>
-
-              <a href="/student/schedule" class="fx-tile"><span class="fx-ico">&#128197;</span><b>Weekly Schedule</b><span>Drag-and-drop classes and study blocks. Auto-saves.</span></a>
+              <a href="/student/leaderboards" class="fx-tile"><span class="fx-ico">&#127942;</span><b>Leaderboards</b><span>Global, country, university, major, and class ranks.</span></a>
 
               <a href="/student/exams" class="fx-tile"><span class="fx-ico">&#128203;</span><b>Exams Dashboard</b><span>Every upcoming exam, sorted by urgency.</span></a>
 
@@ -2627,15 +3076,7 @@ def register_student_routes(app, csrf, limiter):
 
               <td style="font-size:12px;">{_esc(grading_str)}</td>
 
-              <td style="font-size:11px;color:var(--text-muted);">{n_files} file{'s' if n_files != 1 else ''}
-
-                <button onclick="document.getElementById('upload-{c['id']}').click()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;margin-left:4px;" title="Upload files">&#128206;</button>
-
-                <input type="file" id="upload-{c['id']}" style="display:none;" accept=".pdf,.docx,.doc" multiple onchange="uploadFiles({c['id']},this)">
-
-                {('<div style=\"margin-top:4px;border-top:1px solid var(--border);padding-top:4px;\">' + files_list_html + '</div>') if files_list_html else ''}
-
-              </td>
+              <td style="font-size:11px;color:var(--text-muted);">&mdash;</td>
 
               <td style="font-size:12px;color:var(--text-muted);">{synced}</td>
 
@@ -3341,23 +3782,7 @@ def register_student_routes(app, csrf, limiter):
 
         <div class="card" style="margin-bottom:16px;">
 
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-
-            <h2>&#128206; Uploaded Files</h2>
-
-            <label class="btn btn-outline btn-sm" style="cursor:pointer;">
-
-              + Upload Files
-
-              <input type="file" style="display:none;" accept=".pdf,.docx,.doc" multiple onchange="try{{uploadFiles({course_id},this)}}catch(err){{alert('Upload error: '+err.message)}}">
-
-            </label>
-
-          </div>
-
-          {files_html}
-
-        </div>
+          <div class="card-header" style="display:none;"></div>
 
 
 
