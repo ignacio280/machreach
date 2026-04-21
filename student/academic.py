@@ -32,7 +32,7 @@ from outreach.db import (
     get_db, _exec, _fetchone, _fetchall, _fetchval,
     _insert_returning_id, _USE_PG,
 )
-from student.academic_seeds import COUNTRIES, UNIVERSITIES
+from student.academic_seeds import COUNTRIES, UNIVERSITIES, GLOBAL_MAJORS, GLOBAL_MAJORS_ES
 
 
 log = logging.getLogger("student.academic")
@@ -149,6 +149,7 @@ def init_academic_db() -> None:
     # Seed data
     _seed_countries()
     _seed_universities()
+    _seed_majors()
     log.info("Academic identity tables initialized.")
 
 
@@ -223,6 +224,47 @@ def _seed_universities() -> None:
                     )
                 except Exception:
                     pass
+
+
+def _seed_majors() -> None:
+    """Insert the global majors list (university_id NULL = available everywhere).
+
+    English entries use the alias-collapsed normalized form so that students
+    can find them by short codes like "CS" or "econ". Spanish entries are
+    stored with their LITERAL normalized form (no alias mapping) so that
+    Spanish-typing students can find them by partial matches like "psicol".
+    """
+    entries = (
+        [(name, normalize_major(name)) for name in GLOBAL_MAJORS]
+        + [(name, normalize_name(name)) for name in GLOBAL_MAJORS_ES]
+    )
+    with get_db() as db:
+        existing = _fetchval(
+            db,
+            "SELECT COUNT(*) FROM majors WHERE university_id IS NULL",
+            (),
+        ) or 0
+        if existing >= len(entries) * 0.9:
+            return
+        for name, norm in entries:
+            slug = _slugify(name) + "-global"
+            try:
+                # Skip if a global major with this normalized name already exists
+                dup = _fetchval(
+                    db,
+                    "SELECT id FROM majors WHERE university_id IS NULL AND name_norm = %s",
+                    (norm,),
+                )
+                if dup:
+                    continue
+                _exec(
+                    db,
+                    "INSERT INTO majors (name, name_norm, university_id, slug, status) "
+                    "VALUES (%s, %s, NULL, %s, 'approved')",
+                    (name, norm, slug),
+                )
+            except Exception as e:
+                log.warning("seed major %r failed: %s", name, e)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -377,26 +419,48 @@ def get_university(univ_id: int) -> Optional[dict]:
 
 
 def search_majors(query: str, university_id: Optional[int] = None, limit: int = 20) -> list[dict]:
-    """Match against both global majors and majors scoped to this university."""
-    q_norm = normalize_major(query)
-    like = f"%{q_norm}%"
+    """Match against both global majors and majors scoped to this university.
+
+    Searches both the alias-collapsed and literal normalized forms so that
+    students can find majors by abbreviation ("CS"), English name, or
+    Spanish/local name.
+    """
+    q_aliased = normalize_major(query)
+    q_literal = normalize_name(query)
+    forms = [q_aliased]
+    if q_literal and q_literal != q_aliased:
+        forms.append(q_literal)
+    forms = [f for f in forms if f]
+    if not forms:
+        return []
+    seen_ids: set[int] = set()
+    rows: list[dict] = []
     with get_db() as db:
-        if university_id is not None:
-            rows = _fetchall(
-                db,
-                "SELECT id, name, university_id FROM majors "
-                "WHERE (university_id IS NULL OR university_id = %s) "
-                "AND name_norm LIKE %s "
-                "ORDER BY LENGTH(name), name LIMIT %s",
-                (university_id, like, limit),
-            )
-        else:
-            rows = _fetchall(
-                db,
-                "SELECT id, name, university_id FROM majors "
-                "WHERE name_norm LIKE %s ORDER BY LENGTH(name), name LIMIT %s",
-                (like, limit),
-            )
+        for q in forms:
+            like = f"%{q}%"
+            if university_id is not None:
+                hits = _fetchall(
+                    db,
+                    "SELECT id, name, university_id FROM majors "
+                    "WHERE (university_id IS NULL OR university_id = %s) "
+                    "AND name_norm LIKE %s "
+                    "ORDER BY LENGTH(name), name LIMIT %s",
+                    (university_id, like, limit),
+                )
+            else:
+                hits = _fetchall(
+                    db,
+                    "SELECT id, name, university_id FROM majors "
+                    "WHERE name_norm LIKE %s ORDER BY LENGTH(name), name LIMIT %s",
+                    (like, limit),
+                )
+            for r in hits:
+                if r["id"] in seen_ids:
+                    continue
+                seen_ids.add(r["id"])
+                rows.append(r)
+                if len(rows) >= limit:
+                    return rows
     return rows
 
 
