@@ -3045,7 +3045,7 @@ def register_student_routes(app, csrf, limiter):
               const baseline = '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+(padT+innerH)+'" y2="'+(padT+innerH)+'" stroke="rgba(148,163,184,.35)" />';
               const dots = xy.map((p, i) => {{
                 const tipAttr = escAttr(points[i].tip || '');
-                const handler = 'onmousemove="mrShowLineTip(event,\''+hostId+'\')" onmouseleave="mrHideLineTip(\''+hostId+'\')"';
+                const handler = 'onmousemove="mrShowLineTip(event,&quot;'+hostId+'&quot;)" onmouseleave="mrHideLineTip(&quot;'+hostId+'&quot;)"';
                 return '<g class="mr-line-pt" data-tip="'+tipAttr+'" '+handler+'>'
                   + '<circle class="mr-line-dot" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3.5" fill="#7C9CFF" stroke="#fff" stroke-width="1.5" />'
                   + '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="14" fill="transparent" />'
