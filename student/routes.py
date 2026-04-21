@@ -2801,13 +2801,13 @@ def register_student_routes(app, csrf, limiter):
 
         # Compact analytics for dashboard
 
-        _total_mins = int((stats or {}).get("total_minutes", 0) or 0)
+        _total_mins = int((focus_stats or {}).get("total_minutes", 0) or 0)
 
-        _total_sessions = int((stats or {}).get("total_sessions", 0) or 0)
+        _total_sessions = int((focus_stats or {}).get("sessions", 0) or 0)
 
         _avg_session = (_total_mins // _total_sessions) if _total_sessions else 0
 
-        _streak_focus = int((focus_stats or {}).get("current_streak", 0) or 0)
+        _streak_focus = int((focus_stats or {}).get("streak_days", 0) or 0)
 
         analytics_strip_html = (
 
