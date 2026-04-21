@@ -1,6 +1,6 @@
 """
 
-Student routes â€” all /student/* API endpoints and pages for MachReach Student.
+Student routes — all /student/* API endpoints and pages for MachReach Student.
 
 
 
@@ -62,7 +62,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── helpers ─────────────────────────────────────────────
 
     def _esc(s) -> str:
 
@@ -98,7 +98,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Deprecated pages: redirect away â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Deprecated pages: redirect away ─────────────────────
 
     # The Plan, Notes, AI Tutor, Schedule, and Panic features have been removed.
 
@@ -128,7 +128,7 @@ def register_student_routes(app, csrf, limiter):
 
         # We register placeholder routes; the real /student/plan etc. routes
 
-        # below are kept registered too â€” they'll just no longer be linked from
+        # below are kept registered too — they'll just no longer be linked from
 
         # the nav. (Removing them outright would break templates that still
 
@@ -138,7 +138,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Analytics page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Analytics page ──────────────────────────────────────
 
 
 
@@ -240,7 +240,7 @@ def register_student_routes(app, csrf, limiter):
 
             for p in per_course
 
-        ) or "<tr><td colspan='2' style='padding:18px;color:var(--text-muted);text-align:center'>No study sessions yet â€” start a Focus session to begin tracking.</td></tr>"
+        ) or "<tr><td colspan='2' style='padding:18px;color:var(--text-muted);text-align:center'>No study sessions yet — start a Focus session to begin tracking.</td></tr>"
 
 
 
@@ -254,7 +254,7 @@ def register_student_routes(app, csrf, limiter):
 
             bars.append(
 
-                "<div title='" + f"{i:02d}" + ":00 â€” " + str(hour_hist[i]) + " sessions' "
+                "<div title='" + f"{i:02d}" + ":00 — " + str(hour_hist[i]) + " sessions' "
 
                 "style='flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;'>"
 
@@ -284,7 +284,7 @@ def register_student_routes(app, csrf, limiter):
 
         <h1 style='margin:0 0 8px;font-size:32px'>&#128202; Your study analytics</h1>
 
-        <p style='color:var(--text-muted);margin:0 0 24px'>Hours, sessions, courses, and focus rhythm â€” at a glance.</p>
+        <p style='color:var(--text-muted);margin:0 0 24px'>Hours, sessions, courses, and focus rhythm — at a glance.</p>
 
         <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px'>
 
@@ -336,7 +336,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Hard-block deprecated student pages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Hard-block deprecated student pages ─────────────────
 
     # Plan, Notes, AI Tutor, Schedule, Panic have been removed from the product.
 
@@ -392,7 +392,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Canvas connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Canvas connection ───────────────────────────────────
 
 
 
@@ -424,7 +424,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Test connection AND persist courses immediately. No AI/file analysis â€”
+        # Test connection AND persist courses immediately. No AI/file analysis —
         # the connection exists purely so we can show the student's class list and
         # power class-level leaderboards.
 
@@ -530,7 +530,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Sync courses (background) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Sync courses (background) ──────────────────────────
 
 
 
@@ -728,7 +728,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-                    # Download ONLY syllabus-related files (syllabus, programa, guÃ­a docente, etc.)
+                    # Download ONLY syllabus-related files (syllabus, programa, guía docente, etc.)
 
                     try:
 
@@ -942,7 +942,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Courses â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Courses ─────────────────────────────────────────────
 
 
 
@@ -1032,7 +1032,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ File uploads â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── File uploads ────────────────────────────────────────
 
 
 
@@ -1172,7 +1172,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Exam CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Exam CRUD ───────────────────────────────────────────
 
 
 
@@ -1294,7 +1294,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Exams (global list) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Exams (global list) ─────────────────────────────────
 
 
 
@@ -1336,7 +1336,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Study plan (background) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Study plan (background) ──────────────────────────────
 
 
 
@@ -1384,7 +1384,7 @@ def register_student_routes(app, csrf, limiter):
 
                 # AND attach the FULL extracted text of every uploaded file per exam,
 
-                # so the AI plans coverage of the entire study material â€” not just the topic list.
+                # so the AI plans coverage of the entire study material — not just the topic list.
 
                 try:
 
@@ -1418,7 +1418,7 @@ def register_student_routes(app, csrf, limiter):
 
                                 material_files.append(f.get("original_name", ""))
 
-                                # Send only METADATA (page count + short preview) â€” the AI only needs the page count
+                                # Send only METADATA (page count + short preview) — the AI only needs the page count
 
                                 # to assign reading segments. Sending the full PDF blows the context window.
 
@@ -1727,7 +1727,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Progress â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Progress ────────────────────────────────────────────
 
 
 
@@ -1769,7 +1769,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Focus / Pomodoro â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Focus / Pomodoro ────────────────────────────────────
 
 
 
@@ -1833,7 +1833,7 @@ def register_student_routes(app, csrf, limiter):
 
             if course_name:
 
-                detail += f" â€” {course_name}"
+                detail += f" — {course_name}"
 
             sdb.award_xp(cid, "focus_session", xp, detail)
 
@@ -1971,7 +1971,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Dashboard data (single call for the frontend) â”€â”€â”€â”€â”€â”€
+    # ── Dashboard data (single call for the frontend) ──────
 
 
 
@@ -2069,7 +2069,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Frontend pages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Frontend pages ──────────────────────────────────────
 
 
 
@@ -2099,7 +2099,7 @@ def register_student_routes(app, csrf, limiter):
 
             LAYOUT,
 
-            title=f"Student â€” {title}",
+            title=f"Student — {title}",
 
             content=Markup(content_html),
 
@@ -2435,23 +2435,23 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        <!-- Academic Ranks strip â€” live hierarchical leaderboard preview -->
+        <!-- Academic Ranks strip — live hierarchical leaderboard preview -->
         <div id="mr-ranks-strip" class="card reveal r-delay-1" style="margin-bottom:20px;padding:20px;position:relative;overflow:hidden;border:1px solid var(--border);background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.04));">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
             <div style="display:flex;align-items:center;gap:10px;">
               <span style="font-size:22px;">&#127942;</span>
               <div>
                 <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Your ranks</div>
-                <div style="font-size:12px;color:var(--text-muted);" id="mr-ranks-league">Loadingâ€¦</div>
+                <div style="font-size:12px;color:var(--text-muted);" id="mr-ranks-league">Loading…</div>
               </div>
             </div>
             <a href="/student/leaderboard" class="btn btn-outline btn-sm">View full leaderboards &rarr;</a>
           </div>
           <div id="mr-ranks-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
-            <div class="mr-rank-cell"><div class="mr-rank-label">Global</div><div class="mr-rank-val" id="mr-rank-global">â€”</div></div>
-            <div class="mr-rank-cell"><div class="mr-rank-label">Country</div><div class="mr-rank-val" id="mr-rank-country">â€”</div></div>
-            <div class="mr-rank-cell"><div class="mr-rank-label">University</div><div class="mr-rank-val" id="mr-rank-university">â€”</div></div>
-            <div class="mr-rank-cell"><div class="mr-rank-label">Major</div><div class="mr-rank-val" id="mr-rank-major">â€”</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">Global</div><div class="mr-rank-val" id="mr-rank-global">—</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">Country</div><div class="mr-rank-val" id="mr-rank-country">—</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">University</div><div class="mr-rank-val" id="mr-rank-university">—</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">Major</div><div class="mr-rank-val" id="mr-rank-major">—</div></div>
           </div>
           <div id="mr-league-progress" style="margin-top:14px;height:6px;background:rgba(148,163,184,.15);border-radius:999px;overflow:hidden;">
             <div id="mr-league-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7C9CFF,#C084FC);transition:width .6s cubic-bezier(.22,.61,.36,1);"></div>
@@ -2471,7 +2471,7 @@ def register_student_routes(app, csrf, limiter):
               const r = await fetch('/api/academic/ranks');
               if (!r.ok) return;
               const j = await r.json();
-              const fmt = (obj) => obj ? ('#' + obj.rank + ' <span class="of">/ ' + obj.total + '</span>') : 'â€”';
+              const fmt = (obj) => obj ? ('#' + obj.rank + ' <span class="of">/ ' + obj.total + '</span>') : '—';
               document.getElementById('mr-rank-global').innerHTML = fmt(j.ranks.global);
               document.getElementById('mr-rank-country').innerHTML = fmt(j.ranks.country);
               document.getElementById('mr-rank-university').innerHTML = fmt(j.ranks.university);
@@ -2489,7 +2489,7 @@ def register_student_routes(app, csrf, limiter):
           }})();
         </script>
 
-        <!-- Analytics widget â€” full study analytics -->
+        <!-- Analytics widget — full study analytics -->
         <div id="mr-analytics" class="card reveal r-delay-1" style="margin-bottom:20px;padding:22px;border:1px solid var(--border);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
             <div style="display:flex;align-items:center;gap:10px;">
@@ -2501,12 +2501,12 @@ def register_student_routes(app, csrf, limiter):
             </div>
           </div>
           <div id="mr-an-tiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;">
-            <div class="mr-an-stat"><div class="mr-an-label">Total hours</div><div class="mr-an-val" id="an-hours">â€”</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Sessions</div><div class="mr-an-val" id="an-sessions">â€”</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Pages read</div><div class="mr-an-val" id="an-pages">â€”</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Current streak</div><div class="mr-an-val" id="an-streak">â€”</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Best hour</div><div class="mr-an-val" id="an-besthour">â€”</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Best day</div><div class="mr-an-val" id="an-bestdow">â€”</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Total hours</div><div class="mr-an-val" id="an-hours">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Sessions</div><div class="mr-an-val" id="an-sessions">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Pages read</div><div class="mr-an-val" id="an-pages">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Current streak</div><div class="mr-an-val" id="an-streak">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Best hour</div><div class="mr-an-val" id="an-besthour">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Best day</div><div class="mr-an-val" id="an-bestdow">—</div></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" id="mr-an-charts">
             <div>
@@ -2554,8 +2554,8 @@ def register_student_routes(app, csrf, limiter):
               document.getElementById('an-sessions').textContent = a.totals.sessions;
               document.getElementById('an-pages').textContent = a.totals.pages;
               document.getElementById('an-streak').textContent = a.totals.streak + ' day' + (a.totals.streak===1?'':'s');
-              document.getElementById('an-besthour').textContent = a.best_hour ? (a.best_hour.hour + ':00') : 'â€”';
-              document.getElementById('an-bestdow').textContent = a.best_dow ? a.best_dow.day : 'â€”';
+              document.getElementById('an-besthour').textContent = a.best_hour ? (a.best_hour.hour + ':00') : '—';
+              document.getElementById('an-bestdow').textContent = a.best_dow ? a.best_dow.day : '—';
               const max14 = Math.max(1, ...a.last_14_days.map(d => d.minutes));
               document.getElementById('an-bars14').innerHTML = a.last_14_days.map(d => {{
                 const h = Math.max(2, Math.round((d.minutes/max14)*100));
@@ -2564,7 +2564,7 @@ def register_student_routes(app, csrf, limiter):
               const max24 = Math.max(1, ...a.hours_dist.map(h => h.minutes));
               document.getElementById('an-bars24').innerHTML = a.hours_dist.map(h => {{
                 const hp = Math.max(2, Math.round((h.minutes/max24)*100));
-                return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div class="mr-an-bar" style="height:'+hp+'%;width:100%;"><span class="tip">'+h.hour+':00 â€” '+fmtM(h.minutes)+'</span></div></div>';
+                return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div class="mr-an-bar" style="height:'+hp+'%;width:100%;"><span class="tip">'+h.hour+':00 — '+fmtM(h.minutes)+'</span></div></div>';
               }}).join('');
               const max7 = Math.max(1, ...a.dow_dist.map(d => d.minutes));
               document.getElementById('an-bars7').innerHTML = a.dow_dist.map(d => {{
@@ -2584,7 +2584,7 @@ def register_student_routes(app, csrf, limiter):
           }})();
         </script>
 
-        <!-- Feature Explorer â€” always discoverable, collapsible -->
+        <!-- Feature Explorer — always discoverable, collapsible -->
 
         <div id="feature-explorer" class="card reveal r-delay-1" style="margin-bottom:20px;padding:0;position:relative;overflow:hidden;border:1px solid var(--border);">
 
@@ -4466,7 +4466,7 @@ def register_student_routes(app, csrf, limiter):
 
                 if is_free:
 
-                    sessions_html = "<div style='font-size:13px;color:var(--text-muted);font-style:italic;padding:4px 0;'>Free day â€” no study scheduled</div>"
+                    sessions_html = "<div style='font-size:13px;color:var(--text-muted);font-style:italic;padding:4px 0;'>Free day — no study scheduled</div>"
 
                 else:
 
@@ -4652,7 +4652,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Focus / Pomodoro page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Focus / Pomodoro page ───────────────────────────────
 
 
 
@@ -4990,7 +4990,7 @@ def register_student_routes(app, csrf, limiter):
 
                   Block Instagram, TikTok, Twitter/X and other time-sinks automatically while a session is running.
 
-                  <b style="color:var(--text);">YouTube stays allowed</b> â€” because you might actually be studying.
+                  <b style="color:var(--text);">YouTube stays allowed</b> — because you might actually be studying.
 
                 </p>
 
@@ -5044,7 +5044,7 @@ def register_student_routes(app, csrf, limiter):
 
                     <li>Click <b>Load unpacked</b> and select the unzipped <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">focus-guard</code> folder.</li>
 
-                    <li>Start a timer here â€” external distractions get blocked automatically.</li>
+                    <li>Start a timer here — external distractions get blocked automatically.</li>
 
                   </ol>
 
@@ -5110,7 +5110,7 @@ def register_student_routes(app, csrf, limiter):
 
         var alarmCtx = null;
         var alarmAudio = null;          // HTML5 <audio> element (background-safe)
-        var keepaliveAudio = null;      // silent looping audio â€” keeps tab UNTHROTTLED
+        var keepaliveAudio = null;      // silent looping audio — keeps tab UNTHROTTLED
         var alarmPrimed = false;
         var notifPermission = (typeof Notification !== 'undefined') ? Notification.permission : 'denied';
 
@@ -5154,7 +5154,7 @@ def register_student_routes(app, csrf, limiter):
         function buildSilenceWavDataUri() {{
           // 1-second mono silent 16-bit PCM WAV (very small).
           // Looping this in an <audio> element prevents Chrome from suspending
-          // / throttling the tab â€” tabs marked "playing audio" are never throttled.
+          // / throttling the tab — tabs marked "playing audio" are never throttled.
           var sampleRate = 8000;
           var n = sampleRate;
           var buffer = new ArrayBuffer(44 + n * 2);
@@ -5586,7 +5586,7 @@ def register_student_routes(app, csrf, limiter):
 
           if (currentMode === 'pages') {{
 
-            document.getElementById('timer-label').textContent = 'ðŸ“– Reading â€” click the big button for each page';
+            document.getElementById('timer-label').textContent = '📖 Reading — click the big button for each page';
 
             var swStart = Date.now();
 
@@ -5594,7 +5594,7 @@ def register_student_routes(app, csrf, limiter):
 
             localStorage.setItem('focus_float', JSON.stringify({{
 
-              active:true, mode:'stopwatch', startAt: isRestore ? (Date.now() - totalFocusSeconds * 1000) : swStart, label:'ðŸ“– Reading',
+              active:true, mode:'stopwatch', startAt: isRestore ? (Date.now() - totalFocusSeconds * 1000) : swStart, label:'📖 Reading',
 
               originalMode:'pages', course: document.getElementById('focus-course').value || ''
 
@@ -5616,7 +5616,7 @@ def register_student_routes(app, csrf, limiter):
 
           }} else {{
 
-            document.getElementById('timer-label').textContent = isBreak ? 'â˜• Break time!' : 'ðŸ”¥ Focus!';
+            document.getElementById('timer-label').textContent = isBreak ? '☕ Break time!' : '🔥 Focus!';
 
             var phaseStart = Date.now();
 
@@ -5630,7 +5630,7 @@ def register_student_routes(app, csrf, limiter):
 
             phaseEnded = false;
 
-            var label = isBreak ? 'â˜• Break' : 'ðŸ”¥ Focus';
+            var label = isBreak ? '☕ Break' : '🔥 Focus';
 
             var courseName = document.getElementById('focus-course').value || '';
 
@@ -5664,7 +5664,7 @@ def register_student_routes(app, csrf, limiter):
 
                   endAt: endAt + nextBreakMins*60*1000,
 
-                  label: (nextPomoCount % 4 === 0) ? 'ðŸŽ‰ Long Break' : 'â˜• Break',
+                  label: (nextPomoCount % 4 === 0) ? '🎉 Long Break' : '☕ Break',
 
                   originalMode:'pomodoro', isBreak:true, course:courseName, workMinutes:0,
 
@@ -5676,7 +5676,7 @@ def register_student_routes(app, csrf, limiter):
 
                     endAt: endAt + nextBreakMins*60*1000 + followingWorkMins*60*1000,
 
-                    label: 'ðŸ”¥ Focus',
+                    label: '🔥 Focus',
 
                     originalMode:'pomodoro', isBreak:false, course:courseName, workMinutes: followingWorkMins,
 
@@ -5698,7 +5698,7 @@ def register_student_routes(app, csrf, limiter):
 
                   endAt: endAt + workMins*60*1000,
 
-                  label: 'ðŸ”¥ Focus',
+                  label: '🔥 Focus',
 
                   originalMode:'pomodoro', isBreak:false, course:courseName, workMinutes: workMins,
 
@@ -5724,7 +5724,7 @@ def register_student_routes(app, csrf, limiter):
 
             showFloatWidget();
 
-            // â”€â”€â”€ Hard-end timer (fires once at exact phase end) â”€â”€â”€
+            // ─── Hard-end timer (fires once at exact phase end) ───
             // setTimeout(0) is more reliably scheduled than setInterval ticks
             // when the tab is throttled, but is ALSO throttled when hidden.
             // Combined with the visibilitychange handler below this gives us
@@ -5803,7 +5803,7 @@ def register_student_routes(app, csrf, limiter):
 
           }} else {{
 
-            // Tab is back early â€” refresh the displayed countdown immediately
+            // Tab is back early — refresh the displayed countdown immediately
 
             timeLeft = Math.max(0, Math.floor((phaseEndAt - nowMs) / 1000));
 
@@ -5989,14 +5989,14 @@ def register_student_routes(app, csrf, limiter):
           }} else if (currentMode === 'pomodoro' && isBreak) {{
             showNotification('Break over', 'Back to focus!');
           }} else {{
-            showNotification('Focus session complete', 'Great work â€” XP awarded.');
+            showNotification('Focus session complete', 'Great work — XP awarded.');
           }}
 
           if (currentMode === 'pomodoro') {{
 
             if (!isBreak) {{
 
-              // Work phase completed â€” save this session
+              // Work phase completed — save this session
 
               var phaseMinutes = Math.round((totalFocusSeconds - phaseStartFocusSeconds) / 60);
 
@@ -6010,13 +6010,13 @@ def register_student_routes(app, csrf, limiter):
 
                 timeLeft = parseInt(document.getElementById('pomo-long').value) * 60;
 
-                document.getElementById('timer-label').textContent = 'ðŸŽ‰ Long break!';
+                document.getElementById('timer-label').textContent = '🎉 Long break!';
 
               }} else {{
 
                 timeLeft = parseInt(document.getElementById('pomo-break').value) * 60;
 
-                document.getElementById('timer-label').textContent = 'â˜• Short break';
+                document.getElementById('timer-label').textContent = '☕ Short break';
 
               }}
 
@@ -6026,7 +6026,7 @@ def register_student_routes(app, csrf, limiter):
 
               timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
 
-              document.getElementById('timer-label').textContent = 'ðŸ”¥ Starting next session...';
+              document.getElementById('timer-label').textContent = '🔥 Starting next session...';
 
               isBreak = false;
 
@@ -6050,7 +6050,7 @@ def register_student_routes(app, csrf, limiter):
 
             saveFocusSession();
 
-            document.getElementById('timer-label').textContent = 'âœ“ Session complete!';
+            document.getElementById('timer-label').textContent = '✓ Session complete!';
 
             document.getElementById('start-btn').style.display = '';
 
@@ -6090,7 +6090,7 @@ def register_student_routes(app, csrf, limiter):
 
               if (saved.indexOf(ff.phaseId) !== -1) {{
 
-                // Already credited by global controller â€” just refresh stats.
+                // Already credited by global controller — just refresh stats.
 
                 try {{
 
@@ -6392,7 +6392,7 @@ def register_student_routes(app, csrf, limiter):
 
           // The global focus controller may have advanced the phase while the
 
-          // user was on another tab â€” sync local state from focus_float.
+          // user was on another tab — sync local state from focus_float.
 
           if (typeof ff.isBreak === 'boolean') isBreak = ff.isBreak;
 
@@ -6504,7 +6504,7 @@ def register_student_routes(app, csrf, limiter):
 
               s.classList.add('active');
 
-              l.textContent = 'Active â€” sites blocked';
+              l.textContent = 'Active — sites blocked';
 
             }} else {{
 
@@ -6530,7 +6530,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ GPA Calculator page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── GPA Calculator page ─────────────────────────────────
 
 
 
@@ -6986,7 +6986,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Practice Problems (STEM/Math) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Practice Problems (STEM/Math) ───────────────────────
 
 
 
@@ -7016,7 +7016,7 @@ def register_student_routes(app, csrf, limiter):
 
             <h1 style="margin:0;">&#128736; Practice Problems</h1>
 
-            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">AI-generated problems with step-by-step solutions â€” perfect for math &amp; STEM</p>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">AI-generated problems with step-by-step solutions — perfect for math &amp; STEM</p>
 
           </div>
 
@@ -7458,7 +7458,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Schedule settings (per-day availability) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Schedule settings (per-day availability) ────────────
 
 
 
@@ -7572,7 +7572,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Per-date availability overrides â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Per-date availability overrides ─────────────────────
 
     @app.route("/api/student/date-overrides", methods=["GET"])
     def student_get_date_overrides():
@@ -7624,7 +7624,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Course difficulty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Course difficulty ───────────────────────────────────
 
 
 
@@ -7652,7 +7652,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Assignment-level completion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Assignment-level completion ─────────────────────────
 
 
 
@@ -7714,7 +7714,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Schedule settings page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Schedule settings page ──────────────────────────────
 
 
 
@@ -8166,7 +8166,7 @@ def register_student_routes(app, csrf, limiter):
 
         }}
 
-        // â”€â”€ Per-date overrides (calendar UI) â”€â”€
+        // ── Per-date overrides (calendar UI) ──
         function escHtml(s) {{ return String(s||'').replace(/[&<>"']/g, function(c){{ return ({{ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }})[c]; }}); }}
         var ovState = {{
           year: new Date().getFullYear(),
@@ -8334,7 +8334,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Flashcard API routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Flashcard API routes ────────────────────────────────
 
 
 
@@ -8366,7 +8366,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Drag-and-drop / paste path: caller supplied raw source text â€” no course needed.
+        # Drag-and-drop / paste path: caller supplied raw source text — no course needed.
 
         if ad_hoc_source:
 
@@ -8412,7 +8412,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Gather source material â€” ONLY from student's uploaded files
+        # Gather source material — ONLY from student's uploaded files
 
         source_text = ""
 
@@ -8660,7 +8660,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # â”€â”€ Quiz API routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Quiz API routes ─────────────────────────────────────
 
 
 
@@ -8702,11 +8702,11 @@ def register_student_routes(app, csrf, limiter):
 
             count = 10
 
-        count = max(1, min(count, 100))  # hard ceiling â€” generation batches under the hood
+        count = max(1, min(count, 100))  # hard ceiling — generation batches under the hood
 
 
 
-        # Drag-and-drop / paste path: caller supplied raw source text â€” no course needed.
+        # Drag-and-drop / paste path: caller supplied raw source text — no course needed.
 
         if ad_hoc_source:
 
@@ -8762,7 +8762,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Gather source material â€” ONLY from student's uploaded files
+        # Gather source material — ONLY from student's uploaded files
 
         source_text = ""
 
@@ -9028,7 +9028,7 @@ def register_student_routes(app, csrf, limiter):
 
                 "question": q["question"],
 
-                "your_answer": sel.upper() if sel else "â€”",
+                "your_answer": sel.upper() if sel else "—",
 
                 "your_answer_text": q.get(f"option_{sel}", "") if sel in ("a", "b", "c", "d") else "",
 
@@ -9128,7 +9128,7 @@ QUESTIONS THEY GOT RIGHT (sample):
 
 
 
-Produce a student-facing analysis that is blunt, specific, and actionable â€” BETTER than Gemini's quiz feedback.
+Produce a student-facing analysis that is blunt, specific, and actionable — BETTER than Gemini's quiz feedback.
 
 Return ONLY valid JSON with this exact shape:
 
@@ -9146,7 +9146,7 @@ Return ONLY valid JSON with this exact shape:
 
   "weaknesses": [
 
-    {{"topic": "Short concept name", "detail": "What exactly they're missing â€” specific misconception, not generic advice",
+    {{"topic": "Short concept name", "detail": "What exactly they're missing — specific misconception, not generic advice",
 
       "fix": "One concrete fix: re-read X, practice Y, watch Z-type resource"}}
 
@@ -9154,11 +9154,11 @@ Return ONLY valid JSON with this exact shape:
 
   "mistake_patterns": ["Pattern 1 (e.g. 'confuses mitosis phases', 'guesses on calculations')"],
 
-  "time_insight": "Short note on their pacing â€” too fast/slow, where they rushed, etc.",
+  "time_insight": "Short note on their pacing — too fast/slow, where they rushed, etc.",
 
   "next_actions": [
 
-    "Concrete step 1 (e.g. 'Redo questions 3, 7, 12 â€” all about X')",
+    "Concrete step 1 (e.g. 'Redo questions 3, 7, 12 — all about X')",
 
     "Concrete step 2",
 
@@ -9188,7 +9188,7 @@ RULES:
 
 - Quote specific topics / question numbers when relevant.
 
-- Never say "review the material" â€” be concrete.
+- Never say "review the material" — be concrete.
 
 - Keep it in the same language as the quiz content.
 
@@ -9292,7 +9292,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Notes API routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Notes API routes ────────────────────────────────────
 
 
 
@@ -9320,7 +9320,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        # Drag-and-drop / paste path: caller supplied raw source text â€” no course required.
+        # Drag-and-drop / paste path: caller supplied raw source text — no course required.
 
         if ad_hoc_source:
 
@@ -9518,7 +9518,7 @@ No markdown, no code fences. ONLY JSON.
 
                 if len(words) <= 14 and any(c.isalpha() for c in p):
 
-                    if _re.match(r'^(\d+[\.\)]\s*|Cap[iÃ­]tulo|Secci[oÃ³]n|Definici[oÃ³]n|Teorema|Proposici[oÃ³]n|Ejemplo|Lema|Corolario|Observaci[oÃ³]n)', p, _re.IGNORECASE):
+                    if _re.match(r'^(\d+[\.\)]\s*|Cap[ií]tulo|Secci[oó]n|Definici[oó]n|Teorema|Proposici[oó]n|Ejemplo|Lema|Corolario|Observaci[oó]n)', p, _re.IGNORECASE):
 
                         html += "<h2>" + _esc(p) + "</h2>\n"
 
@@ -9656,7 +9656,7 @@ No markdown, no code fences. ONLY JSON.
 
             s = s.replace('&nbsp;', ' ').replace('&#39;', "'").replace('&quot;', '"')
 
-            s = s.replace('&middot;', 'Â·')
+            s = s.replace('&middot;', '·')
 
             return s.strip()
 
@@ -9784,9 +9784,9 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Shared file-extract endpoint (used by drag-drop on
+    # ── Shared file-extract endpoint (used by drag-drop on
 
-    #    quizzes / flashcards / essays / tutor / notes) â”€â”€â”€â”€â”€â”€
+    #    quizzes / flashcards / essays / tutor / notes) ──────
 
     @app.route("/api/student/extract-file", methods=["POST"])
 
@@ -9870,7 +9870,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Flashcards Frontend Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Flashcards Frontend Page ────────────────────────────
 
 
 
@@ -9986,7 +9986,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">â€” or pick from your courses â€”</div>
+          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">— or pick from your courses —</div>
 
 
 
@@ -10074,7 +10074,7 @@ No markdown, no code fences. ONLY JSON.
 
           var info = document.getElementById('fc-file-info');
 
-          info.textContent = 'â³ Extracting text from ' + file.name + '...';
+          info.textContent = '⏳ Extracting text from ' + file.name + '...';
 
           var fd = new FormData(); fd.append('file', file);
 
@@ -10084,15 +10084,15 @@ No markdown, no code fences. ONLY JSON.
 
             var d = await _safeJson(r);
 
-            if (!r.ok) {{ info.textContent = 'âŒ ' + (d.error || 'Failed'); return; }}
+            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
 
             fcDropText = d.text;
 
-            info.innerHTML = 'âœ… ' + d.filename + ' â€” ' + d.char_count.toLocaleString() + ' chars ready';
+            info.innerHTML = '✅ ' + d.filename + ' — ' + d.char_count.toLocaleString() + ' chars ready';
 
             if (!document.getElementById('fc-title').value) document.getElementById('fc-title').value = 'Flashcards: ' + d.title;
 
-          }} catch(e) {{ info.textContent = 'âŒ Network error'; }}
+          }} catch(e) {{ info.textContent = '❌ Network error'; }}
 
         }}
 
@@ -10424,7 +10424,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        // â”€â”€ Study functions (cycling) â”€â”€
+        // ── Study functions (cycling) ──
 
         function renderCard() {{
 
@@ -10516,7 +10516,7 @@ No markdown, no code fences. ONLY JSON.
 
             correct++;
 
-            // Remove card from remaining â€” it's correct for this cycle
+            // Remove card from remaining — it's correct for this cycle
 
             remaining.splice(idx, 1);
 
@@ -10600,7 +10600,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        // â”€â”€ Edit functions â”€â”€
+        // ── Edit functions ──
 
         function renderCardList() {{
 
@@ -10778,7 +10778,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Quiz Frontend Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Quiz Frontend Page ──────────────────────────────────
 
 
 
@@ -10898,7 +10898,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">â€” or pick from your courses â€”</div>
+          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">— or pick from your courses —</div>
 
 
 
@@ -10942,7 +10942,7 @@ No markdown, no code fences. ONLY JSON.
 
               <input type="number" id="qz-count" value="10" min="5" max="100" class="edit-input">
 
-              <small style="display:block;color:var(--text-muted);font-size:11px;margin-top:4px;">Up to 100. Large quizzes generate in batches â€” give it a few seconds.</small>
+              <small style="display:block;color:var(--text-muted);font-size:11px;margin-top:4px;">Up to 100. Large quizzes generate in batches — give it a few seconds.</small>
 
             </div>
 
@@ -10996,7 +10996,7 @@ No markdown, no code fences. ONLY JSON.
 
           var info = document.getElementById('qz-file-info');
 
-          info.textContent = 'â³ Extracting text from ' + file.name + '...';
+          info.textContent = '⏳ Extracting text from ' + file.name + '...';
 
           var fd = new FormData(); fd.append('file', file);
 
@@ -11006,15 +11006,15 @@ No markdown, no code fences. ONLY JSON.
 
             var d = await _safeJson(r);
 
-            if (!r.ok) {{ info.textContent = 'âŒ ' + (d.error || 'Failed'); return; }}
+            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
 
             qzDropText = d.text;
 
             qzDropTitle = d.title;
 
-            info.innerHTML = 'âœ… ' + d.filename + ' â€” ' + d.char_count.toLocaleString() + ' chars ready';
+            info.innerHTML = '✅ ' + d.filename + ' — ' + d.char_count.toLocaleString() + ' chars ready';
 
-          }} catch(e) {{ info.textContent = 'âŒ Network error'; }}
+          }} catch(e) {{ info.textContent = '❌ Network error'; }}
 
         }}
 
@@ -11540,7 +11540,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        /* â”€â”€â”€â”€â”€ Optional timer â”€â”€â”€â”€â”€ */
+        /* ───── Optional timer ───── */
 
         var qzTimerEnabled = false;
 
@@ -11904,13 +11904,13 @@ No markdown, no code fences. ONLY JSON.
 
           .catch(function() {{
 
-            document.getElementById('qz-headline').textContent = 'Detailed analysis unavailable â€” try again later.';
+            document.getElementById('qz-headline').textContent = 'Detailed analysis unavailable — try again later.';
 
-            document.getElementById('qz-strengths').textContent = 'â€”';
+            document.getElementById('qz-strengths').textContent = '—';
 
-            document.getElementById('qz-weaknesses').textContent = 'â€”';
+            document.getElementById('qz-weaknesses').textContent = '—';
 
-            document.getElementById('qz-actions').textContent = 'â€”';
+            document.getElementById('qz-actions').textContent = '—';
 
           }});
 
@@ -12262,7 +12262,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Exam Simulator Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Exam Simulator Mode ────────────────────────────────
 
 
 
@@ -12270,7 +12270,7 @@ No markdown, no code fences. ONLY JSON.
 
     def student_exam_simulator_page(quiz_id):
 
-        """Exam simulator â€” timed, no going back, pressure UI, analytics."""
+        """Exam simulator — timed, no going back, pressure UI, analytics."""
 
         if not _logged_in():
 
@@ -12342,7 +12342,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <li>You <strong>cannot go back</strong> to previous questions</li>
 
-                <li>Timer runs continuously â€” no pausing</li>
+                <li>Timer runs continuously — no pausing</li>
 
                 <li>Answers are final once submitted</li>
 
@@ -12786,7 +12786,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Notes Frontend Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Notes Frontend Page ─────────────────────────────────
 
 
 
@@ -13024,7 +13024,7 @@ No markdown, no code fences. ONLY JSON.
 
             if (!name.endsWith('.pdf') && !name.endsWith('.docx') && !name.endsWith('.doc') && !name.endsWith('.txt')) continue;
 
-            if (files[i].size > 50 * 1024 * 1024) {{ alert(files[i].name + ' es demasiado grande (mÃ¡x 50MB)'); continue; }}
+            if (files[i].size > 50 * 1024 * 1024) {{ alert(files[i].name + ' es demasiado grande (máx 50MB)'); continue; }}
 
             valid.push(files[i]);
 
@@ -13324,7 +13324,7 @@ No markdown, no code fences. ONLY JSON.
 
     # ================================================================
 
-    #  FEATURE 1 â€” AI Study Chat (Tutor)
+    #  FEATURE 1 — AI Study Chat (Tutor)
 
     # ================================================================
 
@@ -13458,13 +13458,13 @@ No markdown, no code fences. ONLY JSON.
 
           <h2 style="display:flex;align-items:center;gap:8px">
 
-            <span style="font-size:1.5em">ðŸ¤–</span> AI Study Tutor
+            <span style="font-size:1.5em">🤖</span> AI Study Tutor
 
           </h2>
 
           <p style="color:var(--text-muted);margin-bottom:16px">
 
-            Ask anything about your courses â€” your AI tutor uses your own notes and course material to help.
+            Ask anything about your courses — your AI tutor uses your own notes and course material to help.
 
           </p>
 
@@ -13496,9 +13496,9 @@ No markdown, no code fences. ONLY JSON.
 
           <div id="chat-attached" style="display:none;margin-bottom:8px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
 
-            <span id="chat-attached-info">ðŸ“„ No file attached</span>
+            <span id="chat-attached-info">📄 No file attached</span>
 
-            <button onclick="chatClearAttached()" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:16px;">âœ•</button>
+            <button onclick="chatClearAttached()" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:16px;">✕</button>
 
           </div>
 
@@ -13506,7 +13506,7 @@ No markdown, no code fences. ONLY JSON.
 
             <button onclick="document.getElementById('chat-file').click()" title="Attach a file (PDF/DOCX/TXT)"
 
-              style="padding:10px 12px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer">ðŸ“Ž</button>
+              style="padding:10px 12px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer">📎</button>
 
             <input type="file" id="chat-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="chatHandleFile(this.files[0])">
 
@@ -13528,7 +13528,7 @@ No markdown, no code fences. ONLY JSON.
 
               style="padding:10px 12px;background:var(--red);color:#fff;border:none;border-radius:8px;
 
-                     cursor:pointer">ðŸ—‘</button>
+                     cursor:pointer">🗑</button>
 
           </div>
 
@@ -13568,7 +13568,7 @@ No markdown, no code fences. ONLY JSON.
 
           bar.style.display = 'flex';
 
-          info.textContent = 'â³ Extracting ' + file.name + '...';
+          info.textContent = '⏳ Extracting ' + file.name + '...';
 
           var fd = new FormData(); fd.append('file', file);
 
@@ -13578,15 +13578,15 @@ No markdown, no code fences. ONLY JSON.
 
             var d = await _safeJson(r);
 
-            if (!r.ok) {{ info.textContent = 'âŒ ' + (d.error || 'Failed'); return; }}
+            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
 
             chatAttachedText = d.text;
 
             chatAttachedName = d.filename;
 
-            info.textContent = 'ðŸ“„ Attached: ' + d.filename + ' (' + d.char_count.toLocaleString() + ' chars) â€” your next message will use this as context';
+            info.textContent = '📄 Attached: ' + d.filename + ' (' + d.char_count.toLocaleString() + ' chars) — your next message will use this as context';
 
-          }} catch(e) {{ info.textContent = 'âŒ Network error'; }}
+          }} catch(e) {{ info.textContent = '❌ Network error'; }}
 
         }}
 
@@ -13632,7 +13632,7 @@ No markdown, no code fences. ONLY JSON.
 
           // Show welcome message
 
-          addBubble('assistant', 'Hi! I\\'m your AI study tutor. Ask me anything about your course material! ðŸ“š');
+          addBubble('assistant', 'Hi! I\\'m your AI study tutor. Ask me anything about your course material! 📚');
 
         }}
 
@@ -13650,11 +13650,11 @@ No markdown, no code fences. ONLY JSON.
 
           inp.value = '';
 
-          var displayMsg = msg + (chatAttachedText ? ' [ðŸ“„ ' + chatAttachedName + ']' : '');
+          var displayMsg = msg + (chatAttachedText ? ' [📄 ' + chatAttachedName + ']' : '');
 
           addBubble('user', displayMsg);
 
-          addBubble('assistant', 'ðŸ’­ Thinking...');
+          addBubble('assistant', '💭 Thinking...');
 
           // Build payload: prepend attached doc as context if present
 
@@ -13684,9 +13684,9 @@ No markdown, no code fences. ONLY JSON.
 
             if (r.ok) {{ addBubble('assistant', d.reply); }}
 
-            else {{ addBubble('assistant', 'âŒ ' + (d.error || 'Error')); }}
+            else {{ addBubble('assistant', '❌ ' + (d.error || 'Error')); }}
 
-          }} catch(e) {{ chatBox.removeChild(chatBox.lastChild); addBubble('assistant', 'âŒ Network error'); }}
+          }} catch(e) {{ chatBox.removeChild(chatBox.lastChild); addBubble('assistant', '❌ Network error'); }}
 
         }}
 
@@ -13714,7 +13714,7 @@ No markdown, no code fences. ONLY JSON.
 
     # ================================================================
 
-    #  FEATURE 3 â€” Weak Topic Detector
+    #  FEATURE 3 — Weak Topic Detector
 
     # ================================================================
 
@@ -13798,7 +13798,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="font-size:13px;color:var(--text-muted);margin-top:4px">
 
-                {_esc(t.get('course',''))} â€” {_esc(t.get('source',''))}
+                {_esc(t.get('course',''))} — {_esc(t.get('source',''))}
 
               </div>
 
@@ -13810,13 +13810,13 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        no_data_html = '<div style="text-align:center;padding:40px;color:var(--text-muted);background:var(--card);border:1px solid var(--border);border-radius:var(--radius)"><div style="font-size:48px;margin-bottom:12px">ðŸ“Š</div><p>Not enough data yet</p><p style="font-size:13px;margin-top:4px">Complete some quizzes and review flashcards to see your weak spots.</p></div>'
+        no_data_html = '<div style="text-align:center;padding:40px;color:var(--text-muted);background:var(--card);border:1px solid var(--border);border-radius:var(--radius)"><div style="font-size:48px;margin-bottom:12px">📊</div><p>Not enough data yet</p><p style="font-size:13px;margin-top:4px">Complete some quizzes and review flashcards to see your weak spots.</p></div>'
 
         recs_section = ""
 
         if recs:
 
-            recs_section = '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:22px"><h3 style="color:var(--text);margin-bottom:12px">ðŸ’¡ Recommendations</h3>' + recs + '</div>'
+            recs_section = '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:22px"><h3 style="color:var(--text);margin-bottom:12px">💡 Recommendations</h3>' + recs + '</div>'
 
 
 
@@ -13824,7 +13824,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div style="max-width:800px;margin:0 auto">
 
-          <h2 style="margin-bottom:4px"><span style="font-size:1.3em">ðŸŽ¯</span> Weak Topic Detector</h2>
+          <h2 style="margin-bottom:4px"><span style="font-size:1.3em">🎯</span> Weak Topic Detector</h2>
 
           <p style="color:var(--text-muted);margin-bottom:24px">
 
@@ -13848,7 +13848,7 @@ No markdown, no code fences. ONLY JSON.
 
     # ================================================================
 
-    #  FEATURE 4 â€” Gamification (XP / Badges / Streaks / Level)
+    #  FEATURE 4 — Gamification (XP / Badges / Streaks / Level)
 
     # ================================================================
 
@@ -13924,7 +13924,7 @@ No markdown, no code fences. ONLY JSON.
 
             streak=streak,
 
-            badges=[{"badge_key": b["badge_key"], "emoji": b.get("emoji","ðŸ…"),
+            badges=[{"badge_key": b["badge_key"], "emoji": b.get("emoji","🏅"),
 
                      "name": b.get("name",""), "desc": b.get("desc","")} for b in badges],
 
@@ -13936,7 +13936,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Study Exchange â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Study Exchange ──────────────────────────────────────
 
 
 
@@ -13944,7 +13944,7 @@ No markdown, no code fences. ONLY JSON.
 
     def student_exchange_page():
 
-        """Study Exchange â€” browse/share notes like Studocu."""
+        """Study Exchange — browse/share notes like Studocu."""
 
         if not _logged_in():
 
@@ -14332,7 +14332,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ GPA Country Setting API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── GPA Country Setting API ─────────────────────────────
 
 
 
@@ -14360,7 +14360,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Study Exchange API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Study Exchange API ──────────────────────────────────
 
 
 
@@ -14574,7 +14574,7 @@ No markdown, no code fences. ONLY JSON.
 
                  onmouseout="this.style.transform='';this.style.boxShadow='';this.querySelector('.badge-tooltip').style.opacity='0';this.querySelector('.badge-tooltip').style.visibility='hidden'">
 
-              <div style="font-size:2.2em;margin-bottom:4px">{b.get('emoji','ðŸ…')}</div>
+              <div style="font-size:2.2em;margin-bottom:4px">{b.get('emoji','🏅')}</div>
 
               <div style="font-weight:700;font-size:13px;color:var(--text)">{_esc(b.get('name',''))}</div>
 
@@ -14678,7 +14678,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div style="max-width:800px;margin:0 auto">
 
-          <h2 style="margin-bottom:20px"><span style="font-size:1.3em">ðŸ†</span> Achievements & Progress</h2>
+          <h2 style="margin-bottom:20px"><span style="font-size:1.3em">🏆</span> Achievements & Progress</h2>
 
 
 
@@ -14690,7 +14690,7 @@ No markdown, no code fences. ONLY JSON.
 
                       box-shadow:0 8px 32px rgba(99,102,241,0.3);position:relative;overflow:hidden">
 
-            <div style="position:absolute;top:-20px;right:-20px;font-size:120px;opacity:0.08">ðŸ†</div>
+            <div style="position:absolute;top:-20px;right:-20px;font-size:120px;opacity:0.08">🏆</div>
 
             <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1.5px;font-weight:600">Level</div>
 
@@ -14720,7 +14720,7 @@ No markdown, no code fences. ONLY JSON.
 
                  onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
 
-              <div style="font-size:2.2em">ðŸ”¥</div>
+              <div style="font-size:2.2em">🔥</div>
 
               <div style="font-size:2.4em;font-weight:800;color:#ea580c;margin:4px 0">{streak}</div>
 
@@ -14734,7 +14734,7 @@ No markdown, no code fences. ONLY JSON.
 
                  onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
 
-              <div style="font-size:2.2em">ðŸ…</div>
+              <div style="font-size:2.2em">🏅</div>
 
               <div style="font-size:2.4em;font-weight:800;color:#16a34a;margin:4px 0">{len(badges)}</div>
 
@@ -14748,11 +14748,11 @@ No markdown, no code fences. ONLY JSON.
 
           <!-- Earned Badges -->
 
-          <h3 style="color:var(--text);margin-bottom:12px">ðŸ… Your Badges</h3>
+          <h3 style="color:var(--text);margin-bottom:12px">🏅 Your Badges</h3>
 
           <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:28px">
 
-            {badges_html if badges_html else '<p style="color:var(--text-muted)">No badges yet â€” keep studying!</p>'}
+            {badges_html if badges_html else '<p style="color:var(--text-muted)">No badges yet — keep studying!</p>'}
 
           </div>
 
@@ -14760,7 +14760,7 @@ No markdown, no code fences. ONLY JSON.
 
           <!-- All Badges -->
 
-          <h3 style="color:var(--text);margin-bottom:12px">ðŸŽ– All Badges</h3>
+          <h3 style="color:var(--text);margin-bottom:12px">🎖 All Badges</h3>
 
           <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:28px">
 
@@ -14772,7 +14772,7 @@ No markdown, no code fences. ONLY JSON.
 
           <!-- XP History -->
 
-          <h3 style="color:var(--text);margin-bottom:12px">ðŸ“Š Recent Activity</h3>
+          <h3 style="color:var(--text);margin-bottom:12px">📊 Recent Activity</h3>
 
           <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px">
 
@@ -14788,7 +14788,7 @@ No markdown, no code fences. ONLY JSON.
 
     # ================================================================
 
-    #  FEATURE 5 â€” Email Preferences (for daily study email)
+    #  FEATURE 5 — Email Preferences (for daily study email)
 
     # ================================================================
 
@@ -15079,7 +15079,7 @@ No markdown, no code fences. ONLY JSON.
 
             bg = "background:rgba(99,102,241,0.08);" if is_me else ""
 
-            medal = {1: "ðŸ¥‡", 2: "ðŸ¥ˆ", 3: "ðŸ¥‰"}.get(i, f"#{i}")
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"#{i}")
 
             name_display = _esc(r["name"] or "Student")
 
@@ -15093,7 +15093,7 @@ No markdown, no code fences. ONLY JSON.
 
               <td style="padding:12px 16px;font-size:18px;font-weight:700;text-align:center;width:60px">{medal}</td>
 
-              <td style="padding:12px 16px"><div style="font-weight:600;color:var(--text)">{name_display}{"  â† you" if is_me else ""}</div></td>
+              <td style="padding:12px 16px"><div style="font-weight:600;color:var(--text)">{name_display}{"  ← you" if is_me else ""}</div></td>
 
               <td style="padding:12px 16px;min-width:160px"><div style="background:var(--bg);border-radius:8px;height:10px;overflow:hidden"><div style="width:{bar_pct}%;height:100%;background:linear-gradient(90deg,#8b5cf6,#22c55e)"></div></div></td>
 
@@ -15181,7 +15181,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Personal Leaderboard API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Personal Leaderboard API ────────────────────────────
 
 
 
@@ -15413,19 +15413,19 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        # â”€â”€ Translations â”€â”€
+        # ── Translations ──
 
         _lang = session.get("lang", "en")
 
         _ES = {
 
-            "Settings": "ConfiguraciÃ³n",
+            "Settings": "Configuración",
 
             "Profile": "Perfil",
 
             "Name": "Nombre",
 
-            "Email": "Correo electrÃ³nico",
+            "Email": "Correo electrónico",
 
             "Email cannot be changed.": "El correo no se puede cambiar.",
 
@@ -15433,13 +15433,13 @@ No markdown, no code fences. ONLY JSON.
 
             "University & Studies": "Universidad y Estudios",
 
-            "Set your university and field of study to appear on the leaderboard and connect with classmates.": "Define tu universidad y carrera para aparecer en la clasificaciÃ³n y conectarte con compaÃ±eros.",
+            "Set your university and field of study to appear on the leaderboard and connect with classmates.": "Define tu universidad y carrera para aparecer en la clasificación y conectarte con compañeros.",
 
             "University": "Universidad",
 
             "Field of Study": "Carrera",
 
-            "View Leaderboard": "Ver clasificaciÃ³n",
+            "View Leaderboard": "Ver clasificación",
 
             "Canvas LMS": "Canvas LMS",
 
@@ -15447,9 +15447,9 @@ No markdown, no code fences. ONLY JSON.
 
             "Not connected": "No conectado",
 
-            "Connect your Canvas LMS to sync courses, exams, and study materials.": "Conecta tu Canvas LMS para sincronizar cursos, exÃ¡menes y material de estudio.",
+            "Connect your Canvas LMS to sync courses, exams, and study materials.": "Conecta tu Canvas LMS para sincronizar cursos, exámenes y material de estudio.",
 
-            "Manage Connection": "Administrar conexiÃ³n",
+            "Manage Connection": "Administrar conexión",
 
             "Connect Canvas": "Conectar Canvas",
 
@@ -15461,11 +15461,11 @@ No markdown, no code fences. ONLY JSON.
 
             "+ Add Email Account": "+ Agregar cuenta de correo",
 
-            "No email accounts connected yet.": "AÃºn no hay cuentas de correo conectadas.",
+            "No email accounts connected yet.": "Aún no hay cuentas de correo conectadas.",
 
             "Mail Sorting Rules": "Reglas de ordenado de correo",
 
-            "Tell the AI how to sort your inbox. Write both <strong>prioritize</strong> and <strong>deprioritize</strong> rules in plain English.": "IndÃ­cale a la IA cÃ³mo ordenar tu bandeja. Escribe reglas para <strong>priorizar</strong> y <strong>despriorizar</strong> en lenguaje natural.",
+            "Tell the AI how to sort your inbox. Write both <strong>prioritize</strong> and <strong>deprioritize</strong> rules in plain English.": "Indícale a la IA cómo ordenar tu bandeja. Escribe reglas para <strong>priorizar</strong> y <strong>despriorizar</strong> en lenguaje natural.",
 
             "Examples:": "Ejemplos:",
 
@@ -15479,19 +15479,19 @@ No markdown, no code fences. ONLY JSON.
 
             "Ignore all emails from noreply@github.com": "Ignora todos los correos de noreply@github.com",
 
-            "Write your mail sorting rules here...": "Escribe aquÃ­ tus reglas de ordenado de correo...",
+            "Write your mail sorting rules here...": "Escribe aquí tus reglas de ordenado de correo...",
 
             "Save Rules": "Guardar reglas",
 
             "Theme": "Tema",
 
-            "Personalize how the app looks. Your choice is saved on this device.": "Personaliza cÃ³mo se ve la app. Tu elecciÃ³n se guarda en este dispositivo.",
+            "Personalize how the app looks. Your choice is saved on this device.": "Personaliza cómo se ve la app. Tu elección se guarda en este dispositivo.",
 
-            "Click any theme to switch instantly. Your choice is saved automatically.": "Haz clic en cualquier tema para cambiar al instante. Se guarda automÃ¡ticamente.",
+            "Click any theme to switch instantly. Your choice is saved automatically.": "Haz clic en cualquier tema para cambiar al instante. Se guarda automáticamente.",
 
             "Daily Study Email": "Correo de estudio diario",
 
-            "Get a morning email with your study plan, upcoming exams, and weak topics to review.": "Recibe un correo matutino con tu plan de estudio, exÃ¡menes prÃ³ximos y temas dÃ©biles para repasar.",
+            "Get a morning email with your study plan, upcoming exams, and weak topics to review.": "Recibe un correo matutino con tu plan de estudio, exámenes próximos y temas débiles para repasar.",
 
             "Enable daily study email": "Habilitar correo diario de estudio",
 
@@ -15509,27 +15509,27 @@ No markdown, no code fences. ONLY JSON.
 
             "Account Security": "Seguridad de la cuenta",
 
-            "Your account is secure": "Tu cuenta estÃ¡ segura",
+            "Your account is secure": "Tu cuenta está segura",
 
-            "Password protected with bcrypt encryption. You can change your password below if needed.": "Protegida con cifrado bcrypt. Puedes cambiar tu contraseÃ±a abajo si lo necesitas.",
+            "Password protected with bcrypt encryption. You can change your password below if needed.": "Protegida con cifrado bcrypt. Puedes cambiar tu contraseña abajo si lo necesitas.",
 
-            "Change password": "Cambiar contraseÃ±a",
+            "Change password": "Cambiar contraseña",
 
             "(optional)": "(opcional)",
 
-            "Current Password": "ContraseÃ±a actual",
+            "Current Password": "Contraseña actual",
 
-            "New Password": "Nueva contraseÃ±a",
+            "New Password": "Nueva contraseña",
 
-            "Confirm Password": "Confirmar contraseÃ±a",
+            "Confirm Password": "Confirmar contraseña",
 
-            "Minimum 6 characters.": "MÃ­nimo 6 caracteres.",
+            "Minimum 6 characters.": "Mínimo 6 caracteres.",
 
-            "Update Password": "Actualizar contraseÃ±a",
+            "Update Password": "Actualizar contraseña",
 
             "Danger Zone": "Zona de peligro",
 
-            "Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action <strong>cannot be undone</strong>.": "Elimina permanentemente tu cuenta y todos los datos asociados (cursos, exÃ¡menes, notas, flashcards, quizzes, historial de chat, XP, insignias). Esta acciÃ³n <strong>no se puede deshacer</strong>.",
+            "Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action <strong>cannot be undone</strong>.": "Elimina permanentemente tu cuenta y todos los datos asociados (cursos, exámenes, notas, flashcards, quizzes, historial de chat, XP, insignias). Esta acción <strong>no se puede deshacer</strong>.",
 
             "Delete My Account": "Eliminar mi cuenta",
 
@@ -15539,15 +15539,15 @@ No markdown, no code fences. ONLY JSON.
 
             "Permanently Delete Account": "Eliminar cuenta permanentemente",
 
-            "Saved!": "Â¡Guardado!",
+            "Saved!": "¡Guardado!",
 
             "Saving...": "Guardando...",
 
             "Please enter at least one rule": "Ingresa al menos una regla",
 
-            "Failed": "FallÃ³",
+            "Failed": "Falló",
 
-            "Connection error": "Error de conexiÃ³n",
+            "Connection error": "Error de conexión",
 
             "Error saving.": "Error al guardar.",
 
@@ -15571,7 +15571,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div>
 
-          <h2 style="margin-bottom:24px">âš™ï¸ {_T("Settings")}</h2>
+          <h2 style="margin-bottom:24px">⚙️ {_T("Settings")}</h2>
 
 
 
@@ -15579,7 +15579,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card">
 
-            <div class="card-header"><h2>ðŸ‘¤ {_T("Profile")}</h2></div>
+            <div class="card-header"><h2>👤 {_T("Profile")}</h2></div>
 
             <form method="post">
 
@@ -15617,7 +15617,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card">
 
-            <div class="card-header"><h2>ðŸ« {_T("University & Studies")}</h2></div>
+            <div class="card-header"><h2>🏫 {_T("University & Studies")}</h2></div>
 
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
 
@@ -15645,7 +15645,7 @@ No markdown, no code fences. ONLY JSON.
 
             </div>
 
-            <a href="/student/leaderboard" class="btn btn-outline btn-sm">ðŸ† {_T("View Leaderboard")}</a>
+            <a href="/student/leaderboard" class="btn btn-outline btn-sm">🏆 {_T("View Leaderboard")}</a>
 
           </div>
 
@@ -15657,9 +15657,9 @@ No markdown, no code fences. ONLY JSON.
 
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
 
-              <h2>ðŸ”— {_T("Canvas LMS")}</h2>
+              <h2>🔗 {_T("Canvas LMS")}</h2>
 
-              <span style="color:{canvas_color};font-weight:600;font-size:13px">â— {_T(canvas_status)}</span>
+              <span style="color:{canvas_color};font-weight:600;font-size:13px">● {_T(canvas_status)}</span>
 
             </div>
 
@@ -15681,9 +15681,9 @@ No markdown, no code fences. ONLY JSON.
 
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
 
-              <h2>ðŸ“… {_T("Google Calendar")}</h2>
+              <h2>📅 {_T("Google Calendar")}</h2>
 
-              <span id="gcal-status-badge" style="color:var(--text-muted);font-weight:600;font-size:13px">â—</span>
+              <span id="gcal-status-badge" style="color:var(--text-muted);font-weight:600;font-size:13px">●</span>
 
             </div>
 
@@ -15713,7 +15713,7 @@ No markdown, no code fences. ONLY JSON.
 
                     b.style.color = 'var(--text-muted)';
 
-                    b.textContent = 'â— Not configured';
+                    b.textContent = '● Not configured';
 
                     a.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Server admin must set GOOGLE_OAUTH_* env vars.</span>';
 
@@ -15725,7 +15725,7 @@ No markdown, no code fences. ONLY JSON.
 
                     b.style.color = '#10B981';
 
-                    b.textContent = 'â— Connected';
+                    b.textContent = '● Connected';
 
                     a.innerHTML = '<span style="font-size:13px;color:var(--text);font-weight:600;margin-right:8px;">' + (d.email || '') + '</span>'
 
@@ -15735,7 +15735,7 @@ No markdown, no code fences. ONLY JSON.
 
                     b.style.color = '#9CA3AF';
 
-                    b.textContent = 'â— Not connected';
+                    b.textContent = '● Not connected';
 
                   }}
 
@@ -15769,7 +15769,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
 
-              <h2>ðŸ“§ {_T("Email Accounts")}</h2>
+              <h2>📧 {_T("Email Accounts")}</h2>
 
               <span style="font-size:13px;color:var(--text-muted)">{len(accounts)}/{limit_text} {_T("mailboxes")}</span>
 
@@ -15859,7 +15859,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card">
 
-            <div class="card-header"><h2>ðŸŽ¨ {_T("Theme")}</h2></div>
+            <div class="card-header"><h2>🎨 {_T("Theme")}</h2></div>
 
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
 
@@ -15969,7 +15969,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card">
 
-            <div class="card-header"><h2>ðŸ“¬ {_T("Daily Study Email")}</h2></div>
+            <div class="card-header"><h2>📬 {_T("Daily Study Email")}</h2></div>
 
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:14px">
 
@@ -16009,7 +16009,7 @@ No markdown, no code fences. ONLY JSON.
 
                     <option value="America/Mexico_City" {"selected" if tz=="America/Mexico_City" else ""}>Mexico City (CST)</option>
 
-                    <option value="America/Cancun" {"selected" if tz=="America/Cancun" else ""}>CancÃºn (EST)</option>
+                    <option value="America/Cancun" {"selected" if tz=="America/Cancun" else ""}>Cancún (EST)</option>
 
                     <option value="America/Tijuana" {"selected" if tz=="America/Tijuana" else ""}>Tijuana (PST)</option>
 
@@ -16031,7 +16031,7 @@ No markdown, no code fences. ONLY JSON.
 
                     <option value="America/Vancouver" {"selected" if tz=="America/Vancouver" else ""}>Vancouver (PST)</option>
 
-                    <option value="America/Bogota" {"selected" if tz=="America/Bogota" else ""}>BogotÃ¡ (COT)</option>
+                    <option value="America/Bogota" {"selected" if tz=="America/Bogota" else ""}>Bogotá (COT)</option>
 
                     <option value="America/Lima" {"selected" if tz=="America/Lima" else ""}>Lima (PET)</option>
 
@@ -16039,7 +16039,7 @@ No markdown, no code fences. ONLY JSON.
 
                     <option value="America/Buenos_Aires" {"selected" if tz=="America/Buenos_Aires" else ""}>Buenos Aires (ART)</option>
 
-                    <option value="America/Sao_Paulo" {"selected" if tz=="America/Sao_Paulo" else ""}>SÃ£o Paulo (BRT)</option>
+                    <option value="America/Sao_Paulo" {"selected" if tz=="America/Sao_Paulo" else ""}>São Paulo (BRT)</option>
 
                     <option value="America/Caracas" {"selected" if tz=="America/Caracas" else ""}>Caracas (VET)</option>
 
@@ -16051,7 +16051,7 @@ No markdown, no code fences. ONLY JSON.
 
                     <option value="America/Montevideo" {"selected" if tz=="America/Montevideo" else ""}>Montevideo (UYT)</option>
 
-                    <option value="America/Asuncion" {"selected" if tz=="America/Asuncion" else ""}>AsunciÃ³n (PYT)</option>
+                    <option value="America/Asuncion" {"selected" if tz=="America/Asuncion" else ""}>Asunción (PYT)</option>
 
                     <option value="America/La_Paz" {"selected" if tz=="America/La_Paz" else ""}>La Paz (BOT)</option>
 
@@ -16258,7 +16258,9 @@ No markdown, no code fences. ONLY JSON.
             var sel = $('acad-country');
             sel.innerHTML = '<option value="">- {_T("Select a country")} -</option>' +
               countries.map(function(c){{
-                return '<option value="' + c.iso + '">' + (c.flag || '') + ' ' + c.name + '</option>';
+                var iso = c.iso_code || c.iso || '';
+                var flag = c.flag_emoji || c.flag || '';
+                return '<option value="' + iso + '">' + flag + ' ' + c.name + '</option>';
               }}).join('');
             sel.disabled = false;
 
@@ -16284,7 +16286,7 @@ No markdown, no code fences. ONLY JSON.
             }}
             if (prof.country_iso || prof.university || prof.major) {{
               var countryName = '';
-              for (var i=0; i<countries.length; i++) {{ if (countries[i].iso === prof.country_iso) {{ countryName = (countries[i].flag || '') + ' ' + countries[i].name; break; }} }}
+              for (var i=0; i<countries.length; i++) {{ var ci=countries[i]; if ((ci.iso_code||ci.iso) === prof.country_iso) {{ countryName = (ci.flag_emoji||ci.flag||'') + ' ' + ci.name; break; }} }}
               $('acad-cur-country').textContent = countryName || (prof.country_iso || '-');
               $('acad-cur-uni').textContent = (prof.university && prof.university.name) || '-';
               $('acad-cur-major').textContent = (prof.major && prof.major.name) || '-';
@@ -16341,16 +16343,16 @@ No markdown, no code fences. ONLY JSON.
             }}, 250);
           }});
 
-          $('acad-major-search').addEventListener('input', function(e){{
-            var q = e.target.value.trim();
-            clearTimeout(debounceTimer);
-            if (q.length < 2) {{ $('acad-major-results').style.display = 'none'; return; }}
-            debounceTimer = setTimeout(function(){{
-              var url = '/api/academic/majors?q=' + encodeURIComponent(q);
+          function runMajorSearch(q){{
+              var url = '/api/academic/majors?q=' + encodeURIComponent(q || '');
               if (acState.universityId) url += '&university_id=' + acState.universityId;
               fetch(url).then(function(r){{ return r.json(); }}).then(function(j){{
                 var majors = (j && j.majors) || [];
                 var box = $('acad-major-results');
+                if (!majors.length && !q) {{
+                  box.style.display = 'none';
+                  return;
+                }}
                 if (!majors.length) {{
                   box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No majors found.")} <a href="#" id="acad-major-create" style="color:var(--primary);">{_T("Add")} \\u201C' + escapeHtml(q) + '\\u201D</a></div>';
                   box.style.display = 'block';
@@ -16379,7 +16381,20 @@ No markdown, no code fences. ONLY JSON.
                   el.addEventListener('mouseleave', function(){{ el.style.background = ''; }});
                 }});
               }});
+            }});
+          }}
+
+          // Trigger major search on input (debounced) and on focus when a
+          // university is already selected, so users instantly see the full
+          // catalog of that school without having to type.
+          $('acad-major-search').addEventListener('input', function(e){{
+            clearTimeout(window.__majorSearchT);
+            window.__majorSearchT = setTimeout(function(){{
+              runMajorSearch(e.target.value || '');
             }}, 250);
+          }});
+          $('acad-major-search').addEventListener('focus', function(){{
+            if (acState.universityId) runMajorSearch('');
           }});
 
           function acadPickUni(u){{
@@ -16453,7 +16468,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        <!-- Account Security (mirrors business settings â€” optional change) -->
+        <!-- Account Security (mirrors business settings — optional change) -->
 
         <div class="card" style="margin-top:16px;">
 
@@ -16655,7 +16670,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        // â”€â”€ Email account management â”€â”€
+        // ── Email account management ──
 
         var EMAIL_PROVIDERS = {{
 
@@ -16697,7 +16712,7 @@ No markdown, no code fences. ONLY JSON.
 
           document.getElementById('acct-smtp-port').value = p.smtp_port;
 
-          badge.innerHTML = '<span style="font-weight:600;">' + p.name + ' detected</span> â€” IMAP/SMTP settings filled automatically.';
+          badge.innerHTML = '<span style="font-weight:600;">' + p.name + ' detected</span> — IMAP/SMTP settings filled automatically.';
 
           badge.style.display = 'flex'; badge.style.borderLeft = '3px solid ' + p.color;
 
@@ -16741,7 +16756,7 @@ No markdown, no code fences. ONLY JSON.
 
                 else {{
 
-                  badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> â€” open <b>Advanced Settings</b> and enter IMAP/SMTP details.';
+                  badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> and enter IMAP/SMTP details.';
 
                   badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--yellow)';
 
@@ -16751,7 +16766,7 @@ No markdown, no code fences. ONLY JSON.
 
               }}).catch(function() {{
 
-                badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> â€” open <b>Advanced Settings</b> and enter IMAP/SMTP details.';
+                badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> and enter IMAP/SMTP details.';
 
                 badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--yellow)';
 
@@ -16855,7 +16870,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # â”€â”€ Essay Assistant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── Essay Assistant ──────────────────────────────────────
 
     @app.route("/student/essay")
 
@@ -16869,7 +16884,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div style="max-width:900px;margin:0 auto">
 
-          <h1 style="margin:0 0 6px">âœï¸ Essay Assistant</h1>
+          <h1 style="margin:0 0 6px">✏️ Essay Assistant</h1>
 
           <p style="color:var(--text-muted);margin:0 0 18px">Paste your draft. Get brutally honest feedback on thesis, structure, grammar, and flow.</p>
 
@@ -16899,7 +16914,7 @@ No markdown, no code fences. ONLY JSON.
 
                 ondrop="eaHandleDrop(event)" onclick="document.getElementById('ea-file').click()">
 
-                <div style="font-size:28px">ðŸ“„</div>
+                <div style="font-size:28px">📄</div>
 
                 <div style="font-weight:600;margin-top:4px;font-size:14px">Drop a PDF / DOCX / TXT</div>
 
@@ -16961,7 +16976,7 @@ No markdown, no code fences. ONLY JSON.
 
           var info = document.getElementById('ea-file-info');
 
-          info.textContent = 'â³ Extracting ' + file.name + '...';
+          info.textContent = '⏳ Extracting ' + file.name + '...';
 
           var fd = new FormData(); fd.append('file', file);
 
@@ -16971,13 +16986,13 @@ No markdown, no code fences. ONLY JSON.
 
             var d = await r.json();
 
-            if (!r.ok) {{ info.textContent = 'âŒ ' + (d.error || 'Failed'); return; }}
+            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
 
             document.getElementById('ea-essay').value = d.text;
 
-            info.textContent = 'âœ… Loaded ' + d.filename + ' (' + d.char_count.toLocaleString() + ' chars)';
+            info.textContent = '✅ Loaded ' + d.filename + ' (' + d.char_count.toLocaleString() + ' chars)';
 
-          }} catch(e) {{ info.textContent = 'âŒ Network error'; }}
+          }} catch(e) {{ info.textContent = '❌ Network error'; }}
 
         }}
 
@@ -17049,7 +17064,7 @@ No markdown, no code fences. ONLY JSON.
 
               + '<div style="text-decoration:line-through;color:#ef4444">' + (g.original || '') + '</div>'
 
-              + '<div style="color:#22c55e;margin-top:4px">â†’ ' + (g.suggestion || '') + '</div></div>';
+              + '<div style="color:#22c55e;margin-top:4px">→ ' + (g.suggestion || '') + '</div></div>';
 
           }}).join('') || '<p style="color:var(--text-muted);font-size:13px">No major grammar issues detected.</p>';
 
@@ -17065,7 +17080,7 @@ No markdown, no code fences. ONLY JSON.
 
             + bar('Clarity', d.clarity_score || 0)
 
-            + '<div style="margin-top:14px;font-size:13px;color:var(--text-muted)">Words: ' + (d.word_count || 0) + ' Â· Level: ' + (d.reading_level || 'â€”') + '</div></div>'
+            + '<div style="margin-top:14px;font-size:13px;color:var(--text-muted)">Words: ' + (d.word_count || 0) + ' · Level: ' + (d.reading_level || '—') + '</div></div>'
 
             + (d.thesis_feedback ? '<div class="card"><h3 style="margin:0 0 8px">Thesis Feedback</h3><p style="margin:0">' + d.thesis_feedback + '</p></div>' : '')
 
@@ -17114,276 +17129,4 @@ No markdown, no code fences. ONLY JSON.
             return jsonify({"error": str(e)}), 500
 
 
-
-    # â”€â”€ Panic Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    @app.route("/student/panic")
-
-    def student_panic_page():
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        courses = sdb.get_courses(_cid())
-
-        options = '<option value="">â€” pick a course â€”</option>'
-
-        for c in courses:
-
-            options += f'<option value="{c["id"]}">{_esc(c["name"])}</option>'
-
-        return _s_render("Panic Mode", f"""
-
-        <div style="max-width:820px;margin:0 auto">
-
-          <h1 style="margin:0 0 6px;color:#ef4444">ðŸš¨ Panic Mode</h1>
-
-          <p style="color:var(--text-muted);margin:0 0 18px">Exam tomorrow and nothing's done? Get a ruthless cram plan in 10 seconds.</p>
-
-          <div class="card">
-
-            <div class="form-group">
-
-              <label>Course</label>
-
-              <select id="pm-course" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">{options}</select>
-
-            </div>
-
-            <div class="form-group">
-
-              <label>Exam name</label>
-
-              <input id="pm-exam" type="text" placeholder="Midterm / Final / Quiz 3" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
-
-            </div>
-
-            <div class="form-group">
-
-              <label>Hours available</label>
-
-              <input id="pm-hours" type="number" step="0.5" min="0.5" value="4" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
-
-            </div>
-
-            <div class="form-group">
-
-              <label>Topics (one per line)</label>
-
-              <textarea id="pm-topics" placeholder="Ch 1: derivatives&#10;Ch 2: integrals&#10;Ch 3: limits" style="width:100%;min-height:140px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
-
-            </div>
-
-            <div class="form-group">
-
-              <label>Weak areas <span style="color:var(--text-muted);font-size:12px">(optional, comma-separated)</span></label>
-
-              <input id="pm-weak" type="text" placeholder="integration by parts, chain rule" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
-
-            </div>
-
-            <button onclick="buildPlan()" class="btn" id="pm-btn" style="background:#ef4444;color:#fff;border:none">Generate Cram Plan</button>
-
-            <span id="pm-status" style="margin-left:10px;color:var(--text-muted);font-size:13px"></span>
-
-          </div>
-
-          <div id="pm-result" style="margin-top:18px"></div>
-
-        </div>
-
-        <script>
-
-        async function buildPlan() {{
-
-          var hours = parseFloat(document.getElementById('pm-hours').value || '0');
-
-          if (!hours || hours <= 0) {{ alert('Hours required'); return; }}
-
-          var topics = document.getElementById('pm-topics').value.split('\\n').map(function(s){{return s.trim();}}).filter(Boolean);
-
-          if (!topics.length) {{ alert('List at least one topic'); return; }}
-
-          var btn = document.getElementById('pm-btn');
-
-          var status = document.getElementById('pm-status');
-
-          btn.disabled = true; btn.textContent = 'Thinking...';
-
-          status.textContent = 'Building plan...';
-
-          var meta = document.querySelector('meta[name="csrf-token"]');
-
-          var headers = {{'Content-Type':'application/json'}};
-
-          if (meta) headers['X-CSRFToken'] = meta.getAttribute('content');
-
-          try {{
-
-            var r = await fetch('/api/student/panic/plan', {{
-
-              method:'POST', headers: headers,
-
-              body: JSON.stringify({{
-
-                hours: hours,
-
-                topics: topics,
-
-                exam_name: document.getElementById('pm-exam').value || 'Exam',
-
-                course_id: document.getElementById('pm-course').value,
-
-                weak: document.getElementById('pm-weak').value.split(',').map(function(s){{return s.trim();}}).filter(Boolean)
-
-              }})
-
-            }});
-
-            var d = await r.json();
-
-            if (!r.ok) throw new Error(d.error || 'Failed');
-
-            renderPlan(d);
-
-          }} catch(e) {{ status.innerHTML = '<span style="color:var(--red)">' + e.message + '</span>'; }}
-
-          finally {{ btn.disabled = false; btn.textContent = 'Generate Cram Plan'; }}
-
-        }}
-
-        function renderPlan(d) {{
-
-          var out = document.getElementById('pm-result');
-
-          var blocks = (d.blocks || []).map(function(b, i){{
-
-            var isBreak = (b.technique || '').indexOf('break') >= 0;
-
-            var bg = isBreak ? 'background:rgba(34,197,94,.08)' : '';
-
-            return '<div class="card" style="margin-bottom:10px;' + bg + '">'
-
-              + '<div style="display:flex;justify-content:space-between;align-items:center">'
-
-              + '<div style="font-weight:700">' + (i+1) + '. ' + (b.topic || '') + '</div>'
-
-              + '<div style="color:var(--text-muted);font-size:13px">' + (b.duration_min || 0) + ' min</div></div>'
-
-              + '<div style="font-size:14px;margin-top:4px">' + (b.focus || '') + '</div>'
-
-              + '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">Technique: ' + (b.technique || '') + ' Â· ' + (b.why || '') + '</div></div>';
-
-          }}).join('');
-
-          var qw = (d.quick_wins || []).map(function(s){{return '<li>' + s + '</li>';}}).join('');
-
-          var skip = (d.skip_these || []).map(function(s){{return '<li>' + s + '</li>';}}).join('');
-
-          out.innerHTML =
-
-            (d.strategy_summary ? '<div class="card"><h3 style="margin:0 0 8px">Strategy</h3><p style="margin:0">' + d.strategy_summary + '</p></div>' : '')
-
-            + (qw ? '<div class="card"><h3 style="margin:0 0 8px;color:#22c55e">Quick Wins</h3><ul style="margin:0;padding-left:20px">' + qw + '</ul></div>' : '')
-
-            + (skip ? '<div class="card"><h3 style="margin:0 0 8px;color:#ef4444">Skip These</h3><ul style="margin:0;padding-left:20px">' + skip + '</ul></div>' : '')
-
-            + '<h3 style="margin:18px 0 10px">Schedule (' + (d.total_minutes || 0) + ' min)</h3>' + blocks;
-
-        }}
-
-        </script>
-
-        """, active_page="student_panic")
-
-
-
-    @app.route("/api/student/panic/plan", methods=["POST"])
-
-    def student_panic_plan_api():
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        data = request.get_json(force=True) or {}
-
-        try:
-
-            hours = float(data.get("hours") or 0)
-
-        except Exception:
-
-            hours = 0
-
-        topics = data.get("topics") or []
-
-        if hours <= 0 or not topics:
-
-            return jsonify({"error": "hours and topics required"}), 400
-
-        course_name = ""
-
-        course_ctx = ""
-
-        cid_val = data.get("course_id")
-
-        if cid_val:
-
-            try:
-
-                course = sdb.get_course(int(cid_val))
-
-                if course and course["client_id"] == _cid():
-
-                    course_name = course.get("name", "") or ""
-
-                    analysis = course.get("analysis_json") or {}
-
-                    if isinstance(analysis, str):
-
-                        try:
-
-                            analysis = json.loads(analysis)
-
-                        except Exception:
-
-                            analysis = {}
-
-                    course_ctx = (analysis.get("summary") or "")[:2500]
-
-            except Exception:
-
-                pass
-
-        try:
-
-            plan = generate_cram_plan(
-
-                hours_available=hours,
-
-                exam_topics=topics,
-
-                exam_name=data.get("exam_name") or "Exam",
-
-                course_name=course_name,
-
-                known_weak_areas=data.get("weak") or [],
-
-                course_context=course_ctx,
-
-            )
-
-            return jsonify(plan)
-
-        except Exception as e:
-
-            log.exception("panic plan failed")
-
-            return jsonify({"error": str(e)}), 500
-
-
-
     log.info("Student routes registered.")
-

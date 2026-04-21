@@ -1,5 +1,5 @@
 """
-Flask web dashboard â€” client-facing campaign management.
+Flask web dashboard — client-facing campaign management.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from outreach.ai import generate_sequence, personalize_email, generate_reply_dra
 from outreach.config import SECRET_KEY, SENDER_NAME
 from outreach.i18n import t, t_dict
 
-# â”€â”€ Sentry error tracking (production only â€” set SENTRY_DSN env var) â”€â”€
+# ── Sentry error tracking (production only — set SENTRY_DSN env var) ──
 from outreach.config import SENTRY_DSN
 if SENTRY_DSN:
     import sentry_sdk
@@ -66,7 +66,7 @@ from outreach.db import (
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
-# â”€â”€ Security: session cookie hardening â”€â”€
+# ── Security: session cookie hardening ──
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # HTTPS-only cookies in production (Render always runs behind TLS)
@@ -80,11 +80,11 @@ if _IS_PRODUCTION:
 app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours max session
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB upload limit
 
-# â”€â”€ Security: CSRF protection â”€â”€
+# ── Security: CSRF protection ──
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 csrf = CSRFProtect(app)
 
-# â”€â”€ Security: Rate limiting â”€â”€
+# ── Security: Rate limiting ──
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 limiter = Limiter(
@@ -94,7 +94,7 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-# â”€â”€ Startup diagnostic â€” log DB path so we can debug persistence â”€â”€
+# ── Startup diagnostic — log DB path so we can debug persistence ──
 import logging
 from outreach.config import DATABASE_PATH
 logging.basicConfig(level=logging.INFO)
@@ -108,7 +108,7 @@ if os.path.isdir('/data'):
 # Ensure DB is initialized (for gunicorn and direct run)
 init_db()
 
-# â”€â”€ MachReach Student module â”€â”€
+# ── MachReach Student module ──
 from student.db import init_student_db
 from student.routes import register_student_routes
 from student.academic_routes import register_academic_routes
@@ -116,7 +116,7 @@ init_student_db()
 register_student_routes(app, csrf, limiter)
 register_academic_routes(app, csrf, limiter)
 
-# â”€â”€ MachReach Pro module (productivity toolkit for business accounts) â”€â”€
+# ── MachReach Pro module (productivity toolkit for business accounts) ──
 from professional.db import init_professional_db
 from professional.routes import register_professional_routes
 init_professional_db()
@@ -124,7 +124,7 @@ register_professional_routes(app, csrf, limiter)
 
 
 # ---------------------------------------------------------------------------
-# System email helper â€” sends transactional emails from support@machreach.com
+# System email helper — sends transactional emails from support@machreach.com
 # ---------------------------------------------------------------------------
 
 def _send_system_email(to: str, subject: str, body: str) -> bool:
@@ -137,7 +137,7 @@ def _send_system_email(to: str, subject: str, body: str) -> bool:
     from email.mime.multipart import MIMEMultipart
     print(f"[SYSTEM EMAIL] Attempting to send to {to} via {SMTP_HOST}:{SMTP_PORT} as {SYSTEM_SMTP_USER}", flush=True)
     if not SYSTEM_SMTP_USER or not SYSTEM_SMTP_PASSWORD:
-        print(f"[SYSTEM EMAIL] SMTP credentials not set â€” SYSTEM_SMTP_USER={'set' if SYSTEM_SMTP_USER else 'EMPTY'}, SYSTEM_SMTP_PASSWORD={'set' if SYSTEM_SMTP_PASSWORD else 'EMPTY'}", flush=True)
+        print(f"[SYSTEM EMAIL] SMTP credentials not set — SYSTEM_SMTP_USER={'set' if SYSTEM_SMTP_USER else 'EMPTY'}, SYSTEM_SMTP_PASSWORD={'set' if SYSTEM_SMTP_PASSWORD else 'EMPTY'}", flush=True)
         return False
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -164,7 +164,7 @@ def _send_system_email(to: str, subject: str, body: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Health check â€” Render uses this to know if the app is alive
+# Health check — Render uses this to know if the app is alive
 # ---------------------------------------------------------------------------
 
 @app.route("/health")
@@ -183,7 +183,7 @@ def health_check():
 @app.route("/api/debug/smtp-test")
 @limiter.exempt
 def debug_smtp_test():
-    """Diagnose SMTP â€” test connection without sending."""
+    """Diagnose SMTP — test connection without sending."""
     from outreach.config import SMTP_HOST, SMTP_PORT, SYSTEM_FROM_EMAIL, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD
     info = {
         "SMTP_HOST": SMTP_HOST,
@@ -225,7 +225,7 @@ def debug_smtp_send_test():
 
 
 # ---------------------------------------------------------------------------
-# ONE-TIME: Diagnostic â€” check what DB Render is using
+# ONE-TIME: Diagnostic — check what DB Render is using
 # ---------------------------------------------------------------------------
 
 @app.route("/api/admin/check-db", methods=["POST"])
@@ -253,7 +253,7 @@ def admin_check_db():
 
 
 # ---------------------------------------------------------------------------
-# ONE-TIME: Account reset â€” delete all accounts and notify users
+# ONE-TIME: Account reset — delete all accounts and notify users
 # Remove this endpoint after use!
 # ---------------------------------------------------------------------------
 
@@ -291,9 +291,9 @@ def admin_reset_all_accounts():
             f"We sincerely apologize for the inconvenience and appreciate your understanding. "
             f"Your data security is our top priority.\n\n"
             f"If you have any questions, reply to this email or contact us at support@machreach.com.\n\n"
-            f"â€” The MachReach Team"
+            f"— The MachReach Team"
         )
-        ok = _send_system_email(c["email"], "MachReach â€” Important Account Update", body)
+        ok = _send_system_email(c["email"], "MachReach — Important Account Update", body)
         if ok:
             sent_count += 1
         else:
@@ -301,7 +301,7 @@ def admin_reset_all_accounts():
 
     # 3. Delete ALL data
     with get_db() as db:
-        # Order matters â€” foreign keys
+        # Order matters — foreign keys
         _exec(db, "DELETE FROM sent_emails")
         _exec(db, "DELETE FROM email_sequences")
         _exec(db, "DELETE FROM contacts")
@@ -337,7 +337,7 @@ def _verify_pw(pw: str, stored_hash: str) -> bool:
     """Verify a password against a stored hash. Supports bcrypt and legacy SHA256."""
     if stored_hash.startswith("$2b$") or stored_hash.startswith("$2a$"):
         return bcrypt.checkpw(pw.encode(), stored_hash.encode())
-    # Legacy SHA256 â€” verify and auto-upgrade
+    # Legacy SHA256 — verify and auto-upgrade
     return hashlib.sha256(pw.encode()).hexdigest() == stored_hash
 
 
@@ -403,7 +403,7 @@ def _set_security_headers(response):
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     response.headers["X-Download-Options"] = "noopen"
-    # Content Security Policy â€” restricts where scripts/styles/images/frames can load from.
+    # Content Security Policy — restricts where scripts/styles/images/frames can load from.
     # 'unsafe-inline' is required because MachReach renders heavy inline HTML/CSS/JS
     # via Jinja/f-strings. Everything else is locked down.
     _CSP = (
@@ -443,7 +443,7 @@ LAYOUT = """<!DOCTYPE html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>MachReach â€” {{title}}</title>
+  <title>MachReach — {{title}}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -590,7 +590,7 @@ LAYOUT = """<!DOCTYPE html>
       color: #475569;
     }
 
-    /* â”€â”€â”€ MachReach student themes â”€â”€â”€ */
+    /* ─── MachReach student themes ─── */
     /* mr-default = light default; mr-dark inherits dark mode vars */
     :root[data-theme="mr-light"] {
       --bg:#F8FAFC; --card:#FFFFFF; --text:#0F172A; --text-muted:#64748B;
@@ -640,7 +640,7 @@ LAYOUT = """<!DOCTYPE html>
     :root[data-theme="mr-mono"] input, :root[data-theme="mr-mono"] textarea, :root[data-theme="mr-mono"] select { background:#171717; color:#fafafa; border-color:#262626; }
     :root[data-theme="mr-mono"] .btn-primary { background:#fff; color:#000; }
 
-    /* Nav theming â€” each theme gets its own gradient so the top bar matches */
+    /* Nav theming — each theme gets its own gradient so the top bar matches */
     :root[data-theme="mr-midnight"] .nav { background: linear-gradient(135deg,#020617 0%,#0f172a 100%); }
     :root[data-theme="mr-forest"]   .nav { background: linear-gradient(135deg,#052e1a 0%,#0f2a20 100%); }
     :root[data-theme="mr-ocean"]    .nav { background: linear-gradient(135deg,#0c1e38 0%,#082f49 100%); }
@@ -657,7 +657,7 @@ LAYOUT = """<!DOCTYPE html>
     :root[data-theme="mr-light"]    .nav-user { color:#64748b; }
     :root[data-theme="mr-light"]    .nav-logo { color:#0f172a; }
 
-    /* â”€â”€ Pastel themes (light, colored) â”€â”€ */
+    /* ── Pastel themes (light, colored) ── */
     /* Each pastel sets vars + body bg + inputs + nav gradient + nav link colors. */
     :root[data-theme="mr-lavender"] {
       --bg:#ede9fe; --card:#f5f3ff; --text:#3b0764; --text-secondary:#5b21b6; --text-muted:#6d28d9;
@@ -742,7 +742,7 @@ LAYOUT = """<!DOCTYPE html>
     :root[data-theme="mr-lavender"]    .nav-dropdown-menu a:hover, :root[data-theme="mr-mint"] .nav-dropdown-menu a:hover, :root[data-theme="mr-peach"] .nav-dropdown-menu a:hover, :root[data-theme="mr-sky"] .nav-dropdown-menu a:hover, :root[data-theme="mr-butter"] .nav-dropdown-menu a:hover, :root[data-theme="mr-lilac"] .nav-dropdown-menu a:hover, :root[data-theme="mr-blush"] .nav-dropdown-menu a:hover, :root[data-theme="mr-sand"] .nav-dropdown-menu a:hover, :root[data-theme="mr-cottoncandy"] .nav-dropdown-menu a:hover, :root[data-theme="mr-seafoam"] .nav-dropdown-menu a:hover { color: var(--text) !important; background: rgba(0,0,0,0.08) !important; }
     :root[data-theme="mr-lavender"]    .nav-user, :root[data-theme="mr-mint"] .nav-user, :root[data-theme="mr-peach"] .nav-user, :root[data-theme="mr-sky"] .nav-user, :root[data-theme="mr-butter"] .nav-user, :root[data-theme="mr-lilac"] .nav-user, :root[data-theme="mr-blush"] .nav-user, :root[data-theme="mr-sand"] .nav-user, :root[data-theme="mr-cottoncandy"] .nav-user, :root[data-theme="mr-seafoam"] .nav-user { color: var(--text-muted); }
 
-    /* â”€â”€â”€ end themes â”€â”€â”€ */
+    /* ─── end themes ─── */
 
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
@@ -781,7 +781,7 @@ LAYOUT = """<!DOCTYPE html>
     #focus-float .ff-close { position:absolute; top:4px; right:8px; font-size:14px; color:#64748b; cursor:pointer; }
     #focus-float .ff-close:hover { color:#ef4444; }
 
-    /* Layout â€” edge-to-edge with comfortable padding */
+    /* Layout — edge-to-edge with comfortable padding */
     .container { max-width: 1440px; margin: 0 auto; padding: 28px 40px; }
     .container.container-wide { max-width: 100%; padding: 28px 40px; }
     @media (max-width: 768px) { .container, .container.container-wide { padding: 20px 16px; } }
@@ -883,7 +883,7 @@ LAYOUT = """<!DOCTYPE html>
     .badge-red { background: var(--red-light); color: #991B1B; }
     .badge-purple { background: var(--primary-light); color: var(--primary-dark); }
 
-    /* Beta banner â€” subtle, non-dominating */
+    /* Beta banner — subtle, non-dominating */
     .beta-banner { display:flex; align-items:center; justify-content:center; gap:10px; padding:9px 16px; margin-bottom:16px; border-radius:10px; background:#FFFBEB; border:1px solid #FDE68A; color:#854D0E; font-size:12.5px; font-weight:500; text-align:center; }
     .beta-pill { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; background:#F59E0B; color:#fff; font-size:10px; font-weight:700; letter-spacing:1px; }
     :root[data-theme="dark"] .beta-banner,
@@ -932,7 +932,7 @@ LAYOUT = """<!DOCTYPE html>
     .empty h3 { color: var(--text-secondary); margin-bottom: 6px; font-size: 15px; }
     .empty p { font-size: 13px; max-width: 300px; margin: 0 auto; }
 
-    /* â”€â”€â”€ Polish pack â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    /* ─── Polish pack ────────────────────────────────────────────
        Global UI upgrades applied across the whole platform. */
 
     /* Cards: smoother lift on hover */
@@ -1090,7 +1090,7 @@ LAYOUT = """<!DOCTYPE html>
       to { opacity: 1; transform: scale(1); }
     }
 
-    /* Apply animations â€” fast & subtle */
+    /* Apply animations — fast & subtle */
     .container { animation: fadeIn 0.15s ease; }
     .page-header { animation: fadeInUp 0.2s ease both; }
 
@@ -1190,7 +1190,7 @@ LAYOUT = """<!DOCTYPE html>
       tbody { display: table-row-group; }
     }
 
-    /* â”€â”€â”€ Global animation system â”€â”€â”€ */
+    /* ─── Global animation system ─── */
     html { scroll-behavior: smooth; }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
@@ -1286,7 +1286,7 @@ LAYOUT = """<!DOCTYPE html>
     .cmdk-empty { padding: 22px; text-align: center; color: var(--text-muted); font-size: 13px; }
     .cmdk-section-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); padding: 10px 12px 4px; font-weight: 700; }
 
-    /* â”€â”€â”€ Skeleton loaders â”€â”€â”€ */
+    /* ─── Skeleton loaders ─── */
     @keyframes skShimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
     .skeleton { display: inline-block; background: linear-gradient(90deg, var(--border-light) 0%, rgba(148,163,184,.18) 50%, var(--border-light) 100%); background-size: 800px 100%; animation: skShimmer 1.4s linear infinite; border-radius: 6px; color: transparent !important; user-select: none; }
     .skeleton-line { display: block; height: 12px; margin: 8px 0; border-radius: 4px; }
@@ -1301,7 +1301,7 @@ LAYOUT = """<!DOCTYPE html>
     .skeleton-card { padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
     .skeleton-stat { padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
 
-    /* â”€â”€â”€ Empty states â”€â”€â”€ */
+    /* ─── Empty states ─── */
     .empty-state { text-align: center; padding: 56px 28px; max-width: 520px; margin: 32px auto; border: 1.5px dashed var(--border); border-radius: 16px; background: linear-gradient(180deg, var(--card), transparent 110%); position: relative; overflow: hidden; }
     .empty-state::before { content: ''; position: absolute; top: -40%; left: 50%; width: 200px; height: 200px; transform: translateX(-50%); background: radial-gradient(circle, rgba(99,102,241,.08), transparent 70%); pointer-events: none; }
     .empty-state .empty-icon { font-size: 44px; margin-bottom: 16px; display: inline-flex; width: 72px; height: 72px; align-items: center; justify-content: center; border-radius: 50%; background: var(--primary-light); color: var(--primary); position: relative; z-index: 1; }
@@ -1318,7 +1318,7 @@ LAYOUT = """<!DOCTYPE html>
     .empty-state.compact h3 { font-size: 17px; }
     .empty-state.compact p { font-size: 13.5px; }
 
-    /* â”€â”€â”€ Top progress bar â”€â”€â”€ */
+    /* ─── Top progress bar ─── */
     #topbar-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: transparent; z-index: 10000; pointer-events: none; }
     #topbar-progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, #6366F1, #A78BFA, #F472B6); background-size: 200% 100%; transition: width .35s var(--ease), opacity .25s var(--ease); box-shadow: 0 0 10px rgba(124,58,237,.55), 0 0 4px rgba(99,102,241,.45); animation: topbarShimmer 2s linear infinite; }
     #topbar-progress.done .bar { opacity: 0; }
@@ -1452,7 +1452,7 @@ LAYOUT = """<!DOCTYPE html>
   <div class="container{% if wide %} container-wide{% endif %}">
     <div class="beta-banner">
       <span class="beta-pill">BETA</span>
-      <span>MachReach is in testing â€” subscriptions are not yet active. All features are free during this period.</span>
+      <span>MachReach is in testing — subscriptions are not yet active. All features are free during this period.</span>
     </div>
     <div class="toast-container" id="toast-container">
     {% for cat, msg in messages %}
@@ -1498,7 +1498,7 @@ LAYOUT = """<!DOCTYPE html>
     document.querySelectorAll('.toast').forEach(function(t) {
       setTimeout(function() { dismissToast(t); }, 4000);
     });
-    // Global confetti helper â€” sprinkles celebratory particles
+    // Global confetti helper — sprinkles celebratory particles
     window.confettiBurst = function(count) {
       count = count || 40;
       var colors = ['#6366F1','#8B5CF6','#EC4899','#F59E0B','#10B981','#3B82F6'];
@@ -1525,7 +1525,7 @@ LAYOUT = """<!DOCTYPE html>
       void el.offsetWidth;
       el.classList.add('num-pop');
     };
-    // Promotion toast â€” shown when a user ranks up
+    // Promotion toast — shown when a user ranks up
     window.showPromotionToast = function(promo) {
       if (!promo || !promo.promoted || !promo.rank_after) return;
       var r = promo.rank_after;
@@ -1553,9 +1553,9 @@ LAYOUT = """<!DOCTYPE html>
       setTimeout(function(){ toast.style.animation='promoFade .5s ease-in forwards'; }, 5500);
       setTimeout(function(){ toast.remove(); }, 6100);
     };
-    // Theme system â€” applies named themes via CSS variables on <body>
+    // Theme system — applies named themes via CSS variables on <body>
     window.MR_THEMES = {
-      // â”€â”€ Dark â”€â”€
+      // ── Dark ──
       default: { bg:'#0f172a', card:'#1e293b', border:'#334155', text:'#f1f5f9', textMuted:'#94a3b8', primary:'#6366f1' },
       midnight:{ bg:'#050816', card:'#0c1026', border:'#1e1b4b', text:'#e2e8f0', textMuted:'#94a3b8', primary:'#8b5cf6' },
       forest:  { bg:'#0b2018', card:'#11322a', border:'#14532d', text:'#d1fae5', textMuted:'#6ee7b7', primary:'#10b981' },
@@ -1563,7 +1563,7 @@ LAYOUT = """<!DOCTYPE html>
       rose:    { bg:'#3f0a1a', card:'#581132', border:'#9f1239', text:'#fecdd3', textMuted:'#fda4af', primary:'#f43f5e' },
       sunset:  { bg:'#431407', card:'#7c2d12', border:'#9a3412', text:'#ffedd5', textMuted:'#fdba74', primary:'#f97316' },
       mono:    { bg:'#0a0a0a', card:'#171717', border:'#262626', text:'#fafafa', textMuted:'#a3a3a3', primary:'#fafafa' },
-      // â”€â”€ Light / Pastel â”€â”€ (bumped saturation + colored cards so the pastel actually shows)
+      // ── Light / Pastel ── (bumped saturation + colored cards so the pastel actually shows)
       light:    { bg:'#f8fafc', card:'#ffffff', border:'#e2e8f0', text:'#0f172a', textMuted:'#64748b', primary:'#6366f1' },
       lavender: { bg:'#ede9fe', card:'#f5f3ff', border:'#c4b5fd', text:'#3b0764', textMuted:'#6d28d9', primary:'#7c3aed' },
       mint:     { bg:'#bbf7d0', card:'#dcfce7', border:'#86efac', text:'#14532d', textMuted:'#15803d', primary:'#16a34a' },
@@ -1600,7 +1600,7 @@ LAYOUT = """<!DOCTYPE html>
     // Apply saved theme on load
     try { window.applyMrTheme(localStorage.getItem('mr_theme') || 'default'); } catch(e) {}
 
-    // â”€â”€ FOCUS SHIELD (in-app distraction blocker) â”€â”€
+    // ── FOCUS SHIELD (in-app distraction blocker) ──
     // When a focus session is running (localStorage.focus_float.active),
     // any non-focus MachReach page is replaced with a full-screen shield
     // urging the user back to the timer. Prevents using MachReach itself
@@ -1622,12 +1622,12 @@ LAYOUT = """<!DOCTYPE html>
         s.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:radial-gradient(circle at top,#1e1b4b,#050816);color:#fff;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;animation:mrFsIn .35s ease-out';
         s.innerHTML = '<style>@keyframes mrFsIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}</style>'
           + '<div style="max-width:520px;padding:40px 32px;text-align:center">'
-          +   '<div style="font-size:72px;margin-bottom:12px">ðŸŽ¯</div>'
+          +   '<div style="font-size:72px;margin-bottom:12px">🎯</div>'
           +   '<div style="font-size:12px;letter-spacing:3px;color:#A78BFA;text-transform:uppercase;font-weight:700;margin-bottom:8px">Focus session active</div>'
           +   '<h1 style="font-size:30px;margin:0 0 14px;font-weight:800;line-height:1.15">Stay locked in.</h1>'
           +   '<p style="color:#C7D2FE;font-size:15px;line-height:1.6;margin:0 0 26px">You started a focus session. This page is blocked until you finish or pause the timer. No shortcuts.</p>'
           +   '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
-          +     '<a href="/student/focus" style="background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;padding:14px 26px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(99,102,241,.4)">âŸµ Back to Focus Timer</a>'
+          +     '<a href="/student/focus" style="background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;padding:14px 26px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(99,102,241,.4)">⟵ Back to Focus Timer</a>'
           +     '<button id="mr-focus-shield-break" style="background:transparent;border:1px solid rgba(255,255,255,.2);color:#A5B4FC;padding:14px 20px;border-radius:12px;cursor:pointer;font-weight:600;font-size:13px">End session (lose progress)</button>'
           +   '</div>'
           + '</div>';
@@ -1684,7 +1684,7 @@ LAYOUT = """<!DOCTYPE html>
       if (e.key === 'Escape') document.querySelectorAll('.preview-modal.show').forEach(m => m.classList.remove('show'));
     });
 
-    // Live stats polling â€” refreshes every 15s
+    // Live stats polling — refreshes every 15s
     (function() {
       const dashStatEls = {
         total_campaigns: document.querySelector('[data-stat="total_campaigns"]'),
@@ -1860,7 +1860,7 @@ LAYOUT = """<!DOCTYPE html>
     });
   </script>
 
-  <!-- â”€â”€â”€ MachReach global UX enhancements â”€â”€â”€ -->
+  <!-- ─── MachReach global UX enhancements ─── -->
   <script>
     (function(){
       // 1) Scroll-reveal observer: any element with [.reveal, .reveal-fade, .reveal-scale, .reveal-left, .reveal-right]
@@ -1919,50 +1919,50 @@ LAYOUT = """<!DOCTYPE html>
 
       // 4) Command palette (Cmd+K / Ctrl+K)
       var CMDK_ITEMS = (window.__IS_LOGGED_IN__ && window.__ACCOUNT_TYPE__ === 'student') ? [
-        {t:'Student Dashboard', u:'/student', i:'ðŸŽ“', s:'Main'},
-        {t:'Courses', u:'/student/courses', i:'ðŸ“š', s:'Main'},
-        {t:'Study Plan', u:'/student/plan', i:'ðŸ“…', s:'Main'},
-        {t:'Flashcards', u:'/student/flashcards', i:'ðŸ“‡', s:'Study'},
-        {t:'Quizzes', u:'/student/quizzes', i:'ðŸ“', s:'Study'},
-        {t:'Notes', u:'/student/notes', i:'ðŸ“–', s:'Study'},
-        {t:'AI Tutor', u:'/student/chat', i:'ðŸ¤–', s:'Study'},
+        {t:'Student Dashboard', u:'/student', i:'🎓', s:'Main'},
+        {t:'Courses', u:'/student/courses', i:'📚', s:'Main'},
+        {t:'Study Plan', u:'/student/plan', i:'📅', s:'Main'},
+        {t:'Flashcards', u:'/student/flashcards', i:'📇', s:'Study'},
+        {t:'Quizzes', u:'/student/quizzes', i:'📝', s:'Study'},
+        {t:'Notes', u:'/student/notes', i:'📖', s:'Study'},
+        {t:'AI Tutor', u:'/student/chat', i:'🤖', s:'Study'},
         {t:'Essay Assistant', u:'/student/essay', i:'\u270F\uFE0F', s:'Study'},
-        {t:'Practice Problems', u:'/student/practice', i:'ðŸ› \uFE0F', s:'Study'},
-        {t:'Focus Mode', u:'/student/focus', i:'ðŸŽ¯', s:'Tools'},
-        {t:'Panic Mode', u:'/student/panic', i:'ðŸš¨', s:'Tools'},
-        {t:'Exams', u:'/student/exams', i:'ðŸ“', s:'Tools'},
-        {t:'Schedule', u:'/student/schedule', i:'ðŸ—“\uFE0F', s:'Tools'},
-        {t:'Weak Topics', u:'/student/weak-topics', i:'ðŸŽ¯', s:'Tools'},
-        {t:'GPA Calculator', u:'/student/gpa', i:'ðŸ“ˆ', s:'Tools'},
-        {t:'Leaderboard', u:'/student/leaderboard', i:'ðŸ†', s:'Social'},
-        {t:'Study Exchange', u:'/student/exchange', i:'ðŸ”', s:'Social'},
-        {t:'Mail Hub', u:'/mail-hub', i:'ðŸ“©', s:'Other'},
+        {t:'Practice Problems', u:'/student/practice', i:'🛠\uFE0F', s:'Study'},
+        {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
+        {t:'Panic Mode', u:'/student/panic', i:'🚨', s:'Tools'},
+        {t:'Exams', u:'/student/exams', i:'📝', s:'Tools'},
+        {t:'Schedule', u:'/student/schedule', i:'🗓\uFE0F', s:'Tools'},
+        {t:'Weak Topics', u:'/student/weak-topics', i:'🎯', s:'Tools'},
+        {t:'GPA Calculator', u:'/student/gpa', i:'📈', s:'Tools'},
+        {t:'Leaderboard', u:'/student/leaderboard', i:'🏆', s:'Social'},
+        {t:'Study Exchange', u:'/student/exchange', i:'🔁', s:'Social'},
+        {t:'Mail Hub', u:'/mail-hub', i:'📩', s:'Other'},
         {t:'Settings', u:'/student/settings', i:'\u2699\uFE0F', s:'Other'},
-        {t:'Log out', u:'/logout', i:'ðŸšª', s:'Other'},
+        {t:'Log out', u:'/logout', i:'🚪', s:'Other'},
       ] : (window.__IS_LOGGED_IN__ ? [
-        {t:'Dashboard', u:'/dashboard', i:'ðŸ ', s:'Main'},
+        {t:'Dashboard', u:'/dashboard', i:'🏠', s:'Main'},
         {t:'New Campaign', u:'/campaign/new', i:'\u2795', s:'Campaigns'},
-        {t:'Inbox', u:'/inbox', i:'ðŸ“¥', s:'Campaigns'},
-        {t:'A/B Tests', u:'/ab-tests', i:'ðŸ§ª', s:'Campaigns'},
+        {t:'Inbox', u:'/inbox', i:'📥', s:'Campaigns'},
+        {t:'A/B Tests', u:'/ab-tests', i:'🧪', s:'Campaigns'},
         {t:'Smart Send Times', u:'/smart-times', i:'\u23F1\uFE0F', s:'Intelligence'},
         {t:'Subject Optimizer', u:'/subject-optimizer', i:'\u2728', s:'Intelligence'},
-        {t:'Reply Intelligence', u:'/reply-intel', i:'ðŸ§ ', s:'Intelligence'},
-        {t:'Deliverability Checker', u:'/deliverability', i:'ðŸ›¡\uFE0F', s:'Intelligence'},
-        {t:'Calendar', u:'/calendar', i:'ðŸ“…', s:'Tools'},
-        {t:'Export', u:'/export', i:'ðŸ“Š', s:'Tools'},
-        {t:'Mail Hub', u:'/mail-hub', i:'ðŸ“©', s:'Mail'},
-        {t:'Contacts', u:'/contacts', i:'ðŸ‘¥', s:'Mail'},
+        {t:'Reply Intelligence', u:'/reply-intel', i:'🧠', s:'Intelligence'},
+        {t:'Deliverability Checker', u:'/deliverability', i:'🛡\uFE0F', s:'Intelligence'},
+        {t:'Calendar', u:'/calendar', i:'📅', s:'Tools'},
+        {t:'Export', u:'/export', i:'📊', s:'Tools'},
+        {t:'Mail Hub', u:'/mail-hub', i:'📩', s:'Mail'},
+        {t:'Contacts', u:'/contacts', i:'👥', s:'Mail'},
         {t:'Pro Tools: Tasks', u:'/pro/tasks', i:'\u2705', s:'Pro'},
-        {t:'Pro Tools: Finance', u:'/pro/finance', i:'ðŸ’°', s:'Pro'},
-        {t:'Pro Tools: Relationships', u:'/pro/relationships', i:'ðŸ§ ', s:'Pro'},
-        {t:'Pro Tools: Goals & OKRs', u:'/pro/goals', i:'ðŸŽ¯', s:'Pro'},
-        {t:'Pro Tools: Invoices', u:'/pro/invoices', i:'ðŸ“„', s:'Pro'},
+        {t:'Pro Tools: Finance', u:'/pro/finance', i:'💰', s:'Pro'},
+        {t:'Pro Tools: Relationships', u:'/pro/relationships', i:'🧠', s:'Pro'},
+        {t:'Pro Tools: Goals & OKRs', u:'/pro/goals', i:'🎯', s:'Pro'},
+        {t:'Pro Tools: Invoices', u:'/pro/invoices', i:'📄', s:'Pro'},
         {t:'Settings', u:'/settings', i:'\u2699\uFE0F', s:'Other'},
-        {t:'Log out', u:'/logout', i:'ðŸšª', s:'Other'},
+        {t:'Log out', u:'/logout', i:'🚪', s:'Other'},
       ] : [
-        {t:'Home', u:'/', i:'ðŸ ', s:'Public'},
-        {t:'Pricing', u:'/pricing', i:'ðŸ’³', s:'Public'},
-        {t:'Log in', u:'/login', i:'ðŸ”‘', s:'Public'},
+        {t:'Home', u:'/', i:'🏠', s:'Public'},
+        {t:'Pricing', u:'/pricing', i:'💳', s:'Public'},
+        {t:'Log in', u:'/login', i:'🔑', s:'Public'},
         {t:'Sign up', u:'/register', i:'\u2728', s:'Public'},
       ]);
 
@@ -1974,8 +1974,8 @@ LAYOUT = """<!DOCTYPE html>
         o.innerHTML =
           '<div class="cmdk-panel" role="dialog" aria-label="Command palette">'
           + '<div class="cmdk-input-wrap">'
-          + '<span style="color:var(--text-muted);">ðŸ”</span>'
-          + '<input id="cmdk-input" type="text" placeholder="Jump to a page or featureâ€¦" autocomplete="off" />'
+          + '<span style="color:var(--text-muted);">🔍</span>'
+          + '<input id="cmdk-input" type="text" placeholder="Jump to a page or feature…" autocomplete="off" />'
           + '<span class="cmdk-kbd">ESC</span>'
           + '</div>'
           + '<div id="cmdk-list" class="cmdk-list"></div>'
@@ -2088,7 +2088,7 @@ LAYOUT = """<!DOCTYPE html>
    * GLOBAL FOCUS CONTROLLER
    * Runs on EVERY page so that when the user navigates away from
    * /student/focus the timer keeps ticking, the alarm fires, XP
-   * gets credited, and pomodoro phases auto-advance â€” even though
+   * gets credited, and pomodoro phases auto-advance — even though
    * the focus page itself has been unloaded.
    * ============================================================ */
   (function(){
@@ -2150,7 +2150,7 @@ LAYOUT = """<!DOCTYPE html>
       if (!alarmDataUri){ alarmDataUri = buildAlarmWavDataUri(); alarmEl.src = alarmDataUri; alarmEl.volume = 0.7; }
     }
 
-    // WebAudio fallback alarm â€” much more reliable than HTML5 Audio when
+    // WebAudio fallback alarm — much more reliable than HTML5 Audio when
     // it comes to autoplay policies, because once the AudioContext is
     // resumed via a user gesture it stays unlocked for the whole document.
     var alarmCtx = null;
@@ -2338,7 +2338,7 @@ LAYOUT = """<!DOCTYPE html>
             // Re-base nextPhase.endAt off NOW so a long pause doesn't make it instantly expire.
             var np = d.nextPhase;
             // The original endAt was relative to the previous phase's endAt; preserve duration.
-            // We don't know the duration directly â€” recompute from workMinutes (work) or label (best-effort 5min default for break is wrong).
+            // We don't know the duration directly — recompute from workMinutes (work) or label (best-effort 5min default for break is wrong).
             // Safer: nextPhase.endAt was already absolute; if it's already in the past, just skip ahead.
             if (np.endAt && np.endAt > Date.now()){
               writeState(np);
@@ -2397,93 +2397,93 @@ LAYOUT = """<!DOCTYPE html>
     var T = {
       // Nav
       "Dashboard": "Panel", "Courses": "Cursos", "Plan": "Plan", "Flashcards": "Tarjetas",
-      "Quizzes": "ExÃ¡menes", "Notes": "Apuntes", "Tutor": "Tutor", "XP": "XP",
-      "Mail": "Correo", "Focus Mode": "Modo Enfoque", "Exams": "ExÃ¡menes",
-      "GPA Calculator": "Calculadora GPA", "Schedule": "Horario", "Weak Topics": "Temas DÃ©biles",
-      "Settings": "Ajustes", "Leaderboard": "ClasificaciÃ³n",
+      "Quizzes": "Exámenes", "Notes": "Apuntes", "Tutor": "Tutor", "XP": "XP",
+      "Mail": "Correo", "Focus Mode": "Modo Enfoque", "Exams": "Exámenes",
+      "GPA Calculator": "Calculadora GPA", "Schedule": "Horario", "Weak Topics": "Temas Débiles",
+      "Settings": "Ajustes", "Leaderboard": "Clasificación",
       // Achievements page
       "Achievements & Progress": "Logros y Progreso", "Level": "Nivel",
-      "XP to next level": "XP para el siguiente nivel", "Day Streak": "Racha de DÃ­as",
+      "XP to next level": "XP para el siguiente nivel", "Day Streak": "Racha de Días",
       "Badges Earned": "Insignias Obtenidas", "Your Badges": "Tus Insignias",
       "All Badges": "Todas las Insignias", "Recent Activity": "Actividad Reciente",
-      "No badges yet â€” keep studying!": "Â¡AÃºn no tienes insignias â€” sigue estudiando!",
-      "No activity yet.": "AÃºn no hay actividad.",
-      "Earned!": "Â¡Obtenida!", "Not yet earned": "AÃºn no obtenida",
+      "No badges yet — keep studying!": "¡Aún no tienes insignias — sigue estudiando!",
+      "No activity yet.": "Aún no hay actividad.",
+      "Earned!": "¡Obtenida!", "Not yet earned": "Aún no obtenida",
       // Badge names
-      "Welcome!": "Â¡Bienvenido!", "Quiz Rookie": "Novato en ExÃ¡menes",
-      "Quiz Master": "Maestro de ExÃ¡menes", "Flashcard Fan": "Fan de Tarjetas",
-      "On Fire!": "Â¡En Llamas!", "Unstoppable": "Â¡Imparable!",
+      "Welcome!": "¡Bienvenido!", "Quiz Rookie": "Novato en Exámenes",
+      "Quiz Master": "Maestro de Exámenes", "Flashcard Fan": "Fan de Tarjetas",
+      "On Fire!": "¡En Llamas!", "Unstoppable": "¡Imparable!",
       "Diamond Student": "Estudiante Diamante", "Note Taker": "Tomador de Apuntes",
       "Rising Star": "Estrella Naciente", "Shining Star": "Estrella Brillante",
       "Superstar": "Superestrella", "Focused": "Enfocado", "Deep Focus": "Enfoque Profundo",
-      "Focus Master": "Maestro del Enfoque", "Page Turner": "Lector Ãvido",
-      "Quiz Pro": "Pro de ExÃ¡menes",
+      "Focus Master": "Maestro del Enfoque", "Page Turner": "Lector Ávido",
+      "Quiz Pro": "Pro de Exámenes",
       // Badge descriptions
-      "Logged in for the first time": "Iniciaste sesiÃ³n por primera vez",
+      "Logged in for the first time": "Iniciaste sesión por primera vez",
       "Completed your first quiz": "Completaste tu primer examen",
       "Scored 100% on a quiz": "Obtuviste 100% en un examen",
       "Reviewed 100 flashcards": "Revisaste 100 tarjetas",
-      "3-day study streak": "Racha de estudio de 3 dÃ­as",
-      "7-day study streak": "Racha de estudio de 7 dÃ­as",
-      "30-day study streak": "Racha de estudio de 30 dÃ­as",
+      "3-day study streak": "Racha de estudio de 3 días",
+      "7-day study streak": "Racha de estudio de 7 días",
+      "30-day study streak": "Racha de estudio de 30 días",
       "Created 10 notes": "Creaste 10 apuntes",
       "Earned 100 XP": "Ganaste 100 XP", "Earned 500 XP": "Ganaste 500 XP",
       "Earned 1000 XP": "Ganaste 1000 XP",
       "1 hour of total focus time": "1 hora de tiempo de enfoque total",
       "10 hours of total focus time": "10 horas de tiempo de enfoque total",
       "50 hours of total focus time": "50 horas de tiempo de enfoque total",
-      "Read 100 pages": "LeÃ­ste 100 pÃ¡ginas",
-      "Completed 10 quizzes": "Completaste 10 exÃ¡menes",
+      "Read 100 pages": "Leíste 100 páginas",
+      "Completed 10 quizzes": "Completaste 10 exámenes",
       // Levels
       "Freshman": "Novato", "Sophomore": "Aprendiz", "Junior": "Intermedio",
       "Senior": "Avanzado", "Scholar": "Erudito", "Master": "Maestro", "Professor": "Profesor",
       // Focus page
       "Study Timer": "Temporizador de Estudio", "Pomodoro": "Pomodoro",
-      "Page Method": "MÃ©todo de PÃ¡ginas", "Custom": "Personalizado",
+      "Page Method": "Método de Páginas", "Custom": "Personalizado",
       "Work (min)": "Trabajo (min)", "Break (min)": "Descanso (min)",
       "Long break (min)": "Descanso largo (min)",
-      "Long break after every 4 sessions.": "Descanso largo despuÃ©s de cada 4 sesiones.",
-      "Target pages": "PÃ¡ginas objetivo", "Page Completed!": "Â¡PÃ¡gina Completada!",
+      "Long break after every 4 sessions.": "Descanso largo después de cada 4 sesiones.",
+      "Target pages": "Páginas objetivo", "Page Completed!": "¡Página Completada!",
       "Ready to focus": "Listo para enfocarte", "Start": "Iniciar", "Pause": "Pausar",
-      "Reset": "Reiniciar", "Study Music": "MÃºsica de Estudio",
-      "Quick Flashcards": "Tarjetas RÃ¡pidas", "Quick Notes": "Notas RÃ¡pidas",
+      "Reset": "Reiniciar", "Study Music": "Música de Estudio",
+      "Quick Flashcards": "Tarjetas Rápidas", "Quick Notes": "Notas Rápidas",
       "Hours Focused": "Horas Enfocado", "Sessions": "Sesiones",
-      "Pages Read": "PÃ¡ginas LeÃ­das",
+      "Pages Read": "Páginas Leídas",
       // Settings
       "Profile": "Perfil", "Name": "Nombre", "Email": "Correo",
       "Email cannot be changed.": "El correo no se puede cambiar.",
       "Save Changes": "Guardar Cambios",
       "University & Studies": "Universidad y Estudios",
       "University": "Universidad", "Field of Study": "Carrera",
-      "View Leaderboard": "Ver ClasificaciÃ³n",
+      "View Leaderboard": "Ver Clasificación",
       "Canvas LMS": "Canvas LMS", "Connected": "Conectado",
-      "Not connected": "No conectado", "Manage Connection": "Administrar ConexiÃ³n",
+      "Not connected": "No conectado", "Manage Connection": "Administrar Conexión",
       "Connect Canvas": "Conectar Canvas",
       "Email Accounts": "Cuentas de Correo", "Manage in Mail Hub": "Administrar en Correo",
       "Daily Study Email": "Email Diario de Estudio",
       "Get a morning email with your study plan, upcoming exams, and weak topics to review.":
-        "Recibe un email matutino con tu plan de estudio, prÃ³ximos exÃ¡menes y temas a repasar.",
+        "Recibe un email matutino con tu plan de estudio, próximos exámenes y temas a repasar.",
       "Enable daily study email": "Activar email diario de estudio",
       "Send at (hour)": "Enviar a las (hora)", "Timezone": "Zona Horaria",
-      "Save Preferences": "Guardar Preferencias", "Saved!": "Â¡Guardado!",
+      "Save Preferences": "Guardar Preferencias", "Saved!": "¡Guardado!",
       "Error saving.": "Error al guardar.",
       // Leaderboard
-      "Student Rankings": "ClasificaciÃ³n de Estudiantes",
+      "Student Rankings": "Clasificación de Estudiantes",
       "Compete with other students! Earn XP from focus sessions, quizzes, and flashcards.":
-        "Â¡Compite con otros estudiantes! Gana XP con sesiones de enfoque, exÃ¡menes y tarjetas.",
-      "Your Rank": "Tu PosiciÃ³n", "Total XP": "XP Total", "All Students": "Todos",
-      "Rank": "PosiciÃ³n", "Student": "Estudiante",
+        "¡Compite con otros estudiantes! Gana XP con sesiones de enfoque, exámenes y tarjetas.",
+      "Your Rank": "Tu Posición", "Total XP": "XP Total", "All Students": "Todos",
+      "Rank": "Posición", "Student": "Estudiante",
       "No students on the leaderboard yet. Start earning XP!":
-        "AÃºn no hay estudiantes en la clasificaciÃ³n. Â¡Empieza a ganar XP!",
+        "Aún no hay estudiantes en la clasificación. ¡Empieza a ganar XP!",
       // Smart Import
-      "Smart Import": "ImportaciÃ³n Inteligente",
-      "Drop a PDF or DOCX â€” we'll auto-generate notes, flashcards, and a quiz":
-        "Sube un PDF o DOCX â€” generaremos apuntes, tarjetas y un examen automÃ¡ticamente",
-      "Drag & Drop your file here": "Arrastra y suelta tu archivo aquÃ­",
+      "Smart Import": "Importación Inteligente",
+      "Drop a PDF or DOCX — we'll auto-generate notes, flashcards, and a quiz":
+        "Sube un PDF o DOCX — generaremos apuntes, tarjetas y un examen automáticamente",
+      "Drag & Drop your file here": "Arrastra y suelta tu archivo aquí",
       "or click to browse": "o haz clic para buscar",
       "Generate Notes + Flashcards + Quiz": "Generar Apuntes + Tarjetas + Examen",
       "Processing your document...": "Procesando tu documento...",
-      "Study materials created!": "Â¡Materiales de estudio creados!",
+      "Study materials created!": "¡Materiales de estudio creados!",
       "Import": "Importar",
       // Study Exchange
       "Study Exchange": "Intercambio de Apuntes",
@@ -2492,46 +2492,46 @@ LAYOUT = """<!DOCTYPE html>
       "My Shared Notes": "Mis Apuntes Compartidos",
       "Search notes...": "Buscar apuntes...", "Subject/Course": "Materia/Curso",
       "Share": "Compartir", "Unpublish": "Despublicar",
-      "Public": "PÃºblico", "Private": "Privado",
+      "Public": "Público", "Private": "Privado",
       "Fork to My Notes": "Copiar a Mis Apuntes", "Exchange": "Intercambio",
       "No shared notes yet. Be the first to share!":
-        "AÃºn no hay apuntes compartidos. Â¡SÃ© el primero en compartir!",
+        "Aún no hay apuntes compartidos. ¡Sé el primero en compartir!",
       // Exam Simulator
       "Exam Simulator": "Simulador de Examen",
       "Start Exam": "Iniciar Examen",
       "Exam Rules:": "Reglas del Examen:",
       "Lock In Answer": "Confirmar Respuesta",
-      "Exam Complete!": "Â¡Examen Completado!",
-      "Question Review": "RevisiÃ³n de Preguntas",
+      "Exam Complete!": "¡Examen Completado!",
+      "Question Review": "Revisión de Preguntas",
       "Retake Exam": "Repetir Examen",
-      "Analytics": "AnÃ¡lisis",
+      "Analytics": "Análisis",
       "Avg per question": "Promedio por pregunta",
-      "Fastest answer": "Respuesta mÃ¡s rÃ¡pida",
-      "Slowest answer": "Respuesta mÃ¡s lenta",
+      "Fastest answer": "Respuesta más rápida",
+      "Slowest answer": "Respuesta más lenta",
       // SRS
-      "Spaced Repetition": "RepeticiÃ³n Espaciada",
-      "due": "pendientes", "Again": "Otra vez", "Hard": "DifÃ­cil",
-      "Good": "Bien", "Easy": "FÃ¡cil",
+      "Spaced Repetition": "Repetición Espaciada",
+      "due": "pendientes", "Again": "Otra vez", "Hard": "Difícil",
+      "Good": "Bien", "Easy": "Fácil",
       // Dashboard
-      "Today's Plan": "Plan de Hoy", "Upcoming Exams": "PrÃ³ximos ExÃ¡menes",
-      "Study Stats": "EstadÃ­sticas de Estudio", "Quick Actions": "Acciones RÃ¡pidas",
+      "Today's Plan": "Plan de Hoy", "Upcoming Exams": "Próximos Exámenes",
+      "Study Stats": "Estadísticas de Estudio", "Quick Actions": "Acciones Rápidas",
       // Quizzes
       "Generate Quiz": "Generar Examen", "Take Quiz": "Hacer Examen",
-      "Your Quizzes": "Tus ExÃ¡menes", "Score": "PuntuaciÃ³n", "Attempts": "Intentos",
-      "Best Score": "Mejor PuntuaciÃ³n", "Delete": "Eliminar",
+      "Your Quizzes": "Tus Exámenes", "Score": "Puntuación", "Attempts": "Intentos",
+      "Best Score": "Mejor Puntuación", "Delete": "Eliminar",
       // Flashcards
       "Your Flashcard Decks": "Tus Mazos de Tarjetas", "Study": "Estudiar",
       "cards": "tarjetas", "Generate Flashcards": "Generar Tarjetas",
       // Notes
       "Your Notes": "Tus Apuntes", "Generate Notes": "Generar Apuntes",
       // Common
-      "Loading...": "Cargando...", "Error": "Error", "Success": "Ã‰xito",
+      "Loading...": "Cargando...", "Error": "Error", "Success": "Éxito",
       "Cancel": "Cancelar", "Confirm": "Confirmar", "Save": "Guardar",
       "Back": "Volver", "Next": "Siguiente", "Previous": "Anterior",
       "Search": "Buscar", "Filter": "Filtrar", "Sort": "Ordenar",
-      "Select a course": "Selecciona un curso", "No courses yet": "AÃºn no hay cursos",
+      "Select a course": "Selecciona un curso", "No courses yet": "Aún no hay cursos",
 
-      // â”€â”€ Extended UI vocabulary â”€â”€
+      // ── Extended UI vocabulary ──
       // Generic actions
       "Edit": "Editar", "Update": "Actualizar", "Add": "Agregar", "Create": "Crear",
       "Remove": "Quitar", "Submit": "Enviar", "Send": "Enviar", "Close": "Cerrar",
@@ -2539,69 +2539,69 @@ LAYOUT = """<!DOCTYPE html>
       "Apply": "Aplicar", "Reload": "Recargar", "Refresh": "Actualizar", "Generate": "Generar",
       "Analyze": "Analizar", "Upload": "Subir", "Download": "Descargar",
       "Browse": "Examinar", "Choose": "Elegir", "Select": "Seleccionar",
-      "Yes": "SÃ­", "No": "No", "OK": "OK", "Got it": "Entendido",
-      "Logout": "Cerrar SesiÃ³n", "Login": "Iniciar SesiÃ³n", "Sign in": "Iniciar SesiÃ³n",
+      "Yes": "Sí", "No": "No", "OK": "OK", "Got it": "Entendido",
+      "Logout": "Cerrar Sesión", "Login": "Iniciar Sesión", "Sign in": "Iniciar Sesión",
       "Sign up": "Registrarse", "Register": "Registrarse",
       "Free": "Gratis", "Pro": "Pro", "Premium": "Premium", "Upgrade": "Mejorar",
       "Active": "Activo", "Inactive": "Inactivo", "Pending": "Pendiente",
-      "Completed": "Completado", "Failed": "FallÃ³", "Sent": "Enviado",
+      "Completed": "Completado", "Failed": "Falló", "Sent": "Enviado",
       "Draft": "Borrador", "Archive": "Archivar", "Archived": "Archivado",
       "All": "Todos", "None": "Ninguno", "Other": "Otro",
-      "Today": "Hoy", "Yesterday": "Ayer", "Tomorrow": "MaÃ±ana",
+      "Today": "Hoy", "Yesterday": "Ayer", "Tomorrow": "Mañana",
       "This Week": "Esta Semana", "This Month": "Este Mes",
-      "Date": "Fecha", "Time": "Hora", "Duration": "DuraciÃ³n",
-      "Created": "Creado", "Updated": "Actualizado", "Last Updated": "Ãšltima ActualizaciÃ³n",
-      "Type": "Tipo", "Title": "TÃ­tulo", "Description": "DescripciÃ³n",
-      "Notes": "Apuntes", "Tags": "Etiquetas", "Category": "CategorÃ­a",
-      "Public": "PÃºblico", "Private": "Privado",
+      "Date": "Fecha", "Time": "Hora", "Duration": "Duración",
+      "Created": "Creado", "Updated": "Actualizado", "Last Updated": "Última Actualización",
+      "Type": "Tipo", "Title": "Título", "Description": "Descripción",
+      "Notes": "Apuntes", "Tags": "Etiquetas", "Category": "Categoría",
+      "Public": "Público", "Private": "Privado",
 
       // Drag & drop / files
-      "Drop a PDF / DOCX / TXT here": "Suelta un PDF / DOCX / TXT aquÃ­",
+      "Drop a PDF / DOCX / TXT here": "Suelta un PDF / DOCX / TXT aquí",
       "or click to browse": "o haz clic para buscar",
-      "Drag & drop PDF or DOCX files here": "Arrastra y suelta PDF o DOCX aquÃ­",
+      "Drag & drop PDF or DOCX files here": "Arrastra y suelta PDF o DOCX aquí",
       "we'll generate flashcards directly from the file (no course needed)":
         "generaremos tarjetas directamente del archivo (no se necesita curso)",
       "we'll generate quiz questions directly from the file (no course needed)":
         "generaremos preguntas directamente del archivo (no se necesita curso)",
-      "â€” or pick from your courses â€”": "â€” o elige de tus cursos â€”",
-      "multi-chapter PDFs fully supported": "PDFs con mÃºltiples capÃ­tulos totalmente soportados",
+      "— or pick from your courses —": "— o elige de tus cursos —",
+      "multi-chapter PDFs fully supported": "PDFs con múltiples capítulos totalmente soportados",
       "AI-summarize into structured notes (recommended for textbooks & multi-chapter PDFs)":
-        "Resumir con IA en apuntes estructurados (recomendado para libros y PDFs con varios capÃ­tulos)",
+        "Resumir con IA en apuntes estructurados (recomendado para libros y PDFs con varios capítulos)",
       "Drop a PDF / DOCX / TXT": "Suelta un PDF / DOCX / TXT",
       "we'll extract the text into the editor below": "extraeremos el texto en el editor de abajo",
       "Or drop your essay file": "O suelta tu archivo de ensayo",
       "Attach a file (PDF/DOCX/TXT)": "Adjuntar un archivo (PDF/DOCX/TXT)",
       "Ask your tutor... (or drag a PDF onto the chat)":
-        "PregÃºntale a tu tutor... (o arrastra un PDF al chat)",
+        "Pregúntale a tu tutor... (o arrastra un PDF al chat)",
       "Drag & Drop Anywhere": "Arrastra y Suelta en Cualquier Lugar",
-      "Drop a PDF onto Notes, Flashcards, Quizzes, or the AI Tutor â€” instant study material from your files.":
-        "Suelta un PDF en Apuntes, Tarjetas, ExÃ¡menes o el Tutor IA â€” material de estudio al instante.",
+      "Drop a PDF onto Notes, Flashcards, Quizzes, or the AI Tutor — instant study material from your files.":
+        "Suelta un PDF en Apuntes, Tarjetas, Exámenes o el Tutor IA — material de estudio al instante.",
 
       // Course / Exam / Quiz / Flashcard / Notes shared labels
       "Course": "Curso", "Courses": "Cursos", "Exam": "Examen", "Topic": "Tema", "Topics": "Temas",
       "Question": "Pregunta", "Questions": "Preguntas", "Answer": "Respuesta", "Answers": "Respuestas",
       "Number of cards": "Cantidad de tarjetas", "Number of questions": "Cantidad de preguntas",
-      "Custom title (optional)": "TÃ­tulo personalizado (opcional)",
-      "Auto-generated if empty": "Generado automÃ¡ticamente si estÃ¡ vacÃ­o",
+      "Custom title (optional)": "Título personalizado (opcional)",
+      "Auto-generated if empty": "Generado automáticamente si está vacío",
       "Difficulty": "Dificultad",
-      "Easy â€” Basic recall": "FÃ¡cil â€” Recuerdo bÃ¡sico",
-      "Medium â€” Exam-level": "Medio â€” Nivel de examen",
-      "Hard â€” Challenge": "DifÃ­cil â€” DesafÃ­o",
+      "Easy — Basic recall": "Fácil — Recuerdo básico",
+      "Medium — Exam-level": "Medio — Nivel de examen",
+      "Hard — Challenge": "Difícil — Desafío",
       "Generate AI Flashcards": "Generar Tarjetas con IA",
       "Generate AI Quiz": "Generar Examen con IA",
       "Generate AI Notes": "Generar Apuntes con IA",
       "AI Flashcards": "Tarjetas IA",
       "AI Study Tutor": "Tutor de Estudio IA",
-      "Practice Quizzes": "ExÃ¡menes de PrÃ¡ctica",
-      "Smart spaced repetition Â· Generated from your course materials":
-        "RepeticiÃ³n espaciada Â· Generadas desde tus materiales de curso",
-      "Unlimited AI-generated questions Â· Adjustable difficulty":
-        "Preguntas ilimitadas con IA Â· Dificultad ajustable",
-      "Ask anything about your courses â€” your AI tutor uses your own notes and course material to help.":
-        "Pregunta lo que sea sobre tus cursos â€” tu tutor IA usa tus propios apuntes para ayudarte.",
-      "General (no specific course)": "General (sin curso especÃ­fico)",
-      "Up to 100. Large quizzes generate in batches â€” give it a few seconds.":
-        "Hasta 100. Los exÃ¡menes grandes se generan por lotes â€” dale unos segundos.",
+      "Practice Quizzes": "Exámenes de Práctica",
+      "Smart spaced repetition · Generated from your course materials":
+        "Repetición espaciada · Generadas desde tus materiales de curso",
+      "Unlimited AI-generated questions · Adjustable difficulty":
+        "Preguntas ilimitadas con IA · Dificultad ajustable",
+      "Ask anything about your courses — your AI tutor uses your own notes and course material to help.":
+        "Pregunta lo que sea sobre tus cursos — tu tutor IA usa tus propios apuntes para ayudarte.",
+      "General (no specific course)": "General (sin curso específico)",
+      "Up to 100. Large quizzes generate in batches — give it a few seconds.":
+        "Hasta 100. Los exámenes grandes se generan por lotes — dale unos segundos.",
       "All topics": "Todos los temas",
       "Exam (optional)": "Examen (opcional)",
       "Not taken": "No realizado",
@@ -2609,50 +2609,50 @@ LAYOUT = """<!DOCTYPE html>
       "questions": "preguntas", "question": "pregunta",
       "due": "pendientes",
       "Drop a file or select a course": "Suelta un archivo o selecciona un curso",
-      "Generated %d flashcards!": "Â¡%d tarjetas generadas!",
-      "Generation failed": "FallÃ³ la generaciÃ³n",
+      "Generated %d flashcards!": "¡%d tarjetas generadas!",
+      "Generation failed": "Falló la generación",
       "Network error": "Error de red",
       "Failed to add card": "Error al agregar tarjeta",
       "Failed to delete": "Error al eliminar",
-      "Delete this flashcard deck?": "Â¿Eliminar este mazo de tarjetas?",
-      "Delete this card?": "Â¿Eliminar esta tarjeta?",
-      "Delete this note?": "Â¿Eliminar este apunte?",
-      "Delete this quiz?": "Â¿Eliminar este examen?",
-      "Clear chat history?": "Â¿Borrar historial de chat?",
+      "Delete this flashcard deck?": "¿Eliminar este mazo de tarjetas?",
+      "Delete this card?": "¿Eliminar esta tarjeta?",
+      "Delete this note?": "¿Eliminar este apunte?",
+      "Delete this quiz?": "¿Eliminar este examen?",
+      "Clear chat history?": "¿Borrar historial de chat?",
       "No flashcard decks yet. Generate your first set from a course!":
-        "AÃºn no tienes mazos. Â¡Genera el primero desde un curso!",
+        "Aún no tienes mazos. ¡Genera el primero desde un curso!",
       "No quizzes yet. Generate your first practice quiz from a course!":
-        "AÃºn no tienes exÃ¡menes. Â¡Genera el primero desde un curso!",
-      "Hi! I'm your AI study tutor. Ask me anything about your course material! ðŸ“š":
-        "Â¡Hola! Soy tu tutor IA. Â¡PregÃºntame lo que sea sobre tus materiales! ðŸ“š",
+        "Aún no tienes exámenes. ¡Genera el primero desde un curso!",
+      "Hi! I'm your AI study tutor. Ask me anything about your course material! 📚":
+        "¡Hola! Soy tu tutor IA. ¡Pregúntame lo que sea sobre tus materiales! 📚",
       "Please summarize and explain the attached document.":
         "Por favor resume y explica el documento adjunto.",
       "PDF, DOCX, or TXT only": "Solo PDF, DOCX, o TXT",
-      "File too large (max 15MB)": "Archivo demasiado grande (mÃ¡x 15MB)",
+      "File too large (max 15MB)": "Archivo demasiado grande (máx 15MB)",
       "Only PDF, DOCX, and TXT files": "Solo archivos PDF, DOCX y TXT",
 
       // Essay assistant
       "Essay Assistant": "Asistente de Ensayos",
       "Paste your draft. Get brutally honest feedback on thesis, structure, grammar, and flow.":
-        "Pega tu borrador. Recibe feedback honesto sobre tesis, estructura, gramÃ¡tica y flujo.",
+        "Pega tu borrador. Recibe feedback honesto sobre tesis, estructura, gramática y flujo.",
       "Assignment prompt": "Enunciado del trabajo",
-      "What was the essay supposed to answer?": "Â¿QuÃ© debÃ­a responder el ensayo?",
+      "What was the essay supposed to answer?": "¿Qué debía responder el ensayo?",
       "Your essay": "Tu ensayo",
-      "Paste your draft here...": "Pega tu borrador aquÃ­...",
+      "Paste your draft here...": "Pega tu borrador aquí...",
       "This takes ~10 seconds.": "Esto tarda ~10 segundos.",
-      "Thesis": "Tesis", "Structure": "Estructura", "Grammar": "GramÃ¡tica",
+      "Thesis": "Tesis", "Structure": "Estructura", "Grammar": "Gramática",
       "Clarity": "Claridad", "Words": "Palabras", "Level": "Nivel",
       "Strengths": "Fortalezas", "Weaknesses": "Debilidades",
-      "Grammar & Style": "GramÃ¡tica y Estilo", "Rewritten Intro": "IntroducciÃ³n Reescrita",
+      "Grammar & Style": "Gramática y Estilo", "Rewritten Intro": "Introducción Reescrita",
       "Thesis Feedback": "Feedback de Tesis", "Overall": "General",
-      "No major grammar issues detected.": "No se detectaron problemas graves de gramÃ¡tica.",
-      "Paste at least a couple of paragraphs.": "Pega al menos un par de pÃ¡rrafos.",
+      "No major grammar issues detected.": "No se detectaron problemas graves de gramática.",
+      "Paste at least a couple of paragraphs.": "Pega al menos un par de párrafos.",
       "Analyzing...": "Analizando...",
 
       // Panic mode
-      "Panic Mode": "Modo PÃ¡nico",
+      "Panic Mode": "Modo Pánico",
       "Exam tomorrow and nothing's done? Get a ruthless cram plan in 10 seconds.":
-        "Â¿Examen maÃ±ana y nada hecho? ObtÃ©n un plan de estudio en 10 segundos.",
+        "¿Examen mañana y nada hecho? Obtén un plan de estudio en 10 segundos.",
 
       // Notes page
       "Generated notes": "Apuntes generados",
@@ -2673,42 +2673,42 @@ LAYOUT = """<!DOCTYPE html>
       // Contacts
       "Contacts": "Contactos", "Add Contact": "Agregar Contacto",
       "First Name": "Nombre", "Last Name": "Apellido",
-      "Company": "Empresa", "Phone": "TelÃ©fono", "Notes": "Notas",
+      "Company": "Empresa", "Phone": "Teléfono", "Notes": "Notas",
 
       // Campaigns
-      "Campaigns": "CampaÃ±as", "New Campaign": "Nueva CampaÃ±a",
-      "Campaign Name": "Nombre de CampaÃ±a", "Recipients": "Destinatarios",
+      "Campaigns": "Campañas", "New Campaign": "Nueva Campaña",
+      "Campaign Name": "Nombre de Campaña", "Recipients": "Destinatarios",
       "Templates": "Plantillas", "Sequence": "Secuencia",
       "Open Rate": "Tasa de Apertura", "Reply Rate": "Tasa de Respuesta",
       "Sent at": "Enviado a las", "Scheduled": "Programado",
       "Send Now": "Enviar Ahora", "Schedule": "Programar",
 
       // Pricing / Billing
-      "Pricing": "Precios", "Billing": "FacturaciÃ³n",
+      "Pricing": "Precios", "Billing": "Facturación",
       "Plan": "Plan", "Current Plan": "Plan Actual",
       "Upgrade Plan": "Mejorar Plan", "Downgrade": "Bajar Plan",
-      "Cancel Subscription": "Cancelar SuscripciÃ³n",
-      "per month": "por mes", "per year": "por aÃ±o",
+      "Cancel Subscription": "Cancelar Suscripción",
+      "per month": "por mes", "per year": "por año",
       "Free Forever": "Gratis Para Siempre",
-      "Most Popular": "MÃ¡s Popular",
+      "Most Popular": "Más Popular",
 
       // Dashboard widgets
       "Today's Tasks": "Tareas de Hoy", "Recent Activity": "Actividad Reciente",
-      "Quick Stats": "EstadÃ­sticas RÃ¡pidas", "Performance": "Rendimiento",
+      "Quick Stats": "Estadísticas Rápidas", "Performance": "Rendimiento",
       "Welcome back": "Bienvenido de vuelta",
 
       // GPA / Schedule / Weak topics
       "GPA Calculator": "Calculadora GPA", "Add Course": "Agregar Curso",
-      "Weight": "Peso", "Grade": "Nota", "Credit": "CrÃ©dito",
+      "Weight": "Peso", "Grade": "Nota", "Credit": "Crédito",
       "Total GPA": "GPA Total", "Semester": "Semestre",
       "Class Schedule": "Horario de Clases",
       "Add to Schedule": "Agregar al Horario",
-      "Weak Topics": "Temas DÃ©biles",
+      "Weak Topics": "Temas Débiles",
       "Topics you've struggled with": "Temas con los que has tenido dificultad",
 
       // Achievements
       "Achievements": "Logros", "XP & Badges": "XP e Insignias",
-      "Earn XP by studying!": "Â¡Gana XP estudiando!",
+      "Earn XP by studying!": "¡Gana XP estudiando!",
 
       // Settings sections
       "Theme": "Tema", "Language": "Idioma", "Currency": "Moneda",
@@ -2716,219 +2716,219 @@ LAYOUT = """<!DOCTYPE html>
       "Account": "Cuenta", "Danger Zone": "Zona de Peligro",
 
       // Empty states
-      "Nothing here yet.": "Nada por aquÃ­ todavÃ­a.",
+      "Nothing here yet.": "Nada por aquí todavía.",
       "Get started by creating one": "Empieza creando uno",
-      "Coming soon": "PrÃ³ximamente",
+      "Coming soon": "Próximamente",
 
-      // â”€â”€ Dashboard headings (whole phrases â€” must come BEFORE word-level keys) â”€â”€
+      // ── Dashboard headings (whole phrases — must come BEFORE word-level keys) ──
       "Today's Study Plan": "Plan de Estudio de Hoy",
       "Today's Plan": "Plan de Hoy",
-      "Upcoming Exams": "PrÃ³ximos ExÃ¡menes",
-      "Upcoming Examens": "PrÃ³ximos ExÃ¡menes",
+      "Upcoming Exams": "Próximos Exámenes",
+      "Upcoming Examens": "Próximos Exámenes",
       "Plan Progress": "Progreso del Plan",
       "Hours Focused": "Horas de Estudio",
       "Focus Hours": "Horas de Estudio",
-      "day streak": "dÃ­as de racha",
-      "Day Streak": "Racha de DÃ­as",
+      "day streak": "días de racha",
+      "Day Streak": "Racha de Días",
       "XP to next level": "XP para el siguiente nivel",
-      "What can I do here?": "Â¿QuÃ© puedo hacer aquÃ­?",
-      "A visual map of every feature â€” click any card to jump there.":
-        "Un mapa visual de cada funciÃ³n â€” haz clic en cualquier tarjeta para ir.",
+      "What can I do here?": "¿Qué puedo hacer aquí?",
+      "A visual map of every feature — click any card to jump there.":
+        "Un mapa visual de cada función — haz clic en cualquier tarjeta para ir.",
       "Show": "Mostrar", "Hide": "Ocultar",
-      "No study sessions yet": "AÃºn no hay sesiones de estudio",
+      "No study sessions yet": "Aún no hay sesiones de estudio",
       "Sync your courses and generate a plan to get a personalized study schedule for today.":
         "Sincroniza tus cursos y genera un plan para obtener un horario de estudio personalizado para hoy.",
-      "No upcoming exams": "No hay exÃ¡menes prÃ³ximos",
+      "No upcoming exams": "No hay exámenes próximos",
       "Sync your courses to automatically detect exam dates from Canvas.":
-        "Sincroniza tus cursos para detectar automÃ¡ticamente las fechas de examen desde Canvas.",
+        "Sincroniza tus cursos para detectar automáticamente las fechas de examen desde Canvas.",
       "Connect Canvas": "Conectar Canvas",
       "Generate Plan": "Generar Plan",
       "Sync Canvas": "Sincronizar Canvas",
       "Mark Today Complete": "Marcar Hoy Como Completo",
       "AI Recommendations": "Recomendaciones de IA",
-      "Starting sync...": "Iniciando sincronizaciÃ³n...",
+      "Starting sync...": "Iniciando sincronización...",
       "Syncing...": "Sincronizando...",
-      "Take a break â€” this may take a while depending on how many files your courses have.":
-        "TÃ³mate un descanso â€” esto puede tardar dependiendo de cuÃ¡ntos archivos tengan tus cursos.",
-      "Sync complete!": "Â¡SincronizaciÃ³n completada!",
-      "Sync failed": "La sincronizaciÃ³n fallÃ³",
+      "Take a break — this may take a while depending on how many files your courses have.":
+        "Tómate un descanso — esto puede tardar dependiendo de cuántos archivos tengan tus cursos.",
+      "Sync complete!": "¡Sincronización completada!",
+      "Sync failed": "La sincronización falló",
       "Network error": "Error de red",
-      "Stats at a glance": "EstadÃ­sticas de un vistazo",
+      "Stats at a glance": "Estadísticas de un vistazo",
       "Your Student Dashboard": "Tu Panel de Estudiante",
-      "Exams Dashboard": "Panel de ExÃ¡menes",
-      "Every upcoming exam, sorted by urgency.": "Todos los exÃ¡menes prÃ³ximos, ordenados por urgencia.",
+      "Exams Dashboard": "Panel de Exámenes",
+      "Every upcoming exam, sorted by urgency.": "Todos los exámenes próximos, ordenados por urgencia.",
 
-      // â”€â”€ Courses page â”€â”€
-      "My Courses": "Mis Cursos", "Canvas Integration": "IntegraciÃ³n con Canvas",
-      "Course Sync": "SincronizaciÃ³n de Cursos", "New Course": "Nuevo Curso",
+      // ── Courses page ──
+      "My Courses": "Mis Cursos", "Canvas Integration": "Integración con Canvas",
+      "Course Sync": "Sincronización de Cursos", "New Course": "Nuevo Curso",
       "Create Course": "Crear Curso", "Create a course": "Crear un curso",
       "Create course manually": "Crear curso manualmente",
       "Send to Canvas": "Enviar a Canvas",
       "Sync Now": "Sincronizar Ahora", "View Materials": "Ver Materiales",
-      "Course name": "Nombre del curso", "Code": "CÃ³digo", "Term": "Periodo",
-      "Last Synced": "Ãšltima sincronizaciÃ³n",
-      "Files": "Archivos", "Grading": "CalificaciÃ³n",
-      "No courses yet": "AÃºn no tienes cursos",
-      "No courses synced yet": "AÃºn no se han sincronizado cursos",
+      "Course name": "Nombre del curso", "Code": "Código", "Term": "Periodo",
+      "Last Synced": "Última sincronización",
+      "Files": "Archivos", "Grading": "Calificación",
+      "No courses yet": "Aún no tienes cursos",
+      "No courses synced yet": "Aún no se han sincronizado cursos",
       "Sync your courses first": "Sincroniza tus cursos primero",
       "No files uploaded": "No hay archivos subidos",
 
-      // â”€â”€ Study Plan page â”€â”€
+      // ── Study Plan page ──
       "Study Plan": "Plan de Estudio",
       "Weekly Schedule": "Horario Semanal",
       "Course Difficulty": "Dificultad del Curso",
       "Edit Schedule": "Editar Horario",
-      "Free day": "DÃ­a libre",
+      "Free day": "Día libre",
       "Check off each assignment as you complete it":
         "Marca cada tarea a medida que la completes",
-      "No study plan yet": "AÃºn no hay plan de estudio",
+      "No study plan yet": "Aún no hay plan de estudio",
       "Sync your Canvas courses first to generate a plan.":
         "Sincroniza tus cursos de Canvas primero para generar un plan.",
       "Complete": "Completar", "Remaining": "Restante",
 
-      // â”€â”€ Focus Mode page â”€â”€
-      "Focus Mode": "Modo Enfoque", "Focus Guard": "GuardiÃ¡n de Enfoque",
-      "Quick Access": "Acceso RÃ¡pido", "Studying for:": "Estudiando para:",
+      // ── Focus Mode page ──
+      "Focus Mode": "Modo Enfoque", "Focus Guard": "Guardián de Enfoque",
+      "Quick Access": "Acceso Rápido", "Studying for:": "Estudiando para:",
       "Long break after every 4 sessions": "Descanso largo cada 4 sesiones",
       "Space flip": "Espacio para voltear",
       "1 incorrect": "1 incorrecto", "2 correct": "2 correcto",
-      "Pages Read": "PÃ¡ginas LeÃ­das",
+      "Pages Read": "Páginas Leídas",
 
-      // â”€â”€ Flashcards page â”€â”€
-      "Smart spaced repetition": "RepeticiÃ³n espaciada inteligente",
+      // ── Flashcards page ──
+      "Smart spaced repetition": "Repetición espaciada inteligente",
       "Study Mode": "Modo de Estudio", "Edit Cards": "Editar Tarjetas",
       "Add Card": "Agregar Tarjeta", "Study Again": "Estudiar de Nuevo",
       "Start Studying": "Comenzar a Estudiar",
-      "Undo last": "Deshacer Ãºltimo",
+      "Undo last": "Deshacer último",
       "Click to flip": "Haz clic para voltear",
       "Incorrect": "Incorrecto", "Correct": "Correcto",
-      "Reviewing again tomorrow": "Repasando de nuevo maÃ±ana",
+      "Reviewing again tomorrow": "Repasando de nuevo mañana",
       "Good learning pace": "Buen ritmo de aprendizaje",
-      "No flashcard decks yet": "AÃºn no tienes mazos de tarjetas",
+      "No flashcard decks yet": "Aún no tienes mazos de tarjetas",
       "Generate your first set from a course!":
-        "Â¡Genera tu primer conjunto desde un curso!",
+        "¡Genera tu primer conjunto desde un curso!",
       "Exam (optional)": "Examen (opcional)",
-      "Custom title": "TÃ­tulo personalizado",
+      "Custom title": "Título personalizado",
 
-      // â”€â”€ Quizzes page â”€â”€
-      "Ready to start?": "Â¿Listo para empezar?",
+      // ── Quizzes page ──
+      "Ready to start?": "¿Listo para empezar?",
       "Quiz complete": "Examen completado",
       "Start Quiz": "Iniciar Examen", "See Results": "Ver Resultados",
       "Retake quiz": "Repetir examen", "Retake wrong only": "Repetir solo errores",
-      "Back to quizzes": "Volver a exÃ¡menes",
+      "Back to quizzes": "Volver a exámenes",
       "Enable timer": "Activar temporizador", "Mode": "Modo",
       "Total time for whole quiz": "Tiempo total para el examen",
       "Time per question": "Tiempo por pregunta",
       "60s / question": "60s / pregunta", "90s / question": "90s / pregunta",
       "2m / question": "2m / pregunta", "Realistic exam": "Examen realista",
       "Total time": "Tiempo total", "Avg / question": "Prom. / pregunta",
-      "Fastest": "MÃ¡s rÃ¡pida", "Slowest": "MÃ¡s lenta",
-      "Mastery": "Dominio", "Solid": "SÃ³lido", "Shaky": "Inestable",
+      "Fastest": "Más rápida", "Slowest": "Más lenta",
+      "Mastery": "Dominio", "Solid": "Sólido", "Shaky": "Inestable",
       "Struggling": "Con dificultad",
       "Strengths": "Fortalezas", "Needs work": "Necesita trabajo",
-      "Mistake patterns": "Patrones de error", "Do this next": "Haz esto a continuaciÃ³n",
+      "Mistake patterns": "Patrones de error", "Do this next": "Haz esto a continuación",
       "30-minute follow-up plan": "Plan de seguimiento de 30 minutos",
-      "Question-by-question review": "RevisiÃ³n pregunta por pregunta",
+      "Question-by-question review": "Revisión pregunta por pregunta",
       "Analyzing...": "Analizando...", "Topic breakdown": "Desglose por tema",
 
-      // â”€â”€ Exam Simulator â”€â”€
-      "Time Limit (minutes)": "Tiempo LÃ­mite (minutos)",
+      // ── Exam Simulator ──
+      "Time Limit (minutes)": "Tiempo Límite (minutos)",
       "You cannot go back to previous questions":
         "No puedes regresar a preguntas anteriores",
-      "Timer runs continuously â€” no pausing":
-        "El temporizador corre sin parar â€” sin pausas",
+      "Timer runs continuously — no pausing":
+        "El temporizador corre sin parar — sin pausas",
       "Answers are final once submitted":
         "Las respuestas son finales al enviarse",
       "Detailed analytics provided at the end":
-        "AnÃ¡lisis detallado al finalizar",
-      "Back to Quizzes": "Volver a ExÃ¡menes",
+        "Análisis detallado al finalizar",
+      "Back to Quizzes": "Volver a Exámenes",
 
-      // â”€â”€ Notes page â”€â”€
+      // ── Notes page ──
       "AI Study Notes": "Apuntes de Estudio con IA",
       "Comprehensive notes generated from your course materials":
         "Apuntes completos generados desde tus materiales de curso",
       "Generate AI Study Notes": "Generar Apuntes con IA",
       "Export PDF": "Exportar PDF", "Print": "Imprimir",
       "Uploading...": "Subiendo...", "AI-summarizing...": "Resumiendo con IA...",
-      "No notes yet": "AÃºn no hay apuntes",
+      "No notes yet": "Aún no hay apuntes",
       "Generate AI study notes from your course materials!":
-        "Â¡Genera apuntes con IA desde tus materiales de curso!",
+        "¡Genera apuntes con IA desde tus materiales de curso!",
       "Back to Notes": "Volver a Apuntes",
       "Bold (B)": "Negrita (B)", "Italic (I)": "Cursiva (I)",
       "Underline (U)": "Subrayado (U)",
       "Heading 2 (H2)": "Encabezado 2 (H2)", "Heading 3 (H3)": "Encabezado 3 (H3)",
-      "Paragraph (P)": "PÃ¡rrafo (P)",
-      "Bullet list": "Lista con viÃ±etas", "Numbered list": "Lista numerada",
+      "Paragraph (P)": "Párrafo (P)",
+      "Bullet list": "Lista con viñetas", "Numbered list": "Lista numerada",
       "Clear formatting": "Quitar formato",
 
-      // â”€â”€ AI Tutor Chat â”€â”€
-      "Ask anything about your courses â€” your AI tutor uses your own notes and course material to help":
-        "Pregunta lo que quieras sobre tus cursos â€” tu tutor de IA usa tus apuntes y materiales para ayudarte",
-      "General (no specific course)": "General (sin curso especÃ­fico)",
+      // ── AI Tutor Chat ──
+      "Ask anything about your courses — your AI tutor uses your own notes and course material to help":
+        "Pregunta lo que quieras sobre tus cursos — tu tutor de IA usa tus apuntes y materiales para ayudarte",
+      "General (no specific course)": "General (sin curso específico)",
       "Select a course...": "Selecciona un curso...",
       "Send": "Enviar", "Clear history": "Borrar historial",
       "Extracting...": "Extrayendo...",
       "Attached:": "Adjuntado:", "No file attached": "Sin archivo adjunto",
       "Hi! I'm your AI study tutor. Ask me anything about your course material!":
-        "Â¡Hola! Soy tu tutor de estudio con IA. Â¡PregÃºntame lo que quieras sobre tus materiales!",
+        "¡Hola! Soy tu tutor de estudio con IA. ¡Pregúntame lo que quieras sobre tus materiales!",
       "Thinking...": "Pensando...",
       "Please summarize and explain the attached document":
         "Por favor resume y explica el documento adjunto",
 
-      // â”€â”€ Weak Topics â”€â”€
-      "Weak Topic Detector": "Detector de Temas DÃ©biles",
+      // ── Weak Topics ──
+      "Weak Topic Detector": "Detector de Temas Débiles",
       "Based on your flashcard accuracy and quiz scores, here are the topics that need more attention":
-        "Basado en tu precisiÃ³n en tarjetas y exÃ¡menes, estos son los temas que necesitan mÃ¡s atenciÃ³n",
+        "Basado en tu precisión en tarjetas y exámenes, estos son los temas que necesitan más atención",
       "Recommendations": "Recomendaciones",
-      "Next steps to improve": "PrÃ³ximos pasos para mejorar",
-      "Not enough data yet": "AÃºn no hay suficientes datos",
+      "Next steps to improve": "Próximos pasos para mejorar",
+      "Not enough data yet": "Aún no hay suficientes datos",
       "Complete some quizzes and review flashcards to see your weak spots":
-        "Completa algunos exÃ¡menes y repasa tarjetas para ver tus puntos dÃ©biles",
+        "Completa algunos exámenes y repasa tarjetas para ver tus puntos débiles",
 
-      // â”€â”€ Achievements â”€â”€
+      // ── Achievements ──
       "XP / Total": "XP / Total",
 
-      // â”€â”€ Leaderboard â”€â”€
+      // ── Leaderboard ──
       "Personal Leaderboards": "Clasificaciones Personales",
       "Fair-play": "Juego Limpio", "Fair-play group": "Grupo de juego limpio",
       "Everyone starts at 0 XP": "Todos comienzan en 0 XP",
-      "Create a Group": "Crear un Grupo", "Join with Code": "Unirse con CÃ³digo",
+      "Create a Group": "Crear un Grupo", "Join with Code": "Unirse con Código",
       "Group Name": "Nombre del Grupo", "Enter group name": "Ingresa el nombre del grupo",
-      "Invite Code": "CÃ³digo de InvitaciÃ³n", "Members": "Miembros",
-      "Copy Invite": "Copiar InvitaciÃ³n", "Delete Group": "Eliminar Grupo",
+      "Invite Code": "Código de Invitación", "Members": "Miembros",
+      "Copy Invite": "Copiar Invitación", "Delete Group": "Eliminar Grupo",
       "Leave": "Salir", "Join": "Unirse",
 
-      // â”€â”€ Study Exchange â”€â”€
+      // ── Study Exchange ──
       "Share to Exchange": "Compartir al Intercambio",
       "Unpublish from Exchange": "Despublicar del Intercambio",
       "Back to Exchange": "Volver al Intercambio",
       "No notes to share": "No hay apuntes para compartir",
-      "Create notes first!": "Â¡Crea apuntes primero!",
+      "Create notes first!": "¡Crea apuntes primero!",
 
-      // â”€â”€ Settings page â”€â”€
-      "Mail Sorting Rules": "Reglas de ClasificaciÃ³n de Correo",
+      // ── Settings page ──
+      "Mail Sorting Rules": "Reglas de Clasificación de Correo",
       "Interactive Tutorial": "Tutorial Interactivo",
       "Account Security": "Seguridad de la Cuenta",
       "Add Email Account": "Agregar Cuenta de Correo",
       "Save Rules": "Guardar Reglas",
       "Restart Tutorial": "Reiniciar Tutorial",
-      "Change password": "Cambiar contraseÃ±a",
-      "Update Password": "Actualizar ContraseÃ±a",
+      "Change password": "Cambiar contraseña",
+      "Update Password": "Actualizar Contraseña",
       "Delete My Account": "Eliminar Mi Cuenta",
       "Connected": "Conectado", "Not connected": "No conectado",
-      "Your account is secure": "Tu cuenta estÃ¡ segura",
+      "Your account is secure": "Tu cuenta está segura",
       "mailboxes": "buzones",
       "Write your mail sorting rules here...":
-        "Escribe aquÃ­ tus reglas de clasificaciÃ³n de correo...",
+        "Escribe aquí tus reglas de clasificación de correo...",
       "e.g. MIT, Stanford, UNAM...": "ej. MIT, Stanford, UNAM...",
-      "e.g. Computer Science, Medicine...": "ej. IngenierÃ­a, Medicina...",
+      "e.g. Computer Science, Medicine...": "ej. Ingeniería, Medicina...",
       "Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action cannot be undone":
-        "Eliminar permanentemente tu cuenta y todos los datos asociados (cursos, exÃ¡menes, apuntes, tarjetas, exÃ¡menes, historial de chat, XP, insignias). Esta acciÃ³n no se puede deshacer",
+        "Eliminar permanentemente tu cuenta y todos los datos asociados (cursos, exámenes, apuntes, tarjetas, exámenes, historial de chat, XP, insignias). Esta acción no se puede deshacer",
       "Permanently Delete Account": "Eliminar Cuenta Permanentemente",
-      "Current Password": "ContraseÃ±a Actual",
-      "New Password": "ContraseÃ±a Nueva",
-      "Confirm Password": "Confirmar ContraseÃ±a",
-      "Minimum 6 characters": "MÃ­nimo 6 caracteres",
+      "Current Password": "Contraseña Actual",
+      "New Password": "Contraseña Nueva",
+      "Confirm Password": "Confirmar Contraseña",
+      "Minimum 6 characters": "Mínimo 6 caracteres",
       "Replay the guided walkthrough to rediscover all the features available to you":
         "Reproduce el recorrido guiado para redescubrir todas las funciones disponibles",
       "Emails from my professors are always urgent":
@@ -2938,49 +2938,49 @@ LAYOUT = """<!DOCTYPE html>
       "Newsletters and marketing emails are always low priority":
         "Los boletines y correos de marketing siempre son de baja prioridad",
 
-      // â”€â”€ Canvas settings â”€â”€
-      "Canvas Connection": "ConexiÃ³n con Canvas",
-      "Canvas LMS Integration": "IntegraciÃ³n con Canvas LMS",
+      // ── Canvas settings ──
+      "Canvas Connection": "Conexión con Canvas",
+      "Canvas LMS Integration": "Integración con Canvas LMS",
       "Canvas URL": "URL de Canvas",
       "API Access Token": "Token de Acceso API",
-      "Disconnect": "Desconectar", "Test Connection": "Probar ConexiÃ³n",
+      "Disconnect": "Desconectar", "Test Connection": "Probar Conexión",
 
-      // â”€â”€ GPA Calculator â”€â”€
+      // ── GPA Calculator ──
       "Your GPA": "Tu GPA", "What-If": "Simulador",
-      "Credits": "CrÃ©ditos", "Calculate GPA": "Calcular GPA",
+      "Credits": "Créditos", "Calculate GPA": "Calcular GPA",
       "GPA Scale": "Escala de GPA",
 
-      // â”€â”€ Practice / Schedule â”€â”€
-      "Practice Problems": "Ejercicios de PrÃ¡ctica",
+      // ── Practice / Schedule ──
+      "Practice Problems": "Ejercicios de Práctica",
       "AI-Generated Exercises": "Ejercicios Generados por IA",
       "Schedule & Study Time": "Horario y Tiempo de Estudio",
       "Weekly Availability": "Disponibilidad Semanal",
       "Time slots for study": "Bloques de tiempo para estudiar",
-      "Days of the week": "DÃ­as de la semana",
-      "Hours per day": "Horas por dÃ­a",
+      "Days of the week": "Días de la semana",
+      "Hours per day": "Horas por día",
 
-      // â”€â”€ Headers / brand â”€â”€
+      // ── Headers / brand ──
       "MachReach Student": "MachReach Estudiante",
-      "AI-powered study planner Â· Canvas integration":
-        "Planificador de estudio con IA Â· IntegraciÃ³n con Canvas",
+      "AI-powered study planner · Canvas integration":
+        "Planificador de estudio con IA · Integración con Canvas",
       "View All": "Ver Todos",
 
-      // â”€â”€ Themes â”€â”€
+      // ── Themes ──
       "Default": "Predeterminado", "Midnight": "Medianoche", "Forest": "Bosque",
-      "Ocean": "OcÃ©ano", "Rose": "Rosa", "Sunset": "Atardecer",
+      "Ocean": "Océano", "Rose": "Rosa", "Sunset": "Atardecer",
       "Mono": "Monocromo", "Light": "Claro", "Lavender": "Lavanda",
       "Mint": "Menta", "Peach": "Durazno", "Sky": "Cielo",
       "Butter": "Mantequilla", "Lilac": "Lila", "Blush": "Rubor",
-      "Sand": "Arena", "Cotton Candy": "AlgodÃ³n de AzÃºcar", "Seafoam": "Espuma",
+      "Sand": "Arena", "Cotton Candy": "Algodón de Azúcar", "Seafoam": "Espuma",
     };
 
-    // Build a single regex of all phrase keys (longest first) â€” replaces whole
+    // Build a single regex of all phrase keys (longest first) — replaces whole
     // phrases only, with word boundaries, so we never mangle untranslated text
     // like "Today's Study Plan" -> "Hoy's Estudiar Plan".
     function _esc(s){ return s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'); }
     var _keys = Object.keys(T).sort(function(a,b){ return b.length - a.length; });
     var _re = new RegExp(
-      '(^|[^A-Za-zÃ€-Ã¿0-9_])(' + _keys.map(_esc).join('|') + ')(?![A-Za-zÃ€-Ã¿0-9_])',
+      '(^|[^A-Za-zÀ-ÿ0-9_])(' + _keys.map(_esc).join('|') + ')(?![A-Za-zÀ-ÿ0-9_])',
       'g'
     );
     function _replaceAll(txt){
@@ -3037,14 +3037,14 @@ LAYOUT = """<!DOCTYPE html>
   {% endif %}
 
   {% if logged_in and account_type|default('business') == 'student' %}
-  <!-- â”€â”€ Academic onboarding modal + preserved-XP welcome banner â”€â”€ -->
+  <!-- ── Academic onboarding modal + preserved-XP welcome banner ── -->
   <div id="mrXpBanner" style="display:none;position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:9998;
        background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;padding:12px 20px;border-radius:12px;
        box-shadow:0 10px 40px rgba(99,102,241,.4);font-weight:500;align-items:center;gap:12px;
        max-width:90vw;animation:mrSlideDown .5s cubic-bezier(.22,.61,.36,1);">
-    <span style="font-size:22px;">ðŸŽ‰</span>
-    <span>Welcome back â€” <strong>your previous progress has been preserved.</strong> All your XP is intact.</span>
-    <button id="mrXpBannerClose" style="background:rgba(255,255,255,.2);border:0;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;">Ã—</button>
+    <span style="font-size:22px;">🎉</span>
+    <span>Welcome back — <strong>your previous progress has been preserved.</strong> All your XP is intact.</span>
+    <button id="mrXpBannerClose" style="background:rgba(255,255,255,.2);border:0;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;">×</button>
   </div>
 
   <div id="mrOnboardingModal" style="display:none;position:fixed;inset:0;z-index:9999;
@@ -3058,10 +3058,10 @@ LAYOUT = """<!DOCTYPE html>
       </div>
       <div id="mrStepContent"></div>
       <div style="display:flex;gap:10px;margin-top:26px;justify-content:space-between;align-items:center;">
-        <button id="mrStepBack" style="background:transparent;color:#8B93A7;border:0;cursor:pointer;font-size:14px;">â† Back</button>
+        <button id="mrStepBack" style="background:transparent;color:#8B93A7;border:0;cursor:pointer;font-size:14px;">← Back</button>
         <button id="mrStepNext" style="background:linear-gradient(135deg,#7C9CFF,#C084FC);color:#0A0E1A;
                 border:0;padding:12px 28px;border-radius:12px;font-weight:700;cursor:pointer;font-size:15px;
-                box-shadow:0 8px 24px rgba(124,156,255,.4);">Continue â†’</button>
+                box-shadow:0 8px 24px rgba(124,156,255,.4);">Continue →</button>
       </div>
     </div>
   </div>
@@ -3141,7 +3141,7 @@ LAYOUT = """<!DOCTYPE html>
           <span class="tag">${c.region||''}</span>
          </div>`).join('');
       stepContent.innerHTML = hdr +
-        `<input class="mr-input" id="mrCountrySearch" placeholder="Search countriesâ€¦" autocomplete="off">
+        `<input class="mr-input" id="mrCountrySearch" placeholder="Search countries…" autocomplete="off">
          <div class="mr-results" id="mrCountryList">${opts}</div>`;
       const list = document.getElementById('mrCountryList');
       document.getElementById('mrCountrySearch').addEventListener('input', e => {
@@ -3161,9 +3161,9 @@ LAYOUT = """<!DOCTYPE html>
     }
 
     async function renderUniversity() {
-      const hdr = renderHeader(STEPS[1].title, `${STEPS[1].sub} â€” Country: ${state.country_name}`);
+      const hdr = renderHeader(STEPS[1].title, `${STEPS[1].sub} — Country: ${state.country_name}`);
       stepContent.innerHTML = hdr +
-        `<input class="mr-input" id="mrUnivSearch" placeholder="e.g. Stanford, PUC, UTFSMâ€¦" autocomplete="off">
+        `<input class="mr-input" id="mrUnivSearch" placeholder="e.g. Stanford, PUC, UTFSM…" autocomplete="off">
          <div class="mr-results" id="mrUnivList"><div style="padding:20px;color:#8B93A7;text-align:center;">Start typing to search</div></div>`;
       const searchEl = document.getElementById('mrUnivSearch');
       const listEl = document.getElementById('mrUnivList');
@@ -3179,9 +3179,9 @@ LAYOUT = """<!DOCTYPE html>
              ${u.status==='pending'?'<span class="tag">pending</span>':''}
            </div>`).join('');
         if (q.length >= 3) {
-          html += `<div class="mr-create-new" id="mrCreateUniv">ï¼‹ Create "${q}"</div>`;
+          html += `<div class="mr-create-new" id="mrCreateUniv">＋ Create "${q}"</div>`;
         }
-        listEl.innerHTML = html || `<div style="padding:20px;color:#8B93A7;text-align:center;">No matches${q.length>=3?' â€” create above':''}</div>`;
+        listEl.innerHTML = html || `<div style="padding:20px;color:#8B93A7;text-align:center;">No matches${q.length>=3?' — create above':''}</div>`;
       };
       searchEl.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(doSearch, 200); });
       listEl.addEventListener('click', async e => {
@@ -3212,7 +3212,7 @@ LAYOUT = """<!DOCTYPE html>
     async function renderMajor() {
       const hdr = renderHeader(STEPS[2].title, STEPS[2].sub);
       stepContent.innerHTML = hdr +
-        `<input class="mr-input" id="mrMajorSearch" placeholder="e.g. Computer Science, Medicine, Economicsâ€¦" autocomplete="off">
+        `<input class="mr-input" id="mrMajorSearch" placeholder="e.g. Computer Science, Medicine, Economics…" autocomplete="off">
          <div class="mr-results" id="mrMajorList"><div style="padding:20px;color:#8B93A7;text-align:center;">Start typing your major</div></div>`;
       const searchEl = document.getElementById('mrMajorSearch');
       const listEl = document.getElementById('mrMajorList');
@@ -3228,7 +3228,7 @@ LAYOUT = """<!DOCTYPE html>
              <span>${m.name}</span>${m.university_id?'<span class="tag">univ-specific</span>':'<span class="tag">global</span>'}
            </div>`).join('');
         if (q.length >= 2) {
-          html += `<div class="mr-create-new" id="mrCreateMajor">ï¼‹ Add "${q}" as new major</div>`;
+          html += `<div class="mr-create-new" id="mrCreateMajor">＋ Add "${q}" as new major</div>`;
         }
         listEl.innerHTML = html;
       };
@@ -3264,25 +3264,25 @@ LAYOUT = """<!DOCTYPE html>
         `<input class="mr-input" id="mrCanvasUrl" placeholder="https://canvas.instructure.com (or your school's)" value="${state.canvas_url||''}">
          <input class="mr-input" id="mrCanvasToken" type="password" placeholder="Canvas personal API token" style="margin-top:10px;" value="${state.canvas_token||''}">
          <p style="margin:14px 0 0;font-size:12px;color:#8B93A7;line-height:1.55;">
-           Generate a token in Canvas: <strong>Account â†’ Settings â†’ + New Access Token</strong>.
+           Generate a token in Canvas: <strong>Account → Settings → + New Access Token</strong>.
            Stored encrypted; revoke anytime in Canvas.
          </p>`;
       document.getElementById('mrCanvasUrl').addEventListener('input', e => state.canvas_url = e.target.value.trim());
       document.getElementById('mrCanvasToken').addEventListener('input', e => state.canvas_token = e.target.value.trim());
-      nextBtn.textContent = 'Finish â†’';
+      nextBtn.textContent = 'Finish →';
     }
 
     function go(step) {
       state.step = Math.max(0, Math.min(STEPS.length - 1, step));
       stepDots.forEach((d, i) => d.classList.toggle('active', i <= state.step));
       backBtn.style.visibility = state.step === 0 ? 'hidden' : 'visible';
-      nextBtn.textContent = state.step === STEPS.length - 1 ? 'Finish â†’' : 'Continue â†’';
+      nextBtn.textContent = state.step === STEPS.length - 1 ? 'Finish →' : 'Continue →';
       STEPS[state.step].render();
     }
 
     async function finish() {
       nextBtn.disabled = true;
-      nextBtn.textContent = 'Savingâ€¦';
+      nextBtn.textContent = 'Saving…';
       try {
         const r = await fetch('/api/academic/profile', {
           method:'POST', headers:{'Content-Type':'application/json'},
@@ -3302,12 +3302,12 @@ LAYOUT = """<!DOCTYPE html>
           setTimeout(() => window.location.reload(), 300);
         } else {
           nextBtn.disabled = false;
-          nextBtn.textContent = 'Finish â†’';
+          nextBtn.textContent = 'Finish →';
           alert(j.error || 'Save failed');
         }
       } catch(e) {
         nextBtn.disabled = false;
-        nextBtn.textContent = 'Finish â†’';
+        nextBtn.textContent = 'Finish →';
         alert('Network error');
       }
     }
@@ -3404,7 +3404,7 @@ def index():
         if session.get("account_type") == "student":
             return redirect(url_for("student_dashboard_page"))
         return redirect(url_for("dashboard"))
-    return render_template_string(LAYOUT, title="MachReach â€” Study smarter. Sell faster.", logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), wide=True, content=Markup("""
+    return render_template_string(LAYOUT, title="MachReach — Study smarter. Sell faster.", logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), wide=True, content=Markup("""
     <style>
       /* Hero */
       .mr-hero-wrap { position: relative; padding: 110px 24px 56px; text-align: center; overflow: hidden; }
@@ -3467,7 +3467,7 @@ def index():
       .mr-pill-biz:hover { transform: translateY(-2px); filter: brightness(1.06); box-shadow: 0 10px 24px rgba(99,102,241,.35), inset 0 1px 0 rgba(255,255,255,.14); }
       .mr-pill-stu:hover { transform: translateY(-2px); filter: brightness(1.06); box-shadow: 0 10px 24px rgba(244,114,182,.35), inset 0 1px 0 rgba(255,255,255,.14); }
 
-      /* â”€â”€â”€ Interactive product preview â”€â”€â”€ */
+      /* ─── Interactive product preview ─── */
       .mr-demo { max-width: 1100px; margin: 80px auto 0; padding: 0 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 22px; }
       .mr-demo-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
       .mr-demo-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border-light); background: var(--border-light); }
@@ -3481,7 +3481,7 @@ def index():
       .mr-demo-label { font-size: 10.5px; color: var(--text-muted); font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 4px; }
       .mr-demo-subject { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 14px; min-height: 24px; }
       .mr-demo-text { font-size: 13.5px; color: var(--text-secondary); line-height: 1.7; min-height: 140px; white-space: pre-wrap; }
-      .mr-demo-cursor::after { content: 'â–Ž'; color: var(--primary); animation: mrBlink 1s step-end infinite; margin-left: 1px; }
+      .mr-demo-cursor::after { content: '▎'; color: var(--primary); animation: mrBlink 1s step-end infinite; margin-left: 1px; }
       @keyframes mrBlink { 50% { opacity: 0; } }
       .mr-demo-sendline { display:flex; align-items:center; gap:10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-light); }
       .mr-demo-btn { padding: 7px 14px; border-radius: 8px; background: var(--primary); color: #fff; font-size: 12.5px; font-weight: 600; }
@@ -3532,7 +3532,7 @@ def index():
       .mr-faq details[open] summary::after { transform: rotate(45deg); color: var(--primary); }
       .mr-faq-body { padding: 0 22px 18px; color: var(--text-secondary); font-size: 14px; line-height: 1.65; }
 
-      /* Pricing cards â€” reuse card but polish for homepage */
+      /* Pricing cards — reuse card but polish for homepage */
       .mr-pricing { max-width: 860px; margin: 80px auto 0; padding: 0 24px; text-align: center; }
       .mr-pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 28px; }
       .mr-price { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px 22px; position: relative; transition: transform .25s var(--ease), border-color .25s var(--ease), box-shadow .25s var(--ease); }
@@ -3564,7 +3564,7 @@ def index():
       }
     </style>
 
-    <!-- â”€â”€â”€ HERO with animated gradient mesh â”€â”€â”€ -->
+    <!-- ─── HERO with animated gradient mesh ─── -->
     <div class="mr-hero-wrap">
       <div class="mesh-bg" aria-hidden="true">
         <div class="mesh-blob b1"></div>
@@ -3592,7 +3592,7 @@ def index():
       <div class="mr-scroll-hint" aria-hidden="true">&darr;</div>
     </div>
 
-    <!-- â”€â”€â”€ Trust strip â”€â”€â”€ -->
+    <!-- ─── Trust strip ─── -->
     <div class="mr-trust reveal-fade">
       <div class="mr-trust-label">Built for</div>
       <div class="mr-trust-track">
@@ -3606,7 +3606,7 @@ def index():
       </div>
     </div>
 
-    <!-- â”€â”€â”€ Product switch â”€â”€â”€ -->
+    <!-- ─── Product switch ─── -->
     <div style="text-align:center;margin-top:64px">
       <div class="mr-switch reveal-fade">
         <button id="sw-biz" class="on biz" onclick="mrShowPanel('biz')">&#128188; For Business</button>
@@ -3614,16 +3614,16 @@ def index():
       </div>
     </div>
 
-    <!-- â”€â”€â”€ BUSINESS panel â”€â”€â”€ -->
+    <!-- ─── BUSINESS panel ─── -->
     <div id="panel-biz" class="mr-panel on">
       <div class="mr-section-title reveal">For sales teams, agencies &amp; founders</div>
       <h2 class="mr-section-h reveal r-delay-1">Email outreach that <span class="g1">actually gets replies</span>.</h2>
-      <p class="mr-section-sub reveal r-delay-2">Write, send, track, and follow up on personalized multi-step email campaigns â€” all on autopilot.</p>
+      <p class="mr-section-sub reveal r-delay-2">Write, send, track, and follow up on personalized multi-step email campaigns — all on autopilot.</p>
 
       <div class="mr-cards" style="margin-top:28px">
         <div class="mr-card biz spotlight reveal"><div class="icon">&#129302;</div><h3>AI Campaign Writer</h3><p>Describe your audience. GPT-4 drafts a multi-step sequence with A/B variants, follow-ups, and personalization.</p></div>
         <div class="mr-card biz spotlight reveal r-delay-1"><div class="icon">&#128233;</div><h3>Unified Mail Hub</h3><p>Connect Gmail, Outlook, and IMAP. Read, reply, and triage every inbox from one screen with AI sorting.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-2"><div class="icon">&#128200;</div><h3>Opens, Clicks &amp; Replies</h3><p>Track every interaction. See what's working and what to cut â€” in real time.</p></div>
+        <div class="mr-card biz spotlight reveal r-delay-2"><div class="icon">&#128200;</div><h3>Opens, Clicks &amp; Replies</h3><p>Track every interaction. See what's working and what to cut — in real time.</p></div>
         <div class="mr-card biz spotlight reveal r-delay-3"><div class="icon">&#9889;</div><h3>Smart Send Times</h3><p>AI learns when each recipient is most likely to open, then schedules sends automatically.</p></div>
         <div class="mr-card biz spotlight reveal"><div class="icon">&#128101;</div><h3>CRM &amp; Contacts</h3><p>Import via CSV or CRM, tag leads, segment by industry, and keep relationships organized.</p></div>
         <div class="mr-card biz spotlight reveal r-delay-1"><div class="icon">&#128272;</div><h3>A/B Testing</h3><p>Test subject lines and body copy. MachReach picks the winner automatically.</p></div>
@@ -3640,11 +3640,11 @@ def index():
       </div>
     </div>
 
-    <!-- â”€â”€â”€ STUDENT panel â”€â”€â”€ -->
+    <!-- ─── STUDENT panel ─── -->
     <div id="panel-stu" class="mr-panel">
       <div class="mr-section-title reveal" style="color:#F472B6">For students who refuse to fail</div>
       <h2 class="mr-section-h reveal r-delay-1">The <span class="g2">AI study OS</span> built for how you actually learn.</h2>
-      <p class="mr-section-sub reveal r-delay-2">Sync Canvas. Upload your PDFs. Let AI build your plan, quizzes, flashcards, notes â€” and tutor you through the hard parts.</p>
+      <p class="mr-section-sub reveal r-delay-2">Sync Canvas. Upload your PDFs. Let AI build your plan, quizzes, flashcards, notes — and tutor you through the hard parts.</p>
 
       <div class="mr-cards" style="margin-top:28px">
         <div class="mr-card stu spotlight reveal"><div class="icon">&#128218;</div><h3>Courses + Canvas Sync</h3><p>Auto-import every course, assignment, and due date. Or create courses manually. Upload syllabi &amp; PDFs.</p></div>
@@ -3664,7 +3664,7 @@ def index():
         <div class="mr-card stu spotlight reveal r-delay-2"><div class="icon">&#128221;</div><h3>Exams Dashboard</h3><p>Every upcoming exam, weighted by difficulty and days remaining. Never blindsided.</p></div>
         <div class="mr-card stu spotlight reveal r-delay-3"><div class="icon">&#128736;</div><h3>Practice Problems</h3><p>Unlimited AI-generated practice, graded and explained step by step.</p></div>
         <div class="mr-card stu spotlight reveal"><div class="icon">&#128233;</div><h3>Daily Study Email</h3><p>Morning briefing with today's plan, weak topics, and upcoming exams. Delivered to your inbox.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-1"><div class="icon">&#128206;</div><h3>Drag &amp; Drop Anywhere</h3><p>Drop a PDF onto Notes, Flashcards, Quizzes, or the AI Tutor â€” instant study material from your files.</p></div>
+        <div class="mr-card stu spotlight reveal r-delay-1"><div class="icon">&#128206;</div><h3>Drag &amp; Drop Anywhere</h3><p>Drop a PDF onto Notes, Flashcards, Quizzes, or the AI Tutor — instant study material from your files.</p></div>
       </div>
 
       <div class="mr-single reveal-fade" style="text-align:center;margin-top:32px">
@@ -3672,18 +3672,18 @@ def index():
       </div>
     </div>
 
-    <!-- â”€â”€â”€ Interactive product preview â”€â”€â”€ -->
+    <!-- ─── Interactive product preview ─── -->
     <div style="text-align:center">
       <div class="mr-section-title reveal">See it in action</div>
       <h2 class="mr-section-h reveal r-delay-1">Watch MachReach think.</h2>
-      <p class="mr-section-sub reveal r-delay-2">Two live previews â€” an AI-written cold email on the left, a live study plan ticking off on the right.</p>
+      <p class="mr-section-sub reveal r-delay-2">Two live previews — an AI-written cold email on the left, a live study plan ticking off on the right.</p>
     </div>
     <div class="mr-demo">
       <!-- Email composer demo -->
       <div class="mr-demo-card reveal-left">
         <div class="mr-demo-head">
           <div class="mr-demo-dots"><span class="mr-demo-dot r"></span><span class="mr-demo-dot y"></span><span class="mr-demo-dot g"></span></div>
-          <span class="mr-demo-title">Compose â€” MachReach AI Campaign Writer</span>
+          <span class="mr-demo-title">Compose — MachReach AI Campaign Writer</span>
         </div>
         <div class="mr-demo-body">
           <div class="mr-demo-label">Subject</div>
@@ -3701,12 +3701,12 @@ def index():
       <div class="mr-demo-card reveal-right">
         <div class="mr-demo-head">
           <div class="mr-demo-dots"><span class="mr-demo-dot r"></span><span class="mr-demo-dot y"></span><span class="mr-demo-dot g"></span></div>
-          <span class="mr-demo-title">Today's Plan â€” Monday</span>
+          <span class="mr-demo-title">Today's Plan — Monday</span>
         </div>
         <div class="mr-demo-body" id="demo-plan">
           <div class="mr-plan-item" data-delay="400"><span class="mr-plan-check">&#10003;</span><span>Review Biology Chapter 5 flashcards</span><span class="mr-plan-meta">25 min</span></div>
           <div class="mr-plan-item" data-delay="1000"><span class="mr-plan-check">&#10003;</span><span>Practice quiz: Calculus derivatives</span><span class="mr-plan-meta">15 min</span></div>
-          <div class="mr-plan-item" data-delay="1700"><span class="mr-plan-check">&#10003;</span><span>Read Political Theory â€” pages 45-62</span><span class="mr-plan-meta">30 min</span></div>
+          <div class="mr-plan-item" data-delay="1700"><span class="mr-plan-check">&#10003;</span><span>Read Political Theory — pages 45-62</span><span class="mr-plan-meta">30 min</span></div>
           <div class="mr-plan-item" data-delay="2500"><span class="mr-plan-check">&#10003;</span><span>Draft thesis intro (Essay Assistant)</span><span class="mr-plan-meta">20 min</span></div>
           <div class="mr-plan-item" data-delay="3300"><span class="mr-plan-check">&#10003;</span><span>AI Tutor: clarify Ch.5 osmosis</span><span class="mr-plan-meta">10 min</span></div>
           <div class="mr-plan-item" data-delay="4100"><span class="mr-plan-check">&#10003;</span><span>Weak topics radar: Python loops</span><span class="mr-plan-meta">15 min</span></div>
@@ -3714,21 +3714,21 @@ def index():
       </div>
     </div>
 
-    <!-- â”€â”€â”€ How it works â”€â”€â”€ -->
+    <!-- ─── How it works ─── -->
     <div style="max-width:1000px;margin:80px auto 0;padding:0 24px;">
       <div class="mr-section-title reveal">How it works</div>
       <h2 class="mr-section-h reveal r-delay-1">Three steps. That's it.</h2>
-      <p class="mr-section-sub reveal r-delay-2">Same simple flow â€” whether you're selling or studying.</p>
+      <p class="mr-section-sub reveal r-delay-2">Same simple flow — whether you're selling or studying.</p>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:28px;margin-top:28px;">
         <div class="reveal" style="text-align:center">
           <div class="drift" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 14px;box-shadow:0 10px 28px rgba(99,102,241,.28)">1</div>
           <h3 style="font-size:18px;margin-bottom:6px;font-weight:700">Tell us what you're doing</h3>
-          <p style="font-size:13.5px;color:var(--text-secondary);line-height:1.6;">Your target audience â€” or your courses and exams. Two minutes, tops.</p>
+          <p style="font-size:13.5px;color:var(--text-secondary);line-height:1.6;">Your target audience — or your courses and exams. Two minutes, tops.</p>
         </div>
         <div class="reveal r-delay-1" style="text-align:center">
           <div class="drift-slow" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#F472B6,#F59E0B);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 14px;box-shadow:0 10px 28px rgba(244,114,182,.28)">2</div>
           <h3 style="font-size:18px;margin-bottom:6px;font-weight:700">AI builds everything</h3>
-          <p style="font-size:13.5px;color:var(--text-secondary);line-height:1.6;">Campaigns, flashcards, quizzes, notes, plans, feedback â€” all generated for you.</p>
+          <p style="font-size:13.5px;color:var(--text-secondary);line-height:1.6;">Campaigns, flashcards, quizzes, notes, plans, feedback — all generated for you.</p>
         </div>
         <div class="reveal r-delay-2" style="text-align:center">
           <div class="drift" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#22D3EE,#6366F1);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 14px;box-shadow:0 10px 28px rgba(34,211,238,.28)">3</div>
@@ -3738,7 +3738,7 @@ def index():
       </div>
     </div>
 
-    <!-- â”€â”€â”€ Testimonials â”€â”€â”€ -->
+    <!-- ─── Testimonials ─── -->
     <div class="mr-testimonials">
       <div style="text-align:center">
         <div class="mr-section-title reveal">What early users say</div>
@@ -3791,7 +3791,7 @@ def index():
         </div>
         <div class="mr-testimonial reveal r-delay-1">
           <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-          <div class="quote">"I replaced 3 SaaS subs with MachReach. Campaigns, inbox, and deliverability â€” all one tab. Still cheaper."</div>
+          <div class="quote">"I replaced 3 SaaS subs with MachReach. Campaigns, inbox, and deliverability — all one tab. Still cheaper."</div>
           <div class="who">
             <div class="avatar">AN</div>
             <div>
@@ -3814,7 +3814,7 @@ def index():
       </div>
     </div>
 
-    <!-- â”€â”€â”€ Comparison â”€â”€â”€ -->
+    <!-- ─── Comparison ─── -->
     <div class="mr-compare">
       <div style="text-align:center">
         <div class="mr-section-title reveal">Compare</div>
@@ -3879,7 +3879,7 @@ def index():
       </div>
     </div>
 
-    <!-- â”€â”€â”€ Pricing teaser â”€â”€â”€ -->
+    <!-- ─── Pricing teaser ─── -->
     <div class="mr-pricing">
       <div class="mr-section-title reveal">Pricing</div>
       <h2 class="mr-section-h reveal r-delay-1">Simple. Transparent. Free to start.</h2>
@@ -3905,7 +3905,7 @@ def index():
       <a href="/pricing" class="btn btn-outline reveal-fade" style="margin-top:24px;">See all plans &rarr;</a>
     </div>
 
-    <!-- â”€â”€â”€ FAQ â”€â”€â”€ -->
+    <!-- ─── FAQ ─── -->
     <div class="mr-faq">
       <div style="text-align:center">
         <div class="mr-section-title reveal">FAQ</div>
@@ -3926,7 +3926,7 @@ def index():
         </details>
         <details class="reveal r-delay-2">
           <summary>Can I connect my own email account?</summary>
-          <div class="mr-faq-body">Yes â€” Gmail, Outlook/Microsoft 365, and any IMAP/SMTP account. Your messages send from your domain so deliverability and authentication stay in your control.</div>
+          <div class="mr-faq-body">Yes — Gmail, Outlook/Microsoft 365, and any IMAP/SMTP account. Your messages send from your domain so deliverability and authentication stay in your control.</div>
         </details>
         <details class="reveal r-delay-2">
           <summary>How is this different from Mailshake, Lemlist, or Quizlet?</summary>
@@ -3934,20 +3934,20 @@ def index():
         </details>
         <details class="reveal r-delay-3">
           <summary>Can students and businesses share one account?</summary>
-          <div class="mr-faq-body">No â€” student and business accounts have different dashboards and tools. But your email address can be used for either. Pick when you sign up; you can always open a second account with a different email.</div>
+          <div class="mr-faq-body">No — student and business accounts have different dashboards and tools. But your email address can be used for either. Pick when you sign up; you can always open a second account with a different email.</div>
         </details>
         <details class="reveal r-delay-3">
           <summary>When does beta end?</summary>
-          <div class="mr-faq-body">When we're satisfied things are stable and support our user base at scale. During beta, every feature is free â€” no limits, no catches. You'll get notice before paid plans go live.</div>
+          <div class="mr-faq-body">When we're satisfied things are stable and support our user base at scale. During beta, every feature is free — no limits, no catches. You'll get notice before paid plans go live.</div>
         </details>
         <details class="reveal r-delay-4">
           <summary>Who builds MachReach?</summary>
-          <div class="mr-faq-body">MachReach is built by a small team obsessed with two things: giving founders unfair leverage in outreach, and giving students unfair leverage in learning. Email <a href="mailto:support@machreach.com" style="color:var(--primary)">support@machreach.com</a> â€” we actually reply.</div>
+          <div class="mr-faq-body">MachReach is built by a small team obsessed with two things: giving founders unfair leverage in outreach, and giving students unfair leverage in learning. Email <a href="mailto:support@machreach.com" style="color:var(--primary)">support@machreach.com</a> — we actually reply.</div>
         </details>
       </div>
     </div>
 
-    <!-- â”€â”€â”€ Final CTA â”€â”€â”€ -->
+    <!-- ─── Final CTA ─── -->
     <div class="mr-final reveal-scale">
       <h2>Pick your side. Start winning.</h2>
       <p>Free during beta. No credit card. Full access.</p>
@@ -3969,10 +3969,10 @@ def index():
         sb.classList.toggle('stu', which === 'stu');
       };
 
-      // â”€â”€â”€ Typewriter effect for the email composer preview â”€â”€â”€
+      // ─── Typewriter effect for the email composer preview ───
       (function(){
         var SUBJECT = "Quick idea for {{COMPANY}}'s Q2 pipeline";
-        var BODY = "Hi Sarah,\\n\\nSaw you just launched the new onboarding flow â€” nice work on the friction drop.\\n\\nI run MachReach. We help B2B teams automate the first 4 follow-ups of every cold outreach sequence. Teams usually see replies go up 2â€“3x in the first month.\\n\\nOpen to a 15-min call next week?\\n\\nâ€” M";
+        var BODY = "Hi Sarah,\\n\\nSaw you just launched the new onboarding flow — nice work on the friction drop.\\n\\nI run MachReach. We help B2B teams automate the first 4 follow-ups of every cold outreach sequence. Teams usually see replies go up 2–3x in the first month.\\n\\nOpen to a 15-min call next week?\\n\\n— M";
         function typeInto(el, text, speed, then) {
           if (!el) return then && then();
           el.textContent = '';
@@ -4016,7 +4016,7 @@ def index():
         }
       })();
 
-      // â”€â”€â”€ Plan ticker â€” checks off items one-by-one â”€â”€â”€
+      // ─── Plan ticker — checks off items one-by-one ───
       (function(){
         function runPlanDemo() {
           var items = document.querySelectorAll('#demo-plan .mr-plan-item');
@@ -4082,9 +4082,9 @@ def register():
                 f"Welcome to MachReach! Please verify your email address:\n\n"
                 f"{verify_link}\n\n"
                 f"This link expires in 24 hours.\n\n"
-                f"â€” MachReach"
+                f"— MachReach"
             )
-            email_sent = _send_system_email(email, "MachReach â€” Verify Your Email", body)
+            email_sent = _send_system_email(email, "MachReach — Verify Your Email", body)
         except Exception as e:
             import traceback
             print(f"[VERIFY] Verification flow failed for {email}: {e}", flush=True)
@@ -4094,13 +4094,13 @@ def register():
             flash(("success", "Account created! Please check your email to verify your address before logging in."))
             return redirect(url_for("login"))
         else:
-            # Verification email failed â€” delete the account so it's not half-created
+            # Verification email failed — delete the account so it's not half-created
             try:
                 from outreach.db import get_db, _exec
                 with get_db() as db:
                     _exec(db, "DELETE FROM email_verification_tokens WHERE client_id = %s", (client_id,))
                     _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
-                print(f"[REGISTER] Rolled back account for {email} â€” verification email failed", flush=True)
+                print(f"[REGISTER] Rolled back account for {email} — verification email failed", flush=True)
             except Exception:
                 pass
             flash(("error", "We couldn't send the verification email. Please check your email address and try again, or contact support@machreach.com."))
@@ -4232,9 +4232,9 @@ def resend_verification():
         expires = (datetime.now() + __import__("datetime").timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         create_verification_token(client["id"], token, expires)
         verify_link = f"{_base_url}/verify-email/{token}"
-        body = f"Hi {client['name']},\n\nVerify your MachReach email:\n\n{verify_link}\n\nExpires in 24 hours.\n\nâ€” MachReach"
+        body = f"Hi {client['name']},\n\nVerify your MachReach email:\n\n{verify_link}\n\nExpires in 24 hours.\n\n— MachReach"
         try:
-            _send_system_email(email, "MachReach â€” Verify Your Email", body)
+            _send_system_email(email, "MachReach — Verify Your Email", body)
         except Exception:
             pass
     flash(("info", "If the email is registered, a new verification link has been sent."))
@@ -4249,7 +4249,7 @@ def set_language(lang):
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Forgot / Reset Password
+# Routes — Forgot / Reset Password
 # ---------------------------------------------------------------------------
 
 @app.route("/forgot-password", methods=["GET", "POST"])
@@ -4268,7 +4268,7 @@ def forgot_password():
             reset_link = f"{BASE_URL}/reset-password/{token}"
             body = f"Click here to reset your MachReach password:\n\n{reset_link}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email."
             try:
-                _send_system_email(email, "MachReach â€” Password Reset", body)
+                _send_system_email(email, "MachReach — Password Reset", body)
             except Exception:
                 pass  # Don't reveal whether email was sent
         # Always show same message to prevent email enumeration
@@ -4331,7 +4331,7 @@ def reset_password(token):
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Change Password (from Settings)
+# Routes — Change Password (from Settings)
 # ---------------------------------------------------------------------------
 
 @app.route("/settings/change-password", methods=["POST"])
@@ -4360,7 +4360,7 @@ def change_password():
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Delete Account
+# Routes — Delete Account
 # ---------------------------------------------------------------------------
 
 @app.route("/settings/delete-account", methods=["POST"])
@@ -4422,7 +4422,7 @@ def delete_account():
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Team Seats
+# Routes — Team Seats
 # ---------------------------------------------------------------------------
 
 @app.route("/api/team/invite", methods=["POST"])
@@ -4457,7 +4457,7 @@ def api_team_invite():
         f"Click the link below to accept the invitation:\n"
         f"{invite_url}\n\n"
         f"If you don't have an account yet, you'll be able to sign up first.\n\n"
-        f"â€” MachReach"
+        f"— MachReach"
     )
     _send_email(to_email=email, subject=f"You're invited to join {client['name'] or 'a team'} on MachReach",
                 body_text=invite_body, from_name="MachReach")
@@ -4501,7 +4501,7 @@ def api_team_list():
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Dashboard
+# Routes — Dashboard
 # ---------------------------------------------------------------------------
 
 @app.route("/dashboard")
@@ -4587,7 +4587,7 @@ def dashboard():
           <div class="empty-state reveal">
             <div class="empty-icon">&#128235;</div>
             <h3>No campaigns yet</h3>
-            <p>Create your first campaign to start sending personalized outreach â€” we&rsquo;ll help you write the first email, pick the best send times, and track every reply.</p>
+            <p>Create your first campaign to start sending personalized outreach — we&rsquo;ll help you write the first email, pick the best send times, and track every reply.</p>
             <div class="empty-actions">
               <a href="/campaign/new" class="primary">&#43; New Campaign</a>
               <a href="/contacts" class="ghost">Import contacts first</a>
@@ -4636,7 +4636,7 @@ def dashboard():
             <span style="font-size:18px;">{% if has_contacts %}&#9989;{% else %}2&#65039;&#8419;{% endif %}</span>
             <strong style="font-size:14px;{% if has_contacts %}color:var(--green-dark);{% endif %}">Import contacts</strong>
           </div>
-          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Add people to reach out to â€” paste emails, upload a CSV, or add them one by one.</p>
+          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Add people to reach out to — paste emails, upload a CSV, or add them one by one.</p>
           {% if has_accounts and not has_contacts %}
           <a href="/contacts" class="btn btn-primary btn-sm">&#128101; Add Contacts</a>
           {% endif %}
@@ -4646,7 +4646,7 @@ def dashboard():
             <span style="font-size:18px;">{% if has_campaigns %}&#9989;{% else %}3&#65039;&#8419;{% endif %}</span>
             <strong style="font-size:14px;{% if has_campaigns %}color:var(--green-dark);{% endif %}">Create a campaign</strong>
           </div>
-          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Describe your business and audience â€” AI generates a personalized email sequence for you.</p>
+          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Describe your business and audience — AI generates a personalized email sequence for you.</p>
           {% if has_contacts and not has_campaigns %}
           <a href="/campaign/new" class="btn btn-primary btn-sm">&#128640; Create Campaign</a>
           {% endif %}
@@ -4767,7 +4767,7 @@ def dashboard():
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Admin Broadcast
+# Routes — Admin Broadcast
 # ---------------------------------------------------------------------------
 
 def _is_admin():
@@ -4854,7 +4854,7 @@ def admin_broadcast():
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Settings
+# Routes — Settings
 # ---------------------------------------------------------------------------
 
 @app.route("/settings", methods=["GET", "POST"])
@@ -5112,10 +5112,10 @@ def settings():
             <h4 style="font-size:14px;margin:0 0 8px;">Step 1: Get a business email</h4>
             <p style="margin:0;">You need an email address on your own domain (e.g. <code>hello@yourcompany.com</code>). Popular options:</p>
             <ul style="padding-left:18px;margin:8px 0 0;">
-              <li><strong>Google Workspace</strong> ($6/mo) â€” Uses Gmail interface, supports App Passwords</li>
-              <li><strong>Microsoft 365</strong> ($6/mo) â€” Uses Outlook interface</li>
-              <li><strong>Zoho Mail</strong> (free tier available) â€” Good budget option</li>
-              <li><strong>Your hosting provider</strong> â€” Many hosts include email with your domain</li>
+              <li><strong>Google Workspace</strong> ($6/mo) — Uses Gmail interface, supports App Passwords</li>
+              <li><strong>Microsoft 365</strong> ($6/mo) — Uses Outlook interface</li>
+              <li><strong>Zoho Mail</strong> (free tier available) — Good budget option</li>
+              <li><strong>Your hosting provider</strong> — Many hosts include email with your domain</li>
             </ul>
           </div>
 
@@ -5198,7 +5198,7 @@ def settings():
             const colors = {{0: ['#FEE2E2','#DC2626'], 1: ['#FEF3C7','#D97706'], 2: ['#FEF3C7','#D97706'], 3: ['#DCFCE7','#16A34A']}};
             const [bg, fg] = colors[d.score] || colors[0];
             scoreEl.style.background = bg; scoreEl.style.color = fg;
-            scoreEl.textContent = d.score + '/3 checks passed â€” ' + (d.score === 3 ? 'Excellent! Your domain is fully authenticated.' : d.score >= 2 ? 'Good, but fix the remaining issue.' : 'Action needed â€” your emails may land in spam.');
+            scoreEl.textContent = d.score + '/3 checks passed — ' + (d.score === 3 ? 'Excellent! Your domain is fully authenticated.' : d.score >= 2 ? 'Good, but fix the remaining issue.' : 'Action needed — your emails may land in spam.');
 
             const rowsEl = document.getElementById('dlvr-rows');
             rowsEl.innerHTML = '';
@@ -5211,7 +5211,7 @@ def settings():
                 + '<div style="flex:1;"><strong style="font-size:13px;">' + item.label + '</strong>'
                 + (c && c.record ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;word-break:break-all;font-family:monospace;">' + (c.record.length > 80 ? c.record.slice(0,80)+'...' : c.record) + '</div>' : '')
                 + (c && c.selector ? '<div style="font-size:11px;color:var(--text-muted);">Selector: ' + c.selector + '</div>' : '')
-                + (!ok ? '<div style="font-size:11px;color:#D97706;margin-top:2px;">' + (c && c.hint ? c.hint : 'Not found â€” add this record in your domain DNS settings.') + '</div>' : '')
+                + (!ok ? '<div style="font-size:11px;color:#D97706;margin-top:2px;">' + (c && c.hint ? c.hint : 'Not found — add this record in your domain DNS settings.') + '</div>' : '')
                 + '</div>';
               rowsEl.appendChild(row);
             }});
@@ -5231,7 +5231,7 @@ def settings():
         <p><strong>Sender Name:</strong> {{{{sender_name}}}}</p>
         <p><strong>Daily Limit:</strong> {{{{daily_limit}}}} emails/day (based on your plan)</p>
         <p><strong>Delay Between Emails:</strong> 60 seconds</p>
-        <p class="text-xs text-muted mt-2">Daily limits scale with your plan: Free=50, Growth=200, Pro=500, Unlimited=âˆž</p>
+        <p class="text-xs text-muted mt-2">Daily limits scale with your plan: Free=50, Growth=200, Pro=500, Unlimited=∞</p>
       </div>
     </div>
 
@@ -5353,7 +5353,7 @@ def settings():
       document.getElementById('acct-imap-port').value = p.imap_port;
       document.getElementById('acct-smtp-host').value = p.smtp;
       document.getElementById('acct-smtp-port').value = p.smtp_port;
-      badge.innerHTML = '<span style="font-weight:600;">' + p.name + ' detected</span> â€” IMAP/SMTP settings filled automatically.';
+      badge.innerHTML = '<span style="font-weight:600;">' + p.name + ' detected</span> — IMAP/SMTP settings filled automatically.';
       badge.style.display = 'flex';
       badge.style.borderLeft = '3px solid ' + p.color;
       hint.innerHTML = p.hint;
@@ -5370,7 +5370,7 @@ def settings():
         _applyProvider(p, badge, hint);
         return;
       }}
-      // Unknown domain â€” debounce MX lookup via server
+      // Unknown domain — debounce MX lookup via server
       clearTimeout(_mxTimeout);
       badge.innerHTML = '<span style="color:var(--text-muted);">&#8987; Detecting provider for <b>' + domain + '</b>...</span>';
       badge.style.display = 'flex';
@@ -5382,14 +5382,14 @@ def settings():
             if (data.provider) {{
               _applyProvider(data, badge, hint);
             }} else {{
-              badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> â€” open <b>Advanced Settings</b> below and enter your IMAP/SMTP server details. Check with your IT department or email provider.';
+              badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> below and enter your IMAP/SMTP server details. Check with your IT department or email provider.';
               badge.style.display = 'flex';
               badge.style.borderLeft = '3px solid var(--yellow)';
               hint.innerHTML = 'Enter the password for this email account. If your provider supports App Passwords, use one for better security.';
             }}
           }})
           .catch(() => {{
-            badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> â€” open <b>Advanced Settings</b> below and enter your IMAP/SMTP server details.';
+            badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> below and enter your IMAP/SMTP server details.';
             badge.style.display = 'flex';
             badge.style.borderLeft = '3px solid var(--yellow)';
             hint.innerHTML = 'Enter the password for this email account.';
@@ -5542,7 +5542,7 @@ def settings():
 
 
 # ---------------------------------------------------------------------------
-# Google Calendar â€” OAuth + API (shared by student + business)
+# Google Calendar — OAuth + API (shared by student + business)
 # ---------------------------------------------------------------------------
 from outreach import gcal as _gcal
 
@@ -5659,7 +5659,7 @@ def gcal_delete_event(event_id):
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Reply Inbox
+# Routes — Reply Inbox
 # ---------------------------------------------------------------------------
 
 @app.route("/inbox")
@@ -5819,7 +5819,7 @@ def inbox():
         thread_cards = """<div class="empty-state reveal">
           <div class="empty-icon">&#128236;</div>
           <h3>Your inbox is a clean slate</h3>
-          <p>Once your campaigns start sending, every sent email, open, click, and reply shows up here â€” threaded, searchable, and scored by MachReach&rsquo;s reply intelligence.</p>
+          <p>Once your campaigns start sending, every sent email, open, click, and reply shows up here — threaded, searchable, and scored by MachReach&rsquo;s reply intelligence.</p>
           <div class="empty-actions">
             <a href="/campaign/new" class="primary">&#43; Launch a campaign</a>
             <a href="/mail-hub" class="ghost">Or check Mail Hub</a>
@@ -5906,7 +5906,7 @@ def inbox():
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” A/B Test Dashboard
+# Routes — A/B Test Dashboard
 # ---------------------------------------------------------------------------
 
 @app.route("/ab-tests")
@@ -5963,7 +5963,7 @@ def ab_tests():
         cards += f"""
         <div class="card" style="margin-bottom:16px;">
           <div class="card-header">
-            <h2>Step {tst['step']} â€” <a href="/campaign/{tst['campaign_id']}" style="color:var(--primary);">{_esc(tst['campaign_name'])}</a></h2>
+            <h2>Step {tst['step']} — <a href="/campaign/{tst['campaign_id']}" style="color:var(--primary);">{_esc(tst['campaign_name'])}</a></h2>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;">
@@ -6039,7 +6039,7 @@ def ab_tests():
                 else:
                     bg = "var(--border-light)"
                     text_col = "var(--text-muted)"
-            cells += f'<td style="width:36px;height:28px;text-align:center;font-size:10px;background:{bg};color:{text_col};border:1px solid var(--card);" title="{day_names[dow]} {hour}:00 â€” {data["total"]} sent, {data["rate"]:.0f}% open rate">{data["rate"]:.0f}%</td>'
+            cells += f'<td style="width:36px;height:28px;text-align:center;font-size:10px;background:{bg};color:{text_col};border:1px solid var(--card);" title="{day_names[dow]} {hour}:00 — {data["total"]} sent, {data["rate"]:.0f}% open rate">{data["rate"]:.0f}%</td>'
         heatmap_rows += f"<tr><td style='font-size:11px;font-weight:600;padding-right:8px;color:var(--text-secondary);'>{day_names[dow]}</td>{cells}</tr>"
 
     hour_headers = "".join(f'<th style="font-size:10px;color:var(--text-muted);font-weight:500;padding:2px;">{h}</th>' for h in range(6, 22))
@@ -6068,7 +6068,7 @@ def ab_tests():
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Campaign Calendar
+# Routes — Campaign Calendar
 # ---------------------------------------------------------------------------
 
 @app.route("/calendar")
@@ -6190,7 +6190,7 @@ def calendar_view():
                 icon = "&#9989;" if e.get("email_status") == "replied" else ("&#128232;" if e["event_type"] == "sent" else "&#128197;")
                 name = _esc(e.get("contact_name") or e.get("contact_email", ""))
                 camp = _esc(e.get("campaign_name", ""))
-                items += f'<div style="padding:4px 0;font-size:12px;">{icon} <strong>{name}</strong> â€” {camp}</div>'
+                items += f'<div style="padding:4px 0;font-size:12px;">{icon} <strong>{name}</strong> — {camp}</div>'
             if len(day_evts) > 3:
                 items += f'<div style="font-size:11px;color:var(--text-muted);">+{len(day_evts) - 3} more</div>'
             upcoming_html += f'<div style="margin-bottom:10px;"><div style="font-weight:600;font-size:12px;color:var(--text-secondary);margin-bottom:2px;">{label}</div>{items}</div>'
@@ -6249,7 +6249,7 @@ def calendar_view():
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Campaign CRUD
+# Routes — Campaign CRUD
 # ---------------------------------------------------------------------------
 
 @app.route("/campaign/new", methods=["GET", "POST"])
@@ -6609,7 +6609,7 @@ def view_campaign(campaign_id):
 
             ab_html += f"""
             <div class="card" style="padding:24px;margin-bottom:16px;">
-              <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;">Step {step} â€” A/B Comparison</h3>
+              <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;">Step {step} — A/B Comparison</h3>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                 <div style="padding:16px;border-radius:var(--radius-xs);background:var(--bg);{win_a}">
                   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -7232,7 +7232,7 @@ def unsubscribe_global(token):
     import hashlib
     from outreach.db import get_db, _fetchone, add_suppression
     # Token format: sha256(client_id:email:secret)
-    # We look up by brute-checking â€” or store the token. For simplicity, decode from query params.
+    # We look up by brute-checking — or store the token. For simplicity, decode from query params.
     email = request.args.get("e", "")
     cid = request.args.get("c", "")
     if email and cid:
@@ -7336,7 +7336,7 @@ def api_reply_draft(sent_email_id):
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Smart Send Times
+# Routes — Smart Send Times
 # ---------------------------------------------------------------------------
 
 @app.route("/smart-times")
@@ -7415,7 +7415,7 @@ def smart_times():
                 else:
                     bg = "var(--border-light)"
                     text_col = "var(--text-muted)"
-            cells += f'<td style="width:36px;height:32px;text-align:center;font-size:10px;background:{bg};color:{text_col};border:2px solid var(--card);border-radius:4px;" title="{day_names[dow]} {hour}:00 â€” {data["total"]} sent, {data["rate"]:.0f}% opens">{data["rate"]:.0f}%</td>'
+            cells += f'<td style="width:36px;height:32px;text-align:center;font-size:10px;background:{bg};color:{text_col};border:2px solid var(--card);border-radius:4px;" title="{day_names[dow]} {hour}:00 — {data["total"]} sent, {data["rate"]:.0f}% opens">{data["rate"]:.0f}%</td>'
         heatmap_rows += f"<tr><td style='font-size:12px;font-weight:600;padding-right:10px;color:var(--text-secondary);'>{day_names[dow]}</td>{cells}</tr>"
 
     hour_headers = "".join(f'<th style="font-size:10px;color:var(--text-muted);font-weight:500;padding:2px 0;">{h}</th>' for h in range(6, 22))
@@ -7464,7 +7464,7 @@ def smart_times():
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Analytics Export
+# Routes — Analytics Export
 # ---------------------------------------------------------------------------
 
 @app.route("/export")
@@ -7739,7 +7739,7 @@ def mail_hub():
         mail_hub_tutorial = f"""
     <div class="card" style="margin-bottom:24px;border:2px solid var(--primary);background:linear-gradient(135deg, var(--primary-light), var(--bg));">
       <div style="padding:24px;">
-        <h2 style="margin:0 0 8px;">&#128231; {t("mail.title")} â€” Getting Started</h2>
+        <h2 style="margin:0 0 8px;">&#128231; {t("mail.title")} — Getting Started</h2>
         <p style="color:var(--text-secondary);margin-bottom:20px;">Follow these steps to set up your Mail Hub inbox:</p>
         <div style="display:flex;flex-direction:column;gap:16px;">
           <div style="display:flex;gap:12px;align-items:flex-start;">
@@ -7753,7 +7753,7 @@ def mail_hub():
             <span style="background:var(--primary);color:white;border-radius:50%;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">2</span>
             <div>
               <strong>Enable 2-Step Verification first</strong>
-              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">App Passwords require 2FA. Go to <a href="https://myaccount.google.com/security" target="_blank" style="color:var(--primary);">Google Security</a> â†’ enable 2-Step Verification â†’ then create an App Password.</p>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">App Passwords require 2FA. Go to <a href="https://myaccount.google.com/security" target="_blank" style="color:var(--primary);">Google Security</a> → enable 2-Step Verification → then create an App Password.</p>
             </div>
           </div>
           <div style="display:flex;gap:12px;align-items:flex-start;">
@@ -7860,7 +7860,7 @@ def mail_hub():
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
       <div>
         <h1 style="font-size:30px;">&#128233; {t("mail.title")}</h1>
-        <p class="subtitle" style="font-size:16px;">AI-powered inbox triage â€” your emails organized by what matters. <span style="font-size:13px;color:var(--text-muted);cursor:pointer;" onclick="document.getElementById('shortcuts-modal').style.display='flex'">Press <kbd style="background:var(--border-light);padding:1px 6px;border-radius:4px;font-size:12px;border:1px solid var(--border);">?</kbd> for shortcuts</span></p>
+        <p class="subtitle" style="font-size:16px;">AI-powered inbox triage — your emails organized by what matters. <span style="font-size:13px;color:var(--text-muted);cursor:pointer;" onclick="document.getElementById('shortcuts-modal').style.display='flex'">Press <kbd style="background:var(--border-light);padding:1px 6px;border-radius:4px;font-size:12px;border:1px solid var(--border);">?</kbd> for shortcuts</span></p>
       </div>
       <div class="btn-group" style="display:flex;align-items:center;gap:12px;">
         <span id="peek-badge" style="display:none;font-size:13px;font-weight:600;color:var(--primary);background:var(--primary-light,rgba(99,102,241,0.1));padding:6px 14px;border-radius:var(--radius-xs);white-space:nowrap;"></span>
@@ -8099,7 +8099,7 @@ def mail_hub():
         .then(data => {{
           const badge = document.getElementById('peek-badge');
           if (data.imap_error) {{
-            badge.textContent = '&#9888; IMAP connection failed â€” check email account settings';
+            badge.textContent = '&#9888; IMAP connection failed — check email account settings';
             badge.style.display = 'inline-block';
             badge.style.background = 'var(--red-light, #fee)';
             badge.style.color = 'var(--red, #e53e3e)';
@@ -8470,7 +8470,7 @@ def mail_hub():
 
 
 # ---------------------------------------------------------------------------
-# API â€” Email Accounts (multi-mailbox)
+# API — Email Accounts (multi-mailbox)
 # ---------------------------------------------------------------------------
 
 @app.route("/api/email-accounts", methods=["POST"])
@@ -8512,7 +8512,7 @@ def api_add_email_account():
     except Exception as e:
         return jsonify({"error": f"IMAP connection failed: {str(e)[:100]}"}), 400
 
-    # Test SMTP connection â€” try SSL (465) first, fall back to STARTTLS (587)
+    # Test SMTP connection — try SSL (465) first, fall back to STARTTLS (587)
     import smtplib
     smtp_connected = False
     smtp_error = ""
@@ -8582,7 +8582,7 @@ def api_save_mail_preferences():
 
 
 # ---------------------------------------------------------------------------
-# API â€” Mail Hub
+# API — Mail Hub
 # ---------------------------------------------------------------------------
 
 @app.route("/api/mail-hub/peek", methods=["POST"])
@@ -8610,7 +8610,7 @@ def api_mail_peek():
             imap_since = dt.strftime("%d-%b-%Y")
             db_since = dt.strftime("%Y-%m-%d")
         else:
-            # No emails synced yet â€” check last 3 days
+            # No emails synced yet — check last 3 days
             dt = datetime.now() - timedelta(days=3)
             imap_since = dt.strftime("%d-%b-%Y")
             db_since = dt.strftime("%Y-%m-%d")
@@ -8656,7 +8656,7 @@ _campaign_sends: dict[int, dict] = {}  # campaign_id -> {status, sent, total}
 
 @app.route("/api/mail-hub/sync", methods=["POST"])
 def api_mail_sync():
-    """Start inbox sync in background â€” returns immediately."""
+    """Start inbox sync in background — returns immediately."""
     if not _logged_in():
         return jsonify({"error": "unauthorized"}), 401
     client_id = session["client_id"]
@@ -8735,7 +8735,7 @@ def api_mail_bulk():
 
 @app.route("/api/mail-hub/send-compose", methods=["POST"])
 def api_mail_send_compose():
-    """Send a composed email immediately via SMTP â€” supports account_id and file attachments."""
+    """Send a composed email immediately via SMTP — supports account_id and file attachments."""
     if not _logged_in():
         return jsonify({"error": "unauthorized"}), 401
 
@@ -9194,7 +9194,7 @@ def mail_hub_detail(mail_id):
 
 
 # ---------------------------------------------------------------------------
-# API â€” Mail Hub: AI draft & send reply
+# API — Mail Hub: AI draft & send reply
 # ---------------------------------------------------------------------------
 
 @app.route("/api/mail-hub/<int:mail_id>/draft", methods=["POST"])
@@ -9226,7 +9226,7 @@ def api_mail_draft(mail_id):
 
 @app.route("/api/mail-hub/<int:mail_id>/send-reply", methods=["POST"])
 def api_mail_send_reply(mail_id):
-    """Send a reply to a mail hub email via SMTP â€” supports file attachments."""
+    """Send a reply to a mail hub email via SMTP — supports file attachments."""
     if not _logged_in():
         return jsonify({"error": "unauthorized"}), 401
     from outreach.db import get_mail_item, get_email_account, get_default_email_account
@@ -9318,7 +9318,7 @@ def api_mail_send_reply(mail_id):
         return jsonify({"error": str(e)}), 500
 
 # ---------------------------------------------------------------------------
-# Routes â€” Contacts Book
+# Routes — Contacts Book
 # ---------------------------------------------------------------------------
 
 @app.route("/contacts")
@@ -9386,7 +9386,7 @@ def contacts_page():
               {lang_badge}
             </div>
             <div style="font-size:13px;color:var(--text-muted);margin-top:2px;">{_esc(c['email'])}</div>
-            {'<div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">' + _esc(c['company']) + (' â€” ' + _esc(c['role']) if c.get('role') else '') + '</div>' if c.get('company') else ''}
+            {'<div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">' + _esc(c['company']) + (' — ' + _esc(c['role']) if c.get('role') else '') + '</div>' if c.get('company') else ''}
             {'<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;font-style:italic;">' + notes_preview + '</div>' if notes_preview else ''}
             <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">
               {tags_html}
@@ -9402,7 +9402,7 @@ def contacts_page():
         <div class="empty-state reveal">
           <div class="empty-icon">&#128101;</div>
           <h3>{'No contacts match those filters' if _filtered else 'Your contact book is empty'}</h3>
-          <p>{'Try clearing filters or broadening your search.' if _filtered else 'Open an email in Mail Hub and click <b>Save Contact</b> â€” or import a CSV to seed your book with hundreds of contacts at once.'}</p>
+          <p>{'Try clearing filters or broadening your search.' if _filtered else 'Open an email in Mail Hub and click <b>Save Contact</b> — or import a CSV to seed your book with hundreds of contacts at once.'}</p>
           <div class="empty-actions">
             {'<a href="/contacts" class="primary">Clear filters</a>' if _filtered else '<a href="/mail-hub" class="primary">Open Mail Hub</a><a href="/campaign/new" class="ghost">Or import a CSV</a>'}
           </div>
@@ -9440,7 +9440,7 @@ def contacts_page():
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
       <div>
         <h1 style="font-size:30px;">&#128101; {t("contacts.title")}</h1>
-        <p class="subtitle" style="font-size:16px;">Your personal contact book â€” AI uses this context to write perfect replies.</p>
+        <p class="subtitle" style="font-size:16px;">Your personal contact book — AI uses this context to write perfect replies.</p>
       </div>
       <div class="btn-group">
         <button onclick="toggleBulkMode()" class="btn btn-ghost" id="bulk-btn" style="font-size:14px;padding:10px 18px;">&#9745; Select</button>
@@ -9686,7 +9686,7 @@ def contact_detail(contact_id):
               </div>
               <div>
                 <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Added</div>
-                <div style="font-size:15px;">{contact['created_at'][:10] if contact.get('created_at') else 'â€”'}</div>
+                <div style="font-size:15px;">{contact['created_at'][:10] if contact.get('created_at') else '—'}</div>
               </div>
               <div>
                 <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Last Contacted</div>
@@ -10092,13 +10092,13 @@ def group_send(group_name):
                 fail_count += 1
 
         if sent_count:
-            suppressed_msg = f" ({suppressed_count} skipped â€” unsubscribed)" if suppressed_count else ""
+            suppressed_msg = f" ({suppressed_count} skipped — unsubscribed)" if suppressed_count else ""
             flash(("success", f"Sent {sent_count} email{'s' if sent_count != 1 else ''} to group '{group_name}'!{suppressed_msg}" + (f" ({fail_count} failed)" if fail_count else "")))
         else:
             flash(("error", f"All {fail_count} emails failed to send."))
         return redirect(url_for("contacts_page"))
 
-    # GET â€” show the send form
+    # GET — show the send form
     contact_rows = ""
     for c in contacts:
         contact_rows += f'<tr><td>{_esc(c["name"] or "-")}</td><td>{_esc(c["email"])}</td><td>{_esc(c.get("company", "") or "-")}</td></tr>'
@@ -10192,7 +10192,7 @@ def group_send(group_name):
 
 
 # ---------------------------------------------------------------------------
-# Routes â€” Billing & PayPal
+# Routes — Billing & PayPal
 # ---------------------------------------------------------------------------
 
 @app.route("/billing")
@@ -10402,7 +10402,7 @@ def paypal_webhook():
     # Verify webhook signature with PayPal API (mandatory)
     from outreach.config import PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID, PAYPAL_MODE
     if not PAYPAL_WEBHOOK_ID or not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
-        print("[PAYPAL] Webhook rejected â€” credentials not configured")
+        print("[PAYPAL] Webhook rejected — credentials not configured")
         return "Webhook not configured", 500
     try:
         import requests as rq
@@ -10787,7 +10787,7 @@ def terms_page():
 
 
 # ---------------------------------------------------------------------------
-# API â€” Usage check
+# API — Usage check
 # ---------------------------------------------------------------------------
 
 @app.route("/api/usage")
@@ -10805,7 +10805,7 @@ def api_usage():
 
 
 # ---------------------------------------------------------------------------
-# API â€” Email provider detection via MX lookup
+# API — Email provider detection via MX lookup
 # ---------------------------------------------------------------------------
 
 @app.route("/api/detect-provider")
@@ -10849,14 +10849,14 @@ def api_detect_provider():
             return jsonify({"provider": "zoho", "name": "Zoho Mail",
                 "imap": "imap.zoho.com", "smtp": "smtp.zoho.com",
                 "imap_port": 993, "smtp_port": 465, "color": "#F0483E",
-                "hint": "This domain uses Zoho Mail. Go to Zoho Mail Settings â†’ Security â†’ App Passwords to generate one.",
+                "hint": "This domain uses Zoho Mail. Go to Zoho Mail Settings → Security → App Passwords to generate one.",
                 "mx": mx_hosts})
 
     return jsonify({"provider": None, "mx": mx_hosts})
 
 
 # ---------------------------------------------------------------------------
-# API â€” Email deliverability check (SPF / DKIM / DMARC)
+# API — Email deliverability check (SPF / DKIM / DMARC)
 # ---------------------------------------------------------------------------
 
 @app.route("/api/check-deliverability")
@@ -10948,7 +10948,7 @@ def api_check_deliverability():
 @app.route("/api/export-my-data")
 @limiter.limit("3 per hour")
 def api_export_my_data():
-    """GDPR Art. 20 â€” Return all user data as downloadable JSON."""
+    """GDPR Art. 20 — Return all user data as downloadable JSON."""
     if not _logged_in():
         return jsonify({"error": "unauthorized"}), 401
     cid = session["client_id"]
@@ -11134,7 +11134,7 @@ def reply_intel_page():
         cards_html += f"""
         <div class="card" style="padding:16px;margin-bottom:12px;border-left:4px solid {intent_colors.get(intent,'#64748b')};">
           <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-            <div><strong>{email}</strong> <span style="color:var(--gray);font-size:13px;">â€” {subj}</span></div>
+            <div><strong>{email}</strong> <span style="color:var(--gray);font-size:13px;">— {subj}</span></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               {badge(intent.replace('_',' '), intent_colors.get(intent,'#64748b'))}
               {badge(senti, '#10B981' if senti=='positive' else '#EF4444' if senti=='negative' else '#64748b')}
@@ -11242,9 +11242,9 @@ def deliverability_page():
     return _render("Deliverability", html, active_page="deliverability")
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# Error handlers â€” polished 404 / 500 / generic error pages
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ─────────────────────────────────────────────────────────────
+# Error handlers — polished 404 / 500 / generic error pages
+# ─────────────────────────────────────────────────────────────
 def _render_error_page(code, heading, message, sub=""):
     """Render a friendly, branded error page."""
     body = f"""
@@ -11289,7 +11289,7 @@ def _render_error_page(code, heading, message, sub=""):
     """
     return render_template_string(
         LAYOUT,
-        title=f"{code} â€” {heading}",
+        title=f"{code} — {heading}",
         logged_in=_logged_in(),
         messages=[],
         active_page="",
@@ -11306,7 +11306,7 @@ def _handle_404(e):
     return _render_error_page(
         404,
         "This page wandered off.",
-        "The link you followed may be broken, or the page has moved. Try heading back home or using âŒ˜K for quick navigation.",
+        "The link you followed may be broken, or the page has moved. Try heading back home or using ⌘K for quick navigation.",
         sub=request.path[:80],
     )
 
@@ -11320,7 +11320,7 @@ def _handle_500(e):
     return _render_error_page(
         500,
         "Something broke on our end.",
-        "This one's on us. We've logged the error â€” in most cases a quick retry will fix it. If not, send us a note at support@machreach.com and we'll dig in.",
+        "This one's on us. We've logged the error — in most cases a quick retry will fix it. If not, send us a note at support@machreach.com and we'll dig in.",
     )
 
 

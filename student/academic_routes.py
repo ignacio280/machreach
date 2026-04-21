@@ -1,11 +1,11 @@
 """
-Academic routes â€” onboarding modal, leaderboards, and profile APIs.
+Academic routes — onboarding modal, leaderboards, and profile APIs.
 
 Mounted by calling `register_academic_routes(app, csrf, limiter)` from
 app.py, right after register_student_routes().
 
 Endpoints
-â”€â”€â”€â”€â”€â”€â”€â”€â”€
+─────────
   GET   /api/academic/countries
   GET   /api/academic/universities?country=CL&q=<query>
   POST  /api/academic/universities          body: {name, country_iso}
@@ -38,7 +38,7 @@ def register_academic_routes(app, csrf, limiter):
     def _cid() -> int:
         return session["client_id"]
 
-    # â”€â”€ countries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── countries ───────────────────────────────────────────
 
     @app.route("/api/academic/countries", methods=["GET"])
     def academic_countries():
@@ -46,7 +46,7 @@ def register_academic_routes(app, csrf, limiter):
             return jsonify({"error": "unauthorized"}), 401
         return jsonify({"countries": ac.list_countries()})
 
-    # â”€â”€ universities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── universities ────────────────────────────────────────
 
     @app.route("/api/academic/universities", methods=["GET"])
     def academic_universities():
@@ -74,7 +74,7 @@ def register_academic_routes(app, csrf, limiter):
         univ_id = ac.create_university(name=name, country_iso=country_iso, created_by=_cid())
         return jsonify({"ok": True, "university": ac.get_university(univ_id)})
 
-    # â”€â”€ majors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── majors ──────────────────────────────────────────────
 
     @app.route("/api/academic/majors", methods=["GET"])
     def academic_majors():
@@ -83,7 +83,13 @@ def register_academic_routes(app, csrf, limiter):
         q = (request.args.get("q") or "").strip()
         univ_id_raw = request.args.get("university_id")
         univ_id = int(univ_id_raw) if (univ_id_raw or "").isdigit() else None
-        rows = ac.search_majors(q, university_id=univ_id, limit=20) if q else []
+        # If a university is selected we ALWAYS return results — even for an
+        # empty query we show that school's full catalogue so the user can
+        # just browse. Without a university we still require >=1 char so we
+        # don't dump the entire global table.
+        if not q and univ_id is None:
+            return jsonify({"majors": []})
+        rows = ac.search_majors(q, university_id=univ_id, limit=50)
         return jsonify({"majors": rows})
 
     @app.route("/api/academic/majors", methods=["POST"])
@@ -100,7 +106,7 @@ def register_academic_routes(app, csrf, limiter):
         major_id = ac.create_major(name=name, university_id=univ_id, created_by=_cid())
         return jsonify({"ok": True, "major": ac.get_major(major_id)})
 
-    # â”€â”€ profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── profile ─────────────────────────────────────────────
 
     @app.route("/api/academic/profile", methods=["GET"])
     def academic_profile_get():
@@ -110,8 +116,6 @@ def register_academic_routes(app, csrf, limiter):
         prof = ac.get_academic_profile(cid)
         univ = ac.get_university(int(prof["university_id"])) if prof.get("university_id") else None
         major = ac.get_major(int(prof["major_id"])) if prof.get("major_id") else None
-        # Compute the user's total prior XP â€” the banner should only appear for
-        # pre-existing accounts that actually have progress to "preserve".
         prior_xp = 0
         try:
             from outreach.db import get_db, _fetchval
@@ -155,7 +159,6 @@ def register_academic_routes(app, csrf, limiter):
             major_id=major_id,
         )
 
-        # Optionally save Canvas credentials if provided (step 4 of the modal)
         canvas_url = (data.get("canvas_url") or "").strip()
         canvas_token = (data.get("canvas_token") or "").strip()
         canvas_saved = False
@@ -175,7 +178,7 @@ def register_academic_routes(app, csrf, limiter):
         ac.mark_welcome_banner_seen(_cid())
         return jsonify({"ok": True})
 
-    # â”€â”€ leaderboards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── leaderboards ────────────────────────────────────────
 
     @app.route("/api/academic/leaderboard", methods=["GET"])
     def academic_leaderboard():
@@ -193,11 +196,10 @@ def register_academic_routes(app, csrf, limiter):
             return jsonify({"error": "unauthorized"}), 401
         cid = _cid()
         summary = ac.ranks_summary(cid)
-        # include league for me
         xp = summary.get("global", {}).get("xp", 0) if summary.get("global") else 0
         return jsonify({"ranks": summary, "league": ac.league_for_xp(int(xp))})
 
-    # â”€â”€ analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── analytics ───────────────────────────────────────────
 
     @app.route("/api/academic/analytics", methods=["GET"])
     def academic_analytics():
@@ -211,7 +213,6 @@ def register_academic_routes(app, csrf, limiter):
 
         try:
             with get_db() as db:
-                # All study sessions for this student
                 rows = _fetchall(
                     db,
                     "SELECT plan_date, focus_minutes, pages_read, notes "
@@ -229,12 +230,10 @@ def register_academic_routes(app, csrf, limiter):
             rows = []
             total_xp = 0
 
-        # Aggregate
         total_minutes = sum(int(r.get("focus_minutes") or 0) for r in rows)
         total_pages = sum(int(r.get("pages_read") or 0) for r in rows)
         total_sessions = len(rows)
 
-        # Per-day for last 14 days
         today = datetime.now().date()
         per_day_min = defaultdict(int)
         per_day_sessions = defaultdict(int)
@@ -257,7 +256,6 @@ def register_academic_routes(app, csrf, limiter):
             per_day_sessions[day_key] += 1
             per_hour[dt.hour] += mins
             per_dow[dt.strftime("%a")] += mins
-            # Notes look like "pomodoro: Math 101" â€” parse the course name
             notes = r.get("notes") or ""
             if ":" in notes:
                 course = notes.split(":", 1)[1].strip()
@@ -274,27 +272,21 @@ def register_academic_routes(app, csrf, limiter):
                 "sessions": per_day_sessions.get(d, 0),
             })
 
-        # Hours of day, sorted 0-23
         hours_dist = [{"hour": h, "minutes": per_hour.get(h, 0)} for h in range(24)]
-
-        # Day-of-week order
         dow_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         dow_dist = [{"day": d, "minutes": per_dow.get(d, 0)} for d in dow_order]
 
-        # Top courses
         top_courses = sorted(
             ({"course": k, "minutes": v} for k, v in per_course.items()),
             key=lambda x: x["minutes"], reverse=True,
         )[:8]
 
-        # Streak: consecutive days back from today with > 0 minutes
         streak = 0
         cursor = today
         while per_day_min.get(cursor.strftime("%Y-%m-%d"), 0) > 0:
             streak += 1
             cursor -= timedelta(days=1)
 
-        # Best hour / best day
         best_hour = max(hours_dist, key=lambda x: x["minutes"]) if any(h["minutes"] for h in hours_dist) else None
         best_dow = max(dow_dist, key=lambda x: x["minutes"]) if any(d["minutes"] for d in dow_dist) else None
 
@@ -314,4 +306,3 @@ def register_academic_routes(app, csrf, limiter):
             "best_hour": best_hour,
             "best_dow": best_dow,
         })
-

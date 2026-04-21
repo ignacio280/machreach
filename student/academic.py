@@ -32,7 +32,10 @@ from outreach.db import (
     get_db, _exec, _fetchone, _fetchall, _fetchval,
     _insert_returning_id, _USE_PG,
 )
-from student.academic_seeds import COUNTRIES, UNIVERSITIES, GLOBAL_MAJORS, GLOBAL_MAJORS_ES
+from student.academic_seeds import (
+    COUNTRIES, UNIVERSITIES, GLOBAL_MAJORS, GLOBAL_MAJORS_ES,
+    UNIVERSITY_MAJORS, _CHILE_COMMON,
+)
 
 
 log = logging.getLogger("student.academic")
@@ -150,6 +153,7 @@ def init_academic_db() -> None:
     _seed_countries()
     _seed_universities()
     _seed_majors()
+    _seed_university_majors()
     log.info("Academic identity tables initialized.")
 
 
@@ -307,6 +311,71 @@ def _seed_majors() -> None:
                 log.warning("seed major %r failed: %s", name, e)
 
 
+def _seed_university_majors() -> None:
+    """Insert per-university carreras (Chilean university catalogues).
+
+    For each (university_name -> [majors]) entry in UNIVERSITY_MAJORS we:
+      1. Look up the university's id via normalized name.
+      2. For each major, upsert a university-scoped row if no duplicate
+         already exists for that university.
+
+    This runs idempotently — the (university_id, name_norm) lookup prevents
+    duplicates on repeat runs, and it's safe if the university hasn't been
+    seeded yet (we simply skip it).
+    """
+    with get_db() as db:
+        # Build a name_norm -> id index for universities
+        rows = _fetchall(
+            db,
+            "SELECT id, name, name_norm FROM universities",
+            (),
+        )
+        index: dict[str, int] = {}
+        for r in rows:
+            key = (r.get("name_norm") or normalize_name(r.get("name", ""))).strip()
+            if key and key not in index:
+                index[key] = int(r["id"])
+
+        total = 0
+        for univ_name, majors in UNIVERSITY_MAJORS.items():
+            key = normalize_name(univ_name)
+            univ_id = index.get(key)
+            if not univ_id:
+                # University not in seed table yet — skip; will pick up on next run.
+                continue
+            # Merge university-specific + common Chilean carreras, de-dupe by norm
+            seen: set[str] = set()
+            combined: list[str] = []
+            for m in list(majors) + list(_CHILE_COMMON):
+                n = normalize_name(m)
+                if n and n not in seen:
+                    seen.add(n)
+                    combined.append(m)
+            for m in combined:
+                norm = normalize_name(m)
+                slug = _slugify(m) + f"-u{univ_id}"
+                try:
+                    # Dedupe per university
+                    dup = _fetchval(
+                        db,
+                        "SELECT id FROM majors WHERE university_id = %s AND name_norm = %s LIMIT 1",
+                        (univ_id, norm),
+                    )
+                    if dup:
+                        continue
+                    _exec(
+                        db,
+                        "INSERT INTO majors (name, name_norm, university_id, slug, status) "
+                        "VALUES (%s, %s, %s, %s, 'approved')",
+                        (m, norm, univ_id, slug),
+                    )
+                    total += 1
+                except Exception as e:
+                    log.debug("seed univ-major %r/%s failed: %s", univ_name, m, e)
+        if total:
+            log.info("Seeded %d per-university majors.", total)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Normalization & slug helpers
 # ═══════════════════════════════════════════════════════════════════════
@@ -461,49 +530,83 @@ def get_university(univ_id: int) -> Optional[dict]:
 
 
 def search_majors(query: str, university_id: Optional[int] = None, limit: int = 20) -> list[dict]:
-    """Match against both global majors and majors scoped to this university.
+    """Match majors with these priorities:
 
-    Searches both the alias-collapsed and literal normalized forms so that
-    students can find majors by abbreviation ("CS"), English name, or
-    Spanish/local name.
+      1. University-scoped rows (carreras at that university) — ranked first.
+      2. Global rows — shown after as fallback.
+
+    When `query` is empty and `university_id` is set, we RETURN the full
+    catalogue for that university so students can just browse. Otherwise we
+    match against the alias-collapsed and literal normalized forms.
     """
     q_aliased = normalize_major(query)
     q_literal = normalize_name(query)
-    forms = [q_aliased]
-    if q_literal and q_literal != q_aliased:
-        forms.append(q_literal)
-    forms = [f for f in forms if f]
-    if not forms:
-        return []
+
     seen_ids: set[int] = set()
     rows: list[dict] = []
+
+    # ── Helper: append rows, preserving order, de-duping on id
+    def _append(hits: list[dict]) -> None:
+        for r in hits:
+            rid = r["id"]
+            if rid in seen_ids:
+                continue
+            seen_ids.add(rid)
+            rows.append(r)
+
     with get_db() as db:
-        for q in forms:
-            like = f"%{q}%"
-            if university_id is not None:
+        # ── 1. No query + university set → show full university catalogue
+        if not q_aliased and not q_literal and university_id is not None:
+            hits = _fetchall(
+                db,
+                "SELECT id, name, university_id FROM majors "
+                "WHERE university_id = %s AND status = 'approved' "
+                "ORDER BY name LIMIT %s",
+                (university_id, limit),
+            )
+            _append(hits)
+            return rows
+
+        # Build query forms, de-duped, preserving order
+        seen_q: set[str] = set()
+        forms: list[str] = []
+        for f in (q_aliased, q_literal):
+            if f and f not in seen_q:
+                seen_q.add(f)
+                forms.append(f)
+        if not forms:
+            return []
+
+        # ── 2. University-scoped matches first (highest relevance)
+        if university_id is not None:
+            for q in forms:
+                like = f"%{q}%"
                 hits = _fetchall(
                     db,
                     "SELECT id, name, university_id FROM majors "
-                    "WHERE (university_id IS NULL OR university_id = %s) "
-                    "AND name_norm LIKE %s "
+                    "WHERE university_id = %s AND name_norm LIKE %s "
                     "ORDER BY LENGTH(name), name LIMIT %s",
                     (university_id, like, limit),
                 )
-            else:
-                hits = _fetchall(
-                    db,
-                    "SELECT id, name, university_id FROM majors "
-                    "WHERE name_norm LIKE %s ORDER BY LENGTH(name), name LIMIT %s",
-                    (like, limit),
-                )
-            for r in hits:
-                if r["id"] in seen_ids:
-                    continue
-                seen_ids.add(r["id"])
-                rows.append(r)
+                _append(hits)
                 if len(rows) >= limit:
-                    return rows
-    return rows
+                    return rows[:limit]
+
+        # ── 3. Global-catalogue matches (fallback)
+        for q in forms:
+            like = f"%{q}%"
+            hits = _fetchall(
+                db,
+                "SELECT id, name, university_id FROM majors "
+                "WHERE university_id IS NULL AND name_norm LIKE %s "
+                "ORDER BY LENGTH(name), name LIMIT %s",
+                (like, limit),
+            )
+            _append(hits)
+            if len(rows) >= limit:
+                return rows[:limit]
+
+    return rows[:limit]
 
 
 def create_major(name: str, university_id: Optional[int], created_by: int) -> int:
