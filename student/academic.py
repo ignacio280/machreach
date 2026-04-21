@@ -34,7 +34,7 @@ from outreach.db import (
 )
 from student.academic_seeds import (
     COUNTRIES, UNIVERSITIES, GLOBAL_MAJORS, GLOBAL_MAJORS_ES,
-    UNIVERSITY_MAJORS, _CHILE_COMMON,
+    UNIVERSITY_MAJORS, _CHILE_COMMON, AUTHORITATIVE_UNIVERSITIES,
 )
 
 
@@ -349,14 +349,43 @@ def _seed_university_majors() -> None:
             if not univ_id:
                 # University not in seed table yet — skip; will pick up on next run.
                 continue
-            # Merge university-specific + common Chilean carreras, de-dupe by norm
+            is_authoritative = univ_name in AUTHORITATIVE_UNIVERSITIES
+            # For authoritative lists use the majors verbatim; otherwise
+            # merge the common Chilean carreras as before.
+            if is_authoritative:
+                source = list(majors)
+            else:
+                source = list(majors) + list(_CHILE_COMMON)
             seen: set[str] = set()
             combined: list[str] = []
-            for m in list(majors) + list(_CHILE_COMMON):
+            for m in source:
                 n = normalize_name(m)
                 if n and n not in seen:
                     seen.add(n)
                     combined.append(m)
+            # For authoritative universities, purge any existing approved
+            # majors that are no longer in the list (keeps DB in sync with
+            # the curated source of truth).
+            if is_authoritative:
+                wanted_norms = {normalize_name(m) for m in combined}
+                try:
+                    existing = _fetchall(
+                        db,
+                        "SELECT id, name_norm FROM majors "
+                        "WHERE university_id = %s AND status = 'approved'",
+                        (univ_id,),
+                    )
+                    stale_ids = [
+                        int(r["id"]) for r in existing
+                        if (r.get("name_norm") or "") not in wanted_norms
+                    ]
+                    for mid in stale_ids:
+                        try:
+                            _exec(db, "DELETE FROM majors WHERE id = %s", (mid,))
+                        except Exception as e:
+                            log.debug("purge stale major id=%s failed: %s", mid, e)
+                except Exception as e:
+                    log.debug("purge stale majors for %r failed: %s", univ_name, e)
             for m in combined:
                 norm = normalize_name(m)
                 slug = _slugify(m) + f"-u{univ_id}"
