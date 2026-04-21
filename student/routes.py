@@ -2961,11 +2961,11 @@ def register_student_routes(app, csrf, limiter):
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" id="mr-an-charts">
             <div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Last 14 days</div>
-              <div id="an-bars14" style="height:130px;"></div>
+              <div id="an-bars14" class="mr-line-host"></div>
             </div>
             <div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Hours of day you study</div>
-              <div id="an-bars24" style="height:130px;"></div>
+              <div id="an-bars24" class="mr-line-host"></div>
             </div>
             <div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Time per course</div>
@@ -2973,7 +2973,7 @@ def register_student_routes(app, csrf, limiter):
             </div>
             <div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Day-of-week</div>
-              <div id="an-bars7" style="height:130px;"></div>
+              <div id="an-bars7" class="mr-line-host"></div>
             </div>
           </div>
         </div>
@@ -2991,13 +2991,42 @@ def register_student_routes(app, csrf, limiter):
           .mr-course-bar {{ flex:1; height:8px; border-radius:4px; background:rgba(148,163,184,.15); overflow:hidden; }}
           .mr-course-fill {{ height:100%; background:linear-gradient(90deg,#7C9CFF,#C084FC); border-radius:4px; }}
           .mr-course-val {{ font-size:11px; color:var(--text-muted); min-width:56px; text-align:right; font-variant-numeric:tabular-nums; }}
+          .mr-line-host {{ position:relative; width:100%; height:220px; }}
+          .mr-line-host svg {{ display:block; width:100%; height:100%; overflow:visible; }}
+          .mr-line-pt {{ cursor:pointer; }}
+          .mr-line-pt:hover .mr-line-dot {{ r:5.5; }}
+          .mr-line-tip {{ position:absolute; pointer-events:none; display:none; background:rgba(11,18,32,.95); color:#fff; font-size:12px; line-height:1.3; padding:6px 10px; border-radius:8px; white-space:nowrap; box-shadow:0 8px 22px rgba(15,23,42,.3); transform:translate(-50%, -110%); z-index:20; }}
           @media (max-width: 720px) {{ #mr-an-charts {{ grid-template-columns:1fr; }} }}
         </style>
         <script>
+          window.mrShowLineTip = function(evt, hostId) {{
+            var host = document.getElementById(hostId);
+            if (!host) return;
+            var pt = evt.target.closest('.mr-line-pt');
+            if (!pt) return;
+            var tip = host.querySelector('.mr-line-tip');
+            if (!tip) return;
+            tip.textContent = pt.getAttribute('data-tip') || '';
+            tip.style.display = 'block';
+            var hostRect = host.getBoundingClientRect();
+            tip.style.left = (evt.clientX - hostRect.left) + 'px';
+            tip.style.top = (evt.clientY - hostRect.top - 6) + 'px';
+          }};
+          window.mrHideLineTip = function(hostId) {{
+            var host = document.getElementById(hostId);
+            if (!host) return;
+            var tip = host.querySelector('.mr-line-tip');
+            if (tip) tip.style.display = 'none';
+          }};
           (async function(){{
-            function renderLine(points, maxV){{
+            function escAttr(s) {{
+              return String(s == null ? '' : s)
+                .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+                .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            }}
+            function renderLine(hostId, points, maxV){{
               if (!points || !points.length) return '';
-              const W = 320, H = 120, padL = 6, padR = 6, padT = 8, padB = 18;
+              const W = 360, H = 160, padL = 14, padR = 14, padT = 14, padB = 26;
               const innerW = W - padL - padR, innerH = H - padT - padB;
               const n = points.length;
               const stepX = n > 1 ? innerW / (n - 1) : innerW;
@@ -3011,26 +3040,35 @@ def register_student_routes(app, csrf, limiter):
               const area = path + ' L' + xy[xy.length-1][0].toFixed(1) + ',' + (padT+innerH) + ' L' + xy[0][0].toFixed(1) + ',' + (padT+innerH) + ' Z';
               const grid = [0.25, 0.5, 0.75].map(f => {{
                 const y = padT + innerH * f;
-                return '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y+'" y2="'+y+'" stroke="rgba(148,163,184,.15)" stroke-dasharray="2,3" />';
+                return '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y+'" y2="'+y+'" stroke="rgba(148,163,184,.18)" stroke-dasharray="2,3" />';
               }}).join('');
               const baseline = '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+(padT+innerH)+'" y2="'+(padT+innerH)+'" stroke="rgba(148,163,184,.35)" />';
-              const dots = xy.map((p, i) => '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3" fill="#7C9CFF" stroke="#fff" stroke-width="1"><title>'+(points[i].tip||'')+'</title></circle>').join('');
+              const dots = xy.map((p, i) => {{
+                const tipAttr = escAttr(points[i].tip || '');
+                const handler = 'onmousemove="mrShowLineTip(event,\''+hostId+'\')" onmouseleave="mrHideLineTip(\''+hostId+'\')"';
+                return '<g class="mr-line-pt" data-tip="'+tipAttr+'" '+handler+'>'
+                  + '<circle class="mr-line-dot" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3.5" fill="#7C9CFF" stroke="#fff" stroke-width="1.5" />'
+                  + '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="14" fill="transparent" />'
+                  + '</g>';
+              }}).join('');
               const labels = points.map((p, i) => {{
                 if (!p.label) return '';
                 const x = padL + i * stepX;
-                return '<text x="'+x.toFixed(1)+'" y="'+(H-4)+'" text-anchor="middle" font-size="9" fill="rgba(148,163,184,.9)">'+p.label+'</text>';
+                return '<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="10" fill="rgba(148,163,184,.9)" pointer-events="none">'+p.label+'</text>';
               }}).join('');
+              const gradId = 'anFill_' + hostId;
               return ''+
-                '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="100%" preserveAspectRatio="none" style="display:block;overflow:visible;">'+
-                  '<defs><linearGradient id="anFillGrad" x1="0" x2="0" y1="0" y2="1">'+
-                    '<stop offset="0%" stop-color="#7C9CFF" stop-opacity="0.35" />'+
+                '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">'+
+                  '<defs><linearGradient id="'+gradId+'" x1="0" x2="0" y1="0" y2="1">'+
+                    '<stop offset="0%" stop-color="#7C9CFF" stop-opacity="0.32" />'+
                     '<stop offset="100%" stop-color="#7C9CFF" stop-opacity="0" />'+
                   '</linearGradient></defs>'+
                   grid + baseline +
-                  '<path d="'+area+'" fill="url(#anFillGrad)" stroke="none" />'+
-                  '<path d="'+path+'" fill="none" stroke="#7C9CFF" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'+
+                  '<path d="'+area+'" fill="url(#'+gradId+')" stroke="none" />'+
+                  '<path d="'+path+'" fill="none" stroke="#7C9CFF" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />'+
                   dots + labels +
-                '</svg>';
+                '</svg>'+
+                '<div class="mr-line-tip"></div>';
             }}
             try {{
               const r = await fetch('/api/academic/analytics');
@@ -3044,15 +3082,15 @@ def register_student_routes(app, csrf, limiter):
               document.getElementById('an-besthour').textContent = a.best_hour ? (a.best_hour.hour + ':00') : '—';
               document.getElementById('an-bestdow').textContent = a.best_dow ? a.best_dow.day : '—';
               const max14 = Math.max(1, ...a.last_14_days.map(d => d.minutes));
-              document.getElementById('an-bars14').innerHTML = renderLine(a.last_14_days.map(d => ({{
+              document.getElementById('an-bars14').innerHTML = renderLine('an-bars14', a.last_14_days.map(d => ({{
                 v: d.minutes, label: d.label[0], tip: d.date + ': ' + fmtM(d.minutes)
               }})), max14);
               const max24 = Math.max(1, ...a.hours_dist.map(h => h.minutes));
-              document.getElementById('an-bars24').innerHTML = renderLine(a.hours_dist.map(h => ({{
+              document.getElementById('an-bars24').innerHTML = renderLine('an-bars24', a.hours_dist.map(h => ({{
                 v: h.minutes, label: (h.hour % 6 === 0 ? String(h.hour) : ''), tip: h.hour + ':00 — ' + fmtM(h.minutes)
               }})), max24);
               const max7 = Math.max(1, ...a.dow_dist.map(d => d.minutes));
-              document.getElementById('an-bars7').innerHTML = renderLine(a.dow_dist.map(d => ({{
+              document.getElementById('an-bars7').innerHTML = renderLine('an-bars7', a.dow_dist.map(d => ({{
                 v: d.minutes, label: d.day, tip: d.day + ': ' + fmtM(d.minutes)
               }})), max7);
               const maxC = Math.max(1, ...a.top_courses.map(c => c.minutes));
