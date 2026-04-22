@@ -6,3 +6,5 @@ _debug_*.py
 *.db
 *.db-wal
 *.db-shm
+
+outreach.zip
