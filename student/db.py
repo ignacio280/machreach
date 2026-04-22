@@ -2991,6 +2991,18 @@ def settle_due_duels() -> int:
                 + " WHERE id = %s",
                 (c_min, o_min, winner, status, d["id"]),
             )
+        # Payout XP + coins to the marathon winner (or both on a tie).
+        try:
+            if status == "tied":
+                add_coins(d["challenger_id"], MARATHON_TIE_COINS, "marathon_tie")
+                add_coins(d["opponent_id"],   MARATHON_TIE_COINS, "marathon_tie")
+                award_xp(d["challenger_id"], "marathon_tie", MARATHON_TIE_XP, f"marathon {d['id']}")
+                award_xp(d["opponent_id"],   "marathon_tie", MARATHON_TIE_XP, f"marathon {d['id']}")
+            elif winner:
+                add_coins(winner, MARATHON_WIN_COINS, "marathon_win")
+                award_xp(winner, "marathon_win", MARATHON_WIN_XP, f"marathon {d['id']}")
+        except Exception:
+            log.exception("marathon payout failed for duel %s", d["id"])
         settled += 1
     return settled
 
@@ -3736,6 +3748,12 @@ QUIZ_DUEL_WIN_XP          = 5
 QUIZ_DUEL_TIE_COINS       = 20
 QUIZ_DUEL_TIE_XP          = 2
 QUIZ_DUEL_DAILY_PAY_CAP   = 3    # rewards capped at N matches per opponent per day
+
+# ── Study Marathon (7-day asynchronous duel) rewards ──
+MARATHON_WIN_COINS  = 250
+MARATHON_WIN_XP     = 30
+MARATHON_TIE_COINS  = 75
+MARATHON_TIE_XP     = 10
 
 
 def init_quiz_duels_tables() -> None:

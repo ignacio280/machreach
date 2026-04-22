@@ -14647,6 +14647,7 @@ No markdown, no code fences. ONLY JSON.
                 <button class="chal-card" onclick="pickMarathon()" style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer;color:var(--text)">
                   <div style="font-size:16px;font-weight:700">📅 Study Marathon (7 days)</div>
                   <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Most focus minutes over the next 7 days wins. Asynchronous — focus whenever you can.</div>
+                  <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +30 XP · +250 🪙 · Tie: +10 XP · +75 🪙</div>
                 </button>
               </div>
 
