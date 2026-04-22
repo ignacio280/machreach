@@ -1854,12 +1854,25 @@ def get_streak_days(client_id: int) -> int:
             streak += 1
             cur = cur - timedelta(days=1)
             continue
-        # Try to consume a freeze for this week
+        # Try to consume the one auto-freeze allotted per ISO week
         iso = cur.isocalendar()
         wk = (iso[0], iso[1])
         if wk not in weeks_used:
             weeks_used.add(wk)
             new_freezes.append((cur, iso[0], iso[1]))
+            streak += 1
+            cur = cur - timedelta(days=1)
+            continue
+        # Try to auto-consume a wallet streak freeze (Duolingo-style).
+        # Only consumes if the user has bought freezes in the shop.
+        try:
+            spent = _consume_wallet_freeze_for_date(client_id, cur)
+        except Exception:
+            spent = False
+        if spent:
+            existing_freezes.add(cur)
+            new_freezes.append((cur, iso[0], iso[1]))
+            weeks_used.add(wk)
             streak += 1
             cur = cur - timedelta(days=1)
             continue
@@ -1901,6 +1914,28 @@ def _record_freezes(client_id: int, freezes: list) -> None:
                 )
             except Exception:
                 pass  # UNIQUE constraint — week already used
+
+
+def _consume_wallet_freeze_for_date(client_id: int, target_date) -> bool:
+    """Atomically decrement a wallet streak freeze if the user has any.
+    Returns True if a freeze was consumed (i.e. the gap day should count).
+    Used by get_streak_days for Duolingo-style auto-consumption."""
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        owned = _fetchval(
+            db,
+            "SELECT streak_freezes FROM student_wallet WHERE client_id = %s",
+            (client_id,),
+        ) or 0
+        if int(owned) <= 0:
+            return False
+        _exec(
+            db,
+            "UPDATE student_wallet SET streak_freezes = streak_freezes - 1 "
+            "WHERE client_id = %s AND streak_freezes > 0",
+            (client_id,),
+        )
+    return True
 
 
 def get_freeze_status(client_id: int) -> dict:

@@ -857,6 +857,51 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+    # ── Hard server-side gate: students MUST complete their academic profile
+    # (country / university / major) before using any student feature.
+    # API endpoints needed by the setup wizard itself are explicitly allowed.
+    _SETUP_PATH = "/student/setup"
+    _SETUP_ALLOWED_PREFIXES = (
+        _SETUP_PATH,
+        "/api/academic/",        # countries / universities / majors / profile
+        "/static/",
+        "/logout",
+        "/login",
+        "/register",
+        "/verify-email",
+        "/resend-verification",
+        "/forgot-password",
+        "/reset-password",
+        "/api/csrf",
+    )
+
+    @app.before_request
+    def _enforce_student_academic_setup():
+        if not _logged_in():
+            return None
+        if session.get("account_type") != "student":
+            return None
+        p = request.path or ""
+        # Only gate student-facing pages and APIs
+        if not (p == "/student" or p.startswith("/student/") or p.startswith("/api/student/")):
+            return None
+        for ok in _SETUP_ALLOWED_PREFIXES:
+            if p == ok or p.startswith(ok):
+                return None
+        try:
+            from student import academic as _ac
+            if not _ac.needs_setup(_cid()):
+                return None
+        except Exception:
+            return None
+        # Block — JSON for APIs, redirect for pages
+        if p.startswith("/api/"):
+            return jsonify(error="Complete your academic profile first.",
+                           setup_required=True,
+                           setup_url=_SETUP_PATH), 403
+        return redirect(_SETUP_PATH)
+
+
     # Also kill the legacy plan-generation API and panic API.
 
     @app.route("/api/student/plan/generate-removed", methods=["POST"])
@@ -2627,6 +2672,205 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+    @app.route("/student/setup")
+    def student_setup_page():
+        """Mandatory onboarding — students cannot use any feature
+        until they pick country / university / major."""
+        if not _logged_in():
+            return redirect(url_for("login"))
+        if session.get("account_type") != "student":
+            return redirect(url_for("dashboard"))
+        try:
+            from student import academic as _ac
+            if not _ac.needs_setup(_cid()):
+                return redirect(url_for("student_dashboard_page"))
+        except Exception:
+            pass
+        body = """
+        <style>
+          .ss-wrap { max-width: 560px; margin: 60px auto; }
+          .ss-card { background: var(--card, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 18px; padding: 32px; }
+          .ss-h1 { font-size: 26px; font-weight: 800; margin: 0 0 6px; }
+          .ss-sub { color: var(--text-muted, #6b7280); font-size: 14px; margin: 0 0 20px; }
+          .ss-step { display: none; }
+          .ss-step.active { display: block; }
+          .ss-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted, #6b7280); font-weight: 700; margin-bottom: 6px; }
+          .ss-input, .ss-select { width: 100%; padding: 12px 14px; border: 1px solid var(--border, #e5e7eb); border-radius: 10px; background: var(--bg, #fff); color: var(--text, #111827); font-size: 14px; box-sizing: border-box; }
+          .ss-list { max-height: 240px; overflow-y: auto; border: 1px solid var(--border, #e5e7eb); border-radius: 10px; margin-top: 8px; background: var(--bg, #fff); }
+          .ss-item { padding: 10px 14px; border-bottom: 1px solid var(--border, #e5e7eb); cursor: pointer; font-size: 14px; }
+          .ss-item:last-child { border-bottom: none; }
+          .ss-item:hover { background: rgba(99,102,241,.08); }
+          .ss-item.create { color: var(--primary, #6366f1); font-weight: 600; }
+          .ss-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 22px; }
+          .ss-pill { display: inline-block; padding: 4px 10px; background: rgba(99,102,241,.1); color: var(--primary, #6366f1); border-radius: 999px; font-size: 12px; font-weight: 600; margin-bottom: 14px; }
+          .ss-err { color: #ef4444; font-size: 12px; margin-top: 6px; min-height: 16px; }
+        </style>
+        <div class="ss-wrap">
+          <div class="ss-card">
+            <span class="ss-pill" id="ss-progress">Step 1 of 3</span>
+            <h1 class="ss-h1">Welcome to MachReach Student</h1>
+            <p class="ss-sub">We need three quick things so we can rank you on the right leaderboards and tailor your study plan. This is required.</p>
+
+            <div class="ss-step active" id="ss-step-0">
+              <div class="ss-label">Your country</div>
+              <select class="ss-select" id="ss-country">
+                <option value="">- Pick your country -</option>
+              </select>
+            </div>
+
+            <div class="ss-step" id="ss-step-1">
+              <div class="ss-label">Your university</div>
+              <input class="ss-input" id="ss-univ-q" type="text" placeholder="Search universities..." autocomplete="off">
+              <div class="ss-list" id="ss-univ-list"></div>
+            </div>
+
+            <div class="ss-step" id="ss-step-2">
+              <div class="ss-label">Your major</div>
+              <input class="ss-input" id="ss-major-q" type="text" placeholder="Search majors..." autocomplete="off">
+              <div class="ss-list" id="ss-major-list"></div>
+            </div>
+
+            <div class="ss-err" id="ss-err"></div>
+            <div class="ss-actions">
+              <button class="btn btn-outline" id="ss-back" disabled>Back</button>
+              <button class="btn btn-primary" id="ss-next">Next</button>
+            </div>
+          </div>
+        </div>
+
+        <script>
+        (function() {
+          const state = { step: 0, country_iso: '', university_id: null, university_name: '', major_id: null, major_name: '' };
+          const stepEls = [0,1,2].map(i => document.getElementById('ss-step-' + i));
+          const progress = document.getElementById('ss-progress');
+          const back = document.getElementById('ss-back');
+          const next = document.getElementById('ss-next');
+          const err  = document.getElementById('ss-err');
+
+          function escapeHtml(s) {
+            return String(s||'').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+          }
+          function show(i) {
+            state.step = i;
+            stepEls.forEach((el, idx) => el.classList.toggle('active', idx === i));
+            progress.textContent = 'Step ' + (i + 1) + ' of 3';
+            back.disabled = (i === 0);
+            next.textContent = (i === 2) ? 'Finish' : 'Next';
+            err.textContent = '';
+          }
+
+          async function loadCountries() {
+            try {
+              const r = await fetch('/api/academic/countries').then(r=>r.json());
+              const sel = document.getElementById('ss-country');
+              (r.countries || []).forEach(c => {
+                const o = document.createElement('option');
+                o.value = c.iso; o.textContent = c.name + ' (' + c.iso + ')';
+                sel.appendChild(o);
+              });
+              sel.addEventListener('change', () => { state.country_iso = sel.value; });
+            } catch(e) { err.textContent = 'Could not load countries.'; }
+          }
+
+          let univTimer = null;
+          document.getElementById('ss-univ-q').addEventListener('input', e => {
+            clearTimeout(univTimer);
+            const q = e.target.value.trim();
+            univTimer = setTimeout(() => searchUniv(q), 220);
+          });
+          async function searchUniv(q) {
+            const list = document.getElementById('ss-univ-list');
+            if (!state.country_iso) { list.innerHTML = '<div class="ss-item">Pick a country first.</div>'; return; }
+            const r = await fetch('/api/academic/universities?country=' + state.country_iso + '&q=' + encodeURIComponent(q)).then(r=>r.json());
+            const items = (r.universities || []).map(u =>
+              '<div class="ss-item" data-id="' + u.id + '" data-name="' + escapeHtml(u.name) + '">' + escapeHtml(u.name) + '</div>'
+            ).join('');
+            const create = q.length >= 2 ? '<div class="ss-item create" data-create="' + escapeHtml(q) + '">+ Add &quot;' + escapeHtml(q) + '&quot;</div>' : '';
+            list.innerHTML = items + create || '<div class="ss-item">Type to search...</div>';
+            list.querySelectorAll('.ss-item[data-id]').forEach(el => {
+              el.addEventListener('click', () => pickUniv(parseInt(el.dataset.id), el.dataset.name));
+            });
+            list.querySelectorAll('.ss-item[data-create]').forEach(el => {
+              el.addEventListener('click', () => createUniv(el.dataset.create));
+            });
+          }
+          function pickUniv(id, name) {
+            state.university_id = id; state.university_name = name;
+            document.getElementById('ss-univ-q').value = name;
+            document.getElementById('ss-univ-list').innerHTML = '<div class="ss-item">&#10003; ' + escapeHtml(name) + '</div>';
+          }
+          async function createUniv(name) {
+            const r = await fetch('/api/academic/universities', {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({name: name, country_iso: state.country_iso})
+            }).then(r=>r.json());
+            if (!r.ok) { err.textContent = r.error || 'Could not create university.'; return; }
+            pickUniv(r.university.id, r.university.name);
+          }
+
+          let majTimer = null;
+          document.getElementById('ss-major-q').addEventListener('input', e => {
+            clearTimeout(majTimer);
+            const q = e.target.value.trim();
+            majTimer = setTimeout(() => searchMajor(q), 220);
+          });
+          async function searchMajor(q) {
+            const list = document.getElementById('ss-major-list');
+            const url = '/api/academic/majors?q=' + encodeURIComponent(q) + (state.university_id ? '&university_id=' + state.university_id : '');
+            const r = await fetch(url).then(r=>r.json());
+            const items = (r.majors || []).map(m =>
+              '<div class="ss-item" data-id="' + m.id + '" data-name="' + escapeHtml(m.name) + '">' + escapeHtml(m.name) + '</div>'
+            ).join('');
+            const create = q.length >= 2 ? '<div class="ss-item create" data-create="' + escapeHtml(q) + '">+ Add &quot;' + escapeHtml(q) + '&quot;</div>' : '';
+            list.innerHTML = items + create || '<div class="ss-item">Type to search...</div>';
+            list.querySelectorAll('.ss-item[data-id]').forEach(el => {
+              el.addEventListener('click', () => pickMajor(parseInt(el.dataset.id), el.dataset.name));
+            });
+            list.querySelectorAll('.ss-item[data-create]').forEach(el => {
+              el.addEventListener('click', () => createMajor(el.dataset.create));
+            });
+          }
+          function pickMajor(id, name) {
+            state.major_id = id; state.major_name = name;
+            document.getElementById('ss-major-q').value = name;
+            document.getElementById('ss-major-list').innerHTML = '<div class="ss-item">&#10003; ' + escapeHtml(name) + '</div>';
+          }
+          async function createMajor(name) {
+            const r = await fetch('/api/academic/majors', {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({name: name, university_id: state.university_id})
+            }).then(r=>r.json());
+            if (!r.ok) { err.textContent = r.error || 'Could not create major.'; return; }
+            pickMajor(r.major.id, r.major.name);
+          }
+
+          back.addEventListener('click', () => { if (state.step > 0) show(state.step - 1); });
+          next.addEventListener('click', async () => {
+            if (state.step === 0 && !state.country_iso) { err.textContent = 'Pick your country.'; return; }
+            if (state.step === 1 && !state.university_id) { err.textContent = 'Pick or create your university.'; return; }
+            if (state.step === 2 && !state.major_id) { err.textContent = 'Pick or create your major.'; return; }
+            if (state.step < 2) { show(state.step + 1); return; }
+            next.disabled = true; next.textContent = 'Saving...';
+            const r = await fetch('/api/academic/profile', {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({
+                country_iso: state.country_iso,
+                university_id: state.university_id,
+                major_id: state.major_id,
+              }),
+            }).then(r=>r.json());
+            if (!r.ok) { err.textContent = r.error || 'Save failed.'; next.disabled = false; next.textContent = 'Finish'; return; }
+            window.location.href = '/student';
+          });
+
+          loadCountries();
+          show(0);
+        })();
+        </script>
+        """
+        return _s_render("Set up your account", body, active_page="student_setup")
+
+
     @app.route("/student")
 
     def student_dashboard_page():
@@ -3066,7 +3310,10 @@ def register_student_routes(app, csrf, limiter):
             }}
             function renderLine(hostId, points, maxV){{
               if (!points || !points.length) return '';
-              const W = 360, H = 160, padL = 14, padR = 14, padT = 14, padB = 26;
+              const host = document.getElementById(hostId);
+              const W = Math.max(180, (host && host.clientWidth) || 360);
+              const H = Math.max(120, (host && host.clientHeight) || 220);
+              const padL = 18, padR = 18, padT = 14, padB = 28;
               const innerW = W - padL - padR, innerH = H - padT - padB;
               const n = points.length;
               const stepX = n > 1 ? innerW / (n - 1) : innerW;
@@ -3098,14 +3345,14 @@ def register_student_routes(app, csrf, limiter):
               }}).join('');
               const gradId = 'anFill_' + hostId;
               return ''+
-                '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">'+
+                '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="100%">'+
                   '<defs><linearGradient id="'+gradId+'" x1="0" x2="0" y1="0" y2="1">'+
                     '<stop offset="0%" stop-color="#7C9CFF" stop-opacity="0.32" />'+
                     '<stop offset="100%" stop-color="#7C9CFF" stop-opacity="0" />'+
                   '</linearGradient></defs>'+
                   grid + baseline +
                   '<path d="'+area+'" fill="url(#'+gradId+')" stroke="none" />'+
-                  '<path d="'+path+'" fill="none" stroke="#7C9CFF" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />'+
+                  '<path d="'+path+'" fill="none" stroke="#7C9CFF" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'+
                   dots + labels +
                 '</svg>'+
                 '<div class="mr-line-tip"></div>';
@@ -8517,7 +8764,14 @@ def register_student_routes(app, csrf, limiter):
 
         sdb.update_flashcard_progress(data["card_id"], correct, quality=quality)
 
-        # XP is only awarded from Focus Mode and Exchange notes usage.
+        # XP + coins on correct answer (Duolingo-style micro-rewards).
+        cid = _cid()
+        if correct:
+            try:
+                sdb.award_xp(cid, "flashcard_review", 2, "Flashcard correct")
+                sdb.add_coins(cid, 1, "flashcard_correct")
+            except Exception:
+                pass
 
         # Check flashcard badges
 
@@ -8525,13 +8779,13 @@ def register_student_routes(app, csrf, limiter):
 
         with get_db() as db:
 
-            fc_count = _fetchval(db, "SELECT COUNT(*) FROM student_xp WHERE client_id = %s AND action = 'flashcard_review'", (_cid(),)) or 0
+            fc_count = _fetchval(db, "SELECT COUNT(*) FROM student_xp WHERE client_id = %s AND action = 'flashcard_review'", (cid,)) or 0
 
         for key, threshold in [("flashcard_fan", 100), ("flashcard_500", 500), ("flashcard_1000", 1000)]:
 
             if fc_count >= threshold:
 
-                sdb.earn_badge(_cid(), key)
+                sdb.earn_badge(cid, key)
 
         return jsonify({"ok": True})
 
@@ -8857,15 +9111,25 @@ def register_student_routes(app, csrf, limiter):
 
         sdb.update_quiz_score(quiz_id, score)
 
-        # XP is only awarded from Focus Mode and Exchange notes usage.
+        # XP + coins proportional to score (0-100). Awarded once per submission.
+        cid = _cid()
+        try:
+            xp = max(1, score)               # 80% -> 80 XP
+            coins = max(1, score // 10)      # 80% -> 8 coins
+            if score >= 90:
+                coins += 5                   # bonus for excellent runs
+            sdb.award_xp(cid, "quiz_score", xp, f"Quiz {quiz_id}: {score}%")
+            sdb.add_coins(cid, coins, f"quiz_{quiz_id}_{score}pct")
+        except Exception:
+            pass
 
         if score == 100:
 
-            sdb.earn_badge(_cid(), "quiz_master")
+            sdb.earn_badge(cid, "quiz_master")
 
-        if not sdb.get_badges(_cid()) or not any(b["badge_key"] == "first_quiz" for b in sdb.get_badges(_cid())):
+        if not sdb.get_badges(cid) or not any(b["badge_key"] == "first_quiz" for b in sdb.get_badges(cid)):
 
-            sdb.earn_badge(_cid(), "first_quiz")
+            sdb.earn_badge(cid, "first_quiz")
 
         # Check quiz_10 badge
 
@@ -8873,19 +9137,19 @@ def register_student_routes(app, csrf, limiter):
 
         with get_db() as db:
 
-            quiz_count = _fetchval(db, "SELECT COUNT(*) FROM student_quizzes WHERE client_id = %s AND attempts > 0", (_cid(),)) or 0
+            quiz_count = _fetchval(db, "SELECT COUNT(*) FROM student_quizzes WHERE client_id = %s AND attempts > 0", (cid,)) or 0
 
         if quiz_count >= 10:
 
-            sdb.earn_badge(_cid(), "quiz_10")
+            sdb.earn_badge(cid, "quiz_10")
 
         if quiz_count >= 25:
 
-            sdb.earn_badge(_cid(), "quiz_25")
+            sdb.earn_badge(cid, "quiz_25")
 
         if quiz_count >= 50:
 
-            sdb.earn_badge(_cid(), "quiz_50")
+            sdb.earn_badge(cid, "quiz_50")
 
         return jsonify({"ok": True})
 
