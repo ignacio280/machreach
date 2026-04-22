@@ -3139,7 +3139,8 @@ BANNERS = {
     "savanna":    {"name": "Savanna Sky",        "price_coins": 320,  "xp_required": 1200,
                    "css": "linear-gradient(180deg,#fbbf24 0%,#f97316 40%,#7c2d12 100%)"},
     "deepsea":    {"name": "Deep Sea",           "price_coins": 320,  "xp_required": 1200,
-                   "css": "radial-gradient(circle at 30% 80%, #06b6d4 0%, transparent 40%), radial-gradient(circle at 70% 20%, #0ea5e9 0%, transparent 40%), linear-gradient(180deg,#0c4a6e,#082f49)"},
+                   "animated": True, "anim_class": "bnr-anim-deepsea",
+                   "css": "radial-gradient(ellipse 60% 40% at 30% 80%, rgba(6,182,212,.55) 0%, transparent 60%), radial-gradient(ellipse 50% 30% at 70% 20%, rgba(14,165,233,.5) 0%, transparent 60%), radial-gradient(circle at 50% 50%, rgba(125,211,252,.18) 0%, transparent 50%), linear-gradient(180deg,#0c4a6e,#082f49,#020617)"},
     "thunder":    {"name": "Thunderhead",        "price_coins": 380,  "xp_required": 2000,
                    "css": "radial-gradient(circle at 50% 30%, #facc15 0%, transparent 25%), linear-gradient(180deg,#1f2937,#111827,#020617)"},
     "lava":       {"name": "Lava Field",         "price_coins": 380,  "xp_required": 2000,
@@ -3149,11 +3150,14 @@ BANNERS = {
     "noir":       {"name": "Noir",               "price_coins": 350,  "xp_required": 1500,
                    "css": "repeating-linear-gradient(135deg, #18181b 0 24px, #27272a 24px 48px)"},
     "neon_grid":  {"name": "Neon Grid",          "price_coins": 420,  "xp_required": 2500,
-                   "css": "repeating-linear-gradient(0deg, rgba(236,72,153,.18) 0 1px, transparent 1px 28px), repeating-linear-gradient(90deg, rgba(34,211,238,.18) 0 1px, transparent 1px 28px), linear-gradient(135deg,#0f172a,#581c87)"},
+                   "animated": True, "anim_class": "bnr-anim-neongrid",
+                   "css": "repeating-linear-gradient(0deg, rgba(236,72,153,.22) 0 1px, transparent 1px 28px), repeating-linear-gradient(90deg, rgba(34,211,238,.22) 0 1px, transparent 1px 28px), radial-gradient(ellipse at center, rgba(168,85,247,.35) 0%, transparent 60%), linear-gradient(135deg,#0f172a,#581c87)"},
     "starfield":  {"name": "Starfield",          "price_coins": 420,  "xp_required": 2500,
-                   "css": "radial-gradient(2px 2px at 20% 30%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 80% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 50% 50%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 30% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 70% 20%, #fff 50%, transparent 50%), linear-gradient(135deg,#000,#1e1b4b)"},
+                   "animated": True, "anim_class": "bnr-anim-starfield",
+                   "css": "radial-gradient(2px 2px at 20% 30%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 80% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 50% 50%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 30% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 70% 20%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 10% 60%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 90% 40%, #fff 50%, transparent 50%), linear-gradient(135deg,#000,#1e1b4b)"},
     "circuit":    {"name": "Circuit Board",      "price_coins": 420,  "xp_required": 2500,
-                   "css": "repeating-linear-gradient(0deg, rgba(34,197,94,.25) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(34,197,94,.25) 0 1px, transparent 1px 32px), linear-gradient(135deg,#022c22,#064e3b)"},
+                   "animated": True, "anim_class": "bnr-anim-circuit",
+                   "css": "repeating-linear-gradient(0deg, rgba(34,197,94,.3) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(34,197,94,.3) 0 1px, transparent 1px 32px), radial-gradient(ellipse at 50% 50%, rgba(16,185,129,.45) 0%, transparent 50%), linear-gradient(135deg,#022c22,#064e3b)"},
     "carbon":     {"name": "Carbon Fiber",       "price_coins": 320,  "xp_required": 1200,
                    "css": "repeating-linear-gradient(45deg, #1f2937 0 6px, #111827 6px 12px), repeating-linear-gradient(-45deg, rgba(255,255,255,.04) 0 6px, transparent 6px 12px)"},
     "stained":    {"name": "Stained Glass",      "price_coins": 480,  "xp_required": 3000,
@@ -3168,15 +3172,18 @@ BANNERS = {
     "plus_prism":    {"name": "Prism (PLUS)",    "price_coins": 800,  "xp_required": 0,    "plus_only": True,
                       "css": "conic-gradient(from 0deg at 50% 50%, #ef4444, #f59e0b, #fde047, #84cc16, #06b6d4, #6366f1, #a855f7, #ef4444)"},
     "plus_cosmic":   {"name": "Cosmic Drift (PLUS)", "price_coins": 1000, "xp_required": 0, "plus_only": True,
-                      "css": "radial-gradient(2px 2px at 25% 35%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 75% 75%, #fff 50%, transparent 50%), radial-gradient(circle at 50% 50%, #7c3aed 0%, transparent 50%), radial-gradient(circle at 80% 30%, #ec4899 0%, transparent 40%), linear-gradient(135deg,#0c0a1f,#1e1b4b)"},
+                      "animated": True, "anim_class": "bnr-anim-cosmic",
+                      "css": "radial-gradient(2px 2px at 25% 35%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 75% 75%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 60% 20%, #fff 50%, transparent 50%), radial-gradient(circle at 30% 50%, rgba(124,58,237,.55) 0%, transparent 45%), radial-gradient(circle at 80% 30%, rgba(236,72,153,.45) 0%, transparent 40%), linear-gradient(135deg,#0c0a1f,#1e1b4b,#0c0a1f)"},
     "plus_quartz":   {"name": "Quartz (PLUS)",   "price_coins": 700,  "xp_required": 0,    "plus_only": True,
                       "css": "conic-gradient(from 90deg at 50% 50%, #fef3c7, #ddd6fe, #bae6fd, #fbcfe8, #fef3c7)"},
     "plus_void":     {"name": "Void (PLUS)",     "price_coins": 700,  "xp_required": 0,    "plus_only": True,
-                      "css": "radial-gradient(circle at 50% 50%, transparent 0%, #000 70%), radial-gradient(circle at 30% 30%, #6d28d9 0%, transparent 25%), radial-gradient(circle at 70% 70%, #db2777 0%, transparent 25%), #000"},
+                      "animated": True, "anim_class": "bnr-anim-void",
+                      "css": "radial-gradient(circle at 50% 50%, transparent 0%, #000 65%), radial-gradient(circle at 30% 30%, rgba(109,40,217,.7) 0%, transparent 30%), radial-gradient(circle at 70% 70%, rgba(219,39,119,.7) 0%, transparent 30%), radial-gradient(circle at 20% 80%, rgba(56,189,248,.4) 0%, transparent 25%), #000"},
     "plus_gold":     {"name": "24K Gold (PLUS)", "price_coins": 900,  "xp_required": 0,    "plus_only": True,
                       "css": "linear-gradient(135deg,#fde68a 0%,#fbbf24 25%,#b45309 50%,#fbbf24 75%,#fde68a 100%)"},
     "plus_galaxy2":  {"name": "Andromeda (PLUS)", "price_coins": 1200, "xp_required": 0,   "plus_only": True,
-                      "css": "radial-gradient(2px 2px at 15% 25%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 65% 75%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 85% 15%, #fff 50%, transparent 50%), radial-gradient(circle at 30% 60%, rgba(168,85,247,.5) 0%, transparent 30%), radial-gradient(circle at 70% 40%, rgba(56,189,248,.5) 0%, transparent 30%), radial-gradient(ellipse at center, #1e1b4b 0%, #000 100%)"},
+                      "animated": True, "anim_class": "bnr-anim-andromeda",
+                      "css": "radial-gradient(2px 2px at 15% 25%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 65% 75%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 85% 15%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 40% 60%, #fff 50%, transparent 50%), radial-gradient(circle at 30% 60%, rgba(168,85,247,.55) 0%, transparent 30%), radial-gradient(circle at 70% 40%, rgba(56,189,248,.55) 0%, transparent 30%), radial-gradient(ellipse at center, #1e1b4b 0%, #000 100%)"},
     # ── Animated PLUS-only banners ──────────────────────────────────
     # Each entry sets `animated: True` and `anim_class` so the renderer can
     # apply the matching CSS class (defined in BANNER_ANIM_CSS below) which
@@ -3187,18 +3194,12 @@ BANNERS = {
     "plus_anim_magma":   {"name": "Flowing Magma (PLUS)",   "price_coins": 1500, "xp_required": 0,
                           "plus_only": True, "animated": True, "anim_class": "bnr-anim-magma",
                           "css": "radial-gradient(circle at 30% 70%, #fde047 0%, transparent 28%), radial-gradient(circle at 70% 30%, #ef4444 0%, transparent 30%), linear-gradient(135deg,#7c2d12,#1c0a04)"},
-    "plus_anim_holo":    {"name": "Slow Holo Rotate (PLUS)","price_coins": 1800, "xp_required": 0,
-                          "plus_only": True, "animated": True, "anim_class": "bnr-anim-holo",
-                          "css": "conic-gradient(from 0deg at 50% 50%, #fbcfe8, #67e8f9, #fde68a, #86efac, #c4b5fd, #fbcfe8)"},
     "plus_anim_neon":    {"name": "Neon Drift (PLUS)",      "price_coins": 1500, "xp_required": 0,
                           "plus_only": True, "animated": True, "anim_class": "bnr-anim-neon",
                           "css": "linear-gradient(120deg,#ec4899,#8b5cf6 30%,#06b6d4 60%,#ec4899)"},
     "plus_anim_sunset":  {"name": "Endless Sunset (PLUS)",  "price_coins": 1500, "xp_required": 0,
                           "plus_only": True, "animated": True, "anim_class": "bnr-anim-sunset",
                           "css": "linear-gradient(120deg,#1e1b4b,#7c3aed 30%,#ec4899 55%,#f59e0b 80%,#1e1b4b)"},
-    "plus_anim_galaxy":  {"name": "Spinning Galaxy (PLUS)", "price_coins": 2000, "xp_required": 0,
-                          "plus_only": True, "animated": True, "anim_class": "bnr-anim-galaxy-spin",
-                          "css": "radial-gradient(2px 2px at 25% 35%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 75% 75%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 15% 80%, #fff 50%, transparent 50%), radial-gradient(circle at 50% 50%, #4c1d95 0%, transparent 60%), radial-gradient(ellipse at center, #1e1b4b 0%, #000 100%)"},
 }
 
 # CSS injected once per page that uses banners. Provides the @keyframes for
@@ -3207,17 +3208,46 @@ BANNERS = {
 BANNER_ANIM_CSS = """
 @keyframes bnr-pan-x { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
 @keyframes bnr-pan-diag { 0% { background-position: 0% 0%; } 50% { background-position: 100% 100%; } 100% { background-position: 0% 0%; } }
+@keyframes bnr-pan-slow { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+@keyframes bnr-pan-vert { 0% { background-position: 50% 0%; } 100% { background-position: 50% 200%; } }
 @keyframes bnr-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-.bnr-anim-aurora,.bnr-anim-magma,.bnr-anim-holo,.bnr-anim-neon,.bnr-anim-sunset { background-size: 300% 300% !important; }
+@keyframes bnr-glow-pulse {
+  0%,100% { filter: brightness(1) saturate(1); }
+  50%     { filter: brightness(1.25) saturate(1.4); }
+}
+@keyframes bnr-twinkle {
+  0%,100% { opacity: .85; transform: scale(1); }
+  50%     { opacity: 1;   transform: scale(1.04); }
+}
+@keyframes bnr-grid-scan { 0% { background-position: 0 0, 0 0, 50% 50%, 0 0; } 100% { background-position: 28px 28px, 28px 28px, 50% 50%, 0 0; } }
+@keyframes bnr-circuit-scan { 0% { background-position: 0 0, 0 0, 50% 50%, 0 0; } 100% { background-position: 32px 0, 0 32px, 50% 50%, 0 0; } }
+@keyframes bnr-void-pulse {
+  0%,100% { background-position: 50% 50%, 30% 30%, 70% 70%, 20% 80%, 0 0; filter: brightness(1); }
+  50%     { background-position: 50% 50%, 35% 25%, 65% 75%, 25% 85%, 0 0; filter: brightness(1.3); }
+}
+@keyframes bnr-andromeda-drift {
+  0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%; transform: scale(1) rotate(0deg); }
+  50%  { transform: scale(1.04) rotate(.6deg); }
+  100% { background-position: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%; transform: scale(1) rotate(0deg); }
+}
+
+.bnr-anim-host { overflow:hidden; position:relative; }
+
+/* Aurora-family pan banners (Plus animated set) */
+.bnr-anim-aurora,.bnr-anim-magma,.bnr-anim-neon,.bnr-anim-sunset { background-size: 300% 300% !important; }
 .bnr-anim-aurora { animation: bnr-pan-x 18s linear infinite; }
 .bnr-anim-magma  { animation: bnr-pan-diag 14s ease-in-out infinite; }
-.bnr-anim-holo   { animation: bnr-spin 22s linear infinite; transform-origin: center; }
 .bnr-anim-neon   { animation: bnr-pan-x 10s linear infinite; }
 .bnr-anim-sunset { animation: bnr-pan-x 24s linear infinite; }
-.bnr-anim-galaxy-spin { animation: bnr-spin 60s linear infinite; transform-origin: center; }
-/* When animated banners are inside a fixed-height card we mask overflow so
-   the spin transform doesn't leak out the corners. */
-.bnr-anim-host { overflow:hidden; position:relative; }
+
+/* Static-art banners that now drift / pulse */
+.bnr-anim-deepsea   { background-size: 200% 200% !important; animation: bnr-pan-diag 22s ease-in-out infinite, bnr-glow-pulse 6s ease-in-out infinite; }
+.bnr-anim-starfield { background-size: 200% 200% !important; animation: bnr-pan-vert 60s linear infinite, bnr-twinkle 3.5s ease-in-out infinite; }
+.bnr-anim-neongrid  { background-size: 28px 28px, 28px 28px, 200% 200%, 100% 100% !important; animation: bnr-grid-scan 4s linear infinite, bnr-glow-pulse 5s ease-in-out infinite; }
+.bnr-anim-circuit   { background-size: 32px 32px, 32px 32px, 200% 200%, 100% 100% !important; animation: bnr-circuit-scan 6s linear infinite, bnr-glow-pulse 5s ease-in-out infinite; }
+.bnr-anim-void      { background-size: 200% 200%, 200% 200%, 200% 200%, 200% 200%, 100% 100% !important; animation: bnr-void-pulse 8s ease-in-out infinite; }
+.bnr-anim-cosmic    { background-size: 200% 200% !important; animation: bnr-pan-diag 30s ease-in-out infinite, bnr-twinkle 4s ease-in-out infinite; }
+.bnr-anim-andromeda { background-size: 220% 220% !important; transform-origin: center; animation: bnr-andromeda-drift 40s ease-in-out infinite; }
 """
 
 # Leaderboard flag catalog. Rendered as a horizontal CSS background on the
@@ -3294,7 +3324,71 @@ FLAGS = {
                       "css": "linear-gradient(90deg, #022c22 0%, #16a34a 25%, #38bdf8 60%, #a855f7 100%)"},
     "plus_prism":    {"name": "Prism Bar (PLUS)",     "price_coins": 1000,"xp_required": 0, "plus_only": True,
                       "css": "linear-gradient(90deg, #ef4444, #f59e0b, #fde047, #84cc16, #06b6d4, #6366f1, #a855f7)"},
+    # ── More cheap / mid-tier ─────────────────────────────────────
+    "rose_gold":   {"name": "Rose Gold",         "price_coins": 90,   "xp_required": 250,
+                    "css": "linear-gradient(90deg, #7f1d1d 0%, #fb7185 50%, #fed7aa 100%)"},
+    "tropic":      {"name": "Tropic",            "price_coins": 90,   "xp_required": 250,
+                    "css": "linear-gradient(90deg, #047857 0%, #10b981 30%, #fbbf24 70%, #ef4444 100%)"},
+    "bubblegum":   {"name": "Bubblegum",         "price_coins": 90,   "xp_required": 250,
+                    "css": "linear-gradient(90deg, #ec4899 0%, #f472b6 50%, #fbcfe8 100%)"},
+    "midnight":    {"name": "Midnight",          "price_coins": 120,  "xp_required": 400,
+                    "css": "linear-gradient(90deg, #020617 0%, #1e3a8a 60%, #38bdf8 100%)"},
+    "sandstorm":   {"name": "Sandstorm",         "price_coins": 120,  "xp_required": 400,
+                    "css": "linear-gradient(90deg, #44403c 0%, #b45309 40%, #fde68a 100%)"},
+    "candy":       {"name": "Candy",             "price_coins": 120,  "xp_required": 400,
+                    "css": "repeating-linear-gradient(90deg, #ec4899 0 18px, #fbcfe8 18px 36px)"},
+    "mint_chip":   {"name": "Mint Chip",         "price_coins": 150,  "xp_required": 600,
+                    "css": "linear-gradient(90deg, #064e3b 0%, #34d399 40%, #ecfeff 100%)"},
+    "blueprint":   {"name": "Blueprint",         "price_coins": 200,  "xp_required": 1000,
+                    "css": "repeating-linear-gradient(90deg, rgba(255,255,255,.1) 0 1px, transparent 1px 18px), linear-gradient(90deg, #0c4a6e 0%, #1e3a8a 100%)"},
+    "vapor":       {"name": "Vaporwave",         "price_coins": 250,  "xp_required": 1500,
+                    "css": "linear-gradient(90deg, #ec4899 0%, #a855f7 35%, #06b6d4 70%, #fde047 100%)"},
+    "obsidian":    {"name": "Obsidian",          "price_coins": 280,  "xp_required": 1800,
+                    "css": "linear-gradient(90deg, #000 0%, #1f2937 40%, #6b7280 80%, #d1d5db 100%)"},
+    "infrared":    {"name": "Infrared",          "price_coins": 300,  "xp_required": 2000,
+                    "css": "linear-gradient(90deg, #450a0a 0%, #7f1d1d 30%, #f97316 60%, #facc15 100%)"},
+    "ultraviolet": {"name": "Ultraviolet",       "price_coins": 300,  "xp_required": 2000,
+                    "css": "linear-gradient(90deg, #1e1b4b 0%, #4c1d95 30%, #a855f7 65%, #f0abfc 100%)"},
+    # ── Animated / dynamic flags ──────────────────────────────────
+    "flow_aurora": {"name": "Flow Aurora",       "price_coins": 500,  "xp_required": 3000,
+                    "animated": True, "anim_class": "flag-anim-pan",
+                    "css": "linear-gradient(90deg, #022c22 0%, #16a34a 25%, #38bdf8 50%, #a855f7 75%, #022c22 100%)"},
+    "flow_sunset": {"name": "Flow Sunset",       "price_coins": 500,  "xp_required": 3000,
+                    "animated": True, "anim_class": "flag-anim-pan",
+                    "css": "linear-gradient(90deg, #1e1b4b 0%, #7c3aed 30%, #ec4899 55%, #f59e0b 80%, #1e1b4b 100%)"},
+    "flow_neon":   {"name": "Flow Neon",         "price_coins": 500,  "xp_required": 3000,
+                    "animated": True, "anim_class": "flag-anim-fast",
+                    "css": "linear-gradient(90deg, #ec4899 0%, #8b5cf6 25%, #06b6d4 50%, #8b5cf6 75%, #ec4899 100%)"},
+    "flow_lava":   {"name": "Flow Lava",         "price_coins": 600,  "xp_required": 4000,
+                    "animated": True, "anim_class": "flag-anim-shimmer",
+                    "css": "linear-gradient(90deg, #7c2d12 0%, #ef4444 30%, #fde047 55%, #ef4444 80%, #7c2d12 100%)"},
+    "flow_glacier":{"name": "Flow Glacier",      "price_coins": 600,  "xp_required": 4000,
+                    "animated": True, "anim_class": "flag-anim-shimmer",
+                    "css": "linear-gradient(90deg, #0c4a6e 0%, #38bdf8 35%, #f0f9ff 55%, #38bdf8 75%, #0c4a6e 100%)"},
+    "flow_rainbow":{"name": "Flow Rainbow",      "price_coins": 900,  "xp_required": 9000,
+                    "animated": True, "anim_class": "flag-anim-fast",
+                    "css": "linear-gradient(90deg, #ef4444, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #a855f7, #ef4444)"},
+    "plus_anim_holo": {"name": "Holo Sweep (PLUS)",  "price_coins": 1200, "xp_required": 0, "plus_only": True,
+                       "animated": True, "anim_class": "flag-anim-shimmer",
+                       "css": "linear-gradient(90deg, #fbcfe8, #67e8f9, #fde68a, #86efac, #c4b5fd, #fbcfe8)"},
+    "plus_anim_chrome":{"name": "Liquid Chrome (PLUS)","price_coins": 1200, "xp_required": 0, "plus_only": True,
+                        "animated": True, "anim_class": "flag-anim-shimmer",
+                        "css": "linear-gradient(90deg, #f8fafc 0%, #cbd5e1 25%, #475569 50%, #cbd5e1 75%, #f8fafc 100%)"},
+    "plus_anim_galaxy":{"name": "Drifting Galaxy (PLUS)","price_coins": 1500,"xp_required": 0, "plus_only": True,
+                        "animated": True, "anim_class": "flag-anim-pan",
+                        "css": "linear-gradient(90deg, #000 0%, #1e1b4b 25%, #7c3aed 50%, #ec4899 75%, #000 100%)"},
 }
+
+# CSS injected once per page that renders flags. Provides @keyframes + helpers
+# for animated flags (matched by anim_class).
+FLAG_ANIM_CSS = """
+@keyframes flg-pan { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+@keyframes flg-shimmer { 0% { background-position: -100% 50%; } 100% { background-position: 200% 50%; } }
+.flag-anim-pan,.flag-anim-fast,.flag-anim-shimmer { background-size: 300% 100% !important; }
+.flag-anim-pan     { animation: flg-pan 14s linear infinite; }
+.flag-anim-fast    { animation: flg-pan 6s linear infinite; }
+.flag-anim-shimmer { animation: flg-shimmer 5s ease-in-out infinite; }
+"""
 
 
 # ── Focus-timer themes ─────────────────────────────────────────────────
@@ -3771,12 +3865,12 @@ def get_flag_state(client_id: int) -> dict:
     return {"selected_flag": sel, "unlocked_flags": unlocked}
 
 
-def get_flags_for_clients(client_ids: list[int]) -> dict[int, str]:
-    """Return {client_id: flag_css_string} for each client in the list.
+def get_flags_for_clients(client_ids: list[int]) -> dict[int, dict]:
+    """Return {client_id: {css, anim_class}} for each client in the list.
     Used by the leaderboard to render flags behind each row."""
     if not client_ids:
         return {}
-    out: dict[int, str] = {}
+    out: dict[int, dict] = {}
     placeholders = ",".join(["%s"] * len(client_ids))
     with get_db() as db:
         rows = _fetchall(
@@ -3793,7 +3887,10 @@ def get_flags_for_clients(client_ids: list[int]) -> dict[int, str]:
             sel = "none"
         cfg = FLAGS.get(sel) or FLAGS["none"]
         if sel != "none":
-            out[int(r["id"])] = cfg["css"]
+            out[int(r["id"])] = {
+                "css": cfg["css"],
+                "anim_class": (cfg.get("anim_class") or "") if cfg.get("animated") else "",
+            }
     return out
 
 

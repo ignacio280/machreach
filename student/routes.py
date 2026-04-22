@@ -15270,7 +15270,7 @@ No markdown, no code fences. ONLY JSON.
       }
       board.innerHTML = rows.map(r => `
         <a class="lb-row ${r.is_you?'me':''}" href="/student/profile/${r.client_id}" style="color:inherit;text-decoration:none;cursor:pointer;">
-          ${r.flag_css ? `<div class="lb-flag" style="background:${r.flag_css};"></div>` : ''}
+          ${r.flag_css ? `<div class="lb-flag ${r.flag_anim_class||''}" style="background:${r.flag_css};"></div>` : ''}
           <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
@@ -15309,7 +15309,7 @@ No markdown, no code fences. ONLY JSON.
 })();
 </script>
 """
-        return _s_render("Leaderboards", content, active_page="student_leaderboard")
+        return _s_render("Leaderboards", f"<style>{sdb.FLAG_ANIM_CSS}</style>" + content, active_page="student_leaderboard")
 
 
 
@@ -17341,9 +17341,10 @@ No markdown, no code fences. ONLY JSON.
                 tag = f'<span style="color:#94a3b8;">{cfg["xp_required"]} XP unlocked</span>'
                 btn = f'<button class="btn btn-sm btn-primary" onclick="buyFlag(\'{key}\')">Buy ({cfg["price_coins"]} \U0001FA99)</button>'
             # Preview the L\u2192R fade exactly like the leaderboard renders it.
+            _flag_anim = (cfg.get("anim_class") or "") if cfg.get("animated") else ""
             preview = (
                 '<div style="position:relative;height:48px;background:#0f172a;border-radius:8px;overflow:hidden;">'
-                f'<div style="position:absolute;inset:0;background:{cfg["css"]};'
+                f'<div class="{_flag_anim}" style="position:absolute;inset:0;background:{cfg["css"]};'
                 '-webkit-mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);'
                 'mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);"></div>'
                 '<div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 12px;color:#fff;font-size:12px;font-weight:600;letter-spacing:.05em;">PREVIEW</div>'
@@ -17501,7 +17502,8 @@ No markdown, no code fences. ONLY JSON.
         bundles_html = "".join(bundle_cards) or '<div style="color:var(--text-muted);font-size:13px;">No bundles available right now.</div>'
 
         return _s_render("Shop", f"""
-        <style>{sdb.BANNER_ANIM_CSS}</style>
+        <style>{sdb.BANNER_ANIM_CSS}
+{sdb.FLAG_ANIM_CSS}</style>
         <h1 style="margin-bottom:6px;">\U0001f6d2 Shop</h1>
         <p style="color:var(--text-muted);margin:0 0 24px;">Spend coins on streak freezes, profile banners, and timed boosts. Earn coins by completing focus sessions, quizzes, flashcards, and duels.</p>
         <style>
@@ -17657,7 +17659,7 @@ No markdown, no code fences. ONLY JSON.
             anim_cls = (cfg.get("anim_class") or "") if cfg.get("animated") else ""
             anim_pill = '<div style="position:absolute;top:6px;left:6px;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">ANIM</div>' if anim_cls else ''
             banner_cards.append(
-                f'<div class="profile-cosm-card" data-key="{key}" data-css="{cfg["css"]}" data-anim="{anim_cls}" '
+                f'<div class="profile-cosm-card" data-banner="{key}" data-css="{cfg["css"]}" data-anim="{anim_cls}" '
                 f'onclick="equipBanner(\'{key}\')" '
                 f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);">'
                 f'  <div class="bnr-anim-host {anim_cls}" style="height:60px;background:{cfg["css"]};"></div>'
@@ -17678,9 +17680,9 @@ No markdown, no code fences. ONLY JSON.
             badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
             border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
             preview = ('<div style="height:30px;background:transparent;"></div>' if key == "none"
-                       else f'<div style="height:30px;background:{cfg["css"]};-webkit-mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%);mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%);"></div>')
+                       else f'<div class="{(cfg.get("anim_class") or "") if cfg.get("animated") else ""}" style="height:30px;background:{cfg["css"]};-webkit-mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%);mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%);"></div>')
             flag_cards.append(
-                f'<div class="profile-cosm-card" onclick="equipFlag(\'{key}\')" '
+                f'<div class="profile-cosm-card" data-flag="{key}" onclick="equipFlag(\'{key}\')" '
                 f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);">'
                 f'  {preview}'
                 f'  <div style="padding:6px 10px;font-size:12px;color:var(--text);">{cfg["name"]}</div>'
@@ -17700,7 +17702,7 @@ No markdown, no code fences. ONLY JSON.
         none_border = "border:2px solid #10b981;" if none_eq else "border:1px solid var(--border);"
         none_badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if none_eq else ''
         badge_cards.append(
-            f'<div class="profile-cosm-card" onclick="equipBadge(\'\')" '
+            f'<div class="profile-cosm-card" data-badge="" onclick="equipBadge(\'\')" '
             f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{none_border}background:var(--card);padding:14px;text-align:center;">'
             f'  <div style="font-size:32px;opacity:.4;">🚫</div>'
             f'  <div style="font-size:12px;color:var(--text-muted);">None</div>'
@@ -17720,7 +17722,7 @@ No markdown, no code fences. ONLY JSON.
             eq_pill = (f'<div style="position:absolute;top:6px;right:6px;display:flex;gap:3px;">{"".join(slot_pills)}</div>'
                        if (is_l or is_r) else '')
             badge_cards.append(
-                f'<div class="profile-cosm-card" onclick="equipBadge(\'{key}\')" title="{b.get("desc","")}" '
+                f'<div class="profile-cosm-card" data-badge="{key}" onclick="equipBadge(\'{key}\')" title="{b.get("desc","")}" '
                 f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);padding:14px;text-align:center;">'
                 f'  <div style="font-size:32px;">{emoji}</div>'
                 f'  <div style="font-size:12px;color:var(--text);font-weight:600;">{name}</div>'
@@ -17739,7 +17741,7 @@ No markdown, no code fences. ONLY JSON.
                 border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
                 pill = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
                 cards.append(
-                    f'<div class="profile-cosm-card" onclick="equipCosmetic(\'{kind}\',\'{key}\')" '
+                    f'<div class="profile-cosm-card" data-key="{key}" onclick="equipCosmetic(\'{kind}\',\'{key}\')" '
                     f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);">'
                     f'  {render_preview(key, cfg)}'
                     f'  <div style="padding:6px 10px;font-size:12px;color:var(--text);">{cfg.get("name", key)}</div>'
@@ -17792,7 +17794,8 @@ No markdown, no code fences. ONLY JSON.
         if ceil > floor:
             progress_pct = max(0, min(100, int((total_xp - floor) * 100 / (ceil - floor))))
         return _s_render("My Profile", f"""
-        <style>{sdb.BANNER_ANIM_CSS}</style>
+        <style>{sdb.BANNER_ANIM_CSS}
+{sdb.FLAG_ANIM_CSS}</style>
         <div style="max-width:900px;margin:0 auto;">
           <div style="background:var(--card);border:1px solid var(--border);border-radius:18px;overflow:hidden;margin-bottom:22px;">
             <div id="profile-banner" class="bnr-anim-host {equipped_banner_anim}" style="height:160px;background:{banner_css};"></div>
@@ -17819,13 +17822,13 @@ No markdown, no code fences. ONLY JSON.
           <div class="card">
             <div class="card-header"><h2>🎨 Profile banner</h2></div>
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Click any banner you've unlocked to equip it. <a href="/student/shop" style="color:var(--primary);">Visit the Shop</a> to unlock more.</p>
-            <div class="profile-cosm-grid">{banners_grid}</div>
+            <div class="profile-cosm-grid" data-cosm="banners">{banners_grid}</div>
           </div>
 
           <div class="card">
             <div class="card-header"><h2>🚩 Leaderboard flag</h2></div>
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Click any flag you've unlocked to equip it. Your flag fades in behind your row on the leaderboard.</p>
-            <div class="profile-cosm-grid">{flags_grid}</div>
+            <div class="profile-cosm-grid" data-cosm="flags">{flags_grid}</div>
           </div>
 
           <div class="card">
@@ -17835,19 +17838,19 @@ No markdown, no code fences. ONLY JSON.
               <button id="badge-side-left"  onclick="setBadgeSide('left')"  class="badge-side-btn" style="border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;">◀ Left slot</button>
               <button id="badge-side-right" onclick="setBadgeSide('right')" class="badge-side-btn active" style="border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;">Right slot ▶</button>
             </div>
-            <div class="profile-cosm-grid">{badges_grid}</div>
+            <div class="profile-cosm-grid" data-cosm="badges">{badges_grid}</div>
           </div>
 
           <div class="card">
             <div class="card-header"><h2>🔥 Streak flame</h2></div>
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Choose the icon that appears next to your streak number.</p>
-            <div class="profile-cosm-grid">{flame_grid}</div>
+            <div class="profile-cosm-grid" data-cosm="streak_flame">{flame_grid}</div>
           </div>
 
           <div class="card">
             <div class="card-header"><h2>📝 Quiz card theme</h2></div>
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">The look of the card behind quiz questions.</p>
-            <div class="profile-cosm-grid">{quiz_grid}</div>
+            <div class="profile-cosm-grid" data-cosm="quiz_theme">{quiz_grid}</div>
           </div>
 
           <div class="card">
@@ -17863,23 +17866,41 @@ No markdown, no code fences. ONLY JSON.
           .profile-cosm-card:hover {{ transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.18); }}
         </style>
         <script>
-        const BANNER_CSS = {{ {", ".join(f'"{k}":{json.dumps(v["css"])}' for k,v in sdb.BANNERS.items())} }};
+        const BANNER_CSS  = {{ {", ".join(f'"{k}":{json.dumps(v["css"])}' for k,v in sdb.BANNERS.items())} }};
         const BANNER_ANIM = {{ {", ".join(f'"{k}":{json.dumps((v.get("anim_class") or "") if v.get("animated") else "")}' for k,v in sdb.BANNERS.items())} }};
+        const FLAG_CSS    = {{ {", ".join(f'"{k}":{json.dumps(v["css"])}' for k,v in sdb.FLAGS.items())} }};
+        const FLAG_ANIM   = {{ {", ".join(f'"{k}":{json.dumps((v.get("anim_class") or "") if v.get("animated") else "")}' for k,v in sdb.FLAGS.items())} }};
+        const EQUIP_PILL  = '<div class="profile-eq-pill" style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>';
+
+        function _markEquippedSingle(containerSelector, attrName, key) {{
+          const container = document.querySelector(containerSelector);
+          if (!container) return;
+          container.querySelectorAll('.profile-cosm-card').forEach(card => {{
+            const k = card.getAttribute(attrName);
+            const isEq = (k === key);
+            card.style.border = isEq ? '2px solid #10b981' : '1px solid var(--border)';
+            const old = card.querySelector('.profile-eq-pill');
+            if (old) old.remove();
+            if (isEq) card.insertAdjacentHTML('beforeend', EQUIP_PILL);
+          }});
+        }}
+
         async function equipBanner(k) {{
           const el = document.getElementById('profile-banner');
           if (BANNER_CSS[k]) el.style.background = BANNER_CSS[k];
-          // swap animation classes
           el.className = 'bnr-anim-host ' + (BANNER_ANIM[k] || '');
+          _markEquippedSingle('[data-cosm="banners"]', 'data-banner', k);
           const r = await fetch('/api/student/wallet/set-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key:k}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not apply.'); return; }}
-          location.reload();
+          if (!r.ok) alert(r.error || 'Could not apply.');
         }}
         async function equipFlag(k) {{
+          _markEquippedSingle('[data-cosm="flags"]', 'data-flag', k);
           const r = await fetch('/api/student/wallet/set-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key:k}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not apply.'); return; }}
-          location.reload();
+          if (!r.ok) alert(r.error || 'Could not apply.');
         }}
         let BADGE_SIDE = 'right';
+        let BADGE_LEFT = {json.dumps(eq_left)};
+        let BADGE_RIGHT = {json.dumps(eq_right)};
         function setBadgeSide(side) {{
           BADGE_SIDE = side;
           document.getElementById('badge-side-left').style.background  = (side==='left')  ? 'linear-gradient(90deg,#3b82f6,#7c3aed)' : 'var(--card)';
@@ -17888,15 +17909,39 @@ No markdown, no code fences. ONLY JSON.
           document.getElementById('badge-side-right').style.color      = (side==='right') ? '#fff' : 'var(--text)';
         }}
         setBadgeSide('right');
+        function _refreshBadgeCards() {{
+          const container = document.querySelector('[data-cosm="badges"]');
+          if (!container) return;
+          container.querySelectorAll('.profile-cosm-card').forEach(card => {{
+            const k = card.getAttribute('data-badge') || '';
+            const isL = (k && k === BADGE_LEFT);
+            const isR = (k && k === BADGE_RIGHT);
+            const noneTile = (k === '');
+            const eq = noneTile ? (!BADGE_LEFT && !BADGE_RIGHT) : (isL || isR);
+            card.style.border = eq ? '2px solid #10b981' : '1px solid var(--border)';
+            const old = card.querySelector('.profile-eq-pill');
+            if (old) old.remove();
+            if (noneTile && eq) {{
+              card.insertAdjacentHTML('beforeend', EQUIP_PILL);
+            }} else if (eq) {{
+              const pills = [];
+              if (isL) pills.push('<span style="background:#3b82f6;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">L</span>');
+              if (isR) pills.push('<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">R</span>');
+              card.insertAdjacentHTML('beforeend', '<div class="profile-eq-pill" style="position:absolute;top:6px;right:6px;display:flex;gap:3px;">' + pills.join('') + '</div>');
+            }}
+          }});
+        }}
         async function equipBadge(k) {{
+          if (BADGE_SIDE === 'left') BADGE_LEFT = k; else BADGE_RIGHT = k;
+          if (k === '') {{ BADGE_LEFT = ''; BADGE_RIGHT = ''; }}
+          _refreshBadgeCards();
           const r = await fetch('/api/student/wallet/set-badge', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{badge_key:k, side: BADGE_SIDE}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not equip.'); return; }}
-          location.reload();
+          if (!r.ok) alert(r.error || 'Could not equip.');
         }}
         async function equipCosmetic(kind, key) {{
+          _markEquippedSingle('[data-cosm="' + kind + '"]', 'data-key', key);
           const r = await fetch('/api/student/wallet/set-cosmetic', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{kind, key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not apply.'); return; }}
-          location.reload();
+          if (!r.ok) alert(r.error || 'Could not apply.');
         }}
         async function buyBundle(k) {{
           if (!confirm('Buy this bundle? Coins will be deducted immediately.')) return;

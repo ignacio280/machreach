@@ -919,9 +919,10 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
         ids = [row["client_id"] for row in out]
         flags = _sdb.get_flags_for_clients(ids)
         for row in out:
-            css = flags.get(int(row["client_id"]))
-            if css:
-                row["flag_css"] = css
+            f = flags.get(int(row["client_id"]))
+            if f:
+                row["flag_css"] = f.get("css", "")
+                row["flag_anim_class"] = f.get("anim_class", "")
         # Equipped badges (left + right of user name)
         badges = _sdb.get_equipped_badges_for_clients(ids)
         for row in out:

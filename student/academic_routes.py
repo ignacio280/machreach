@@ -244,7 +244,9 @@ def register_academic_routes(app, csrf, limiter):
             },
             "badges": [
                 {"key": b.get("badge_key"), "name": b.get("name"),
-                 "icon": b.get("icon"), "earned_at": str(b.get("earned_at") or "")}
+                 "icon": b.get("emoji") or b.get("icon") or "🏅",
+                 "desc": b.get("desc", ""),
+                 "earned_at": str(b.get("earned_at") or "")}
                 for b in badges
             ],
             "badge_count": len(badges),
