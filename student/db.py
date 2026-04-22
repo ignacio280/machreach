@@ -3097,7 +3097,8 @@ BANNERS = {
     "magma":      {"name": "Magma Core",         "price_coins": 350,  "xp_required": 1500,
                    "css": "radial-gradient(circle at 30% 80%, #fbbf24 0%, transparent 35%), radial-gradient(circle at 70% 30%, #ef4444 0%, transparent 40%), radial-gradient(circle at 50% 50%, #7c2d12 0%, #1c0a04 90%)"},
     "matrix":     {"name": "Matrix Rain",        "price_coins": 400,  "xp_required": 2000,
-                   "css": "repeating-linear-gradient(180deg, rgba(16,185,129,.18) 0 2px, transparent 2px 14px), repeating-linear-gradient(180deg, rgba(16,185,129,.35) 0 1px, transparent 1px 28px), linear-gradient(180deg, #022c22, #000)"},
+                   "animated": True, "anim_class": "bnr-anim-matrix",
+                   "css": "repeating-linear-gradient(180deg, rgba(134,239,172,.95) 0 6px, rgba(34,197,94,.55) 6px 14px, rgba(16,185,129,.25) 14px 26px, transparent 26px 56px), repeating-linear-gradient(90deg, transparent 0 10px, rgba(0,0,0,.55) 10px 12px), repeating-linear-gradient(180deg, rgba(74,222,128,.18) 0 2px, transparent 2px 18px), linear-gradient(180deg, #022c22 0%, #000 100%)"},
     "blueprint":  {"name": "Blueprint Grid",     "price_coins": 250,  "xp_required": 750,
                    "css": "repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, transparent 1px 24px), linear-gradient(135deg, #0c4a6e, #1e3a8a)"},
     "hologram":   {"name": "Hologram",           "price_coins": 600,  "xp_required": 6000,
@@ -3247,7 +3248,18 @@ BANNER_ANIM_CSS = """
 .bnr-anim-circuit   { background-size: 32px 32px, 32px 32px, 200% 200%, 100% 100% !important; animation: bnr-circuit-scan 6s linear infinite, bnr-glow-pulse 5s ease-in-out infinite; }
 .bnr-anim-void      { background-size: 200% 200%, 200% 200%, 200% 200%, 200% 200%, 100% 100% !important; animation: bnr-void-pulse 8s ease-in-out infinite; }
 .bnr-anim-cosmic    { background-size: 200% 200% !important; animation: bnr-pan-diag 30s ease-in-out infinite, bnr-twinkle 4s ease-in-out infinite; }
-.bnr-anim-andromeda { background-size: 220% 220% !important; transform-origin: center; animation: bnr-andromeda-drift 40s ease-in-out infinite; }
+.bnr-anim-andromeda { background-size: 220% 220%; transform-origin: center; animation: bnr-andromeda-drift 40s ease-in-out infinite; }
+
+/* Matrix rain — vertical glyph cascade */
+@keyframes bnr-matrix-rain {
+  0%   { background-position: 0 0,        0 0, 0 0,        0 0; }
+  100% { background-position: 0 560px,    0 0, 0 -360px,   0 0; }
+}
+.bnr-anim-matrix {
+  background-size: 100% 56px, 12px 100%, 100% 18px, 100% 100% !important;
+  animation: bnr-matrix-rain 2.6s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(74,222,128,.45));
+}
 """
 
 # Leaderboard flag catalog. Rendered as a horizontal CSS background on the
@@ -3303,6 +3315,9 @@ FLAGS = {
                    "css": "linear-gradient(90deg, #f472b6 0%, #fcd34d 50%, #60a5fa 100%)"},
     "matrix_bar": {"name": "Matrix Trail",       "price_coins": 320,  "xp_required": 2000,
                    "css": "linear-gradient(90deg, #022c22 0%, #16a34a 50%, #86efac 100%)"},
+    "matrix_rain":{"name": "Matrix Rain",        "price_coins": 500,  "xp_required": 3000,
+                   "animated": True, "anim_class": "flag-anim-matrix",
+                   "css": "repeating-linear-gradient(180deg, rgba(134,239,172,.95) 0 5px, rgba(34,197,94,.55) 5px 12px, rgba(16,185,129,.22) 12px 22px, transparent 22px 48px), repeating-linear-gradient(90deg, transparent 0 9px, rgba(0,0,0,.6) 9px 11px), linear-gradient(180deg, #022c22 0%, #000 100%)"},
     "bloodmoon":  {"name": "Blood Moon",         "price_coins": 450,  "xp_required": 3500,
                    "css": "linear-gradient(90deg, #000 0%, #7f1d1d 50%, #f87171 100%)"},
     "honey":      {"name": "Honeycomb",          "price_coins": 320,  "xp_required": 2000,
@@ -3388,6 +3403,17 @@ FLAG_ANIM_CSS = """
 .flag-anim-pan     { animation: flg-pan 14s linear infinite; }
 .flag-anim-fast    { animation: flg-pan 6s linear infinite; }
 .flag-anim-shimmer { animation: flg-shimmer 5s ease-in-out infinite; }
+
+/* Matrix rain flag — vertical green glyph cascade */
+@keyframes flg-matrix-rain {
+  0%   { background-position: 0 0,    0 0,    0 0; }
+  100% { background-position: 0 480px,0 0,    0 0; }
+}
+.flag-anim-matrix {
+  background-size: 100% 48px, 11px 100%, 100% 100% !important;
+  animation: flg-matrix-rain 2.4s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(74,222,128,.5));
+}
 """
 
 
