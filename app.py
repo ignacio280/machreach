@@ -11361,7 +11361,7 @@ def _handle_404(e):
 @app.errorhandler(500)
 def _handle_500(e):
     try:
-        app.logger.error("500 error at %s: %s", request.path, e)
+        app.logger.exception("500 error at %s %s: %s", request.method, request.path, e)
     except Exception:
         pass
     return _render_error_page(

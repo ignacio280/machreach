@@ -17329,14 +17329,14 @@ No markdown, no code fences. ONLY JSON.
         boost_cards = []
         for key, cfg in sdb.BOOSTS.items():
             disabled = "disabled" if coins < cfg["price_coins"] else ""
-            icon = "\u2728" if cfg["kind"] == "xp" else "\ud83d\udcb0"
+            icon = "\u2728" if cfg["kind"] == "xp" else "\U0001F4B0"
             color = "#8b5cf6" if cfg["kind"] == "xp" else "#f59e0b"
             boost_cards.append(
                 '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;">'
                 f'<div style="font-size:24px;">{icon}</div>'
                 f'<div style="font-weight:700;margin-top:4px;color:{color};">{cfg["label"]}</div>'
                 f'<div style="color:var(--text-muted);font-size:12px;margin:4px 0 10px;">Stacks if you already own one.</div>'
-                f'<button class="btn btn-sm btn-primary" onclick="buyBoost(\'{key}\')" {disabled}>Buy ({cfg["price_coins"]} \ud83e\ude99)</button>'
+                f'<button class="btn btn-sm btn-primary" onclick="buyBoost(\'{key}\')" {disabled}>Buy ({cfg["price_coins"]} \U0001FA99)</button>'
                 '</div>'
             )
         boosts_html = "".join(boost_cards)
@@ -17415,7 +17415,7 @@ No markdown, no code fences. ONLY JSON.
         {active_html}
         {subscription_section}
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;">
-          <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \ud83e\ude99</div><div class="label">Coins</div></div>
+          <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \U0001FA99</div><div class="label">Coins</div></div>
           <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Streak Freezes</div></div>
           <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">Total XP</div></div>
         </div>
@@ -17432,10 +17432,10 @@ No markdown, no code fences. ONLY JSON.
           <div class="card-header"><h2>\u2744\ufe0f Streak Freezes</h2></div>
           <p style="color:var(--text-muted);font-size:13px;">Used automatically when you miss a day. Max 3 owned at a time.</p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;">
-            <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} \ud83e\ude99 each</div>
+            <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} \U0001FA99 each</div>
             <button class="btn btn-primary btn-sm" id="buy-freeze-btn" onclick="buyFreeze()" {freeze_btn_disabled}>Buy 1 freeze</button>
             <div style="width:1px;height:24px;background:var(--border);"></div>
-            <div style="font-size:14px;"><b>3-pack</b>: {bundle_price} \ud83e\ude99 <span style="color:#10b981;font-weight:700;">(save {bundle_save})</span></div>
+            <div style="font-size:14px;"><b>3-pack</b>: {bundle_price} \U0001FA99 <span style="color:#10b981;font-weight:700;">(save {bundle_save})</span></div>
             <button class="btn btn-primary btn-sm" onclick="buyFreezeBundle()" {bundle_disabled}>Buy 3-pack</button>
           </div>
         </div>
