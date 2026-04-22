@@ -2240,9 +2240,21 @@ def get_badges(client_id: int) -> list[dict]:
             (client_id,),
         )
     result = []
+    seen = set()
     for r in rows:
         info = BADGE_DEFS.get(r["badge_key"], {})
         result.append({**r, **info})
+        seen.add(r["badge_key"])
+    # Ultimate tier: surface every defined badge so they can equip any of them.
+    try:
+        from . import subscription as _sub
+        if _sub.get_tier(client_id) == "ultimate":
+            for key, info in BADGE_DEFS.items():
+                if key in seen:
+                    continue
+                result.append({"badge_key": key, "client_id": client_id, **info})
+    except Exception:
+        pass
     return result
 
 
@@ -3606,6 +3618,15 @@ def get_wallet(client_id: int) -> dict:
         unlocked = ["default"]
     if "default" not in unlocked:
         unlocked.insert(0, "default")
+    # Ultimate tier auto-unlocks every banner (incl. PLUS-only).
+    try:
+        from . import subscription as _sub
+        if _sub.get_tier(client_id) == "ultimate":
+            for k in BANNERS.keys():
+                if k not in unlocked:
+                    unlocked.append(k)
+    except Exception:
+        pass
     return {
         "coins":            int(row.get("coins") or 0),
         "streak_freezes":   int(row.get("streak_freezes") or 0),
@@ -3738,6 +3759,15 @@ def get_flag_state(client_id: int) -> dict:
     sel = prefs.get("selected_flag") or "none"
     if sel not in FLAGS:
         sel = "none"
+    # Ultimate tier auto-unlocks every flag (incl. PLUS-only).
+    try:
+        from . import subscription as _sub
+        if _sub.get_tier(client_id) == "ultimate":
+            for k in FLAGS.keys():
+                if k not in unlocked:
+                    unlocked.append(k)
+    except Exception:
+        pass
     return {"selected_flag": sel, "unlocked_flags": unlocked}
 
 

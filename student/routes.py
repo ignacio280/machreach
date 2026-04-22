@@ -17839,12 +17839,6 @@ No markdown, no code fences. ONLY JSON.
           </div>
 
           <div class="card">
-            <div class="card-header"><h2>🌧️ Focus theme</h2></div>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Pick the background that wraps your focus sessions.</p>
-            <div class="profile-cosm-grid">{focus_grid}</div>
-          </div>
-
-          <div class="card">
             <div class="card-header"><h2>🔥 Streak flame</h2></div>
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Choose the icon that appears next to your streak number.</p>
             <div class="profile-cosm-grid">{flame_grid}</div>
@@ -17854,12 +17848,6 @@ No markdown, no code fences. ONLY JSON.
             <div class="card-header"><h2>📝 Quiz card theme</h2></div>
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">The look of the card behind quiz questions.</p>
             <div class="profile-cosm-grid">{quiz_grid}</div>
-          </div>
-
-          <div class="card">
-            <div class="card-header"><h2>⏱️ Focus timer ring</h2></div>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">The colored ring around the focus countdown.</p>
-            <div class="profile-cosm-grid">{ring_grid}</div>
           </div>
 
           <div class="card">
