@@ -3091,12 +3091,11 @@ BANNERS = {
     "champion":   {"name": "Champion (Elite)",   "price_coins": 500,  "xp_required": 5000,  "css": "linear-gradient(135deg,#f43f5e,#facc15,#10b981)"},
     # ── Generative banners ────────────────────────────────────────────
     "aurora":     {"name": "Aurora Borealis",    "price_coins": 250,  "xp_required": 750,
+                   "animated": True, "anim_class": "bnr-anim-aurora-borealis",
                    "css": "radial-gradient(ellipse 120% 80% at 30% 0%, rgba(34,197,94,.55), transparent 60%), radial-gradient(ellipse 120% 80% at 70% 100%, rgba(56,189,248,.55), transparent 60%), radial-gradient(ellipse 80% 100% at 50% 50%, rgba(168,85,247,.45), transparent 70%), #0a0f1f"},
     "iridescent": {"name": "Iridescent Pearl",   "price_coins": 350,  "xp_required": 1500,
                    "css": "conic-gradient(from 220deg at 50% 50%, #f0abfc, #67e8f9, #fde68a, #86efac, #c4b5fd, #f0abfc)"},
-    "magma":      {"name": "Magma Core",         "price_coins": 350,  "xp_required": 1500,
-                   "css": "radial-gradient(circle at 30% 80%, #fbbf24 0%, transparent 35%), radial-gradient(circle at 70% 30%, #ef4444 0%, transparent 40%), radial-gradient(circle at 50% 50%, #7c2d12 0%, #1c0a04 90%)"},
-    "matrix":     {"name": "Matrix Rain",        "price_coins": 400,  "xp_required": 2000,
+    "matrix":     {"name": "Matrix Rain (PLUS)", "price_coins": 800,  "xp_required": 0, "plus_only": True,
                    "animated": True, "anim_class": "bnr-anim-matrix",
                    "css": "repeating-linear-gradient(180deg, rgba(134,239,172,.95) 0 6px, rgba(34,197,94,.55) 6px 14px, rgba(16,185,129,.25) 14px 26px, transparent 26px 56px), repeating-linear-gradient(90deg, transparent 0 10px, rgba(0,0,0,.55) 10px 12px), repeating-linear-gradient(180deg, rgba(74,222,128,.18) 0 2px, transparent 2px 18px), linear-gradient(180deg, #022c22 0%, #000 100%)"},
     "blueprint":  {"name": "Blueprint Grid",     "price_coins": 250,  "xp_required": 750,
@@ -3104,6 +3103,7 @@ BANNERS = {
     "hologram":   {"name": "Hologram",           "price_coins": 600,  "xp_required": 6000,
                    "css": "conic-gradient(from 0deg at 50% 50%, rgba(236,72,153,.7), rgba(99,102,241,.7), rgba(34,211,238,.7), rgba(132,204,22,.7), rgba(236,72,153,.7)), repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 2px, transparent 2px 8px)"},
     "abyss":      {"name": "Deep Abyss",         "price_coins": 450,  "xp_required": 3500,
+                   "animated": True, "anim_class": "bnr-anim-abyss",
                    "css": "radial-gradient(circle at 20% 30%, #312e81 0%, transparent 45%), radial-gradient(circle at 80% 70%, #155e75 0%, transparent 45%), radial-gradient(circle at 50% 50%, #020617 60%, #000 100%)"},
     "phoenix":    {"name": "Phoenix",            "price_coins": 750,  "xp_required": 8000,
                    "css": "radial-gradient(circle at 50% 100%, #fde047 0%, #f97316 25%, #dc2626 55%, #1e1b4b 100%)"},
@@ -3130,7 +3130,8 @@ BANNERS = {
                    "css": "linear-gradient(135deg,#f1f5f9,#cbd5e1,#94a3b8)"},
     # ── Themed / illustrative banners ─────────────────────────────────
     "cherry":     {"name": "Cherry Blossom",     "price_coins": 280,  "xp_required": 800,
-                   "css": "radial-gradient(circle at 20% 30%, #fbcfe8 0%, transparent 30%), radial-gradient(circle at 80% 60%, #f9a8d4 0%, transparent 30%), linear-gradient(135deg,#fff1f2,#fbcfe8)"},
+                   "animated": True, "anim_class": "bnr-anim-cherry",
+                   "css": "radial-gradient(circle at 20% 30%, #fbcfe8 0%, transparent 30%), radial-gradient(circle at 80% 60%, #f9a8d4 0%, transparent 30%), radial-gradient(2px 3px at 15% 20%, #ec4899 50%, transparent 55%), radial-gradient(3px 2px at 75% 70%, #db2777 50%, transparent 55%), radial-gradient(2px 2px at 45% 40%, #f472b6 50%, transparent 55%), radial-gradient(3px 3px at 90% 25%, #be185d 50%, transparent 55%), linear-gradient(135deg,#fff1f2,#fbcfe8)"},
     "tropical":   {"name": "Tropical Sunset",    "price_coins": 280,  "xp_required": 800,
                    "css": "linear-gradient(180deg,#0c4a6e 0%,#1e3a8a 30%,#7c3aed 55%,#ec4899 80%,#f59e0b 100%)"},
     "tundra":     {"name": "Frozen Tundra",      "price_coins": 280,  "xp_required": 800,
@@ -3142,12 +3143,6 @@ BANNERS = {
     "deepsea":    {"name": "Deep Sea",           "price_coins": 320,  "xp_required": 1200,
                    "animated": True, "anim_class": "bnr-anim-deepsea",
                    "css": "radial-gradient(ellipse 60% 40% at 30% 80%, rgba(6,182,212,.55) 0%, transparent 60%), radial-gradient(ellipse 50% 30% at 70% 20%, rgba(14,165,233,.5) 0%, transparent 60%), radial-gradient(circle at 50% 50%, rgba(125,211,252,.18) 0%, transparent 50%), linear-gradient(180deg,#0c4a6e,#082f49,#020617)"},
-    "thunder":    {"name": "Thunderhead",        "price_coins": 380,  "xp_required": 2000,
-                   "css": "radial-gradient(circle at 50% 30%, #facc15 0%, transparent 25%), linear-gradient(180deg,#1f2937,#111827,#020617)"},
-    "lava":       {"name": "Lava Field",         "price_coins": 380,  "xp_required": 2000,
-                   "css": "radial-gradient(circle at 30% 70%, #fbbf24 0%, transparent 35%), radial-gradient(circle at 70% 80%, #f97316 0%, transparent 35%), linear-gradient(135deg,#7c2d12,#000)"},
-    "moss":       {"name": "Moss & Stone",       "price_coins": 280,  "xp_required": 800,
-                   "css": "radial-gradient(circle at 20% 30%, #84cc16 0%, transparent 30%), radial-gradient(circle at 80% 70%, #65a30d 0%, transparent 30%), linear-gradient(135deg,#1c1917,#292524)"},
     "noir":       {"name": "Noir",               "price_coins": 350,  "xp_required": 1500,
                    "css": "repeating-linear-gradient(135deg, #18181b 0 24px, #27272a 24px 48px)"},
     "neon_grid":  {"name": "Neon Grid",          "price_coins": 420,  "xp_required": 2500,
@@ -3158,17 +3153,19 @@ BANNERS = {
                    "css": "radial-gradient(2px 2px at 20% 30%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 80% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 50% 50%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 30% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 70% 20%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 10% 60%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 90% 40%, #fff 50%, transparent 50%), linear-gradient(135deg,#000,#1e1b4b)"},
     "circuit":    {"name": "Circuit Board",      "price_coins": 420,  "xp_required": 2500,
                    "animated": True, "anim_class": "bnr-anim-circuit",
-                   "css": "repeating-linear-gradient(0deg, rgba(34,197,94,.3) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(34,197,94,.3) 0 1px, transparent 1px 32px), radial-gradient(ellipse at 50% 50%, rgba(16,185,129,.45) 0%, transparent 50%), linear-gradient(135deg,#022c22,#064e3b)"},
+                   "css": "repeating-linear-gradient(180deg, rgba(134,239,172,.85) 0 5px, rgba(34,197,94,.45) 5px 11px, transparent 11px 36px), repeating-linear-gradient(90deg, transparent 0 16px, rgba(0,0,0,.4) 16px 18px), repeating-linear-gradient(0deg, rgba(34,197,94,.3) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(34,197,94,.3) 0 1px, transparent 1px 32px), radial-gradient(ellipse at 50% 50%, rgba(16,185,129,.45) 0%, transparent 50%), linear-gradient(135deg,#022c22,#064e3b)"},
     "carbon":     {"name": "Carbon Fiber",       "price_coins": 320,  "xp_required": 1200,
                    "css": "repeating-linear-gradient(45deg, #1f2937 0 6px, #111827 6px 12px), repeating-linear-gradient(-45deg, rgba(255,255,255,.04) 0 6px, transparent 6px 12px)"},
     "stained":    {"name": "Stained Glass",      "price_coins": 480,  "xp_required": 3000,
                    "css": "conic-gradient(from 45deg at 30% 30%, #ef4444, #f59e0b, #84cc16, #06b6d4, #8b5cf6, #ec4899, #ef4444)"},
     # ── PLUS-only banners (premium cosmetics) ─────────────────────────
     "plus_velvet":   {"name": "Velvet (PLUS)",   "price_coins": 600,  "xp_required": 0,    "plus_only": True,
+                      "animated": True, "anim_class": "bnr-anim-velvet",
                       "css": "radial-gradient(ellipse at 30% 30%, rgba(168,85,247,.6), transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(236,72,153,.6), transparent 60%), linear-gradient(135deg,#3b0764,#831843)"},
     "plus_chrome":   {"name": "Chrome (PLUS)",   "price_coins": 600,  "xp_required": 0,    "plus_only": True,
                       "css": "linear-gradient(135deg,#f8fafc 0%,#cbd5e1 25%,#475569 55%,#cbd5e1 80%,#f8fafc 100%)"},
     "plus_aurora2":  {"name": "Polar Aurora (PLUS)", "price_coins": 800, "xp_required": 0, "plus_only": True,
+                      "animated": True, "anim_class": "bnr-anim-polar",
                       "css": "radial-gradient(ellipse 120% 80% at 50% 0%, rgba(56,189,248,.7), transparent 70%), radial-gradient(ellipse 100% 70% at 50% 100%, rgba(168,85,247,.7), transparent 70%), radial-gradient(ellipse 60% 80% at 30% 50%, rgba(34,197,94,.6), transparent 70%), #020617"},
     "plus_prism":    {"name": "Prism (PLUS)",    "price_coins": 800,  "xp_required": 0,    "plus_only": True,
                       "css": "conic-gradient(from 0deg at 50% 50%, #ef4444, #f59e0b, #fde047, #84cc16, #06b6d4, #6366f1, #a855f7, #ef4444)"},
@@ -3245,10 +3242,10 @@ BANNER_ANIM_CSS = """
 .bnr-anim-deepsea   { background-size: 200% 200% !important; animation: bnr-pan-diag 22s ease-in-out infinite, bnr-glow-pulse 6s ease-in-out infinite; }
 .bnr-anim-starfield { background-size: 200% 200% !important; animation: bnr-pan-vert 60s linear infinite, bnr-twinkle 3.5s ease-in-out infinite; }
 .bnr-anim-neongrid  { background-size: 28px 28px, 28px 28px, 200% 200%, 100% 100% !important; animation: bnr-grid-scan 4s linear infinite, bnr-glow-pulse 5s ease-in-out infinite; }
-.bnr-anim-circuit   { background-size: 32px 32px, 32px 32px, 200% 200%, 100% 100% !important; animation: bnr-circuit-scan 6s linear infinite, bnr-glow-pulse 5s ease-in-out infinite; }
+.bnr-anim-circuit   { background-size: 100% 36px, 18px 100%, 32px 32px, 32px 32px, 200% 200%, 100% 100% !important; animation: bnr-circuit-rain 3s linear infinite, bnr-circuit-scan 6s linear infinite, bnr-glow-pulse 5s ease-in-out infinite; }
 .bnr-anim-void      { background-size: 200% 200%, 200% 200%, 200% 200%, 200% 200%, 100% 100% !important; animation: bnr-void-pulse 8s ease-in-out infinite; }
 .bnr-anim-cosmic    { background-size: 200% 200% !important; animation: bnr-pan-diag 30s ease-in-out infinite, bnr-twinkle 4s ease-in-out infinite; }
-.bnr-anim-andromeda { background-size: 220% 220%; transform-origin: center; animation: bnr-andromeda-drift 40s ease-in-out infinite; }
+.bnr-anim-andromeda { background-size: 220% 220%, 220% 220%, 220% 220%, 220% 220%, 220% 220%, 220% 220%, 220% 220%; transform-origin: center; animation: bnr-andromeda-drift 28s ease-in-out infinite, bnr-twinkle 5s ease-in-out infinite; }
 
 /* Matrix rain — vertical glyph cascade */
 @keyframes bnr-matrix-rain {
@@ -3259,6 +3256,63 @@ BANNER_ANIM_CSS = """
   background-size: 100% 56px, 12px 100%, 100% 18px, 100% 100% !important;
   animation: bnr-matrix-rain 2.6s linear infinite;
   filter: drop-shadow(0 0 6px rgba(74,222,128,.45));
+}
+
+/* Circuit Board — 1s and 0s falling like rain on top of the grid */
+@keyframes bnr-circuit-rain {
+  0%   { background-position: 0 0,    0 0, 0 0, 0 0, 0 0, 0 0; }
+  100% { background-position: 0 360px,0 0, 28px 28px, 28px 28px, 50% 50%, 0 0; }
+}
+
+/* Aurora Borealis — luminous green/cyan ribbons swimming */
+@keyframes bnr-aurora-borealis {
+  0%,100% { background-position: 30% 0%, 70% 100%, 50% 50%, 0 0; filter: hue-rotate(0deg) brightness(1); }
+  50%     { background-position: 60% 10%, 40% 90%, 55% 45%, 0 0; filter: hue-rotate(25deg) brightness(1.2); }
+}
+.bnr-anim-aurora-borealis {
+  background-size: 220% 220%, 220% 220%, 220% 220%, 100% 100% !important;
+  animation: bnr-aurora-borealis 14s ease-in-out infinite;
+}
+
+/* Deep Abyss — slow swirling pressure with breathing glow */
+@keyframes bnr-abyss {
+  0%,100% { background-position: 20% 30%, 80% 70%, 50% 50%; filter: brightness(.85); }
+  50%     { background-position: 30% 35%, 70% 65%, 55% 50%; filter: brightness(1.15); }
+}
+.bnr-anim-abyss {
+  background-size: 180% 180%, 180% 180%, 180% 180% !important;
+  animation: bnr-abyss 11s ease-in-out infinite;
+}
+
+/* Cherry Blossom — petals drifting diagonally */
+@keyframes bnr-cherry {
+  0%   { background-position: 20% 30%, 80% 60%, 0 -40px, 0 -40px, 0 -40px, 0 -40px, 0 0; }
+  100% { background-position: 25% 32%, 75% 58%, 40px 320px, -40px 320px, 30px 320px, -30px 320px, 0 0; }
+}
+.bnr-anim-cherry {
+  background-size: 100% 100%, 100% 100%, 200px 220px, 220px 240px, 180px 200px, 240px 260px, 100% 100% !important;
+  animation: bnr-cherry 9s linear infinite;
+}
+
+/* Velvet (PLUS) — soft purple/pink blooms breathing */
+@keyframes bnr-velvet {
+  0%,100% { background-position: 30% 30%, 70% 70%, 0 0; filter: saturate(1) brightness(1); }
+  50%     { background-position: 35% 28%, 65% 72%, 0 0; filter: saturate(1.25) brightness(1.15); }
+}
+.bnr-anim-velvet {
+  background-size: 200% 200%, 200% 200%, 100% 100% !important;
+  animation: bnr-velvet 10s ease-in-out infinite;
+}
+
+/* Polar Aurora (PLUS) — northern lights drifting both ways */
+@keyframes bnr-polar {
+  0%,100% { background-position: 50% 0%,  50% 100%, 30% 50%, 0 0; filter: hue-rotate(0deg)   brightness(1); }
+  33%     { background-position: 35% 5%,  65% 95%,  40% 45%, 0 0; filter: hue-rotate(-15deg) brightness(1.18); }
+  66%     { background-position: 65% 8%,  35% 92%,  20% 55%, 0 0; filter: hue-rotate(20deg)  brightness(1.1); }
+}
+.bnr-anim-polar {
+  background-size: 240% 240%, 240% 240%, 200% 200%, 100% 100% !important;
+  animation: bnr-polar 16s ease-in-out infinite;
 }
 """
 
@@ -3275,6 +3329,9 @@ FLAGS = {
     "neon":       {"name": "Neon Pulse",         "price_coins": 150,  "xp_required": 600,
                    "css": "linear-gradient(90deg, #ec4899 0%, #8b5cf6 50%, #06b6d4 100%)"},
     "racing":     {"name": "Racing Stripes",     "price_coins": 200,  "xp_required": 1000,
+                   "css": "repeating-linear-gradient(45deg, #ef4444 0 14px, #fafafa 14px 28px)"},
+    "racing_anim":{"name": "Racing Stripes (Anim)", "price_coins": 350,  "xp_required": 1500,
+                   "animated": True, "anim_class": "flag-anim-racing",
                    "css": "repeating-linear-gradient(45deg, #ef4444 0 14px, #fafafa 14px 28px)"},
     "verdant":    {"name": "Verdant Banner",     "price_coins": 200,  "xp_required": 1000,
                    "css": "linear-gradient(90deg, #064e3b 0%, #10b981 60%, #a7f3d0 100%)"},
@@ -3301,6 +3358,9 @@ FLAGS = {
                    "css": "linear-gradient(90deg, #581c87 0%, #a855f7 60%, #e9d5ff 100%)"},
     "checker":    {"name": "Checker Flag",       "price_coins": 250,  "xp_required": 1500,
                    "css": "repeating-conic-gradient(#0f172a 0% 25%, #f8fafc 25% 50%) 0 0 / 24px 24px"},
+    "checker_anim":{"name": "Checker Flag (Anim)","price_coins": 400, "xp_required": 1800,
+                   "animated": True, "anim_class": "flag-anim-checker",
+                   "css": "repeating-conic-gradient(#0f172a 0% 25%, #f8fafc 25% 50%) 0 0 / 24px 24px"},
     "stripes_3":  {"name": "Tricolor",           "price_coins": 180,  "xp_required": 800,
                    "css": "linear-gradient(90deg, #ef4444 0% 33%, #fafafa 33% 66%, #2563eb 66% 100%)"},
     "stripes_5":  {"name": "Pentaband",          "price_coins": 220,  "xp_required": 1200,
@@ -3313,9 +3373,13 @@ FLAGS = {
                    "css": "linear-gradient(90deg, #18181b 0%, #52525b 50%, #d4d4d8 100%)"},
     "candy_pop":  {"name": "Candy Pop",          "price_coins": 150,  "xp_required": 500,
                    "css": "linear-gradient(90deg, #f472b6 0%, #fcd34d 50%, #60a5fa 100%)"},
+    "candy_anim": {"name": "Candy Pop (Anim)",   "price_coins": 280,  "xp_required": 900,
+                   "animated": True, "anim_class": "flag-anim-candy",
+                   "css": "linear-gradient(90deg, #f472b6, #fcd34d, #60a5fa, #a78bfa, #34d399, #f472b6)"},
     "matrix_bar": {"name": "Matrix Trail",       "price_coins": 320,  "xp_required": 2000,
-                   "css": "linear-gradient(90deg, #022c22 0%, #16a34a 50%, #86efac 100%)"},
-    "matrix_rain":{"name": "Matrix Rain",        "price_coins": 500,  "xp_required": 3000,
+                   "animated": True, "anim_class": "flag-anim-matrix-h",
+                   "css": "repeating-linear-gradient(90deg, rgba(134,239,172,.95) 0 5px, rgba(34,197,94,.55) 5px 12px, rgba(16,185,129,.22) 12px 22px, transparent 22px 48px), repeating-linear-gradient(180deg, transparent 0 9px, rgba(0,0,0,.5) 9px 11px), linear-gradient(90deg, #022c22 0%, #16a34a 50%, #86efac 100%)"},
+    "matrix_rain":{"name": "Matrix Rain (PLUS)", "price_coins": 800,  "xp_required": 0, "plus_only": True,
                    "animated": True, "anim_class": "flag-anim-matrix",
                    "css": "repeating-linear-gradient(180deg, rgba(134,239,172,.95) 0 5px, rgba(34,197,94,.55) 5px 12px, rgba(16,185,129,.22) 12px 22px, transparent 22px 48px), repeating-linear-gradient(90deg, transparent 0 9px, rgba(0,0,0,.6) 9px 11px), linear-gradient(180deg, #022c22 0%, #000 100%)"},
     "bloodmoon":  {"name": "Blood Moon",         "price_coins": 450,  "xp_required": 3500,
@@ -3414,6 +3478,37 @@ FLAG_ANIM_CSS = """
   animation: flg-matrix-rain 2.4s linear infinite;
   filter: drop-shadow(0 0 4px rgba(74,222,128,.5));
 }
+
+/* Matrix Trail — same idea but rolling to the RIGHT */
+@keyframes flg-matrix-rain-h {
+  0%   { background-position: 0 0,        0 0, 0 0; }
+  100% { background-position: 480px 0,    0 0, 0 0; }
+}
+.flag-anim-matrix-h {
+  background-size: 48px 100%, 100% 11px, 100% 100% !important;
+  animation: flg-matrix-rain-h 2.6s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(74,222,128,.5));
+}
+
+/* Racing Stripes (Anim) — diagonal stripes flying right */
+@keyframes flg-racing { 0% { background-position: 0 0; } 100% { background-position: 56px 56px; } }
+.flag-anim-racing {
+  background-size: 28px 28px !important;
+  animation: flg-racing .7s linear infinite;
+}
+
+/* Checker Flag (Anim) — checker rolling sideways */
+@keyframes flg-checker { 0% { background-position: 0 0; } 100% { background-position: 48px 0; } }
+.flag-anim-checker {
+  animation: flg-checker .9s linear infinite;
+}
+
+/* Candy Pop (Anim) — pastel rainbow shimmer */
+@keyframes flg-candy { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+.flag-anim-candy {
+  background-size: 300% 100% !important;
+  animation: flg-candy 6s linear infinite;
+}
 """
 
 
@@ -3483,12 +3578,6 @@ BUNDLES = {
         "banner": "ocean",
         "flag": "tide",
     },
-    "magma": {
-        "name": "Magma Pack",
-        "desc": "Magma Core banner + Blood Moon flag — lava-hot.",
-        "banner": "magma",
-        "flag": "bloodmoon",
-    },
     "space": {
         "name": "Space Pack",
         "desc": "Galaxy banner + Galactic Trail flag — interstellar drip.",
@@ -3543,6 +3632,17 @@ def bundle_price(bundle_key: str) -> int:
 STREAK_FREEZE_PRICE = 10
 STREAK_FREEZE_BUNDLE_QTY = 3
 STREAK_FREEZE_BUNDLE_PRICE = 25  # vs. 30 if bought one-by-one (saves 5)
+
+# ── Coin microtransactions ──────────────────────────────────────────
+# Real-money packs that credit virtual coins. Prices are in USD; the actual
+# payment processor (PayPal one-time orders) is wired in routes.py.
+COIN_PACKS = {
+    "small":  {"name": "Pocket Pack",    "coins": 250,   "bonus": 0,    "price_usd": 0.99,  "tag": ""},
+    "medium": {"name": "Stash Pack",     "coins": 800,   "bonus": 50,   "price_usd": 2.99,  "tag": "+6%"},
+    "large":  {"name": "Vault Pack",     "coins": 2000,  "bonus": 300,  "price_usd": 6.99,  "tag": "+15%"},
+    "mega":   {"name": "Treasury Pack",  "coins": 5500,  "bonus": 1000, "price_usd": 14.99, "tag": "+18% \u2022 BEST VALUE"},
+    "ultra":  {"name": "Whale Pack",     "coins": 15000, "bonus": 4000, "price_usd": 34.99, "tag": "+27%"},
+}
 
 # Timed boosts. Each entry: (label, multiplier, hours, price_coins)
 BOOSTS = {
@@ -3772,6 +3872,21 @@ def add_coins(client_id: int, amount: int, _reason: str = "") -> int:
         _exec(db, "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
               (int(amount), client_id))
         return _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
+
+
+def credit_coin_pack(client_id: int, pack_key: str) -> dict:
+    """Credit coins for a real-money pack purchase. Bypasses 2x-coin boost
+    (real-money purchases shouldn't double-stack with timed boosts)."""
+    cfg = COIN_PACKS.get(pack_key)
+    if not cfg:
+        return {"ok": False, "error": "Unknown coin pack."}
+    total = int(cfg["coins"]) + int(cfg.get("bonus") or 0)
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        _exec(db, "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
+              (total, client_id))
+        new_balance = _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
+    return {"ok": True, "credited": total, "coins": new_balance, "pack": pack_key}
 
 
 def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dict:

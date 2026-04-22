@@ -17501,6 +17501,27 @@ No markdown, no code fences. ONLY JSON.
             )
         bundles_html = "".join(bundle_cards) or '<div style="color:var(--text-muted);font-size:13px;">No bundles available right now.</div>'
 
+        # ── Coin packs (real-money microtransactions) ─────────────────
+        coin_pack_cards = []
+        for pkey, pcfg in sdb.COIN_PACKS.items():
+            total = int(pcfg["coins"]) + int(pcfg.get("bonus") or 0)
+            bonus_html = (f'<div style="font-size:11px;color:#22c55e;font-weight:700;margin-top:4px;">+{pcfg["bonus"]} bonus \U0001FA99</div>'
+                          if pcfg.get("bonus") else '')
+            tag_html = (f'<div style="position:absolute;top:8px;right:8px;background:linear-gradient(90deg,#f59e0b,#ec4899);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;letter-spacing:.04em;">{pcfg["tag"]}</div>'
+                        if pcfg.get("tag") else '')
+            coin_pack_cards.append(
+                f'<div style="position:relative;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center;">'
+                f'  {tag_html}'
+                f'  <div style="font-size:38px;line-height:1;">\U0001FA99</div>'
+                f'  <div style="font-size:13px;color:var(--text-muted);margin-top:6px;">{pcfg["name"]}</div>'
+                f'  <div style="font-size:24px;font-weight:800;margin-top:6px;">{total:,} coins</div>'
+                f'  {bonus_html}'
+                f'  <div style="font-size:18px;font-weight:700;margin-top:10px;">${pcfg["price_usd"]:.2f}</div>'
+                f'  <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px;" onclick="buyCoinPack(\'{pkey}\')">Buy now</button>'
+                f'</div>'
+            )
+        coin_packs_html = "".join(coin_pack_cards)
+
         return _s_render("Shop", f"""
         <style>{sdb.BANNER_ANIM_CSS}
 {sdb.FLAG_ANIM_CSS}</style>
@@ -17516,6 +17537,14 @@ No markdown, no code fences. ONLY JSON.
           <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \U0001FA99</div><div class="label">Coins</div></div>
           <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Streak Freezes</div></div>
           <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">Total XP</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h2>\U0001FA99 Buy Coins</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Top up your wallet with real-money coin packs. Bonus coins on larger packs.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
+            {coin_packs_html}
+          </div>
         </div>
 
         <div class="card">
@@ -17566,6 +17595,15 @@ No markdown, no code fences. ONLY JSON.
         async function buyFreeze() {{
           const r = await fetch('/api/student/wallet/buy-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          location.reload();
+        }}
+        async function buyCoinPack(packKey) {{
+          // In production this should open a PayPal/Stripe checkout and only credit
+          // after capture. For now we credit immediately as a sandbox flow.
+          if (!confirm('Buy this coin pack? Coins are credited instantly (sandbox mode).')) return;
+          const r = await fetch('/api/student/wallet/buy-coin-pack', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{pack_key: packKey}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not purchase.'); return; }}
+          alert('+' + r.credited + ' coins credited!');
           location.reload();
         }}
         async function buyFreezeBundle() {{
@@ -17986,6 +18024,24 @@ No markdown, no code fences. ONLY JSON.
             return jsonify(ok=False, error="Login required"), 401
         data = request.get_json(silent=True) or {}
         return jsonify(sdb.buy_banner(_cid(), str(data.get("banner_key") or "")))
+
+
+    @app.route("/api/student/wallet/buy-coin-pack", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_buy_coin_pack_api():
+        """Microtransaction: credit a coin pack to the wallet.
+        Frontend calls this after a successful PayPal capture; the pack key is
+        validated server-side. In dev / when no payment processor is wired the
+        endpoint can be triggered directly which immediately credits the coins
+        (treat as a sandbox).
+        """
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        pack_key = str(data.get("pack_key") or "")
+        if pack_key not in sdb.COIN_PACKS:
+            return jsonify(ok=False, error="Unknown coin pack"), 400
+        return jsonify(sdb.credit_coin_pack(_cid(), pack_key))
 
 
     @app.route("/api/student/wallet/set-banner", methods=["POST"])
