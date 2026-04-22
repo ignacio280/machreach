@@ -17342,68 +17342,68 @@ No markdown, no code fences. ONLY JSON.
         boosts_html = "".join(boost_cards)
 
         # ── Subscription tier cards ────────────────────────
+        subscription_section = ""
         try:
             from student import subscription as _sub
             current_tier = _sub.get_tier(cid)
             beta_active = _sub.BETA_ACTIVE
             plans = _sub.PLANS
-        except Exception:
-            current_tier = "free"
-            beta_active = True
-            plans = {}
-        tier_order = ["free", "plus", "ultimate"]
-        tier_colors = {
-            "free":     ("#64748b", "#f1f5f9"),
-            "plus":     ("#7c3aed", "#ede9fe"),
-            "ultimate": ("#d97706", "#fef3c7"),
-        }
-        sub_cards = []
-        for key in tier_order:
-            cfg = plans.get(key)
-            if not cfg:
-                continue
-            border, bg = tier_colors.get(key, ("#64748b", "#f1f5f9"))
-            is_current = (key == current_tier)
-            features_html = "".join(
-                f'<li style="margin:6px 0;font-size:13px;color:#334155;">{f}</li>' for f in cfg.get("features", [])
-            )
-            price = cfg.get("price_usd_month", 0)
-            price_html = "Free" if price == 0 else f"${price:.2f}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mo</span>"
-            label_name = cfg.get("name", key.title())
-            if is_current:
-                btn = '<button class="btn btn-sm" disabled style="width:100%;background:#10b981;color:#fff;border:none;">Current plan</button>'
-            elif key == "free":
-                btn = f'<button class="btn btn-sm btn-outline" style="width:100%;" onclick="changeTier(\'{key}\')">Downgrade</button>'
-            else:
-                btn = f'<button class="btn btn-sm btn-primary" style="width:100%;" onclick="changeTier(\'{key}\')">Upgrade to {label_name}</button>'
-            badge = '<div style="position:absolute;top:10px;right:10px;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;">ACTIVE</div>' if is_current else ""
-            sub_cards.append(
-                f'<div style="position:relative;background:var(--card);border:2px solid {border};border-radius:16px;padding:18px;display:flex;flex-direction:column;">'
-                f'{badge}'
-                f'<div style="font-size:13px;font-weight:700;color:{border};text-transform:uppercase;letter-spacing:.5px;">{label_name}</div>'
-                f'<div style="font-size:28px;font-weight:800;margin:6px 0 4px;">{price_html}</div>'
-                f'<div style="color:var(--text-muted);font-size:12px;margin-bottom:10px;">{cfg.get("blurb","")}</div>'
-                f'<ul style="list-style:none;padding:0;margin:0 0 14px;flex:1;">{features_html}</ul>'
-                f'{btn}'
+            tier_order = ["free", "plus", "ultimate"]
+            tier_colors = {
+                "free":     ("#64748b", "#f1f5f9"),
+                "plus":     ("#7c3aed", "#ede9fe"),
+                "ultimate": ("#d97706", "#fef3c7"),
+            }
+            sub_cards = []
+            for key in tier_order:
+                cfg = plans.get(key)
+                if not cfg:
+                    continue
+                border, _bg = tier_colors.get(key, ("#64748b", "#f1f5f9"))
+                is_current = (key == current_tier)
+                features_html = "".join(
+                    f'<li style="margin:6px 0;font-size:13px;color:#334155;">{_esc(str(f))}</li>'
+                    for f in cfg.get("features", [])
+                )
+                price = cfg.get("price_usd_month", 0)
+                price_html = "Free" if not price else f"${price:.2f}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mo</span>"
+                label_name = cfg.get("name", key.title())
+                if is_current:
+                    btn = '<button class="btn btn-sm" disabled style="width:100%;background:#10b981;color:#fff;border:none;">Current plan</button>'
+                elif key == "free":
+                    btn = f'<button class="btn btn-sm btn-outline" style="width:100%;" onclick="changeTier(\'{key}\')">Downgrade</button>'
+                else:
+                    btn = f'<button class="btn btn-sm btn-primary" style="width:100%;" onclick="changeTier(\'{key}\')">Upgrade to {_esc(label_name)}</button>'
+                badge = '<div style="position:absolute;top:10px;right:10px;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;">ACTIVE</div>' if is_current else ""
+                sub_cards.append(
+                    f'<div style="position:relative;background:var(--card);border:2px solid {border};border-radius:16px;padding:18px;display:flex;flex-direction:column;">'
+                    f'{badge}'
+                    f'<div style="font-size:13px;font-weight:700;color:{border};text-transform:uppercase;letter-spacing:.5px;">{_esc(label_name)}</div>'
+                    f'<div style="font-size:28px;font-weight:800;margin:6px 0 4px;">{price_html}</div>'
+                    f'<div style="color:var(--text-muted);font-size:12px;margin-bottom:10px;">{_esc(cfg.get("blurb",""))}</div>'
+                    f'<ul style="list-style:none;padding:0;margin:0 0 14px;flex:1;">{features_html}</ul>'
+                    f'{btn}'
+                    '</div>'
+                )
+            subscriptions_html = "".join(sub_cards)
+            beta_banner = (
+                '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #60a5fa;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#1e3a8a;">'
+                '<b>\U0001F389 Beta in progress.</b> While we\'re in beta, every plan unlocks Ultimate features for free. '
+                'Free-tier limits (1 quiz/day &middot; 1 flashcard set/day &middot; 30 items max) start when beta ends.'
                 '</div>'
+                if beta_active else ""
             )
-        subscriptions_html = "".join(sub_cards)
-        beta_banner = (
-            '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #60a5fa;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#1e3a8a;">'
-            '<b>🎉 Beta in progress.</b> While we\'re in beta, every plan unlocks Ultimate features for free. '
-            'Free-tier limits (1 quiz/day · 1 flashcard set/day · 30 items max) start when beta ends.'
-            '</div>'
-            if beta_active else ""
-        )
-        subscription_section = f"""
-        <div class="card">
-          <div class="card-header"><h2>💎 Subscription</h2></div>
-          {beta_banner}
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
-            {subscriptions_html}
-          </div>
-        </div>
-        """
+            subscription_section = (
+                '<div class="card">'
+                '<div class="card-header"><h2>\U0001F48E Subscription</h2></div>'
+                + beta_banner +
+                '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">'
+                + subscriptions_html +
+                '</div></div>'
+            )
+        except Exception as _sub_err:
+            log.exception("Shop subscription section failed: %s", _sub_err)
+            subscription_section = ""
 
         return _s_render("Shop", f"""
         <h1 style="margin-bottom:6px;">\U0001f6d2 Shop</h1>
