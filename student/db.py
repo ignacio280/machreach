@@ -2977,9 +2977,6 @@ BOOSTS = {
     "xp_1h":   {"label": "2\u00d7 XP \u00b7 1 hour",   "kind": "xp",   "mult": 2.0, "hours": 1,   "price_coins": 20},
     "xp_24h":  {"label": "2\u00d7 XP \u00b7 24 hours", "kind": "xp",   "mult": 2.0, "hours": 24,  "price_coins": 80},
     "xp_7d":   {"label": "2\u00d7 XP \u00b7 7 days",   "kind": "xp",   "mult": 2.0, "hours": 168, "price_coins": 300},
-    "coin_1h": {"label": "2\u00d7 Coins \u00b7 1 hour",   "kind": "coin", "mult": 2.0, "hours": 1,   "price_coins": 15},
-    "coin_24h":{"label": "2\u00d7 Coins \u00b7 24 hours", "kind": "coin", "mult": 2.0, "hours": 24,  "price_coins": 60},
-    "coin_7d": {"label": "2\u00d7 Coins \u00b7 7 days",   "kind": "coin", "mult": 2.0, "hours": 168, "price_coins": 250},
 }
 
 def init_boosts_table() -> None:
