@@ -913,6 +913,16 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
             "league_color": lg["color"],
             "is_you": r["client_id"] == client_id,
         })
+    # Enrich with leaderboard flags (per-row CSS background).
+    try:
+        from . import db as _sdb
+        flags = _sdb.get_flags_for_clients([row["client_id"] for row in out])
+        for row in out:
+            css = flags.get(int(row["client_id"]))
+            if css:
+                row["flag_css"] = css
+    except Exception:
+        pass
     return out
 
 

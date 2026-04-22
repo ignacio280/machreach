@@ -2975,6 +2975,51 @@ BANNERS = {
     "gold":       {"name": "Gold Rush",          "price_coins": 200,  "xp_required": 1000,  "css": "linear-gradient(135deg,#facc15,#b45309)"},
     "galaxy":     {"name": "Galaxy",             "price_coins": 300,  "xp_required": 2500,  "css": "linear-gradient(135deg,#1e1b4b,#7c3aed,#ec4899)"},
     "champion":   {"name": "Champion (Elite)",   "price_coins": 500,  "xp_required": 5000,  "css": "linear-gradient(135deg,#f43f5e,#facc15,#10b981)"},
+    # ── Unique / generative banners (multi-stop conic + radial layers) ──
+    "aurora":     {"name": "Aurora Borealis",    "price_coins": 250,  "xp_required": 750,
+                   "css": "radial-gradient(ellipse 120% 80% at 30% 0%, rgba(34,197,94,.55), transparent 60%), radial-gradient(ellipse 120% 80% at 70% 100%, rgba(56,189,248,.55), transparent 60%), radial-gradient(ellipse 80% 100% at 50% 50%, rgba(168,85,247,.45), transparent 70%), #0a0f1f"},
+    "iridescent": {"name": "Iridescent Pearl",   "price_coins": 350,  "xp_required": 1500,
+                   "css": "conic-gradient(from 220deg at 50% 50%, #f0abfc, #67e8f9, #fde68a, #86efac, #c4b5fd, #f0abfc)"},
+    "magma":      {"name": "Magma Core",         "price_coins": 350,  "xp_required": 1500,
+                   "css": "radial-gradient(circle at 30% 80%, #fbbf24 0%, transparent 35%), radial-gradient(circle at 70% 30%, #ef4444 0%, transparent 40%), radial-gradient(circle at 50% 50%, #7c2d12 0%, #1c0a04 90%)"},
+    "matrix":     {"name": "Matrix Rain",        "price_coins": 400,  "xp_required": 2000,
+                   "css": "repeating-linear-gradient(180deg, rgba(16,185,129,.18) 0 2px, transparent 2px 14px), repeating-linear-gradient(180deg, rgba(16,185,129,.35) 0 1px, transparent 1px 28px), linear-gradient(180deg, #022c22, #000)"},
+    "blueprint":  {"name": "Blueprint Grid",     "price_coins": 250,  "xp_required": 750,
+                   "css": "repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, transparent 1px 24px), linear-gradient(135deg, #0c4a6e, #1e3a8a)"},
+    "hologram":   {"name": "Hologram",           "price_coins": 600,  "xp_required": 6000,
+                   "css": "conic-gradient(from 0deg at 50% 50%, rgba(236,72,153,.7), rgba(99,102,241,.7), rgba(34,211,238,.7), rgba(132,204,22,.7), rgba(236,72,153,.7)), repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 2px, transparent 2px 8px)"},
+    "abyss":      {"name": "Deep Abyss",         "price_coins": 450,  "xp_required": 3500,
+                   "css": "radial-gradient(circle at 20% 30%, #312e81 0%, transparent 45%), radial-gradient(circle at 80% 70%, #155e75 0%, transparent 45%), radial-gradient(circle at 50% 50%, #020617 60%, #000 100%)"},
+    "phoenix":    {"name": "Phoenix",            "price_coins": 750,  "xp_required": 8000,
+                   "css": "radial-gradient(circle at 50% 100%, #fde047 0%, #f97316 25%, #dc2626 55%, #1e1b4b 100%)"},
+}
+
+# Leaderboard flag catalog. Rendered as a horizontal CSS background on the
+# leaderboard row, mask-faded from full opacity on the LEFT to transparent on
+# the RIGHT. Same structure as banners (re-uses cfg["css"]).
+FLAGS = {
+    "none":       {"name": "No flag",            "price_coins": 0,    "xp_required": 0,
+                   "css": "transparent"},
+    "sunrise":    {"name": "Sunrise Streak",     "price_coins": 75,   "xp_required": 200,
+                   "css": "linear-gradient(90deg, #f97316 0%, #fde047 100%)"},
+    "tide":       {"name": "Tidal Pull",         "price_coins": 75,   "xp_required": 200,
+                   "css": "linear-gradient(90deg, #0ea5e9 0%, #6366f1 100%)"},
+    "neon":       {"name": "Neon Pulse",         "price_coins": 150,  "xp_required": 600,
+                   "css": "linear-gradient(90deg, #ec4899 0%, #8b5cf6 50%, #06b6d4 100%)"},
+    "racing":     {"name": "Racing Stripes",     "price_coins": 200,  "xp_required": 1000,
+                   "css": "repeating-linear-gradient(45deg, #ef4444 0 14px, #fafafa 14px 28px)"},
+    "verdant":    {"name": "Verdant Banner",     "price_coins": 200,  "xp_required": 1000,
+                   "css": "linear-gradient(90deg, #064e3b 0%, #10b981 60%, #a7f3d0 100%)"},
+    "imperial":   {"name": "Imperial Gold",      "price_coins": 350,  "xp_required": 2500,
+                   "css": "linear-gradient(90deg, #78350f 0%, #f59e0b 50%, #fde68a 100%)"},
+    "void":       {"name": "Void Walker",        "price_coins": 350,  "xp_required": 2500,
+                   "css": "linear-gradient(90deg, #000 0%, #6d28d9 60%, #c084fc 100%)"},
+    "diamond":    {"name": "Diamond Tier",       "price_coins": 600,  "xp_required": 5000,
+                   "css": "linear-gradient(90deg, #1e3a8a 0%, #38bdf8 40%, #e0f2fe 100%)"},
+    "crimson":    {"name": "Crimson Crown",      "price_coins": 600,  "xp_required": 5000,
+                   "css": "linear-gradient(90deg, #450a0a 0%, #dc2626 50%, #fecaca 100%)"},
+    "rainbow":    {"name": "Rainbow Arc",        "price_coins": 800,  "xp_required": 10000,
+                   "css": "linear-gradient(90deg, #ef4444, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #a855f7)"},
 }
 
 STREAK_FREEZE_PRICE = 10
@@ -3125,9 +3170,47 @@ def _ensure_wallet(db, client_id: int) -> None:
         )
 
 
+def _grant_weekly_free_freeze(db, client_id: int) -> None:
+    """Once every 7 days, grant the user 1 free streak freeze (capped at 3 owned).
+    Tracked via clients.mail_preferences JSON key `last_free_freeze_grant`.
+    """
+    try:
+        from datetime import datetime, timedelta
+        row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (client_id,))
+        raw = (row or {}).get("mail_preferences") or ""
+        try:
+            prefs = _json.loads(raw) if raw else {}
+            if not isinstance(prefs, dict):
+                prefs = {}
+        except Exception:
+            prefs = {}
+        last = prefs.get("last_free_freeze_grant")
+        now = datetime.utcnow()
+        due = True
+        if last:
+            try:
+                due = (now - datetime.fromisoformat(last)) >= timedelta(days=7)
+            except Exception:
+                due = True
+        if not due:
+            return
+        # Grant if under cap
+        cur = _fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
+        if int(cur) < 3:
+            _exec(db, "UPDATE student_wallet SET streak_freezes = streak_freezes + 1 WHERE client_id = %s",
+                  (client_id,))
+        # Always update the timestamp so the cycle advances even if at cap.
+        prefs["last_free_freeze_grant"] = now.isoformat()
+        _exec(db, "UPDATE clients SET mail_preferences = %s WHERE id = %s",
+              (_json.dumps(prefs), client_id))
+    except Exception as e:
+        log.exception("weekly free freeze grant failed: %s", e)
+
+
 def get_wallet(client_id: int) -> dict:
     with get_db() as db:
         _ensure_wallet(db, client_id)
+        _grant_weekly_free_freeze(db, client_id)
         row = _fetchone(db, "SELECT * FROM student_wallet WHERE client_id = %s", (client_id,))
     try:
         unlocked = _json.loads(row.get("unlocked_banners") or '["default"]')
@@ -3224,6 +3307,106 @@ def set_selected_banner(client_id: int, banner_key: str) -> dict:
         _exec(db, "UPDATE student_wallet SET selected_banner = %s WHERE client_id = %s",
               (banner_key, client_id))
     return {"ok": True, "selected_banner": banner_key}
+
+
+# ── Leaderboard flags ─────────────────────────────────────────────
+# Flags are stored inside clients.mail_preferences JSON to avoid a schema
+# migration. Keys: "selected_flag" (str), "unlocked_flags" (list).
+
+def _load_flag_prefs(db, client_id: int) -> dict:
+    row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (client_id,))
+    raw = (row or {}).get("mail_preferences") or ""
+    try:
+        prefs = _json.loads(raw) if raw else {}
+        if not isinstance(prefs, dict):
+            prefs = {}
+    except Exception:
+        prefs = {}
+    return prefs
+
+
+def _save_flag_prefs(db, client_id: int, prefs: dict) -> None:
+    _exec(db, "UPDATE clients SET mail_preferences = %s WHERE id = %s",
+          (_json.dumps(prefs), client_id))
+
+
+def get_flag_state(client_id: int) -> dict:
+    with get_db() as db:
+        prefs = _load_flag_prefs(db, client_id)
+    unlocked = prefs.get("unlocked_flags") or ["none"]
+    if not isinstance(unlocked, list):
+        unlocked = ["none"]
+    if "none" not in unlocked:
+        unlocked = ["none"] + unlocked
+    sel = prefs.get("selected_flag") or "none"
+    if sel not in FLAGS:
+        sel = "none"
+    return {"selected_flag": sel, "unlocked_flags": unlocked}
+
+
+def get_flags_for_clients(client_ids: list[int]) -> dict[int, str]:
+    """Return {client_id: flag_css_string} for each client in the list.
+    Used by the leaderboard to render flags behind each row."""
+    if not client_ids:
+        return {}
+    out: dict[int, str] = {}
+    placeholders = ",".join(["%s"] * len(client_ids))
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            f"SELECT id, mail_preferences FROM clients WHERE id IN ({placeholders})",
+            tuple(client_ids),
+        )
+    for r in rows:
+        try:
+            raw = r.get("mail_preferences") or ""
+            prefs = _json.loads(raw) if raw else {}
+            sel = (prefs.get("selected_flag") or "none") if isinstance(prefs, dict) else "none"
+        except Exception:
+            sel = "none"
+        cfg = FLAGS.get(sel) or FLAGS["none"]
+        if sel != "none":
+            out[int(r["id"])] = cfg["css"]
+    return out
+
+
+def buy_flag(client_id: int, flag_key: str) -> dict:
+    cfg = FLAGS.get(flag_key)
+    if not cfg:
+        return {"ok": False, "error": "Unknown flag."}
+    if flag_key == "none":
+        return {"ok": False, "error": "Already owned."}
+    total_xp = get_total_xp(client_id)
+    if total_xp < cfg["xp_required"]:
+        return {"ok": False, "error": f"Need {cfg['xp_required']} XP to unlock this flag."}
+    state = get_flag_state(client_id)
+    if flag_key in state["unlocked_flags"]:
+        return {"ok": False, "error": "Already owned."}
+    wallet = get_wallet(client_id)
+    if wallet["coins"] < cfg["price_coins"]:
+        return {"ok": False, "error": "Not enough coins."}
+    new_unlocked = list(state["unlocked_flags"]) + [flag_key]
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        _exec(db, "UPDATE student_wallet SET coins = coins - %s WHERE client_id = %s",
+              (cfg["price_coins"], client_id))
+        prefs = _load_flag_prefs(db, client_id)
+        prefs["unlocked_flags"] = new_unlocked
+        _save_flag_prefs(db, client_id, prefs)
+    return {"ok": True, "coins": wallet["coins"] - cfg["price_coins"], "unlocked_flags": new_unlocked}
+
+
+def set_selected_flag(client_id: int, flag_key: str) -> dict:
+    if flag_key not in FLAGS:
+        return {"ok": False, "error": "Unknown flag."}
+    state = get_flag_state(client_id)
+    if flag_key not in state["unlocked_flags"] and flag_key != "none":
+        return {"ok": False, "error": "Flag not unlocked."}
+    with get_db() as db:
+        prefs = _load_flag_prefs(db, client_id)
+        prefs["selected_flag"] = flag_key
+        _save_flag_prefs(db, client_id, prefs)
+    return {"ok": True, "selected_flag": flag_key}
 
 
 def use_streak_freeze(client_id: int) -> dict:

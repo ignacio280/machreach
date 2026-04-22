@@ -15156,8 +15156,15 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-row {
     display:grid; grid-template-columns: 56px 1fr 110px 110px;
     align-items:center; padding: 14px 20px; border-top:1px solid var(--border);
-    transition: background .15s;
+    transition: background .15s; position: relative; overflow: hidden;
   }
+  /* Leaderboard flag (cosmetic). Sits behind the row content, fades L→R. */
+  #mr-lb-page .lb-flag {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);
+            mask-image: linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);
+  }
+  #mr-lb-page .lb-row > *:not(.lb-flag) { position: relative; z-index: 1; }
   #mr-lb-page a.lb-row { display:grid; }
   #mr-lb-page .lb-row:first-child { border-top:none;}
   #mr-lb-page .lb-row:hover { background: rgba(255,255,255,.02);}
@@ -15266,6 +15273,7 @@ No markdown, no code fences. ONLY JSON.
       }
       board.innerHTML = rows.map(r => `
         <a class="lb-row ${r.is_you?'me':''}" href="/student/profile/${r.client_id}" style="color:inherit;text-decoration:none;cursor:pointer;">
+          ${r.flag_css ? `<div class="lb-flag" style="background:${r.flag_css};"></div>` : ''}
           <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
@@ -17296,6 +17304,49 @@ No markdown, no code fences. ONLY JSON.
                 f'<div style="margin-top:10px;">{btn}</div></div></div>'
             )
         banners_html = "".join(banner_cards)
+
+        # Build leaderboard flag cards HTML
+        flag_state = sdb.get_flag_state(cid)
+        flag_cards = []
+        for key, cfg in sdb.FLAGS.items():
+            if key == "none":
+                continue
+            owned = key in flag_state["unlocked_flags"]
+            xp_ok = total_xp >= cfg["xp_required"]
+            selected = (key == flag_state["selected_flag"])
+            if owned:
+                if selected:
+                    tag = '<span style="color:#7c3aed;font-weight:700;">Equipped</span>'
+                    btn = '<button class="btn btn-sm btn-outline" disabled>In use</button>'
+                else:
+                    tag = '<span style="color:#10b981;font-weight:700;">Owned</span>'
+                    btn = f'<button class="btn btn-sm btn-primary" onclick="equipFlag(\'{key}\')">Equip</button>'
+            elif not xp_ok:
+                tag = f'<span style="color:#94a3b8;">Reach {cfg["xp_required"]} XP to unlock</span>'
+                btn = ''
+            elif wallet["coins"] < cfg["price_coins"]:
+                tag = f'<span style="color:#ef4444;">Need {cfg["price_coins"]} coins</span>'
+                btn = f'<button class="btn btn-sm btn-outline" disabled>Buy ({cfg["price_coins"]} \U0001FA99)</button>'
+            else:
+                tag = f'<span style="color:#94a3b8;">{cfg["xp_required"]} XP unlocked</span>'
+                btn = f'<button class="btn btn-sm btn-primary" onclick="buyFlag(\'{key}\')">Buy ({cfg["price_coins"]} \U0001FA99)</button>'
+            # Preview the L\u2192R fade exactly like the leaderboard renders it.
+            preview = (
+                '<div style="position:relative;height:48px;background:#0f172a;border-radius:8px;overflow:hidden;">'
+                f'<div style="position:absolute;inset:0;background:{cfg["css"]};'
+                '-webkit-mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);'
+                'mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);"></div>'
+                '<div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 12px;color:#fff;font-size:12px;font-weight:600;letter-spacing:.05em;">PREVIEW</div>'
+                '</div>'
+            )
+            flag_cards.append(
+                '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;padding:12px;">'
+                f'{preview}'
+                f'<div style="margin-top:10px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}</div>'
+                f'<div style="font-size:12px;margin-top:4px;">{tag}</div>'
+                f'<div style="margin-top:10px;">{btn}</div></div></div>'
+            )
+        flags_html = "".join(flag_cards)
         coins = wallet["coins"]
         freezes = wallet["streak_freezes"]
         freeze_btn_disabled = "disabled" if (coins < sdb.STREAK_FREEZE_PRICE or freezes >= 3) else ""
@@ -17448,6 +17499,14 @@ No markdown, no code fences. ONLY JSON.
           </div>
         </div>
 
+        <div class="card">
+          <div class="card-header"><h2>\U0001F3F4 Leaderboard Flags</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Show off on the leaderboard. Your flag streams behind your row, fading from left to right \u2014 visible to every other student.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
+            {flags_html}
+          </div>
+        </div>
+
         <script>
         async function buyFreeze() {{
           const r = await fetch('/api/student/wallet/buy-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
@@ -17467,6 +17526,16 @@ No markdown, no code fences. ONLY JSON.
         async function buyBanner(key) {{
           const r = await fetch('/api/student/wallet/buy-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key: key}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          location.reload();
+        }}
+        async function buyFlag(key) {{
+          const r = await fetch('/api/student/wallet/buy-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key: key}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          location.reload();
+        }}
+        async function equipFlag(key) {{
+          const r = await fetch('/api/student/wallet/set-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key: key}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not equip.'); return; }}
           location.reload();
         }}
         async function changeTier(tier) {{
@@ -17629,6 +17698,24 @@ No markdown, no code fences. ONLY JSON.
             return jsonify(ok=False, error="Login required"), 401
         data = request.get_json(silent=True) or {}
         return jsonify(sdb.set_selected_banner(_cid(), str(data.get("banner_key") or "")))
+
+
+    @app.route("/api/student/wallet/buy-flag", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_buy_flag_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        return jsonify(sdb.buy_flag(_cid(), str(data.get("flag_key") or "")))
+
+
+    @app.route("/api/student/wallet/set-flag", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_set_flag_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        return jsonify(sdb.set_selected_flag(_cid(), str(data.get("flag_key") or "")))
 
 
     @app.route("/api/student/wallet/use-freeze", methods=["POST"])

@@ -57,19 +57,12 @@ PLANS = {
     "plus": {
         "key": "plus",
         "name": "Plus",
-        # Cost basis: assume avg active user generates ~6 AI calls/day at ~$0.005
-        # each (gpt-4o-mini level) = $0.90/mo. Add infra (~$0.20) and a healthy
-        # margin → $4.99/mo. Annual gets ~33 % off.
         "price_usd_month": 4.99,
         "price_usd_year": 39.99,
         "blurb": "Unlimited AI study tools.",
         "features": [
             "Unlimited AI quizzes & flashcards",
             "Unlimited cards / questions per generation",
-            "Smarter AI tutor (deeper explanations on wrong answers)",
-            "Larger uploads (up to 100 MB / 500-page PDFs)",
-            "Ad-free experience",
-            "Auto streak protection (never lose your streak)",
             "300 bonus coins per month",
             "PLUS profile badge & exclusive cosmetics",
             "Detailed analytics & exportable reports",
@@ -78,18 +71,13 @@ PLANS = {
     "ultimate": {
         "key": "ultimate",
         "name": "Ultimate",
-        # Cost basis: Plus value + MailHub usage (outreach emails cost ~$0.0008
-        # per message via SendGrid + AI subject/body generation ~$0.01 each).
-        # Heavy users send ~200 mails/mo = ~$2.50 in API + infra. Bundle at $9.99.
         "price_usd_month": 9.99,
         "price_usd_year": 79.99,
-        "blurb": "Everything in Plus, plus MailHub for outreach.",
+        "blurb": "Everything in Plus, plus mail tools.",
         "features": [
             "Everything in Plus",
-            "MailHub access (cold email outreach)",
-            "AI-generated subject lines & email bodies",
-            "Reply detection, bounce tracking, scheduled send",
-            "Up to 500 outreach emails / month",
+            "Mail organization",
+            "Email AI reply",
             "Priority support",
         ],
     },
