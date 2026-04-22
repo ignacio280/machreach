@@ -916,11 +916,19 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
     # Enrich with leaderboard flags (per-row CSS background).
     try:
         from . import db as _sdb
-        flags = _sdb.get_flags_for_clients([row["client_id"] for row in out])
+        ids = [row["client_id"] for row in out]
+        flags = _sdb.get_flags_for_clients(ids)
         for row in out:
             css = flags.get(int(row["client_id"]))
             if css:
                 row["flag_css"] = css
+        # Equipped badges (next to user name)
+        badges = _sdb.get_equipped_badges_for_clients(ids)
+        for row in out:
+            b = badges.get(int(row["client_id"]))
+            if b:
+                row["badge_emoji"] = b["emoji"]
+                row["badge_name"] = b["name"]
     except Exception:
         pass
     return out

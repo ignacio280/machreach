@@ -3483,11 +3483,11 @@ def register_student_routes(app, csrf, limiter):
 
           </div>
 
-          <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span> &middot; Files: <span id="sync-files">0</span></div>
+          <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span></div>
 
           <div style="margin-top:10px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px;color:var(--text-muted);">
 
-            &#9749; Take a break &mdash; this may take a while depending on how many files your courses have.
+            &#128260; Syncing your Canvas course list &mdash; this is fast, no files are downloaded.
 
           </div>
 
@@ -3535,8 +3535,6 @@ def register_student_routes(app, csrf, limiter):
 
               document.getElementById('sync-courses').textContent = (d.courses_done||0) + '/' + (d.courses_total||0);
 
-              document.getElementById('sync-files').textContent = d.files_downloaded || 0;
-
               if (d.status === 'done') {{
 
                 clearInterval(iv);
@@ -3545,7 +3543,7 @@ def register_student_routes(app, csrf, limiter):
 
                 btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
 
-                var msg = 'Sync complete! ' + d.files_downloaded + ' syllabus files processed across ' + d.courses_done + ' courses.';
+                var msg = 'Sync complete! ' + (d.courses_done||0) + ' courses synced.';
 
                 if (d.warnings && d.warnings.length > 0) {{
 
@@ -3817,11 +3815,11 @@ def register_student_routes(app, csrf, limiter):
 
           </div>
 
-          <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span> &middot; Files: <span id="sync-files">0</span></div>
+          <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span></div>
 
           <div style="margin-top:10px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px;color:var(--text-muted);">
 
-            &#9749; Take a break &mdash; this may take a while depending on how many courses you have.
+            &#128260; Syncing your Canvas course list &mdash; this is fast, no files are downloaded.
 
           </div>
 
@@ -3866,8 +3864,6 @@ def register_student_routes(app, csrf, limiter):
                 document.getElementById('sync-msg').textContent = s.progress || 'Syncing...';
 
                 document.getElementById('sync-courses').textContent = (s.courses_done||0) + '/' + (s.courses_total||0);
-
-                document.getElementById('sync-files').textContent = s.files_downloaded || 0;
 
                 if (s.status === 'done') {{
 
@@ -15277,7 +15273,7 @@ No markdown, no code fences. ONLY JSON.
           <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
-            <div><div>${escapeHtml(r.name)}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
+            <div><div>${r.badge_emoji?`<span title="${escapeHtml(r.badge_name||'')}" style="margin-right:4px;">${r.badge_emoji}</span>`:''}${escapeHtml(r.name)}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
                  <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div></div>
           </div>
           <div class="lb-xp">${r.xp.toLocaleString()} XP</div>
@@ -17280,26 +17276,33 @@ No markdown, no code fences. ONLY JSON.
         wallet = sdb.get_wallet(cid)
         total_xp = sdb.get_total_xp(cid)
         # Build banner cards HTML
+        is_plus = sdb._is_plus_user(cid)
         banner_cards = []
         for key, cfg in sdb.BANNERS.items():
             owned = key in wallet["unlocked_banners"]
             xp_ok = total_xp >= cfg["xp_required"]
+            plus_only = bool(cfg.get("plus_only"))
+            plus_locked = plus_only and not is_plus
+            plus_pill = ' <span style="background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;vertical-align:middle;">PLUS</span>' if plus_only else ''
             if owned:
                 tag = '<span style="color:#10b981;font-weight:700;">Owned</span>'
                 btn = ''
+            elif plus_locked:
+                tag = '<span style="color:#a855f7;">Plus subscription required</span>'
+                btn = '<button class="btn btn-sm btn-outline" disabled>Plus only</button>'
             elif not xp_ok:
                 tag = f'<span style="color:#94a3b8;">Reach {cfg["xp_required"]} XP to unlock</span>'
                 btn = ''
             elif wallet["coins"] < cfg["price_coins"]:
                 tag = f'<span style="color:#ef4444;">Need {cfg["price_coins"]} coins</span>'
-                btn = f'<button class="btn btn-sm btn-outline" disabled>Buy ({cfg["price_coins"]} 🪙)</button>'
+                btn = f'<button class="btn btn-sm btn-outline" disabled>Buy ({cfg["price_coins"]} \U0001FA99)</button>'
             else:
                 tag = f'<span style="color:#94a3b8;">{cfg["xp_required"]} XP unlocked</span>'
-                btn = f'<button class="btn btn-sm btn-primary" onclick="buyBanner(\'{key}\')">Buy ({cfg["price_coins"]} 🪙)</button>'
+                btn = f'<button class="btn btn-sm btn-primary" onclick="buyBanner(\'{key}\')">Buy ({cfg["price_coins"]} \U0001FA99)</button>'
             banner_cards.append(
                 f'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
                 f'<div style="height:90px;background:{cfg["css"]};"></div>'
-                f'<div style="padding:14px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}</div>'
+                f'<div style="padding:14px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}{plus_pill}</div>'
                 f'<div style="font-size:12px;margin-top:4px;">{tag}</div>'
                 f'<div style="margin-top:10px;">{btn}</div></div></div>'
             )
@@ -17314,6 +17317,9 @@ No markdown, no code fences. ONLY JSON.
             owned = key in flag_state["unlocked_flags"]
             xp_ok = total_xp >= cfg["xp_required"]
             selected = (key == flag_state["selected_flag"])
+            plus_only = bool(cfg.get("plus_only"))
+            plus_locked = plus_only and not is_plus
+            plus_pill = ' <span style="background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;vertical-align:middle;">PLUS</span>' if plus_only else ''
             if owned:
                 if selected:
                     tag = '<span style="color:#7c3aed;font-weight:700;">Equipped</span>'
@@ -17321,6 +17327,9 @@ No markdown, no code fences. ONLY JSON.
                 else:
                     tag = '<span style="color:#10b981;font-weight:700;">Owned</span>'
                     btn = f'<button class="btn btn-sm btn-primary" onclick="equipFlag(\'{key}\')">Equip</button>'
+            elif plus_locked:
+                tag = '<span style="color:#a855f7;">Plus subscription required</span>'
+                btn = '<button class="btn btn-sm btn-outline" disabled>Plus only</button>'
             elif not xp_ok:
                 tag = f'<span style="color:#94a3b8;">Reach {cfg["xp_required"]} XP to unlock</span>'
                 btn = ''
@@ -17342,7 +17351,7 @@ No markdown, no code fences. ONLY JSON.
             flag_cards.append(
                 '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;padding:12px;">'
                 f'{preview}'
-                f'<div style="margin-top:10px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}</div>'
+                f'<div style="margin-top:10px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}{plus_pill}</div>'
                 f'<div style="font-size:12px;margin-top:4px;">{tag}</div>'
                 f'<div style="margin-top:10px;">{btn}</div></div></div>'
             )
@@ -17582,15 +17591,82 @@ No markdown, no code fences. ONLY JSON.
         except Exception:
             level_name, floor, ceil = "Beginner", 0, 100
         banner_css = sdb.BANNERS.get(wallet["selected_banner"], sdb.BANNERS["default"])["css"]
-        # Banner picker (only owned)
-        owned_options = []
+
+        # ── Banners (grid of unlocked) ──────────────────────────────
+        banner_cards = []
         for key in wallet["unlocked_banners"]:
             cfg = sdb.BANNERS.get(key)
             if not cfg:
                 continue
-            sel = " selected" if key == wallet["selected_banner"] else ""
-            owned_options.append(f'<option value="{key}"{sel}>{cfg["name"]}</option>')
-        owned_html = "".join(owned_options)
+            is_eq = key == wallet["selected_banner"]
+            badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
+            border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
+            banner_cards.append(
+                f'<div class="profile-cosm-card" data-key="{key}" data-css="{cfg["css"]}" '
+                f'onclick="equipBanner(\'{key}\')" '
+                f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);">'
+                f'  <div style="height:60px;background:{cfg["css"]};"></div>'
+                f'  <div style="padding:6px 10px;font-size:12px;color:var(--text);">{cfg["name"]}</div>'
+                f'  {badge}'
+                f'</div>'
+            )
+        banners_grid = "".join(banner_cards) or '<div style="color:var(--text-muted);font-size:13px;">No banners unlocked yet — visit the Shop.</div>'
+
+        # ── Flags (grid of unlocked) ────────────────────────────────
+        flag_state = sdb.get_flag_state(cid)
+        flag_cards = []
+        for key in flag_state["unlocked_flags"]:
+            cfg = sdb.FLAGS.get(key)
+            if not cfg:
+                continue
+            is_eq = key == flag_state["selected_flag"]
+            badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
+            border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
+            preview = ('<div style="height:30px;background:transparent;"></div>' if key == "none"
+                       else f'<div style="height:30px;background:{cfg["css"]};-webkit-mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%);mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%);"></div>')
+            flag_cards.append(
+                f'<div class="profile-cosm-card" onclick="equipFlag(\'{key}\')" '
+                f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);">'
+                f'  {preview}'
+                f'  <div style="padding:6px 10px;font-size:12px;color:var(--text);">{cfg["name"]}</div>'
+                f'  {badge}'
+                f'</div>'
+            )
+        flags_grid = "".join(flag_cards)
+
+        # ── Earned badges (grid; one equipped at a time on leaderboard) ──
+        earned = sdb.get_badges(cid)
+        equipped_badge_key = sdb.get_equipped_badge(cid)
+        badge_cards = []
+        # "None" tile to clear
+        none_eq = (not equipped_badge_key)
+        none_border = "border:2px solid #10b981;" if none_eq else "border:1px solid var(--border);"
+        none_badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if none_eq else ''
+        badge_cards.append(
+            f'<div class="profile-cosm-card" onclick="equipBadge(\'\')" '
+            f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{none_border}background:var(--card);padding:14px;text-align:center;">'
+            f'  <div style="font-size:32px;opacity:.4;">🚫</div>'
+            f'  <div style="font-size:12px;color:var(--text-muted);">None</div>'
+            f'  {none_badge}'
+            f'</div>'
+        )
+        for b in earned:
+            key = b["badge_key"]
+            emoji = b.get("emoji", "🏅")
+            name = (b.get("name") or key).replace("'", "\\'").replace('"', "&quot;")
+            is_eq = key == equipped_badge_key
+            border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
+            eq_pill = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
+            badge_cards.append(
+                f'<div class="profile-cosm-card" onclick="equipBadge(\'{key}\')" title="{b.get("desc","")}" '
+                f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);padding:14px;text-align:center;">'
+                f'  <div style="font-size:32px;">{emoji}</div>'
+                f'  <div style="font-size:12px;color:var(--text);font-weight:600;">{name}</div>'
+                f'  {eq_pill}'
+                f'</div>'
+            )
+        badges_grid = "".join(badge_cards)
+
         name = (c.get("name") or "Student").replace("<", "&lt;")
         email = (c.get("email") or "").replace("<", "&lt;")
         progress_pct = 0
@@ -17607,7 +17683,7 @@ No markdown, no code fences. ONLY JSON.
                 <div style="margin-top:6px;font-size:13px;">Level: <b>{level_name}</b> &middot; <b>{total_xp}</b> XP</div>
               </div>
               <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <div class="stat-card stat-yellow" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['coins']} 🪙</div><div class="label">Coins</div></div>
+                <div class="stat-card stat-yellow" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['coins']} \U0001FA99</div><div class="label">Coins</div></div>
                 <div class="stat-card stat-blue" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['streak_freezes']} ❄️</div><div class="label">Freezes</div></div>
                 <div class="stat-card stat-red" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{focus_stats.get('streak_days',0)} 🔥</div><div class="label">Streak</div></div>
               </div>
@@ -17621,36 +17697,45 @@ No markdown, no code fences. ONLY JSON.
           </div>
 
           <div class="card">
-            <div class="card-header"><h2>🎨 Edit profile banner</h2></div>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:10px;">Pick from banners you've unlocked. <a href="/student/shop" style="color:var(--primary);">Visit the Shop</a> to unlock more.</p>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-              <select id="banner-select" class="edit-input" style="padding:8px;min-width:220px;">{owned_html}</select>
-              <button class="btn btn-primary btn-sm" onclick="saveBanner()">Apply</button>
-            </div>
+            <div class="card-header"><h2>🎨 Profile banner</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Click any banner you've unlocked to equip it. <a href="/student/shop" style="color:var(--primary);">Visit the Shop</a> to unlock more.</p>
+            <div class="profile-cosm-grid">{banners_grid}</div>
           </div>
 
           <div class="card">
-            <div class="card-header"><h2>❄️ Use a streak freeze</h2></div>
-            <p style="color:var(--text-muted);font-size:13px;">If you missed yesterday, click below to spend a freeze and keep your streak.</p>
-            <button class="btn btn-outline btn-sm" onclick="useFreeze()" {'disabled' if wallet['streak_freezes']<=0 else ''}>Use 1 freeze</button>
+            <div class="card-header"><h2>🚩 Leaderboard flag</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Click any flag you've unlocked to equip it. Your flag fades in behind your row on the leaderboard.</p>
+            <div class="profile-cosm-grid">{flags_grid}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>🏅 Leaderboard badge</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Pick one earned badge to display next to your name on the leaderboard. Only one can be equipped at a time.</p>
+            <div class="profile-cosm-grid">{badges_grid}</div>
           </div>
         </div>
 
+        <style>
+          .profile-cosm-grid {{ display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px; }}
+          .profile-cosm-card {{ transition:transform .12s ease, box-shadow .12s ease; }}
+          .profile-cosm-card:hover {{ transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.18); }}
+        </style>
         <script>
-        const BANNER_CSS = {{ {", ".join(f'"{k}":"{v["css"]}"' for k,v in sdb.BANNERS.items())} }};
-        document.getElementById('banner-select').addEventListener('change', function(){{
-          const k = this.value;
+        const BANNER_CSS = {{ {", ".join(f'"{k}":{json.dumps(v["css"])}' for k,v in sdb.BANNERS.items())} }};
+        async function equipBanner(k) {{
           if (BANNER_CSS[k]) document.getElementById('profile-banner').style.background = BANNER_CSS[k];
-        }});
-        async function saveBanner() {{
-          const k = document.getElementById('banner-select').value;
           const r = await fetch('/api/student/wallet/set-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key:k}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not apply.'); return; }}
+          location.reload();
         }}
-        async function useFreeze() {{
-          if (!confirm('Use one streak freeze?')) return;
-          const r = await fetch('/api/student/wallet/use-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not use freeze.'); return; }}
+        async function equipFlag(k) {{
+          const r = await fetch('/api/student/wallet/set-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key:k}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not apply.'); return; }}
+          location.reload();
+        }}
+        async function equipBadge(k) {{
+          const r = await fetch('/api/student/wallet/set-badge', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{badge_key:k}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not equip.'); return; }}
           location.reload();
         }}
         </script>
@@ -17716,6 +17801,15 @@ No markdown, no code fences. ONLY JSON.
             return jsonify(ok=False, error="Login required"), 401
         data = request.get_json(silent=True) or {}
         return jsonify(sdb.set_selected_flag(_cid(), str(data.get("flag_key") or "")))
+
+
+    @app.route("/api/student/wallet/set-badge", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_set_badge_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        return jsonify(sdb.set_equipped_badge(_cid(), str(data.get("badge_key") or "")))
 
 
     @app.route("/api/student/wallet/use-freeze", methods=["POST"])

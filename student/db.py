@@ -2026,6 +2026,96 @@ BADGE_DEFS = {
     "perfect_week":    {"emoji": "🌟", "name": "Perfect Week",    "desc": "Earned XP every day for a week"},
     "early_bird":      {"emoji": "🌅", "name": "Early Bird",      "desc": "Studied before 7 AM"},
     "night_owl":       {"emoji": "🦉", "name": "Night Owl",       "desc": "Studied after 11 PM"},
+    # ── Quiz / accuracy mastery ─────────────────────────────────────
+    "quiz_100":        {"emoji": "🎓", "name": "Quiz Centurion",  "desc": "Completed 100 quizzes"},
+    "quiz_500":        {"emoji": "🧬", "name": "Quiz Scientist",  "desc": "Completed 500 quizzes"},
+    "quiz_perfect_5":  {"emoji": "🎯", "name": "Sharpshooter",    "desc": "5 perfect-score quizzes"},
+    "quiz_perfect_25": {"emoji": "🏹", "name": "Bullseye",        "desc": "25 perfect-score quizzes"},
+    "quiz_speed":      {"emoji": "⚡", "name": "Speedrunner",     "desc": "Aced a quiz in under 60 seconds"},
+    "quiz_no_skip":    {"emoji": "✅", "name": "No Shortcuts",    "desc": "10 quizzes with no skipped questions"},
+    "comeback_kid":    {"emoji": "💪", "name": "Comeback Kid",    "desc": "Failed a quiz, then aced the retake"},
+    # ── Flashcard mastery ──────────────────────────────────────────
+    "flashcard_5000":  {"emoji": "🃏", "name": "Card Master",     "desc": "Reviewed 5,000 flashcards"},
+    "flashcard_streak":{"emoji": "🔁", "name": "Spaced Repetition","desc": "Reviewed flashcards 7 days in a row"},
+    "deck_builder":    {"emoji": "🏗️", "name": "Deck Architect",  "desc": "Created 10 flashcard decks"},
+    # ── Notes / writing ─────────────────────────────────────────────
+    "note_taker_100":  {"emoji": "📓", "name": "Walking Library", "desc": "Created 100 notes"},
+    "note_taker_250":  {"emoji": "📔", "name": "Encyclopedia",    "desc": "Created 250 notes"},
+    "long_note":       {"emoji": "📜", "name": "Treatise",        "desc": "Wrote a 5,000-character note"},
+    # ── Focus mastery ───────────────────────────────────────────────
+    "focus_session_4h":{"emoji": "🪨", "name": "Marathon Mind",   "desc": "Completed a single 4-hour focus session"},
+    "focus_500h":      {"emoji": "🌌", "name": "Eternal Focus",   "desc": "500 hours of total focus time"},
+    "focus_1000h":     {"emoji": "♾️", "name": "Infinity Mind",   "desc": "1,000 hours of total focus time"},
+    "no_phone_30":     {"emoji": "📵", "name": "Phone Down",      "desc": "30 sessions with no phone interruption"},
+    "deep_work_week":  {"emoji": "🌊", "name": "Deep Work Week",  "desc": "20 hours of focus in a single week"},
+    # ── Streak elite ────────────────────────────────────────────────
+    "streak_180":      {"emoji": "🛡️", "name": "Half-Year Hero",  "desc": "180-day study streak"},
+    "streak_365":      {"emoji": "🏆", "name": "Year of Discipline","desc": "365-day study streak"},
+    "freeze_used":     {"emoji": "🧊", "name": "Saved by Ice",    "desc": "Used a streak freeze for the first time"},
+    # ── XP elite ────────────────────────────────────────────────────
+    "xp_10000":        {"emoji": "🌠", "name": "Cosmic Mind",     "desc": "Earned 10,000 XP"},
+    "xp_25000":        {"emoji": "🌟", "name": "Galactic Mind",   "desc": "Earned 25,000 XP"},
+    "xp_50000":        {"emoji": "🪐", "name": "Stellar Mind",    "desc": "Earned 50,000 XP"},
+    "xp_100000":       {"emoji": "☄️", "name": "Supernova",       "desc": "Earned 100,000 XP"},
+    # ── Time-of-day & calendar ──────────────────────────────────────
+    "weekend_warrior": {"emoji": "🗡️", "name": "Weekend Warrior", "desc": "Studied both Saturday and Sunday"},
+    "midnight_oil":    {"emoji": "🕯️", "name": "Midnight Oil",   "desc": "Studied past 2 AM"},
+    "sunrise_session": {"emoji": "☀️", "name": "Sunrise Session", "desc": "Studied at exactly 6 AM"},
+    "holiday_grinder": {"emoji": "🎄", "name": "Holiday Grinder", "desc": "Studied on a public holiday"},
+    "birthday_study":  {"emoji": "🎂", "name": "Cake Later",      "desc": "Studied on your birthday"},
+    "leap_day":        {"emoji": "🐸", "name": "Leap Year Scholar","desc": "Studied on Feb 29"},
+    "new_years":       {"emoji": "🎆", "name": "New Year, New Me","desc": "Studied on January 1st"},
+    # ── Duels & social combat ───────────────────────────────────────
+    "duel_first":      {"emoji": "⚔️", "name": "First Blood",     "desc": "Won your first quiz duel"},
+    "duel_streak_3":   {"emoji": "🔪", "name": "Win Streak",      "desc": "Won 3 quiz duels in a row"},
+    "duel_streak_10":  {"emoji": "🗡️", "name": "Duelist",         "desc": "Won 10 quiz duels in a row"},
+    "duel_25":         {"emoji": "🛡️", "name": "Veteran Duelist", "desc": "Won 25 quiz duels"},
+    "duel_100":        {"emoji": "👑", "name": "Duel Champion",   "desc": "Won 100 quiz duels"},
+    "duel_perfect":    {"emoji": "💥", "name": "Flawless Victory","desc": "Won a duel with a perfect score"},
+    "duel_underdog":   {"emoji": "🐺", "name": "Underdog",        "desc": "Beat an opponent with 2x your XP"},
+    # ── Exchange / community ────────────────────────────────────────
+    "helper_500":      {"emoji": "🌐", "name": "Worldwide Mentor","desc": "500 students used your shared notes"},
+    "viral_note_100":  {"emoji": "🚀", "name": "Trending",        "desc": "A shared note got 100 likes"},
+    "exchange_5":      {"emoji": "📤", "name": "Generous",        "desc": "Shared 5 notes"},
+    "exchange_25":     {"emoji": "🏛️", "name": "Library Founder", "desc": "Shared 25 notes"},
+    "downloader_10":   {"emoji": "📥", "name": "Curious Mind",    "desc": "Used 10 shared notes from others"},
+    # ── Course / academic milestones ────────────────────────────────
+    "ten_courses":     {"emoji": "🎒", "name": "Course Hoarder",  "desc": "Added 10 courses"},
+    "exam_passer":     {"emoji": "📋", "name": "Exam Ready",      "desc": "Passed 5 practice exams"},
+    "exam_master":     {"emoji": "🎓", "name": "Exam Master",     "desc": "Passed 25 practice exams"},
+    "syllabus_synced": {"emoji": "🔄", "name": "Synced Up",       "desc": "Synced Canvas for the first time"},
+    # ── Wallet / economy ────────────────────────────────────────────
+    "first_purchase":  {"emoji": "🛍️", "name": "First Splurge",   "desc": "Made your first shop purchase"},
+    "big_spender":     {"emoji": "💰", "name": "Big Spender",     "desc": "Spent 1,000 coins in the shop"},
+    "banner_collector":{"emoji": "🎨", "name": "Banner Collector","desc": "Unlocked 5 banners"},
+    "flag_collector":  {"emoji": "🚩", "name": "Flag Collector",  "desc": "Unlocked 5 leaderboard flags"},
+    "completionist":   {"emoji": "🏵️", "name": "Completionist",   "desc": "Unlocked every banner in the shop"},
+    # ── Page & reading ──────────────────────────────────────────────
+    "page_2500":       {"emoji": "📙", "name": "Speed Reader",    "desc": "Read 2,500 pages"},
+    "page_5000":       {"emoji": "📕", "name": "Library Lord",    "desc": "Read 5,000 pages"},
+    # ── Profile / cosmetics ─────────────────────────────────────────
+    "first_banner":    {"emoji": "🖼️", "name": "Decorator",       "desc": "Equipped a custom profile banner"},
+    "first_flag":      {"emoji": "🎌", "name": "Flying Colors",   "desc": "Equipped a leaderboard flag"},
+    "identity":        {"emoji": "🪪", "name": "True Self",       "desc": "Equipped a leaderboard badge"},
+    # ── Secret / quirky ─────────────────────────────────────────────
+    "lucky_seven":     {"emoji": "🍀", "name": "Lucky Seven",     "desc": "Scored exactly 77% on a quiz"},
+    "palindrome":      {"emoji": "🔄", "name": "Palindrome",      "desc": "Earned exactly 121 XP in a day"},
+    "ghost":           {"emoji": "👻", "name": "Halloween Ghost", "desc": "Studied on October 31st"},
+    "valentine":       {"emoji": "💌", "name": "Heartstudy",      "desc": "Studied on February 14th"},
+    "pi_day":          {"emoji": "🥧", "name": "Pi Day",          "desc": "Studied on March 14th"},
+    "april_fools":     {"emoji": "🃏", "name": "April Fool",      "desc": "Studied on April 1st"},
+    "back_to_school":  {"emoji": "🍎", "name": "Back to School",  "desc": "Studied on September 1st"},
+    "speed_demon":     {"emoji": "🏎️", "name": "Speed Demon",    "desc": "Earned 500 XP in a single day"},
+    "marathoner":      {"emoji": "🏃", "name": "XP Marathoner",   "desc": "Earned 1,000 XP in a single day"},
+    "comeback":        {"emoji": "🔥", "name": "Comeback Story",  "desc": "Returned after a 30-day break"},
+    "loyal":           {"emoji": "💝", "name": "Loyal",           "desc": "Account older than 1 year"},
+    "od_loyal":        {"emoji": "🗿", "name": "Old Guard",       "desc": "Account older than 2 years"},
+    # ── PLUS-only badges ────────────────────────────────────────────
+    "plus_member":     {"emoji": "💎", "name": "Plus Member",     "desc": "Active Plus subscription", "plus_only": True},
+    "plus_supporter":  {"emoji": "🤍", "name": "Supporter",       "desc": "Subscribed to support development", "plus_only": True},
+    "plus_founder":    {"emoji": "🏛️", "name": "Founder",         "desc": "Joined Plus during beta", "plus_only": True},
+    "plus_vip":        {"emoji": "⭐", "name": "VIP",             "desc": "Exclusive Plus VIP badge", "plus_only": True},
+    "plus_gold":       {"emoji": "🥇", "name": "Gold Tier",       "desc": "Exclusive Plus golden badge", "plus_only": True},
 }
 
 LEVEL_THRESHOLDS = [
@@ -2965,7 +3055,7 @@ def get_streak_risk_recipients(min_streak: int = 5) -> list[dict]:
 
 import json as _json
 
-# Banner catalog: key -> { name, price_coins, xp_required }
+# Banner catalog: key -> { name, price_coins, xp_required, css, plus_only? }
 BANNERS = {
     "default":    {"name": "Default",            "price_coins": 0,    "xp_required": 0,     "css": "linear-gradient(135deg,#475569,#1e293b)"},
     "ocean":      {"name": "Ocean Wave",         "price_coins": 50,   "xp_required": 100,   "css": "linear-gradient(135deg,#06b6d4,#3b82f6)"},
@@ -2975,7 +3065,7 @@ BANNERS = {
     "gold":       {"name": "Gold Rush",          "price_coins": 200,  "xp_required": 1000,  "css": "linear-gradient(135deg,#facc15,#b45309)"},
     "galaxy":     {"name": "Galaxy",             "price_coins": 300,  "xp_required": 2500,  "css": "linear-gradient(135deg,#1e1b4b,#7c3aed,#ec4899)"},
     "champion":   {"name": "Champion (Elite)",   "price_coins": 500,  "xp_required": 5000,  "css": "linear-gradient(135deg,#f43f5e,#facc15,#10b981)"},
-    # ── Unique / generative banners (multi-stop conic + radial layers) ──
+    # ── Generative banners ────────────────────────────────────────────
     "aurora":     {"name": "Aurora Borealis",    "price_coins": 250,  "xp_required": 750,
                    "css": "radial-gradient(ellipse 120% 80% at 30% 0%, rgba(34,197,94,.55), transparent 60%), radial-gradient(ellipse 120% 80% at 70% 100%, rgba(56,189,248,.55), transparent 60%), radial-gradient(ellipse 80% 100% at 50% 50%, rgba(168,85,247,.45), transparent 70%), #0a0f1f"},
     "iridescent": {"name": "Iridescent Pearl",   "price_coins": 350,  "xp_required": 1500,
@@ -2992,6 +3082,77 @@ BANNERS = {
                    "css": "radial-gradient(circle at 20% 30%, #312e81 0%, transparent 45%), radial-gradient(circle at 80% 70%, #155e75 0%, transparent 45%), radial-gradient(circle at 50% 50%, #020617 60%, #000 100%)"},
     "phoenix":    {"name": "Phoenix",            "price_coins": 750,  "xp_required": 8000,
                    "css": "radial-gradient(circle at 50% 100%, #fde047 0%, #f97316 25%, #dc2626 55%, #1e1b4b 100%)"},
+    # ── Coin-only banners (no XP gate, accessible to new players) ──
+    "candy":      {"name": "Candy Pop",          "price_coins": 80,   "xp_required": 0,
+                   "css": "linear-gradient(135deg,#fbcfe8,#f9a8d4,#a5b4fc)"},
+    "mint":       {"name": "Fresh Mint",         "price_coins": 80,   "xp_required": 0,
+                   "css": "linear-gradient(135deg,#a7f3d0,#6ee7b7,#34d399)"},
+    "obsidian":   {"name": "Obsidian",           "price_coins": 150,  "xp_required": 200,
+                   "css": "linear-gradient(135deg,#0f172a,#1e293b,#334155)"},
+    "rosegold":   {"name": "Rose Gold",          "price_coins": 200,  "xp_required": 400,
+                   "css": "linear-gradient(135deg,#fda4af,#f59e0b,#fde68a)"},
+    "sapphire":   {"name": "Sapphire",           "price_coins": 220,  "xp_required": 500,
+                   "css": "linear-gradient(135deg,#1e3a8a,#3b82f6,#93c5fd)"},
+    "emerald":    {"name": "Emerald",            "price_coins": 220,  "xp_required": 500,
+                   "css": "linear-gradient(135deg,#064e3b,#059669,#a7f3d0)"},
+    "ruby":       {"name": "Ruby",               "price_coins": 220,  "xp_required": 500,
+                   "css": "linear-gradient(135deg,#7f1d1d,#dc2626,#fecaca)"},
+    "amethyst":   {"name": "Amethyst",           "price_coins": 220,  "xp_required": 500,
+                   "css": "linear-gradient(135deg,#4c1d95,#7c3aed,#c4b5fd)"},
+    "topaz":      {"name": "Topaz",              "price_coins": 220,  "xp_required": 500,
+                   "css": "linear-gradient(135deg,#92400e,#f59e0b,#fde68a)"},
+    "pearl":      {"name": "Pearl",              "price_coins": 220,  "xp_required": 500,
+                   "css": "linear-gradient(135deg,#f1f5f9,#cbd5e1,#94a3b8)"},
+    # ── Themed / illustrative banners ─────────────────────────────────
+    "cherry":     {"name": "Cherry Blossom",     "price_coins": 280,  "xp_required": 800,
+                   "css": "radial-gradient(circle at 20% 30%, #fbcfe8 0%, transparent 30%), radial-gradient(circle at 80% 60%, #f9a8d4 0%, transparent 30%), linear-gradient(135deg,#fff1f2,#fbcfe8)"},
+    "tropical":   {"name": "Tropical Sunset",    "price_coins": 280,  "xp_required": 800,
+                   "css": "linear-gradient(180deg,#0c4a6e 0%,#1e3a8a 30%,#7c3aed 55%,#ec4899 80%,#f59e0b 100%)"},
+    "tundra":     {"name": "Frozen Tundra",      "price_coins": 280,  "xp_required": 800,
+                   "css": "linear-gradient(180deg,#1e3a8a,#2563eb,#bae6fd,#f0f9ff)"},
+    "desert":     {"name": "Sahara Dusk",        "price_coins": 280,  "xp_required": 800,
+                   "css": "linear-gradient(180deg,#fde68a 0%,#f59e0b 30%,#b45309 60%,#7c2d12 100%)"},
+    "savanna":    {"name": "Savanna Sky",        "price_coins": 320,  "xp_required": 1200,
+                   "css": "linear-gradient(180deg,#fbbf24 0%,#f97316 40%,#7c2d12 100%)"},
+    "deepsea":    {"name": "Deep Sea",           "price_coins": 320,  "xp_required": 1200,
+                   "css": "radial-gradient(circle at 30% 80%, #06b6d4 0%, transparent 40%), radial-gradient(circle at 70% 20%, #0ea5e9 0%, transparent 40%), linear-gradient(180deg,#0c4a6e,#082f49)"},
+    "thunder":    {"name": "Thunderhead",        "price_coins": 380,  "xp_required": 2000,
+                   "css": "radial-gradient(circle at 50% 30%, #facc15 0%, transparent 25%), linear-gradient(180deg,#1f2937,#111827,#020617)"},
+    "lava":       {"name": "Lava Field",         "price_coins": 380,  "xp_required": 2000,
+                   "css": "radial-gradient(circle at 30% 70%, #fbbf24 0%, transparent 35%), radial-gradient(circle at 70% 80%, #f97316 0%, transparent 35%), linear-gradient(135deg,#7c2d12,#000)"},
+    "moss":       {"name": "Moss & Stone",       "price_coins": 280,  "xp_required": 800,
+                   "css": "radial-gradient(circle at 20% 30%, #84cc16 0%, transparent 30%), radial-gradient(circle at 80% 70%, #65a30d 0%, transparent 30%), linear-gradient(135deg,#1c1917,#292524)"},
+    "noir":       {"name": "Noir",               "price_coins": 350,  "xp_required": 1500,
+                   "css": "repeating-linear-gradient(135deg, #18181b 0 24px, #27272a 24px 48px)"},
+    "neon_grid":  {"name": "Neon Grid",          "price_coins": 420,  "xp_required": 2500,
+                   "css": "repeating-linear-gradient(0deg, rgba(236,72,153,.18) 0 1px, transparent 1px 28px), repeating-linear-gradient(90deg, rgba(34,211,238,.18) 0 1px, transparent 1px 28px), linear-gradient(135deg,#0f172a,#581c87)"},
+    "starfield":  {"name": "Starfield",          "price_coins": 420,  "xp_required": 2500,
+                   "css": "radial-gradient(2px 2px at 20% 30%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 80% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 50% 50%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 30% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 70% 20%, #fff 50%, transparent 50%), linear-gradient(135deg,#000,#1e1b4b)"},
+    "circuit":    {"name": "Circuit Board",      "price_coins": 420,  "xp_required": 2500,
+                   "css": "repeating-linear-gradient(0deg, rgba(34,197,94,.25) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(34,197,94,.25) 0 1px, transparent 1px 32px), linear-gradient(135deg,#022c22,#064e3b)"},
+    "carbon":     {"name": "Carbon Fiber",       "price_coins": 320,  "xp_required": 1200,
+                   "css": "repeating-linear-gradient(45deg, #1f2937 0 6px, #111827 6px 12px), repeating-linear-gradient(-45deg, rgba(255,255,255,.04) 0 6px, transparent 6px 12px)"},
+    "stained":    {"name": "Stained Glass",      "price_coins": 480,  "xp_required": 3000,
+                   "css": "conic-gradient(from 45deg at 30% 30%, #ef4444, #f59e0b, #84cc16, #06b6d4, #8b5cf6, #ec4899, #ef4444)"},
+    # ── PLUS-only banners (premium cosmetics) ─────────────────────────
+    "plus_velvet":   {"name": "Velvet (PLUS)",   "price_coins": 600,  "xp_required": 0,    "plus_only": True,
+                      "css": "radial-gradient(ellipse at 30% 30%, rgba(168,85,247,.6), transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(236,72,153,.6), transparent 60%), linear-gradient(135deg,#3b0764,#831843)"},
+    "plus_chrome":   {"name": "Chrome (PLUS)",   "price_coins": 600,  "xp_required": 0,    "plus_only": True,
+                      "css": "linear-gradient(135deg,#f8fafc 0%,#cbd5e1 25%,#475569 55%,#cbd5e1 80%,#f8fafc 100%)"},
+    "plus_aurora2":  {"name": "Polar Aurora (PLUS)", "price_coins": 800, "xp_required": 0, "plus_only": True,
+                      "css": "radial-gradient(ellipse 120% 80% at 50% 0%, rgba(56,189,248,.7), transparent 70%), radial-gradient(ellipse 100% 70% at 50% 100%, rgba(168,85,247,.7), transparent 70%), radial-gradient(ellipse 60% 80% at 30% 50%, rgba(34,197,94,.6), transparent 70%), #020617"},
+    "plus_prism":    {"name": "Prism (PLUS)",    "price_coins": 800,  "xp_required": 0,    "plus_only": True,
+                      "css": "conic-gradient(from 0deg at 50% 50%, #ef4444, #f59e0b, #fde047, #84cc16, #06b6d4, #6366f1, #a855f7, #ef4444)"},
+    "plus_cosmic":   {"name": "Cosmic Drift (PLUS)", "price_coins": 1000, "xp_required": 0, "plus_only": True,
+                      "css": "radial-gradient(2px 2px at 25% 35%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 75% 75%, #fff 50%, transparent 50%), radial-gradient(circle at 50% 50%, #7c3aed 0%, transparent 50%), radial-gradient(circle at 80% 30%, #ec4899 0%, transparent 40%), linear-gradient(135deg,#0c0a1f,#1e1b4b)"},
+    "plus_quartz":   {"name": "Quartz (PLUS)",   "price_coins": 700,  "xp_required": 0,    "plus_only": True,
+                      "css": "conic-gradient(from 90deg at 50% 50%, #fef3c7, #ddd6fe, #bae6fd, #fbcfe8, #fef3c7)"},
+    "plus_void":     {"name": "Void (PLUS)",     "price_coins": 700,  "xp_required": 0,    "plus_only": True,
+                      "css": "radial-gradient(circle at 50% 50%, transparent 0%, #000 70%), radial-gradient(circle at 30% 30%, #6d28d9 0%, transparent 25%), radial-gradient(circle at 70% 70%, #db2777 0%, transparent 25%), #000"},
+    "plus_gold":     {"name": "24K Gold (PLUS)", "price_coins": 900,  "xp_required": 0,    "plus_only": True,
+                      "css": "linear-gradient(135deg,#fde68a 0%,#fbbf24 25%,#b45309 50%,#fbbf24 75%,#fde68a 100%)"},
+    "plus_galaxy2":  {"name": "Andromeda (PLUS)", "price_coins": 1200, "xp_required": 0,   "plus_only": True,
+                      "css": "radial-gradient(2px 2px at 15% 25%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 65% 75%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 85% 15%, #fff 50%, transparent 50%), radial-gradient(circle at 30% 60%, rgba(168,85,247,.5) 0%, transparent 30%), radial-gradient(circle at 70% 40%, rgba(56,189,248,.5) 0%, transparent 30%), radial-gradient(ellipse at center, #1e1b4b 0%, #000 100%)"},
 }
 
 # Leaderboard flag catalog. Rendered as a horizontal CSS background on the
@@ -3020,6 +3181,54 @@ FLAGS = {
                    "css": "linear-gradient(90deg, #450a0a 0%, #dc2626 50%, #fecaca 100%)"},
     "rainbow":    {"name": "Rainbow Arc",        "price_coins": 800,  "xp_required": 10000,
                    "css": "linear-gradient(90deg, #ef4444, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #a855f7)"},
+    # ── New flags (more cheap, mid-tier and high-tier) ──────────────
+    "ember":      {"name": "Ember",              "price_coins": 60,   "xp_required": 100,
+                   "css": "linear-gradient(90deg, #7f1d1d 0%, #ef4444 60%, #fbbf24 100%)"},
+    "ocean_calm": {"name": "Ocean Calm",         "price_coins": 60,   "xp_required": 100,
+                   "css": "linear-gradient(90deg, #0c4a6e 0%, #0ea5e9 60%, #bae6fd 100%)"},
+    "forest_run": {"name": "Forest Run",         "price_coins": 60,   "xp_required": 100,
+                   "css": "linear-gradient(90deg, #064e3b 0%, #16a34a 60%, #bbf7d0 100%)"},
+    "mocha":      {"name": "Mocha",              "price_coins": 60,   "xp_required": 100,
+                   "css": "linear-gradient(90deg, #292524 0%, #78350f 50%, #fed7aa 100%)"},
+    "lilac":      {"name": "Lilac",              "price_coins": 60,   "xp_required": 100,
+                   "css": "linear-gradient(90deg, #581c87 0%, #a855f7 60%, #e9d5ff 100%)"},
+    "checker":    {"name": "Checker Flag",       "price_coins": 250,  "xp_required": 1500,
+                   "css": "repeating-conic-gradient(#0f172a 0% 25%, #f8fafc 25% 50%) 0 0 / 24px 24px"},
+    "stripes_3":  {"name": "Tricolor",           "price_coins": 180,  "xp_required": 800,
+                   "css": "linear-gradient(90deg, #ef4444 0% 33%, #fafafa 33% 66%, #2563eb 66% 100%)"},
+    "stripes_5":  {"name": "Pentaband",          "price_coins": 220,  "xp_required": 1200,
+                   "css": "linear-gradient(90deg, #ef4444 0% 20%, #f59e0b 20% 40%, #facc15 40% 60%, #22c55e 60% 80%, #3b82f6 80% 100%)"},
+    "midnight":   {"name": "Midnight Streak",    "price_coins": 280,  "xp_required": 1500,
+                   "css": "linear-gradient(90deg, #020617 0%, #1e1b4b 50%, #4c1d95 100%)"},
+    "ice":        {"name": "Ice Wave",           "price_coins": 280,  "xp_required": 1500,
+                   "css": "linear-gradient(90deg, #082f49 0%, #38bdf8 50%, #f0f9ff 100%)"},
+    "smoke":      {"name": "Smoke",              "price_coins": 200,  "xp_required": 1000,
+                   "css": "linear-gradient(90deg, #18181b 0%, #52525b 50%, #d4d4d8 100%)"},
+    "candy_pop":  {"name": "Candy Pop",          "price_coins": 150,  "xp_required": 500,
+                   "css": "linear-gradient(90deg, #f472b6 0%, #fcd34d 50%, #60a5fa 100%)"},
+    "matrix_bar": {"name": "Matrix Trail",       "price_coins": 320,  "xp_required": 2000,
+                   "css": "linear-gradient(90deg, #022c22 0%, #16a34a 50%, #86efac 100%)"},
+    "bloodmoon":  {"name": "Blood Moon",         "price_coins": 450,  "xp_required": 3500,
+                   "css": "linear-gradient(90deg, #000 0%, #7f1d1d 50%, #f87171 100%)"},
+    "honey":      {"name": "Honeycomb",          "price_coins": 320,  "xp_required": 2000,
+                   "css": "linear-gradient(90deg, #78350f 0%, #f59e0b 50%, #fde68a 100%)"},
+    "galaxy_bar": {"name": "Galactic Trail",     "price_coins": 700,  "xp_required": 7000,
+                   "css": "linear-gradient(90deg, #000 0%, #4c1d95 30%, #db2777 60%, #f59e0b 100%)"},
+    "phoenix_bar":{"name": "Phoenix Trail",      "price_coins": 800,  "xp_required": 9000,
+                   "css": "linear-gradient(90deg, #1e1b4b 0%, #dc2626 30%, #f97316 60%, #fde047 100%)"},
+    # ── PLUS-only flags ─────────────────────────────────────────────
+    "plus_chrome":   {"name": "Chrome Streak (PLUS)", "price_coins": 700, "xp_required": 0, "plus_only": True,
+                      "css": "linear-gradient(90deg, #f8fafc 0%, #94a3b8 30%, #1e293b 60%, #94a3b8 80%, #f8fafc 100%)"},
+    "plus_holo":     {"name": "Holographic (PLUS)",   "price_coins": 800, "xp_required": 0, "plus_only": True,
+                      "css": "linear-gradient(90deg, #fbcfe8, #67e8f9, #fde68a, #86efac, #c4b5fd, #fbcfe8)"},
+    "plus_void":     {"name": "Void Bar (PLUS)",      "price_coins": 700, "xp_required": 0, "plus_only": True,
+                      "css": "linear-gradient(90deg, #000 0%, #1e1b4b 40%, #6d28d9 70%, #c084fc 100%)"},
+    "plus_gold":     {"name": "24K Gold Bar (PLUS)",  "price_coins": 900, "xp_required": 0, "plus_only": True,
+                      "css": "linear-gradient(90deg, #fde68a 0%, #fbbf24 25%, #b45309 50%, #fbbf24 75%, #fde68a 100%)"},
+    "plus_aurora":   {"name": "Aurora Bar (PLUS)",    "price_coins": 800, "xp_required": 0, "plus_only": True,
+                      "css": "linear-gradient(90deg, #022c22 0%, #16a34a 25%, #38bdf8 60%, #a855f7 100%)"},
+    "plus_prism":    {"name": "Prism Bar (PLUS)",     "price_coins": 1000,"xp_required": 0, "plus_only": True,
+                      "css": "linear-gradient(90deg, #ef4444, #f59e0b, #fde047, #84cc16, #06b6d4, #6366f1, #a855f7)"},
 }
 
 STREAK_FREEZE_PRICE = 10
@@ -3274,11 +3483,22 @@ def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dic
     return {"ok": True, "coins": int(new.get("coins") or 0), "streak_freezes": int(new.get("streak_freezes") or 0)}
 
 
+def _is_plus_user(client_id: int) -> bool:
+    """True if user can access PLUS-only cosmetics."""
+    try:
+        from student.subscription import get_tier  # type: ignore
+        return get_tier(client_id) in ("plus", "ultimate")
+    except Exception:
+        return False
+
+
 def buy_banner(client_id: int, banner_key: str) -> dict:
     """Buy a banner. Requires both XP threshold and coins."""
     cfg = BANNERS.get(banner_key)
     if not cfg:
         return {"ok": False, "error": "Unknown banner."}
+    if cfg.get("plus_only") and not _is_plus_user(client_id):
+        return {"ok": False, "error": "Plus subscription required."}
     total_xp = get_total_xp(client_id)
     if total_xp < cfg["xp_required"]:
         return {"ok": False, "error": f"Need {cfg['xp_required']} XP to unlock this banner."}
@@ -3376,6 +3596,8 @@ def buy_flag(client_id: int, flag_key: str) -> dict:
         return {"ok": False, "error": "Unknown flag."}
     if flag_key == "none":
         return {"ok": False, "error": "Already owned."}
+    if cfg.get("plus_only") and not _is_plus_user(client_id):
+        return {"ok": False, "error": "Plus subscription required."}
     total_xp = get_total_xp(client_id)
     if total_xp < cfg["xp_required"]:
         return {"ok": False, "error": f"Need {cfg['xp_required']} XP to unlock this flag."}
@@ -3407,6 +3629,62 @@ def set_selected_flag(client_id: int, flag_key: str) -> dict:
         prefs["selected_flag"] = flag_key
         _save_flag_prefs(db, client_id, prefs)
     return {"ok": True, "selected_flag": flag_key}
+
+
+# ── Equipped leaderboard badge ────────────────────────────────────
+# A single badge the user has earned can be shown next to their name on the
+# leaderboard. Stored inside clients.mail_preferences JSON as 'equipped_badge'.
+
+def get_equipped_badge(client_id: int) -> str:
+    with get_db() as db:
+        prefs = _load_flag_prefs(db, client_id)
+    key = prefs.get("equipped_badge") or ""
+    if not isinstance(key, str):
+        return ""
+    if key and key not in BADGE_DEFS:
+        return ""
+    return key
+
+
+def set_equipped_badge(client_id: int, badge_key: str) -> dict:
+    """Equip a badge to display on the leaderboard. Empty string clears it.
+    User must already own the badge."""
+    if badge_key:
+        if badge_key not in BADGE_DEFS:
+            return {"ok": False, "error": "Unknown badge."}
+        owned = {b["badge_key"] for b in get_badges(client_id)}
+        if badge_key not in owned:
+            return {"ok": False, "error": "Badge not earned."}
+    with get_db() as db:
+        prefs = _load_flag_prefs(db, client_id)
+        prefs["equipped_badge"] = badge_key or ""
+        _save_flag_prefs(db, client_id, prefs)
+    return {"ok": True, "equipped_badge": badge_key or ""}
+
+
+def get_equipped_badges_for_clients(client_ids: list[int]) -> dict[int, dict]:
+    """Bulk lookup for the leaderboard. Returns {client_id: {emoji, name, key}}."""
+    if not client_ids:
+        return {}
+    out: dict[int, dict] = {}
+    placeholders = ",".join(["%s"] * len(client_ids))
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            f"SELECT id, mail_preferences FROM clients WHERE id IN ({placeholders})",
+            tuple(client_ids),
+        )
+    for r in rows:
+        try:
+            raw = r.get("mail_preferences") or ""
+            prefs = _json.loads(raw) if raw else {}
+            key = prefs.get("equipped_badge") if isinstance(prefs, dict) else ""
+        except Exception:
+            key = ""
+        if key and key in BADGE_DEFS:
+            info = BADGE_DEFS[key]
+            out[int(r["id"])] = {"emoji": info.get("emoji", ""), "name": info.get("name", ""), "key": key}
+    return out
 
 
 def use_streak_freeze(client_id: int) -> dict:
