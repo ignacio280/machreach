@@ -10412,7 +10412,7 @@ def billing_checkout():
             redirect_url=redirect_url,
         )
     except Exception as e:
-        log.exception("[LS] checkout failed: %s", e)
+        _log.exception("[LS] checkout failed: %s", e)
         flash(("error", "Could not start checkout. Please try again."))
         return redirect(url_for("billing_page"))
 
@@ -10459,7 +10459,7 @@ def lemonsqueezy_webhook():
     raw = request.get_data() or b""
     sig = request.headers.get("X-Signature", "") or request.headers.get("x-signature", "")
     if not ls.verify_webhook(raw, sig):
-        log.warning("[LS] webhook rejected: bad signature")
+        _log.warning("[LS] webhook rejected: bad signature")
         return "Invalid signature", 401
 
     try:
@@ -10480,10 +10480,10 @@ def lemonsqueezy_webhook():
         cid = 0
 
     if not cid:
-        log.warning("[LS] webhook missing client_id in custom_data: %s", event_name)
+        _log.warning("[LS] webhook missing client_id in custom_data: %s", event_name)
         return "ok", 200  # ack so LS doesn't retry forever
 
-    log.info("[LS] webhook %s purpose=%s client=%s", event_name, purpose, cid)
+    _log.info("[LS] webhook %s purpose=%s client=%s", event_name, purpose, cid)
 
     # ── Outreach SaaS subscription ─────────────────────────────────
     if purpose == "outreach_sub":
@@ -10538,7 +10538,7 @@ def lemonsqueezy_webhook():
                     prefs["subscription"] = sub
                     _exec(db, "UPDATE clients SET mail_preferences = %s WHERE id = %s", (_json.dumps(prefs), cid))
             except Exception:
-                log.exception("[LS] could not persist ls_sub_id for student %s", cid)
+                _log.exception("[LS] could not persist ls_sub_id for student %s", cid)
         elif event_name in ("subscription_cancelled", "subscription_expired"):
             ssub.set_tier(cid, "free")
         # payment_success / payment_failed don't change the tier (LS already
@@ -10556,10 +10556,10 @@ def lemonsqueezy_webhook():
             from student import db as sdb
             sdb.credit_coin_pack(cid, pack_key)
         except Exception as e:
-            log.exception("[LS] coin-pack credit failed: %s", e)
+            _log.exception("[LS] coin-pack credit failed: %s", e)
         return "ok", 200
 
-    log.info("[LS] webhook unknown purpose=%r event=%s", purpose, event_name)
+    _log.info("[LS] webhook unknown purpose=%r event=%s", purpose, event_name)
     return "ok", 200
 @app.route("/pricing")
 def pricing_page():
