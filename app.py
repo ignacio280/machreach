@@ -2329,6 +2329,9 @@ LAYOUT = """<!DOCTYPE html>
       if (!d || !d.phaseId) return;
       if (isPhaseSaved(d.phaseId)) return;
       if (!d.workMinutes || d.workMinutes <= 0) return; // breaks don't credit
+      // Defensive cap: anything above 8h on a single phase is a corrupted /
+      // tampered state, not a real session. Drop silently.
+      if (d.workMinutes > 480) return;
       markPhaseSaved(d.phaseId);
       var payload = {
         mode: d.originalMode || 'pomodoro',
@@ -2357,6 +2360,27 @@ LAYOUT = """<!DOCTYPE html>
         stopKeepalive();
         return;
       }
+
+      // Abandonment guard. If the saved focus_float is more than 12h old
+      // (e.g. user closed the browser overnight, started a session days ago
+      // and never returned, etc.) DO NOT credit it. Crediting a stale phase
+      // is exactly how phantom hours appeared on real users' dashboards.
+      // Clear the state silently so it can't auto-fire on the next tick.
+      var ABANDON_MS = 12 * 60 * 60 * 1000;
+      var refTs = 0;
+      if (d.mode === 'stopwatch' && d.startAt) {
+        refTs = d.startAt;
+      } else if (d.mode === 'countdown' && d.endAt) {
+        var w = (d.workMinutes && d.workMinutes > 0) ? d.workMinutes : 25;
+        refTs = d.endAt - w * 60 * 1000;
+      }
+      if (refTs && (Date.now() - refTs) > ABANDON_MS) {
+        try { localStorage.removeItem('focus_float'); } catch(e) {}
+        widget.style.display = 'none';
+        stopKeepalive();
+        return;
+      }
+
       widget.style.display = 'block';
       // Make sure keepalive stays running (browser may have paused it).
       if (keepEl && keepEl.paused) startKeepalive();

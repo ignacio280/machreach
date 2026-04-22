@@ -1057,9 +1057,57 @@ def delete_course(course_id: int, client_id: int):
 
 # ── Focus / Pomodoro tracking ────────────────────────────────
 
+# Server-side ceilings to defend against orphaned timers, malicious clients,
+# or stale localStorage state crediting absurd amounts of "study time".
+FOCUS_MAX_MINUTES_PER_SESSION = 480   # 8h cap on a single save
+FOCUS_MAX_MINUTES_PER_DAY     = 16 * 60  # 16h cap on a single calendar day
+
 def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
                        course_name: str = "") -> int:
+    """Persist a focus session.
+    Returns the new row id, or 0 if the request was rejected for being garbage
+    (negative, NaN, or so large that it must be a bug / abandoned timer).
+    """
+    # Sanitize inputs.
+    try:
+        minutes = int(minutes)
+    except (TypeError, ValueError):
+        minutes = 0
+    try:
+        pages = int(pages)
+    except (TypeError, ValueError):
+        pages = 0
+    if minutes < 0:
+        minutes = 0
+    if pages < 0:
+        pages = 0
+
+    # Per-session cap (prevents a stopwatch left running for days from
+    # crediting tens of hours in one shot).
+    if minutes > FOCUS_MAX_MINUTES_PER_SESSION:
+        minutes = FOCUS_MAX_MINUTES_PER_SESSION
+
+    # Reject empty saves entirely (no minutes, no pages).
+    if minutes <= 0 and pages <= 0:
+        return 0
+
+    today = datetime.now().strftime("%Y-%m-%d")
     with get_db() as db:
+        # Per-day cap: clamp `minutes` so the calendar-day total never exceeds
+        # FOCUS_MAX_MINUTES_PER_DAY. This is the second line of defence against
+        # orphaned timers re-crediting after a long absence.
+        already_today = _fetchval(
+            db,
+            "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress "
+            "WHERE client_id = %s AND plan_date LIKE %s",
+            (client_id, f"{today}%"),
+        ) or 0
+        room_left = max(0, FOCUS_MAX_MINUTES_PER_DAY - int(already_today))
+        if minutes > room_left:
+            minutes = room_left
+        if minutes <= 0 and pages <= 0:
+            return 0
+
         return _insert_returning_id(
             db,
             "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "

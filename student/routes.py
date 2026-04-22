@@ -2314,15 +2314,35 @@ def register_student_routes(app, csrf, limiter):
 
         mode = data.get("mode", "pomodoro")
 
-        minutes = int(data.get("minutes", 0))
-
-        pages = int(data.get("pages", 0))
-
+        try:
+            minutes = int(data.get("minutes", 0))
+        except (TypeError, ValueError):
+            minutes = 0
+        try:
+            pages = int(data.get("pages", 0))
+        except (TypeError, ValueError):
+            pages = 0
         course_name = data.get("course_name", "")
 
+        # Defensive caps (real customers reported phantom hours from stale
+        # localStorage / abandoned timers). Anything above 8h in a single save
+        # is almost certainly a bug, not a real study session.
+        if minutes < 0:
+            return jsonify({"ok": False, "error": "Invalid minutes"}), 400
+        if pages < 0:
+            pages = 0
+        if minutes > 480:
+            minutes = 480
 
+        # Drop empty saves entirely so we don't pollute the day.
+        if minutes <= 0 and pages <= 0:
+            return jsonify({"ok": True, "saved": False, "reason": "empty"})
 
-        sdb.save_focus_session(cid, mode=mode, minutes=minutes, pages=pages, course_name=course_name)
+        # save_focus_session itself will further clamp by per-day total and
+        # may return 0 if the day is already maxed out.
+        saved_id = sdb.save_focus_session(cid, mode=mode, minutes=minutes, pages=pages, course_name=course_name)
+        if not saved_id:
+            return jsonify({"ok": True, "saved": False, "reason": "daily-cap-or-empty"})
 
 
 
@@ -5996,6 +6016,12 @@ def register_student_routes(app, csrf, limiter):
 
           var minutes = overrideMinutes !== undefined ? overrideMinutes : Math.round(totalFocusSeconds / 60);
 
+          // Defensive cap. If a stopwatch was left running for hours / days
+          // (e.g. browser sleep, abandoned tab) the raw value can be absurd.
+          // Server also caps at 480, but we don't want to even send garbage.
+          if (!minutes || minutes < 0 || isNaN(minutes)) minutes = 0;
+          if (minutes > 480) minutes = 480;
+
           var pages = currentMode === 'pages' ? pageDone : 0;
 
           var course = document.getElementById('focus-course').value;
@@ -6275,6 +6301,29 @@ def register_student_routes(app, csrf, limiter):
 
           if (!ff || !ff.active || !ts) return;
 
+          // Abandonment guard: if the saved timer state is more than 12h old
+          // (e.g. user closed the laptop overnight, started a stopwatch and
+          // forgot, etc.) treat it as abandoned. Crediting it would log
+          // phantom hours — exactly the bug real users have reported.
+          var ABANDON_MS = 12 * 60 * 60 * 1000;
+          var refTs = 0;
+          if (ff.mode === 'stopwatch' && ff.startAt) {{
+            refTs = ff.startAt;
+          }} else if (ff.mode === 'countdown' && ff.endAt) {{
+            // Approx start = endAt - workMinutes
+            var w = (ff.workMinutes && ff.workMinutes > 0) ? ff.workMinutes : 25;
+            refTs = ff.endAt - w * 60 * 1000;
+          }}
+          if (refTs && (Date.now() - refTs) > ABANDON_MS) {{
+            try {{
+              localStorage.removeItem('focus_float');
+              localStorage.removeItem('focus_timer_state');
+              var fel = document.getElementById('focus-float');
+              if (fel) fel.style.display = 'none';
+            }} catch(e) {{}}
+            return;
+          }}
+
 
 
           // Restore mode UI without calling setMode (which resets timer)
@@ -6378,6 +6427,17 @@ def register_student_routes(app, csrf, limiter):
           }} else if (ff.mode === 'stopwatch') {{
 
             var elapsed = Math.floor((Date.now() - ff.startAt) / 1000);
+
+            // Hard cap at 8h — anything longer is an abandoned session.
+            if (elapsed > 8 * 3600) {{
+              try {{
+                localStorage.removeItem('focus_float');
+                localStorage.removeItem('focus_timer_state');
+                var fel2 = document.getElementById('focus-float');
+                if (fel2) fel2.style.display = 'none';
+              }} catch(e) {{}}
+              return;
+            }}
 
             totalFocusSeconds = elapsed;
 
