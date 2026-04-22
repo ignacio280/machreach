@@ -18005,21 +18005,78 @@ No markdown, no code fences. ONLY JSON.
         coins = wallet["coins"]
         freezes = wallet["streak_freezes"]
         freeze_btn_disabled = "disabled" if (coins < sdb.STREAK_FREEZE_PRICE or freezes >= 3) else ""
+        bundle_qty   = sdb.STREAK_FREEZE_BUNDLE_QTY
+        bundle_price = sdb.STREAK_FREEZE_BUNDLE_PRICE
+        bundle_save  = sdb.STREAK_FREEZE_PRICE * bundle_qty - bundle_price
+        bundle_disabled = "disabled" if (coins < bundle_price or freezes + bundle_qty > 3) else ""
+
+        # Active boosts banner
+        active_boosts = sdb.get_active_boosts(cid)
+        if active_boosts:
+            chips = []
+            for b in active_boosts:
+                exp = b.get("expires_at") or ""
+                kind_label = "XP" if b.get("kind") == "xp" else "Coins"
+                chips.append(
+                    f'<span class="sh-active-chip" data-exp="{exp}">'
+                    f'\u26a1 {b.get("multiplier",1):g}\u00d7 {kind_label} \u00b7 '
+                    f'<span class="sh-cd">--:--:--</span></span>'
+                )
+            active_html = (
+                '<div class="card" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:none;">'
+                '<div style="font-weight:700;margin-bottom:6px;color:#78350f;">Active boosts</div>'
+                f'<div style="display:flex;gap:8px;flex-wrap:wrap;">{"".join(chips)}</div>'
+                '</div>'
+            )
+        else:
+            active_html = ""
+
+        # Boost cards
+        boost_cards = []
+        for key, cfg in sdb.BOOSTS.items():
+            disabled = "disabled" if coins < cfg["price_coins"] else ""
+            icon = "\u2728" if cfg["kind"] == "xp" else "\ud83d\udcb0"
+            color = "#8b5cf6" if cfg["kind"] == "xp" else "#f59e0b"
+            boost_cards.append(
+                '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;">'
+                f'<div style="font-size:24px;">{icon}</div>'
+                f'<div style="font-weight:700;margin-top:4px;color:{color};">{cfg["label"]}</div>'
+                f'<div style="color:var(--text-muted);font-size:12px;margin:4px 0 10px;">Stacks if you already own one.</div>'
+                f'<button class="btn btn-sm btn-primary" onclick="buyBoost(\'{key}\')" {disabled}>Buy ({cfg["price_coins"]} \ud83e\ude99)</button>'
+                '</div>'
+            )
+        boosts_html = "".join(boost_cards)
         return _s_render("Shop", f"""
-        <h1 style="margin-bottom:6px;">🛒 Shop</h1>
-        <p style="color:var(--text-muted);margin:0 0 24px;">Spend coins on streak freezes and profile banners. Earn coins by completing focus sessions.</p>
+        <h1 style="margin-bottom:6px;">\U0001f6d2 Shop</h1>
+        <p style="color:var(--text-muted);margin:0 0 24px;">Spend coins on streak freezes, profile banners, and timed boosts. Earn coins by completing focus sessions, quizzes, flashcards, and duels.</p>
+        <style>
+          .sh-active-chip {{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:rgba(255,255,255,.7); border-radius:999px; font-size:12px; font-weight:600; color:#78350f; }}
+          .sh-cd {{ font-variant-numeric: tabular-nums; }}
+        </style>
+        {active_html}
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;">
-          <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} 🪙</div><div class="label">Coins</div></div>
-          <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} ❄️</div><div class="label">Streak Freezes</div></div>
+          <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \ud83e\ude99</div><div class="label">Coins</div></div>
+          <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Streak Freezes</div></div>
           <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">Total XP</div></div>
         </div>
 
         <div class="card">
-          <div class="card-header"><h2>❄️ Streak Freezes</h2></div>
-          <p style="color:var(--text-muted);font-size:13px;">Use a freeze to save your streak when you miss a day. Max 3 owned at a time.</p>
+          <div class="card-header"><h2>\u26a1 Boosts</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Double the XP and coins you earn for a limited time. Stacks: buying again extends the timer.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
+            {boosts_html}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h2>\u2744\ufe0f Streak Freezes</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;">Used automatically when you miss a day. Max 3 owned at a time.</p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;">
-            <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} 🪙 each</div>
+            <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} \ud83e\ude99 each</div>
             <button class="btn btn-primary btn-sm" id="buy-freeze-btn" onclick="buyFreeze()" {freeze_btn_disabled}>Buy 1 freeze</button>
+            <div style="width:1px;height:24px;background:var(--border);"></div>
+            <div style="font-size:14px;"><b>3-pack</b>: {bundle_price} \ud83e\ude99 <span style="color:#10b981;font-weight:700;">(save {bundle_save})</span></div>
+            <button class="btn btn-primary btn-sm" onclick="buyFreezeBundle()" {bundle_disabled}>Buy 3-pack</button>
           </div>
         </div>
 
@@ -18037,11 +18094,39 @@ No markdown, no code fences. ONLY JSON.
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
           location.reload();
         }}
+        async function buyFreezeBundle() {{
+          const r = await fetch('/api/student/wallet/buy-freeze-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          location.reload();
+        }}
+        async function buyBoost(key) {{
+          const r = await fetch('/api/student/wallet/buy-boost', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{boost_key:key}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          location.reload();
+        }}
         async function buyBanner(key) {{
           const r = await fetch('/api/student/wallet/buy-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key: key}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
           location.reload();
         }}
+        // Live countdown for active boost chips
+        (function() {{
+          const chips = document.querySelectorAll('.sh-active-chip');
+          if (!chips.length) return;
+          function pad(n) {{ return String(n).padStart(2, '0'); }}
+          function tick() {{
+            const now = Date.now();
+            chips.forEach(chip => {{
+              const exp = new Date(chip.dataset.exp).getTime();
+              const ms = exp - now;
+              if (ms <= 0) {{ chip.querySelector('.sh-cd').textContent = 'expired'; return; }}
+              const s = Math.floor(ms / 1000);
+              const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+              chip.querySelector('.sh-cd').textContent = pad(h) + ':' + pad(m) + ':' + pad(sec);
+            }});
+          }}
+          tick(); setInterval(tick, 1000);
+        }})();
         </script>
         """, active_page="student_shop")
 
@@ -18142,6 +18227,23 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
         return jsonify(sdb.buy_streak_freeze(_cid(), 1))
+
+
+    @app.route("/api/student/wallet/buy-freeze-bundle", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_buy_freeze_bundle_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        return jsonify(sdb.buy_streak_freeze(_cid(), sdb.STREAK_FREEZE_BUNDLE_QTY, bundle=True))
+
+
+    @app.route("/api/student/wallet/buy-boost", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_buy_boost_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        return jsonify(sdb.buy_boost(_cid(), str(data.get("boost_key") or "")))
 
 
     @app.route("/api/student/wallet/buy-banner", methods=["POST"])

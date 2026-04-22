@@ -491,6 +491,11 @@ def init_student_db():
         init_wallet_table()
     except Exception as e:
         log.exception("init_wallet_table failed: %s", e)
+    # Timed boosts (2x XP, 2x coins)
+    try:
+        init_boosts_table()
+    except Exception as e:
+        log.exception("init_boosts_table failed: %s", e)
     # Quiz Duels v2 (file-upload + AI-generated, synchronous)
     try:
         init_quiz_duels_tables()
@@ -1747,6 +1752,14 @@ def get_youtube_imports(client_id: int) -> list[dict]:
 # ── XP / Gamification ──────────────────────────────────────
 
 def award_xp(client_id: int, action: str, xp: int, detail: str = "") -> int:
+    # Apply timed XP multiplier (2x potion, etc.) only on positive awards.
+    if xp and xp > 0:
+        try:
+            mult = get_active_boost(client_id, "xp")
+            if mult and mult > 1.0:
+                xp = int(round(xp * mult))
+        except Exception:
+            pass
     with get_db() as db:
         return _insert_returning_id(
             db,
@@ -2956,6 +2969,127 @@ BANNERS = {
 }
 
 STREAK_FREEZE_PRICE = 10
+STREAK_FREEZE_BUNDLE_QTY = 3
+STREAK_FREEZE_BUNDLE_PRICE = 25  # vs. 30 if bought one-by-one (saves 5)
+
+# Timed boosts. Each entry: (label, multiplier, hours, price_coins)
+BOOSTS = {
+    "xp_1h":   {"label": "2\u00d7 XP \u00b7 1 hour",   "kind": "xp",   "mult": 2.0, "hours": 1,   "price_coins": 20},
+    "xp_24h":  {"label": "2\u00d7 XP \u00b7 24 hours", "kind": "xp",   "mult": 2.0, "hours": 24,  "price_coins": 80},
+    "xp_7d":   {"label": "2\u00d7 XP \u00b7 7 days",   "kind": "xp",   "mult": 2.0, "hours": 168, "price_coins": 300},
+    "coin_1h": {"label": "2\u00d7 Coins \u00b7 1 hour",   "kind": "coin", "mult": 2.0, "hours": 1,   "price_coins": 15},
+    "coin_24h":{"label": "2\u00d7 Coins \u00b7 24 hours", "kind": "coin", "mult": 2.0, "hours": 24,  "price_coins": 60},
+    "coin_7d": {"label": "2\u00d7 Coins \u00b7 7 days",   "kind": "coin", "mult": 2.0, "hours": 168, "price_coins": 250},
+}
+
+def init_boosts_table() -> None:
+    """Create the boosts table if missing."""
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_boosts ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "kind TEXT NOT NULL, "
+        "multiplier REAL NOT NULL DEFAULT 2.0, "
+        "expires_at TIMESTAMP NOT NULL, "
+        "created_at TIMESTAMP DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS student_boosts ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "kind TEXT NOT NULL, "
+        "multiplier REAL NOT NULL DEFAULT 2.0, "
+        "expires_at TIMESTAMP NOT NULL, "
+        "created_at TIMESTAMP DEFAULT (datetime('now','localtime')))",
+    )
+
+
+def get_active_boost(client_id: int, kind: str) -> float:
+    """Return the highest active multiplier for `kind` ('xp' or 'coin'), or 1.0.
+    Re-entrant safe: never raises (returns 1.0 on any failure)."""
+    try:
+        with get_db() as db:
+            row = _fetchone(
+                db,
+                "SELECT MAX(multiplier) AS m FROM student_boosts "
+                "WHERE client_id = %s AND kind = %s AND expires_at > %s",
+                (client_id, kind, datetime.now()),
+            )
+            m = float((row or {}).get("m") or 1.0)
+            return m if m >= 1.0 else 1.0
+    except Exception:
+        return 1.0
+
+
+def get_active_boosts(client_id: int) -> list:
+    """Return list of active boosts with kind, multiplier, expires_at (ISO)."""
+    try:
+        with get_db() as db:
+            rows = _fetchall(
+                db,
+                "SELECT kind, multiplier, expires_at FROM student_boosts "
+                "WHERE client_id = %s AND expires_at > %s ORDER BY expires_at DESC",
+                (client_id, datetime.now()),
+            ) or []
+        out = []
+        for r in rows:
+            exp = r.get("expires_at")
+            if hasattr(exp, "isoformat"):
+                exp = exp.isoformat()
+            out.append({"kind": r.get("kind"), "multiplier": float(r.get("multiplier") or 1.0), "expires_at": exp})
+        return out
+    except Exception:
+        return []
+
+
+def buy_boost(client_id: int, boost_key: str) -> dict:
+    """Purchase a timed boost. Stacks duration if same kind already active
+    (extends expiry by `hours`)."""
+    cfg = BOOSTS.get(boost_key)
+    if not cfg:
+        return {"ok": False, "error": "Unknown boost."}
+    cost = int(cfg["price_coins"])
+    hours = int(cfg["hours"])
+    mult = float(cfg["mult"])
+    kind = cfg["kind"]
+    from datetime import timedelta as _td
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        coins = int(_fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s",
+                              (client_id,)) or 0)
+        if coins < cost:
+            return {"ok": False, "error": "Not enough coins."}
+        # If a same-kind boost is active, extend it; otherwise create new.
+        existing = _fetchone(
+            db,
+            "SELECT id, expires_at FROM student_boosts "
+            "WHERE client_id = %s AND kind = %s AND expires_at > %s "
+            "ORDER BY expires_at DESC LIMIT 1",
+            (client_id, kind, datetime.now()),
+        )
+        if existing:
+            cur_exp = existing["expires_at"]
+            if isinstance(cur_exp, str):
+                try:
+                    cur_exp = datetime.fromisoformat(cur_exp)
+                except Exception:
+                    cur_exp = datetime.now()
+            new_exp = cur_exp + _td(hours=hours)
+            _exec(db, "UPDATE student_boosts SET expires_at = %s, multiplier = %s WHERE id = %s",
+                  (new_exp, mult, existing["id"]))
+        else:
+            new_exp = datetime.now() + _td(hours=hours)
+            _exec(
+                db,
+                "INSERT INTO student_boosts (client_id, kind, multiplier, expires_at) "
+                "VALUES (%s, %s, %s, %s)",
+                (client_id, kind, mult, new_exp),
+            )
+        _exec(db, "UPDATE student_wallet SET coins = coins - %s WHERE client_id = %s",
+              (cost, client_id))
+        new_coins = int(_fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s",
+                                  (client_id,)) or 0)
+    return {"ok": True, "coins": new_coins, "boost": {"kind": kind, "multiplier": mult,
+            "expires_at": new_exp.isoformat() if hasattr(new_exp, "isoformat") else str(new_exp)}}
+
 
 def init_wallet_table() -> None:
     """Create the wallet table if missing (called from init_student_db)."""
@@ -3009,9 +3143,17 @@ def get_wallet(client_id: int) -> dict:
 
 
 def add_coins(client_id: int, amount: int, _reason: str = "") -> int:
-    """Add (or subtract) coins. Returns new balance."""
+    """Add (or subtract) coins. Returns new balance.
+    Positive amounts get multiplied by an active 2x-coin boost if any."""
     if amount == 0:
         return get_wallet(client_id)["coins"]
+    if amount > 0:
+        try:
+            mult = get_active_boost(client_id, "coin")
+            if mult and mult > 1.0:
+                amount = int(round(amount * mult))
+        except Exception:
+            pass
     with get_db() as db:
         _ensure_wallet(db, client_id)
         _exec(db, "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
@@ -3019,10 +3161,15 @@ def add_coins(client_id: int, amount: int, _reason: str = "") -> int:
         return _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
 
 
-def buy_streak_freeze(client_id: int, qty: int = 1) -> dict:
-    """Spend coins to buy `qty` streak freezes (max 3 owned at once)."""
+def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dict:
+    """Spend coins to buy `qty` streak freezes (max 3 owned at once).
+    If `bundle=True` and qty==STREAK_FREEZE_BUNDLE_QTY, use the discounted
+    bundle price."""
     qty = max(1, min(3, int(qty)))
-    cost = STREAK_FREEZE_PRICE * qty
+    if bundle and qty == STREAK_FREEZE_BUNDLE_QTY:
+        cost = STREAK_FREEZE_BUNDLE_PRICE
+    else:
+        cost = STREAK_FREEZE_PRICE * qty
     with get_db() as db:
         _ensure_wallet(db, client_id)
         row = _fetchone(db, "SELECT coins, streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,))
