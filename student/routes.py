@@ -63,6 +63,8 @@ _GPA_PLANILLA_HTML = r"""
   .pl-course-h .label { font-size:11px; color:var(--text-muted); }
   .pl-course-h .del { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; }
   .pl-course-h .del:hover { background:rgba(239,68,68,.12); color:#ef4444; }
+  .pl-course-h .copy { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; }
+  .pl-course-h .copy:hover { background:rgba(56,189,248,.12); color:#0ea5e9; }
   .pl-evals { width:100%; border-collapse:collapse; font-size:13px; }
   .pl-evals th { text-align:left; padding:6px 4px; font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid var(--border); }
   .pl-evals td { padding:4px 4px; }
@@ -280,6 +282,7 @@ _GPA_PLANILLA_HTML = r"""
         '<input class="cname" value="' + escapeHtml(c.name) + '" placeholder="Nombre del ramo" oninput="plSetCourse(' + sIdx + ',' + cIdx + ',\'name\',this.value)">' +
         '<span class="label">Créd:</span>' +
         '<input class="ccred" inputmode="numeric" value="' + escapeHtml(c.credits) + '" oninput="plSetCourse(' + sIdx + ',' + cIdx + ',\'credits\',this.value)">' +
+        '<button class="copy" title="Copiar a otro semestre" onclick="plCopyCourse(' + sIdx + ',' + cIdx + ')">⧉</button>' +
         '<button class="del" title="Eliminar ramo" onclick="plDelCourse(' + sIdx + ',' + cIdx + ')">🗑</button>' +
       '</div>' +
       '<table class="pl-evals"><thead><tr>' +
@@ -368,6 +371,41 @@ _GPA_PLANILLA_HTML = r"""
   window.plDelCourse = function(s, c){
     if (!confirm('¿Eliminar este ramo?')) return;
     data.sems[s].courses.splice(c, 1);
+    rerender();
+  };
+  // Deep-clone a course (with fresh ids so edits don't bleed across semesters)
+  // and append it to the chosen target semester.
+  window.plCopyCourse = function(s, c){
+    var src = data.sems[s] && data.sems[s].courses[c];
+    if (!src) return;
+    // Build a numbered list of all semesters except the source so the user
+    // can pick where to paste.
+    var opts = [];
+    data.sems.forEach(function(sm, i){
+      if (i === s) return;
+      opts.push((i + 1) + ') Sem ' + sm.label + ' (' + sm.courses.length + ' ramos)');
+    });
+    var prompt_msg = 'Copiar "' + (src.name || 'ramo') + '" a qué semestre?\n\n' +
+                     opts.join('\n') +
+                     '\n\nEscribe el número (1-' + data.sems.length + '):';
+    var raw = window.prompt(prompt_msg, String(s + 2 > data.sems.length ? 1 : s + 2));
+    if (raw == null) return;
+    var n = parseInt(raw, 10);
+    if (!isFinite(n) || n < 1 || n > data.sems.length) {
+      alert('Número inválido.');
+      return;
+    }
+    var targetIdx = n - 1;
+    if (targetIdx === s) {
+      alert('Ese es el mismo semestre.');
+      return;
+    }
+    var copy = JSON.parse(JSON.stringify(src));
+    copy.id = uid();
+    if (Array.isArray(copy.evals)) {
+      copy.evals.forEach(function(e){ e.id = uid(); e.grade = ''; });
+    }
+    data.sems[targetIdx].courses.push(copy);
     rerender();
   };
   window.plReset = function(){
@@ -2504,7 +2542,12 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        return jsonify({"ok": True, "stats": stats, "promotion": promotion})
+        # Frontend cards say "Hours Today" / "Sessions Today" — return
+        # today-scoped stats, not lifetime totals (lifetime `stats` above is
+        # only used for badge thresholds).
+        today_stats = sdb.get_focus_stats_today(cid)
+
+        return jsonify({"ok": True, "stats": today_stats, "promotion": promotion})
 
 
 
@@ -2516,7 +2559,7 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        return jsonify(sdb.get_focus_stats(_cid()))
+        return jsonify(sdb.get_focus_stats_today(_cid()))
 
 
 
@@ -6048,15 +6091,16 @@ def register_student_routes(app, csrf, limiter):
 
                     var s = await r2.json();
 
-                    if (s && s.stats) {{
+                    // Endpoint returns the stats object directly (today-scoped).
+                    if (s) {{
 
-                      document.getElementById('stat-hours').textContent = s.stats.total_hours;
+                      document.getElementById('stat-hours').textContent = s.total_hours;
 
-                      document.getElementById('stat-sessions').textContent = s.stats.sessions;
+                      document.getElementById('stat-sessions').textContent = s.sessions;
 
-                      document.getElementById('stat-pages').textContent = s.stats.total_pages;
+                      document.getElementById('stat-pages').textContent = s.total_pages;
 
-                      document.getElementById('stat-streak').textContent = s.stats.streak_days;
+                      document.getElementById('stat-streak').textContent = s.streak_days;
 
                     }}
 

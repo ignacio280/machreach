@@ -3145,7 +3145,59 @@ BANNERS = {
                    "css": "conic-gradient(from 220deg at 50% 50%, #f0abfc, #67e8f9, #fde68a, #86efac, #c4b5fd, #f0abfc)"},
     "matrix":     {"name": "Matrix Rain (PLUS)", "price_coins": 800,  "xp_required": 0, "plus_only": True,
                    "animated": True, "anim_class": "bnr-anim-matrix",
-                   "css": "repeating-linear-gradient(180deg, rgba(134,239,172,.95) 0 6px, rgba(34,197,94,.55) 6px 14px, rgba(16,185,129,.25) 14px 26px, transparent 26px 56px), repeating-linear-gradient(90deg, transparent 0 10px, rgba(0,0,0,.55) 10px 12px), repeating-linear-gradient(180deg, rgba(74,222,128,.18) 0 2px, transparent 2px 18px), linear-gradient(180deg, #022c22 0%, #000 100%)"},
+                   "css": ("url('data:image/svg+xml;utf8,"
+                           "<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2284%22 height=%22480%22>"
+                           "<style>.g{font:bold 18px ui-monospace,Menlo,monospace;fill:%2322c55e}"
+                           ".h{font:bold 18px ui-monospace,Menlo,monospace;fill:%23dcfce7}</style>"
+                           "<text class=%22h%22 x=%228%22 y=%2218%22>1</text>"
+                           "<text class=%22g%22 x=%228%22 y=%2248%22>0</text>"
+                           "<text class=%22g%22 x=%228%22 y=%2278%22>1</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22108%22>1</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22138%22>0</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22168%22>1</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22198%22>0</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22228%22>0</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22258%22>1</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22288%22>0</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22318%22>1</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22348%22>0</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22378%22>1</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22408%22>1</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22438%22>0</text>"
+                           "<text class=%22g%22 x=%228%22 y=%22468%22>1</text>"
+                           "<text class=%22h%22 x=%2236%22 y=%2230%22>0</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%2260%22>1</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%2290%22>0</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22120%22>0</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22150%22>1</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22180%22>0</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22210%22>1</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22240%22>1</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22270%22>0</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22300%22>1</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22330%22>0</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22360%22>0</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22390%22>1</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22420%22>1</text>"
+                           "<text class=%22g%22 x=%2236%22 y=%22450%22>0</text>"
+                           "<text class=%22h%22 x=%2264%22 y=%2212%22>1</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%2242%22>1</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%2272%22>0</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22102%22>1</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22132%22>0</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22162%22>1</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22192%22>1</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22222%22>0</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22252%22>1</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22282%22>0</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22312%22>0</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22342%22>1</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22372%22>0</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22402%22>1</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22432%22>1</text>"
+                           "<text class=%22g%22 x=%2264%22 y=%22462%22>0</text>"
+                           "</svg>'), "
+                           "linear-gradient(180deg, #022c22 0%, #000 100%)")},
     "blueprint":  {"name": "Blueprint Grid",     "price_coins": 250,  "xp_required": 750,
                    "css": "repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, transparent 1px 24px), linear-gradient(135deg, #0c4a6e, #1e3a8a)"},
     "hologram":   {"name": "Hologram",           "price_coins": 600,  "xp_required": 6000,
@@ -3199,9 +3251,6 @@ BANNERS = {
     "starfield":  {"name": "Starfield",          "price_coins": 420,  "xp_required": 2500,
                    "animated": True, "anim_class": "bnr-anim-starfield",
                    "css": "radial-gradient(2px 2px at 20% 30%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 80% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 50% 50%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 30% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 70% 20%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 10% 60%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 90% 40%, #fff 50%, transparent 50%), linear-gradient(135deg,#000,#1e1b4b)"},
-    "circuit":    {"name": "Circuit Board",      "price_coins": 420,  "xp_required": 2500,
-                   "animated": True, "anim_class": "bnr-anim-circuit",
-                   "css": "repeating-linear-gradient(180deg, rgba(134,239,172,.85) 0 5px, rgba(34,197,94,.45) 5px 11px, transparent 11px 36px), repeating-linear-gradient(90deg, transparent 0 16px, rgba(0,0,0,.4) 16px 18px), repeating-linear-gradient(0deg, rgba(34,197,94,.3) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(34,197,94,.3) 0 1px, transparent 1px 32px), radial-gradient(ellipse at 50% 50%, rgba(16,185,129,.45) 0%, transparent 50%), linear-gradient(135deg,#022c22,#064e3b)"},
     "carbon":     {"name": "Carbon Fiber",       "price_coins": 320,  "xp_required": 1200,
                    "css": "repeating-linear-gradient(45deg, #1f2937 0 6px, #111827 6px 12px), repeating-linear-gradient(-45deg, rgba(255,255,255,.04) 0 6px, transparent 6px 12px)"},
     "stained":    {"name": "Stained Glass",      "price_coins": 480,  "xp_required": 3000,
@@ -3266,7 +3315,6 @@ BANNER_ANIM_CSS = """
   50%     { opacity: 1;   transform: scale(1.04); }
 }
 @keyframes bnr-grid-scan { 0% { background-position: 0 0, 0 0, 50% 50%, 0 0; } 100% { background-position: 28px 28px, 28px 28px, 50% 50%, 0 0; } }
-@keyframes bnr-circuit-scan { 0% { background-position: 0 0, 0 0, 50% 50%, 0 0; } 100% { background-position: 32px 0, 0 32px, 50% 50%, 0 0; } }
 @keyframes bnr-void-pulse {
   0%,100% { background-position: 50% 50%, 30% 30%, 70% 70%, 20% 80%, 0 0; filter: brightness(1); }
   50%     { background-position: 50% 50%, 35% 25%, 65% 75%, 25% 85%, 0 0; filter: brightness(1.3); }
@@ -3290,26 +3338,22 @@ BANNER_ANIM_CSS = """
 .bnr-anim-deepsea   { background-size: 200% 200% !important; animation: bnr-pan-diag 22s ease-in-out infinite, bnr-glow-pulse 6s ease-in-out infinite; }
 .bnr-anim-starfield { background-size: 200% 200% !important; animation: bnr-pan-vert 60s linear infinite, bnr-twinkle 3.5s ease-in-out infinite; }
 .bnr-anim-neongrid  { background-size: 28px 28px, 28px 28px, 200% 200%, 100% 100% !important; animation: bnr-grid-scan 4s linear infinite, bnr-glow-pulse 5s ease-in-out infinite; }
-.bnr-anim-circuit   { background-size: 100% 36px, 18px 100%, 32px 32px, 32px 32px, 200% 200%, 100% 100% !important; animation: bnr-circuit-rain 3s linear infinite, bnr-circuit-scan 6s linear infinite, bnr-glow-pulse 5s ease-in-out infinite; }
 .bnr-anim-void      { background-size: 200% 200%, 200% 200%, 200% 200%, 200% 200%, 100% 100% !important; animation: bnr-void-pulse 8s ease-in-out infinite; }
 .bnr-anim-cosmic    { background-size: 200% 200% !important; animation: bnr-pan-diag 30s ease-in-out infinite, bnr-twinkle 4s ease-in-out infinite; }
 .bnr-anim-andromeda { background-size: 220% 220%, 220% 220%, 220% 220%, 220% 220%, 220% 220%, 220% 220%, 220% 220%; transform-origin: center; animation: bnr-andromeda-drift 28s ease-in-out infinite, bnr-twinkle 5s ease-in-out infinite; }
 
-/* Matrix rain — vertical glyph cascade */
+/* Matrix Rain — actual falling 1s and 0s (SVG layer scrolls down). The SVG
+   tile is 84px x 480px (3 staggered columns) and is set as the first
+   background-image via the banner's css value. We just animate Y. */
 @keyframes bnr-matrix-rain {
-  0%   { background-position: 0 0,        0 0, 0 0,        0 0; }
-  100% { background-position: 0 560px,    0 0, 0 -360px,   0 0; }
+  0%   { background-position: 0 0,    0 0; }
+  100% { background-position: 0 480px, 0 0; }
 }
 .bnr-anim-matrix {
-  background-size: 100% 56px, 12px 100%, 100% 18px, 100% 100% !important;
-  animation: bnr-matrix-rain 2.6s linear infinite;
+  background-size: 84px 480px, 100% 100% !important;
+  background-repeat: repeat, no-repeat !important;
+  animation: bnr-matrix-rain 4s linear infinite;
   filter: drop-shadow(0 0 6px rgba(74,222,128,.45));
-}
-
-/* Circuit Board — 1s and 0s falling like rain on top of the grid */
-@keyframes bnr-circuit-rain {
-  0%   { background-position: 0 0,    0 0, 0 0, 0 0, 0 0, 0 0; }
-  100% { background-position: 0 360px,0 0, 28px 28px, 28px 28px, 50% 50%, 0 0; }
 }
 
 /* Aurora Borealis — luminous green/cyan ribbons swimming */
@@ -3429,7 +3473,26 @@ FLAGS = {
                    "css": "repeating-linear-gradient(90deg, rgba(134,239,172,.95) 0 5px, rgba(34,197,94,.55) 5px 12px, rgba(16,185,129,.22) 12px 22px, transparent 22px 48px), repeating-linear-gradient(180deg, transparent 0 9px, rgba(0,0,0,.5) 9px 11px), linear-gradient(90deg, #022c22 0%, #16a34a 50%, #86efac 100%)"},
     "matrix_rain":{"name": "Matrix Rain (PLUS)", "price_coins": 800,  "xp_required": 0, "plus_only": True,
                    "animated": True, "anim_class": "flag-anim-matrix",
-                   "css": "repeating-linear-gradient(180deg, rgba(134,239,172,.95) 0 5px, rgba(34,197,94,.55) 5px 12px, rgba(16,185,129,.22) 12px 22px, transparent 22px 48px), repeating-linear-gradient(90deg, transparent 0 9px, rgba(0,0,0,.6) 9px 11px), linear-gradient(180deg, #022c22 0%, #000 100%)"},
+                   "css": ("url('data:image/svg+xml;utf8,"
+                           "<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2284%22 height=%22120%22>"
+                           "<style>.g{font:bold 14px ui-monospace,Menlo,monospace;fill:%2322c55e}"
+                           ".h{font:bold 14px ui-monospace,Menlo,monospace;fill:%23dcfce7}</style>"
+                           "<text class=%22h%22 x=%226%22 y=%2214%22>1</text>"
+                           "<text class=%22g%22 x=%226%22 y=%2238%22>0</text>"
+                           "<text class=%22g%22 x=%226%22 y=%2262%22>1</text>"
+                           "<text class=%22g%22 x=%226%22 y=%2286%22>1</text>"
+                           "<text class=%22g%22 x=%226%22 y=%22110%22>0</text>"
+                           "<text class=%22h%22 x=%2234%22 y=%2226%22>0</text>"
+                           "<text class=%22g%22 x=%2234%22 y=%2250%22>1</text>"
+                           "<text class=%22g%22 x=%2234%22 y=%2274%22>0</text>"
+                           "<text class=%22g%22 x=%2234%22 y=%2298%22>1</text>"
+                           "<text class=%22h%22 x=%2262%22 y=%228%22>1</text>"
+                           "<text class=%22g%22 x=%2262%22 y=%2232%22>1</text>"
+                           "<text class=%22g%22 x=%2262%22 y=%2256%22>0</text>"
+                           "<text class=%22g%22 x=%2262%22 y=%2280%22>1</text>"
+                           "<text class=%22g%22 x=%2262%22 y=%22104%22>0</text>"
+                           "</svg>'), "
+                           "linear-gradient(180deg, #022c22 0%, #000 100%)")},
     "bloodmoon":  {"name": "Blood Moon",         "price_coins": 450,  "xp_required": 3500,
                    "css": "linear-gradient(90deg, #000 0%, #7f1d1d 50%, #f87171 100%)"},
     "honey":      {"name": "Honeycomb",          "price_coins": 320,  "xp_required": 2000,
@@ -3516,13 +3579,14 @@ FLAG_ANIM_CSS = """
 .flag-anim-fast    { animation: flg-pan 6s linear infinite; }
 .flag-anim-shimmer { animation: flg-shimmer 5s ease-in-out infinite; }
 
-/* Matrix rain flag — vertical green glyph cascade */
+/* Matrix rain flag — actual falling 1s and 0s (SVG layer scrolls down) */
 @keyframes flg-matrix-rain {
-  0%   { background-position: 0 0,    0 0,    0 0; }
-  100% { background-position: 0 480px,0 0,    0 0; }
+  0%   { background-position: 0 0,    0 0; }
+  100% { background-position: 0 120px, 0 0; }
 }
 .flag-anim-matrix {
-  background-size: 100% 48px, 11px 100%, 100% 100% !important;
+  background-size: 84px 120px, 100% 100% !important;
+  background-repeat: repeat, no-repeat !important;
   animation: flg-matrix-rain 2.4s linear infinite;
   filter: drop-shadow(0 0 4px rgba(74,222,128,.5));
 }
