@@ -3747,7 +3747,7 @@ STREAK_FREEZE_BUNDLE_PRICE = 25  # vs. 30 if bought one-by-one (saves 5)
 
 # ── Coin microtransactions ──────────────────────────────────────────
 # Real-money packs that credit virtual coins. Prices are in USD; the actual
-# payment processor (PayPal one-time orders) is wired in routes.py.
+# payment processor (Lemon Squeezy one-time orders) is wired in routes.py.
 COIN_PACKS = {
     "small":  {"name": "Pocket Pack",    "coins": 250,   "bonus": 0,    "price_usd": 0.99,  "tag": ""},
     "medium": {"name": "Stash Pack",     "coins": 800,   "bonus": 50,   "price_usd": 2.99,  "tag": "+6%"},

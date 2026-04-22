@@ -408,16 +408,16 @@ def _set_security_headers(response):
     # via Jinja/f-strings. Everything else is locked down.
     _CSP = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
         "img-src 'self' data: blob: https:; "
         "media-src 'self' https:; "
         "connect-src 'self' https://api.openai.com https://*.instructure.com https://cdn.jsdelivr.net; "
-        "frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.sandbox.paypal.com https://open.spotify.com https://www.youtube.com https://www.youtube-nocookie.com; "
+        "frame-src 'self' https://open.spotify.com https://www.youtube.com https://www.youtube-nocookie.com; "
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
-        "form-action 'self' https://www.paypal.com https://www.sandbox.paypal.com; "
+        "form-action 'self' https://*.lemonsqueezy.com; "
         "object-src 'none'; "
         "upgrade-insecure-requests"
     )
@@ -10263,28 +10263,29 @@ def group_send(group_name):
 
 
 # ---------------------------------------------------------------------------
-# Routes — Billing & PayPal
+# Routes — Billing (Lemon Squeezy hosted checkout)
 # ---------------------------------------------------------------------------
 
 @app.route("/billing")
 def billing_page():
     if not _logged_in():
         return redirect(url_for("login"))
-    from outreach.db import get_subscription, get_usage, check_limit
-    from outreach.config import PLAN_LIMITS, PAYPAL_CLIENT_ID, PAYPAL_PLAN_GROWTH, PAYPAL_PLAN_PRO, PAYPAL_PLAN_UNLIMITED
+    from outreach.db import get_subscription, get_usage
+    from outreach.config import (
+        PLAN_LIMITS,
+        LS_VARIANT_GROWTH, LS_VARIANT_PRO, LS_VARIANT_UNLIMITED,
+    )
 
     sub = get_subscription(session["client_id"])
     usage = get_usage(session["client_id"])
     plan = sub.get("plan", "free")
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
 
-    # Flash messages for redirect params
     if request.args.get("upgraded"):
         flash(("success", "Payment successful! Your plan has been upgraded."))
     if request.args.get("canceled"):
         flash(("info", "Checkout canceled. No changes made."))
 
-    # Build usage bars
     def _bar(used, limit, label):
         if limit == -1:
             return f'<div class="usage-row"><span class="usage-label">{label}</span><span class="usage-val">{used} used &middot; <b>Unlimited</b></span><div class="progress-wrap" style="width:100%;margin-top:4px;"><div class="progress-bar bar-green" style="width:0%"></div></div></div>'
@@ -10295,11 +10296,14 @@ def billing_page():
     usage_html = _bar(usage.get("emails_sent", 0), limits["emails_per_month"], "Emails Sent")
     usage_html += _bar(usage.get("mail_hub_syncs", 0), limits["mail_hub_syncs"], "Mail Hub Syncs")
 
-    # Plan cards with PayPal buttons
     plan_order = ["free", "growth", "pro", "unlimited"]
     plan_labels = {"free": "Free", "growth": "Growth", "pro": "Pro", "unlimited": "Unlimited"}
     plan_prices = {"free": "$0", "growth": "$8", "pro": "$20", "unlimited": "$40"}
-    plan_ids = {"growth": PAYPAL_PLAN_GROWTH, "pro": PAYPAL_PLAN_PRO, "unlimited": PAYPAL_PLAN_UNLIMITED}
+    has_variant = {
+        "growth":    bool(LS_VARIANT_GROWTH),
+        "pro":       bool(LS_VARIANT_PRO),
+        "unlimited": bool(LS_VARIANT_UNLIMITED),
+    }
     plan_features = {
         "free": ["200 emails/month", "1 mailbox", "2 campaigns", "10 Mail Hub syncs/month", "Basic analytics"],
         "growth": ["2,000 emails/month", "3 mailboxes", "Unlimited campaigns", "Unlimited Mail Hub syncs", "AI email classification", "Reply sentiment analysis"],
@@ -10317,9 +10321,13 @@ def billing_page():
             btn = '<button class="btn btn-outline btn-sm" disabled style="width:100%;justify-content:center;opacity:0.5;">Current Plan</button>'
         elif p == "free":
             btn = '<form method="post" action="/billing/downgrade"><button class="btn btn-outline btn-sm" style="width:100%;justify-content:center;">Downgrade</button></form>'
+        elif not has_variant.get(p):
+            btn = '<button class="btn btn-outline btn-sm" disabled style="width:100%;">Not available</button>'
         else:
-            pp_id = plan_ids.get(p, "")
-            btn = f'<div id="paypal-btn-{p}" style="margin-top:8px;"></div>' if pp_id else '<button class="btn btn-outline btn-sm" disabled style="width:100%;">Not available</button>'
+            btn = (f'<form method="post" action="/billing/checkout">'
+                   f'<input type="hidden" name="plan" value="{p}">'
+                   f'<button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;">'
+                   f'Upgrade to {plan_labels[p]}</button></form>')
 
         border = "border:2px solid var(--primary);" if is_current else ""
         cards += f"""
@@ -10336,44 +10344,9 @@ def billing_page():
 
     status_badge = {"active": "badge-green", "past_due": "badge-yellow", "canceled": "badge-red"}.get(sub.get("status", "active"), "badge-gray")
 
-    # PayPal JS SDK script + button renderers
-    paypal_script = ""
-    if PAYPAL_CLIENT_ID:
-        paypal_buttons_js = ""
-        for p_name, p_id in plan_ids.items():
-            if p_id and p_name != plan:
-                paypal_buttons_js += f"""
-        if (document.getElementById('paypal-btn-{p_name}')) {{
-          paypal.Buttons({{
-            style: {{ shape: 'rect', color: 'blue', layout: 'vertical', label: 'subscribe' }},
-            createSubscription: function(data, actions) {{
-              return actions.subscription.create({{ plan_id: '{p_id}' }});
-            }},
-            onApprove: function(data) {{
-              fetch('/billing/activate', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ subscription_id: data.subscriptionID, plan: '{p_name}' }})
-              }}).then(function() {{ window.location = '/billing?upgraded=1'; }});
-            }},
-            onCancel: function() {{ window.location = '/billing?canceled=1'; }},
-            onError: function(err) {{ console.error('PayPal error:', err); alert('Payment error. Please try again.'); }}
-          }}).render('#paypal-btn-{p_name}');
-        }}
-"""
-        paypal_script = f"""
-    <script src="https://www.paypal.com/sdk/js?client-id={PAYPAL_CLIENT_ID}&vault=true&intent=subscription" data-sdk-integration-source="button-factory"></script>
-    <script>{paypal_buttons_js}</script>
-    """
-
     return _render(t("billing.title"), f"""
     <div class="page-header">
       <h1>&#128179; {t("billing.title")}</h1>
-    </div>
-
-    <div style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;padding:16px 24px;border-radius:10px;margin-bottom:24px;text-align:center;">
-      <div style="font-size:18px;font-weight:700;margin-bottom:4px;">&#128679; Testing Mode</div>
-      <div style="font-size:14px;opacity:0.95;">Subscriptions and paid plans are <b>not available</b> during the beta period. All features are currently free. We'll announce when plans go live!</div>
     </div>
 
     <div class="card" style="margin-bottom:24px;">
@@ -10388,7 +10361,7 @@ def billing_page():
       {cards}
     </div>
 
-    {paypal_script}
+    <p style="text-align:center;color:var(--text-muted);font-size:13px;">Payments are processed securely by <a href="https://www.lemonsqueezy.com/" target="_blank" rel="noopener" style="color:var(--primary);">Lemon Squeezy</a>. You can cancel any time from this page.</p>
 
     <style>
       .usage-row {{ margin-bottom:16px; }}
@@ -10401,152 +10374,193 @@ def billing_page():
     """, active_page="billing")
 
 
-@app.route("/billing/activate", methods=["POST"])
-@limiter.limit("5 per minute")
-def billing_activate():
-    """Activate a PayPal subscription after user approval."""
+@app.route("/billing/checkout", methods=["POST"])
+@limiter.limit("10 per minute")
+def billing_checkout():
+    """Create a Lemon Squeezy hosted checkout for the chosen plan and redirect."""
     if not _logged_in():
-        return jsonify({"error": "unauthorized"}), 401
+        return redirect(url_for("login"))
 
-    data = request.get_json() or {}
-    pp_sub_id = data.get("subscription_id", "")
-    plan = data.get("plan", "")
+    from outreach.config import (
+        LS_VARIANT_GROWTH, LS_VARIANT_PRO, LS_VARIANT_UNLIMITED,
+    )
+    from outreach import lemonsqueezy as ls
 
-    if not pp_sub_id or plan not in ("growth", "pro", "unlimited"):
-        return jsonify({"error": "invalid"}), 400
+    plan = (request.form.get("plan") or "").strip().lower()
+    variant = {
+        "growth":    LS_VARIANT_GROWTH,
+        "pro":       LS_VARIANT_PRO,
+        "unlimited": LS_VARIANT_UNLIMITED,
+    }.get(plan, "")
 
-    from outreach.db import update_subscription
-    update_subscription(session["client_id"],
-                        plan=plan,
-                        stripe_subscription_id=pp_sub_id,
-                        status="active")
-    print(f"[PAYPAL] Client {session['client_id']} upgraded to {plan} (sub={pp_sub_id})")
-    return jsonify({"ok": True})
+    if not variant:
+        flash(("error", "That plan is not available."))
+        return redirect(url_for("billing_page"))
+    if not ls.is_configured():
+        flash(("error", "Billing is not configured yet."))
+        return redirect(url_for("billing_page"))
+
+    cid = session["client_id"]
+    email = session.get("email") or ""
+    redirect_url = url_for("billing_page", upgraded=1, _external=True)
+
+    try:
+        url = ls.create_checkout(
+            variant,
+            custom_data={"client_id": str(cid), "purpose": "outreach_sub", "plan": plan},
+            email=email,
+            redirect_url=redirect_url,
+        )
+    except Exception as e:
+        log.exception("[LS] checkout failed: %s", e)
+        flash(("error", "Could not start checkout. Please try again."))
+        return redirect(url_for("billing_page"))
+
+    return redirect(url, code=302)
 
 
 @app.route("/billing/downgrade", methods=["POST"])
 @limiter.limit("5 per minute")
 def billing_downgrade():
-    """Cancel PayPal subscription and revert to free plan."""
+    """Cancel the active Lemon Squeezy subscription and revert to free."""
     if not _logged_in():
         return redirect(url_for("login"))
 
-    from outreach.config import PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_MODE
     from outreach.db import get_subscription, update_subscription
+    from outreach import lemonsqueezy as ls
 
     sub = get_subscription(session["client_id"])
-    pp_sub_id = sub.get("stripe_subscription_id")
-
-    if pp_sub_id and PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET:
-        try:
-            import requests as rq
-            base = "https://api-m.paypal.com" if PAYPAL_MODE == "live" else "https://api-m.sandbox.paypal.com"
-            # Get access token
-            auth_resp = rq.post(f"{base}/v1/oauth2/token",
-                                auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
-                                data={"grant_type": "client_credentials"},
-                                headers={"Accept": "application/json"})
-            token = auth_resp.json().get("access_token", "")
-            if token:
-                rq.post(f"{base}/v1/billing/subscriptions/{pp_sub_id}/cancel",
-                        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                        json={"reason": "Customer requested downgrade"})
-        except Exception as e:
-            print(f"[PAYPAL] Cancel error: {e}")
+    ls_sub_id = sub.get("stripe_subscription_id")  # column reused for LS sub IDs
+    if ls_sub_id:
+        ls.cancel_subscription(ls_sub_id)
 
     update_subscription(session["client_id"], plan="free", stripe_subscription_id="", status="active")
     flash(("success", "Downgraded to Free plan."))
     return redirect(url_for("billing_page"))
 
 
-@app.route("/paypal/webhook", methods=["POST"])
+# ---------------------------------------------------------------------------
+# Lemon Squeezy webhook  (single endpoint for all 3 paid surfaces)
+# ---------------------------------------------------------------------------
+
+@app.route("/webhooks/lemonsqueezy", methods=["POST"])
 @csrf.exempt
-def paypal_webhook():
-    """Handle PayPal webhook events for subscription lifecycle."""
-    import json
+def lemonsqueezy_webhook():
+    """Single webhook for outreach subs, student PLUS subs, and coin packs.
+
+    Routing is done via `meta.custom_data.purpose`:
+      - "outreach_sub"  -> outreach subscription event (plan = growth/pro/unlimited)
+      - "student_sub"   -> student PLUS/Ultimate subscription event (tier)
+      - "coin_pack"     -> one-time coin-pack purchase (pack_key)
+    """
+    import json as _json
+    from outreach import lemonsqueezy as ls
+
+    raw = request.get_data() or b""
+    sig = request.headers.get("X-Signature", "") or request.headers.get("x-signature", "")
+    if not ls.verify_webhook(raw, sig):
+        log.warning("[LS] webhook rejected: bad signature")
+        return "Invalid signature", 401
 
     try:
-        body = json.loads(request.get_data())
+        body = _json.loads(raw.decode("utf-8") or "{}")
     except Exception:
         return "Bad JSON", 400
 
-    # Verify webhook signature with PayPal API (mandatory)
-    from outreach.config import PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID, PAYPAL_MODE
-    if not PAYPAL_WEBHOOK_ID or not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
-        print("[PAYPAL] Webhook rejected — credentials not configured")
-        return "Webhook not configured", 500
+    meta = body.get("meta") or {}
+    event_name = meta.get("event_name") or ""
+    custom = (meta.get("custom_data") or {})
+    data = body.get("data") or {}
+    attrs = (data.get("attributes") or {})
+
+    purpose = str(custom.get("purpose") or "")
     try:
-        import requests as rq
-        base = "https://api-m.paypal.com" if PAYPAL_MODE == "live" else "https://api-m.sandbox.paypal.com"
-        auth_resp = rq.post(f"{base}/v1/oauth2/token",
-                            auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
-                            data={"grant_type": "client_credentials"},
-                            headers={"Accept": "application/json"})
-        token = auth_resp.json().get("access_token", "")
-        if not token:
-            print("[PAYPAL] Could not obtain access token for webhook verification")
-            return "Verification failed", 500
-        verify_resp = rq.post(f"{base}/v1/notifications/verify-webhook-signature",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json={
-                "auth_algo": request.headers.get("PAYPAL-AUTH-ALGO", ""),
-                "cert_url": request.headers.get("PAYPAL-CERT-URL", ""),
-                "transmission_id": request.headers.get("PAYPAL-TRANSMISSION-ID", ""),
-                "transmission_sig": request.headers.get("PAYPAL-TRANSMISSION-SIG", ""),
-                "transmission_time": request.headers.get("PAYPAL-TRANSMISSION-TIME", ""),
-                "webhook_id": PAYPAL_WEBHOOK_ID,
-                "webhook_event": body,
-            })
-        if verify_resp.json().get("verification_status") != "SUCCESS":
-            print("[PAYPAL] Webhook signature verification failed")
-            return "Invalid signature", 400
-    except Exception as e:
-        print(f"[PAYPAL] Webhook verify error: {e}")
-        return "Verification error", 500
+        cid = int(custom.get("client_id") or 0)
+    except (TypeError, ValueError):
+        cid = 0
 
-    event_type = body.get("event_type", "")
-    resource = body.get("resource", {})
-    pp_sub_id = resource.get("id", "") or resource.get("billing_agreement_id", "")
+    if not cid:
+        log.warning("[LS] webhook missing client_id in custom_data: %s", event_name)
+        return "ok", 200  # ack so LS doesn't retry forever
 
-    from outreach.db import update_subscription, get_subscription_by_stripe_sub
+    log.info("[LS] webhook %s purpose=%s client=%s", event_name, purpose, cid)
 
-    if event_type == "BILLING.SUBSCRIPTION.ACTIVATED":
-        sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
-        if sub_rec:
-            update_subscription(sub_rec["client_id"], status="active")
-            print(f"[PAYPAL] Subscription {pp_sub_id} activated")
+    # ── Outreach SaaS subscription ─────────────────────────────────
+    if purpose == "outreach_sub":
+        from outreach.db import update_subscription, get_subscription_by_stripe_sub
+        sub_id = str(data.get("id") or "")
+        plan = str(custom.get("plan") or "")
+        if event_name == "subscription_created" and plan in ("growth", "pro", "unlimited"):
+            update_subscription(cid, plan=plan, stripe_subscription_id=sub_id, status="active")
+        elif event_name == "subscription_updated":
+            status = (attrs.get("status") or "").lower()
+            mapped = {"active": "active", "on_trial": "active", "paused": "past_due",
+                      "past_due": "past_due", "unpaid": "past_due",
+                      "cancelled": "canceled", "expired": "canceled"}.get(status, "active")
+            update_subscription(cid, status=mapped)
+        elif event_name in ("subscription_cancelled", "subscription_expired"):
+            rec = get_subscription_by_stripe_sub(sub_id)
+            target_cid = (rec or {}).get("client_id") or cid
+            update_subscription(target_cid, plan="free", stripe_subscription_id="", status="active")
+        elif event_name == "subscription_payment_success":
+            update_subscription(cid, status="active")
+        elif event_name == "subscription_payment_failed":
+            update_subscription(cid, status="past_due")
+        return "ok", 200
 
-    elif event_type == "BILLING.SUBSCRIPTION.CANCELLED":
-        sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
-        if sub_rec:
-            update_subscription(sub_rec["client_id"], plan="free",
-                                stripe_subscription_id="", status="active")
-            print(f"[PAYPAL] Client {sub_rec['client_id']} subscription cancelled -> free")
+    # ── Student PLUS / Ultimate subscription ───────────────────────
+    if purpose == "student_sub":
+        try:
+            from student import subscription as ssub
+        except Exception:
+            ssub = None
+        tier = str(custom.get("tier") or "plus").lower()
+        if tier not in ("plus", "ultimate"):
+            tier = "plus"
+        if not ssub:
+            return "ok", 200
+        sub_id = str(data.get("id") or "")
+        if event_name == "subscription_created":
+            ssub.set_tier(cid, tier)
+            # Stash the LS subscription id so we can cancel it later.
+            try:
+                from outreach.db import get_db, _fetchone, _exec
+                import json as _json
+                with get_db() as db:
+                    row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (cid,))
+                    prefs = {}
+                    try:
+                        prefs = _json.loads((row or {}).get("mail_preferences") or "{}")
+                    except Exception:
+                        prefs = {}
+                    sub = prefs.get("subscription") or {}
+                    sub["ls_sub_id"] = sub_id
+                    prefs["subscription"] = sub
+                    _exec(db, "UPDATE clients SET mail_preferences = %s WHERE id = %s", (_json.dumps(prefs), cid))
+            except Exception:
+                log.exception("[LS] could not persist ls_sub_id for student %s", cid)
+        elif event_name in ("subscription_cancelled", "subscription_expired"):
+            ssub.set_tier(cid, "free")
+        # payment_success / payment_failed don't change the tier (LS already
+        # toggles subscription status which we mirror on the next update).
+        return "ok", 200
 
-    elif event_type == "BILLING.SUBSCRIPTION.SUSPENDED":
-        sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
-        if sub_rec:
-            update_subscription(sub_rec["client_id"], status="past_due")
-            print(f"[PAYPAL] Subscription {pp_sub_id} suspended")
+    # ── One-time coin-pack purchase ────────────────────────────────
+    if purpose == "coin_pack":
+        if event_name != "order_created":
+            return "ok", 200  # we only credit on the initial order
+        pack_key = str(custom.get("pack_key") or "")
+        if not pack_key:
+            return "ok", 200
+        try:
+            from student import db as sdb
+            sdb.credit_coin_pack(cid, pack_key)
+        except Exception as e:
+            log.exception("[LS] coin-pack credit failed: %s", e)
+        return "ok", 200
 
-    elif event_type == "BILLING.SUBSCRIPTION.EXPIRED":
-        sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
-        if sub_rec:
-            update_subscription(sub_rec["client_id"], plan="free",
-                                stripe_subscription_id="", status="active")
-            print(f"[PAYPAL] Subscription {pp_sub_id} expired -> free")
-
-    elif event_type == "PAYMENT.SALE.COMPLETED":
-        pp_sub_id = resource.get("billing_agreement_id", "")
-        if pp_sub_id:
-            sub_rec = get_subscription_by_stripe_sub(pp_sub_id)
-            if sub_rec and sub_rec.get("status") == "past_due":
-                update_subscription(sub_rec["client_id"], status="active")
-                print(f"[PAYPAL] Payment received, reactivated client {sub_rec['client_id']}")
-
+    log.info("[LS] webhook unknown purpose=%r event=%s", purpose, event_name)
     return "ok", 200
-
-
 @app.route("/pricing")
 def pricing_page():
     """Public pricing page."""
@@ -10664,7 +10678,7 @@ def privacy_page():
         <p><strong>Student side &mdash; study exchange:</strong> notes you explicitly mark as shared become viewable to other MachReach students. You can unshare them at any time. Other users' forks of your notes are tracked only as anonymous counters for XP.</p>
         <p><strong>Focus Shield browser extension:</strong> the Focus Guard extension runs locally in your browser. It stores your blocklist and active-session state in <code>chrome.storage</code> on your device. It does <strong>not</strong> send your browsing history to our servers.</p>
         <p><strong>Usage data:</strong> aggregate metrics about how you use MachReach (features opened, campaigns created, quizzes generated) to improve the service. We do not use third-party advertising analytics.</p>
-        <p><strong>Payment data:</strong> billing is processed by PayPal. We receive only a subscription ID and status &mdash; never card numbers.</p>
+        <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive only a subscription ID and status &mdash; never card numbers.</p>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. How We Use Your Information</h2>
         <ul style="padding-left:20px;">
@@ -10697,7 +10711,7 @@ def privacy_page():
           <li><strong>OpenAI (US):</strong> Business side &mdash; email subjects and snippets may be sent for classification and reply generation. Student side &mdash; excerpts of your uploaded study materials and your questions are sent to generate plans, quizzes, flashcards, notes, tutor answers, essay feedback, and panic-mode plans. OpenAI does not train on API data per its API data-usage policy.</li>
           <li><strong>Instructure / Canvas LMS:</strong> OAuth provider for importing your courses and exams. We request only read scopes.</li>
           <li><strong>Google (Gmail OAuth) / Microsoft (Outlook OAuth):</strong> used only if you connect those accounts for Mail Hub or email sending.</li>
-          <li><strong>PayPal:</strong> processes payments. We do not store card numbers.</li>
+          <li><strong>Lemon Squeezy:</strong> processes payments &amp; subscriptions. We do not store card numbers.</li>
           <li><strong>Render (US):</strong> our application server and PostgreSQL database are hosted on Render's US infrastructure.</li>
           <li><strong>Sentry:</strong> error reporting. Stack traces may include request paths but we scrub form fields and secrets.</li>
           <li><strong>Legal requirements:</strong> we may disclose information if required by law or to protect our rights.</li>
@@ -10813,7 +10827,7 @@ def terms_page():
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. Subscriptions & Billing</h2>
         <ul style="padding-left:20px;">
           <li>Free plans are available with limited features</li>
-          <li>Paid plans are billed monthly through PayPal</li>
+          <li>Paid plans are billed monthly through Lemon Squeezy</li>
           <li>You can cancel your subscription at any time; access continues until the end of the billing period</li>
           <li>Refunds are handled on a case-by-case basis</li>
           <li>We reserve the right to change pricing with 30 days' notice</li>

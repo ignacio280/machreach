@@ -36,19 +36,31 @@ services:
         sync: false
       - key: BASE_URL
         sync: false
-      - key: PAYPAL_CLIENT_ID
+      - key: LEMON_SQUEEZY_API_KEY
         sync: false
-      - key: PAYPAL_CLIENT_SECRET
+      - key: LEMON_SQUEEZY_STORE_ID
         sync: false
-      - key: PAYPAL_WEBHOOK_ID
+      - key: LEMON_SQUEEZY_WEBHOOK_SECRET
         sync: false
-      - key: PAYPAL_PLAN_GROWTH
+      - key: LS_VARIANT_GROWTH
         sync: false
-      - key: PAYPAL_PLAN_PRO
+      - key: LS_VARIANT_PRO
         sync: false
-      - key: PAYPAL_PLAN_UNLIMITED
+      - key: LS_VARIANT_UNLIMITED
         sync: false
-      - key: PAYPAL_MODE
+      - key: LS_VARIANT_STUDENT_PLUS
+        sync: false
+      - key: LS_VARIANT_STUDENT_ULTIMATE
+        sync: false
+      - key: LS_VARIANT_COIN_SMALL
+        sync: false
+      - key: LS_VARIANT_COIN_MEDIUM
+        sync: false
+      - key: LS_VARIANT_COIN_LARGE
+        sync: false
+      - key: LS_VARIANT_COIN_MEGA
+        sync: false
+      - key: LS_VARIANT_COIN_ULTRA
         sync: false
       - key: SENTRY_DSN
         sync: false

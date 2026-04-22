@@ -17702,12 +17702,10 @@ No markdown, no code fences. ONLY JSON.
           location.reload();
         }}
         async function buyCoinPack(packKey) {{
-          // In production this should open a PayPal/Stripe checkout and only credit
-          // after capture. For now we credit immediately as a sandbox flow.
-          if (!confirm('Buy this coin pack? Coins are credited instantly (sandbox mode).')) return;
+          if (!confirm('Buy this coin pack? You will be redirected to checkout.')) return;
           const r = await fetch('/api/student/wallet/buy-coin-pack', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{pack_key: packKey}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not purchase.'); return; }}
-          alert('+' + r.credited + ' coins credited!');
+          if (!r.ok) {{ alert(r.error || 'Could not start checkout.'); return; }}
+          if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
           location.reload();
         }}
         async function buyFreezeBundle() {{
@@ -17747,6 +17745,7 @@ No markdown, no code fences. ONLY JSON.
           if (!confirm('Switch to the ' + (labels[tier]||tier) + ' plan?')) return;
           const r = await fetch('/api/student/subscription/change', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{tier:tier}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not change plan.'); return; }}
+          if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
           location.reload();
         }}
         // Live countdown for active boost chips
@@ -18133,11 +18132,10 @@ No markdown, no code fences. ONLY JSON.
     @app.route("/api/student/wallet/buy-coin-pack", methods=["POST"])
     @csrf.exempt
     def student_wallet_buy_coin_pack_api():
-        """Microtransaction: credit a coin pack to the wallet.
-        Frontend calls this after a successful PayPal capture; the pack key is
-        validated server-side. In dev / when no payment processor is wired the
-        endpoint can be triggered directly which immediately credits the coins
-        (treat as a sandbox).
+        """Microtransaction: kick off a Lemon Squeezy hosted-checkout for a
+        coin pack. The actual credit happens server-side in the LS webhook
+        (`order_created`), not here. Returns a `checkout_url` for the client
+        to redirect to.
         """
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -18145,7 +18143,29 @@ No markdown, no code fences. ONLY JSON.
         pack_key = str(data.get("pack_key") or "")
         if pack_key not in sdb.COIN_PACKS:
             return jsonify(ok=False, error="Unknown coin pack"), 400
-        return jsonify(sdb.credit_coin_pack(_cid(), pack_key))
+        from outreach import lemonsqueezy as ls
+        from outreach import config as _cfg
+        variant_map = {
+            "small":  _cfg.LS_VARIANT_COIN_SMALL,
+            "medium": _cfg.LS_VARIANT_COIN_MEDIUM,
+            "large":  _cfg.LS_VARIANT_COIN_LARGE,
+            "mega":   _cfg.LS_VARIANT_COIN_MEGA,
+            "ultra":  _cfg.LS_VARIANT_COIN_ULTRA,
+        }
+        variant = variant_map.get(pack_key, "")
+        if not variant:
+            return jsonify(ok=False, error="Coin pack not configured for checkout."), 503
+        cid = _cid()
+        try:
+            url = ls.create_checkout(
+                variant,
+                custom_data={"purpose": "coin_pack", "pack_key": pack_key, "client_id": str(cid)},
+                email=session.get("email") or None,
+                redirect_url=request.url_root.rstrip("/") + "/student/shop?bought=1",
+            )
+        except Exception as e:
+            return jsonify(ok=False, error=str(e)), 500
+        return jsonify(ok=True, checkout_url=url)
 
 
     @app.route("/api/student/wallet/set-banner", methods=["POST"])
@@ -18218,6 +18238,12 @@ No markdown, no code fences. ONLY JSON.
     @app.route("/api/student/subscription/change", methods=["POST"])
     @csrf.exempt
     def student_subscription_change_api():
+        """Switch student tier.
+
+        - tier=free  -> cancel any existing LS subscription + flip back to free.
+        - tier=plus / ultimate -> return a Lemon Squeezy hosted-checkout URL.
+          The actual tier change happens server-side in the LS webhook.
+        """
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
         data = request.get_json(silent=True) or {}
@@ -18226,8 +18252,40 @@ No markdown, no code fences. ONLY JSON.
             from student import subscription as _sub
             if tier not in _sub.PLANS:
                 return jsonify(ok=False, error="Unknown plan"), 400
-            _sub.set_tier(_cid(), tier)
-            return jsonify(ok=True, tier=tier)
+            cid = _cid()
+            if tier == "free":
+                # Cancel the active LS subscription if we have its id stashed.
+                try:
+                    from outreach.db import get_db, _fetchone, _exec
+                    from outreach import lemonsqueezy as ls
+                    import json as _json
+                    with get_db() as db:
+                        row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (cid,))
+                    prefs = {}
+                    try:
+                        prefs = _json.loads((row or {}).get("mail_preferences") or "{}")
+                    except Exception:
+                        prefs = {}
+                    sub_id = ((prefs.get("subscription") or {}).get("ls_sub_id")) or ""
+                    if sub_id:
+                        ls.cancel_subscription(sub_id)
+                except Exception:
+                    pass
+                _sub.set_tier(cid, "free")
+                return jsonify(ok=True, tier="free")
+            # Upgrade -> hosted checkout
+            from outreach import lemonsqueezy as ls
+            from outreach import config as _cfg
+            variant = _cfg.LS_VARIANT_STUDENT_PLUS if tier == "plus" else _cfg.LS_VARIANT_STUDENT_ULTIMATE
+            if not variant:
+                return jsonify(ok=False, error="Plan not configured for checkout."), 503
+            url = ls.create_checkout(
+                variant,
+                custom_data={"purpose": "student_sub", "tier": tier, "client_id": str(cid)},
+                email=session.get("email") or None,
+                redirect_url=request.url_root.rstrip("/") + "/student/shop?upgraded=1",
+            )
+            return jsonify(ok=True, checkout_url=url)
         except Exception as e:
             return jsonify(ok=False, error=str(e)), 500
 

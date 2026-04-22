@@ -66,14 +66,27 @@ FOLLOWUP_DELAY_DAYS = [3, 7, 14]  # Days after initial email for follow-ups
 # Apollo.io (prospect finder — free tier: 10k credits/month)
 APOLLO_API_KEY = os.getenv("APOLLO_API_KEY", "")
 
-# PayPal (billing — subscriptions via PayPal JS SDK)
-PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "")
-PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "")
-PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "")
-PAYPAL_PLAN_GROWTH = os.getenv("PAYPAL_PLAN_GROWTH", "")         # PayPal Plan ID
-PAYPAL_PLAN_PRO = os.getenv("PAYPAL_PLAN_PRO", "")
-PAYPAL_PLAN_UNLIMITED = os.getenv("PAYPAL_PLAN_UNLIMITED", "")
-PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")               # sandbox or live
+# ── Lemon Squeezy (billing) ──────────────────────────────────────────
+# Hosted-checkout subscriptions + one-time orders. We send custom_data on
+# every checkout so the webhook can route the event back to the right
+# user / purpose / plan. Configure the variant IDs in the LS dashboard,
+# then paste them as env vars.
+LEMON_SQUEEZY_API_KEY        = os.getenv("LEMON_SQUEEZY_API_KEY", "")
+LEMON_SQUEEZY_STORE_ID       = os.getenv("LEMON_SQUEEZY_STORE_ID", "")
+LEMON_SQUEEZY_WEBHOOK_SECRET = os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "")
+# Outreach SaaS subscription variant IDs.
+LS_VARIANT_GROWTH    = os.getenv("LS_VARIANT_GROWTH", "")
+LS_VARIANT_PRO       = os.getenv("LS_VARIANT_PRO", "")
+LS_VARIANT_UNLIMITED = os.getenv("LS_VARIANT_UNLIMITED", "")
+# Student PLUS / Ultimate subscription variant IDs.
+LS_VARIANT_STUDENT_PLUS     = os.getenv("LS_VARIANT_STUDENT_PLUS", "")
+LS_VARIANT_STUDENT_ULTIMATE = os.getenv("LS_VARIANT_STUDENT_ULTIMATE", "")
+# Coin-pack one-time variant IDs (key matches student.db.COIN_PACKS).
+LS_VARIANT_COIN_SMALL  = os.getenv("LS_VARIANT_COIN_SMALL", "")
+LS_VARIANT_COIN_MEDIUM = os.getenv("LS_VARIANT_COIN_MEDIUM", "")
+LS_VARIANT_COIN_LARGE  = os.getenv("LS_VARIANT_COIN_LARGE", "")
+LS_VARIANT_COIN_MEGA   = os.getenv("LS_VARIANT_COIN_MEGA", "")
+LS_VARIANT_COIN_ULTRA  = os.getenv("LS_VARIANT_COIN_ULTRA", "")
 
 # Sentry (error tracking — set SENTRY_DSN in production)
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
