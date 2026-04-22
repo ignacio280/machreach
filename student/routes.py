@@ -3689,83 +3689,47 @@ def register_student_routes(app, csrf, limiter):
 
         for c in courses:
 
-            analysis = json.loads(c["analysis_json"]) if isinstance(c.get("analysis_json"), str) else c.get("analysis_json", {})
-
             try:
 
                 n_exams = len(sdb.get_course_exams(c["id"]) or [])
 
             except Exception:
 
-                n_exams = len(analysis.get("exams", []))
+                n_exams = 0
 
-            has_sched = "Yes" if analysis.get("weekly_schedule") else "No"
+            cname_esc = _esc(c['name'])
 
-            grading = analysis.get("grading", {})
+            rows += f"""<tr class="course-row" data-course-id="{c['id']}">
 
-            grading_str = ", ".join(f"{k}: {v}%" for k, v in list(grading.items())[:4]) if grading else "Not detected"
-
-            synced = c.get("last_synced", "Never")
-
-            # Count uploaded files
-
-            uploaded_files = sdb.get_course_files(_cid(), c["id"])
-
-            n_files = len(uploaded_files)
-
-            files_list_html = ""
-
-            for uf in uploaded_files:
-
-                files_list_html += f"""<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;">
-
-                  <span>&#128196; {_esc(uf['original_name'])}</span>
-
-                  <button onclick="deleteFile({uf['id']})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px;">&#10005;</button>
-
-                </div>"""
-
-            rows += f"""<tr>
-
-              <td style="font-weight:600;"><a href="/student/courses/{c['id']}" style="color:var(--primary);text-decoration:none;">{_esc(c['name'])}</a></td>
+              <td style="font-weight:600;"><button onclick="toggleCourse({c['id']})" style="background:none;border:none;color:var(--primary);text-decoration:none;cursor:pointer;font-weight:600;font-size:14px;padding:0;text-align:left;">{cname_esc}</button></td>
 
               <td>{_esc(c.get('code',''))}</td>
 
-              <td>{n_exams}</td>
-
-              <td>{has_sched}</td>
-
-              <td style="font-size:12px;">{_esc(grading_str)}</td>
-
-              <td style="font-size:11px;color:var(--text-muted);">&mdash;</td>
-
-              <td style="font-size:12px;color:var(--text-muted);">{synced}</td>
+              <td><span id="exam-count-{c['id']}">{n_exams}</span></td>
 
               <td><button onclick="deleteCourse({c['id']},'{_esc(c['name'][:30])}')" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;padding:4px 8px;" title="Remove course">&#128465;</button></td>
+
+            </tr>
+
+            <tr class="course-detail" id="detail-{c['id']}" style="display:none;">
+
+              <td colspan="4" style="background:var(--bg);padding:14px 18px;">
+
+                <div id="exams-panel-{c['id']}" style="font-size:13px;color:var(--text-muted);">Loading exams&hellip;</div>
+
+              </td>
 
             </tr>"""
 
         if not rows:
 
-            rows = """<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">
+            rows = """<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text-muted);">
 
               <div style="font-size:36px;margin-bottom:10px;">&#128218;</div>
 
               No courses synced yet. Connect Canvas and hit Sync.
 
             </td></tr>"""
-
-
-
-        upload_buttons = ""
-
-        for c in courses:
-
-            cname = _esc(c["name"][:25])
-
-            cid = c["id"]
-
-            upload_buttons += f"<button onclick=\"document.getElementById('upload-{cid}').click()\" class=\"btn btn-outline btn-sm\">{cname}</button>"
 
 
 
@@ -3793,7 +3757,7 @@ def register_student_routes(app, csrf, limiter):
 
             <h3 style="margin:0 0 6px">Create a course</h3>
 
-            <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px">For classes outside Canvas. You can add exams and files to it just like a synced course.</p>
+            <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px">For classes outside Canvas. You can add exams to it just like a synced course.</p>
 
             <div class="form-group">
 
@@ -3835,49 +3799,11 @@ def register_student_routes(app, csrf, limiter):
 
           <table>
 
-            <thead><tr><th>Course</th><th>Code</th><th>Exams</th><th>Schedule</th><th>Grading</th><th>Files</th><th>Last Synced</th><th></th></tr></thead>
+            <thead><tr><th>Course</th><th>Code</th><th>Exams</th><th></th></tr></thead>
 
             <tbody>{rows}</tbody>
 
           </table>
-
-        </div>
-
-        <div class="card" style="margin-top:16px;padding:16px;">
-
-          <h3 style="margin:0 0 8px;">&#128206; Upload Course Files</h3>
-
-          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">
-
-            Upload PDFs or DOCX files (syllabi, class notes, schedules, etc.) to help the AI generate a better study plan.
-
-            Click the &#128206; icon next to any course above, or use the buttons below.
-
-          </p>
-
-          <div style="display:flex;flex-wrap:wrap;gap:8px;">
-
-            {upload_buttons}
-
-          </div>
-
-        </div>
-
-        <div id="upload-bar" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 18px;margin-top:16px;">
-
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;">
-
-            <span>&#128206; Uploading <b id="upload-bar-name"></b></span>
-
-            <span id="upload-bar-pct">0%</span>
-
-          </div>
-
-          <div style="background:var(--bg);border-radius:8px;height:10px;overflow:hidden;">
-
-            <div id="upload-bar-fill" style="height:100%;background:linear-gradient(90deg,var(--primary),#8B5CF6);width:0%;transition:width 0.3s ease;border-radius:8px;"></div>
-
-          </div>
 
         </div>
 
@@ -3895,13 +3821,21 @@ def register_student_routes(app, csrf, limiter):
 
           <div style="margin-top:10px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px;color:var(--text-muted);">
 
-            &#9749; Take a break &mdash; this may take a while depending on how many files your courses have.
+            &#9749; Take a break &mdash; this may take a while depending on how many courses you have.
 
           </div>
 
         </div>
 
-        <style>@keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}</style>
+        <style>
+
+        @keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}
+
+        .ex-input {{ padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px; }}
+
+        .ex-input:focus {{ border-color:var(--primary);outline:none; }}
+
+        </style>
 
         <script>
 
@@ -3943,7 +3877,7 @@ def register_student_routes(app, csrf, limiter):
 
                   btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
 
-                  alert('Sync complete! ' + s.files_downloaded + ' files processed.');
+                  alert('Sync complete!');
 
                   location.reload();
 
@@ -3967,93 +3901,257 @@ def register_student_routes(app, csrf, limiter):
 
         }}
 
-        function showUploadBar(name) {{
+        function _esc(s) {{ return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }}
 
-          var bar = document.getElementById('upload-bar');
+        async function toggleCourse(courseId) {{
 
-          document.getElementById('upload-bar-name').textContent = name;
+          var row = document.getElementById('detail-' + courseId);
 
-          document.getElementById('upload-bar-fill').style.width = '0%';
+          if (!row) return;
 
-          document.getElementById('upload-bar-pct').textContent = '0%';
+          if (row.style.display === 'none') {{
 
-          bar.style.display = 'block';
+            row.style.display = '';
 
-        }}
+            await loadCourseExams(courseId);
 
-        function updateUploadBar(pct, msg) {{
+          }} else {{
 
-          document.getElementById('upload-bar-fill').style.width = pct + '%';
-
-          document.getElementById('upload-bar-pct').textContent = msg || (Math.round(pct) + '%');
-
-        }}
-
-        function hideUploadBar(msg) {{
-
-          document.getElementById('upload-bar-fill').style.width = '100%';
-
-          document.getElementById('upload-bar-pct').textContent = msg || 'Done!';
-
-          setTimeout(function(){{ document.getElementById('upload-bar').style.display = 'none'; }}, 1500);
-
-        }}
-
-        async function uploadFiles(courseId, input) {{
-
-          if (!input.files.length) return;
-
-          var fileList = Array.from(input.files);
-
-          showUploadBar(fileList.length + ' file(s)');
-
-          var done = 0;
-
-          for (var i = 0; i < fileList.length; i++) {{
-
-            updateUploadBar(((i)/fileList.length)*90, fileList[i].name);
-
-            var fd = new FormData();
-
-            fd.append('file', fileList[i]);
-
-            try {{
-
-              var r = await fetch('/api/student/courses/' + courseId + '/upload', {{method:'POST', body:fd}});
-
-              var d = await _safeJson(r);
-
-              if (!r.ok) console.warn('Upload failed:', fileList[i].name, d.error);
-
-            }} catch(e) {{ console.warn('Upload error:', fileList[i].name); }}
-
-            done++;
-
-            updateUploadBar((done/fileList.length)*90, done + '/' + fileList.length + ' done');
+            row.style.display = 'none';
 
           }}
 
-          hideUploadBar(done + '/' + fileList.length + ' uploaded');
+        }}
 
-          input.value = '';
+        async function loadCourseExams(courseId) {{
 
-          setTimeout(function(){{ location.reload(); }}, 1000);
+          var panel = document.getElementById('exams-panel-' + courseId);
+
+          if (!panel) return;
+
+          panel.innerHTML = 'Loading exams&hellip;';
+
+          try {{
+
+            var r = await fetch('/api/student/courses/' + courseId + '/exams');
+
+            var d = await r.json();
+
+            renderExamsPanel(courseId, d.exams || []);
+
+          }} catch(e) {{
+
+            panel.innerHTML = '<span style="color:var(--red);">Failed to load exams.</span>';
+
+          }}
 
         }}
 
-        async function deleteFile(fileId) {{
+        function renderExamsPanel(courseId, exams) {{
 
-          if (!confirm('Delete this file?')) return;
+          var panel = document.getElementById('exams-panel-' + courseId);
 
-          await fetch('/api/student/files/' + fileId, {{method:'DELETE'}});
+          if (!panel) return;
 
-          location.reload();
+          var rowsHtml = '';
+
+          for (var i=0;i<exams.length;i++) {{
+
+            var e = exams[i];
+
+            rowsHtml += examRowHtml(e.id, e.name||'', e.exam_date||'', e.weight_pct||0);
+
+          }}
+
+          panel.innerHTML =
+
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+
+            + '<b style="color:var(--text);">&#128221; Exams &amp; Assessments</b>'
+
+            + '<button class="btn btn-outline btn-sm" onclick="addExamRow(' + courseId + ')">+ Add Exam</button>'
+
+            + '</div>'
+
+            + '<div id="exams-list-' + courseId + '">'
+
+            + (rowsHtml || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0;">No exams yet. Click <b>+ Add Exam</b> to create one.</div>')
+
+            + '</div>';
+
+          document.getElementById('exam-count-' + courseId).textContent = exams.length;
+
+        }}
+
+        function examRowHtml(examId, name, date, weight) {{
+
+          var idAttr = examId ? examId : 'new';
+
+          return '<div class="ex-row" data-exam-id="' + idAttr + '" style="display:grid;grid-template-columns:2fr 1fr 90px auto auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">'
+
+            + '<input type="text" class="ex-input" data-field="name" value="' + _esc(name) + '" placeholder="Exam name">'
+
+            + '<input type="date" class="ex-input" data-field="exam_date" value="' + _esc(date) + '">'
+
+            + '<span style="display:flex;align-items:center;gap:4px;"><input type="number" class="ex-input" data-field="weight_pct" value="' + (weight||0) + '" min="0" max="100" style="width:60px;">%</span>'
+
+            + '<button class="btn btn-ghost btn-sm" style="color:var(--primary);font-size:12px;padding:2px 8px;" onclick="saveExamInline(this)" title="Save">&#128190;</button>'
+
+            + '<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;padding:2px 8px;" onclick="deleteExamInline(this)" title="Delete">&#128465;</button>'
+
+            + '</div>';
+
+        }}
+
+        function addExamRow(courseId) {{
+
+          var list = document.getElementById('exams-list-' + courseId);
+
+          if (!list) return;
+
+          // Clear "no exams" placeholder
+
+          if (list.children.length === 1 && !list.children[0].classList.contains('ex-row')) {{
+
+            list.innerHTML = '';
+
+          }}
+
+          var div = document.createElement('div');
+
+          div.innerHTML = examRowHtml('', '', '', 0);
+
+          var node = div.firstChild;
+
+          node.dataset.courseId = courseId;
+
+          list.appendChild(node);
+
+        }}
+
+        async function saveExamInline(btnEl) {{
+
+          var row = btnEl.closest('.ex-row');
+
+          if (!row) return;
+
+          var examId = row.dataset.examId;
+
+          var courseId = row.dataset.courseId;
+
+          if (!courseId) {{
+
+            var listEl = row.parentElement;
+
+            if (listEl) {{
+
+              var m = listEl.id.match(/exams-list-(\\d+)/);
+
+              if (m) courseId = m[1];
+
+            }}
+
+          }}
+
+          var name = (row.querySelector('[data-field=\"name\"]').value || '').trim();
+
+          var exam_date = row.querySelector('[data-field=\"exam_date\"]').value || '';
+
+          var weight_pct = parseInt(row.querySelector('[data-field=\"weight_pct\"]').value) || 0;
+
+          if (!name) {{ alert('Exam name is required'); return; }}
+
+          var csrfToken = document.querySelector('meta[name=\"csrf-token\"]');
+
+          var headers = {{'Content-Type':'application/json'}};
+
+          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+
+          var url, method;
+
+          if (examId && examId !== 'new') {{
+
+            url = '/api/student/exams/' + examId; method = 'PUT';
+
+          }} else {{
+
+            url = '/api/student/courses/' + courseId + '/exams'; method = 'POST';
+
+          }}
+
+          btnEl.disabled = true;
+
+          try {{
+
+            var r = await fetch(url, {{
+
+              method: method, headers: headers,
+
+              body: JSON.stringify({{ name: name, exam_date: exam_date, weight_pct: weight_pct, topics: [], course_id: parseInt(courseId)||0 }})
+
+            }});
+
+            if (r.ok) {{
+
+              var d = await r.json();
+
+              if (d && d.id) {{ row.dataset.examId = d.id; }}
+
+              btnEl.innerHTML = '&#10003;';
+
+              setTimeout(function(){{ btnEl.innerHTML = '&#128190;'; btnEl.disabled = false; }}, 900);
+
+              if (courseId) loadCourseExams(parseInt(courseId)||0);
+
+            }} else {{
+
+              var de = await _safeJson(r);
+
+              alert(de.error || 'Failed to save exam');
+
+              btnEl.disabled = false;
+
+            }}
+
+          }} catch(e) {{ alert('Network error'); btnEl.disabled = false; }}
+
+        }}
+
+        async function deleteExamInline(btnEl) {{
+
+          var row = btnEl.closest('.ex-row');
+
+          if (!row) return;
+
+          var examId = row.dataset.examId;
+
+          if (!examId || examId === 'new') {{ row.remove(); return; }}
+
+          if (!confirm('Delete this exam?')) return;
+
+          try {{
+
+            await fetch('/api/student/exams/' + examId, {{method:'DELETE'}});
+
+            var listEl = row.parentElement;
+
+            row.remove();
+
+            if (listEl) {{
+
+              var match = listEl.id.match(/exams-list-(\\d+)/);
+
+              if (match) {{ var cid = parseInt(match[1])||0; if (cid) loadCourseExams(cid); }}
+
+            }}
+
+          }} catch(e) {{ alert('Network error'); }}
 
         }}
 
         async function deleteCourse(courseId, name) {{
 
-          if (!confirm('Remove "' + name + '"? This will delete all its exams and uploaded files.')) return;
+          if (!confirm('Remove \"' + name + '\"? This will delete all its exams.')) return;
 
           try {{
 
@@ -4103,7 +4201,7 @@ def register_student_routes(app, csrf, limiter):
 
           try {{
 
-            var meta = document.querySelector('meta[name="csrf-token"]');
+            var meta = document.querySelector('meta[name=\"csrf-token\"]');
 
             var headers = {{'Content-Type':'application/json'}};
 
@@ -4132,832 +4230,10 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/student/courses/<int:course_id>")
-
     def student_course_detail_page(course_id):
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        course = sdb.get_course(course_id)
-
-        if not course or course["client_id"] != _cid():
-
-            return redirect(url_for("student_courses_page"))
-
-        course = dict(course)
-
-        analysis = json.loads(course["analysis_json"]) if isinstance(course["analysis_json"], str) else (course["analysis_json"] or {})
-
-        exams = sdb.get_course_exams(course_id)
-
-        uploaded_files = sdb.get_course_files(_cid(), course_id)
-
-
-
-# Build exams HTML with per-exam file uploads
-
-        exams_rows = ""
-
-        for e in exams:
-
-            topics = json.loads(e["topics_json"]) if isinstance(e.get("topics_json"), str) else []
-
-            topics_str = ", ".join(topics) if topics else ""
-
-            exam_files = sdb.get_course_files(_cid(), course_id, exam_id=e["id"])
-
-            ef_html = ""
-
-            for ef in exam_files:
-
-                ef_html += f"<span style='display:inline-block;background:var(--bg);padding:2px 8px;border-radius:10px;font-size:11px;margin:2px;'>&#128196; {_esc(ef['original_name'])} <button onclick=\"deleteFile({ef['id']})\" style='background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;'>&#10005;</button></span>"
-
-            exams_rows += f"""<tr data-exam-id="{e['id']}">
-
-              <td><input type="text" value="{_esc(e.get('name',''))}" class="edit-input" data-field="name"></td>
-
-              <td><input type="date" value="{_esc(e.get('exam_date','') or '')}" class="edit-input" data-field="exam_date"></td>
-
-              <td><input type="number" value="{e.get('weight_pct',0)}" class="edit-input" data-field="weight_pct" min="0" max="100" style="width:60px;">%</td>
-
-              <td><input type="text" value="{_esc(topics_str)}" class="edit-input" data-field="topics" placeholder="Topic 1, Topic 2, ..." style="width:100%;"></td>
-
-              <td style="font-size:11px;">
-
-                {ef_html}
-
-                <label class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;cursor:pointer;" title="Upload file for this exam">
-
-                  &#128206;
-
-                  <input type="file" style="display:none;" accept=".pdf,.docx,.doc" multiple onchange="try{{uploadExamFiles({course_id},{e['id']},this)}}catch(err){{alert('Upload error: '+err.message)}}">
-
-                </label>
-
-              </td>
-
-              <td>
-
-                <button onclick="saveExam({e['id']},this)" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;" title="Save">&#128190;</button>
-
-                <button onclick="deleteExam({e['id']})" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;color:var(--red);" title="Delete">&#128465;</button>
-
-              </td>
-
-            </tr>"""
-
-
-
-        # Weekly schedule rows
-
-        schedule = analysis.get("weekly_schedule", [])
-
-        schedule_rows = ""
-
-        for w in schedule:
-
-            topics_str = ", ".join(w.get("topics", []))
-
-            schedule_rows += f"""<div class="sched-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">
-
-              <input type="text" value="Week {w.get('week','')}" class="edit-input" style="width:70px;" placeholder="Week" data-key="week">
-
-              <input type="text" value="{_esc(w.get('dates',''))}" class="edit-input" style="width:120px;" placeholder="Dates" data-key="dates">
-
-              <input type="text" value="{_esc(topics_str)}" class="edit-input" style="flex:1;" placeholder="Topics (comma-separated)" data-key="topics">
-
-              <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>
-
-            </div>"""
-
-
-
-        # Study tips
-
-        tips = analysis.get("study_tips", [])
-
-        tips_rows = ""
-
-        for tip in tips:
-
-            tips_rows += f"""<div class="tip-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">
-
-              <input type="text" value="{_esc(tip)}" class="edit-input" style="flex:1;" placeholder="Study tip">
-
-              <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>
-
-            </div>"""
-
-
-
-        # Files list
-
-        files_html = ""
-
-        for uf in uploaded_files:
-
-            files_html += f"""<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
-
-              <span>&#128196; {_esc(uf['original_name'])} <span style="color:var(--text-muted);font-size:11px;">({uf.get('file_type','?')})</span></span>
-
-              <div style="display:flex;gap:8px;">
-
-                <button onclick="viewFileText({uf['id']})" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px;" title="Preview extracted text">&#128065; View</button>
-
-                <button onclick="deleteFile({uf['id']})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;" title="Delete file">&#128465; Remove</button>
-
-              </div>
-
-            </div>"""
-
-        if not files_html:
-
-            files_html = "<p style='color:var(--text-muted);font-size:13px;'>No files uploaded yet.</p>"
-
-
-
-        return _s_render(f"Edit: {course['name']}", f"""
-
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
-
-          <div>
-
-            <a href="/student/courses" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Courses</a>
-
-            <h1 style="margin:4px 0 0;">&#9999;&#65039; Edit Course</h1>
-
-          </div>
-
-          <button onclick="saveCourseInfo()" class="btn btn-primary btn-sm" id="save-btn">&#128190; Save All Changes</button>
-
-        </div>
-
-
-
-        <!-- Course basic info -->
-
-        <div class="card" style="margin-bottom:16px;">
-
-          <div class="card-header"><h2>&#128218; Course Info</h2></div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:4px 0;">
-
-            <div class="form-group">
-
-              <label>Course Name</label>
-
-              <input type="text" id="course-name" value="{_esc(course['name'])}" class="edit-input">
-
-            </div>
-
-            <div class="form-group">
-
-              <label>Course Code</label>
-
-              <input type="text" id="course-code" value="{_esc(course.get('code',''))}" class="edit-input">
-
-            </div>
-
-          </div>
-
-        </div>
-
-
-
-        <!-- Exams -->
-
-        <div class="card" style="margin-bottom:16px;">
-
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-
-            <h2>&#128221; Exams & Assessments</h2>
-
-            <button onclick="addExamRow()" class="btn btn-outline btn-sm">+ Add Exam</button>
-
-          </div>
-
-          <table id="exams-table">
-
-            <thead><tr><th>Name</th><th>Date</th><th>Weight</th><th>Topics</th><th>Files</th><th></th></tr></thead>
-
-            <tbody>{exams_rows}</tbody>
-
-          </table>
-
-          <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0;">Separate topics with commas. Click &#128190; to save each exam individually.</p>
-
-        </div>
-
-
-
-        <!-- Multi-file upload queue (fixed position) -->
-
-        <div id="upload-queue" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#1E1B4B;border-bottom:3px solid #7C3AED;padding:14px 24px;box-shadow:0 4px 24px rgba(0,0,0,0.4);">
-
-          <div style="max-width:800px;margin:0 auto;">
-
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-
-              <span style="color:#E0E7FF;font-size:14px;font-weight:600;">&#128206; Uploading files</span>
-
-              <span id="upload-queue-count" style="color:#A5B4FC;font-size:14px;font-weight:700;">0/0</span>
-
-            </div>
-
-            <div id="upload-queue-list" style="max-height:200px;overflow-y:auto;"></div>
-
-          </div>
-
-        </div>
-
-
-
-        <!-- File preview modal -->
-
-        <div id="file-preview-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);justify-content:center;align-items:center;" onclick="if(event.target===this)this.style.display='none'">
-
-          <div style="background:var(--card);border-radius:var(--radius);width:90%;max-width:800px;max-height:85vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);">
-
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);">
-
-              <h3 id="file-preview-name" style="font-size:15px;margin:0;">File Preview</h3>
-
-              <button onclick="document.getElementById('file-preview-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);">&#10005;</button>
-
-            </div>
-
-            <pre id="file-preview-text" style="padding:20px;margin:0;overflow:auto;flex:1;font-size:13px;line-height:1.6;white-space:pre-wrap;word-wrap:break-word;font-family:'Inter',monospace;color:var(--text);background:var(--bg);"></pre>
-
-          </div>
-
-        </div>
-
-
-
-        <!-- Weekly schedule -->
-
-        <div class="card" style="margin-bottom:16px;">
-
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-
-            <h2>&#128197; Weekly Schedule</h2>
-
-            <button onclick="addScheduleRow()" class="btn btn-outline btn-sm">+ Add Week</button>
-
-          </div>
-
-          <div id="schedule-container">
-
-            {schedule_rows}
-
-          </div>
-
-        </div>
-
-
-
-        <!-- Study tips -->
-
-        <div class="card" style="margin-bottom:16px;">
-
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-
-            <h2>&#128161; Study Tips</h2>
-
-            <button onclick="addTipRow()" class="btn btn-outline btn-sm">+ Add Tip</button>
-
-          </div>
-
-          <div id="tips-container">
-
-            {tips_rows}
-
-          </div>
-
-        </div>
-
-
-
-        <!-- Uploaded files -->
-
-        <div class="card" style="margin-bottom:16px;">
-
-          <div class="card-header" style="display:none;"></div>
-
-
-
-        <style>
-
-        .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
-
-        .edit-input:focus {{ border-color:var(--primary); outline:none; }}
-
-        </style>
-
-
-
-        <!-- Upload functions -->
-
-        <script>
-
-        function doUpload(cid, fd, fileName) {{
-
-          var row = document.createElement('div');
-
-          row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;';
-
-          row.innerHTML = '<span style="color:#E0E7FF;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;">&#128196; ' + fileName + '</span>'
-
-            + '<div style="display:flex;align-items:center;gap:8px;flex:1;margin-left:12px;">'
-
-            + '<div style="flex:1;background:#312E81;border-radius:6px;height:8px;overflow:hidden;"><div class="uf-bar" style="height:100%;background:linear-gradient(90deg,#7C3AED,#A78BFA);width:0%;transition:width 0.3s;border-radius:6px;"></div></div>'
-
-            + '<span class="uf-pct" style="color:#A5B4FC;font-size:12px;font-weight:600;min-width:40px;text-align:right;">0%</span>'
-
-            + '</div>';
-
-          var list = document.getElementById('upload-queue-list');
-
-          list.appendChild(row);
-
-          document.getElementById('upload-queue').style.display = 'block';
-
-          var bar = row.querySelector('.uf-bar');
-
-          var pct = row.querySelector('.uf-pct');
-
-          return new Promise(function(resolve) {{
-
-            var csrfToken = document.querySelector('meta[name="csrf-token"]');
-
-            var xhr = new XMLHttpRequest();
-
-            xhr.open('POST', '/api/student/courses/' + cid + '/upload');
-
-            if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
-
-            xhr.upload.onprogress = function(e) {{
-
-              if (e.lengthComputable) {{
-
-                var p = Math.round((e.loaded / e.total) * 80);
-
-                bar.style.width = p + '%'; pct.textContent = p + '%';
-
-              }}
-
-            }};
-
-            xhr.onload = function() {{
-
-              bar.style.width = '100%';
-
-              try {{
-
-                var d = JSON.parse(xhr.responseText);
-
-                if (xhr.status >= 200 && xhr.status < 300) {{
-
-                  pct.textContent = '\\u2713'; pct.style.color = '#6EE7B7';
-
-                }} else {{
-
-                  pct.textContent = '\\u2717'; pct.style.color = '#FCA5A5';
-
-                  row.title = d.error || 'Upload failed';
-
-                }}
-
-              }} catch(e) {{ pct.textContent = '\\u2717'; pct.style.color = '#FCA5A5'; }}
-
-              resolve();
-
-            }};
-
-            xhr.onerror = function() {{ pct.textContent = '\\u2717'; pct.style.color = '#FCA5A5'; resolve(); }};
-
-            bar.style.width = '5%'; pct.textContent = '5%';
-
-            xhr.send(fd);
-
-          }});
-
-        }}
-
-        async function uploadFiles(cid, input) {{
-
-          if (!input.files.length) return;
-
-          document.getElementById('upload-queue-list').innerHTML = '';
-
-          var fileList = Array.from(input.files);
-
-          document.getElementById('upload-queue-count').textContent = '0/' + fileList.length;
-
-          for (var i = 0; i < fileList.length; i++) {{
-
-            var fd = new FormData();
-
-            fd.append('file', fileList[i]);
-
-            await doUpload(cid, fd, fileList[i].name);
-
-            document.getElementById('upload-queue-count').textContent = (i+1) + '/' + fileList.length;
-
-          }}
-
-          input.value = '';
-
-          setTimeout(function(){{ location.reload(); }}, 1200);
-
-        }}
-
-        async function uploadExamFiles(cid, examId, input) {{
-
-          if (!input.files.length) return;
-
-          document.getElementById('upload-queue-list').innerHTML = '';
-
-          var fileList = Array.from(input.files);
-
-          document.getElementById('upload-queue-count').textContent = '0/' + fileList.length;
-
-          for (var i = 0; i < fileList.length; i++) {{
-
-            var fd = new FormData();
-
-            fd.append('file', fileList[i]);
-
-            fd.append('exam_id', examId);
-
-            await doUpload(cid, fd, fileList[i].name);
-
-            document.getElementById('upload-queue-count').textContent = (i+1) + '/' + fileList.length;
-
-          }}
-
-          input.value = '';
-
-          setTimeout(function(){{ location.reload(); }}, 1200);
-
-        }}
-
-        async function viewFileText(fileId) {{
-
-          var modal = document.getElementById('file-preview-modal');
-
-          document.getElementById('file-preview-name').textContent = 'Loading...';
-
-          document.getElementById('file-preview-text').textContent = '';
-
-          modal.style.display = 'flex';
-
-          try {{
-
-            var r = await fetch('/api/student/files/' + fileId);
-
-            var d = await _safeJson(r);
-
-            if (d.name) document.getElementById('file-preview-name').textContent = d.name;
-
-            document.getElementById('file-preview-text').textContent = d.text || '(No text extracted)';
-
-          }} catch(e) {{ document.getElementById('file-preview-text').textContent = 'Error loading file'; }}
-
-        }}
-
-        function deleteFile(fileId) {{
-
-          if (!confirm('Delete this file?')) return;
-
-          fetch('/api/student/files/' + fileId, {{method:'DELETE'}}).then(function(){{ location.reload(); }});
-
-        }}
-
-        </script>
-
-
-
-        <script>
-
-        var courseId = {course_id};
-
-
-
-        async function saveCourseInfo() {{
-
-          var btn = document.getElementById('save-btn');
-
-          btn.disabled = true; btn.innerHTML = '&#9203; Saving...';
-
-
-
-          // Collect schedule
-
-          var schedule = [];
-
-          document.querySelectorAll('#schedule-container .sched-row').forEach(function(row) {{
-
-            var inputs = row.querySelectorAll('input');
-
-            var weekStr = inputs[0].value.trim();
-
-            var weekNum = parseInt(weekStr.replace(/[^0-9]/g,'')) || schedule.length + 1;
-
-            var dates = inputs[1].value.trim();
-
-            var topics = inputs[2].value.split(',').map(function(t){{ return t.trim(); }}).filter(Boolean);
-
-            schedule.push({{ week: weekNum, dates: dates, topics: topics }});
-
-          }});
-
-
-
-          // Collect tips
-
-          var tips = [];
-
-          document.querySelectorAll('#tips-container .tip-row input').forEach(function(inp) {{
-
-            var v = inp.value.trim();
-
-            if (v) tips.push(v);
-
-          }});
-
-
-
-          var csrfToken = document.querySelector('meta[name="csrf-token"]');
-
-          var headers = {{'Content-Type':'application/json'}};
-
-          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
-
-
-
-          try {{
-
-            // 1. Save all exam rows (existing and new)
-
-            var examRows = document.querySelectorAll('#exams-table tbody tr');
-
-            var examErrors = [];
-
-            for (var i = 0; i < examRows.length; i++) {{
-
-              var tr = examRows[i];
-
-              var nameEl = tr.querySelector('[data-field="name"]');
-
-              if (!nameEl) continue;
-
-              var name = nameEl.value.trim();
-
-              if (!name) continue; // skip empty rows silently
-
-              var exam_date = (tr.querySelector('[data-field="exam_date"]') || {{}}).value || '';
-
-              var weightEl = tr.querySelector('[data-field="weight_pct"]');
-
-              var weight_pct = weightEl ? (parseInt(weightEl.value) || 0) : 0;
-
-              var topicsEl = tr.querySelector('[data-field="topics"]');
-
-              var topicsRaw = topicsEl ? topicsEl.value : '';
-
-              var topics = topicsRaw.split(',').map(function(t){{ return t.trim(); }}).filter(Boolean);
-
-              var examId = tr.dataset.examId;
-
-              var url, method;
-
-              if (examId && examId !== 'new') {{
-
-                url = '/api/student/exams/' + examId; method = 'PUT';
-
-              }} else {{
-
-                url = '/api/student/courses/' + courseId + '/exams'; method = 'POST';
-
-              }}
-
-              try {{
-
-                var er = await fetch(url, {{
-
-                  method: method, headers: headers,
-
-                  body: JSON.stringify({{ name: name, exam_date: exam_date, weight_pct: weight_pct, topics: topics, course_id: courseId }})
-
-                }});
-
-                if (!er.ok) {{
-
-                  var ed = await _safeJson(er);
-
-                  examErrors.push(name + ': ' + (ed.error || 'save failed'));
-
-                }}
-
-              }} catch(e) {{ examErrors.push(name + ': network error'); }}
-
-            }}
-
-
-
-            // 2. Save course info + schedule + tips
-
-            var r = await fetch('/api/student/courses/' + courseId, {{
-
-              method:'PUT', headers: headers,
-
-              body: JSON.stringify({{
-
-                name: document.getElementById('course-name').value.trim(),
-
-                code: document.getElementById('course-code').value.trim(),
-
-                weekly_schedule: schedule,
-
-                study_tips: tips
-
-              }})
-
-            }});
-
-            if (r.ok) {{
-
-              if (examErrors.length) alert('Saved with some exam errors:\\n' + examErrors.join('\\n'));
-
-              else alert('All changes saved!');
-
-              location.reload();
-
-            }}
-
-            else {{ var d = await _safeJson(r); alert(d.error || 'Save failed'); }}
-
-          }} catch(e) {{ alert('Network error: ' + e.message); }}
-
-          btn.disabled = false; btn.innerHTML = '&#128190; Save All Changes';
-
-        }}
-
-
-
-        function addExamRow() {{
-
-          var tbody = document.querySelector('#exams-table tbody');
-
-          var tr = document.createElement('tr');
-
-          tr.dataset.examId = 'new';
-
-          tr.innerHTML = '<td><input type="text" class="edit-input" data-field="name" placeholder="Exam name"></td>'
-
-            + '<td><input type="date" class="edit-input" data-field="exam_date"></td>'
-
-            + '<td><input type="number" class="edit-input" data-field="weight_pct" value="0" min="0" max="100" style="width:60px;">%</td>'
-
-            + '<td><input type="text" class="edit-input" data-field="topics" placeholder="Topic 1, Topic 2, ..."></td>'
-
-            + '<td style="font-size:11px;color:var(--text-muted);">Save first</td>'
-
-            + '<td><button onclick="saveExam(null,this)" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;">&#128190;</button>'
-
-            + ' <button onclick="this.closest(\\'tr\\').remove()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;color:var(--red);">&#128465;</button></td>';
-
-          tbody.appendChild(tr);
-
-        }}
-
-
-
-        async function saveExam(examId, btnEl) {{
-
-          var tr = btnEl.closest('tr');
-
-          var name = tr.querySelector('[data-field="name"]').value.trim();
-
-          var exam_date = tr.querySelector('[data-field="exam_date"]').value;
-
-          var weight_pct = parseInt(tr.querySelector('[data-field="weight_pct"]').value) || 0;
-
-          var topicsRaw = tr.querySelector('[data-field="topics"]').value;
-
-          var topics = topicsRaw.split(',').map(function(t){{ return t.trim(); }}).filter(Boolean);
-
-          if (!name) {{ alert('Exam name is required'); return; }}
-
-          var csrfToken = document.querySelector('meta[name="csrf-token"]');
-
-          var headers = {{'Content-Type':'application/json'}};
-
-          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
-
-          try {{
-
-            var url, method;
-
-            if (examId) {{
-
-              url = '/api/student/exams/' + examId;
-
-              method = 'PUT';
-
-            }} else {{
-
-              url = '/api/student/courses/' + courseId + '/exams';
-
-              method = 'POST';
-
-            }}
-
-            var r = await fetch(url, {{
-
-              method: method, headers: headers,
-
-              body: JSON.stringify({{ name: name, exam_date: exam_date, weight_pct: weight_pct, topics: topics, course_id: courseId }})
-
-            }});
-
-            if (r.ok) {{ alert('Exam saved!'); location.reload(); }}
-
-            else {{ var d = await _safeJson(r); alert(d.error || 'Failed'); }}
-
-          }} catch(e) {{ alert('Network error'); }}
-
-        }}
-
-
-
-        async function deleteExam(examId) {{
-
-          if (!confirm('Delete this exam?')) return;
-
-          try {{
-
-            await fetch('/api/student/exams/' + examId, {{method:'DELETE'}});
-
-            location.reload();
-
-          }} catch(e) {{ alert('Network error'); }}
-
-        }}
-
-
-
-        function addScheduleRow() {{
-
-          var c = document.getElementById('schedule-container');
-
-          var n = c.querySelectorAll('.sched-row').length + 1;
-
-          var div = document.createElement('div');
-
-          div.className = 'sched-row';
-
-          div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;align-items:center;';
-
-          div.innerHTML = '<input type="text" class="edit-input" style="width:70px;" value="Week ' + n + '" placeholder="Week">'
-
-            + '<input type="text" class="edit-input" style="width:120px;" placeholder="Dates">'
-
-            + '<input type="text" class="edit-input" style="flex:1;" placeholder="Topics (comma-separated)">'
-
-            + '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>';
-
-          c.appendChild(div);
-
-        }}
-
-
-
-        function addTipRow() {{
-
-          var c = document.getElementById('tips-container');
-
-          var div = document.createElement('div');
-
-          div.className = 'tip-row';
-
-          div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;align-items:center;';
-
-          div.innerHTML = '<input type="text" class="edit-input" style="flex:1;" placeholder="Study tip">'
-
-            + '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;">&#10005;</button>';
-
-          c.appendChild(div);
-
-        }}
-
-
-
-        </script>
-
-        """, active_page="student_courses")
+        # Per-course edit page removed; everything happens inline on the
+        # courses list page. Keep the route so old bookmarks redirect.
+        return redirect(url_for("student_courses_page"))
 
 
 
@@ -15483,7 +14759,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div style="display:flex;gap:6px">
 
-                  <button class="btn btn-sm btn-primary" onclick="frChallenge(${{u.id}}, ${{JSON.stringify(u.name||'')}})">Challenge</button>
+                  <button class="btn btn-sm btn-primary" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname)">Challenge</button>
 
                   <button class="btn btn-sm btn-outline" onclick="frRemove(${{u.id}})">Remove</button>
 
@@ -18414,6 +17690,15 @@ No markdown, no code fences. ONLY JSON.
         ):
             return jsonify(ok=False, error="You already have an open quiz duel with this user."), 400
 
+        # Free-tier quota: a quiz duel uses your one daily AI quiz.
+        try:
+            from student import subscription as _sub
+            allowed, reason = _sub.can_generate_quiz_today(cid)
+            if not allowed:
+                return jsonify(ok=False, error=reason or "Daily quiz limit reached."), 402
+        except Exception:
+            pass
+
         # File upload (PDF / DOCX / TXT). Hard-cap at 8 MB.
         f_in = request.files.get("file")
         if not f_in or not f_in.filename:
@@ -18475,6 +17760,11 @@ No markdown, no code fences. ONLY JSON.
             return jsonify(ok=False, error="Could not generate enough quality questions from this file."), 500
 
         did = sdb.create_quiz_duel(cid, opp, clean, topic=topic, file_name=fname)
+        try:
+            from student import subscription as _sub
+            _sub.record_generation(cid, "quiz_generated")
+        except Exception:
+            pass
         return jsonify(ok=True, duel_id=did, count=len(clean))
 
 
