@@ -14647,7 +14647,7 @@ No markdown, no code fences. ONLY JSON.
                 <button class="chal-card" onclick="pickMarathon()" style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer;color:var(--text)">
                   <div style="font-size:16px;font-weight:700">📅 Study Marathon (7 days)</div>
                   <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Most focus minutes over the next 7 days wins. Asynchronous — focus whenever you can.</div>
-                  <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +30 XP · +250 🪙 · Tie: +10 XP · +75 🪙</div>
+                  <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +8 XP · +70 🪙 · Tie: +3 XP · +25 🪙</div>
                 </button>
               </div>
 
@@ -15274,7 +15274,7 @@ No markdown, no code fences. ONLY JSON.
           <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
-            <div><div>${r.badge_emoji?`<span title="${escapeHtml(r.badge_name||'')}" style="margin-right:4px;">${r.badge_emoji}</span>`:''}${escapeHtml(r.name)}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
+            <div><div>${r.badge_left_emoji?`<span title="${escapeHtml(r.badge_left_name||'')}" style="margin-right:4px;">${r.badge_left_emoji}</span>`:''}${escapeHtml(r.name)}${r.badge_right_emoji?`<span title="${escapeHtml(r.badge_right_name||'')}" style="margin-left:4px;">${r.badge_right_emoji}</span>`:''}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
                  <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div></div>
           </div>
           <div class="lb-xp">${r.xp.toLocaleString()} XP</div>
@@ -17302,7 +17302,7 @@ No markdown, no code fences. ONLY JSON.
                 btn = f'<button class="btn btn-sm btn-primary" onclick="buyBanner(\'{key}\')">Buy ({cfg["price_coins"]} \U0001FA99)</button>'
             banner_cards.append(
                 f'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
-                f'<div style="height:90px;background:{cfg["css"]};"></div>'
+                f'<div class="bnr-anim-host {(cfg.get("anim_class") or "") if cfg.get("animated") else ""}" style="height:90px;background:{cfg["css"]};"></div>'
                 f'<div style="padding:14px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}{plus_pill}</div>'
                 f'<div style="font-size:12px;margin-top:4px;">{tag}</div>'
                 f'<div style="margin-top:10px;">{btn}</div></div></div>'
@@ -17466,7 +17466,42 @@ No markdown, no code fences. ONLY JSON.
             log.exception("Shop subscription section failed: %s", _sub_err)
             subscription_section = ""
 
+        # Build identity bundle cards (25% off banner+flag bundles)
+        bundle_cards = []
+        cur_flag_state = sdb.get_flag_state(cid)
+        for bkey, bcfg in sdb.BUNDLES.items():
+            if bcfg.get("plus_only") and not is_plus:
+                continue
+            bnr = sdb.BANNERS.get(bcfg.get("banner") or "") or {}
+            flg = sdb.FLAGS.get(bcfg.get("flag") or "") or {}
+            full = int(bnr.get("price_coins") or 0) + int(flg.get("price_coins") or 0)
+            price = sdb.bundle_price(bkey)
+            already_b = (bcfg.get("banner") in (wallet["unlocked_banners"] or []))
+            already_f = (bcfg.get("flag") in (cur_flag_state["unlocked_flags"] or []))
+            both = already_b and already_f
+            if both:
+                cta = '<button class="btn btn-sm btn-outline" disabled>Owned</button>'
+            elif wallet["coins"] < price:
+                cta = f'<button class="btn btn-sm btn-outline" disabled>Buy ({price} \U0001FA99)</button>'
+            else:
+                cta = f'<button class="btn btn-sm btn-primary" onclick="buyBundle(\'{bkey}\')">Buy ({price} \U0001FA99)</button>'
+            anim_b = (bnr.get("anim_class") or "") if bnr.get("animated") else ""
+            bundle_cards.append(
+                f'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
+                f'  <div class="bnr-anim-host {anim_b}" style="height:70px;background:{bnr.get("css","")};"></div>'
+                f'  <div style="height:8px;background:{flg.get("css","")};opacity:.85;"></div>'
+                f'  <div style="padding:14px;">'
+                f'    <div style="font-weight:700;font-size:15px;">{bcfg["name"]} <span style="background:#22c55e;color:#03250f;font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;vertical-align:middle;">−25%</span></div>'
+                f'    <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">{bcfg.get("desc","")}</div>'
+                f'    <div style="font-size:12px;color:var(--text-muted);"><s>{full} \U0001FA99</s></div>'
+                f'    <div style="margin-top:10px;">{cta}</div>'
+                f'  </div>'
+                f'</div>'
+            )
+        bundles_html = "".join(bundle_cards) or '<div style="color:var(--text-muted);font-size:13px;">No bundles available right now.</div>'
+
         return _s_render("Shop", f"""
+        <style>{sdb.BANNER_ANIM_CSS}</style>
         <h1 style="margin-bottom:6px;">\U0001f6d2 Shop</h1>
         <p style="color:var(--text-muted);margin:0 0 24px;">Spend coins on streak freezes, profile banners, and timed boosts. Earn coins by completing focus sessions, quizzes, flashcards, and duels.</p>
         <style>
@@ -17517,6 +17552,14 @@ No markdown, no code fences. ONLY JSON.
           </div>
         </div>
 
+        <div class="card">
+          <div class="card-header"><h2>🎁 Identity Bundles &nbsp; <span style="font-size:13px;font-weight:600;color:#22c55e;">25% off</span></h2></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Atomic packs that unlock a matching banner + flag for less than buying separately.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
+            {bundles_html}
+          </div>
+        </div>
+
         <script>
         async function buyFreeze() {{
           const r = await fetch('/api/student/wallet/buy-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
@@ -17541,6 +17584,13 @@ No markdown, no code fences. ONLY JSON.
         async function buyFlag(key) {{
           const r = await fetch('/api/student/wallet/buy-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key: key}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          location.reload();
+        }}
+        async function buyBundle(key) {{
+          if (!confirm('Buy this bundle? Coins will be deducted immediately.')) return;
+          const r = await fetch('/api/student/wallet/buy-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{bundle_key: key}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not purchase.'); return; }}
+          alert('Unlocked: ' + r.banner_name + ' + ' + r.flag_name);
           location.reload();
         }}
         async function equipFlag(key) {{
@@ -17592,6 +17642,8 @@ No markdown, no code fences. ONLY JSON.
         except Exception:
             level_name, floor, ceil = "Beginner", 0, 100
         banner_css = sdb.BANNERS.get(wallet["selected_banner"], sdb.BANNERS["default"])["css"]
+        equipped_banner_cfg = sdb.BANNERS.get(wallet["selected_banner"], sdb.BANNERS["default"]) or {}
+        equipped_banner_anim = equipped_banner_cfg.get("anim_class") if equipped_banner_cfg.get("animated") else ""
 
         # ── Banners (grid of unlocked) ──────────────────────────────
         banner_cards = []
@@ -17602,13 +17654,15 @@ No markdown, no code fences. ONLY JSON.
             is_eq = key == wallet["selected_banner"]
             badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
             border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
+            anim_cls = (cfg.get("anim_class") or "") if cfg.get("animated") else ""
+            anim_pill = '<div style="position:absolute;top:6px;left:6px;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">ANIM</div>' if anim_cls else ''
             banner_cards.append(
-                f'<div class="profile-cosm-card" data-key="{key}" data-css="{cfg["css"]}" '
+                f'<div class="profile-cosm-card" data-key="{key}" data-css="{cfg["css"]}" data-anim="{anim_cls}" '
                 f'onclick="equipBanner(\'{key}\')" '
                 f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);">'
-                f'  <div style="height:60px;background:{cfg["css"]};"></div>'
+                f'  <div class="bnr-anim-host {anim_cls}" style="height:60px;background:{cfg["css"]};"></div>'
                 f'  <div style="padding:6px 10px;font-size:12px;color:var(--text);">{cfg["name"]}</div>'
-                f'  {badge}'
+                f'  {anim_pill}{badge}'
                 f'</div>'
             )
         banners_grid = "".join(banner_cards) or '<div style="color:var(--text-muted);font-size:13px;">No banners unlocked yet — visit the Shop.</div>'
@@ -17635,12 +17689,14 @@ No markdown, no code fences. ONLY JSON.
             )
         flags_grid = "".join(flag_cards)
 
-        # ── Earned badges (grid; one equipped at a time on leaderboard) ──
+        # ── Earned badges (two slots: left + right of name) ──
         earned = sdb.get_badges(cid)
-        equipped_badge_key = sdb.get_equipped_badge(cid)
+        eq_badges = sdb.get_equipped_badges(cid)
+        eq_left = eq_badges.get("left") or ""
+        eq_right = eq_badges.get("right") or ""
         badge_cards = []
-        # "None" tile to clear
-        none_eq = (not equipped_badge_key)
+        # "None" tile clears the currently selected slot
+        none_eq = (not eq_left and not eq_right)
         none_border = "border:2px solid #10b981;" if none_eq else "border:1px solid var(--border);"
         none_badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if none_eq else ''
         badge_cards.append(
@@ -17655,9 +17711,14 @@ No markdown, no code fences. ONLY JSON.
             key = b["badge_key"]
             emoji = b.get("emoji", "🏅")
             name = (b.get("name") or key).replace("'", "\\'").replace('"', "&quot;")
-            is_eq = key == equipped_badge_key
-            border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
-            eq_pill = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
+            is_l = (key == eq_left)
+            is_r = (key == eq_right)
+            slot_pills = []
+            if is_l: slot_pills.append('<span style="background:#3b82f6;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">L</span>')
+            if is_r: slot_pills.append('<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">R</span>')
+            border = "border:2px solid #10b981;" if (is_l or is_r) else "border:1px solid var(--border);"
+            eq_pill = (f'<div style="position:absolute;top:6px;right:6px;display:flex;gap:3px;">{"".join(slot_pills)}</div>'
+                       if (is_l or is_r) else '')
             badge_cards.append(
                 f'<div class="profile-cosm-card" onclick="equipBadge(\'{key}\')" title="{b.get("desc","")}" '
                 f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);padding:14px;text-align:center;">'
@@ -17668,15 +17729,73 @@ No markdown, no code fences. ONLY JSON.
             )
         badges_grid = "".join(badge_cards)
 
+        # ── Generic cosmetic grids (focus theme, streak flame, quiz theme, timer ring) ──
+        cos_state = sdb.get_cosmetic_state(cid)
+
+        def _cos_grid(kind, catalog, sel, render_preview):
+            cards = []
+            for key, cfg in catalog.items():
+                is_eq = (key == sel)
+                border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
+                pill = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
+                cards.append(
+                    f'<div class="profile-cosm-card" onclick="equipCosmetic(\'{kind}\',\'{key}\')" '
+                    f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);">'
+                    f'  {render_preview(key, cfg)}'
+                    f'  <div style="padding:6px 10px;font-size:12px;color:var(--text);">{cfg.get("name", key)}</div>'
+                    f'  {pill}'
+                    f'</div>'
+                )
+            return "".join(cards)
+
+        focus_grid = _cos_grid("focus_theme", sdb.FOCUS_THEMES, cos_state["focus_theme"],
+            lambda k, cfg: f'<div style="height:60px;background:{cfg["css"]};"></div>')
+        flame_grid = _cos_grid("streak_flame", sdb.STREAK_FLAMES, cos_state["streak_flame"],
+            lambda k, cfg: f'<div style="height:60px;display:flex;align-items:center;justify-content:center;font-size:30px;{cfg.get("css","")}">{cfg.get("icon","🔥")}</div>')
+        quiz_grid = _cos_grid("quiz_theme", sdb.QUIZ_THEMES, cos_state["quiz_theme"],
+            lambda k, cfg: f'<div style="height:60px;background:{cfg["css"]};color:{cfg.get("text","#fff")};display:flex;align-items:center;justify-content:center;font-weight:700;">Aa</div>')
+        ring_grid = _cos_grid("timer_ring", sdb.TIMER_RINGS, cos_state["timer_ring"],
+            lambda k, cfg: f'<div style="height:60px;display:flex;align-items:center;justify-content:center;"><div style="width:42px;height:42px;border-radius:50%;background:{cfg["css"]};display:flex;align-items:center;justify-content:center;"><div style="width:30px;height:30px;border-radius:50%;background:var(--card);"></div></div></div>')
+
+        # ── Identity bundles (25% off) ──
+        bundle_cards = []
+        for bkey, bcfg in sdb.BUNDLES.items():
+            if bcfg.get("plus_only") and not getattr(sdb, "_is_plus_user", lambda _x: False)(cid):
+                continue
+            bnr = sdb.BANNERS.get(bcfg.get("banner") or "") or {}
+            flg = sdb.FLAGS.get(bcfg.get("flag") or "") or {}
+            full = int(bnr.get("price_coins") or 0) + int(flg.get("price_coins") or 0)
+            price = sdb.bundle_price(bkey)
+            already_b = (bcfg.get("banner") in (wallet["unlocked_banners"] or []))
+            already_f = (bcfg.get("flag") in (sdb.get_flag_state(cid)["unlocked_flags"] or []))
+            both = already_b and already_f
+            cta = ('<button disabled style="background:#374151;color:#9ca3af;border:0;border-radius:8px;padding:6px 12px;font-size:12px;cursor:not-allowed;">Owned</button>'
+                   if both else
+                   f'<button onclick="buyBundle(\'{bkey}\')" style="background:linear-gradient(90deg,#7c3aed,#3b82f6);color:#fff;border:0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;">Buy {price} 🪙</button>')
+            bundle_cards.append(
+                f'<div style="border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card);">'
+                f'  <div style="height:48px;background:{bnr.get("css","")};"></div>'
+                f'  <div style="height:6px;background:{flg.get("css","")};opacity:.85;"></div>'
+                f'  <div style="padding:10px 12px;">'
+                f'    <div style="font-weight:700;font-size:14px;">{bcfg["name"]}</div>'
+                f'    <div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px;">{bcfg.get("desc","")}</div>'
+                f'    <div style="font-size:11px;color:var(--text-muted);"><s>{full} 🪙</s> &nbsp; <b style="color:#22c55e;">−25%</b></div>'
+                f'    <div style="display:flex;justify-content:flex-end;margin-top:6px;">{cta}</div>'
+                f'  </div>'
+                f'</div>'
+            )
+        bundles_grid = "".join(bundle_cards) or '<div style="color:var(--text-muted);font-size:13px;">No bundles available right now.</div>'
+
         name = (c.get("name") or "Student").replace("<", "&lt;")
         email = (c.get("email") or "").replace("<", "&lt;")
         progress_pct = 0
         if ceil > floor:
             progress_pct = max(0, min(100, int((total_xp - floor) * 100 / (ceil - floor))))
         return _s_render("My Profile", f"""
+        <style>{sdb.BANNER_ANIM_CSS}</style>
         <div style="max-width:900px;margin:0 auto;">
           <div style="background:var(--card);border:1px solid var(--border);border-radius:18px;overflow:hidden;margin-bottom:22px;">
-            <div id="profile-banner" style="height:160px;background:{banner_css};"></div>
+            <div id="profile-banner" class="bnr-anim-host {equipped_banner_anim}" style="height:160px;background:{banner_css};"></div>
             <div style="padding:18px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
               <div>
                 <div style="font-size:24px;font-weight:800;">{name}</div>
@@ -17710,9 +17829,43 @@ No markdown, no code fences. ONLY JSON.
           </div>
 
           <div class="card">
-            <div class="card-header"><h2>🏅 Leaderboard badge</h2></div>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Pick one earned badge to display next to your name on the leaderboard. Only one can be equipped at a time.</p>
+            <div class="card-header"><h2>🏅 Leaderboard badges</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:8px;">You can equip <b>two</b> badges — one on each side of your name. Pick which slot to fill, then click a badge. The same badge can fill both sides.</p>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <button id="badge-side-left"  onclick="setBadgeSide('left')"  class="badge-side-btn" style="border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;">◀ Left slot</button>
+              <button id="badge-side-right" onclick="setBadgeSide('right')" class="badge-side-btn active" style="border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;">Right slot ▶</button>
+            </div>
             <div class="profile-cosm-grid">{badges_grid}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>🌧️ Focus theme</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Pick the background that wraps your focus sessions.</p>
+            <div class="profile-cosm-grid">{focus_grid}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>🔥 Streak flame</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Choose the icon that appears next to your streak number.</p>
+            <div class="profile-cosm-grid">{flame_grid}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>📝 Quiz card theme</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">The look of the card behind quiz questions.</p>
+            <div class="profile-cosm-grid">{quiz_grid}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>⏱️ Focus timer ring</h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">The colored ring around the focus countdown.</p>
+            <div class="profile-cosm-grid">{ring_grid}</div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>🎁 Identity bundles &nbsp; <span style="font-size:12px;font-weight:600;color:#22c55e;">25% off</span></h2></div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Bundles unlock a matching banner + flag at a discount vs buying separately.</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">{bundles_grid}</div>
           </div>
         </div>
 
@@ -17723,8 +17876,12 @@ No markdown, no code fences. ONLY JSON.
         </style>
         <script>
         const BANNER_CSS = {{ {", ".join(f'"{k}":{json.dumps(v["css"])}' for k,v in sdb.BANNERS.items())} }};
+        const BANNER_ANIM = {{ {", ".join(f'"{k}":{json.dumps((v.get("anim_class") or "") if v.get("animated") else "")}' for k,v in sdb.BANNERS.items())} }};
         async function equipBanner(k) {{
-          if (BANNER_CSS[k]) document.getElementById('profile-banner').style.background = BANNER_CSS[k];
+          const el = document.getElementById('profile-banner');
+          if (BANNER_CSS[k]) el.style.background = BANNER_CSS[k];
+          // swap animation classes
+          el.className = 'bnr-anim-host ' + (BANNER_ANIM[k] || '');
           const r = await fetch('/api/student/wallet/set-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key:k}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not apply.'); return; }}
           location.reload();
@@ -17734,9 +17891,30 @@ No markdown, no code fences. ONLY JSON.
           if (!r.ok) {{ alert(r.error || 'Could not apply.'); return; }}
           location.reload();
         }}
+        let BADGE_SIDE = 'right';
+        function setBadgeSide(side) {{
+          BADGE_SIDE = side;
+          document.getElementById('badge-side-left').style.background  = (side==='left')  ? 'linear-gradient(90deg,#3b82f6,#7c3aed)' : 'var(--card)';
+          document.getElementById('badge-side-left').style.color       = (side==='left')  ? '#fff' : 'var(--text)';
+          document.getElementById('badge-side-right').style.background = (side==='right') ? 'linear-gradient(90deg,#3b82f6,#7c3aed)' : 'var(--card)';
+          document.getElementById('badge-side-right').style.color      = (side==='right') ? '#fff' : 'var(--text)';
+        }}
+        setBadgeSide('right');
         async function equipBadge(k) {{
-          const r = await fetch('/api/student/wallet/set-badge', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{badge_key:k}})}}).then(r=>r.json());
+          const r = await fetch('/api/student/wallet/set-badge', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{badge_key:k, side: BADGE_SIDE}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not equip.'); return; }}
+          location.reload();
+        }}
+        async function equipCosmetic(kind, key) {{
+          const r = await fetch('/api/student/wallet/set-cosmetic', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{kind, key}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not apply.'); return; }}
+          location.reload();
+        }}
+        async function buyBundle(k) {{
+          if (!confirm('Buy this bundle? Coins will be deducted immediately.')) return;
+          const r = await fetch('/api/student/wallet/buy-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{bundle_key:k}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not purchase.'); return; }}
+          alert('Unlocked: ' + r.banner_name + ' + ' + r.flag_name);
           location.reload();
         }}
         </script>
@@ -17810,7 +17988,30 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
         data = request.get_json(silent=True) or {}
-        return jsonify(sdb.set_equipped_badge(_cid(), str(data.get("badge_key") or "")))
+        side = str(data.get("side") or "right").lower()
+        return jsonify(sdb.set_equipped_badge(_cid(), str(data.get("badge_key") or ""), side=side))
+
+
+    @app.route("/api/student/wallet/set-cosmetic", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_set_cosmetic_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        return jsonify(sdb.set_cosmetic(
+            _cid(),
+            str(data.get("kind") or ""),
+            str(data.get("key") or ""),
+        ))
+
+
+    @app.route("/api/student/wallet/buy-bundle", methods=["POST"])
+    @csrf.exempt
+    def student_wallet_buy_bundle_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        return jsonify(sdb.buy_bundle(_cid(), str(data.get("bundle_key") or "")))
 
 
     @app.route("/api/student/wallet/use-freeze", methods=["POST"])
@@ -17872,12 +18073,13 @@ No markdown, no code fences. ONLY JSON.
         ):
             return jsonify(ok=False, error="You already have an open quiz duel with this user."), 400
 
-        # Free-tier quota: a quiz duel uses your one daily AI quiz.
+        # Free-tier quota: up to 3 quiz duels per day. Sending one also burns
+        # the day's AI-quiz slot (handled inside subscription.can_send_quiz_duel_today).
         try:
             from student import subscription as _sub
-            allowed, reason = _sub.can_generate_quiz_today(cid)
+            allowed, reason = _sub.can_send_quiz_duel_today(cid)
             if not allowed:
-                return jsonify(ok=False, error=reason or "Daily quiz limit reached."), 402
+                return jsonify(ok=False, error=reason or "Daily quiz-duel limit reached."), 402
         except Exception:
             pass
 
@@ -17944,7 +18146,7 @@ No markdown, no code fences. ONLY JSON.
         did = sdb.create_quiz_duel(cid, opp, clean, topic=topic, file_name=fname)
         try:
             from student import subscription as _sub
-            _sub.record_generation(cid, "quiz_generated")
+            _sub.record_generation(cid, "quiz_duel_sent")
         except Exception:
             pass
         return jsonify(ok=True, duel_id=did, count=len(clean))

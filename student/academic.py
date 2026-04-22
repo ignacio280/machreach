@@ -922,13 +922,24 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
             css = flags.get(int(row["client_id"]))
             if css:
                 row["flag_css"] = css
-        # Equipped badges (next to user name)
+        # Equipped badges (left + right of user name)
         badges = _sdb.get_equipped_badges_for_clients(ids)
         for row in out:
             b = badges.get(int(row["client_id"]))
             if b:
-                row["badge_emoji"] = b["emoji"]
-                row["badge_name"] = b["name"]
+                left = b.get("left") or {}
+                right = b.get("right") or {}
+                if left:
+                    row["badge_left_emoji"] = left.get("emoji", "")
+                    row["badge_left_name"] = left.get("name", "")
+                if right:
+                    row["badge_right_emoji"] = right.get("emoji", "")
+                    row["badge_right_name"] = right.get("name", "")
+                # Back-compat single fields (used by older UI snippets)
+                primary = right or left
+                if primary:
+                    row["badge_emoji"] = primary.get("emoji", "")
+                    row["badge_name"] = primary.get("name", "")
     except Exception:
         pass
     return out

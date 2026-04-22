@@ -38,6 +38,10 @@ BETA_ACTIVE = True
 FREE_DAILY_QUIZZES        = 1
 FREE_QUIZ_MAX_QUESTIONS   = 30
 FREE_DAILY_FLASHCARD_SETS = 1
+# Free users can send up to N quiz-duel challenges per day. Sending even one
+# also blocks AI quiz generation for the rest of the day (only the SENDER
+# is penalized; the receiver is unaffected).
+FREE_DAILY_QUIZ_DUELS_SENT = 3
 FREE_FLASHCARD_MAX_CARDS  = 30
 
 PLANS = {
@@ -169,10 +173,36 @@ def can_generate_quiz_today(client_id: int) -> tuple[bool, str]:
     """Return (allowed, reason)."""
     if has_unlimited_ai(client_id):
         return True, ""
+    # Sending a quiz duel uses up the day's free AI quiz budget too.
+    if _count_today(client_id, "quiz_duel_sent") > 0:
+        return False, (
+            "You've already sent a quiz duel today. Free plan: 1 AI activity "
+            "per day (a duel counts). Upgrade to Plus for unlimited."
+        )
     used = _count_today(client_id, "quiz_generated")
     if used >= FREE_DAILY_QUIZZES:
         return False, (
             f"Free plan: {FREE_DAILY_QUIZZES} AI quiz per day. "
+            "Upgrade to Plus for unlimited."
+        )
+    return True, ""
+
+
+def can_send_quiz_duel_today(client_id: int) -> tuple[bool, str]:
+    """Return (allowed, reason). Plus/Ultimate: unlimited. Free: 3 sent / day,
+    AND if a regular AI quiz was already generated today the duel slot is
+    consumed too (mirror of can_generate_quiz_today)."""
+    if has_unlimited_ai(client_id):
+        return True, ""
+    if _count_today(client_id, "quiz_generated") > 0:
+        return False, (
+            "You've already used your daily AI quiz. Upgrade to Plus to send "
+            "unlimited quiz duels."
+        )
+    sent = _count_today(client_id, "quiz_duel_sent")
+    if sent >= FREE_DAILY_QUIZ_DUELS_SENT:
+        return False, (
+            f"Free plan: {FREE_DAILY_QUIZ_DUELS_SENT} quiz duels per day. "
             "Upgrade to Plus for unlimited."
         )
     return True, ""
@@ -194,8 +224,8 @@ def record_generation(client_id: int, kind: str) -> None:
     """Log a generation in `student_xp` (re-using existing table) so daily
     quotas can be counted cheaply without a new table.
 
-    `kind` is one of 'quiz_generated', 'flashcards_generated'. Recorded with
-    xp=0 so it doesn't affect XP totals.
+    `kind` is one of 'quiz_generated', 'flashcards_generated', 'quiz_duel_sent'.
+    Recorded with xp=0 so it doesn't affect XP totals.
     """
     try:
         from outreach.db import _exec

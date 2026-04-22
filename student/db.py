@@ -3165,7 +3165,48 @@ BANNERS = {
                       "css": "linear-gradient(135deg,#fde68a 0%,#fbbf24 25%,#b45309 50%,#fbbf24 75%,#fde68a 100%)"},
     "plus_galaxy2":  {"name": "Andromeda (PLUS)", "price_coins": 1200, "xp_required": 0,   "plus_only": True,
                       "css": "radial-gradient(2px 2px at 15% 25%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 65% 75%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 85% 15%, #fff 50%, transparent 50%), radial-gradient(circle at 30% 60%, rgba(168,85,247,.5) 0%, transparent 30%), radial-gradient(circle at 70% 40%, rgba(56,189,248,.5) 0%, transparent 30%), radial-gradient(ellipse at center, #1e1b4b 0%, #000 100%)"},
+    # ── Animated PLUS-only banners ──────────────────────────────────
+    # Each entry sets `animated: True` and `anim_class` so the renderer can
+    # apply the matching CSS class (defined in BANNER_ANIM_CSS below) which
+    # provides the @keyframes + background-size for smooth motion.
+    "plus_anim_aurora":  {"name": "Drifting Aurora (PLUS)", "price_coins": 1500, "xp_required": 0,
+                          "plus_only": True, "animated": True, "anim_class": "bnr-anim-aurora",
+                          "css": "linear-gradient(120deg,#022c22,#16a34a 25%,#38bdf8 55%,#a855f7 80%,#022c22)"},
+    "plus_anim_magma":   {"name": "Flowing Magma (PLUS)",   "price_coins": 1500, "xp_required": 0,
+                          "plus_only": True, "animated": True, "anim_class": "bnr-anim-magma",
+                          "css": "radial-gradient(circle at 30% 70%, #fde047 0%, transparent 28%), radial-gradient(circle at 70% 30%, #ef4444 0%, transparent 30%), linear-gradient(135deg,#7c2d12,#1c0a04)"},
+    "plus_anim_holo":    {"name": "Slow Holo Rotate (PLUS)","price_coins": 1800, "xp_required": 0,
+                          "plus_only": True, "animated": True, "anim_class": "bnr-anim-holo",
+                          "css": "conic-gradient(from 0deg at 50% 50%, #fbcfe8, #67e8f9, #fde68a, #86efac, #c4b5fd, #fbcfe8)"},
+    "plus_anim_neon":    {"name": "Neon Drift (PLUS)",      "price_coins": 1500, "xp_required": 0,
+                          "plus_only": True, "animated": True, "anim_class": "bnr-anim-neon",
+                          "css": "linear-gradient(120deg,#ec4899,#8b5cf6 30%,#06b6d4 60%,#ec4899)"},
+    "plus_anim_sunset":  {"name": "Endless Sunset (PLUS)",  "price_coins": 1500, "xp_required": 0,
+                          "plus_only": True, "animated": True, "anim_class": "bnr-anim-sunset",
+                          "css": "linear-gradient(120deg,#1e1b4b,#7c3aed 30%,#ec4899 55%,#f59e0b 80%,#1e1b4b)"},
+    "plus_anim_galaxy":  {"name": "Spinning Galaxy (PLUS)", "price_coins": 2000, "xp_required": 0,
+                          "plus_only": True, "animated": True, "anim_class": "bnr-anim-galaxy-spin",
+                          "css": "radial-gradient(2px 2px at 25% 35%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 75% 75%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 15% 80%, #fff 50%, transparent 50%), radial-gradient(circle at 50% 50%, #4c1d95 0%, transparent 60%), radial-gradient(ellipse at center, #1e1b4b 0%, #000 100%)"},
 }
+
+# CSS injected once per page that uses banners. Provides the @keyframes for
+# every animated banner in BANNERS (matched by anim_class). Background-size
+# is set generously so the gradient has room to drift.
+BANNER_ANIM_CSS = """
+@keyframes bnr-pan-x { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+@keyframes bnr-pan-diag { 0% { background-position: 0% 0%; } 50% { background-position: 100% 100%; } 100% { background-position: 0% 0%; } }
+@keyframes bnr-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.bnr-anim-aurora,.bnr-anim-magma,.bnr-anim-holo,.bnr-anim-neon,.bnr-anim-sunset { background-size: 300% 300% !important; }
+.bnr-anim-aurora { animation: bnr-pan-x 18s linear infinite; }
+.bnr-anim-magma  { animation: bnr-pan-diag 14s ease-in-out infinite; }
+.bnr-anim-holo   { animation: bnr-spin 22s linear infinite; transform-origin: center; }
+.bnr-anim-neon   { animation: bnr-pan-x 10s linear infinite; }
+.bnr-anim-sunset { animation: bnr-pan-x 24s linear infinite; }
+.bnr-anim-galaxy-spin { animation: bnr-spin 60s linear infinite; transform-origin: center; }
+/* When animated banners are inside a fixed-height card we mask overflow so
+   the spin transform doesn't leak out the corners. */
+.bnr-anim-host { overflow:hidden; position:relative; }
+"""
 
 # Leaderboard flag catalog. Rendered as a horizontal CSS background on the
 # leaderboard row, mask-faded from full opacity on the LEFT to transparent on
@@ -3242,6 +3283,130 @@ FLAGS = {
     "plus_prism":    {"name": "Prism Bar (PLUS)",     "price_coins": 1000,"xp_required": 0, "plus_only": True,
                       "css": "linear-gradient(90deg, #ef4444, #f59e0b, #fde047, #84cc16, #06b6d4, #6366f1, #a855f7)"},
 }
+
+
+# ── Focus-timer themes ─────────────────────────────────────────────────
+# Visual-only backgrounds for the focus session screen. All free + selectable.
+FOCUS_THEMES = {
+    "default":   {"name": "Default",       "css": "linear-gradient(135deg,#0f172a,#1e293b)"},
+    "rain":      {"name": "Rain Window",   "css": "radial-gradient(circle at 30% 20%, rgba(56,189,248,.25), transparent 40%), radial-gradient(circle at 70% 60%, rgba(99,102,241,.25), transparent 45%), linear-gradient(180deg,#0c1a2e,#020617)"},
+    "fireplace": {"name": "Fireplace",     "css": "radial-gradient(circle at 50% 90%, #fbbf24 0%, #ef4444 18%, transparent 45%), radial-gradient(circle at 50% 100%, #fde047 0%, transparent 25%), linear-gradient(180deg,#1c0a04,#000)"},
+    "library":   {"name": "Library",       "css": "repeating-linear-gradient(0deg, rgba(180,83,9,.12) 0 32px, transparent 32px 64px), linear-gradient(135deg,#3b2412,#1c1006)"},
+    "cafe":      {"name": "Café",          "css": "radial-gradient(circle at 30% 30%, rgba(251,191,36,.15), transparent 40%), linear-gradient(135deg,#3f2a14,#1c120a)"},
+    "forest":    {"name": "Misty Forest",  "css": "radial-gradient(circle at 50% 100%, rgba(34,197,94,.25), transparent 45%), linear-gradient(180deg,#022c22,#000)"},
+    "ocean":     {"name": "Calm Ocean",    "css": "linear-gradient(180deg,#0c4a6e 0%,#082f49 50%,#020617 100%)"},
+    "sunset":    {"name": "Lo-fi Sunset",  "css": "linear-gradient(180deg,#1e1b4b 0%,#7c3aed 35%,#ec4899 70%,#f59e0b 100%)"},
+    "snow":      {"name": "Quiet Snow",    "css": "radial-gradient(2px 2px at 25% 30%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 75% 60%, #fff 50%, transparent 50%), radial-gradient(2px 2px at 50% 80%, #fff 50%, transparent 50%), linear-gradient(180deg,#1e293b,#020617)"},
+    "stars":     {"name": "Starfield",     "css": "radial-gradient(2px 2px at 20% 30%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 80% 70%, #fff 50%, transparent 50%), radial-gradient(1px 1px at 50% 50%, #fff 50%, transparent 50%), linear-gradient(135deg,#000,#1e1b4b)"},
+}
+
+# ── Streak flame visuals ─────────────────────────────────────────────
+# The character / span used next to the streak number. Stored as plain text;
+# leaderboard/profile/dashboard read the user's selected_streak_flame.
+STREAK_FLAMES = {
+    "fire":      {"name": "Classic Fire",  "icon": "🔥"},
+    "blue":      {"name": "Blue Flame",    "icon": "💙",  "css": "filter:hue-rotate(160deg) saturate(1.4);"},
+    "green":     {"name": "Green Flame",   "icon": "🟢",  "css": "filter:hue-rotate(75deg) saturate(1.4);"},
+    "lightning": {"name": "Lightning",     "icon": "⚡"},
+    "snowflake": {"name": "Ironic Snow",   "icon": "❄️"},
+    "comet":     {"name": "Comet",         "icon": "☄️"},
+    "star":      {"name": "Shooting Star", "icon": "🌟"},
+    "rocket":    {"name": "Rocket",        "icon": "🚀"},
+    "diamond":   {"name": "Diamond",       "icon": "💎"},
+}
+
+# ── Quiz card themes ─────────────────────────────────────────────────
+# Background applied to the quiz answering page. Visual only.
+QUIZ_THEMES = {
+    "default":   {"name": "Default",     "css": "var(--card)"},
+    "paper":     {"name": "Paper",       "css": "linear-gradient(135deg,#fefce8,#fef3c7)", "text": "#1c1917"},
+    "holo":      {"name": "Hologram",    "css": "conic-gradient(from 220deg at 50% 50%, #f0abfc, #67e8f9, #fde68a, #86efac, #c4b5fd, #f0abfc)", "text": "#000"},
+    "dark":      {"name": "Pure Dark",   "css": "linear-gradient(135deg,#000,#0a0a0a)"},
+    "blueprint": {"name": "Blueprint",   "css": "repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 1px, transparent 1px 22px), repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, transparent 1px 22px), linear-gradient(135deg,#0c4a6e,#1e3a8a)"},
+    "carbon":    {"name": "Carbon",      "css": "repeating-linear-gradient(45deg, #1f2937 0 6px, #111827 6px 12px)"},
+    "mint":      {"name": "Mint",        "css": "linear-gradient(135deg,#a7f3d0,#6ee7b7)", "text": "#053b22"},
+    "rose":      {"name": "Rose",        "css": "linear-gradient(135deg,#fda4af,#fbcfe8)", "text": "#5d0c1d"},
+}
+
+# ── Focus timer rings ────────────────────────────────────────────────
+# CSS gradient applied to the conic timer ring. Stored as conic-gradient.
+TIMER_RINGS = {
+    "default":   {"name": "Default",   "css": "linear-gradient(135deg,#7c3aed,#3b82f6)"},
+    "rainbow":   {"name": "Rainbow",   "css": "conic-gradient(from 0deg, #ef4444, #f59e0b, #fde047, #84cc16, #06b6d4, #6366f1, #a855f7, #ef4444)"},
+    "fire":      {"name": "Fire",      "css": "conic-gradient(from 0deg, #fde047, #f97316, #dc2626, #fde047)"},
+    "ice":       {"name": "Ice",       "css": "conic-gradient(from 0deg, #f0f9ff, #38bdf8, #0c4a6e, #f0f9ff)"},
+    "neon":      {"name": "Neon",      "css": "conic-gradient(from 0deg, #ec4899, #8b5cf6, #06b6d4, #ec4899)"},
+    "gold":      {"name": "Gold",      "css": "conic-gradient(from 0deg, #fde68a, #fbbf24, #b45309, #fde68a)"},
+    "emerald":   {"name": "Emerald",   "css": "conic-gradient(from 0deg, #a7f3d0, #10b981, #064e3b, #a7f3d0)"},
+    "amethyst":  {"name": "Amethyst",  "css": "conic-gradient(from 0deg, #e9d5ff, #a855f7, #4c1d95, #e9d5ff)"},
+}
+
+# ── Identity bundles ─────────────────────────────────────────────────
+# Each bundle grants its banner + flag at a 25% discount vs buying separately.
+# Price is computed dynamically from the included items.
+BUNDLES = {
+    "ocean": {
+        "name": "Ocean Pack",
+        "desc": "Ocean Wave banner + Tidal Pull flag — sail in style.",
+        "banner": "ocean",
+        "flag": "tide",
+    },
+    "magma": {
+        "name": "Magma Pack",
+        "desc": "Magma Core banner + Blood Moon flag — lava-hot.",
+        "banner": "magma",
+        "flag": "bloodmoon",
+    },
+    "space": {
+        "name": "Space Pack",
+        "desc": "Galaxy banner + Galactic Trail flag — interstellar drip.",
+        "banner": "galaxy",
+        "flag": "galaxy_bar",
+    },
+    "forest": {
+        "name": "Forest Pack",
+        "desc": "Forest banner + Verdant flag — deep-green focus.",
+        "banner": "forest",
+        "flag": "verdant",
+    },
+    "sunset": {
+        "name": "Sunset Pack",
+        "desc": "Sunset banner + Sunrise Streak flag — warm vibes.",
+        "banner": "sunset",
+        "flag": "sunrise",
+    },
+    "matrix": {
+        "name": "Matrix Pack",
+        "desc": "Matrix Rain banner + Matrix Trail flag — hacker mode.",
+        "banner": "matrix",
+        "flag": "matrix_bar",
+    },
+    "phoenix": {
+        "name": "Phoenix Pack",
+        "desc": "Phoenix banner + Phoenix Trail flag — rise from the ashes.",
+        "banner": "phoenix",
+        "flag": "phoenix_bar",
+    },
+    "iridescent": {
+        "name": "Iridescent Pack",
+        "desc": "Iridescent Pearl banner + Holographic flag (PLUS).",
+        "banner": "iridescent",
+        "flag": "plus_holo",
+        "plus_only": True,
+    },
+}
+
+
+def bundle_price(bundle_key: str) -> int:
+    """Return the discounted price of a bundle (25% off the sum of items)."""
+    cfg = BUNDLES.get(bundle_key)
+    if not cfg:
+        return 0
+    bnr = BANNERS.get(cfg.get("banner", "")) or {}
+    flg = FLAGS.get(cfg.get("flag", "")) or {}
+    full = int(bnr.get("price_coins") or 0) + int(flg.get("price_coins") or 0)
+    return max(1, int(round(full * 0.75)))
+
 
 STREAK_FREEZE_PRICE = 10
 STREAK_FREEZE_BUNDLE_QTY = 3
@@ -3647,20 +3812,44 @@ def set_selected_flag(client_id: int, flag_key: str) -> dict:
 # A single badge the user has earned can be shown next to their name on the
 # leaderboard. Stored inside clients.mail_preferences JSON as 'equipped_badge'.
 
-def get_equipped_badge(client_id: int) -> str:
+def _badge_slot_keys(prefs: dict) -> tuple[str, str]:
+    """Return (left_key, right_key) honoring legacy single-slot 'equipped_badge'."""
+    if not isinstance(prefs, dict):
+        return "", ""
+    left = prefs.get("equipped_badge_left") or ""
+    right = prefs.get("equipped_badge_right") or ""
+    legacy = prefs.get("equipped_badge") or ""
+    # Legacy single-slot entries fall back to the right side.
+    if not right and legacy:
+        right = legacy
+    if not isinstance(left, str): left = ""
+    if not isinstance(right, str): right = ""
+    if left and left not in BADGE_DEFS: left = ""
+    if right and right not in BADGE_DEFS: right = ""
+    return left, right
+
+
+def get_equipped_badge(client_id: int, side: str = "right") -> str:
+    """Return the badge key for the requested side ('left' or 'right')."""
     with get_db() as db:
         prefs = _load_flag_prefs(db, client_id)
-    key = prefs.get("equipped_badge") or ""
-    if not isinstance(key, str):
-        return ""
-    if key and key not in BADGE_DEFS:
-        return ""
-    return key
+    left, right = _badge_slot_keys(prefs)
+    return left if str(side).lower() == "left" else right
 
 
-def set_equipped_badge(client_id: int, badge_key: str) -> dict:
-    """Equip a badge to display on the leaderboard. Empty string clears it.
+def get_equipped_badges(client_id: int) -> dict:
+    """Return both equipped slots."""
+    with get_db() as db:
+        prefs = _load_flag_prefs(db, client_id)
+    left, right = _badge_slot_keys(prefs)
+    return {"left": left, "right": right}
+
+
+def set_equipped_badge(client_id: int, badge_key: str, side: str = "right") -> dict:
+    """Equip a badge to one slot ('left' or 'right'). Empty string clears that slot.
+    The same badge_key may be equipped to both sides simultaneously.
     User must already own the badge."""
+    side = "left" if str(side).lower() == "left" else "right"
     if badge_key:
         if badge_key not in BADGE_DEFS:
             return {"ok": False, "error": "Unknown badge."}
@@ -3669,13 +3858,23 @@ def set_equipped_badge(client_id: int, badge_key: str) -> dict:
             return {"ok": False, "error": "Badge not earned."}
     with get_db() as db:
         prefs = _load_flag_prefs(db, client_id)
-        prefs["equipped_badge"] = badge_key or ""
+        # Migrate legacy single slot into right on first write
+        if "equipped_badge" in prefs and "equipped_badge_right" not in prefs:
+            prefs["equipped_badge_right"] = prefs.get("equipped_badge") or ""
+        if side == "left":
+            prefs["equipped_badge_left"] = badge_key or ""
+        else:
+            prefs["equipped_badge_right"] = badge_key or ""
+            # Keep legacy field in sync for any old reader
+            prefs["equipped_badge"] = badge_key or ""
         _save_flag_prefs(db, client_id, prefs)
-    return {"ok": True, "equipped_badge": badge_key or ""}
+    left, right = _badge_slot_keys(prefs)
+    return {"ok": True, "equipped_badge_left": left, "equipped_badge_right": right}
 
 
 def get_equipped_badges_for_clients(client_ids: list[int]) -> dict[int, dict]:
-    """Bulk lookup for the leaderboard. Returns {client_id: {emoji, name, key}}."""
+    """Bulk lookup for the leaderboard.
+    Returns {client_id: {left:{emoji,name,key}|None, right:{emoji,name,key}|None}}."""
     if not client_ids:
         return {}
     out: dict[int, dict] = {}
@@ -3690,13 +3889,101 @@ def get_equipped_badges_for_clients(client_ids: list[int]) -> dict[int, dict]:
         try:
             raw = r.get("mail_preferences") or ""
             prefs = _json.loads(raw) if raw else {}
-            key = prefs.get("equipped_badge") if isinstance(prefs, dict) else ""
         except Exception:
-            key = ""
-        if key and key in BADGE_DEFS:
-            info = BADGE_DEFS[key]
-            out[int(r["id"])] = {"emoji": info.get("emoji", ""), "name": info.get("name", ""), "key": key}
+            prefs = {}
+        left_key, right_key = _badge_slot_keys(prefs)
+        entry = {"left": None, "right": None}
+        if left_key:
+            info = BADGE_DEFS[left_key]
+            entry["left"] = {"emoji": info.get("emoji", ""), "name": info.get("name", ""), "key": left_key}
+        if right_key:
+            info = BADGE_DEFS[right_key]
+            entry["right"] = {"emoji": info.get("emoji", ""), "name": info.get("name", ""), "key": right_key}
+        if entry["left"] or entry["right"]:
+            out[int(r["id"])] = entry
     return out
+
+
+# ── Generic cosmetic selectors (focus theme, streak flame, quiz theme, timer ring) ──
+_COSMETIC_KINDS = {
+    "focus_theme":  ("FOCUS_THEMES",  "selected_focus_theme"),
+    "streak_flame": ("STREAK_FLAMES", "selected_streak_flame"),
+    "quiz_theme":   ("QUIZ_THEMES",   "selected_quiz_theme"),
+    "timer_ring":   ("TIMER_RINGS",   "selected_timer_ring"),
+}
+
+
+def get_cosmetic_state(client_id: int) -> dict:
+    """Return all selected cosmetic keys for the user (with defaults filled in)."""
+    with get_db() as db:
+        prefs = _load_flag_prefs(db, client_id)
+    out = {}
+    for kind, (catalog_name, pref_key) in _COSMETIC_KINDS.items():
+        catalog = globals().get(catalog_name) or {}
+        sel = prefs.get(pref_key) if isinstance(prefs, dict) else None
+        if not sel or sel not in catalog:
+            sel = "default" if "default" in catalog else (next(iter(catalog), "") if catalog else "")
+        out[kind] = sel
+    return out
+
+
+def set_cosmetic(client_id: int, kind: str, key: str) -> dict:
+    """Select a cosmetic. All catalog entries are free + always available."""
+    if kind not in _COSMETIC_KINDS:
+        return {"ok": False, "error": "Unknown cosmetic kind."}
+    catalog_name, pref_key = _COSMETIC_KINDS[kind]
+    catalog = globals().get(catalog_name) or {}
+    if key not in catalog:
+        return {"ok": False, "error": "Unknown option."}
+    with get_db() as db:
+        prefs = _load_flag_prefs(db, client_id)
+        prefs[pref_key] = key
+        _save_flag_prefs(db, client_id, prefs)
+    return {"ok": True, "kind": kind, "key": key}
+
+
+def buy_bundle(client_id: int, bundle_key: str) -> dict:
+    """Atomic 25%-off purchase that grants the bundle's banner + flag.
+    Already-owned items are skipped on the unlock side but the bundle price
+    stays the same (the discount IS the value)."""
+    cfg = BUNDLES.get(bundle_key)
+    if not cfg:
+        return {"ok": False, "error": "Unknown bundle."}
+    if cfg.get("plus_only") and not _is_plus_user(client_id):
+        return {"ok": False, "error": "Plus subscription required."}
+    bnr_key = cfg.get("banner") or ""
+    flg_key = cfg.get("flag") or ""
+    if bnr_key not in BANNERS or flg_key not in FLAGS:
+        return {"ok": False, "error": "Bundle misconfigured."}
+    price = bundle_price(bundle_key)
+    wallet = get_wallet(client_id)
+    if wallet["coins"] < price:
+        return {"ok": False, "error": f"Need {price} coins (have {wallet['coins']})."}
+    flag_state = get_flag_state(client_id)
+    new_banners = list(wallet["unlocked_banners"])
+    if bnr_key not in new_banners:
+        new_banners.append(bnr_key)
+    new_flags = list(flag_state["unlocked_flags"])
+    if flg_key not in new_flags:
+        new_flags.append(flg_key)
+    with get_db() as db:
+        _ensure_wallet(db, client_id)
+        _exec(
+            db,
+            "UPDATE student_wallet SET coins = coins - %s, unlocked_banners = %s WHERE client_id = %s",
+            (price, _json.dumps(new_banners), client_id),
+        )
+        prefs = _load_flag_prefs(db, client_id)
+        prefs["unlocked_flags"] = new_flags
+        _save_flag_prefs(db, client_id, prefs)
+    return {
+        "ok": True, "bundle": bundle_key, "spent": price,
+        "coins": wallet["coins"] - price,
+        "banner": bnr_key, "flag": flg_key,
+        "banner_name": BANNERS[bnr_key].get("name", bnr_key),
+        "flag_name": FLAGS[flg_key].get("name", flg_key),
+        "unlocked_banners": new_banners, "unlocked_flags": new_flags,
+    }
 
 
 def use_streak_freeze(client_id: int) -> dict:
@@ -3750,10 +4037,12 @@ QUIZ_DUEL_TIE_XP          = 2
 QUIZ_DUEL_DAILY_PAY_CAP   = 3    # rewards capped at N matches per opponent per day
 
 # ── Study Marathon (7-day asynchronous duel) rewards ──
-MARATHON_WIN_COINS  = 250
-MARATHON_WIN_XP     = 30
-MARATHON_TIE_COINS  = 75
-MARATHON_TIE_XP     = 10
+# Slightly higher than a quiz duel (50 coins / 5 XP) but not by much,
+# because marathons run for a whole week and would otherwise dominate.
+MARATHON_WIN_COINS  = 70
+MARATHON_WIN_XP     = 8
+MARATHON_TIE_COINS  = 25
+MARATHON_TIE_XP     = 3
 
 
 def init_quiz_duels_tables() -> None:
