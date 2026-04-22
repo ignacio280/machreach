@@ -5370,7 +5370,7 @@ def register_student_routes(app, csrf, limiter):
         focus_stats = sdb.get_focus_stats_today(_cid())
 
         # Use a Windows-safe date format (no %-d / %#d) so it renders the same everywhere.
-        _today_label = datetime.now().strftime("%A, %B ") + str(datetime.now().day)
+        _today_label = ""  # rendered client-side from browser's local date (timezone-correct)
 
         course_options = ""
 
@@ -5384,7 +5384,7 @@ def register_student_routes(app, csrf, limiter):
 
         <h1 style="margin-bottom:6px;">&#127917; Focus Mode</h1>
         <p style="margin:0 0 20px;color:var(--text-muted);font-size:13px;">
-          Showing what you've studied <b style="color:var(--text);">today</b> &middot; {_today_label}
+          Showing what you've studied <b style="color:var(--text);">today</b> &middot; <span id="focus-today-label">{_today_label}</span>
         </p>
 
 
@@ -6578,15 +6578,12 @@ def register_student_routes(app, csrf, limiter):
 
           stopKeepalive();
 
+          // Reset DISCARDS unsaved progress — do NOT call saveFocusSession.
+          // Users who want to save their work should pause/finish the timer.
+
           isRunning = false;
 
           isBreak = false;
-
-          if (sessionStarted && totalFocusSeconds > 60) {{
-
-            saveFocusSession();
-
-          }}
 
           totalFocusSeconds = 0;
 
@@ -6861,6 +6858,18 @@ def register_student_routes(app, csrf, limiter):
           }} catch(e) {{}}
 
         }}
+
+
+
+        // Render today's date from the BROWSER (timezone-correct, not server UTC)
+        (function() {{
+          var el = document.getElementById('focus-today-label');
+          if (!el) return;
+          try {{
+            var d = new Date();
+            el.textContent = d.toLocaleDateString(undefined, {{ weekday: 'long', month: 'long', day: 'numeric' }});
+          }} catch(e) {{}}
+        }})();
 
 
 

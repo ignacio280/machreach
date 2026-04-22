@@ -1852,6 +1852,10 @@ def get_streak_days(client_id: int) -> int:
         if isinstance(d, str):
             d = _date.fromisoformat(d)
         activity.add(d)
+    # Earliest activity date — we never apply freezes for days before this
+    # (otherwise a brand-new account could rack up an infinite streak by
+    # auto-consuming freezes on days that never had any activity).
+    earliest_activity = min(activity) if activity else today
     # Pull existing freezes (last 120 days)
     existing_freezes = _get_recent_freeze_dates(client_id, today - timedelta(days=120))
     # Track freezes already used per ISO week
@@ -1863,6 +1867,11 @@ def get_streak_days(client_id: int) -> int:
     if cur not in activity and cur not in existing_freezes:
         cur = cur - timedelta(days=1)
     while True:
+        # Hard floor: never count any day older than the user's earliest
+        # activity \u2014 even if a freeze row exists for it (bogus rows from
+        # prior buggy runs are ignored here).
+        if cur < earliest_activity:
+            break
         if cur in activity or cur in existing_freezes:
             streak += 1
             cur = cur - timedelta(days=1)
@@ -2974,9 +2983,6 @@ STREAK_FREEZE_BUNDLE_PRICE = 25  # vs. 30 if bought one-by-one (saves 5)
 
 # Timed boosts. Each entry: (label, multiplier, hours, price_coins)
 BOOSTS = {
-    "xp_1h":   {"label": "2\u00d7 XP \u00b7 1 hour",   "kind": "xp",   "mult": 2.0, "hours": 1,   "price_coins": 20},
-    "xp_24h":  {"label": "2\u00d7 XP \u00b7 24 hours", "kind": "xp",   "mult": 2.0, "hours": 24,  "price_coins": 80},
-    "xp_7d":   {"label": "2\u00d7 XP \u00b7 7 days",   "kind": "xp",   "mult": 2.0, "hours": 168, "price_coins": 300},
 }
 
 def init_boosts_table() -> None:

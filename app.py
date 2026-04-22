@@ -1695,59 +1695,12 @@ LAYOUT = """<!DOCTYPE html>
     // Apply saved theme on load
     try { window.applyMrTheme(localStorage.getItem('mr_theme') || 'default'); } catch(e) {}
 
-    // ── FOCUS SHIELD (in-app distraction blocker) ──
-    // When a focus session is running (localStorage.focus_float.active),
-    // any non-focus MachReach page is replaced with a full-screen shield
-    // urging the user back to the timer. Prevents using MachReach itself
-    // as a distraction.
-    (function() {
-      function isActive() {
-        try {
-          var ff = JSON.parse(localStorage.getItem('focus_float') || 'null');
-          return !!(ff && ff.active);
-        } catch(e) { return false; }
-      }
-      function onFocusPage() {
-        return location.pathname === '/student/focus' || location.pathname === '/student/focus/';
-      }
-      function mountShield() {
-        if (document.getElementById('mr-focus-shield')) return;
-        var s = document.createElement('div');
-        s.id = 'mr-focus-shield';
-        s.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:radial-gradient(circle at top,#1e1b4b,#050816);color:#fff;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;animation:mrFsIn .35s ease-out';
-        s.innerHTML = '<style>@keyframes mrFsIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}</style>'
-          + '<div style="max-width:520px;padding:40px 32px;text-align:center">'
-          +   '<div style="font-size:72px;margin-bottom:12px">🎯</div>'
-          +   '<div style="font-size:12px;letter-spacing:3px;color:#A78BFA;text-transform:uppercase;font-weight:700;margin-bottom:8px">Focus session active</div>'
-          +   '<h1 style="font-size:30px;margin:0 0 14px;font-weight:800;line-height:1.15">Stay locked in.</h1>'
-          +   '<p style="color:#C7D2FE;font-size:15px;line-height:1.6;margin:0 0 26px">You started a focus session. This page is blocked until you finish or pause the timer. No shortcuts.</p>'
-          +   '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
-          +     '<a href="/student/focus" style="background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;padding:14px 26px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(99,102,241,.4)">⟵ Back to Focus Timer</a>'
-          +     '<button id="mr-focus-shield-break" style="background:transparent;border:1px solid rgba(255,255,255,.2);color:#A5B4FC;padding:14px 20px;border-radius:12px;cursor:pointer;font-weight:600;font-size:13px">End session (lose progress)</button>'
-          +   '</div>'
-          + '</div>';
-        document.body.appendChild(s);
-        document.getElementById('mr-focus-shield-break').onclick = function() {
-          if (!confirm('End your focus session and forfeit unsaved XP?')) return;
-          localStorage.removeItem('focus_float');
-          localStorage.removeItem('focus_timer_state');
-          location.reload();
-        };
-      }
-      function unmount() {
-        var s = document.getElementById('mr-focus-shield');
-        if (s) s.remove();
-      }
-      function tick() {
-        if (isActive() && !onFocusPage()) mountShield();
-        else unmount();
-      }
-      // Run immediately + every 2s
-      tick();
-      setInterval(tick, 2000);
-      // React instantly to storage changes across tabs
-      window.addEventListener('storage', function(e){ if (e.key === 'focus_float') tick(); });
-    })();
+    // ── FOCUS SHIELD (DISABLED) ──
+    // Previously blocked every non-focus MachReach page when a focus session
+    // was active. Disabled because it blocked legitimate study navigation
+    // (leaderboards, courses, flashcards). Anti-distraction is now opt-in via
+    // the user's own browser focus extensions.
+    (function(){})();
     // Loading button handler
     document.querySelectorAll('form[data-loading]').forEach(form => {
       form.addEventListener('submit', () => {
