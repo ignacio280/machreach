@@ -1406,9 +1406,8 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/shop" {% if active_page == 'student_shop' %}class="active"{% endif %}>&#128722; Shop</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_analytics','student_weak','student_gpa','student_achievements','student_exchange'] %}class="active"{% endif %}>More &#9662;</a>
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_weak','student_gpa','student_achievements','student_exchange'] %}class="active"{% endif %}>More &#9662;</a>
           <div class="nav-dropdown-menu">
-            <a href="/student/analytics">&#128202; Analytics</a>
             <a href="/student/weak-topics">&#127919; Weak Topics</a>
             <a href="/student/gpa">&#128200; GPA</a>
             <a href="/student/achievements">&#127942; XP &amp; Badges</a>

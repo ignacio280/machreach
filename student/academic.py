@@ -720,6 +720,25 @@ def save_academic_profile(
             + " WHERE id = %s",
             (country_iso, university_id, major_id, client_id),
         )
+    # Best-effort: derive a sensible IANA timezone from the country and
+    # store it in mail_preferences so date rendering uses the right tz.
+    try:
+        import json as _json
+        from student.timezones import tz_for_country
+        from outreach.db import get_mail_preferences, update_mail_preferences
+        tz = tz_for_country(country_iso)
+        if tz:
+            raw = get_mail_preferences(client_id) or ""
+            try:
+                prefs = _json.loads(raw) if raw else {}
+                if not isinstance(prefs, dict):
+                    prefs = {}
+            except Exception:
+                prefs = {}
+            prefs["timezone"] = tz
+            update_mail_preferences(client_id, _json.dumps(prefs))
+    except Exception:
+        pass
 
 
 def mark_welcome_banner_seen(client_id: int) -> None:

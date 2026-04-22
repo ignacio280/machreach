@@ -516,6 +516,11 @@ def register_student_routes(app, csrf, limiter):
     @app.route("/student/analytics")
 
     def student_analytics_page():
+        # Analytics tab was deprecated — the dashboard already shows the
+        # full study breakdown. Bounce visitors there.
+        return redirect(url_for("student_dashboard_page"))
+
+    def _student_analytics_page_legacy():
 
         if not _logged_in():
 
@@ -2472,33 +2477,10 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Build promotion payload based on total XP change during this call.
-
-        # We compute after all XP additions above (focus + pages) are done.
-
-        _new_total = sdb.get_total_xp(cid)
-
-        _rank_after = sdb.get_study_rank(_new_total)
-
-        _xp_delta = _focus_xp_awarded + _page_xp_awarded
-
-        _rank_before = sdb.get_study_rank(max(0, _new_total - _xp_delta))
-
+        # Promotion / demotion toasts intentionally disabled.
+        # Leagues are XP-monotonic (no demotions) and the celebration toast
+        # was distracting. Keep the response key for client back-compat.
         promotion = None
-
-        if _rank_after["index"] > _rank_before["index"]:
-
-            promotion = {
-
-                "promoted": True,
-
-                "tier_up": _rank_after["tier"] != _rank_before["tier"],
-
-                "reached_elite": _rank_after["division"] == "" and _rank_before["division"] != "",
-
-                "rank_after": _rank_after,
-
-            }
 
 
 
@@ -2983,13 +2965,11 @@ def register_student_routes(app, csrf, limiter):
 
               <h3>No sessions tracked today yet</h3>
 
-              <p>Start a Focus session to log study time, then check Analytics for a full breakdown.</p>
+              <p>Start a Focus session to log study time — your dashboard will show the breakdown.</p>
 
               <div class="empty-actions">
 
                 <a href="/student/focus" class="primary">&#127919; Start Focus session</a>
-
-                <a href="/student/analytics" class="ghost">&#128202; View analytics</a>
 
               </div>
 
@@ -3126,8 +3106,6 @@ def register_student_routes(app, csrf, limiter):
             "<div><div style='font-weight:700;font-size:16px;'>Study analytics</div>"
 
             "<div style='font-size:12px;color:var(--text-muted);'>Last 30 days at a glance</div></div></div>"
-
-            "<a href='/student/analytics' class='btn btn-outline btn-sm'>Full analytics &rarr;</a>"
 
             "</div>"
 
@@ -6848,9 +6826,7 @@ def register_student_routes(app, csrf, limiter):
               }}
 
               if (result.promotion && window.showPromotionToast) {{
-
-                window.showPromotionToast(result.promotion);
-
+                /* promotion toasts disabled */
               }}
 
             }}
@@ -8579,6 +8555,11 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Unauthorized"}), 401
 
+        from student import subscription as _sub
+        _ok, _why = _sub.can_generate_flashcards_today(_cid())
+        if not _ok:
+            return jsonify({"error": _why, "upgrade_required": True}), 402
+
         data = request.get_json(force=True)
 
         course_id = data.get("course_id")
@@ -8592,6 +8573,9 @@ def register_student_routes(app, csrf, limiter):
         exam_id = data.get("exam_id")
 
         count = min(int(data.get("count", 15)), 100)
+
+        # Apply per-tier card cap (free = 30 max).
+        count = _sub.cap_cards(_cid(), count)
 
 
 
@@ -8624,6 +8608,12 @@ def register_student_routes(app, csrf, limiter):
                                                 exam_id=exam_id, source_type="drop")
 
             sdb.add_flashcards(deck_id, cards)
+
+            try:
+                from student import subscription as _sub
+                _sub.record_generation(_cid(), "flashcards_generated")
+            except Exception:
+                pass
 
             return jsonify({"deck_id": deck_id, "card_count": len(cards)})
 
@@ -8695,7 +8685,11 @@ def register_student_routes(app, csrf, limiter):
 
         sdb.add_flashcards(deck_id, cards)
 
-
+        try:
+            from student import subscription as _sub
+            _sub.record_generation(_cid(), "flashcards_generated")
+        except Exception:
+            pass
 
         return jsonify({"deck_id": deck_id, "card_count": len(cards)})
 
@@ -8912,6 +8906,11 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Unauthorized"}), 401
 
+        from student import subscription as _sub
+        _ok, _why = _sub.can_generate_quiz_today(_cid())
+        if not _ok:
+            return jsonify({"error": _why, "upgrade_required": True}), 402
+
         data = request.get_json(force=True)
 
         course_id = data.get("course_id")
@@ -8939,6 +8938,10 @@ def register_student_routes(app, csrf, limiter):
             count = 10
 
         count = max(1, min(count, 100))  # hard ceiling — generation batches under the hood
+
+        # Apply per-tier question cap (free = 30 max).
+        from student import subscription as _sub
+        count = _sub.cap_questions(_cid(), count)
 
 
 
@@ -8971,6 +8974,12 @@ def register_student_routes(app, csrf, limiter):
             quiz_id = sdb.create_quiz(_cid(), title, difficulty, course_id=course_id or None, exam_id=exam_id)
 
             sdb.add_quiz_questions(quiz_id, questions)
+
+            try:
+                from student import subscription as _sub
+                _sub.record_generation(_cid(), "quiz_generated")
+            except Exception:
+                pass
 
             return jsonify({
 
@@ -17982,7 +17991,7 @@ No markdown, no code fences. ONLY JSON.
     @app.route("/student/shop")
     def student_shop_page():
         if not _logged_in():
-            return redirect(url_for("student_login"))
+            return redirect(url_for("login"))
         cid = _cid()
         wallet = sdb.get_wallet(cid)
         total_xp = sdb.get_total_xp(cid)
@@ -18055,6 +18064,71 @@ No markdown, no code fences. ONLY JSON.
                 '</div>'
             )
         boosts_html = "".join(boost_cards)
+
+        # ── Subscription tier cards ────────────────────────
+        try:
+            from student import subscription as _sub
+            current_tier = _sub.get_tier(cid)
+            beta_active = _sub.BETA_ACTIVE
+            plans = _sub.PLANS
+        except Exception:
+            current_tier = "free"
+            beta_active = True
+            plans = {}
+        tier_order = ["free", "plus", "ultimate"]
+        tier_colors = {
+            "free":     ("#64748b", "#f1f5f9"),
+            "plus":     ("#7c3aed", "#ede9fe"),
+            "ultimate": ("#d97706", "#fef3c7"),
+        }
+        sub_cards = []
+        for key in tier_order:
+            cfg = plans.get(key)
+            if not cfg:
+                continue
+            border, bg = tier_colors.get(key, ("#64748b", "#f1f5f9"))
+            is_current = (key == current_tier)
+            features_html = "".join(
+                f'<li style="margin:6px 0;font-size:13px;color:#334155;">{f}</li>' for f in cfg.get("features", [])
+            )
+            price = cfg.get("price_usd_month", 0)
+            price_html = "Free" if price == 0 else f"${price:.2f}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mo</span>"
+            label_name = cfg.get("name", key.title())
+            if is_current:
+                btn = '<button class="btn btn-sm" disabled style="width:100%;background:#10b981;color:#fff;border:none;">Current plan</button>'
+            elif key == "free":
+                btn = f'<button class="btn btn-sm btn-outline" style="width:100%;" onclick="changeTier(\'{key}\')">Downgrade</button>'
+            else:
+                btn = f'<button class="btn btn-sm btn-primary" style="width:100%;" onclick="changeTier(\'{key}\')">Upgrade to {label_name}</button>'
+            badge = '<div style="position:absolute;top:10px;right:10px;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;">ACTIVE</div>' if is_current else ""
+            sub_cards.append(
+                f'<div style="position:relative;background:var(--card);border:2px solid {border};border-radius:16px;padding:18px;display:flex;flex-direction:column;">'
+                f'{badge}'
+                f'<div style="font-size:13px;font-weight:700;color:{border};text-transform:uppercase;letter-spacing:.5px;">{label_name}</div>'
+                f'<div style="font-size:28px;font-weight:800;margin:6px 0 4px;">{price_html}</div>'
+                f'<div style="color:var(--text-muted);font-size:12px;margin-bottom:10px;">{cfg.get("blurb","")}</div>'
+                f'<ul style="list-style:none;padding:0;margin:0 0 14px;flex:1;">{features_html}</ul>'
+                f'{btn}'
+                '</div>'
+            )
+        subscriptions_html = "".join(sub_cards)
+        beta_banner = (
+            '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #60a5fa;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#1e3a8a;">'
+            '<b>🎉 Beta in progress.</b> While we\'re in beta, every plan unlocks Ultimate features for free. '
+            'Free-tier limits (1 quiz/day · 1 flashcard set/day · 30 items max) start when beta ends.'
+            '</div>'
+            if beta_active else ""
+        )
+        subscription_section = f"""
+        <div class="card">
+          <div class="card-header"><h2>💎 Subscription</h2></div>
+          {beta_banner}
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
+            {subscriptions_html}
+          </div>
+        </div>
+        """
+
         return _s_render("Shop", f"""
         <h1 style="margin-bottom:6px;">\U0001f6d2 Shop</h1>
         <p style="color:var(--text-muted);margin:0 0 24px;">Spend coins on streak freezes, profile banners, and timed boosts. Earn coins by completing focus sessions, quizzes, flashcards, and duels.</p>
@@ -18063,6 +18137,7 @@ No markdown, no code fences. ONLY JSON.
           .sh-cd {{ font-variant-numeric: tabular-nums; }}
         </style>
         {active_html}
+        {subscription_section}
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;">
           <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \ud83e\ude99</div><div class="label">Coins</div></div>
           <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Streak Freezes</div></div>
@@ -18118,6 +18193,13 @@ No markdown, no code fences. ONLY JSON.
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
           location.reload();
         }}
+        async function changeTier(tier) {{
+          const labels = {{free:'Free', plus:'Plus', ultimate:'Ultimate'}};
+          if (!confirm('Switch to the ' + (labels[tier]||tier) + ' plan?')) return;
+          const r = await fetch('/api/student/subscription/change', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{tier:tier}})}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not change plan.'); return; }}
+          location.reload();
+        }}
         // Live countdown for active boost chips
         (function() {{
           const chips = document.querySelectorAll('.sh-active-chip');
@@ -18143,7 +18225,7 @@ No markdown, no code fences. ONLY JSON.
     @app.route("/student/profile")
     def student_profile_page():
         if not _logged_in():
-            return redirect(url_for("student_login"))
+            return redirect(url_for("login"))
         cid = _cid()
         from outreach.db import get_client
         c = get_client(cid) or {}
@@ -18279,6 +18361,23 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
         return jsonify(sdb.use_streak_freeze(_cid()))
+
+
+    @app.route("/api/student/subscription/change", methods=["POST"])
+    @csrf.exempt
+    def student_subscription_change_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        tier = str(data.get("tier") or "").strip().lower()
+        try:
+            from student import subscription as _sub
+            if tier not in _sub.PLANS:
+                return jsonify(ok=False, error="Unknown plan"), 400
+            _sub.set_tier(_cid(), tier)
+            return jsonify(ok=True, tier=tier)
+        except Exception as e:
+            return jsonify(ok=False, error=str(e)), 500
 
 
     # ================================================================
