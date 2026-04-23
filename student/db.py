@@ -501,6 +501,11 @@ def init_student_db():
         init_quiz_duels_tables()
     except Exception as e:
         log.exception("init_quiz_duels_tables failed: %s", e)
+    # Marketplace (paid file uploads — replaces the old free Exchange)
+    try:
+        init_marketplace_tables()
+    except Exception as e:
+        log.exception("init_marketplace_tables failed: %s", e)
     # Academic identity layer (countries, universities, majors, leagues).
     # Imported lazily so a bad seed file can't take down the whole app.
     try:
@@ -546,6 +551,8 @@ def _student_migrations():
         ("student_email_prefs", "gpa_country", "TEXT DEFAULT 'us'"),
         # Quiz per-question topic tag (for analytics)
         ("student_quiz_questions", "topic", "TEXT DEFAULT ''"),
+        # Presence — unix epoch seconds of the last activity touch.
+        ("clients", "last_seen_at", "BIGINT DEFAULT 0"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -2288,21 +2295,9 @@ def get_badges(client_id: int) -> list[dict]:
             (client_id,),
         )
     result = []
-    seen = set()
     for r in rows:
         info = BADGE_DEFS.get(r["badge_key"], {})
         result.append({**r, **info})
-        seen.add(r["badge_key"])
-    # Ultimate tier: surface every defined badge so they can equip any of them.
-    try:
-        from . import subscription as _sub
-        if _sub.get_tier(client_id) == "ultimate":
-            for key, info in BADGE_DEFS.items():
-                if key in seen:
-                    continue
-                result.append({"badge_key": key, "client_id": client_id, **info})
-    except Exception:
-        pass
     return result
 
 
@@ -2914,51 +2909,187 @@ def remove_friend(client_id: int, friend_id: int) -> None:
 
 
 def list_friends(client_id: int) -> dict:
-    """Return {'friends': [...accepted...], 'incoming': [...pending TO me...], 'outgoing': [...pending FROM me...]}."""
+    """Return {'friends': [...accepted...], 'incoming': [...pending TO me...], 'outgoing': [...pending FROM me...]}.
+
+    Each friend row also includes `last_seen_at` (epoch seconds) and `online`
+    (bool — true when last_seen_at is within ONLINE_WINDOW_SEC).
+    """
     with get_db() as db:
         accepted = _fetchall(
             db,
-            "SELECT c.id, c.name, c.email FROM student_friends sf "
+            "SELECT c.id, c.name, c.email, c.last_seen_at FROM student_friends sf "
             "JOIN clients c ON c.id = sf.friend_client_id "
             "WHERE sf.client_id = %s AND sf.status = 'accepted'",
             (client_id,),
         ) or []
         incoming = _fetchall(
             db,
-            "SELECT c.id, c.name, c.email FROM student_friends sf "
+            "SELECT c.id, c.name, c.email, c.last_seen_at FROM student_friends sf "
             "JOIN clients c ON c.id = sf.client_id "
             "WHERE sf.friend_client_id = %s AND sf.status = 'pending'",
             (client_id,),
         ) or []
         outgoing = _fetchall(
             db,
-            "SELECT c.id, c.name, c.email FROM student_friends sf "
+            "SELECT c.id, c.name, c.email, c.last_seen_at FROM student_friends sf "
             "JOIN clients c ON c.id = sf.friend_client_id "
             "WHERE sf.client_id = %s AND sf.status = 'pending'",
             (client_id,),
         ) or []
+
+    def _row(r):
+        ls = int(r.get("last_seen_at") or 0)
+        return {
+            "id": r["id"],
+            "name": r.get("name") or "",
+            "email": r.get("email") or "",
+            "last_seen_at": ls,
+            "online": is_online(ls),
+        }
+
     return {
-        "friends":  [{"id": r["id"], "name": r.get("name") or "", "email": r.get("email") or ""} for r in accepted],
-        "incoming": [{"id": r["id"], "name": r.get("name") or "", "email": r.get("email") or ""} for r in incoming],
-        "outgoing": [{"id": r["id"], "name": r.get("name") or "", "email": r.get("email") or ""} for r in outgoing],
+        "friends":  [_row(r) for r in accepted],
+        "incoming": [_row(r) for r in incoming],
+        "outgoing": [_row(r) for r in outgoing],
     }
 
 
-# -- 7-day Duels ---------------------------------------------
+# -- Presence (online status) --------------------------------
+
+ONLINE_WINDOW_SEC = 90  # users with activity in last 90s are "online"
+
+
+def touch_presence(client_id: int) -> None:
+    """Mark a user as online RIGHT NOW. Cheap single-row update."""
+    import time as _time
+    try:
+        with get_db() as db:
+            _exec(
+                db,
+                "UPDATE clients SET last_seen_at = %s WHERE id = %s",
+                (int(_time.time()), client_id),
+            )
+    except Exception as e:
+        log.debug("touch_presence failed: %s", e)
+
+
+def is_online(last_seen_at: int | None) -> bool:
+    if not last_seen_at:
+        return False
+    import time as _time
+    try:
+        return (int(_time.time()) - int(last_seen_at)) < ONLINE_WINDOW_SEC
+    except Exception:
+        return False
+
+
+def is_user_online(client_id: int) -> bool:
+    try:
+        with get_db() as db:
+            ls = _fetchval(
+                db, "SELECT last_seen_at FROM clients WHERE id = %s", (client_id,),
+            )
+        return is_online(int(ls or 0))
+    except Exception:
+        return False
+
+
+# -- 7-day Duels (Study Marathon) ----------------------------
 
 def start_duel(challenger_id: int, opponent_id: int) -> int:
-    """Create a 7-day duel. Returns the duel id."""
+    """Send a 7-day Study Marathon invite. Status is 'pending' until the
+    opponent accepts via accept_marathon_duel(). Returns the duel id.
+
+    The 7-day window does NOT begin until acceptance; ends_at is set to a
+    placeholder one week from now and reset on accept.
+    """
     from datetime import datetime, timedelta
     ends = datetime.now() + timedelta(days=7)
     with get_db() as db:
         return _insert_returning_id(
             db,
             "INSERT INTO student_duels (challenger_id, opponent_id, ends_at, status) "
-            "VALUES (%s, %s, %s, 'active') RETURNING id",
+            "VALUES (%s, %s, %s, 'pending') RETURNING id",
             (challenger_id, opponent_id, ends),
             "INSERT INTO student_duels (challenger_id, opponent_id, ends_at, status) "
-            "VALUES (?, ?, ?, 'active')",
+            "VALUES (?, ?, ?, 'pending')",
         )
+
+
+def list_pending_marathons_for(client_id: int) -> dict:
+    """Return marathon invites split by direction.
+    {'incoming': [pending duels TO me], 'outgoing': [pending duels I sent]}.
+    """
+    with get_db() as db:
+        incoming = _fetchall(
+            db,
+            "SELECT d.*, cc.name AS challenger_name, oc.name AS opponent_name "
+            "FROM student_duels d "
+            "JOIN clients cc ON cc.id = d.challenger_id "
+            "JOIN clients oc ON oc.id = d.opponent_id "
+            "WHERE d.opponent_id = %s AND d.status = 'pending' "
+            "ORDER BY d.started_at DESC",
+            (client_id,),
+        ) or []
+        outgoing = _fetchall(
+            db,
+            "SELECT d.*, cc.name AS challenger_name, oc.name AS opponent_name "
+            "FROM student_duels d "
+            "JOIN clients cc ON cc.id = d.challenger_id "
+            "JOIN clients oc ON oc.id = d.opponent_id "
+            "WHERE d.challenger_id = %s AND d.status = 'pending' "
+            "ORDER BY d.started_at DESC",
+            (client_id,),
+        ) or []
+    return {
+        "incoming": [dict(r) for r in incoming],
+        "outgoing": [dict(r) for r in outgoing],
+    }
+
+
+def accept_marathon_duel(duel_id: int, opponent_id: int) -> dict:
+    """Accept a pending marathon. The 7-day clock starts NOW."""
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    ends = now + timedelta(days=7)
+    with get_db() as db:
+        d = _fetchone(
+            db,
+            "SELECT * FROM student_duels WHERE id = %s",
+            (duel_id,),
+        )
+        if not d:
+            return {"ok": False, "error": "Duel not found."}
+        if int(d.get("opponent_id") or 0) != int(opponent_id):
+            return {"ok": False, "error": "Not your invite."}
+        if (d.get("status") or "") != "pending":
+            return {"ok": False, "error": f"Duel is {d.get('status')}."}
+        _exec(
+            db,
+            "UPDATE student_duels SET started_at = %s, ends_at = %s, status = 'active' "
+            "WHERE id = %s",
+            (now, ends, duel_id),
+        )
+    return {"ok": True, "duel_id": duel_id}
+
+
+def decline_marathon_duel(duel_id: int, actor_id: int) -> dict:
+    """Decline (opponent) or cancel (challenger) a pending marathon — deletes the row."""
+    with get_db() as db:
+        d = _fetchone(
+            db,
+            "SELECT challenger_id, opponent_id, status FROM student_duels WHERE id = %s",
+            (duel_id,),
+        )
+        if not d:
+            return {"ok": False, "error": "Duel not found."}
+        actor = int(actor_id)
+        if actor not in (int(d.get("opponent_id") or 0), int(d.get("challenger_id") or 0)):
+            return {"ok": False, "error": "Not your invite."}
+        if (d.get("status") or "") != "pending":
+            return {"ok": False, "error": f"Duel is {d.get('status')}."}
+        _exec(db, "DELETE FROM student_duels WHERE id = %s", (duel_id,))
+    return {"ok": True}
 
 
 def get_active_duels(client_id: int) -> list[dict]:
@@ -4410,18 +4541,18 @@ def use_streak_freeze(client_id: int) -> dict:
 QUIZ_DUEL_INVITE_TTL_MIN  = 10   # opponent must accept within 10 min
 QUIZ_DUEL_PLAY_TTL_MIN    = 15   # match must be finished within 15 min of start
 QUIZ_DUEL_QUESTION_COUNT  = 10
-QUIZ_DUEL_WIN_COINS       = 50
+QUIZ_DUEL_WIN_COINS       = 5
 QUIZ_DUEL_WIN_XP          = 5
-QUIZ_DUEL_TIE_COINS       = 20
+QUIZ_DUEL_TIE_COINS       = 2
 QUIZ_DUEL_TIE_XP          = 2
 QUIZ_DUEL_DAILY_PAY_CAP   = 3    # rewards capped at N matches per opponent per day
 
 # ── Study Marathon (7-day asynchronous duel) rewards ──
-# Slightly higher than a quiz duel (50 coins / 5 XP) but not by much,
-# because marathons run for a whole week and would otherwise dominate.
-MARATHON_WIN_COINS  = 70
+# Coins are kept token-small on purpose: real income is the Marketplace,
+# duels exist for status / streaks / XP — not as a coin farm.
+MARATHON_WIN_COINS  = 8
 MARATHON_WIN_XP     = 8
-MARATHON_TIE_COINS  = 25
+MARATHON_TIE_COINS  = 3
 MARATHON_TIE_XP     = 3
 
 
@@ -4943,3 +5074,321 @@ def get_quiz_duel_history(client_id: int, limit: int = 20) -> list[dict]:
         d.pop("questions_json", None)
         out.append(d)
     return out
+
+
+# ─────────────────────────────────────────────────────────────
+# Marketplace (paid file uploads)
+# ─────────────────────────────────────────────────────────────
+#
+# Sellers upload a file, set a coin price, write a title/description,
+# and (optionally) a short preview. Buyers see the metadata + preview
+# and pay the listed coin price to unlock the full file. Ultimate-tier
+# subscribers get free access to every listing (no purchase row).
+
+import os as _os
+import shutil as _shutil
+
+MARKETPLACE_UPLOAD_DIR = _os.path.join(
+    _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+    "uploads",
+    "marketplace",
+)
+MARKETPLACE_MAX_FILE_BYTES = 25 * 1024 * 1024
+MARKETPLACE_ALLOWED_EXT = {
+    "pdf", "txt", "md", "docx", "doc", "pptx", "ppt",
+    "xlsx", "xls", "csv", "rtf", "odt", "epub",
+    "png", "jpg", "jpeg", "gif", "webp", "zip",
+}
+MARKETPLACE_MIN_PRICE = 1
+MARKETPLACE_MAX_PRICE = 5000
+
+
+def init_marketplace_tables() -> None:
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_marketplace ("
+        "id SERIAL PRIMARY KEY, "
+        "seller_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "title TEXT NOT NULL, "
+        "description TEXT DEFAULT '', "
+        "preview TEXT DEFAULT '', "
+        "subject TEXT DEFAULT '', "
+        "file_name TEXT NOT NULL, "
+        "stored_path TEXT NOT NULL, "
+        "file_size INTEGER NOT NULL DEFAULT 0, "
+        "file_ext TEXT DEFAULT '', "
+        "price_coins INTEGER NOT NULL DEFAULT 0, "
+        "downloads INTEGER NOT NULL DEFAULT 0, "
+        "created_at TIMESTAMP DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS student_marketplace ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "seller_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "title TEXT NOT NULL, "
+        "description TEXT DEFAULT '', "
+        "preview TEXT DEFAULT '', "
+        "subject TEXT DEFAULT '', "
+        "file_name TEXT NOT NULL, "
+        "stored_path TEXT NOT NULL, "
+        "file_size INTEGER NOT NULL DEFAULT 0, "
+        "file_ext TEXT DEFAULT '', "
+        "price_coins INTEGER NOT NULL DEFAULT 0, "
+        "downloads INTEGER NOT NULL DEFAULT 0, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')))",
+    )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_marketplace_purchases ("
+        "id SERIAL PRIMARY KEY, "
+        "item_id INTEGER NOT NULL REFERENCES student_marketplace(id) ON DELETE CASCADE, "
+        "buyer_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "seller_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "price_paid INTEGER NOT NULL DEFAULT 0, "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(item_id, buyer_id))",
+        "CREATE TABLE IF NOT EXISTS student_marketplace_purchases ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "item_id INTEGER NOT NULL REFERENCES student_marketplace(id) ON DELETE CASCADE, "
+        "buyer_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "seller_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "price_paid INTEGER NOT NULL DEFAULT 0, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(item_id, buyer_id))",
+    )
+    try:
+        _os.makedirs(MARKETPLACE_UPLOAD_DIR, exist_ok=True)
+    except Exception:
+        pass
+
+
+def _safe_ext(filename: str) -> str:
+    if "." not in filename:
+        return ""
+    return filename.rsplit(".", 1)[-1].strip().lower()[:8]
+
+
+def marketplace_create_listing(
+    seller_id: int,
+    title: str,
+    description: str,
+    preview: str,
+    subject: str,
+    src_file_path: str,
+    original_filename: str,
+    file_size: int,
+    price_coins: int,
+) -> dict:
+    """Move an already-uploaded temp file into the marketplace store and
+    insert the listing row. Returns {ok, item_id} or {ok=False, error}."""
+    title = (title or "").strip()
+    if not title:
+        return {"ok": False, "error": "Title is required."}
+    if file_size <= 0:
+        return {"ok": False, "error": "File is empty."}
+    if file_size > MARKETPLACE_MAX_FILE_BYTES:
+        return {"ok": False, "error": f"File too large. Max {MARKETPLACE_MAX_FILE_BYTES // (1024*1024)} MB."}
+    ext = _safe_ext(original_filename)
+    if ext and ext not in MARKETPLACE_ALLOWED_EXT:
+        return {"ok": False, "error": f"File type .{ext} is not allowed."}
+    try:
+        price = int(price_coins)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "Invalid price."}
+    if price < MARKETPLACE_MIN_PRICE or price > MARKETPLACE_MAX_PRICE:
+        return {"ok": False, "error": f"Price must be between {MARKETPLACE_MIN_PRICE} and {MARKETPLACE_MAX_PRICE} coins."}
+
+    _os.makedirs(MARKETPLACE_UPLOAD_DIR, exist_ok=True)
+    import uuid as _uuid
+    stored_name = f"{_uuid.uuid4().hex}{('.' + ext) if ext else ''}"
+    dest = _os.path.join(MARKETPLACE_UPLOAD_DIR, stored_name)
+    try:
+        _shutil.move(src_file_path, dest)
+    except Exception:
+        try:
+            _shutil.copyfile(src_file_path, dest)
+            try:
+                _os.remove(src_file_path)
+            except Exception:
+                pass
+        except Exception as e:
+            return {"ok": False, "error": f"Could not store file: {e}"}
+
+    with get_db() as db:
+        if _USE_PG:
+            row = _fetchone(
+                db,
+                "INSERT INTO student_marketplace "
+                "(seller_id, title, description, preview, subject, file_name, stored_path, file_size, file_ext, price_coins) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                (seller_id, title[:200], (description or "")[:4000], (preview or "")[:1500],
+                 (subject or "")[:120], original_filename[:200], stored_name, file_size, ext, price),
+            )
+            item_id = int(row["id"])
+        else:
+            cur = db.execute(
+                "INSERT INTO student_marketplace "
+                "(seller_id, title, description, preview, subject, file_name, stored_path, file_size, file_ext, price_coins) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (seller_id, title[:200], (description or "")[:4000], (preview or "")[:1500],
+                 (subject or "")[:120], original_filename[:200], stored_name, file_size, ext, price),
+            )
+            item_id = int(cur.lastrowid)
+    return {"ok": True, "item_id": item_id}
+
+
+def marketplace_browse(
+    viewer_id: int | None = None,
+    search: str = "",
+    subject: str = "",
+    limit: int = 60,
+) -> list[dict]:
+    where = []
+    params: list = []
+    if search:
+        like = f"%{search}%"
+        where.append("(LOWER(m.title) LIKE LOWER(%s) OR LOWER(m.description) LIKE LOWER(%s))")
+        params.extend([like, like])
+    if subject:
+        where.append("LOWER(m.subject) LIKE LOWER(%s)")
+        params.append(f"%{subject}%")
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    sql_pg = (
+        "SELECT m.id, m.seller_id, m.title, m.description, m.preview, m.subject, "
+        "m.file_name, m.file_size, m.file_ext, m.price_coins, m.downloads, m.created_at, "
+        "c.name AS seller_name "
+        "FROM student_marketplace m JOIN clients c ON c.id = m.seller_id "
+        f"{where_sql} ORDER BY m.created_at DESC LIMIT %s"
+    )
+    params_pg = list(params) + [int(limit)]
+    sql_lite = sql_pg.replace("%s", "?")
+    with get_db() as db:
+        rows = _fetchall(db, sql_pg if _USE_PG else sql_lite, tuple(params_pg)) or []
+    out = [dict(r) for r in rows]
+    if viewer_id:
+        owned = marketplace_list_purchased_ids(viewer_id)
+        for r in out:
+            r["owned"] = (r["id"] in owned) or (r["seller_id"] == viewer_id)
+    return out
+
+
+def marketplace_get(item_id: int) -> dict | None:
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT m.*, c.name AS seller_name "
+            "FROM student_marketplace m JOIN clients c ON c.id = m.seller_id "
+            "WHERE m.id = %s",
+            (int(item_id),),
+        )
+    return dict(row) if row else None
+
+
+def marketplace_list_purchased_ids(buyer_id: int) -> set:
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT item_id FROM student_marketplace_purchases WHERE buyer_id = %s",
+            (int(buyer_id),),
+        ) or []
+    return {int(r["item_id"]) for r in rows}
+
+
+def marketplace_has_access(viewer_id: int, item: dict) -> bool:
+    """Sellers + previous buyers always have access. Ultimate users get
+    free access to every listing."""
+    if not item:
+        return False
+    if int(item.get("seller_id") or 0) == int(viewer_id):
+        return True
+    try:
+        from student.subscription import get_tier as _get_tier
+        if _get_tier(viewer_id) == "ultimate":
+            return True
+    except Exception:
+        pass
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT 1 FROM student_marketplace_purchases "
+            "WHERE item_id = %s AND buyer_id = %s",
+            (int(item["id"]), int(viewer_id)),
+        )
+    return bool(row)
+
+
+def marketplace_purchase(item_id: int, buyer_id: int) -> dict:
+    item = marketplace_get(item_id)
+    if not item:
+        return {"ok": False, "error": "Item not found."}
+    if int(item["seller_id"]) == int(buyer_id):
+        return {"ok": False, "error": "You can't buy your own listing."}
+    try:
+        from student.subscription import get_tier as _get_tier
+        if _get_tier(buyer_id) == "ultimate":
+            return {"ok": True, "free": True, "ultimate": True}
+    except Exception:
+        pass
+    if marketplace_has_access(buyer_id, item):
+        return {"ok": True, "already": True}
+    price = int(item.get("price_coins") or 0)
+    bal = int(get_wallet(buyer_id).get("coins") or 0)
+    if bal < price:
+        return {"ok": False, "error": f"Not enough coins ({bal}/{price})."}
+    new_bal = add_coins(buyer_id, -price, f"marketplace_buy {item_id}")
+    add_coins(int(item["seller_id"]), price, f"marketplace_sale {item_id}")
+    with get_db() as db:
+        try:
+            _exec(
+                db,
+                "INSERT INTO student_marketplace_purchases (item_id, buyer_id, seller_id, price_paid) "
+                "VALUES (%s,%s,%s,%s)",
+                (int(item_id), int(buyer_id), int(item["seller_id"]), price),
+            )
+            _exec(db, "UPDATE student_marketplace SET downloads = downloads + 1 WHERE id = %s", (int(item_id),))
+        except Exception:
+            add_coins(buyer_id, price, f"marketplace_refund {item_id}")
+            add_coins(int(item["seller_id"]), -price, f"marketplace_revert {item_id}")
+            return {"ok": False, "error": "Already purchased."}
+    return {"ok": True, "coins": new_bal, "price": price}
+
+
+def marketplace_my_listings(seller_id: int) -> list[dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT * FROM student_marketplace WHERE seller_id = %s ORDER BY created_at DESC",
+            (int(seller_id),),
+        ) or []
+    return [dict(r) for r in rows]
+
+
+def marketplace_my_purchases(buyer_id: int) -> list[dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT m.*, c.name AS seller_name, p.created_at AS purchased_at, p.price_paid "
+            "FROM student_marketplace_purchases p "
+            "JOIN student_marketplace m ON m.id = p.item_id "
+            "JOIN clients c ON c.id = m.seller_id "
+            "WHERE p.buyer_id = %s ORDER BY p.created_at DESC",
+            (int(buyer_id),),
+        ) or []
+    return [dict(r) for r in rows]
+
+
+def marketplace_delete(item_id: int, seller_id: int) -> dict:
+    item = marketplace_get(item_id)
+    if not item:
+        return {"ok": False, "error": "Not found."}
+    if int(item["seller_id"]) != int(seller_id):
+        return {"ok": False, "error": "Not your listing."}
+    try:
+        path = _os.path.join(MARKETPLACE_UPLOAD_DIR, item["stored_path"])
+        if _os.path.isfile(path):
+            _os.remove(path)
+    except Exception:
+        pass
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_marketplace WHERE id = %s", (int(item_id),))
+    return {"ok": True}
+
+
+def marketplace_file_path(item: dict) -> str:
+    return _os.path.join(MARKETPLACE_UPLOAD_DIR, item["stored_path"])

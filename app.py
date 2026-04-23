@@ -372,6 +372,10 @@ def _effective_client_id() -> int:
     return owner if owner else cid
 
 
+_PRESENCE_LAST_TOUCH = {}  # cid -> last unix-second we wrote a heartbeat
+_PRESENCE_TOUCH_THROTTLE = 25  # don't UPDATE more often than every 25s per user
+
+
 @app.before_request
 def _validate_session():
     if "client_id" in session:
@@ -381,6 +385,19 @@ def _validate_session():
                             (session["client_id"],))
             if row is None:
                 session.clear()
+                return
+        # Throttled presence touch — keeps friends' online indicators fresh
+        # without hammering the DB on every request.
+        try:
+            import time as _time
+            cid = int(session["client_id"])
+            now = int(_time.time())
+            if now - _PRESENCE_LAST_TOUCH.get(cid, 0) >= _PRESENCE_TOUCH_THROTTLE:
+                _PRESENCE_LAST_TOUCH[cid] = now
+                from student import db as _sdb
+                _sdb.touch_presence(cid)
+        except Exception:
+            pass
 
 
 def _esc(text: str) -> str:
@@ -884,17 +901,6 @@ LAYOUT = """<!DOCTYPE html>
     .badge-red { background: var(--red-light); color: #991B1B; }
     .badge-purple { background: var(--primary-light); color: var(--primary-dark); }
 
-    /* Beta banner — subtle, non-dominating */
-    .beta-banner { display:flex; align-items:center; justify-content:center; gap:10px; padding:9px 16px; margin-bottom:16px; border-radius:10px; background:#FFFBEB; border:1px solid #FDE68A; color:#854D0E; font-size:12.5px; font-weight:500; text-align:center; }
-    .beta-pill { display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; background:#F59E0B; color:#fff; font-size:10px; font-weight:700; letter-spacing:1px; }
-    :root[data-theme="dark"] .beta-banner,
-    :root[data-theme="mr-midnight"] .beta-banner,
-    :root[data-theme="mr-forest"] .beta-banner,
-    :root[data-theme="mr-ocean"] .beta-banner,
-    :root[data-theme="mr-rose"] .beta-banner,
-    :root[data-theme="mr-sunset"] .beta-banner,
-    :root[data-theme="mr-mono"] .beta-banner { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.25); color:#FCD34D; }
-
     /* Toast notifications */
     .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-width: 400px; }
     .toast { padding: 14px 20px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 10px; pointer-events: auto; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,.15); animation: toastIn 0.35s ease; position: relative; overflow: hidden; }
@@ -1391,7 +1397,6 @@ LAYOUT = """<!DOCTYPE html>
         {% if account_type|default('business') == 'student' %}
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
-        <a href="/student/exams" {% if active_page == 'student_exams' %}class="active"{% endif %}>&#128221; Exams</a>
         <a href="/student/friends" {% if active_page == 'student_friends' %}class="active"{% endif %}>&#128101; Friends</a>
         <div class="nav-dropdown">
           <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
@@ -1403,15 +1408,14 @@ LAYOUT = """<!DOCTYPE html>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
-        <a href="/student/shop" {% if active_page == 'student_shop' %}class="active"{% endif %}>&#128722; Shop</a>
+        <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Marketplace</a>
+        <a href="/student/shop" {% if active_page == 'student_shop' %}class="active"{% endif %}>&#129534; Shop</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_weak','student_gpa','student_achievements','student_exchange'] %}class="active"{% endif %}>More &#9662;</a>
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_gpa','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
           <div class="nav-dropdown-menu">
-            <a href="/student/weak-topics">&#127919; Weak Topics</a>
             <a href="/student/gpa">&#128200; GPA</a>
             <a href="/student/achievements">&#127942; XP &amp; Badges</a>
-            <a href="/student/exchange">&#128257; Exchange</a>
           </div>
         </div>
         <a href="/student/leaderboard" {% if active_page == 'student_leaderboard' %}class="active"{% endif %}>&#127942; Leaderboard</a>
@@ -1419,32 +1423,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; Mail</a>
         <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881;</a>
         {% else %}
-        <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>{{nav.dashboard}}</a>
-        <a href="/campaign/new" {% if active_page == 'new_campaign' %}class="active"{% endif %}>{{nav.new_campaign}}</a>
-        <a href="/inbox" {% if active_page == 'inbox' %}class="active"{% endif %}>{{nav.inbox}}</a>
-        <a href="/ab-tests" {% if active_page == 'ab_tests' %}class="active"{% endif %}>{{nav.ab_tests}}</a>
-        <a href="/smart-times" {% if active_page == 'smart_times' %}class="active"{% endif %}>&#9201; {{nav.send_times}}</a>
-        <a href="/subject-optimizer" {% if active_page == 'subject_optimizer' %}class="active"{% endif %}>&#10024; Subject</a>
-        <a href="/reply-intel" {% if active_page == 'reply_intel' %}class="active"{% endif %}>&#129504; Replies</a>
-        <a href="/deliverability" {% if active_page == 'deliverability' %}class="active"{% endif %}>&#128737;&#65039; Inbox</a>
-        <a href="/calendar" {% if active_page == 'calendar' %}class="active"{% endif %}>{{nav.calendar}}</a>
-        <a href="/export" {% if active_page == 'export' %}class="active"{% endif %}>&#128202; {{nav.export}}</a>
-        <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['pro','pro_tasks','pro_invoices','pro_finance','pro_goals','pro_assistant','pro_linkedin','pro_meetings','pro_relationships'] %}class="active"{% endif %}>&#128188; Pro Tools &#9662;</a>
-          <div class="nav-dropdown-menu">
-            <a href="/pro/tasks">&#9989; Tasks</a>
-            <a href="/pro/finance">&#128176; Finance</a>
-            <a href="/pro/relationships">&#129504; Relationships</a>
-            <a href="/pro/meeting-agenda">&#128197; Meeting Agenda</a>
-            <a href="/pro/goals">&#127919; Goals &amp; OKRs</a>
-            <a href="/pro/invoices">&#128196; Invoices</a>
-            <a href="/pro/assistant">&#9997; Text Polish</a>
-            <a href="/pro/linkedin-post">&#128100; LinkedIn Post</a>
-          </div>
-        </div>
-        <div class="nav-divider"></div>
-        <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %} style="{% if active_page == 'mail_hub' %}color:var(--primary);{% endif %}">&#128233; {{nav.mail_hub}}</a>
-        <a href="/contacts" {% if active_page == 'contacts' %}class="active"{% endif %} style="{% if active_page == 'contacts' %}color:var(--primary);{% endif %}">&#128101; {{nav.contacts}}</a>
+        <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>&#128640; Coming soon</a>
         <a href="/settings" {% if active_page == 'settings' %}class="active"{% endif %}>{{nav.settings}}</a>
         {% endif %}
         {% if is_admin %}<a href="/admin/broadcast" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
@@ -1465,10 +1444,6 @@ LAYOUT = """<!DOCTYPE html>
     </div>
   </div>
   <div class="container{% if wide %} container-wide{% endif %}">
-    <div class="beta-banner">
-      <span class="beta-pill">BETA</span>
-      <span>MachReach is in testing — subscriptions are not yet active. All features are free during this period.</span>
-    </div>
     <div class="toast-container" id="toast-container">
     {% for cat, msg in messages %}
       <div class="toast toast-{{cat}}" onclick="dismissToast(this)">
@@ -1977,12 +1952,10 @@ LAYOUT = """<!DOCTYPE html>
         {t:'Practice Problems', u:'/student/practice', i:'🛠\uFE0F', s:'Study'},
         {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
         {t:'Panic Mode', u:'/student/panic', i:'🚨', s:'Tools'},
-        {t:'Exams', u:'/student/exams', i:'📝', s:'Tools'},
         {t:'Schedule', u:'/student/schedule', i:'🗓\uFE0F', s:'Tools'},
-        {t:'Weak Topics', u:'/student/weak-topics', i:'🎯', s:'Tools'},
         {t:'GPA Calculator', u:'/student/gpa', i:'📈', s:'Tools'},
         {t:'Leaderboard', u:'/student/leaderboard', i:'🏆', s:'Social'},
-        {t:'Study Exchange', u:'/student/exchange', i:'🔁', s:'Social'},
+        {t:'Marketplace', u:'/student/marketplace', i:'🛒', s:'Social'},
         {t:'Mail Hub', u:'/mail-hub', i:'📩', s:'Other'},
         {t:'Settings', u:'/student/settings', i:'\u2699\uFE0F', s:'Other'},
         {t:'Log out', u:'/logout', i:'🚪', s:'Other'},
@@ -3475,646 +3448,285 @@ def index():
         if session.get("account_type") == "student":
             return redirect(url_for("student_dashboard_page"))
         return redirect(url_for("dashboard"))
-    return render_template_string(LAYOUT, title="MachReach — Study smarter. Sell faster.", logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), wide=True, content=Markup("""
+
+    lang = session.get("lang", "en")
+    is_es = (lang == "es")
+
+    # ── i18n copy (en + es) ────────────────────────────────────
+    if is_es:
+        page_title = "MachReach — Estudia más inteligente. Domina cada día."
+        hero_kicker = "ESTUDIO IMPULSADO POR IA  ·  TUTOR  ·  DUELOS  ·  MARKETPLACE"
+        hero_h1_a = "Tu cerebro,"
+        hero_h1_b = "supercargado."
+        hero_sub = "MachReach es la suite de estudio con IA para estudiantes universitarios: tutor 24/7, generador de quizzes, flashcards, temporizador de enfoque, duelos, ligas y un marketplace para ganar monedas vendiendo tus apuntes."
+        cta_primary = "Empieza gratis"
+        cta_secondary = "Iniciar sesión"
+        coming_soon_biz = "El módulo para empresas está en camino — por ahora MachReach es 100% para estudiantes."
+        stats = [
+            ("∞", "Quizzes con IA en planes pagos"),
+            ("24/7", "Tutor IA disponible"),
+            ("3", "Niveles: Free · Plus · Ultimate"),
+            ("100%", "Hecho para estudiantes"),
+        ]
+        f_h = "Todo lo que necesitas para conquistar el semestre"
+        f_sub = "Una sola app. Cero distracciones. Solo herramientas que funcionan."
+        features = [
+            ("&#129504;", "Tutor IA 24/7", "Pregúntale lo que quieras de tus apuntes y materiales. Respuestas con citas a la fuente."),
+            ("&#128221;", "Quizzes infinitos", "Sube un PDF y genera quizzes ilimitados al instante. Plus/Ultimate sin límites diarios."),
+            ("&#127919;", "Flashcards inteligentes", "Tarjetas de repaso con repetición espaciada. Dominas el material en menos tiempo."),
+            ("&#9201;&#65039;", "Focus Timer + cursos", "Pomodoro con seguimiento por curso. Acumula racha, monedas y XP por cada sesión."),
+            ("&#9876;&#65039;", "Duelos de Quiz", "Reta a tus amigos a duelos 1v1 con preguntas IA. Gana monedas, sube en la liga."),
+            ("&#128722;", "Marketplace", "Sube tus apuntes con un precio en monedas. Otros estudiantes los compran y tú ganas."),
+            ("&#127942;", "Ligas y badges", "Sube de rango cada temporada compitiendo con otros estudiantes en XP."),
+            ("&#10024;", "Plan Ultimate", "Todo Plus + acceso gratis a TODO el marketplace + herramientas de correo."),
+        ]
+        how_h = "Cómo funciona en 3 pasos"
+        how_steps = [
+            ("1", "Crea tu cuenta gratis", "Sin tarjeta. Empieza a estudiar en menos de 30 segundos."),
+            ("2", "Sube tus materiales", "Apuntes, PDFs, slides — la IA los entiende y te genera quizzes y resúmenes."),
+            ("3", "Estudia, gana y compite", "Acumula XP, sube en la liga, gana monedas en duelos y compra apuntes en el marketplace."),
+        ]
+        plans_h = "Planes pensados para estudiantes"
+        plans_sub = "Empieza gratis. Sube de plan cuando quieras desbloquear lo ilimitado."
+        plans = [
+            ("Free", "$0", "/ siempre", [
+                "1 quiz IA al día (hasta 30 preguntas)",
+                "1 set de flashcards al día (hasta 30)",
+                "Focus timer, rachas, ligas, duelos",
+                "Marketplace (comprar y vender)",
+            ], "Empezar gratis", "/register", False),
+            ("Plus", "$4.99", "/ mes", [
+                "Quizzes y flashcards ILIMITADOS",
+                "Sin límites por generación",
+                "300 monedas extra cada mes",
+                "Badge PLUS y cosméticos exclusivos",
+                "Reportes y estadísticas avanzadas",
+            ], "Probar Plus", "/register", True),
+            ("Ultimate", "$9.99", "/ mes", [
+                "Todo lo de Plus",
+                "Marketplace 100% gratis (todos los archivos)",
+                "Herramientas de correo (organización + IA)",
+                "Soporte prioritario",
+            ], "Ir a Ultimate", "/register", False),
+        ]
+        final_h = "Tu semestre empieza ahora."
+        final_sub = "Cero tarjeta. Cero compromiso. Solo herramientas que te ayudan a aprobar."
+        final_cta = "Crear cuenta gratis"
+        biz_note_full = (
+            "&#128640; <strong>Coming soon:</strong> el módulo de outreach para empresas. "
+            "Por ahora MachReach se enfoca 100% en herramientas para estudiantes."
+        )
+    else:
+        page_title = "MachReach — Study smarter. Win every day."
+        hero_kicker = "AI-POWERED STUDY  ·  TUTOR  ·  DUELS  ·  MARKETPLACE"
+        hero_h1_a = "Your brain,"
+        hero_h1_b = "supercharged."
+        hero_sub = "MachReach is the AI study suite built for college students: 24/7 tutor, quiz & flashcard generator, focus timer, duels, leagues, and a marketplace where you earn coins selling your notes."
+        cta_primary = "Start free"
+        cta_secondary = "Log in"
+        coming_soon_biz = "The business module is on the way — for now MachReach is 100% for students."
+        stats = [
+            ("∞", "AI quizzes on paid plans"),
+            ("24/7", "AI tutor on call"),
+            ("3", "Tiers: Free · Plus · Ultimate"),
+            ("100%", "Built for students"),
+        ]
+        f_h = "Everything you need to crush the semester"
+        f_sub = "One app. Zero distractions. Tools that actually work."
+        features = [
+            ("&#129504;", "24/7 AI Tutor", "Ask anything about your notes and materials. Cited answers from your sources."),
+            ("&#128221;", "Unlimited Quizzes", "Drop a PDF and generate quizzes instantly. Plus/Ultimate get no daily caps."),
+            ("&#127919;", "Smart Flashcards", "Spaced-repetition cards. Master the material in less time."),
+            ("&#9201;&#65039;", "Focus Timer + Courses", "Pomodoro with per-course tracking. Build streaks, earn coins and XP."),
+            ("&#9876;&#65039;", "Quiz Duels", "Challenge friends to AI-generated 1v1 duels. Win coins, climb the league."),
+            ("&#128722;", "Marketplace", "List your notes for a coin price. Other students buy them and you cash in."),
+            ("&#127942;", "Leagues & Badges", "Climb seasonal ranks competing for XP with other students."),
+            ("&#10024;", "Ultimate plan", "Everything in Plus + FREE access to every marketplace file + mail tools."),
+        ]
+        how_h = "How it works in 3 steps"
+        how_steps = [
+            ("1", "Create a free account", "No card. Start studying in under 30 seconds."),
+            ("2", "Drop your materials", "Notes, PDFs, slides — the AI reads them and generates quizzes & summaries."),
+            ("3", "Study, earn, compete", "Stack XP, climb the league, win coins in duels, buy notes on the marketplace."),
+        ]
+        plans_h = "Plans built for students"
+        plans_sub = "Start free. Upgrade when you want unlimited."
+        plans = [
+            ("Free", "$0", "/ forever", [
+                "1 AI quiz / day (up to 30 questions)",
+                "1 flashcard set / day (up to 30 cards)",
+                "Focus timer, streaks, leagues, duels",
+                "Marketplace (buy & sell)",
+            ], "Start free", "/register", False),
+            ("Plus", "$4.99", "/ month", [
+                "UNLIMITED quizzes & flashcards",
+                "No per-generation cap",
+                "300 bonus coins every month",
+                "PLUS badge & exclusive cosmetics",
+                "Detailed analytics & reports",
+            ], "Try Plus", "/register", True),
+            ("Ultimate", "$9.99", "/ month", [
+                "Everything in Plus",
+                "Marketplace 100% FREE (every file)",
+                "Mail tools (organization + AI reply)",
+                "Priority support",
+            ], "Go Ultimate", "/register", False),
+        ]
+        final_h = "Your semester starts now."
+        final_sub = "No card. No commitment. Just tools that help you pass."
+        final_cta = "Create free account"
+        biz_note_full = (
+            "&#128640; <strong>Coming soon:</strong> the business outreach module. "
+            "For now MachReach is 100% focused on student tools."
+        )
+
+    # ── Build HTML blocks ──────────────────────────────────────
+    stats_html = "".join(
+        f'<div class="lp-stat"><div class="num">{n}</div><div class="lbl">{l}</div></div>'
+        for (n, l) in stats
+    )
+    features_html = "".join(
+        f'<div class="lp-card"><div class="icon">{i}</div><h3>{t}</h3><p>{p}</p></div>'
+        for (i, t, p) in features
+    )
+    steps_html = "".join(
+        f'<div class="lp-step"><div class="lp-step-n">{n}</div><h3>{t}</h3><p>{d}</p></div>'
+        for (n, t, d) in how_steps
+    )
+    plans_html = ""
+    for (name, price, period, feats, cta, href, highlight) in plans:
+        feats_html = "".join(f'<li>&#10003; {f}</li>' for f in feats)
+        cls = "lp-plan featured" if highlight else "lp-plan"
+        ribbon = ('<div class="lp-plan-ribbon">' + ("MÁS POPULAR" if is_es else "MOST POPULAR") + '</div>') if highlight else ""
+        plans_html += (
+            f'<div class="{cls}">{ribbon}'
+            f'<h3>{name}</h3>'
+            f'<div class="lp-price"><span class="amt">{price}</span><span class="per">{period}</span></div>'
+            f'<ul>{feats_html}</ul>'
+            f'<a href="{href}" class="lp-plan-cta">{cta}</a>'
+            f'</div>'
+        )
+
+    return render_template_string(LAYOUT, title=page_title, logged_in=False, messages=[], active_page="home", client_name="", nav=t_dict("nav"), lang=lang, wide=True, content=Markup(f"""
     <style>
-      /* Hero */
-      .mr-hero-wrap { position: relative; padding: 110px 24px 56px; text-align: center; overflow: hidden; }
-      .mr-hero-wrap h1 { font-size: clamp(40px, 6vw, 64px); max-width: 880px; margin: 0 auto 20px; line-height: 1.03; font-weight: 900; letter-spacing: -1.6px; position: relative; z-index: 1; }
-      .mr-hero-wrap h1 .g1 { background: linear-gradient(90deg,#A78BFA,#6366F1); -webkit-background-clip: text; background-clip: text; color: transparent; }
-      .mr-hero-wrap h1 .g2 { background: linear-gradient(90deg,#F472B6,#F59E0B); -webkit-background-clip: text; background-clip: text; color: transparent; }
-      .mr-hero-wrap p.sub { max-width: 660px; margin: 0 auto 28px; color: var(--text-secondary); font-size: 18px; line-height: 1.55; position: relative; z-index: 1; }
-      .mr-dual-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 18px; position: relative; z-index: 1; }
-      .mr-fine { font-size: 12px; color: var(--text-muted); margin-top: 14px; position: relative; z-index: 1; }
-      .mr-scroll-hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); color: var(--text-muted); font-size: 22px; animation: mrBob 2.4s ease-in-out infinite; z-index: 1; opacity: .6; }
-      @keyframes mrBob { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 8px); } }
+      .lp-hero {{ position: relative; padding: 100px 24px 70px; text-align: center; overflow: hidden; }}
+      .lp-hero::before {{ content: ''; position: absolute; inset: 0; background:
+          radial-gradient(circle at 20% 20%, rgba(167,139,250,.18), transparent 45%),
+          radial-gradient(circle at 80% 30%, rgba(244,114,182,.16), transparent 45%),
+          radial-gradient(circle at 50% 100%, rgba(99,102,241,.18), transparent 50%);
+        z-index: 0; }}
+      .lp-kicker {{ position: relative; z-index: 1; display: inline-block; padding: 6px 14px; border-radius: 999px;
+        background: rgba(99,102,241,.12); color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: 2px; margin-bottom: 22px; }}
+      .lp-hero h1 {{ position: relative; z-index: 1; font-size: clamp(46px, 7vw, 80px); max-width: 980px; margin: 0 auto 22px;
+        line-height: 1; font-weight: 900; letter-spacing: -2.4px; }}
+      .lp-hero h1 .g1 {{ background: linear-gradient(90deg,#A78BFA,#6366F1); -webkit-background-clip: text; background-clip: text; color: transparent; }}
+      .lp-hero h1 .g2 {{ background: linear-gradient(90deg,#F472B6,#F59E0B); -webkit-background-clip: text; background-clip: text; color: transparent; }}
+      .lp-hero p.sub {{ position: relative; z-index: 1; max-width: 720px; margin: 0 auto 30px;
+        color: var(--text-secondary); font-size: 18px; line-height: 1.6; }}
+      .lp-cta {{ position: relative; z-index: 1; display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }}
+      .lp-btn {{ padding: 15px 30px; border-radius: 12px; font-weight: 700; font-size: 15px; text-decoration: none; display: inline-flex; align-items: center; gap: 10px;
+        transition: transform .2s, box-shadow .2s, filter .2s; }}
+      .lp-btn-primary {{ background: linear-gradient(135deg,#F472B6,#F59E0B); color: #fff; box-shadow: 0 6px 22px rgba(244,114,182,.32); }}
+      .lp-btn-primary:hover {{ transform: translateY(-2px); filter: brightness(1.06); box-shadow: 0 10px 32px rgba(244,114,182,.42); }}
+      .lp-btn-ghost {{ background: rgba(255,255,255,.04); color: var(--text); border: 1px solid var(--border); }}
+      .lp-btn-ghost:hover {{ transform: translateY(-2px); border-color: var(--primary); }}
 
-      /* Stats row with animated counters */
-      .mr-stat-row { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 20px; max-width: 960px; margin: 8px auto 0; padding: 26px 24px 12px; position: relative; z-index: 1; }
-      .mr-stat { text-align: center; }
-      .mr-stat .num { font-size: clamp(28px, 3.5vw, 42px); font-weight: 900; background: linear-gradient(135deg,#A78BFA,#F472B6); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: -1px; line-height: 1; }
-      .mr-stat .lbl { font-size: 11.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.6px; font-weight: 700; margin-top: 8px; }
+      .lp-biz-note {{ max-width: 720px; margin: 28px auto 0; padding: 12px 18px; border-radius: 10px;
+        background: rgba(99,102,241,.08); border: 1px dashed rgba(99,102,241,.4); color: var(--text-secondary);
+        font-size: 13.5px; text-align: center; position: relative; z-index: 1; }}
 
-      /* Trust strip */
-      .mr-trust { max-width: 1100px; margin: 48px auto 0; padding: 0 24px; text-align: center; }
-      .mr-trust-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; font-weight: 700; margin-bottom: 18px; }
-      .mr-trust-track { color: var(--text-muted); font-weight: 600; font-size: 14px; }
-      .mr-trust-track span { margin: 0 20px; opacity: .85; }
-      .mr-trust-track span strong { color: var(--text); font-weight: 700; }
+      .lp-stats {{ position: relative; z-index: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 24px;
+        max-width: 960px; margin: 56px auto 0; padding: 0 24px; }}
+      .lp-stat {{ text-align: center; }}
+      .lp-stat .num {{ font-size: clamp(32px, 4vw, 46px); font-weight: 900;
+        background: linear-gradient(135deg,#A78BFA,#F472B6); -webkit-background-clip: text; background-clip: text; color: transparent;
+        letter-spacing: -1.2px; line-height: 1; }}
+      .lp-stat .lbl {{ font-size: 11.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.6px; font-weight: 700; margin-top: 8px; }}
 
-      /* Product switch pill */
-      .mr-switch { display: inline-flex; background: rgba(148,163,184,.10); border: 1px solid var(--border); border-radius: 999px; padding: 4px; margin: 0 auto 36px; gap: 4px; }
-      .mr-switch button { border: none; background: transparent; color: var(--text-secondary); padding: 10px 22px; border-radius: 999px; cursor: pointer; font-weight: 700; font-size: 14px; transition: color .2s var(--ease), background .2s var(--ease), box-shadow .2s var(--ease); }
-      .mr-switch button:hover { color: var(--text); }
-      .mr-switch button.on { color: #fff; }
-      .mr-switch button.on.biz { background: linear-gradient(135deg,#6366F1,#8B5CF6); box-shadow: 0 6px 20px rgba(99,102,241,.32); }
-      .mr-switch button.on.stu { background: linear-gradient(135deg,#F472B6,#F59E0B); box-shadow: 0 6px 20px rgba(244,114,182,.32); }
+      .lp-section-title {{ text-align: center; font-size: 11.5px; font-weight: 800; letter-spacing: 2.2px;
+        text-transform: uppercase; color: var(--primary); margin: 100px 0 10px; }}
+      .lp-section-h {{ text-align: center; font-size: clamp(30px, 3.6vw, 42px); font-weight: 900; max-width: 760px; margin: 0 auto 16px;
+        letter-spacing: -1px; line-height: 1.1; }}
+      .lp-section-sub {{ text-align: center; color: var(--text-secondary); font-size: 16px; max-width: 620px; margin: 0 auto 36px; line-height: 1.6; }}
 
-      .mr-panel { display: none; }
-      .mr-panel.on { display: block; animation: mrFadeIn .4s var(--ease); }
-      @keyframes mrFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .lp-cards {{ max-width: 1180px; margin: 0 auto; padding: 0 24px;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }}
+      .lp-card {{ background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px;
+        transition: transform .25s, border-color .25s, box-shadow .25s; }}
+      .lp-card:hover {{ transform: translateY(-4px); border-color: var(--primary); box-shadow: 0 14px 32px rgba(99,102,241,.10); }}
+      .lp-card .icon {{ font-size: 28px; width: 52px; height: 52px; border-radius: 12px;
+        background: linear-gradient(135deg, rgba(244,114,182,.15), rgba(245,158,11,.15));
+        display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; }}
+      .lp-card h3 {{ font-size: 17px; margin: 0 0 6px; font-weight: 800; letter-spacing: -.3px; }}
+      .lp-card p {{ font-size: 14px; line-height: 1.55; color: var(--text-secondary); margin: 0; }}
 
-      /* Feature card grid */
-      .mr-cards { max-width: 1120px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap: 16px; }
-      .mr-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px; position: relative; overflow: hidden; }
-      .mr-card::after { content: ''; position: absolute; inset: 0; border-radius: 14px; pointer-events: none; box-shadow: 0 0 0 1px transparent; transition: box-shadow .3s var(--ease); }
-      .mr-card:hover::after { box-shadow: 0 0 0 1px var(--primary); }
-      .mr-card .icon { font-size: 26px; margin-bottom: 10px; display: inline-flex; width: 44px; height: 44px; border-radius: 10px; align-items: center; justify-content: center; }
-      .mr-card.biz { background: linear-gradient(150deg,rgba(99,102,241,.05),transparent 55%), var(--card); }
-      .mr-card.biz .icon { background: rgba(99,102,241,.10); color: #6366F1; }
-      .mr-card.stu { background: linear-gradient(150deg,rgba(244,114,182,.05),transparent 55%), var(--card); }
-      .mr-card.stu .icon { background: rgba(244,114,182,.10); color: #F472B6; }
-      .mr-card h3 { font-size: 16px; margin: 0 0 6px; font-weight: 700; letter-spacing: -.2px; }
-      .mr-card p { font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
+      .lp-steps {{ max-width: 1100px; margin: 0 auto; padding: 0 24px;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }}
+      .lp-step {{ text-align: center; padding: 28px 22px; }}
+      .lp-step-n {{ width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 16px;
+        background: linear-gradient(135deg,#A78BFA,#F472B6); color: #fff;
+        font-size: 22px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center;
+        box-shadow: 0 8px 22px rgba(167,139,250,.32); }}
+      .lp-step h3 {{ font-size: 18px; margin: 0 0 8px; font-weight: 800; }}
+      .lp-step p {{ font-size: 14px; color: var(--text-secondary); line-height: 1.55; margin: 0; }}
 
-      .mr-section-title { text-align: center; margin: 80px 0 8px; font-size: 12.5px; font-weight: 700; letter-spacing: 2.2px; text-transform: uppercase; color: var(--primary); }
-      .mr-section-h { text-align: center; font-size: clamp(28px, 3.4vw, 36px); font-weight: 800; margin: 0 auto 14px; max-width: 760px; letter-spacing: -.7px; line-height: 1.1; }
-      .mr-section-sub { text-align: center; color: var(--text-secondary); font-size: 16px; max-width: 640px; margin: 0 auto 28px; line-height: 1.55; }
+      .lp-plans {{ max-width: 1100px; margin: 0 auto; padding: 0 24px;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; align-items: stretch; }}
+      .lp-plan {{ background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px 24px;
+        position: relative; display: flex; flex-direction: column; }}
+      .lp-plan.featured {{ border-color: #F472B6; box-shadow: 0 14px 40px rgba(244,114,182,.18); transform: translateY(-6px); }}
+      .lp-plan-ribbon {{ position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+        background: linear-gradient(135deg,#F472B6,#F59E0B); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 1px;
+        padding: 5px 14px; border-radius: 999px; }}
+      .lp-plan h3 {{ font-size: 22px; font-weight: 900; margin: 0 0 4px; letter-spacing: -.4px; }}
+      .lp-price {{ display: flex; align-items: baseline; gap: 6px; margin: 6px 0 16px; }}
+      .lp-price .amt {{ font-size: 36px; font-weight: 900; letter-spacing: -1px; }}
+      .lp-price .per {{ font-size: 13px; color: var(--text-muted); font-weight: 600; }}
+      .lp-plan ul {{ list-style: none; padding: 0; margin: 0 0 22px; flex: 1; }}
+      .lp-plan ul li {{ font-size: 14px; padding: 7px 0; color: var(--text-secondary); border-bottom: 1px dashed var(--border-light); }}
+      .lp-plan-cta {{ display: block; text-align: center; padding: 14px; border-radius: 10px; background: var(--bg-elev);
+        color: var(--text); font-weight: 700; text-decoration: none; transition: transform .2s, background .2s; }}
+      .lp-plan.featured .lp-plan-cta {{ background: linear-gradient(135deg,#F472B6,#F59E0B); color: #fff; }}
+      .lp-plan-cta:hover {{ transform: translateY(-2px); }}
 
-      /* CTA pills */
-      .mr-dual-cta a.mr-pill-biz, .mr-dual-cta a.mr-pill-stu,
-      .mr-single a.mr-pill-biz, .mr-single a.mr-pill-stu { padding: 14px 26px; border-radius: 12px; font-weight: 600; font-size: 14.5px; text-decoration: none; transition: transform .25s var(--ease), box-shadow .25s var(--ease), filter .25s; display: inline-flex; align-items: center; gap: 8px; }
-      .mr-pill-biz { background: linear-gradient(135deg,#6366F1,#8B5CF6); color: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.14), inset 0 1px 0 rgba(255,255,255,.14); }
-      .mr-pill-stu { background: linear-gradient(135deg,#F472B6,#F59E0B); color: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.14), inset 0 1px 0 rgba(255,255,255,.14); }
-      .mr-pill-biz:hover { transform: translateY(-2px); filter: brightness(1.06); box-shadow: 0 10px 24px rgba(99,102,241,.35), inset 0 1px 0 rgba(255,255,255,.14); }
-      .mr-pill-stu:hover { transform: translateY(-2px); filter: brightness(1.06); box-shadow: 0 10px 24px rgba(244,114,182,.35), inset 0 1px 0 rgba(255,255,255,.14); }
-
-      /* ─── Interactive product preview ─── */
-      .mr-demo { max-width: 1100px; margin: 80px auto 0; padding: 0 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 22px; }
-      .mr-demo-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
-      .mr-demo-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border-light); background: var(--border-light); }
-      .mr-demo-dots { display: inline-flex; gap: 6px; }
-      .mr-demo-dot { width: 10px; height: 10px; border-radius: 50%; background: #d1d5db; }
-      .mr-demo-dot.r { background: #f87171; }
-      .mr-demo-dot.y { background: #fbbf24; }
-      .mr-demo-dot.g { background: #34d399; }
-      .mr-demo-title { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-left: 8px; }
-      .mr-demo-body { padding: 18px 20px; min-height: 240px; }
-      .mr-demo-label { font-size: 10.5px; color: var(--text-muted); font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 4px; }
-      .mr-demo-subject { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 14px; min-height: 24px; }
-      .mr-demo-text { font-size: 13.5px; color: var(--text-secondary); line-height: 1.7; min-height: 140px; white-space: pre-wrap; }
-      .mr-demo-cursor::after { content: '▎'; color: var(--primary); animation: mrBlink 1s step-end infinite; margin-left: 1px; }
-      @keyframes mrBlink { 50% { opacity: 0; } }
-      .mr-demo-sendline { display:flex; align-items:center; gap:10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-light); }
-      .mr-demo-btn { padding: 7px 14px; border-radius: 8px; background: var(--primary); color: #fff; font-size: 12.5px; font-weight: 600; }
-
-      .mr-plan-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--border-light); font-size: 14px; color: var(--text); }
-      .mr-plan-item:last-child { border-bottom: none; }
-      .mr-plan-check { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .3s var(--ease); color: transparent; font-size: 13px; font-weight: 700; }
-      .mr-plan-item.done .mr-plan-check { background: var(--green); border-color: var(--green); color: #fff; }
-      .mr-plan-item.done { color: var(--text-muted); text-decoration: line-through; }
-      .mr-plan-meta { margin-left: auto; font-size: 11.5px; color: var(--text-muted); }
-
-      /* Testimonials */
-      .mr-testimonials { max-width: 1120px; margin: 80px auto 0; padding: 0 24px; }
-      .mr-test-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
-      .mr-testimonial { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px; position: relative; transition: border-color .3s var(--ease), transform .3s var(--ease), box-shadow .3s var(--ease); }
-      .mr-testimonial:hover { transform: translateY(-3px); border-color: var(--primary); box-shadow: 0 10px 30px rgba(99,102,241,.08); }
-      .mr-testimonial .quote { font-size: 14.5px; line-height: 1.6; color: var(--text); margin-bottom: 14px; }
-      .mr-testimonial .who { display: flex; align-items: center; gap: 10px; }
-      .mr-testimonial .avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #6366F1, #F472B6); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
-      .mr-testimonial .name { font-size: 13.5px; font-weight: 700; color: var(--text); }
-      .mr-testimonial .role { font-size: 12px; color: var(--text-muted); }
-      .mr-testimonial .stars { color: #F59E0B; font-size: 13px; letter-spacing: 2px; margin-bottom: 10px; }
-
-      /* Comparison table */
-      .mr-compare { max-width: 1100px; margin: 80px auto 0; padding: 0 24px; }
-      .mr-compare-table { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-xs); }
-      .mr-compare-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; align-items: center; padding: 14px 22px; border-bottom: 1px solid var(--border-light); font-size: 14px; }
-      .mr-compare-row:last-child { border-bottom: none; }
-      .mr-compare-head { background: linear-gradient(135deg,rgba(99,102,241,.06),rgba(139,92,246,.04)); font-weight: 700; font-size: 12.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
-      .mr-compare-head .mr-compare-mine { color: var(--primary); }
-      .mr-compare-cell { text-align: center; font-weight: 600; }
-      .mr-compare-cell.mine { color: var(--primary); font-weight: 700; }
-      .mr-compare-feature { color: var(--text); font-weight: 500; }
-      .mr-compare-check { color: var(--green); font-weight: 800; font-size: 16px; }
-      .mr-compare-x { color: var(--text-muted); font-weight: 600; font-size: 16px; opacity: .6; }
-      .mr-compare-partial { color: var(--yellow); font-weight: 700; }
-      @media (max-width: 720px) {
-        .mr-compare-row { grid-template-columns: 2fr repeat(3, 1fr); padding: 12px 14px; font-size: 12.5px; }
-      }
-
-      /* FAQ */
-      .mr-faq { max-width: 820px; margin: 80px auto 0; padding: 0 24px; }
-      .mr-faq details { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 0; margin-bottom: 10px; overflow: hidden; transition: border-color .2s var(--ease), box-shadow .2s var(--ease); }
-      .mr-faq details[open] { border-color: var(--primary); box-shadow: 0 4px 20px rgba(99,102,241,.06); }
-      .mr-faq summary { cursor: pointer; padding: 16px 22px; font-weight: 600; font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 12px; list-style: none; user-select: none; }
-      .mr-faq summary::-webkit-details-marker { display: none; }
-      .mr-faq summary::after { content: '+'; margin-left: auto; font-size: 22px; font-weight: 300; color: var(--text-muted); transition: transform .25s var(--ease); line-height: 1; }
-      .mr-faq details[open] summary::after { transform: rotate(45deg); color: var(--primary); }
-      .mr-faq-body { padding: 0 22px 18px; color: var(--text-secondary); font-size: 14px; line-height: 1.65; }
-
-      /* Pricing cards — reuse card but polish for homepage */
-      .mr-pricing { max-width: 860px; margin: 80px auto 0; padding: 0 24px; text-align: center; }
-      .mr-pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 28px; }
-      .mr-price { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px 22px; position: relative; transition: transform .25s var(--ease), border-color .25s var(--ease), box-shadow .25s var(--ease); }
-      .mr-price:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-      .mr-price.popular { border-color: var(--primary); box-shadow: 0 12px 40px rgba(99,102,241,.15); }
-      .mr-price .tag { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--primary); color: #fff; font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; letter-spacing: 1px; text-transform: uppercase; }
-      .mr-price .plan { font-size: 12.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.2px; }
-      .mr-price .amt { font-size: 40px; font-weight: 800; margin: 6px 0 2px; letter-spacing: -1px; line-height: 1; }
-      .mr-price .amt small { font-size: 14px; font-weight: 600; color: var(--text-muted); letter-spacing: 0; }
-      .mr-price .desc { font-size: 13px; color: var(--text-muted); }
-
-      /* Final CTA */
-      .mr-final { background: linear-gradient(135deg,#4F46E5 0%,#8B5CF6 50%,#F472B6 100%); padding: 72px 24px; text-align: center; border-radius: 20px; margin: 72px 24px 48px; position: relative; overflow: hidden; }
-      .mr-final::before { content: ''; position: absolute; inset: 0; background: radial-gradient(600px circle at 20% 20%, rgba(255,255,255,.18), transparent 50%), radial-gradient(600px circle at 80% 80%, rgba(255,255,255,.12), transparent 50%); pointer-events: none; }
-      .mr-final h2 { font-size: clamp(28px, 3.6vw, 40px); font-weight: 900; color: #fff; margin-bottom: 12px; letter-spacing: -.5px; position: relative; }
-      .mr-final p { color: rgba(255,255,255,0.9); font-size: 16px; margin-bottom: 28px; position: relative; }
-      .mr-final-ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; position: relative; }
-      .mr-final-ctas a { padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; text-decoration: none; transition: transform .2s var(--ease), background .2s var(--ease); }
-      .mr-final-ctas a.primary { background: #fff; color: #4F46E5; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
-      .mr-final-ctas a.primary:hover { transform: translateY(-2px); }
-      .mr-final-ctas a.secondary { background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.32); backdrop-filter: blur(6px); }
-      .mr-final-ctas a.secondary:hover { background: rgba(255,255,255,.22); transform: translateY(-2px); }
-
-      /* Responsive */
-      @media (max-width: 640px) {
-        .mr-hero-wrap { padding: 80px 20px 40px; }
-        .mr-section-title { margin-top: 60px; }
-        .mr-testimonials, .mr-compare, .mr-faq, .mr-pricing, .mr-demo { margin-top: 56px; padding: 0 18px; }
-      }
+      .lp-final {{ margin: 110px auto 60px; padding: 60px 24px; text-align: center; max-width: 900px;
+        border-radius: 24px; background: linear-gradient(135deg, rgba(244,114,182,.10), rgba(99,102,241,.12));
+        border: 1px solid var(--border); }}
+      .lp-final h2 {{ font-size: clamp(34px, 4vw, 48px); font-weight: 900; margin: 0 0 12px; letter-spacing: -1px; }}
+      .lp-final p {{ font-size: 17px; color: var(--text-secondary); margin: 0 0 24px; }}
     </style>
 
-    <!-- ─── HERO with animated gradient mesh ─── -->
-    <div class="mr-hero-wrap">
-      <div class="mesh-bg" aria-hidden="true">
-        <div class="mesh-blob b1"></div>
-        <div class="mesh-blob b2"></div>
-        <div class="mesh-blob b3"></div>
-        <div class="mesh-blob b4"></div>
+    <section class="lp-hero">
+      <div class="lp-kicker">{hero_kicker}</div>
+      <h1><span class="g1">{hero_h1_a}</span><br><span class="g2">{hero_h1_b}</span></h1>
+      <p class="sub">{hero_sub}</p>
+      <div class="lp-cta">
+        <a href="/register" class="lp-btn lp-btn-primary">{cta_primary} &rarr;</a>
+        <a href="/login" class="lp-btn lp-btn-ghost">{cta_secondary}</a>
       </div>
+      <div class="lp-biz-note">{biz_note_full}</div>
+      <div class="lp-stats">{stats_html}</div>
+    </section>
 
-      <h1 class="reveal">Two products, <span class="g1">one mission</span>.<br>Be the <span class="g2">best</span> at what you do.</h1>
-      <p class="sub reveal r-delay-1">MachReach runs AI-powered email outreach for businesses <strong>and</strong> an AI-powered study OS for students. Pick your side.</p>
-      <div class="mr-dual-cta reveal r-delay-2">
-        <a href="/register?type=business" class="mr-pill-biz">&#128188; I'm a Business &rarr;</a>
-        <a href="/register?type=student" class="mr-pill-stu">&#127891; I'm a Student &rarr;</a>
-      </div>
-      <p class="mr-fine reveal r-delay-3">No credit card required &bull; Free plan available forever</p>
+    <div class="lp-section-title">{("CARACTERÍSTICAS" if is_es else "FEATURES")}</div>
+    <h2 class="lp-section-h">{f_h}</h2>
+    <p class="lp-section-sub">{f_sub}</p>
+    <div class="lp-cards">{features_html}</div>
 
-      <!-- Stat row with animated counters -->
-      <div class="mr-stat-row reveal r-delay-4">
-        <div class="mr-stat"><div class="num" data-count="40" data-count-suffix="+">0</div><div class="lbl">AI-powered tools</div></div>
-        <div class="mr-stat"><div class="num" data-count="2">0</div><div class="lbl">Complete products</div></div>
-        <div class="mr-stat"><div class="num" data-count="0" data-count-prefix="$">$0</div><div class="lbl">To get started</div></div>
-        <div class="mr-stat"><div class="num">24/7</div><div class="lbl">On autopilot</div></div>
-      </div>
+    <div class="lp-section-title">{("CÓMO FUNCIONA" if is_es else "HOW IT WORKS")}</div>
+    <h2 class="lp-section-h">{how_h}</h2>
+    <div class="lp-steps">{steps_html}</div>
 
-      <div class="mr-scroll-hint" aria-hidden="true">&darr;</div>
-    </div>
+    <div class="lp-section-title">{("PRECIOS" if is_es else "PRICING")}</div>
+    <h2 class="lp-section-h">{plans_h}</h2>
+    <p class="lp-section-sub">{plans_sub}</p>
+    <div class="lp-plans">{plans_html}</div>
 
-    <!-- ─── Trust strip ─── -->
-    <div class="mr-trust reveal-fade">
-      <div class="mr-trust-label">Built for</div>
-      <div class="mr-trust-track">
-        <span><strong>Founders</strong></span>
-        <span>Sales teams</span>
-        <span><strong>Agencies</strong></span>
-        <span>Students</span>
-        <span><strong>Recruiters</strong></span>
-        <span>Educators</span>
-        <span><strong>Solo consultants</strong></span>
-      </div>
-    </div>
-
-    <!-- ─── Product switch ─── -->
-    <div style="text-align:center;margin-top:64px">
-      <div class="mr-switch reveal-fade">
-        <button id="sw-biz" class="on biz" onclick="mrShowPanel('biz')">&#128188; For Business</button>
-        <button id="sw-stu" onclick="mrShowPanel('stu')">&#127891; For Students</button>
-      </div>
-    </div>
-
-    <!-- ─── BUSINESS panel ─── -->
-    <div id="panel-biz" class="mr-panel on">
-      <div class="mr-section-title reveal">For sales teams, agencies &amp; founders</div>
-      <h2 class="mr-section-h reveal r-delay-1">Email outreach that <span class="g1">actually gets replies</span>.</h2>
-      <p class="mr-section-sub reveal r-delay-2">Write, send, track, and follow up on personalized multi-step email campaigns — all on autopilot.</p>
-
-      <div class="mr-cards" style="margin-top:28px">
-        <div class="mr-card biz spotlight reveal"><div class="icon">&#129302;</div><h3>AI Campaign Writer</h3><p>Describe your audience. GPT-4 drafts a multi-step sequence with A/B variants, follow-ups, and personalization.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-1"><div class="icon">&#128233;</div><h3>Unified Mail Hub</h3><p>Connect Gmail, Outlook, and IMAP. Read, reply, and triage every inbox from one screen with AI sorting.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-2"><div class="icon">&#128200;</div><h3>Opens, Clicks &amp; Replies</h3><p>Track every interaction. See what's working and what to cut — in real time.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-3"><div class="icon">&#9889;</div><h3>Smart Send Times</h3><p>AI learns when each recipient is most likely to open, then schedules sends automatically.</p></div>
-        <div class="mr-card biz spotlight reveal"><div class="icon">&#128101;</div><h3>CRM &amp; Contacts</h3><p>Import via CSV or CRM, tag leads, segment by industry, and keep relationships organized.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-1"><div class="icon">&#128272;</div><h3>A/B Testing</h3><p>Test subject lines and body copy. MachReach picks the winner automatically.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-2"><div class="icon">&#128196;</div><h3>Subject-Line Optimizer</h3><p>Rate any subject line for open-rate, spam risk, and hook strength before you hit send.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-3"><div class="icon">&#128172;</div><h3>Reply Intelligence</h3><p>Auto-classify replies as interested / objection / not-a-fit and draft the perfect follow-up.</p></div>
-        <div class="mr-card biz spotlight reveal"><div class="icon">&#128737;</div><h3>Deliverability Checker</h3><p>Scan your message for spam triggers, SPF/DKIM issues, and link problems before it goes out.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-1"><div class="icon">&#128197;</div><h3>Scheduled Campaigns</h3><p>Queue campaigns to start at the perfect time. No manual activation, no missed windows.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-2"><div class="icon">&#128101;</div><h3>Team Collaboration</h3><p>Invite teammates to share campaigns, inbox, and contacts. Everyone stays in sync.</p></div>
-        <div class="mr-card biz spotlight reveal r-delay-3"><div class="icon">&#128736;</div><h3>CSV + CRM Import</h3><p>Drop in a spreadsheet or sync from your CRM. MachReach handles dedup, validation, and tagging.</p></div>
-      </div>
-
-      <div class="mr-single reveal-fade" style="text-align:center;margin-top:32px">
-        <a href="/register?type=business" class="mr-pill-biz">Start your first campaign free &rarr;</a>
-      </div>
-    </div>
-
-    <!-- ─── STUDENT panel ─── -->
-    <div id="panel-stu" class="mr-panel">
-      <div class="mr-section-title reveal" style="color:#F472B6">For students who refuse to fail</div>
-      <h2 class="mr-section-h reveal r-delay-1">The <span class="g2">AI study OS</span> built for how you actually learn.</h2>
-      <p class="mr-section-sub reveal r-delay-2">Sync Canvas. Upload your PDFs. Let AI build your plan, quizzes, flashcards, notes — and tutor you through the hard parts.</p>
-
-      <div class="mr-cards" style="margin-top:28px">
-        <div class="mr-card stu spotlight reveal"><div class="icon">&#128218;</div><h3>Courses + Canvas Sync</h3><p>Auto-import every course, assignment, and due date. Or create courses manually. Upload syllabi &amp; PDFs.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-1"><div class="icon">&#128197;</div><h3>AI Study Plan</h3><p>Personalized daily plan built from your exams, workload, and priorities. Ticked off as you go.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-2"><div class="icon">&#127917;</div><h3>Focus Mode</h3><p>Pomodoro, pages-read, and custom sessions. Earn XP. Climb the rank ladder.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-3"><div class="icon">&#127183;</div><h3>AI Flashcards (SRS)</h3><p>Auto-generated from your uploads. Spaced-repetition so you never forget.</p></div>
-        <div class="mr-card stu spotlight reveal"><div class="icon">&#128221;</div><h3>AI Quizzes</h3><p>Practice quizzes built from your course files. Real exam prep, no fluff.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-1"><div class="icon">&#128214;</div><h3>AI Notes</h3><p>Drop a PDF or DOCX and get clean, organized study notes extracted automatically.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-2"><div class="icon">&#129302;</div><h3>AI Tutor (grounded)</h3><p>Chats only from YOUR uploaded files. No hallucinations, no random answers.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-3"><div class="icon">&#9999;&#65039;</div><h3>Essay Assistant</h3><p>Brutally honest feedback on thesis, structure, grammar, and flow. Rewritten intros included.</p></div>
-        <div class="mr-card stu spotlight reveal"><div class="icon">&#128680;</div><h3>Panic Mode</h3><p>Exam tomorrow? Get a ruthless cram plan in 10 seconds. Topic by topic, minute by minute.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-1"><div class="icon">&#127942;</div><h3>Leaderboards + Ranks</h3><p>Initiates &rarr; Apprentices &rarr; Scholars &rarr; Masterminds &rarr; Legends. 35 ranks to chase.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-2"><div class="icon">&#128218;</div><h3>Study Exchange</h3><p>Publish your notes. Fork other students' notes. Earn XP when yours get used.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-3"><div class="icon">&#128337;</div><h3>Schedule &amp; Weekly Planner</h3><p>Drag-and-drop weekly schedule. Block classes, study sessions, and deadlines.</p></div>
-        <div class="mr-card stu spotlight reveal"><div class="icon">&#127891;</div><h3>GPA Calculator</h3><p>Track current GPA, forecast what grades you need, and plan your semester.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-1"><div class="icon">&#127919;</div><h3>Weak Topics Radar</h3><p>AI spots what you struggle with based on quiz performance and focuses your review.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-2"><div class="icon">&#128221;</div><h3>Exams Dashboard</h3><p>Every upcoming exam, weighted by difficulty and days remaining. Never blindsided.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-3"><div class="icon">&#128736;</div><h3>Practice Problems</h3><p>Unlimited AI-generated practice, graded and explained step by step.</p></div>
-        <div class="mr-card stu spotlight reveal"><div class="icon">&#128233;</div><h3>Daily Study Email</h3><p>Morning briefing with today's plan, weak topics, and upcoming exams. Delivered to your inbox.</p></div>
-        <div class="mr-card stu spotlight reveal r-delay-1"><div class="icon">&#128206;</div><h3>Drag &amp; Drop Anywhere</h3><p>Drop a PDF onto Notes, Flashcards, Quizzes, or the AI Tutor — instant study material from your files.</p></div>
-      </div>
-
-      <div class="mr-single reveal-fade" style="text-align:center;margin-top:32px">
-        <a href="/register?type=student" class="mr-pill-stu">Study smarter, free &rarr;</a>
-      </div>
-    </div>
-
-    <!-- ─── Interactive product preview ─── -->
-    <div style="text-align:center">
-      <div class="mr-section-title reveal">See it in action</div>
-      <h2 class="mr-section-h reveal r-delay-1">Watch MachReach think.</h2>
-      <p class="mr-section-sub reveal r-delay-2">Two live previews — an AI-written cold email on the left, a live study plan ticking off on the right.</p>
-    </div>
-    <div class="mr-demo">
-      <!-- Email composer demo -->
-      <div class="mr-demo-card reveal-left">
-        <div class="mr-demo-head">
-          <div class="mr-demo-dots"><span class="mr-demo-dot r"></span><span class="mr-demo-dot y"></span><span class="mr-demo-dot g"></span></div>
-          <span class="mr-demo-title">Compose — MachReach AI Campaign Writer</span>
-        </div>
-        <div class="mr-demo-body">
-          <div class="mr-demo-label">Subject</div>
-          <div id="demo-subject" class="mr-demo-subject mr-demo-cursor"></div>
-          <div class="mr-demo-label">Body</div>
-          <div id="demo-body" class="mr-demo-text mr-demo-cursor"></div>
-          <div class="mr-demo-sendline">
-            <span class="mr-demo-btn">Send &uarr;</span>
-            <span style="color:var(--text-muted);font-size:12px">Follow-up in 3 days if no reply</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Study plan demo -->
-      <div class="mr-demo-card reveal-right">
-        <div class="mr-demo-head">
-          <div class="mr-demo-dots"><span class="mr-demo-dot r"></span><span class="mr-demo-dot y"></span><span class="mr-demo-dot g"></span></div>
-          <span class="mr-demo-title">Today's Plan — Monday</span>
-        </div>
-        <div class="mr-demo-body" id="demo-plan">
-          <div class="mr-plan-item" data-delay="400"><span class="mr-plan-check">&#10003;</span><span>Review Biology Chapter 5 flashcards</span><span class="mr-plan-meta">25 min</span></div>
-          <div class="mr-plan-item" data-delay="1000"><span class="mr-plan-check">&#10003;</span><span>Practice quiz: Calculus derivatives</span><span class="mr-plan-meta">15 min</span></div>
-          <div class="mr-plan-item" data-delay="1700"><span class="mr-plan-check">&#10003;</span><span>Read Political Theory — pages 45-62</span><span class="mr-plan-meta">30 min</span></div>
-          <div class="mr-plan-item" data-delay="2500"><span class="mr-plan-check">&#10003;</span><span>Draft thesis intro (Essay Assistant)</span><span class="mr-plan-meta">20 min</span></div>
-          <div class="mr-plan-item" data-delay="3300"><span class="mr-plan-check">&#10003;</span><span>AI Tutor: clarify Ch.5 osmosis</span><span class="mr-plan-meta">10 min</span></div>
-          <div class="mr-plan-item" data-delay="4100"><span class="mr-plan-check">&#10003;</span><span>Weak topics radar: Python loops</span><span class="mr-plan-meta">15 min</span></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ─── How it works ─── -->
-    <div style="max-width:1000px;margin:80px auto 0;padding:0 24px;">
-      <div class="mr-section-title reveal">How it works</div>
-      <h2 class="mr-section-h reveal r-delay-1">Three steps. That's it.</h2>
-      <p class="mr-section-sub reveal r-delay-2">Same simple flow — whether you're selling or studying.</p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:28px;margin-top:28px;">
-        <div class="reveal" style="text-align:center">
-          <div class="drift" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 14px;box-shadow:0 10px 28px rgba(99,102,241,.28)">1</div>
-          <h3 style="font-size:18px;margin-bottom:6px;font-weight:700">Tell us what you're doing</h3>
-          <p style="font-size:13.5px;color:var(--text-secondary);line-height:1.6;">Your target audience — or your courses and exams. Two minutes, tops.</p>
-        </div>
-        <div class="reveal r-delay-1" style="text-align:center">
-          <div class="drift-slow" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#F472B6,#F59E0B);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 14px;box-shadow:0 10px 28px rgba(244,114,182,.28)">2</div>
-          <h3 style="font-size:18px;margin-bottom:6px;font-weight:700">AI builds everything</h3>
-          <p style="font-size:13.5px;color:var(--text-secondary);line-height:1.6;">Campaigns, flashcards, quizzes, notes, plans, feedback — all generated for you.</p>
-        </div>
-        <div class="reveal r-delay-2" style="text-align:center">
-          <div class="drift" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#22D3EE,#6366F1);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin:0 auto 14px;box-shadow:0 10px 28px rgba(34,211,238,.28)">3</div>
-          <h3 style="font-size:18px;margin-bottom:6px;font-weight:700">You win</h3>
-          <p style="font-size:13.5px;color:var(--text-secondary);line-height:1.6;">Replies roll in. Grades go up. MachReach tracks everything in the background.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- ─── Testimonials ─── -->
-    <div class="mr-testimonials">
-      <div style="text-align:center">
-        <div class="mr-section-title reveal">What early users say</div>
-        <h2 class="mr-section-h reveal r-delay-1">Real feedback from the beta.</h2>
-      </div>
-      <div class="mr-test-grid" style="margin-top:28px">
-        <div class="mr-testimonial reveal">
-          <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-          <div class="quote">"The AI Campaign Writer got me 6 replies in my first batch of 50. The follow-up sequences alone are worth it."</div>
-          <div class="who">
-            <div class="avatar">SM</div>
-            <div>
-              <div class="name">Sarah M.</div>
-              <div class="role">Founder, B2B SaaS</div>
-            </div>
-          </div>
-        </div>
-        <div class="mr-testimonial reveal r-delay-1">
-          <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-          <div class="quote">"Panic Mode saved my Chem final. Uploaded the syllabus at 10pm, had a real cram plan by 10:01pm."</div>
-          <div class="who">
-            <div class="avatar">DR</div>
-            <div>
-              <div class="name">Derek R.</div>
-              <div class="role">Pre-med, UCLA</div>
-            </div>
-          </div>
-        </div>
-        <div class="mr-testimonial reveal r-delay-2">
-          <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-          <div class="quote">"Finally a mail hub that doesn't suck. I triage 200+ emails a day and MachReach's AI sort is shockingly good."</div>
-          <div class="who">
-            <div class="avatar">JK</div>
-            <div>
-              <div class="name">James K.</div>
-              <div class="role">Recruiter, staffing agency</div>
-            </div>
-          </div>
-        </div>
-        <div class="mr-testimonial reveal">
-          <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-          <div class="quote">"The AI Tutor only answers from MY uploaded files. No hallucinations. That's the feature I've been waiting for."</div>
-          <div class="who">
-            <div class="avatar">PL</div>
-            <div>
-              <div class="name">Priya L.</div>
-              <div class="role">Grad student, MIT</div>
-            </div>
-          </div>
-        </div>
-        <div class="mr-testimonial reveal r-delay-1">
-          <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-          <div class="quote">"I replaced 3 SaaS subs with MachReach. Campaigns, inbox, and deliverability — all one tab. Still cheaper."</div>
-          <div class="who">
-            <div class="avatar">AN</div>
-            <div>
-              <div class="name">Alex N.</div>
-              <div class="role">Agency owner</div>
-            </div>
-          </div>
-        </div>
-        <div class="mr-testimonial reveal r-delay-2">
-          <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-          <div class="quote">"Flashcards auto-made from my notes PDFs. Spaced-repetition done right. Grades literally went up a letter."</div>
-          <div class="who">
-            <div class="avatar">MT</div>
-            <div>
-              <div class="name">Mika T.</div>
-              <div class="role">Junior, state university</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ─── Comparison ─── -->
-    <div class="mr-compare">
-      <div style="text-align:center">
-        <div class="mr-section-title reveal">Compare</div>
-        <h2 class="mr-section-h reveal r-delay-1">One tool. Everything others sell separately.</h2>
-        <p class="mr-section-sub reveal r-delay-2">Most "cold email" and "study" tools give you 20% of what you need. MachReach ships the whole stack.</p>
-      </div>
-      <div class="mr-compare-table reveal-fade" style="margin-top:24px">
-        <div class="mr-compare-row mr-compare-head">
-          <div>Feature</div>
-          <div class="mr-compare-mine">MachReach</div>
-          <div>Mailshake/Lemlist</div>
-          <div>Anki/Quizlet</div>
-        </div>
-        <div class="mr-compare-row">
-          <div class="mr-compare-feature">AI-generated email sequences</div>
-          <div class="mr-compare-cell mine"><span class="mr-compare-check">&#10003;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-partial">Partial</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-        </div>
-        <div class="mr-compare-row">
-          <div class="mr-compare-feature">Unified multi-account inbox</div>
-          <div class="mr-compare-cell mine"><span class="mr-compare-check">&#10003;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-        </div>
-        <div class="mr-compare-row">
-          <div class="mr-compare-feature">Deliverability + spam checker</div>
-          <div class="mr-compare-cell mine"><span class="mr-compare-check">&#10003;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-partial">Add-on</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-        </div>
-        <div class="mr-compare-row">
-          <div class="mr-compare-feature">AI Tutor grounded on your files</div>
-          <div class="mr-compare-cell mine"><span class="mr-compare-check">&#10003;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-        </div>
-        <div class="mr-compare-row">
-          <div class="mr-compare-feature">Auto-generated flashcards &amp; quizzes</div>
-          <div class="mr-compare-cell mine"><span class="mr-compare-check">&#10003;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-partial">Manual</span></div>
-        </div>
-        <div class="mr-compare-row">
-          <div class="mr-compare-feature">Daily AI study plan</div>
-          <div class="mr-compare-cell mine"><span class="mr-compare-check">&#10003;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-        </div>
-        <div class="mr-compare-row">
-          <div class="mr-compare-feature">Canvas LMS sync</div>
-          <div class="mr-compare-cell mine"><span class="mr-compare-check">&#10003;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-          <div class="mr-compare-cell"><span class="mr-compare-x">&minus;</span></div>
-        </div>
-        <div class="mr-compare-row">
-          <div class="mr-compare-feature">Starting price</div>
-          <div class="mr-compare-cell mine">Free &rarr; $20</div>
-          <div class="mr-compare-cell">$59+</div>
-          <div class="mr-compare-cell">Free &rarr; $36</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ─── Pricing teaser ─── -->
-    <div class="mr-pricing">
-      <div class="mr-section-title reveal">Pricing</div>
-      <h2 class="mr-section-h reveal r-delay-1">Simple. Transparent. Free to start.</h2>
-      <p class="mr-section-sub reveal r-delay-2">No seats, no overage fees, no surprise charges. Cancel anytime.</p>
-      <div class="mr-pricing-grid">
-        <div class="mr-price reveal">
-          <div class="plan">Free</div>
-          <div class="amt">$0<small>/mo</small></div>
-          <div class="desc">Core features, limited AI credits</div>
-        </div>
-        <div class="mr-price popular reveal r-delay-1">
-          <span class="tag">Most Popular</span>
-          <div class="plan" style="color:var(--primary)">Pro</div>
-          <div class="amt">$20<small>/mo</small></div>
-          <div class="desc">Unlock every feature, fair-use AI</div>
-        </div>
-        <div class="mr-price reveal r-delay-2">
-          <div class="plan">Unlimited</div>
-          <div class="amt">$40<small>/mo</small></div>
-          <div class="desc">Zero limits. Team seats included.</div>
-        </div>
-      </div>
-      <a href="/pricing" class="btn btn-outline reveal-fade" style="margin-top:24px;">See all plans &rarr;</a>
-    </div>
-
-    <!-- ─── FAQ ─── -->
-    <div class="mr-faq">
-      <div style="text-align:center">
-        <div class="mr-section-title reveal">FAQ</div>
-        <h2 class="mr-section-h reveal r-delay-1">Short answers to real questions.</h2>
-      </div>
-      <div style="margin-top:28px">
-        <details class="reveal" open>
-          <summary>Do I really not need a credit card?</summary>
-          <div class="mr-faq-body">Correct. The free plan works forever without one. Enter a card only when you're ready to upgrade to Pro or Unlimited.</div>
-        </details>
-        <details class="reveal r-delay-1">
-          <summary>What AI models does MachReach use?</summary>
-          <div class="mr-faq-body">We use OpenAI GPT-4 class models for generation, plus smaller models for classification (like reply intelligence) to keep things fast and cheap. We never train on your data.</div>
-        </details>
-        <details class="reveal r-delay-1">
-          <summary>Is my data private?</summary>
-          <div class="mr-faq-body">Yes. Your emails, contacts, notes, and uploaded files are yours. We don't sell data, we don't train on it, and you can export or delete everything at any time from Settings.</div>
-        </details>
-        <details class="reveal r-delay-2">
-          <summary>Can I connect my own email account?</summary>
-          <div class="mr-faq-body">Yes — Gmail, Outlook/Microsoft 365, and any IMAP/SMTP account. Your messages send from your domain so deliverability and authentication stay in your control.</div>
-        </details>
-        <details class="reveal r-delay-2">
-          <summary>How is this different from Mailshake, Lemlist, or Quizlet?</summary>
-          <div class="mr-faq-body">One platform does the full outreach workflow (write &#43; send &#43; inbox &#43; deliverability &#43; replies) and the full study workflow (plan &#43; flashcards &#43; quizzes &#43; tutor &#43; Canvas sync). Most competitors do one slice, charge more for it, and you end up stitching tools together.</div>
-        </details>
-        <details class="reveal r-delay-3">
-          <summary>Can students and businesses share one account?</summary>
-          <div class="mr-faq-body">No — student and business accounts have different dashboards and tools. But your email address can be used for either. Pick when you sign up; you can always open a second account with a different email.</div>
-        </details>
-        <details class="reveal r-delay-3">
-          <summary>When does beta end?</summary>
-          <div class="mr-faq-body">When we're satisfied things are stable and support our user base at scale. During beta, every feature is free — no limits, no catches. You'll get notice before paid plans go live.</div>
-        </details>
-        <details class="reveal r-delay-4">
-          <summary>Who builds MachReach?</summary>
-          <div class="mr-faq-body">MachReach is built by a small team obsessed with two things: giving founders unfair leverage in outreach, and giving students unfair leverage in learning. Email <a href="mailto:support@machreach.com" style="color:var(--primary)">support@machreach.com</a> — we actually reply.</div>
-        </details>
-      </div>
-    </div>
-
-    <!-- ─── Final CTA ─── -->
-    <div class="mr-final reveal-scale">
-      <h2>Pick your side. Start winning.</h2>
-      <p>Free during beta. No credit card. Full access.</p>
-      <div class="mr-final-ctas">
-        <a href="/register?type=business" class="primary">&#128188; Business account &rarr;</a>
-        <a href="/register?type=student" class="secondary">&#127891; Student account &rarr;</a>
-      </div>
-    </div>
-
-    <script>
-      // Panel switch
-      window.mrShowPanel = function(which) {
-        document.getElementById('panel-biz').classList.toggle('on', which === 'biz');
-        document.getElementById('panel-stu').classList.toggle('on', which === 'stu');
-        var bb = document.getElementById('sw-biz'), sb = document.getElementById('sw-stu');
-        bb.classList.toggle('on', which === 'biz');
-        bb.classList.toggle('biz', which === 'biz');
-        sb.classList.toggle('on', which === 'stu');
-        sb.classList.toggle('stu', which === 'stu');
-      };
-
-      // ─── Typewriter effect for the email composer preview ───
-      (function(){
-        var SUBJECT = "Quick idea for {{COMPANY}}'s Q2 pipeline";
-        var BODY = "Hi Sarah,\\n\\nSaw you just launched the new onboarding flow — nice work on the friction drop.\\n\\nI run MachReach. We help B2B teams automate the first 4 follow-ups of every cold outreach sequence. Teams usually see replies go up 2–3x in the first month.\\n\\nOpen to a 15-min call next week?\\n\\n— M";
-        function typeInto(el, text, speed, then) {
-          if (!el) return then && then();
-          el.textContent = '';
-          el.classList.add('mr-demo-cursor');
-          var i = 0;
-          var timer = setInterval(function(){
-            el.textContent = text.slice(0, i+1);
-            i++;
-            if (i >= text.length) {
-              clearInterval(timer);
-              el.classList.remove('mr-demo-cursor');
-              if (then) setTimeout(then, 600);
-            }
-          }, speed);
-        }
-        function runEmailDemo() {
-          var subject = document.getElementById('demo-subject');
-          var body = document.getElementById('demo-body');
-          if (!subject || !body) return;
-          typeInto(subject, SUBJECT, 40, function(){
-            typeInto(body, BODY, 18, function(){
-              // Loop after a pause
-              setTimeout(runEmailDemo, 4500);
-            });
-          });
-        }
-        // Start when email demo card enters viewport
-        if ('IntersectionObserver' in window) {
-          var ob = new IntersectionObserver(function(entries){
-            entries.forEach(function(e){
-              if (e.isIntersecting) {
-                runEmailDemo();
-                ob.disconnect();
-              }
-            });
-          }, { threshold: 0.3 });
-          var target = document.getElementById('demo-subject');
-          if (target) ob.observe(target.closest('.mr-demo-card'));
-        } else {
-          runEmailDemo();
-        }
-      })();
-
-      // ─── Plan ticker — checks off items one-by-one ───
-      (function(){
-        function runPlanDemo() {
-          var items = document.querySelectorAll('#demo-plan .mr-plan-item');
-          items.forEach(function(it){ it.classList.remove('done'); });
-          items.forEach(function(it){
-            var delay = parseInt(it.dataset.delay || '0', 10);
-            setTimeout(function(){ it.classList.add('done'); }, delay);
-          });
-          // Loop
-          setTimeout(runPlanDemo, 7500);
-        }
-        if ('IntersectionObserver' in window) {
-          var ob = new IntersectionObserver(function(entries){
-            entries.forEach(function(e){
-              if (e.isIntersecting) {
-                runPlanDemo();
-                ob.disconnect();
-              }
-            });
-          }, { threshold: 0.3 });
-          var plan = document.getElementById('demo-plan');
-          if (plan) ob.observe(plan);
-        } else {
-          runPlanDemo();
-        }
-      })();
-    </script>
+    <section class="lp-final">
+      <h2>{final_h}</h2>
+      <p>{final_sub}</p>
+      <a href="/register" class="lp-btn lp-btn-primary">{final_cta} &rarr;</a>
+    </section>
     """))
 
 @app.route("/register", methods=["GET", "POST"])
@@ -4124,10 +3736,11 @@ def register():
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
-        business = request.form.get("business", "").strip()
-        account_type = request.form.get("account_type", "business").strip()
-        if account_type not in ("business", "student"):
-            account_type = "business"
+        business = ""
+        # Business side is currently disabled — only student accounts can be
+        # created. The form field is kept but we force the value here so a
+        # crafted POST can't sneak through.
+        account_type = "student"
         if not name or not email or not password:
             flash(("error", t("auth.all_required")))
             return redirect(url_for("register"))
@@ -4184,37 +3797,29 @@ def register():
         <form method="post">
           <div class="form-group">
             <label>I'm signing up as</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;" id="type-selector">
-              <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border:2px solid var(--primary);border-radius:var(--radius-sm);cursor:pointer;background:var(--primary-light);transition:all .2s;" id="type-business" onclick="selectType('business')">
-                <input type="radio" name="account_type" value="business" checked style="accent-color:var(--primary);">
-                <div>
-                  <div style="font-weight:700;font-size:14px;color:var(--text);">&#128188; Business</div>
-                  <div style="font-size:11px;color:var(--text-muted);font-weight:400;">Email outreach &amp; campaigns</div>
-                </div>
-              </label>
-              <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--card);transition:all .2s;" id="type-student" onclick="selectType('student')">
-                <input type="radio" name="account_type" value="student" style="accent-color:var(--primary);">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
+              <label style="display:flex;align-items:center;gap:10px;padding:14px 16px;border:2px solid var(--primary);border-radius:var(--radius-sm);background:var(--primary-light);">
+                <input type="radio" name="account_type" value="student" checked style="accent-color:var(--primary);">
                 <div>
                   <div style="font-weight:700;font-size:14px;color:var(--text);">&#127891; Student</div>
-                  <div style="font-size:11px;color:var(--text-muted);font-weight:400;">AI study planner &amp; Canvas</div>
+                  <div style="font-size:11px;color:var(--text-muted);font-weight:400;">AI study planner, focus, duels &amp; marketplace</div>
                 </div>
               </label>
+              <div title="Business accounts are coming soon" style="position:relative;display:flex;align-items:center;gap:10px;padding:14px 16px;border:2px dashed var(--border);border-radius:var(--radius-sm);background:var(--card);opacity:.55;cursor:not-allowed;">
+                <span style="position:absolute;top:6px;right:8px;font-size:9px;font-weight:800;letter-spacing:1.4px;color:var(--primary);background:var(--primary-light);border-radius:999px;padding:2px 8px;text-transform:uppercase;">Coming soon</span>
+                <div>
+                  <div style="font-weight:700;font-size:14px;color:var(--text);">&#128188; Business</div>
+                  <div style="font-size:11px;color:var(--text-muted);font-weight:400;">Email outreach launches later this year.</div>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="form-group"><label>{t("auth.full_name")}</label><input name="name" placeholder="John Doe" required></div>
-          <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="john@company.com" required></div>
+          <div class="form-group"><label>{t("auth.full_name")}</label><input name="name" placeholder="Alex Garcia" required></div>
+          <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="you@school.edu" required></div>
           <div class="form-group"><label>{t("auth.password")}</label><input name="password" type="password" placeholder="At least 6 characters" required minlength="6"></div>
-          <div class="form-group" id="business-field"><label>{t("auth.business_name")} <span style="font-weight:400;text-transform:none;color:var(--text-muted);">({t("auth.optional")})</span></label><input name="business" placeholder="Acme Inc."></div>
           <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.create_btn")}</button>
           <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:12px;line-height:1.6;">By creating an account, you agree to our <a href="/terms" style="color:var(--primary);">Terms of Service</a> and <a href="/privacy" style="color:var(--primary);">Privacy Policy</a>.</p>
         </form>
-        <script>
-        function selectType(t){{
-          var bus=document.getElementById('type-business'),stu=document.getElementById('type-student'),bf=document.getElementById('business-field');
-          if(t==='student'){{stu.style.border='2px solid var(--primary)';stu.style.background='var(--primary-light)';bus.style.border='2px solid var(--border)';bus.style.background='var(--card)';bf.style.display='none';}}
-          else{{bus.style.border='2px solid var(--primary)';bus.style.background='var(--primary-light)';stu.style.border='2px solid var(--border)';stu.style.background='var(--card)';bf.style.display='block';}}
-        }}
-        </script>
         <div class="auth-footer">{t("auth.have_account")} <a href="/login">{t("auth.log_in")}</a></div>
       </div>
     </div>
@@ -4582,6 +4187,41 @@ def dashboard():
     if session.get("account_type") == "student":
         return redirect(url_for("student_dashboard_page"))
 
+    # Business side is on hold — show a coming-soon page instead of the
+    # outreach dashboard. Existing business accounts can still log in but
+    # all the campaign/inbox surfaces are gated behind this notice.
+    return render_template_string(
+        LAYOUT,
+        title="Business — Coming soon",
+        logged_in=True,
+        messages=[],
+        active_page="dashboard",
+        client_name=session.get("client_name", ""),
+        nav=t_dict("nav"),
+        lang=session.get("lang", "en"),
+        account_type="business",
+        wide=True,
+        content=Markup("""
+        <div style="max-width:680px;margin:80px auto;padding:48px 32px;text-align:center;background:var(--card);border:1px solid var(--border);border-radius:20px;">
+          <div style="font-size:60px;margin-bottom:14px;">&#128640;</div>
+          <h1 style="margin:0 0 10px;font-size:32px;letter-spacing:-.5px;">MachReach Business is coming soon.</h1>
+          <p style="color:var(--text-muted);font-size:16px;line-height:1.6;margin:0 auto 28px;max-width:520px;">
+            We're focusing 100% on the student product right now. The outreach &amp; email campaign tools
+            are temporarily paused while we build the next version. Your account is safe and your data is intact.
+          </p>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+            <a href="/" class="btn btn-outline">&larr; Back home</a>
+            <a href="/logout" class="btn btn-primary">Log out</a>
+          </div>
+          <p style="margin-top:28px;font-size:12px;color:var(--text-muted);">
+            Want early access when we relaunch? Email
+            <a href="mailto:support@machreach.com" style="color:var(--primary);">support@machreach.com</a>.
+          </p>
+        </div>
+        """),
+    )
+
+    # ── Below this point is the legacy business dashboard (now unreachable). ──
     data_cid = _effective_client_id()
     campaigns = get_campaigns(data_cid)
 
@@ -10609,9 +10249,6 @@ def pricing_page():
       <div style="text-align:center;margin-bottom:40px;">
         <h1 style="font-size:36px;margin-bottom:8px;">{t("pricing.title")}</h1>
         <p style="color:var(--text-muted);font-size:18px;">{t("pricing.subtitle")}</p>
-        <div style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;padding:12px 24px;border-radius:10px;margin-top:16px;display:inline-block;font-size:14px;font-weight:600;">
-          &#128679; We're in beta! All features are free during testing. Paid plans coming soon.
-        </div>
       </div>
       <div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:center;">
         {cards}

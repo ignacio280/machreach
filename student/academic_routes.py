@@ -218,6 +218,27 @@ def register_academic_routes(app, csrf, limiter):
         my_scope = "retirement" if retired else "global"
         my_rank_obj = ac.my_rank(my_scope, user_id) or {}
 
+        # Equipped banner (cosmetic) + total study time.
+        try:
+            wallet = sdb.get_wallet(user_id) or {}
+            banner_key = wallet.get("selected_banner") or "default"
+            banner_cfg = sdb.BANNERS.get(banner_key) or sdb.BANNERS.get("default") or {}
+            banner = {
+                "key": banner_key,
+                "css": banner_cfg.get("css", ""),
+                "anim_class": (banner_cfg.get("anim_class") or "") if banner_cfg.get("animated") else "",
+            }
+        except Exception:
+            banner = {"key": "default", "css": "", "anim_class": ""}
+
+        try:
+            focus_stats = sdb.get_focus_stats(user_id) or {}
+            total_minutes = int(focus_stats.get("total_minutes") or 0)
+            sessions = int(focus_stats.get("total_sessions") or focus_stats.get("sessions") or 0)
+        except Exception:
+            total_minutes, sessions = 0, 0
+        total_hours = round(total_minutes / 60, 1)
+
         return jsonify({
             "user_id": int(row["id"]),
             "name": row.get("name") or "Student",
@@ -229,6 +250,10 @@ def register_academic_routes(app, csrf, limiter):
             "university": univ,
             "major": major,
             "xp": int(total_xp),
+            "total_minutes": total_minutes,
+            "total_hours": total_hours,
+            "sessions": sessions,
+            "banner": banner,
             "rank": {
                 "full_name": rank_info.get("full_name"),
                 "tier": rank_info.get("tier"),
@@ -283,13 +308,24 @@ def register_academic_routes(app, csrf, limiter):
 
     @app.route("/api/academic/analytics", methods=["GET"])
     def academic_analytics():
-        """Return a comprehensive study-analytics payload for the dashboard widget."""
+        """Return a comprehensive study-analytics payload for the dashboard widget.
+
+        Query params:
+            week_offset: 0 = current ISO week, -1 = previous, etc. (cannot be > 0)
+        """
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
         cid = _cid()
         from outreach.db import get_db, _fetchall, _fetchval
         from datetime import datetime, timedelta
         from collections import defaultdict
+
+        try:
+            week_offset = int(request.args.get("week_offset") or 0)
+        except (TypeError, ValueError):
+            week_offset = 0
+        if week_offset > 0:
+            week_offset = 0
 
         try:
             with get_db() as db:
@@ -315,11 +351,14 @@ def register_academic_routes(app, csrf, limiter):
         total_sessions = len(rows)
 
         today = datetime.now().date()
+        # ISO week starts on Monday. Anchor "this week" to Monday of current week.
+        week_anchor = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
+        week_end = week_anchor + timedelta(days=6)
+
         per_day_min = defaultdict(int)
         per_day_sessions = defaultdict(int)
-        per_hour = defaultdict(int)
         per_course = defaultdict(int)
-        per_dow = defaultdict(int)
+        per_dow_week = defaultdict(int)  # only for the requested ISO week
 
         for r in rows:
             pd = (r.get("plan_date") or "")[:19]
@@ -334,8 +373,9 @@ def register_academic_routes(app, csrf, limiter):
             mins = int(r.get("focus_minutes") or 0)
             per_day_min[day_key] += mins
             per_day_sessions[day_key] += 1
-            per_hour[dt.hour] += mins
-            per_dow[dt.strftime("%a")] += mins
+            d_only = dt.date()
+            if week_anchor <= d_only <= week_end:
+                per_dow_week[dt.strftime("%a")] += mins
             notes = r.get("notes") or ""
             if ":" in notes:
                 course = notes.split(":", 1)[1].strip()
@@ -352,9 +392,15 @@ def register_academic_routes(app, csrf, limiter):
                 "sessions": per_day_sessions.get(d, 0),
             })
 
-        hours_dist = [{"hour": h, "minutes": per_hour.get(h, 0)} for h in range(24)]
         dow_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        dow_dist = [{"day": d, "minutes": per_dow.get(d, 0)} for d in dow_order]
+        dow_dist = [{"day": d, "minutes": per_dow_week.get(d, 0)} for d in dow_order]
+
+        if week_offset == 0:
+            week_label = "this week"
+        elif week_offset == -1:
+            week_label = "last week"
+        else:
+            week_label = week_anchor.strftime("%b %d") + " – " + week_end.strftime("%b %d")
 
         top_courses = sorted(
             ({"course": k, "minutes": v} for k, v in per_course.items()),
@@ -370,7 +416,6 @@ def register_academic_routes(app, csrf, limiter):
             streak += 1
             cursor -= timedelta(days=1)
 
-        best_hour = max(hours_dist, key=lambda x: x["minutes"]) if any(h["minutes"] for h in hours_dist) else None
         best_dow = max(dow_dist, key=lambda x: x["minutes"]) if any(d["minutes"] for d in dow_dist) else None
 
         return jsonify({
@@ -383,9 +428,11 @@ def register_academic_routes(app, csrf, limiter):
                 "streak": streak,
             },
             "last_14_days": last_14,
-            "hours_dist": hours_dist,
             "dow_dist": dow_dist,
+            "week_offset": week_offset,
+            "week_label": week_label,
+            "week_start": week_anchor.strftime("%Y-%m-%d"),
+            "week_end": week_end.strftime("%Y-%m-%d"),
             "top_courses": top_courses,
-            "best_hour": best_hour,
             "best_dow": best_dow,
         })

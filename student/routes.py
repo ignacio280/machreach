@@ -461,7 +461,7 @@ def register_student_routes(app, csrf, limiter):
 
                                   chat_with_tutor, notes_from_transcript,
 
-                                  flashcards_from_transcript, detect_weak_topics,
+                                  flashcards_from_transcript,
 
                                   generate_practice_problems,
 
@@ -2360,7 +2360,11 @@ def register_student_routes(app, csrf, limiter):
             pages = int(data.get("pages", 0))
         except (TypeError, ValueError):
             pages = 0
-        course_name = data.get("course_name", "")
+        course_name = (data.get("course_name") or "").strip()
+
+        # Course is mandatory — "general study" was retired.
+        if not course_name:
+            return jsonify({"ok": False, "error": "Pick a course before starting the timer."}), 400
 
         # Defensive caps (real customers reported phantom hours from stale
         # localStorage / abandoned timers). Anything above 8h in a single save
@@ -3280,7 +3284,6 @@ def register_student_routes(app, csrf, limiter):
             <div class="mr-an-stat"><div class="mr-an-label">Sessions</div><div class="mr-an-val" id="an-sessions">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Pages read</div><div class="mr-an-val" id="an-pages">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Current streak</div><div class="mr-an-val" id="an-streak">—</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Best hour</div><div class="mr-an-val" id="an-besthour">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Best day</div><div class="mr-an-val" id="an-bestdow">—</div></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" id="mr-an-charts">
@@ -3289,16 +3292,18 @@ def register_student_routes(app, csrf, limiter):
               <div id="an-bars14" class="mr-line-host"></div>
             </div>
             <div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Hours of day you study</div>
-              <div id="an-bars24" class="mr-line-host"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;" id="an-dow-title">Day-of-week (this week)</div>
+                <div style="display:flex;gap:4px;">
+                  <button type="button" id="an-dow-prev" onclick="anDowShift(-1)" title="Previous week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:24px;height:22px;cursor:pointer;color:var(--text);font-size:14px;line-height:1;padding:0;">&#8249;</button>
+                  <button type="button" id="an-dow-next" onclick="anDowShift(1)" title="Next week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:24px;height:22px;cursor:pointer;color:var(--text);font-size:14px;line-height:1;padding:0;">&#8250;</button>
+                </div>
+              </div>
+              <div id="an-bars7" class="mr-line-host"></div>
             </div>
             <div>
               <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Time per course</div>
               <div id="an-courses" style="display:flex;flex-direction:column;gap:6px;"></div>
-            </div>
-            <div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Day-of-week</div>
-              <div id="an-bars7" class="mr-line-host"></div>
             </div>
           </div>
         </div>
@@ -3398,29 +3403,50 @@ def register_student_routes(app, csrf, limiter):
                 '</svg>'+
                 '<div class="mr-line-tip"></div>';
             }}
+            window.__anFmtM = m => m >= 60 ? (Math.floor(m/60)+'h '+(m%60)+'m') : (m+'m');
+            window.__anWeekOffset = 0;
+            window.anRenderDow = function(dow_dist, label) {{
+              const fmtM = window.__anFmtM;
+              const max7 = Math.max(1, ...dow_dist.map(d => d.minutes));
+              document.getElementById('an-bars7').innerHTML = renderLine('an-bars7', dow_dist.map(d => ({{
+                v: d.minutes, label: d.day, tip: d.day + ': ' + fmtM(d.minutes)
+              }})), max7);
+              const titleEl = document.getElementById('an-dow-title');
+              if (titleEl) titleEl.textContent = 'Day-of-week (' + label + ')';
+              const nextBtn = document.getElementById('an-dow-next');
+              if (nextBtn) {{
+                nextBtn.disabled = (window.__anWeekOffset >= 0);
+                nextBtn.style.opacity = nextBtn.disabled ? '0.4' : '1';
+                nextBtn.style.cursor = nextBtn.disabled ? 'default' : 'pointer';
+              }}
+            }};
+            window.anDowShift = async function(delta) {{
+              const next = window.__anWeekOffset + delta;
+              if (next > 0) return;
+              window.__anWeekOffset = next;
+              try {{
+                const r = await fetch('/api/academic/analytics?week_offset=' + window.__anWeekOffset);
+                if (!r.ok) return;
+                const a = await r.json();
+                const label = (a.week_label) || (window.__anWeekOffset === 0 ? 'this week' : (window.__anWeekOffset === -1 ? 'last week' : (Math.abs(window.__anWeekOffset) + ' weeks ago')));
+                window.anRenderDow(a.dow_dist, label);
+              }} catch(e) {{}}
+            }};
             try {{
-              const r = await fetch('/api/academic/analytics');
+              const r = await fetch('/api/academic/analytics?week_offset=0');
               if (!r.ok) return;
               const a = await r.json();
-              const fmtM = m => m >= 60 ? (Math.floor(m/60)+'h '+(m%60)+'m') : (m+'m');
+              const fmtM = window.__anFmtM;
               document.getElementById('an-hours').textContent = a.totals.hours.toFixed(1);
               document.getElementById('an-sessions').textContent = a.totals.sessions;
               document.getElementById('an-pages').textContent = a.totals.pages;
               document.getElementById('an-streak').textContent = a.totals.streak + ' day' + (a.totals.streak===1?'':'s');
-              document.getElementById('an-besthour').textContent = a.best_hour ? (a.best_hour.hour + ':00') : '—';
               document.getElementById('an-bestdow').textContent = a.best_dow ? a.best_dow.day : '—';
               const max14 = Math.max(1, ...a.last_14_days.map(d => d.minutes));
               document.getElementById('an-bars14').innerHTML = renderLine('an-bars14', a.last_14_days.map(d => ({{
                 v: d.minutes, label: d.label[0], tip: d.date + ': ' + fmtM(d.minutes)
               }})), max14);
-              const max24 = Math.max(1, ...a.hours_dist.map(h => h.minutes));
-              document.getElementById('an-bars24').innerHTML = renderLine('an-bars24', a.hours_dist.map(h => ({{
-                v: h.minutes, label: (h.hour % 6 === 0 ? String(h.hour) : ''), tip: h.hour + ':00 — ' + fmtM(h.minutes)
-              }})), max24);
-              const max7 = Math.max(1, ...a.dow_dist.map(d => d.minutes));
-              document.getElementById('an-bars7').innerHTML = renderLine('an-bars7', a.dow_dist.map(d => ({{
-                v: d.minutes, label: d.day, tip: d.day + ': ' + fmtM(d.minutes)
-              }})), max7);
+              window.anRenderDow(a.dow_dist, a.week_label || 'this week');
               const maxC = Math.max(1, ...a.top_courses.map(c => c.minutes));
               const coursesEl = document.getElementById('an-courses');
               if (a.top_courses.length) {{
@@ -3438,11 +3464,9 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:24px;">
 
           <div class="stat-card stat-purple"><div class="num">{len(courses)}</div><div class="label">Courses</div></div>
-
-          <div class="stat-card stat-red"><div class="num">{stats['upcoming_exams']}</div><div class="label">Upcoming Exams</div></div>
 
           <div class="stat-card stat-green"><div class="num">{stats['completion_pct']}%</div><div class="label">Plan Progress</div></div>
 
@@ -3523,16 +3547,6 @@ def register_student_routes(app, csrf, limiter):
         }})();
 
         </script>
-
-
-
-        <div class="card">
-
-          <div class="card-header"><h2>&#128221; Upcoming Exams</h2></div>
-
-          {exams_html}
-
-        </div>
 
 
 
@@ -4300,77 +4314,9 @@ def register_student_routes(app, csrf, limiter):
 
     def student_exams_page():
 
-        if not _logged_in():
+        # Exams page retired — exam progress is on the leaderboard now.
 
-            return redirect(url_for("login"))
-
-        exams = sdb.get_upcoming_exams(_cid())
-
-        rows = ""
-
-        for e in exams:
-
-            topics = json.loads(e["topics_json"]) if isinstance(e.get("topics_json"), str) else []
-
-            topics_str = ", ".join(topics) if topics else "-"
-
-            days_until = ""
-
-            if e.get("exam_date"):
-
-                try:
-
-                    ed = datetime.strptime(e["exam_date"], "%Y-%m-%d").date()
-
-                    d = (ed - datetime.now().date()).days
-
-                    color = "#EF4444" if d <= 7 else "#F59E0B" if d <= 14 else "#10B981"
-
-                    days_until = f"<span style='color:{color};font-weight:700;'>{d}d</span>"
-
-                except ValueError:
-
-                    days_until = "?"
-
-            rows += f"""<tr>
-
-              <td style="font-weight:600;">{_esc(e.get('course_name',''))}</td>
-
-              <td>{_esc(e.get('name','Exam'))}</td>
-
-              <td>{e.get('exam_date','TBD')}</td>
-
-              <td>{days_until}</td>
-
-              <td>{e.get('weight_pct',0)}%</td>
-
-              <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{_esc(topics_str)}</td>
-
-            </tr>"""
-
-        if not rows:
-
-            rows = "<tr><td colspan='6' style='text-align:center;padding:32px;color:var(--text-muted);'>No upcoming exams detected. Sync your courses first.</td></tr>"
-
-
-
-        return _s_render("Exams", f"""
-
-        <h1 style="margin-bottom:20px;">&#128221; Upcoming Exams</h1>
-
-        <div class="card">
-
-          <table>
-
-            <thead><tr><th>Course</th><th>Exam</th><th>Date</th><th>Days Left</th><th>Weight</th><th>Topics</th></tr></thead>
-
-            <tbody>{rows}</tbody>
-
-          </table>
-
-        </div>
-
-        """, active_page="student_exams")
+        return redirect(url_for("student_leaderboard_page"))
 
 
 
@@ -4742,15 +4688,21 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="form-group" style="margin-bottom:12px;">
 
-              <label style="font-size:12px;">Studying for:</label>
+              <label style="font-size:12px;">Studying for: <span style="color:#ef4444;">*</span></label>
 
-              <select id="focus-course" class="edit-input">
+              <select id="focus-course" class="edit-input" required>
 
-                <option value="">General study</option>
+                <option value="">— Pick a course to start —</option>
 
                 {course_options}
 
               </select>
+
+              <div id="focus-course-warn" style="display:none;font-size:12px;color:#ef4444;margin-top:6px;">
+
+                Pick a course before starting the timer.
+
+              </div>
 
             </div>
 
@@ -5543,6 +5495,19 @@ def register_student_routes(app, csrf, limiter):
         function startTimer(isRestore) {{
 
           if (isRunning) return;
+
+          // Block the timer entirely if no course is picked. Mandatory
+          // since "general study" was removed.
+          if (!isRestore) {{
+            var __courseSel = document.getElementById('focus-course');
+            var __warn = document.getElementById('focus-course-warn');
+            if (__courseSel && !(__courseSel.value || '').trim()) {{
+              if (__warn) __warn.style.display = 'block';
+              try {{ __courseSel.focus(); }} catch (_) {{}}
+              return;
+            }}
+            if (__warn) __warn.style.display = 'none';
+          }}
 
           // Prime the alarm INSIDE the user-gesture handler so audio can play
           // later even when the tab is hidden.
@@ -12447,14 +12412,6 @@ No markdown, no code fences. ONLY JSON.
 
         for n in notes:
 
-            is_pub = n.get("is_public", False)
-
-            share_icon = "&#127760;" if is_pub else "&#128274;"
-
-            share_label = "Public" if is_pub else "Share"
-
-            share_color = "color:var(--green);" if is_pub else ""
-
             notes_html += f"""
 
             <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/notes/{n['id']}'">
@@ -12470,8 +12427,6 @@ No markdown, no code fences. ONLY JSON.
                 </div>
 
                 <div style="display:flex;gap:6px;align-items:center;">
-
-                  <button onclick="event.stopPropagation();toggleShare({n['id']},{'true' if is_pub else 'false'})" class="btn btn-ghost btn-sm" style="font-size:12px;{share_color}" title="{'Unpublish from Exchange' if is_pub else 'Share to Exchange'}">{share_icon} {share_label}</button>
 
                   <button onclick="event.stopPropagation();deleteNote({n['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
 
@@ -12610,34 +12565,6 @@ No markdown, no code fences. ONLY JSON.
           if (!confirm('Delete this note?')) return;
 
           await fetch('/api/student/notes/' + id, {{method:'DELETE'}});
-
-          location.reload();
-
-        }}
-
-        async function toggleShare(noteId, isPublic) {{
-
-          if (isPublic) {{
-
-            await fetch('/api/student/exchange/unpublish', {{
-
-              method:'POST', headers:{{'Content-Type':'application/json'}},
-
-              body:JSON.stringify({{note_id:noteId}})
-
-            }});
-
-          }} else {{
-
-            await fetch('/api/student/exchange/publish', {{
-
-              method:'POST', headers:{{'Content-Type':'application/json'}},
-
-              body:JSON.stringify({{note_id:noteId}})
-
-            }});
-
-          }}
 
           location.reload();
 
@@ -13345,136 +13272,6 @@ No markdown, no code fences. ONLY JSON.
 
     # ================================================================
 
-    #  FEATURE 3 — Weak Topic Detector
-
-    # ================================================================
-
-
-
-    @app.route("/api/student/weak-topics")
-
-    def student_weak_topics_api():
-
-        if not _logged_in():
-
-            return jsonify(error="Login required"), 401
-
-        cid = _cid()
-
-        fc_data = sdb.get_flashcard_accuracy(cid)
-
-        quiz_data = sdb.get_quiz_scores(cid)
-
-        result = detect_weak_topics(fc_data, quiz_data)
-
-        return jsonify(**result)
-
-
-
-    @app.route("/student/weak-topics")
-
-    def student_weak_topics_page():
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        cid = _cid()
-
-        fc_data = sdb.get_flashcard_accuracy(cid)
-
-        quiz_data = sdb.get_quiz_scores(cid)
-
-        result = detect_weak_topics(fc_data, quiz_data)
-
-
-
-        weak_html = ""
-
-        for t in result.get("weak_topics", []):
-
-            score = t.get("score", 0)
-
-            if score < 50:
-
-                color = "var(--red)"
-
-            elif score < 75:
-
-                color = "var(--yellow)"
-
-            else:
-
-                color = "var(--green)"
-
-            weak_html += f"""
-
-            <div style="padding:14px 18px;background:var(--card);
-
-                        border:1px solid var(--border);border-left:4px solid {color};
-
-                        border-radius:var(--radius-sm);margin-bottom:10px;transition:transform 0.15s, box-shadow 0.2s"
-
-                 onmouseover="this.style.transform='translateX(4px)';this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-
-              <div style="display:flex;justify-content:space-between;align-items:center">
-
-                <strong style="color:var(--text)">{_esc(t.get('topic',''))}</strong>
-
-                <span style="background:{color};color:#fff;padding:3px 12px;border-radius:12px;
-
-                             font-size:13px;font-weight:700">{score}%</span>
-
-              </div>
-
-              <div style="font-size:13px;color:var(--text-muted);margin-top:4px">
-
-                {_esc(t.get('course',''))} — {_esc(t.get('source',''))}
-
-              </div>
-
-            </div>"""
-
-
-
-        recs = result.get("recommendations_html", "")
-
-
-
-        no_data_html = '<div style="text-align:center;padding:40px;color:var(--text-muted);background:var(--card);border:1px solid var(--border);border-radius:var(--radius)"><div style="font-size:48px;margin-bottom:12px">📊</div><p>Not enough data yet</p><p style="font-size:13px;margin-top:4px">Complete some quizzes and review flashcards to see your weak spots.</p></div>'
-
-        recs_section = ""
-
-
-
-        return _s_render("Weak Topics", f"""
-
-        <div style="max-width:800px;margin:0 auto">
-
-          <h2 style="margin-bottom:4px"><span style="font-size:1.3em">🎯</span> Weak Topic Detector</h2>
-
-          <p style="color:var(--text-muted);margin-bottom:24px">
-
-            Based on your flashcard accuracy and quiz scores, here are the topics that need more attention.
-
-          </p>
-
-          <div style="margin-bottom:28px">
-
-            {weak_html if weak_html else no_data_html}
-
-          </div>
-
-          {recs_section}
-
-        </div>
-
-        """, active_page="student_weak_topics")
-
-
-
-    # ================================================================
-
     #  FEATURE 4 — Gamification (XP / Badges / Streaks / Level)
 
     # ================================================================
@@ -13563,181 +13360,103 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # ── Study Exchange ──────────────────────────────────────
+    # ── Marketplace ─────────────────────────────────────────
 
 
 
-    @app.route("/student/exchange")
+    @app.route("/student/marketplace")
 
-    def student_exchange_page():
+    def student_marketplace_page():
 
-        """Study Exchange — browse/share notes like Studocu."""
+        """Marketplace — buy & sell study files for coins."""
 
         if not _logged_in():
 
             return redirect(url_for("login"))
 
+        cid = _cid()
+
+        search = (request.args.get("q") or "").strip()
+
+        subject = (request.args.get("subject") or "").strip()
+
+        items = sdb.marketplace_browse(viewer_id=cid, search=search, subject=subject, limit=80)
+
+        wallet = sdb.get_wallet(cid)
+
+        coins = int(wallet.get("coins") or 0)
 
 
-        search = request.args.get("q", "")
 
-        subject = request.args.get("subject", "")
+        try:
 
-        university = request.args.get("university", "")
+            from student.subscription import get_tier as _get_tier
 
-        notes = sdb.browse_public_notes(search=search, subject=subject, university=university)
+            tier = _get_tier(cid)
+
+        except Exception:
+
+            tier = "free"
+
+        is_ultimate = (tier == "ultimate")
 
 
 
-        notes_html = ""
+        cards_html = ""
 
-        for n in notes:
+        for it in items:
 
-            length_kb = round((n.get("content_length", 0) or 0) / 1024, 1)
+            owned = bool(it.get("owned"))
 
-            notes_html += f"""
+            price = int(it.get("price_coins") or 0)
 
-            <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/exchange/{n['id']}'">
+            size_kb = max(1, int((it.get("file_size") or 0) / 1024))
 
-              <div style="display:flex;justify-content:space-between;align-items:start;">
+            ext = (it.get("file_ext") or "").upper() or "FILE"
 
-                <div>
+            preview = (it.get("preview") or it.get("description") or "")[:240]
 
-                  <h3 style="margin:0;font-size:16px;">{_esc(n.get('title','Untitled'))}</h3>
+            badge = ""
 
-                  <span style="font-size:13px;color:var(--text-muted);">
+            if is_ultimate:
 
-                    {_esc(n.get('course_name',''))}
+                badge = '<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;">ULTIMATE FREE</span>'
 
-                    {(' &middot; ' + _esc(n.get('university',''))) if n.get('university') else ''}
+            elif owned:
 
-                    &middot; {_esc(n.get('source_type','ai'))} &middot; {length_kb}KB
+                badge = '<span style="background:var(--green);color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;">OWNED</span>'
 
-                  </span>
+            cards_html += f"""
 
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+            <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/marketplace/{it['id']}'">
 
-                    &#128100; {_esc(n.get('author_name','Anonymous'))} &middot; {str(n.get('created_at',''))[:10]}
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+
+                <div style="flex:1;min-width:0;">
+
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+
+                    <h3 style="margin:0;font-size:16px;">{_esc(it.get('title','Untitled'))}</h3>
+
+                    {badge}
 
                   </div>
 
-                </div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
 
-                <div style="display:flex;align-items:center;gap:4px;color:var(--text-muted);font-size:14px;">
+                    by {_esc(it.get('seller_name','Unknown'))} &middot; {_esc(it.get('subject') or 'General')} &middot; {ext} &middot; {size_kb} KB &middot; {int(it.get('downloads') or 0)} downloads
 
-                  <span style="color:#EF4444;">&#10084;</span> {n.get('likes',0)}
+                  </div>
 
-                </div>
-
-              </div>
-
-            </div>"""
-
-        if not notes_html:
-
-            notes_html = """<div style="text-align:center;padding:40px;color:var(--text-muted);">
-
-              <div style="font-size:48px;margin-bottom:12px;">&#128218;</div>
-
-              <p>No shared notes yet. Be the first to share!</p>
-
-            </div>"""
-
-
-
-        return _s_render("Study Exchange", f"""
-
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-
-          <div>
-
-            <h1 style="margin:0;">&#128218; Study Exchange</h1>
-
-            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Browse & share study notes with other students</p>
-
-          </div>
-
-          <a href="/student/exchange/my" class="btn btn-outline btn-sm">&#128196; My Shared Notes</a>
-
-        </div>
-
-
-
-        <!-- Search/filter -->
-
-        <div class="card" style="padding:16px;margin-bottom:20px;">
-
-          <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;">
-
-            <input name="q" value="{_esc(search)}" placeholder="Search notes..." style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
-
-            <input name="subject" value="{_esc(subject)}" placeholder="Subject/Course" style="width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
-
-            <input name="university" value="{_esc(university)}" placeholder="University" style="width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
-
-            <button type="submit" class="btn btn-primary btn-sm">&#128269; Search</button>
-
-          </form>
-
-        </div>
-
-
-
-        {notes_html}
-
-        """, active_page="student_exchange")
-
-
-
-    @app.route("/student/exchange/my")
-
-    def student_exchange_my_page():
-
-        """Manage your shared notes."""
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        notes = sdb.get_notes(_cid())
-
-        prefs = sdb.get_email_prefs(_cid())
-
-        author_name = prefs.get("name", "") if prefs else ""
-
-        university = prefs.get("university", "") if prefs else ""
-
-
-
-        my_html = ""
-
-        for n in notes:
-
-            is_pub = n.get("is_public", False)
-
-            pub_badge = '<span style="background:#10B98122;color:#10B981;padding:2px 8px;border-radius:10px;font-size:11px;">Public</span>' if is_pub else '<span style="background:var(--bg);color:var(--text-muted);padding:2px 8px;border-radius:10px;font-size:11px;">Private</span>'
-
-            action = f'<button onclick="unpublish({n["id"]})" class="btn btn-ghost btn-sm" style="font-size:12px;color:#EF4444;">Unpublish</button>' if is_pub else f'<button onclick="publish({n["id"]})" class="btn btn-ghost btn-sm" style="font-size:12px;color:#10B981;">Share</button>'
-
-            my_html += f"""
-
-            <div class="card" style="margin-bottom:10px;">
-
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-
-                <div>
-
-                  <h3 style="margin:0;font-size:15px;">{_esc(n.get('title','Untitled'))}</h3>
-
-                  <span style="font-size:12px;color:var(--text-muted);">{str(n.get('created_at',''))[:10]}</span>
+                  <p style="margin:8px 0 0;font-size:13px;color:var(--text-muted);">{_esc(preview)}</p>
 
                 </div>
 
-                <div style="display:flex;gap:8px;align-items:center;">
+                <div style="text-align:right;white-space:nowrap;">
 
-                  {pub_badge}
+                  <div style="font-size:18px;font-weight:700;color:#f59e0b;">&#129689; {price}</div>
 
-                  {action}
+                  <div style="font-size:11px;color:var(--text-muted);">coins</div>
 
                 </div>
 
@@ -13745,127 +13464,49 @@ No markdown, no code fences. ONLY JSON.
 
             </div>"""
 
-        if not my_html:
+        if not cards_html:
 
-            my_html = '<p style="text-align:center;color:var(--text-muted);padding:30px;">No notes to share. Create notes first!</p>'
-
-
-
-        return _s_render("My Shared Notes", f"""
-
-        <a href="/student/exchange" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Exchange</a>
-
-        <h1 style="margin:8px 0 20px;">&#128196; My Shared Notes</h1>
-
-        <p style="color:var(--text-muted);font-size:14px;margin-bottom:20px;">Click "Share" to publish your notes to the Study Exchange. Other students can view and fork them.</p>
-
-        {my_html}
-
-        <script>
-
-        async function publish(noteId) {{
-
-          try {{
-
-            var r = await fetch('/api/student/exchange/publish', {{
-
-              method: 'POST', headers: {{'Content-Type':'application/json'}},
-
-              body: JSON.stringify({{ note_id: noteId }})
-
-            }});
-
-            if (r.ok) location.reload();
-
-            else alert('Failed to publish');
-
-          }} catch(e) {{ alert('Error'); }}
-
-        }}
-
-        async function unpublish(noteId) {{
-
-          try {{
-
-            var r = await fetch('/api/student/exchange/unpublish', {{
-
-              method: 'POST', headers: {{'Content-Type':'application/json'}},
-
-              body: JSON.stringify({{ note_id: noteId }})
-
-            }});
-
-            if (r.ok) location.reload();
-
-            else alert('Failed to unpublish');
-
-          }} catch(e) {{ alert('Error'); }}
-
-        }}
-
-        </script>
-
-        """, active_page="student_exchange")
+            cards_html = '<div class="card" style="text-align:center;color:var(--text-muted);padding:24px;">No listings yet. Be the first to share!</div>'
 
 
 
-    @app.route("/student/exchange/<int:note_id>")
+        ultimate_note = ""
 
-    def student_exchange_view_page(note_id):
+        if is_ultimate:
 
-        """View a public note in the exchange."""
+            ultimate_note = (
 
-        if not _logged_in():
+                '<div class="card" style="background:linear-gradient(90deg,#7c3aed22,#a855f722);'
 
-            return redirect(url_for("login"))
+                'border:1px solid #7c3aed;margin-bottom:12px;">'
 
-        note = sdb.get_public_note(note_id)
+                '<strong style="color:#a855f7;">&#10024; ULTIMATE perk:</strong> '
 
-        if not note:
+                'You get free access to every file in the marketplace.</div>'
 
-            return redirect(url_for("student_exchange_page"))
-
-
-
-        liked = sdb.has_liked_note(_cid(), note_id)
-
-        like_class = "color:#EF4444;font-weight:700;" if liked else "color:var(--text-muted);"
+            )
 
 
 
-        return _s_render(f"Exchange: {note.get('title','')}", f"""
+        return _s_render("Marketplace", f"""
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
 
           <div>
 
-            <a href="/student/exchange" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Exchange</a>
+            <h1 style="margin:0;">&#128722; Marketplace</h1>
 
-            <h1 style="margin:4px 0 0;font-size:24px;">{_esc(note.get('title',''))}</h1>
-
-            <p style="color:var(--text-muted);margin:2px 0 0;font-size:13px;">
-
-              &#128100; {_esc(note.get('author_name','Anonymous'))}
-
-              {(' &middot; ' + _esc(note.get('university',''))) if note.get('university') else ''}
-
-              &middot; {_esc(note.get('course_name',''))}
-
-              &middot; {str(note.get('created_at',''))[:10]}
-
-            </p>
+            <p style="color:var(--text-muted);margin:4px 0 0;">Buy & sell study materials with coins.</p>
 
           </div>
 
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;align-items:center;">
 
-            <button onclick="toggleLike()" class="btn btn-outline btn-sm" id="like-btn" style="{like_class}">
+            <span style="padding:6px 12px;background:var(--bg-elev);border-radius:8px;font-weight:700;color:#f59e0b;">&#129689; {coins} coins</span>
 
-              &#10084; <span id="like-count">{note.get('likes',0)}</span>
+            <a href="/student/marketplace/my" class="btn btn-outline btn-sm">&#128193; My Listings</a>
 
-            </button>
-
-            <button onclick="forkNote()" class="btn btn-primary btn-sm">&#128203; Fork to My Notes</button>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('upload-modal').style.display='flex'">&#10133; Sell a File</button>
 
           </div>
 
@@ -13873,259 +13514,627 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        <div class="card" style="padding:30px;">
+        {ultimate_note}
 
-          {note.get('content_html','')}
+
+
+        <form method="GET" action="/student/marketplace" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+
+          <input type="text" name="q" placeholder="Search title or description..." value="{_esc(search)}" style="flex:1;min-width:200px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
+
+          <input type="text" name="subject" placeholder="Subject filter..." value="{_esc(subject)}" style="width:180px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
+
+          <button class="btn btn-outline btn-sm" type="submit">Search</button>
+
+        </form>
+
+
+
+        {cards_html}
+
+
+
+        <div id="upload-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)this.style.display='none'">
+
+          <div class="card" style="max-width:540px;width:100%;max-height:90vh;overflow:auto;">
+
+            <h2 style="margin-top:0;">&#128722; Sell a Study File</h2>
+
+            <p style="color:var(--text-muted);font-size:13px;">Upload a study file. Buyers see only the title, subject, and preview text — they unlock the full file by paying your price in coins.</p>
+
+            <form id="upload-form" enctype="multipart/form-data">
+
+              <label style="display:block;margin-top:12px;font-size:13px;">Title *</label>
+
+              <input name="title" type="text" required maxlength="200" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
+
+              <label style="display:block;margin-top:12px;font-size:13px;">Subject (optional)</label>
+
+              <input name="subject" type="text" maxlength="120" placeholder="e.g. Calculus, Biology" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
+
+              <label style="display:block;margin-top:12px;font-size:13px;">Short description (optional)</label>
+
+              <textarea name="description" rows="2" maxlength="500" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);"></textarea>
+
+              <label style="display:block;margin-top:12px;font-size:13px;">Preview (what buyers see before paying)</label>
+
+              <textarea name="preview" rows="3" maxlength="1500" placeholder="Give a teaser — first paragraph, table of contents, etc." style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);"></textarea>
+
+              <label style="display:block;margin-top:12px;font-size:13px;">Price (coins) *</label>
+
+              <input name="price_coins" type="number" min="1" max="5000" value="20" required style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
+
+              <label style="display:block;margin-top:12px;font-size:13px;">File * (max 25 MB)</label>
+
+              <input name="file" type="file" required style="width:100%;padding:6px 0;">
+
+              <div id="upload-msg" style="margin-top:10px;font-size:13px;"></div>
+
+              <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+
+                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('upload-modal').style.display='none'">Cancel</button>
+
+                <button type="submit" class="btn btn-primary btn-sm">Publish Listing</button>
+
+              </div>
+
+            </form>
+
+          </div>
 
         </div>
 
 
-
-        <style>
-
-        @media print {{
-
-          body * {{ visibility: hidden; }}
-
-          .card, .card * {{ visibility: visible; }}
-
-          .card {{ position: absolute; left: 0; top: 0; width: 100%; }}
-
-        }}
-
-        </style>
 
         <script>
 
-        async function toggleLike() {{
+        document.getElementById('upload-form').addEventListener('submit', async function(ev){{
+
+          ev.preventDefault();
+
+          var msg = document.getElementById('upload-msg');
+
+          msg.textContent = 'Uploading...';
+
+          msg.style.color = 'var(--text-muted)';
+
+          var fd = new FormData(ev.target);
 
           try {{
 
-            var r = await fetch('/api/student/exchange/like', {{
+            var r = await fetch('/api/student/marketplace/upload', {{ method:'POST', body: fd }});
 
-              method: 'POST', headers: {{'Content-Type':'application/json'}},
+            var j = await r.json();
 
-              body: JSON.stringify({{ note_id: {note_id} }})
+            if (j && j.ok) {{
 
-            }});
+              msg.textContent = 'Published!';
 
-            var d = await _safeJson(r);
+              msg.style.color = 'var(--green)';
 
-            if (r.ok) {{
+              setTimeout(function(){{ window.location = '/student/marketplace/' + j.item_id; }}, 600);
 
-              document.getElementById('like-count').textContent = d.likes;
+            }} else {{
 
-              var btn = document.getElementById('like-btn');
+              msg.textContent = (j && j.error) || 'Upload failed.';
 
-              btn.style.color = d.liked ? '#EF4444' : 'var(--text-muted)';
-
-              btn.style.fontWeight = d.liked ? '700' : '400';
+              msg.style.color = 'var(--red)';
 
             }}
 
-          }} catch(e) {{}}
+          }} catch(e) {{
 
-        }}
+            msg.textContent = 'Network error.';
 
-        async function forkNote() {{
+            msg.style.color = 'var(--red)';
 
-          if (!confirm('Copy this note to your personal notes?')) return;
+          }}
 
-          try {{
+        }});
 
-            var r = await fetch('/api/student/exchange/fork', {{
+        </script>
 
-              method: 'POST', headers: {{'Content-Type':'application/json'}},
+        """, active_page="student_marketplace")
 
-              body: JSON.stringify({{ note_id: {note_id} }})
 
-            }});
 
-            var d = await _safeJson(r);
+    @app.route("/student/marketplace/my")
 
-            if (r.ok && d.note_id) {{
+    def student_marketplace_my_page():
 
-              window.location = '/student/notes/' + d.note_id;
+        if not _logged_in():
 
-            }} else {{ alert(d.error || 'Fork failed'); }}
+            return redirect(url_for("login"))
 
-          }} catch(e) {{ alert('Error'); }}
+        cid = _cid()
+
+        listings = sdb.marketplace_my_listings(cid)
+
+        purchases = sdb.marketplace_my_purchases(cid)
+
+
+
+        listings_html = ""
+
+        for it in listings:
+
+            size_kb = max(1, int((it.get("file_size") or 0) / 1024))
+
+            ext = (it.get("file_ext") or "").upper() or "FILE"
+
+            listings_html += f"""
+
+            <div class="card" style="margin-bottom:10px;">
+
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+
+                <div style="flex:1;min-width:0;">
+
+                  <a href="/student/marketplace/{it['id']}" style="font-weight:700;color:var(--text);text-decoration:none;">{_esc(it.get('title','Untitled'))}</a>
+
+                  <div style="font-size:12px;color:var(--text-muted);">{ext} &middot; {size_kb} KB &middot; {int(it.get('downloads') or 0)} downloads &middot; {int(it.get('price_coins') or 0)} coins</div>
+
+                </div>
+
+                <button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="deleteListing({it['id']})">&#128465;</button>
+
+              </div>
+
+            </div>"""
+
+        if not listings_html:
+
+            listings_html = '<div class="card" style="color:var(--text-muted);">You haven\'t listed anything yet.</div>'
+
+
+
+        purchases_html = ""
+
+        for it in purchases:
+
+            ext = (it.get("file_ext") or "").upper() or "FILE"
+
+            purchases_html += f"""
+
+            <div class="card" style="margin-bottom:10px;">
+
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+
+                <div style="flex:1;min-width:0;">
+
+                  <a href="/student/marketplace/{it['id']}" style="font-weight:700;color:var(--text);text-decoration:none;">{_esc(it.get('title','Untitled'))}</a>
+
+                  <div style="font-size:12px;color:var(--text-muted);">by {_esc(it.get('seller_name','Unknown'))} &middot; {ext} &middot; paid {int(it.get('price_paid') or 0)} coins</div>
+
+                </div>
+
+                <a class="btn btn-outline btn-sm" href="/api/student/marketplace/{it['id']}/download">&#11015; Download</a>
+
+              </div>
+
+            </div>"""
+
+        if not purchases_html:
+
+            purchases_html = '<div class="card" style="color:var(--text-muted);">No purchases yet.</div>'
+
+
+
+        return _s_render("My Marketplace", f"""
+
+        <a href="/student/marketplace" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Marketplace</a>
+
+        <h1>&#128193; My Marketplace</h1>
+
+
+
+        <h2 style="margin-top:24px;font-size:18px;">My Listings</h2>
+
+        {listings_html}
+
+
+
+        <h2 style="margin-top:24px;font-size:18px;">My Purchases</h2>
+
+        {purchases_html}
+
+
+
+        <script>
+
+        async function deleteListing(id) {{
+
+          if (!confirm('Delete this listing? Buyers who already paid keep access.')) return;
+
+          var r = await fetch('/api/student/marketplace/' + id + '/delete', {{ method:'DELETE' }});
+
+          var j = await r.json();
+
+          if (j && j.ok) location.reload();
+
+          else alert((j && j.error) || 'Delete failed.');
 
         }}
 
         </script>
 
-        """, active_page="student_exchange")
+        """, active_page="student_marketplace")
 
 
 
-    # ── GPA Country Setting API ─────────────────────────────
+    @app.route("/student/marketplace/<int:item_id>")
+
+    def student_marketplace_item_page(item_id):
+
+        if not _logged_in():
+
+            return redirect(url_for("login"))
+
+        cid = _cid()
+
+        item = sdb.marketplace_get(item_id)
+
+        if not item:
+
+            return redirect(url_for("student_marketplace_page"))
+
+        has_access = sdb.marketplace_has_access(cid, item)
+
+        is_seller = (int(item.get("seller_id") or 0) == cid)
+
+        try:
+
+            from student.subscription import get_tier as _get_tier
+
+            tier = _get_tier(cid)
+
+        except Exception:
+
+            tier = "free"
+
+        is_ultimate = (tier == "ultimate")
 
 
 
-    @app.route("/api/student/settings/gpa-country", methods=["POST"])
+        wallet = sdb.get_wallet(cid)
 
-    def student_set_gpa_country():
+        coins = int(wallet.get("coins") or 0)
+
+        price = int(item.get("price_coins") or 0)
+
+        ext = (item.get("file_ext") or "").upper() or "FILE"
+
+        size_kb = max(1, int((item.get("file_size") or 0) / 1024))
+
+
+
+        if has_access:
+
+            if is_seller:
+
+                cta = '<div style="padding:12px;background:var(--bg-elev);border-radius:8px;text-align:center;color:var(--text-muted);">This is your listing.</div>'
+
+            elif is_ultimate and not has_access:
+
+                cta = '<div style="padding:12px;background:#7c3aed22;border:1px solid #7c3aed;border-radius:8px;text-align:center;">&#10024; Ultimate access &mdash; download free.</div>'
+
+            else:
+
+                cta = '<div style="padding:12px;background:var(--green);color:#fff;border-radius:8px;text-align:center;font-weight:700;">&#10003; You own this file.</div>'
+
+            cta += f'<a class="btn btn-primary" style="display:block;text-align:center;margin-top:10px;" href="/api/student/marketplace/{item_id}/download">&#11015; Download Full File</a>'
+
+        elif is_ultimate:
+
+            cta = (
+
+                '<div style="padding:12px;background:#7c3aed22;border:1px solid #7c3aed;border-radius:8px;text-align:center;">'
+
+                '<strong style="color:#a855f7;">&#10024; ULTIMATE perk:</strong> Free download for you.</div>'
+
+                f'<a class="btn btn-primary" style="display:block;text-align:center;margin-top:10px;" href="/api/student/marketplace/{item_id}/download">&#11015; Download Full File</a>'
+
+            )
+
+        else:
+
+            disabled = "disabled" if coins < price else ""
+
+            label = ("Buy for " + str(price) + " coins") if coins >= price else f"Need {price - coins} more coins"
+
+            cta = (
+
+                f'<div style="text-align:center;margin-bottom:8px;">Your balance: <strong style="color:#f59e0b;">&#129689; {coins}</strong></div>'
+
+                f'<button class="btn btn-primary" style="width:100%;" id="buy-btn" {disabled} onclick="buyItem({item_id})">&#129689; {label}</button>'
+
+                '<div id="buy-msg" style="margin-top:10px;text-align:center;font-size:13px;"></div>'
+
+            )
+
+
+
+        preview_html = _esc(item.get("preview") or "(No preview provided.)").replace("\n", "<br>")
+
+        desc_html = _esc(item.get("description") or "").replace("\n", "<br>")
+
+
+
+        return _s_render(item.get("title", "Marketplace"), f"""
+
+        <a href="/student/marketplace" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Marketplace</a>
+
+        <h1 style="margin:8px 0;">{_esc(item.get('title','Untitled'))}</h1>
+
+        <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">
+
+          by <strong>{_esc(item.get('seller_name','Unknown'))}</strong> &middot; {_esc(item.get('subject') or 'General')} &middot; {ext} &middot; {size_kb} KB &middot; {int(item.get('downloads') or 0)} downloads
+
+        </div>
+
+
+
+        <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start;">
+
+          <div>
+
+            {('<div class="card"><h3 style="margin-top:0;font-size:14px;color:var(--text-muted);">Description</h3><div>' + desc_html + '</div></div>') if item.get('description') else ''}
+
+            <div class="card">
+
+              <h3 style="margin-top:0;font-size:14px;color:var(--text-muted);">Preview</h3>
+
+              <div style="white-space:pre-wrap;line-height:1.5;">{preview_html}</div>
+
+              {'' if has_access else '<div style="margin-top:12px;padding:8px;background:var(--bg-elev);border-radius:6px;font-size:12px;color:var(--text-muted);text-align:center;">&#128274; Full file unlocks after purchase.</div>'}
+
+            </div>
+
+          </div>
+
+          <div class="card" style="position:sticky;top:12px;">
+
+            <div style="text-align:center;margin-bottom:12px;">
+
+              <div style="font-size:32px;font-weight:800;color:#f59e0b;">&#129689; {price}</div>
+
+              <div style="font-size:12px;color:var(--text-muted);">coins</div>
+
+            </div>
+
+            {cta}
+
+          </div>
+
+        </div>
+
+
+
+        <script>
+
+        async function buyItem(id) {{
+
+          var btn = document.getElementById('buy-btn');
+
+          var msg = document.getElementById('buy-msg');
+
+          if (btn) btn.disabled = true;
+
+          msg.textContent = 'Processing...';
+
+          msg.style.color = 'var(--text-muted)';
+
+          try {{
+
+            var r = await fetch('/api/student/marketplace/' + id + '/buy', {{
+
+              method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'
+
+            }});
+
+            var j = await r.json();
+
+            if (j && j.ok) {{
+
+              msg.textContent = 'Purchased! Refreshing...';
+
+              msg.style.color = 'var(--green)';
+
+              setTimeout(function(){{ location.reload(); }}, 500);
+
+            }} else {{
+
+              msg.textContent = (j && j.error) || 'Purchase failed.';
+
+              msg.style.color = 'var(--red)';
+
+              if (btn) btn.disabled = false;
+
+            }}
+
+          }} catch(e) {{
+
+            msg.textContent = 'Network error.';
+
+            msg.style.color = 'var(--red)';
+
+            if (btn) btn.disabled = false;
+
+          }}
+
+        }}
+
+        </script>
+
+        """, active_page="student_marketplace")
+
+
+
+    # ── Marketplace API ─────────────────────────────────────
+
+
+
+    @app.route("/api/student/marketplace/upload", methods=["POST"])
+
+    def student_marketplace_upload():
 
         if not _logged_in():
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        data = request.get_json(force=True)
+        cid = _cid()
 
-        country = data.get("country", "us")
+        if "file" not in request.files:
 
-        allowed = {"us","uk","mx","ar","co","cl","br","de","fr","es","in","au","jp"}
+            return jsonify({"ok": False, "error": "No file uploaded."}), 400
 
-        if country not in allowed:
+        f = request.files["file"]
 
-            country = "us"
+        if not f or not (f.filename or "").strip():
 
-        sdb.set_gpa_country(_cid(), country)
-
-        return jsonify({"ok": True})
+            return jsonify({"ok": False, "error": "No file selected."}), 400
 
 
 
-    # ── Study Exchange API ──────────────────────────────────
+        title = (request.form.get("title") or "").strip()
+
+        description = (request.form.get("description") or "").strip()
+
+        preview = (request.form.get("preview") or "").strip()
+
+        subject = (request.form.get("subject") or "").strip()
+
+        try:
+
+            price = int(request.form.get("price_coins") or 0)
+
+        except (TypeError, ValueError):
+
+            price = 0
 
 
 
-    @app.route("/api/student/exchange/publish", methods=["POST"])
+        import tempfile as _tempfile
 
-    def student_exchange_publish():
+        import os as _os2
 
-        if not _logged_in():
+        fd, tmp_path = _tempfile.mkstemp(prefix="mkpl_", suffix="_" + (f.filename[-40:] if f.filename else "upload"))
 
-            return jsonify({"error": "Unauthorized"}), 401
+        _os2.close(fd)
 
-        data = request.get_json(force=True)
+        try:
 
-        note_id = data.get("note_id")
+            f.save(tmp_path)
 
-        if not note_id:
+            file_size = _os2.path.getsize(tmp_path)
 
-            return jsonify({"error": "note_id required"}), 400
+            res = sdb.marketplace_create_listing(
 
-        # Verify ownership
+                seller_id=cid,
 
-        note = sdb.get_note(note_id, _cid())
+                title=title,
 
-        if not note:
+                description=description,
 
-            return jsonify({"error": "Note not found"}), 404
+                preview=preview,
 
-        prefs = sdb.get_email_prefs(_cid())
+                subject=subject,
 
-        author = prefs.get("name", "Anonymous") if prefs else "Anonymous"
+                src_file_path=tmp_path,
 
-        uni = prefs.get("university", "") if prefs else ""
+                original_filename=f.filename or "upload",
 
-        sdb.publish_note(note_id, _cid(), author, uni)
+                file_size=file_size,
 
-        sdb.earn_badge(_cid(), "sharer")
+                price_coins=price,
 
-        return jsonify({"ok": True})
+            )
 
+        finally:
 
+            try:
 
-    @app.route("/api/student/exchange/unpublish", methods=["POST"])
+                if _os2.path.isfile(tmp_path):
 
-    def student_exchange_unpublish():
+                    _os2.remove(tmp_path)
 
-        if not _logged_in():
+            except Exception:
 
-            return jsonify({"error": "Unauthorized"}), 401
+                pass
 
-        data = request.get_json(force=True)
+        if not res.get("ok"):
 
-        sdb.unpublish_note(data.get("note_id"), _cid())
+            return jsonify(res), 400
 
-        return jsonify({"ok": True})
-
-
-
-    @app.route("/api/student/exchange/like", methods=["POST"])
-
-    def student_exchange_like():
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        data = request.get_json(force=True)
-
-        note_id = data.get("note_id")
-
-        liked = sdb.toggle_note_like(_cid(), note_id)
-
-        note = sdb.get_public_note(note_id)
-
-        # Award popular/viral note badges to the author
-
-        if liked and note and note.get("client_id"):
-
-            likes = note.get("likes", 0)
-
-            author_id = note["client_id"]
-
-            if likes >= 5:
-
-                sdb.earn_badge(author_id, "popular_note")
-
-            if likes >= 25:
-
-                sdb.earn_badge(author_id, "viral_note")
-
-        return jsonify({"ok": True, "liked": liked, "likes": note.get("likes", 0) if note else 0})
+        return jsonify(res)
 
 
 
-    @app.route("/api/student/exchange/fork", methods=["POST"])
+    @app.route("/api/student/marketplace/<int:item_id>/buy", methods=["POST"])
 
-    def student_exchange_fork():
+    def student_marketplace_buy(item_id):
 
         if not _logged_in():
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        data = request.get_json(force=True)
+        res = sdb.marketplace_purchase(item_id, _cid())
 
-        note_id = data.get("note_id")
+        if not res.get("ok"):
 
-        # Get public note to find author
+            return jsonify(res), 400
 
-        pub_note = sdb.get_public_note(note_id)
+        return jsonify(res)
 
-        new_id = sdb.fork_note(_cid(), note_id)
 
-        if not new_id:
 
-            return jsonify({"error": "Note not found or not public"}), 404
+    @app.route("/api/student/marketplace/<int:item_id>/download")
 
-        # Award XP to the original author (once per unique forker)
+    def student_marketplace_download(item_id):
 
-        if pub_note and pub_note.get("client_id"):
+        if not _logged_in():
 
-            author_id = pub_note["client_id"]
+            return redirect(url_for("login"))
 
-            is_new = sdb.record_note_fork(note_id, _cid(), author_id)
+        cid = _cid()
 
-            if is_new and author_id != _cid():
+        item = sdb.marketplace_get(item_id)
 
-                sdb.award_xp(author_id, "note_used", 5, f"Your note was used by a student")
+        if not item:
 
-                # Check helper badges
+            return jsonify({"error": "Not found"}), 404
 
-                fork_count = sdb.get_note_fork_count(author_id)
+        if not sdb.marketplace_has_access(cid, item):
 
-                for key, threshold in [("helper_5", 5), ("helper_25", 25), ("helper_100", 100)]:
+            return jsonify({"error": "Purchase required"}), 403
 
-                    if fork_count >= threshold:
+        path = sdb.marketplace_file_path(item)
 
-                        sdb.earn_badge(author_id, key)
+        import os as _os3
 
-        return jsonify({"ok": True, "note_id": new_id})
+        if not _os3.path.isfile(path):
+
+            return jsonify({"error": "File missing"}), 404
+
+        return send_file(path, as_attachment=True, download_name=item.get("file_name") or "download")
+
+
+
+    @app.route("/api/student/marketplace/<int:item_id>/delete", methods=["DELETE"])
+
+    def student_marketplace_delete(item_id):
+
+        if not _logged_in():
+
+            return jsonify({"error": "Unauthorized"}), 401
+
+        res = sdb.marketplace_delete(item_id, _cid())
+
+        if not res.get("ok"):
+
+            return jsonify(res), 400
+
+        return jsonify(res)
 
 
 
@@ -14645,6 +14654,16 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card" style="margin-bottom:18px;padding:16px">
 
+            <h3 style="margin:0 0 10px 0">📅 Study marathon invites</h3>
+
+            <div id="fr-marathon-pending" style="font-size:13px;color:var(--text-muted)">No pending marathon invites.</div>
+
+          </div>
+
+
+
+          <div class="card" style="margin-bottom:18px;padding:16px">
+
             <h3 style="margin:0 0 10px 0">Active duels</h3>
 
             <div id="fr-active-duels">No active duels.</div>
@@ -14717,14 +14736,15 @@ No markdown, no code fences. ONLY JSON.
 
         }}
 
-        async function frChallenge(uid, uname) {{
+        async function frChallenge(uid, uname, isOnline) {{
 
-          openChallengeModal(uid, uname || ('User #' + uid));
+          openChallengeModal(uid, uname || ('User #' + uid), isOnline);
 
         }}
 
         // ── Challenge modal (Quiz Duel vs Study Marathon) ──────────
-        function openChallengeModal(uid, uname) {{
+        function openChallengeModal(uid, uname, isOnline) {{
+          window.__chalOnline = !!isOnline;
           let m = document.getElementById('chal-modal');
           if (!m) {{
             m = document.createElement('div');
@@ -14743,14 +14763,14 @@ No markdown, no code fences. ONLY JSON.
               </div>
 
               <div id="chal-pick" style="display:flex;flex-direction:column;gap:10px">
-                <button class="chal-card" onclick="pickQuiz()" style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer;color:var(--text)">
-                  <div style="font-size:16px;font-weight:700">🥊 Quiz Duel</div>
+                <button class="chal-card" onclick="pickQuiz()" ${{window.__chalOnline ? '' : 'disabled style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:not-allowed;color:var(--text);opacity:.55"'}} style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer;color:var(--text)">
+                  <div style="font-size:16px;font-weight:700">🥊 Quiz Duel ${{window.__chalOnline ? '<span style=&quot;font-size:11px;color:#22c55e;font-weight:600;margin-left:6px&quot;>● online</span>' : '<span style=&quot;font-size:11px;color:#94a3b8;font-weight:600;margin-left:6px&quot;>● offline — unavailable</span>'}}</div>
                   <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Upload a study file. AI builds 10 questions. Both must be online — first to finish at the highest score wins. Tab-switch = instant loss.</div>
                   <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +5 XP · +50 🪙</div>
                 </button>
                 <button class="chal-card" onclick="pickMarathon()" style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer;color:var(--text)">
                   <div style="font-size:16px;font-weight:700">📅 Study Marathon (7 days)</div>
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Most focus minutes over the next 7 days wins. Asynchronous — focus whenever you can.</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Most focus minutes over the next 7 days wins. Asynchronous — they don't need to be online; they just need to accept on their friends tab to start the clock.</div>
                   <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +8 XP · +70 🪙 · Tie: +3 XP · +25 🪙</div>
                 </button>
               </div>
@@ -14774,15 +14794,17 @@ No markdown, no code fences. ONLY JSON.
           if (m) m.remove();
         }}
         function pickMarathon() {{
-          if (!confirm('Start a 7-day study duel with ' + window.__chalName + '? Most focus minutes wins.')) return;
+          if (!confirm('Send a 7-day Study Marathon invite to ' + window.__chalName + '? They have to accept it on their friends tab before the clock starts.')) return;
           fetch('/api/student/duels/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{opponent_id: window.__chalUid}})}})
             .then(r=>r.json()).then(r => {{
               if (r.error) {{ alert(r.error); return; }}
               closeChallengeModal();
+              alert('Marathon invite sent! It will start once they accept on their friends tab.');
               loadAll();
             }});
         }}
         function pickQuiz() {{
+          if (!window.__chalOnline) {{ alert('That friend is offline. Quiz duels need both players online — try a Study Marathon instead.'); return; }}
           document.getElementById('chal-pick').style.display = 'none';
           document.getElementById('chal-quiz').style.display = 'block';
         }}
@@ -14848,11 +14870,17 @@ No markdown, no code fences. ONLY JSON.
             const uniq = f.friends.filter(u => {{ if (seen.has(u.id)) return false; seen.add(u.id); return true; }});
             const parts = await Promise.all(uniq.map(async u => {{
               const h2h = await fetch('/api/student/duels/h2h?friend_id=' + u.id).then(r=>r.json());
+              const onlineDot = u.online
+                ? '<span title="Online now" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.18);margin-right:6px;vertical-align:middle"></span>'
+                : '<span title="Offline" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#94a3b8;margin-right:6px;vertical-align:middle;opacity:.6"></span>';
+              const onlineLabel = u.online
+                ? '<span style="color:#22c55e;font-size:11px;font-weight:600;margin-left:6px">online</span>'
+                : '<span style="color:#94a3b8;font-size:11px;margin-left:6px">offline</span>';
               return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
 
                 <div>
 
-                  <b>${{esc(u.name)}}</b> <span style="color:var(--text-muted);font-size:12px">#${{u.id}}</span>
+                  ${{onlineDot}}<b>${{esc(u.name)}}</b> <span style="color:var(--text-muted);font-size:12px">#${{u.id}}</span>${{onlineLabel}}
 
                   <div style="font-size:12px;color:var(--text-muted)">vs you: ${{h2h.wins}}W &middot; ${{h2h.losses}}L &middot; ${{h2h.ties}}T</div>
 
@@ -14860,7 +14888,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div style="display:flex;gap:6px">
 
-                  <button class="btn btn-sm btn-primary" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname)">Challenge</button>
+                  <button class="btn btn-sm btn-primary" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" data-online="${{u.online ? '1' : '0'}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname, this.dataset.online === '1')">Challenge</button>
 
                   <button class="btn btn-sm btn-outline" onclick="frRemove(${{u.id}})">Remove</button>
 
@@ -14871,6 +14899,32 @@ No markdown, no code fences. ONLY JSON.
             fl.innerHTML = parts.join('');
 
           }} else {{ fl.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No friends yet — search above to add some.</div>'; }}
+
+          // ── Marathon invites (pending) ────────────────────────
+          try {{
+            const mp = await fetch('/api/student/duels/marathon/pending').then(r=>r.json());
+            const mbox = document.getElementById('fr-marathon-pending');
+            const inc = (mp.incoming || []).map(d => `
+              <div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+                <div>
+                  <b>${{esc(d.challenger_name)}}</b> challenged you to a 7-day Study Marathon.
+                  <div style="font-size:12px;color:var(--text-muted)">Most focus minutes over the next 7 days wins. Clock starts when you accept.</div>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-sm btn-primary" onclick="mAccept(${{d.id}})">Accept</button>
+                  <button class="btn btn-sm btn-outline" onclick="mDecline(${{d.id}})">Decline</button>
+                </div>
+              </div>`).join('');
+            const out = (mp.outgoing || []).map(d => `
+              <div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+                <div>
+                  Waiting on <b>${{esc(d.opponent_name)}}</b> to accept your marathon invite.
+                  <div style="font-size:12px;color:var(--text-muted)">Clock hasn't started — they need to accept on their friends tab.</div>
+                </div>
+                <button class="btn btn-sm btn-outline" onclick="mCancel(${{d.id}})">Cancel</button>
+              </div>`).join('');
+            mbox.innerHTML = (inc + out) || '<div style="color:var(--text-muted);font-size:13px">No pending marathon invites.</div>';
+          }} catch(e) {{}}
 
           const d = await fetch('/api/student/duels/list').then(r=>r.json());
 
@@ -14970,6 +15024,28 @@ No markdown, no code fences. ONLY JSON.
           loadAll();
         }}
 
+        async function mAccept(id) {{
+          const r = await fetch('/api/student/duels/marathon/' + id + '/accept', {{method:'POST'}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not accept.'); return; }}
+          loadAll();
+        }}
+        async function mDecline(id) {{
+          if (!confirm('Decline this marathon invite?')) return;
+          const r = await fetch('/api/student/duels/marathon/' + id + '/decline', {{method:'POST'}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not decline.'); return; }}
+          loadAll();
+        }}
+        async function mCancel(id) {{
+          if (!confirm('Cancel your marathon invite?')) return;
+          const r = await fetch('/api/student/duels/marathon/' + id + '/decline', {{method:'POST'}}).then(r=>r.json());
+          if (!r.ok) {{ alert(r.error || 'Could not cancel.'); return; }}
+          loadAll();
+        }}
+
+        // Presence heartbeat — keeps the user marked online while the friends tab is open
+        fetch('/api/student/presence/heartbeat', {{method:'POST'}}).catch(()=>{{}});
+        setInterval(() => {{ fetch('/api/student/presence/heartbeat', {{method:'POST'}}).catch(()=>{{}}); }}, 30000);
+
         loadAll();
         // Auto-refresh quiz-duel pending so users see invites quickly
         setInterval(loadAll, 8000);
@@ -15009,6 +15085,19 @@ No markdown, no code fences. ONLY JSON.
         cid = _cid()
 
         return jsonify(**sdb.list_friends(cid))
+
+
+    @app.route("/api/student/presence/heartbeat", methods=["POST"])
+    @csrf.exempt
+    def student_presence_heartbeat_api():
+        """Friend tab pings this every few seconds while open so others can
+        see them as online. The before_request hook also touches presence on
+        any authenticated request (throttled), so this is just an extra signal
+        for users idling on the friends/duels page."""
+        if not _logged_in():
+            return jsonify(ok=False), 401
+        sdb.touch_presence(_cid())
+        return jsonify(ok=True)
 
 
 
@@ -15065,48 +15154,61 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/duels/start", methods=["POST"])
-
     def student_duels_start_api():
-
         if not _logged_in():
-
             return jsonify(error="Login required"), 401
-
         cid = _cid()
-
         data = request.get_json(silent=True) or {}
-
         try:
-
             opp = int(data.get("opponent_id"))
-
         except Exception:
-
             return jsonify(error="Invalid opponent_id"), 400
-
         if opp == cid:
-
             return jsonify(error="Cannot duel yourself"), 400
-
         # Must be friends
-
         f = sdb.list_friends(cid)
-
         if not any(x["id"] == opp for x in f["friends"]):
-
             return jsonify(error="You must be friends to start a duel"), 400
-
         # Cap active duels with same opponent
-
         active = sdb.get_active_duels(cid)
-
         if any((d["challenger_id"] == opp or d["opponent_id"] == opp) for d in active):
-
             return jsonify(error="You already have an active duel with this user"), 400
-
+        # Cap pending invites with same opponent (in either direction)
+        pending = sdb.list_pending_marathons_for(cid)
+        all_pending = (pending.get("incoming") or []) + (pending.get("outgoing") or [])
+        if any((d["challenger_id"] == opp or d["opponent_id"] == opp) for d in all_pending):
+            return jsonify(error="There's already a pending marathon invite with this user"), 400
         did = sdb.start_duel(cid, opp)
+        return jsonify(ok=True, duel_id=did, status="pending")
 
-        return jsonify(ok=True, duel_id=did)
+
+    @app.route("/api/student/duels/marathon/pending")
+    def student_duels_marathon_pending_api():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        out = sdb.list_pending_marathons_for(_cid())
+        # Stringify timestamps for JSON consumers
+        for k in ("incoming", "outgoing"):
+            for d in out.get(k, []):
+                d["started_at"] = str(d.get("started_at") or "")
+                d["ends_at"] = str(d.get("ends_at") or "")
+        return jsonify(**out)
+
+
+    @app.route("/api/student/duels/marathon/<int:duel_id>/accept", methods=["POST"])
+    @csrf.exempt
+    def student_duels_marathon_accept_api(duel_id):
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        return jsonify(sdb.accept_marathon_duel(duel_id, _cid()))
+
+
+    @app.route("/api/student/duels/marathon/<int:duel_id>/decline", methods=["POST"])
+    @csrf.exempt
+    def student_duels_marathon_decline_api(duel_id):
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        return jsonify(sdb.decline_marathon_duel(duel_id, _cid()))
 
 
 
@@ -15428,13 +15530,17 @@ No markdown, no code fences. ONLY JSON.
         is_self = (user_id == _cid())
         title = "Your Profile" if is_self else "Student Profile"
         content = """
-<style>
+<style>""" + sdb.BANNER_ANIM_CSS + """
   #mr-prof { --pf-card:#10172A; --pf-border:rgba(148,163,184,.12); }
   #mr-prof .pf-loading, #mr-prof .pf-error { padding:60px 20px; text-align:center; color:var(--text-muted);}
+  #mr-prof .pf-banner {
+    height:160px; border-radius:20px; margin-bottom:-60px; position:relative; overflow:hidden;
+    border:1px solid var(--border);
+  }
   #mr-prof .pf-hero {
     background: linear-gradient(135deg, rgba(124,156,255,.12), rgba(192,132,252,.08));
     border: 1px solid var(--border); border-radius: 20px; padding: 32px;
-    display:flex; gap:24px; align-items:center; flex-wrap:wrap;
+    display:flex; gap:24px; align-items:center; flex-wrap:wrap; position:relative;
   }
   #mr-prof .pf-avatar {
     width:96px; height:96px; border-radius:50%; flex-shrink:0;
@@ -15471,7 +15577,17 @@ No markdown, no code fences. ONLY JSON.
     padding:8px 14px; border-radius:999px;
     background: rgba(124,156,255,.1); border:1px solid rgba(124,156,255,.3);
     font-size:13px; display:inline-flex; align-items:center; gap:6px;
+    cursor: help; position: relative;
   }
+  #mr-prof .pf-badge .pf-tip {
+    position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+    background:#0B1220; color:#fff; font-size:12px; line-height:1.35; padding:8px 12px;
+    border-radius:8px; min-width:200px; max-width:280px; text-align:left;
+    box-shadow:0 8px 24px rgba(15,23,42,.4); display:none; z-index:30; pointer-events:none;
+    white-space:normal;
+  }
+  #mr-prof .pf-badge .pf-tip b { display:block; margin-bottom:3px; font-size:13px; }
+  #mr-prof .pf-badge:hover .pf-tip { display:block; }
   #mr-prof .pf-empty { color:var(--text-muted); font-size:13px; }
   #mr-prof .pf-retired-tag {
     display:inline-block; padding:4px 12px; border-radius:999px;
@@ -15491,6 +15607,7 @@ No markdown, no code fences. ONLY JSON.
   var IS_SELF = """ + ("true" if is_self else "false") + """;
   function escapeHtml(s){return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function initials(name){return (name||'?').split(/\\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();}
+  function fmtMin(m){ m = m||0; if (m < 60) return m + 'm'; var h = Math.floor(m/60), r = m%60; return r ? (h+'h '+r+'m') : (h+'h'); }
   fetch('/api/academic/user/' + USER_ID).then(r => r.json()).then(p => {
     var box = document.getElementById('mr-prof');
     if (!p || p.error) { box.innerHTML = '<div class="pf-error">Profile not found.</div>'; return; }
@@ -15506,6 +15623,10 @@ No markdown, no code fences. ONLY JSON.
       : 'Unranked';
     var bio = p.bio ? '<p style="margin:14px 0 0;color:var(--text-muted);font-size:14px;line-height:1.6;">' + escapeHtml(p.bio) + '</p>' : '';
     var html = '';
+    var bnr = p.banner || {};
+    if (bnr.css) {
+      html += '<div class="pf-banner bnr-anim-host ' + escapeHtml(bnr.anim_class || '') + '" style="background:' + bnr.css + ';"></div>';
+    }
     html += '<div class="pf-hero">';
     html +=   '<div class="pf-avatar">' + initials(p.name) + '</div>';
     html +=   '<div style="flex:1;min-width:200px;">';
@@ -15524,6 +15645,8 @@ No markdown, no code fences. ONLY JSON.
     html += '</div>';
     html += '<div class="pf-grid">';
     html +=   '<div class="pf-stat"><div class="label">Total XP</div><div class="value">' + (p.xp||0).toLocaleString() + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">Total hours studied</div><div class="value">' + ((p.total_hours||0).toFixed(1)) + 'h</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">Focus sessions</div><div class="value">' + (p.sessions||0).toLocaleString() + '</div></div>';
     html +=   '<div class="pf-stat"><div class="label">Leaderboard</div><div class="value">' + posLine + '</div></div>';
     html +=   '<div class="pf-stat"><div class="label">Badges</div><div class="value">' + (p.badge_count||0) + '</div></div>';
     html +=   '<div class="pf-stat"><div class="label">Status</div><div class="value">' + (p.is_retired ? '🏖️ Retired' : '⚡ Active') + '</div></div>';
@@ -15534,7 +15657,11 @@ No markdown, no code fences. ONLY JSON.
     } else {
       html += '<div class="pf-badges">';
       p.badges.forEach(b => {
-        html += '<span class="pf-badge">' + (b.icon||'🎖️') + ' ' + escapeHtml(b.name||b.key||'Badge') + '</span>';
+        var name = escapeHtml(b.name || b.key || 'Badge');
+        var desc = escapeHtml(b.desc || 'Earned badge.');
+        var earned = b.earned_at ? ('<div style="margin-top:4px;color:#94a3b8;font-size:11px;">Earned ' + escapeHtml(String(b.earned_at).slice(0,10)) + '</div>') : '';
+        html += '<span class="pf-badge">' + (b.icon||'🎖️') + ' ' + name +
+                '<span class="pf-tip"><b>' + name + '</b>' + desc + earned + '</span></span>';
       });
       html += '</div>';
     }
@@ -17512,7 +17639,6 @@ No markdown, no code fences. ONLY JSON.
         try:
             from student import subscription as _sub
             current_tier = _sub.get_tier(cid)
-            beta_active = _sub.BETA_ACTIVE
             plans = _sub.PLANS
             tier_order = ["free", "plus", "ultimate"]
             tier_colors = {
@@ -17552,17 +17678,9 @@ No markdown, no code fences. ONLY JSON.
                     '</div>'
                 )
             subscriptions_html = "".join(sub_cards)
-            beta_banner = (
-                '<div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #60a5fa;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#1e3a8a;">'
-                '<b>\U0001F389 Beta in progress.</b> While we\'re in beta, every plan unlocks Ultimate features for free. '
-                'Free-tier limits (1 quiz/day &middot; 1 flashcard set/day &middot; 30 items max) start when beta ends.'
-                '</div>'
-                if beta_active else ""
-            )
             subscription_section = (
                 '<div class="card">'
                 '<div class="card-header"><h2>\U0001F48E Subscription</h2></div>'
-                + beta_banner +
                 '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">'
                 + subscriptions_html +
                 '</div></div>'
@@ -18314,6 +18432,9 @@ No markdown, no code fences. ONLY JSON.
         f = sdb.list_friends(cid)
         if not any(x["id"] == opp for x in f["friends"]):
             return jsonify(ok=False, error="You must be friends to start a duel."), 400
+        # Quiz duels are real-time — opponent must be online RIGHT NOW.
+        if not sdb.is_user_online(opp):
+            return jsonify(ok=False, error="That friend is offline. Quiz duels need both players online — try a Study Marathon instead, or wait until they come back."), 400
         # Avoid duplicate pending invite to same opponent
         existing = sdb.list_active_quiz_duels_for(cid)
         if any(

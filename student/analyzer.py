@@ -1266,66 +1266,6 @@ Keep in the same language as the transcript. No markdown fences."""
         return []
 
 
-# ── Weak topic detection ────────────────────────────────────
-
-def detect_weak_topics(
-    flashcard_data: list[dict],
-    quiz_data: list[dict],
-) -> dict:
-    """
-    Analyze flashcard accuracy and quiz scores to find weak topics
-    and generate study recommendations.
-
-    Returns:
-        {"weak_topics": [...], "recommendations_html": "..."}
-    """
-    summary_lines = []
-    for fd in flashcard_data:
-        summary_lines.append(
-            f"- Flashcard deck \"{fd['title']}\" (course: {fd.get('course_name','N/A')}): "
-            f"{fd.get('accuracy', 0)}% accuracy ({fd.get('total_correct',0)}/{fd.get('total_seen',0)})"
-        )
-    for qd in quiz_data:
-        summary_lines.append(
-            f"- Quiz \"{qd['title']}\" (course: {qd.get('course_name','N/A')}): "
-            f"best score {qd.get('best_score', 0)}% ({qd.get('attempts', 0)} attempts)"
-        )
-
-    if not summary_lines:
-        return {"weak_topics": [], "recommendations_html":
-                "<p>Not enough data yet. Complete some quizzes and review flashcards first!</p>"}
-
-    prompt = f"""You are a study advisor. Analyze this student's performance data and identify weak topics.
-
-PERFORMANCE DATA:
-{chr(10).join(summary_lines)}
-
-Return ONLY valid JSON:
-{{
-  "weak_topics": [
-    {{"topic": "Topic name", "score": 45, "source": "quiz/flashcard", "course": "Course name"}}
-  ],
-  "recommendations_html": "<h3>Study Recommendations</h3><ul><li>Focus on ...</li></ul>"
-}}
-
-Sort weak_topics from weakest to strongest. Keep recommendations in the same language as the topic names."""
-
-    try:
-        resp = _ai().chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=3000,
-        )
-        raw = resp.choices[0].message.content.strip()
-        raw = re.sub(r"^```json?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-        return json.loads(raw)
-    except Exception as e:
-        log.error("Weak topic detection failed: %s", e)
-        return {"weak_topics": [], "recommendations_html": "<p>Analysis failed. Try again.</p>"}
-
-
 # ── Homework Helper ─────────────────────────────────────────
 
 def solve_homework(

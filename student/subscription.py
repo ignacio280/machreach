@@ -2,11 +2,8 @@
 
 Tiers:
   - free      : 1 quiz/day (max 30 q), 1 flashcard set/day (max 30 c).
-                Limits ENFORCED only after BETA ends.
   - plus      : Unlimited AI generation, ad-free, smarter tutor, no MailHub.
   - ultimate  : Everything Plus has + MailHub access.
-
-During beta everything is unlimited regardless of tier — see `BETA_ACTIVE`.
 
 Storage: re-uses the existing `clients` table via `mail_preferences` JSON-blob
 column (already exists in the schema). Keys used:
@@ -29,9 +26,9 @@ from outreach.db import get_db
 
 log = logging.getLogger(__name__)
 
-# Toggle this off when you launch out of beta.
-# When True, every tier is treated as Ultimate (no limits, all features).
-BETA_ACTIVE = True
+# Legacy flag kept for back-compat with any references elsewhere; tier limits
+# now always enforce regardless of value.
+BETA_ACTIVE = False
 
 # ── Plan definitions ───────────────────────────────────────────────────
 
@@ -141,14 +138,10 @@ def set_tier(client_id: int, tier: str) -> dict:
 # ── Capability checks (the API surface that quotes the tier) ────────────
 
 def has_unlimited_ai(client_id: int) -> bool:
-    if BETA_ACTIVE:
-        return True
     return get_tier(client_id) in ("plus", "ultimate")
 
 
 def has_mailhub(client_id: int) -> bool:
-    if BETA_ACTIVE:
-        return True
     return get_tier(client_id) == "ultimate"
 
 
