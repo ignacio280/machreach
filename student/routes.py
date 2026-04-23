@@ -15195,40 +15195,17 @@ No markdown, no code fences. ONLY JSON.
     align-items:center; padding: 14px 20px; border-top:1px solid var(--border);
     transition: background .15s; position: relative; overflow: hidden;
   }
-  /* Leaderboard flag (cosmetic). Two parts:
-     - .lb-flag-bg: full-row colored background, fades on the right so XP stays readable
-     - .lb-flag-pill: small pill on the right with a flag thumbnail + name label */
+  /* Leaderboard flag (cosmetic). Wide stripe on the right portion of the row,
+     fades in from ~25% so the rank/name on the left stay clean. No pill, no label. */
   #mr-lb-page .lb-flag-bg {
     position: absolute; inset: 0; pointer-events: none; z-index: 0;
-    -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,.4) 88%, transparent 100%);
-            mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,.4) 88%, transparent 100%);
-    opacity: .85;
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 22%, rgba(0,0,0,.6) 36%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 100%);
+            mask-image: linear-gradient(to right, transparent 0%, transparent 22%, rgba(0,0,0,.6) 36%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 100%);
+    opacity: .9;
   }
   #mr-lb-page .lb-row > *:not(.lb-flag-bg) { position: relative; z-index: 1; }
-  #mr-lb-page .lb-flag-pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 3px 9px 3px 4px; border-radius: 999px;
-    background: rgba(15,23,42,.55);
-    border: 1px solid rgba(255,255,255,.18);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.10),
-      0 2px 6px -2px rgba(0,0,0,.5),
-      0 0 12px -3px var(--lb-flag-glow, rgba(124,156,255,.6));
-    color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .12em;
-    text-shadow: 0 1px 2px rgba(0,0,0,.5);
-    white-space: nowrap;
-    max-width: 140px; overflow: hidden; text-overflow: ellipsis;
-    margin-left: 8px;
-  }
-  #mr-lb-page .lb-flag-pill .lb-flag-thumb {
-    width: 18px; height: 12px; border-radius: 3px;
-    border: 1px solid rgba(255,255,255,.25);
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
-    flex-shrink: 0;
-  }
   @media (max-width: 600px) {
-    #mr-lb-page .lb-flag-pill { display: none; }
-    #mr-lb-page .lb-flag-bg { opacity: .55; }
+    #mr-lb-page .lb-flag-bg { opacity: .6; }
   }
   #mr-lb-page a.lb-row { display:grid; }
   #mr-lb-page .lb-row:first-child { border-top:none;}
@@ -15336,21 +15313,9 @@ No markdown, no code fences. ONLY JSON.
         board.innerHTML = `<div class="lb-empty">${emptyCopy}</div>`;
         return;
       }
-      // Pull the first hex/rgb color out of a flag's CSS gradient so we can
-      // tint the soft glow behind the pill to match the flag itself.
-      function glowFromCss(css){
-        if (!css) return 'rgba(124,156,255,.55)';
-        const hex = css.match(/#[0-9a-fA-F]{3,8}/);
-        if (hex) return hex[0];
-        const rgb = css.match(/rgba?\\([^)]+\\)/);
-        return rgb ? rgb[0] : 'rgba(124,156,255,.55)';
-      }
       board.innerHTML = rows.map(r => {
         const flagBg = r.flag_css
           ? `<div class="lb-flag-bg ${r.flag_anim_class||''}" style="background:${r.flag_css};"></div>`
-          : '';
-        const flagPill = r.flag_css
-          ? `<span class="lb-flag-pill" style="--lb-flag-glow:${glowFromCss(r.flag_css)};"><span class="lb-flag-thumb ${r.flag_anim_class||''}" style="background:${r.flag_css};"></span>${escapeHtml((r.flag_name||'').toUpperCase())}</span>`
           : '';
         return `
         <a class="lb-row ${r.is_you?'me':''}" href="/student/profile/${r.client_id}" style="color:inherit;text-decoration:none;cursor:pointer;">
@@ -15358,7 +15323,7 @@ No markdown, no code fences. ONLY JSON.
           <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
-            <div><div>${r.badge_left_emoji?`<span title="${escapeHtml(r.badge_left_name||'')}" style="margin-right:4px;">${r.badge_left_emoji}</span>`:''}${escapeHtml(r.name)}${r.badge_right_emoji?`<span title="${escapeHtml(r.badge_right_name||'')}" style="margin-left:4px;">${r.badge_right_emoji}</span>`:''}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}${flagPill}</div>
+            <div><div>${r.badge_left_emoji?`<span title="${escapeHtml(r.badge_left_name||'')}" style="margin-right:4px;">${r.badge_left_emoji}</span>`:''}${escapeHtml(r.name)}${r.badge_right_emoji?`<span title="${escapeHtml(r.badge_right_name||'')}" style="margin-left:4px;">${r.badge_right_emoji}</span>`:''}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
                  <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div></div>
           </div>
           <div class="lb-xp">${r.xp.toLocaleString()} XP</div>
