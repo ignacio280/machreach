@@ -1397,7 +1397,6 @@ LAYOUT = """<!DOCTYPE html>
         {% if account_type|default('business') == 'student' %}
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
-        <a href="/student/friends" {% if active_page == 'student_friends' %}class="active"{% endif %}>&#128101; Friends</a>
         <div class="nav-dropdown">
           <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
           <div class="nav-dropdown-menu">
@@ -1410,11 +1409,12 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
         <a href="/student/training" {% if active_page == 'student_training' %}class="active"{% endif %}>&#128170; Training</a>
         <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Marketplace</a>
-        <a href="/student/shop" {% if active_page == 'student_shop' %}class="active"{% endif %}>&#129534; Shop</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_gpa','student_achievements'] %}class="active"{% endif %}>More &#9662;</a>
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>More &#9662;</a>
           <div class="nav-dropdown-menu">
+            <a href="/student/friends">&#128101; Friends</a>
+            <a href="/student/shop">&#129534; Shop</a>
             <a href="/student/gpa">&#128200; GPA</a>
             <a href="/student/achievements">&#127942; XP &amp; Badges</a>
           </div>
