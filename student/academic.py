@@ -923,6 +923,7 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
             if f:
                 row["flag_css"] = f.get("css", "")
                 row["flag_anim_class"] = f.get("anim_class", "")
+                row["flag_name"] = f.get("name", "")
         # Equipped badges (left + right of user name)
         badges = _sdb.get_equipped_badges_for_clients(ids)
         for row in out:

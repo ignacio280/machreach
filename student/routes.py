@@ -33,10 +33,170 @@ from markupsafe import Markup
 log = logging.getLogger(__name__)
 
 
+# Tiny animated study pet (POC). A small floating dog in the bottom-right
+# that idle-bobs, blinks, and waggles when the user moves the mouse near it.
+# Click to dismiss for the session (stored in localStorage).
+_STUDY_PET_HTML = """
+<div id="mr-pet" aria-hidden="true">
+  <div class="mr-pet-body">
+    <div class="mr-pet-emoji">\U0001F436</div>
+    <div class="mr-pet-shadow"></div>
+  </div>
+  <button class="mr-pet-close" type="button" aria-label="Hide pet" title="Hide pet">×</button>
+</div>
+<style>
+  #mr-pet {
+    position: fixed; right: 18px; bottom: 18px; z-index: 9998;
+    width: 56px; height: 64px; pointer-events: auto;
+    user-select: none; -webkit-user-select: none;
+    transition: transform .25s cubic-bezier(.2,.9,.3,1.4), opacity .2s;
+  }
+  #mr-pet.mr-pet-hidden { display: none; }
+  #mr-pet:hover { transform: translateY(-3px) scale(1.05); }
+  #mr-pet .mr-pet-body { position: relative; width: 100%; height: 100%; }
+  #mr-pet .mr-pet-emoji {
+    position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+    font-size: 38px; line-height: 1;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,.35));
+    animation: mrPetIdle 2.4s ease-in-out infinite;
+    transform-origin: 50% 80%;
+  }
+  #mr-pet:hover .mr-pet-emoji { animation: mrPetWag .35s ease-in-out infinite; }
+  #mr-pet .mr-pet-shadow {
+    position: absolute; left: 50%; bottom: 0;
+    width: 40px; height: 8px; transform: translateX(-50%);
+    background: radial-gradient(ellipse at center, rgba(0,0,0,.35) 0%, rgba(0,0,0,0) 70%);
+    animation: mrPetShadow 2.4s ease-in-out infinite;
+  }
+  #mr-pet .mr-pet-close {
+    position: absolute; top: -6px; right: -6px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(15,23,42,.85); color: #fff; border: 1px solid rgba(255,255,255,.2);
+    font-size: 12px; line-height: 16px; padding: 0; cursor: pointer;
+    opacity: 0; transition: opacity .15s;
+  }
+  #mr-pet:hover .mr-pet-close { opacity: 1; }
+  @keyframes mrPetIdle {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50%      { transform: translateX(-50%) translateY(-6px); }
+  }
+  @keyframes mrPetWag {
+    0%, 100% { transform: translateX(-50%) rotate(-5deg); }
+    50%      { transform: translateX(-50%) rotate(5deg); }
+  }
+  @keyframes mrPetShadow {
+    0%, 100% { opacity: .55; transform: translateX(-50%) scale(1); }
+    50%      { opacity: .25; transform: translateX(-50%) scale(.7); }
+  }
+  @media (max-width: 600px) {
+    #mr-pet { right: 10px; bottom: 84px; transform: scale(.85); }
+  }
+</style>
+<script>
+(function(){
+  var pet = document.getElementById('mr-pet');
+  if (!pet) return;
+  try {
+    if (localStorage.getItem('mr_pet_hidden') === '1') {
+      pet.classList.add('mr-pet-hidden');
+      return;
+    }
+  } catch(e){}
+  var close = pet.querySelector('.mr-pet-close');
+  if (close) close.addEventListener('click', function(ev){
+    ev.stopPropagation();
+    pet.classList.add('mr-pet-hidden');
+    try { localStorage.setItem('mr_pet_hidden', '1'); } catch(e){}
+  });
+  // Bark on click. Picks one of a few cheerful messages.
+  var lines = ['Woof! Keep going!', 'You got this!', '\U0001F4DA Focus time!', 'Nice study streak!'];
+  pet.addEventListener('click', function(){
+    var msg = document.createElement('div');
+    msg.textContent = lines[Math.floor(Math.random()*lines.length)];
+    msg.style.cssText = 'position:fixed;right:80px;bottom:36px;background:#0f172a;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);pointer-events:none;opacity:0;transition:opacity .2s;';
+    document.body.appendChild(msg);
+    requestAnimationFrame(function(){ msg.style.opacity = '1'; });
+    setTimeout(function(){ msg.style.opacity = '0'; setTimeout(function(){ msg.remove(); }, 220); }, 1600);
+  });
+})();
+</script>
+"""
 
 
 
-_GPA_PLANILLA_HTML = r"""
+def _gpa_planilla_html(lang: str = "en") -> str:
+    """Return the GPA planilla HTML, localized for `lang` ('en' | 'es').
+
+    The source template mixes Spanish (most labels) with a few English
+    summary headers. We translate either direction here so callers get
+    a fully-localized page.
+    """
+    html = _GPA_PLANILLA_HTML_ES
+    if lang == "es":
+        # Translate the few English summary labels back to Spanish.
+        for src, dst in [
+            (">Semester average<",   ">Promedio del semestre<"),
+            (">Semester credits<",   ">Créditos del semestre<"),
+            (">Career average<",     ">Promedio de la carrera<"),
+            (">Career credits<",     ">Créditos de la carrera<"),
+        ]:
+            html = html.replace(src, dst)
+        return html
+    EN_REPL = [
+        ("📊 Planilla de Notas", "📊 Grade Sheet"),
+        ("Calcula tus promedios por semestre y la nota mínima que necesitas para aprobar — basado en la planilla que circula en la PUC.",
+         "Calculate your semester averages and the minimum grade you need to pass — based on the spreadsheet that circulates at PUC."),
+        (">⬇ Export<",  ">⬇ Export<"),
+        (">⬆ Import<",  ">⬆ Import<"),
+        (">🗑 Reset<",   ">🗑 Reset<"),
+        (">Semester average<", ">Semester average<"),
+        (">Semester credits<", ">Semester credits<"),
+        (">Career average<",   ">Career average<"),
+        (">Career credits<",   ">Career credits<"),
+        ("<b>Tips:</b> Notas en escala chilena (1.0 – 7.0; 4.0 = aprobado). Las ponderaciones (%) deben sumar 100. La <b>NMPA</b> es la nota mínima que necesitas en lo que te falta para aprobar el ramo. Todo se guarda automáticamente en tu navegador.",
+         "<b>Tips:</b> Chilean grading scale (1.0 – 7.0; 4.0 = passing). Weights (%) must sum to 100. <b>NMPA</b> is the minimum grade you need on what's left to pass the course. Everything saves automatically in your browser."),
+        ("defaultCourse('Curso 1')", "defaultCourse('Course 1')"),
+        ("defaultCourse('Curso 2')", "defaultCourse('Course 2')"),
+        ("'Curso ' + n",             "'Course ' + n"),
+        ("name: 'Prueba 1'", "name: 'Test 1'"),
+        ("name: 'Prueba 2'", "name: 'Test 2'"),
+        ("name: 'Examen'",   "name: 'Exam'"),
+        ("'<span class=\"pl-ok\">Curso completado</span>'", "'<span class=\"pl-ok\">Course completed</span>'"),
+        ("'<span class=\"pl-ok\">Ya aprobado ✓</span>'",     "'<span class=\"pl-ok\">Already passed ✓</span>'"),
+        ("'<span class=\"pl-warn\">Imposible aprobar</span>'", "'<span class=\"pl-warn\">Cannot pass anymore</span>'"),
+        ("'Necesitas <strong>' + nm.toFixed(1) + '</strong> en lo que falta para aprobar'",
+         "'You need <strong>' + nm.toFixed(1) + '</strong> on what\\'s left to pass'"),
+        ("placeholder=\"Evaluación\"", "placeholder=\"Evaluation\""),
+        ("placeholder=\"Nombre del ramo\"", "placeholder=\"Course name\""),
+        ("<span class=\"label\">Créd:</span>", "<span class=\"label\">Cred:</span>"),
+        ("title=\"Copiar a otro semestre\"", "title=\"Copy to another semester\""),
+        ("title=\"Eliminar ramo\"", "title=\"Delete course\""),
+        ("title=\"Eliminar\"", "title=\"Delete\""),
+        ("<th>Evaluación</th>", "<th>Evaluation</th>"),
+        (">Nota</th>", ">Grade</th>"),
+        (">+ Agregar evaluación<", ">+ Add evaluation<"),
+        ("Promedio: <span", "Average: <span"),
+        ("'No tienes ramos en este semestre todavía.<br><br><button class=\"pl-btn primary\" onclick=\"plAddCourse()\">+ Agregar primer ramo</button>'",
+         "'No courses in this semester yet.<br><br><button class=\"pl-btn primary\" onclick=\"plAddCourse()\">+ Add first course</button>'"),
+        (">+ Agregar ramo<", ">+ Add course<"),
+        ("'¿Eliminar este ramo?'", "'Delete this course?'"),
+        ("'Copiar \"' + (src.name || 'ramo') + '\" a qué semestre?\\n\\n'",
+         "'Copy \"' + (src.name || 'course') + '\" to which semester?\\n\\n'"),
+        ("'\\n\\nEscribe el número (1-' + data.sems.length + '):'",
+         "'\\n\\nEnter the number (1-' + data.sems.length + '):'"),
+        ("' ramos)'", "' courses)'"),
+        ("'Número inválido.'", "'Invalid number.'"),
+        ("'Ese es el mismo semestre.'", "'That is the same semester.'"),
+        ("'Esto borrará TODA la planilla. ¿Continuar?'", "'This will erase the WHOLE sheet. Continue?'"),
+        ("'planilla_notas.json'", "'grade_sheet.json'"),
+        ("'Archivo inválido.'", "'Invalid file.'"),
+    ]
+    for src, dst in EN_REPL:
+        html = html.replace(src, dst)
+    return html
+
+
+_GPA_PLANILLA_HTML_ES = r"""
 <style>
   .pl-wrap { max-width: 1200px; margin: 0 auto; }
   .pl-h { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
@@ -459,7 +619,7 @@ def register_student_routes(app, csrf, limiter):
 
                                   generate_flashcards, generate_quiz, generate_notes,
 
-                                  chat_with_tutor, notes_from_transcript,
+                                  notes_from_transcript,
 
                                   flashcards_from_transcript,
 
@@ -2691,13 +2851,17 @@ def register_student_routes(app, csrf, limiter):
 
             is_admin = bool(c and c.get("is_admin"))
 
+        # Tiny animated study pet (POC). Fixed bottom-right, follows the
+        # cursor a little, idle-bounces, can be toggled off via the bubble.
+        pet_html = _STUDY_PET_HTML if _logged_in() else ""
+
         return render_template_string(
 
             LAYOUT,
 
             title=f"Student — {title}",
 
-            content=Markup(content_html),
+            content=Markup(pet_html + content_html),
 
             logged_in=_logged_in(),
 
@@ -2814,7 +2978,10 @@ def register_student_routes(app, csrf, limiter):
               const sel = document.getElementById('ss-country');
               (r.countries || []).forEach(c => {
                 const o = document.createElement('option');
-                o.value = c.iso; o.textContent = c.name + ' (' + c.iso + ')';
+                const iso = c.iso_code || c.iso || '';
+                const flag = c.flag_emoji || c.flag || '';
+                o.value = iso;
+                o.textContent = (flag ? (flag + ' ') : '') + (c.name || iso);
                 sel.appendChild(o);
               });
               sel.addEventListener('change', () => { state.country_iso = sel.value; });
@@ -3464,11 +3631,27 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:24px;">
+        <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:24px;">
 
           <div class="stat-card stat-purple"><div class="num">{len(courses)}</div><div class="label">Courses</div></div>
 
-          <div class="stat-card stat-green"><div class="num">{stats['completion_pct']}%</div><div class="label">Plan Progress</div></div>
+        </div>
+
+
+
+        <!-- Upcoming exams -->
+
+        <div class="card" style="margin-bottom:24px">
+
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+
+            <h2 style="margin:0">&#128221; Upcoming exams</h2>
+
+            <a href="/student/exams" style="font-size:13px;color:var(--text-muted);text-decoration:none;">Manage &rarr;</a>
+
+          </div>
+
+          <div style="padding:6px 14px 14px 14px">{exams_html}</div>
 
         </div>
 
@@ -6527,8 +6710,10 @@ def register_student_routes(app, csrf, limiter):
         if not _logged_in():
             return redirect(url_for("login"))
         cid = _cid()
-        return _s_render("GPA Calculator", _GPA_PLANILLA_HTML.replace("__CID__", str(cid)),
-                         active_page="student_gpa")
+        lang = (session.get("lang") or "en")
+        title = "Calculadora GPA" if lang == "es" else "GPA Calculator"
+        html = _gpa_planilla_html(lang).replace("__CID__", str(cid))
+        return _s_render(title, html, active_page="student_gpa")
 
 
 
@@ -10736,6 +10921,9 @@ No markdown, no code fences. ONLY JSON.
 
         questions = sdb.get_quiz_questions(quiz_id)
 
+        from student import subscription as _sub
+        _is_plus = _sub.has_unlimited_ai(_cid())
+
         questions_json = json.dumps([{
 
             "id": q["id"], "question": q["question"],
@@ -10744,11 +10932,18 @@ No markdown, no code fences. ONLY JSON.
 
             "option_c": q.get("option_c", ""), "option_d": q.get("option_d", ""),
 
-            "correct": q["correct"], "explanation": q.get("explanation", ""),
+            "correct": q["correct"],
+
+            # Wrong-answer explanations are PLUS-gated. Strip them for free
+            # users so they cannot inspect via DevTools. Frontend shows
+            # an upsell box in their place.
+            "explanation": (q.get("explanation", "") if _is_plus else ""),
 
             "topic": q.get("topic", "") or ""
 
         } for q in questions], ensure_ascii=False)
+
+        _is_plus_js = "true" if _is_plus else "false"
 
 
 
@@ -11402,11 +11597,24 @@ No markdown, no code fences. ONLY JSON.
 
           exp.style.display = 'block';
 
-          exp.style.background = isCorrect ? '#D1FAE5' : '#FEE2E2';
+          var IS_PLUS = {_is_plus_js};
 
-          exp.style.color = isCorrect ? '#065F46' : '#991B1B';
+          if (!isCorrect && !IS_PLUS) {{
 
-          exp.innerHTML = (isCorrect ? '&#10003; Correct! ' : '&#10007; Incorrect. ') + (q.explanation || '');
+            // Free user got it wrong → show PLUS upsell instead of the explanation.
+            exp.style.background = 'linear-gradient(135deg, rgba(245,158,11,.14), rgba(236,72,153,.10))';
+            exp.style.color = '#FBBF24';
+            exp.style.border = '1px solid rgba(245,158,11,.35)';
+            exp.innerHTML = '&#128274; <b>See why you got this wrong</b> &mdash; upgrade to <b>PLUS</b> to unlock per-question explanations on every quiz. <a href="/student/shop" style="color:#FBBF24;text-decoration:underline;font-weight:600;">Upgrade &rarr;</a>';
+
+          }} else {{
+
+            exp.style.background = isCorrect ? '#D1FAE5' : '#FEE2E2';
+            exp.style.color = isCorrect ? '#065F46' : '#991B1B';
+            exp.style.border = '';
+            exp.innerHTML = (isCorrect ? '&#10003; Correct! ' : '&#10007; Incorrect. ') + (q.explanation || '');
+
+          }}
 
 
 
@@ -11764,7 +11972,11 @@ No markdown, no code fences. ONLY JSON.
 
               + (!a.is_correct ? '<div style="font-size:13px;margin-top:4px;color:#10B981;">Correct: <b>' + q.correct.toUpperCase() + '.</b> ' + escH(q['option_' + q.correct] || '') + '</div>' : '')
 
-              + (q.explanation ? '<div style="font-size:12px;margin-top:6px;color:var(--text-muted);font-style:italic;">' + escH(q.explanation) + '</div>' : '')
+              + (q.explanation
+                  ? '<div style="font-size:12px;margin-top:6px;color:var(--text-muted);font-style:italic;">' + escH(q.explanation) + '</div>'
+                  : (!a.is_correct && !{_is_plus_js}
+                      ? '<div style="font-size:12px;margin-top:6px;color:#FBBF24;">&#128274; Explanation locked &mdash; <a href="/student/shop" style="color:#FBBF24;text-decoration:underline;">upgrade to PLUS</a></div>'
+                      : ''))
 
               + '</div>';
 
@@ -11880,6 +12092,9 @@ No markdown, no code fences. ONLY JSON.
 
         questions = sdb.get_quiz_questions(quiz_id)
 
+        from student import subscription as _sub
+        _is_plus = _sub.has_unlimited_ai(_cid())
+
         questions_json = json.dumps([{
 
             "id": q["id"], "question": q["question"],
@@ -11888,11 +12103,16 @@ No markdown, no code fences. ONLY JSON.
 
             "option_c": q.get("option_c", ""), "option_d": q.get("option_d", ""),
 
-            "correct": q["correct"], "explanation": q.get("explanation", ""),
+            "correct": q["correct"],
+
+            # Wrong-answer explanations are PLUS-gated; stripped for free users.
+            "explanation": (q.get("explanation", "") if _is_plus else ""),
 
             "topic": q.get("topic", "") or ""
 
         } for q in questions], ensure_ascii=False)
+
+        _is_plus_js = "true" if _is_plus else "false"
 
 
 
@@ -12328,7 +12548,11 @@ No markdown, no code fences. ONLY JSON.
 
               + (a.isCorrect ? ' &#10003;' : ' &#10007; (Correct: ' + a.correct.toUpperCase() + ')') + '</div>'
 
-              + (a.explanation ? '<div style="font-size:13px;margin-top:6px;color:var(--text-muted);font-style:italic;">' + escH(a.explanation) + '</div>' : '')
+              + (a.explanation
+                  ? '<div style="font-size:13px;margin-top:6px;color:var(--text-muted);font-style:italic;">' + escH(a.explanation) + '</div>'
+                  : (!a.isCorrect && !{_is_plus_js}
+                      ? '<div style="font-size:12px;margin-top:6px;color:#FBBF24;">&#128274; Explanation locked &mdash; <a href="/student/shop" style="color:#FBBF24;text-decoration:underline;">upgrade to PLUS</a></div>'
+                      : ''))
 
               + '</div>';
 
@@ -12877,396 +13101,6 @@ No markdown, no code fences. ONLY JSON.
         </script>
 
         """, active_page="student_notes")
-
-
-
-    # ================================================================
-
-    #  FEATURE 1 — AI Study Chat (Tutor)
-
-    # ================================================================
-
-
-
-    @app.route("/api/student/chat", methods=["POST"])
-
-    @limiter.limit("30 per minute")
-
-    def student_chat_send():
-
-        if not _logged_in():
-
-            return jsonify(error="Login required"), 401
-
-        cid = _cid()
-
-        data = request.get_json(force=True)
-
-        msg = (data.get("message") or "").strip()
-
-        course_id = data.get("course_id")
-
-        if not msg:
-
-            return jsonify(error="Empty message"), 400
-
-
-
-        # Build context from uploaded files, notes, and syllabus
-
-        context_text = ""
-
-        course_name = "General"
-
-        if course_id:
-
-            course = sdb.get_course(int(course_id))
-
-            if course:
-
-                course_name = course.get("name", "General")
-
-                # PRIMARY: uploaded course files (the student's actual documents)
-
-                files = sdb.get_course_files(cid, int(course_id))
-
-                for f in files:
-
-                    if f.get("extracted_text"):
-
-                        context_text += f"--- File: {f.get('original_name','')} ---\n{f['extracted_text']}\n\n"
-
-                # SECONDARY: AI-generated notes
-
-                notes = sdb.get_notes(cid, int(course_id))
-
-                for n in notes:
-
-                    context_text += (n.get("content_html") or "") + "\n"
-
-
-
-        # Get recent history
-
-        history_rows = sdb.get_chat_history(cid, int(course_id) if course_id else None, limit=20)
-
-        history = [{"role": r["role"], "content": r["content"]} for r in reversed(history_rows)]
-
-
-
-        # Save user message
-
-        sdb.add_chat_message(cid, "user", msg, int(course_id) if course_id else None)
-
-
-
-        # Get AI reply
-
-        reply = chat_with_tutor(course_name, msg, history, context_text)
-
-
-
-        # Save assistant reply
-
-        sdb.add_chat_message(cid, "assistant", reply, int(course_id) if course_id else None)
-
-
-
-        return jsonify(reply=reply)
-
-
-
-    @app.route("/api/student/chat/clear", methods=["POST"])
-
-    def student_chat_clear():
-
-        if not _logged_in():
-
-            return jsonify(error="Login required"), 401
-
-        data = request.get_json(force=True)
-
-        sdb.clear_chat_history(_cid(), data.get("course_id"))
-
-        return jsonify(ok=True)
-
-
-
-    @app.route("/student/chat")
-
-    def student_chat_page():
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        cid = _cid()
-
-        courses = sdb.get_courses(cid)
-
-        course_opts = "".join(
-
-            f'<option value="{c["id"]}">{_esc(c["name"])}</option>' for c in courses
-
-        )
-
-        return _s_render("AI Tutor", f"""
-
-        <div style="max-width:800px;margin:0 auto">
-
-          <h2 style="display:flex;align-items:center;gap:8px">
-
-            <span style="font-size:1.5em">🤖</span> AI Study Tutor
-
-          </h2>
-
-          <p style="color:var(--text-muted);margin-bottom:16px">
-
-            Ask anything about your courses — your AI tutor uses your own notes and course material to help.
-
-          </p>
-
-          <div style="margin-bottom:12px">
-
-            <select id="chat-course" onchange="loadHistory()"
-
-              style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;width:100%;
-
-                     background:var(--bg);color:var(--text)">
-
-              <option value="">General (no specific course)</option>
-
-              {course_opts}
-
-            </select>
-
-          </div>
-
-          <div id="chat-box" style="border:1px solid var(--border);border-radius:12px;height:450px;
-
-               overflow-y:auto;padding:16px;background:var(--bg);margin-bottom:12px"
-
-               ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
-
-               ondragleave="this.style.borderColor='var(--border)'"
-
-               ondrop="chatHandleDrop(event)"></div>
-
-          <div id="chat-attached" style="display:none;margin-bottom:8px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-
-            <span id="chat-attached-info">📄 No file attached</span>
-
-            <button onclick="chatClearAttached()" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:16px;">✕</button>
-
-          </div>
-
-          <div style="display:flex;gap:8px">
-
-            <button onclick="document.getElementById('chat-file').click()" title="Attach a file (PDF/DOCX/TXT)"
-
-              style="padding:10px 12px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer">📎</button>
-
-            <input type="file" id="chat-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="chatHandleFile(this.files[0])">
-
-            <input id="chat-input" type="text" placeholder="Ask your tutor... (or drag a PDF onto the chat)"
-
-              style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;
-
-                     background:var(--card);color:var(--text)"
-
-              onkeydown="if(event.key==='Enter')sendMsg()">
-
-            <button onclick="sendMsg()"
-
-              style="padding:10px 20px;background:var(--primary);color:#fff;border:none;border-radius:8px;
-
-                     font-weight:600;cursor:pointer">Send</button>
-
-            <button onclick="clearChat()" title="Clear history"
-
-              style="padding:10px 12px;background:var(--red);color:#fff;border:none;border-radius:8px;
-
-                     cursor:pointer">🗑</button>
-
-          </div>
-
-        </div>
-
-        <script>
-
-        var chatBox = document.getElementById('chat-box');
-
-        var chatAttachedText = "";
-
-        var chatAttachedName = "";
-
-        async function chatHandleDrop(e) {{
-
-          e.preventDefault();
-
-          e.currentTarget.style.borderColor = 'var(--border)';
-
-          if (e.dataTransfer.files.length) await chatHandleFile(e.dataTransfer.files[0]);
-
-        }}
-
-        async function chatHandleFile(file) {{
-
-          if (!file) return;
-
-          var ext = file.name.split('.').pop().toLowerCase();
-
-          if (!['pdf','docx','doc','txt'].includes(ext)) {{ alert('PDF, DOCX, or TXT only'); return; }}
-
-          if (file.size > 50*1024*1024) {{ alert('File too large (max 50MB)'); return; }}
-
-          var bar = document.getElementById('chat-attached');
-
-          var info = document.getElementById('chat-attached-info');
-
-          bar.style.display = 'flex';
-
-          info.textContent = '⏳ Extracting ' + file.name + '...';
-
-          var fd = new FormData(); fd.append('file', file);
-
-          try {{
-
-            var r = await fetch('/api/student/extract-file', {{ method:'POST', body: fd }});
-
-            var d = await _safeJson(r);
-
-            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
-
-            chatAttachedText = d.text;
-
-            chatAttachedName = d.filename;
-
-            info.textContent = '📄 Attached: ' + d.filename + ' (' + d.char_count.toLocaleString() + ' chars) — your next message will use this as context';
-
-          }} catch(e) {{ info.textContent = '❌ Network error'; }}
-
-        }}
-
-        function chatClearAttached() {{
-
-          chatAttachedText = ""; chatAttachedName = "";
-
-          document.getElementById('chat-attached').style.display = 'none';
-
-        }}
-
-        function addBubble(role, text) {{
-
-          var d = document.createElement('div');
-
-          d.style.cssText = 'margin-bottom:10px;display:flex;' + (role==='user'?'justify-content:flex-end':'');
-
-          var b = document.createElement('div');
-
-          b.style.cssText = 'max-width:75%;padding:10px 14px;border-radius:12px;line-height:1.5;white-space:pre-wrap;' +
-
-            (role==='user'
-
-              ? 'background:var(--primary);color:#fff;border-bottom-right-radius:4px'
-
-              : 'background:var(--card);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px');
-
-          b.textContent = text;
-
-          d.appendChild(b);
-
-          chatBox.appendChild(d);
-
-          chatBox.scrollTop = chatBox.scrollHeight;
-
-        }}
-
-        async function loadHistory() {{
-
-          chatBox.innerHTML = '';
-
-          var cid = document.getElementById('chat-course').value;
-
-          // Show welcome message
-
-          addBubble('assistant', 'Hi! I\\'m your AI study tutor. Ask me anything about your course material! 📚');
-
-        }}
-
-        loadHistory();
-
-        async function sendMsg() {{
-
-          var inp = document.getElementById('chat-input');
-
-          var msg = inp.value.trim();
-
-          if (!msg && !chatAttachedText) return;
-
-          if (!msg) msg = "Please summarize and explain the attached document.";
-
-          inp.value = '';
-
-          var displayMsg = msg + (chatAttachedText ? ' [📄 ' + chatAttachedName + ']' : '');
-
-          addBubble('user', displayMsg);
-
-          addBubble('assistant', '💭 Thinking...');
-
-          // Build payload: prepend attached doc as context if present
-
-          var payloadMsg = msg;
-
-          if (chatAttachedText) {{
-
-            payloadMsg = "I am attaching a document called \\"" + chatAttachedName + "\\". Use its contents as the primary source for your answer.\\n\\n=== DOCUMENT START ===\\n" + chatAttachedText + "\\n=== DOCUMENT END ===\\n\\nMy question: " + msg;
-
-            chatClearAttached();
-
-          }}
-
-          try {{
-
-            var r = await fetch('/api/student/chat', {{
-
-              method:'POST', headers:{{'Content-Type':'application/json'}},
-
-              body: JSON.stringify({{message: payloadMsg, course_id: document.getElementById('chat-course').value || null}})
-
-            }});
-
-            chatBox.removeChild(chatBox.lastChild);
-
-            var d = await _safeJson(r);
-
-            if (r.ok) {{ addBubble('assistant', d.reply); }}
-
-            else {{ addBubble('assistant', '❌ ' + (d.error || 'Error')); }}
-
-          }} catch(e) {{ chatBox.removeChild(chatBox.lastChild); addBubble('assistant', '❌ Network error'); }}
-
-        }}
-
-        async function clearChat() {{
-
-          if (!confirm('Clear chat history?')) return;
-
-          await fetch('/api/student/chat/clear', {{
-
-            method:'POST', headers:{{'Content-Type':'application/json'}},
-
-            body: JSON.stringify({{course_id: document.getElementById('chat-course').value || null}})
-
-          }});
-
-          loadHistory();
-
-        }}
-
-        </script>
-
-        """, active_page="student_chat")
 
 
 
@@ -15361,13 +15195,24 @@ No markdown, no code fences. ONLY JSON.
     align-items:center; padding: 14px 20px; border-top:1px solid var(--border);
     transition: background .15s; position: relative; overflow: hidden;
   }
-  /* Leaderboard flag (cosmetic). Sits behind the row content, fades L→R. */
+  /* Leaderboard flag (cosmetic). Inline pill next to the name with soft glow. */
   #mr-lb-page .lb-flag {
-    position: absolute; inset: 0; pointer-events: none; z-index: 0;
-    -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);
-            mask-image: linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);
+    display: inline-block; vertical-align: middle;
+    margin-left: 8px;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 10px; font-weight: 800; letter-spacing: .12em;
+    color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.45);
+    border: 1px solid rgba(255,255,255,.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.16),
+      0 2px 8px -2px rgba(0,0,0,.4),
+      0 0 16px -3px var(--lb-flag-glow, rgba(124,156,255,.6));
+    white-space: nowrap;
+    max-width: 140px; overflow: hidden; text-overflow: ellipsis;
   }
-  #mr-lb-page .lb-row > *:not(.lb-flag) { position: relative; z-index: 1; }
+  @media (max-width: 600px) {
+    #mr-lb-page .lb-flag { display: none; }
+  }
   #mr-lb-page a.lb-row { display:grid; }
   #mr-lb-page .lb-row:first-child { border-top:none;}
   #mr-lb-page .lb-row:hover { background: rgba(255,255,255,.02);}
@@ -15474,19 +15319,32 @@ No markdown, no code fences. ONLY JSON.
         board.innerHTML = `<div class="lb-empty">${emptyCopy}</div>`;
         return;
       }
-      board.innerHTML = rows.map(r => `
+      // Pull the first hex/rgb color out of a flag's CSS gradient so we can
+      // tint the soft glow behind the pill to match the flag itself.
+      function glowFromCss(css){
+        if (!css) return 'rgba(124,156,255,.55)';
+        const hex = css.match(/#[0-9a-fA-F]{3,8}/);
+        if (hex) return hex[0];
+        const rgb = css.match(/rgba?\\([^)]+\\)/);
+        return rgb ? rgb[0] : 'rgba(124,156,255,.55)';
+      }
+      board.innerHTML = rows.map(r => {
+        const flagPill = r.flag_css
+          ? `<span class="lb-flag ${r.flag_anim_class||''}" style="background:${r.flag_css}; --lb-flag-glow:${glowFromCss(r.flag_css)};">${escapeHtml((r.flag_name||'').toUpperCase())}</span>`
+          : '';
+        return `
         <a class="lb-row ${r.is_you?'me':''}" href="/student/profile/${r.client_id}" style="color:inherit;text-decoration:none;cursor:pointer;">
-          ${r.flag_css ? `<div class="lb-flag ${r.flag_anim_class||''}" style="background:${r.flag_css};"></div>` : ''}
           <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
-            <div><div>${r.badge_left_emoji?`<span title="${escapeHtml(r.badge_left_name||'')}" style="margin-right:4px;">${r.badge_left_emoji}</span>`:''}${escapeHtml(r.name)}${r.badge_right_emoji?`<span title="${escapeHtml(r.badge_right_name||'')}" style="margin-left:4px;">${r.badge_right_emoji}</span>`:''}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
+            <div><div>${r.badge_left_emoji?`<span title="${escapeHtml(r.badge_left_name||'')}" style="margin-right:4px;">${r.badge_left_emoji}</span>`:''}${escapeHtml(r.name)}${r.badge_right_emoji?`<span title="${escapeHtml(r.badge_right_name||'')}" style="margin-left:4px;">${r.badge_right_emoji}</span>`:''}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}${flagPill}</div>
                  <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div></div>
           </div>
           <div class="lb-xp">${r.xp.toLocaleString()} XP</div>
           <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div>
         </a>
-      `).join('');
+      `;
+      }).join('');
     } catch(e) {
       board.innerHTML = `<div class="lb-empty">Failed to load. ${e}</div>`;
     }
@@ -17618,22 +17476,6 @@ No markdown, no code fences. ONLY JSON.
         else:
             active_html = ""
 
-        # Boost cards
-        boost_cards = []
-        for key, cfg in sdb.BOOSTS.items():
-            disabled = "disabled" if coins < cfg["price_coins"] else ""
-            icon = "\u2728" if cfg["kind"] == "xp" else "\U0001F4B0"
-            color = "#8b5cf6" if cfg["kind"] == "xp" else "#f59e0b"
-            boost_cards.append(
-                '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;">'
-                f'<div style="font-size:24px;">{icon}</div>'
-                f'<div style="font-weight:700;margin-top:4px;color:{color};">{cfg["label"]}</div>'
-                f'<div style="color:var(--text-muted);font-size:12px;margin:4px 0 10px;">Stacks if you already own one.</div>'
-                f'<button class="btn btn-sm btn-primary" onclick="buyBoost(\'{key}\')" {disabled}>Buy ({cfg["price_coins"]} \U0001FA99)</button>'
-                '</div>'
-            )
-        boosts_html = "".join(boost_cards)
-
         # ── Subscription tier cards ────────────────────────
         subscription_section = ""
         try:
@@ -17766,14 +17608,6 @@ No markdown, no code fences. ONLY JSON.
           <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Top up your wallet with real-money coin packs. Bonus coins on larger packs.</p>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
             {coin_packs_html}
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header"><h2>\u26a1 Boosts</h2></div>
-          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Double the XP and coins you earn for a limited time. Stacks: buying again extends the timer.</p>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
-            {boosts_html}
           </div>
         </div>
 
@@ -18011,10 +17845,6 @@ No markdown, no code fences. ONLY JSON.
 
         focus_grid = _cos_grid("focus_theme", sdb.FOCUS_THEMES, cos_state["focus_theme"],
             lambda k, cfg: f'<div style="height:60px;background:{cfg["css"]};"></div>')
-        flame_grid = _cos_grid("streak_flame", sdb.STREAK_FLAMES, cos_state["streak_flame"],
-            lambda k, cfg: f'<div style="height:60px;display:flex;align-items:center;justify-content:center;font-size:30px;{cfg.get("css","")}">{cfg.get("icon","🔥")}</div>')
-        quiz_grid = _cos_grid("quiz_theme", sdb.QUIZ_THEMES, cos_state["quiz_theme"],
-            lambda k, cfg: f'<div style="height:60px;background:{cfg["css"]};color:{cfg.get("text","#fff")};display:flex;align-items:center;justify-content:center;font-weight:700;">Aa</div>')
         ring_grid = _cos_grid("timer_ring", sdb.TIMER_RINGS, cos_state["timer_ring"],
             lambda k, cfg: f'<div style="height:60px;display:flex;align-items:center;justify-content:center;"><div style="width:42px;height:42px;border-radius:50%;background:{cfg["css"]};display:flex;align-items:center;justify-content:center;"><div style="width:30px;height:30px;border-radius:50%;background:var(--card);"></div></div></div>')
 
@@ -18098,18 +17928,6 @@ No markdown, no code fences. ONLY JSON.
               <button id="badge-side-right" onclick="setBadgeSide('right')" class="badge-side-btn active" style="border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;">Right slot ▶</button>
             </div>
             <div class="profile-cosm-grid" data-cosm="badges">{badges_grid}</div>
-          </div>
-
-          <div class="card">
-            <div class="card-header"><h2>🔥 Streak flame</h2></div>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Choose the icon that appears next to your streak number.</p>
-            <div class="profile-cosm-grid" data-cosm="streak_flame">{flame_grid}</div>
-          </div>
-
-          <div class="card">
-            <div class="card-header"><h2>📝 Quiz card theme</h2></div>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">The look of the card behind quiz questions.</p>
-            <div class="profile-cosm-grid" data-cosm="quiz_theme">{quiz_grid}</div>
           </div>
 
           <div class="card">

@@ -1947,7 +1947,6 @@ LAYOUT = """<!DOCTYPE html>
         {t:'Flashcards', u:'/student/flashcards', i:'📇', s:'Study'},
         {t:'Quizzes', u:'/student/quizzes', i:'📝', s:'Study'},
         {t:'Notes', u:'/student/notes', i:'📖', s:'Study'},
-        {t:'AI Tutor', u:'/student/chat', i:'🤖', s:'Study'},
         {t:'Essay Assistant', u:'/student/essay', i:'\u270F\uFE0F', s:'Study'},
         {t:'Practice Problems', u:'/student/practice', i:'🛠\uFE0F', s:'Study'},
         {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
@@ -2618,8 +2617,8 @@ LAYOUT = """<!DOCTYPE html>
       "Ask your tutor... (or drag a PDF onto the chat)":
         "Pregúntale a tu tutor... (o arrastra un PDF al chat)",
       "Drag & Drop Anywhere": "Arrastra y Suelta en Cualquier Lugar",
-      "Drop a PDF onto Notes, Flashcards, Quizzes, or the AI Tutor — instant study material from your files.":
-        "Suelta un PDF en Apuntes, Tarjetas, Exámenes o el Tutor IA — material de estudio al instante.",
+      "Drop a PDF onto Notes, Flashcards, or Quizzes — instant study material from your files.":
+        "Suelta un PDF en Apuntes, Tarjetas o Exámenes — material de estudio al instante.",
 
       // Course / Exam / Quiz / Flashcard / Notes shared labels
       "Course": "Curso", "Courses": "Cursos", "Exam": "Examen", "Topic": "Tema", "Topics": "Temas",
@@ -2701,9 +2700,6 @@ LAYOUT = """<!DOCTYPE html>
       // Notes page
       "Generated notes": "Apuntes generados",
       "AI Study Notes": "Apuntes de Estudio IA",
-
-      // Tutor
-      "AI Tutor": "Tutor IA",
 
       // Mail Hub / Inbox common
       "Inbox": "Bandeja", "Sent": "Enviados", "Outbox": "Salida",
@@ -2905,13 +2901,6 @@ LAYOUT = """<!DOCTYPE html>
       "Bullet list": "Lista con viñetas", "Numbered list": "Lista numerada",
       "Clear formatting": "Quitar formato",
 
-      // ── AI Tutor Chat ──
-      "Ask anything about your courses — your AI tutor uses your own notes and course material to help":
-        "Pregunta lo que quieras sobre tus cursos — tu tutor de IA usa tus apuntes y materiales para ayudarte",
-      "General (no specific course)": "General (sin curso específico)",
-      "Select a course...": "Selecciona un curso...",
-      "Send": "Enviar", "Clear history": "Borrar historial",
-      "Extracting...": "Extrayendo...",
       "Attached:": "Adjuntado:", "No file attached": "Sin archivo adjunto",
       "Hi! I'm your AI study tutor. Ask me anything about your course material!":
         "¡Hola! Soy tu tutor de estudio con IA. ¡Pregúntame lo que quieras sobre tus materiales!",
@@ -3458,20 +3447,19 @@ def index():
         hero_kicker = "ESTUDIO IMPULSADO POR IA  ·  TUTOR  ·  DUELOS  ·  MARKETPLACE"
         hero_h1_a = "Tu cerebro,"
         hero_h1_b = "supercargado."
-        hero_sub = "MachReach es la suite de estudio con IA para estudiantes universitarios: tutor 24/7, generador de quizzes, flashcards, temporizador de enfoque, duelos, ligas y un marketplace para ganar monedas vendiendo tus apuntes."
+        hero_sub = "MachReach es la suite de estudio con IA para estudiantes universitarios: generador de quizzes, flashcards, temporizador de enfoque, duelos, ligas y un marketplace para ganar monedas vendiendo tus apuntes."
         cta_primary = "Empieza gratis"
         cta_secondary = "Iniciar sesión"
         coming_soon_biz = "El módulo para empresas está en camino — por ahora MachReach es 100% para estudiantes."
         stats = [
             ("∞", "Quizzes con IA en planes pagos"),
-            ("24/7", "Tutor IA disponible"),
+            ("∞", "Marketplace de apuntes activo"),
             ("3", "Niveles: Free · Plus · Ultimate"),
             ("100%", "Hecho para estudiantes"),
         ]
         f_h = "Todo lo que necesitas para conquistar el semestre"
         f_sub = "Una sola app. Cero distracciones. Solo herramientas que funcionan."
         features = [
-            ("&#129504;", "Tutor IA 24/7", "Pregúntale lo que quieras de tus apuntes y materiales. Respuestas con citas a la fuente."),
             ("&#128221;", "Quizzes infinitos", "Sube un PDF y genera quizzes ilimitados al instante. Plus/Ultimate sin límites diarios."),
             ("&#127919;", "Flashcards inteligentes", "Tarjetas de repaso con repetición espaciada. Dominas el material en menos tiempo."),
             ("&#9201;&#65039;", "Focus Timer + cursos", "Pomodoro con seguimiento por curso. Acumula racha, monedas y XP por cada sesión."),
@@ -3521,20 +3509,19 @@ def index():
         hero_kicker = "AI-POWERED STUDY  ·  TUTOR  ·  DUELS  ·  MARKETPLACE"
         hero_h1_a = "Your brain,"
         hero_h1_b = "supercharged."
-        hero_sub = "MachReach is the AI study suite built for college students: 24/7 tutor, quiz & flashcard generator, focus timer, duels, leagues, and a marketplace where you earn coins selling your notes."
+        hero_sub = "MachReach is the AI study suite built for college students: quiz & flashcard generator, focus timer, duels, leagues, and a marketplace where you earn coins selling your notes."
         cta_primary = "Start free"
         cta_secondary = "Log in"
         coming_soon_biz = "The business module is on the way — for now MachReach is 100% for students."
         stats = [
             ("∞", "AI quizzes on paid plans"),
-            ("24/7", "AI tutor on call"),
+            ("∞", "Notes marketplace open 24/7"),
             ("3", "Tiers: Free · Plus · Ultimate"),
             ("100%", "Built for students"),
         ]
         f_h = "Everything you need to crush the semester"
         f_sub = "One app. Zero distractions. Tools that actually work."
         features = [
-            ("&#129504;", "24/7 AI Tutor", "Ask anything about your notes and materials. Cited answers from your sources."),
             ("&#128221;", "Unlimited Quizzes", "Drop a PDF and generate quizzes instantly. Plus/Ultimate get no daily caps."),
             ("&#127919;", "Smart Flashcards", "Spaced-repetition cards. Master the material in less time."),
             ("&#9201;&#65039;", "Focus Timer + Courses", "Pomodoro with per-course tracking. Build streaks, earn coins and XP."),

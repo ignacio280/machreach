@@ -89,7 +89,10 @@ def register_academic_routes(app, csrf, limiter):
         # don't dump the entire global table.
         if not q and univ_id is None:
             return jsonify({"majors": []})
-        rows = ac.search_majors(q, university_id=univ_id, limit=50)
+        # Empty query + university selected → return the FULL catalogue so the
+        # browse-list isn't silently truncated (PUC alone has 77 carreras).
+        cap = 250 if (univ_id is not None and not q) else 50
+        rows = ac.search_majors(q, university_id=univ_id, limit=cap)
         return jsonify({"majors": rows})
 
     @app.route("/api/academic/majors", methods=["POST"])
