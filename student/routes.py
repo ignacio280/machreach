@@ -15195,23 +15195,40 @@ No markdown, no code fences. ONLY JSON.
     align-items:center; padding: 14px 20px; border-top:1px solid var(--border);
     transition: background .15s; position: relative; overflow: hidden;
   }
-  /* Leaderboard flag (cosmetic). Inline pill next to the name with soft glow. */
-  #mr-lb-page .lb-flag {
-    display: inline-block; vertical-align: middle;
-    margin-left: 8px;
-    padding: 4px 10px; border-radius: 999px;
-    font-size: 10px; font-weight: 800; letter-spacing: .12em;
-    color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.45);
+  /* Leaderboard flag (cosmetic). Two parts:
+     - .lb-flag-bg: full-row colored background, fades on the right so XP stays readable
+     - .lb-flag-pill: small pill on the right with a flag thumbnail + name label */
+  #mr-lb-page .lb-flag-bg {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,.4) 88%, transparent 100%);
+            mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,.4) 88%, transparent 100%);
+    opacity: .85;
+  }
+  #mr-lb-page .lb-row > *:not(.lb-flag-bg) { position: relative; z-index: 1; }
+  #mr-lb-page .lb-flag-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px 3px 4px; border-radius: 999px;
+    background: rgba(15,23,42,.55);
     border: 1px solid rgba(255,255,255,.18);
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.16),
-      0 2px 8px -2px rgba(0,0,0,.4),
-      0 0 16px -3px var(--lb-flag-glow, rgba(124,156,255,.6));
+      inset 0 1px 0 rgba(255,255,255,.10),
+      0 2px 6px -2px rgba(0,0,0,.5),
+      0 0 12px -3px var(--lb-flag-glow, rgba(124,156,255,.6));
+    color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .12em;
+    text-shadow: 0 1px 2px rgba(0,0,0,.5);
     white-space: nowrap;
     max-width: 140px; overflow: hidden; text-overflow: ellipsis;
+    margin-left: 8px;
+  }
+  #mr-lb-page .lb-flag-pill .lb-flag-thumb {
+    width: 18px; height: 12px; border-radius: 3px;
+    border: 1px solid rgba(255,255,255,.25);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
+    flex-shrink: 0;
   }
   @media (max-width: 600px) {
-    #mr-lb-page .lb-flag { display: none; }
+    #mr-lb-page .lb-flag-pill { display: none; }
+    #mr-lb-page .lb-flag-bg { opacity: .55; }
   }
   #mr-lb-page a.lb-row { display:grid; }
   #mr-lb-page .lb-row:first-child { border-top:none;}
@@ -15329,11 +15346,15 @@ No markdown, no code fences. ONLY JSON.
         return rgb ? rgb[0] : 'rgba(124,156,255,.55)';
       }
       board.innerHTML = rows.map(r => {
+        const flagBg = r.flag_css
+          ? `<div class="lb-flag-bg ${r.flag_anim_class||''}" style="background:${r.flag_css};"></div>`
+          : '';
         const flagPill = r.flag_css
-          ? `<span class="lb-flag ${r.flag_anim_class||''}" style="background:${r.flag_css}; --lb-flag-glow:${glowFromCss(r.flag_css)};">${escapeHtml((r.flag_name||'').toUpperCase())}</span>`
+          ? `<span class="lb-flag-pill" style="--lb-flag-glow:${glowFromCss(r.flag_css)};"><span class="lb-flag-thumb ${r.flag_anim_class||''}" style="background:${r.flag_css};"></span>${escapeHtml((r.flag_name||'').toUpperCase())}</span>`
           : '';
         return `
         <a class="lb-row ${r.is_you?'me':''}" href="/student/profile/${r.client_id}" style="color:inherit;text-decoration:none;cursor:pointer;">
+          ${flagBg}
           <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
@@ -15391,29 +15412,47 @@ No markdown, no code fences. ONLY JSON.
 <style>""" + sdb.BANNER_ANIM_CSS + """
   #mr-prof { --pf-card:#10172A; --pf-border:rgba(148,163,184,.12); }
   #mr-prof .pf-loading, #mr-prof .pf-error { padding:60px 20px; text-align:center; color:var(--text-muted);}
+  /* Twitter-style hero: full-width banner, avatar overlapping bottom-left,
+     identity strip (name + rank·XP) sits below in a flat dark band. */
   #mr-prof .pf-banner {
-    height:160px; border-radius:20px; margin-bottom:-60px; position:relative; overflow:hidden;
-    border:1px solid var(--border);
+    height:140px; border-radius:14px 14px 0 0; position:relative; overflow:hidden;
+    border:1px solid var(--border); border-bottom: none;
   }
-  #mr-prof .pf-hero {
-    background: linear-gradient(135deg, rgba(124,156,255,.12), rgba(192,132,252,.08));
-    border: 1px solid var(--border); border-radius: 20px; padding: 32px;
-    display:flex; gap:24px; align-items:center; flex-wrap:wrap; position:relative;
+  #mr-prof .pf-banner-fallback {
+    background: linear-gradient(135deg, #06b6d4 0%, #2563eb 100%);
+  }
+  #mr-prof .pf-identity {
+    background: #0B1220; border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 14px 14px; padding: 14px 22px 18px 22px;
+    position: relative;
   }
   #mr-prof .pf-avatar {
-    width:96px; height:96px; border-radius:50%; flex-shrink:0;
+    width:72px; height:72px; border-radius:50%; flex-shrink:0;
     background: linear-gradient(135deg, #3B4A7A, #5B4694);
     display:flex; align-items:center; justify-content:center;
-    color:#fff; font-size:36px; font-weight:700;
-    border: 3px solid var(--border);
+    color:#fff; font-size:26px; font-weight:700;
+    border: 3px solid #0B1220;
+    position: absolute; left: 22px; top: -36px; z-index: 2;
   }
-  #mr-prof .pf-name { font-size:28px; font-weight:800; margin:0 0 6px; letter-spacing:-.02em; }
+  #mr-prof .pf-id-body { padding-top: 42px; }
+  #mr-prof .pf-name { font-size:22px; font-weight:800; margin:0 0 4px; letter-spacing:-.02em; color:#fff; }
+  #mr-prof .pf-rankline {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size:13px; color: var(--text-muted); letter-spacing:.02em;
+  }
+  #mr-prof .pf-rankline b { color:#fff; font-weight:700; }
+  #mr-prof .pf-hero {
+    background: linear-gradient(135deg, rgba(124,156,255,.12), rgba(192,132,252,.08));
+    border: 1px solid var(--border); border-radius: 18px; padding: 22px 26px;
+    display:flex; gap:20px; align-items:center; flex-wrap:wrap; position:relative;
+    margin-top: 16px;
+  }
   #mr-prof .pf-meta { color:var(--text-muted); font-size:14px; display:flex; gap:14px; flex-wrap:wrap; }
   #mr-prof .pf-rank-card {
     margin-left:auto; padding:14px 20px; border-radius:14px;
     background: rgba(255,255,255,.03); border:1px solid var(--border); text-align:center;
   }
-  #mr-prof .pf-rank-name { font-size:20px; font-weight:700; }
+  #mr-prof .pf-rank-name { font-size:18px; font-weight:700; }
   #mr-prof .pf-rank-xp { font-size:13px; color:var(--text-muted); margin-top:4px; }
   #mr-prof .pf-grid {
     display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -15482,13 +15521,22 @@ No markdown, no code fences. ONLY JSON.
     var bio = p.bio ? '<p style="margin:14px 0 0;color:var(--text-muted);font-size:14px;line-height:1.6;">' + escapeHtml(p.bio) + '</p>' : '';
     var html = '';
     var bnr = p.banner || {};
-    if (bnr.css) {
-      html += '<div class="pf-banner bnr-anim-host ' + escapeHtml(bnr.anim_class || '') + '" style="background:' + bnr.css + ';"></div>';
-    }
-    html += '<div class="pf-hero">';
+    var bannerStyle = bnr.css ? ('background:' + bnr.css + ';') : '';
+    var bannerCls = bnr.css ? ('bnr-anim-host ' + escapeHtml(bnr.anim_class || '')) : 'pf-banner-fallback';
+    // Twitter-style banner with avatar overlapping the identity strip below.
+    html += '<div class="pf-banner ' + bannerCls + '" style="' + bannerStyle + '"></div>';
+    html += '<div class="pf-identity">';
     html +=   '<div class="pf-avatar">' + initials(p.name) + '</div>';
-    html +=   '<div style="flex:1;min-width:200px;">';
+    html +=   '<div class="pf-id-body">';
     html +=     '<h1 class="pf-name">' + escapeHtml(p.name) + retiredTag + '</h1>';
+    var rankNum = (leaderPos && leaderPos.rank) ? ('#' + leaderPos.rank) : 'Unranked';
+    html +=     '<div class="pf-rankline">Rank <b>' + rankNum + '</b> &middot; <b>' + (p.xp||0).toLocaleString() + '</b> XP</div>';
+    html += '</div>';
+    html += '</div>';
+
+    // Secondary hero card: country / university / major / bio + league chip
+    html += '<div class="pf-hero">';
+    html +=   '<div style="flex:1;min-width:200px;">';
     html +=     '<div class="pf-meta">';
     if (country)  html += '<span>' + country + '</span>';
     html +=       '<span>🎓 ' + uniName + '</span>';
@@ -17736,6 +17784,15 @@ No markdown, no code fences. ONLY JSON.
             level_name, floor, ceil = sdb.get_level(total_xp)
         except Exception:
             level_name, floor, ceil = "Beginner", 0, 100
+        # Pull the leaderboard rank for the identity strip ("Rank #X · Y XP").
+        try:
+            from student import academic as _ac
+            _retired = bool((c or {}).get("retired") or 0)
+            _my_rank_obj = _ac.my_rank("retirement" if _retired else "global", cid) or {}
+            _my_rank = _my_rank_obj.get("rank")
+        except Exception:
+            _my_rank = None
+        rank_display = ("#" + str(_my_rank)) if _my_rank else "Unranked"
         banner_css = sdb.BANNERS.get(wallet["selected_banner"], sdb.BANNERS["default"])["css"]
         equipped_banner_cfg = sdb.BANNERS.get(wallet["selected_banner"], sdb.BANNERS["default"]) or {}
         equipped_banner_anim = equipped_banner_cfg.get("anim_class") if equipped_banner_cfg.get("animated") else ""
@@ -17886,24 +17943,21 @@ No markdown, no code fences. ONLY JSON.
         <style>{sdb.BANNER_ANIM_CSS}
 {sdb.FLAG_ANIM_CSS}</style>
         <div style="max-width:900px;margin:0 auto;">
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:18px;overflow:hidden;margin-bottom:22px;">
-            <div id="profile-banner" class="bnr-anim-host {equipped_banner_anim}" style="height:160px;background:{banner_css};"></div>
-            <div style="padding:18px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
-              <div>
-                <div style="font-size:24px;font-weight:800;">{name}</div>
-                <div style="color:var(--text-muted);font-size:13px;">{email}</div>
-                <div style="margin-top:6px;font-size:13px;">Level: <b>{level_name}</b> &middot; <b>{total_xp}</b> XP</div>
-              </div>
-              <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <div class="stat-card stat-yellow" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['coins']} \U0001FA99</div><div class="label">Coins</div></div>
-                <div class="stat-card stat-blue" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['streak_freezes']} ❄️</div><div class="label">Freezes</div></div>
-                <div class="stat-card stat-red" style="min-width:120px;padding:10px 14px;"><div class="num" style="font-size:20px;">{focus_stats.get('streak_days',0)} 🔥</div><div class="label">Streak</div></div>
-              </div>
-            </div>
-            <div style="padding:0 24px 18px;">
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Progress to next level: {progress_pct}%</div>
-              <div style="background:var(--bg);border-radius:8px;height:8px;overflow:hidden;">
-                <div style="height:100%;background:linear-gradient(90deg,var(--primary),#8b5cf6);width:{progress_pct}%;"></div>
+          <div style="margin-bottom:22px;">
+            <div id="profile-banner" class="bnr-anim-host {equipped_banner_anim}" style="height:140px;background:{banner_css};border:1px solid var(--border);border-bottom:none;border-radius:14px 14px 0 0;"></div>
+            <div style="background:#0B1220;border:1px solid var(--border);border-top:none;border-radius:0 0 14px 14px;padding:14px 22px 18px;position:relative;">
+              <div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#3B4A7A,#5B4694);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:700;border:3px solid #0B1220;position:absolute;left:22px;top:-36px;z-index:2;">{(name[:2] or '?').upper()}</div>
+              <div style="padding-top:42px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;">
+                <div>
+                  <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em;">{name}</div>
+                  <div style="color:var(--text-muted);font-size:12px;">{email}</div>
+                  <div style="margin-top:4px;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;color:var(--text-muted);letter-spacing:.02em;">Rank <b style="color:#fff;font-weight:700;">{rank_display}</b> &middot; <b style="color:#fff;font-weight:700;">{total_xp:,}</b> XP</div>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                  <div class="stat-card stat-yellow" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['coins']} \U0001FA99</div><div class="label">Coins</div></div>
+                  <div class="stat-card stat-blue" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['streak_freezes']} ❄️</div><div class="label">Freezes</div></div>
+                  <div class="stat-card stat-red" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{focus_stats.get('streak_days',0)} 🔥</div><div class="label">Streak</div></div>
+                </div>
               </div>
             </div>
           </div>
