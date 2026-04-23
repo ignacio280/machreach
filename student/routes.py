@@ -15201,11 +15201,11 @@ No markdown, no code fences. ONLY JSON.
     position: absolute; inset: 0; pointer-events: none; z-index: 0;
     -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 22%, rgba(0,0,0,.6) 36%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 100%);
             mask-image: linear-gradient(to right, transparent 0%, transparent 22%, rgba(0,0,0,.6) 36%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 100%);
-    opacity: .9;
+    opacity: .55;
   }
   #mr-lb-page .lb-row > *:not(.lb-flag-bg) { position: relative; z-index: 1; }
   @media (max-width: 600px) {
-    #mr-lb-page .lb-flag-bg { opacity: .6; }
+    #mr-lb-page .lb-flag-bg { opacity: .35; }
   }
   #mr-lb-page a.lb-row { display:grid; }
   #mr-lb-page .lb-row:first-child { border-top:none;}
