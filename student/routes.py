@@ -3071,6 +3071,186 @@ def register_student_routes(app, csrf, limiter):
         return jsonify({"ok": True})
 
 
+    # ── Training tab API ────────────────────────────────────
+
+    @app.route("/api/student/training/courses", methods=["GET"])
+    def training_search_courses():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        try:
+            from student import training as tr
+            from outreach.db import _fetchone
+            uid_raw = request.args.get("university_id")
+            if uid_raw and uid_raw.isdigit():
+                uid = int(uid_raw)
+            else:
+                # Default to caller's own university.
+                with get_db() as db:
+                    r = _fetchone(db, "SELECT university_id FROM clients WHERE id = %s", (_cid(),))
+                uid = (r or {}).get("university_id") if r else None
+            if not uid:
+                return jsonify({"error": "university not set"}), 400
+            q = (request.args.get("q") or "").strip()
+            return jsonify({"university_id": uid, "courses": tr.search_courses(uid, q)})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/student/training/courses", methods=["POST"])
+    @limiter.limit("30 per hour")
+    def training_create_course():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        try:
+            from student import training as tr
+            from outreach.db import _fetchone
+            data = request.get_json(silent=True) or {}
+            name = (data.get("name") or "").strip()
+            code = (data.get("code") or "").strip() or None
+            uid_raw = data.get("university_id")
+            if uid_raw and str(uid_raw).isdigit():
+                uid = int(uid_raw)
+            else:
+                with get_db() as db:
+                    r = _fetchone(db, "SELECT university_id FROM clients WHERE id = %s", (_cid(),))
+                uid = (r or {}).get("university_id") if r else None
+            if not uid:
+                return jsonify({"error": "university not set"}), 400
+            course = tr.get_or_create_course(uid, name, code, created_by=_cid())
+            return jsonify({"ok": True, "course": course})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/api/student/training/courses/<int:course_id>/quizzes", methods=["GET"])
+    def training_course_quizzes(course_id: int):
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        from student import training as tr
+        course = tr.get_course(course_id)
+        if not course:
+            return jsonify({"error": "course not found"}), 404
+        return jsonify({"course": course, "quizzes": tr.list_quizzes_for_course(course_id)})
+
+    @app.route("/api/student/training/quizzes/<int:tq_id>", methods=["GET"])
+    def training_get_quiz(tq_id: int):
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        from student import training as tr
+        meta = tr.get_training_quiz(tq_id)
+        if not meta:
+            return jsonify({"error": "not found"}), 404
+        questions = sdb.get_quiz_questions(meta["quiz_id"])
+        return jsonify({"quiz": meta, "questions": [dict(q) for q in questions]})
+
+    @app.route("/api/student/training/quizzes/<int:tq_id>/attempt", methods=["POST"])
+    @limiter.limit("60 per hour")
+    def training_submit_attempt(tq_id: int):
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        from student import training as tr
+        data = request.get_json(silent=True) or {}
+        try:
+            score_pct = int(data.get("score_pct"))
+        except Exception:
+            return jsonify({"error": "score_pct required"}), 400
+        try:
+            result = tr.record_attempt(tq_id, _cid(), score_pct)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+        return jsonify({"ok": True, **result})
+
+    @app.route("/api/student/training/quizzes/<int:tq_id>/rate", methods=["POST"])
+    @limiter.limit("60 per hour")
+    def training_rate_quiz(tq_id: int):
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        from student import training as tr
+        data = request.get_json(silent=True) or {}
+        try:
+            rating = int(data.get("rating"))
+        except Exception:
+            return jsonify({"error": "rating required (1-10)"}), 400
+        try:
+            result = tr.record_rating(tq_id, _cid(), rating)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+        return jsonify({"ok": True, **result})
+
+    @app.route("/api/student/training/publish", methods=["POST"])
+    @limiter.limit("30 per hour")
+    def training_publish_quiz():
+        """Publish an existing per-user quiz to a training course."""
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        from student import training as tr
+        data = request.get_json(silent=True) or {}
+        try:
+            quiz_id = int(data.get("quiz_id"))
+            course_id = int(data.get("training_course_id"))
+        except Exception:
+            return jsonify({"error": "quiz_id + training_course_id required"}), 400
+        quiz = sdb.get_quiz(quiz_id, _cid())
+        if not quiz:
+            return jsonify({"error": "quiz not found"}), 404
+        questions = sdb.get_quiz_questions(quiz_id)
+        if not questions:
+            return jsonify({"error": "quiz has no questions"}), 400
+        try:
+            tq_id = tr.publish_quiz(
+                course_id, quiz_id, _cid(),
+                [dict(q) for q in questions],
+                title=quiz.get("title") or "Untitled quiz",
+            )
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        return jsonify({"ok": True, "training_quiz_id": tq_id})
+
+    @app.route("/api/student/training/upload-test", methods=["POST"])
+    @limiter.limit("10 per hour")
+    def training_upload_test():
+        """Convert an uploaded official-test PDF/DOCX into a MachReach
+        quiz, attach to a training course. Multiple-choice ONLY."""
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        from student.canvas import extract_text_from_pdf, extract_text_from_docx
+        from student.analyzer import extract_quiz_from_test
+        from student import training as tr
+        course_id = (request.form.get("training_course_id") or "").strip()
+        title = (request.form.get("title") or "").strip() or "Official Test"
+        if not course_id.isdigit():
+            return jsonify({"error": "training_course_id required"}), 400
+        course = tr.get_course(int(course_id))
+        if not course:
+            return jsonify({"error": "course not found"}), 404
+        f = request.files.get("file")
+        if not f:
+            return jsonify({"error": "file required"}), 400
+        raw = f.read()
+        name = (f.filename or "").lower()
+        try:
+            if name.endswith(".pdf"):
+                text = extract_text_from_pdf(raw)
+            elif name.endswith(".docx"):
+                text = extract_text_from_docx(raw)
+            else:
+                return jsonify({"error": "Only PDF or DOCX supported"}), 400
+        except Exception as e:
+            return jsonify({"error": f"Failed to parse file: {e}"}), 400
+        if not text or len(text.strip()) < 80:
+            return jsonify({"error": "Couldn't extract enough text. Make sure the test isn't a scanned image."}), 400
+        questions = extract_quiz_from_test(text, course.get("name") or "")
+        if not questions:
+            return jsonify({"error": "No multiple-choice questions detected. Reminder: only multiple-choice tests work — anything else won't transcribe correctly."}), 400
+        quiz_id = sdb.create_quiz(_cid(), title, "medium", course_id=None)
+        sdb.add_quiz_questions(quiz_id, questions)
+        try:
+            tq_id = tr.publish_quiz(
+                int(course_id), quiz_id, _cid(), questions,
+                title=title, is_official=True,
+            )
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        return jsonify({"ok": True, "training_quiz_id": tq_id, "question_count": len(questions)})
+
     # ── Frontend pages ──────────────────────────────────────
 
 
@@ -6927,6 +7107,348 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+    # ── Training tab page ────────────────────────────────────
+
+    @app.route("/student/training")
+    def student_training_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        body = """
+        <style>
+          .tr-wrap { max-width: 1080px; margin: 0 auto; padding: 16px; }
+          .tr-h1 { font-size: 28px; font-weight: 800; margin: 0 0 6px; }
+          .tr-sub { color: var(--text-muted, #94a3b8); margin: 0 0 22px; font-size: 14px; }
+          .tr-search { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+          .tr-search input {
+            flex: 1; min-width: 220px;
+            background: var(--card); border: 1px solid var(--border);
+            color: var(--text); border-radius: 10px; padding: 10px 14px;
+            font-size: 14px;
+          }
+          .tr-btn {
+            background: linear-gradient(135deg,#6366f1,#8b5cf6); color: #fff;
+            border: none; padding: 9px 16px; border-radius: 10px;
+            font-weight: 700; font-size: 13px; cursor: pointer;
+          }
+          .tr-btn.ghost {
+            background: var(--card); color: var(--text);
+            border: 1px solid var(--border);
+          }
+          .tr-courses, .tr-quizzes { display: grid; gap: 8px; margin-bottom: 22px; }
+          .tr-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 14px 16px; cursor: pointer;
+            transition: transform .12s, border-color .12s;
+          }
+          .tr-card:hover { transform: translateY(-1px); border-color: var(--primary, #6366f1); }
+          .tr-card .name { font-weight: 700; font-size: 15px; }
+          .tr-card .meta { color: var(--text-muted, #94a3b8); font-size: 12px; margin-top: 3px; }
+          .tr-pill {
+            display: inline-block; padding: 2px 8px; border-radius: 999px;
+            font-size: 11px; font-weight: 700; letter-spacing: .04em;
+            text-transform: uppercase; margin-right: 6px;
+          }
+          .tr-pill.easy   { background: rgba(16,185,129,.18); color: #10b981; }
+          .tr-pill.medium { background: rgba(245,158,11,.18); color: #f59e0b; }
+          .tr-pill.hard   { background: rgba(239,68,68,.18); color: #ef4444; }
+          .tr-pill.official { background: rgba(99,102,241,.18); color: #818cf8; }
+          .tr-empty { color: var(--text-muted); padding: 22px; text-align: center; border: 1px dashed var(--border); border-radius: 12px; }
+          .tr-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+          .tr-section { margin-top: 24px; }
+          .tr-section h2 { font-size: 18px; margin: 0 0 10px; }
+          .tr-upload {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 14px 16px;
+          }
+          .tr-upload input[type=file], .tr-upload input[type=text] {
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: 8px; padding: 8px 10px; font-size: 13px;
+            color: var(--text); width: 100%; box-sizing: border-box;
+            margin: 6px 0;
+          }
+          .tr-quiz-modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,.7);
+            backdrop-filter: blur(4px); z-index: 99980;
+            display: none; padding: 4vh 16px; overflow-y: auto;
+          }
+          .tr-quiz-modal.open { display: block; }
+          .tr-quiz-card {
+            max-width: 720px; margin: 0 auto;
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 16px; padding: 22px;
+          }
+          .tr-q { padding: 14px 0; border-bottom: 1px solid var(--border); }
+          .tr-q:last-child { border-bottom: none; }
+          .tr-q .qtxt { font-weight: 600; margin-bottom: 8px; }
+          .tr-q label {
+            display: block; padding: 8px 12px; margin: 4px 0;
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: 8px; cursor: pointer;
+          }
+          .tr-q label:hover { border-color: var(--primary); }
+          .tr-q input[type=radio] { margin-right: 8px; }
+          .tr-rate { display:flex; gap:4px; flex-wrap:wrap; margin-top: 12px; }
+          .tr-rate button {
+            width: 32px; height: 32px; border-radius: 50%;
+            border: 1px solid var(--border); background: var(--bg); color: var(--text);
+            font-weight: 700; cursor: pointer;
+          }
+          .tr-rate button.on { background: linear-gradient(135deg,#f59e0b,#ef4444); color:#fff; border:none; }
+          .tr-note { color: var(--text-muted); font-size: 12px; margin-top: 10px; }
+        </style>
+
+        <div class="tr-wrap">
+          <h1 class="tr-h1">&#128170; Training</h1>
+          <p class="tr-sub">Practice quizzes shared by other students at your university. Highest XP per attempt — way more than focus.</p>
+
+          <div class="tr-search">
+            <input id="tr-q" type="text" placeholder="Search course by name or code (e.g. IIC1103, Calculus I)" />
+            <button class="tr-btn" id="tr-search-btn">Search</button>
+            <button class="tr-btn ghost" id="tr-new-course-btn">+ New course</button>
+          </div>
+          <div class="tr-courses" id="tr-courses"></div>
+
+          <div class="tr-section" id="tr-quizzes-sec" style="display:none;">
+            <h2 id="tr-course-title"></h2>
+            <div class="tr-quizzes" id="tr-quizzes"></div>
+            <div class="tr-upload" id="tr-upload">
+              <div style="font-weight:700;margin-bottom:6px;">&#128194; Upload an official test (PDF or DOCX)</div>
+              <div class="tr-note">Reminder: only multiple-choice tests work — anything else won't transcribe correctly.</div>
+              <input id="tr-up-title" type="text" placeholder="Test title (e.g. Midterm 2024 Sem 1)" />
+              <input id="tr-up-file" type="file" accept=".pdf,.docx" />
+              <button class="tr-btn" id="tr-up-btn">Upload &amp; convert</button>
+              <div id="tr-up-status" class="tr-note"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tr-quiz-modal" class="tr-quiz-modal">
+          <div class="tr-quiz-card">
+            <div id="tr-quiz-head"></div>
+            <div id="tr-quiz-body"></div>
+            <div id="tr-quiz-foot" style="text-align:right;margin-top:14px;">
+              <button class="tr-btn ghost" id="tr-quiz-close">Close</button>
+              <button class="tr-btn" id="tr-quiz-submit">Submit</button>
+            </div>
+          </div>
+        </div>
+
+        <script>
+        (function(){
+          var state = { courseId: null, quiz: null, answers: {} };
+
+          function el(id){ return document.getElementById(id); }
+
+          function loadCourses(q){
+            var url = '/api/student/training/courses' + (q ? ('?q=' + encodeURIComponent(q)) : '');
+            fetch(url, {credentials:'same-origin'})
+              .then(function(r){ return r.json(); })
+              .then(function(data){
+                renderCourses(data.courses || []);
+              }).catch(function(){ el('tr-courses').innerHTML = '<div class="tr-empty">Failed to load.</div>'; });
+          }
+
+          function renderCourses(rows){
+            var box = el('tr-courses');
+            if (!rows.length) {
+              box.innerHTML = '<div class="tr-empty">No courses yet for your university. Create one with the +New course button.</div>';
+              return;
+            }
+            box.innerHTML = '';
+            rows.forEach(function(r){
+              var card = document.createElement('div');
+              card.className = 'tr-card';
+              card.innerHTML = '<div class="name">' + escapeHtml(r.name) +
+                (r.code ? ' <span style="color:var(--text-muted);font-weight:500;font-size:12px;">(' + escapeHtml(r.code) + ')</span>' : '') +
+                '</div><div class="meta">' + (r.quiz_count || 0) + ' quiz' + (r.quiz_count === 1 ? '' : 'zes') + '</div>';
+              card.addEventListener('click', function(){ openCourse(r); });
+              box.appendChild(card);
+            });
+          }
+
+          function openCourse(c){
+            state.courseId = c.id;
+            el('tr-course-title').textContent = c.name + (c.code ? ' (' + c.code + ')' : '');
+            el('tr-quizzes-sec').style.display = 'block';
+            el('tr-quizzes').innerHTML = '<div class="tr-empty">Loading quizzes…</div>';
+            fetch('/api/student/training/courses/' + c.id + '/quizzes', {credentials:'same-origin'})
+              .then(function(r){ return r.json(); })
+              .then(function(data){ renderQuizzes(data.quizzes || []); });
+          }
+
+          function renderQuizzes(rows){
+            var box = el('tr-quizzes');
+            if (!rows.length) {
+              box.innerHTML = '<div class="tr-empty">No quizzes yet for this course. Be the first — generate one in Quizzes or upload an official test below.</div>';
+              return;
+            }
+            box.innerHTML = '';
+            rows.forEach(function(q){
+              var card = document.createElement('div');
+              card.className = 'tr-card';
+              var diff = (q.difficulty || 'medium').toLowerCase();
+              var ratingHtml = (q.rating_count > 0)
+                ? ('&#9733; ' + (q.avg_rating || 0).toFixed(1) + ' (' + q.rating_count + ')')
+                : 'Unrated';
+              card.innerHTML =
+                '<div class="name">' +
+                  (q.is_official ? '<span class="tr-pill official">Official</span>' : '') +
+                  '<span class="tr-pill ' + diff + '">' + diff + '</span>' +
+                  escapeHtml(q.title || 'Untitled') +
+                '</div>' +
+                '<div class="meta">' + (q.question_count || 0) + ' questions · ' +
+                  (q.attempt_count || 0) + ' attempts · ' + ratingHtml +
+                  ' · by ' + escapeHtml(q.uploader_name || 'Unknown') + '</div>';
+              card.addEventListener('click', function(){ openQuiz(q.id); });
+              box.appendChild(card);
+            });
+          }
+
+          function openQuiz(tqId){
+            state.answers = {};
+            fetch('/api/student/training/quizzes/' + tqId, {credentials:'same-origin'})
+              .then(function(r){ return r.json(); })
+              .then(function(data){
+                if (!data.quiz) return;
+                state.quiz = data.quiz;
+                state.questions = data.questions || [];
+                renderQuizModal();
+                el('tr-quiz-modal').classList.add('open');
+              });
+          }
+
+          function renderQuizModal(){
+            var q = state.quiz;
+            var diff = (q.difficulty || 'medium').toLowerCase();
+            el('tr-quiz-head').innerHTML =
+              '<h2 style="margin:0 0 6px;">' + escapeHtml(q.title || '') + '</h2>' +
+              '<div class="tr-note"><span class="tr-pill ' + diff + '">' + diff +
+              '</span> · ' + state.questions.length + ' questions</div>';
+            var body = el('tr-quiz-body');
+            body.innerHTML = '';
+            state.questions.forEach(function(qq, idx){
+              var d = document.createElement('div');
+              d.className = 'tr-q';
+              var html = '<div class="qtxt">' + (idx+1) + '. ' + escapeHtml(qq.question) + '</div>';
+              ['a','b','c','d'].forEach(function(letter){
+                var v = qq['option_' + letter];
+                if (!v) return;
+                html += '<label><input type="radio" name="q' + idx + '" value="' + letter + '" /> ' +
+                        escapeHtml(v) + '</label>';
+              });
+              d.innerHTML = html;
+              body.appendChild(d);
+            });
+          }
+
+          el('tr-quiz-submit').addEventListener('click', function(){
+            var correct = 0;
+            state.questions.forEach(function(qq, idx){
+              var sel = document.querySelector('input[name=q' + idx + ']:checked');
+              if (sel && sel.value === (qq.correct || '').toLowerCase()) correct++;
+            });
+            var pct = Math.round(100 * correct / Math.max(1, state.questions.length));
+            fetch('/api/student/training/quizzes/' + state.quiz.id + '/attempt', {
+              method:'POST', credentials:'same-origin',
+              headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({score_pct: pct})
+            }).then(function(r){ return r.json(); })
+              .then(function(data){
+                el('tr-quiz-body').innerHTML =
+                  '<div style="text-align:center;padding:20px 0;">' +
+                  '<div style="font-size:54px;font-weight:800;">' + pct + '%</div>' +
+                  '<div class="tr-note">' + correct + ' of ' + state.questions.length + ' correct</div>' +
+                  '<div style="margin-top:14px;font-weight:700;color:var(--primary);">+' +
+                    (data.xp_awarded || 0) + ' XP awarded</div>' +
+                  '<div class="tr-note">Difficulty now: ' + (data.new_difficulty || '?') + ' · community avg ' +
+                    (data.avg_score_pct || 0) + '%</div>' +
+                  '<div style="margin-top:18px;">Rate this quiz:</div>' +
+                  '<div class="tr-rate" id="tr-rate-row"></div>' +
+                  '</div>';
+                buildRater();
+              });
+          });
+
+          function buildRater(){
+            var row = el('tr-rate-row');
+            row.innerHTML = '';
+            for (var i = 1; i <= 10; i++) {
+              (function(n){
+                var b = document.createElement('button');
+                b.textContent = n;
+                b.addEventListener('click', function(){
+                  fetch('/api/student/training/quizzes/' + state.quiz.id + '/rate', {
+                    method:'POST', credentials:'same-origin',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({rating: n})
+                  }).then(function(){
+                    Array.prototype.forEach.call(row.children, function(x){ x.classList.remove('on'); });
+                    b.classList.add('on');
+                  });
+                });
+                row.appendChild(b);
+              })(i);
+            }
+          }
+
+          el('tr-quiz-close').addEventListener('click', function(){
+            el('tr-quiz-modal').classList.remove('open');
+          });
+
+          el('tr-search-btn').addEventListener('click', function(){
+            loadCourses(el('tr-q').value.trim());
+          });
+          el('tr-q').addEventListener('keydown', function(e){
+            if (e.key === 'Enter') { e.preventDefault(); loadCourses(el('tr-q').value.trim()); }
+          });
+          el('tr-new-course-btn').addEventListener('click', function(){
+            var n = prompt('Course name (e.g. "Calculus I"):');
+            if (!n) return;
+            var c = prompt('Course code (optional, e.g. "MAT1610"):') || '';
+            fetch('/api/student/training/courses', {
+              method:'POST', credentials:'same-origin',
+              headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({name:n, code:c})
+            }).then(function(r){ return r.json(); })
+              .then(function(data){
+                if (data.error) { alert(data.error); return; }
+                loadCourses('');
+                if (data.course) openCourse(data.course);
+              });
+          });
+
+          el('tr-up-btn').addEventListener('click', function(){
+            if (!state.courseId) return;
+            var f = el('tr-up-file').files[0];
+            if (!f) { alert('Pick a PDF or DOCX first.'); return; }
+            var fd = new FormData();
+            fd.append('file', f);
+            fd.append('training_course_id', state.courseId);
+            fd.append('title', el('tr-up-title').value || f.name);
+            el('tr-up-status').textContent = 'Converting test… can take 30-60s.';
+            fetch('/api/student/training/upload-test', {
+              method:'POST', credentials:'same-origin', body: fd
+            }).then(function(r){ return r.json(); })
+              .then(function(data){
+                if (data.error) { el('tr-up-status').textContent = 'Error: ' + data.error; return; }
+                el('tr-up-status').textContent = 'Done — ' + (data.question_count || 0) + ' questions transcribed.';
+                openCourse({id: state.courseId, name: el('tr-course-title').textContent, code:''});
+              });
+          });
+
+          function escapeHtml(s){
+            return String(s == null ? '' : s)
+              .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+              .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+          }
+
+          loadCourses('');
+        })();
+        </script>
+        """
+        return _s_render("Training", body, active_page="student_training")
+
+
     # ── GPA Calculator page ─────────────────────────────────
 
 
@@ -8815,11 +9337,34 @@ def register_student_routes(app, csrf, limiter):
 
         sdb.add_quiz_questions(quiz_id, questions)
 
+        # Auto-publish to the Training tab so other students at the same
+        # university can practise on it. AI heuristic re-assigns difficulty
+        # at publish time and community avg score then recalibrates over time.
+        training_published = None
+        try:
+            from outreach.db import _fetchone as _fo
+            with get_db() as _db:
+                _cli = _fo(_db, "SELECT university_id FROM clients WHERE id = %s", (_cid(),))
+            _uni = (_cli or {}).get("university_id") if _cli else None
+            if _uni:
+                from student import training as _tr
+                _tc = _tr.get_or_create_course(
+                    _uni, course["name"], course.get("code") or None, created_by=_cid()
+                )
+                training_published = _tr.publish_quiz(
+                    _tc["id"], quiz_id, _cid(),
+                    [dict(q) for q in questions], title=title,
+                )
+        except Exception as _e:
+            log.warning("auto-publish to training failed: %s", _e)
+
 
 
         return jsonify({
 
             "quiz_id": quiz_id,
+
+            "training_quiz_id": training_published,
 
             "question_count": len(questions),
 

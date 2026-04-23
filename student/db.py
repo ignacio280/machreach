@@ -519,6 +519,12 @@ def init_student_db():
         init_prize_tables()
     except Exception as e:
         log.exception("init_prize_tables failed: %s", e)
+    # Training tab (community quizzes per university course).
+    try:
+        from student.training import init_training_tables
+        init_training_tables()
+    except Exception as e:
+        log.exception("init_training_tables failed: %s", e)
     log.info("Student tables initialized.")
 
 

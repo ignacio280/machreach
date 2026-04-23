@@ -1408,6 +1408,7 @@ LAYOUT = """<!DOCTYPE html>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
+        <a href="/student/training" {% if active_page == 'student_training' %}class="active"{% endif %}>&#128170; Training</a>
         <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Marketplace</a>
         <a href="/student/shop" {% if active_page == 'student_shop' %}class="active"{% endif %}>&#129534; Shop</a>
         <div class="nav-divider"></div>

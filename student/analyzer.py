@@ -901,6 +901,107 @@ def generate_quiz(
     return all_questions[:count]
 
 
+def extract_quiz_from_test(test_text: str, course_name: str = "") -> list[dict]:
+    """Convert raw text from an official test PDF into MachReach quiz
+    questions. Multiple choice ONLY — anything else is dropped.
+
+    The model is told to *transcribe*, not invent: the exact questions
+    and options that appear in the source. Used by the Training tab's
+    "Upload official test" flow."""
+    if not (test_text or "").strip():
+        return []
+
+    # If huge, send the model only the first ~80k chars — most exams
+    # fit easily under that ceiling and chunking would split the
+    # numbered question stream.
+    src = test_text[:80000]
+
+    prompt = f"""You are given the raw text of an official multiple-choice test.
+Transcribe every multiple-choice question into the JSON schema below — do NOT invent new ones, do NOT rephrase, do NOT add questions that weren't in the source.
+
+If a question has more or fewer than 4 options, SKIP IT. Only transcribe questions that have exactly 4 distinct options labelled (a, b, c, d) or (A, B, C, D) or (1, 2, 3, 4) or similar. Convert all option labels to a/b/c/d.
+
+If you can't determine the correct answer from the source text (because it's a blank test), set "correct" to "a" and add the note "Answer not provided in source." in the explanation field — the user will fix it.
+
+Course: {course_name or "Unknown"}
+
+SOURCE TEXT:
+{src}
+
+Return ONLY a valid JSON array — no markdown, no commentary:
+[
+  {{
+    "topic": "Short concept tag",
+    "question": "...",
+    "option_a": "...",
+    "option_b": "...",
+    "option_c": "...",
+    "option_d": "...",
+    "correct": "a",
+    "explanation": "..."
+  }}
+]"""
+    try:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=8000,
+            response_format={"type": "json_object"},
+        )
+        raw = resp.choices[0].message.content.strip()
+    except Exception:
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=8000,
+        )
+        raw = resp.choices[0].message.content.strip()
+
+    raw = re.sub(r"^```json?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        m = re.search(r"\[\s*\{.*\}\s*\]", raw, re.DOTALL)
+        if not m:
+            return []
+        try:
+            parsed = json.loads(m.group(0))
+        except Exception:
+            return []
+    if isinstance(parsed, dict):
+        for key in ("questions", "quiz", "data", "items"):
+            if isinstance(parsed.get(key), list):
+                parsed = parsed[key]
+                break
+    if not isinstance(parsed, list):
+        return []
+
+    cleaned = []
+    for q in parsed:
+        if not isinstance(q, dict):
+            continue
+        if not q.get("question"):
+            continue
+        if q.get("correct") not in ("a", "b", "c", "d"):
+            continue
+        if not all(q.get(f"option_{k}") for k in ("a", "b", "c", "d")):
+            continue
+        cleaned.append({
+            "topic": (q.get("topic") or "Test").strip()[:80],
+            "question": q["question"],
+            "option_a": q["option_a"],
+            "option_b": q["option_b"],
+            "option_c": q["option_c"],
+            "option_d": q["option_d"],
+            "correct": q["correct"],
+            "explanation": q.get("explanation", ""),
+        })
+    return cleaned
+
+
 # ── Shared chunking utility ─────────────────────────────────
 
 def _split_into_chunks(txt: str, max_chars: int = 18000, hard_cap_chunks: int = 12) -> list[tuple[str, str]]:
