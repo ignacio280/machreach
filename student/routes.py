@@ -123,6 +123,199 @@ _STUDY_PET_HTML = """
 """
 
 
+# Pop-up modal that fires the first time a logged-in student opens any
+# page after a weekly or monthly leaderboard period closes. Shows their
+# rank in every scope (global / country / university / major) plus any
+# coin prizes they won. One popup per period, dismissed by acking the
+# server. Injected into `_s_render` for every authenticated page.
+_PERIOD_POPUP_HTML = """
+<div id="mr-period-modal" class="mr-period-hidden" aria-hidden="true">
+  <div class="mr-period-back"></div>
+  <div class="mr-period-card" role="dialog" aria-modal="true">
+    <div class="mr-period-head">
+      <div class="mr-period-eyebrow" id="mr-period-eyebrow">Weekly results</div>
+      <div class="mr-period-title" id="mr-period-title">Last week's leaderboard</div>
+      <div class="mr-period-sub" id="mr-period-sub"></div>
+    </div>
+    <div class="mr-period-prize" id="mr-period-prize"></div>
+    <div class="mr-period-grid" id="mr-period-grid"></div>
+    <div class="mr-period-foot">
+      <button id="mr-period-next" class="mr-period-btn primary" type="button">Sweet, got it</button>
+    </div>
+  </div>
+</div>
+<style>
+  #mr-period-modal { position: fixed; inset: 0; z-index: 99990; display: block; }
+  #mr-period-modal.mr-period-hidden { display: none; }
+  #mr-period-modal .mr-period-back {
+    position: absolute; inset: 0; background: rgba(8, 11, 24, .72);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  #mr-period-modal .mr-period-card {
+    position: relative; max-width: 520px; width: calc(100% - 32px);
+    margin: 8vh auto 0; background: var(--card, #0f172a);
+    color: var(--text, #f8fafc);
+    border: 1px solid var(--border, rgba(255,255,255,.08));
+    border-radius: 18px; overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,.55);
+    animation: mrPeriodIn .25s cubic-bezier(.2,.9,.3,1.4);
+  }
+  @keyframes mrPeriodIn {
+    from { transform: translateY(20px) scale(.97); opacity: 0; }
+    to   { transform: translateY(0) scale(1);     opacity: 1; }
+  }
+  #mr-period-modal .mr-period-head {
+    padding: 22px 22px 14px; text-align: center;
+    background: linear-gradient(135deg, rgba(99,102,241,.18), rgba(139,92,246,.18));
+    border-bottom: 1px solid var(--border, rgba(255,255,255,.06));
+  }
+  #mr-period-modal .mr-period-eyebrow {
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: #c7d2fe; font-weight: 700; margin-bottom: 4px;
+  }
+  #mr-period-modal .mr-period-title { font-size: 22px; font-weight: 800; margin: 0; }
+  #mr-period-modal .mr-period-sub {
+    font-size: 12px; color: var(--text-muted, #94a3b8); margin-top: 4px;
+  }
+  #mr-period-modal .mr-period-prize {
+    margin: 16px 18px 0; padding: 14px 16px;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    color: #fff; border-radius: 12px;
+    font-weight: 700; text-align: center;
+    box-shadow: 0 8px 24px rgba(245,158,11,.3);
+  }
+  #mr-period-modal .mr-period-prize.empty { display: none; }
+  #mr-period-modal .mr-period-prize .big { font-size: 28px; line-height: 1; margin: 4px 0 6px; }
+  #mr-period-modal .mr-period-prize .small { font-size: 12px; opacity: .92; font-weight: 500; }
+  #mr-period-modal .mr-period-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 8px; padding: 16px 18px 8px;
+  }
+  #mr-period-modal .mr-period-cell {
+    padding: 10px 12px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--border, rgba(255,255,255,.06));
+    border-radius: 10px;
+  }
+  #mr-period-modal .mr-period-cell .lbl {
+    font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-muted, #94a3b8); font-weight: 700;
+  }
+  #mr-period-modal .mr-period-cell .rank {
+    font-size: 22px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums;
+  }
+  #mr-period-modal .mr-period-cell .meta {
+    font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 2px;
+  }
+  #mr-period-modal .mr-period-cell.win { background: linear-gradient(135deg, rgba(245,158,11,.18), rgba(239,68,68,.18)); border-color: rgba(245,158,11,.4); }
+  #mr-period-modal .mr-period-cell.win .rank { color: #fbbf24; }
+  #mr-period-modal .mr-period-cell.unranked .rank { color: var(--text-muted, #94a3b8); font-size: 14px; font-weight: 600; }
+  #mr-period-modal .mr-period-foot { padding: 8px 18px 18px; text-align: center; }
+  #mr-period-modal .mr-period-btn {
+    background: linear-gradient(135deg,#6366f1,#8b5cf6); color: #fff;
+    border: none; padding: 10px 22px; border-radius: 10px;
+    font-weight: 700; font-size: 14px; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(99,102,241,.4);
+  }
+  #mr-period-modal .mr-period-btn:hover { filter: brightness(1.05); }
+  @media (max-width: 480px) {
+    #mr-period-modal .mr-period-card { margin-top: 4vh; }
+    #mr-period-modal .mr-period-grid { grid-template-columns: 1fr; }
+  }
+</style>
+<script>
+(function(){
+  if (window.__mrPeriodInit) return;
+  window.__mrPeriodInit = true;
+  var modal = document.getElementById('mr-period-modal');
+  if (!modal) return;
+  var queue = [];
+  var SCOPES = [
+    { key: 'global',     label: 'Global' },
+    { key: 'country',    label: 'Country' },
+    { key: 'university', label: 'University' },
+    { key: 'major',      label: 'Major' },
+  ];
+  function show(p){
+    var kindLabel = p.period_kind === 'week' ? 'Weekly' : 'Monthly';
+    document.getElementById('mr-period-eyebrow').textContent = kindLabel + ' results';
+    document.getElementById('mr-period-title').textContent =
+      p.period_kind === 'week'
+        ? "Last week's leaderboard"
+        : "Last month's leaderboard";
+    document.getElementById('mr-period-sub').textContent =
+      'Period ' + (p.period_key || '') + ' is now closed.';
+    var prizeBox = document.getElementById('mr-period-prize');
+    if (p.total_coins_won > 0) {
+      prizeBox.classList.remove('empty');
+      prizeBox.innerHTML =
+        '<div class="small">\\u{1F389} You won</div>' +
+        '<div class="big">+' + p.total_coins_won + ' coins</div>' +
+        '<div class="small">Already credited to your wallet</div>';
+    } else {
+      prizeBox.classList.add('empty');
+      prizeBox.innerHTML = '';
+    }
+    var grid = document.getElementById('mr-period-grid');
+    grid.innerHTML = '';
+    SCOPES.forEach(function(s){
+      var data = (p.scopes || {})[s.key];
+      var prize = (p.prizes_by_scope || {})[s.key];
+      var cell = document.createElement('div');
+      var rankHtml, metaHtml = '';
+      var winClass = '';
+      if (!data) {
+        cell.className = 'mr-period-cell unranked';
+        rankHtml = 'Not ranked';
+        metaHtml = 'No XP this period';
+      } else {
+        if (prize) {
+          winClass = ' win';
+          metaHtml = data.xp + ' XP · +' + prize.coins + ' coins';
+        } else {
+          metaHtml = data.xp + ' XP · of ' + data.total_in_bucket + ' players';
+        }
+        rankHtml = '#' + data.rank;
+      }
+      cell.className = 'mr-period-cell' + winClass;
+      cell.innerHTML =
+        '<div class="lbl">' + s.label + '</div>' +
+        '<div class="rank">' + rankHtml + '</div>' +
+        '<div class="meta">' + metaHtml + '</div>';
+      grid.appendChild(cell);
+    });
+    modal.classList.remove('mr-period-hidden');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+  function ack(p){
+    fetch('/api/student/period/ack', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ period_kind: p.period_kind, period_key: p.period_key })
+    }).catch(function(){});
+  }
+  function next(){
+    if (!queue.length) {
+      modal.classList.add('mr-period-hidden');
+      modal.setAttribute('aria-hidden', 'true');
+      return;
+    }
+    var p = queue.shift();
+    ack(p);
+    show(p);
+  }
+  document.getElementById('mr-period-next').addEventListener('click', next);
+  fetch('/api/student/period/results', { credentials: 'same-origin' })
+    .then(function(r){ return r.ok ? r.json() : { periods: [] }; })
+    .then(function(data){
+      queue = (data && data.periods) || [];
+      if (queue.length) next();
+    }).catch(function(){});
+})();
+</script>
+"""
+
+
 
 def _gpa_planilla_html(lang: str = "en") -> str:
     """Return the GPA planilla HTML, localized for `lang` ('en' | 'es').
@@ -2588,13 +2781,15 @@ def register_student_routes(app, csrf, limiter):
 
                         break
 
-            # XP formula: 1 XP per 5 min, multiplied by difficulty and mode
+            # XP formula: heavily de-emphasised since focus sessions are
+            # easy to fake (timer runs whether you study or not). Real
+            # XP comes from quizzes/training. Cap at 5 XP per session.
 
-            diff_mult = {1: 1.0, 2: 1.25, 3: 1.5, 4: 1.75, 5: 2.0}.get(difficulty, 1.5)
+            diff_mult = {1: 1.0, 2: 1.1, 3: 1.2, 4: 1.3, 5: 1.5}.get(difficulty, 1.2)
 
-            mode_mult = 1.2 if mode == "pomodoro" else 1.0
+            mode_mult = 1.1 if mode == "pomodoro" else 1.0
 
-            xp = max(2, int(minutes / 5 * diff_mult * mode_mult + 0.5))
+            xp = min(5, max(1, int(minutes / 30 * diff_mult * mode_mult + 0.5)))
 
             detail = f"{mode.title()} {minutes}min"
 
@@ -2709,7 +2904,8 @@ def register_student_routes(app, csrf, limiter):
         # Frontend cards say "Hours Today" / "Sessions Today" — return
         # today-scoped stats, not lifetime totals (lifetime `stats` above is
         # only used for badge thresholds).
-        today_stats = sdb.get_focus_stats_today(cid)
+        local_date = (request.args.get("local_date") or "").strip() or None
+        today_stats = sdb.get_focus_stats_today(cid, local_date=local_date)
 
         return jsonify({"ok": True, "stats": today_stats, "promotion": promotion})
 
@@ -2723,7 +2919,9 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        return jsonify(sdb.get_focus_stats_today(_cid()))
+        local_date = (request.args.get("local_date") or "").strip() or None
+
+        return jsonify(sdb.get_focus_stats_today(_cid(), local_date=local_date))
 
 
 
@@ -2740,6 +2938,20 @@ def register_student_routes(app, csrf, limiter):
         if not _logged_in():
 
             return jsonify({"error": "Unauthorized"}), 401
+
+
+
+        # Lazy: run weekly/monthly leaderboard payouts if a boundary just passed.
+
+        try:
+
+            from student.leaderboard_prizes import run_payouts_if_due
+
+            run_payouts_if_due()
+
+        except Exception:
+
+            pass
 
 
 
@@ -2825,6 +3037,40 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+    # ── Leaderboard pop-up endpoints ────────────────────────
+
+    @app.route("/api/student/period/results", methods=["GET"])
+    def student_period_results():
+        """Return any closed-period leaderboard summaries the user
+        hasn't acknowledged yet (week + month). One popup per period."""
+        if not _logged_in():
+            return jsonify({"periods": []}), 401
+        try:
+            from student.leaderboard_prizes import get_pending_period_results
+            periods = get_pending_period_results(_cid())
+        except Exception:
+            periods = []
+        return jsonify({"periods": periods})
+
+    @app.route("/api/student/period/ack", methods=["POST"])
+    def student_period_ack():
+        """Mark one (period_kind, period_key) summary as seen so the
+        popup never shows again for this user/period."""
+        if not _logged_in():
+            return jsonify({"ok": False}), 401
+        try:
+            data = request.get_json(silent=True) or {}
+            kind = (data.get("period_kind") or "").strip()
+            key = (data.get("period_key") or "").strip()
+            if kind not in ("week", "month") or not key:
+                return jsonify({"ok": False, "error": "bad period"}), 400
+            from student.leaderboard_prizes import mark_period_seen
+            mark_period_seen(_cid(), kind, key)
+        except Exception:
+            return jsonify({"ok": False}), 500
+        return jsonify({"ok": True})
+
+
     # ── Frontend pages ──────────────────────────────────────
 
 
@@ -2854,6 +3100,9 @@ def register_student_routes(app, csrf, limiter):
         # Tiny animated study pet (POC). Fixed bottom-right, follows the
         # cursor a little, idle-bounces, can be toggled off via the bubble.
         pet_html = _STUDY_PET_HTML if _logged_in() else ""
+        # End-of-week / end-of-month leaderboard results popup. Shows once
+        # per period to every authenticated student.
+        period_popup_html = _PERIOD_POPUP_HTML if _logged_in() else ""
 
         return render_template_string(
 
@@ -2861,7 +3110,7 @@ def register_student_routes(app, csrf, limiter):
 
             title=f"Student — {title}",
 
-            content=Markup(pet_html + content_html),
+            content=Markup(pet_html + period_popup_html + content_html),
 
             logged_in=_logged_in(),
 
@@ -3999,55 +4248,7 @@ def register_student_routes(app, csrf, limiter):
 
           <div style="display:flex;gap:8px;flex-wrap:wrap">
 
-            <button onclick="showNewCourseModal()" class="btn btn-outline btn-sm">&#43; New Course</button>
-
             <button onclick="syncCourses()" class="btn btn-primary btn-sm" id="sync-btn">&#128260; Sync Canvas</button>
-
-          </div>
-
-        </div>
-
-
-
-        <div id="new-course-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
-
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;width:92%;max-width:440px">
-
-            <h3 style="margin:0 0 6px">Create a course</h3>
-
-            <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px">For classes outside Canvas. You can add exams to it just like a synced course.</p>
-
-            <div class="form-group">
-
-              <label>Course name *</label>
-
-              <input id="nc-name" type="text" placeholder="Intro to Microeconomics" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
-
-            </div>
-
-            <div class="form-group">
-
-              <label>Code</label>
-
-              <input id="nc-code" type="text" placeholder="ECON 101" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
-
-            </div>
-
-            <div class="form-group">
-
-              <label>Term</label>
-
-              <input id="nc-term" type="text" placeholder="Spring 2026" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
-
-            </div>
-
-            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-
-              <button onclick="hideNewCourseModal()" class="btn btn-ghost btn-sm">Cancel</button>
-
-              <button onclick="saveNewCourse()" class="btn btn-primary btn-sm" id="nc-save">Create</button>
-
-            </div>
 
           </div>
 
@@ -4842,6 +5043,30 @@ def register_student_routes(app, csrf, limiter):
           <div class="stat-card stat-red"><div class="num" id="stat-streak">{focus_stats['streak_days']}</div><div class="label">Day Streak &#128293;</div></div>
 
         </div>
+
+        <script>
+        // Refresh today's stats with the BROWSER's local date so users in
+        // negative-UTC timezones don't see ghost sessions belonging to the
+        // server's tomorrow.
+        (function(){{
+          try {{
+            var ld = new Date();
+            var ldStr = ld.getFullYear()+'-'+String(ld.getMonth()+1).padStart(2,'0')+'-'+String(ld.getDate()).padStart(2,'0');
+            fetch('/api/student/focus/stats?local_date=' + encodeURIComponent(ldStr))
+              .then(function(r){{ return r.ok ? r.json() : null; }})
+              .then(function(s){{
+                if (!s) return;
+                var h = document.getElementById('stat-hours');
+                var ss = document.getElementById('stat-sessions');
+                var st = document.getElementById('stat-streak');
+                if (h)  h.textContent  = s.total_hours;
+                if (ss) ss.textContent = s.sessions;
+                if (st) st.textContent = s.streak_days;
+              }})
+              .catch(function(){{}});
+          }} catch(e) {{}}
+        }})();
+        </script>
 
 
 
@@ -6233,7 +6458,8 @@ def register_student_routes(app, csrf, limiter):
 
                 try {{
 
-                  var r2 = await fetch('/api/student/focus/stats');
+                  var __ld = new Date(); var __ldStr = __ld.getFullYear()+'-'+String(__ld.getMonth()+1).padStart(2,'0')+'-'+String(__ld.getDate()).padStart(2,'0');
+                  var r2 = await fetch('/api/student/focus/stats?local_date=' + encodeURIComponent(__ldStr));
 
                   if (r2.ok) {{
 
@@ -15201,11 +15427,11 @@ No markdown, no code fences. ONLY JSON.
     position: absolute; inset: 0; pointer-events: none; z-index: 0;
     -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 22%, rgba(0,0,0,.6) 36%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 100%);
             mask-image: linear-gradient(to right, transparent 0%, transparent 22%, rgba(0,0,0,.6) 36%, rgba(0,0,0,1) 50%, rgba(0,0,0,1) 100%);
-    opacity: .55;
+    opacity: .28;
   }
   #mr-lb-page .lb-row > *:not(.lb-flag-bg) { position: relative; z-index: 1; }
   @media (max-width: 600px) {
-    #mr-lb-page .lb-flag-bg { opacity: .35; }
+    #mr-lb-page .lb-flag-bg { opacity: .18; }
   }
   #mr-lb-page a.lb-row { display:grid; }
   #mr-lb-page .lb-row:first-child { border-top:none;}

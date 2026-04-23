@@ -804,28 +804,31 @@ def league_for_xp(xp: int) -> dict:
 
 def _period_sql(period: str) -> str:
     """Return a SQL fragment that constrains student_xp.created_at to a
-    rolling window. `period` ∈ {"all", "week", "month"}.
+    CALENDAR period. `period` ∈ {"all", "week", "month"}.
 
-    Uses a parameter-free expression because `created_at` default is NOW() on
-    Postgres and CURRENT_TIMESTAMP on SQLite — both accept the interval math
-    below via NOW()/datetime('now', …). To keep the query portable we rely
-    on the hybrid `_exec`/`_fetchall` layer from outreach.db which passes
-    queries through unchanged; both engines understand `created_at >=
-    NOW() - INTERVAL '7 days'` on Postgres, and we fall back to
-    `created_at >= datetime('now','-7 days')` on SQLite via str replace.
+    Week = current ISO week (Monday 00:00 → Sunday 23:59).
+    Month = current calendar month (day 1 00:00 → end of month).
+    Periods reset at the boundary so the leaderboard "starts fresh" on
+    Monday and on the 1st, which is what the prize/payout system relies on.
     """
     if period == "week":
-        return " AND x.created_at >= NOW() - INTERVAL '7 days' "
+        # Postgres: date_trunc gives Monday 00:00 of current ISO week.
+        return " AND x.created_at >= date_trunc('week', NOW()) "
     if period == "month":
-        return " AND x.created_at >= NOW() - INTERVAL '30 days' "
+        return " AND x.created_at >= date_trunc('month', NOW()) "
     return ""
 
 
 def _sqlite_port(q: str) -> str:
-    """If we're on SQLite, translate Postgres interval math to sqlite syntax."""
+    """If we're on SQLite, translate Postgres date_trunc/interval math to sqlite syntax."""
     from outreach.db import _USE_PG  # local import to avoid cycles
     if _USE_PG:
         return q
+    # Week: weekday() in SQLite is 0=Sunday..6=Saturday, but we want Monday-start.
+    # date('now','weekday 1','-7 days') gives the most recent Monday.
+    q = q.replace("date_trunc('week', NOW())", "date('now','weekday 1','-7 days')")
+    q = q.replace("date_trunc('month', NOW())", "date('now','start of month')")
+    # Legacy rolling window (no longer emitted but kept defensive).
     q = q.replace("NOW() - INTERVAL '7 days'", "datetime('now','-7 days')")
     q = q.replace("NOW() - INTERVAL '30 days'", "datetime('now','-30 days')")
     return q

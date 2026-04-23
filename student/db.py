@@ -513,6 +513,12 @@ def init_student_db():
         init_academic_db()
     except Exception as e:
         log.exception("init_academic_db failed: %s", e)
+    # Weekly/monthly leaderboard prize tables.
+    try:
+        from student.leaderboard_prizes import init_prize_tables
+        init_prize_tables()
+    except Exception as e:
+        log.exception("init_prize_tables failed: %s", e)
     log.info("Student tables initialized.")
 
 
@@ -1171,13 +1177,20 @@ def get_focus_stats(client_id: int) -> dict:
         }
 
 
-def get_focus_stats_today(client_id: int) -> dict:
+def get_focus_stats_today(client_id: int, local_date: str | None = None) -> dict:
     """Focus stats restricted to TODAY (the user's local calendar day).
 
     Used by the Focus Mode page header so the numbers reflect what the
     student has put in *today*, not their lifetime totals.
+
+    `local_date` (YYYY-MM-DD) lets callers pass the browser's local date so
+    users in negative-UTC timezones don't see "phantom" sessions belonging
+    to the server's tomorrow.
     """
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    if local_date and len(local_date) == 10 and local_date[4] == '-' and local_date[7] == '-':
+        today_str = local_date
+    else:
+        today_str = datetime.now().strftime("%Y-%m-%d")
     like_today = today_str + "%"
     with get_db() as db:
         total_min = _fetchval(
@@ -2673,14 +2686,14 @@ def get_note_fork_count(author_id: int) -> int:
 # -- Daily Quests --------------------------------------------
 
 QUEST_POOL = [
-    {"key": "focus_25",    "label": "Focus for 25 minutes",         "target": 25,  "xp": 15, "metric": "focus_minutes"},
-    {"key": "focus_60",    "label": "Focus for 60 minutes",         "target": 60,  "xp": 25, "metric": "focus_minutes"},
+    {"key": "focus_25",    "label": "Focus for 25 minutes",         "target": 25,  "xp": 3,  "metric": "focus_minutes"},
+    {"key": "focus_60",    "label": "Focus for 60 minutes",         "target": 60,  "xp": 5,  "metric": "focus_minutes"},
     {"key": "flashcards_20","label": "Review 20 flashcards",        "target": 20,  "xp": 15, "metric": "flashcards_reviewed"},
     {"key": "quiz_1",      "label": "Complete 1 quiz",              "target": 1,   "xp": 20, "metric": "quizzes_completed"},
     {"key": "session_3",   "label": "Finish 3 study sessions",      "target": 3,   "xp": 20, "metric": "sessions_completed"},
     {"key": "pages_15",    "label": "Read 15 pages of material",    "target": 15,  "xp": 15, "metric": "pages_read"},
     {"key": "note_1",      "label": "Create 1 note",                "target": 1,   "xp": 10, "metric": "notes_created"},
-    {"key": "exam_review_15","label": "15 min reviewing for an exam","target": 15, "xp": 15, "metric": "focus_minutes"},
+    {"key": "exam_review_15","label": "15 min reviewing for an exam","target": 15, "xp": 4,  "metric": "focus_minutes"},
 ]
 
 QUEST_BUNDLE_BONUS_XP = 30  # awarded when all 3 daily quests complete
@@ -3552,10 +3565,10 @@ FLAGS = {
     "neon":       {"name": "Neon Pulse",         "price_coins": 150,  "xp_required": 600,
                    "css": "linear-gradient(90deg, #ec4899 0%, #8b5cf6 50%, #06b6d4 100%)"},
     "racing":     {"name": "Racing Stripes",     "price_coins": 200,  "xp_required": 1000,
-                   "css": "repeating-linear-gradient(45deg, #ef4444 0 14px, #fafafa 14px 28px)"},
+                   "css": "repeating-linear-gradient(90deg, #ef4444 0 14px, #fafafa 14px 28px)"},
     "racing_anim":{"name": "Racing Stripes (Anim)", "price_coins": 350,  "xp_required": 1500,
                    "animated": True, "anim_class": "flag-anim-racing",
-                   "css": "repeating-linear-gradient(45deg, #ef4444 0 14px, #fafafa 14px 28px)"},
+                   "css": "repeating-linear-gradient(90deg, #ef4444 0 14px, #fafafa 14px 28px)"},
     "verdant":    {"name": "Verdant Banner",     "price_coins": 200,  "xp_required": 1000,
                    "css": "linear-gradient(90deg, #064e3b 0%, #10b981 60%, #a7f3d0 100%)"},
     "imperial":   {"name": "Imperial Gold",      "price_coins": 350,  "xp_required": 2500,
@@ -3733,8 +3746,8 @@ FLAG_ANIM_CSS = """
   filter: drop-shadow(0 0 4px rgba(74,222,128,.5));
 }
 
-/* Racing Stripes (Anim) — diagonal stripes flying right */
-@keyframes flg-racing { 0% { background-position: 0 0; } 100% { background-position: 56px 56px; } }
+/* Racing Stripes (Anim) — vertical stripes scrolling rightward */
+@keyframes flg-racing { 0% { background-position: 0 0; } 100% { background-position: 56px 0; } }
 .flag-anim-racing {
   background-size: 28px 28px !important;
   animation: flg-racing .7s linear infinite;
