@@ -10287,7 +10287,7 @@ def privacy_page():
     return _render("Privacy Policy", Markup("""
     <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
       <h1 style="font-size:32px;margin-bottom:8px;">Privacy Policy</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 17, 2026</p>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 24, 2026</p>
 
       <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
         <p style="background:rgba(139,92,246,.08);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:24px;"><strong>Plain-English summary:</strong> MachReach has two sides &mdash; a <em>Business</em> outreach platform and a <em>Student</em> study platform. We collect only what the features require, we never sell your data, passwords are hashed with bcrypt, email credentials are encrypted with AES-256, and you can export or delete everything at any time from Settings.</p>
@@ -10299,8 +10299,9 @@ def privacy_page():
         <p><strong>Business side &mdash; contact data:</strong> names, emails, and companies you upload for your campaigns. You are responsible for ensuring you have proper consent or legitimate interest to contact those individuals.</p>
         <p><strong>Student side &mdash; Canvas LMS data:</strong> when you connect Canvas we fetch your courses, assignments, and exam dates via OAuth. Your Canvas access token is encrypted at rest. You can disconnect Canvas at any time in Settings, which immediately deletes the token.</p>
         <p><strong>Student side &mdash; uploaded study materials:</strong> PDFs, DOCX files, notes, and text you provide for flashcards, quizzes, AI notes, and the AI tutor. These are stored in your account and used only to generate study features for you.</p>
-        <p><strong>Student side &mdash; gamification data:</strong> XP events, study streak, badges, quiz scores, flashcard reviews, and focus-session data (duration, type of timer). This feeds your level, global leaderboard, personal (fair-play) leaderboards, and progress charts.</p>
-        <p><strong>Student side &mdash; study exchange:</strong> notes you explicitly mark as shared become viewable to other MachReach students. You can unshare them at any time. Other users' forks of your notes are tracked only as anonymous counters for XP.</p>
+        <p><strong>Student side &mdash; gamification data:</strong> XP events, study streak, badges, quiz scores, flashcard reviews, and focus-session data (duration, type of timer). This feeds your level, the hierarchical leaderboards (global, country, university, major), and progress charts.</p>
+        <p><strong>Student side &mdash; weekly &amp; monthly coin payouts:</strong> at the end of each ISO week and calendar month we automatically compute the top&nbsp;5 per leaderboard scope. Winners receive coins in their in-app wallet and a congratulatory email listing the categories they placed in. All users see a one-time position popup on their next login summarising where they ranked on the eight leaderboards (global/country/university/major &times; weekly/monthly). Only rank and XP are shown to you &mdash; no other user&rsquo;s email or private data.</p>
+        <p><strong>Student side &mdash; training tab (community quizzes):</strong> when you generate an AI quiz for a course at your university it is automatically published to that course&rsquo;s training tab, visible to other students registered in the same university. Your display name is shown as the quiz author. Other users&rsquo; attempts and 1&ndash;10 ratings are aggregated to re-calibrate the quiz&rsquo;s difficulty label (easy / medium / hard); we do not expose individual attempt scores to the author. If you upload an official test (PDF/DOCX) to generate a practice quiz, the text is sent to OpenAI for question extraction (see Section&nbsp;4) and the resulting multiple-choice questions are published to the training tab exactly like an AI-generated quiz. You can request deletion of any quiz you published by emailing support.</p>
         <p><strong>Focus Shield browser extension:</strong> the Focus Guard extension runs locally in your browser. It stores your blocklist and active-session state in <code>chrome.storage</code> on your device. It does <strong>not</strong> send your browsing history to our servers.</p>
         <p><strong>Usage data:</strong> aggregate metrics about how you use MachReach (features opened, campaigns created, quizzes generated) to improve the service. We do not use third-party advertising analytics.</p>
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive only a subscription ID and status &mdash; never card numbers.</p>
@@ -10312,8 +10313,10 @@ def privacy_page():
           <li>To sync and classify your inbox in Mail Hub</li>
           <li>To generate AI-powered study plans, flashcards, quizzes, and tutor answers based on your own materials</li>
           <li>To track XP, streaks, and leaderboard rankings</li>
+          <li>To compute and credit weekly / monthly leaderboard coin payouts and email winners a short congratulations notice</li>
+          <li>To power the Training tab &mdash; publishing your AI-generated quizzes to your university&rsquo;s course pages, aggregating community scores to calibrate difficulty, and recording your quiz ratings</li>
           <li>To process payments and manage your subscription</li>
-          <li>To send you service-related notifications (password resets, security alerts, daily study emails you opted into)</li>
+          <li>To send you service-related notifications (password resets, security alerts, prize congratulations, daily study emails you opted into)</li>
         </ul>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Data Security</h2>
@@ -10355,9 +10358,8 @@ def privacy_page():
           <li>Update or correct your personal information in Settings</li>
           <li>Delete your account and all associated data</li>
           <li>Disconnect email or Canvas accounts at any time (credentials/tokens are immediately deleted)</li>
-          <li>Unshare or delete any note you previously shared in Study Exchange</li>
-          <li>Leave or delete any personal leaderboard you created</li>
-          <li>Opt out of daily study-email digests in Settings</li>
+          <li>Request removal of any quiz you published to a Training-tab course (email support)</li>
+          <li>Opt out of daily study-email digests and of weekly/monthly prize congratulation emails in Settings</li>
         </ul>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. International Users (GDPR / UK&nbsp;GDPR)</h2>
@@ -10404,7 +10406,7 @@ def terms_page():
     return _render("Terms of Service", Markup("""
     <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
       <h1 style="font-size:32px;margin-bottom:8px;">Terms of Service</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 17, 2026</p>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 24, 2026</p>
 
       <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Acceptance of Terms</h2>
@@ -10414,7 +10416,7 @@ def terms_page():
         <p>MachReach is a dual-purpose platform:</p>
         <ul style="padding-left:20px;">
           <li><strong>Business side:</strong> email outreach, campaign management, inbox sync via IMAP/SMTP, AI-assisted writing and reply classification.</li>
-          <li><strong>Student side:</strong> Canvas LMS integration, AI-generated study plans, flashcards, practice quizzes, AI tutor, essay feedback, panic-mode cram plans, weekly schedule, focus-mode timers, XP/leaderboards, and the optional Focus Guard browser extension.</li>
+          <li><strong>Student side:</strong> Canvas LMS integration, AI-generated study plans, flashcards, practice quizzes, AI tutor, essay feedback, panic-mode cram plans, weekly schedule, focus-mode timers, XP/leaderboards with weekly &amp; monthly coin payouts, a Training tab of community-shared quizzes per university course, and the optional Focus Guard browser extension.</li>
         </ul>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Account Responsibilities</h2>
@@ -10464,10 +10466,12 @@ def terms_page():
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7a. Academic Integrity</h2>
         <p>You are solely responsible for complying with your institution&rsquo;s academic-integrity policies. MachReach is a study aid; using its output to commit plagiarism, cheat on exams, or violate honor codes is a breach of these Terms and of your relationship with your institution.</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7b. Study Exchange &amp; Shared Content</h2>
-        <p>When you publish a note to Study Exchange, you grant other MachReach students a non-exclusive, revocable license to view and fork that note. You must own the content or have the right to share it. You can unshare or delete any note at any time. Leaderboards (global, university, and fair-play personal) display only your first name, university, and XP totals.</p>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7b. Training Tab &amp; Shared Quizzes</h2>
+        <p>When you generate an AI quiz for a course at your university it is automatically published to that course&rsquo;s Training tab, visible to other students registered at the same university. By generating or uploading a quiz you grant MachReach and those students a non-exclusive, revocable license to display and take that quiz. You must own the content or have the right to share it &mdash; do <strong>not</strong> upload copyrighted exams without permission from the rights holder. You can request removal of any quiz you published by emailing support. Community ratings (1&ndash;10) and aggregate attempt scores are used only to calibrate the quiz&rsquo;s displayed difficulty label.</p>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7c. Leaderboards &amp; Prize Payouts</h2>
+        <p>The hierarchical leaderboards (global / country / university / major) display only your first name, country, university, major, and XP totals. At the end of each ISO week (Monday 00:00 UTC) and calendar month (1st of the month 00:00 UTC) MachReach automatically awards in-app coins to the top&nbsp;5 students in each scope. Coins have no cash value, cannot be transferred between accounts, and cannot be redeemed for money; they are redeemable only inside MachReach (cosmetics, streak freezes, etc.). We reserve the right to withhold or reverse payouts in cases of suspected abuse (e.g. multi-accounting, XP farming, exploiting bugs).</p>
 
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7c. Focus Guard Browser Extension</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7d. Focus Guard Browser Extension</h2>
         <p>The Focus Guard Chrome extension is provided free of charge and runs locally in your browser. You install it at your own discretion and may uninstall it at any time. It does not transmit your browsing history to MachReach.</p>
 
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. Limitation of Liability</h2>

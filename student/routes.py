@@ -9962,18 +9962,6 @@ No markdown, no code fences. ONLY JSON.
 
                                   course_id=course_id)
 
-        # Check note badges
-
-        all_notes = sdb.get_notes(_cid())
-
-        nc = len(all_notes) if all_notes else 0
-
-        for key, threshold in [("note_taker", 10), ("note_taker_25", 25), ("note_taker_50", 50)]:
-
-            if nc >= threshold:
-
-                sdb.earn_badge(_cid(), key)
-
         return jsonify({"note_id": note_id, "title": result["title"]})
 
 
@@ -10085,18 +10073,6 @@ No markdown, no code fences. ONLY JSON.
             html += "<p>" + _esc(p) + "</p>\n"
 
         note_id = sdb.create_note(_cid(), title, html, source_type="pdf-upload")
-
-        # Check note badges
-
-        all_notes = sdb.get_notes(_cid())
-
-        nc = len(all_notes) if all_notes else 0
-
-        for key, threshold in [("note_taker", 10), ("note_taker_25", 25), ("note_taker_50", 50)]:
-
-            if nc >= threshold:
-
-                sdb.earn_badge(_cid(), key)
 
         return jsonify({"note_id": note_id, "title": title})
 
@@ -14779,16 +14755,6 @@ No markdown, no code fences. ONLY JSON.
 
                 sdb.earn_badge(cid, key)
 
-        # Auto-check helper badges
-
-        fork_count = sdb.get_note_fork_count(cid)
-
-        for key, threshold in [("helper_5", 5), ("helper_25", 25), ("helper_100", 100)]:
-
-            if fork_count >= threshold:
-
-                sdb.earn_badge(cid, key)
-
         badges = sdb.get_badges(cid)
 
 
@@ -15998,6 +15964,16 @@ No markdown, no code fences. ONLY JSON.
     display:inline-block; padding: 3px 9px; font-size:11px; border-radius:999px;
     font-weight:600; letter-spacing:.02em;
   }
+  /* Prize chip shown next to leaderboard rank when a payout is on the line. */
+  #mr-lb-page .lb-prize {
+    display:inline-flex; align-items:center; gap:3px;
+    margin-top:4px; padding: 2px 7px; font-size:10px; line-height:1.2;
+    background: linear-gradient(135deg, rgba(250,204,21,.18), rgba(234,179,8,.10));
+    color: #FCD34D; border: 1px solid rgba(250,204,21,.35);
+    border-radius: 999px; font-weight:700; letter-spacing:.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  #mr-lb-page .lb-medal-cell { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
   #mr-lb-page .lb-empty, #mr-lb-page .lb-loading { padding: 36px 20px; text-align:center; color: var(--text-muted);}
   #mr-lb-page .lb-skeleton { display:flex; flex-direction:column; gap: 10px; padding: 14px 20px;}
   #mr-lb-page .lb-sk-row { height: 48px; background: linear-gradient(90deg, rgba(148,163,184,.06), rgba(148,163,184,.14), rgba(148,163,184,.06));
@@ -16053,6 +16029,21 @@ No markdown, no code fences. ONLY JSON.
   // Currently-selected scope + period. Period starts at "all" = all-time.
   const lbState = { scope: 'global', period: 'all' };
 
+  // Monthly prize table (weekly = monthly // 2). Mirrors student/leaderboard_prizes.py.
+  // Retirement scope has no payouts — left out intentionally.
+  const PRIZES_MONTHLY = {
+    global:     {1:500, 2:300, 3:200, 4:100, 5:50},
+    country:    {1:300, 2:200, 3:100, 4: 60, 5:30},
+    university: {1:150, 2:100, 3: 60, 4: 40, 5:20},
+    major:      {1: 80, 2: 50, 3: 30, 4: 20, 5:10},
+  };
+  function prizeFor(scope, rank, period) {
+    if (period !== 'week' && period !== 'month') return 0;
+    const base = (PRIZES_MONTHLY[scope] || {})[rank] || 0;
+    if (!base) return 0;
+    return period === 'week' ? Math.floor(base/2) : base;
+  }
+
   async function loadRanks() {
     try {
       const r = await fetch('/api/academic/ranks?period=' + encodeURIComponent(lbState.period));
@@ -16088,10 +16079,17 @@ No markdown, no code fences. ONLY JSON.
         const flagBg = r.flag_css
           ? `<div class="lb-flag-bg ${r.flag_anim_class||''}" style="background:${r.flag_css};"></div>`
           : '';
+        const prize = prizeFor(lbState.scope, r.rank, lbState.period);
+        const prizeChip = prize > 0
+          ? `<div class="lb-prize" title="Prize for finishing #${r.rank} this ${lbState.period}">🪙 +${prize}</div>`
+          : '';
         return `
         <a class="lb-row ${r.is_you?'me':''}" href="/student/profile/${r.client_id}" style="color:inherit;text-decoration:none;cursor:pointer;">
           ${flagBg}
-          <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
+          <div class="lb-medal-cell">
+            <div class="${r.rank<=3?'lb-medal':'lb-pos'}">${r.rank<=3 ? medal(r.rank) : '#'+r.rank}</div>
+            ${prizeChip}
+          </div>
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
             <div><div>${r.badge_left_emoji?`<span title="${escapeHtml(r.badge_left_name||'')}" style="margin-right:4px;">${r.badge_left_emoji}</span>`:''}${escapeHtml(r.name)}${r.badge_right_emoji?`<span title="${escapeHtml(r.badge_right_name||'')}" style="margin-left:4px;">${r.badge_right_emoji}</span>`:''}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>

@@ -2065,7 +2065,6 @@ BADGE_DEFS = {
     "streak_3":        {"emoji": "🔥", "name": "On Fire!",        "desc": "3-day study streak"},
     "streak_7":        {"emoji": "⚡", "name": "Unstoppable",      "desc": "7-day study streak"},
     "streak_30":       {"emoji": "💎", "name": "Diamond Student",  "desc": "30-day study streak"},
-    "note_taker":      {"emoji": "📒", "name": "Note Taker",      "desc": "Created 10 notes"},
     "xp_100":          {"emoji": "⭐", "name": "Rising Star",     "desc": "Earned 100 XP"},
     "xp_500":          {"emoji": "🌟", "name": "Shining Star",    "desc": "Earned 500 XP"},
     "xp_1000":         {"emoji": "💫", "name": "Superstar",       "desc": "Earned 1000 XP"},
@@ -2077,8 +2076,6 @@ BADGE_DEFS = {
     # New badges
     "flashcard_500":   {"emoji": "🗂️", "name": "Card Shark",     "desc": "Reviewed 500 flashcards"},
     "flashcard_1000":  {"emoji": "🎰", "name": "Flashcard Legend", "desc": "Reviewed 1,000 flashcards"},
-    "note_taker_25":   {"emoji": "📚", "name": "Prolific Writer", "desc": "Created 25 notes"},
-    "note_taker_50":   {"emoji": "✍️", "name": "Note Machine",   "desc": "Created 50 notes"},
     "quiz_25":         {"emoji": "🧪", "name": "Quiz Veteran",    "desc": "Completed 25 quizzes"},
     "quiz_50":         {"emoji": "🏅", "name": "Quiz Legend",     "desc": "Completed 50 quizzes"},
     "xp_2500":         {"emoji": "🚀", "name": "Rocket Student",  "desc": "Earned 2,500 XP"},
@@ -2086,12 +2083,6 @@ BADGE_DEFS = {
     "streak_14":       {"emoji": "🔱", "name": "Two-Week Warrior", "desc": "14-day study streak"},
     "streak_60":       {"emoji": "🏛️", "name": "Iron Will",      "desc": "60-day study streak"},
     "streak_100":      {"emoji": "💯", "name": "The 100 Club",    "desc": "100-day study streak"},
-    "sharer":          {"emoji": "🤝", "name": "Sharer",          "desc": "Published a note to Study Exchange"},
-    "popular_note":    {"emoji": "❤️", "name": "Popular Note",    "desc": "One of your shared notes got 5 likes"},
-    "viral_note":      {"emoji": "🔥", "name": "Viral Note",      "desc": "One of your shared notes got 25 likes"},
-    "helper_5":        {"emoji": "🙌", "name": "Helpful",         "desc": "5 students used your shared notes"},
-    "helper_25":       {"emoji": "🌍", "name": "Community Hero",  "desc": "25 students used your shared notes"},
-    "helper_100":      {"emoji": "🏆", "name": "Knowledge Legend", "desc": "100 students used your shared notes"},
     "first_course":    {"emoji": "📕", "name": "First Course",    "desc": "Added your first course"},
     "five_courses":    {"emoji": "📚", "name": "Course Collector", "desc": "Added 5 courses"},
     "focus_100h":      {"emoji": "⏳", "name": "Time Lord",       "desc": "100 hours of total focus time"},
@@ -2112,10 +2103,6 @@ BADGE_DEFS = {
     "flashcard_5000":  {"emoji": "🃏", "name": "Card Master",     "desc": "Reviewed 5,000 flashcards"},
     "flashcard_streak":{"emoji": "🔁", "name": "Spaced Repetition","desc": "Reviewed flashcards 7 days in a row"},
     "deck_builder":    {"emoji": "🏗️", "name": "Deck Architect",  "desc": "Created 10 flashcard decks"},
-    # ── Notes / writing ─────────────────────────────────────────────
-    "note_taker_100":  {"emoji": "📓", "name": "Walking Library", "desc": "Created 100 notes"},
-    "note_taker_250":  {"emoji": "📔", "name": "Encyclopedia",    "desc": "Created 250 notes"},
-    "long_note":       {"emoji": "📜", "name": "Treatise",        "desc": "Wrote a 5,000-character note"},
     # ── Focus mastery ───────────────────────────────────────────────
     "focus_session_4h":{"emoji": "🪨", "name": "Marathon Mind",   "desc": "Completed a single 4-hour focus session"},
     "focus_500h":      {"emoji": "🌌", "name": "Eternal Focus",   "desc": "500 hours of total focus time"},
@@ -2147,12 +2134,17 @@ BADGE_DEFS = {
     "duel_100":        {"emoji": "👑", "name": "Duel Champion",   "desc": "Won 100 quiz duels"},
     "duel_perfect":    {"emoji": "💥", "name": "Flawless Victory","desc": "Won a duel with a perfect score"},
     "duel_underdog":   {"emoji": "🐺", "name": "Underdog",        "desc": "Beat an opponent with 2x your XP"},
-    # ── Exchange / community ────────────────────────────────────────
-    "helper_500":      {"emoji": "🌐", "name": "Worldwide Mentor","desc": "500 students used your shared notes"},
-    "viral_note_100":  {"emoji": "🚀", "name": "Trending",        "desc": "A shared note got 100 likes"},
-    "exchange_5":      {"emoji": "📤", "name": "Generous",        "desc": "Shared 5 notes"},
-    "exchange_25":     {"emoji": "🏛️", "name": "Library Founder", "desc": "Shared 25 notes"},
-    "downloader_10":   {"emoji": "📥", "name": "Curious Mind",    "desc": "Used 10 shared notes from others"},
+    # ── Community training ──────────────────────────────────────────
+    # New badges tied to the Training tab (community-shared quizzes per course).
+    "training_first": {"emoji": "🏫", "name": "Training Day",     "desc": "Completed your first community training quiz"},
+    "training_10":    {"emoji": "📚", "name": "Training Regular", "desc": "Completed 10 community training quizzes"},
+    "training_50":    {"emoji": "🎓", "name": "Training Scholar", "desc": "Completed 50 community training quizzes"},
+    "training_publish":{"emoji": "📣", "name": "Course Contributor","desc": "Published a quiz to your university's training tab"},
+    "hard_quiz":      {"emoji": "🪨", "name": "Hard Mode",        "desc": "Aced a Hard-rated community quiz"},
+    # ── Weekly / monthly payouts ────────────────────────────────────
+    "first_prize":    {"emoji": "🪙", "name": "First Prize",      "desc": "Earned your first leaderboard coin payout"},
+    "podium_week":    {"emoji": "🥇", "name": "Podium Finisher",  "desc": "Finished top-3 on any weekly leaderboard"},
+    "podium_month":   {"emoji": "🏅", "name": "Monthly Podium",   "desc": "Finished top-3 on any monthly leaderboard"},
     # ── Course / academic milestones ────────────────────────────────
     "ten_courses":     {"emoji": "🎒", "name": "Course Hoarder",  "desc": "Added 10 courses"},
     "exam_passer":     {"emoji": "📋", "name": "Exam Ready",      "desc": "Passed 5 practice exams"},
@@ -2698,8 +2690,8 @@ QUEST_POOL = [
     {"key": "quiz_1",      "label": "Complete 1 quiz",              "target": 1,   "xp": 20, "metric": "quizzes_completed"},
     {"key": "session_3",   "label": "Finish 3 study sessions",      "target": 3,   "xp": 20, "metric": "sessions_completed"},
     {"key": "pages_15",    "label": "Read 15 pages of material",    "target": 15,  "xp": 15, "metric": "pages_read"},
-    {"key": "note_1",      "label": "Create 1 note",                "target": 1,   "xp": 10, "metric": "notes_created"},
     {"key": "exam_review_15","label": "15 min reviewing for an exam","target": 15, "xp": 4,  "metric": "focus_minutes"},
+    {"key": "training_1",  "label": "Finish 1 community training quiz","target": 1, "xp": 20, "metric": "training_completed"},
 ]
 
 QUEST_BUNDLE_BONUS_XP = 30  # awarded when all 3 daily quests complete
@@ -3445,6 +3437,62 @@ BANNERS = {
     "plus_anim_sunset":  {"name": "Endless Sunset (PLUS)",  "price_coins": 1500, "xp_required": 0,
                           "plus_only": True, "animated": True, "anim_class": "bnr-anim-sunset",
                           "css": "linear-gradient(120deg,#1e1b4b,#7c3aed 30%,#ec4899 55%,#f59e0b 80%,#1e1b4b)"},
+    # ── New cheap entry banners (low XP gates so day-one players can buy) ──
+    "peach":      {"name": "Peach Fizz",         "price_coins": 40,   "xp_required": 50,
+                   "css": "linear-gradient(135deg,#fed7aa,#fb923c,#fda4af)"},
+    "lagoon":     {"name": "Lagoon",             "price_coins": 40,   "xp_required": 50,
+                   "css": "linear-gradient(135deg,#67e8f9,#22d3ee,#0891b2)"},
+    "lemon":      {"name": "Lemonade",           "price_coins": 40,   "xp_required": 50,
+                   "css": "linear-gradient(135deg,#fef9c3,#facc15,#84cc16)"},
+    "berry":      {"name": "Berry Crush",        "price_coins": 60,   "xp_required": 100,
+                   "css": "linear-gradient(135deg,#7e22ce,#db2777,#fda4af)"},
+    "graphite":   {"name": "Graphite",           "price_coins": 60,   "xp_required": 100,
+                   "css": "linear-gradient(135deg,#1f2937,#374151,#9ca3af)"},
+    "sky":        {"name": "Open Sky",           "price_coins": 60,   "xp_required": 100,
+                   "css": "linear-gradient(180deg,#0ea5e9 0%,#bae6fd 60%,#f0f9ff 100%)"},
+    "moss":       {"name": "Moss Stone",         "price_coins": 60,   "xp_required": 100,
+                   "css": "linear-gradient(135deg,#1c1917,#3f6212,#84cc16)"},
+    # ── Patterned / textured banners ────────────────────────────────────
+    "polka":      {"name": "Polka Pop",          "price_coins": 180,  "xp_required": 600,
+                   "css": "radial-gradient(circle, rgba(255,255,255,.4) 2px, transparent 3px) 0 0/22px 22px, linear-gradient(135deg,#7c3aed,#ec4899)"},
+    "wavy":       {"name": "Wavy Lines",         "price_coins": 180,  "xp_required": 600,
+                   "css": "repeating-linear-gradient(45deg, rgba(255,255,255,.08) 0 6px, transparent 6px 14px), linear-gradient(135deg,#0ea5e9,#1d4ed8)"},
+    "circuit":    {"name": "Circuit Board",      "price_coins": 260,  "xp_required": 1000,
+                   "css": "repeating-linear-gradient(0deg, rgba(34,197,94,.18) 0 1px, transparent 1px 16px), repeating-linear-gradient(90deg, rgba(34,197,94,.18) 0 1px, transparent 1px 16px), radial-gradient(circle, rgba(34,197,94,.25) 1.5px, transparent 2px) 8px 8px/16px 16px, linear-gradient(135deg,#022c22,#0f172a)"},
+    "argyle":     {"name": "Argyle",             "price_coins": 260,  "xp_required": 1000,
+                   "css": "repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 14px, transparent 14px 28px), repeating-linear-gradient(-45deg, rgba(255,255,255,.06) 0 14px, transparent 14px 28px), linear-gradient(135deg,#7c2d12,#facc15)"},
+    "honeycomb":  {"name": "Honeycomb",          "price_coins": 320,  "xp_required": 1500,
+                   "css": "radial-gradient(circle at 50% 0, transparent 9px, #f59e0b 10px, transparent 11px), radial-gradient(circle at 50% 100%, transparent 9px, #f59e0b 10px, transparent 11px), linear-gradient(135deg,#78350f,#fbbf24)"},
+    # ── Themed scenes ──────────────────────────────────────────────────
+    "lofi_dawn":  {"name": "Lofi Dawn",          "price_coins": 280,  "xp_required": 800,
+                   "css": "linear-gradient(180deg,#fb7185 0%,#fda4af 30%,#fbcfe8 55%,#a78bfa 80%,#6366f1 100%)"},
+    "city_lights":{"name": "City Lights",        "price_coins": 320,  "xp_required": 1200,
+                   "css": "radial-gradient(2px 2px at 15% 60%, #fde047, transparent 60%), radial-gradient(1px 1px at 35% 70%, #fbbf24, transparent 60%), radial-gradient(2px 2px at 65% 55%, #fde047, transparent 60%), radial-gradient(1px 1px at 85% 65%, #fbbf24, transparent 60%), linear-gradient(180deg,#0f172a 0%,#1e1b4b 50%,#0c0a1f 100%)"},
+    "vineyard":   {"name": "Vineyard",           "price_coins": 320,  "xp_required": 1200,
+                   "css": "linear-gradient(180deg,#fde047 0%,#84cc16 30%,#15803d 70%,#052e16 100%)"},
+    "monsoon":    {"name": "Monsoon",            "price_coins": 320,  "xp_required": 1200,
+                   "animated": True, "anim_class": "bnr-anim-monsoon",
+                   "css": "repeating-linear-gradient(75deg, rgba(186,230,253,.18) 0 1px, transparent 1px 6px), linear-gradient(180deg,#0f172a,#1e293b,#0c4a6e)"},
+    "molten":     {"name": "Molten Core",        "price_coins": 420,  "xp_required": 2500,
+                   "animated": True, "anim_class": "bnr-anim-molten",
+                   "css": "radial-gradient(circle at 30% 70%, #fde047 0%, #f97316 25%, #dc2626 55%, transparent 80%), radial-gradient(circle at 70% 30%, #f97316 0%, transparent 35%), linear-gradient(135deg,#1c0a04,#000)"},
+    "glacial":    {"name": "Glacial",            "price_coins": 420,  "xp_required": 2500,
+                   "animated": True, "anim_class": "bnr-anim-glacial",
+                   "css": "radial-gradient(ellipse at 30% 30%, rgba(186,230,253,.6), transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(125,211,252,.45), transparent 60%), linear-gradient(135deg,#082f49,#0c4a6e,#1e3a8a)"},
+    # ── PLUS premium ───────────────────────────────────────────────────
+    "plus_emerald":  {"name": "Royal Emerald (PLUS)", "price_coins": 700, "xp_required": 0, "plus_only": True,
+                      "css": "radial-gradient(circle at 30% 30%, rgba(167,243,208,.6), transparent 55%), linear-gradient(135deg,#022c22,#059669,#a7f3d0)"},
+    "plus_ruby":     {"name": "Royal Ruby (PLUS)",    "price_coins": 700, "xp_required": 0, "plus_only": True,
+                      "css": "radial-gradient(circle at 30% 30%, rgba(254,202,202,.6), transparent 55%), linear-gradient(135deg,#450a0a,#dc2626,#fecaca)"},
+    "plus_anim_oil": {"name": "Oil Slick (PLUS)",     "price_coins": 1500, "xp_required": 0, "plus_only": True,
+                      "animated": True, "anim_class": "bnr-anim-oil",
+                      "css": "conic-gradient(from 0deg at 50% 50%, #06b6d4, #8b5cf6, #ec4899, #f59e0b, #06b6d4)"},
+    "plus_anim_supernova": {"name": "Supernova (PLUS)", "price_coins": 1800, "xp_required": 0, "plus_only": True,
+                            "animated": True, "anim_class": "bnr-anim-supernova",
+                            "css": "radial-gradient(circle at 50% 50%, #fde047 0%, #f97316 12%, #dc2626 24%, #4c1d95 50%, #000 80%)"},
+    "plus_anim_zen": {"name": "Zen Garden (PLUS)",    "price_coins": 1200, "xp_required": 0, "plus_only": True,
+                      "animated": True, "anim_class": "bnr-anim-zen",
+                      "css": "radial-gradient(ellipse at 30% 50%, rgba(34,197,94,.4), transparent 60%), radial-gradient(ellipse at 70% 50%, rgba(125,211,252,.4), transparent 60%), linear-gradient(180deg,#fefce8 0%,#a7f3d0 60%,#0c4a6e 100%)"},
 }
 
 # CSS injected once per page that uses banners. Provides the @keyframes for
@@ -3555,6 +3603,61 @@ BANNER_ANIM_CSS = """
 .bnr-anim-polar {
   background-size: 240% 240%, 240% 240%, 200% 200%, 100% 100% !important;
   animation: bnr-polar 16s ease-in-out infinite;
+}
+
+/* Monsoon — diagonal rain streaks scrolling */
+@keyframes bnr-monsoon { 0% { background-position: 0 0, 0 0; } 100% { background-position: -200px 600px, 0 0; } }
+.bnr-anim-monsoon {
+  background-size: 100% 100%, 100% 100% !important;
+  animation: bnr-monsoon 1.4s linear infinite;
+}
+
+/* Molten Core — heat shimmer + slow drift */
+@keyframes bnr-molten {
+  0%,100% { background-position: 30% 70%, 70% 30%, 0 0; filter: brightness(1) hue-rotate(0deg); }
+  50%     { background-position: 35% 65%, 65% 35%, 0 0; filter: brightness(1.2) hue-rotate(8deg); }
+}
+.bnr-anim-molten {
+  background-size: 200% 200%, 200% 200%, 100% 100% !important;
+  animation: bnr-molten 7s ease-in-out infinite;
+}
+
+/* Glacial — cold breath drifting */
+@keyframes bnr-glacial {
+  0%,100% { background-position: 30% 30%, 70% 70%, 0 0; filter: brightness(1); }
+  50%     { background-position: 35% 28%, 65% 72%, 0 0; filter: brightness(1.12); }
+}
+.bnr-anim-glacial {
+  background-size: 220% 220%, 220% 220%, 100% 100% !important;
+  animation: bnr-glacial 12s ease-in-out infinite;
+}
+
+/* Oil Slick — iridescent rotation */
+@keyframes bnr-oil { 0% { transform: rotate(0deg); filter: hue-rotate(0deg); } 100% { transform: rotate(360deg); filter: hue-rotate(360deg); } }
+.bnr-anim-oil {
+  background-size: 200% 200% !important;
+  animation: bnr-oil 22s linear infinite;
+}
+
+/* Supernova — pulsing radial burst */
+@keyframes bnr-supernova {
+  0%,100% { background-size: 200% 200% !important; filter: brightness(1); }
+  50%     { background-size: 240% 240% !important; filter: brightness(1.35); }
+}
+.bnr-anim-supernova {
+  background-size: 200% 200% !important;
+  background-position: center center;
+  animation: bnr-supernova 6s ease-in-out infinite;
+}
+
+/* Zen Garden — gentle horizontal drift */
+@keyframes bnr-zen {
+  0%,100% { background-position: 30% 50%, 70% 50%, 0 0; }
+  50%     { background-position: 33% 50%, 67% 50%, 0 0; }
+}
+.bnr-anim-zen {
+  background-size: 200% 200%, 200% 200%, 100% 100% !important;
+  animation: bnr-zen 18s ease-in-out infinite;
 }
 """
 
@@ -3717,6 +3820,69 @@ FLAGS = {
     "plus_anim_galaxy":{"name": "Drifting Galaxy (PLUS)","price_coins": 1500,"xp_required": 0, "plus_only": True,
                         "animated": True, "anim_class": "flag-anim-pan",
                         "css": "linear-gradient(90deg, #000 0%, #1e1b4b 25%, #7c3aed 50%, #ec4899 75%, #000 100%)"},
+    # ── More entry-tier flags ─────────────────────────────────────────
+    "creamsicle":  {"name": "Creamsicle",        "price_coins": 50,   "xp_required": 75,
+                    "css": "linear-gradient(90deg, #fb923c 0%, #fed7aa 50%, #fef9c3 100%)"},
+    "spearmint":   {"name": "Spearmint",         "price_coins": 50,   "xp_required": 75,
+                    "css": "linear-gradient(90deg, #134e4a 0%, #14b8a6 50%, #ccfbf1 100%)"},
+    "raspberry":   {"name": "Raspberry",         "price_coins": 50,   "xp_required": 75,
+                    "css": "linear-gradient(90deg, #4c0519 0%, #e11d48 50%, #fda4af 100%)"},
+    "twilight":    {"name": "Twilight",          "price_coins": 80,   "xp_required": 200,
+                    "css": "linear-gradient(90deg, #1e1b4b 0%, #6366f1 40%, #f472b6 80%, #fbcfe8 100%)"},
+    "amber":       {"name": "Amber Glow",        "price_coins": 80,   "xp_required": 200,
+                    "css": "linear-gradient(90deg, #451a03 0%, #d97706 50%, #fde68a 100%)"},
+    "jade":        {"name": "Jade Pulse",        "price_coins": 100,  "xp_required": 300,
+                    "css": "linear-gradient(90deg, #022c22 0%, #059669 50%, #d1fae5 100%)"},
+    # ── Patterned flags ───────────────────────────────────────────────
+    "pinstripe":   {"name": "Pinstripe",         "price_coins": 140,  "xp_required": 500,
+                    "css": "repeating-linear-gradient(90deg, rgba(255,255,255,.3) 0 1px, transparent 1px 12px), linear-gradient(90deg, #1e293b 0%, #475569 100%)"},
+    "barcode":     {"name": "Barcode",           "price_coins": 180,  "xp_required": 800,
+                    "css": "repeating-linear-gradient(90deg, #fafafa 0 2px, #0f172a 2px 5px, #fafafa 5px 9px, #0f172a 9px 14px)"},
+    "morse":       {"name": "Morse Code",        "price_coins": 220,  "xp_required": 1000,
+                    "css": "repeating-linear-gradient(90deg, #fde047 0 6px, transparent 6px 12px, #fde047 12px 24px, transparent 24px 36px), linear-gradient(90deg, #0f172a, #1e293b)"},
+    "argyle_bar":  {"name": "Argyle Bar",        "price_coins": 250,  "xp_required": 1200,
+                    "css": "repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 12px, transparent 12px 24px), repeating-linear-gradient(-45deg, rgba(255,255,255,.06) 0 12px, transparent 12px 24px), linear-gradient(90deg, #7c2d12, #facc15)"},
+    "scales":      {"name": "Dragon Scales",     "price_coins": 300,  "xp_required": 1500,
+                    "css": "radial-gradient(circle at 50% 0, transparent 11px, #14532d 12px, transparent 13px), radial-gradient(circle at 50% 100%, transparent 11px, #14532d 12px, transparent 13px), linear-gradient(90deg, #052e16, #16a34a)"},
+    # ── Themed scenes ─────────────────────────────────────────────────
+    "city_skyline":{"name": "City Skyline",      "price_coins": 320,  "xp_required": 1500,
+                    "css": "radial-gradient(2px 2px at 20% 50%, #fde047, transparent 60%), radial-gradient(1px 1px at 50% 60%, #fbbf24, transparent 60%), radial-gradient(2px 2px at 80% 50%, #fde047, transparent 60%), linear-gradient(90deg, #020617 0%, #1e1b4b 50%, #4c1d95 100%)"},
+    "savanna_bar": {"name": "Savanna Trail",     "price_coins": 280,  "xp_required": 1200,
+                    "css": "linear-gradient(90deg, #fde047 0%, #f59e0b 30%, #b45309 65%, #44403c 100%)"},
+    "tundra_bar":  {"name": "Tundra Trail",      "price_coins": 280,  "xp_required": 1200,
+                    "css": "linear-gradient(90deg, #1e3a8a 0%, #38bdf8 35%, #bae6fd 65%, #f0f9ff 100%)"},
+    "forest_run2": {"name": "Verdant March",     "price_coins": 280,  "xp_required": 1200,
+                    "css": "linear-gradient(90deg, #052e16 0%, #15803d 35%, #84cc16 70%, #fef9c3 100%)"},
+    # ── Animated mid-tier flags ────────────────────────────────────────
+    "flow_ember":  {"name": "Flow Ember",        "price_coins": 500,  "xp_required": 3000,
+                    "animated": True, "anim_class": "flag-anim-pan",
+                    "css": "linear-gradient(90deg, #1c0a04 0%, #dc2626 25%, #fbbf24 50%, #dc2626 75%, #1c0a04 100%)"},
+    "flow_ocean":  {"name": "Flow Ocean",        "price_coins": 500,  "xp_required": 3000,
+                    "animated": True, "anim_class": "flag-anim-pan",
+                    "css": "linear-gradient(90deg, #082f49 0%, #0ea5e9 25%, #f0f9ff 50%, #0ea5e9 75%, #082f49 100%)"},
+    "flow_jungle": {"name": "Flow Jungle",       "price_coins": 500,  "xp_required": 3000,
+                    "animated": True, "anim_class": "flag-anim-pan",
+                    "css": "linear-gradient(90deg, #022c22 0%, #16a34a 25%, #fde047 50%, #16a34a 75%, #022c22 100%)"},
+    "flow_galaxy_lite":{"name": "Flow Galaxy",   "price_coins": 600,  "xp_required": 4000,
+                    "animated": True, "anim_class": "flag-anim-shimmer",
+                    "css": "linear-gradient(90deg, #000 0%, #4c1d95 30%, #db2777 55%, #f59e0b 80%, #000 100%)"},
+    "pulse_neon":  {"name": "Neon Pulse (Anim)", "price_coins": 550,  "xp_required": 3500,
+                    "animated": True, "anim_class": "flag-anim-pulse",
+                    "css": "linear-gradient(90deg, #ec4899 0%, #8b5cf6 50%, #06b6d4 100%)"},
+    "scan_line":   {"name": "Scanline",          "price_coins": 480,  "xp_required": 2800,
+                    "animated": True, "anim_class": "flag-anim-scan",
+                    "css": "repeating-linear-gradient(90deg, rgba(34,197,94,.0) 0 80px, rgba(74,222,128,.6) 80px 92px, rgba(34,197,94,.0) 92px 200px), linear-gradient(90deg, #022c22, #16a34a)"},
+    # ── PLUS premium flags ────────────────────────────────────────────
+    "plus_pearl":     {"name": "Pearl Bar (PLUS)", "price_coins": 800,  "xp_required": 0, "plus_only": True,
+                       "css": "linear-gradient(90deg, #f1f5f9 0%, #cbd5e1 30%, #94a3b8 60%, #cbd5e1 80%, #f1f5f9 100%)"},
+    "plus_emerald2":  {"name": "Royal Emerald (PLUS)", "price_coins": 800, "xp_required": 0, "plus_only": True,
+                       "css": "linear-gradient(90deg, #022c22 0%, #059669 40%, #a7f3d0 75%, #ecfeff 100%)"},
+    "plus_anim_solar":{"name": "Solar Flare (PLUS)", "price_coins": 1500, "xp_required": 0, "plus_only": True,
+                       "animated": True, "anim_class": "flag-anim-shimmer",
+                       "css": "linear-gradient(90deg, #1c0a04 0%, #dc2626 20%, #fde047 50%, #f97316 80%, #1c0a04 100%)"},
+    "plus_anim_dawn": {"name": "Cosmic Dawn (PLUS)", "price_coins": 1500, "xp_required": 0, "plus_only": True,
+                       "animated": True, "anim_class": "flag-anim-pan",
+                       "css": "linear-gradient(90deg, #1e1b4b 0%, #db2777 25%, #fbbf24 50%, #db2777 75%, #1e1b4b 100%)"},
 }
 
 # CSS injected once per page that renders flags. Provides @keyframes + helpers
@@ -3770,6 +3936,20 @@ FLAG_ANIM_CSS = """
 .flag-anim-candy {
   background-size: 300% 100% !important;
   animation: flg-candy 6s linear infinite;
+}
+
+/* Neon Pulse (Anim) — pulsing saturation */
+@keyframes flg-pulse {
+  0%,100% { filter: brightness(.9) saturate(1); }
+  50%     { filter: brightness(1.3) saturate(1.6); }
+}
+.flag-anim-pulse { animation: flg-pulse 1.8s ease-in-out infinite; }
+
+/* Scanline — bright line sweeping rightward */
+@keyframes flg-scan { 0% { background-position: -200px 0, 0 0; } 100% { background-position: 200px 0, 0 0; } }
+.flag-anim-scan {
+  background-size: 100% 100%, 100% 100% !important;
+  animation: flg-scan 2.4s linear infinite;
 }
 """
 
