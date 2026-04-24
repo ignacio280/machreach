@@ -31,7 +31,7 @@
 >
 > - **Backend** en Python con Flask — es el cerebro que maneja los usuarios, las sesiones de estudio, los ranking, y los pagos.
 > - **Base de datos** PostgreSQL en la nube — ahí viven los usuarios, los cursos bajados de Canvas, el tiempo estudiado, el XP, los rankings.
-> - **IA** — uso la API de OpenAI (GPT) únicamente para leer material desordenado de Canvas (por ejemplo, un syllabus en PDF) y transformarlo en datos estructurados (nombres de pruebas, fechas, unidades). No hay tutor de IA; el valor lo da la plataforma, no el modelo.
+> - **IA** — uso la API de OpenAI, específicamente el modelo `gpt-4o-mini` (la variante más barata, ~60 veces más económica que GPT-4 estándar). Sirve para tres cosas puntuales: **(1)** parsear material desordenado de Canvas (syllabus en PDF, programas de curso) y convertirlo en datos estructurados (nombres de pruebas, fechas, unidades); **(2)** generar **quizzes** a partir de ese material para el módulo Training; **(3)** generar **flashcards** para estudio. No hay tutor conversacional ni chat abierto — cada llamada a IA es una tarea corta, estructurada y con prompt optimizado, así que el costo por usuario es de centavos.
 > - **Frontend** servido desde el mismo backend (HTML + JS responsive) — funciona en celular y notebook sin necesidad de instalar una app.
 > - **Pagos** con **Lemon Squeezy** (cobra mundial, emite factura, se queda con 5%). La plata me llega en USD a una cuenta y de ahí se convierte a CLP.
 > - **Hosting** en Render.com — un servicio web + un worker de background + la base de datos. Auto-escala.
@@ -58,14 +58,14 @@
 > | Concepto | USD / mes | CLP / mes |
 > |---|---|---|
 > | Hosting Render (web + worker + base de datos) | $35 | ~33.000 |
-> | API de OpenAI (parsear syllabus desde Canvas) | $40 | ~38.000 |
-> | Envío de correos (recordatorios diarios, emails de ranking) | $20 | ~19.000 |
-> | Dominio, SSL, herramientas varias | $15 | ~14.000 |
-> | **Total fijo** | **~$110 USD** | **~105.000 CLP** |
+> | API de OpenAI (quizzes + flashcards + parsing de Canvas, todo con gpt-4o-mini) | $15 | ~14.000 |
+> | Envío de correos (recordatorios diarios, emails de ranking — tier bajo de Resend) | $10 | ~9.500 |
+> | Dominio + SSL + herramientas varias | $5 | ~5.000 |
+> | **Total fijo** | **~$65 USD** | **~62.000 CLP** |
 >
 > Fee de Lemon Squeezy (5%) es costo variable sobre lo que vendo — no aparece si no vendo nada.
 >
-> Con más usuarios, la factura de OpenAI sube, pero es **costo variable** que escala proporcional al uso. Los prompts ya están optimizados para quedarse debajo del 5% del precio de la suscripción PLUS."
+> El costo de IA es bajo porque uso `gpt-4o-mini` y las llamadas son cortas y estructuradas. Aunque los usuarios se dupliquen, la factura de IA apenas sube a $25–30/mes. No es un producto tipo ChatGPT donde cada conversación cuesta; acá la IA dispara puntualmente cuando alguien sincroniza un curso o pide un quiz."
 
 ## 6. Ingresos potenciales (2 min)
 
@@ -79,19 +79,20 @@
 > - 15 × $4.99 = $74,85/mes ≈ **71.000 CLP/mes**.
 > - Más un 20% que compra un paquete de monedas promedio de $3: +$9/mes ≈ 8.500 CLP.
 > - **Ingreso bruto: ~$84 USD ≈ 80.000 CLP/mes.**
-> - Costos fijos: 105.000 CLP. **Aquí todavía no soy rentable — falta escala.**
+> - Costos fijos: 62.000 CLP + fee Lemon (5%) ≈ 4.000 CLP = **~66.000 CLP**
+> - **Ganancia neta: ~14.000 CLP/mes.** Chico pero **ya arriba de break-even con solo 15 usuarios**. De ahí todo lo que sume es ganancia casi pura, porque los costos fijos no crecen con cada usuario nuevo.
 >
 > **Escenario 2 — objetivo realista a 6 meses: 150 suscriptores PLUS + compras de monedas.**
 > - 150 × $4.99 = $748/mes ≈ **711.000 CLP/mes** (PLUS)
 > - Coin packs (20% compra, promedio $5): $150/mes ≈ **142.000 CLP**
 > - Algunos PRO (asume 10 usuarios a $9.99): $100/mes ≈ **95.000 CLP**
 > - **Ingreso bruto: ~$1.000 USD ≈ 950.000 CLP/mes**
-> - Costos fijos: 105.000 CLP
-> - Costos variables de IA (se duplican con más uso): +$40 ≈ 38.000 CLP
+> - Costos fijos: 62.000 CLP
+> - Costos variables de IA (se duplican con más uso): +$15 ≈ 14.000 CLP
 > - Fee Lemon Squeezy (5%): $50 ≈ 48.000 CLP
-> - **Ganancia neta mensual: ~760.000 CLP** (~$800 USD)
+> - **Ganancia neta mensual: ~825.000 CLP** (~$870 USD)
 >
-> **Escenario 3 — a 12 meses con 400 PLUS + buen volumen de coin packs**: ~2.500.000 CLP netos/mes."
+> **Escenario 3 — a 12 meses con 400 PLUS + buen volumen de coin packs**: ~2.600.000 CLP netos/mes."
 
 ## 7. La pregunta — qué necesito (1 min)
 
@@ -100,22 +101,22 @@
 > | Concepto | Total |
 > |---|---|
 > | Publicidad en Instagram + TikTok + Google ($150 USD/mes × 6 meses) | ~850.000 CLP |
-> | Cubrir hosting y APIs mientras los ingresos aún no alcanzan ($150 USD/mes × 6) | ~850.000 CLP |
+> | Cubrir hosting y APIs los primeros meses (62.000 CLP × 6 meses, antes de tener ingresos suficientes) | ~400.000 CLP |
 > | Gastos legales (constituir la sociedad, términos y condiciones, aspectos tributarios) | ~300.000 CLP |
 > | Colchón para imprevistos | ~200.000 CLP |
-> | **Total que les pido** | **~2.200.000 CLP** (aprox $2.300 USD) |
+> | **Total que les pido** | **~1.750.000 CLP** (aprox $1.850 USD) |
 >
-> Menos que un auto usado. Con esto tengo 6 meses de runway garantizado para llegar a los 150 usuarios pagando."
+> Menos que un auto usado y menos que un viaje familiar. Con esto tengo 6 meses de runway garantizado para llegar a los 150 usuarios pagando."
 
 ## 8. Qué reciben a cambio (1 min)
 
 > "Les propongo dos opciones — la que más les acomode:
 >
 > **Opción A — Préstamo con interés fijo.**
-> Me prestan 2.200.000 CLP. Les devuelvo **2.860.000 CLP en 18 meses** (eso es 20% anual — mejor rendimiento que cualquier depósito a plazo del banco). Si el negocio despega rápido, les pago antes.
+> Me prestan 1.750.000 CLP. Les devuelvo **2.275.000 CLP en 18 meses** (eso es 20% anual — mejor rendimiento que cualquier depósito a plazo del banco). Si el negocio despega rápido, les pago antes.
 >
 > **Opción B — Participación (equity).**
-> Me dan los 2.200.000 CLP a cambio del **10% de Machreach**. Si al año la empresa está generando 760.000 CLP netos/mes como proyecto, su 10% vale 76.000 CLP/mes de utilidad. A los 30 meses ya recuperaron la inversión **y siguen cobrando** el 10% mientras la empresa exista. Si un día vendo el proyecto, les corresponde el 10% del precio de venta.
+> Me dan los 1.750.000 CLP a cambio del **10% de Machreach**. Si al año la empresa está generando 825.000 CLP netos/mes como proyecto, su 10% vale 82.500 CLP/mes de utilidad. A los 21 meses ya recuperaron la inversión **y siguen cobrando** el 10% mientras la empresa exista. Si un día vendo el proyecto, les corresponde el 10% del precio de venta.
 >
 > La Opción A es segura. La Opción B es más riesgosa pero con techo mucho más alto. Ustedes eligen."
 
@@ -128,7 +129,7 @@
 ## Apéndice — Preguntas que seguramente les van a hacer
 
 **"¿Y si no llegas a los 150 usuarios pagando?"**
-> "Incluso con 50 PLUS estoy cerca del break-even (50 × $4.99 = $250/mes vs $110 fijos). Con 80 ya soy rentable. El peor escenario no es perder plata, es tardarme más en ser rentable. Y si llego a cero — que no va a pasar porque la plataforma ya tiene tracción — la plata ya se gastó en publicidad que generó datos útiles para el siguiente intento."
+> "El break-even está en **14 suscriptores PLUS** (14 × $4.99 ≈ $70/mes ≈ 66.000 CLP, contra 62.000 CLP de costos fijos + fee). Con **30 usuarios** ya estoy duplicando los costos. El escenario de 150 es el **objetivo de crecimiento**, no el punto de supervivencia. Si llego solo a 50, la plataforma ya se sostiene sola mientras sigo empujándola. Si llego a cero — que no va a pasar porque la plataforma ya tiene tracción — la plata se gastó en publicidad que generó datos útiles para el siguiente intento."
 
 **"¿Por qué un estudiante te pagaría 4.700 CLP al mes?"**
 > "Un alumno que pierde un ramo paga arancel doble — unos 600.000 CLP fácilmente. Que la app te ayude a organizarte, medir tus horas y competir sanamente con compañeros por 5.000 CLP al mes es trivial. Además, el tier gratuito ya es potente — quien paga PLUS lo hace por los cosméticos y las monedas extras, que es el mismo modelo que hizo rica a Duolingo y Supercell."
