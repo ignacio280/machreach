@@ -2310,7 +2310,9 @@ LAYOUT = """<!DOCTYPE html>
         mode: d.originalMode || 'pomodoro',
         minutes: d.workMinutes,
         pages: 0,
-        course_name: d.course || ''
+        course_name: d.course || '',
+        course_id: d.courseId || null,
+        exam_id: d.examId || null
       };
       try {
         if (navigator.sendBeacon){

@@ -2738,6 +2738,34 @@ def register_student_routes(app, csrf, limiter):
         except (TypeError, ValueError):
             pages = 0
         course_name = (data.get("course_name") or "").strip()
+        # Optional structured tags — what the student is studying *for*
+        # (course) and *which test* within that course (exam, optional).
+        try:
+            course_id = int(data.get("course_id") or 0) or None
+        except (TypeError, ValueError):
+            course_id = None
+        try:
+            exam_id = int(data.get("exam_id") or 0) or None
+        except (TypeError, ValueError):
+            exam_id = None
+
+        # Backwards-compat: older clients still send only course_name. If we
+        # have the name but not the id, look the id up so stats queries stay
+        # exact (joins on course_id beat fragile note-string parsing).
+        if course_name and not course_id:
+            for _c in sdb.get_courses(cid):
+                if _c["name"] == course_name:
+                    course_id = int(_c["id"])
+                    break
+
+        # If course_id was resolved but the client didn't send a name, fill it
+        # in from the DB so the `notes` string stays informative in the legacy
+        # analytics widget that still reads it.
+        if course_id and not course_name:
+            for _c in sdb.get_courses(cid):
+                if int(_c["id"]) == course_id:
+                    course_name = _c["name"] or ""
+                    break
 
         # Course is mandatory — "general study" was retired.
         if not course_name:
@@ -2759,7 +2787,10 @@ def register_student_routes(app, csrf, limiter):
 
         # save_focus_session itself will further clamp by per-day total and
         # may return 0 if the day is already maxed out.
-        saved_id = sdb.save_focus_session(cid, mode=mode, minutes=minutes, pages=pages, course_name=course_name)
+        saved_id = sdb.save_focus_session(
+            cid, mode=mode, minutes=minutes, pages=pages,
+            course_name=course_name, course_id=course_id, exam_id=exam_id,
+        )
         if not saved_id:
             return jsonify({"ok": True, "saved": False, "reason": "daily-cap-or-empty"})
 
@@ -2946,6 +2977,124 @@ def register_student_routes(app, csrf, limiter):
         local_date = (request.args.get("local_date") or "").strip() or None
 
         return jsonify(sdb.get_focus_stats_today(_cid(), local_date=local_date))
+
+
+    # ── Study-time breakdown (dashboard bar chart + drill-downs) ──
+    #
+    # Three endpoints back the interactive "time per course" card:
+    #   GET /api/student/stats/per_course
+    #     → one bar per course, lifetime minutes.
+    #
+    #   GET /api/student/stats/course_detail?course_id=X[&week_offset=N]
+    #     → picked a course from the chart:
+    #         · per-day-of-week bars for the ISO week at `week_offset`
+    #         · per-exam bars (lifetime minutes for each exam of this course)
+    #
+    #   GET /api/student/stats/exam_detail?exam_id=X[&week_offset=N]
+    #     → picked an exam from the drill-down: per-day-of-week bars.
+    #
+    # week_offset: 0 = current ISO week, -1 = last, etc. Future offsets clamped.
+
+    @app.route("/api/student/stats/per_course", methods=["GET"])
+    def student_stats_per_course():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        cid = _cid()
+        rows = sdb.get_time_per_course(cid)
+        return jsonify({
+            "courses": [
+                {"course_id": int(r["course_id"]),
+                 "name": r["course_name"],
+                 "minutes": int(r["minutes"] or 0),
+                 "sessions": int(r["sessions"] or 0)}
+                for r in rows
+            ],
+        })
+
+    @app.route("/api/student/stats/course_detail", methods=["GET"])
+    def student_stats_course_detail():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        cid = _cid()
+        try:
+            course_id = int(request.args.get("course_id") or 0)
+        except (TypeError, ValueError):
+            course_id = 0
+        if not course_id:
+            return jsonify({"error": "course_id required"}), 400
+        try:
+            week_offset = int(request.args.get("week_offset") or 0)
+        except (TypeError, ValueError):
+            week_offset = 0
+        if week_offset > 0:
+            week_offset = 0
+
+        course = sdb.get_course(course_id)
+        if not course or int(course["client_id"]) != int(cid):
+            return jsonify({"error": "Not found"}), 404
+
+        week = sdb.get_course_week(cid, course_id, week_offset=week_offset)
+        exams = sdb.get_time_per_exam(cid, course_id)
+        return jsonify({
+            "course": {"id": int(course["id"]), "name": course.get("name", "")},
+            "week_offset": week_offset,
+            "week_start": week["week_start"],
+            "week_end": week["week_end"],
+            "days": week["days"],
+            "exams": [
+                {"exam_id": int(e["exam_id"]),
+                 "name": e["exam_name"],
+                 "exam_date": e.get("exam_date") or "",
+                 "minutes": int(e["minutes"] or 0),
+                 "sessions": int(e["sessions"] or 0)}
+                for e in exams
+            ],
+        })
+
+    @app.route("/api/student/stats/exam_detail", methods=["GET"])
+    def student_stats_exam_detail():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        cid = _cid()
+        try:
+            exam_id = int(request.args.get("exam_id") or 0)
+        except (TypeError, ValueError):
+            exam_id = 0
+        if not exam_id:
+            return jsonify({"error": "exam_id required"}), 400
+        try:
+            week_offset = int(request.args.get("week_offset") or 0)
+        except (TypeError, ValueError):
+            week_offset = 0
+        if week_offset > 0:
+            week_offset = 0
+
+        from outreach.db import get_db, _fetchone
+        with get_db() as db:
+            erow = _fetchone(
+                db,
+                "SELECT e.id, e.name, e.exam_date, e.course_id, c.name AS course_name "
+                "FROM student_exams e JOIN student_courses c ON c.id = e.course_id "
+                "WHERE e.id = %s AND e.client_id = %s",
+                (exam_id, cid),
+            )
+        if not erow:
+            return jsonify({"error": "Not found"}), 404
+
+        week = sdb.get_exam_week(cid, exam_id, week_offset=week_offset)
+        return jsonify({
+            "exam": {
+                "id": int(erow["id"]),
+                "name": erow.get("name") or "Exam",
+                "exam_date": erow.get("exam_date") or "",
+                "course_id": int(erow["course_id"]),
+                "course_name": erow.get("course_name") or "",
+            },
+            "week_offset": week_offset,
+            "week_start": week["week_start"],
+            "week_end": week["week_end"],
+            "days": week["days"],
+        })
 
 
 
@@ -4057,6 +4206,288 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+
+
+        <!-- Interactive "time per course" breakdown with drill-downs. -->
+        <div id="cb-card" class="card reveal r-delay-1" style="margin-bottom:20px;padding:22px;border:1px solid var(--border);">
+          <div id="cb-head" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <button type="button" id="cb-back" onclick="cbBack()" style="display:none;background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);font-size:13px;">&#8592; Back</button>
+              <span style="font-size:22px;">&#128200;</span>
+              <div>
+                <div id="cb-title" style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Study time per course</div>
+                <div id="cb-subtitle" style="font-size:12px;color:var(--text-muted);">Click any bar to see the day-by-day breakdown.</div>
+              </div>
+            </div>
+            <div id="cb-week-nav" style="display:none;align-items:center;gap:4px;">
+              <button type="button" id="cb-week-prev" onclick="cbWeekShift(-1)" title="Previous week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8249;</button>
+              <div id="cb-week-label" style="font-size:12px;color:var(--text-muted);min-width:90px;text-align:center;">this week</div>
+              <button type="button" id="cb-week-next" onclick="cbWeekShift(1)" title="Next week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8250;</button>
+            </div>
+          </div>
+          <div id="cb-stage" style="position:relative;min-height:260px;">
+            <div id="cb-view-courses" class="cb-view"></div>
+            <div id="cb-view-course" class="cb-view" style="display:none;"></div>
+            <div id="cb-view-exam" class="cb-view" style="display:none;"></div>
+          </div>
+          <div id="cb-empty" style="display:none;text-align:center;padding:28px 10px;color:var(--text-muted);font-size:13px;">
+            No course-tagged focus sessions yet. Start a timer on <a href="/student/focus" style="color:var(--primary);">Focus Mode</a> and pick a course to populate this chart.
+          </div>
+        </div>
+        <style>
+          .cb-view {{ animation: cbFadeIn .25s ease; }}
+          .cb-slide-left {{ animation: cbSlideInLeft .28s ease; }}
+          .cb-slide-right {{ animation: cbSlideInRight .28s ease; }}
+          @keyframes cbFadeIn {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+          @keyframes cbSlideInLeft {{ from {{ opacity: 0; transform: translateX(-14px); }} to {{ opacity: 1; transform: translateX(0); }} }}
+          @keyframes cbSlideInRight {{ from {{ opacity: 0; transform: translateX(14px); }} to {{ opacity: 1; transform: translateX(0); }} }}
+          .cb-bars {{ display:flex; align-items:flex-end; gap:6px; height:220px; padding:8px 2px 0; border-bottom:1px solid var(--border); position:relative; }}
+          .cb-bar {{ flex:1 1 0; min-width:22px; background:linear-gradient(180deg,#7C9CFF,#5B4694); border-radius:6px 6px 2px 2px; cursor:pointer; position:relative; transition:transform .2s ease, filter .2s ease; display:flex; align-items:flex-start; justify-content:center; min-height:3px; }}
+          .cb-bar:hover {{ filter:brightness(1.15); transform:translateY(-2px); }}
+          .cb-bar.cb-muted {{ background:linear-gradient(180deg,rgba(148,163,184,.45),rgba(148,163,184,.25)); cursor:default; }}
+          .cb-bar.cb-muted:hover {{ transform:none; filter:none; }}
+          .cb-bar .cb-val {{ font-size:10px; color:#fff; margin-top:4px; font-weight:600; text-shadow:0 1px 2px rgba(0,0,0,.25); white-space:nowrap; }}
+          .cb-bar-label {{ font-size:11px; color:var(--text-muted); text-align:center; margin-top:6px; word-break:break-word; line-height:1.2; }}
+          .cb-tip {{ position:absolute; background:rgba(11,18,32,.95); color:#fff; font-size:11px; padding:4px 8px; border-radius:6px; white-space:nowrap; pointer-events:none; transform:translate(-50%,-110%); display:none; z-index:5; }}
+          .cb-section-title {{ font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 8px; }}
+          .cb-col {{ display:flex; flex-direction:column; align-items:center; flex:1 1 0; min-width:36px; }}
+        </style>
+        <script>
+          window.__cbState = {{ view: 'courses', courseId: null, examId: null, weekOffset: 0 }};
+          window.__cbFmtM = function(m) {{ m = m|0; return m >= 60 ? (Math.floor(m/60)+'h '+(m%60)+'m') : (m+'m'); }};
+          window.__cbEsc = function(s) {{ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }};
+
+          function cbWeekLabel(offset) {{
+            if (offset === 0) return 'this week';
+            if (offset === -1) return 'last week';
+            return Math.abs(offset) + ' weeks ago';
+          }}
+
+          function cbShowView(id, direction) {{
+            var ids = ['cb-view-courses','cb-view-course','cb-view-exam'];
+            ids.forEach(function(x){{ var el = document.getElementById(x); if (el) el.style.display = (x===id?'':'none'); }});
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('cb-slide-left','cb-slide-right','cb-view');
+            void el.offsetWidth;
+            if (direction === 'in') el.classList.add('cb-slide-right');
+            else if (direction === 'out') el.classList.add('cb-slide-left');
+            else el.classList.add('cb-view');
+          }}
+
+          function cbRenderBars(host, items) {{
+            var maxV = Math.max(1, ...items.map(function(d){{ return d.value||0; }}));
+            var fmtM = window.__cbFmtM;
+            var esc = window.__cbEsc;
+            var out = '<div class="cb-bars">';
+            items.forEach(function(d){{
+              var hpct = Math.max(2, (d.value||0) / maxV * 100);
+              var muted = !d.value;
+              var cls = 'cb-bar' + (muted ? ' cb-muted' : '');
+              var onClick = d.onClick && !muted ? (' data-click="'+esc(d.onClick)+'" onclick="cbBarClick(this)"') : '';
+              var tipText = d.tip || (d.label + ': ' + fmtM(d.value||0));
+              out += '<div class="cb-col">';
+              out += '<div class="'+cls+'" style="height:'+hpct+'%;"'+onClick+' data-tip="'+esc(tipText)+'" onmouseover="cbShowTip(event,this)" onmouseout="cbHideTip(this)">';
+              if ((d.value||0) > 0) out += '<span class="cb-val">'+fmtM(d.value||0)+'</span>';
+              out += '</div>';
+              out += '<div class="cb-bar-label">'+esc(d.label||'')+'</div>';
+              out += '</div>';
+            }});
+            out += '</div>';
+            host.innerHTML = out;
+          }}
+
+          window.cbShowTip = function(ev, el) {{
+            var tip = document.getElementById('cb-tip-host');
+            if (!tip) {{
+              tip = document.createElement('div');
+              tip.id = 'cb-tip-host';
+              tip.className = 'cb-tip';
+              document.body.appendChild(tip);
+            }}
+            tip.textContent = el.getAttribute('data-tip') || '';
+            tip.style.display = 'block';
+            var rect = el.getBoundingClientRect();
+            tip.style.left = (rect.left + rect.width/2) + 'px';
+            tip.style.top = (rect.top + window.scrollY) + 'px';
+          }};
+          window.cbHideTip = function(el) {{
+            var tip = document.getElementById('cb-tip-host');
+            if (tip) tip.style.display = 'none';
+          }};
+          window.cbBarClick = function(el) {{
+            var action = el.getAttribute('data-click') || '';
+            if (action.indexOf('course:') === 0) {{
+              var cid = parseInt(action.slice(7), 10);
+              cbOpenCourse(cid);
+            }} else if (action.indexOf('exam:') === 0) {{
+              var eid = parseInt(action.slice(5), 10);
+              cbOpenExam(eid);
+            }}
+          }};
+
+          async function cbLoadCourses() {{
+            window.__cbState = {{ view: 'courses', courseId: null, examId: null, weekOffset: 0 }};
+            document.getElementById('cb-back').style.display = 'none';
+            document.getElementById('cb-week-nav').style.display = 'none';
+            document.getElementById('cb-title').textContent = 'Study time per course';
+            document.getElementById('cb-subtitle').textContent = 'Click any bar to see the day-by-day breakdown.';
+            try {{
+              var r = await fetch('/api/student/stats/per_course');
+              if (!r.ok) return;
+              var data = await r.json();
+              var host = document.getElementById('cb-view-courses');
+              var any = (data.courses || []).some(function(c){{ return c.minutes > 0; }});
+              if (!(data.courses || []).length || !any) {{
+                host.innerHTML = '';
+                document.getElementById('cb-empty').style.display = 'block';
+              }} else {{
+                document.getElementById('cb-empty').style.display = 'none';
+                cbRenderBars(host, data.courses.map(function(c){{
+                  return {{
+                    label: c.name,
+                    value: c.minutes,
+                    onClick: 'course:' + c.course_id,
+                    tip: c.name + ': ' + window.__cbFmtM(c.minutes) + ' · ' + c.sessions + ' session' + (c.sessions===1?'':'s')
+                  }};
+                }}));
+              }}
+              cbShowView('cb-view-courses');
+            }} catch(e) {{}}
+          }}
+
+          async function cbOpenCourse(courseId, direction) {{
+            window.__cbState.view = 'course';
+            window.__cbState.courseId = courseId;
+            window.__cbState.examId = null;
+            window.__cbState.weekOffset = 0;
+            document.getElementById('cb-back').style.display = '';
+            document.getElementById('cb-week-nav').style.display = 'flex';
+            await cbRenderCourse(direction || 'in');
+          }}
+
+          async function cbRenderCourse(direction) {{
+            var cid = window.__cbState.courseId;
+            var wo = window.__cbState.weekOffset;
+            try {{
+              var r = await fetch('/api/student/stats/course_detail?course_id='+cid+'&week_offset='+wo);
+              if (!r.ok) return;
+              var data = await r.json();
+              document.getElementById('cb-title').textContent = data.course.name;
+              document.getElementById('cb-subtitle').textContent = 'Days studied this week · exams in this course.';
+              document.getElementById('cb-week-label').textContent = cbWeekLabel(wo);
+              var nextBtn = document.getElementById('cb-week-next');
+              if (nextBtn) {{
+                nextBtn.disabled = (wo >= 0);
+                nextBtn.style.opacity = nextBtn.disabled ? '0.4' : '1';
+                nextBtn.style.cursor = nextBtn.disabled ? 'default' : 'pointer';
+              }}
+              var host = document.getElementById('cb-view-course');
+              var fmtM = window.__cbFmtM;
+              var esc = window.__cbEsc;
+              var today = new Date().toISOString().slice(0,10);
+              var dayItems = data.days.map(function(d){{
+                return {{
+                  label: d.dow + (d.date===today?' *':''),
+                  value: d.minutes,
+                  tip: d.date + ': ' + fmtM(d.minutes) + ' · ' + d.sessions + ' session' + (d.sessions===1?'':'s')
+                }};
+              }});
+              var examItems = (data.exams || []).map(function(e){{
+                return {{
+                  label: e.name + (e.exam_date?(' · '+e.exam_date):''),
+                  value: e.minutes,
+                  onClick: 'exam:' + e.exam_id,
+                  tip: e.name + ': ' + fmtM(e.minutes) + ' · ' + e.sessions + ' session' + (e.sessions===1?'':'s')
+                }};
+              }});
+              var weekTotal = data.days.reduce(function(a,d){{ return a + (d.minutes||0); }}, 0);
+              var html = '';
+              html += '<div class="cb-section-title">Days — '+esc(cbWeekLabel(wo))+' · total '+fmtM(weekTotal)+'</div>';
+              html += '<div id="cb-course-days"></div>';
+              html += '<div style="height:18px;"></div>';
+              html += '<div class="cb-section-title">Exams in this course <span style="color:var(--text-muted);text-transform:none;letter-spacing:0;font-weight:400;font-size:11px;">— click a bar to drill down</span></div>';
+              html += '<div id="cb-course-exams"></div>';
+              if (!examItems.length) html += '<div style="font-size:12px;color:var(--text-muted);padding:10px 2px;">No exams added for this course yet.</div>';
+              host.innerHTML = html;
+              cbRenderBars(document.getElementById('cb-course-days'), dayItems);
+              if (examItems.length) cbRenderBars(document.getElementById('cb-course-exams'), examItems);
+              cbShowView('cb-view-course', direction || 'in');
+            }} catch(e) {{}}
+          }}
+
+          async function cbOpenExam(examId) {{
+            window.__cbState.view = 'exam';
+            window.__cbState.examId = examId;
+            window.__cbState.weekOffset = 0;
+            document.getElementById('cb-back').style.display = '';
+            document.getElementById('cb-week-nav').style.display = 'flex';
+            await cbRenderExam('in');
+          }}
+
+          async function cbRenderExam(direction) {{
+            var eid = window.__cbState.examId;
+            var wo = window.__cbState.weekOffset;
+            try {{
+              var r = await fetch('/api/student/stats/exam_detail?exam_id='+eid+'&week_offset='+wo);
+              if (!r.ok) return;
+              var data = await r.json();
+              document.getElementById('cb-title').textContent = data.exam.name;
+              document.getElementById('cb-subtitle').textContent = data.exam.course_name + (data.exam.exam_date ? (' · ' + data.exam.exam_date) : '');
+              document.getElementById('cb-week-label').textContent = cbWeekLabel(wo);
+              var nextBtn = document.getElementById('cb-week-next');
+              if (nextBtn) {{
+                nextBtn.disabled = (wo >= 0);
+                nextBtn.style.opacity = nextBtn.disabled ? '0.4' : '1';
+                nextBtn.style.cursor = nextBtn.disabled ? 'default' : 'pointer';
+              }}
+              var host = document.getElementById('cb-view-exam');
+              var fmtM = window.__cbFmtM;
+              var esc = window.__cbEsc;
+              var today = new Date().toISOString().slice(0,10);
+              var dayItems = data.days.map(function(d){{
+                return {{
+                  label: d.dow + (d.date===today?' *':''),
+                  value: d.minutes,
+                  tip: d.date + ': ' + fmtM(d.minutes) + ' · ' + d.sessions + ' session' + (d.sessions===1?'':'s')
+                }};
+              }});
+              var weekTotal = data.days.reduce(function(a,d){{ return a + (d.minutes||0); }}, 0);
+              var html = '';
+              html += '<div class="cb-section-title">Days — '+esc(cbWeekLabel(wo))+' · total '+fmtM(weekTotal)+'</div>';
+              html += '<div id="cb-exam-days"></div>';
+              host.innerHTML = html;
+              cbRenderBars(document.getElementById('cb-exam-days'), dayItems);
+              cbShowView('cb-view-exam', direction || 'in');
+            }} catch(e) {{}}
+          }}
+
+          function cbBack() {{
+            var st = window.__cbState;
+            if (st.view === 'exam') {{
+              st.view = 'course';
+              st.examId = null;
+              st.weekOffset = 0;
+              cbRenderCourse('out');
+            }} else if (st.view === 'course') {{
+              st.view = 'courses';
+              st.courseId = null;
+              st.weekOffset = 0;
+              cbLoadCourses();
+            }}
+          }}
+
+          function cbWeekShift(delta) {{
+            var st = window.__cbState;
+            var next = st.weekOffset + delta;
+            if (next > 0) return;
+            st.weekOffset = next;
+            if (st.view === 'course') cbRenderCourse();
+            else if (st.view === 'exam') cbRenderExam();
+          }}
+
+          cbLoadCourses();
+        </script>
 
 
         <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:24px;">
@@ -5194,11 +5625,29 @@ def register_student_routes(app, csrf, limiter):
         # Use a Windows-safe date format (no %-d / %#d) so it renders the same everywhere.
         _today_label = ""  # rendered client-side from browser's local date (timezone-correct)
 
+        # Build a course→exams map so the exam dropdown can be filtered in JS
+        # without a round-trip each time the student picks a different course.
+        course_exams_map = {}
         course_options = ""
-
         for c in courses:
+            course_options += (
+                f'<option value="{int(c["id"])}" data-name="{_esc(c["name"])}">'
+                f'{_esc(c["name"])}</option>'
+            )
+            try:
+                cexams = sdb.get_course_exams(int(c["id"]))
+            except Exception:
+                cexams = []
+            course_exams_map[int(c["id"])] = [
+                {"id": int(e["id"]), "name": e.get("name") or "Exam",
+                 "date": e.get("exam_date") or ""}
+                for e in cexams
+            ]
 
-            course_options += f'<option value="{_esc(c["name"])}">{_esc(c["name"])}</option>'
+        # JSON-encoded for safe injection into an f-string `{_json_course_exams}`.
+        # Keys are coerced to strings so JS can look them up by the select value.
+        _json_course_exams = json.dumps({str(k): v for k, v in course_exams_map.items()},
+                                        ensure_ascii=False).replace("<", "\\u003c")
 
 
 
@@ -5277,7 +5726,7 @@ def register_student_routes(app, csrf, limiter):
 
               <label style="font-size:12px;">Studying for: <span style="color:#ef4444;">*</span></label>
 
-              <select id="focus-course" class="edit-input" required>
+              <select id="focus-course" class="edit-input" required onchange="onFocusCourseChange()">
 
                 <option value="">— Pick a course to start —</option>
 
@@ -5288,6 +5737,26 @@ def register_student_routes(app, csrf, limiter):
               <div id="focus-course-warn" style="display:none;font-size:12px;color:#ef4444;margin-top:6px;">
 
                 Pick a course before starting the timer.
+
+              </div>
+
+            </div>
+
+            <!-- Exam selector (optional — only shows once a course is picked) -->
+
+            <div class="form-group" id="focus-exam-group" style="margin-bottom:12px;display:none;">
+
+              <label style="font-size:12px;">Studying for which test? <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+
+              <select id="focus-exam" class="edit-input">
+
+                <option value="">— General course study —</option>
+
+              </select>
+
+              <div id="focus-exam-empty" style="display:none;font-size:12px;color:var(--text-muted);margin-top:6px;">
+
+                No exams added for this course yet. Add them on <a href="/student/exams" style="color:var(--primary);">the courses tab</a>.
 
               </div>
 
@@ -5907,7 +6376,35 @@ def register_student_routes(app, csrf, limiter):
 
         var phaseStartFocusSeconds = 0;
 
+        // course_id → [{{id,name,date}}]. Serialized server-side so the exam
+        // dropdown can filter client-side without an extra round trip.
+        var FOCUS_COURSE_EXAMS = {_json_course_exams};
 
+        function onFocusCourseChange() {{
+          var sel = document.getElementById('focus-course');
+          var examGroup = document.getElementById('focus-exam-group');
+          var examSel = document.getElementById('focus-exam');
+          var emptyMsg = document.getElementById('focus-exam-empty');
+          if (!sel || !examGroup || !examSel) return;
+          var cid = sel.value;
+          if (!cid) {{
+            examGroup.style.display = 'none';
+            examSel.value = '';
+            return;
+          }}
+          var exams = FOCUS_COURSE_EXAMS[cid] || [];
+          // Wipe and rebuild options.
+          while (examSel.options.length > 1) examSel.remove(1);
+          exams.forEach(function(e){{
+            var o = document.createElement('option');
+            o.value = e.id;
+            var dateTxt = e.date ? (' · ' + e.date) : '';
+            o.textContent = e.name + dateTxt;
+            examSel.appendChild(o);
+          }});
+          examGroup.style.display = '';
+          emptyMsg.style.display = exams.length ? 'none' : 'block';
+        }}
 
         function saveFocusTimerState() {{
 
@@ -5917,7 +6414,9 @@ def register_student_routes(app, csrf, limiter):
 
             totalFocusSeconds: totalFocusSeconds, phaseStartFocusSeconds: phaseStartFocusSeconds,
 
-            totalTime: totalTime, course: document.getElementById('focus-course').value
+            totalTime: totalTime,
+            course: document.getElementById('focus-course').value,
+            exam: document.getElementById('focus-exam') ? document.getElementById('focus-exam').value : ''
 
           }}));
 
@@ -6132,11 +6631,19 @@ def register_student_routes(app, csrf, limiter):
 
             var swInitial = totalFocusSeconds;
 
+            var _pgcSel = document.getElementById('focus-course');
+            var _pgeSel = document.getElementById('focus-exam');
+            var _pgCourseName = '';
+            if (_pgcSel && _pgcSel.selectedOptions && _pgcSel.selectedOptions[0]) {{
+              _pgCourseName = _pgcSel.selectedOptions[0].getAttribute('data-name') || _pgcSel.selectedOptions[0].textContent || '';
+            }}
             localStorage.setItem('focus_float', JSON.stringify({{
 
               active:true, mode:'stopwatch', startAt: isRestore ? (Date.now() - totalFocusSeconds * 1000) : swStart, label:'📖 Reading',
 
-              originalMode:'pages', course: document.getElementById('focus-course').value || ''
+              originalMode:'pages', course: _pgCourseName,
+              courseId: _pgcSel ? (parseInt(_pgcSel.value, 10) || null) : null,
+              examId: _pgeSel ? (parseInt(_pgeSel.value, 10) || null) : null
 
             }}));
 
@@ -6172,7 +6679,14 @@ def register_student_routes(app, csrf, limiter):
 
             var label = isBreak ? '☕ Break' : '🔥 Focus';
 
-            var courseName = document.getElementById('focus-course').value || '';
+            var _cSel = document.getElementById('focus-course');
+            var _eSel = document.getElementById('focus-exam');
+            var focusCourseId = _cSel ? (parseInt(_cSel.value, 10) || null) : null;
+            var focusExamId = _eSel ? (parseInt(_eSel.value, 10) || null) : null;
+            var courseName = '';
+            if (_cSel && _cSel.selectedOptions && _cSel.selectedOptions[0]) {{
+              courseName = _cSel.selectedOptions[0].getAttribute('data-name') || _cSel.selectedOptions[0].textContent || '';
+            }}
 
             // Minutes of WORK this phase will credit when it ends (0 for breaks).
 
@@ -6257,6 +6771,7 @@ def register_student_routes(app, csrf, limiter):
               active:true, mode:'countdown', endAt:endAt, label:label, nextPhase:nextPhase,
 
               originalMode: currentMode, isBreak: isBreak, course: courseName,
+              courseId: focusCourseId, examId: focusExamId,
 
               workMinutes: phaseWorkMinutes, phaseId: phaseId
 
@@ -6619,7 +7134,15 @@ def register_student_routes(app, csrf, limiter):
 
           var pages = currentMode === 'pages' ? pageDone : 0;
 
-          var course = document.getElementById('focus-course').value;
+          var courseSel = document.getElementById('focus-course');
+          var examSel = document.getElementById('focus-exam');
+          var courseId = courseSel ? (parseInt(courseSel.value, 10) || null) : null;
+          var examId = examSel ? (parseInt(examSel.value, 10) || null) : null;
+          var courseName = '';
+          if (courseSel && courseSel.selectedOptions && courseSel.selectedOptions[0]) {{
+            courseName = courseSel.selectedOptions[0].getAttribute('data-name') || courseSel.selectedOptions[0].textContent || '';
+          }}
+          var course = courseName; // legacy name used in payload below
 
           // Dedupe by phaseId so the global widget controller doesn't also credit the same phase.
 
@@ -6675,7 +7198,8 @@ def register_student_routes(app, csrf, limiter):
 
           }} catch(e) {{}}
 
-          var payload = {{ mode: currentMode, minutes: minutes, pages: pages, course_name: course }};
+          var payload = {{ mode: currentMode, minutes: minutes, pages: pages,
+                          course_name: course, course_id: courseId, exam_id: examId }};
 
           // Use a single keepalive fetch — it survives navigation/tab close and
           // returns the updated stats. Using sendBeacon AND fetch at the same
@@ -6953,7 +7477,14 @@ def register_student_routes(app, csrf, limiter):
 
           sessionStarted = true;
 
-          if (ts.course) document.getElementById('focus-course').value = ts.course;
+          if (ts.course) {{
+            document.getElementById('focus-course').value = ts.course;
+            onFocusCourseChange();
+            if (ts.exam) {{
+              var _esel = document.getElementById('focus-exam');
+              if (_esel) _esel.value = ts.exam;
+            }}
+          }}
 
           // The global focus controller may have advanced the phase while the
 
@@ -6961,7 +7492,14 @@ def register_student_routes(app, csrf, limiter):
 
           if (typeof ff.isBreak === 'boolean') isBreak = ff.isBreak;
 
-          if (ff.course) document.getElementById('focus-course').value = ff.course;
+          if (ff.courseId) {{
+            document.getElementById('focus-course').value = String(ff.courseId);
+            onFocusCourseChange();
+            if (ff.examId) {{
+              var _erestore = document.getElementById('focus-exam');
+              if (_erestore) _erestore.value = String(ff.examId);
+            }}
+          }}
 
 
 
@@ -18260,36 +18798,17 @@ No markdown, no code fences. ONLY JSON.
             # Preview the L\u2192R fade exactly like the leaderboard renders it.
             _flag_anim = (cfg.get("anim_class") or "") if cfg.get("animated") else ""
             preview = (
-                '<div class="sh-flag-preview">'
-                '<div class="sh-flag-preview-label">How it looks on the leaderboard</div>'
-                '<div class="sh-flag-row sh-flag-row-gold">'
-                f'<div class="sh-flag-flag {_flag_anim}" style="background:{cfg["css"]};"></div>'
-                '<div class="sh-flag-inner">'
-                '<div class="sh-flag-rank sh-flag-rank-1">1</div>'
-                '<div class="sh-flag-avatar">&#128100;</div>'
-                '<div class="sh-flag-ident">'
-                '<div class="sh-flag-name">You</div>'
-                '<div class="sh-flag-meta">Level 12 &middot; &#128293; 7d</div>'
-                '</div>'
-                '<div class="sh-flag-xp"><div class="sh-flag-xp-n">12,480</div><div class="sh-flag-xp-l">XP</div></div>'
-                '</div></div>'
-                '<div class="sh-flag-row">'
-                f'<div class="sh-flag-flag {_flag_anim}" style="background:{cfg["css"]};opacity:.55;"></div>'
-                '<div class="sh-flag-inner">'
-                '<div class="sh-flag-rank sh-flag-rank-2">2</div>'
-                '<div class="sh-flag-avatar sh-flag-avatar-alt">&#128104;</div>'
-                '<div class="sh-flag-ident">'
-                '<div class="sh-flag-name sh-flag-name-alt">Ana R.</div>'
-                '<div class="sh-flag-meta">Level 11</div>'
-                '</div>'
-                '<div class="sh-flag-xp"><div class="sh-flag-xp-n sh-flag-xp-n-alt">10,920</div><div class="sh-flag-xp-l">XP</div></div>'
-                '</div></div>'
+                '<div style="position:relative;height:48px;background:#0f172a;border-radius:8px;overflow:hidden;">'
+                f'<div class="{_flag_anim}" style="position:absolute;inset:0;background:{cfg["css"]};'
+                '-webkit-mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);'
+                'mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);"></div>'
+                '<div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 12px;color:#fff;font-size:12px;font-weight:600;letter-spacing:.05em;">PREVIEW</div>'
                 '</div>'
             )
             flag_cards.append(
-                '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;padding:14px;">'
+                '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;padding:12px;">'
                 f'{preview}'
-                f'<div style="margin-top:12px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}{plus_pill}</div>'
+                f'<div style="margin-top:10px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}{plus_pill}</div>'
                 f'<div style="font-size:12px;margin-top:4px;">{tag}</div>'
                 f'<div style="margin-top:10px;">{btn}</div></div></div>'
             )
@@ -18441,47 +18960,6 @@ No markdown, no code fences. ONLY JSON.
         <style>
           .sh-active-chip {{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:rgba(255,255,255,.7); border-radius:999px; font-size:12px; font-weight:600; color:#78350f; }}
           .sh-cd {{ font-variant-numeric: tabular-nums; }}
-
-          /* ── Leaderboard flag preview (mini row mockup) ───────────────── */
-          .sh-flag-preview {{ background:#0b1220; border:1px solid #1e293b; border-radius:12px; padding:10px; }}
-          .sh-flag-preview-label {{ font-size:10px; letter-spacing:.12em; color:#64748b; text-transform:uppercase; font-weight:700; margin:0 2px 8px; }}
-          .sh-flag-row {{ position:relative; height:56px; border-radius:10px; overflow:hidden; margin-bottom:6px; background:#0f172a; }}
-          .sh-flag-row:last-child {{ margin-bottom:0; }}
-          .sh-flag-row-gold {{ box-shadow: inset 0 0 0 1px rgba(251,191,36,.45); }}
-          .sh-flag-flag {{
-            position:absolute; inset:0;
-            -webkit-mask-image:linear-gradient(to right, rgba(0,0,0,.95) 0%, rgba(0,0,0,.55) 40%, rgba(0,0,0,.15) 70%, transparent 100%);
-            mask-image:linear-gradient(to right, rgba(0,0,0,.95) 0%, rgba(0,0,0,.55) 40%, rgba(0,0,0,.15) 70%, transparent 100%);
-          }}
-          .sh-flag-inner {{
-            position:absolute; inset:0;
-            display:grid; grid-template-columns: 36px 34px 1fr auto; align-items:center;
-            gap:10px; padding:0 12px; color:#fff;
-          }}
-          .sh-flag-rank {{
-            display:flex; align-items:center; justify-content:center;
-            width:26px; height:26px; border-radius:50%;
-            font-size:12px; font-weight:800; color:#0f172a;
-            background:#cbd5e1;
-          }}
-          .sh-flag-rank-1 {{ background: linear-gradient(135deg,#fde047,#f59e0b); color:#78350f; box-shadow:0 0 0 2px rgba(251,191,36,.35); }}
-          .sh-flag-rank-2 {{ background: linear-gradient(135deg,#e2e8f0,#94a3b8); color:#0f172a; }}
-          .sh-flag-avatar {{
-            width:30px; height:30px; border-radius:50%;
-            background: linear-gradient(135deg,#7c3aed,#22d3ee);
-            display:flex; align-items:center; justify-content:center;
-            font-size:16px; line-height:1;
-            box-shadow:0 0 0 2px rgba(255,255,255,.15);
-          }}
-          .sh-flag-avatar-alt {{ background: linear-gradient(135deg,#10b981,#059669); }}
-          .sh-flag-ident {{ min-width:0; line-height:1.15; }}
-          .sh-flag-name {{ font-weight:800; font-size:13px; color:#fde047; letter-spacing:.01em; }}
-          .sh-flag-name-alt {{ color:#fff; }}
-          .sh-flag-meta {{ font-size:10px; color:rgba(255,255,255,.72); margin-top:2px; }}
-          .sh-flag-xp {{ text-align:right; }}
-          .sh-flag-xp-n {{ font-weight:800; font-size:14px; color:#fff; font-variant-numeric: tabular-nums; }}
-          .sh-flag-xp-n-alt {{ color:rgba(255,255,255,.85); }}
-          .sh-flag-xp-l {{ font-size:9px; letter-spacing:.14em; color:rgba(255,255,255,.6); text-transform:uppercase; }}
         </style>
         {active_html}
         {subscription_section}

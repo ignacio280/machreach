@@ -553,6 +553,9 @@ def _student_migrations():
         ("student_course_files", "exam_id", "INTEGER DEFAULT NULL"),
         ("student_study_progress", "focus_minutes", "INTEGER DEFAULT 0"),
         ("student_study_progress", "pages_read", "INTEGER DEFAULT 0"),
+        # Focus session → what are you studying for / which test (optional, per-session)
+        ("student_study_progress", "course_id", "INTEGER DEFAULT NULL"),
+        ("student_study_progress", "exam_id", "INTEGER DEFAULT NULL"),
         ("student_courses", "difficulty", "INTEGER DEFAULT 3"),
         ("student_email_prefs", "university", "TEXT DEFAULT ''"),
         ("student_email_prefs", "field_of_study", "TEXT DEFAULT ''"),
@@ -1089,11 +1092,28 @@ FOCUS_MAX_MINUTES_PER_SESSION = 480   # 8h cap on a single save
 FOCUS_MAX_MINUTES_PER_DAY     = 16 * 60  # 16h cap on a single calendar day
 
 def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
-                       course_name: str = "") -> int:
+                       course_name: str = "", course_id: int | None = None,
+                       exam_id: int | None = None) -> int:
     """Persist a focus session.
     Returns the new row id, or 0 if the request was rejected for being garbage
     (negative, NaN, or so large that it must be a bug / abandoned timer).
+
+    course_id / exam_id are optional FKs — set when the session is tagged
+    to a specific course (and, optionally, a specific exam within that course).
+    Validated against ownership here so a malicious client can't tag another
+    user's course/exam rows.
     """
+    # Validate FK ownership up-front so garbage IDs don't poison stats later.
+    if course_id:
+        try:
+            course_id = int(course_id)
+        except (TypeError, ValueError):
+            course_id = None
+    if exam_id:
+        try:
+            exam_id = int(exam_id)
+        except (TypeError, ValueError):
+            exam_id = None
     # Sanitize inputs.
     try:
         minutes = int(minutes)
@@ -1119,6 +1139,32 @@ def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
 
     today = datetime.now().strftime("%Y-%m-%d")
     with get_db() as db:
+        # Validate course ownership.
+        if course_id:
+            owns = _fetchval(
+                db,
+                "SELECT 1 FROM student_courses WHERE id = %s AND client_id = %s",
+                (course_id, client_id),
+            )
+            if not owns:
+                course_id = None
+        # Validate exam ownership + that it belongs to the selected course.
+        if exam_id:
+            if course_id:
+                owns = _fetchval(
+                    db,
+                    "SELECT 1 FROM student_exams WHERE id = %s AND client_id = %s AND course_id = %s",
+                    (exam_id, client_id, course_id),
+                )
+            else:
+                owns = _fetchval(
+                    db,
+                    "SELECT 1 FROM student_exams WHERE id = %s AND client_id = %s",
+                    (exam_id, client_id),
+                )
+            if not owns:
+                exam_id = None
+
         # Per-day cap: clamp `minutes` so the calendar-day total never exceeds
         # FOCUS_MAX_MINUTES_PER_DAY. This is the second line of defence against
         # orphaned timers re-crediting after a long absence.
@@ -1136,12 +1182,13 @@ def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
 
         return _insert_returning_id(
             db,
-            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
-            "VALUES (%s, %s, 1, %s, %s, %s) RETURNING id",
+            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
+            "VALUES (%s, %s, 1, %s, %s, %s, %s, %s) RETURNING id",
             (client_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-             f"{mode}: {course_name}" if course_name else mode, minutes, pages),
-            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
-            "VALUES (?, ?, 1, ?, ?, ?)",
+             f"{mode}: {course_name}" if course_name else mode, minutes, pages,
+             course_id, exam_id),
+            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
+            "VALUES (?, ?, 1, ?, ?, ?, ?, ?)",
         )
 
 
@@ -1232,6 +1279,156 @@ def get_focus_stats_today(client_id: int, local_date: str | None = None) -> dict
         "total_pages": total_pages,
         "sessions": sessions,
         "streak_days": streak,
+    }
+
+
+# ── Per-course / per-exam focus-minute aggregations ──────────
+#
+# These power the dashboard "time per course" chart and its drill-downs
+# (course → week, course → exams, exam → week). Each row in
+# student_study_progress now carries an optional course_id/exam_id, so the
+# joins below are exact — no fragile notes-string parsing.
+
+def get_time_per_course(client_id: int) -> list[dict]:
+    """Total focus minutes per course (includes *only* sessions that were
+    tagged to a specific course)."""
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT c.id AS course_id, c.name AS course_name, "
+            "       COALESCE(SUM(sp.focus_minutes), 0) AS minutes, "
+            "       COUNT(sp.id) AS sessions "
+            "FROM student_courses c "
+            "LEFT JOIN student_study_progress sp ON sp.course_id = c.id "
+            "     AND sp.client_id = c.client_id "
+            "     AND COALESCE(sp.focus_minutes, 0) > 0 "
+            "WHERE c.client_id = %s "
+            "GROUP BY c.id, c.name "
+            "ORDER BY minutes DESC, c.name ASC",
+            (client_id,),
+        )
+        return [dict(r) for r in rows]
+
+
+def get_time_per_exam(client_id: int, course_db_id: int) -> list[dict]:
+    """Total focus minutes per exam for a single course.
+    Returns every exam in the course (minutes = 0 if never studied for)."""
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT e.id AS exam_id, e.name AS exam_name, e.exam_date, "
+            "       COALESCE(SUM(sp.focus_minutes), 0) AS minutes, "
+            "       COUNT(sp.id) AS sessions "
+            "FROM student_exams e "
+            "LEFT JOIN student_study_progress sp ON sp.exam_id = e.id "
+            "     AND sp.client_id = e.client_id "
+            "     AND COALESCE(sp.focus_minutes, 0) > 0 "
+            "WHERE e.client_id = %s AND e.course_id = %s "
+            "GROUP BY e.id, e.name, e.exam_date "
+            "ORDER BY CASE WHEN e.exam_date IS NULL OR e.exam_date = '' THEN 1 ELSE 0 END, "
+            "         e.exam_date ASC, e.name ASC",
+            (client_id, course_db_id),
+        )
+        return [dict(r) for r in rows]
+
+
+def _iso_week_anchor(week_offset: int) -> tuple:
+    """Return (monday_date, sunday_date) for the ISO week offset from today.
+    0 = this week, -1 = last week, etc."""
+    from datetime import date, timedelta
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    anchor = monday + timedelta(weeks=week_offset)
+    return anchor, anchor + timedelta(days=6)
+
+
+def get_course_week(client_id: int, course_db_id: int, week_offset: int = 0) -> dict:
+    """Focus minutes per day-of-week for a specific course in a given ISO week.
+
+    Returns {
+        "week_start": "YYYY-MM-DD", "week_end": "YYYY-MM-DD",
+        "days": [{"date": "YYYY-MM-DD", "dow": "Mon", "minutes": int, "sessions": int}, ...]
+    }
+    """
+    from datetime import timedelta, datetime as _dt
+    monday, sunday = _iso_week_anchor(week_offset)
+    # plan_date is stored as "YYYY-MM-DD HH:MM:SS" for focus rows, so range
+    # compare the prefix substring.
+    start_str = monday.strftime("%Y-%m-%d") + " 00:00:00"
+    end_str = sunday.strftime("%Y-%m-%d") + " 23:59:59"
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT plan_date, COALESCE(focus_minutes, 0) AS mins "
+            "FROM student_study_progress "
+            "WHERE client_id = %s AND course_id = %s "
+            "  AND plan_date >= %s AND plan_date <= %s "
+            "  AND COALESCE(focus_minutes, 0) > 0",
+            (client_id, course_db_id, start_str, end_str),
+        )
+    per_day_min = {(monday + timedelta(days=i)).strftime("%Y-%m-%d"): 0 for i in range(7)}
+    per_day_sess = {k: 0 for k in per_day_min}
+    for r in rows:
+        d_str = (r["plan_date"] or "")[:10]
+        if d_str in per_day_min:
+            per_day_min[d_str] += int(r["mins"] or 0)
+            per_day_sess[d_str] += 1
+    dow_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    days = []
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        ds = d.strftime("%Y-%m-%d")
+        days.append({
+            "date": ds,
+            "dow": dow_names[i],
+            "minutes": per_day_min[ds],
+            "sessions": per_day_sess[ds],
+        })
+    return {
+        "week_start": monday.strftime("%Y-%m-%d"),
+        "week_end": sunday.strftime("%Y-%m-%d"),
+        "days": days,
+    }
+
+
+def get_exam_week(client_id: int, exam_db_id: int, week_offset: int = 0) -> dict:
+    """Focus minutes per day-of-week for a specific exam in a given ISO week."""
+    from datetime import timedelta
+    monday, sunday = _iso_week_anchor(week_offset)
+    start_str = monday.strftime("%Y-%m-%d") + " 00:00:00"
+    end_str = sunday.strftime("%Y-%m-%d") + " 23:59:59"
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT plan_date, COALESCE(focus_minutes, 0) AS mins "
+            "FROM student_study_progress "
+            "WHERE client_id = %s AND exam_id = %s "
+            "  AND plan_date >= %s AND plan_date <= %s "
+            "  AND COALESCE(focus_minutes, 0) > 0",
+            (client_id, exam_db_id, start_str, end_str),
+        )
+    per_day_min = {(monday + timedelta(days=i)).strftime("%Y-%m-%d"): 0 for i in range(7)}
+    per_day_sess = {k: 0 for k in per_day_min}
+    for r in rows:
+        d_str = (r["plan_date"] or "")[:10]
+        if d_str in per_day_min:
+            per_day_min[d_str] += int(r["mins"] or 0)
+            per_day_sess[d_str] += 1
+    dow_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    days = []
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        ds = d.strftime("%Y-%m-%d")
+        days.append({
+            "date": ds,
+            "dow": dow_names[i],
+            "minutes": per_day_min[ds],
+            "sessions": per_day_sess[ds],
+        })
+    return {
+        "week_start": monday.strftime("%Y-%m-%d"),
+        "week_end": sunday.strftime("%Y-%m-%d"),
+        "days": days,
     }
 
 
@@ -3879,6 +4076,152 @@ FLAGS = {
     "plus_anim_dawn": {"name": "Cosmic Dawn (PLUS)", "price_coins": 1500, "xp_required": 0, "plus_only": True,
                        "animated": True, "anim_class": "flag-anim-pan",
                        "css": "linear-gradient(90deg, #1e1b4b 0%, #db2777 25%, #fbbf24 50%, #db2777 75%, #1e1b4b 100%)"},
+    # ── Cosmic / Space (31-40) ────────────────────────────────────────
+    "stardust_run":    {"name": "Stardust Run",      "price_coins": 240,  "xp_required": 800,
+                        "css": "radial-gradient(1px 1px at 12% 30%, #fff, transparent 60%), radial-gradient(1px 1px at 38% 70%, #fff, transparent 60%), radial-gradient(2px 2px at 62% 40%, #c4b5fd, transparent 55%), radial-gradient(1px 1px at 85% 65%, #fff, transparent 60%), linear-gradient(90deg, #1e1b4b 0%, #4c1d95 55%, #7c3aed 100%)"},
+    "nebula_stream":   {"name": "Nebula Stream",     "price_coins": 260,  "xp_required": 900,
+                        "css": "radial-gradient(ellipse at 25% 50%, rgba(34,211,238,.45), transparent 55%), radial-gradient(ellipse at 70% 50%, rgba(168,85,247,.45), transparent 55%), linear-gradient(90deg, #0c4a6e 0%, #1e1b4b 55%, #4c1d95 100%)"},
+    "quantum_leap":    {"name": "Quantum Leap",      "price_coins": 260,  "xp_required": 950,
+                        "css": "radial-gradient(ellipse at 30% 50%, rgba(34,197,94,.5), transparent 55%), radial-gradient(ellipse at 75% 50%, rgba(14,165,233,.35), transparent 55%), linear-gradient(90deg, #022c22 0%, #064e3b 50%, #0c4a6e 100%)"},
+    "electro_zenith":  {"name": "Electro Zenith",    "price_coins": 280,  "xp_required": 1000,
+                        "css": "radial-gradient(ellipse at 50% 50%, rgba(56,189,248,.55), transparent 55%), repeating-linear-gradient(110deg, rgba(255,255,255,.08) 0 1px, transparent 1px 18px), linear-gradient(90deg, #0c4a6e 0%, #1e40af 50%, #1e1b4b 100%)"},
+    "vortex_spiral":   {"name": "Vortex Spiral",     "price_coins": 300,  "xp_required": 1100,
+                        "animated": True, "anim_class": "flag-anim-pan",
+                        "css": "radial-gradient(circle at 50% 50%, rgba(251,146,60,.5), rgba(124,58,237,.4) 30%, transparent 60%), linear-gradient(90deg, #1e1b4b 0%, #4c1d95 50%, #1e1b4b 100%)"},
+    "black_ice":       {"name": "Black Ice",         "price_coins": 300,  "xp_required": 1150,
+                        "css": "radial-gradient(ellipse at 30% 50%, rgba(186,230,253,.35), transparent 55%), linear-gradient(90deg, #020617 0%, #1e293b 50%, #0f172a 100%)"},
+    "frostbite":       {"name": "Frostbite",         "price_coins": 300,  "xp_required": 1200,
+                        "css": "radial-gradient(ellipse at 30% 50%, rgba(165,243,252,.5), transparent 55%), linear-gradient(90deg, #082f49 0%, #0284c7 40%, #7dd3fc 80%, #e0f2fe 100%)"},
+    "polar_lights":    {"name": "Polar Lights",      "price_coins": 320,  "xp_required": 1300,
+                        "animated": True, "anim_class": "flag-anim-shimmer",
+                        "css": "linear-gradient(90deg, #052e16 0%, #16a34a 25%, #22d3ee 50%, #a855f7 75%, #052e16 100%)"},
+    "winter_veil":     {"name": "Winter Veil",       "price_coins": 320,  "xp_required": 1350,
+                        "css": "radial-gradient(1px 1px at 20% 40%, #fff, transparent 60%), radial-gradient(1px 1px at 55% 70%, #fff, transparent 60%), radial-gradient(1px 1px at 80% 30%, #fff, transparent 60%), linear-gradient(90deg, #1e293b 0%, #475569 50%, #cbd5e1 100%)"},
+    "razor_wind":      {"name": "Razor Wind",        "price_coins": 320,  "xp_required": 1400,
+                        "animated": True, "anim_class": "flag-anim-scan",
+                        "css": "repeating-linear-gradient(92deg, rgba(165,243,252,0) 0 90px, rgba(165,243,252,.5) 90px 98px, rgba(165,243,252,0) 98px 200px), linear-gradient(90deg, #0f172a 0%, #334155 55%, #94a3b8 100%)"},
+    # ── Desert / Nature (41-50) ───────────────────────────────────────
+    "desert_sun":      {"name": "Desert Sun",        "price_coins": 280,  "xp_required": 1000,
+                        "css": "radial-gradient(circle at 50% 50%, #fde047 0%, #f97316 25%, transparent 60%), linear-gradient(90deg, #7c2d12 0%, #b45309 50%, #f59e0b 100%)"},
+    "dune_walker":     {"name": "Dune Walker",       "price_coins": 300,  "xp_required": 1100,
+                        "css": "linear-gradient(90deg, #78350f 0%, #b45309 40%, #d97706 70%, #1c1917 100%)"},
+    "sand_whisper":    {"name": "Sand Whisper",      "price_coins": 300,  "xp_required": 1150,
+                        "css": "linear-gradient(90deg, #78350f 0%, #ca8a04 40%, #fde047 80%, #fef3c7 100%)"},
+    "jungle_vibe":     {"name": "Jungle Vibe",       "price_coins": 320,  "xp_required": 1250,
+                        "css": "radial-gradient(ellipse at 30% 50%, rgba(132,204,22,.5), transparent 55%), linear-gradient(90deg, #052e16 0%, #14532d 50%, #166534 100%)"},
+    "wild_growth":     {"name": "Wild Growth",       "price_coins": 320,  "xp_required": 1300,
+                        "css": "radial-gradient(ellipse at 50% 50%, rgba(190,242,100,.5), transparent 55%), linear-gradient(90deg, #14532d 0%, #16a34a 50%, #84cc16 100%)"},
+    "natures_call":    {"name": "Nature's Call",     "price_coins": 340,  "xp_required": 1400,
+                        "css": "radial-gradient(ellipse at 25% 50%, rgba(244,114,182,.45), transparent 55%), radial-gradient(ellipse at 75% 50%, rgba(132,204,22,.45), transparent 55%), linear-gradient(90deg, #831843 0%, #14532d 50%, #052e16 100%)"},
+    "toxic_haze":      {"name": "Toxic Haze",        "price_coins": 340,  "xp_required": 1450,
+                        "animated": True, "anim_class": "flag-anim-pulse",
+                        "css": "radial-gradient(ellipse at 30% 50%, rgba(163,230,53,.6), transparent 55%), linear-gradient(90deg, #14532d 0%, #4d7c0f 50%, #65a30d 100%)"},
+    "swamp_shadow":    {"name": "Swamp Shadow",      "price_coins": 340,  "xp_required": 1500,
+                        "css": "radial-gradient(ellipse at 50% 50%, rgba(22,101,52,.5), transparent 55%), linear-gradient(90deg, #0f172a 0%, #052e16 50%, #1c1917 100%)"},
+    "mystic_forest":   {"name": "Mystic Forest",     "price_coins": 360,  "xp_required": 1600,
+                        "css": "radial-gradient(1px 1px at 30% 50%, #a7f3d0, transparent 60%), radial-gradient(ellipse at 50% 50%, rgba(16,185,129,.3), transparent 55%), linear-gradient(90deg, #022c22 0%, #064e3b 50%, #14532d 100%)"},
+    "ancient_roots":   {"name": "Ancient Roots",     "price_coins": 360,  "xp_required": 1700,
+                        "css": "linear-gradient(90deg, #1c0a04 0%, #431407 40%, #78350f 70%, #1c0a04 100%)"},
+    # ── Ocean (51-60) ─────────────────────────────────────────────────
+    "ocean_breeze":    {"name": "Ocean Breeze",      "price_coins": 320,  "xp_required": 1200,
+                        "css": "radial-gradient(ellipse at 30% 50%, rgba(34,211,238,.5), transparent 55%), linear-gradient(90deg, #083344 0%, #0891b2 50%, #67e8f9 100%)"},
+    "deep_sea":        {"name": "Deep Sea",          "price_coins": 340,  "xp_required": 1300,
+                        "css": "radial-gradient(ellipse at 50% 50%, rgba(14,116,144,.5), transparent 55%), linear-gradient(90deg, #020617 0%, #0c4a6e 50%, #082f49 100%)"},
+    "abyss_walker":    {"name": "Abyss Walker",      "price_coins": 360,  "xp_required": 1400,
+                        "css": "radial-gradient(ellipse at 50% 50%, rgba(30,58,138,.4), transparent 55%), linear-gradient(90deg, #000 0%, #020617 50%, #0c4a6e 100%)"},
+    "tidal_force":     {"name": "Tidal Force",       "price_coins": 380,  "xp_required": 1500,
+                        "animated": True, "anim_class": "flag-anim-pan",
+                        "css": "linear-gradient(90deg, #082f49 0%, #0284c7 30%, #7dd3fc 50%, #0284c7 70%, #082f49 100%)"},
+    "blue_marine":     {"name": "Blue Marine",       "price_coins": 380,  "xp_required": 1600,
+                        "css": "linear-gradient(90deg, #1e1b4b 0%, #1e40af 50%, #3b82f6 100%)"},
+    "coral_reef":      {"name": "Coral Reef",        "price_coins": 400,  "xp_required": 1700,
+                        "css": "radial-gradient(ellipse at 30% 50%, rgba(236,72,153,.5), transparent 55%), radial-gradient(ellipse at 75% 50%, rgba(251,146,60,.45), transparent 55%), linear-gradient(90deg, #831843 0%, #7c2d12 50%, #0c4a6e 100%)"},
+    "sunken_treasure": {"name": "Sunken Treasure",   "price_coins": 420,  "xp_required": 1800,
+                        "css": "radial-gradient(ellipse at 30% 50%, rgba(250,204,21,.55), transparent 55%), linear-gradient(90deg, #0c4a6e 0%, #083344 40%, #a16207 70%, #fbbf24 100%)"},
+    "pirates_flag":    {"name": "Pirate's Flag",     "price_coins": 440,  "xp_required": 1900,
+                        "css": "radial-gradient(circle at 85% 50%, rgba(255,255,255,.55) 0 6px, transparent 10px), linear-gradient(90deg, #450a0a 0%, #1c1917 50%, #000 100%)"},
+    "sea_legend":      {"name": "Sea Legend",        "price_coins": 460,  "xp_required": 2000,
+                        "animated": True, "anim_class": "flag-anim-shimmer",
+                        "css": "linear-gradient(90deg, #020617 0%, #0c4a6e 25%, #0ea5e9 50%, #67e8f9 80%, #f0f9ff 100%)"},
+    "oceans_wrath":    {"name": "Ocean's Wrath",     "price_coins": 480,  "xp_required": 2200,
+                        "animated": True, "anim_class": "flag-anim-pulse",
+                        "css": "radial-gradient(ellipse at 50% 50%, rgba(56,189,248,.5), transparent 55%), linear-gradient(90deg, #000 0%, #0c4a6e 40%, #1e293b 100%)"},
+    # ── Galactic (61-70) ──────────────────────────────────────────────
+    "galactic_core":   {"name": "Galactic Core",     "price_coins": 420,  "xp_required": 1900,
+                        "css": "radial-gradient(circle at 50% 50%, rgba(251,191,36,.5) 0%, rgba(168,85,247,.45) 25%, transparent 55%), linear-gradient(90deg, #1e1b4b 0%, #4c1d95 50%, #1e1b4b 100%)"},
+    "supernova_big":   {"name": "Supernova",         "price_coins": 460,  "xp_required": 2100,
+                        "animated": True, "anim_class": "flag-anim-pulse",
+                        "css": "radial-gradient(circle at 30% 50%, #fde047 0%, #f97316 20%, #dc2626 35%, transparent 55%), linear-gradient(90deg, #1c0a04 0%, #4c1d95 50%, #1c0a04 100%)"},
+    "black_hole":      {"name": "Black Hole",        "price_coins": 480,  "xp_required": 2200,
+                        "css": "radial-gradient(circle at 50% 50%, #000 0 12%, rgba(251,191,36,.4) 14%, rgba(168,85,247,.3) 22%, transparent 45%), linear-gradient(90deg, #020617 0%, #1e1b4b 50%, #000 100%)"},
+    "cosmic_rift":     {"name": "Cosmic Rift",       "price_coins": 500,  "xp_required": 2300,
+                        "css": "linear-gradient(90deg, #1e1b4b 0%, #4c1d95 30%, #a855f7 50%, #4c1d95 70%, #1e1b4b 100%)"},
+    "interstellar":    {"name": "Interstellar",      "price_coins": 520,  "xp_required": 2400,
+                        "css": "radial-gradient(1px 1px at 15% 40%, #fff, transparent 60%), radial-gradient(1px 1px at 55% 70%, #fff, transparent 60%), radial-gradient(1px 1px at 80% 30%, #fff, transparent 60%), linear-gradient(90deg, #020617 0%, #1e40af 50%, #4c1d95 100%)"},
+    "void_star":       {"name": "Void Star",         "price_coins": 540,  "xp_required": 2500,
+                        "css": "radial-gradient(circle at 70% 50%, #fff 0 2px, rgba(167,139,250,.55) 2px 10px, transparent 16px), linear-gradient(90deg, #000 0%, #1e1b4b 50%, #000 100%)"},
+    "lunar_eclipse":   {"name": "Lunar Eclipse",     "price_coins": 560,  "xp_required": 2600,
+                        "css": "radial-gradient(circle at 70% 50%, #fb923c 0 8px, #0f172a 10px 14px, transparent 20px), linear-gradient(90deg, #020617 0%, #1e293b 50%, #0f172a 100%)"},
+    "silver_moon":     {"name": "Silver Moon",       "price_coins": 580,  "xp_required": 2700,
+                        "css": "radial-gradient(circle at 75% 50%, #f8fafc 0 10px, transparent 16px), radial-gradient(ellipse at 50% 50%, rgba(203,213,225,.3), transparent 55%), linear-gradient(90deg, #020617 0%, #1e293b 50%, #334155 100%)"},
+    "crystal_clear":   {"name": "Crystal Clear",     "price_coins": 600,  "xp_required": 2800,
+                        "css": "repeating-linear-gradient(60deg, rgba(255,255,255,.15) 0 8px, transparent 8px 18px), linear-gradient(90deg, #083344 0%, #0891b2 50%, #67e8f9 100%)"},
+    "diamond_shine":   {"name": "Diamond Shine",     "price_coins": 620,  "xp_required": 3000,
+                        "animated": True, "anim_class": "flag-anim-shimmer",
+                        "css": "repeating-linear-gradient(45deg, rgba(255,255,255,.25) 0 3px, transparent 3px 12px), linear-gradient(90deg, #cbd5e1 0%, #f8fafc 50%, #cbd5e1 100%)"},
+    # ── Fire / Earth (71-80) ──────────────────────────────────────────
+    "volcanic_ash":    {"name": "Volcanic Ash",      "price_coins": 460,  "xp_required": 2000,
+                        "css": "radial-gradient(ellipse at 30% 50%, rgba(220,38,38,.5), transparent 55%), linear-gradient(90deg, #000 0%, #1c0a04 50%, #450a0a 100%)"},
+    "magma_surge":     {"name": "Magma Surge",       "price_coins": 480,  "xp_required": 2100,
+                        "animated": True, "anim_class": "flag-anim-pan",
+                        "css": "linear-gradient(90deg, #1c0a04 0%, #7c2d12 30%, #dc2626 50%, #f97316 70%, #1c0a04 100%)"},
+    "firestorm":       {"name": "Firestorm",         "price_coins": 500,  "xp_required": 2200,
+                        "animated": True, "anim_class": "flag-anim-pulse",
+                        "css": "radial-gradient(ellipse at 50% 50%, rgba(251,146,60,.55), transparent 55%), linear-gradient(90deg, #450a0a 0%, #dc2626 50%, #fbbf24 100%)"},
+    "burning_sky":     {"name": "Burning Sky",       "price_coins": 520,  "xp_required": 2300,
+                        "animated": True, "anim_class": "flag-anim-shimmer",
+                        "css": "linear-gradient(90deg, #7c2d12 0%, #ea580c 35%, #fbbf24 70%, #fef3c7 100%)"},
+    "smoldering":      {"name": "Smoldering",        "price_coins": 540,  "xp_required": 2400,
+                        "css": "radial-gradient(1px 1px at 30% 60%, #fbbf24, transparent 60%), radial-gradient(2px 2px at 70% 40%, #f97316, transparent 55%), linear-gradient(90deg, #1c1917 0%, #450a0a 50%, #1c1917 100%)"},
+    "ashen_waste":     {"name": "Ashen Waste",       "price_coins": 540,  "xp_required": 2500,
+                        "css": "linear-gradient(90deg, #1c1917 0%, #44403c 40%, #78716c 70%, #a8a29e 100%)"},
+    "iron_will":       {"name": "Iron Will",         "price_coins": 560,  "xp_required": 2600,
+                        "css": "repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, transparent 1px 12px), linear-gradient(90deg, #0f172a 0%, #334155 50%, #64748b 100%)"},
+    "steel_phalanx":   {"name": "Steel Phalanx",     "price_coins": 580,  "xp_required": 2700,
+                        "css": "repeating-linear-gradient(45deg, rgba(255,255,255,.1) 0 6px, transparent 6px 14px), linear-gradient(90deg, #1e293b 0%, #475569 50%, #94a3b8 100%)"},
+    "titanium_edge":   {"name": "Titanium Edge",     "price_coins": 600,  "xp_required": 2800,
+                        "animated": True, "anim_class": "flag-anim-scan",
+                        "css": "repeating-linear-gradient(90deg, rgba(226,232,240,0) 0 70px, rgba(226,232,240,.6) 70px 78px, rgba(226,232,240,0) 78px 200px), linear-gradient(90deg, #1e293b 0%, #475569 50%, #cbd5e1 100%)"},
+    "chrome_line":     {"name": "Chrome Line",       "price_coins": 620,  "xp_required": 3000,
+                        "css": "linear-gradient(90deg, #cbd5e1 0%, #f8fafc 25%, #94a3b8 50%, #f8fafc 75%, #cbd5e1 100%)"},
+    # ── Golden / Victory (81-90) ──────────────────────────────────────
+    "golden_dawn":     {"name": "Golden Dawn",       "price_coins": 640,  "xp_required": 3200,
+                        "css": "radial-gradient(circle at 50% 50%, #fef3c7 0 10%, #fde047 25%, #f59e0b 45%, transparent 65%), linear-gradient(90deg, #78350f 0%, #b45309 50%, #fbbf24 100%)"},
+    "divine_light":    {"name": "Divine Light",      "price_coins": 680,  "xp_required": 3500,
+                        "animated": True, "anim_class": "flag-anim-shimmer",
+                        "css": "linear-gradient(90deg, #78350f 0%, #d97706 30%, #fef3c7 55%, #fde047 75%, #fff 100%)"},
+    "celestial_crown": {"name": "Celestial Crown",   "price_coins": 720,  "xp_required": 3800,
+                        "css": "radial-gradient(circle at 50% 50%, rgba(251,191,36,.55), transparent 55%), linear-gradient(90deg, #1e1b4b 0%, #7c3aed 50%, #fbbf24 100%)"},
+    "heavenly_rays":   {"name": "Heavenly Rays",     "price_coins": 740,  "xp_required": 4000,
+                        "animated": True, "anim_class": "flag-anim-pulse",
+                        "css": "radial-gradient(ellipse at 50% 50%, rgba(254,243,199,.6), transparent 60%), linear-gradient(90deg, #4c1d95 0%, #a855f7 50%, #fef3c7 100%)"},
+    "glorious_path":   {"name": "Glorious Path",     "price_coins": 760,  "xp_required": 4300,
+                        "css": "linear-gradient(90deg, #78350f 0%, #f59e0b 30%, #fef3c7 55%, #f59e0b 80%, #78350f 100%)"},
+    "victory_road":    {"name": "Victory Road",      "price_coins": 780,  "xp_required": 4600,
+                        "animated": True, "anim_class": "flag-anim-pan",
+                        "css": "linear-gradient(90deg, #1e3a8a 0%, #3b82f6 30%, #fef3c7 55%, #3b82f6 80%, #1e3a8a 100%)"},
+    "champions_blaze": {"name": "Champion's Blaze",  "price_coins": 820,  "xp_required": 5000,
+                        "animated": True, "anim_class": "flag-anim-pulse",
+                        "css": "radial-gradient(circle at 50% 50%, rgba(251,191,36,.55), rgba(220,38,38,.4) 30%, transparent 60%), linear-gradient(90deg, #450a0a 0%, #b91c1c 50%, #fbbf24 100%)"},
+    "legendary_tier":  {"name": "Legendary",         "price_coins": 900,  "xp_required": 5500,
+                        "animated": True, "anim_class": "flag-anim-shimmer",
+                        "css": "linear-gradient(90deg, #1e1b4b 0%, #7c3aed 25%, #ec4899 50%, #f59e0b 75%, #1e1b4b 100%)"},
+    "hall_of_fame":    {"name": "Hall of Fame",      "price_coins": 1000, "xp_required": 6000,
+                        "animated": True, "anim_class": "flag-anim-shimmer",
+                        "css": "repeating-linear-gradient(90deg, rgba(255,255,255,.1) 0 2px, transparent 2px 14px), linear-gradient(90deg, #78350f 0%, #fbbf24 30%, #fef3c7 55%, #fbbf24 80%, #78350f 100%)"},
+    "unbreakable":     {"name": "Unbreakable",       "price_coins": 1200, "xp_required": 6500,
+                        "animated": True, "anim_class": "flag-anim-pulse",
+                        "css": "repeating-linear-gradient(45deg, rgba(255,255,255,.15) 0 4px, transparent 4px 12px), linear-gradient(90deg, #0f172a 0%, #1e293b 30%, #cbd5e1 60%, #fbbf24 100%)"},
 }
 
 # CSS injected once per page that renders flags. Provides @keyframes + helpers
