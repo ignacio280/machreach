@@ -1,148 +1,156 @@
 # Guión — Presentación de Machreach a Inversionistas (mamá y papá)
 
 *Duración estimada: 8–10 minutos hablando tranquilo.*
+*Monedas en CLP. Tipo de cambio referencial: 1 USD ≈ 950 CLP.*
 
 ---
 
 ## 1. Arranque (1 min)
 
-> "Hola, gracias por escucharme. Quiero enseñarles algo en lo que llevo trabajando y que ya está generando ingresos: **Machreach**. No les vengo a pedir que me regalen dinero — les vengo a proponer una inversión chica que, con números conservadores, se recupera en 6 a 9 meses."
+> "Hola, gracias por escucharme. Quiero mostrarles algo en lo que llevo trabajando y que ya está en producción: **Machreach**. No les vengo a pedir plata de regalo — les vengo a proponer una inversión chica que, con números conservadores, se recupera en menos de un año."
 
 ## 2. Qué es Machreach (2 min)
 
-> "Machreach es una empresa de software con dos productos que comparten la misma infraestructura:
+> "Machreach es una plataforma web para universitarios. Se llama **Machreach Student**. Lo que hace:
 >
-> **Producto 1 — Agente de Email Outreach (B2B).** Es un agente de inteligencia artificial que escribe y envía correos en frío para negocios pequeños — agencias, freelancers, consultoras — que quieren conseguir clientes pero no tienen a alguien full-time mandando emails. El agente:
->  - Escribe secuencias de correos personalizadas con IA (GPT)
->  - Los manda en drip campaigns (uno el lunes, otro el jueves, otro la siguiente semana)
->  - Prueba dos versiones del asunto automáticamente para ver cuál funciona mejor (A/B test)
->  - Da dashboards de cuánta gente abrió, respondió, rebotó
+> - **Se conecta a Canvas** (el LMS que usan casi todas las universidades) y baja automáticamente los cursos y materiales del alumno.
+> - **Modo Focus** tipo Pomodoro: el alumno dice qué ramo y qué prueba está estudiando, le da start, y la plataforma le cuenta el tiempo.
+> - **Analítica de estudio**: cuántas horas lleva esta semana, qué día rinde más, cuánto tiempo le ha dedicado a cada ramo y a cada examen — con gráficos de tiempo por día, por ramo y por prueba.
+> - **Training**: quizzes compartidos entre alumnos de la misma universidad. Si alguien sube un cuestionario de Cálculo I en mi misma universidad, yo puedo practicar con él.
+> - **Rankings (leaderboards)** por nivel global, país, universidad y carrera. Se cierran cada semana y cada mes con premios en monedas virtuales.
+> - **XP, badges, rachas, ligas** — el sistema se siente como un juego. El alumno gana XP por estudiar y sube de liga.
+> - **Monedas virtuales** para comprar banners y cosméticos de perfil.
+> - **Suscripción PLUS** ($4.99/mes USD ≈ 4.700 CLP/mes) que da monedas extras cada mes y desbloquea cosméticos exclusivos.
+> - **Paquetes de monedas** (compra única, desde $0.99 a $34.99 USD) para quienes quieran comprar cosméticos directo sin esperar.
 >
-> **Producto 2 — Machreach Student.** Es una app para estudiantes universitarios:
->  - Se conecta a Canvas para bajar sus cursos automáticamente
->  - Modo de enfoque (Pomodoro) con seguimiento por materia y por examen
->  - Entrenamiento con quizzes comunitarios por universidad
->  - Sistema de XP, ligas, y ranking semanal/mensual
->  - Suscripciones PLUS y paquetes de monedas virtuales (pagados con Lemon Squeezy)
->
-> Los dos corren sobre la misma stack técnica, el mismo servidor, y el mismo modelo de pagos. Es decir: **pago una sola infraestructura y atiendo dos mercados.**"
+> En resumen: **es una mezcla de Notion + Duolingo + Canvas, pensado para que estudiar no sea una lata.**"
 
 ## 3. Cómo funciona por dentro — explicación técnica simple (2 min)
 
-> "Para que se imaginen lo que hay debajo:
+> "Para que se imaginen lo que hay abajo:
 >
-> - **Backend** en Python con Flask (el 'cerebro' que maneja usuarios, pagos, y las APIs de IA).
-> - **Base de datos** PostgreSQL en la nube (donde viven los contactos, campañas, emails, estudiantes, cursos).
-> - **IA** — uso la API de OpenAI (GPT-4) para los correos, y Claude (de Anthropic) para el tutor de estudiantes. Lo manejo con prompts cuidadosamente diseñados para que no gaste de más.
-> - **Frontend** en HTML+JS servido desde el mismo backend (no hay app separada; es una web app responsive que funciona en celular y laptop).
-> - **Envío de correos** con SMTP autenticado (Gmail API para clientes chicos, Resend/SendGrid para los que mandan mucho volumen).
-> - **Pagos** con Lemon Squeezy (me dan acta fiscal, cobran globalmente, y se llevan 5%). Recibo el dinero neto a mi cuenta.
-> - **Hosting** en Render.com — un web service + un worker de background + la base de datos. Todo auto-escala.
-> - **CI/CD** — cada commit que hago en GitHub se despliega automáticamente a producción en 2 minutos.
+> - **Backend** en Python con Flask — es el cerebro que maneja los usuarios, las sesiones de estudio, los ranking, y los pagos.
+> - **Base de datos** PostgreSQL en la nube — ahí viven los usuarios, los cursos bajados de Canvas, el tiempo estudiado, el XP, los rankings.
+> - **IA** — uso la API de OpenAI (GPT) únicamente para leer material desordenado de Canvas (por ejemplo, un syllabus en PDF) y transformarlo en datos estructurados (nombres de pruebas, fechas, unidades). No hay tutor de IA; el valor lo da la plataforma, no el modelo.
+> - **Frontend** servido desde el mismo backend (HTML + JS responsive) — funciona en celular y notebook sin necesidad de instalar una app.
+> - **Pagos** con **Lemon Squeezy** (cobra mundial, emite factura, se queda con 5%). La plata me llega en USD a una cuenta y de ahí se convierte a CLP.
+> - **Hosting** en Render.com — un servicio web + un worker de background + la base de datos. Auto-escala.
+> - **Despliegue continuo** — cada vez que hago un push a GitHub, en 2 minutos está en producción.
+> - **Integración con Canvas** vía OAuth — el alumno se conecta una vez y la plataforma sincroniza todo solo.
 >
-> Esto no es un prototipo: **ya está en producción, ya tiene usuarios, y ya procesa pagos reales.**"
+> Esto **no es un prototipo**: está corriendo en un servidor real, tiene usuarios reales usándolo, y la pasarela de pagos está funcionando."
 
-## 4. Estado actual — tracción (1 min)
+## 4. Estado actual (1 min)
 
 > "Hoy mismo:
 >
-> - Código: ~20,000 líneas de Python, 1,000 horas de desarrollo.
-> - Los dos productos están en vivo en un servidor pagado.
-> - Infraestructura de pagos integrada y probada.
-> - [Agregar aquí: tu número actual de usuarios, clientes pagando, ingresos del último mes si los tienes].
+> - Código: aprox 20.000 líneas de Python, ~1.000 horas de desarrollo.
+> - La plataforma completa está en producción.
+> - Sistema de pagos con Lemon Squeezy integrado y probado.
+> - [Aquí agregar: tu número real de usuarios registrados, cuántos en PLUS hoy, ingresos del último mes].
 >
-> La parte más difícil — construir el producto — ya está hecha. Lo que sigue es **vender**."
+> La parte cara — construir el producto — **ya está hecha y pagada por mí mismo**. Lo que sigue es **conseguir usuarios**."
 
-## 5. Costos mensuales — realidad financiera (1–2 min)
+## 5. Costos mensuales reales (1–2 min)
 
-> "Los costos que tengo hoy para mantener todo corriendo:
+> "Estos son los costos fijos que tengo hoy para mantener la plataforma funcionando:
 >
-> | Concepto | Mensual (USD) |
-> |---|---|
-> | Hosting Render (web + worker + DB) | **$35** |
-> | OpenAI API (GPT-4 para los correos) | **$80** |
-> | Claude API (Anthropic, tutor de estudiantes) | **$60** |
-> | Envío de correos (SMTP transaccional) | **$20** |
-> | Dominio + SSL + herramientas | **$15** |
-> | Lemon Squeezy (fee 5% sobre lo que vendo, no es costo fijo) | variable |
-> | **Total fijo** | **~$210 USD / mes** |
+> | Concepto | USD / mes | CLP / mes |
+> |---|---|---|
+> | Hosting Render (web + worker + base de datos) | $35 | ~33.000 |
+> | API de OpenAI (parsear syllabus desde Canvas) | $40 | ~38.000 |
+> | Envío de correos (recordatorios diarios, emails de ranking) | $20 | ~19.000 |
+> | Dominio, SSL, herramientas varias | $15 | ~14.000 |
+> | **Total fijo** | **~$110 USD** | **~105.000 CLP** |
 >
-> Con más usuarios, la factura de IA sube — pero la IA es **costo variable** que escala proporcional al ingreso. Siempre dejo un margen en los prompts para que el costo por cliente se quede debajo del 10% del precio que cobro."
+> Fee de Lemon Squeezy (5%) es costo variable sobre lo que vendo — no aparece si no vendo nada.
+>
+> Con más usuarios, la factura de OpenAI sube, pero es **costo variable** que escala proporcional al uso. Los prompts ya están optimizados para quedarse debajo del 5% del precio de la suscripción PLUS."
 
-## 6. Ingresos potenciales — por qué 15 clientes cambian el juego (2 min)
+## 6. Ingresos potenciales (2 min)
 
-> "El agente de outreach lo cobro en tres planes:
+> "La plataforma tiene tres fuentes de ingreso:
 >
-> | Plan | Precio / mes |
-> |---|---|
-> | Starter | $200 |
-> | Growth | $350 |
-> | Pro | $500 |
+> **a) Suscripción PLUS** — $4.99 USD/mes (~4.700 CLP/mes) o $39.99 USD/año.
+> **b) Suscripción PRO** — $9.99 USD/mes (~9.500 CLP/mes) o $79.99 USD/año.
+> **c) Paquetes de monedas** (compra única) — desde $0.99 hasta $34.99 USD.
 >
-> Asumiendo **15 clientes pagando** en una mezcla realista — digamos 6 Starter, 6 Growth, 3 Pro:
+> **Escenario 1 — primer hito: 15 suscriptores PLUS pagando.**
+> - 15 × $4.99 = $74,85/mes ≈ **71.000 CLP/mes**.
+> - Más un 20% que compra un paquete de monedas promedio de $3: +$9/mes ≈ 8.500 CLP.
+> - **Ingreso bruto: ~$84 USD ≈ 80.000 CLP/mes.**
+> - Costos fijos: 105.000 CLP. **Aquí todavía no soy rentable — falta escala.**
 >
-> - Ingreso: 6×$200 + 6×$350 + 3×$500 = **$4,800 USD/mes** (~$96,000 MXN/mes al tipo de cambio de ~20)
-> - Costos fijos: $210
-> - Costos variables IA (aprox 8% del ingreso): $384
-> - Fee de Lemon Squeezy (5%): $240
-> - **Ganancia neta: ~$3,960 USD/mes (~$79,000 MXN/mes)**
+> **Escenario 2 — objetivo realista a 6 meses: 150 suscriptores PLUS + compras de monedas.**
+> - 150 × $4.99 = $748/mes ≈ **711.000 CLP/mes** (PLUS)
+> - Coin packs (20% compra, promedio $5): $150/mes ≈ **142.000 CLP**
+> - Algunos PRO (asume 10 usuarios a $9.99): $100/mes ≈ **95.000 CLP**
+> - **Ingreso bruto: ~$1.000 USD ≈ 950.000 CLP/mes**
+> - Costos fijos: 105.000 CLP
+> - Costos variables de IA (se duplican con más uso): +$40 ≈ 38.000 CLP
+> - Fee Lemon Squeezy (5%): $50 ≈ 48.000 CLP
+> - **Ganancia neta mensual: ~760.000 CLP** (~$800 USD)
 >
-> Y eso es **solo con el producto de outreach**. El de estudiantes aporta ingresos independientes de suscripciones PLUS ($5/mes) y paquetes de monedas ($3–$20 c/u). Si apenas llego a 200 estudiantes pagando PLUS al mes: otros $1,000 USD/mes encima.
->
-> **Total realista con 15 clientes de outreach + 200 estudiantes: ~$5,000 USD netos/mes.**"
+> **Escenario 3 — a 12 meses con 400 PLUS + buen volumen de coin packs**: ~2.500.000 CLP netos/mes."
 
 ## 7. La pregunta — qué necesito (1 min)
 
-> "Para llegar a esos 15 clientes necesito dos cosas que hoy no tengo:
+> "Para pasar del hito 1 al hito 2 (de 15 a 150 usuarios pagando), necesito plata para **adquisición**. Construir el producto ya lo hice yo; lo que no puedo pagar de mi bolsillo es la publicidad.
 >
-> 1. **Presupuesto para publicidad** en Google Ads / LinkedIn Ads — $400 USD/mes × 6 meses = **$2,400 USD**
-> 2. **Cubrir los costos de IA premium** mientras crezco (Claude + GPT-4 Turbo para los planes Pro) — $200 USD/mes × 6 meses = **$1,200 USD**
-> 3. **Colchón para el servidor y herramientas** mientras la facturación no alcanza a cubrirlos sola — $50 × 6 = **$300 USD**
-> 4. **Gastos legales y de incorporación** (registrar una LLC o S.A. de C.V., acta fiscal, términos y condiciones revisados) — **$600 USD** una sola vez
-> 5. **Colchón para imprevistos** — **$500 USD**
+> | Concepto | Total |
+> |---|---|
+> | Publicidad en Instagram + TikTok + Google ($150 USD/mes × 6 meses) | ~850.000 CLP |
+> | Cubrir hosting y APIs mientras los ingresos aún no alcanzan ($150 USD/mes × 6) | ~850.000 CLP |
+> | Gastos legales (constituir la sociedad, términos y condiciones, aspectos tributarios) | ~300.000 CLP |
+> | Colchón para imprevistos | ~200.000 CLP |
+> | **Total que les pido** | **~2.200.000 CLP** (aprox $2.300 USD) |
 >
-> **Total que les pido: $5,000 USD** (aprox. **$100,000 MXN**)."
+> Menos que un auto usado. Con esto tengo 6 meses de runway garantizado para llegar a los 150 usuarios pagando."
 
 ## 8. Qué reciben a cambio (1 min)
 
-> "Les propongo dos opciones — lo que les acomode:
+> "Les propongo dos opciones — la que más les acomode:
 >
 > **Opción A — Préstamo con interés fijo.**
-> Me prestan $100,000 MXN. Les regreso $130,000 MXN en 18 meses (eso es 20% anual, mejor que cualquier pagaré de banco). Si les va bien los primeros 6 meses y consigo los 15 clientes, les pago antes.
+> Me prestan 2.200.000 CLP. Les devuelvo **2.860.000 CLP en 18 meses** (eso es 20% anual — mejor rendimiento que cualquier depósito a plazo del banco). Si el negocio despega rápido, les pago antes.
 >
 > **Opción B — Participación (equity).**
-> Me aportan los $100,000 MXN a cambio del **10% de Machreach**. Si el negocio llega a facturar $5,000 USD/mes netos, su 10% vale $500 USD/mes de utilidad, y en un año ya habrían recuperado su inversión con utilidades. Si un día vendo la empresa, ustedes reciben el 10% del precio de venta.
+> Me dan los 2.200.000 CLP a cambio del **10% de Machreach**. Si al año la empresa está generando 760.000 CLP netos/mes como proyecto, su 10% vale 76.000 CLP/mes de utilidad. A los 30 meses ya recuperaron la inversión **y siguen cobrando** el 10% mientras la empresa exista. Si un día vendo el proyecto, les corresponde el 10% del precio de venta.
 >
-> La Opción A es más segura. La Opción B es más arriesgada pero con más upside si la cosa crece. Ustedes eligen."
+> La Opción A es segura. La Opción B es más riesgosa pero con techo mucho más alto. Ustedes eligen."
 
 ## 9. Cierre (30 seg)
 
-> "No les estoy pidiendo que confíen en una idea — les estoy pidiendo que inviertan en un negocio que ya existe, ya funciona y ya cobra. Lo que no tengo yo solo es el capital para acelerar la parte comercial. Si creen en mí y en el proyecto, cerramos. Si prefieren pensarlo, no hay presión. ¿Qué preguntas tienen?"
+> "No les estoy pidiendo que confíen en una idea — les estoy pidiendo que inviertan en un producto que **ya existe, ya corre en producción, y ya procesa pagos**. Lo único que no tengo solo es el capital para acelerar la adquisición. Si creen en mí y en el proyecto, cerramos. Si prefieren pensarlo, no hay apuro. ¿Qué preguntas tienen?"
 
 ---
 
 ## Apéndice — Preguntas que seguramente les van a hacer
 
-**"¿Y si no consigues los 15 clientes?"**
-> "Tengo una hoja de ruta de 30 leads cualificados que ya están en la mira. Con $400/mes en ads y un ciclo de ventas de 2–3 semanas, consigo 2–3 clientes al mes. En 6 meses eso es 12–18. Si me quedo en 8 clientes, el ingreso es ~$2,500/mes y los costos siguen siendo los mismos — sigo siendo rentable, solo tardo más en pagarles a ustedes."
+**"¿Y si no llegas a los 150 usuarios pagando?"**
+> "Incluso con 50 PLUS estoy cerca del break-even (50 × $4.99 = $250/mes vs $110 fijos). Con 80 ya soy rentable. El peor escenario no es perder plata, es tardarme más en ser rentable. Y si llego a cero — que no va a pasar porque la plataforma ya tiene tracción — la plata ya se gastó en publicidad que generó datos útiles para el siguiente intento."
 
-**"¿Por qué alguien te pagaría $200/mes en vez de contratar un asistente por menos?"**
-> "Un asistente humano manda ~50 correos al día y cobra $1,500 USD/mes. Mi agente manda 500 correos/día, personalizados, 24/7, sin enfermarse ni renunciar. Un cliente actual ya reemplazó a su SDR con mi sistema."
+**"¿Por qué un estudiante te pagaría 4.700 CLP al mes?"**
+> "Un alumno que pierde un ramo paga arancel doble — unos 600.000 CLP fácilmente. Que la app te ayude a organizarte, medir tus horas y competir sanamente con compañeros por 5.000 CLP al mes es trivial. Además, el tier gratuito ya es potente — quien paga PLUS lo hace por los cosméticos y las monedas extras, que es el mismo modelo que hizo rica a Duolingo y Supercell."
 
-**"¿La IA no va a abaratarse tanto que cualquiera pueda hacer esto?"**
-> "Sí — y esa es exactamente mi ventaja. El motor (GPT/Claude) va a ser más barato cada año, así que mis márgenes suben con el tiempo sin que yo haga nada. Lo que compro el cliente no es el modelo — es la **integración completa** (CRM, envío, analytics, anti-spam, A/B). Eso se tarda años en construir."
+**"¿Qué pasa si OpenAI sube los precios?"**
+> "Los modelos de IA son cada vez **más baratos**, no más caros — GPT-4 hoy cuesta 10 veces menos que al lanzamiento. Mis márgenes suben con el tiempo sin hacer nada."
 
-**"¿Qué pasa si te quedas sin tiempo por la escuela?"**
-> "La plataforma corre sola 95% del tiempo — mantenimiento real son ~5 horas/semana. Las ventas sí requieren tiempo, por eso parte del presupuesto de ads es automatizar esa pinche parte."
+**"¿Qué pasa si descuidas la U por esto?"**
+> "La plataforma corre sola el 95% del tiempo — mantenimiento real son ~5 horas a la semana. Lo que consume tiempo es adquirir usuarios, y gran parte de eso se automatiza con ads pagados — que es justamente lo que les estoy pidiendo financiar."
 
-**"¿Y si un cliente se va?"**
-> "Churn (tasa de cancelación) realista para este tipo de SaaS B2B es 5–8% mensual. Está calculado en mi proyección — por eso apunto a 15 netos, no a 15 cerrados de por vida. Y los que se quedan 6+ meses tienden a quedarse años porque el producto se vuelve parte de su proceso."
+**"¿Hay competencia?"**
+> "Notion, Forest App y Quizlet son los referentes, pero ninguno integra las 5 cosas que Machreach integra a la vez (Canvas + Focus + analítica + quizzes comunitarios + leaderboards con economía de monedas). El nicho específico — universitario latinoamericano con conexión directa a Canvas — está libre."
+
+**"¿Y si te quitan Canvas la API?"**
+> "La integración con Canvas es OAuth estándar usado por cientos de apps terceras. Canvas gana dinero con la API. Pero incluso sin Canvas, los alumnos pueden subir sus cursos manualmente — la app seguiría funcionando, solo perdería un diferencial."
 
 ---
 
 ## Notas para ti (no leer en voz alta)
 
-- **Antes de la reunión**, actualiza el "Estado actual" con tus números reales: cuántos clientes tienes hoy, cuánto ingresaste el último mes, cuánto llevas invertido de tu bolsa.
-- Lleva una hoja impresa con la tabla de precios, costos y la tabla de proyección — a los papás les da confianza ver números en papel.
-- Si te preguntan por competencia, nombres concretos: **Instantly.ai** ($97/mes plan básico, limitado), **Smartlead** ($39 pero sin IA de generación), **Apollo** ($59 pero caro al escalar). Tú eres el que tiene el agente de IA completo al precio del segmento medio.
-- Ofrece que en las primeras 4 semanas te pueden ver el dashboard de admin con los números reales — nada de fe ciega.
+- Antes de la reunión, **actualiza los números reales**: cuántos usuarios registrados tienes hoy, cuántos en PLUS, cuánto ingresó en el último mes, y cuánto llevas invertido de tu propia plata.
+- Imprime una hoja con la tabla de costos, la tabla de ingresos proyectados, y las dos opciones de inversión — a los papás les da mucha más confianza ver las cifras escritas.
+- Si te preguntan por competencia, nombra concretos: **Notion** (gratis pero sin analítica de estudio ni gamificación), **Forest** (solo focus, sin Canvas ni quizzes), **Quizlet** (flashcards, sin tiempo ni rankings).
+- Ofreceles ver el **dashboard de admin en vivo** — que vean usuarios reales, pagos reales, métricas reales. Nada de fe ciega.
+- Valor de cambio usado: 1 USD ≈ 950 CLP. Si cuando presentas el valor es muy distinto, recalculá las columnas de CLP.
