@@ -521,8 +521,15 @@ def init_student_db():
         log.exception("init_prize_tables failed: %s", e)
     # Training tab (community quizzes per university course).
     try:
-        from student.training import init_training_tables
+        from student.training import init_training_tables, backfill_courses_from_all_syncs
         init_training_tables()
+        # One-shot backfill: fold any previously-synced Canvas courses into
+        # the shared catalog. get_or_create_course is idempotent, so repeat
+        # boots are cheap.
+        try:
+            backfill_courses_from_all_syncs()
+        except Exception as be:
+            log.warning("backfill_courses_from_all_syncs failed: %s", be)
     except Exception as e:
         log.exception("init_training_tables failed: %s", e)
     log.info("Student tables initialized.")
@@ -3457,8 +3464,6 @@ BANNERS = {
                    "css": "radial-gradient(circle, rgba(255,255,255,.4) 2px, transparent 3px) 0 0/22px 22px, linear-gradient(135deg,#7c3aed,#ec4899)"},
     "wavy":       {"name": "Wavy Lines",         "price_coins": 180,  "xp_required": 600,
                    "css": "repeating-linear-gradient(45deg, rgba(255,255,255,.08) 0 6px, transparent 6px 14px), linear-gradient(135deg,#0ea5e9,#1d4ed8)"},
-    "circuit":    {"name": "Circuit Board",      "price_coins": 260,  "xp_required": 1000,
-                   "css": "repeating-linear-gradient(0deg, rgba(34,197,94,.18) 0 1px, transparent 1px 16px), repeating-linear-gradient(90deg, rgba(34,197,94,.18) 0 1px, transparent 1px 16px), radial-gradient(circle, rgba(34,197,94,.25) 1.5px, transparent 2px) 8px 8px/16px 16px, linear-gradient(135deg,#022c22,#0f172a)"},
     "argyle":     {"name": "Argyle",             "price_coins": 260,  "xp_required": 1000,
                    "css": "repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 14px, transparent 14px 28px), repeating-linear-gradient(-45deg, rgba(255,255,255,.06) 0 14px, transparent 14px 28px), linear-gradient(135deg,#7c2d12,#facc15)"},
     "honeycomb":  {"name": "Honeycomb",          "price_coins": 320,  "xp_required": 1500,
@@ -3484,9 +3489,6 @@ BANNERS = {
                       "css": "radial-gradient(circle at 30% 30%, rgba(167,243,208,.6), transparent 55%), linear-gradient(135deg,#022c22,#059669,#a7f3d0)"},
     "plus_ruby":     {"name": "Royal Ruby (PLUS)",    "price_coins": 700, "xp_required": 0, "plus_only": True,
                       "css": "radial-gradient(circle at 30% 30%, rgba(254,202,202,.6), transparent 55%), linear-gradient(135deg,#450a0a,#dc2626,#fecaca)"},
-    "plus_anim_oil": {"name": "Oil Slick (PLUS)",     "price_coins": 1500, "xp_required": 0, "plus_only": True,
-                      "animated": True, "anim_class": "bnr-anim-oil",
-                      "css": "conic-gradient(from 0deg at 50% 50%, #06b6d4, #8b5cf6, #ec4899, #f59e0b, #06b6d4)"},
     "plus_anim_supernova": {"name": "Supernova (PLUS)", "price_coins": 1800, "xp_required": 0, "plus_only": True,
                             "animated": True, "anim_class": "bnr-anim-supernova",
                             "css": "radial-gradient(circle at 50% 50%, #fde047 0%, #f97316 12%, #dc2626 24%, #4c1d95 50%, #000 80%)"},
@@ -3630,13 +3632,6 @@ BANNER_ANIM_CSS = """
 .bnr-anim-glacial {
   background-size: 220% 220%, 220% 220%, 100% 100% !important;
   animation: bnr-glacial 12s ease-in-out infinite;
-}
-
-/* Oil Slick — iridescent rotation */
-@keyframes bnr-oil { 0% { transform: rotate(0deg); filter: hue-rotate(0deg); } 100% { transform: rotate(360deg); filter: hue-rotate(360deg); } }
-.bnr-anim-oil {
-  background-size: 200% 200% !important;
-  animation: bnr-oil 22s linear infinite;
 }
 
 /* Supernova — pulsing radial burst */
@@ -3838,8 +3833,9 @@ FLAGS = {
                     "css": "repeating-linear-gradient(90deg, rgba(255,255,255,.3) 0 1px, transparent 1px 12px), linear-gradient(90deg, #1e293b 0%, #475569 100%)"},
     "barcode":     {"name": "Barcode",           "price_coins": 180,  "xp_required": 800,
                     "css": "repeating-linear-gradient(90deg, #fafafa 0 2px, #0f172a 2px 5px, #fafafa 5px 9px, #0f172a 9px 14px)"},
-    "morse":       {"name": "Morse Code",        "price_coins": 220,  "xp_required": 1000,
-                    "css": "repeating-linear-gradient(90deg, #fde047 0 6px, transparent 6px 12px, #fde047 12px 24px, transparent 24px 36px), linear-gradient(90deg, #0f172a, #1e293b)"},
+    "heartbeat":   {"name": "Heartbeat",          "price_coins": 260,  "xp_required": 1100,
+                    "animated": True, "anim_class": "flg-heartbeat",
+                    "css": "linear-gradient(90deg, #450a0a 0%, #7f1d1d 25%, #ef4444 55%, #fecaca 85%, #450a0a 100%)"},
     "argyle_bar":  {"name": "Argyle Bar",        "price_coins": 250,  "xp_required": 1200,
                     "css": "repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 12px, transparent 12px 24px), repeating-linear-gradient(-45deg, rgba(255,255,255,.06) 0 12px, transparent 12px 24px), linear-gradient(90deg, #7c2d12, #facc15)"},
     "scales":      {"name": "Dragon Scales",     "price_coins": 300,  "xp_required": 1500,
@@ -3951,6 +3947,16 @@ FLAG_ANIM_CSS = """
   background-size: 100% 100%, 100% 100% !important;
   animation: flg-scan 2.4s linear infinite;
 }
+
+/* Heartbeat — double-thump pulse (systole/diastole rhythm) */
+@keyframes flg-heartbeat {
+  0%,  100% { filter: brightness(.92) saturate(1);    transform: scale(1); }
+  14%       { filter: brightness(1.35) saturate(1.5); transform: scale(1.03); }
+  28%       { filter: brightness(1)    saturate(1.1); transform: scale(1); }
+  42%       { filter: brightness(1.25) saturate(1.4); transform: scale(1.02); }
+  56%       { filter: brightness(.96)  saturate(1);   transform: scale(1); }
+}
+.flg-heartbeat { animation: flg-heartbeat 1.2s ease-in-out infinite; transform-origin: center; }
 """
 
 

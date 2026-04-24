@@ -3763,8 +3763,7 @@ def register():
             traceback.print_exc()
 
         if email_sent:
-            flash(("success", "Account created! Please check your email to verify your address before logging in."))
-            return redirect(url_for("login"))
+            return redirect(url_for("verify_email_pending", email=email, created="1"))
         else:
             # Verification email failed — delete the account so it's not half-created
             try:
@@ -3826,8 +3825,7 @@ def login():
             flash(("error", t("auth.invalid_creds")))
             return redirect(url_for("login"))
         if not client.get("email_verified"):
-            flash(("warning", "Please verify your email before logging in. Check your inbox or resend the verification link below."))
-            return redirect(url_for("login"))
+            return redirect(url_for("verify_email_pending", email=email))
         _maybe_upgrade_hash(client["id"], password, client["password"])
         _log_security("LOGIN_OK", client_id=client["id"], email=email)
         # Preserve team invite token across session clear
@@ -3901,8 +3899,124 @@ def resend_verification():
             _send_system_email(email, "MachReach — Verify Your Email", body)
         except Exception:
             pass
+    # If we know an email, take the user back to the dedicated pending page
+    # so they land somewhere meaningful — the toast on /login was easy to miss.
+    if email:
+        return redirect(url_for("verify_email_pending", email=email, sent="1"))
     flash(("info", "If the email is registered, a new verification link has been sent."))
     return redirect(url_for("login"))
+
+
+@app.route("/verify-email-pending")
+def verify_email_pending():
+    """Dedicated landing page for users whose email isn't verified yet.
+    Replaces the easy-to-miss flash toast shown on /login — this is the full
+    page, with the resend form front and center."""
+    email = (request.args.get("email") or "").strip()
+    just_created = request.args.get("created") == "1"
+    just_sent = request.args.get("sent") == "1"
+    safe_email = _esc(email)
+    headline = ("&#127881; Account created!" if just_created
+                else "&#128231; Verify your email to continue")
+    sub = (
+        "We just sent you a verification link. Click it and you're in."
+        if just_created else
+        "A new verification link is on its way — check your inbox."
+        if just_sent else
+        "Your email isn't verified yet. Click the link we sent to your inbox "
+        "to log in. Can't find it? Resend below."
+    )
+    resend_notice = (
+        '<div class="vep-flash">A new verification link has been sent. '
+        'Check your inbox (and your spam folder).</div>' if just_sent else ""
+    )
+    return render_template_string(LAYOUT, title="Verify your email", logged_in=False,
+        messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
+        active_page="login", client_name="", nav=t_dict("nav"),
+        lang=session.get("lang", "en"),
+        content=Markup(f"""
+    <style>
+      .vep-wrap {{
+        max-width: 520px; margin: 48px auto; padding: 0 16px;
+      }}
+      .vep-card {{
+        background: var(--card); border: 1px solid var(--border);
+        border-radius: 16px; padding: 32px 28px;
+        box-shadow: 0 8px 40px rgba(0,0,0,.08);
+      }}
+      .vep-icon {{
+        width: 68px; height: 68px; margin: 0 auto 16px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 32px;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: #fff;
+      }}
+      .vep-card h1 {{
+        text-align: center; font-size: 22px; margin: 0 0 8px;
+      }}
+      .vep-card .vep-sub {{
+        text-align: center; color: var(--text-muted);
+        font-size: 14px; line-height: 1.55; margin: 0 0 22px;
+      }}
+      .vep-email {{
+        background: var(--bg); border: 1px solid var(--border);
+        border-radius: 10px; padding: 10px 14px;
+        font-size: 14px; text-align: center; color: var(--text);
+        margin-bottom: 20px; word-break: break-all;
+      }}
+      .vep-steps {{
+        background: var(--bg); border: 1px solid var(--border);
+        border-radius: 10px; padding: 14px 16px; margin-bottom: 22px;
+      }}
+      .vep-steps ol {{ margin: 0; padding-left: 20px; font-size: 13px; color: var(--text-muted); line-height: 1.8; }}
+      .vep-steps strong {{ color: var(--text); }}
+      .vep-flash {{
+        background: #d1fae5; color: #065f46;
+        border: 1px solid #34d399; border-radius: 10px;
+        padding: 10px 14px; font-size: 13px;
+        margin-bottom: 18px; text-align: center;
+      }}
+      .vep-form {{ display: flex; gap: 8px; margin-bottom: 16px; }}
+      .vep-form input {{
+        flex: 1; padding: 10px 12px;
+        border: 1px solid var(--border); border-radius: 10px;
+        background: var(--bg); color: var(--text); font-size: 14px;
+      }}
+      .vep-form button {{
+        padding: 10px 16px; border-radius: 10px;
+        background: linear-gradient(135deg,#6366f1,#8b5cf6);
+        color: #fff; font-weight: 600; font-size: 14px;
+        border: none; cursor: pointer;
+      }}
+      .vep-foot {{ text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 20px; }}
+      .vep-foot a {{ color: var(--primary); font-weight: 600; }}
+    </style>
+    <div class="vep-wrap">
+      <div class="vep-card">
+        <div class="vep-icon">&#128231;</div>
+        <h1>{headline}</h1>
+        <p class="vep-sub">{sub}</p>
+        {resend_notice}
+        {(f'<div class="vep-email">Sent to <strong>{safe_email}</strong></div>' if email else '')}
+        <div class="vep-steps">
+          <ol>
+            <li>Open the email from <strong>MachReach</strong></li>
+            <li>Click <strong>Verify email</strong></li>
+            <li>Log in and start studying.</li>
+          </ol>
+        </div>
+        <form method="post" action="/resend-verification" class="vep-form">
+          <input name="email" type="email" placeholder="your@email.com"
+                 value="{safe_email}" required>
+          <button type="submit">Resend link</button>
+        </form>
+        <div class="vep-foot">
+          Already verified? <a href="/login">Log in</a>
+        </div>
+      </div>
+    </div>
+    """))
 
 
 @app.route("/set-language/<lang>")

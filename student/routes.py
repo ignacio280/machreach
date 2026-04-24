@@ -1394,6 +1394,20 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+        # Fold every synced course into the shared Training catalog.
+
+        try:
+
+            from student import training as _tr
+
+            _tr.auto_create_courses_for_client(cid)
+
+        except Exception as _e:
+
+            log.warning("training auto-create after connect failed (client %s): %s", cid, _e)
+
+
+
         return jsonify({
 
             "message": "Canvas connected",
@@ -1549,6 +1563,16 @@ def register_student_routes(app, csrf, limiter):
                     except Exception:
 
                         continue
+
+                try:
+
+                    from student import training as _tr
+
+                    _tr.auto_create_courses_for_client(client_id)
+
+                except Exception as _e:
+
+                    log.warning("training auto-create after sync failed (client %s): %s", client_id, _e)
 
                 _sync_status[client_id] = {
 
@@ -3094,31 +3118,6 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"university_id": uid, "courses": tr.search_courses(uid, q)})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/student/training/courses", methods=["POST"])
-    @limiter.limit("30 per hour")
-    def training_create_course():
-        if not _logged_in():
-            return jsonify({"error": "unauthorized"}), 401
-        try:
-            from student import training as tr
-            from outreach.db import _fetchone
-            data = request.get_json(silent=True) or {}
-            name = (data.get("name") or "").strip()
-            code = (data.get("code") or "").strip() or None
-            uid_raw = data.get("university_id")
-            if uid_raw and str(uid_raw).isdigit():
-                uid = int(uid_raw)
-            else:
-                with get_db() as db:
-                    r = _fetchone(db, "SELECT university_id FROM clients WHERE id = %s", (_cid(),))
-                uid = (r or {}).get("university_id") if r else None
-            if not uid:
-                return jsonify({"error": "university not set"}), 400
-            course = tr.get_or_create_course(uid, name, code, created_by=_cid())
-            return jsonify({"ok": True, "course": course})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
 
     @app.route("/api/student/training/courses/<int:course_id>/quizzes", methods=["GET"])
     def training_course_quizzes(course_id: int):
@@ -7204,7 +7203,6 @@ def register_student_routes(app, csrf, limiter):
           <div class="tr-search">
             <input id="tr-q" type="text" placeholder="Search course by name or code (e.g. IIC1103, Calculus I)" />
             <button class="tr-btn" id="tr-search-btn">Search</button>
-            <button class="tr-btn ghost" id="tr-new-course-btn">+ New course</button>
           </div>
           <div class="tr-courses" id="tr-courses"></div>
 
@@ -7251,7 +7249,7 @@ def register_student_routes(app, csrf, limiter):
           function renderCourses(rows){
             var box = el('tr-courses');
             if (!rows.length) {
-              box.innerHTML = '<div class="tr-empty">No courses yet for your university. Create one with the +New course button.</div>';
+              box.innerHTML = '<div class="tr-empty">No courses yet for your university. Courses appear automatically when a student at your university syncs their Canvas.</div>';
               return;
             }
             box.innerHTML = '';
@@ -7401,22 +7399,6 @@ def register_student_routes(app, csrf, limiter):
           el('tr-q').addEventListener('keydown', function(e){
             if (e.key === 'Enter') { e.preventDefault(); loadCourses(el('tr-q').value.trim()); }
           });
-          el('tr-new-course-btn').addEventListener('click', function(){
-            var n = prompt('Course name (e.g. "Calculus I"):');
-            if (!n) return;
-            var c = prompt('Course code (optional, e.g. "MAT1610"):') || '';
-            fetch('/api/student/training/courses', {
-              method:'POST', credentials:'same-origin',
-              headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({name:n, code:c})
-            }).then(function(r){ return r.json(); })
-              .then(function(data){
-                if (data.error) { alert(data.error); return; }
-                loadCourses('');
-                if (data.course) openCourse(data.course);
-              });
-          });
-
           el('tr-up-btn').addEventListener('click', function(){
             if (!state.courseId) return;
             var f = el('tr-up-file').files[0];
@@ -11392,7 +11374,7 @@ No markdown, no code fences. ONLY JSON.
 
             <h1 style="margin:0;">&#128221; Practice Quizzes</h1>
 
-            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Unlimited AI-generated questions &middot; Adjustable difficulty</p>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Pick where your questions come from &mdash; an official test or your own notes.</p>
 
           </div>
 
@@ -11404,19 +11386,45 @@ No markdown, no code fences. ONLY JSON.
 
         <div id="qz-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
 
-          <h3 style="margin:0 0 14px;">Generate AI Quiz</h3>
+          <h3 style="margin:0 0 6px;">Generate AI Quiz</h3>
+
+          <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px;">Two ways to build a quiz. Pick one.</p>
 
 
 
-          <!-- Drag-and-drop zone -->
+          <div class="qz-mode-row">
+
+            <button type="button" class="qz-mode active" data-mode="test" onclick="qzSetMode('test')">
+
+              <div class="qz-mode-ic">&#128221;</div>
+
+              <div class="qz-mode-t">Official test</div>
+
+              <div class="qz-mode-s">Upload a past exam (PDF / DOCX). We re-type it verbatim. Only multiple-choice tests work.</div>
+
+            </button>
+
+            <button type="button" class="qz-mode" data-mode="notes" onclick="qzSetMode('notes')">
+
+              <div class="qz-mode-ic">&#128214;</div>
+
+              <div class="qz-mode-t">Notes</div>
+
+              <div class="qz-mode-s">Upload your class notes (PDF / DOCX / TXT) and we'll generate quiz questions from them.</div>
+
+            </button>
+
+          </div>
+
+
 
           <div id="qz-drop" class="dropzone" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="qzHandleDrop(event)" onclick="document.getElementById('qz-file').click()">
 
             <div style="font-size:32px;">&#128206;</div>
 
-            <div style="font-weight:600;margin-top:6px;">Drop a PDF / DOCX / TXT here</div>
+            <div style="font-weight:600;margin-top:6px;" id="qz-drop-t">Drop a PDF / DOCX / TXT here</div>
 
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">or click to browse &middot; we'll generate quiz questions directly from the file (no course needed)</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="qz-drop-s">or click to browse</div>
 
             <input type="file" id="qz-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="qzHandleFile(this.files[0])">
 
@@ -11426,7 +11434,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">— or pick from your courses —</div>
+          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">&mdash; or pick a course you've synced from Canvas &mdash;</div>
 
 
 
@@ -11448,29 +11456,13 @@ No markdown, no code fences. ONLY JSON.
 
             </div>
 
-            <div class="form-group">
-
-              <label>Difficulty</label>
-
-              <select id="qz-diff" class="edit-input">
-
-                <option value="easy">&#127793; Easy &mdash; Basic recall</option>
-
-                <option value="medium" selected>&#128170; Medium &mdash; Exam-level</option>
-
-                <option value="hard">&#128293; Hard &mdash; Challenge</option>
-
-              </select>
-
-            </div>
-
-            <div class="form-group">
+            <div class="form-group" style="grid-column:1 / -1;">
 
               <label>Number of questions</label>
 
               <input type="number" id="qz-count" value="10" min="5" max="100" class="edit-input">
 
-              <small style="display:block;color:var(--text-muted);font-size:11px;margin-top:4px;">Up to 100. Large quizzes generate in batches — give it a few seconds.</small>
+              <small style="display:block;color:var(--text-muted);font-size:11px;margin-top:4px;">Up to 100. Large quizzes generate in batches &mdash; give it a few seconds.</small>
 
             </div>
 
@@ -11496,11 +11488,67 @@ No markdown, no code fences. ONLY JSON.
 
         .dropzone.drag {{ border-color:var(--primary); background:var(--card); }}
 
+        .qz-mode-row {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }}
+
+        .qz-mode {{ text-align:left; padding:14px 16px; border:1px solid var(--border); border-radius:12px; background:var(--bg); color:var(--text); cursor:pointer; transition:all .15s; }}
+
+        .qz-mode:hover {{ border-color:var(--primary); }}
+
+        .qz-mode.active {{ border-color:var(--primary); background:var(--card); box-shadow:0 0 0 2px rgba(99,102,241,.15); }}
+
+        .qz-mode-ic {{ font-size:20px; }}
+
+        .qz-mode-t {{ font-weight:700; margin-top:4px; }}
+
+        .qz-mode-s {{ font-size:12px; color:var(--text-muted); margin-top:4px; line-height:1.4; }}
+
+        @media (max-width: 640px) {{ .qz-mode-row {{ grid-template-columns:1fr; }} }}
+
         </style>
 
         <script>
 
         var qzDropText = "";
+
+        var qzMode = 'test';
+
+        function qzSetMode(m) {{
+
+          qzMode = m;
+
+          var nodes = document.querySelectorAll('.qz-mode');
+
+          for (var i = 0; i < nodes.length; i++) {{
+
+            if (nodes[i].getAttribute('data-mode') === m) nodes[i].classList.add('active');
+
+            else nodes[i].classList.remove('active');
+
+          }}
+
+          var t = document.getElementById('qz-drop-t');
+
+          var s = document.getElementById('qz-drop-s');
+
+          if (m === 'test') {{
+
+            t.innerHTML = 'Drop an official test (PDF / DOCX)';
+
+            s.innerHTML = 'Reminder: only multiple-choice tests transcribe correctly.';
+
+            document.getElementById('qz-file').accept = '.pdf,.docx,.doc';
+
+          }} else {{
+
+            t.innerHTML = 'Drop your notes (PDF / DOCX / TXT)';
+
+            s.innerHTML = "We'll generate quiz questions from the material.";
+
+            document.getElementById('qz-file').accept = '.pdf,.docx,.doc,.txt';
+
+          }}
+
+        }}
 
         async function qzHandleDrop(e) {{
 
@@ -11585,8 +11633,6 @@ No markdown, no code fences. ONLY JSON.
           try {{
 
             var body = {{
-
-              difficulty: document.getElementById('qz-diff').value,
 
               count: parseInt(document.getElementById('qz-count').value)
 
@@ -18214,17 +18260,36 @@ No markdown, no code fences. ONLY JSON.
             # Preview the L\u2192R fade exactly like the leaderboard renders it.
             _flag_anim = (cfg.get("anim_class") or "") if cfg.get("animated") else ""
             preview = (
-                '<div style="position:relative;height:48px;background:#0f172a;border-radius:8px;overflow:hidden;">'
-                f'<div class="{_flag_anim}" style="position:absolute;inset:0;background:{cfg["css"]};'
-                '-webkit-mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);'
-                'mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);"></div>'
-                '<div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 12px;color:#fff;font-size:12px;font-weight:600;letter-spacing:.05em;">PREVIEW</div>'
+                '<div class="sh-flag-preview">'
+                '<div class="sh-flag-preview-label">How it looks on the leaderboard</div>'
+                '<div class="sh-flag-row sh-flag-row-gold">'
+                f'<div class="sh-flag-flag {_flag_anim}" style="background:{cfg["css"]};"></div>'
+                '<div class="sh-flag-inner">'
+                '<div class="sh-flag-rank sh-flag-rank-1">1</div>'
+                '<div class="sh-flag-avatar">&#128100;</div>'
+                '<div class="sh-flag-ident">'
+                '<div class="sh-flag-name">You</div>'
+                '<div class="sh-flag-meta">Level 12 &middot; &#128293; 7d</div>'
+                '</div>'
+                '<div class="sh-flag-xp"><div class="sh-flag-xp-n">12,480</div><div class="sh-flag-xp-l">XP</div></div>'
+                '</div></div>'
+                '<div class="sh-flag-row">'
+                f'<div class="sh-flag-flag {_flag_anim}" style="background:{cfg["css"]};opacity:.55;"></div>'
+                '<div class="sh-flag-inner">'
+                '<div class="sh-flag-rank sh-flag-rank-2">2</div>'
+                '<div class="sh-flag-avatar sh-flag-avatar-alt">&#128104;</div>'
+                '<div class="sh-flag-ident">'
+                '<div class="sh-flag-name sh-flag-name-alt">Ana R.</div>'
+                '<div class="sh-flag-meta">Level 11</div>'
+                '</div>'
+                '<div class="sh-flag-xp"><div class="sh-flag-xp-n sh-flag-xp-n-alt">10,920</div><div class="sh-flag-xp-l">XP</div></div>'
+                '</div></div>'
                 '</div>'
             )
             flag_cards.append(
-                '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;padding:12px;">'
+                '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;padding:14px;">'
                 f'{preview}'
-                f'<div style="margin-top:10px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}{plus_pill}</div>'
+                f'<div style="margin-top:12px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}{plus_pill}</div>'
                 f'<div style="font-size:12px;margin-top:4px;">{tag}</div>'
                 f'<div style="margin-top:10px;">{btn}</div></div></div>'
             )
@@ -18376,6 +18441,47 @@ No markdown, no code fences. ONLY JSON.
         <style>
           .sh-active-chip {{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:rgba(255,255,255,.7); border-radius:999px; font-size:12px; font-weight:600; color:#78350f; }}
           .sh-cd {{ font-variant-numeric: tabular-nums; }}
+
+          /* ── Leaderboard flag preview (mini row mockup) ───────────────── */
+          .sh-flag-preview {{ background:#0b1220; border:1px solid #1e293b; border-radius:12px; padding:10px; }}
+          .sh-flag-preview-label {{ font-size:10px; letter-spacing:.12em; color:#64748b; text-transform:uppercase; font-weight:700; margin:0 2px 8px; }}
+          .sh-flag-row {{ position:relative; height:56px; border-radius:10px; overflow:hidden; margin-bottom:6px; background:#0f172a; }}
+          .sh-flag-row:last-child {{ margin-bottom:0; }}
+          .sh-flag-row-gold {{ box-shadow: inset 0 0 0 1px rgba(251,191,36,.45); }}
+          .sh-flag-flag {{
+            position:absolute; inset:0;
+            -webkit-mask-image:linear-gradient(to right, rgba(0,0,0,.95) 0%, rgba(0,0,0,.55) 40%, rgba(0,0,0,.15) 70%, transparent 100%);
+            mask-image:linear-gradient(to right, rgba(0,0,0,.95) 0%, rgba(0,0,0,.55) 40%, rgba(0,0,0,.15) 70%, transparent 100%);
+          }}
+          .sh-flag-inner {{
+            position:absolute; inset:0;
+            display:grid; grid-template-columns: 36px 34px 1fr auto; align-items:center;
+            gap:10px; padding:0 12px; color:#fff;
+          }}
+          .sh-flag-rank {{
+            display:flex; align-items:center; justify-content:center;
+            width:26px; height:26px; border-radius:50%;
+            font-size:12px; font-weight:800; color:#0f172a;
+            background:#cbd5e1;
+          }}
+          .sh-flag-rank-1 {{ background: linear-gradient(135deg,#fde047,#f59e0b); color:#78350f; box-shadow:0 0 0 2px rgba(251,191,36,.35); }}
+          .sh-flag-rank-2 {{ background: linear-gradient(135deg,#e2e8f0,#94a3b8); color:#0f172a; }}
+          .sh-flag-avatar {{
+            width:30px; height:30px; border-radius:50%;
+            background: linear-gradient(135deg,#7c3aed,#22d3ee);
+            display:flex; align-items:center; justify-content:center;
+            font-size:16px; line-height:1;
+            box-shadow:0 0 0 2px rgba(255,255,255,.15);
+          }}
+          .sh-flag-avatar-alt {{ background: linear-gradient(135deg,#10b981,#059669); }}
+          .sh-flag-ident {{ min-width:0; line-height:1.15; }}
+          .sh-flag-name {{ font-weight:800; font-size:13px; color:#fde047; letter-spacing:.01em; }}
+          .sh-flag-name-alt {{ color:#fff; }}
+          .sh-flag-meta {{ font-size:10px; color:rgba(255,255,255,.72); margin-top:2px; }}
+          .sh-flag-xp {{ text-align:right; }}
+          .sh-flag-xp-n {{ font-weight:800; font-size:14px; color:#fff; font-variant-numeric: tabular-nums; }}
+          .sh-flag-xp-n-alt {{ color:rgba(255,255,255,.85); }}
+          .sh-flag-xp-l {{ font-size:9px; letter-spacing:.14em; color:rgba(255,255,255,.6); text-transform:uppercase; }}
         </style>
         {active_html}
         {subscription_section}

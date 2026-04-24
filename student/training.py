@@ -274,6 +274,72 @@ def get_course(course_id: int) -> dict | None:
     return dict(r) if r else None
 
 
+def auto_create_courses_for_client(client_id: int) -> int:
+    """After a Canvas sync, fold every student_courses row for this client
+    into the shared training catalog. Idempotent: existing (name_norm, code_norm)
+    matches are skipped by get_or_create_course. Returns the number of rows
+    created (best-effort count)."""
+    init_training_tables()
+    try:
+        with get_db() as db:
+            cli = _fetchone(
+                db,
+                "SELECT university_id FROM clients WHERE id = %s",
+                (client_id,),
+            )
+            uni = (dict(cli).get("university_id") if cli else None)
+            if not uni:
+                return 0
+            rows = _fetchall(
+                db,
+                "SELECT name, code FROM student_courses WHERE client_id = %s",
+                (client_id,),
+            )
+    except Exception as e:
+        log.warning("auto_create_courses_for_client lookup failed (client %s): %s", client_id, e)
+        return 0
+
+    before_ids: set[int] = set()
+    created = 0
+    for r in rows or []:
+        d = dict(r)
+        name = (d.get("name") or "").strip()
+        code = (d.get("code") or "").strip() or None
+        if len(name) < 2:
+            continue
+        try:
+            tc = get_or_create_course(uni, name, code, created_by=client_id)
+            tcid = int(tc.get("id"))
+            if tcid not in before_ids:
+                before_ids.add(tcid)
+                created += 1
+        except Exception as e:
+            log.debug("skip course '%s' for client %s: %s", name, client_id, e)
+            continue
+    return created
+
+
+def backfill_courses_from_all_syncs() -> int:
+    """One-shot: walk every client that has at least one student_courses row
+    and make sure the shared training catalog contains it. Idempotent."""
+    init_training_tables()
+    try:
+        with get_db() as db:
+            rows = _fetchall(
+                db,
+                "SELECT DISTINCT client_id FROM student_courses",
+            )
+    except Exception as e:
+        log.warning("backfill_courses_from_all_syncs list failed: %s", e)
+        return 0
+    total = 0
+    for r in rows or []:
+        cid = dict(r).get("client_id")
+        if cid:
+            total += auto_create_courses_for_client(int(cid))
+    return total
+
+
 # ── Publish + list ──────────────────────────────────────────────────────
 
 def publish_quiz(training_course_id: int, quiz_id: int, uploaded_by: int,
