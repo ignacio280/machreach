@@ -33,96 +33,6 @@ from markupsafe import Markup
 log = logging.getLogger(__name__)
 
 
-# Tiny animated study pet (POC). A small floating dog in the bottom-right
-# that idle-bobs, blinks, and waggles when the user moves the mouse near it.
-# Click to dismiss for the session (stored in localStorage).
-_STUDY_PET_HTML = """
-<div id="mr-pet" aria-hidden="true">
-  <div class="mr-pet-body">
-    <div class="mr-pet-emoji">\U0001F436</div>
-    <div class="mr-pet-shadow"></div>
-  </div>
-  <button class="mr-pet-close" type="button" aria-label="Hide pet" title="Hide pet">×</button>
-</div>
-<style>
-  #mr-pet {
-    position: fixed; right: 18px; bottom: 18px; z-index: 9998;
-    width: 56px; height: 64px; pointer-events: auto;
-    user-select: none; -webkit-user-select: none;
-    transition: transform .25s cubic-bezier(.2,.9,.3,1.4), opacity .2s;
-  }
-  #mr-pet.mr-pet-hidden { display: none; }
-  #mr-pet:hover { transform: translateY(-3px) scale(1.05); }
-  #mr-pet .mr-pet-body { position: relative; width: 100%; height: 100%; }
-  #mr-pet .mr-pet-emoji {
-    position: absolute; left: 50%; top: 0; transform: translateX(-50%);
-    font-size: 38px; line-height: 1;
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,.35));
-    animation: mrPetIdle 2.4s ease-in-out infinite;
-    transform-origin: 50% 80%;
-  }
-  #mr-pet:hover .mr-pet-emoji { animation: mrPetWag .35s ease-in-out infinite; }
-  #mr-pet .mr-pet-shadow {
-    position: absolute; left: 50%; bottom: 0;
-    width: 40px; height: 8px; transform: translateX(-50%);
-    background: radial-gradient(ellipse at center, rgba(0,0,0,.35) 0%, rgba(0,0,0,0) 70%);
-    animation: mrPetShadow 2.4s ease-in-out infinite;
-  }
-  #mr-pet .mr-pet-close {
-    position: absolute; top: -6px; right: -6px;
-    width: 18px; height: 18px; border-radius: 50%;
-    background: rgba(15,23,42,.85); color: #fff; border: 1px solid rgba(255,255,255,.2);
-    font-size: 12px; line-height: 16px; padding: 0; cursor: pointer;
-    opacity: 0; transition: opacity .15s;
-  }
-  #mr-pet:hover .mr-pet-close { opacity: 1; }
-  @keyframes mrPetIdle {
-    0%, 100% { transform: translateX(-50%) translateY(0); }
-    50%      { transform: translateX(-50%) translateY(-6px); }
-  }
-  @keyframes mrPetWag {
-    0%, 100% { transform: translateX(-50%) rotate(-5deg); }
-    50%      { transform: translateX(-50%) rotate(5deg); }
-  }
-  @keyframes mrPetShadow {
-    0%, 100% { opacity: .55; transform: translateX(-50%) scale(1); }
-    50%      { opacity: .25; transform: translateX(-50%) scale(.7); }
-  }
-  @media (max-width: 600px) {
-    #mr-pet { right: 10px; bottom: 84px; transform: scale(.85); }
-  }
-</style>
-<script>
-(function(){
-  var pet = document.getElementById('mr-pet');
-  if (!pet) return;
-  try {
-    if (localStorage.getItem('mr_pet_hidden') === '1') {
-      pet.classList.add('mr-pet-hidden');
-      return;
-    }
-  } catch(e){}
-  var close = pet.querySelector('.mr-pet-close');
-  if (close) close.addEventListener('click', function(ev){
-    ev.stopPropagation();
-    pet.classList.add('mr-pet-hidden');
-    try { localStorage.setItem('mr_pet_hidden', '1'); } catch(e){}
-  });
-  // Bark on click. Picks one of a few cheerful messages.
-  var lines = ['Woof! Keep going!', 'You got this!', '\U0001F4DA Focus time!', 'Nice study streak!'];
-  pet.addEventListener('click', function(){
-    var msg = document.createElement('div');
-    msg.textContent = lines[Math.floor(Math.random()*lines.length)];
-    msg.style.cssText = 'position:fixed;right:80px;bottom:36px;background:#0f172a;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);pointer-events:none;opacity:0;transition:opacity .2s;';
-    document.body.appendChild(msg);
-    requestAnimationFrame(function(){ msg.style.opacity = '1'; });
-    setTimeout(function(){ msg.style.opacity = '0'; setTimeout(function(){ msg.remove(); }, 220); }, 1600);
-  });
-})();
-</script>
-"""
-
-
 # Pop-up modal that fires the first time a logged-in student opens any
 # page after a weekly or monthly leaderboard period closes. Shows their
 # rank in every scope (global / country / university / major) plus any
@@ -3425,9 +3335,6 @@ def register_student_routes(app, csrf, limiter):
 
             is_admin = bool(c and c.get("is_admin"))
 
-        # Tiny animated study pet (POC). Fixed bottom-right, follows the
-        # cursor a little, idle-bounces, can be toggled off via the bubble.
-        pet_html = _STUDY_PET_HTML if _logged_in() else ""
         # End-of-week / end-of-month leaderboard results popup. Shows once
         # per period to every authenticated student.
         period_popup_html = _PERIOD_POPUP_HTML if _logged_in() else ""
@@ -3438,7 +3345,7 @@ def register_student_routes(app, csrf, limiter):
 
             title=f"Student — {title}",
 
-            content=Markup(pet_html + period_popup_html + content_html),
+            content=Markup(period_popup_html + content_html),
 
             logged_in=_logged_in(),
 
@@ -4045,9 +3952,31 @@ def register_student_routes(app, csrf, limiter):
               </div>
               <div id="an-bars7" class="mr-line-host"></div>
             </div>
-            <div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Time per course</div>
-              <div id="an-courses" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+
+          <!-- Interactive time-per-course breakdown with drill-downs. -->
+          <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--border);" id="cb-section">
+            <div id="cb-head" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+              <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                <button type="button" id="cb-back" onclick="cbBack()" style="display:none;background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);font-size:13px;flex-shrink:0;">&#8592; Back</button>
+                <div style="min-width:0;">
+                  <div id="cb-title" style="font-weight:700;font-size:15px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Study time per course</div>
+                  <div id="cb-subtitle" style="font-size:12px;color:var(--text-muted);">Click any bar to see the day-by-day breakdown.</div>
+                </div>
+              </div>
+              <div id="cb-week-nav" style="display:none;align-items:center;gap:4px;flex-shrink:0;">
+                <button type="button" id="cb-week-prev" onclick="cbWeekShift(-1)" title="Previous week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8249;</button>
+                <div id="cb-week-label" style="font-size:12px;color:var(--text-muted);min-width:90px;text-align:center;">this week</div>
+                <button type="button" id="cb-week-next" onclick="cbWeekShift(1)" title="Next week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8250;</button>
+              </div>
+            </div>
+            <div id="cb-stage" style="position:relative;min-height:260px;">
+              <div id="cb-view-courses" class="cb-view"></div>
+              <div id="cb-view-course" class="cb-view" style="display:none;"></div>
+              <div id="cb-view-exam" class="cb-view" style="display:none;"></div>
+            </div>
+            <div id="cb-empty" style="display:none;text-align:center;padding:20px 10px 0;color:var(--text-muted);font-size:13px;">
+              No course-tagged focus sessions yet. Start a timer on <a href="/student/focus" style="color:var(--primary);">Focus Mode</a> and pick a course to populate this chart.
             </div>
           </div>
         </div>
@@ -4191,16 +4120,10 @@ def register_student_routes(app, csrf, limiter):
                 v: d.minutes, label: d.label[0], tip: d.date + ': ' + fmtM(d.minutes)
               }})), max14);
               window.anRenderDow(a.dow_dist, a.week_label || 'this week');
-              const maxC = Math.max(1, ...a.top_courses.map(c => c.minutes));
-              const coursesEl = document.getElementById('an-courses');
-              if (a.top_courses.length) {{
-                coursesEl.innerHTML = a.top_courses.map(c =>
-                  '<div class="mr-course-row"><div class="mr-course-name" title="'+c.course.replace(/"/g,'&quot;')+'">'+c.course+'</div><div class="mr-course-bar"><div class="mr-course-fill" style="width:'+((c.minutes/maxC)*100)+'%"></div></div><div class="mr-course-val">'+fmtM(c.minutes)+'</div></div>'
-                ).join('');
-              }} else {{
-                coursesEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">No course-specific sessions yet. Start a focus timer and tag a course!</div>';
-              }}
             }} catch(e) {{ /* silent */ }}
+            // Expose the renderer and esc helper for the breakdown card below.
+            window.__mrRenderLine = renderLine;
+            window.__mrEscAttr = escAttr;
           }})();
         </script>
 
@@ -4208,32 +4131,6 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        <!-- Interactive "time per course" breakdown with drill-downs. -->
-        <div id="cb-card" class="card reveal r-delay-1" style="margin-bottom:20px;padding:22px;border:1px solid var(--border);">
-          <div id="cb-head" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <button type="button" id="cb-back" onclick="cbBack()" style="display:none;background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);font-size:13px;">&#8592; Back</button>
-              <span style="font-size:22px;">&#128200;</span>
-              <div>
-                <div id="cb-title" style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Study time per course</div>
-                <div id="cb-subtitle" style="font-size:12px;color:var(--text-muted);">Click any bar to see the day-by-day breakdown.</div>
-              </div>
-            </div>
-            <div id="cb-week-nav" style="display:none;align-items:center;gap:4px;">
-              <button type="button" id="cb-week-prev" onclick="cbWeekShift(-1)" title="Previous week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8249;</button>
-              <div id="cb-week-label" style="font-size:12px;color:var(--text-muted);min-width:90px;text-align:center;">this week</div>
-              <button type="button" id="cb-week-next" onclick="cbWeekShift(1)" title="Next week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8250;</button>
-            </div>
-          </div>
-          <div id="cb-stage" style="position:relative;min-height:260px;">
-            <div id="cb-view-courses" class="cb-view"></div>
-            <div id="cb-view-course" class="cb-view" style="display:none;"></div>
-            <div id="cb-view-exam" class="cb-view" style="display:none;"></div>
-          </div>
-          <div id="cb-empty" style="display:none;text-align:center;padding:28px 10px;color:var(--text-muted);font-size:13px;">
-            No course-tagged focus sessions yet. Start a timer on <a href="/student/focus" style="color:var(--primary);">Focus Mode</a> and pick a course to populate this chart.
-          </div>
-        </div>
         <style>
           .cb-view {{ animation: cbFadeIn .25s ease; }}
           .cb-slide-left {{ animation: cbSlideInLeft .28s ease; }}
@@ -4241,16 +4138,21 @@ def register_student_routes(app, csrf, limiter):
           @keyframes cbFadeIn {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: translateY(0); }} }}
           @keyframes cbSlideInLeft {{ from {{ opacity: 0; transform: translateX(-14px); }} to {{ opacity: 1; transform: translateX(0); }} }}
           @keyframes cbSlideInRight {{ from {{ opacity: 0; transform: translateX(14px); }} to {{ opacity: 1; transform: translateX(0); }} }}
-          .cb-bars {{ display:flex; align-items:flex-end; gap:6px; height:220px; padding:8px 2px 0; border-bottom:1px solid var(--border); position:relative; }}
-          .cb-bar {{ flex:1 1 0; min-width:22px; background:linear-gradient(180deg,#7C9CFF,#5B4694); border-radius:6px 6px 2px 2px; cursor:pointer; position:relative; transition:transform .2s ease, filter .2s ease; display:flex; align-items:flex-start; justify-content:center; min-height:3px; }}
+          .cb-bars {{ display:flex; align-items:flex-end; gap:10px; height:200px; padding:24px 4px 0; border-bottom:1px solid var(--border); position:relative; }}
+          .cb-bar {{ flex:1 1 0; min-width:24px; background:linear-gradient(180deg,#7C9CFF,#5B4694); border-radius:6px 6px 2px 2px; cursor:pointer; position:relative; transition:transform .2s ease, filter .2s ease; min-height:3px; }}
           .cb-bar:hover {{ filter:brightness(1.15); transform:translateY(-2px); }}
           .cb-bar.cb-muted {{ background:linear-gradient(180deg,rgba(148,163,184,.45),rgba(148,163,184,.25)); cursor:default; }}
           .cb-bar.cb-muted:hover {{ transform:none; filter:none; }}
-          .cb-bar .cb-val {{ font-size:10px; color:#fff; margin-top:4px; font-weight:600; text-shadow:0 1px 2px rgba(0,0,0,.25); white-space:nowrap; }}
-          .cb-bar-label {{ font-size:11px; color:var(--text-muted); text-align:center; margin-top:6px; word-break:break-word; line-height:1.2; }}
+          .cb-bar .cb-val {{ position:absolute; bottom:calc(100% + 4px); left:50%; transform:translateX(-50%); font-size:10px; color:var(--text); font-weight:600; white-space:nowrap; pointer-events:none; }}
+          .cb-bar-label {{ font-size:11px; color:var(--text-muted); text-align:center; margin-top:10px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; min-height:16px; }}
           .cb-tip {{ position:absolute; background:rgba(11,18,32,.95); color:#fff; font-size:11px; padding:4px 8px; border-radius:6px; white-space:nowrap; pointer-events:none; transform:translate(-50%,-110%); display:none; z-index:5; }}
           .cb-section-title {{ font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 8px; }}
-          .cb-col {{ display:flex; flex-direction:column; align-items:center; flex:1 1 0; min-width:36px; }}
+          .cb-col {{ display:flex; flex-direction:column; align-items:center; flex:1 1 0; min-width:42px; max-width:140px; overflow:hidden; }}
+          .cb-line-host {{ position:relative; width:100%; height:220px; }}
+          .cb-line-host svg {{ display:block; width:100%; height:100%; overflow:visible; }}
+          .cb-line-pt {{ cursor:pointer; }}
+          .cb-line-pt:hover .cb-line-dot {{ r:5.5; }}
+          .cb-line-tip {{ position:absolute; pointer-events:none; display:none; background:rgba(11,18,32,.95); color:#fff; font-size:12px; line-height:1.3; padding:6px 10px; border-radius:8px; white-space:nowrap; box-shadow:0 8px 22px rgba(15,23,42,.3); transform:translate(-50%, -110%); z-index:20; }}
         </style>
         <script>
           window.__cbState = {{ view: 'courses', courseId: null, examId: null, weekOffset: 0 }};
@@ -4287,14 +4189,38 @@ def register_student_routes(app, csrf, limiter):
               var onClick = d.onClick && !muted ? (' data-click="'+esc(d.onClick)+'" onclick="cbBarClick(this)"') : '';
               var tipText = d.tip || (d.label + ': ' + fmtM(d.value||0));
               out += '<div class="cb-col">';
+              // Bar — value floats above it via CSS so it never overlaps the label below.
               out += '<div class="'+cls+'" style="height:'+hpct+'%;"'+onClick+' data-tip="'+esc(tipText)+'" onmouseover="cbShowTip(event,this)" onmouseout="cbHideTip(this)">';
               if ((d.value||0) > 0) out += '<span class="cb-val">'+fmtM(d.value||0)+'</span>';
               out += '</div>';
-              out += '<div class="cb-bar-label">'+esc(d.label||'')+'</div>';
+              out += '<div class="cb-bar-label" title="'+esc(d.label||'')+'">'+esc(d.label||'')+'</div>';
               out += '</div>';
             }});
             out += '</div>';
             host.innerHTML = out;
+          }}
+
+          // Line-chart renderer for the day-by-day breakdown.
+          // Uses the same SVG primitive as the top "Last 14 days" chart.
+          function cbRenderLine(host, items) {{
+            if (!host) return;
+            host.classList.add('cb-line-host');
+            host.id = host.id || ('cb-line-' + Math.random().toString(36).slice(2,8));
+            var fmtM = window.__cbFmtM;
+            var pts = items.map(function(d){{
+              return {{
+                v: d.value || 0,
+                label: d.label || '',
+                tip: d.tip || ((d.label||'') + ': ' + fmtM(d.value||0))
+              }};
+            }});
+            var maxV = Math.max(1, ...items.map(function(d){{ return d.value||0; }}));
+            if (window.__mrRenderLine) {{
+              host.innerHTML = window.__mrRenderLine(host.id, pts, maxV);
+            }} else {{
+              // Fallback: bars, in case the analytics IIFE hasn't run yet.
+              cbRenderBars(host, items);
+            }}
           }}
 
           window.cbShowTip = function(ev, el) {{
@@ -4410,7 +4336,7 @@ def register_student_routes(app, csrf, limiter):
               html += '<div id="cb-course-exams"></div>';
               if (!examItems.length) html += '<div style="font-size:12px;color:var(--text-muted);padding:10px 2px;">No exams added for this course yet.</div>';
               host.innerHTML = html;
-              cbRenderBars(document.getElementById('cb-course-days'), dayItems);
+              cbRenderLine(document.getElementById('cb-course-days'), dayItems);
               if (examItems.length) cbRenderBars(document.getElementById('cb-course-exams'), examItems);
               cbShowView('cb-view-course', direction || 'in');
             }} catch(e) {{}}
@@ -4457,7 +4383,7 @@ def register_student_routes(app, csrf, limiter):
               html += '<div class="cb-section-title">Days — '+esc(cbWeekLabel(wo))+' · total '+fmtM(weekTotal)+'</div>';
               html += '<div id="cb-exam-days"></div>';
               host.innerHTML = html;
-              cbRenderBars(document.getElementById('cb-exam-days'), dayItems);
+              cbRenderLine(document.getElementById('cb-exam-days'), dayItems);
               cbShowView('cb-view-exam', direction || 'in');
             }} catch(e) {{}}
           }}
@@ -7650,6 +7576,13 @@ def register_student_routes(app, csrf, limiter):
     def student_training_page():
         if not _logged_in():
             return redirect(url_for("login"))
+        # Best-effort: fold any freshly-synced Canvas courses into the shared
+        # training catalog on each visit. Idempotent and cheap.
+        try:
+            from student import training as _tr
+            _tr.auto_create_courses_for_client(_cid())
+        except Exception as _e:
+            log.debug("training auto-create on page load failed: %s", _e)
         body = """
         <style>
           .tr-wrap { max-width: 1080px; margin: 0 auto; padding: 16px; }
@@ -15455,19 +15388,56 @@ No markdown, no code fences. ONLY JSON.
 
 
 
+        def _fmt_xp_ts(raw):
+            # student_xp.created_at is either a datetime (Postgres) or an
+            # ISO-ish string (SQLite 'YYYY-MM-DD HH:MM:SS'). Render both
+            # date and time compactly.
+            if raw is None:
+                return ("", "")
+            try:
+                from datetime import datetime as _dt
+                if hasattr(raw, "strftime"):
+                    dt_obj = raw
+                else:
+                    s = str(raw).strip()
+                    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
+                                "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%f"):
+                        try:
+                            dt_obj = _dt.strptime(s.split("+")[0].split("Z")[0], fmt)
+                            break
+                        except Exception:
+                            continue
+                    else:
+                        return (s[:10], s[11:16] if len(s) >= 16 else "")
+                return (dt_obj.strftime("%Y-%m-%d"), dt_obj.strftime("%H:%M"))
+            except Exception:
+                return (str(raw)[:10], "")
+
         history_html = ""
 
         for h in history:
 
+            _d, _t = _fmt_xp_ts(h.get("created_at"))
+            ts_html = ""
+            if _d:
+                ts_html = (
+                    f'<div style="color:var(--text-muted);font-size:11px;margin-top:2px">'
+                    f'{_esc(_d)}{" &middot; " + _esc(_t) if _t else ""}'
+                    f'</div>'
+                )
+
             history_html += f"""
 
-            <div style="display:flex;justify-content:space-between;padding:6px 0;
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;
 
-                        border-bottom:1px solid var(--border);font-size:14px;color:var(--text)">
+                        border-bottom:1px solid var(--border);font-size:14px;color:var(--text);gap:12px">
 
-              <span>{_esc(h.get('detail','') or h['action'])}</span>
+              <div style="min-width:0;flex:1">
+                <div style="overflow:hidden;text-overflow:ellipsis">{_esc(h.get('detail','') or h['action'])}</div>
+                {ts_html}
+              </div>
 
-              <span style="color:#22c55e;font-weight:600">+{h['xp']} XP</span>
+              <span style="color:#22c55e;font-weight:600;white-space:nowrap">+{h['xp']} XP</span>
 
             </div>"""
 

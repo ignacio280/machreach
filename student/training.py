@@ -278,7 +278,7 @@ def auto_create_courses_for_client(client_id: int) -> int:
     """After a Canvas sync, fold every student_courses row for this client
     into the shared training catalog. Idempotent: existing (name_norm, code_norm)
     matches are skipped by get_or_create_course. Returns the number of rows
-    created (best-effort count)."""
+    folded in (existing + newly created, best-effort count)."""
     init_training_tables()
     try:
         with get_db() as db:
@@ -288,8 +288,6 @@ def auto_create_courses_for_client(client_id: int) -> int:
                 (client_id,),
             )
             uni = (dict(cli).get("university_id") if cli else None)
-            if not uni:
-                return 0
             rows = _fetchall(
                 db,
                 "SELECT name, code FROM student_courses WHERE client_id = %s",
@@ -299,8 +297,17 @@ def auto_create_courses_for_client(client_id: int) -> int:
         log.warning("auto_create_courses_for_client lookup failed (client %s): %s", client_id, e)
         return 0
 
-    before_ids: set[int] = set()
-    created = 0
+    if not uni:
+        if rows:
+            log.info(
+                "auto_create_courses_for_client: client %s has %d Canvas courses "
+                "but no university_id set — skipped. Prompt user to finish "
+                "the academic profile.", client_id, len(rows),
+            )
+        return 0
+
+    seen_ids: set[int] = set()
+    folded = 0
     for r in rows or []:
         d = dict(r)
         name = (d.get("name") or "").strip()
@@ -310,13 +317,17 @@ def auto_create_courses_for_client(client_id: int) -> int:
         try:
             tc = get_or_create_course(uni, name, code, created_by=client_id)
             tcid = int(tc.get("id"))
-            if tcid not in before_ids:
-                before_ids.add(tcid)
-                created += 1
+            if tcid not in seen_ids:
+                seen_ids.add(tcid)
+                folded += 1
         except Exception as e:
             log.debug("skip course '%s' for client %s: %s", name, client_id, e)
             continue
-    return created
+    log.info(
+        "auto_create_courses_for_client: client %s uni=%s — folded %d Canvas courses into training catalog.",
+        client_id, uni, folded,
+    )
+    return folded
 
 
 def backfill_courses_from_all_syncs() -> int:
@@ -333,10 +344,33 @@ def backfill_courses_from_all_syncs() -> int:
         log.warning("backfill_courses_from_all_syncs list failed: %s", e)
         return 0
     total = 0
+    clients_scanned = 0
+    clients_missing_uni = 0
     for r in rows or []:
         cid = dict(r).get("client_id")
-        if cid:
-            total += auto_create_courses_for_client(int(cid))
+        if not cid:
+            continue
+        clients_scanned += 1
+        folded = auto_create_courses_for_client(int(cid))
+        total += folded
+        if folded == 0:
+            # auto_create_courses_for_client returns 0 only when no uni or
+            # no valid course rows. Use it as a signal for visibility.
+            try:
+                with get_db() as db:
+                    cli = _fetchone(
+                        db,
+                        "SELECT university_id FROM clients WHERE id = %s",
+                        (int(cid),),
+                    )
+                    if not cli or not dict(cli).get("university_id"):
+                        clients_missing_uni += 1
+            except Exception:
+                pass
+    log.info(
+        "backfill_courses_from_all_syncs: scanned=%d, folded=%d, clients_missing_university=%d",
+        clients_scanned, total, clients_missing_uni,
+    )
     return total
 
 
