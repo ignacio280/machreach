@@ -282,6 +282,8 @@ def _gpa_planilla_html(lang: str = "en") -> str:
         ("'No tienes ramos en este semestre todavía.<br><br><button class=\"pl-btn primary\" onclick=\"plAddCourse()\">+ Agregar primer ramo</button>'",
          "'No courses in this semester yet.<br><br><button class=\"pl-btn primary\" onclick=\"plAddCourse()\">+ Add first course</button>'"),
         (">+ Agregar ramo<", ">+ Add course<"),
+        (">+ Semestre<", ">+ Semester<"),
+        ("title=\"Agregar otro semestre\"", "title=\"Add another semester\""),
         ("'¿Eliminar este ramo?'", "'Delete this course?'"),
         ("'Copiar \"' + (src.name || 'ramo') + '\" a qué semestre?\\n\\n'",
          "'Copy \"' + (src.name || 'course') + '\" to which semester?\\n\\n'"),
@@ -506,12 +508,14 @@ _GPA_PLANILLA_HTML_ES = r"""
 
   function renderTabs(){
     var t = document.getElementById('pl-tabs');
-    t.innerHTML = data.sems.map(function(s, i){
+    var tabs = data.sems.map(function(s, i){
       var hasAny = s.courses.some(function(c){ return courseStats(c).hasAny; });
       var dot = hasAny ? ' •' : '';
       return '<button class="pl-tab' + (i === data.current ? ' active' : '') +
              '" onclick="plSwitchSem(' + i + ')">Sem ' + s.label + dot + '</button>';
     }).join('');
+    var addBtn = '<button class="pl-tab" style="opacity:.85;" onclick="plAddSemester()" title="Agregar otro semestre">+ Semestre</button>';
+    t.innerHTML = tabs + addBtn;
   }
 
   function renderCourseCard(c, sIdx, cIdx){
@@ -669,6 +673,18 @@ _GPA_PLANILLA_HTML_ES = r"""
       copy.evals.forEach(function(e){ e.id = uid(); e.grade = ''; });
     }
     data.sems[targetIdx].courses.push(copy);
+    rerender();
+  };
+  window.plAddSemester = function(){
+    // Roman numeral for the next slot. Falls back to plain count if user
+    // somehow gets past 30 semesters (unlikely on a 5-year career).
+    var ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X',
+                 'XI','XII','XIII','XIV','XV','XVI','XVII','XVIII','XIX','XX',
+                 'XXI','XXII','XXIII','XXIV','XXV','XXVI','XXVII','XXVIII','XXIX','XXX'];
+    var n = data.sems.length;
+    var label = ROMAN[n] || String(n + 1);
+    data.sems.push({ label: label, active: false, courses: [] });
+    data.current = data.sems.length - 1;
     rerender();
   };
   window.plReset = function(){
@@ -7780,7 +7796,7 @@ def register_student_routes(app, csrf, limiter):
             return redirect(url_for("login"))
         cid = _cid()
         lang = (session.get("lang") or "en")
-        title = "Calculadora GPA" if lang == "es" else "GPA Calculator"
+        title = "Planilla de Notas" if lang == "es" else "Grade Sheet"
         html = _gpa_planilla_html(lang).replace("__CID__", str(cid))
         return _s_render(title, html, active_page="student_gpa")
 
@@ -15258,12 +15274,14 @@ No markdown, no code fences. ONLY JSON.
 
         def _fmt_xp_ts(raw):
             # student_xp.created_at is either a datetime (Postgres) or an
-            # ISO-ish string (SQLite 'YYYY-MM-DD HH:MM:SS'). Render both
-            # date and time compactly.
+            # ISO-ish string (SQLite 'YYYY-MM-DD HH:MM:SS'). Postgres NOW()
+            # is UTC on Render — convert to the user's local tz before
+            # rendering so they don't see "today's quiz" stamped with a
+            # time that's hours off from their phone clock.
             if raw is None:
                 return ("", "")
             try:
-                from datetime import datetime as _dt
+                from datetime import datetime as _dt, timezone as _tz
                 if hasattr(raw, "strftime"):
                     dt_obj = raw
                 else:
@@ -15277,6 +15295,26 @@ No markdown, no code fences. ONLY JSON.
                             continue
                     else:
                         return (s[:10], s[11:16] if len(s) >= 16 else "")
+                # Treat naive timestamps as UTC (the server stores in UTC),
+                # then convert to the user's IANA tz from their profile.
+                try:
+                    from zoneinfo import ZoneInfo
+                    from student.timezones import tz_for_country
+                    from outreach.db import _fetchone as _fo
+                    user_tz_name = "America/Santiago"
+                    try:
+                        with get_db() as _db:
+                            _row = _fo(_db, "SELECT country_iso FROM clients WHERE id = %s", (cid,))
+                        iso = (dict(_row).get("country_iso") if _row else "") or ""
+                        if iso:
+                            user_tz_name = tz_for_country(iso)
+                    except Exception:
+                        pass
+                    if dt_obj.tzinfo is None:
+                        dt_obj = dt_obj.replace(tzinfo=_tz.utc)
+                    dt_obj = dt_obj.astimezone(ZoneInfo(user_tz_name))
+                except Exception:
+                    pass
                 return (dt_obj.strftime("%Y-%m-%d"), dt_obj.strftime("%H:%M"))
             except Exception:
                 return (str(raw)[:10], "")
@@ -18724,12 +18762,42 @@ No markdown, no code fences. ONLY JSON.
                     '</div>'
                 )
             subscriptions_html = "".join(sub_cards)
+            junaeb_email = "support@machreach.com"
+            junaeb_subject = "Junaeb%20%E2%80%94%20Solicitud%20de%20descuento%20PLUS"
+            junaeb_body = (
+                "Hola%20equipo%20Machreach%2C%0A%0A"
+                "Adjunto%20fotos%20de%20mi%20Tarjeta%20Junaeb%20%28frente%20y%20reverso%29%20"
+                "para%20solicitar%20el%20descuento%20PLUS.%0A%0A"
+                "Mi%20correo%20de%20la%20cuenta%3A%20%5Bcompletar%5D%0A"
+                "Mi%20universidad%3A%20%5Bcompletar%5D%0A%0AGracias!"
+            )
+            junaeb_mailto = f"mailto:{junaeb_email}?subject={junaeb_subject}&body={junaeb_body}"
+            junaeb_card = (
+                '<div style="margin-top:14px;background:linear-gradient(135deg,#ecfdf5,#d1fae5);'
+                'border:1px solid #10b981;border-radius:14px;padding:16px 18px;color:#064e3b;">'
+                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+                '<span style="font-size:22px;">\U0001f4b3</span>'
+                '<div style="font-weight:800;font-size:15px;">¿Tienes Tarjeta Junaeb?</div>'
+                '</div>'
+                '<div style="font-size:13px;line-height:1.5;margin-bottom:10px;">'
+                'Si tienes Junaeb activa, te damos un descuento especial en PLUS. '
+                'Mándanos una foto del <b>frente</b> y <b>reverso</b> de tu tarjeta a '
+                f'<a href="mailto:{junaeb_email}" style="color:#047857;font-weight:700;">{junaeb_email}</a> '
+                'y te respondemos manualmente con un código de descuento (24–48h).'
+                '</div>'
+                f'<a href="{junaeb_mailto}" class="btn btn-sm btn-primary" '
+                'style="background:#10b981;border:none;display:inline-block;">'
+                '\U00002709️ Enviar correo a soporte</a>'
+                '</div>'
+            )
             subscription_section = (
                 '<div class="card">'
                 '<div class="card-header"><h2>\U0001F48E Subscription</h2></div>'
                 '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">'
                 + subscriptions_html +
-                '</div></div>'
+                '</div>'
+                + junaeb_card +
+                '</div>'
             )
         except Exception as _sub_err:
             log.exception("Shop subscription section failed: %s", _sub_err)

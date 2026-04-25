@@ -44,7 +44,11 @@ def register_academic_routes(app, csrf, limiter):
     def academic_countries():
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
-        return jsonify({"countries": ac.list_countries()})
+        # Phased rollout: Chile only for now. Other countries will be added
+        # one by one as we onboard university partnerships.
+        all_countries = ac.list_countries() or []
+        chile = [c for c in all_countries if (dict(c).get("iso_code", "") or "").upper() == "CL"]
+        return jsonify({"countries": chile})
 
     # ── universities ────────────────────────────────────────
 
@@ -56,7 +60,15 @@ def register_academic_routes(app, csrf, limiter):
         q = (request.args.get("q") or "").strip()
         if not country:
             return jsonify({"error": "country required"}), 400
-        rows = ac.search_universities(country, q, limit=25)
+        # Phased rollout: only Pontificia Universidad Católica de Chile is
+        # exposed in the picker. Other unis will be added one by one.
+        rows = ac.search_universities(country, q, limit=25) or []
+        def _is_puc(r):
+            d = dict(r)
+            name = (d.get("name") or "").lower()
+            short = (d.get("short_name") or "").lower()
+            return ("pontificia universidad cat" in name and "chile" in name) or short in ("puc", "uc")
+        rows = [r for r in rows if _is_puc(r)]
         return jsonify({"universities": rows})
 
     @app.route("/api/academic/universities", methods=["POST"])

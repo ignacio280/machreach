@@ -1415,7 +1415,7 @@ LAYOUT = """<!DOCTYPE html>
           <div class="nav-dropdown-menu">
             <a href="/student/friends">&#128101; Friends</a>
             <a href="/student/shop">&#129534; Shop</a>
-            <a href="/student/gpa">&#128200; GPA</a>
+            <a href="/student/gpa">&#128200; Grade Sheet</a>
             <a href="/student/achievements">&#127942; XP &amp; Badges</a>
           </div>
         </div>
@@ -1953,7 +1953,7 @@ LAYOUT = """<!DOCTYPE html>
         {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
         {t:'Panic Mode', u:'/student/panic', i:'🚨', s:'Tools'},
         {t:'Schedule', u:'/student/schedule', i:'🗓\uFE0F', s:'Tools'},
-        {t:'GPA Calculator', u:'/student/gpa', i:'📈', s:'Tools'},
+        {t:'Grade Sheet', u:'/student/gpa', i:'📈', s:'Tools'},
         {t:'Leaderboard', u:'/student/leaderboard', i:'🏆', s:'Social'},
         {t:'Marketplace', u:'/student/marketplace', i:'🛒', s:'Social'},
         {t:'Mail Hub', u:'/mail-hub', i:'📩', s:'Other'},
