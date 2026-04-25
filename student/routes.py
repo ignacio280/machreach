@@ -1306,11 +1306,12 @@ def register_student_routes(app, csrf, limiter):
 
         # Fold every synced course into the shared Training catalog.
 
+        folded = 0
         try:
 
             from student import training as _tr
 
-            _tr.auto_create_courses_for_client(cid)
+            folded = _tr.auto_create_courses_for_client(cid) or 0
 
         except Exception as _e:
 
@@ -1325,6 +1326,8 @@ def register_student_routes(app, csrf, limiter):
             "courses_found": len(courses),
 
             "courses_saved": saved,
+
+            "training_folded": folded,
 
             "courses": [{"id": c["id"], "name": c.get("name", "?")} for c in courses[:20]],
 
@@ -1381,6 +1384,45 @@ def register_student_routes(app, csrf, limiter):
     # In-memory sync status per client  {client_id: {status, progress, ...}}
 
     _sync_status: dict[int, dict] = {}
+
+
+
+    def _kick_silent_canvas_resync(client_id: int) -> None:
+        """Fire-and-forget Canvas course refresh on page visits.
+        Skips if already running. No UI feedback — courses just appear."""
+        try:
+            tok = sdb.get_canvas_token(client_id)
+        except Exception:
+            return
+        if not tok:
+            return
+        if _sync_status.get(client_id, {}).get("status") == "running":
+            return
+
+        def _bg():
+            _sync_status[client_id] = {"status": "running", "started_at": datetime.now().isoformat()}
+            try:
+                canvas = CanvasClient(tok["canvas_url"], tok["token"])
+                courses = canvas.get_courses()
+                for c in courses:
+                    try:
+                        cid_canvas = int(c.get("id"))
+                        name = c.get("name") or c.get("course_code") or f"Course {cid_canvas}"
+                        code = c.get("course_code", "") or ""
+                        sdb.upsert_course(client_id, cid_canvas, name, code)
+                    except Exception:
+                        continue
+                try:
+                    from student import training as _tr
+                    _tr.auto_create_courses_for_client(client_id)
+                except Exception as _e:
+                    log.warning("training auto-create after silent resync failed (client %s): %s", client_id, _e)
+                _sync_status[client_id] = {"status": "done", "courses_done": len(courses)}
+            except Exception as e:
+                log.warning("silent canvas resync failed (client %s): %s", client_id, e)
+                _sync_status[client_id] = {"status": "error", "error": str(e)}
+
+        threading.Thread(target=_bg, daemon=True).start()
 
 
 
@@ -2726,45 +2768,27 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Award XP based on time, difficulty, and mode
+        # Award XP: 1 XP per 10 minutes of study time.
+        # Breaks aren't counted — `minutes` arrives study-only because the
+        # frontend reports phaseWorkMinutes=0 for break phases.
+
+        _focus_xp_awarded = 0
 
         if minutes > 0:
 
-            # Look up course difficulty (1-5)
+            xp = minutes // 10
 
-            difficulty = 3  # default medium
+            if xp > 0:
 
-            if course_name:
+                detail = f"{mode.title()} {minutes}min"
 
-                courses = sdb.get_courses(cid)
+                if course_name:
 
-                for c in courses:
+                    detail += f" — {course_name}"
 
-                    if c["name"] == course_name:
+                sdb.award_xp(cid, "focus_session", xp, detail)
 
-                        difficulty = c.get("difficulty", 3) or 3
-
-                        break
-
-            # XP formula: heavily de-emphasised since focus sessions are
-            # easy to fake (timer runs whether you study or not). Real
-            # XP comes from quizzes/training. Cap at 5 XP per session.
-
-            diff_mult = {1: 1.0, 2: 1.1, 3: 1.2, 4: 1.3, 5: 1.5}.get(difficulty, 1.2)
-
-            mode_mult = 1.1 if mode == "pomodoro" else 1.0
-
-            xp = min(5, max(1, int(minutes / 30 * diff_mult * mode_mult + 0.5)))
-
-            detail = f"{mode.title()} {minutes}min"
-
-            if course_name:
-
-                detail += f" — {course_name}"
-
-            sdb.award_xp(cid, "focus_session", xp, detail)
-
-            _focus_xp_awarded = xp
+                _focus_xp_awarded = xp
 
             # Coins: 1 coin per 5 focus minutes (rounded down, min 1)
             try:
@@ -2772,10 +2796,6 @@ def register_student_routes(app, csrf, limiter):
                 sdb.add_coins(cid, coins, "focus_session")
             except Exception:
                 pass
-
-        else:
-
-            _focus_xp_awarded = 0
 
 
 
@@ -4518,105 +4538,8 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        <div id="sync-progress" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 18px;margin-top:16px;">
-
-          <div style="display:flex;align-items:center;gap:10px;">
-
-            <span id="sync-spinner" style="animation:spin 1s linear infinite;display:inline-block;">&#9203;</span>
-
-            <span id="sync-msg" style="color:var(--text-secondary);font-size:14px;">Starting sync...</span>
-
-          </div>
-
-          <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span></div>
-
-          <div style="margin-top:10px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px;color:var(--text-muted);">
-
-            &#128260; Syncing your Canvas course list &mdash; this is fast, no files are downloaded.
-
-          </div>
-
-        </div>
-
-        <style>@keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}</style>
-
-
-
         <script>
 
-        async function syncCourses() {{
-
-          var btn = document.getElementById('sync-btn');
-
-          btn.disabled = true; btn.innerHTML = '&#9203; Starting...';
-
-          document.getElementById('sync-progress').style.display = 'block';
-
-          try {{
-
-            var r = await fetch('/api/student/sync', {{method: 'POST'}});
-
-            var d = await _safeJson(r);
-
-            if (!r.ok) {{ alert(d.error || 'Sync failed'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; return; }}
-
-            pollSync(btn);
-
-          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; }}
-
-        }}
-
-        function pollSync(btn) {{
-
-          var iv = setInterval(async function() {{
-
-            try {{
-
-              var r = await fetch('/api/student/sync/status');
-
-              var d = await _safeJson(r);
-
-              document.getElementById('sync-msg').textContent = d.progress || 'Syncing...';
-
-              document.getElementById('sync-courses').textContent = (d.courses_done||0) + '/' + (d.courses_total||0);
-
-              if (d.status === 'done') {{
-
-                clearInterval(iv);
-
-                document.getElementById('sync-progress').style.display = 'none';
-
-                btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
-
-                var msg = 'Sync complete! ' + (d.courses_done||0) + ' courses synced.';
-
-                if (d.warnings && d.warnings.length > 0) {{
-
-                  msg += '\n\n\u26A0\uFE0F Warnings:\n' + d.warnings.join('\n');
-
-                }}
-
-                alert(msg);
-
-                location.reload();
-
-              }} else if (d.status === 'error') {{
-
-                clearInterval(iv);
-
-                document.getElementById('sync-progress').style.display = 'none';
-
-                btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
-
-                alert(d.progress || 'Sync failed');
-
-              }}
-
-            }} catch(e) {{}}
-
-          }}, 2000);
-
-        }}
 
         async function generatePlan() {{
 
@@ -4726,6 +4649,13 @@ def register_student_routes(app, csrf, limiter):
 
             return redirect(url_for("login"))
 
+        # No more "Sync Canvas" button — kick a silent background refresh on
+        # every visit so the list stays current. Idempotent + non-blocking.
+        try:
+            _kick_silent_canvas_resync(_cid())
+        except Exception as _e:
+            log.debug("silent resync kick failed: %s", _e)
+
         courses = sdb.get_courses(_cid())
 
         rows = ""
@@ -4770,7 +4700,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div style="font-size:36px;margin-bottom:10px;">&#128218;</div>
 
-              No courses synced yet. Connect Canvas and hit Sync.
+              No courses yet. <a href="/student/canvas-settings" style="color:var(--primary);">Connect Canvas</a> and your courses will appear here automatically.
 
             </td></tr>"""
 
@@ -4781,12 +4711,6 @@ def register_student_routes(app, csrf, limiter):
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px">
 
           <h1>&#128218; My Courses</h1>
-
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-
-            <button onclick="syncCourses()" class="btn btn-primary btn-sm" id="sync-btn">&#128260; Sync Canvas</button>
-
-          </div>
 
         </div>
 
@@ -4802,29 +4726,7 @@ def register_student_routes(app, csrf, limiter):
 
         </div>
 
-        <div id="sync-progress" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 18px;margin-top:16px;">
-
-          <div style="display:flex;align-items:center;gap:10px;">
-
-            <span style="animation:spin 1s linear infinite;display:inline-block;">&#9203;</span>
-
-            <span id="sync-msg" style="color:var(--text-secondary);font-size:14px;">Starting sync...</span>
-
-          </div>
-
-          <div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Courses: <span id="sync-courses">0/0</span></div>
-
-          <div style="margin-top:10px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px;color:var(--text-muted);">
-
-            &#128260; Syncing your Canvas course list &mdash; this is fast, no files are downloaded.
-
-          </div>
-
-        </div>
-
         <style>
-
-        @keyframes spin {{ from {{ transform:rotate(0deg); }} to {{ transform:rotate(360deg); }} }}
 
         .ex-input {{ padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px; }}
 
@@ -4833,66 +4735,6 @@ def register_student_routes(app, csrf, limiter):
         </style>
 
         <script>
-
-        async function syncCourses() {{
-
-          var btn = document.getElementById('sync-btn');
-
-          btn.disabled = true; btn.innerHTML = '&#9203; Starting...';
-
-          document.getElementById('sync-progress').style.display = 'block';
-
-          try {{
-
-            var r = await fetch('/api/student/sync', {{method: 'POST'}});
-
-            var d = await _safeJson(r);
-
-            if (!r.ok) {{ alert(d.error || 'Sync failed'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; return; }}
-
-            var iv = setInterval(async function() {{
-
-              try {{
-
-                var r2 = await fetch('/api/student/sync/status');
-
-                var s = await r2.json();
-
-                document.getElementById('sync-msg').textContent = s.progress || 'Syncing...';
-
-                document.getElementById('sync-courses').textContent = (s.courses_done||0) + '/' + (s.courses_total||0);
-
-                if (s.status === 'done') {{
-
-                  clearInterval(iv);
-
-                  document.getElementById('sync-progress').style.display = 'none';
-
-                  btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
-
-                  alert('Sync complete!');
-
-                  location.reload();
-
-                }} else if (s.status === 'error') {{
-
-                  clearInterval(iv);
-
-                  document.getElementById('sync-progress').style.display = 'none';
-
-                  btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas';
-
-                  alert(s.progress || 'Sync failed');
-
-                }}
-
-              }} catch(e) {{}}
-
-            }}, 2000);
-
-          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#128260; Sync Canvas'; document.getElementById('sync-progress').style.display = 'none'; }}
-
-        }}
 
         function _esc(s) {{ return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }}
 
@@ -7576,14 +7418,39 @@ def register_student_routes(app, csrf, limiter):
     def student_training_page():
         if not _logged_in():
             return redirect(url_for("login"))
-        # Best-effort: fold any freshly-synced Canvas courses into the shared
-        # training catalog on each visit. Idempotent and cheap.
+        # Background-refresh courses from Canvas, then fold into the shared
+        # training catalog. Idempotent — duplicates are skipped by name+code.
+        try:
+            _kick_silent_canvas_resync(_cid())
+        except Exception as _e:
+            log.debug("silent canvas resync on training visit failed: %s", _e)
         try:
             from student import training as _tr
             _tr.auto_create_courses_for_client(_cid())
         except Exception as _e:
             log.debug("training auto-create on page load failed: %s", _e)
-        body = """
+
+        # Banner if user hasn't set their university — without it, the catalog
+        # can't be scoped to their classmates and courses won't appear.
+        uni_banner = ""
+        try:
+            from outreach.db import _fetchone
+            with get_db() as _db:
+                _r = _fetchone(_db, "SELECT university_id FROM clients WHERE id = %s", (_cid(),))
+            if not _r or not (dict(_r) if _r else {}).get("university_id"):
+                uni_banner = (
+                    '<div style="background:rgba(245,158,11,0.12);border:1px solid #f59e0b;'
+                    'border-radius:12px;padding:14px 16px;margin-bottom:16px;color:var(--text);">'
+                    '<b>&#9888;&#65039; Set your university first.</b> Training courses are '
+                    'matched per university — until you pick yours, your classmates\' courses '
+                    'and quizzes won\'t show up. '
+                    '<a href="/student/setup" style="color:var(--primary);font-weight:700;">'
+                    'Finish your academic profile &rarr;</a>'
+                    '</div>'
+                )
+        except Exception:
+            pass
+        body = uni_banner + """
         <style>
           .tr-wrap { max-width: 1080px; margin: 0 auto; padding: 16px; }
           .tr-h1 { font-size: 28px; font-weight: 800; margin: 0 0 6px; }
