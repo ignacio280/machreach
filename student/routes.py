@@ -429,6 +429,73 @@ _GPA_PLANILLA_HTML_ES = r"""
 
   function save(){ try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e){} }
 
+  // Pull courses + exams from the server and merge into the localStorage
+  // structure. Server data is the authoritative source for course names
+  // and evaluation weights; the user's grade entries (typed numbers) stay
+  // untouched. Each (semester_label, course_name) lands in the matching
+  // slot — or appended to the last semester if the label isn't a tab yet.
+  function findSemesterByLabel(label){
+    if (!label) return -1;
+    for (var i = 0; i < data.sems.length; i++){
+      if ((data.sems[i].label || '') === label) return i;
+    }
+    return -1;
+  }
+  function ensureSemesterSlot(label){
+    var idx = findSemesterByLabel(label);
+    if (idx >= 0) return idx;
+    data.sems.push({ label: label, active: false, courses: [] });
+    return data.sems.length - 1;
+  }
+  function findCourseInSem(sem, name){
+    var n = (name || '').trim().toLowerCase();
+    if (!n) return -1;
+    for (var i = 0; i < sem.courses.length; i++){
+      if (((sem.courses[i].name || '').trim().toLowerCase()) === n) return i;
+    }
+    return -1;
+  }
+  function mergeServerCourses(payload){
+    if (!payload || !payload.semesters) return;
+    var sems = payload.semesters;
+    Object.keys(sems).forEach(function(label){
+      // '_unassigned' is the server's bucket for courses without a semester
+      // tag — drop them onto whatever the user marked as current_semester
+      // (or the active tab as a last resort).
+      var targetLabel = (label === '_unassigned') ? (payload.current || data.sems[data.current].label) : label;
+      var sIdx = ensureSemesterSlot(targetLabel);
+      var sem = data.sems[sIdx];
+      (sems[label] || []).forEach(function(srv){
+        var cIdx = findCourseInSem(sem, srv.name);
+        if (cIdx === -1){
+          // Brand-new course → seed it with the server-side evaluations.
+          var evs = (srv.exams || []).map(function(e){
+            return { id: uid(), name: e.name || '', pct: e.weight_pct || '', grade: '' };
+          });
+          if (!evs.length){ evs.push({ id: uid(), name: 'Prueba 1', pct: 30, grade: '' }); }
+          sem.courses.push({ id: uid(), name: srv.name || 'Curso', credits: 10, evals: evs });
+          return;
+        }
+        // Existing course — patch in any server evaluations the user
+        // doesn't already have (matched by case-insensitive name).
+        var c = sem.courses[cIdx];
+        (srv.exams || []).forEach(function(e){
+          var en = (e.name || '').trim().toLowerCase();
+          if (!en) return;
+          var has = c.evals.some(function(ev){ return ((ev.name || '').trim().toLowerCase()) === en; });
+          if (!has){
+            c.evals.push({ id: uid(), name: e.name || '', pct: e.weight_pct || '', grade: '' });
+          }
+        });
+      });
+    });
+    save();
+  }
+  fetch('/api/student/courses/by-semester', { credentials: 'same-origin' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ if (d) { mergeServerCourses(d); rerender(); } })
+    .catch(function(){ /* offline — localStorage data still works */ });
+
   function num(v){ var n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : NaN; }
 
   // Returns { avg, weightDone, weightedSum, hasAny, ok, allDone }
@@ -3192,6 +3259,34 @@ def register_student_routes(app, csrf, limiter):
 
     # ── Training tab API ────────────────────────────────────
 
+    # ── Grade-Sheet semester sync ────────────────────────────
+
+    @app.route("/api/student/semester/current", methods=["GET", "POST"])
+    @csrf.exempt
+    def student_semester_current():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        cid = _cid()
+        if request.method == "POST":
+            data = request.get_json(silent=True) or {}
+            label = (data.get("label") or "").strip()
+            if not label:
+                return jsonify({"error": "label required"}), 400
+            sdb.set_current_semester(cid, label)
+            return jsonify({"ok": True, "current": sdb.get_current_semester(cid)})
+        return jsonify({"current": sdb.get_current_semester(cid)})
+
+
+    @app.route("/api/student/courses/by-semester", methods=["GET"])
+    def student_courses_by_semester():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        return jsonify({
+            "current": sdb.get_current_semester(_cid()),
+            "semesters": sdb.get_courses_by_semester(_cid()),
+        })
+
+
     @app.route("/api/student/training/courses", methods=["GET"])
     def training_search_courses():
         if not _logged_in():
@@ -3396,7 +3491,7 @@ def register_student_routes(app, csrf, limiter):
 
             nav=nav,
 
-            lang=session.get("lang", "en"),
+            lang=session.get("lang", "es"),
 
             is_admin=is_admin,
 
@@ -4723,11 +4818,37 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        return _s_render("Courses", f"""
+        current_sem = sdb.get_current_semester(_cid())
+        sem_options = ""
+        for _lbl in ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"]:
+            sel = " selected" if _lbl == current_sem else ""
+            sem_options += f'<option value="{_lbl}"{sel}>{_lbl}</option>'
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px">
+        return _s_render("Mis Cursos", f"""
 
-          <h1>&#128218; My Courses</h1>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+
+          <h1>&#128218; Mis Cursos</h1>
+
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);">
+
+            <span>Semestre actual:</span>
+
+            <select id="cur-sem-select" onchange="setCurrentSemester(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-weight:600;">
+
+              <option value="" {'selected' if not current_sem else ''}>—</option>
+
+              {sem_options}
+
+            </select>
+
+          </div>
+
+        </div>
+
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+
+          Los ramos sin semestre se asignarán al que selecciones aquí. Cuando avances al siguiente semestre, los nuevos cursos que llegan de Canvas caen automáticamente en el slot que tengas activo.
 
         </div>
 
@@ -4735,7 +4856,7 @@ def register_student_routes(app, csrf, limiter):
 
           <table>
 
-            <thead><tr><th>Course</th><th>Code</th><th>Exams</th><th></th></tr></thead>
+            <thead><tr><th>Curso</th><th>Código</th><th>Pruebas</th><th></th></tr></thead>
 
             <tbody>{rows}</tbody>
 
@@ -4754,6 +4875,19 @@ def register_student_routes(app, csrf, limiter):
         <script>
 
         function _esc(s) {{ return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }}
+
+        async function setCurrentSemester(label) {{
+          if (label === '') return;  // ignore the placeholder
+          var csrfToken = document.querySelector('meta[name=\"csrf-token\"]');
+          var headers = {{'Content-Type':'application/json'}};
+          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+          try {{
+            await fetch('/api/student/semester/current', {{
+              method: 'POST', headers: headers,
+              body: JSON.stringify({{ label: label }})
+            }});
+          }} catch(e) {{ alert('No se pudo guardar el semestre.'); }}
+        }}
 
         async function toggleCourse(courseId) {{
 
@@ -4817,17 +4951,23 @@ def register_student_routes(app, csrf, limiter):
 
           panel.innerHTML =
 
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">'
 
-            + '<b style="color:var(--text);">&#128221; Exams &amp; Assessments</b>'
+            + '<b style="color:var(--text);">&#128221; Pruebas y Evaluaciones</b>'
 
-            + '<button class="btn btn-outline btn-sm" onclick="addExamRow(' + courseId + ')">+ Add Exam</button>'
+            + '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+
+            + '<button class="btn btn-outline btn-sm" onclick="addExamRow(' + courseId + ')">+ Agregar evaluación</button>'
+
+            + '<button class="btn btn-primary btn-sm" onclick="saveAllExams(' + courseId + ', this)">&#128190; Guardar</button>'
+
+            + '</div>'
 
             + '</div>'
 
             + '<div id="exams-list-' + courseId + '">'
 
-            + (rowsHtml || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0;">No exams yet. Click <b>+ Add Exam</b> to create one.</div>')
+            + (rowsHtml || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0;">Sin evaluaciones todavía. Aprieta <b>+ Agregar evaluación</b> para crear una.</div>')
 
             + '</div>';
 
@@ -4839,17 +4979,15 @@ def register_student_routes(app, csrf, limiter):
 
           var idAttr = examId ? examId : 'new';
 
-          return '<div class="ex-row" data-exam-id="' + idAttr + '" style="display:grid;grid-template-columns:2fr 1fr 90px auto auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">'
+          return '<div class="ex-row" data-exam-id="' + idAttr + '" style="display:grid;grid-template-columns:2fr 1fr 90px auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">'
 
-            + '<input type="text" class="ex-input" data-field="name" value="' + _esc(name) + '" placeholder="Exam name">'
+            + '<input type="text" class="ex-input" data-field="name" value="' + _esc(name) + '" placeholder="Nombre evaluación">'
 
             + '<input type="date" class="ex-input" data-field="exam_date" value="' + _esc(date) + '">'
 
             + '<span style="display:flex;align-items:center;gap:4px;"><input type="number" class="ex-input" data-field="weight_pct" value="' + (weight||0) + '" min="0" max="100" style="width:60px;">%</span>'
 
-            + '<button class="btn btn-ghost btn-sm" style="color:var(--primary);font-size:12px;padding:2px 8px;" onclick="saveExamInline(this)" title="Save">&#128190;</button>'
-
-            + '<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;padding:2px 8px;" onclick="deleteExamInline(this)" title="Delete">&#128465;</button>'
+            + '<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;padding:2px 8px;" onclick="deleteExamInline(this)" title="Eliminar">&#128465;</button>'
 
             + '</div>';
 
@@ -4881,37 +5019,15 @@ def register_student_routes(app, csrf, limiter):
 
         }}
 
-        async function saveExamInline(btnEl) {{
+        async function saveAllExams(courseId, btnEl) {{
 
-          var row = btnEl.closest('.ex-row');
+          var list = document.getElementById('exams-list-' + courseId);
 
-          if (!row) return;
+          if (!list) return;
 
-          var examId = row.dataset.examId;
+          var rows = list.querySelectorAll('.ex-row');
 
-          var courseId = row.dataset.courseId;
-
-          if (!courseId) {{
-
-            var listEl = row.parentElement;
-
-            if (listEl) {{
-
-              var m = listEl.id.match(/exams-list-(\\d+)/);
-
-              if (m) courseId = m[1];
-
-            }}
-
-          }}
-
-          var name = (row.querySelector('[data-field=\"name\"]').value || '').trim();
-
-          var exam_date = row.querySelector('[data-field=\"exam_date\"]').value || '';
-
-          var weight_pct = parseInt(row.querySelector('[data-field=\"weight_pct\"]').value) || 0;
-
-          if (!name) {{ alert('Exam name is required'); return; }}
+          if (!rows.length) {{ alert('No hay evaluaciones que guardar.'); return; }}
 
           var csrfToken = document.querySelector('meta[name=\"csrf-token\"]');
 
@@ -4919,53 +5035,65 @@ def register_student_routes(app, csrf, limiter):
 
           if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
 
-          var url, method;
+          btnEl.disabled = true;
 
-          if (examId && examId !== 'new') {{
+          var origLabel = btnEl.innerHTML;
 
-            url = '/api/student/exams/' + examId; method = 'PUT';
+          btnEl.innerHTML = '&#9203; Guardando...';
 
-          }} else {{
+          var ok = 0, fail = 0;
 
-            url = '/api/student/courses/' + courseId + '/exams'; method = 'POST';
+          for (var i = 0; i < rows.length; i++) {{
+
+            var row = rows[i];
+
+            var name = (row.querySelector('[data-field=\"name\"]').value || '').trim();
+
+            var exam_date = row.querySelector('[data-field=\"exam_date\"]').value || '';
+
+            var weight_pct = parseInt(row.querySelector('[data-field=\"weight_pct\"]').value) || 0;
+
+            if (!name) {{ continue; }}  // skip empty rows quietly
+
+            var examId = row.dataset.examId;
+
+            var url, method;
+
+            if (examId && examId !== 'new') {{ url = '/api/student/exams/' + examId; method = 'PUT'; }}
+
+            else {{ url = '/api/student/courses/' + courseId + '/exams'; method = 'POST'; }}
+
+            try {{
+
+              var r = await fetch(url, {{
+
+                method: method, headers: headers,
+
+                body: JSON.stringify({{ name: name, exam_date: exam_date, weight_pct: weight_pct, topics: [], course_id: parseInt(courseId)||0 }})
+
+              }});
+
+              if (r.ok) {{
+
+                var d = await r.json();
+
+                if (d && d.id) {{ row.dataset.examId = d.id; }}
+
+                ok++;
+
+              }} else {{ fail++; }}
+
+            }} catch(e) {{ fail++; }}
 
           }}
 
-          btnEl.disabled = true;
+          btnEl.innerHTML = '&#10003; Guardado';
 
-          try {{
+          setTimeout(function(){{ btnEl.innerHTML = origLabel; btnEl.disabled = false; }}, 1200);
 
-            var r = await fetch(url, {{
+          if (fail > 0) alert('Se guardaron ' + ok + ' evaluaciones. Fallaron ' + fail + '.');
 
-              method: method, headers: headers,
-
-              body: JSON.stringify({{ name: name, exam_date: exam_date, weight_pct: weight_pct, topics: [], course_id: parseInt(courseId)||0 }})
-
-            }});
-
-            if (r.ok) {{
-
-              var d = await r.json();
-
-              if (d && d.id) {{ row.dataset.examId = d.id; }}
-
-              btnEl.innerHTML = '&#10003;';
-
-              setTimeout(function(){{ btnEl.innerHTML = '&#128190;'; btnEl.disabled = false; }}, 900);
-
-              if (courseId) loadCourseExams(parseInt(courseId)||0);
-
-            }} else {{
-
-              var de = await _safeJson(r);
-
-              alert(de.error || 'Failed to save exam');
-
-              btnEl.disabled = false;
-
-            }}
-
-          }} catch(e) {{ alert('Network error'); btnEl.disabled = false; }}
+          loadCourseExams(parseInt(courseId)||0);
 
         }}
 
@@ -7795,7 +7923,7 @@ def register_student_routes(app, csrf, limiter):
         if not _logged_in():
             return redirect(url_for("login"))
         cid = _cid()
-        lang = (session.get("lang") or "en")
+        lang = (session.get("lang") or "es")
         title = "Planilla de Notas" if lang == "es" else "Grade Sheet"
         html = _gpa_planilla_html(lang).replace("__CID__", str(cid))
         return _s_render(title, html, active_page="student_gpa")
@@ -15523,7 +15651,7 @@ No markdown, no code fences. ONLY JSON.
 
                 field_of_study=str(data.get("field_of_study", ""))[:120],
 
-                lang=session.get("lang", "en"),
+                lang=session.get("lang", "es"),
 
             )
 
@@ -17183,7 +17311,7 @@ No markdown, no code fences. ONLY JSON.
 
         # ── Translations ──
 
-        _lang = session.get("lang", "en")
+        _lang = session.get("lang", "es")
 
         _ES = {
 

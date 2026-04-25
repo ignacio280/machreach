@@ -277,8 +277,9 @@ TRANSLATIONS = {
 
 
 def get_lang() -> str:
-    """Get current language from session, default to English."""
-    return session.get("lang", "en")
+    """Get current language from session. Defaults to Spanish — Machreach
+    is rolling out Chile-first."""
+    return session.get("lang", "es")
 
 
 def t(key: str) -> str:

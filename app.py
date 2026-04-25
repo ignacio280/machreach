@@ -3429,7 +3429,7 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
         client_name=session.get("client_name", ""),
         wide=wide,
         nav=nav,
-        lang=session.get("lang", "en"),
+        lang=session.get("lang", "es"),
         is_admin=is_admin,
         account_type=acct_type,
     )
@@ -3441,7 +3441,7 @@ def index():
             return redirect(url_for("student_dashboard_page"))
         return redirect(url_for("dashboard"))
 
-    lang = session.get("lang", "en")
+    lang = session.get("lang", "es")
     is_es = (lang == "es")
 
     # ── i18n copy (en + es) ────────────────────────────────────
@@ -3778,7 +3778,7 @@ def register():
                 pass
             flash(("error", "We couldn't send the verification email. Please check your email address and try again, or contact support@machreach.com."))
             return redirect(url_for("register"))
-    return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
+    return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
         <h1>{t("auth.create_account")}</h1>
@@ -3842,7 +3842,7 @@ def login():
         if session["account_type"] == "student":
             return redirect(url_for("student_dashboard_page"))
         return redirect(url_for("dashboard"))
-    return render_template_string(LAYOUT, title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup(f"""
+    return render_template_string(LAYOUT, title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
         <h1>{t("auth.welcome_back")}</h1>
@@ -3935,7 +3935,7 @@ def verify_email_pending():
     return render_template_string(LAYOUT, title="Verify your email", logged_in=False,
         messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
         active_page="login", client_name="", nav=t_dict("nav"),
-        lang=session.get("lang", "en"),
+        lang=session.get("lang", "es"),
         content=Markup(f"""
     <style>
       .vep-wrap {{
@@ -4056,7 +4056,7 @@ def forgot_password():
         return redirect(url_for("forgot_password"))
     return render_template_string(LAYOUT, title="Forgot Password", logged_in=False,
         messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
-        active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"),
+        active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"),
         content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
@@ -4095,7 +4095,7 @@ def reset_password(token):
         return redirect(url_for("login"))
     return render_template_string(LAYOUT, title="Reset Password", logged_in=False,
         messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
-        active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"),
+        active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"),
         content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
@@ -4302,7 +4302,7 @@ def dashboard():
         active_page="dashboard",
         client_name=session.get("client_name", ""),
         nav=t_dict("nav"),
-        lang=session.get("lang", "en"),
+        lang=session.get("lang", "es"),
         account_type="business",
         wide=True,
         content=Markup("""
@@ -7031,7 +7031,7 @@ def unsubscribe(contact_id):
     # RFC 8058: POST = one-click unsubscribe (email client auto-sends)
     if request.method == "POST":
         return "", 200
-    return render_template_string(LAYOUT, title="Unsubscribed", logged_in=False, messages=[], active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup("""
+    return render_template_string(LAYOUT, title="Unsubscribed", logged_in=False, messages=[], active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup("""
     <div style="text-align:center;padding:80px 24px;">
       <div style="font-size:48px;margin-bottom:16px;opacity:0.4;">&#9993;</div>
       <h1 style="font-size:22px;margin-bottom:8px;">You've been unsubscribed</h1>
@@ -7060,7 +7060,7 @@ def unsubscribe_global(token):
             pass
     if request.method == "POST":
         return "", 200
-    return render_template_string(LAYOUT, title="Unsubscribed", logged_in=False, messages=[], active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "en"), content=Markup("""
+    return render_template_string(LAYOUT, title="Unsubscribed", logged_in=False, messages=[], active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup("""
     <div style="text-align:center;padding:80px 24px;">
       <div style="font-size:48px;margin-bottom:16px;opacity:0.4;">&#9993;</div>
       <h1 style="font-size:22px;margin-bottom:8px;">You've been unsubscribed</h1>
@@ -10347,7 +10347,7 @@ def pricing_page():
 
     return render_template_string(LAYOUT, title="Pricing", logged_in=_logged_in(),
         messages=[], active_page="pricing", client_name=session.get("client_name", ""),
-        nav=t_dict("nav"), lang=session.get("lang", "en"),
+        nav=t_dict("nav"), lang=session.get("lang", "es"),
         content=Markup(f"""
     <div style="max-width:1200px;margin:0 auto;padding:40px 20px;">
       <div style="text-align:center;margin-bottom:40px;">
@@ -11125,7 +11125,7 @@ def _render_error_page(code, heading, message, sub=""):
         active_page="",
         client_name=session.get("client_name", "") if _logged_in() else "",
         nav=t_dict("nav"),
-        lang=session.get("lang", "en"),
+        lang=session.get("lang", "es"),
         wide=True,
         content=Markup(body),
     ), code

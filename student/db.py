@@ -575,6 +575,12 @@ def _student_migrations():
         ("student_quiz_questions", "topic", "TEXT DEFAULT ''"),
         # Presence — unix epoch seconds of the last activity touch.
         ("clients", "last_seen_at", "BIGINT DEFAULT 0"),
+        # Grade-Sheet semester tracking. The user's current_semester drives
+        # which slot incoming Canvas courses land in, and is also what the
+        # /student/courses page shows in the picker. semester_label on each
+        # course is the slot the course belongs to in the grade sheet.
+        ("clients", "current_semester", "TEXT DEFAULT ''"),
+        ("student_courses", "semester_label", "TEXT DEFAULT ''"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -787,6 +793,10 @@ def delete_canvas_token(client_id: int):
 
 def upsert_course(client_id: int, canvas_course_id: int, name: str,
                   code: str = "", term: str = "") -> int:
+    """Insert or update a Canvas course. NEW courses are auto-tagged with
+    the user's current_semester so they land in the right Grade-Sheet slot;
+    EXISTING courses keep whatever semester the user already set, so a fresh
+    sync from Canvas never overwrites the slot they're in."""
     with get_db() as db:
         existing = _fetchone(
             db,
@@ -798,14 +808,87 @@ def upsert_course(client_id: int, canvas_course_id: int, name: str,
                   "UPDATE student_courses SET name = %s, code = %s, term = %s WHERE id = %s",
                   (name, code, term, existing["id"]))
             return existing["id"]
+        # New course → take semester from the client's current_semester so
+        # mid-year syncs land courses in the next slot, not the current one.
+        cli = _fetchone(
+            db,
+            "SELECT current_semester FROM clients WHERE id = %s",
+            (client_id,),
+        )
+        sem = (dict(cli).get("current_semester") if cli else "") or ""
         return _insert_returning_id(
             db,
-            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term) "
-            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (client_id, canvas_course_id, name, code, term),
-            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (client_id, canvas_course_id, name, code, term, sem),
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
         )
+
+
+def get_current_semester(client_id: int) -> str:
+    with get_db() as db:
+        r = _fetchone(db, "SELECT current_semester FROM clients WHERE id = %s", (client_id,))
+    return ((dict(r).get("current_semester") if r else "") or "")
+
+
+def set_current_semester(client_id: int, label: str) -> None:
+    """Update the user's current semester. Any of their courses that don't
+    yet have a semester get tagged with the OLD value (so the user's
+    pre-existing list lands in whatever slot was active before they
+    advanced)."""
+    label = (label or "").strip()
+    with get_db() as db:
+        prev = _fetchone(db, "SELECT current_semester FROM clients WHERE id = %s", (client_id,))
+        prev_label = ((dict(prev).get("current_semester") if prev else "") or "").strip()
+        # Backfill: if the user is just now setting a semester for the first
+        # time, tag all of their existing courses with whatever they pick.
+        # On subsequent advances, only untagged courses inherit the OLD label.
+        backfill_to = prev_label or label
+        _exec(
+            db,
+            "UPDATE student_courses SET semester_label = %s "
+            "WHERE client_id = %s AND (semester_label IS NULL OR semester_label = '')",
+            (backfill_to, client_id),
+        )
+        _exec(db, "UPDATE clients SET current_semester = %s WHERE id = %s", (label, client_id))
+
+
+def get_courses_by_semester(client_id: int) -> dict:
+    """Return {semester_label: [{id, name, code, exams: [...]}]} for the
+    Grade Sheet to overlay onto its localStorage data."""
+    with get_db() as db:
+        crows = _fetchall(
+            db,
+            "SELECT id, name, code, COALESCE(semester_label,'') AS semester_label "
+            "FROM student_courses WHERE client_id = %s ORDER BY id ASC",
+            (client_id,),
+        )
+        erows = _fetchall(
+            db,
+            "SELECT course_id, name, exam_date, weight_pct "
+            "FROM student_exams WHERE client_id = %s",
+            (client_id,),
+        )
+    exams_by_course: dict = {}
+    for e in erows or []:
+        d = dict(e)
+        exams_by_course.setdefault(int(d["course_id"]), []).append({
+            "name": d.get("name") or "",
+            "exam_date": d.get("exam_date") or "",
+            "weight_pct": int(d.get("weight_pct") or 0),
+        })
+    out: dict = {}
+    for c in crows or []:
+        d = dict(c)
+        sem = (d.get("semester_label") or "") or "_unassigned"
+        out.setdefault(sem, []).append({
+            "id": int(d["id"]),
+            "name": d.get("name") or "",
+            "code": d.get("code") or "",
+            "exams": exams_by_course.get(int(d["id"]), []),
+        })
+    return out
 
 
 def create_manual_course(client_id: int, name: str, code: str = "", term: str = "") -> int:
