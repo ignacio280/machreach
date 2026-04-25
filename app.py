@@ -2073,7 +2073,7 @@ LAYOUT = """<!DOCTYPE html>
   <div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--card);border-top:1px solid var(--border-light);box-shadow:0 -2px 16px rgba(0,0,0,.12);padding:16px 24px;font-size:13px;color:var(--text-secondary);">
     <div style="max-width:960px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
       <p style="flex:1;margin:0;min-width:200px;">We use essential cookies to keep you signed in and remember your preferences. No tracking or advertising cookies. <a href="/privacy" style="color:var(--primary);text-decoration:underline;">Privacy Policy</a></p>
-      <button onclick="acceptCookies()" class="btn btn-primary btn-sm">Accept</button>
+      <button onclick="acceptCookies()" class="btn btn-primary btn-sm">Aceptar</button>
     </div>
   </div>
   <script>
@@ -2375,7 +2375,7 @@ LAYOUT = """<!DOCTYPE html>
           // Audible + visual alert (works in background because keepalive kept us unthrottled).
           playAlarm();
           if (d.workMinutes > 0){
-            showNotif('Focus session complete', 'Time for a break!');
+            showNotif('Sesión de focus completada', 'Time for a break!');
           } else {
             showNotif('Break over', 'Back to focus!');
           }
@@ -2502,9 +2502,9 @@ LAYOUT = """<!DOCTYPE html>
       "University & Studies": "Universidad y Estudios",
       "University": "Universidad", "Field of Study": "Carrera",
       "View Leaderboard": "Ver Clasificación",
-      "Canvas LMS": "Canvas LMS", "Connected": "Conectado",
-      "Not connected": "No conectado", "Manage Connection": "Administrar Conexión",
-      "Connect Canvas": "Conectar Canvas",
+      "Canvas LMS": "Canvas LMS", "Conectado": "Conectado",
+      "Sin conectar": "No conectado", "Manage Connection": "Administrar Conexión",
+      "Conectar Canvas": "Conectar Canvas",
       "Email Accounts": "Cuentas de Correo", "Manage in Mail Hub": "Administrar en Correo",
       "Daily Study Email": "Email Diario de Estudio",
       "Get a morning email with your study plan, upcoming exams, and weak topics to review.":
@@ -2571,7 +2571,7 @@ LAYOUT = """<!DOCTYPE html>
       // Notes
       "Your Notes": "Tus Apuntes", "Generate Notes": "Generar Apuntes",
       // Common
-      "Loading...": "Cargando...", "Error": "Error", "Success": "Éxito",
+      "Cargando...": "Cargando...", "Error": "Error", "Success": "Éxito",
       "Cancel": "Cancelar", "Confirm": "Confirmar", "Save": "Guardar",
       "Back": "Volver", "Next": "Siguiente", "Previous": "Anterior",
       "Search": "Buscar", "Filter": "Filtrar", "Sort": "Ordenar",
@@ -2656,8 +2656,8 @@ LAYOUT = """<!DOCTYPE html>
       "due": "pendientes",
       "Drop a file or select a course": "Suelta un archivo o selecciona un curso",
       "Generated %d flashcards!": "¡%d tarjetas generadas!",
-      "Generation failed": "Falló la generación",
-      "Network error": "Error de red",
+      "Error al generar": "Falló la generación",
+      "Error de red": "Error de red",
       "Failed to add card": "Error al agregar tarjeta",
       "Failed to delete": "Error al eliminar",
       "Delete this flashcard deck?": "¿Eliminar este mazo de tarjetas?",
@@ -2784,7 +2784,7 @@ LAYOUT = """<!DOCTYPE html>
       "No upcoming exams": "No hay exámenes próximos",
       "Sync your courses to automatically detect exam dates from Canvas.":
         "Sincroniza tus cursos para detectar automáticamente las fechas de examen desde Canvas.",
-      "Connect Canvas": "Conectar Canvas",
+      "Conectar Canvas": "Conectar Canvas",
       "Generate Plan": "Generar Plan",
       "Sync Canvas": "Sincronizar Canvas",
       "Mark Today Complete": "Marcar Hoy Como Completo",
@@ -2795,7 +2795,7 @@ LAYOUT = """<!DOCTYPE html>
         "Tómate un descanso — esto puede tardar dependiendo de cuántos archivos tengan tus cursos.",
       "Sync complete!": "¡Sincronización completada!",
       "Sync failed": "La sincronización falló",
-      "Network error": "Error de red",
+      "Error de red": "Error de red",
       "Stats at a glance": "Estadísticas de un vistazo",
       "Your Student Dashboard": "Tu Panel de Estudiante",
       "Exams Dashboard": "Panel de Exámenes",
@@ -2951,7 +2951,7 @@ LAYOUT = """<!DOCTYPE html>
       "Change password": "Cambiar contraseña",
       "Update Password": "Actualizar Contraseña",
       "Delete My Account": "Eliminar Mi Cuenta",
-      "Connected": "Conectado", "Not connected": "No conectado",
+      "Conectado": "Conectado", "Sin conectar": "No conectado",
       "Your account is secure": "Tu cuenta está segura",
       "mailboxes": "buzones",
       "Write your mail sorting rules here...":
@@ -2979,7 +2979,7 @@ LAYOUT = """<!DOCTYPE html>
       "Canvas LMS Integration": "Integración con Canvas LMS",
       "Canvas URL": "URL de Canvas",
       "API Access Token": "Token de Acceso API",
-      "Disconnect": "Desconectar", "Test Connection": "Probar Conexión",
+      "Desconectar": "Desconectar", "Test Connection": "Probar Conexión",
 
       // ── GPA Calculator ──
       "Your GPA": "Tu GPA", "What-If": "Simulador",
@@ -3154,7 +3154,7 @@ LAYOUT = """<!DOCTYPE html>
       { title:'What do you study?',
         sub:'Major, program, or field. We normalize duplicates.',
         render: renderMajor },
-      { title:'Connect Canvas (optional)',
+      { title:'Conectar Canvas (optional)',
         sub:'Paste your Canvas personal API token to auto-sync courses and assignments. Skip and do it later from Settings.',
         render: renderCanvas },
     ];
@@ -3344,7 +3344,7 @@ LAYOUT = """<!DOCTYPE html>
       } catch(e) {
         nextBtn.disabled = false;
         nextBtn.textContent = 'Finish →';
-        alert('Network error');
+        alert('Error de red');
       }
     }
 
@@ -4651,7 +4651,7 @@ def admin_broadcast():
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <button type="submit" class="btn btn-primary" style="font-size:15px;padding:10px 28px;" onclick="return confirm('Send this email to ALL {len(users)} registered users?')">&#128640; Send to {len(users)} Users</button>
-          <a href="/dashboard" class="btn btn-ghost">Cancel</a>
+          <a href="/dashboard" class="btn btn-ghost">Cancelar</a>
         </div>
       </form>
     </div>
@@ -4889,12 +4889,12 @@ def settings():
         </div>
         <div id="provider-badge" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:var(--radius-xs);font-size:13px;background:#EFF6FF;color:#1E40AF;align-items:center;gap:8px;"></div>
         <div class="form-group">
-          <label>App Password</label>
-          <input id="acct-password" type="password" placeholder="Paste your App Password here" required autocomplete="new-password">
-          <p class="form-hint" id="password-hint">For Gmail, generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>. For Outlook, use your account password with <a href="https://support.microsoft.com/en-us/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944" target="_blank">app passwords</a>.</p>
+          <label>Contraseña de App</label>
+          <input id="acct-password" type="password" placeholder="Paste your Contraseña de App here" required autocomplete="new-password">
+          <p class="form-hint" id="password-hint">For Gmail, generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">Contraseña de App</a>. For Outlook, use your account password with <a href="https://support.microsoft.com/en-us/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944" target="_blank">app passwords</a>.</p>
         </div>
         <details style="margin-bottom:14px;">
-          <summary style="font-size:13px;color:var(--text-muted);cursor:pointer;">Advanced Settings (IMAP/SMTP)</summary>
+          <summary style="font-size:13px;color:var(--text-muted);cursor:pointer;">Ajustes avanzados (IMAP/SMTP)</summary>
           <div style="margin-top:10px;">
             <div class="form-row">
               <div class="form-group"><label>IMAP Host</label><input id="acct-imap-host" value="imap.gmail.com"></div>
@@ -4908,7 +4908,7 @@ def settings():
         </details>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-primary" onclick="addAccount()" id="save-account-btn">&#128274; Test &amp; Add Account</button>
-          <button class="btn btn-ghost" onclick="hideAddAccount()">Cancel</button>
+          <button class="btn btn-ghost" onclick="hideAddAccount()">Cancelar</button>
         </div>
         <div id="add-account-status" style="margin-top:10px;font-size:13px;"></div>
       </div>
@@ -4927,7 +4927,7 @@ def settings():
             <h4 style="font-size:14px;margin:0 0 8px;">Step 1: Get a business email</h4>
             <p style="margin:0;">You need an email address on your own domain (e.g. <code>hello@yourcompany.com</code>). Popular options:</p>
             <ul style="padding-left:18px;margin:8px 0 0;">
-              <li><strong>Google Workspace</strong> ($6/mo) — Uses Gmail interface, supports App Passwords</li>
+              <li><strong>Google Workspace</strong> ($6/mo) — Uses Gmail interface, supports Contraseña de Apps</li>
               <li><strong>Microsoft 365</strong> ($6/mo) — Uses Outlook interface</li>
               <li><strong>Zoho Mail</strong> (free tier available) — Good budget option</li>
               <li><strong>Your hosting provider</strong> — Many hosts include email with your domain</li>
@@ -4969,8 +4969,8 @@ def settings():
               <li>Click <strong>"+ Add Email Account"</strong> above</li>
               <li>Enter your custom domain email (e.g. <code>hello@yourcompany.com</code>)</li>
               <li>If using Google Workspace, it auto-detects Gmail settings</li>
-              <li>For other providers, open <strong>Advanced Settings</strong> and enter your IMAP/SMTP details</li>
-              <li>Use an App Password if your provider supports it</li>
+              <li>For other providers, open <strong>Ajustes avanzados</strong> and enter your IMAP/SMTP details</li>
+              <li>Use an Contraseña de App if your provider supports it</li>
             </ol>
           </div>
 
@@ -5140,19 +5140,19 @@ def settings():
     <script>
     const EMAIL_PROVIDERS = {{
       'gmail.com': {{imap: 'imap.gmail.com', smtp: 'smtp.gmail.com', imap_port: 993, smtp_port: 465, name: 'Gmail', color: '#EA4335',
-        hint: 'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a> in your Google account.'}},
+        hint: 'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">Contraseña de App</a> in your Google account.'}},
       'googlemail.com': {{imap: 'imap.gmail.com', smtp: 'smtp.gmail.com', imap_port: 993, smtp_port: 465, name: 'Gmail', color: '#EA4335',
-        hint: 'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a> in your Google account.'}},
+        hint: 'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">Contraseña de App</a> in your Google account.'}},
       'yahoo.com': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
-        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">Contraseña de App</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
       'yahoo.es': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
-        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">Contraseña de App</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
       'yahoo.co.uk': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
-        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">Contraseña de App</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
       'yahoo.com.ar': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
-        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">Contraseña de App</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
       'ymail.com': {{imap: 'imap.mail.yahoo.com', smtp: 'smtp.mail.yahoo.com', imap_port: 993, smtp_port: 465, name: 'Yahoo Mail', color: '#6001D2',
-        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
+        hint: 'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">Contraseña de App</a> in Yahoo Account Security. Enable 2-Step Verification first.'}},
       'outlook.com': {{imap: 'imap-mail.outlook.com', smtp: 'smtp-mail.outlook.com', imap_port: 993, smtp_port: 587, name: 'Outlook', color: '#0078D4',
         hint: 'Use your regular password. If 2FA is on, generate an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
       'hotmail.com': {{imap: 'imap-mail.outlook.com', smtp: 'smtp-mail.outlook.com', imap_port: 993, smtp_port: 587, name: 'Outlook', color: '#0078D4',
@@ -5197,14 +5197,14 @@ def settings():
             if (data.provider) {{
               _applyProvider(data, badge, hint);
             }} else {{
-              badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> below and enter your IMAP/SMTP server details. Check with your IT department or email provider.';
+              badge.innerHTML = '<span style="font-weight:600;">Proveedor personalizado</span> — open <b>Ajustes avanzados</b> below and enter your IMAP/SMTP server details. Check with your IT department or email provider.';
               badge.style.display = 'flex';
               badge.style.borderLeft = '3px solid var(--yellow)';
-              hint.innerHTML = 'Enter the password for this email account. If your provider supports App Passwords, use one for better security.';
+              hint.innerHTML = 'Enter the password for this email account. If your provider supports Contraseña de Apps, use one for better security.';
             }}
           }})
           .catch(() => {{
-            badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> below and enter your IMAP/SMTP server details.';
+            badge.innerHTML = '<span style="font-weight:600;">Proveedor personalizado</span> — open <b>Ajustes avanzados</b> below and enter your IMAP/SMTP server details.';
             badge.style.display = 'flex';
             badge.style.borderLeft = '3px solid var(--yellow)';
             hint.innerHTML = 'Enter the password for this email account.';
@@ -5402,7 +5402,7 @@ def gcal_callback():
             google_email=google_email,
             scopes=scopes,
         )
-        flash(f"Connected Google Calendar ({google_email}).", "success")
+        flash(f"Conectado Google Calendar ({google_email}).", "success")
     except Exception as e:
         log = logging.getLogger("machreach.gcal")
         log.warning("gcal callback failed: %s", e)
@@ -6082,7 +6082,7 @@ def new_campaign():
         if camp_limit != -1:
             existing = get_campaigns(session["client_id"])
             if len(existing) >= camp_limit:
-                flash(("error", f"Free plan allows {camp_limit} campaigns. Upgrade to create more."))
+                flash(("error", f"Free plan allows {camp_limit} campaigns. Mejorar a create more."))
                 return redirect(url_for("new_campaign"))
 
         name = request.form.get("name", "").strip()
@@ -6259,7 +6259,7 @@ def view_campaign(campaign_id):
         actions = f"""
         <form method="post" action="/campaign/{campaign_id}/status" class="confirm-form"><input type="hidden" name="action" value="activate"><button class="btn btn-green btn-sm">&#9654; Activate</button></form>
         <form method="post" action="/campaign/{campaign_id}/duplicate" class="confirm-form"><button class="btn btn-outline btn-sm">&#128203; Duplicate</button></form>
-        <form method="post" action="/campaign/{campaign_id}/delete" class="confirm-form" onsubmit="return confirm('Delete this campaign and all its data?')"><button class="btn btn-red btn-sm">Delete</button></form>"""
+        <form method="post" action="/campaign/{campaign_id}/delete" class="confirm-form" onsubmit="return confirm('Delete this campaign and all its data?')"><button class="btn btn-red btn-sm">Eliminar</button></form>"""
     elif camp["status"] == "active":
         actions = f"""
         <form method="post" action="/campaign/{campaign_id}/status" class="confirm-form"><input type="hidden" name="action" value="pause"><button class="btn btn-yellow btn-sm">&#9208; Pause</button></form>
@@ -6268,7 +6268,7 @@ def view_campaign(campaign_id):
         actions = f"""
         <form method="post" action="/campaign/{campaign_id}/status" class="confirm-form"><input type="hidden" name="action" value="activate"><button class="btn btn-green btn-sm">&#9654; Resume</button></form>
         <form method="post" action="/campaign/{campaign_id}/duplicate" class="confirm-form"><button class="btn btn-outline btn-sm">&#128203; Duplicate</button></form>
-        <form method="post" action="/campaign/{campaign_id}/delete" class="confirm-form" onsubmit="return confirm('Delete this campaign and all its data?')"><button class="btn btn-red btn-sm">Delete</button></form>"""
+        <form method="post" action="/campaign/{campaign_id}/delete" class="confirm-form" onsubmit="return confirm('Delete this campaign and all its data?')"><button class="btn btn-red btn-sm">Eliminar</button></form>"""
 
     # Sequence cards with previews
     seq_html = ""
@@ -6543,7 +6543,7 @@ def view_campaign(campaign_id):
               <input type="checkbox" id="crm-select-all" onchange="toggleAllCrm(this.checked)"> Select all
             </label>
             <div class="btn-group">
-              <button class="btn btn-outline btn-sm" onclick="document.getElementById('crm-import-modal').style.display='none'">Cancel</button>
+              <button class="btn btn-outline btn-sm" onclick="document.getElementById('crm-import-modal').style.display='none'">Cancelar</button>
               <button class="btn btn-green btn-sm" onclick="importCrmContacts()">Import Selected</button>
             </div>
           </div>
@@ -6678,7 +6678,7 @@ def edit_sequence(cid, sid):
         <p class="form-hint">Use placeholders: <code>{{name}}</code> <code>{{company}}</code> <code>{{role}}</code> <code>{{sender_name}}</code></p>
         <div class="btn-group mt-2">
           <button class="btn btn-primary" type="submit">Save Changes</button>
-          <a href="/campaign/{{cid}}" class="btn btn-outline">Cancel</a>
+          <a href="/campaign/{{cid}}" class="btn btn-outline">Cancelar</a>
         </div>
       </form>
     </div>
@@ -7313,7 +7313,7 @@ def export_page():
 
     <div class="card" style="margin-top:16px;">
       <div class="card-header"><h2>Quick Stats Summary</h2></div>
-      <div id="summary-stats">Loading...</div>
+      <div id="summary-stats">Cargando...</div>
     </div>
 
     <script>
@@ -7561,14 +7561,14 @@ def mail_hub():
             <span style="background:var(--primary);color:white;border-radius:50%;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">1</span>
             <div>
               <strong>Connect your email account</strong>
-              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Go to <a href="/settings" style="color:var(--primary);font-weight:600;">Settings</a> and click "+ Add Email Account". You'll need a Gmail <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--primary);">App Password</a> (not your regular password).</p>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Go to <a href="/settings" style="color:var(--primary);font-weight:600;">Settings</a> and click "+ Add Email Account". You'll need a Gmail <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--primary);">Contraseña de App</a> (not your regular password).</p>
             </div>
           </div>
           <div style="display:flex;gap:12px;align-items:flex-start;">
             <span style="background:var(--primary);color:white;border-radius:50%;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">2</span>
             <div>
               <strong>Enable 2-Step Verification first</strong>
-              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">App Passwords require 2FA. Go to <a href="https://myaccount.google.com/security" target="_blank" style="color:var(--primary);">Google Security</a> → enable 2-Step Verification → then create an App Password.</p>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Contraseña de Apps require 2FA. Go to <a href="https://myaccount.google.com/security" target="_blank" style="color:var(--primary);">Google Security</a> → enable 2-Step Verification → then create an Contraseña de App.</p>
             </div>
           </div>
           <div style="display:flex;gap:12px;align-items:flex-start;">
@@ -7689,7 +7689,7 @@ def mail_hub():
       <form method="GET" style="display:flex;align-items:center;gap:10px;flex:1;">
         <span style="font-size:18px;color:var(--text-muted);">&#128269;</span>
         <input type="text" name="q" id="mail-search-input" value="{_esc(search_q)}" placeholder="Search emails by subject, sender, body... (press / to focus)" style="flex:1;font-size:14px;padding:10px 14px;border:1px solid var(--border-light);border-radius:var(--radius-xs);margin-bottom:0;">
-        <button type="submit" class="btn btn-primary btn-sm" style="font-size:13px;">Search</button>
+        <button type="submit" class="btn btn-primary btn-sm" style="font-size:13px;">Buscar</button>
         {'<a href="/mail-hub" class="btn btn-ghost btn-sm">Clear</a>' if search_q else ''}
       </form>
     </div>
@@ -7783,7 +7783,7 @@ def mail_hub():
 
         <div style="display:flex;gap:8px;margin-top:16px;">
           <button class="btn btn-primary" onclick="submitSnooze()" style="flex:1;font-size:15px;">&#128340; Set Reminder</button>
-          <button class="btn btn-ghost" onclick="document.getElementById('snooze-modal').style.display='none'" style="font-size:15px;">Cancel</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('snooze-modal').style.display='none'" style="font-size:15px;">Cancelar</button>
         </div>
       </div>
     </div>
@@ -7827,7 +7827,7 @@ def mail_hub():
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button class="btn btn-primary" onclick="sendCompose('now')" id="compose-send-btn" style="flex:1;font-size:15px;">&#9993; Send Now</button>
           <button class="btn btn-yellow" onclick="toggleSchedule()" id="compose-schedule-toggle" style="font-size:15px;">&#128340; Schedule</button>
-          <button class="btn btn-ghost" onclick="document.getElementById('compose-modal').style.display='none'" style="font-size:15px;">Cancel</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('compose-modal').style.display='none'" style="font-size:15px;">Cancelar</button>
         </div>
         <div id="compose-status" style="margin-top:10px;font-size:13px;text-align:center;"></div>
       </div>
@@ -8236,7 +8236,7 @@ def mail_hub():
             btn.disabled = false;
           }}
         }}).catch(() => {{
-          status.innerHTML = '<span style="color:var(--red);">&#9888; Network error</span>';
+          status.innerHTML = '<span style="color:var(--red);">&#9888; Error de red</span>';
           btn.innerHTML = '&#128340; Schedule Send';
           btn.disabled = false;
         }});
@@ -8266,7 +8266,7 @@ def mail_hub():
             btn.disabled = false;
           }}
         }}).catch(() => {{
-          status.innerHTML = '<span style="color:var(--red);">&#9888; Network error</span>';
+          status.innerHTML = '<span style="color:var(--red);">&#9888; Error de red</span>';
           btn.innerHTML = '&#9993; Send Now';
           btn.disabled = false;
         }});
@@ -8974,7 +8974,7 @@ def mail_hub_detail(mail_id):
           }}
         }})
         .catch(() => {{
-          status.innerHTML = '<span style="color:var(--red);">&#9888; Network error</span>';
+          status.innerHTML = '<span style="color:var(--red);">&#9888; Error de red</span>';
           btn.innerHTML = '&#9993; Send Reply';
           btn.disabled = false;
         }});
@@ -9332,7 +9332,7 @@ def contacts_page():
           <div class="form-group"><label>Personality / Communication Style</label><textarea name="personality" rows="2" placeholder="e.g. 'Direct and concise, prefers bullet points, casual tone'" style="font-size:14px;"></textarea></div>
           <div style="display:flex;gap:8px;margin-top:16px;">
             <button type="submit" class="btn btn-primary" style="flex:1;font-size:15px;">Save Contact</button>
-            <button type="button" class="btn btn-ghost" onclick="document.getElementById('add-modal').style.display='none'" style="font-size:15px;">Cancel</button>
+            <button type="button" class="btn btn-ghost" onclick="document.getElementById('add-modal').style.display='none'" style="font-size:15px;">Cancelar</button>
           </div>
         </form>
       </div>
@@ -9350,7 +9350,7 @@ def contacts_page():
         <button onclick="document.getElementById('bulk-tag-input').value='Follow Up';bulkTag('add')" class="btn btn-ghost btn-sm" style="font-size:11px;">Follow Up</button>
         <button onclick="document.getElementById('bulk-tag-input').value='Priority';bulkTag('add')" class="btn btn-ghost btn-sm" style="font-size:11px;">Priority</button>
       </div>
-      <button onclick="toggleBulkMode()" class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:13px;">Cancel</button>
+      <button onclick="toggleBulkMode()" class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:13px;">Cancelar</button>
     </div>
 
     <script>
@@ -9384,7 +9384,7 @@ def contacts_page():
       }}).then(r => r.json()).then(d => {{
         if (d.ok) location.reload();
         else alert(d.error || 'Error');
-      }}).catch(() => alert('Network error'));
+      }}).catch(() => alert('Error de red'));
     }}
     </script>
     """, active_page="contacts", wide=True)
@@ -10064,14 +10064,14 @@ def billing_page():
         if is_current:
             btn = '<button class="btn btn-outline btn-sm" disabled style="width:100%;justify-content:center;opacity:0.5;">Current Plan</button>'
         elif p == "free":
-            btn = '<form method="post" action="/billing/downgrade"><button class="btn btn-outline btn-sm" style="width:100%;justify-content:center;">Downgrade</button></form>'
+            btn = '<form method="post" action="/billing/downgrade"><button class="btn btn-outline btn-sm" style="width:100%;justify-content:center;">Bajar plan</button></form>'
         elif not has_variant.get(p):
             btn = '<button class="btn btn-outline btn-sm" disabled style="width:100%;">Not available</button>'
         else:
             btn = (f'<form method="post" action="/billing/checkout">'
                    f'<input type="hidden" name="plan" value="{p}">'
                    f'<button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;">'
-                   f'Upgrade to {plan_labels[p]}</button></form>')
+                   f'Mejorar a {plan_labels[p]}</button></form>')
 
         border = "border:2px solid var(--primary);" if is_current else ""
         cards += f"""
@@ -10473,7 +10473,7 @@ def privacy_page():
           <li>Access and export your data at any time via Settings &gt; Export My Data (machine-readable JSON)</li>
           <li>Update or correct your personal information in Settings</li>
           <li>Delete your account and all associated data</li>
-          <li>Disconnect email or Canvas accounts at any time (credentials/tokens are immediately deleted)</li>
+          <li>Desconectar email or Canvas accounts at any time (credentials/tokens are immediately deleted)</li>
           <li>Request removal of any quiz you published to a Training-tab course (email support)</li>
           <li>Opt out of daily study-email digests and of weekly/monthly prize congratulation emails in Settings</li>
         </ul>
@@ -10661,7 +10661,7 @@ def api_detect_provider():
             return jsonify({"provider": "google", "name": "Google Workspace",
                 "imap": "imap.gmail.com", "smtp": "smtp.gmail.com",
                 "imap_port": 993, "smtp_port": 465, "color": "#EA4335",
-                "hint": "This domain uses Google Workspace. Generate an <a href='https://myaccount.google.com/apppasswords' target='_blank'>App Password</a> in your Google account.",
+                "hint": "This domain uses Google Workspace. Generate an <a href='https://myaccount.google.com/apppasswords' target='_blank'>Contraseña de App</a> in your Google account.",
                 "mx": mx_hosts})
         if "outlook" in mx or "microsoft" in mx or "protection.outlook" in mx:
             return jsonify({"provider": "microsoft", "name": "Microsoft 365",
@@ -10673,13 +10673,13 @@ def api_detect_provider():
             return jsonify({"provider": "yahoo", "name": "Yahoo Mail",
                 "imap": "imap.mail.yahoo.com", "smtp": "smtp.mail.yahoo.com",
                 "imap_port": 993, "smtp_port": 465, "color": "#6001D2",
-                "hint": "This domain uses Yahoo. Generate an <a href='https://login.yahoo.com/account/security' target='_blank'>App Password</a> in Yahoo Account Security.",
+                "hint": "This domain uses Yahoo. Generate an <a href='https://login.yahoo.com/account/security' target='_blank'>Contraseña de App</a> in Yahoo Account Security.",
                 "mx": mx_hosts})
         if "zoho" in mx:
             return jsonify({"provider": "zoho", "name": "Zoho Mail",
                 "imap": "imap.zoho.com", "smtp": "smtp.zoho.com",
                 "imap_port": 993, "smtp_port": 465, "color": "#F0483E",
-                "hint": "This domain uses Zoho Mail. Go to Zoho Mail Settings → Security → App Passwords to generate one.",
+                "hint": "This domain uses Zoho Mail. Go to Zoho Mail Settings → Security → Contraseña de Apps to generate one.",
                 "mx": mx_hosts})
 
     return jsonify({"provider": None, "mx": mx_hosts})

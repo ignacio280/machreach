@@ -43,8 +43,8 @@ _PERIOD_POPUP_HTML = """
   <div class="mr-period-back"></div>
   <div class="mr-period-card" role="dialog" aria-modal="true">
     <div class="mr-period-head">
-      <div class="mr-period-eyebrow" id="mr-period-eyebrow">Weekly results</div>
-      <div class="mr-period-title" id="mr-period-title">Last week's leaderboard</div>
+      <div class="mr-period-eyebrow" id="mr-period-eyebrow">Resultados semanales</div>
+      <div class="mr-period-title" id="mr-period-title">Ranking de la semana pasada</div>
       <div class="mr-period-sub" id="mr-period-sub"></div>
     </div>
     <div class="mr-period-prize" id="mr-period-prize"></div>
@@ -161,7 +161,7 @@ _PERIOD_POPUP_HTML = """
       prizeBox.innerHTML =
         '<div class="small">\\u{1F389} You won</div>' +
         '<div class="big">+' + p.total_coins_won + ' coins</div>' +
-        '<div class="small">Already credited to your wallet</div>';
+        '<div class="small">Ya acreditado en tu billetera</div>';
     } else {
       prizeBox.classList.add('empty');
       prizeBox.innerHTML = '';
@@ -238,10 +238,10 @@ def _gpa_planilla_html(lang: str = "en") -> str:
     if lang == "es":
         # Translate the few English summary labels back to Spanish.
         for src, dst in [
-            (">Semester average<",   ">Promedio del semestre<"),
-            (">Semester credits<",   ">Créditos del semestre<"),
-            (">Career average<",     ">Promedio de la carrera<"),
-            (">Career credits<",     ">Créditos de la carrera<"),
+            (">Promedio del semestre<",   ">Promedio del semestre<"),
+            (">Créditos del semestre<",   ">Créditos del semestre<"),
+            (">Promedio de carrera<",     ">Promedio de la carrera<"),
+            (">Créditos de carrera<",     ">Créditos de la carrera<"),
         ]:
             html = html.replace(src, dst)
         return html
@@ -252,10 +252,10 @@ def _gpa_planilla_html(lang: str = "en") -> str:
         (">⬇ Export<",  ">⬇ Export<"),
         (">⬆ Import<",  ">⬆ Import<"),
         (">🗑 Reset<",   ">🗑 Reset<"),
-        (">Semester average<", ">Semester average<"),
-        (">Semester credits<", ">Semester credits<"),
-        (">Career average<",   ">Career average<"),
-        (">Career credits<",   ">Career credits<"),
+        (">Promedio del semestre<", ">Promedio del semestre<"),
+        (">Créditos del semestre<", ">Créditos del semestre<"),
+        (">Promedio de carrera<",   ">Promedio de carrera<"),
+        (">Créditos de carrera<",   ">Créditos de carrera<"),
         ("<b>Tips:</b> Notas en escala chilena (1.0 – 7.0; 4.0 = aprobado). Las ponderaciones (%) deben sumar 100. La <b>NMPA</b> es la nota mínima que necesitas en lo que te falta para aprobar el ramo. Todo se guarda automáticamente en tu navegador.",
          "<b>Tips:</b> Chilean grading scale (1.0 – 7.0; 4.0 = passing). Weights (%) must sum to 100. <b>NMPA</b> is the minimum grade you need on what's left to pass the course. Everything saves automatically in your browser."),
         ("defaultCourse('Curso 1')", "defaultCourse('Course 1')"),
@@ -374,10 +374,10 @@ _GPA_PLANILLA_HTML_ES = r"""
   </div>
 
   <div class="pl-summary">
-    <div class="pl-card"><div class="lbl">Semester average</div><div class="val" id="pl-sem-avg">–</div></div>
-    <div class="pl-card"><div class="lbl">Semester credits</div><div class="val" id="pl-sem-cred">0</div></div>
-    <div class="pl-card"><div class="lbl">Career average</div><div class="val" id="pl-car-avg">–</div></div>
-    <div class="pl-card"><div class="lbl">Career credits</div><div class="val" id="pl-car-cred">0</div></div>
+    <div class="pl-card"><div class="lbl">Promedio del semestre</div><div class="val" id="pl-sem-avg">–</div></div>
+    <div class="pl-card"><div class="lbl">Créditos del semestre</div><div class="val" id="pl-sem-cred">0</div></div>
+    <div class="pl-card"><div class="lbl">Promedio de carrera</div><div class="val" id="pl-car-avg">–</div></div>
+    <div class="pl-card"><div class="lbl">Créditos de carrera</div><div class="val" id="pl-car-cred">0</div></div>
   </div>
 
   <div class="pl-tabs" id="pl-tabs"></div>
@@ -1106,7 +1106,7 @@ def register_student_routes(app, csrf, limiter):
 
                 "<div style='flex:1;min-width:220px'>"
 
-                "<div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700'>Current rank</div>"
+                "<div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700'>Rango actual</div>"
 
                 "<div style='font-size:26px;font-weight:800;margin-top:4px;color:" + rcolor + "'>" + rname + "</div>"
 
@@ -1122,7 +1122,7 @@ def register_student_routes(app, csrf, limiter):
 
                 "<div style='text-align:center;min-width:140px'>"
 
-                "<div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700'>Global position</div>"
+                "<div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700'>Posición global</div>"
 
                 "<div style='font-size:28px;font-weight:800;margin-top:4px'>" + _esc(pos_text) + "</div>"
 
@@ -1150,13 +1150,13 @@ def register_student_routes(app, csrf, limiter):
 
         <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px'>
 
-          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Total time</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__TOTAL__</div></div>
+          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Tiempo total</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__TOTAL__</div></div>
 
-          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Sessions</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__SESSIONS__</div></div>
+          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Sesiones</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__SESSIONS__</div></div>
 
-          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Avg session</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__AVG__ min</div></div>
+          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Promedio por sesión</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__AVG__ min</div></div>
 
-          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Streak</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__STREAK__</div></div>
+          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Racha</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__STREAK__</div></div>
 
         </div>
 
@@ -3911,7 +3911,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        canvas_status = "Connected" if canvas_tok else "Not connected"
+        canvas_status = "Conectado" if canvas_tok else "Sin conectar"
 
         canvas_color = "#10B981" if canvas_tok else "#EF4444"
 
@@ -3961,13 +3961,13 @@ def register_student_routes(app, csrf, limiter):
 
             "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;'>"
 
-            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Total time</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_total_mins//60}h {_total_mins%60}m</div></div>"
+            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Tiempo total</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_total_mins//60}h {_total_mins%60}m</div></div>"
 
-            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Sessions</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_total_sessions}</div></div>"
+            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Sesiones</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_total_sessions}</div></div>"
 
-            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Avg session</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_avg_session} min</div></div>"
+            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Promedio por sesión</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_avg_session} min</div></div>"
 
-            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Streak</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_streak_focus} day" + ("s" if _streak_focus != 1 else "") + "</div></div>"
+            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Racha</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_streak_focus} day" + ("s" if _streak_focus != 1 else "") + "</div></div>"
 
             "</div></div>"
 
@@ -4004,16 +4004,16 @@ def register_student_routes(app, csrf, limiter):
               <span style="font-size:22px;">&#127942;</span>
               <div>
                 <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Your ranks</div>
-                <div style="font-size:12px;color:var(--text-muted);" id="mr-ranks-league">Loading…</div>
+                <div style="font-size:12px;color:var(--text-muted);" id="mr-ranks-league">Cargando…</div>
               </div>
             </div>
             <a href="/student/leaderboard" class="btn btn-outline btn-sm">View full leaderboards &rarr;</a>
           </div>
           <div id="mr-ranks-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
             <div class="mr-rank-cell"><div class="mr-rank-label">Global</div><div class="mr-rank-val" id="mr-rank-global">—</div></div>
-            <div class="mr-rank-cell"><div class="mr-rank-label">Country</div><div class="mr-rank-val" id="mr-rank-country">—</div></div>
-            <div class="mr-rank-cell"><div class="mr-rank-label">University</div><div class="mr-rank-val" id="mr-rank-university">—</div></div>
-            <div class="mr-rank-cell"><div class="mr-rank-label">Major</div><div class="mr-rank-val" id="mr-rank-major">—</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">País</div><div class="mr-rank-val" id="mr-rank-country">—</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">Universidad</div><div class="mr-rank-val" id="mr-rank-university">—</div></div>
+            <div class="mr-rank-cell"><div class="mr-rank-label">Carrera</div><div class="mr-rank-val" id="mr-rank-major">—</div></div>
           </div>
           <div id="mr-league-progress" style="margin-top:14px;height:6px;background:rgba(148,163,184,.15);border-radius:999px;overflow:hidden;">
             <div id="mr-league-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7C9CFF,#C084FC);transition:width .6s cubic-bezier(.22,.61,.36,1);"></div>
@@ -4064,7 +4064,7 @@ def register_student_routes(app, csrf, limiter):
           </div>
           <div id="mr-an-tiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;">
             <div class="mr-an-stat"><div class="mr-an-label">Total hours</div><div class="mr-an-val" id="an-hours">—</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Sessions</div><div class="mr-an-val" id="an-sessions">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Sesiones</div><div class="mr-an-val" id="an-sessions">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Pages read</div><div class="mr-an-val" id="an-pages">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Current streak</div><div class="mr-an-val" id="an-streak">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Best day</div><div class="mr-an-val" id="an-bestdow">—</div></div>
@@ -4586,7 +4586,7 @@ def register_student_routes(app, csrf, limiter):
 
           </div>
 
-          <div id="dq-list" style="padding:6px 14px 14px 14px">Loading…</div>
+          <div id="dq-list" style="padding:6px 14px 14px 14px">Cargando…</div>
 
         </div>
 
@@ -4665,7 +4665,7 @@ def register_student_routes(app, csrf, limiter):
 
             var d = await _safeJson(r);
 
-            if (!r.ok) {{ alert(d.error || 'Generation failed'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; return; }}
+            if (!r.ok) {{ alert(d.error || 'Error al generar'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; return; }}
 
             var iv = setInterval(async function() {{
 
@@ -4699,7 +4699,7 @@ def register_student_routes(app, csrf, limiter):
 
             }}, 2000);
 
-          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; }}
+          }} catch(e) {{ alert('Error de red'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; }}
 
         }}
 
@@ -4800,7 +4800,7 @@ def register_student_routes(app, csrf, limiter):
 
               <td colspan="4" style="background:var(--bg);padding:14px 18px;">
 
-                <div id="exams-panel-{c['id']}" style="font-size:13px;color:var(--text-muted);">Loading exams&hellip;</div>
+                <div id="exams-panel-{c['id']}" style="font-size:13px;color:var(--text-muted);">Cargando evaluaciones…</div>
 
               </td>
 
@@ -4812,7 +4812,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div style="font-size:36px;margin-bottom:10px;">&#128218;</div>
 
-              No courses yet. <a href="/student/canvas-settings" style="color:var(--primary);">Connect Canvas</a> and your courses will appear here automatically.
+              No courses yet. <a href="/student/canvas-settings" style="color:var(--primary);">Conectar Canvas</a> and your courses will appear here automatically.
 
             </td></tr>"""
 
@@ -4915,7 +4915,7 @@ def register_student_routes(app, csrf, limiter):
 
           if (!panel) return;
 
-          panel.innerHTML = 'Loading exams&hellip;';
+          panel.innerHTML = 'Cargando evaluaciones…';
 
           try {{
 
@@ -4927,7 +4927,7 @@ def register_student_routes(app, csrf, limiter):
 
           }} catch(e) {{
 
-            panel.innerHTML = '<span style="color:var(--red);">Failed to load exams.</span>';
+            panel.innerHTML = '<span style="color:var(--red);">No se pudieron cargar las evaluaciones.</span>';
 
           }}
 
@@ -5125,7 +5125,7 @@ def register_student_routes(app, csrf, limiter):
 
             }}
 
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Error de red'); }}
 
         }}
 
@@ -5139,9 +5139,9 @@ def register_student_routes(app, csrf, limiter):
 
             if (r.ok) {{ location.reload(); }}
 
-            else {{ var d = await _safeJson(r); alert(d.error || 'Failed to remove course'); }}
+            else {{ var d = await _safeJson(r); alert(d.error || 'No se pudo eliminar el curso'); }}
 
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Error de red'); }}
 
         }}
 
@@ -5199,7 +5199,7 @@ def register_student_routes(app, csrf, limiter):
 
             else {{ var d = await _safeJson(r); alert(d.error || 'Failed to create course'); btn.disabled=false; btn.textContent='Create'; }}
 
-          }} catch(e) {{ alert('Network error'); btn.disabled=false; btn.textContent='Create'; }}
+          }} catch(e) {{ alert('Error de red'); btn.disabled=false; btn.textContent='Create'; }}
 
         }}
 
@@ -5509,7 +5509,7 @@ def register_student_routes(app, csrf, limiter):
 
             }}, 2000);
 
-          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = '&#128260; Regenerate'; }}
+          }} catch(e) {{ alert('Error de red'); btn.disabled = false; btn.innerHTML = '&#128260; Regenerate'; }}
 
         }}
 
@@ -6950,11 +6950,11 @@ def register_student_routes(app, csrf, limiter):
 
           // Desktop notification works even when tab is hidden / muted
           if (currentMode === 'pomodoro' && !isBreak) {{
-            showNotification('Focus session complete', 'Time for a break!');
+            showNotification('Sesión de focus completada', 'Time for a break!');
           }} else if (currentMode === 'pomodoro' && isBreak) {{
             showNotification('Break over', 'Back to focus!');
           }} else {{
-            showNotification('Focus session complete', 'Great work — XP awarded.');
+            showNotification('Sesión de focus completada', '¡Buen trabajo — XP otorgado!');
           }}
 
           if (currentMode === 'pomodoro') {{
@@ -7685,7 +7685,7 @@ def register_student_routes(app, csrf, limiter):
 
           <div class="tr-search">
             <input id="tr-q" type="text" placeholder="Search course by name or code (e.g. IIC1103, Calculus I)" />
-            <button class="tr-btn" id="tr-search-btn">Search</button>
+            <button class="tr-btn" id="tr-search-btn">Buscar</button>
           </div>
           <div class="tr-courses" id="tr-courses"></div>
 
@@ -7709,7 +7709,7 @@ def register_student_routes(app, csrf, limiter):
             <div id="tr-quiz-body"></div>
             <div id="tr-quiz-foot" style="text-align:right;margin-top:14px;">
               <button class="tr-btn ghost" id="tr-quiz-close">Close</button>
-              <button class="tr-btn" id="tr-quiz-submit">Submit</button>
+              <button class="tr-btn" id="tr-quiz-submit">Enviar</button>
             </div>
           </div>
         </div>
@@ -7726,7 +7726,7 @@ def register_student_routes(app, csrf, limiter):
               .then(function(r){ return r.json(); })
               .then(function(data){
                 renderCourses(data.courses || []);
-              }).catch(function(){ el('tr-courses').innerHTML = '<div class="tr-empty">Failed to load.</div>'; });
+              }).catch(function(){ el('tr-courses').innerHTML = '<div class="tr-empty">No se pudo cargar.</div>'; });
           }
 
           function renderCourses(rows){
@@ -8098,9 +8098,9 @@ def register_student_routes(app, csrf, limiter):
 
               renderProblems(d.problems);
 
-            }} else {{ alert(d.error || 'Generation failed'); }}
+            }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Error de red'); }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
@@ -8314,7 +8314,7 @@ def register_student_routes(app, csrf, limiter):
 
             <span style="display:inline-block;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;background:{'#D1FAE5' if connected else '#FEE2E2'};color:{'#065F46' if connected else '#991B1B'};">
 
-              {'&#10003; Connected' if connected else '&#10007; Not Connected'}
+              {'&#10003; Conectado' if connected else '&#10007; Not Conectado'}
 
             </span>
 
@@ -8350,9 +8350,9 @@ def register_student_routes(app, csrf, limiter):
 
             <div style="display:flex;gap:10px;">
 
-              <button type="submit" class="btn btn-primary" id="connect-btn">{'Update' if connected else 'Connect Canvas'}</button>
+              <button type="submit" class="btn btn-primary" id="connect-btn">{'Update' if connected else 'Conectar Canvas'}</button>
 
-              {'<button type="button" onclick="disconnectCanvas()" class="btn btn-outline" style="color:var(--red);border-color:var(--red);">Disconnect</button>' if connected else ''}
+              {'<button type="button" onclick="disconnectCanvas()" class="btn btn-outline" style="color:var(--red);border-color:var(--red);">Desconectar</button>' if connected else ''}
 
             </div>
 
@@ -8376,19 +8376,19 @@ def register_student_routes(app, csrf, limiter):
 
             var d = await _safeJson(r);
 
-            if (r.ok) {{ alert('Connected! Found ' + d.courses_found + ' courses. ' + (d.training_folded || 0) + ' added to Training catalog.'); location.reload(); }}
+            if (r.ok) {{ alert('Conectado! Found ' + d.courses_found + ' courses. ' + (d.training_folded || 0) + ' added to Training catalog.'); location.reload(); }}
 
             else {{ alert(d.error || 'Connection failed'); }}
 
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Error de red'); }}
 
-          btn.disabled = false; btn.innerHTML = 'Connect Canvas';
+          btn.disabled = false; btn.innerHTML = 'Conectar Canvas';
 
         }}
 
         async function disconnectCanvas() {{
 
-          if (!confirm('Disconnect Canvas?')) return;
+          if (!confirm('Desconectar Canvas?')) return;
 
           await fetch('/api/student/canvas/disconnect', {{method:'POST'}});
 
@@ -8710,7 +8710,7 @@ def register_student_routes(app, csrf, limiter):
 
                 <input type="checkbox" class="free-day-check" data-day="{i}" {checked} onchange="toggleFreeDay({i},this.checked)">
 
-                <span style="font-size:13px;color:var(--text-muted);">Free day</span>
+                <span style="font-size:13px;color:var(--text-muted);">Día libre</span>
 
               </label>
 
@@ -8766,7 +8766,7 @@ def register_student_routes(app, csrf, limiter):
 
         if not diff_rows:
 
-            diff_rows = "<p style='color:var(--text-muted);text-align:center;padding:16px;'>No courses synced yet.</p>"
+            diff_rows = "<p style='color:var(--text-muted);text-align:center;padding:16px;'>Sin cursos sincronizados todavía.</p>"
 
 
 
@@ -8842,11 +8842,11 @@ def register_student_routes(app, csrf, limiter):
 
             <span><span style="display:inline-block;width:12px;height:12px;background:var(--bg);border:1px solid var(--border);border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Default (weekly)</span>
 
-            <span><span style="display:inline-block;width:12px;height:12px;background:rgba(99,102,241,0.25);border:1px solid var(--primary);border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Custom hours</span>
+            <span><span style="display:inline-block;width:12px;height:12px;background:rgba(99,102,241,0.25);border:1px solid var(--primary);border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Horas personalizadas</span>
 
-            <span><span style="display:inline-block;width:12px;height:12px;background:rgba(239,68,68,0.25);border:1px solid #ef4444;border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Free day</span>
+            <span><span style="display:inline-block;width:12px;height:12px;background:rgba(239,68,68,0.25);border:1px solid #ef4444;border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Día libre</span>
 
-            <span><span style="display:inline-block;width:12px;height:12px;border:2px solid var(--primary);border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Today</span>
+            <span><span style="display:inline-block;width:12px;height:12px;border:2px solid var(--primary);border-radius:3px;vertical-align:middle;margin-right:4px;"></span>Hoy</span>
 
           </div>
 
@@ -8884,7 +8884,7 @@ def register_student_routes(app, csrf, limiter):
 
                   <input type="radio" name="ov-mode" value="hours" id="ov-mode-hours" checked>
 
-                  <span style="flex:1;"><b>Custom hours</b>
+                  <span style="flex:1;"><b>Horas personalizadas</b>
 
                     <div style="margin-top:6px;display:flex;align-items:center;gap:6px;">
 
@@ -8906,7 +8906,7 @@ def register_student_routes(app, csrf, limiter):
 
                   <input type="radio" name="ov-mode" value="free" id="ov-mode-free">
 
-                  <span><b>Free day</b><br><span style="font-size:12px;color:var(--text-muted);">No study scheduled this day</span></span>
+                  <span><b>Día libre</b><br><span style="font-size:12px;color:var(--text-muted);">No study scheduled this day</span></span>
 
                 </label>
 
@@ -8924,9 +8924,9 @@ def register_student_routes(app, csrf, limiter):
 
             <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
 
-              <button onclick="ovCloseModal()" class="btn btn-outline btn-sm">Cancel</button>
+              <button onclick="ovCloseModal()" class="btn btn-outline btn-sm">Cancelar</button>
 
-              <button onclick="ovSaveModal()" class="btn btn-primary btn-sm" id="ov-save-btn">Save</button>
+              <button onclick="ovSaveModal()" class="btn btn-primary btn-sm" id="ov-save-btn">Guardar</button>
 
             </div>
 
@@ -9070,7 +9070,7 @@ def register_student_routes(app, csrf, limiter):
 
             }}
 
-          }} catch(e) {{ alert('Network error'); btn.disabled = false; btn.innerHTML = 'Save Schedule'; }}
+          }} catch(e) {{ alert('Error de red'); btn.disabled = false; btn.innerHTML = 'Save Schedule'; }}
 
         }}
 
@@ -9262,7 +9262,7 @@ def register_student_routes(app, csrf, limiter):
                 alert(j.error || 'Failed to save');
               }}
             }}
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Error de red'); }}
           btn.disabled = false; btn.textContent = 'Save';
           ovCloseModal();
           ovRender();
@@ -10997,7 +10997,7 @@ No markdown, no code fences. ONLY JSON.
 
               <label>Exam (optional)</label>
 
-              <select id="fc-exam" class="edit-input"><option value="">All topics</option></select>
+              <select id="fc-exam" class="edit-input"><option value="">Todos los temas</option></select>
 
             </div>
 
@@ -11085,7 +11085,7 @@ No markdown, no code fences. ONLY JSON.
 
             if (!document.getElementById('fc-title').value) document.getElementById('fc-title').value = 'Flashcards: ' + d.title;
 
-          }} catch(e) {{ info.textContent = '❌ Network error'; }}
+          }} catch(e) {{ info.textContent = '❌ Error de red'; }}
 
         }}
 
@@ -11093,7 +11093,7 @@ No markdown, no code fences. ONLY JSON.
 
           var sel = document.getElementById(selectId);
 
-          sel.innerHTML = '<option value="">All topics</option>';
+          sel.innerHTML = '<option value="">Todos los temas</option>';
 
           if (!courseId) return;
 
@@ -11161,9 +11161,9 @@ No markdown, no code fences. ONLY JSON.
 
               window.location = '/student/flashcards/' + d.deck_id;
 
-            }} else {{ alert(d.error || 'Generation failed'); }}
+            }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Error de red'); }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
@@ -11935,7 +11935,7 @@ No markdown, no code fences. ONLY JSON.
 
               <label>Exam (optional)</label>
 
-              <select id="qz-exam" class="edit-input"><option value="">All topics</option></select>
+              <select id="qz-exam" class="edit-input"><option value="">Todos los temas</option></select>
 
             </div>
 
@@ -12073,7 +12073,7 @@ No markdown, no code fences. ONLY JSON.
 
             info.innerHTML = '✅ ' + d.filename + ' — ' + d.char_count.toLocaleString() + ' chars ready';
 
-          }} catch(e) {{ info.textContent = '❌ Network error'; }}
+          }} catch(e) {{ info.textContent = '❌ Error de red'; }}
 
         }}
 
@@ -12083,7 +12083,7 @@ No markdown, no code fences. ONLY JSON.
 
           var sel = document.getElementById(selectId);
 
-          sel.innerHTML = '<option value="">All topics</option>';
+          sel.innerHTML = '<option value="">Todos los temas</option>';
 
           if (!courseId) return;
 
@@ -12155,9 +12155,9 @@ No markdown, no code fences. ONLY JSON.
 
               window.location = '/student/quizzes/' + d.quiz_id;
 
-            }} else {{ alert(d.error || 'Generation failed'); }}
+            }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Error de red'); }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
@@ -12413,7 +12413,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
 
-                <div style="text-align:center;"><div id="qz-pace-total" style="font-size:20px;font-weight:700;">0:00</div><div style="font-size:11px;color:var(--text-muted);">Total time</div></div>
+                <div style="text-align:center;"><div id="qz-pace-total" style="font-size:20px;font-weight:700;">0:00</div><div style="font-size:11px;color:var(--text-muted);">Tiempo total</div></div>
 
                 <div style="text-align:center;"><div id="qz-pace-avg" style="font-size:20px;font-weight:700;">0s</div><div style="font-size:11px;color:var(--text-muted);">Avg / question</div></div>
 
@@ -14052,9 +14052,9 @@ No markdown, no code fences. ONLY JSON.
 
               window.location = '/student/notes/' + d.note_id;
 
-            }} else {{ alert(d.error || 'Generation failed'); }}
+            }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Error de red'); }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
@@ -14246,9 +14246,9 @@ No markdown, no code fences. ONLY JSON.
 
             <div style="display:flex;gap:8px;margin-top:12px;">
 
-              <button onclick="saveNote()" class="btn btn-primary btn-sm" id="save-note-btn">&#128190; Save</button>
+              <button onclick="saveNote()" class="btn btn-primary btn-sm" id="save-note-btn">&#128190; Guardar</button>
 
-              <button onclick="toggleEdit()" class="btn btn-outline btn-sm">Cancel</button>
+              <button onclick="toggleEdit()" class="btn btn-outline btn-sm">Cancelar</button>
 
             </div>
 
@@ -14344,9 +14344,9 @@ No markdown, no code fences. ONLY JSON.
 
             }} else {{ alert('Save failed'); }}
 
-          }} catch(e) {{ alert('Network error'); }}
+          }} catch(e) {{ alert('Error de red'); }}
 
-          btn.disabled = false; btn.innerHTML = '&#128190; Save';
+          btn.disabled = false; btn.innerHTML = '&#128190; Guardar';
 
         }}
 
@@ -14634,7 +14634,7 @@ No markdown, no code fences. ONLY JSON.
 
           <input type="text" name="subject" placeholder="Subject filter..." value="{_esc(subject)}" style="width:180px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
 
-          <button class="btn btn-outline btn-sm" type="submit">Search</button>
+          <button class="btn btn-outline btn-sm" type="submit">Buscar</button>
 
         </form>
 
@@ -14682,7 +14682,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
 
-                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('upload-modal').style.display='none'">Cancel</button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('upload-modal').style.display='none'">Cancelar</button>
 
                 <button type="submit" class="btn btn-primary btn-sm">Publish Listing</button>
 
@@ -14734,7 +14734,7 @@ No markdown, no code fences. ONLY JSON.
 
           }} catch(e) {{
 
-            msg.textContent = 'Network error.';
+            msg.textContent = 'Error de red.';
 
             msg.style.color = 'var(--red)';
 
@@ -15064,7 +15064,7 @@ No markdown, no code fences. ONLY JSON.
 
           }} catch(e) {{
 
-            msg.textContent = 'Network error.';
+            msg.textContent = 'Error de red.';
 
             msg.style.color = 'var(--red)';
 
@@ -15771,7 +15771,7 @@ No markdown, no code fences. ONLY JSON.
 
               <input id="fr-search" placeholder="Search by name, email, or #ID" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
 
-              <button class="btn btn-primary" onclick="frSearch()">Search</button>
+              <button class="btn btn-primary" onclick="frSearch()">Buscar</button>
 
             </div>
 
@@ -15795,7 +15795,7 @@ No markdown, no code fences. ONLY JSON.
 
             <h3 style="margin:0 0 10px 0">Your friends</h3>
 
-            <div id="fr-friends">Loading…</div>
+            <div id="fr-friends">Cargando…</div>
 
           </div>
 
@@ -15805,7 +15805,7 @@ No markdown, no code fences. ONLY JSON.
 
             <h3 style="margin:0 0 10px 0">⚔️ Quiz duels</h3>
 
-            <div id="fr-quiz-duels" style="font-size:13px;color:var(--text-muted)">Loading…</div>
+            <div id="fr-quiz-duels" style="font-size:13px;color:var(--text-muted)">Cargando…</div>
 
           </div>
 
@@ -15940,7 +15940,7 @@ No markdown, no code fences. ONLY JSON.
                 <input id="chal-file" type="file" accept=".pdf,.docx,.txt,.md" style="width:100%;margin-bottom:14px">
                 <div id="chal-err" style="color:#ef4444;font-size:12px;margin-bottom:8px"></div>
                 <div style="display:flex;gap:8px;justify-content:flex-end">
-                  <button class="btn btn-sm btn-outline" onclick="closeChallengeModal()">Cancel</button>
+                  <button class="btn btn-sm btn-outline" onclick="closeChallengeModal()">Cancelar</button>
                   <button class="btn btn-sm btn-primary" id="chal-go" onclick="sendQuizDuel(${{uid}})">Send invite</button>
                 </div>
               </div>
@@ -15986,7 +15986,7 @@ No markdown, no code fences. ONLY JSON.
             // Take the challenger straight into the play page (it auto-starts when opponent accepts)
             window.location.href = '/student/duels/quiz/' + r.duel_id + '/play';
           }} catch(e) {{
-            errEl.textContent = 'Network error.';
+            errEl.textContent = 'Error de red.';
             btn.disabled = false; btn.textContent = 'Send invite';
           }}
         }}
@@ -16013,7 +16013,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div><b>${{esc(u.name)}}</b> <span style="color:var(--text-muted);font-size:12px">#${{u.id}}</span></div>
 
-                <button class="btn btn-sm btn-primary" onclick="frAccept(${{u.id}})">Accept</button>
+                <button class="btn btn-sm btn-primary" onclick="frAccept(${{u.id}})">Aceptar</button>
 
               </div>`).join('');
 
@@ -16047,7 +16047,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div style="display:flex;gap:6px">
 
-                  <button class="btn btn-sm btn-primary" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" data-online="${{u.online ? '1' : '0'}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname, this.dataset.online === '1')">Challenge</button>
+                  <button class="btn btn-sm btn-primary" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" data-online="${{u.online ? '1' : '0'}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname, this.dataset.online === '1')">Desafiar</button>
 
                   <button class="btn btn-sm btn-outline" onclick="frRemove(${{u.id}})">Remove</button>
 
@@ -16070,8 +16070,8 @@ No markdown, no code fences. ONLY JSON.
                   <div style="font-size:12px;color:var(--text-muted)">Most focus minutes over the next 7 days wins. Clock starts when you accept.</div>
                 </div>
                 <div style="display:flex;gap:6px">
-                  <button class="btn btn-sm btn-primary" onclick="mAccept(${{d.id}})">Accept</button>
-                  <button class="btn btn-sm btn-outline" onclick="mDecline(${{d.id}})">Decline</button>
+                  <button class="btn btn-sm btn-primary" onclick="mAccept(${{d.id}})">Aceptar</button>
+                  <button class="btn btn-sm btn-outline" onclick="mDecline(${{d.id}})">Rechazar</button>
                 </div>
               </div>`).join('');
             const out = (mp.outgoing || []).map(d => `
@@ -16080,7 +16080,7 @@ No markdown, no code fences. ONLY JSON.
                   Waiting on <b>${{esc(d.opponent_name)}}</b> to accept your marathon invite.
                   <div style="font-size:12px;color:var(--text-muted)">Clock hasn't started — they need to accept on their friends tab.</div>
                 </div>
-                <button class="btn btn-sm btn-outline" onclick="mCancel(${{d.id}})">Cancel</button>
+                <button class="btn btn-sm btn-outline" onclick="mCancel(${{d.id}})">Cancelar</button>
               </div>`).join('');
             mbox.innerHTML = (inc + out) || '<div style="color:var(--text-muted);font-size:13px">No pending marathon invites.</div>';
           }} catch(e) {{}}
@@ -16149,7 +16149,7 @@ No markdown, no code fences. ONLY JSON.
                 </div>
                 <div style="display:flex;gap:6px">
                   <button class="btn btn-sm btn-primary" onclick="qdAccept(${{x.id}})">Accept &amp; play</button>
-                  <button class="btn btn-sm btn-outline" onclick="qdDecline(${{x.id}})">Decline</button>
+                  <button class="btn btn-sm btn-outline" onclick="qdDecline(${{x.id}})">Rechazar</button>
                 </div>
               </div>`).join('');
             const playable = (qd.playable||[]).map(x => {{
@@ -16165,7 +16165,7 @@ No markdown, no code fences. ONLY JSON.
               </div>`;
             }}).join('');
             const inner = (incoming + playable);
-            qbox.innerHTML = inner || '<div style="color:var(--text-muted);font-size:13px">No quiz duels right now. Click <b>Challenge</b> on a friend to start one.</div>';
+            qbox.innerHTML = inner || '<div style="color:var(--text-muted);font-size:13px">No quiz duels right now. Click <b>Desafiar</b> on a friend to start one.</div>';
           }} catch(e) {{}}
 
           }} finally {{ __loadingAll = false; }}
@@ -16580,9 +16580,9 @@ No markdown, no code fences. ONLY JSON.
     <p>Your XP is live-counted against every other student — globally, and in your country, university, and major.</p>
     <div class="lb-rank-strip" id="lbRankStrip">
       <div class="lb-rank-card"><div class="label">Global</div><div class="rank-big" id="lb_r_global">—</div></div>
-      <div class="lb-rank-card"><div class="label">Country</div><div class="rank-big" id="lb_r_country">—</div></div>
-      <div class="lb-rank-card"><div class="label">University</div><div class="rank-big" id="lb_r_university">—</div></div>
-      <div class="lb-rank-card"><div class="label">Major</div><div class="rank-big" id="lb_r_major">—</div></div>
+      <div class="lb-rank-card"><div class="label">País</div><div class="rank-big" id="lb_r_country">—</div></div>
+      <div class="lb-rank-card"><div class="label">Universidad</div><div class="rank-big" id="lb_r_university">—</div></div>
+      <div class="lb-rank-card"><div class="label">Carrera</div><div class="rank-big" id="lb_r_major">—</div></div>
     </div>
   </section>
 
@@ -16689,7 +16689,7 @@ No markdown, no code fences. ONLY JSON.
       `;
       }).join('');
     } catch(e) {
-      board.innerHTML = `<div class="lb-empty">Failed to load. ${e}</div>`;
+      board.innerHTML = `<div class="lb-empty">No se pudo cargar. ${e}</div>`;
     }
   }
 
@@ -16872,7 +16872,7 @@ No markdown, no code fences. ONLY JSON.
     html +=   '</div>';
     html += '</div>';
     html += '<div class="pf-grid">';
-    html +=   '<div class="pf-stat"><div class="label">Total XP</div><div class="value">' + (p.xp||0).toLocaleString() + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">XP total</div><div class="value">' + (p.xp||0).toLocaleString() + '</div></div>';
     html +=   '<div class="pf-stat"><div class="label">Total hours studied</div><div class="value">' + ((p.total_hours||0).toFixed(1)) + 'h</div></div>';
     html +=   '<div class="pf-stat"><div class="label">Focus sessions</div><div class="value">' + (p.sessions||0).toLocaleString() + '</div></div>';
     html +=   '<div class="pf-stat"><div class="label">Leaderboard</div><div class="value">' + posLine + '</div></div>';
@@ -17235,7 +17235,7 @@ No markdown, no code fences. ONLY JSON.
 
         canvas_tok = sdb.get_canvas_token(cid)
 
-        canvas_status = "Connected" if canvas_tok else "Not connected"
+        canvas_status = "Conectado" if canvas_tok else "Sin conectar"
 
         canvas_color = "#10B981" if canvas_tok else "#EF4444"
 
@@ -17339,15 +17339,15 @@ No markdown, no code fences. ONLY JSON.
 
             "Canvas LMS": "Canvas LMS",
 
-            "Connected": "Conectado",
+            "Conectado": "Conectado",
 
-            "Not connected": "No conectado",
+            "Sin conectar": "No conectado",
 
             "Connect your Canvas LMS to sync courses, exams, and study materials.": "Conecta tu Canvas LMS para sincronizar cursos, exámenes y material de estudio.",
 
             "Manage Connection": "Administrar conexión",
 
-            "Connect Canvas": "Conectar Canvas",
+            "Conectar Canvas": "Conectar Canvas",
 
             "Email Accounts": "Cuentas de correo",
 
@@ -17524,7 +17524,7 @@ No markdown, no code fences. ONLY JSON.
               <div style="display:grid;gap:12px;">
                 <div>
                   <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("Country")}</label>
-                  <select id="acad-country" class="input" style="width:100%;"><option value="">{_T("Loading...")}</option></select>
+                  <select id="acad-country" class="input" style="width:100%;"><option value="">{_T("Cargando...")}</option></select>
                 </div>
                 <div>
                   <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{_T("University")}</label>
@@ -17806,7 +17806,7 @@ No markdown, no code fences. ONLY JSON.
 
             </p>
 
-            <a href="/student/canvas-settings" class="btn btn-outline btn-sm">{_T("Manage Connection") if canvas_tok else _T("Connect Canvas")}</a>
+            <a href="/student/canvas-settings" class="btn btn-outline btn-sm">{_T("Manage Connection") if canvas_tok else _T("Conectar Canvas")}</a>
 
           </div>
 
@@ -17841,12 +17841,12 @@ No markdown, no code fences. ONLY JSON.
               </div>
               <div id="provider-badge" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:var(--radius-xs);font-size:13px;background:#EFF6FF;color:#1E40AF;align-items:center;gap:8px;"></div>
               <div class="form-group">
-                <label>App Password</label>
-                <input id="acct-password" type="password" placeholder="Paste your App Password here" required autocomplete="new-password">
-                <p class="form-hint" id="password-hint">For Gmail, generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>. For Outlook, use your account password.</p>
+                <label>Contraseña de App</label>
+                <input id="acct-password" type="password" placeholder="Paste your Contraseña de App here" required autocomplete="new-password">
+                <p class="form-hint" id="password-hint">For Gmail, generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">Contraseña de App</a>. For Outlook, use your account password.</p>
               </div>
               <details style="margin-bottom:14px;">
-                <summary style="font-size:13px;color:var(--text-muted);cursor:pointer;">Advanced Settings (IMAP/SMTP)</summary>
+                <summary style="font-size:13px;color:var(--text-muted);cursor:pointer;">Ajustes avanzados (IMAP/SMTP)</summary>
                 <div style="margin-top:10px;">
                   <div class="form-row">
                     <div class="form-group"><label>IMAP Host</label><input id="acct-imap-host" value="imap.gmail.com"></div>
@@ -17860,7 +17860,7 @@ No markdown, no code fences. ONLY JSON.
               </details>
               <div style="display:flex;gap:8px;">
                 <button class="btn btn-primary btn-sm" onclick="addAccount()" id="save-account-btn">&#128274; Test &amp; Add Account</button>
-                <button class="btn btn-ghost btn-sm" onclick="hideAddAccount()">Cancel</button>
+                <button class="btn btn-ghost btn-sm" onclick="hideAddAccount()">Cancelar</button>
               </div>
               <div id="add-account-status" style="margin-top:10px;font-size:13px;"></div>
             </div>
@@ -18143,7 +18143,7 @@ No markdown, no code fences. ONLY JSON.
               var j = await r.json();
               if (j.ok) {{ s.textContent = {repr(_T("Retired. Reloading..."))}; setTimeout(function(){{location.reload();}}, 600); }}
               else {{ s.textContent = (j.error || 'Failed.'); }}
-            }} catch(e) {{ s.textContent = 'Network error.'; }}
+            }} catch(e) {{ s.textContent = 'Error de red.'; }}
           }}
           async function unretireMe() {{
             var s = document.getElementById('retire-status');
@@ -18153,7 +18153,7 @@ No markdown, no code fences. ONLY JSON.
               var j = await r.json();
               if (j.ok) {{ s.textContent = {repr(_T("Welcome back! Reloading..."))}; setTimeout(function(){{location.reload();}}, 600); }}
               else {{ s.textContent = (j.error || 'Failed.'); }}
-            }} catch(e) {{ s.textContent = 'Network error.'; }}
+            }} catch(e) {{ s.textContent = 'Error de red.'; }}
           }}
         </script>
 
@@ -18273,15 +18273,15 @@ No markdown, no code fences. ONLY JSON.
 
           'gmail.com': {{imap:'imap.gmail.com', smtp:'smtp.gmail.com', imap_port:993, smtp_port:465, name:'Gmail', color:'#EA4335',
 
-            hint:'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a> in your Google account.'}},
+            hint:'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">Contraseña de App</a> in your Google account.'}},
 
           'googlemail.com': {{imap:'imap.gmail.com', smtp:'smtp.gmail.com', imap_port:993, smtp_port:465, name:'Gmail', color:'#EA4335',
 
-            hint:'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>.'}},
+            hint:'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">Contraseña de App</a>.'}},
 
           'yahoo.com': {{imap:'imap.mail.yahoo.com', smtp:'smtp.mail.yahoo.com', imap_port:993, smtp_port:465, name:'Yahoo', color:'#6001D2',
 
-            hint:'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">App Password</a>.'}},
+            hint:'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">Contraseña de App</a>.'}},
 
           'outlook.com': {{imap:'imap-mail.outlook.com', smtp:'smtp-mail.outlook.com', imap_port:993, smtp_port:587, name:'Outlook', color:'#0078D4',
 
@@ -18353,7 +18353,7 @@ No markdown, no code fences. ONLY JSON.
 
                 else {{
 
-                  badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> and enter IMAP/SMTP details.';
+                  badge.innerHTML = '<span style="font-weight:600;">Proveedor personalizado</span> — open <b>Ajustes avanzados</b> and enter IMAP/SMTP details.';
 
                   badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--yellow)';
 
@@ -18363,7 +18363,7 @@ No markdown, no code fences. ONLY JSON.
 
               }}).catch(function() {{
 
-                badge.innerHTML = '<span style="font-weight:600;">Custom provider</span> — open <b>Advanced Settings</b> and enter IMAP/SMTP details.';
+                badge.innerHTML = '<span style="font-weight:600;">Proveedor personalizado</span> — open <b>Ajustes avanzados</b> and enter IMAP/SMTP details.';
 
                 badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--yellow)';
 
@@ -18589,7 +18589,7 @@ No markdown, no code fences. ONLY JSON.
 
             info.textContent = '✅ Loaded ' + d.filename + ' (' + d.char_count.toLocaleString() + ' chars)';
 
-          }} catch(e) {{ info.textContent = '❌ Network error'; }}
+          }} catch(e) {{ info.textContent = '❌ Error de red'; }}
 
         }}
 
@@ -18745,11 +18745,11 @@ No markdown, no code fences. ONLY JSON.
             plus_locked = plus_only and not is_plus
             plus_pill = ' <span style="background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;vertical-align:middle;">PLUS</span>' if plus_only else ''
             if owned:
-                tag = '<span style="color:#10b981;font-weight:700;">Owned</span>'
+                tag = '<span style="color:#10b981;font-weight:700;">Comprado</span>'
                 btn = ''
             elif plus_locked:
-                tag = '<span style="color:#a855f7;">Plus subscription required</span>'
-                btn = '<button class="btn btn-sm btn-outline" disabled>Plus only</button>'
+                tag = '<span style="color:#a855f7;">Requiere suscripción PLUS</span>'
+                btn = '<button class="btn btn-sm btn-outline" disabled>Solo PLUS</button>'
             elif not xp_ok:
                 tag = f'<span style="color:#94a3b8;">Reach {cfg["xp_required"]} XP to unlock</span>'
                 btn = ''
@@ -18782,14 +18782,14 @@ No markdown, no code fences. ONLY JSON.
             plus_pill = ' <span style="background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;vertical-align:middle;">PLUS</span>' if plus_only else ''
             if owned:
                 if selected:
-                    tag = '<span style="color:#7c3aed;font-weight:700;">Equipped</span>'
-                    btn = '<button class="btn btn-sm btn-outline" disabled>In use</button>'
+                    tag = '<span style="color:#7c3aed;font-weight:700;">Equipado</span>'
+                    btn = '<button class="btn btn-sm btn-outline" disabled>En uso</button>'
                 else:
-                    tag = '<span style="color:#10b981;font-weight:700;">Owned</span>'
-                    btn = f'<button class="btn btn-sm btn-primary" onclick="equipFlag(\'{key}\')">Equip</button>'
+                    tag = '<span style="color:#10b981;font-weight:700;">Comprado</span>'
+                    btn = f'<button class="btn btn-sm btn-primary" onclick="equipFlag(\'{key}\')">Equipar</button>'
             elif plus_locked:
-                tag = '<span style="color:#a855f7;">Plus subscription required</span>'
-                btn = '<button class="btn btn-sm btn-outline" disabled>Plus only</button>'
+                tag = '<span style="color:#a855f7;">Requiere suscripción PLUS</span>'
+                btn = '<button class="btn btn-sm btn-outline" disabled>Solo PLUS</button>'
             elif not xp_ok:
                 tag = f'<span style="color:#94a3b8;">Reach {cfg["xp_required"]} XP to unlock</span>'
                 btn = ''
@@ -18873,12 +18873,12 @@ No markdown, no code fences. ONLY JSON.
                 price_html = "Free" if not price else f"${price:.2f}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mo</span>"
                 label_name = cfg.get("name", key.title())
                 if is_current:
-                    btn = '<button class="btn btn-sm" disabled style="width:100%;background:#10b981;color:#fff;border:none;">Current plan</button>'
+                    btn = '<button class="btn btn-sm" disabled style="width:100%;background:#10b981;color:#fff;border:none;">Plan actual</button>'
                 elif key == "free":
-                    btn = f'<button class="btn btn-sm btn-outline" style="width:100%;" onclick="changeTier(\'{key}\')">Downgrade</button>'
+                    btn = f'<button class="btn btn-sm btn-outline" style="width:100%;" onclick="changeTier(\'{key}\')">Bajar plan</button>'
                 else:
-                    btn = f'<button class="btn btn-sm btn-primary" style="width:100%;" onclick="changeTier(\'{key}\')">Upgrade to {_esc(label_name)}</button>'
-                badge = '<div style="position:absolute;top:10px;right:10px;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;">ACTIVE</div>' if is_current else ""
+                    btn = f'<button class="btn btn-sm btn-primary" style="width:100%;" onclick="changeTier(\'{key}\')">Mejorar a {_esc(label_name)}</button>'
+                badge = '<div style="position:absolute;top:10px;right:10px;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;">ACTIVO</div>' if is_current else ""
                 sub_cards.append(
                     f'<div style="position:relative;background:var(--card);border:2px solid {border};border-radius:16px;padding:18px;display:flex;flex-direction:column;">'
                     f'{badge}'
@@ -18945,7 +18945,7 @@ No markdown, no code fences. ONLY JSON.
             already_f = (bcfg.get("flag") in (cur_flag_state["unlocked_flags"] or []))
             both = already_b and already_f
             if both:
-                cta = '<button class="btn btn-sm btn-outline" disabled>Owned</button>'
+                cta = '<button class="btn btn-sm btn-outline" disabled>Comprado</button>'
             elif wallet["coins"] < price:
                 cta = f'<button class="btn btn-sm btn-outline" disabled>Buy ({price} \U0001FA99)</button>'
             else:
@@ -19000,7 +19000,7 @@ No markdown, no code fences. ONLY JSON.
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;">
           <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \U0001FA99</div><div class="label">Coins</div></div>
           <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Streak Freezes</div></div>
-          <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">Total XP</div></div>
+          <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">XP total</div></div>
         </div>
 
         <div class="card">
@@ -19156,7 +19156,7 @@ No markdown, no code fences. ONLY JSON.
             if not cfg:
                 continue
             is_eq = key == wallet["selected_banner"]
-            badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
+            badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPADO</div>' if is_eq else ''
             border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
             anim_cls = (cfg.get("anim_class") or "") if cfg.get("animated") else ""
             anim_pill = '<div style="position:absolute;top:6px;left:6px;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">ANIM</div>' if anim_cls else ''
@@ -19179,7 +19179,7 @@ No markdown, no code fences. ONLY JSON.
             if not cfg:
                 continue
             is_eq = key == flag_state["selected_flag"]
-            badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
+            badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPADO</div>' if is_eq else ''
             border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
             preview = ('<div style="height:30px;background:transparent;"></div>' if key == "none"
                        else f'<div class="{(cfg.get("anim_class") or "") if cfg.get("animated") else ""}" style="height:30px;background:{cfg["css"]};-webkit-mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%);mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%);"></div>')
@@ -19202,7 +19202,7 @@ No markdown, no code fences. ONLY JSON.
         # "None" tile clears the currently selected slot
         none_eq = (not eq_left and not eq_right)
         none_border = "border:2px solid #10b981;" if none_eq else "border:1px solid var(--border);"
-        none_badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if none_eq else ''
+        none_badge = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPADO</div>' if none_eq else ''
         badge_cards.append(
             f'<div class="profile-cosm-card" data-badge="" onclick="equipBadge(\'\')" '
             f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{none_border}background:var(--card);padding:14px;text-align:center;">'
@@ -19241,7 +19241,7 @@ No markdown, no code fences. ONLY JSON.
             for key, cfg in catalog.items():
                 is_eq = (key == sel)
                 border = "border:2px solid #10b981;" if is_eq else "border:1px solid var(--border);"
-                pill = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>' if is_eq else ''
+                pill = '<div style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPADO</div>' if is_eq else ''
                 cards.append(
                     f'<div class="profile-cosm-card" data-key="{key}" onclick="equipCosmetic(\'{kind}\',\'{key}\')" '
                     f'style="position:relative;cursor:pointer;border-radius:12px;overflow:hidden;{border}background:var(--card);">'
@@ -19269,7 +19269,7 @@ No markdown, no code fences. ONLY JSON.
             already_b = (bcfg.get("banner") in (wallet["unlocked_banners"] or []))
             already_f = (bcfg.get("flag") in (sdb.get_flag_state(cid)["unlocked_flags"] or []))
             both = already_b and already_f
-            cta = ('<button disabled style="background:#374151;color:#9ca3af;border:0;border-radius:8px;padding:6px 12px;font-size:12px;cursor:not-allowed;">Owned</button>'
+            cta = ('<button disabled style="background:#374151;color:#9ca3af;border:0;border-radius:8px;padding:6px 12px;font-size:12px;cursor:not-allowed;">Comprado</button>'
                    if both else
                    f'<button onclick="buyBundle(\'{bkey}\')" style="background:linear-gradient(90deg,#7c3aed,#3b82f6);color:#fff;border:0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;">Buy {price} 🪙</button>')
             bundle_cards.append(
@@ -19308,7 +19308,7 @@ No markdown, no code fences. ONLY JSON.
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
                   <div class="stat-card stat-yellow" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['coins']} \U0001FA99</div><div class="label">Coins</div></div>
                   <div class="stat-card stat-blue" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['streak_freezes']} ❄️</div><div class="label">Freezes</div></div>
-                  <div class="stat-card stat-red" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{focus_stats.get('streak_days',0)} 🔥</div><div class="label">Streak</div></div>
+                  <div class="stat-card stat-red" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{focus_stats.get('streak_days',0)} 🔥</div><div class="label">Racha</div></div>
                 </div>
               </div>
             </div>
@@ -19353,7 +19353,7 @@ No markdown, no code fences. ONLY JSON.
         const BANNER_ANIM = {{ {", ".join(f'"{k}":{json.dumps((v.get("anim_class") or "") if v.get("animated") else "")}' for k,v in sdb.BANNERS.items())} }};
         const FLAG_CSS    = {{ {", ".join(f'"{k}":{json.dumps(v["css"])}' for k,v in sdb.FLAGS.items())} }};
         const FLAG_ANIM   = {{ {", ".join(f'"{k}":{json.dumps((v.get("anim_class") or "") if v.get("animated") else "")}' for k,v in sdb.FLAGS.items())} }};
-        const EQUIP_PILL  = '<div class="profile-eq-pill" style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPPED</div>';
+        const EQUIP_PILL  = '<div class="profile-eq-pill" style="position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">EQUIPADO</div>';
 
         function _markEquippedSingle(containerSelector, attrName, key) {{
           const container = document.querySelector(containerSelector);
