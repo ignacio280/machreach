@@ -274,12 +274,18 @@ def get_course(course_id: int) -> dict | None:
     return dict(r) if r else None
 
 
-def auto_create_courses_for_client(client_id: int) -> int:
-    """After a Canvas sync, fold every student_courses row for this client
-    into the shared training catalog. Idempotent: existing (name_norm, code_norm)
-    matches are skipped by get_or_create_course. Returns the number of rows
-    folded in (existing + newly created, best-effort count)."""
-    init_training_tables()
+def _ensure_university_for_client(client_id: int) -> int | None:
+    """Make sure the client has a university_id so the catalog can be scoped.
+
+    Order of preference:
+      1. Whatever they already picked (academic profile).
+      2. A placeholder uni derived from their Canvas hostname — so a user who
+         skipped the profile but connected Canvas still gets a working scope.
+         Two students at the same school share the same Canvas instance, so
+         the hostname is a decent classmate-grouping key.
+
+    Returns the resolved university_id, or None if neither source has data.
+    """
     try:
         with get_db() as db:
             cli = _fetchone(
@@ -288,6 +294,72 @@ def auto_create_courses_for_client(client_id: int) -> int:
                 (client_id,),
             )
             uni = (dict(cli).get("university_id") if cli else None)
+            if uni:
+                return int(uni)
+            tok = _fetchone(
+                db,
+                "SELECT canvas_url FROM student_canvas_tokens WHERE client_id = %s",
+                (client_id,),
+            )
+    except Exception as e:
+        log.warning("_ensure_university lookup failed (client %s): %s", client_id, e)
+        return None
+
+    canvas_url = (dict(tok).get("canvas_url") if tok else "") or ""
+    if not canvas_url:
+        return None
+
+    # Extract hostname like "canvas.uc.cl" from "https://canvas.uc.cl/".
+    try:
+        from urllib.parse import urlparse
+        host = (urlparse(canvas_url).hostname or "").lower().strip()
+    except Exception:
+        host = ""
+    if not host:
+        return None
+
+    slug = f"auto-canvas-{host}"
+    placeholder_name = host
+
+    try:
+        with get_db() as db:
+            existing = _fetchone(
+                db,
+                "SELECT id FROM universities WHERE slug = %s",
+                (slug,),
+            )
+            if existing:
+                uni_id = int(dict(existing)["id"])
+            else:
+                uni_id = _insert_returning_id(
+                    db,
+                    "INSERT INTO universities (name, name_norm, country_iso, slug, status, created_by) "
+                    "VALUES (%s, %s, %s, %s, 'auto', %s) RETURNING id",
+                    (placeholder_name, placeholder_name, None, slug, client_id),
+                    "INSERT INTO universities (name, name_norm, country_iso, slug, status, created_by) "
+                    "VALUES (?, ?, ?, ?, 'auto', ?)",
+                )
+            _exec(
+                db,
+                "UPDATE clients SET university_id = %s WHERE id = %s AND university_id IS NULL",
+                (uni_id, client_id),
+            )
+        log.info("client %s auto-assigned to placeholder university '%s' (id=%s) from Canvas host", client_id, placeholder_name, uni_id)
+        return uni_id
+    except Exception as e:
+        log.warning("_ensure_university placeholder create failed (client %s, host %s): %s", client_id, host, e)
+        return None
+
+
+def auto_create_courses_for_client(client_id: int) -> int:
+    """After a Canvas sync, fold every student_courses row for this client
+    into the shared training catalog. Idempotent: existing (name_norm, code_norm)
+    matches are skipped by get_or_create_course. Returns the number of rows
+    folded in (existing + newly created, best-effort count)."""
+    init_training_tables()
+    uni = _ensure_university_for_client(client_id)
+    try:
+        with get_db() as db:
             rows = _fetchall(
                 db,
                 "SELECT name, code FROM student_courses WHERE client_id = %s",
@@ -301,8 +373,8 @@ def auto_create_courses_for_client(client_id: int) -> int:
         if rows:
             log.info(
                 "auto_create_courses_for_client: client %s has %d Canvas courses "
-                "but no university_id set — skipped. Prompt user to finish "
-                "the academic profile.", client_id, len(rows),
+                "but no university could be resolved (no profile, no Canvas host) — skipped.",
+                client_id, len(rows),
             )
         return 0
 

@@ -3182,17 +3182,18 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "unauthorized"}), 401
         try:
             from student import training as tr
-            from outreach.db import _fetchone
             uid_raw = request.args.get("university_id")
             if uid_raw and uid_raw.isdigit():
                 uid = int(uid_raw)
             else:
-                # Default to caller's own university.
-                with get_db() as db:
-                    r = _fetchone(db, "SELECT university_id FROM clients WHERE id = %s", (_cid(),))
-                uid = (r or {}).get("university_id") if r else None
+                # Resolve the caller's university — falls back to a Canvas-host
+                # placeholder if they skipped the academic profile.
+                uid = tr._ensure_university_for_client(_cid())
             if not uid:
-                return jsonify({"error": "university not set"}), 400
+                # Truly nothing to scope by — no profile AND no Canvas. Return
+                # empty list instead of an error so the UI shows the empty
+                # state with the "set your university" banner.
+                return jsonify({"university_id": None, "courses": []})
             q = (request.args.get("q") or "").strip()
             return jsonify({"university_id": uid, "courses": tr.search_courses(uid, q)})
         except Exception as e:
@@ -8231,7 +8232,7 @@ def register_student_routes(app, csrf, limiter):
 
             var d = await _safeJson(r);
 
-            if (r.ok) {{ alert('Connected! Found ' + d.courses_found + ' courses.'); location.reload(); }}
+            if (r.ok) {{ alert('Connected! Found ' + d.courses_found + ' courses. ' + (d.training_folded || 0) + ' added to Training catalog.'); location.reload(); }}
 
             else {{ alert(d.error || 'Connection failed'); }}
 
