@@ -154,7 +154,8 @@ def init_training_tables() -> None:
 # Base XP per attempt. Bonus from rating is +(avg_rating - 5) * 2, capped
 # at +20, so a well-loved hard quiz can push to ~110 XP; a 1-rated easy
 # one floors at ~5.
-XP_BY_DIFFICULTY = {"easy": 3, "medium": 6, "hard": 15}
+XP_BY_DIFFICULTY = {"easy": 0, "medium": 0, "hard": 0}
+COINS_BY_DIFFICULTY = {"easy": 1, "medium": 2, "hard": 4}
 
 
 def _classify_difficulty(avg_score_pct: float | None) -> str:
@@ -551,12 +552,13 @@ def record_attempt(training_quiz_id: int, client_id: int, score_pct: int) -> dic
     new_n = n + 1
     new_diff = _classify_difficulty(new_avg)
 
-    # XP base from new (post-attempt) difficulty
-    base_xp = XP_BY_DIFFICULTY.get(new_diff, 30)
-    rc = int(q.get("rating_count") or 0)
-    avg_rating = (int(q.get("rating_sum") or 0) / rc) if rc else 5.0
-    rating_bonus = max(-10, min(20, int(round((avg_rating - 5.0) * 2))))
-    xp = max(1, base_xp + rating_bonus)
+    # Training quizzes give COINS now, not XP. Focus is the only XP source.
+    # Coin payout = base difficulty + small score bonus, kept tight so
+    # cosmetics still take real grind.
+    base_coins = COINS_BY_DIFFICULTY.get(new_diff, 1)
+    score_bonus = 1 if score_pct >= 90 else 0
+    coins = max(1, base_coins + score_bonus)
+    xp = 0  # logged for backward compat — student_xp action row stays
 
     # Persist
     with get_db() as db:
@@ -573,19 +575,20 @@ def record_attempt(training_quiz_id: int, client_id: int, score_pct: int) -> dic
             (training_quiz_id, client_id, score_pct, xp),
         )
 
-    # Award XP via the regular student XP pipeline
+    # Log a 0-XP action row + grant coins.
     try:
         from . import db as sdb
         sdb.award_xp(client_id, "training_quiz",
-                     xp, f"Training quiz #{training_quiz_id} ({new_diff}, {score_pct}%)")
+                     0, f"Training quiz #{training_quiz_id} ({new_diff}, {score_pct}%)")
+        sdb.add_coins(client_id, coins, f"training_{training_quiz_id}_{score_pct}pct")
     except Exception as e:
-        log.warning("award_xp failed for training quiz %s: %s", training_quiz_id, e)
+        log.warning("award_xp/coins failed for training quiz %s: %s", training_quiz_id, e)
 
     return {
         "xp_awarded": xp,
+        "coins_awarded": coins,
         "new_difficulty": new_diff,
         "avg_score_pct": round(new_avg, 1),
-        "rating_bonus": rating_bonus,
         "attempt_count": new_n,
     }
 

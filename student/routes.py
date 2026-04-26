@@ -2851,16 +2851,19 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Award XP: 2 XP per 10 minutes of study time (focus is now the
-        # biggest XP source — quizzes and training got dialed down).
+        # Focus is the ONLY XP source now. 5 XP per 10 minutes of study.
+        # Quizzes / flashcards / training give coins instead of XP, so the
+        # only way to climb the ranks is to actually study.
         # Breaks aren't counted — `minutes` arrives study-only because the
         # frontend reports phaseWorkMinutes=0 for break phases.
+        # No coins from focus on purpose: coins come from quizzes/flashcards
+        # and the cosmetic grind, XP comes from focus. Two separate loops.
 
         _focus_xp_awarded = 0
 
         if minutes > 0:
 
-            xp = (minutes * 2) // 10  # 25 min → 5 XP, 60 min → 12 XP
+            xp = (minutes * 5) // 10  # 25 min → 12 XP, 50 min → 25 XP
 
             if xp > 0:
 
@@ -2873,13 +2876,6 @@ def register_student_routes(app, csrf, limiter):
                 sdb.award_xp(cid, "focus_session", xp, detail)
 
                 _focus_xp_awarded = xp
-
-            # Coins: 1 coin per 5 focus minutes (rounded down, min 1)
-            try:
-                coins = max(1, minutes // 5)
-                sdb.add_coins(cid, coins, "focus_session")
-            except Exception:
-                pass
 
 
 
@@ -6895,6 +6891,10 @@ def register_student_routes(app, csrf, limiter):
 
           localStorage.removeItem('focus_float');
 
+          try {{ localStorage.removeItem('focus_pending_credit'); }} catch(e) {{}}
+
+          if (typeof hidePendingCreditUI === 'function') hidePendingCreditUI();
+
           clearFocusTimerState();
 
           var el = document.getElementById('focus-float');
@@ -6960,31 +6960,78 @@ def register_student_routes(app, csrf, limiter):
 
             if (!isBreak) {{
 
-              // Work phase completed — save this session
+              // Work phase completed — DO NOT credit yet. Anti-cheat: the
+              // user must manually start the break within 1h to confirm
+              // they were actually present. Otherwise the session is
+              // dropped (no XP, no minutes counted, no session counted).
 
               var phaseMinutes = Math.round((totalFocusSeconds - phaseStartFocusSeconds) / 60);
 
-              if (phaseMinutes > 0) saveFocusSession(phaseMinutes);
+              try {{
 
-              pomoCount++;
+                var courseSel = document.getElementById('focus-course');
 
-              document.getElementById('pomo-count').textContent = 'Completed ' + pomoCount + ' of 4';
+                var examSel = document.getElementById('focus-exam');
 
-              if (pomoCount % 4 === 0) {{
+                var pendingCourseId = courseSel ? (parseInt(courseSel.value, 10) || null) : null;
+
+                var pendingExamId = examSel ? (parseInt(examSel.value, 10) || null) : null;
+
+                var pendingCourseName = '';
+
+                if (courseSel && courseSel.selectedOptions && courseSel.selectedOptions[0]) {{
+
+                  pendingCourseName = courseSel.selectedOptions[0].getAttribute('data-name') || courseSel.selectedOptions[0].textContent || '';
+
+                }}
+
+                localStorage.setItem('focus_pending_credit', JSON.stringify({{
+
+                  minutes: phaseMinutes,
+
+                  courseId: pendingCourseId,
+
+                  examId: pendingExamId,
+
+                  courseName: pendingCourseName,
+
+                  workEndedAt: Date.now(),
+
+                  expiresAt: Date.now() + 60*60*1000,  // 1 hour grace
+
+                  pomoCountAfter: pomoCount + 1,
+
+                  isLongBreak: ((pomoCount + 1) % 4 === 0)
+
+                }}));
+
+              }} catch(e) {{}}
+
+              // UI: show the confirm-and-start-break button. We deliberately
+              // DO NOT auto-start the break. We DO NOT increment pomoCount
+              // until the user confirms. We DO NOT save the session.
+
+              isBreak = true;  // mark intent so a manual Start would launch a break
+
+              timeLeft = parseInt(document.getElementById('pomo-break').value) * 60;
+
+              if (((pomoCount + 1) % 4) === 0) {{
 
                 timeLeft = parseInt(document.getElementById('pomo-long').value) * 60;
 
-                document.getElementById('timer-label').textContent = '🎉 Long break!';
-
-              }} else {{
-
-                timeLeft = parseInt(document.getElementById('pomo-break').value) * 60;
-
-                document.getElementById('timer-label').textContent = '☕ Short break';
-
               }}
 
-              isBreak = true;
+              totalTime = timeLeft;
+
+              updateDisplay();
+
+              showPendingCreditUI(phaseMinutes);
+
+              saveFocusTimerState();
+
+              // No setTimeout startTimer — user must press the confirm button.
+
+              return;
 
             }} else {{
 
@@ -7002,7 +7049,7 @@ def register_student_routes(app, csrf, limiter):
 
             saveFocusTimerState();
 
-            // Auto-start next phase after 2 seconds
+            // Auto-start next phase after 2 seconds (only after a break ends)
 
             setTimeout(function() {{
 
@@ -7031,6 +7078,257 @@ def register_student_routes(app, csrf, limiter):
           }}
 
         }}
+
+
+
+        // ── Anti-cheat: pending credit UI ──────────────────────────────
+        // When a Pomodoro work phase ends, we DO NOT save automatically.
+        // The user must click "Confirmar y empezar descanso" within 1h.
+        // If they don't, the session is dropped completely (no XP, no
+        // hours, no session counted). This stops people from starting a
+        // timer and going to sleep to farm XP.
+
+        function showPendingCreditUI(phaseMinutes) {{
+
+          try {{
+
+            var lbl = document.getElementById('timer-label');
+
+            if (lbl) lbl.innerHTML = '⏱️ Tiempo de trabajo terminado · <b>confirma para acreditar tus ' + phaseMinutes + ' min</b>';
+
+            // Hide the regular start/pause buttons during the pending state.
+
+            var startBtn = document.getElementById('start-btn');
+
+            var pauseBtn = document.getElementById('pause-btn');
+
+            var skipBtn  = document.getElementById('skip-btn');
+
+            if (startBtn) startBtn.style.display = 'none';
+
+            if (pauseBtn) pauseBtn.style.display = 'none';
+
+            if (skipBtn)  skipBtn.style.display = 'none';
+
+            var host = document.getElementById('pending-credit');
+
+            if (!host) {{
+
+              host = document.createElement('div');
+
+              host.id = 'pending-credit';
+
+              host.style.cssText = 'margin-top:14px;padding:14px 16px;border:2px solid #f59e0b;background:rgba(245,158,11,.08);border-radius:12px;text-align:center;';
+
+              var anchor = document.getElementById('start-btn');
+
+              if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(host, anchor);
+
+              else document.body.appendChild(host);
+
+            }}
+
+            host.innerHTML =
+
+              '<div style="font-weight:700;color:#92400e;margin-bottom:6px;">¿Sigues ahí?</div>' +
+
+              '<div style="font-size:13px;color:#78350f;margin-bottom:12px;">' +
+
+              'Aprieta el botón en <b><span id="pending-countdown">60:00</span></b> para acreditar esta sesión y empezar tu descanso. ' +
+
+              'Si no, se descarta para evitar farmeo automático.</div>' +
+
+              '<button class="btn btn-primary" onclick="confirmPendingAndStartBreak()">' +
+
+              '✅ Confirmar y empezar descanso (' + phaseMinutes + ' min)</button>';
+
+            host.style.display = 'block';
+
+            startPendingCountdown();
+
+          }} catch(e) {{}}
+
+        }}
+
+        function hidePendingCreditUI() {{
+
+          var host = document.getElementById('pending-credit');
+
+          if (host) host.style.display = 'none';
+
+          stopPendingCountdown();
+
+        }}
+
+        var __pendingTimerId = null;
+
+        function startPendingCountdown() {{
+
+          stopPendingCountdown();
+
+          __pendingTimerId = setInterval(function() {{
+
+            try {{
+
+              var p = JSON.parse(localStorage.getItem('focus_pending_credit')||'null');
+
+              if (!p) {{ stopPendingCountdown(); return; }}
+
+              var msLeft = p.expiresAt - Date.now();
+
+              if (msLeft <= 0) {{
+
+                expirePendingCredit();
+
+                return;
+
+              }}
+
+              var sec = Math.floor(msLeft / 1000);
+
+              var mm = Math.floor(sec / 60);
+
+              var ss = sec % 60;
+
+              var el = document.getElementById('pending-countdown');
+
+              if (el) el.textContent = String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+
+            }} catch(e) {{}}
+
+          }}, 1000);
+
+        }}
+
+        function stopPendingCountdown() {{
+
+          if (__pendingTimerId) {{ clearInterval(__pendingTimerId); __pendingTimerId = null; }}
+
+        }}
+
+        function expirePendingCredit() {{
+
+          // 1h passed without confirmation — drop everything.
+
+          try {{ localStorage.removeItem('focus_pending_credit'); }} catch(e) {{}}
+
+          hidePendingCreditUI();
+
+          // Reset the whole timer to the initial Pomodoro state.
+
+          if (typeof resetTimer === 'function') resetTimer();
+
+          var lbl = document.getElementById('timer-label');
+
+          if (lbl) lbl.innerHTML = '⌛ Sesión descartada — no hubo confirmación en 1 hora';
+
+        }}
+
+        async function confirmPendingAndStartBreak() {{
+
+          var p = null;
+
+          try {{ p = JSON.parse(localStorage.getItem('focus_pending_credit')||'null'); }} catch(e) {{ p = null; }}
+
+          if (!p || !p.minutes) {{ hidePendingCreditUI(); return; }}
+
+          if (Date.now() > (p.expiresAt || 0)) {{ expirePendingCredit(); return; }}
+
+          // Force the dropdown values back to the pending session's course/exam
+
+          // so saveFocusSession picks them up correctly.
+
+          try {{
+
+            if (p.courseId) {{
+
+              var cs = document.getElementById('focus-course');
+
+              if (cs) {{ cs.value = String(p.courseId); if (typeof onFocusCourseChange === 'function') onFocusCourseChange(); }}
+
+              if (p.examId) {{
+
+                var es = document.getElementById('focus-exam');
+
+                if (es) es.value = String(p.examId);
+
+              }}
+
+            }}
+
+          }} catch(e) {{}}
+
+          // Credit the work phase NOW.
+
+          await saveFocusSession(p.minutes);
+
+          // Bump the cycle counter and clear the pending state.
+
+          pomoCount = p.pomoCountAfter || (pomoCount + 1);
+
+          var pcLabel = document.getElementById('pomo-count');
+
+          if (pcLabel) pcLabel.textContent = 'Completed ' + pomoCount + ' of 4';
+
+          try {{ localStorage.removeItem('focus_pending_credit'); }} catch(e) {{}}
+
+          hidePendingCreditUI();
+
+          // Restore the regular start/pause/skip buttons (start hidden — break
+
+          // will run on its own).
+
+          var startBtn = document.getElementById('start-btn');
+
+          var pauseBtn = document.getElementById('pause-btn');
+
+          var skipBtn  = document.getElementById('skip-btn');
+
+          if (startBtn) startBtn.style.display = '';
+
+          if (pauseBtn) pauseBtn.style.display = 'none';
+
+          if (skipBtn)  skipBtn.style.display = '';
+
+          // Now actually start the break timer.
+
+          isBreak = true;
+
+          var lbl = document.getElementById('timer-label');
+
+          if (lbl) lbl.textContent = p.isLongBreak ? '🎉 Long break!' : '☕ Short break';
+
+          startTimer();
+
+        }}
+
+        // On page load, restore the pending-credit UI if there's a live one,
+
+        // or expire it if the 1h window already passed.
+
+        (function checkPendingOnLoad() {{
+
+          try {{
+
+            var p = JSON.parse(localStorage.getItem('focus_pending_credit')||'null');
+
+            if (!p || !p.minutes) return;
+
+            if (Date.now() > (p.expiresAt || 0)) {{
+
+              localStorage.removeItem('focus_pending_credit');
+
+              return;
+
+            }}
+
+            // Defer until DOM is ready.
+
+            setTimeout(function() {{ showPendingCreditUI(p.minutes); }}, 150);
+
+          }} catch(e) {{}}
+
+        }})();
 
 
 
@@ -7843,12 +8141,12 @@ def register_student_routes(app, csrf, limiter):
                 el('tr-quiz-body').innerHTML =
                   '<div style="text-align:center;padding:20px 0;">' +
                   '<div style="font-size:54px;font-weight:800;">' + pct + '%</div>' +
-                  '<div class="tr-note">' + correct + ' of ' + state.questions.length + ' correct</div>' +
-                  '<div style="margin-top:14px;font-weight:700;color:var(--primary);">+' +
-                    (data.xp_awarded || 0) + ' XP awarded</div>' +
-                  '<div class="tr-note">Difficulty now: ' + (data.new_difficulty || '?') + ' · community avg ' +
+                  '<div class="tr-note">' + correct + ' de ' + state.questions.length + ' correctas</div>' +
+                  '<div style="margin-top:14px;font-weight:700;color:#f59e0b;">+' +
+                    (data.coins_awarded || 0) + ' 🪙 monedas</div>' +
+                  '<div class="tr-note">Dificultad ahora: ' + (data.new_difficulty || '?') + ' · promedio comunidad ' +
                     (data.avg_score_pct || 0) + '%</div>' +
-                  '<div style="margin-top:18px;">Rate this quiz:</div>' +
+                  '<div style="margin-top:18px;">Califica este quiz:</div>' +
                   '<div class="tr-rate" id="tr-rate-row"></div>' +
                   '</div>';
                 buildRater();
@@ -9511,11 +9809,13 @@ def register_student_routes(app, csrf, limiter):
 
         sdb.update_flashcard_progress(data["card_id"], correct, quality=quality)
 
-        # XP + coins on correct answer (Duolingo-style micro-rewards).
+        # Coins only — flashcards give 1 coin per correct, no XP.
+        # We still log a 0-XP row so the badge counter (which queries
+        # student_xp WHERE action='flashcard_review') keeps working.
         cid = _cid()
         if correct:
             try:
-                sdb.award_xp(cid, "flashcard_review", 2, "Flashcard correct")
+                sdb.award_xp(cid, "flashcard_review", 0, "Flashcard correct")
                 sdb.add_coins(cid, 1, "flashcard_correct")
             except Exception:
                 pass
@@ -9930,16 +10230,15 @@ def register_student_routes(app, csrf, limiter):
         except Exception as _e:
             log.warning("training: backstop publish failed for quiz %s: %s", quiz_id, _e)
 
-        # XP + coins proportional to score (0-100). Quiz XP was way too
-        # generous (80% scored = 80 XP) — focus sessions are the main grind
-        # now. Quizzes give a sliver of XP plus the same coin payout.
+        # Quizzes give COINS only, no XP. Focus sessions are the only XP
+        # source. Coins are intentionally low so the cosmetics still take
+        # real grind. We log a 0-XP action row so badge queries keep working.
         cid = _cid()
         try:
-            xp = max(1, score // 10)         # 80% -> 8 XP, 100% -> 10 XP
-            coins = max(1, score // 10)      # 80% -> 8 coins
+            coins = max(1, score // 25)      # 50% -> 2, 80% -> 3, 100% -> 4
             if score >= 90:
-                coins += 5                   # bonus for excellent runs
-            sdb.award_xp(cid, "quiz_score", xp, f"Quiz {quiz_id}: {score}%")
+                coins += 2                   # small bonus for excellence
+            sdb.award_xp(cid, "quiz_score", 0, f"Quiz {quiz_id}: {score}%")
             sdb.add_coins(cid, coins, f"quiz_{quiz_id}_{score}pct")
         except Exception:
             pass
