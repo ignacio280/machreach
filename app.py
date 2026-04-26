@@ -2409,6 +2409,15 @@ LAYOUT = """<!DOCTYPE html>
         if (l) l.textContent = d.label || 'Focus';
         if (left <= 0 && d.phaseId && !phaseEndedFlag[d.phaseId]){
           phaseEndedFlag[d.phaseId] = true;
+          // When the student is actively on /student/focus, the page-level
+          // controller owns credit + audio + chain advancement. If we ALSO
+          // credit/advance here we race with it: this widget calls
+          // markPhaseSaved + writeState(nextPhase), and the page-level
+          // saveFocusSession then reads the FRESH focus_float.phaseId, marks
+          // the next-phase id as saved, and the actual next phase's save is
+          // blocked by the dedupe ("only the first session counts" bug).
+          var onFocusPage = (typeof window !== 'undefined' && window.location && window.location.pathname === '/student/focus');
+          if (onFocusPage) return;
           // Credit XP for work phases.
           creditPhase(d);
           // Audible + visual alert (works in background because keepalive kept us unthrottled).

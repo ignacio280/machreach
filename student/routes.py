@@ -7114,12 +7114,18 @@ def register_student_routes(app, csrf, limiter):
           var payload = {{ mode: currentMode, minutes: minutes, pages: pages,
                           course_name: course, course_id: courseId, exam_id: examId }};
 
+          // Pass the BROWSER's local date so the response stats reflect the
+          // student's calendar day (the server might be on UTC and disagree
+          // about which day a 23:00 Chile session belongs to).
+          var __ld_save = new Date();
+          var __ldStr_save = __ld_save.getFullYear()+'-'+String(__ld_save.getMonth()+1).padStart(2,'0')+'-'+String(__ld_save.getDate()).padStart(2,'0');
+
           // Use a single keepalive fetch — it survives navigation/tab close and
           // returns the updated stats. Using sendBeacon AND fetch at the same
           // time caused duplicate rows in student_study_progress.
           try {{
 
-            var resp = await fetch('/api/student/focus/save', {{
+            var resp = await fetch('/api/student/focus/save?local_date=' + encodeURIComponent(__ldStr_save), {{
 
               method: 'POST',
 
