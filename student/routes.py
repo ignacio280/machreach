@@ -4066,7 +4066,6 @@ def register_student_routes(app, csrf, limiter):
           <div id="mr-an-tiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;">
             <div class="mr-an-stat"><div class="mr-an-label">Horas totales</div><div class="mr-an-val" id="an-hours">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Sesiones</div><div class="mr-an-val" id="an-sessions">—</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Páginas leídas</div><div class="mr-an-val" id="an-pages">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Racha actual</div><div class="mr-an-val" id="an-streak">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Mejor día</div><div class="mr-an-val" id="an-bestdow">—</div></div>
           </div>
@@ -4245,8 +4244,7 @@ def register_student_routes(app, csrf, limiter):
               const fmtM = window.__anFmtM;
               document.getElementById('an-hours').textContent = a.totals.hours.toFixed(1);
               document.getElementById('an-sessions').textContent = a.totals.sessions;
-              document.getElementById('an-pages').textContent = a.totals.pages;
-              document.getElementById('an-streak').textContent = a.totals.streak + ' day' + (a.totals.streak===1?'':'s');
+              document.getElementById('an-streak').textContent = a.totals.streak + ' día' + (a.totals.streak===1?'':'s');
               document.getElementById('an-bestdow').textContent = a.best_dow ? a.best_dow.day : '—';
               const max14 = Math.max(1, ...a.last_14_days.map(d => d.minutes));
               document.getElementById('an-bars14').innerHTML = renderLine('an-bars14', a.last_14_days.map(d => ({{
@@ -9812,16 +9810,15 @@ def register_student_routes(app, csrf, limiter):
         sdb.add_quiz_questions(quiz_id, questions)
 
         # Auto-publish to the Training tab so other students at the same
-        # university can practise on it. AI heuristic re-assigns difficulty
-        # at publish time and community avg score then recalibrates over time.
+        # university can practise on it. We use _ensure_university_for_client
+        # so users without a saved profile still get a placeholder uni from
+        # their Canvas hostname — otherwise the publish silently skipped and
+        # quizzes never appeared in Training.
         training_published = None
         try:
-            from outreach.db import _fetchone as _fo
-            with get_db() as _db:
-                _cli = _fo(_db, "SELECT university_id FROM clients WHERE id = %s", (_cid(),))
-            _uni = (_cli or {}).get("university_id") if _cli else None
+            from student import training as _tr
+            _uni = _tr._ensure_university_for_client(_cid())
             if _uni:
-                from student import training as _tr
                 _tc = _tr.get_or_create_course(
                     _uni, course["name"], course.get("code") or None, created_by=_cid()
                 )
@@ -9829,8 +9826,11 @@ def register_student_routes(app, csrf, limiter):
                     _tc["id"], quiz_id, _cid(),
                     [dict(q) for q in questions], title=title,
                 )
+                log.info("training: auto-published quiz %s as training_quiz %s (uni=%s)", quiz_id, training_published, _uni)
+            else:
+                log.info("training: skipped auto-publish for quiz %s — no university and no Canvas host to derive one", quiz_id)
         except Exception as _e:
-            log.warning("auto-publish to training failed: %s", _e)
+            log.warning("training: auto-publish failed for quiz %s: %s", quiz_id, _e)
 
 
 
@@ -9901,6 +9901,34 @@ def register_student_routes(app, csrf, limiter):
         score = int(data.get("score", 0))
 
         sdb.update_quiz_score(quiz_id, score)
+
+        # Backstop auto-publish to Training. The generation endpoint already
+        # tries this, but quizzes made before the auto-publish was wired
+        # (or before the user had a university) wouldn't show up. Now every
+        # completion re-checks and publishes if missing. Idempotent: we only
+        # insert when no training_quiz row references this quiz_id yet.
+        try:
+            from student import training as _tr
+            from outreach.db import _fetchone as _fo, _fetchall as _fa
+            with get_db() as _db:
+                already = _fo(_db, "SELECT id FROM training_quizzes WHERE quiz_id = %s", (quiz_id,))
+            if not already:
+                _q = sdb.get_quiz(quiz_id, _cid())
+                _course = sdb.get_course(_q["course_id"]) if _q and _q.get("course_id") else None
+                if _course and _course.get("client_id") == _cid():
+                    _uni = _tr._ensure_university_for_client(_cid())
+                    if _uni:
+                        _tc = _tr.get_or_create_course(
+                            _uni, _course["name"], _course.get("code") or None, created_by=_cid()
+                        )
+                        _qs = sdb.get_quiz_questions(quiz_id)
+                        _tr.publish_quiz(
+                            _tc["id"], quiz_id, _cid(),
+                            [dict(_qq) for _qq in _qs], title=_q.get("title") or _course["name"],
+                        )
+                        log.info("training: backstop-published quiz %s on score submit", quiz_id)
+        except Exception as _e:
+            log.warning("training: backstop publish failed for quiz %s: %s", quiz_id, _e)
 
         # XP + coins proportional to score (0-100). Quiz XP was way too
         # generous (80% scored = 80 XP) — focus sessions are the main grind
