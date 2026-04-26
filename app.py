@@ -2441,6 +2441,35 @@ LAYOUT = """<!DOCTYPE html>
   <script>
   (function(){
     var T = {
+      // Compound phrases first — longer keys win the longest-match regex.
+      // Without these, "Study Tools" rendered as "Estudiar Tools" because
+      // only the bare word "Study" was in the map.
+      "Study Tools": "Herramientas de Estudio",
+      "Grade Sheet": "Planilla de Notas",
+      "Pro Tools: Tasks": "Herramientas Pro: Tareas",
+      "Pro Tools: Finance": "Herramientas Pro: Finanzas",
+      "Pro Tools: Relationships": "Herramientas Pro: Relaciones",
+      "Pro Tools: Goals & OKRs": "Herramientas Pro: Objetivos y OKRs",
+      "Pro Tools: Invoices": "Herramientas Pro: Facturas",
+      "Tools": "Herramientas",
+      "Social": "Social",
+      "Pro": "Pro",
+      "Study Analytics": "Analítica de Estudio",
+      "Your study analytics": "Tu analítica de estudio",
+      "How much, when, and on what — all time.": "Cuánto, cuándo y en qué — histórico.",
+      "Study time per course": "Tiempo de estudio por curso",
+      "Click any bar to see the day-by-day breakdown.": "Haz clic en una barra para ver el desglose día a día.",
+      "Total hours": "Horas totales",
+      "Pages read": "Páginas leídas",
+      "Current streak": "Racha actual",
+      "Best day": "Mejor día",
+      "Last 14 days": "Últimos 14 días",
+      "Day-of-week (this week)": "Día de la semana (esta semana)",
+      "this week": "esta semana",
+      "No course-tagged focus sessions yet.": "Aún no hay sesiones etiquetadas con un curso.",
+      "Previous week": "Semana anterior",
+      "Next week": "Semana siguiente",
+      "Back": "Volver",
       // Nav
       "Dashboard": "Panel", "Courses": "Cursos", "Plan": "Plan", "Flashcards": "Tarjetas",
       "Quizzes": "Exámenes", "Notes": "Apuntes", "Tutor": "Tutor", "XP": "XP",

@@ -50,7 +50,7 @@ _PERIOD_POPUP_HTML = """
     <div class="mr-period-prize" id="mr-period-prize"></div>
     <div class="mr-period-grid" id="mr-period-grid"></div>
     <div class="mr-period-foot">
-      <button id="mr-period-next" class="mr-period-btn primary" type="button">Sweet, got it</button>
+      <button id="mr-period-next" class="mr-period-btn primary" type="button">Perfecto, entendido</button>
     </div>
   </div>
 </div>
@@ -264,9 +264,9 @@ def _gpa_planilla_html(lang: str = "en") -> str:
         ("name: 'Prueba 1'", "name: 'Test 1'"),
         ("name: 'Prueba 2'", "name: 'Test 2'"),
         ("name: 'Examen'",   "name: 'Exam'"),
-        ("'<span class=\"pl-ok\">Curso completado</span>'", "'<span class=\"pl-ok\">Course completed</span>'"),
+        ("'<span class=\"pl-ok\">Curso completado</span>'", "'<span class=\"pl-ok\">Curso completado</span>'"),
         ("'<span class=\"pl-ok\">Ya aprobado ✓</span>'",     "'<span class=\"pl-ok\">Already passed ✓</span>'"),
-        ("'<span class=\"pl-warn\">Imposible aprobar</span>'", "'<span class=\"pl-warn\">Cannot pass anymore</span>'"),
+        ("'<span class=\"pl-warn\">Imposible aprobar</span>'", "'<span class=\"pl-warn\">Imposible aprobar</span>'"),
         ("'Necesitas <strong>' + nm.toFixed(1) + '</strong> en lo que falta para aprobar'",
          "'You need <strong>' + nm.toFixed(1) + '</strong> on what\\'s left to pass'"),
         ("placeholder=\"Evaluación\"", "placeholder=\"Evaluation\""),
@@ -1170,7 +1170,7 @@ def register_student_routes(app, csrf, limiter):
 
         <div class='card' style='padding:0;overflow:hidden'>
 
-          <h3 style='margin:0;padding:18px;border-bottom:1px solid var(--border);font-size:16px'>Time per course</h3>
+          <h3 style='margin:0;padding:18px;border-bottom:1px solid var(--border);font-size:16px'>Tiempo por curso</h3>
 
           <table style='width:100%;border-collapse:collapse'>__ROWS__</table>
 
@@ -2969,7 +2969,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Frontend cards say "Hours Today" / "Sessions Today" — return
+        # Frontend cards say "Horas hoy" / "Sesiones hoy" — return
         # today-scoped stats, not lifetime totals (lifetime `stats` above is
         # only used for badge thresholds).
         local_date = (request.args.get("local_date") or "").strip() or None
@@ -3537,24 +3537,24 @@ def register_student_routes(app, csrf, limiter):
         <div class="ss-wrap">
           <div class="ss-card">
             <span class="ss-pill" id="ss-progress">Step 1 of 3</span>
-            <h1 class="ss-h1">Welcome to MachReach Student</h1>
+            <h1 class="ss-h1">Bienvenido a MachReach Student</h1>
             <p class="ss-sub">We need three quick things so we can rank you on the right leaderboards and tailor your study plan. This is required.</p>
 
             <div class="ss-step active" id="ss-step-0">
-              <div class="ss-label">Your country</div>
+              <div class="ss-label">Tu país</div>
               <select class="ss-select" id="ss-country">
                 <option value="">- Pick your country -</option>
               </select>
             </div>
 
             <div class="ss-step" id="ss-step-1">
-              <div class="ss-label">Your university</div>
+              <div class="ss-label">Tu universidad</div>
               <input class="ss-input" id="ss-univ-q" type="text" placeholder="Search universities..." autocomplete="off">
               <div class="ss-list" id="ss-univ-list"></div>
             </div>
 
             <div class="ss-step" id="ss-step-2">
-              <div class="ss-label">Your major</div>
+              <div class="ss-label">Tu carrera</div>
               <input class="ss-input" id="ss-major-q" type="text" placeholder="Search majors..." autocomplete="off">
               <div class="ss-list" id="ss-major-list"></div>
             </div>
@@ -3813,7 +3813,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div class="empty-icon">&#128218;</div>
 
-              <h3>No sessions tracked today yet</h3>
+              <h3>Aún no hay sesiones registradas hoy</h3>
 
               <p>Start a Focus session to log study time — your dashboard will show the breakdown.</p>
 
@@ -3907,7 +3907,7 @@ def register_student_routes(app, csrf, limiter):
 
         if not exams_html:
 
-            exams_html = """<div class="empty-state compact reveal"><div class="empty-icon">&#128221;</div><h3>No upcoming exams</h3><p>Add an exam from any course page so it shows up here, sorted by urgency.</p><div class="empty-actions"><a href="/student/exams" class="primary">&#128221; Manage exams</a></div></div>"""
+            exams_html = """<div class="empty-state compact reveal"><div class="empty-icon">&#128221;</div><h3>Sin pruebas próximas</h3><p>Add an exam from any course page so it shows up here, sorted by urgency.</p><div class="empty-actions"><a href="/student/exams" class="primary">&#128221; Manage exams</a></div></div>"""
 
 
 
@@ -3953,7 +3953,7 @@ def register_student_routes(app, csrf, limiter):
 
             "<span style='font-size:22px;'>&#128202;</span>"
 
-            "<div><div style='font-weight:700;font-size:16px;'>Study analytics</div>"
+            "<div><div style='font-weight:700;font-size:16px;'>Analítica de estudio</div>"
 
             "<div style='font-size:12px;color:var(--text-muted);'>Last 30 days at a glance</div></div></div>"
 
@@ -4003,7 +4003,7 @@ def register_student_routes(app, csrf, limiter):
             <div style="display:flex;align-items:center;gap:10px;">
               <span style="font-size:22px;">&#127942;</span>
               <div>
-                <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Your ranks</div>
+                <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Tus rangos</div>
                 <div style="font-size:12px;color:var(--text-muted);" id="mr-ranks-league">Cargando…</div>
               </div>
             </div>
@@ -4057,29 +4057,29 @@ def register_student_routes(app, csrf, limiter):
             <div style="display:flex;align-items:center;gap:10px;">
               <span style="font-size:22px;">&#128200;</span>
               <div>
-                <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Your study analytics</div>
-                <div style="font-size:12px;color:var(--text-muted);">How much, when, and on what &mdash; all time.</div>
+                <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Tu analítica de estudio</div>
+                <div style="font-size:12px;color:var(--text-muted);">Cuánto, cuándo y en qué &mdash; histórico.</div>
               </div>
             </div>
           </div>
           <div id="mr-an-tiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;">
-            <div class="mr-an-stat"><div class="mr-an-label">Total hours</div><div class="mr-an-val" id="an-hours">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Horas totales</div><div class="mr-an-val" id="an-hours">—</div></div>
             <div class="mr-an-stat"><div class="mr-an-label">Sesiones</div><div class="mr-an-val" id="an-sessions">—</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Pages read</div><div class="mr-an-val" id="an-pages">—</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Current streak</div><div class="mr-an-val" id="an-streak">—</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Best day</div><div class="mr-an-val" id="an-bestdow">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Páginas leídas</div><div class="mr-an-val" id="an-pages">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Racha actual</div><div class="mr-an-val" id="an-streak">—</div></div>
+            <div class="mr-an-stat"><div class="mr-an-label">Mejor día</div><div class="mr-an-val" id="an-bestdow">—</div></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" id="mr-an-charts">
             <div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Last 14 days</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Últimos 14 días</div>
               <div id="an-bars14" class="mr-line-host"></div>
             </div>
             <div>
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;" id="an-dow-title">Day-of-week (this week)</div>
+                <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;" id="an-dow-title">Día de la semana (esta semana)</div>
                 <div style="display:flex;gap:4px;">
-                  <button type="button" id="an-dow-prev" onclick="anDowShift(-1)" title="Previous week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:24px;height:22px;cursor:pointer;color:var(--text);font-size:14px;line-height:1;padding:0;">&#8249;</button>
-                  <button type="button" id="an-dow-next" onclick="anDowShift(1)" title="Next week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:24px;height:22px;cursor:pointer;color:var(--text);font-size:14px;line-height:1;padding:0;">&#8250;</button>
+                  <button type="button" id="an-dow-prev" onclick="anDowShift(-1)" title="Semana anterior" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:24px;height:22px;cursor:pointer;color:var(--text);font-size:14px;line-height:1;padding:0;">&#8249;</button>
+                  <button type="button" id="an-dow-next" onclick="anDowShift(1)" title="Semana siguiente" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:24px;height:22px;cursor:pointer;color:var(--text);font-size:14px;line-height:1;padding:0;">&#8250;</button>
                 </div>
               </div>
               <div id="an-bars7" class="mr-line-host"></div>
@@ -4090,16 +4090,16 @@ def register_student_routes(app, csrf, limiter):
           <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--border);" id="cb-section">
             <div id="cb-head" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
               <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-                <button type="button" id="cb-back" onclick="cbBack()" style="display:none;background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);font-size:13px;flex-shrink:0;">&#8592; Back</button>
+                <button type="button" id="cb-back" onclick="cbBack()" style="display:none;background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);font-size:13px;flex-shrink:0;">&#8592; Volver</button>
                 <div style="min-width:0;">
-                  <div id="cb-title" style="font-weight:700;font-size:15px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Study time per course</div>
-                  <div id="cb-subtitle" style="font-size:12px;color:var(--text-muted);">Click any bar to see the day-by-day breakdown.</div>
+                  <div id="cb-title" style="font-weight:700;font-size:15px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tiempo de estudio por curso</div>
+                  <div id="cb-subtitle" style="font-size:12px;color:var(--text-muted);">Haz clic en una barra para ver el desglose día a día.</div>
                 </div>
               </div>
               <div id="cb-week-nav" style="display:none;align-items:center;gap:4px;flex-shrink:0;">
-                <button type="button" id="cb-week-prev" onclick="cbWeekShift(-1)" title="Previous week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8249;</button>
-                <div id="cb-week-label" style="font-size:12px;color:var(--text-muted);min-width:90px;text-align:center;">this week</div>
-                <button type="button" id="cb-week-next" onclick="cbWeekShift(1)" title="Next week" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8250;</button>
+                <button type="button" id="cb-week-prev" onclick="cbWeekShift(-1)" title="Semana anterior" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8249;</button>
+                <div id="cb-week-label" style="font-size:12px;color:var(--text-muted);min-width:90px;text-align:center;">esta semana</div>
+                <button type="button" id="cb-week-next" onclick="cbWeekShift(1)" title="Semana siguiente" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8250;</button>
               </div>
             </div>
             <div id="cb-stage" style="position:relative;min-height:260px;">
@@ -4108,7 +4108,7 @@ def register_student_routes(app, csrf, limiter):
               <div id="cb-view-exam" class="cb-view" style="display:none;"></div>
             </div>
             <div id="cb-empty" style="display:none;text-align:center;padding:20px 10px 0;color:var(--text-muted);font-size:13px;">
-              No course-tagged focus sessions yet. Start a timer on <a href="/student/focus" style="color:var(--primary);">Focus Mode</a> and pick a course to populate this chart.
+              Aún no hay sesiones etiquetadas con un curso. Inicia un temporizador en <a href="/student/focus" style="color:var(--primary);">Modo Enfoque</a> y elige un curso para llenar este gráfico.
             </div>
           </div>
         </div>
@@ -4388,8 +4388,8 @@ def register_student_routes(app, csrf, limiter):
             window.__cbState = {{ view: 'courses', courseId: null, examId: null, weekOffset: 0 }};
             document.getElementById('cb-back').style.display = 'none';
             document.getElementById('cb-week-nav').style.display = 'none';
-            document.getElementById('cb-title').textContent = 'Study time per course';
-            document.getElementById('cb-subtitle').textContent = 'Click any bar to see the day-by-day breakdown.';
+            document.getElementById('cb-title').textContent = 'Tiempo de estudio por curso';
+            document.getElementById('cb-subtitle').textContent = 'Haz clic en una barra para ver el desglose día a día.';
             try {{
               var r = await fetch('/api/student/stats/per_course');
               if (!r.ok) return;
@@ -4432,7 +4432,7 @@ def register_student_routes(app, csrf, limiter):
               if (!r.ok) return;
               var data = await r.json();
               document.getElementById('cb-title').textContent = data.course.name;
-              document.getElementById('cb-subtitle').textContent = 'Days studied this week · exams in this course.';
+              document.getElementById('cb-subtitle').textContent = 'Días estudiados esta semana · evaluaciones de este curso.';
               document.getElementById('cb-week-label').textContent = cbWeekLabel(wo);
               var nextBtn = document.getElementById('cb-week-next');
               if (nextBtn) {{
@@ -4464,7 +4464,7 @@ def register_student_routes(app, csrf, limiter):
               html += '<div class="cb-section-title">Days — '+esc(cbWeekLabel(wo))+' · total '+fmtM(weekTotal)+'</div>';
               html += '<div id="cb-course-days"></div>';
               html += '<div style="height:18px;"></div>';
-              html += '<div class="cb-section-title">Exams in this course <span style="color:var(--text-muted);text-transform:none;letter-spacing:0;font-weight:400;font-size:11px;">— click a bar to drill down</span></div>';
+              html += '<div class="cb-section-title">Pruebas de este curso <span style="color:var(--text-muted);text-transform:none;letter-spacing:0;font-weight:400;font-size:11px;">— click a bar to drill down</span></div>';
               html += '<div id="cb-course-exams"></div>';
               if (!examItems.length) html += '<div style="font-size:12px;color:var(--text-muted);padding:10px 2px;">No exams added for this course yet.</div>';
               host.innerHTML = html;
@@ -5271,11 +5271,11 @@ def register_student_routes(app, csrf, limiter):
 
               <div style="font-size:48px;margin-bottom:16px;">&#129302;</div>
 
-              <h2>No study plan yet</h2>
+              <h2>Aún no tienes plan de estudio</h2>
 
               <p style="color:var(--text-muted);margin:12px 0 24px;">Sync your Canvas courses first, then generate an AI study plan.</p>
 
-              <button onclick="generatePlan()" class="btn btn-primary" id="plan-btn">Generate Study Plan</button>
+              <button onclick="generatePlan()" class="btn btn-primary" id="plan-btn">Generar plan de estudio</button>
 
             </div>"""
 
@@ -5577,9 +5577,9 @@ def register_student_routes(app, csrf, limiter):
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px;">
 
-          <div class="stat-card stat-purple"><div class="num" id="stat-hours">{focus_stats['total_hours']}</div><div class="label">Hours Today</div></div>
+          <div class="stat-card stat-purple"><div class="num" id="stat-hours">{focus_stats['total_hours']}</div><div class="label">Horas hoy</div></div>
 
-          <div class="stat-card stat-blue"><div class="num" id="stat-sessions">{focus_stats['sessions']}</div><div class="label">Sessions Today</div></div>
+          <div class="stat-card stat-blue"><div class="num" id="stat-sessions">{focus_stats['sessions']}</div><div class="label">Sesiones hoy</div></div>
 
           <div class="stat-card stat-red"><div class="num" id="stat-streak">{focus_stats['streak_days']}</div><div class="label">Day Streak &#128293;</div></div>
 
@@ -5721,7 +5721,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div class="form-group" style="margin-bottom:12px;">
 
-                <label style="font-size:12px;">Target pages</label>
+                <label style="font-size:12px;">Páginas objetivo</label>
 
                 <input type="number" id="page-target" value="20" min="1" max="500" class="edit-input" onchange="updatePageProgress()">
 
@@ -5799,7 +5799,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div id="timer-display" style="font-size:64px;font-weight:800;font-family:monospace;color:var(--text);letter-spacing:2px;">25:00</div>
 
-              <div id="timer-label" style="font-size:14px;color:var(--text-muted);margin-top:4px;">Ready to focus</div>
+              <div id="timer-label" style="font-size:14px;color:var(--text-muted);margin-top:4px;">Listo para enfocarte</div>
 
               <div id="pomo-count" style="font-size:12px;color:var(--text-muted);margin-top:4px;">Session 1 of 4</div>
 
@@ -5925,7 +5925,7 @@ def register_student_routes(app, csrf, limiter):
 
                   Block Instagram, TikTok, Twitter/X and other time-sinks automatically while a session is running.
 
-                  <b style="color:var(--text);">YouTube stays allowed</b> — because you might actually be studying.
+                  <b style="color:var(--text);">YouTube sigue permitido</b> — because you might actually be studying.
 
                 </p>
 
@@ -5959,7 +5959,7 @@ def register_student_routes(app, csrf, limiter):
 
                   <a href="/download/focus-guard.zip" class="btn btn-primary btn-sm" download>&#11015; Download extension</a>
 
-                  <button onclick="document.getElementById('fg-how').style.display='block';this.style.display='none';" class="btn btn-outline btn-sm">How to install</button>
+                  <button onclick="document.getElementById('fg-how').style.display='block';this.style.display='none';" class="btn btn-outline btn-sm">Cómo instalar</button>
 
                 </div>
 
@@ -5975,9 +5975,9 @@ def register_student_routes(app, csrf, limiter):
 
                     <li>Open <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">chrome://extensions</code> (or <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">edge://extensions</code>).</li>
 
-                    <li>Toggle <b>Developer mode</b> on (top-right).</li>
+                    <li>Toggle <b>Modo desarrollador</b> on (top-right).</li>
 
-                    <li>Click <b>Load unpacked</b> and select the unzipped <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">focus-guard</code> folder.</li>
+                    <li>Click <b>Cargar sin empaquetar</b> and select the unzipped <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">focus-guard</code> folder.</li>
 
                     <li>Start a timer here — external distractions get blocked automatically.</li>
 
@@ -7708,7 +7708,7 @@ def register_student_routes(app, csrf, limiter):
             <div id="tr-quiz-head"></div>
             <div id="tr-quiz-body"></div>
             <div id="tr-quiz-foot" style="text-align:right;margin-top:14px;">
-              <button class="tr-btn ghost" id="tr-quiz-close">Close</button>
+              <button class="tr-btn ghost" id="tr-quiz-close">Cerrar</button>
               <button class="tr-btn" id="tr-quiz-submit">Enviar</button>
             </div>
           </div>
@@ -7972,7 +7972,7 @@ def register_student_routes(app, csrf, limiter):
 
         <div id="gen-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
 
-          <h3 style="margin:0 0 14px;">Generate Practice Problems</h3>
+          <h3 style="margin:0 0 14px;">Generar problemas de práctica</h3>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
 
@@ -8010,7 +8010,7 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="form-group">
 
-              <label>Number of problems</label>
+              <label>Número de problemas</label>
 
               <select id="prac-count" class="edit-input">
 
@@ -8126,7 +8126,7 @@ def register_student_routes(app, csrf, limiter):
 
               + '<div class="solution-area">'
 
-              + '<h4>Step-by-step Solution</h4>'
+              + '<h4>Solución paso a paso</h4>'
 
               + '<div class="solution-text">' + escHtml(p.solution) + '</div>'
 
@@ -8328,7 +8328,7 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="form-group">
 
-              <label>Canvas URL</label>
+              <label>URL de Canvas</label>
 
               <input id="canvas-url" type="url" placeholder="https://yourschool.instructure.com" value="{_esc(url_val)}" required>
 
@@ -8336,7 +8336,7 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="form-group">
 
-              <label>API Access Token</label>
+              <label>Token de acceso API</label>
 
               <input id="canvas-token" type="password" placeholder="Paste your Canvas access token" {'value="********"' if connected else ''} required>
 
@@ -8790,7 +8790,7 @@ def register_student_routes(app, csrf, limiter):
 
             {day_rows}
 
-            <button onclick="saveSchedule()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="save-sched-btn">Save Schedule</button>
+            <button onclick="saveSchedule()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="save-sched-btn">Guardar horario</button>
 
           </div>
 
@@ -8860,7 +8860,7 @@ def register_student_routes(app, csrf, limiter):
 
           <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.4);">
 
-            <h3 style="margin:0 0 4px;">&#128197; <span id="ov-modal-date">Set availability</span></h3>
+            <h3 style="margin:0 0 4px;">&#128197; <span id="ov-modal-date">Definir disponibilidad</span></h3>
 
             <p id="ov-modal-weekday" style="font-size:13px;color:var(--text-muted);margin:0 0 16px;"></p>
 
@@ -8872,7 +8872,7 @@ def register_student_routes(app, csrf, limiter):
 
                   <input type="radio" name="ov-mode" value="default" id="ov-mode-default">
 
-                  <span><b>Use weekly default</b><br><span style="font-size:12px;color:var(--text-muted);">Remove any override for this date</span></span>
+                  <span><b>Usar predeterminado semanal</b><br><span style="font-size:12px;color:var(--text-muted);">Quitar override de esta fecha</span></span>
 
                 </label>
 
@@ -8906,7 +8906,7 @@ def register_student_routes(app, csrf, limiter):
 
                   <input type="radio" name="ov-mode" value="free" id="ov-mode-free">
 
-                  <span><b>Día libre</b><br><span style="font-size:12px;color:var(--text-muted);">No study scheduled this day</span></span>
+                  <span><b>Día libre</b><br><span style="font-size:12px;color:var(--text-muted);">Sin estudio programado este día</span></span>
 
                 </label>
 
@@ -10957,7 +10957,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div id="gen-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
 
-          <h3 style="margin:0 0 14px;">Generate AI Flashcards</h3>
+          <h3 style="margin:0 0 14px;">Generar tarjetas con IA</h3>
 
 
 
@@ -11003,7 +11003,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div class="form-group">
 
-              <label>Number of cards</label>
+              <label>Cantidad de tarjetas</label>
 
               <input type="number" id="fc-count" value="30" min="5" max="100" class="edit-input">
 
@@ -11285,7 +11285,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div id="fc-content" style="font-size:20px;line-height:1.5;color:var(--text);"></div>
 
-              <div style="position:absolute;bottom:16px;font-size:12px;color:var(--text-muted);">Click to flip</div>
+              <div style="position:absolute;bottom:16px;font-size:12px;color:var(--text-muted);">Haz clic para girar</div>
 
             </div>
 
@@ -11319,7 +11319,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="font-size:48px;margin-bottom:12px;">&#127881;</div>
 
-              <h2 style="margin:0 0 8px;">Session Complete!</h2>
+              <h2 style="margin:0 0 8px;">¡Sesión completada!</h2>
 
               <div id="fc-score" style="font-size:28px;font-weight:700;color:var(--primary);"></div>
 
@@ -11869,7 +11869,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div id="qz-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
 
-          <h3 style="margin:0 0 6px;">Generate AI Quiz</h3>
+          <h3 style="margin:0 0 6px;">Generar quiz con IA</h3>
 
           <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px;">Two ways to build a quiz. Pick one.</p>
 
@@ -11881,7 +11881,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div class="qz-mode-ic">&#128221;</div>
 
-              <div class="qz-mode-t">Official test</div>
+              <div class="qz-mode-t">Prueba oficial</div>
 
               <div class="qz-mode-s">Upload a past exam (PDF / DOCX). We re-type it verbatim. Only multiple-choice tests work.</div>
 
@@ -11941,7 +11941,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div class="form-group" style="grid-column:1 / -1;">
 
-              <label>Number of questions</label>
+              <label>Cantidad de preguntas</label>
 
               <input type="number" id="qz-count" value="10" min="5" max="100" class="edit-input">
 
@@ -12309,9 +12309,9 @@ No markdown, no code fences. ONLY JSON.
 
                     <select id="qz-timer-mode" class="edit-input">
 
-                      <option value="total">Total time for whole quiz</option>
+                      <option value="total">Tiempo total para el quiz completo</option>
 
-                      <option value="per">Time per question</option>
+                      <option value="per">Tiempo por pregunta</option>
 
                     </select>
 
@@ -12321,7 +12321,7 @@ No markdown, no code fences. ONLY JSON.
 
                     <label style="font-size:12px;color:var(--text-muted);font-weight:600;">
 
-                      <span id="qz-timer-unit-label">Minutes total</span>
+                      <span id="qz-timer-unit-label">Minutos totales</span>
 
                     </label>
 
@@ -12393,7 +12393,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div id="qz-verdict" style="display:inline-block;font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:700;padding:4px 12px;border-radius:999px;background:rgba(99,102,241,.15);color:#A78BFA;margin-bottom:10px;">Analyzing...</div>
 
-                <h2 style="margin:0 0 4px;font-size:18px;font-weight:600;color:var(--text-muted);">Quiz complete</h2>
+                <h2 style="margin:0 0 4px;font-size:18px;font-weight:600;color:var(--text-muted);">Quiz completado</h2>
 
                 <div id="qz-final-score" style="font-size:64px;font-weight:800;line-height:1;background:linear-gradient(135deg,#6366F1,#8B5CF6,#EC4899);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;"></div>
 
@@ -12527,7 +12527,7 @@ No markdown, no code fences. ONLY JSON.
 
               <button id="qz-retake-wrong" onclick="retakeWrong()" class="btn btn-outline" style="display:none;">&#9998; Retake wrong only</button>
 
-              <a href="/student/quizzes" class="btn btn-outline">Back to quizzes</a>
+              <a href="/student/quizzes" class="btn btn-outline">Volver a quizzes</a>
 
             </div>
 
@@ -12881,7 +12881,7 @@ No markdown, no code fences. ONLY JSON.
             exp.style.background = 'linear-gradient(135deg, rgba(245,158,11,.14), rgba(236,72,153,.10))';
             exp.style.color = '#FBBF24';
             exp.style.border = '1px solid rgba(245,158,11,.35)';
-            exp.innerHTML = '&#128274; <b>See why you got this wrong</b> &mdash; upgrade to <b>PLUS</b> to unlock per-question explanations on every quiz. <a href="/student/shop" style="color:#FBBF24;text-decoration:underline;font-weight:600;">Upgrade &rarr;</a>';
+            exp.innerHTML = '&#128274; <b>Ver por qué fallaste</b> &mdash; upgrade to <b>PLUS</b> to unlock per-question explanations on every quiz. <a href="/student/shop" style="color:#FBBF24;text-decoration:underline;font-weight:600;">Upgrade &rarr;</a>';
 
           }} else {{
 
@@ -13406,7 +13406,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div style="font-size:64px;margin-bottom:16px;">&#128221;</div>
 
-          <h1 style="margin:0;">Exam Simulator</h1>
+          <h1 style="margin:0;">Simulador de prueba</h1>
 
           <p style="color:var(--text-muted);margin:8px 0 0;">{_esc(quiz.get('title',''))}</p>
 
@@ -13436,9 +13436,9 @@ No markdown, no code fences. ONLY JSON.
 
                 <li>Timer runs continuously — no pausing</li>
 
-                <li>Answers are final once submitted</li>
+                <li>Las respuestas son finales una vez enviadas</li>
 
-                <li>Detailed analytics provided at the end</li>
+                <li>Análisis detallado al finalizar</li>
 
               </ul>
 
@@ -13512,7 +13512,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div id="exam-emoji" style="font-size:64px;margin-bottom:12px;">&#127942;</div>
 
-            <h1 style="margin:0 0 8px;">Exam Complete!</h1>
+            <h1 style="margin:0 0 8px;">¡Prueba completada!</h1>
 
             <div id="exam-final-score" style="font-size:48px;font-weight:800;color:var(--primary);"></div>
 
@@ -13536,7 +13536,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div id="anal-avg-time" style="font-size:24px;font-weight:700;color:var(--primary);">0s</div>
 
-                <div style="font-size:12px;color:var(--text-muted);">Avg per question</div>
+                <div style="font-size:12px;color:var(--text-muted);">Promedio por pregunta</div>
 
               </div>
 
@@ -13544,7 +13544,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div id="anal-fastest" style="font-size:24px;font-weight:700;color:#10B981;">0s</div>
 
-                <div style="font-size:12px;color:var(--text-muted);">Fastest answer</div>
+                <div style="font-size:12px;color:var(--text-muted);">Respuesta más rápida</div>
 
               </div>
 
@@ -13552,7 +13552,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div id="anal-slowest" style="font-size:24px;font-weight:700;color:#EF4444;">0s</div>
 
-                <div style="font-size:12px;color:var(--text-muted);">Slowest answer</div>
+                <div style="font-size:12px;color:var(--text-muted);">Respuesta más lenta</div>
 
               </div>
 
@@ -13578,7 +13578,7 @@ No markdown, no code fences. ONLY JSON.
 
             <button onclick="location.reload()" class="btn btn-primary">&#128260; Retake Exam</button>
 
-            <a href="/student/quizzes" class="btn btn-outline">Back to Quizzes</a>
+            <a href="/student/quizzes" class="btn btn-outline">Volver a quizzes</a>
 
           </div>
 
@@ -13956,7 +13956,7 @@ No markdown, no code fences. ONLY JSON.
 
             <h1 style="margin:0;">&#128221; AI Study Notes</h1>
 
-            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Comprehensive notes generated from your course materials</p>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Apuntes completos generados a partir de tu material de curso</p>
 
           </div>
 
@@ -13968,7 +13968,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div id="note-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
 
-          <h3 style="margin:0 0 14px;">Generate AI Study Notes</h3>
+          <h3 style="margin:0 0 14px;">Generar apuntes con IA</h3>
 
           <div class="form-group">
 
