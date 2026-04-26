@@ -2971,14 +2971,14 @@ def get_note_fork_count(author_id: int) -> int:
 # -- Daily Quests --------------------------------------------
 
 QUEST_POOL = [
-    {"key": "focus_25",    "label": "Focus for 25 minutes",         "target": 25,  "xp": 3,  "metric": "focus_minutes"},
-    {"key": "focus_60",    "label": "Focus for 60 minutes",         "target": 60,  "xp": 5,  "metric": "focus_minutes"},
-    {"key": "flashcards_20","label": "Review 20 flashcards",        "target": 20,  "xp": 15, "metric": "flashcards_reviewed"},
-    {"key": "quiz_1",      "label": "Complete 1 quiz",              "target": 1,   "xp": 20, "metric": "quizzes_completed"},
-    {"key": "session_3",   "label": "Finish 3 study sessions",      "target": 3,   "xp": 20, "metric": "sessions_completed"},
-    {"key": "pages_15",    "label": "Read 15 pages of material",    "target": 15,  "xp": 15, "metric": "pages_read"},
-    {"key": "exam_review_15","label": "15 min reviewing for an exam","target": 15, "xp": 4,  "metric": "focus_minutes"},
-    {"key": "training_1",  "label": "Finish 1 community training quiz","target": 1, "xp": 20, "metric": "training_completed"},
+    {"key": "focus_25",    "label": "Enfócate 25 minutos",            "target": 25,  "xp": 3,  "metric": "focus_minutes"},
+    {"key": "focus_60",    "label": "Enfócate 60 minutos",            "target": 60,  "xp": 5,  "metric": "focus_minutes"},
+    {"key": "flashcards_20","label": "Repasa 20 tarjetas",            "target": 20,  "xp": 15, "metric": "flashcards_reviewed"},
+    {"key": "quiz_1",      "label": "Completa 1 quiz",                "target": 1,   "xp": 20, "metric": "quizzes_completed"},
+    {"key": "session_3",   "label": "Completa 3 sesiones de estudio", "target": 3,   "xp": 20, "metric": "sessions_completed"},
+    {"key": "pages_15",    "label": "Lee 15 páginas de material",     "target": 15,  "xp": 15, "metric": "pages_read"},
+    {"key": "exam_review_15","label": "15 min repasando para una prueba", "target": 15, "xp": 4, "metric": "focus_minutes"},
+    {"key": "training_1",  "label": "Completa 1 quiz de entrenamiento comunitario", "target": 1, "xp": 20, "metric": "training_completed"},
 ]
 
 QUEST_BUNDLE_BONUS_XP = 30  # awarded when all 3 daily quests complete

@@ -1395,6 +1395,35 @@ LAYOUT = """<!DOCTYPE html>
     <div class="nav-links">
       {% if logged_in %}
         {% if account_type|default('business') == 'student' %}
+        {% if lang == 'es' %}
+        <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Panel</a>
+        <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Cursos</a>
+        <div class="nav-dropdown">
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Herramientas de Estudio &#9662;</a>
+          <div class="nav-dropdown-menu">
+            <a href="/student/flashcards">&#127183; Tarjetas</a>
+            <a href="/student/quizzes">&#128221; Quizzes</a>
+            <a href="/student/essay">&#9999;&#65039; Ensayos</a>
+            <a href="/student/practice">&#128736; Práctica</a>
+          </div>
+        </div>
+        <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Enfoque</a>
+        <a href="/student/training" {% if active_page == 'student_training' %}class="active"{% endif %}>&#128170; Entrenamiento</a>
+        <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Mercado</a>
+        <div class="nav-divider"></div>
+        <div class="nav-dropdown">
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>Más &#9662;</a>
+          <div class="nav-dropdown-menu">
+            <a href="/student/friends">&#128101; Amigos</a>
+            <a href="/student/shop">&#129534; Tienda</a>
+            <a href="/student/gpa">&#128200; Planilla de Notas</a>
+            <a href="/student/achievements">&#127942; XP e Insignias</a>
+          </div>
+        </div>
+        <a href="/student/leaderboard" {% if active_page == 'student_leaderboard' %}class="active"{% endif %}>&#127942; Ranking</a>
+        <div class="nav-divider"></div>
+        <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; Correo</a>
+        {% else %}
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <div class="nav-dropdown">
@@ -1422,6 +1451,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/leaderboard" {% if active_page == 'student_leaderboard' %}class="active"{% endif %}>&#127942; Leaderboard</a>
         <div class="nav-divider"></div>
         <a href="/mail-hub" {% if active_page == 'mail_hub' %}class="active"{% endif %}>&#128233; Mail</a>
+        {% endif %}
         <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881;</a>
         {% else %}
         <a href="/dashboard" {% if active_page == 'dashboard' %}class="active"{% endif %}>&#128640; Coming soon</a>
@@ -1458,12 +1488,21 @@ LAYOUT = """<!DOCTYPE html>
     {{content|safe}}
   </div>
   <footer style="border-top:1px solid var(--border);margin-top:48px;padding:24px 48px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-muted);flex-wrap:wrap;gap:12px;">
+    {% if lang == 'es' %}
+    <span>&copy; 2026 MachReach. Todos los derechos reservados.</span>
+    <div style="display:flex;gap:18px;">
+      <a href="/privacy" style="color:var(--text-muted);text-decoration:none;">Política de Privacidad</a>
+      <a href="/terms" style="color:var(--text-muted);text-decoration:none;">Términos del Servicio</a>
+      <a href="mailto:support@machreach.com" style="color:var(--text-muted);text-decoration:none;">Contacto</a>
+    </div>
+    {% else %}
     <span>&copy; 2026 MachReach. All rights reserved.</span>
     <div style="display:flex;gap:18px;">
       <a href="/privacy" style="color:var(--text-muted);text-decoration:none;">Privacy Policy</a>
       <a href="/terms" style="color:var(--text-muted);text-decoration:none;">Terms of Service</a>
       <a href="mailto:support@machreach.com" style="color:var(--text-muted);text-decoration:none;">Contact</a>
     </div>
+    {% endif %}
   </footer>
   <script>
     // Toast notifications
@@ -2072,7 +2111,7 @@ LAYOUT = """<!DOCTYPE html>
   <!-- Cookie Consent Banner (GDPR) -->
   <div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--card);border-top:1px solid var(--border-light);box-shadow:0 -2px 16px rgba(0,0,0,.12);padding:16px 24px;font-size:13px;color:var(--text-secondary);">
     <div style="max-width:960px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <p style="flex:1;margin:0;min-width:200px;">We use essential cookies to keep you signed in and remember your preferences. No tracking or advertising cookies. <a href="/privacy" style="color:var(--primary);text-decoration:underline;">Privacy Policy</a></p>
+      <p style="flex:1;margin:0;min-width:200px;">Usamos cookies esenciales para mantener tu sesión y recordar tus preferencias. Sin cookies de tracking ni publicidad. <a href="/privacy" style="color:var(--primary);text-decoration:underline;">Privacy Policy</a></p>
       <button onclick="acceptCookies()" class="btn btn-primary btn-sm">Aceptar</button>
     </div>
   </div>
@@ -3039,19 +3078,11 @@ LAYOUT = """<!DOCTYPE html>
       "Sand": "Arena", "Cotton Candy": "Algodón de Azúcar", "Seafoam": "Espuma",
     };
 
-    // Build a single regex of all phrase keys (longest first) — replaces whole
-    // phrases only, with word boundaries, so we never mangle untranslated text
-    // like "Today's Study Plan" -> "Hoy's Estudiar Plan".
-    function _esc(s){ return s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'); }
-    var _keys = Object.keys(T).sort(function(a,b){ return b.length - a.length; });
-    var _re = new RegExp(
-      '(^|[^A-Za-zÀ-ÿ0-9_])(' + _keys.map(_esc).join('|') + ')(?![A-Za-zÀ-ÿ0-9_])',
-      'g'
-    );
-    function _replaceAll(txt){
-      return txt.replace(_re, function(_m, pre, key){ return pre + (T[key] || key); });
-    }
-
+    // EXACT-match only. We used to fall back to a partial-word regex which
+    // produced "Activo duels", "Todos-time", "Estudiar marathon invites",
+    // "Academic Perfil" etc. — bare entries like "Active": "Activo" would
+    // grab one word and leave the rest English. Now if a phrase isn't in
+    // T verbatim it stays English (and we translate it at the source).
     function translate(el) {
       if (el.childElementCount === 0) {
         var raw = el.textContent;
@@ -3059,10 +3090,7 @@ LAYOUT = """<!DOCTYPE html>
         if (!txt) return;
         if (T[txt]) {
           el.textContent = raw.replace(txt, T[txt]);
-          return;
         }
-        var translated = _replaceAll(txt);
-        if (translated !== txt) el.textContent = raw.replace(txt, translated);
       }
       if (el.placeholder && T[el.placeholder]) el.placeholder = T[el.placeholder];
       if (el.title && T[el.title]) el.title = T[el.title];
@@ -6657,7 +6685,7 @@ def view_campaign(campaign_id):
 
     {% elif tab == 'activity' %}
       <div class="card">
-        <div class="card-header"><h2>Recent Activity</h2></div>
+        <div class="card-header"><h2>Actividad reciente</h2></div>
         {{activity_html}}
       </div>
     {% endif %}
@@ -10093,7 +10121,7 @@ def billing_page():
         if is_current:
             btn = '<button class="btn btn-outline btn-sm" disabled style="width:100%;justify-content:center;opacity:0.5;">Current Plan</button>'
         elif p == "free":
-            btn = '<form method="post" action="/billing/downgrade"><button class="btn btn-outline btn-sm" style="width:100%;justify-content:center;">Bajar plan</button></form>'
+            btn = '<form method="post" action="/billing/downgrade"><button class="btn btn-outline btn-sm" style="width:100%;justify-content:center;">Bajar a Gratis</button></form>'
         elif not has_variant.get(p):
             btn = '<button class="btn btn-outline btn-sm" disabled style="width:100%;">Not available</button>'
         else:

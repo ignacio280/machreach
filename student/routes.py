@@ -3907,7 +3907,7 @@ def register_student_routes(app, csrf, limiter):
 
         if not exams_html:
 
-            exams_html = """<div class="empty-state compact reveal"><div class="empty-icon">&#128221;</div><h3>Sin pruebas próximas</h3><p>Add an exam from any course page so it shows up here, sorted by urgency.</p><div class="empty-actions"><a href="/student/exams" class="primary">&#128221; Manage exams</a></div></div>"""
+            exams_html = """<div class="empty-state compact reveal"><div class="empty-icon">&#128221;</div><h3>Sin pruebas próximas</h3><p>Agrega una evaluación desde cualquier curso y aparecerá aquí, ordenada por urgencia.</p><div class="empty-actions"><a href="/student/exams" class="primary">&#128221; Administrar pruebas</a></div></div>"""
 
 
 
@@ -4562,9 +4562,9 @@ def register_student_routes(app, csrf, limiter):
 
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
 
-            <h2 style="margin:0">&#128221; Upcoming exams</h2>
+            <h2 style="margin:0">&#128221; Pruebas próximas</h2>
 
-            <a href="/student/exams" style="font-size:13px;color:var(--text-muted);text-decoration:none;">Manage &rarr;</a>
+            <a href="/student/exams" style="font-size:13px;color:var(--text-muted);text-decoration:none;">Administrar &rarr;</a>
 
           </div>
 
@@ -4580,7 +4580,7 @@ def register_student_routes(app, csrf, limiter):
 
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
 
-            <h2 style="margin:0">&#127919; Daily Quests</h2>
+            <h2 style="margin:0">&#127919; Misiones diarias</h2>
 
             <span id="dq-streak" style="font-size:13px;color:var(--text-muted)"></span>
 
@@ -4606,13 +4606,13 @@ def register_student_routes(app, csrf, limiter):
 
             if (s && s.streak !== undefined) {{
 
-              const fz = s.freeze && s.freeze.available ? '&#128737;&#65039; freeze ready' : (s.freeze ? '&#128737;&#65039; freeze used' : '');
+              const fz = s.freeze && s.freeze.available ? '&#128737;&#65039; congelador listo' : (s.freeze ? '&#128737;&#65039; congelador usado' : '');
 
-              sBox.innerHTML = '&#128293; ' + s.streak + '-day streak' + (fz ? ' &middot; ' + fz : '');
+              sBox.innerHTML = '&#128293; racha de ' + s.streak + ' días' + (fz ? ' &middot; ' + fz : '');
 
             }}
 
-            if (!r.quests || !r.quests.length) {{ list.textContent = 'No quests yet.'; return; }}
+            if (!r.quests || !r.quests.length) {{ list.textContent = 'Sin misiones todavía.'; return; }}
 
             list.innerHTML = r.quests.map(q => {{
 
@@ -4640,9 +4640,9 @@ def register_student_routes(app, csrf, limiter):
 
               </div>`;
 
-            }}).join('') + `<div style="font-size:12px;color:var(--text-muted);margin-top:10px">Complete all 3 for a <b style="color:#8b5cf6">+${{r.bundle_bonus_xp}} XP</b> bonus.</div>`;
+            }}).join('') + `<div style="font-size:12px;color:var(--text-muted);margin-top:10px">Completa las 3 para un bono de <b style="color:#8b5cf6">+${{r.bundle_bonus_xp}} XP</b>.</div>`;
 
-          }} catch(e) {{ document.getElementById('dq-list').textContent = 'Could not load quests.'; }}
+          }} catch(e) {{ document.getElementById('dq-list').textContent = 'No se pudieron cargar las misiones.'; }}
 
         }})();
 
@@ -4812,7 +4812,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div style="font-size:36px;margin-bottom:10px;">&#128218;</div>
 
-              No courses yet. <a href="/student/canvas-settings" style="color:var(--primary);">Conectar Canvas</a> and your courses will appear here automatically.
+              Aún no hay cursos. <a href="/student/canvas-settings" style="color:var(--primary);">Conecta Canvas</a> y tus cursos aparecerán aquí automáticamente.
 
             </td></tr>"""
 
@@ -5641,7 +5641,7 @@ def register_student_routes(app, csrf, limiter):
 
               <select id="focus-course" class="edit-input" required onchange="onFocusCourseChange()">
 
-                <option value="">— Pick a course to start —</option>
+                <option value="">— Elige un curso para empezar —</option>
 
                 {course_options}
 
@@ -5801,7 +5801,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div id="timer-label" style="font-size:14px;color:var(--text-muted);margin-top:4px;">Listo para enfocarte</div>
 
-              <div id="pomo-count" style="font-size:12px;color:var(--text-muted);margin-top:4px;">Session 1 of 4</div>
+              <div id="pomo-count" style="font-size:12px;color:var(--text-muted);margin-top:4px;">Sesión 1 de 4</div>
 
             </div>
 
@@ -5823,7 +5823,7 @@ def register_student_routes(app, csrf, limiter):
 
             <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:10px;">
 
-              Shortcuts: <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Space</kbd> start/pause
+              Shortcuts: <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Space</kbd> iniciar/pausar
 
               &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">R</kbd> reset
 
@@ -5857,11 +5857,11 @@ def register_student_routes(app, csrf, limiter):
 
                     value="https://open.spotify.com/playlist/0vvXsWCC9xrXsKd4FyS8kM">
 
-                  <button onclick="loadSpotify()" class="btn btn-outline btn-sm">Load</button>
+                  <button onclick="loadSpotify()" class="btn btn-outline btn-sm">Cargar</button>
 
                 </div>
 
-                <small style="display:block;margin-top:6px;color:var(--text-muted);font-size:11px;">Music plays while you're on this page. For uninterrupted background music, use the Spotify desktop app or a separate browser tab.</small>
+                <small style="display:block;margin-top:6px;color:var(--text-muted);font-size:11px;">La música suena mientras estás en esta página. Para música sin interrupciones usa la app de escritorio de Spotify o una pestaña separada.</small>
 
               </div>
 
@@ -5923,7 +5923,7 @@ def register_student_routes(app, csrf, limiter):
 
                 <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;line-height:1.55;">
 
-                  Block Instagram, TikTok, Twitter/X and other time-sinks automatically while a session is running.
+                  Bloquea Instagram, TikTok, Twitter/X y otras distracciones automáticamente durante la sesión.
 
                   <b style="color:var(--text);">YouTube sigue permitido</b> — because you might actually be studying.
 
@@ -6906,7 +6906,7 @@ def register_student_routes(app, csrf, limiter):
 
             timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
 
-            document.getElementById('pomo-count').textContent = 'Session 1 of 4';
+            document.getElementById('pomo-count').textContent = 'Sesión 1 de 4';
 
           }} else if (currentMode === 'custom') {{
 
@@ -11857,7 +11857,7 @@ No markdown, no code fences. ONLY JSON.
 
             <h1 style="margin:0;">&#128221; Practice Quizzes</h1>
 
-            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Pick where your questions come from &mdash; an official test or your own notes.</p>
+            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Elige de dónde vienen tus preguntas &mdash; una prueba oficial o tus propios apuntes.</p>
 
           </div>
 
@@ -15751,15 +15751,15 @@ No markdown, no code fences. ONLY JSON.
 
         cid = _cid()
 
-        return _s_render("Friends & Duels", f"""
+        return _s_render("Amigos y Duelos", f"""
 
         <div style="max-width:900px;margin:0 auto">
 
-          <h2 style="margin-bottom:6px"><span style="font-size:1.3em">&#128101;</span> Friends &amp; Duels</h2>
+          <h2 style="margin-bottom:6px"><span style="font-size:1.3em">&#128101;</span> Amigos y Duelos</h2>
 
           <div style="color:var(--text-muted);margin-bottom:14px;font-size:13px">
 
-            Your user ID: <b style="color:var(--text)">#{cid}</b> &middot; share this so friends can find you.
+            Tu ID de usuario: <b style="color:var(--text)">#{cid}</b> &middot; compártelo para que tus amigos te encuentren.
 
           </div>
 
@@ -15769,7 +15769,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
 
-              <input id="fr-search" placeholder="Search by name, email, or #ID" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+              <input id="fr-search" placeholder="Buscar por nombre, correo o #ID" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
 
               <button class="btn btn-primary" onclick="frSearch()">Buscar</button>
 
@@ -15783,7 +15783,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div id="fr-incoming-wrap" class="card" style="margin-bottom:18px;padding:16px;display:none">
 
-            <h3 style="margin:0 0 10px 0">Friend requests</h3>
+            <h3 style="margin:0 0 10px 0">Solicitudes de amistad</h3>
 
             <div id="fr-incoming"></div>
 
@@ -15793,7 +15793,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card" style="margin-bottom:18px;padding:16px">
 
-            <h3 style="margin:0 0 10px 0">Your friends</h3>
+            <h3 style="margin:0 0 10px 0">Tus amigos</h3>
 
             <div id="fr-friends">Cargando…</div>
 
@@ -15803,7 +15803,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card" style="margin-bottom:18px;padding:16px">
 
-            <h3 style="margin:0 0 10px 0">⚔️ Quiz duels</h3>
+            <h3 style="margin:0 0 10px 0">⚔️ Duelos de quiz</h3>
 
             <div id="fr-quiz-duels" style="font-size:13px;color:var(--text-muted)">Cargando…</div>
 
@@ -15813,19 +15813,9 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card" style="margin-bottom:18px;padding:16px">
 
-            <h3 style="margin:0 0 10px 0">📅 Study marathon invites</h3>
+            <h3 style="margin:0 0 10px 0">📅 Invitaciones a maratón de estudio</h3>
 
-            <div id="fr-marathon-pending" style="font-size:13px;color:var(--text-muted)">No pending marathon invites.</div>
-
-          </div>
-
-
-
-          <div class="card" style="margin-bottom:18px;padding:16px">
-
-            <h3 style="margin:0 0 10px 0">Active duels</h3>
-
-            <div id="fr-active-duels">No active duels.</div>
+            <div id="fr-marathon-pending" style="font-size:13px;color:var(--text-muted)">Sin invitaciones pendientes.</div>
 
           </div>
 
@@ -15833,9 +15823,19 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card" style="margin-bottom:18px;padding:16px">
 
-            <h3 style="margin:0 0 10px 0">Duel history</h3>
+            <h3 style="margin:0 0 10px 0">Duelos activos</h3>
 
-            <div id="fr-history">No completed duels yet.</div>
+            <div id="fr-active-duels">Sin duelos activos.</div>
+
+          </div>
+
+
+
+          <div class="card" style="margin-bottom:18px;padding:16px">
+
+            <h3 style="margin:0 0 10px 0">Historial de duelos</h3>
+
+            <div id="fr-history">Aún no hay duelos completados.</div>
 
           </div>
 
@@ -16082,7 +16082,7 @@ No markdown, no code fences. ONLY JSON.
                 </div>
                 <button class="btn btn-sm btn-outline" onclick="mCancel(${{d.id}})">Cancelar</button>
               </div>`).join('');
-            mbox.innerHTML = (inc + out) || '<div style="color:var(--text-muted);font-size:13px">No pending marathon invites.</div>';
+            mbox.innerHTML = (inc + out) || '<div style="color:var(--text-muted);font-size:13px">Sin invitaciones pendientes.</div>';
           }} catch(e) {{}}
 
           const d = await fetch('/api/student/duels/list').then(r=>r.json());
@@ -16111,7 +16111,7 @@ No markdown, no code fences. ONLY JSON.
 
             }}).join('');
 
-          }} else {{ ad.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No active duels.</div>'; }}
+          }} else {{ ad.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Sin duelos activos.</div>'; }}
 
           const hist = document.getElementById('fr-history');
 
@@ -16135,7 +16135,7 @@ No markdown, no code fences. ONLY JSON.
 
             }}).join('');
 
-          }} else {{ hist.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No completed duels yet.</div>'; }}
+          }} else {{ hist.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Aún no hay duelos completados.</div>'; }}
 
           // Quiz duels (v2 — file-upload + AI)
           try {{
@@ -16165,7 +16165,7 @@ No markdown, no code fences. ONLY JSON.
               </div>`;
             }}).join('');
             const inner = (incoming + playable);
-            qbox.innerHTML = inner || '<div style="color:var(--text-muted);font-size:13px">No quiz duels right now. Click <b>Desafiar</b> on a friend to start one.</div>';
+            qbox.innerHTML = inner || '<div style="color:var(--text-muted);font-size:13px">No hay duelos activos. Haz clic en <b>Desafiar</b> a un amigo para empezar uno.</div>';
           }} catch(e) {{}}
 
           }} finally {{ __loadingAll = false; }}
@@ -16576,8 +16576,8 @@ No markdown, no code fences. ONLY JSON.
 
 <div id="mr-lb-page">
   <section class="lb-hero">
-    <h2>🏆 Climb the ranks.</h2>
-    <p>Your XP is live-counted against every other student — globally, and in your country, university, and major.</p>
+    <h2>🏆 Sube en el ranking.</h2>
+    <p>Tu XP se cuenta en vivo contra todos los demás estudiantes — globalmente y en tu país, universidad y carrera.</p>
     <div class="lb-rank-strip" id="lbRankStrip">
       <div class="lb-rank-card"><div class="label">Global</div><div class="rank-big" id="lb_r_global">—</div></div>
       <div class="lb-rank-card"><div class="label">País</div><div class="rank-big" id="lb_r_country">—</div></div>
@@ -16588,16 +16588,16 @@ No markdown, no code fences. ONLY JSON.
 
   <div class="lb-tabs" id="lbTabs">
     <div class="lb-tab active" data-scope="global">🌍 Global</div>
-    <div class="lb-tab" data-scope="country">🏳️ Country</div>
-    <div class="lb-tab" data-scope="university">🎓 University</div>
-    <div class="lb-tab" data-scope="major">📚 Major</div>
-    <div class="lb-tab" data-scope="retirement" title="Retired students only">🏖️ Retired</div>
+    <div class="lb-tab" data-scope="country">🏳️ País</div>
+    <div class="lb-tab" data-scope="university">🎓 Universidad</div>
+    <div class="lb-tab" data-scope="major">📚 Carrera</div>
+    <div class="lb-tab" data-scope="retirement" title="Solo egresados">🏖️ Egresados</div>
   </div>
 
   <div class="lb-tabs" id="lbPeriodTabs" style="margin-top:-8px;">
-    <div class="lb-tab active" data-period="all">🏛️ All-time</div>
-    <div class="lb-tab" data-period="month">📅 Monthly</div>
-    <div class="lb-tab" data-period="week">⚡ Weekly</div>
+    <div class="lb-tab active" data-period="all">🏛️ Histórico</div>
+    <div class="lb-tab" data-period="month">📅 Mensual</div>
+    <div class="lb-tab" data-period="week">⚡ Semanal</div>
   </div>
 
   <div class="lb-board" id="lbBoard">
@@ -17446,6 +17446,40 @@ No markdown, no code fences. ONLY JSON.
             "Connection error": "Error de conexión",
 
             "Error saving.": "Error al guardar.",
+
+            "Retirement": "Egreso",
+
+            "Retired": "Egresado",
+
+            "You are currently retired from active rankings. Your name only appears on the Retirement leaderboard. You can come back at any time.": "Actualmente estás egresado de los rankings activos. Tu nombre solo aparece en el ranking de egresados. Puedes volver cuando quieras.",
+
+            "Return to active rankings": "Volver a los rankings activos",
+
+            "When you finish your studies, retire to leave the active rankings with honor. Your XP is preserved and you'll appear on the Retirement leaderboard alongside other graduates. You can return at any time.": "Cuando termines tus estudios, egresa para dejar los rankings activos con honor. Tu XP se preserva y aparecerás en el ranking de egresados junto a otros graduados. Puedes volver cuando quieras.",
+
+            "Retire from active rankings": "Egresar de los rankings activos",
+
+            "Are you sure? You will be removed from the global, country, university and major leaderboards.": "¿Estás seguro? Te quitaremos de los rankings global, país, universidad y carrera.",
+
+            "Yes, retire me": "Sí, egresar",
+
+            "Retiring...": "Egresando...",
+
+            "Manage Connection": "Administrar conexión",
+
+            "Manage in Mail Hub": "Administrar en el centro de correo",
+
+            "Academic Profile": "Perfil académico",
+
+            "Used to rank you on the country, university, and major leaderboards. You can change these at any time.": "Se usa para clasificarte en los rankings de país, universidad y carrera. Puedes cambiarlo cuando quieras.",
+
+            "Save Academic Profile": "Guardar perfil académico",
+
+            "Country": "País",
+
+            "University": "Universidad",
+
+            "Major": "Carrera",
 
         }
 
@@ -18825,7 +18859,7 @@ No markdown, no code fences. ONLY JSON.
         bundle_save  = sdb.STREAK_FREEZE_PRICE * bundle_qty - bundle_price
         bundle_disabled = "disabled" if (coins < bundle_price or freezes + bundle_qty > 3) else ""
 
-        # Active boosts banner
+        # Boosts activos banner
         active_boosts = sdb.get_active_boosts(cid)
         if active_boosts:
             chips = []
@@ -18839,7 +18873,7 @@ No markdown, no code fences. ONLY JSON.
                 )
             active_html = (
                 '<div class="card" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:none;">'
-                '<div style="font-weight:700;margin-bottom:6px;color:#78350f;">Active boosts</div>'
+                '<div style="font-weight:700;margin-bottom:6px;color:#78350f;">Boosts activos</div>'
                 f'<div style="display:flex;gap:8px;flex-wrap:wrap;">{"".join(chips)}</div>'
                 '</div>'
             )
@@ -18875,7 +18909,7 @@ No markdown, no code fences. ONLY JSON.
                 if is_current:
                     btn = '<button class="btn btn-sm" disabled style="width:100%;background:#10b981;color:#fff;border:none;">Plan actual</button>'
                 elif key == "free":
-                    btn = f'<button class="btn btn-sm btn-outline" style="width:100%;" onclick="changeTier(\'{key}\')">Bajar plan</button>'
+                    btn = f'<button class="btn btn-sm btn-outline" style="width:100%;" onclick="changeTier(\'{key}\')">Bajar a Gratis</button>'
                 else:
                     btn = f'<button class="btn btn-sm btn-primary" style="width:100%;" onclick="changeTier(\'{key}\')">Mejorar a {_esc(label_name)}</button>'
                 badge = '<div style="position:absolute;top:10px;right:10px;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;">ACTIVO</div>' if is_current else ""
@@ -18981,7 +19015,7 @@ No markdown, no code fences. ONLY JSON.
                 f'  <div style="font-size:24px;font-weight:800;margin-top:6px;">{total:,} coins</div>'
                 f'  {bonus_html}'
                 f'  <div style="font-size:18px;font-weight:700;margin-top:10px;">${pcfg["price_usd"]:.2f}</div>'
-                f'  <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px;" onclick="buyCoinPack(\'{pkey}\')">Buy now</button>'
+                f'  <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px;" onclick="buyCoinPack(\'{pkey}\')">Comprar</button>'
                 f'</div>'
             )
         coin_packs_html = "".join(coin_pack_cards)
@@ -18989,8 +19023,8 @@ No markdown, no code fences. ONLY JSON.
         return _s_render("Shop", f"""
         <style>{sdb.BANNER_ANIM_CSS}
 {sdb.FLAG_ANIM_CSS}</style>
-        <h1 style="margin-bottom:6px;">\U0001f6d2 Shop</h1>
-        <p style="color:var(--text-muted);margin:0 0 24px;">Spend coins on streak freezes, profile banners, and timed boosts. Earn coins by completing focus sessions, quizzes, flashcards, and duels.</p>
+        <h1 style="margin-bottom:6px;">\U0001f6d2 Tienda</h1>
+        <p style="color:var(--text-muted);margin:0 0 24px;">Gasta monedas en congeladores de racha, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes, tarjetas y duelos.</p>
         <style>
           .sh-active-chip {{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:rgba(255,255,255,.7); border-radius:999px; font-size:12px; font-weight:600; color:#78350f; }}
           .sh-cd {{ font-variant-numeric: tabular-nums; }}
@@ -18998,50 +19032,50 @@ No markdown, no code fences. ONLY JSON.
         {active_html}
         {subscription_section}
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;">
-          <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \U0001FA99</div><div class="label">Coins</div></div>
-          <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Streak Freezes</div></div>
+          <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \U0001FA99</div><div class="label">Monedas</div></div>
+          <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Congeladores de racha</div></div>
           <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">XP total</div></div>
         </div>
 
         <div class="card">
-          <div class="card-header"><h2>\U0001FA99 Buy Coins</h2></div>
-          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Top up your wallet with real-money coin packs. Bonus coins on larger packs.</p>
+          <div class="card-header"><h2>\U0001FA99 Comprar monedas</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Recarga tu billetera con paquetes de monedas. Bonus en los paquetes más grandes.</p>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
             {coin_packs_html}
           </div>
         </div>
 
         <div class="card">
-          <div class="card-header"><h2>\u2744\ufe0f Streak Freezes</h2></div>
-          <p style="color:var(--text-muted);font-size:13px;">Used automatically when you miss a day. Max 3 owned at a time.</p>
+          <div class="card-header"><h2>\u2744\ufe0f Congeladores de racha</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Máximo 3 a la vez.</p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;">
-            <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} \U0001FA99 each</div>
-            <button class="btn btn-primary btn-sm" id="buy-freeze-btn" onclick="buyFreeze()" {freeze_btn_disabled}>Buy 1 freeze</button>
+            <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} \U0001FA99 cada uno</div>
+            <button class="btn btn-primary btn-sm" id="buy-freeze-btn" onclick="buyFreeze()" {freeze_btn_disabled}>Comprar 1</button>
             <div style="width:1px;height:24px;background:var(--border);"></div>
-            <div style="font-size:14px;"><b>3-pack</b>: {bundle_price} \U0001FA99 <span style="color:#10b981;font-weight:700;">(save {bundle_save})</span></div>
-            <button class="btn btn-primary btn-sm" onclick="buyFreezeBundle()" {bundle_disabled}>Buy 3-pack</button>
+            <div style="font-size:14px;"><b>Pack de 3</b>: {bundle_price} \U0001FA99 <span style="color:#10b981;font-weight:700;">(ahorra {bundle_save})</span></div>
+            <button class="btn btn-primary btn-sm" onclick="buyFreezeBundle()" {bundle_disabled}>Comprar pack de 3</button>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-header"><h2>🎨 Profile Banners</h2></div>
-          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Unlock banners by reaching XP tiers, then purchase with coins.</p>
+          <div class="card-header"><h2>🎨 Banners de perfil</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Desbloquéalos al alcanzar el XP requerido y cómpralos con monedas.</p>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
             {banners_html}
           </div>
         </div>
 
         <div class="card">
-          <div class="card-header"><h2>\U0001F3F4 Leaderboard Flags</h2></div>
-          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Show off on the leaderboard. Your flag streams behind your row, fading from left to right \u2014 visible to every other student.</p>
+          <div class="card-header"><h2>\U0001F3F4 Banderas del ranking</h2></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Lúcete en el ranking. Tu bandera fluye detrás de tu fila, desvaneciéndose de izquierda a derecha \u2014 visible para todos los estudiantes.</p>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
             {flags_html}
           </div>
         </div>
 
         <div class="card">
-          <div class="card-header"><h2>🎁 Identity Bundles &nbsp; <span style="font-size:13px;font-weight:600;color:#22c55e;">25% off</span></h2></div>
-          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Atomic packs that unlock a matching banner + flag for less than buying separately.</p>
+          <div class="card-header"><h2>🎁 Packs de identidad &nbsp; <span style="font-size:13px;font-weight:600;color:#22c55e;">25% de descuento</span></h2></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Packs que desbloquean banner + bandera juntos por menos que comprándolos por separado.</p>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
             {bundles_html}
           </div>
@@ -19337,7 +19371,7 @@ No markdown, no code fences. ONLY JSON.
           </div>
 
           <div class="card">
-            <div class="card-header"><h2>🎁 Identity bundles &nbsp; <span style="font-size:12px;font-weight:600;color:#22c55e;">25% off</span></h2></div>
+            <div class="card-header"><h2>🎁 Identity bundles &nbsp; <span style="font-size:12px;font-weight:600;color:#22c55e;">25% de descuento</span></h2></div>
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Bundles unlock a matching banner + flag at a discount vs buying separately.</p>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">{bundles_grid}</div>
           </div>
