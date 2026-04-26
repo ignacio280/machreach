@@ -2851,7 +2851,8 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Award XP: 1 XP per 10 minutes of study time.
+        # Award XP: 2 XP per 10 minutes of study time (focus is now the
+        # biggest XP source — quizzes and training got dialed down).
         # Breaks aren't counted — `minutes` arrives study-only because the
         # frontend reports phaseWorkMinutes=0 for break phases.
 
@@ -2859,7 +2860,7 @@ def register_student_routes(app, csrf, limiter):
 
         if minutes > 0:
 
-            xp = minutes // 10
+            xp = (minutes * 2) // 10  # 25 min → 5 XP, 60 min → 12 XP
 
             if xp > 0:
 
@@ -7686,8 +7687,8 @@ def register_student_routes(app, csrf, limiter):
         </style>
 
         <div class="tr-wrap">
-          <h1 class="tr-h1">&#128170; Training</h1>
-          <p class="tr-sub">Practice quizzes shared by other students at your university. Highest XP per attempt — way more than focus.</p>
+          <h1 class="tr-h1">&#128170; Entrenamiento</h1>
+          <p class="tr-sub">Quizzes prácticos compartidos por otros estudiantes de tu universidad. Las sesiones de Enfoque dan la mayor cantidad de XP — esto es para reforzar.</p>
 
           <div class="tr-search">
             <input id="tr-q" type="text" placeholder="Search course by name or code (e.g. IIC1103, Calculus I)" />
@@ -9641,6 +9642,8 @@ def register_student_routes(app, csrf, limiter):
 
     @app.route("/api/student/quizzes/generate", methods=["POST"])
 
+    @csrf.exempt
+
     @limiter.limit("5 per minute")
 
     def student_generate_quiz():
@@ -9885,6 +9888,8 @@ def register_student_routes(app, csrf, limiter):
 
     @app.route("/api/student/quizzes/<int:quiz_id>/score", methods=["POST"])
 
+    @csrf.exempt
+
     def student_submit_quiz_score(quiz_id):
 
         if not _logged_in():
@@ -9897,10 +9902,12 @@ def register_student_routes(app, csrf, limiter):
 
         sdb.update_quiz_score(quiz_id, score)
 
-        # XP + coins proportional to score (0-100). Awarded once per submission.
+        # XP + coins proportional to score (0-100). Quiz XP was way too
+        # generous (80% scored = 80 XP) — focus sessions are the main grind
+        # now. Quizzes give a sliver of XP plus the same coin payout.
         cid = _cid()
         try:
-            xp = max(1, score)               # 80% -> 80 XP
+            xp = max(1, score // 10)         # 80% -> 8 XP, 100% -> 10 XP
             coins = max(1, score // 10)      # 80% -> 8 coins
             if score >= 90:
                 coins += 5                   # bonus for excellent runs
@@ -9943,6 +9950,8 @@ def register_student_routes(app, csrf, limiter):
 
     @app.route("/api/student/quizzes/<int:quiz_id>", methods=["DELETE"])
 
+    @csrf.exempt
+
     def student_delete_quiz(quiz_id):
 
         if not _logged_in():
@@ -9956,6 +9965,8 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/api/student/quizzes/<int:quiz_id>/analyze", methods=["POST"])
+
+    @csrf.exempt
 
     @limiter.limit("10 per minute")
 

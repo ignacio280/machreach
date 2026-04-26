@@ -154,7 +154,7 @@ def init_training_tables() -> None:
 # Base XP per attempt. Bonus from rating is +(avg_rating - 5) * 2, capped
 # at +20, so a well-loved hard quiz can push to ~110 XP; a 1-rated easy
 # one floors at ~5.
-XP_BY_DIFFICULTY = {"easy": 15, "medium": 30, "hard": 90}
+XP_BY_DIFFICULTY = {"easy": 3, "medium": 6, "hard": 15}
 
 
 def _classify_difficulty(avg_score_pct: float | None) -> str:
