@@ -2338,31 +2338,28 @@ LAYOUT = """<!DOCTYPE html>
 
     function creditPhase(d){
       // d: a focus_float phase object that just ended.
+      // New model: phases are NOT saved automatically. They accumulate in
+      // `focus_pending_phases` and the user must click "Reclamar" on
+      // /student/focus to actually post them. Anti-cheat: every 4th work
+      // phase opens a 30-min mandatory claim window enforced by that page.
       if (!d || !d.phaseId) return;
       if (isPhaseSaved(d.phaseId)) return;
       if (!d.workMinutes || d.workMinutes <= 0) return; // breaks don't credit
-      // Defensive cap: anything above 8h on a single phase is a corrupted /
-      // tampered state, not a real session. Drop silently.
       if (d.workMinutes > 480) return;
       markPhaseSaved(d.phaseId);
-      var payload = {
-        mode: d.originalMode || 'pomodoro',
-        minutes: d.workMinutes,
-        pages: 0,
-        course_name: d.course || '',
-        course_id: d.courseId || null,
-        exam_id: d.examId || null
-      };
       try {
-        if (navigator.sendBeacon){
-          var blob = new Blob([JSON.stringify(payload)], { type:'application/json' });
-          navigator.sendBeacon('/api/student/focus/save', blob);
-        } else {
-          fetch('/api/student/focus/save', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            keepalive:true, body: JSON.stringify(payload)
-          }).catch(function(){});
-        }
+        var arr = JSON.parse(localStorage.getItem('focus_pending_phases')||'[]');
+        if (!Array.isArray(arr)) arr = [];
+        arr.push({
+          minutes: d.workMinutes,
+          courseId: d.courseId || null,
+          examId: d.examId || null,
+          courseName: d.course || '',
+          mode: d.originalMode || 'pomodoro',
+          ts: Date.now(),
+          phaseId: d.phaseId
+        });
+        localStorage.setItem('focus_pending_phases', JSON.stringify(arr));
       } catch(e){}
     }
 
@@ -2428,7 +2425,19 @@ LAYOUT = """<!DOCTYPE html>
             showNotif('Break over', 'Back to focus!');
           }
           // Advance to next phase or end.
-          if (d.nextPhase){
+          // Stop the chain at the long-break boundary: the focus page owns
+          // the mandatory 30-min claim window. Detect via the chained label
+          // ("Descanso largo" / "Long Break"), which is set by the focus page.
+          var isLongBreakNext = !!(d.nextPhase && d.nextPhase.label &&
+            (d.nextPhase.label.indexOf('largo') !== -1 || d.nextPhase.label.indexOf('Long') !== -1));
+          if (isLongBreakNext && d.workMinutes > 0){
+            try { localStorage.setItem('focus_mandatory_until', String(Date.now() + 30*60*1000)); } catch(e){}
+            d.active = false;
+            writeState(d);
+            widget.style.display = 'none';
+            stopKeepalive();
+            showNotif('¡Reclama tu descanso largo!', 'Tienes 30 min para reclamar tus recompensas en el Modo Enfoque.');
+          } else if (d.nextPhase){
             // Re-base nextPhase.endAt off NOW so a long pause doesn't make it instantly expire.
             var np = d.nextPhase;
             // The original endAt was relative to the previous phase's endAt; preserve duration.

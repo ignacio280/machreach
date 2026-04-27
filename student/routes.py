@@ -5561,9 +5561,9 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Focus Mode", f"""
 
-        <h1 style="margin-bottom:6px;">&#127917; Focus Mode</h1>
+        <h1 style="margin-bottom:6px;">&#127917; Modo Enfoque</h1>
         <p style="margin:0 0 20px;color:var(--text-muted);font-size:13px;">
-          Showing what you've studied <b style="color:var(--text);">today</b> &middot; <span id="focus-today-label">{_today_label}</span>
+          Mostrando lo que has estudiado <b style="color:var(--text);">hoy</b> &middot; <span id="focus-today-label">{_today_label}</span>
         </p>
 
 
@@ -5576,7 +5576,7 @@ def register_student_routes(app, csrf, limiter):
 
           <div class="stat-card stat-blue"><div class="num" id="stat-sessions">{focus_stats['sessions']}</div><div class="label">Sesiones hoy</div></div>
 
-          <div class="stat-card stat-red"><div class="num" id="stat-streak">{focus_stats['streak_days']}</div><div class="label">Day Streak &#128293;</div></div>
+          <div class="stat-card stat-red"><div class="num" id="stat-streak">{focus_stats['streak_days']}</div><div class="label">Racha de d&iacute;as &#128293;</div></div>
 
         </div>
 
@@ -5612,7 +5612,7 @@ def register_student_routes(app, csrf, limiter):
 
           <div class="card">
 
-            <div class="card-header"><h2>&#9201; Study Timer</h2></div>
+            <div class="card-header"><h2>&#9201; Temporizador de estudio</h2></div>
 
 
 
@@ -5622,7 +5622,7 @@ def register_student_routes(app, csrf, limiter):
 
               <button onclick="setMode('pomodoro')" class="btn btn-sm mode-btn active" id="mode-pomodoro">&#127813; Pomodoro</button>
 
-              <button onclick="setMode('custom')" class="btn btn-outline btn-sm mode-btn" id="mode-custom">&#9881; Custom</button>
+              <button onclick="setMode('custom')" class="btn btn-outline btn-sm mode-btn" id="mode-custom">&#9881; Personalizado</button>
 
             </div>
 
@@ -5632,7 +5632,7 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="form-group" style="margin-bottom:12px;">
 
-              <label style="font-size:12px;">Studying for: <span style="color:#ef4444;">*</span></label>
+              <label style="font-size:12px;">Estudiando para: <span style="color:#ef4444;">*</span></label>
 
               <select id="focus-course" class="edit-input" required onchange="onFocusCourseChange()">
 
@@ -5644,7 +5644,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div id="focus-course-warn" style="display:none;font-size:12px;color:#ef4444;margin-top:6px;">
 
-                Pick a course before starting the timer.
+                Elige un curso antes de empezar el temporizador.
 
               </div>
 
@@ -5654,17 +5654,17 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="form-group" id="focus-exam-group" style="margin-bottom:12px;display:none;">
 
-              <label style="font-size:12px;">Studying for which test? <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+              <label style="font-size:12px;">&iquest;Estudiando para qu&eacute; prueba? <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
 
               <select id="focus-exam" class="edit-input">
 
-                <option value="">— General course study —</option>
+                <option value="">— Estudio general del curso —</option>
 
               </select>
 
               <div id="focus-exam-empty" style="display:none;font-size:12px;color:var(--text-muted);margin-top:6px;">
 
-                No exams added for this course yet. Add them on <a href="/student/exams" style="color:var(--primary);">the courses tab</a>.
+                A&uacute;n no hay pruebas para este curso. Agr&eacute;galas en <a href="/student/exams" style="color:var(--primary);">la pesta&ntilde;a de cursos</a>.
 
               </div>
 
@@ -5680,7 +5680,7 @@ def register_student_routes(app, csrf, limiter):
 
                 <div class="form-group" style="flex:1;">
 
-                  <label style="font-size:12px;">Work (min)</label>
+                  <label style="font-size:12px;">Trabajo (min)</label>
 
                   <input type="number" id="pomo-work" value="25" min="5" max="120" class="edit-input">
 
@@ -5688,7 +5688,7 @@ def register_student_routes(app, csrf, limiter):
 
                 <div class="form-group" style="flex:1;">
 
-                  <label style="font-size:12px;">Break (min)</label>
+                  <label style="font-size:12px;">Descanso (min)</label>
 
                   <input type="number" id="pomo-break" value="5" min="1" max="30" class="edit-input">
 
@@ -5696,7 +5696,7 @@ def register_student_routes(app, csrf, limiter):
 
                 <div class="form-group" style="flex:1;">
 
-                  <label style="font-size:12px;">Long break (min)</label>
+                  <label style="font-size:12px;">Descanso largo (min)</label>
 
                   <input type="number" id="pomo-long" value="15" min="5" max="60" class="edit-input">
 
@@ -5704,7 +5704,7 @@ def register_student_routes(app, csrf, limiter):
 
               </div>
 
-              <p style="font-size:12px;color:var(--text-muted);margin:0;">Long break after every 4 sessions.</p>
+              <p style="font-size:12px;color:var(--text-muted);margin:0;">Descanso largo cada 4 sesiones.</p>
 
             </div>
 
@@ -5778,7 +5778,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div class="form-group" style="margin-bottom:12px;">
 
-                <label style="font-size:12px;">Duration (min)</label>
+                <label style="font-size:12px;">Duraci&oacute;n (min)</label>
 
                 <input type="number" id="custom-mins" value="45" min="5" max="300" class="edit-input">
 
@@ -5806,25 +5806,77 @@ def register_student_routes(app, csrf, limiter):
 
             <div style="display:flex;justify-content:center;gap:12px;">
 
-              <button onclick="startTimer()" id="start-btn" class="btn btn-primary">&#9654; Start</button>
+              <button onclick="startTimer()" id="start-btn" class="btn btn-primary">&#9654; Empezar</button>
 
-              <button onclick="pauseTimer()" id="pause-btn" class="btn btn-outline" style="display:none;">&#10074;&#10074; Pause</button>
+              <button onclick="pauseTimer()" id="pause-btn" class="btn btn-outline" style="display:none;">&#10074;&#10074; Pausar</button>
 
-              <button onclick="resetTimer()" id="reset-btn" class="btn btn-outline">&#8635; Reset</button>
+              <button onclick="resetTimer()" id="reset-btn" class="btn btn-outline">&#8635; Reiniciar</button>
 
-              <button onclick="skipPhase()" id="skip-btn" class="btn btn-ghost btn-sm" style="display:none;">Skip &raquo;</button>
+              <button onclick="skipPhase()" id="skip-btn" class="btn btn-ghost btn-sm" style="display:none;">Saltar &raquo;</button>
+
+            </div>
+
+            <!-- Reward claim card (pending XP / minutes / sessions) -->
+
+            <div id="claim-counter" style="display:none;margin-top:14px;padding:14px 16px;border:2px solid var(--primary);background:rgba(139,92,246,0.08);border-radius:12px;">
+
+              <div id="claim-headline" style="font-weight:700;color:var(--text);margin-bottom:10px;text-align:center;font-size:13px;">
+
+                Recompensas pendientes
+
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:12px;">
+
+                <div>
+
+                  <div id="claim-minutes" style="font-size:22px;font-weight:800;color:var(--primary);">0</div>
+
+                  <div style="font-size:11px;color:var(--text-muted);">min estudiados</div>
+
+                </div>
+
+                <div>
+
+                  <div id="claim-sessions" style="font-size:22px;font-weight:800;color:var(--primary);">0</div>
+
+                  <div style="font-size:11px;color:var(--text-muted);">sesiones</div>
+
+                </div>
+
+                <div>
+
+                  <div id="claim-xp" style="font-size:22px;font-weight:800;color:var(--primary);">0</div>
+
+                  <div style="font-size:11px;color:var(--text-muted);">XP</div>
+
+                </div>
+
+              </div>
+
+              <button id="claim-btn" onclick="claimNow()" class="btn btn-primary" style="width:100%;font-weight:700;">
+
+                &#127873; Reclamar y reiniciar
+
+              </button>
+
+              <p id="claim-help" style="font-size:11px;color:var(--text-muted);text-align:center;margin:8px 0 0;">
+
+                Reclamar termina tu sesi&oacute;n y reinicia el temporizador.
+
+              </p>
 
             </div>
 
             <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:10px;">
 
-              Shortcuts: <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Space</kbd> iniciar/pausar
+              Atajos: <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Espacio</kbd> iniciar/pausar
 
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">R</kbd> reset
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">R</kbd> reiniciar
 
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">S</kbd> skip
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">S</kbd> saltar
 
-              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">P</kbd> page done
+              &middot; <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">P</kbd> p&aacute;gina lista
 
             </p>
 
@@ -5840,11 +5892,11 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="card" style="margin-bottom:16px;">
 
-              <div class="card-header"><h2>&#127925; Study Music</h2></div>
+              <div class="card-header"><h2>&#127925; M&uacute;sica para estudiar</h2></div>
 
               <div style="margin-bottom:12px;">
 
-                <label style="font-size:12px;color:var(--text-muted);">Paste a Spotify playlist or album link:</label>
+                <label style="font-size:12px;color:var(--text-muted);">Pega un enlace de playlist o &aacute;lbum de Spotify:</label>
 
                 <div style="display:flex;gap:8px;margin-top:4px;">
 
@@ -5872,7 +5924,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div style="margin-top:8px;">
 
-                <p style="font-size:11px;color:var(--text-muted);">Quick picks:</p>
+                <p style="font-size:11px;color:var(--text-muted);">Selecci&oacute;n r&aacute;pida:</p>
 
                 <div style="display:flex;flex-wrap:wrap;gap:6px;">
 
@@ -5908,7 +5960,7 @@ def register_student_routes(app, csrf, limiter):
 
                   <span id="fg-dot" style="width:8px;height:8px;border-radius:50%;background:#64748b;display:inline-block;"></span>
 
-                  <span id="fg-label">Idle</span>
+                  <span id="fg-label">Inactivo</span>
 
                 </span>
 
@@ -5920,7 +5972,7 @@ def register_student_routes(app, csrf, limiter):
 
                   Bloquea Instagram, TikTok, Twitter/X y otras distracciones automáticamente durante la sesión.
 
-                  <b style="color:var(--text);">YouTube sigue permitido</b> — because you might actually be studying.
+                  <b style="color:var(--text);">YouTube sigue permitido</b> — porque podr&iacute;as estar estudiando de verdad.
 
                 </p>
 
@@ -5952,7 +6004,7 @@ def register_student_routes(app, csrf, limiter):
 
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
 
-                  <a href="/download/focus-guard.zip" class="btn btn-primary btn-sm" download>&#11015; Download extension</a>
+                  <a href="/download/focus-guard.zip" class="btn btn-primary btn-sm" download>&#11015; Descargar extensi&oacute;n</a>
 
                   <button onclick="document.getElementById('fg-how').style.display='block';this.style.display='none';" class="btn btn-outline btn-sm">Cómo instalar</button>
 
@@ -5962,19 +6014,19 @@ def register_student_routes(app, csrf, limiter):
 
                 <div id="fg-how" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-muted);line-height:1.7;">
 
-                  <b style="color:var(--text);">Install in 30 seconds:</b>
+                  <b style="color:var(--text);">Instala en 30 segundos:</b>
 
                   <ol style="margin:6px 0 0 18px;padding:0;">
 
-                    <li>Unzip the downloaded file.</li>
+                    <li>Descomprime el archivo descargado.</li>
 
-                    <li>Open <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">chrome://extensions</code> (or <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">edge://extensions</code>).</li>
+                    <li>Abre <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">chrome://extensions</code> (o <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">edge://extensions</code>).</li>
 
-                    <li>Toggle <b>Modo desarrollador</b> on (top-right).</li>
+                    <li>Activa <b>Modo desarrollador</b> (arriba a la derecha).</li>
 
-                    <li>Click <b>Cargar sin empaquetar</b> and select the unzipped <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">focus-guard</code> folder.</li>
+                    <li>Haz clic en <b>Cargar sin empaquetar</b> y selecciona la carpeta <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">focus-guard</code>.</li>
 
-                    <li>Start a timer here — external distractions get blocked automatically.</li>
+                    <li>Inicia un temporizador aqu&iacute; — las distracciones externas se bloquean autom&aacute;ticamente.</li>
 
                   </ol>
 
@@ -6284,6 +6336,17 @@ def register_student_routes(app, csrf, limiter):
 
         var phaseStartFocusSeconds = 0;
 
+        // True between phase-start and phase-end (kept across pauses). Lets us
+        // tell "fresh phase start" from "resume after pause" so we don't reset
+        // phaseStartFocusSeconds on resume — that bug made paused sessions
+        // credit only the post-resume minutes.
+        var __phaseOpen = false;
+
+        // Mandatory-claim countdown end (Date.now() + 30min). Kept in sync
+        // with localStorage so a tab reload restores the timer.
+        var __mandatoryEndAt = null;
+        var __mandatoryInterval = null;
+
         // course_id → [{{id,name,date}}]. Serialized server-side so the exam
         // dropdown can filter client-side without an extra round trip.
         var FOCUS_COURSE_EXAMS = {_json_course_exams};
@@ -6525,7 +6588,14 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-          if (!isBreak && !isRestore) phaseStartFocusSeconds = totalFocusSeconds;
+          // Only reset the phase boundary when starting a FRESH work phase.
+          // Resuming after a pause keeps __phaseOpen=true, so we leave
+          // phaseStartFocusSeconds alone and credit the full phase, not just
+          // the post-resume slice. (isRestore = restored from localStorage.)
+          if (!isBreak && !isRestore && !__phaseOpen) {{
+            phaseStartFocusSeconds = totalFocusSeconds;
+            __phaseOpen = true;
+          }}
 
           saveFocusTimerState();
 
@@ -6533,7 +6603,7 @@ def register_student_routes(app, csrf, limiter):
 
           if (currentMode === 'pages') {{
 
-            document.getElementById('timer-label').textContent = '📖 Reading — click the big button for each page';
+            document.getElementById('timer-label').textContent = '📖 Lectura — pulsa el bot&oacute;n grande por cada p&aacute;gina';
 
             var swStart = Date.now();
 
@@ -6547,7 +6617,7 @@ def register_student_routes(app, csrf, limiter):
             }}
             localStorage.setItem('focus_float', JSON.stringify({{
 
-              active:true, mode:'stopwatch', startAt: isRestore ? (Date.now() - totalFocusSeconds * 1000) : swStart, label:'📖 Reading',
+              active:true, mode:'stopwatch', startAt: isRestore ? (Date.now() - totalFocusSeconds * 1000) : swStart, label:'📖 Lectura',
 
               originalMode:'pages', course: _pgCourseName,
               courseId: _pgcSel ? (parseInt(_pgcSel.value, 10) || null) : null,
@@ -6571,7 +6641,7 @@ def register_student_routes(app, csrf, limiter):
 
           }} else {{
 
-            document.getElementById('timer-label').textContent = isBreak ? '☕ Break time!' : '🔥 Focus!';
+            document.getElementById('timer-label').textContent = isBreak ? '☕ ¡Hora de descanso!' : '🔥 ¡Enfoque!';
 
             var phaseStart = Date.now();
 
@@ -6585,7 +6655,7 @@ def register_student_routes(app, csrf, limiter):
 
             phaseEnded = false;
 
-            var label = isBreak ? '☕ Break' : '🔥 Focus';
+            var label = isBreak ? '☕ Descanso' : '🔥 Enfoque';
 
             var _cSel = document.getElementById('focus-course');
             var _eSel = document.getElementById('focus-exam');
@@ -6626,7 +6696,7 @@ def register_student_routes(app, csrf, limiter):
 
                   endAt: endAt + nextBreakMins*60*1000,
 
-                  label: (nextPomoCount % 4 === 0) ? '🎉 Long Break' : '☕ Break',
+                  label: (nextPomoCount % 4 === 0) ? '🎉 Descanso largo' : '☕ Descanso',
 
                   originalMode:'pomodoro', isBreak:true, course:courseName, workMinutes:0,
 
@@ -6638,7 +6708,7 @@ def register_student_routes(app, csrf, limiter):
 
                     endAt: endAt + nextBreakMins*60*1000 + followingWorkMins*60*1000,
 
-                    label: '🔥 Focus',
+                    label: '🔥 Enfoque',
 
                     originalMode:'pomodoro', isBreak:false, course:courseName, workMinutes: followingWorkMins,
 
@@ -6844,7 +6914,7 @@ def register_student_routes(app, csrf, limiter):
 
           document.getElementById('pause-btn').style.display = 'none';
 
-          document.getElementById('timer-label').textContent = 'Paused';
+          document.getElementById('timer-label').textContent = 'Pausado';
 
           localStorage.removeItem('focus_float');
 
@@ -6877,11 +6947,21 @@ def register_student_routes(app, csrf, limiter):
 
           phaseStartFocusSeconds = 0;
 
+          __phaseOpen = false;
+
           sessionStarted = false;
 
           pomoCount = 0;
 
           pageDone = 0;
+
+          // Reset DISCARDS unsaved pending phases. Use Reclamar to save them.
+
+          setPendingPhases([]);
+
+          if (typeof exitMandatoryClaimMode === 'function') exitMandatoryClaimMode();
+
+          if (typeof refreshClaimCounter === 'function') refreshClaimCounter();
 
           document.getElementById('start-btn').style.display = '';
 
@@ -6923,7 +7003,7 @@ def register_student_routes(app, csrf, limiter):
 
           updateDisplay();
 
-          document.getElementById('timer-label').textContent = 'Ready to focus';
+          document.getElementById('timer-label').textContent = 'Listo para enfocarte';
 
         }}
 
@@ -6960,32 +7040,38 @@ def register_student_routes(app, csrf, limiter):
 
             if (!isBreak) {{
 
-              // Work phase completed — DO NOT credit yet. Anti-cheat: the
-              // user must manually start the break within 1h to confirm
-              // they were actually present. Otherwise the session is
-              // dropped (no XP, no minutes counted, no session counted).
+              // Work phase ended → push to pending. Nothing is saved server-
+              // side until the user clicks "Reclamar". After every 4th work
+              // phase a mandatory 30-min claim window opens; if the user
+              // doesn't claim in time, all pending phases are forfeited.
 
               var phaseMinutes = Math.round((totalFocusSeconds - phaseStartFocusSeconds) / 60);
 
-              try {{
+              if (phaseMinutes < 0) phaseMinutes = 0;
 
-                var courseSel = document.getElementById('focus-course');
+              if (phaseMinutes > 480) phaseMinutes = 480;
 
-                var examSel = document.getElementById('focus-exam');
+              __phaseOpen = false;
 
-                var pendingCourseId = courseSel ? (parseInt(courseSel.value, 10) || null) : null;
+              var courseSelW = document.getElementById('focus-course');
 
-                var pendingExamId = examSel ? (parseInt(examSel.value, 10) || null) : null;
+              var examSelW = document.getElementById('focus-exam');
 
-                var pendingCourseName = '';
+              var pendingCourseId = courseSelW ? (parseInt(courseSelW.value, 10) || null) : null;
 
-                if (courseSel && courseSel.selectedOptions && courseSel.selectedOptions[0]) {{
+              var pendingExamId = examSelW ? (parseInt(examSelW.value, 10) || null) : null;
 
-                  pendingCourseName = courseSel.selectedOptions[0].getAttribute('data-name') || courseSel.selectedOptions[0].textContent || '';
+              var pendingCourseName = '';
 
-                }}
+              if (courseSelW && courseSelW.selectedOptions && courseSelW.selectedOptions[0]) {{
 
-                localStorage.setItem('focus_pending_credit', JSON.stringify({{
+                pendingCourseName = courseSelW.selectedOptions[0].getAttribute('data-name') || courseSelW.selectedOptions[0].textContent || '';
+
+              }}
+
+              if (phaseMinutes > 0) {{
+
+                addPendingPhase({{
 
                   minutes: phaseMinutes,
 
@@ -6995,41 +7081,45 @@ def register_student_routes(app, csrf, limiter):
 
                   courseName: pendingCourseName,
 
-                  workEndedAt: Date.now(),
+                  mode: 'pomodoro',
 
-                  expiresAt: Date.now() + 60*60*1000,  // 1 hour grace
+                  ts: Date.now()
 
-                  pomoCountAfter: pomoCount + 1,
-
-                  isLongBreak: ((pomoCount + 1) % 4 === 0)
-
-                }}));
-
-              }} catch(e) {{}}
-
-              // UI: show the confirm-and-start-break button. We deliberately
-              // DO NOT auto-start the break. We DO NOT increment pomoCount
-              // until the user confirms. We DO NOT save the session.
-
-              isBreak = true;  // mark intent so a manual Start would launch a break
-
-              timeLeft = parseInt(document.getElementById('pomo-break').value) * 60;
-
-              if (((pomoCount + 1) % 4) === 0) {{
-
-                timeLeft = parseInt(document.getElementById('pomo-long').value) * 60;
+                }});
 
               }}
+
+              pomoCount++;
+
+              refreshClaimCounter();
+
+              var pcLabelEnd = document.getElementById('pomo-count');
+
+              if (pcLabelEnd) pcLabelEnd.textContent = 'Completadas ' + pomoCount + ' de 4';
+
+              if (pomoCount > 0 && pomoCount % 4 === 0) {{
+
+                // Long-break boundary: mandatory claim within 30 min.
+
+                enterMandatoryClaimMode();
+
+                return;
+
+              }}
+
+              // Otherwise auto-advance into a short break.
+
+              isBreak = true;
+
+              timeLeft = parseInt(document.getElementById('pomo-break').value) * 60;
 
               totalTime = timeLeft;
 
               updateDisplay();
 
-              showPendingCreditUI(phaseMinutes);
-
               saveFocusTimerState();
 
-              // No setTimeout startTimer — user must press the confirm button.
+              setTimeout(function() {{ startTimer(); }}, 2000);
 
               return;
 
@@ -7037,7 +7127,7 @@ def register_student_routes(app, csrf, limiter):
 
               timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
 
-              document.getElementById('timer-label').textContent = '🔥 Starting next session...';
+              document.getElementById('timer-label').textContent = '🔥 Empezando la siguiente sesión...';
 
               isBreak = false;
 
@@ -7061,7 +7151,7 @@ def register_student_routes(app, csrf, limiter):
 
             saveFocusSession();
 
-            document.getElementById('timer-label').textContent = '✓ Session complete!';
+            document.getElementById('timer-label').textContent = '✓ ¡Sesión completada!';
 
             document.getElementById('start-btn').style.display = '';
 
@@ -7081,176 +7171,205 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        // ── Anti-cheat: pending credit UI ──────────────────────────────
-        // When a Pomodoro work phase ends, we DO NOT save automatically.
-        // The user must click "Confirmar y empezar descanso" within 1h.
-        // If they don't, the session is dropped completely (no XP, no
-        // hours, no session counted). This stops people from starting a
-        // timer and going to sleep to farm XP.
+        // ── Pending-phase claim system ─────────────────────────────────
+        // Completed work phases accumulate in localStorage as
+        // `focus_pending_phases`. Nothing is saved server-side until the
+        // user clicks "Reclamar y reiniciar". Anti-cheat: after every 4th
+        // work phase a mandatory 30-min claim window opens; if it expires
+        // without a click, every pending phase is forfeited.
 
-        function showPendingCreditUI(phaseMinutes) {{
+        function getPendingPhases() {{
 
-          try {{
+          try {{ return JSON.parse(localStorage.getItem('focus_pending_phases') || '[]') || []; }}
 
-            var lbl = document.getElementById('timer-label');
-
-            if (lbl) lbl.innerHTML = '⏱️ Tiempo de trabajo terminado · <b>confirma para acreditar tus ' + phaseMinutes + ' min</b>';
-
-            // Hide the regular start/pause buttons during the pending state.
-
-            var startBtn = document.getElementById('start-btn');
-
-            var pauseBtn = document.getElementById('pause-btn');
-
-            var skipBtn  = document.getElementById('skip-btn');
-
-            if (startBtn) startBtn.style.display = 'none';
-
-            if (pauseBtn) pauseBtn.style.display = 'none';
-
-            if (skipBtn)  skipBtn.style.display = 'none';
-
-            var host = document.getElementById('pending-credit');
-
-            if (!host) {{
-
-              host = document.createElement('div');
-
-              host.id = 'pending-credit';
-
-              host.style.cssText = 'margin-top:14px;padding:14px 16px;border:2px solid #f59e0b;background:rgba(245,158,11,.08);border-radius:12px;text-align:center;';
-
-              var anchor = document.getElementById('start-btn');
-
-              if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(host, anchor);
-
-              else document.body.appendChild(host);
-
-            }}
-
-            host.innerHTML =
-
-              '<div style="font-weight:700;color:#92400e;margin-bottom:6px;">¿Sigues ahí?</div>' +
-
-              '<div style="font-size:13px;color:#78350f;margin-bottom:12px;">' +
-
-              'Aprieta el botón en <b><span id="pending-countdown">60:00</span></b> para acreditar esta sesión y empezar tu descanso. ' +
-
-              'Si no, se descarta para evitar farmeo automático.</div>' +
-
-              '<button class="btn btn-primary" onclick="confirmPendingAndStartBreak()">' +
-
-              '✅ Confirmar y empezar descanso (' + phaseMinutes + ' min)</button>';
-
-            host.style.display = 'block';
-
-            startPendingCountdown();
-
-          }} catch(e) {{}}
+          catch(e) {{ return []; }}
 
         }}
 
-        function hidePendingCreditUI() {{
+        function setPendingPhases(arr) {{
 
-          var host = document.getElementById('pending-credit');
-
-          if (host) host.style.display = 'none';
-
-          stopPendingCountdown();
+          try {{ localStorage.setItem('focus_pending_phases', JSON.stringify(arr || [])); }} catch(e) {{}}
 
         }}
 
-        var __pendingTimerId = null;
+        function addPendingPhase(phase) {{
 
-        function startPendingCountdown() {{
+          var arr = getPendingPhases();
 
-          stopPendingCountdown();
+          arr.push(phase);
 
-          __pendingTimerId = setInterval(function() {{
+          setPendingPhases(arr);
+
+        }}
+
+        function pendingTotals() {{
+
+          var arr = getPendingPhases();
+
+          var minutes = 0;
+
+          for (var i = 0; i < arr.length; i++) minutes += (parseInt(arr[i].minutes) || 0);
+
+          var xp = Math.floor(minutes * 5 / 10);  // mirrors server-side formula
+
+          return {{ minutes: minutes, sessions: arr.length, xp: xp }};
+
+        }}
+
+        function refreshClaimCounter() {{
+
+          var t = pendingTotals();
+
+          var box = document.getElementById('claim-counter');
+
+          if (!box) return;
+
+          var mEl = document.getElementById('claim-minutes');
+
+          var sEl = document.getElementById('claim-sessions');
+
+          var xEl = document.getElementById('claim-xp');
+
+          if (mEl) mEl.textContent = t.minutes;
+
+          if (sEl) sEl.textContent = t.sessions;
+
+          if (xEl) xEl.textContent = t.xp;
+
+          box.style.display = (t.sessions > 0 || __mandatoryEndAt) ? '' : 'none';
+
+        }}
+
+        function setClaimMandatoryStyling(isMandatory) {{
+
+          var box = document.getElementById('claim-counter');
+
+          var headline = document.getElementById('claim-headline');
+
+          var help = document.getElementById('claim-help');
+
+          var btn = document.getElementById('claim-btn');
+
+          if (!box) return;
+
+          if (isMandatory) {{
+
+            box.style.borderColor = '#f59e0b';
+
+            box.style.background = 'rgba(245,158,11,0.10)';
+
+            if (headline) {{ headline.textContent = '🎉 ¡Descanso largo desbloqueado! Reclama o pierdes todo'; headline.style.color = '#92400e'; }}
+
+            if (help) help.textContent = 'Tienes 30 min para reclamar. Si no, todo lo acumulado se pierde.';
+
+            if (btn) btn.textContent = '🎁 Reclamar ahora';
+
+          }} else {{
+
+            box.style.borderColor = 'var(--primary)';
+
+            box.style.background = 'rgba(139,92,246,0.08)';
+
+            if (headline) {{ headline.textContent = 'Recompensas pendientes'; headline.style.color = ''; }}
+
+            if (help) help.textContent = 'Reclamar termina tu sesión y reinicia el temporizador.';
+
+            if (btn) btn.textContent = '🎁 Reclamar y reiniciar';
+
+          }}
+
+        }}
+
+        async function claimNow() {{
+
+          var phases = getPendingPhases();
+
+          if (!phases.length) {{
+
+            // Mandatory window with no phases (edge case) — just exit it.
+
+            exitMandatoryClaimMode();
+
+            resetTimer();
+
+            return;
+
+          }}
+
+          var btn = document.getElementById('claim-btn');
+
+          if (btn) {{ btn.disabled = true; btn.textContent = 'Reclamando...'; }}
+
+          var __ld_save = new Date();
+
+          var __ldStr_save = __ld_save.getFullYear()+'-'+String(__ld_save.getMonth()+1).padStart(2,'0')+'-'+String(__ld_save.getDate()).padStart(2,'0');
+
+          // One save call per pending phase so the server counts each as a
+          // distinct session (sessions_completed quest, focus stats, etc.).
+
+          for (var i = 0; i < phases.length; i++) {{
+
+            var p = phases[i];
+
+            var payload = {{
+
+              mode: p.mode || 'pomodoro',
+
+              minutes: parseInt(p.minutes) || 0,
+
+              pages: 0,
+
+              course_name: p.courseName || '',
+
+              course_id: p.courseId || null,
+
+              exam_id: p.examId || null
+
+            }};
+
+            if (payload.minutes <= 0) continue;
 
             try {{
 
-              var p = JSON.parse(localStorage.getItem('focus_pending_credit')||'null');
+              await fetch('/api/student/focus/save?local_date=' + encodeURIComponent(__ldStr_save), {{
 
-              if (!p) {{ stopPendingCountdown(); return; }}
+                method: 'POST',
 
-              var msLeft = p.expiresAt - Date.now();
+                headers: {{ 'Content-Type': 'application/json' }},
 
-              if (msLeft <= 0) {{
+                keepalive: true,
 
-                expirePendingCredit();
+                body: JSON.stringify(payload)
 
-                return;
-
-              }}
-
-              var sec = Math.floor(msLeft / 1000);
-
-              var mm = Math.floor(sec / 60);
-
-              var ss = sec % 60;
-
-              var el = document.getElementById('pending-countdown');
-
-              if (el) el.textContent = String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+              }});
 
             }} catch(e) {{}}
 
-          }}, 1000);
+          }}
 
-        }}
-
-        function stopPendingCountdown() {{
-
-          if (__pendingTimerId) {{ clearInterval(__pendingTimerId); __pendingTimerId = null; }}
-
-        }}
-
-        function expirePendingCredit() {{
-
-          // 1h passed without confirmation — drop everything.
-
-          try {{ localStorage.removeItem('focus_pending_credit'); }} catch(e) {{}}
-
-          hidePendingCreditUI();
-
-          // Reset the whole timer to the initial Pomodoro state.
-
-          if (typeof resetTimer === 'function') resetTimer();
-
-          var lbl = document.getElementById('timer-label');
-
-          if (lbl) lbl.innerHTML = '⌛ Sesión descartada — no hubo confirmación en 1 hora';
-
-        }}
-
-        async function confirmPendingAndStartBreak() {{
-
-          var p = null;
-
-          try {{ p = JSON.parse(localStorage.getItem('focus_pending_credit')||'null'); }} catch(e) {{ p = null; }}
-
-          if (!p || !p.minutes) {{ hidePendingCreditUI(); return; }}
-
-          if (Date.now() > (p.expiresAt || 0)) {{ expirePendingCredit(); return; }}
-
-          // Force the dropdown values back to the pending session's course/exam
-
-          // so saveFocusSession picks them up correctly.
+          // Refresh today's stat tiles in one call.
 
           try {{
 
-            if (p.courseId) {{
+            var r = await fetch('/api/student/focus/stats?local_date=' + encodeURIComponent(__ldStr_save));
 
-              var cs = document.getElementById('focus-course');
+            if (r.ok) {{
 
-              if (cs) {{ cs.value = String(p.courseId); if (typeof onFocusCourseChange === 'function') onFocusCourseChange(); }}
+              var s = await r.json();
 
-              if (p.examId) {{
+              if (s) {{
 
-                var es = document.getElementById('focus-exam');
+                var hh = document.getElementById('stat-hours');
 
-                if (es) es.value = String(p.examId);
+                var ss2 = document.getElementById('stat-sessions');
+
+                var st = document.getElementById('stat-streak');
+
+                if (hh) hh.textContent = s.total_hours;
+
+                if (ss2) ss2.textContent = s.sessions;
+
+                if (st) st.textContent = s.streak_days;
 
               }}
 
@@ -7258,25 +7377,88 @@ def register_student_routes(app, csrf, limiter):
 
           }} catch(e) {{}}
 
-          // Credit the work phase NOW.
+          setPendingPhases([]);
 
-          await saveFocusSession(p.minutes);
+          exitMandatoryClaimMode();
 
-          // Bump the cycle counter and clear the pending state.
+          if (btn) {{ btn.disabled = false; }}
 
-          pomoCount = p.pomoCountAfter || (pomoCount + 1);
+          resetTimer();
 
-          var pcLabel = document.getElementById('pomo-count');
+          var lblDone = document.getElementById('timer-label');
 
-          if (pcLabel) pcLabel.textContent = 'Completed ' + pomoCount + ' of 4';
+          if (lblDone) lblDone.textContent = '✓ ¡Reclamado! Listo para enfocarte';
 
-          try {{ localStorage.removeItem('focus_pending_credit'); }} catch(e) {{}}
+        }}
 
-          hidePendingCreditUI();
+        function enterMandatoryClaimMode() {{
 
-          // Restore the regular start/pause/skip buttons (start hidden — break
+          // Stop any running timer; the big display now shows a 30-min
+          // countdown, and the only way out is to claim or forfeit.
 
-          // will run on its own).
+          if (timerInterval) {{ clearInterval(timerInterval); timerInterval = null; }}
+
+          if (window.__focusEndTimeout) {{ clearTimeout(window.__focusEndTimeout); window.__focusEndTimeout = null; }}
+
+          stopKeepalive();
+
+          isRunning = false;
+
+          isBreak = false;
+
+          __phaseOpen = false;
+
+          __mandatoryEndAt = Date.now() + 30 * 60 * 1000;
+
+          try {{ localStorage.setItem('focus_mandatory_until', String(__mandatoryEndAt)); }} catch(e) {{}}
+
+          var startBtn = document.getElementById('start-btn');
+
+          var pauseBtn = document.getElementById('pause-btn');
+
+          var skipBtn  = document.getElementById('skip-btn');
+
+          if (startBtn) startBtn.style.display = 'none';
+
+          if (pauseBtn) pauseBtn.style.display = 'none';
+
+          if (skipBtn)  skipBtn.style.display = 'none';
+
+          var lbl = document.getElementById('timer-label');
+
+          if (lbl) lbl.textContent = '🎉 ¡Descanso largo! Reclama tus recompensas';
+
+          var pc = document.getElementById('pomo-count');
+
+          if (pc) pc.textContent = '⏳ 30 min para reclamar — si no, pierdes todo';
+
+          setClaimMandatoryStyling(true);
+
+          refreshClaimCounter();
+
+          startMandatoryCountdown();
+
+          // The current focus_float (a chained "next break" phase) is no
+          // longer relevant — we're forcing the user to claim before the
+          // chain can continue.
+
+          try {{ localStorage.removeItem('focus_float'); }} catch(e) {{}}
+
+          var ffEl = document.getElementById('focus-float');
+
+          if (ffEl) ffEl.style.display = 'none';
+
+        }}
+
+        function exitMandatoryClaimMode() {{
+
+          stopMandatoryCountdown();
+
+          __mandatoryEndAt = null;
+
+          try {{ localStorage.removeItem('focus_mandatory_until'); }} catch(e) {{}}
+
+          setClaimMandatoryStyling(false);
 
           var startBtn = document.getElementById('start-btn');
 
@@ -7288,43 +7470,149 @@ def register_student_routes(app, csrf, limiter):
 
           if (pauseBtn) pauseBtn.style.display = 'none';
 
-          if (skipBtn)  skipBtn.style.display = '';
-
-          // Now actually start the break timer.
-
-          isBreak = true;
-
-          var lbl = document.getElementById('timer-label');
-
-          if (lbl) lbl.textContent = p.isLongBreak ? '🎉 Long break!' : '☕ Short break';
-
-          startTimer();
+          if (skipBtn)  skipBtn.style.display = 'none';
 
         }}
 
-        // On page load, restore the pending-credit UI if there's a live one,
+        function startMandatoryCountdown() {{
 
-        // or expire it if the 1h window already passed.
+          stopMandatoryCountdown();
 
-        (function checkPendingOnLoad() {{
+          function tick() {{
 
-          try {{
+            var msLeft = (__mandatoryEndAt || 0) - Date.now();
 
-            var p = JSON.parse(localStorage.getItem('focus_pending_credit')||'null');
+            if (msLeft <= 0) {{
 
-            if (!p || !p.minutes) return;
-
-            if (Date.now() > (p.expiresAt || 0)) {{
-
-              localStorage.removeItem('focus_pending_credit');
+              forfeitPending();
 
               return;
 
             }}
 
-            // Defer until DOM is ready.
+            var sec = Math.floor(msLeft / 1000);
 
-            setTimeout(function() {{ showPendingCreditUI(p.minutes); }}, 150);
+            var m = Math.floor(sec / 60), s = sec % 60;
+
+            var disp = document.getElementById('timer-display');
+
+            if (disp) disp.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+
+          }}
+
+          tick();
+
+          __mandatoryInterval = setInterval(tick, 1000);
+
+        }}
+
+        function stopMandatoryCountdown() {{
+
+          if (__mandatoryInterval) {{ clearInterval(__mandatoryInterval); __mandatoryInterval = null; }}
+
+        }}
+
+        function forfeitPending() {{
+
+          // 30-min window expired without a claim — drop everything.
+
+          setPendingPhases([]);
+
+          exitMandatoryClaimMode();
+
+          resetTimer();
+
+          var lbl = document.getElementById('timer-label');
+
+          if (lbl) lbl.textContent = '⌛ Sesión perdida — no reclamaste a tiempo';
+
+          refreshClaimCounter();
+
+        }}
+
+        // On page load: restore the pending counter, and re-enter the
+        // mandatory window if it was open and hasn't expired (or forfeit if
+        // it has).
+
+        (function checkPendingOnLoad() {{
+
+          try {{
+
+            var until = parseInt(localStorage.getItem('focus_mandatory_until') || '0', 10);
+
+            var hasPending = getPendingPhases().length > 0;
+
+            if (until && Date.now() < until) {{
+
+              __mandatoryEndAt = until;
+
+              setTimeout(function() {{
+
+                // Replay enterMandatoryClaimMode UI without resetting the deadline.
+
+                isRunning = false;
+
+                var startBtn = document.getElementById('start-btn');
+
+                var pauseBtn = document.getElementById('pause-btn');
+
+                var skipBtn  = document.getElementById('skip-btn');
+
+                if (startBtn) startBtn.style.display = 'none';
+
+                if (pauseBtn) pauseBtn.style.display = 'none';
+
+                if (skipBtn)  skipBtn.style.display = 'none';
+
+                var lbl = document.getElementById('timer-label');
+
+                if (lbl) lbl.textContent = '🎉 ¡Descanso largo! Reclama tus recompensas';
+
+                var pc = document.getElementById('pomo-count');
+
+                if (pc) pc.textContent = '⏳ 30 min para reclamar — si no, pierdes todo';
+
+                setClaimMandatoryStyling(true);
+
+                refreshClaimCounter();
+
+                startMandatoryCountdown();
+
+              }}, 150);
+
+              return;
+
+            }}
+
+            if (until && Date.now() >= until) {{
+
+              // Window expired while user was away — forfeit silently.
+
+              setPendingPhases([]);
+
+              try {{ localStorage.removeItem('focus_mandatory_until'); }} catch(e) {{}}
+
+              setTimeout(function() {{ refreshClaimCounter(); }}, 150);
+
+              return;
+
+            }}
+
+            if (hasPending) {{
+
+              setTimeout(function() {{
+
+                pomoCount = getPendingPhases().length;
+
+                var pc2 = document.getElementById('pomo-count');
+
+                if (pc2) pc2.textContent = 'Completadas ' + pomoCount + ' de 4';
+
+                refreshClaimCounter();
+
+              }}, 150);
+
+            }}
 
           }} catch(e) {{}}
 
@@ -7490,7 +7778,7 @@ def register_student_routes(app, csrf, limiter):
 
           var match = url.match(/open\\.spotify\\.com\\/(playlist|album|track|episode|show)\\/([a-zA-Z0-9]+)/);
 
-          if (!match) {{ alert('Paste a valid Spotify link'); return; }}
+          if (!match) {{ alert('Pega un enlace válido de Spotify'); return; }}
 
           setPlaylist(match[2], match[1]);
 
@@ -7743,9 +8031,9 @@ def register_student_routes(app, csrf, limiter):
 
                 document.getElementById('pomo-count').textContent = isBreak
 
-                  ? 'Completed ' + pomoCount + ' of 4'
+                  ? 'Completadas ' + pomoCount + ' de 4'
 
-                  : 'Session ' + (pomoCount + 1) + ' of 4';
+                  : 'Sesión ' + (pomoCount + 1) + ' de 4';
 
               }}
 
@@ -7834,13 +8122,13 @@ def register_student_routes(app, csrf, limiter):
 
               s.classList.add('active');
 
-              l.textContent = 'Active — sites blocked';
+              l.textContent = 'Activo — sitios bloqueados';
 
             }} else {{
 
               s.classList.remove('active');
 
-              l.textContent = 'Idle';
+              l.textContent = 'Inactivo';
 
             }}
 

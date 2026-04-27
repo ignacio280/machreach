@@ -49,23 +49,23 @@
 </head>
 <body>
   <h1>🛡️ Focus Guard</h1>
-  <div class="sub">Distraction blocker for MachReach</div>
-  <div id="state" class="state idle"><span class="dot off"></span>Idle</div>
+  <div class="sub">Bloqueador de distracciones para MachReach</div>
+  <div id="state" class="state idle"><span class="dot off"></span>Inactivo</div>
   <div class="list">
-    <b>Blocked when focused:</b> Instagram · TikTok · Twitter/X · Facebook · Reddit · Snapchat · Pinterest · Twitch · Netflix<br>
-    <b>Always allowed:</b> YouTube (you might be studying).
+    <b>Bloqueados durante el enfoque:</b> Instagram · TikTok · Twitter/X · Facebook · Reddit · Snapchat · Pinterest · Twitch · Netflix<br>
+    <b>Siempre permitidos:</b> YouTube (puede que estés estudiando).
   </div>
-  <a href="https://machreach.com/student/focus" target="_blank">Open MachReach →</a>
+  <a href="https://machreach.com/student/focus" target="_blank">Abrir MachReach →</a>
   <script>
     chrome.storage.local.get(["focusActive", "focusExpiresAt"], (d) => {
       const active = d.focusActive && (!d.focusExpiresAt || Date.now() < d.focusExpiresAt);
       const el = document.getElementById("state");
       if (active) {
         el.className = "state active";
-        el.innerHTML = '<span class="dot on"></span>Focus active — sites blocked';
+        el.innerHTML = '<span class="dot on"></span>Activo — sitios bloqueados';
       } else {
         el.className = "state idle";
-        el.innerHTML = '<span class="dot off"></span>No session running';
+        el.innerHTML = '<span class="dot off"></span>Sin sesión activa';
       }
     });
   </script>
