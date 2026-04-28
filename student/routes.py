@@ -8827,7 +8827,7 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Canvas Settings", f"""
 
-        <h1 style="margin-bottom:20px;">&#128279; Conexión a Canvas para usuarios españoles</h1>
+        <h1 style="margin-bottom:20px;">&#128279; Conexión a Canvas</h1>
 
         <div class="card" style="max-width:600px;">
 
