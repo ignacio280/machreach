@@ -509,8 +509,32 @@ LAYOUT = """<!DOCTYPE html>
     })();
     // Safe JSON helper: avoids crashes when server returns non-JSON (502, HTML error pages)
     window._safeJson = async function(r) {
-      try { var t = await r.text(); return JSON.parse(t); }
+      try { var t = await r.text(); return t ? JSON.parse(t) : {}; }
       catch(e) { return {error: 'Server error (status ' + r.status + '). Please try again.'}; }
+    };
+    window.__mrNavigating = false;
+    window.mrIsAbortLike = function(e) {
+      if (!e) return false;
+      if (e.name === 'AbortError') return true;
+      var msg = String(e.message || e || '').toLowerCase();
+      return msg.indexOf('abort') >= 0 || msg.indexOf('cancel') >= 0 || msg.indexOf('interrupted') >= 0;
+    };
+    window.mrReload = function() {
+      window.__mrNavigating = true;
+      window.location.reload();
+    };
+    window.mrGo = function(url) {
+      window.__mrNavigating = true;
+      window.location.href = url;
+    };
+    window.mrNetworkError = function(e, msg) {
+      if (window.__mrNavigating || window.mrIsAbortLike(e)) {
+        console.warn('[MachReach] Ignored navigation-related request interruption.', e);
+        return;
+      }
+      var text = msg || 'Network error. Please check your connection and try again.';
+      if (typeof showToast === 'function') showToast(text, 'error');
+      else window.alert(text);
     };
   </script>
   <style>
@@ -2997,13 +3021,6 @@ LAYOUT = """<!DOCTYPE html>
     var origAlert = window.alert;
     window.alert = function(msg) {
       var raw = String(msg || '').trim();
-      if (raw === 'Error de red' || raw === 'Error de red.') {
-        console.warn('[MachReach] Suppressed transient network alert:', raw);
-        if (typeof showToast === 'function') {
-          showToast('No se pudo confirmar la acción, pero puede haberse aplicado. Revisa la pantalla antes de repetirla.', 'info');
-        }
-        return;
-      }
       origAlert(T[msg] || _replaceAll(raw));
     };
   })();
@@ -3273,7 +3290,7 @@ LAYOUT = """<!DOCTYPE html>
           modal.style.display = 'none';
           document.body.style.overflow = '';
           // Reload to refresh any rank/league widgets
-          setTimeout(() => window.location.reload(), 300);
+          setTimeout(() => mrReload(), 300);
         } else {
           nextBtn.disabled = false;
           nextBtn.textContent = 'Finish →';
@@ -3282,7 +3299,7 @@ LAYOUT = """<!DOCTYPE html>
       } catch(e) {
         nextBtn.disabled = false;
         nextBtn.textContent = 'Finish →';
-        alert('Error de red');
+        mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.');
       }
     }
 

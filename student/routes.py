@@ -3642,7 +3642,7 @@ def register_student_routes(app, csrf, limiter):
               }),
             }).then(r=>r.json());
             if (!r.ok) { err.textContent = r.error || 'Save failed.'; next.disabled = false; next.textContent = 'Finish'; return; }
-            window.location.href = '/student';
+            mrGo('/student');
           });
 
           loadCountries();
@@ -4631,7 +4631,7 @@ def register_student_routes(app, csrf, limiter):
 
                   if (window.confettiBurst) window.confettiBurst(60);
 
-                  setTimeout(function(){{ location.reload(); }}, 900);
+                  setTimeout(function(){{ mrReload(); }}, 900);
 
                 }} else if (s.status === 'error') {{
 
@@ -4647,7 +4647,7 @@ def register_student_routes(app, csrf, limiter):
 
             }}, 2000);
 
-          }} catch(e) {{ alert('Error de red'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; }}
 
         }}
 
@@ -4655,7 +4655,7 @@ def register_student_routes(app, csrf, limiter):
 
           var r = await fetch('/api/student/progress/complete', {{method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({{}})}});
 
-          if (r.ok) {{ alert('Today marked as complete!'); location.reload(); }}
+          if (r.ok) {{ alert('Today marked as complete!'); mrReload(); }}
 
         }}
 
@@ -5073,7 +5073,7 @@ def register_student_routes(app, csrf, limiter):
 
             }}
 
-          }} catch(e) {{ alert('Error de red'); }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
 
         }}
 
@@ -5085,11 +5085,11 @@ def register_student_routes(app, csrf, limiter):
 
             var r = await fetch('/api/student/courses/' + courseId, {{method:'DELETE'}});
 
-            if (r.ok) {{ location.reload(); }}
+            if (r.ok) {{ mrReload(); }}
 
             else {{ var d = await _safeJson(r); alert(d.error || 'No se pudo eliminar el curso'); }}
 
-          }} catch(e) {{ alert('Error de red'); }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
 
         }}
 
@@ -5143,11 +5143,11 @@ def register_student_routes(app, csrf, limiter):
 
             }});
 
-            if (r.ok) {{ location.reload(); }}
+            if (r.ok) {{ mrReload(); }}
 
             else {{ var d = await _safeJson(r); alert(d.error || 'Failed to create course'); btn.disabled=false; btn.textContent='Create'; }}
 
-          }} catch(e) {{ alert('Error de red'); btn.disabled=false; btn.textContent='Create'; }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); btn.disabled=false; btn.textContent='Create'; }}
 
         }}
 
@@ -5441,7 +5441,7 @@ def register_student_routes(app, csrf, limiter):
 
                   if (window.confettiBurst) window.confettiBurst(60);
 
-                  setTimeout(function(){{ location.reload(); }}, 900);
+                  setTimeout(function(){{ mrReload(); }}, 900);
 
                 }} else if (s.status === 'error') {{
 
@@ -5457,7 +5457,7 @@ def register_student_routes(app, csrf, limiter):
 
             }}, 2000);
 
-          }} catch(e) {{ alert('Error de red'); btn.disabled = false; btn.innerHTML = '&#128260; Regenerate'; }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); btn.disabled = false; btn.innerHTML = '&#128260; Regenerate'; }}
 
         }}
 
@@ -8621,7 +8621,7 @@ def register_student_routes(app, csrf, limiter):
 
             }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ alert('Error de red'); }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
@@ -8897,11 +8897,14 @@ def register_student_routes(app, csrf, limiter):
 
             var d = await _safeJson(r);
 
-            if (r.ok) {{ alert('Conectado! Found ' + d.courses_found + ' courses. ' + (d.training_folded || 0) + ' added to Training catalog.'); location.reload(); }}
+            if (r.ok) {{
+              if (typeof showToast === 'function') showToast('Canvas conectado. Cursos encontrados: ' + d.courses_found + '.', 'success');
+              setTimeout(function(){{ mrReload(); }}, 250);
+            }}
 
             else {{ alert(d.error || 'Connection failed'); }}
 
-          }} catch(e) {{ alert('Error de red'); }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
 
           btn.disabled = false; btn.innerHTML = 'Conectar Canvas';
 
@@ -8913,7 +8916,7 @@ def register_student_routes(app, csrf, limiter):
 
           await fetch('/api/student/canvas/disconnect', {{method:'POST'}});
 
-          location.reload();
+          mrReload();
 
         }}
 
@@ -9591,7 +9594,7 @@ def register_student_routes(app, csrf, limiter):
 
             }}
 
-          }} catch(e) {{ alert('Error de red'); btn.disabled = false; btn.innerHTML = 'Save Schedule'; }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); btn.disabled = false; btn.innerHTML = 'Save Schedule'; }}
 
         }}
 
@@ -9783,7 +9786,7 @@ def register_student_routes(app, csrf, limiter):
                 alert(j.error || 'Failed to save');
               }}
             }}
-          }} catch(e) {{ alert('Error de red'); }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
           btn.disabled = false; btn.textContent = 'Save';
           ovCloseModal();
           ovRender();
@@ -11721,11 +11724,11 @@ No markdown, no code fences. ONLY JSON.
 
               alert('Generated ' + d.card_count + ' flashcards!');
 
-              window.location = '/student/flashcards/' + d.deck_id;
+              mrGo('/student/flashcards/' + d.deck_id);
 
             }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ alert('Error de red'); }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
@@ -11737,7 +11740,7 @@ No markdown, no code fences. ONLY JSON.
 
           await fetch('/api/student/flashcards/decks/' + id, {{method:'DELETE'}});
 
-          location.reload();
+          mrReload();
 
         }}
 
@@ -12715,11 +12718,11 @@ No markdown, no code fences. ONLY JSON.
 
               alert(msg);
 
-              window.location = '/student/quizzes/' + d.quiz_id;
+              mrGo('/student/quizzes/' + d.quiz_id);
 
             }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ alert('Error de red'); }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
@@ -12731,7 +12734,7 @@ No markdown, no code fences. ONLY JSON.
 
           await fetch('/api/student/quizzes/' + id, {{method:'DELETE'}});
 
-          location.reload();
+          mrReload();
 
         }}
 
@@ -14138,7 +14141,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div style="display:flex;gap:12px;justify-content:center;margin:24px 0;">
 
-            <button onclick="location.reload()" class="btn btn-primary">&#128260; Retake Exam</button>
+            <button onclick="mrReload()" class="btn btn-primary">&#128260; Retake Exam</button>
 
             <a href="/student/quizzes" class="btn btn-outline">Volver a quizzes</a>
 
@@ -14612,11 +14615,11 @@ No markdown, no code fences. ONLY JSON.
 
             if (r.ok) {{
 
-              window.location = '/student/notes/' + d.note_id;
+              mrGo('/student/notes/' + d.note_id);
 
             }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ alert('Error de red'); }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
@@ -14628,7 +14631,7 @@ No markdown, no code fences. ONLY JSON.
 
           await fetch('/api/student/notes/' + id, {{method:'DELETE'}});
 
-          location.reload();
+          mrReload();
 
         }}
 
@@ -14700,9 +14703,9 @@ No markdown, no code fences. ONLY JSON.
 
           }}
 
-          if (ok > 0 && valid.length === 1) {{ window.location = '/student/notes/' + lastNoteId; }}
+          if (ok > 0 && valid.length === 1) {{ mrGo('/student/notes/' + lastNoteId); }}
 
-          else if (ok > 0) {{ status.innerHTML = '&#9989; ' + ok + ' notes created' + (fail ? ', ' + fail + ' failed' : '') + '. Reloading...'; setTimeout(function(){{ location.reload(); }}, 1200); }}
+          else if (ok > 0) {{ status.innerHTML = '&#9989; ' + ok + ' notes created' + (fail ? ', ' + fail + ' failed' : '') + '. Reloading...'; setTimeout(function(){{ mrReload(); }}, 1200); }}
 
           else {{ status.innerHTML = '&#10060; All uploads failed' + (lastError ? '<br><span style="font-size:12px;color:var(--text-muted);">' + lastError + '</span>' : ''); }}
 
@@ -14906,7 +14909,7 @@ No markdown, no code fences. ONLY JSON.
 
             }} else {{ alert('Save failed'); }}
 
-          }} catch(e) {{ alert('Error de red'); }}
+          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
 
           btn.disabled = false; btn.innerHTML = '&#128190; Guardar';
 
@@ -15284,7 +15287,7 @@ No markdown, no code fences. ONLY JSON.
 
               msg.style.color = 'var(--green)';
 
-              setTimeout(function(){{ window.location = '/student/marketplace/' + j.item_id; }}, 600);
+              setTimeout(function(){{ mrGo('/student/marketplace/' + j.item_id); }}, 600);
 
             }} else {{
 
@@ -15422,7 +15425,7 @@ No markdown, no code fences. ONLY JSON.
 
           var j = await r.json();
 
-          if (j && j.ok) location.reload();
+          if (j && j.ok) mrReload();
 
           else alert((j && j.error) || 'Delete failed.');
 
@@ -15612,7 +15615,7 @@ No markdown, no code fences. ONLY JSON.
 
               msg.style.color = 'var(--green)';
 
-              setTimeout(function(){{ location.reload(); }}, 500);
+              setTimeout(function(){{ mrReload(); }}, 500);
 
             }} else {{
 
@@ -16546,7 +16549,7 @@ No markdown, no code fences. ONLY JSON.
             if (!r.ok) {{ errEl.textContent = r.error || 'Failed.'; btn.disabled = false; btn.textContent = 'Send invite'; return; }}
             closeChallengeModal();
             // Take the challenger straight into the play page (it auto-starts when opponent accepts)
-            window.location.href = '/student/duels/quiz/' + r.duel_id + '/play';
+            mrGo('/student/duels/quiz/' + r.duel_id + '/play');
           }} catch(e) {{
             errEl.textContent = 'Error de red.';
             btn.disabled = false; btn.textContent = 'Send invite';
@@ -16736,7 +16739,7 @@ No markdown, no code fences. ONLY JSON.
         async function qdAccept(id) {{
           const r = await fetch('/api/student/duels/quiz/' + id + '/accept', {{method:'POST'}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not accept.'); return; }}
-          window.location.href = '/student/duels/quiz/' + id + '/play';
+          mrGo('/student/duels/quiz/' + id + '/play');
         }}
         async function qdDecline(id) {{
           if (!confirm('Decline this quiz duel?')) return;
@@ -18525,7 +18528,7 @@ No markdown, no code fences. ONLY JSON.
             try {{
               var r = await fetch('/api/student/retire', {{method:'POST'}});
               var j = await r.json();
-              if (j.ok) {{ s.textContent = {repr(_T("Retired. Reloading..."))}; setTimeout(function(){{location.reload();}}, 600); }}
+              if (j.ok) {{ s.textContent = {repr(_T("Retired. Reloading..."))}; setTimeout(function(){{mrReload();}}, 600); }}
               else {{ s.textContent = (j.error || 'Failed.'); }}
             }} catch(e) {{ s.textContent = 'Error de red.'; }}
           }}
@@ -18535,7 +18538,7 @@ No markdown, no code fences. ONLY JSON.
             try {{
               var r = await fetch('/api/student/unretire', {{method:'POST'}});
               var j = await r.json();
-              if (j.ok) {{ s.textContent = {repr(_T("Welcome back! Reloading..."))}; setTimeout(function(){{location.reload();}}, 600); }}
+              if (j.ok) {{ s.textContent = {repr(_T("Welcome back! Reloading..."))}; setTimeout(function(){{mrReload();}}, 600); }}
               else {{ s.textContent = (j.error || 'Failed.'); }}
             }} catch(e) {{ s.textContent = 'Error de red.'; }}
           }}
@@ -19201,46 +19204,46 @@ No markdown, no code fences. ONLY JSON.
         async function buyFreeze() {{
           const r = await fetch('/api/student/wallet/buy-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
-          location.reload();
+          mrReload();
         }}
         async function buyCoinPack(packKey) {{
           if (!confirm('Buy this coin pack? You will be redirected to checkout.')) return;
           const r = await fetch('/api/student/wallet/buy-coin-pack', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{pack_key: packKey}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not start checkout.'); return; }}
           if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
-          location.reload();
+          mrReload();
         }}
         async function buyFreezeBundle() {{
           const r = await fetch('/api/student/wallet/buy-freeze-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
-          location.reload();
+          mrReload();
         }}
         async function buyBoost(key) {{
           const r = await fetch('/api/student/wallet/buy-boost', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{boost_key:key}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
-          location.reload();
+          mrReload();
         }}
         async function buyBanner(key) {{
           const r = await fetch('/api/student/wallet/buy-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key: key}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
-          location.reload();
+          mrReload();
         }}
         async function buyFlag(key) {{
           const r = await fetch('/api/student/wallet/buy-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key: key}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
-          location.reload();
+          mrReload();
         }}
         async function buyBundle(key) {{
           if (!confirm('Buy this bundle? Coins will be deducted immediately.')) return;
           const r = await fetch('/api/student/wallet/buy-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{bundle_key: key}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not purchase.'); return; }}
           alert('Unlocked: ' + r.banner_name + ' + ' + r.flag_name);
-          location.reload();
+          mrReload();
         }}
         async function equipFlag(key) {{
           const r = await fetch('/api/student/wallet/set-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key: key}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not equip.'); return; }}
-          location.reload();
+          mrReload();
         }}
         async function changeTier(tier) {{
           const labels = {{free:'Free', plus:'Plus', ultimate:'Ultimate'}};
@@ -19248,7 +19251,7 @@ No markdown, no code fences. ONLY JSON.
           const r = await fetch('/api/student/subscription/change', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{tier:tier}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not change plan.'); return; }}
           if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
-          location.reload();
+          mrReload();
         }}
         // Live countdown for active boost chips
         (function() {{
@@ -19581,7 +19584,7 @@ No markdown, no code fences. ONLY JSON.
           const r = await fetch('/api/student/wallet/buy-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{bundle_key:k}})}}).then(r=>r.json());
           if (!r.ok) {{ alert(r.error || 'Could not purchase.'); return; }}
           alert('Unlocked: ' + r.banner_name + ' + ' + r.flag_name);
-          location.reload();
+          mrReload();
         }}
         </script>
         """, active_page="student_profile")
@@ -20115,7 +20118,7 @@ No markdown, no code fences. ONLY JSON.
                 renderQ();
               }}
               if (r.status === 'settled' || r.status === 'tied' || r.status === 'forfeit') {{
-                window.location.href = '/student/duels/quiz/' + DUEL_ID + '/result';
+                mrGo('/student/duels/quiz/' + DUEL_ID + '/result');
               }}
             }} catch(e) {{}}
           }}
