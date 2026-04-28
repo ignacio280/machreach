@@ -3391,53 +3391,6 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": str(e)}), 500
         return jsonify({"ok": True, "training_quiz_id": tq_id})
 
-    @app.route("/api/student/training/upload-test", methods=["POST"])
-    @limiter.limit("10 per hour")
-    def training_upload_test():
-        """Convert an uploaded official-test PDF/DOCX into a MachReach
-        quiz, attach to a training course. Multiple-choice ONLY."""
-        if not _logged_in():
-            return jsonify({"error": "unauthorized"}), 401
-        from student.canvas import extract_text_from_pdf, extract_text_from_docx
-        from student.analyzer import extract_quiz_from_test
-        from student import training as tr
-        course_id = (request.form.get("training_course_id") or "").strip()
-        title = (request.form.get("title") or "").strip() or "Official Test"
-        if not course_id.isdigit():
-            return jsonify({"error": "training_course_id required"}), 400
-        course = tr.get_course(int(course_id))
-        if not course:
-            return jsonify({"error": "course not found"}), 404
-        f = request.files.get("file")
-        if not f:
-            return jsonify({"error": "file required"}), 400
-        raw = f.read()
-        name = (f.filename or "").lower()
-        try:
-            if name.endswith(".pdf"):
-                text = extract_text_from_pdf(raw)
-            elif name.endswith(".docx"):
-                text = extract_text_from_docx(raw)
-            else:
-                return jsonify({"error": "Only PDF or DOCX supported"}), 400
-        except Exception as e:
-            return jsonify({"error": f"Failed to parse file: {e}"}), 400
-        if not text or len(text.strip()) < 80:
-            return jsonify({"error": "Couldn't extract enough text. Make sure the test isn't a scanned image."}), 400
-        questions = extract_quiz_from_test(text, course.get("name") or "")
-        if not questions:
-            return jsonify({"error": "No multiple-choice questions detected. Reminder: only multiple-choice tests work — anything else won't transcribe correctly."}), 400
-        quiz_id = sdb.create_quiz(_cid(), title, "medium", course_id=None)
-        sdb.add_quiz_questions(quiz_id, questions)
-        try:
-            tq_id = tr.publish_quiz(
-                int(course_id), quiz_id, _cid(), questions,
-                title=title, is_official=True,
-            )
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-        return jsonify({"ok": True, "training_quiz_id": tq_id, "question_count": len(questions)})
-
     # ── Frontend pages ──────────────────────────────────────
 
 
@@ -8275,7 +8228,7 @@ def register_student_routes(app, csrf, limiter):
           <p class="tr-sub">Quizzes prácticos compartidos por otros estudiantes de tu universidad. Las sesiones de Enfoque dan la mayor cantidad de XP — esto es para reforzar.</p>
 
           <div class="tr-search">
-            <input id="tr-q" type="text" placeholder="Search course by name or code (e.g. IIC1103, Calculus I)" />
+            <input id="tr-q" type="text" placeholder="Busca un curso por nombre o c&oacute;digo (p. ej. IIC1103, C&aacute;lculo I)" />
             <button class="tr-btn" id="tr-search-btn">Buscar</button>
           </div>
           <div class="tr-courses" id="tr-courses"></div>
@@ -8283,14 +8236,6 @@ def register_student_routes(app, csrf, limiter):
           <div class="tr-section" id="tr-quizzes-sec" style="display:none;">
             <h2 id="tr-course-title"></h2>
             <div class="tr-quizzes" id="tr-quizzes"></div>
-            <div class="tr-upload" id="tr-upload">
-              <div style="font-weight:700;margin-bottom:6px;">&#128194; Upload an official test (PDF or DOCX)</div>
-              <div class="tr-note">Reminder: only multiple-choice tests work — anything else won't transcribe correctly.</div>
-              <input id="tr-up-title" type="text" placeholder="Test title (e.g. Midterm 2024 Sem 1)" />
-              <input id="tr-up-file" type="file" accept=".pdf,.docx" />
-              <button class="tr-btn" id="tr-up-btn">Upload &amp; convert</button>
-              <div id="tr-up-status" class="tr-note"></div>
-            </div>
           </div>
         </div>
 
@@ -8323,7 +8268,7 @@ def register_student_routes(app, csrf, limiter):
           function renderCourses(rows){
             var box = el('tr-courses');
             if (!rows.length) {
-              box.innerHTML = '<div class="tr-empty">No courses yet for your university. Courses appear automatically when a student at your university syncs their Canvas.</div>';
+              box.innerHTML = '<div class="tr-empty">Aún no hay cursos para tu universidad. Los cursos aparecen automáticamente cuando un estudiante de tu universidad sincroniza su Canvas.</div>';
               return;
             }
             box.innerHTML = '';
@@ -8332,7 +8277,7 @@ def register_student_routes(app, csrf, limiter):
               card.className = 'tr-card';
               card.innerHTML = '<div class="name">' + escapeHtml(r.name) +
                 (r.code ? ' <span style="color:var(--text-muted);font-weight:500;font-size:12px;">(' + escapeHtml(r.code) + ')</span>' : '') +
-                '</div><div class="meta">' + (r.quiz_count || 0) + ' quiz' + (r.quiz_count === 1 ? '' : 'zes') + '</div>';
+                '</div><div class="meta">' + (r.quiz_count || 0) + ' ' + (r.quiz_count === 1 ? 'quiz' : 'quizzes') + '</div>';
               card.addEventListener('click', function(){ openCourse(r); });
               box.appendChild(card);
             });
@@ -8342,7 +8287,7 @@ def register_student_routes(app, csrf, limiter):
             state.courseId = c.id;
             el('tr-course-title').textContent = c.name + (c.code ? ' (' + c.code + ')' : '');
             el('tr-quizzes-sec').style.display = 'block';
-            el('tr-quizzes').innerHTML = '<div class="tr-empty">Loading quizzes…</div>';
+            el('tr-quizzes').innerHTML = '<div class="tr-empty">Cargando quizzes…</div>';
             fetch('/api/student/training/courses/' + c.id + '/quizzes', {credentials:'same-origin'})
               .then(function(r){ return r.json(); })
               .then(function(data){ renderQuizzes(data.quizzes || []); });
@@ -8351,26 +8296,28 @@ def register_student_routes(app, csrf, limiter):
           function renderQuizzes(rows){
             var box = el('tr-quizzes');
             if (!rows.length) {
-              box.innerHTML = '<div class="tr-empty">No quizzes yet for this course. Be the first — generate one in Quizzes or upload an official test below.</div>';
+              box.innerHTML = '<div class="tr-empty">Aún no hay quizzes para este curso. Sé el primero — genera uno en la pestaña Quizzes y se publicará automáticamente al completarlo.</div>';
               return;
             }
             box.innerHTML = '';
+            var diffEs = { easy: 'fácil', medium: 'medio', hard: 'difícil' };
             rows.forEach(function(q){
               var card = document.createElement('div');
               card.className = 'tr-card';
               var diff = (q.difficulty || 'medium').toLowerCase();
+              var diffLabel = diffEs[diff] || diff;
               var ratingHtml = (q.rating_count > 0)
                 ? ('&#9733; ' + (q.avg_rating || 0).toFixed(1) + ' (' + q.rating_count + ')')
-                : 'Unrated';
+                : 'Sin calificar';
               card.innerHTML =
                 '<div class="name">' +
-                  (q.is_official ? '<span class="tr-pill official">Official</span>' : '') +
-                  '<span class="tr-pill ' + diff + '">' + diff + '</span>' +
-                  escapeHtml(q.title || 'Untitled') +
+                  (q.is_official ? '<span class="tr-pill official">Oficial</span>' : '') +
+                  '<span class="tr-pill ' + diff + '">' + diffLabel + '</span>' +
+                  escapeHtml(q.title || 'Sin título') +
                 '</div>' +
-                '<div class="meta">' + (q.question_count || 0) + ' questions · ' +
-                  (q.attempt_count || 0) + ' attempts · ' + ratingHtml +
-                  ' · by ' + escapeHtml(q.uploader_name || 'Unknown') + '</div>';
+                '<div class="meta">' + (q.question_count || 0) + ' preguntas · ' +
+                  (q.attempt_count || 0) + ' intentos · ' + ratingHtml +
+                  ' · por ' + escapeHtml(q.uploader_name || 'Anónimo') + '</div>';
               card.addEventListener('click', function(){ openQuiz(q.id); });
               box.appendChild(card);
             });
@@ -8392,10 +8339,12 @@ def register_student_routes(app, csrf, limiter):
           function renderQuizModal(){
             var q = state.quiz;
             var diff = (q.difficulty || 'medium').toLowerCase();
+            var diffEs = { easy: 'fácil', medium: 'medio', hard: 'difícil' };
+            var diffLabel = diffEs[diff] || diff;
             el('tr-quiz-head').innerHTML =
               '<h2 style="margin:0 0 6px;">' + escapeHtml(q.title || '') + '</h2>' +
-              '<div class="tr-note"><span class="tr-pill ' + diff + '">' + diff +
-              '</span> · ' + state.questions.length + ' questions</div>';
+              '<div class="tr-note"><span class="tr-pill ' + diff + '">' + diffLabel +
+              '</span> · ' + state.questions.length + ' preguntas</div>';
             var body = el('tr-quiz-body');
             body.innerHTML = '';
             state.questions.forEach(function(qq, idx){
@@ -8473,25 +8422,6 @@ def register_student_routes(app, csrf, limiter):
           el('tr-q').addEventListener('keydown', function(e){
             if (e.key === 'Enter') { e.preventDefault(); loadCourses(el('tr-q').value.trim()); }
           });
-          el('tr-up-btn').addEventListener('click', function(){
-            if (!state.courseId) return;
-            var f = el('tr-up-file').files[0];
-            if (!f) { alert('Pick a PDF or DOCX first.'); return; }
-            var fd = new FormData();
-            fd.append('file', f);
-            fd.append('training_course_id', state.courseId);
-            fd.append('title', el('tr-up-title').value || f.name);
-            el('tr-up-status').textContent = 'Converting test… can take 30-60s.';
-            fetch('/api/student/training/upload-test', {
-              method:'POST', credentials:'same-origin', body: fd
-            }).then(function(r){ return r.json(); })
-              .then(function(data){
-                if (data.error) { el('tr-up-status').textContent = 'Error: ' + data.error; return; }
-                el('tr-up-status').textContent = 'Done — ' + (data.question_count || 0) + ' questions transcribed.';
-                openCourse({id: state.courseId, name: el('tr-course-title').textContent, code:''});
-              });
-          });
-
           function escapeHtml(s){
             return String(s == null ? '' : s)
               .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
