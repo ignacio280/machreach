@@ -12,12 +12,27 @@ import logging
 import re
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
+from requests import HTTPError
 
 log = logging.getLogger(__name__)
 
 _TIMEOUT = 20  # seconds
+
+
+def normalize_canvas_url(base_url: str) -> str:
+    """Return the Canvas instance origin from either a root URL or a settings page URL."""
+    raw = (base_url or "").strip()
+    if not raw:
+        return ""
+    if "://" not in raw:
+        raw = "https://" + raw
+    parsed = urlparse(raw)
+    if not parsed.netloc:
+        return raw.rstrip("/")
+    return f"{parsed.scheme or 'https'}://{parsed.netloc}".rstrip("/")
 
 
 class CanvasClient:
@@ -25,7 +40,7 @@ class CanvasClient:
 
     def __init__(self, base_url: str, token: str):
         # Normalize: "https://school.instructure.com" (no trailing slash)
-        self.base = base_url.rstrip("/")
+        self.base = normalize_canvas_url(base_url)
         self.session = requests.Session()
         self.session.headers.update({
             "Authorization": f"Bearer {token}",
@@ -36,8 +51,19 @@ class CanvasClient:
     def _get(self, path: str, params: dict | None = None) -> Any:
         url = f"{self.base}/api/v1{path}"
         resp = self.session.get(url, params=params or {}, timeout=_TIMEOUT)
-        resp.raise_for_status()
+        self._raise_canvas_error(resp)
         return resp.json()
+
+    @staticmethod
+    def _raise_canvas_error(resp):
+        try:
+            resp.raise_for_status()
+        except HTTPError as exc:
+            if resp.status_code in (401, 403):
+                raise ValueError("Canvas rechazó el token. Crea un token nuevo desde Account > Settings > New Access Token.") from exc
+            if resp.status_code == 404:
+                raise ValueError("No encontramos la API de Canvas en esa URL. Usa la URL principal de tu Canvas, por ejemplo https://cursos.canvas.uc.cl.") from exc
+            raise ValueError(f"Canvas respondió con error {resp.status_code}. Inténtalo de nuevo en unos minutos.") from exc
 
     def _get_paginated(self, path: str, params: dict | None = None) -> list:
         """Follow Canvas pagination (Link headers) and collect all pages."""
@@ -47,7 +73,7 @@ class CanvasClient:
         p.setdefault("per_page", 100)
         while url:
             resp = self.session.get(url, params=p, timeout=_TIMEOUT)
-            resp.raise_for_status()
+            self._raise_canvas_error(resp)
             results.extend(resp.json())
             # Canvas pagination via Link header
             url = None

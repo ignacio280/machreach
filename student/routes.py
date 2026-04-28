@@ -799,7 +799,7 @@ def register_student_routes(app, csrf, limiter):
 
     # Import here to avoid circular imports at module level
 
-    from student.canvas import CanvasClient, extract_text_from_pdf, extract_text_from_docx
+    from student.canvas import CanvasClient, extract_text_from_pdf, extract_text_from_docx, normalize_canvas_url
 
     from student.analyzer import (analyze_course_material, generate_study_plan,
 
@@ -1321,7 +1321,7 @@ def register_student_routes(app, csrf, limiter):
 
         data = request.get_json(force=True)
 
-        canvas_url = (data.get("canvas_url") or "").strip().rstrip("/")
+        canvas_url = normalize_canvas_url(data.get("canvas_url") or "")
 
         token = (data.get("token") or "").strip()
 
@@ -8877,11 +8877,34 @@ def register_student_routes(app, csrf, limiter):
 
             </div>
 
+            <div id="canvas-connect-status" style="display:none;margin-top:12px;font-size:13px;font-weight:600;"></div>
+
           </form>
 
         </div>
 
         <script>
+
+        function canvasConnectStatus(msg, ok) {{
+          var el = document.getElementById('canvas-connect-status');
+          if (!el) return;
+          el.style.display = msg ? 'block' : 'none';
+          el.style.color = ok ? 'var(--green)' : 'var(--red)';
+          el.textContent = msg || '';
+        }}
+
+        function normalizeCanvasUrlInput(raw) {{
+          var value = (raw || '').trim();
+          if (!value) return value;
+          try {{
+            if (!new RegExp('^https?://', 'i').test(value)) value = 'https://' + value;
+            var u = new URL(value);
+            return u.origin;
+          }} catch(e) {{
+            while (value.endsWith('/')) value = value.slice(0, -1);
+            return value;
+          }}
+        }}
 
         async function connectCanvas(e) {{
 
@@ -8890,23 +8913,35 @@ def register_student_routes(app, csrf, limiter):
           var btn = document.getElementById('connect-btn');
 
           btn.disabled = true; btn.innerHTML = '&#9203; Connecting...';
+          canvasConnectStatus('', false);
 
           try {{
+            var urlEl = document.getElementById('canvas-url');
+            var tokenEl = document.getElementById('canvas-token');
+            var canvasUrl = normalizeCanvasUrlInput(urlEl.value);
+            urlEl.value = canvasUrl;
 
-            var r = await fetch('/api/student/canvas/connect', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{canvas_url:document.getElementById('canvas-url').value,token:document.getElementById('canvas-token').value}})}});
+            var r = await fetch('/api/student/canvas/connect', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{canvas_url:canvasUrl,token:tokenEl.value}})}});
 
             var d = await _safeJson(r);
 
             if (r.ok) {{
+              canvasConnectStatus('Canvas conectado. Cursos encontrados: ' + d.courses_found + '.', true);
               if (typeof showToast === 'function') showToast('Canvas conectado. Cursos encontrados: ' + d.courses_found + '.', 'success');
               setTimeout(function(){{ mrReload(); }}, 250);
             }}
 
-            else {{ alert(d.error || 'Connection failed'); }}
+            else {{
+              canvasConnectStatus(d.error || 'No se pudo conectar Canvas. Revisa la URL y el token.', false);
+              btn.disabled = false; btn.innerHTML = 'Conectar Canvas';
+            }}
 
-          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
+          }} catch(e) {{
+            canvasConnectStatus('No se pudo contactar el servidor de MachReach. Inténtalo de nuevo.', false);
+            btn.disabled = false; btn.innerHTML = 'Conectar Canvas';
+            console.error('Canvas connect failed', e);
+          }}
 
-          btn.disabled = false; btn.innerHTML = 'Conectar Canvas';
 
         }}
 
