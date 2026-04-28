@@ -8859,7 +8859,7 @@ def register_student_routes(app, csrf, limiter):
 
               <label>Token de acceso API</label>
 
-              <input id="canvas-token" name="canvas_api_token_manual" type="password" placeholder="Paste your Canvas access token" {'value="********"' if connected else ''} required autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-form-type="other">
+              <input id="canvas-token" name="canvas_api_token_manual" type="text" placeholder="Paste your Canvas access token" {'value="********"' if connected else ''} required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-form-type="other" style="-webkit-text-security:disc;text-security:disc;">
 
               <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">
 
