@@ -8827,7 +8827,7 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Canvas Settings", f"""
 
-        <h1 style="margin-bottom:20px;">&#128279; Canvas Connection</h1>
+        <h1 style="margin-bottom:20px;">&#128279; Conexión a Canvas para usuarios españoles</h1>
 
         <div class="card" style="max-width:600px;">
 
@@ -8835,7 +8835,7 @@ def register_student_routes(app, csrf, limiter):
 
             <span style="display:inline-block;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;background:{'#D1FAE5' if connected else '#FEE2E2'};color:{'#065F46' if connected else '#991B1B'};">
 
-              {'&#10003; Conectado' if connected else '&#10007; Not Conectado'}
+              {'&#10003; Conectado' if connected else '&#10007; No conectado'}
 
             </span>
 
@@ -8845,13 +8845,13 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-          <form onsubmit="connectCanvas(event)">
+          <form onsubmit="connectCanvas(event)" autocomplete="off">
 
             <div class="form-group">
 
               <label>URL de Canvas</label>
 
-              <input id="canvas-url" type="url" placeholder="https://yourschool.instructure.com" value="{_esc(url_val)}" required>
+              <input id="canvas-url" name="canvas_school_url_manual" type="url" placeholder="https://yourschool.instructure.com" value="{_esc(url_val)}" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other">
 
             </div>
 
@@ -8859,7 +8859,7 @@ def register_student_routes(app, csrf, limiter):
 
               <label>Token de acceso API</label>
 
-              <input id="canvas-token" type="password" placeholder="Paste your Canvas access token" {'value="********"' if connected else ''} required>
+              <input id="canvas-token" name="canvas_api_token_manual" type="password" placeholder="Paste your Canvas access token" {'value="********"' if connected else ''} required autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-form-type="other">
 
               <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">
 
@@ -17754,9 +17754,8 @@ No markdown, no code fences. ONLY JSON.
 
         # Handle profile update
 
-        from outreach.db import get_client, update_client, get_email_accounts, get_subscription, get_mail_preferences
+        from outreach.db import get_client, update_client
 
-        from outreach.config import PLAN_LIMITS
 
         client = get_client(cid)
 
@@ -17801,76 +17800,6 @@ No markdown, no code fences. ONLY JSON.
 
         canvas_color = "#10B981" if canvas_tok else "#EF4444"
 
-        mail_rules = get_mail_preferences(cid) or ""
-
-
-
-        # Email accounts
-
-        accounts = get_email_accounts(cid)
-
-        sub = get_subscription(cid)
-
-        plan = sub.get("plan", "free") if sub else "free"
-
-        limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
-
-        max_mailboxes = limits.get("mailboxes", 1)
-
-        can_add = max_mailboxes == -1 or len(accounts) < max_mailboxes
-
-        limit_text = "Unlimited" if max_mailboxes == -1 else str(max_mailboxes)
-
-
-
-        accounts_html = ""
-
-        for a in accounts:
-
-            default_badge = '<span style="background:var(--blue);color:#fff;padding:2px 8px;border-radius:8px;font-size:10px;margin-left:6px;">Default</span>' if a["is_default"] else ""
-
-            set_default_btn = '' if a["is_default"] else f'<button class="btn btn-ghost btn-sm" onclick="setDefault({a["id"]})" style="font-size:12px;">Set Default</button>'
-
-            accounts_html += f"""
-
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--border);">
-
-              <div style="display:flex;align-items:center;gap:12px;">
-
-                <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#8B5CF6);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;">
-
-                  {_esc(a['email'][:1].upper())}
-
-                </div>
-
-                <div>
-
-                  <div style="font-weight:600;color:var(--text)">{_esc(a['label'] or a['email'])}{default_badge}</div>
-
-                  <div style="font-size:13px;color:var(--text-muted)">{_esc(a['email'])}</div>
-
-                </div>
-
-              </div>
-
-              <div style="display:flex;gap:8px;">
-
-                {set_default_btn}
-
-                <button class="btn btn-ghost btn-sm" onclick="deleteAccount({a['id']})" style="font-size:12px;color:var(--red);">&#128465;</button>
-
-              </div>
-
-            </div>"""
-
-
-
-        if not accounts_html:
-
-            accounts_html = '<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">No email accounts connected yet.</p>'
-
-
-
         # ── Translations ──
 
         _lang = session.get("lang", "es")
@@ -17910,36 +17839,6 @@ No markdown, no code fences. ONLY JSON.
             "Manage Connection": "Administrar conexión",
 
             "Conectar Canvas": "Conectar Canvas",
-
-            "Email Accounts": "Cuentas de correo",
-
-            "mailboxes": "buzones",
-
-            "Manage in Mail Hub": "Administrar en Centro de Correo",
-
-            "+ Add Email Account": "+ Agregar cuenta de correo",
-
-            "No email accounts connected yet.": "Aún no hay cuentas de correo conectadas.",
-
-            "Mail Sorting Rules": "Reglas de ordenado de correo",
-
-            "Tell the AI how to sort your inbox. Write both <strong>prioritize</strong> and <strong>deprioritize</strong> rules in plain English.": "Indícale a la IA cómo ordenar tu bandeja. Escribe reglas para <strong>priorizar</strong> y <strong>despriorizar</strong> en lenguaje natural.",
-
-            "Examples:": "Ejemplos:",
-
-            "Emails from my professors are always urgent": "Los correos de mis profesores son siempre urgentes",
-
-            "Meeting invites from @university.edu are important": "Las invitaciones a reuniones de @universidad.edu son importantes",
-
-            "Do NOT mark no-reply@render.com as urgent": "NO marques no-reply@render.com como urgente",
-
-            "Newsletters and marketing emails are always low priority": "Los boletines y correos de marketing son de baja prioridad",
-
-            "Ignore all emails from noreply@github.com": "Ignora todos los correos de noreply@github.com",
-
-            "Write your mail sorting rules here...": "Escribe aquí tus reglas de ordenado de correo...",
-
-            "Save Rules": "Guardar reglas",
 
             "Theme": "Tema",
 
@@ -18001,8 +17900,6 @@ No markdown, no code fences. ONLY JSON.
 
             "Saving...": "Guardando...",
 
-            "Please enter at least one rule": "Ingresa al menos una regla",
-
             "Failed": "Falló",
 
             "Connection error": "Error de conexión",
@@ -18029,8 +17926,6 @@ No markdown, no code fences. ONLY JSON.
 
             "Manage Connection": "Administrar conexión",
 
-            "Manage in Mail Hub": "Administrar en el centro de correo",
-
             "Academic Profile": "Perfil académico",
 
             "Used to rank you on the country, university, and major leaderboards. You can change these at any time.": "Se usa para clasificarte en los rankings de país, universidad y carrera. Puedes cambiarlo cuando quieras.",
@@ -18048,16 +17943,6 @@ No markdown, no code fences. ONLY JSON.
         def _T(s):
 
             return _ES.get(s, s) if _lang == "es" else s
-
-
-
-        if not accounts:
-
-            # localize empty-state text after translation dict is defined
-
-            accounts_html = f'<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">{_T("No email accounts connected yet.")}</p>'
-
-
 
         return _s_render("Settings", f"""
 
@@ -18406,103 +18291,6 @@ No markdown, no code fences. ONLY JSON.
 
           </div>
 
-
-
-
-
-
-          <!-- Email Accounts -->
-
-          <div class="card">
-
-            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-
-              <h2>📧 {_T("Email Accounts")}</h2>
-
-              <span style="font-size:13px;color:var(--text-muted)">{len(accounts)}/{limit_text} {_T("mailboxes")}</span>
-
-            </div>
-
-            <div>{accounts_html}</div>
-
-            {f"<div style='margin-top:12px'><a href='/mail-hub' class='btn btn-outline btn-sm'>{_T('Manage in Mail Hub')}</a></div>" if accounts else ""}
-
-            {'<div style="margin-top:12px;"><button type="button" class="btn btn-primary btn-sm" onclick="showAddAccount()" id="add-account-btn">&#43; ' + _T("+ Add Email Account") + '</button></div>' if can_add else '<p style="margin-top:12px;font-size:13px;color:var(--text-muted);">Mailbox limit reached. <a href="/billing">Upgrade your plan</a> for more.</p>'}
-
-            <div id="add-account-form" style="display:none;margin-top:16px;padding:20px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border);">
-              <h3 style="font-size:16px;margin-bottom:14px;">{_T("+ Add Email Account")}</h3>
-              <div class="form-row">
-                <div class="form-group"><label>Label</label><input id="acct-label" placeholder="School Gmail, Personal, etc." autocomplete="off"></div>
-                <div class="form-group"><label>{_T("Email")}</label><input id="acct-email" type="email" placeholder="you@example.com" required autocomplete="off" oninput="detectProvider(this.value)"></div>
-              </div>
-              <div id="provider-badge" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:var(--radius-xs);font-size:13px;background:#EFF6FF;color:#1E40AF;align-items:center;gap:8px;"></div>
-              <div class="form-group">
-                <label>Contraseña de App</label>
-                <input id="acct-password" type="password" placeholder="Paste your Contraseña de App here" required autocomplete="new-password">
-                <p class="form-hint" id="password-hint">For Gmail, generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">Contraseña de App</a>. For Outlook, use your account password.</p>
-              </div>
-              <details style="margin-bottom:14px;">
-                <summary style="font-size:13px;color:var(--text-muted);cursor:pointer;">Ajustes avanzados (IMAP/SMTP)</summary>
-                <div style="margin-top:10px;">
-                  <div class="form-row">
-                    <div class="form-group"><label>IMAP Host</label><input id="acct-imap-host" value="imap.gmail.com"></div>
-                    <div class="form-group"><label>IMAP Port</label><input id="acct-imap-port" value="993" type="number"></div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group"><label>SMTP Host</label><input id="acct-smtp-host" value="smtp.gmail.com"></div>
-                    <div class="form-group"><label>SMTP Port</label><input id="acct-smtp-port" value="465" type="number"></div>
-                  </div>
-                </div>
-              </details>
-              <div style="display:flex;gap:8px;">
-                <button class="btn btn-primary btn-sm" onclick="addAccount()" id="save-account-btn">&#128274; Test &amp; Add Account</button>
-                <button class="btn btn-ghost btn-sm" onclick="hideAddAccount()">Cancelar</button>
-              </div>
-              <div id="add-account-status" style="margin-top:10px;font-size:13px;"></div>
-            </div>
-
-          </div>
-
-
-
-          <!-- Mail Sorting Rules -->
-
-          <div class="card">
-
-            <div class="card-header"><h2>&#128340; {_T("Mail Sorting Rules")}</h2></div>
-
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:6px;">{_T("Tell the AI how to sort your inbox. Write both <strong>prioritize</strong> and <strong>deprioritize</strong> rules in plain English.")}</p>
-
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.7;background:var(--bg);padding:12px 14px;border-radius:var(--radius-xs);">
-
-              <strong>{_T("Examples:")}</strong><br>
-
-              &#128314; {_T("Emails from my professors are always urgent")}<br>
-
-              &#128314; {_T("Meeting invites from @university.edu are important")}<br>
-
-              &#128315; {_T("Do NOT mark no-reply@render.com as urgent")}<br>
-
-              &#128315; {_T("Newsletters and marketing emails are always low priority")}<br>
-
-              &#128315; {_T("Ignore all emails from noreply@github.com")}
-
-            </div>
-
-            <div class="form-group">
-
-              <textarea id="settings-mail-rules" placeholder="{_T('Write your mail sorting rules here...')}" style="height:120px;font-size:13px;width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);resize:vertical;">{_esc(mail_rules)}</textarea>
-
-            </div>
-
-            <button class="btn btn-primary btn-sm" onclick="saveMailRules()" id="save-rules-btn">{_T("Save Rules")}</button>
-
-            <span id="rules-save-status" style="margin-left:10px;font-size:13px;"></span>
-
-          </div>
-
-
-
           <!-- Theme Selector -->
 
           <div class="card">
@@ -18818,240 +18606,6 @@ No markdown, no code fences. ONLY JSON.
             alert(msg);
 
           }}
-
-        }}
-
-        function saveMailRules() {{
-
-          var text = document.getElementById('settings-mail-rules').value.trim();
-
-          var btn = document.getElementById('save-rules-btn');
-
-          var status = document.getElementById('rules-save-status');
-
-          if (!text) {{ status.innerHTML = '<span style="color:var(--red);">{_T("Please enter at least one rule")}</span>'; return; }}
-
-          btn.disabled = true; btn.textContent = '{_T("Saving...")}';
-
-          fetch('/api/mail-preferences', {{
-
-            method: 'POST', headers: {{'Content-Type': 'application/json'}},
-
-            body: JSON.stringify({{preferences: text}})
-
-          }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
-
-            btn.disabled = false; btn.textContent = '{_T("Save Rules")}';
-
-            if (data.ok) {{
-
-              status.innerHTML = '<span style="color:var(--green);">&#10003; {_T("Saved!")}</span>';
-
-              setTimeout(function() {{ status.innerHTML = ''; }}, 4000);
-
-            }} else {{ status.innerHTML = '<span style="color:var(--red);">' + (data.error || '{_T("Failed")}') + '</span>'; }}
-
-          }}).catch(function() {{
-
-            btn.disabled = false; btn.textContent = '{_T("Save Rules")}';
-
-            status.innerHTML = '<span style="color:var(--red);">{_T("Connection error")}</span>';
-
-          }});
-
-        }}
-
-
-
-        // ── Email account management ──
-
-        var EMAIL_PROVIDERS = {{
-
-          'gmail.com': {{imap:'imap.gmail.com', smtp:'smtp.gmail.com', imap_port:993, smtp_port:465, name:'Gmail', color:'#EA4335',
-
-            hint:'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">Contraseña de App</a> in your Google account.'}},
-
-          'googlemail.com': {{imap:'imap.gmail.com', smtp:'smtp.gmail.com', imap_port:993, smtp_port:465, name:'Gmail', color:'#EA4335',
-
-            hint:'Generate an <a href="https://myaccount.google.com/apppasswords" target="_blank">Contraseña de App</a>.'}},
-
-          'yahoo.com': {{imap:'imap.mail.yahoo.com', smtp:'smtp.mail.yahoo.com', imap_port:993, smtp_port:465, name:'Yahoo', color:'#6001D2',
-
-            hint:'Generate an <a href="https://login.yahoo.com/account/security" target="_blank">Contraseña de App</a>.'}},
-
-          'outlook.com': {{imap:'imap-mail.outlook.com', smtp:'smtp-mail.outlook.com', imap_port:993, smtp_port:587, name:'Outlook', color:'#0078D4',
-
-            hint:'Use your regular password or an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
-
-          'hotmail.com': {{imap:'imap-mail.outlook.com', smtp:'smtp-mail.outlook.com', imap_port:993, smtp_port:587, name:'Outlook', color:'#0078D4',
-
-            hint:'Use your regular password or an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}},
-
-          'live.com': {{imap:'imap-mail.outlook.com', smtp:'smtp-mail.outlook.com', imap_port:993, smtp_port:587, name:'Outlook', color:'#0078D4',
-
-            hint:'Use your regular password or an <a href="https://account.live.com/proofs/AppPassword" target="_blank">app password</a>.'}}
-
-        }};
-
-        var _mxTimeout = null;
-
-        function _applyProvider(p, badge, hint) {{
-
-          document.getElementById('acct-imap-host').value = p.imap;
-
-          document.getElementById('acct-imap-port').value = p.imap_port;
-
-          document.getElementById('acct-smtp-host').value = p.smtp;
-
-          document.getElementById('acct-smtp-port').value = p.smtp_port;
-
-          badge.innerHTML = '<span style="font-weight:600;">' + p.name + ' detected</span> — IMAP/SMTP settings filled automatically.';
-
-          badge.style.display = 'flex'; badge.style.borderLeft = '3px solid ' + p.color;
-
-          hint.innerHTML = p.hint;
-
-        }}
-
-        function detectProvider(email) {{
-
-          var badge = document.getElementById('provider-badge');
-
-          var hint = document.getElementById('password-hint');
-
-          var at = email.indexOf('@');
-
-          if (at < 0) {{ badge.style.display = 'none'; return; }}
-
-          var domain = email.substring(at + 1).toLowerCase().trim();
-
-          if (!domain || domain.indexOf('.') < 0) {{ badge.style.display = 'none'; return; }}
-
-          var p = EMAIL_PROVIDERS[domain];
-
-          if (p) {{ _applyProvider(p, badge, hint); return; }}
-
-          clearTimeout(_mxTimeout);
-
-          badge.innerHTML = '<span style="color:var(--text-muted);">&#8987; Detecting provider for <b>' + domain + '</b>...</span>';
-
-          badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--border)';
-
-          _mxTimeout = setTimeout(function() {{
-
-            fetch('/api/detect-provider?domain=' + encodeURIComponent(domain))
-
-              .then(function(r) {{ return r.json(); }})
-
-              .then(function(data) {{
-
-                if (data.provider) {{ _applyProvider(data, badge, hint); }}
-
-                else {{
-
-                  badge.innerHTML = '<span style="font-weight:600;">Proveedor personalizado</span> — open <b>Ajustes avanzados</b> and enter IMAP/SMTP details.';
-
-                  badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--yellow)';
-
-                  hint.innerHTML = 'Enter the password for this email account.';
-
-                }}
-
-              }}).catch(function() {{
-
-                badge.innerHTML = '<span style="font-weight:600;">Proveedor personalizado</span> — open <b>Ajustes avanzados</b> and enter IMAP/SMTP details.';
-
-                badge.style.display = 'flex'; badge.style.borderLeft = '3px solid var(--yellow)';
-
-              }});
-
-          }}, 600);
-
-        }}
-
-        function showAddAccount() {{
-
-          document.getElementById('add-account-form').style.display = 'block';
-
-          document.getElementById('add-account-btn').style.display = 'none';
-
-        }}
-
-        function hideAddAccount() {{
-
-          document.getElementById('add-account-form').style.display = 'none';
-
-          document.getElementById('add-account-btn').style.display = '';
-
-        }}
-
-        function addAccount() {{
-
-          var btn = document.getElementById('save-account-btn');
-
-          var status = document.getElementById('add-account-status');
-
-          btn.disabled = true; btn.innerHTML = '&#8987; Testing connection...';
-
-          status.innerHTML = '';
-
-          fetch('/api/email-accounts', {{
-
-            method: 'POST',
-
-            headers: {{'Content-Type': 'application/json'}},
-
-            body: JSON.stringify({{
-
-              label: document.getElementById('acct-label').value,
-
-              email: document.getElementById('acct-email').value,
-
-              password: document.getElementById('acct-password').value,
-
-              imap_host: document.getElementById('acct-imap-host').value,
-
-              imap_port: parseInt(document.getElementById('acct-imap-port').value),
-
-              smtp_host: document.getElementById('acct-smtp-host').value,
-
-              smtp_port: parseInt(document.getElementById('acct-smtp-port').value)
-
-            }})
-
-          }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
-
-            if (data.id) {{ window.location.reload(); }}
-
-            else {{
-
-              status.innerHTML = '<span style="color:var(--red);">&#9888; ' + (data.error || 'Failed to add account') + '</span>';
-
-              btn.disabled = false; btn.innerHTML = '&#128274; Test &amp; Add Account';
-
-            }}
-
-          }}).catch(function() {{
-
-            status.innerHTML = '<span style="color:var(--red);">&#9888; Connection error</span>';
-
-            btn.disabled = false; btn.innerHTML = '&#128274; Test &amp; Add Account';
-
-          }});
-
-        }}
-
-        function setDefault(id) {{
-
-          fetch('/api/email-accounts/' + id + '/default', {{method: 'POST'}}).then(function() {{ window.location.reload(); }});
-
-        }}
-
-        function deleteAccount(id) {{
-
-          if (!confirm('Remove this email account?')) return;
-
-          fetch('/api/email-accounts/' + id, {{method: 'DELETE'}}).then(function() {{ window.location.reload(); }});
 
         }}
 
