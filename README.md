@@ -1,38 +1,28 @@
-# AI Email Outreach Agent
+# MachReach Student
 
-> **Proprietary Software** — © 2026 MachReach. All rights reserved. See [LICENSE](LICENSE).
+> **Proprietary Software** - (c) 2026 MachReach. All rights reserved. See [LICENSE](LICENSE).
 
-Autonomous AI-powered cold email outreach system for small businesses.
+AI-powered study tools for students.
 
 ## What It Does
-- Generates personalized cold email sequences using AI (OpenAI GPT)
-- Sends emails on a schedule (drip campaigns)
-- Tracks opens, replies, and bounces
-- A/B tests subject lines automatically
-- Web dashboard for clients to manage campaigns
+- Generates study plans, quizzes, flashcards, and notes from student materials
+- Provides an AI tutor, essay feedback, panic-mode planning, and practice tools
+- Tracks focus sessions, XP, streaks, leaderboards, badges, and coins
+- Includes a student marketplace for sharing and buying study files
+- Supports Canvas LMS import and the optional Focus Guard browser extension
 
 ## Setup
 ```bash
 pip install -r requirements.txt
 cp .env.example .env   # fill in your keys
-python -m outreach.db   # initialize database
-python app.py           # start web dashboard
-python worker.py        # start email worker (separate terminal)
+python app.py
 ```
 
 ## Architecture
 ```
-app.py              — Flask web dashboard (client-facing)
-worker.py           — Background email sender (scheduler)
-outreach/
-  config.py         — Settings, env vars
-  db.py             — SQLite database (campaigns, contacts, emails)
-  ai.py             — GPT email generation (sequences, A/B variants)
-  sender.py         — SMTP email delivery with tracking
-  tracker.py        — Open/click tracking pixel + webhook
-  templates/        — HTML email templates
+app.py              - Flask app shell, auth, layout, billing webhook, shared pages
+student/            - Student dashboard, study tools, marketplace, settings, APIs
+outreach/           - Shared infrastructure modules such as config, DB, mail, and billing helpers
+extensions/         - Focus Guard browser extension
+docs/               - Project docs
 ```
-
-## Pricing Model
-- $200-500/month per client
-- 10 clients = $2k-5k/month recurring
