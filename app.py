@@ -2995,7 +2995,17 @@ LAYOUT = """<!DOCTYPE html>
     } catch(_){}
 
     var origAlert = window.alert;
-    window.alert = function(msg) { origAlert(T[msg] || _replaceAll(String(msg))); };
+    window.alert = function(msg) {
+      var raw = String(msg || '').trim();
+      if (raw === 'Error de red' || raw === 'Error de red.') {
+        console.warn('[MachReach] Suppressed transient network alert:', raw);
+        if (typeof showToast === 'function') {
+          showToast('No se pudo confirmar la acción, pero puede haberse aplicado. Revisa la pantalla antes de repetirla.', 'info');
+        }
+        return;
+      }
+      origAlert(T[msg] || _replaceAll(raw));
+    };
   })();
   </script>
   {% endif %}
