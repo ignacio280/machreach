@@ -17192,6 +17192,62 @@ No markdown, no code fences. ONLY JSON.
     font-variant-numeric: tabular-nums;
   }
   #mr-lb-page .lb-medal-cell { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
+  #mr-lb-page .lb-podium {
+    display:grid; grid-template-columns:1fr 1.12fr 1fr; gap:18px; align-items:end;
+    margin: 18px 0 18px; padding: 28px 24px 22px;
+    border:1px solid rgba(148,163,184,.18); border-radius:24px;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(250,204,21,.20), transparent 34%),
+      radial-gradient(circle at 12% 18%, rgba(124,156,255,.18), transparent 28%),
+      radial-gradient(circle at 86% 24%, rgba(192,132,252,.16), transparent 30%),
+      linear-gradient(135deg, rgba(15,23,42,.88), rgba(30,41,59,.72));
+    position:relative; overflow:hidden; box-shadow:0 24px 70px rgba(2,6,23,.28);
+  }
+  #mr-lb-page .lb-podium::before {
+    content:""; position:absolute; inset:-40% -20% auto; height:70%;
+    background:linear-gradient(115deg, transparent 15%, rgba(255,255,255,.18) 45%, transparent 75%);
+    transform:rotate(-5deg); opacity:.45; pointer-events:none;
+  }
+  #mr-lb-page .lb-podium::after {
+    content:""; position:absolute; left:7%; right:7%; bottom:16px; height:2px;
+    background:linear-gradient(90deg, transparent, rgba(250,204,21,.8), rgba(124,156,255,.75), transparent);
+    filter:blur(.2px); opacity:.9;
+  }
+  #mr-lb-page .lb-podium-card {
+    position:relative; z-index:1; min-height:220px; display:flex; flex-direction:column;
+    justify-content:flex-end; border-radius:20px; overflow:hidden; color:#fff;
+    border:1px solid rgba(255,255,255,.16); box-shadow:0 18px 45px rgba(0,0,0,.28);
+    background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.035));
+  }
+  #mr-lb-page .lb-podium-card.place-1 { min-height:280px; transform:translateY(-10px); border-color:rgba(250,204,21,.55); box-shadow:0 24px 70px rgba(250,204,21,.18), 0 18px 45px rgba(0,0,0,.32); }
+  #mr-lb-page .lb-podium-card.place-2 { min-height:238px; border-color:rgba(203,213,225,.35); }
+  #mr-lb-page .lb-podium-card.place-3 { min-height:218px; border-color:rgba(251,146,60,.45); }
+  #mr-lb-page .lb-podium-flag { position:absolute; inset:0; opacity:.30; z-index:0; }
+  #mr-lb-page .lb-podium-card::after {
+    content:""; position:absolute; inset:0; z-index:0;
+    background:linear-gradient(180deg, rgba(2,6,23,.02), rgba(2,6,23,.82) 72%);
+  }
+  #mr-lb-page .lb-podium-body { position:relative; z-index:2; padding:20px; text-align:center; }
+  #mr-lb-page .lb-crown { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:3; font-size:34px; filter:drop-shadow(0 5px 14px rgba(0,0,0,.5)); }
+  #mr-lb-page .lb-podium-medal { font-size:30px; line-height:1; margin-bottom:8px; }
+  #mr-lb-page .lb-podium-avatar {
+    width:68px; height:68px; border-radius:50%; margin:0 auto 10px;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:22px;
+    background:linear-gradient(135deg,#334155,#7c3aed); border:3px solid rgba(255,255,255,.24);
+    box-shadow:0 0 0 5px rgba(255,255,255,.06);
+  }
+  #mr-lb-page .place-1 .lb-podium-avatar { width:82px; height:82px; font-size:26px; border-color:rgba(250,204,21,.78); box-shadow:0 0 0 6px rgba(250,204,21,.10), 0 0 34px rgba(250,204,21,.35); }
+  #mr-lb-page .lb-podium-name { font-size:17px; font-weight:800; letter-spacing:-.02em; line-height:1.18; }
+  #mr-lb-page .place-1 .lb-podium-name { font-size:21px; }
+  #mr-lb-page .lb-podium-xp { margin-top:6px; font-size:13px; color:rgba(255,255,255,.76); font-variant-numeric:tabular-nums; }
+  #mr-lb-page .lb-podium-step {
+    position:relative; z-index:2; margin-top:16px; padding:10px 12px;
+    border-radius:14px 14px 0 0; font-size:12px; font-weight:900; letter-spacing:.18em;
+    text-transform:uppercase; color:rgba(15,23,42,.86);
+  }
+  #mr-lb-page .place-1 .lb-podium-step { height:58px; background:linear-gradient(180deg,#fde68a,#f59e0b); }
+  #mr-lb-page .place-2 .lb-podium-step { height:42px; background:linear-gradient(180deg,#e2e8f0,#94a3b8); }
+  #mr-lb-page .place-3 .lb-podium-step { height:34px; background:linear-gradient(180deg,#fdba74,#c2410c); }
   #mr-lb-page .lb-empty, #mr-lb-page .lb-loading { padding: 36px 20px; text-align:center; color: var(--text-muted);}
   #mr-lb-page .lb-skeleton { display:flex; flex-direction:column; gap: 10px; padding: 14px 20px;}
   #mr-lb-page .lb-sk-row { height: 48px; background: linear-gradient(90deg, rgba(148,163,184,.06), rgba(148,163,184,.14), rgba(148,163,184,.06));
@@ -17199,6 +17255,8 @@ No markdown, no code fences. ONLY JSON.
   @keyframes lbShimmer { from { background-position: 0 0;} to { background-position: -200% 0;}}
   @media (max-width: 600px) {
     #mr-lb-page .lb-rank-strip { grid-template-columns: repeat(2, 1fr); }
+    #mr-lb-page .lb-podium { grid-template-columns:1fr; padding:18px; }
+    #mr-lb-page .lb-podium-card, #mr-lb-page .lb-podium-card.place-1, #mr-lb-page .lb-podium-card.place-2, #mr-lb-page .lb-podium-card.place-3 { min-height:210px; transform:none; }
     #mr-lb-page .lb-row { grid-template-columns: 40px 1fr 80px; }
     #mr-lb-page .lb-row .lb-pill-col { display:none;}
   }
@@ -17229,6 +17287,8 @@ No markdown, no code fences. ONLY JSON.
     <div class="lb-tab" data-period="month">📅 Mensual</div>
     <div class="lb-tab" data-period="week">⚡ Semanal</div>
   </div>
+
+  <div class="lb-podium" id="lbPodium" style="display:none;"></div>
 
   <div class="lb-board" id="lbBoard">
     <div class="lb-skeleton">
@@ -17261,6 +17321,25 @@ No markdown, no code fences. ONLY JSON.
     if (!base) return 0;
     return period === 'week' ? Math.floor(base/2) : base;
   }
+  function podiumCard(r) {
+    const flagBg = r.flag_css
+      ? `<div class="lb-podium-flag ${r.flag_anim_class||''}" style="background:${r.flag_css};"></div>`
+      : '';
+    const crown = r.rank === 1 ? '<div class="lb-crown">&#128081;</div>' : '';
+    const title = r.rank === 1 ? 'Champion' : (r.rank === 2 ? 'Runner-up' : 'Third place');
+    return `
+      <a class="lb-podium-card place-${r.rank} ${r.is_you?'me':''}" href="/student/profile/${r.client_id}" style="text-decoration:none;">
+        ${flagBg}
+        ${crown}
+        <div class="lb-podium-body">
+          <div class="lb-podium-medal">${medal(r.rank)}</div>
+          <div class="lb-podium-avatar">${initials(r.name)}</div>
+          <div class="lb-podium-name">${r.badge_left_emoji?`<span title="${escapeHtml(r.badge_left_name||'')}" style="margin-right:5px;">${r.badge_left_emoji}</span>`:''}${escapeHtml(r.name)}${r.badge_right_emoji?`<span title="${escapeHtml(r.badge_right_name||'')}" style="margin-left:5px;">${r.badge_right_emoji}</span>`:''}</div>
+          <div class="lb-podium-xp">${r.xp.toLocaleString()} XP &middot; <span style="color:${r.league_color};font-weight:800;">${escapeHtml(r.league_name)}</span></div>
+        </div>
+        <div class="lb-podium-step">#${r.rank} ${title}</div>
+      </a>`;
+  }
 
   async function loadRanks() {
     try {
@@ -17291,7 +17370,19 @@ No markdown, no code fences. ONLY JSON.
                 ? 'No XP earned in the last 30 days in this scope yet.'
                 : 'No one to compare against yet in this scope. Invite some friends!');
         board.innerHTML = `<div class="lb-empty">${emptyCopy}</div>`;
+        document.getElementById('lbPodium').style.display = 'none';
         return;
+      }
+      const podium = document.getElementById('lbPodium');
+      const top = rows.filter(r => r.rank <= 3);
+      if (top.length) {
+        const byRank = {};
+        top.forEach(r => { byRank[r.rank] = r; });
+        const ordered = [byRank[2], byRank[1], byRank[3]].filter(Boolean);
+        podium.innerHTML = ordered.map(podiumCard).join('');
+        podium.style.display = 'grid';
+      } else {
+        podium.style.display = 'none';
       }
       board.innerHTML = rows.map(r => {
         const flagBg = r.flag_css
