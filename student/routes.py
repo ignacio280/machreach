@@ -3399,7 +3399,7 @@ def register_student_routes(app, csrf, limiter):
 
         """Render a student page using MachReach's LAYOUT."""
 
-        from app import LAYOUT
+        from app import ADMIN_EMAILS, LAYOUT
 
         from outreach.db import get_client
 
@@ -3415,7 +3415,9 @@ def register_student_routes(app, csrf, limiter):
 
             c = get_client(session["client_id"])
 
-            is_admin = bool(c and c.get("is_admin"))
+            email = (c.get("email") or "").strip().lower() if c else ""
+
+            is_admin = bool(c and c.get("is_admin")) or email in ADMIN_EMAILS
 
         # End-of-week / end-of-month leaderboard results popup. Shows once
         # per period to every authenticated student.
