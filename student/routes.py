@@ -8830,8 +8830,8 @@ def register_student_routes(app, csrf, limiter):
         <style>
           .canvas-settings-grid {{
             display:grid;
-            grid-template-columns:minmax(320px,600px) minmax(320px,520px);
-            gap:22px;
+            grid-template-columns:minmax(320px,560px) minmax(420px,760px);
+            gap:28px;
             align-items:start;
           }}
           @media (max-width: 900px) {{
@@ -8843,7 +8843,7 @@ def register_student_routes(app, csrf, limiter):
 
         <div class="canvas-settings-grid">
 
-        <div class="card">
+        <div class="card" style="padding:18px;">
 
           <div style="margin-bottom:20px;">
 
@@ -8903,7 +8903,7 @@ def register_student_routes(app, csrf, limiter):
             <h2 style="font-size:18px;margin:0;">Tutorial de conexión</h2>
           </div>
 
-          <video controls preload="metadata" playsinline style="width:100%;display:block;border-radius:8px;border:1px solid var(--border);background:#000;">
+          <video controls loop preload="metadata" playsinline style="width:100%;display:block;border-radius:8px;border:1px solid var(--border);background:#000;">
             <source src="/static/tutorials/canvas-connection-tutorial.mp4" type="video/mp4">
           </video>
 
