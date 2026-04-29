@@ -14907,11 +14907,11 @@ No markdown, no code fences. ONLY JSON.
 
             if is_ultimate:
 
-                badge = '<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;">ULTIMATE FREE</span>'
+                badge = '<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;">GRATIS ULTIMATE</span>'
 
             elif owned:
 
-                badge = '<span style="background:var(--green);color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;">OWNED</span>'
+                badge = '<span style="background:var(--green);color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;">COMPRADO</span>'
 
             cards_html += f"""
 
@@ -14923,7 +14923,7 @@ No markdown, no code fences. ONLY JSON.
 
                   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
 
-                    <h3 style="margin:0;font-size:16px;">{_esc(it.get('title','Untitled'))}</h3>
+                    <h3 style="margin:0;font-size:16px;">{_esc(it.get('title','Sin título'))}</h3>
 
                     {badge}
 
@@ -14931,7 +14931,7 @@ No markdown, no code fences. ONLY JSON.
 
                   <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
 
-                    by {_esc(it.get('seller_name','Unknown'))} &middot; {_esc(it.get('subject') or 'General')} &middot; {ext} &middot; {size_kb} KB &middot; {int(it.get('downloads') or 0)} downloads
+                    por {_esc(it.get('seller_name','Desconocido'))} &middot; {_esc(it.get('subject') or 'General')} &middot; {ext} &middot; {size_kb} KB &middot; {int(it.get('downloads') or 0)} descargas
 
                   </div>
 
@@ -14943,7 +14943,7 @@ No markdown, no code fences. ONLY JSON.
 
                   <div style="font-size:18px;font-weight:700;color:#f59e0b;">&#129689; {price}</div>
 
-                  <div style="font-size:11px;color:var(--text-muted);">coins</div>
+                  <div style="font-size:11px;color:var(--text-muted);">monedas</div>
 
                 </div>
 
@@ -14953,7 +14953,7 @@ No markdown, no code fences. ONLY JSON.
 
         if not cards_html:
 
-            cards_html = '<div class="card" style="text-align:center;color:var(--text-muted);padding:24px;">No listings yet. Be the first to share!</div>'
+            cards_html = '<div class="card" style="text-align:center;color:var(--text-muted);padding:24px;">Todavía no hay publicaciones. Sé el primero en compartir.</div>'
 
 
 
@@ -14967,33 +14967,33 @@ No markdown, no code fences. ONLY JSON.
 
                 'border:1px solid #7c3aed;margin-bottom:12px;">'
 
-                '<strong style="color:#a855f7;">&#10024; ULTIMATE perk:</strong> '
+                '<strong style="color:#a855f7;">&#10024; Beneficio ULTIMATE:</strong> '
 
-                'You get free access to every file in the marketplace.</div>'
+                'Tienes acceso gratis a todos los archivos del mercado.</div>'
 
             )
 
 
 
-        return _s_render("Marketplace", f"""
+        return _s_render("Mercado", f"""
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
 
           <div>
 
-            <h1 style="margin:0;">&#128722; Marketplace</h1>
+            <h1 style="margin:0;">&#128722; Mercado</h1>
 
-            <p style="color:var(--text-muted);margin:4px 0 0;">Buy & sell study materials with coins.</p>
+            <p style="color:var(--text-muted);margin:4px 0 0;">Compra y vende materiales de estudio con monedas.</p>
 
           </div>
 
           <div style="display:flex;gap:8px;align-items:center;">
 
-            <span style="padding:6px 12px;background:var(--bg-elev);border-radius:8px;font-weight:700;color:#f59e0b;">&#129689; {coins} coins</span>
+            <span style="padding:6px 12px;background:var(--bg-elev);border-radius:8px;font-weight:700;color:#f59e0b;">&#129689; {coins} monedas</span>
 
-            <a href="/student/marketplace/my" class="btn btn-outline btn-sm">&#128193; My Listings</a>
+            <a href="/student/marketplace/my" class="btn btn-outline btn-sm">&#128193; Mis publicaciones</a>
 
-            <button class="btn btn-primary btn-sm" onclick="document.getElementById('upload-modal').style.display='flex'">&#10133; Sell a File</button>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('upload-modal').style.display='flex'">&#10133; Vender archivo</button>
 
           </div>
 
@@ -15007,9 +15007,9 @@ No markdown, no code fences. ONLY JSON.
 
         <form method="GET" action="/student/marketplace" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
 
-          <input type="text" name="q" placeholder="Search title or description..." value="{_esc(search)}" style="flex:1;min-width:200px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
+          <input type="text" name="q" placeholder="Buscar por título o descripción..." value="{_esc(search)}" style="flex:1;min-width:200px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
 
-          <input type="text" name="subject" placeholder="Subject filter..." value="{_esc(subject)}" style="width:180px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
+          <input type="text" name="subject" placeholder="Filtrar por materia..." value="{_esc(subject)}" style="width:180px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
 
           <button class="btn btn-outline btn-sm" type="submit">Buscar</button>
 
@@ -15025,33 +15025,33 @@ No markdown, no code fences. ONLY JSON.
 
           <div class="card" style="max-width:540px;width:100%;max-height:90vh;overflow:auto;">
 
-            <h2 style="margin-top:0;">&#128722; Sell a Study File</h2>
+            <h2 style="margin-top:0;">&#128722; Vender archivo de estudio</h2>
 
-            <p style="color:var(--text-muted);font-size:13px;">Upload a study file. Buyers see only the title, subject, and preview text — they unlock the full file by paying your price in coins.</p>
+            <p style="color:var(--text-muted);font-size:13px;">Sube un archivo de estudio. Los compradores solo ven el título, la materia y la vista previa; desbloquean el archivo completo pagando tu precio en monedas.</p>
 
             <form id="upload-form" enctype="multipart/form-data">
 
-              <label style="display:block;margin-top:12px;font-size:13px;">Title *</label>
+              <label style="display:block;margin-top:12px;font-size:13px;">Título *</label>
 
               <input name="title" type="text" required maxlength="200" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
 
-              <label style="display:block;margin-top:12px;font-size:13px;">Subject (optional)</label>
+              <label style="display:block;margin-top:12px;font-size:13px;">Materia (opcional)</label>
 
-              <input name="subject" type="text" maxlength="120" placeholder="e.g. Calculus, Biology" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
+              <input name="subject" type="text" maxlength="120" placeholder="Ej. Cálculo, Biología" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
 
-              <label style="display:block;margin-top:12px;font-size:13px;">Short description (optional)</label>
+              <label style="display:block;margin-top:12px;font-size:13px;">Descripción corta (opcional)</label>
 
               <textarea name="description" rows="2" maxlength="500" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);"></textarea>
 
-              <label style="display:block;margin-top:12px;font-size:13px;">Preview (what buyers see before paying)</label>
+              <label style="display:block;margin-top:12px;font-size:13px;">Vista previa (lo que ven antes de pagar)</label>
 
-              <textarea name="preview" rows="3" maxlength="1500" placeholder="Give a teaser — first paragraph, table of contents, etc." style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);"></textarea>
+              <textarea name="preview" rows="3" maxlength="1500" placeholder="Muestra un adelanto: primer párrafo, índice, resumen, etc." style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);"></textarea>
 
-              <label style="display:block;margin-top:12px;font-size:13px;">Price (coins) *</label>
+              <label style="display:block;margin-top:12px;font-size:13px;">Precio (monedas) *</label>
 
               <input name="price_coins" type="number" min="1" max="5000" value="20" required style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
 
-              <label style="display:block;margin-top:12px;font-size:13px;">File * (max 25 MB)</label>
+              <label style="display:block;margin-top:12px;font-size:13px;">Archivo * (máx. 25 MB)</label>
 
               <input name="file" type="file" required style="width:100%;padding:6px 0;">
 
@@ -15061,7 +15061,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('upload-modal').style.display='none'">Cancelar</button>
 
-                <button type="submit" class="btn btn-primary btn-sm">Publish Listing</button>
+                <button type="submit" class="btn btn-primary btn-sm">Publicar</button>
 
               </div>
 
@@ -15081,7 +15081,7 @@ No markdown, no code fences. ONLY JSON.
 
           var msg = document.getElementById('upload-msg');
 
-          msg.textContent = 'Uploading...';
+          msg.textContent = 'Subiendo...';
 
           msg.style.color = 'var(--text-muted)';
 
@@ -15095,7 +15095,7 @@ No markdown, no code fences. ONLY JSON.
 
             if (j && j.ok) {{
 
-              msg.textContent = 'Published!';
+              msg.textContent = 'Publicado.';
 
               msg.style.color = 'var(--green)';
 
@@ -15103,7 +15103,7 @@ No markdown, no code fences. ONLY JSON.
 
             }} else {{
 
-              msg.textContent = (j && j.error) || 'Upload failed.';
+              msg.textContent = (j && j.error) || 'No se pudo subir.';
 
               msg.style.color = 'var(--red)';
 
@@ -15157,9 +15157,9 @@ No markdown, no code fences. ONLY JSON.
 
                 <div style="flex:1;min-width:0;">
 
-                  <a href="/student/marketplace/{it['id']}" style="font-weight:700;color:var(--text);text-decoration:none;">{_esc(it.get('title','Untitled'))}</a>
+                  <a href="/student/marketplace/{it['id']}" style="font-weight:700;color:var(--text);text-decoration:none;">{_esc(it.get('title','Sin título'))}</a>
 
-                  <div style="font-size:12px;color:var(--text-muted);">{ext} &middot; {size_kb} KB &middot; {int(it.get('downloads') or 0)} downloads &middot; {int(it.get('price_coins') or 0)} coins</div>
+                  <div style="font-size:12px;color:var(--text-muted);">{ext} &middot; {size_kb} KB &middot; {int(it.get('downloads') or 0)} descargas &middot; {int(it.get('price_coins') or 0)} monedas</div>
 
                 </div>
 
@@ -15171,7 +15171,7 @@ No markdown, no code fences. ONLY JSON.
 
         if not listings_html:
 
-            listings_html = '<div class="card" style="color:var(--text-muted);">You haven\'t listed anything yet.</div>'
+            listings_html = '<div class="card" style="color:var(--text-muted);">Todavía no has publicado nada.</div>'
 
 
 
@@ -15189,13 +15189,13 @@ No markdown, no code fences. ONLY JSON.
 
                 <div style="flex:1;min-width:0;">
 
-                  <a href="/student/marketplace/{it['id']}" style="font-weight:700;color:var(--text);text-decoration:none;">{_esc(it.get('title','Untitled'))}</a>
+                  <a href="/student/marketplace/{it['id']}" style="font-weight:700;color:var(--text);text-decoration:none;">{_esc(it.get('title','Sin título'))}</a>
 
-                  <div style="font-size:12px;color:var(--text-muted);">by {_esc(it.get('seller_name','Unknown'))} &middot; {ext} &middot; paid {int(it.get('price_paid') or 0)} coins</div>
+                  <div style="font-size:12px;color:var(--text-muted);">por {_esc(it.get('seller_name','Desconocido'))} &middot; {ext} &middot; pagado {int(it.get('price_paid') or 0)} monedas</div>
 
                 </div>
 
-                <a class="btn btn-outline btn-sm" href="/api/student/marketplace/{it['id']}/download">&#11015; Download</a>
+                <a class="btn btn-outline btn-sm" href="/api/student/marketplace/{it['id']}/download">&#11015; Descargar</a>
 
               </div>
 
@@ -15203,25 +15203,25 @@ No markdown, no code fences. ONLY JSON.
 
         if not purchases_html:
 
-            purchases_html = '<div class="card" style="color:var(--text-muted);">No purchases yet.</div>'
+            purchases_html = '<div class="card" style="color:var(--text-muted);">Todavía no tienes compras.</div>'
 
 
 
-        return _s_render("My Marketplace", f"""
+        return _s_render("Mi mercado", f"""
 
-        <a href="/student/marketplace" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Marketplace</a>
+        <a href="/student/marketplace" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Volver al mercado</a>
 
-        <h1>&#128193; My Marketplace</h1>
+        <h1>&#128193; Mi mercado</h1>
 
 
 
-        <h2 style="margin-top:24px;font-size:18px;">My Listings</h2>
+        <h2 style="margin-top:24px;font-size:18px;">Mis publicaciones</h2>
 
         {listings_html}
 
 
 
-        <h2 style="margin-top:24px;font-size:18px;">My Purchases</h2>
+        <h2 style="margin-top:24px;font-size:18px;">Mis compras</h2>
 
         {purchases_html}
 
@@ -15231,7 +15231,7 @@ No markdown, no code fences. ONLY JSON.
 
         async function deleteListing(id) {{
 
-          if (!confirm('Delete this listing? Buyers who already paid keep access.')) return;
+          if (!confirm('¿Eliminar esta publicación? Los compradores que ya pagaron mantienen el acceso.')) return;
 
           var r = await fetch('/api/student/marketplace/' + id + '/delete', {{ method:'DELETE' }});
 
@@ -15239,7 +15239,7 @@ No markdown, no code fences. ONLY JSON.
 
           if (j && j.ok) mrReload();
 
-          else alert((j && j.error) || 'Delete failed.');
+          else alert((j && j.error) || 'No se pudo eliminar.');
 
         }}
 
@@ -15299,17 +15299,17 @@ No markdown, no code fences. ONLY JSON.
 
             if is_seller:
 
-                cta = '<div style="padding:12px;background:var(--bg-elev);border-radius:8px;text-align:center;color:var(--text-muted);">This is your listing.</div>'
+                cta = '<div style="padding:12px;background:var(--bg-elev);border-radius:8px;text-align:center;color:var(--text-muted);">Esta es tu publicación.</div>'
 
             elif is_ultimate and not has_access:
 
-                cta = '<div style="padding:12px;background:#7c3aed22;border:1px solid #7c3aed;border-radius:8px;text-align:center;">&#10024; Ultimate access &mdash; download free.</div>'
+                cta = '<div style="padding:12px;background:#7c3aed22;border:1px solid #7c3aed;border-radius:8px;text-align:center;">&#10024; Acceso Ultimate: descarga gratis.</div>'
 
             else:
 
-                cta = '<div style="padding:12px;background:var(--green);color:#fff;border-radius:8px;text-align:center;font-weight:700;">&#10003; You own this file.</div>'
+                cta = '<div style="padding:12px;background:var(--green);color:#fff;border-radius:8px;text-align:center;font-weight:700;">&#10003; Ya tienes este archivo.</div>'
 
-            cta += f'<a class="btn btn-primary" style="display:block;text-align:center;margin-top:10px;" href="/api/student/marketplace/{item_id}/download">&#11015; Download Full File</a>'
+            cta += f'<a class="btn btn-primary" style="display:block;text-align:center;margin-top:10px;" href="/api/student/marketplace/{item_id}/download">&#11015; Descargar archivo completo</a>'
 
         elif is_ultimate:
 
@@ -15317,9 +15317,9 @@ No markdown, no code fences. ONLY JSON.
 
                 '<div style="padding:12px;background:#7c3aed22;border:1px solid #7c3aed;border-radius:8px;text-align:center;">'
 
-                '<strong style="color:#a855f7;">&#10024; ULTIMATE perk:</strong> Free download for you.</div>'
+                '<strong style="color:#a855f7;">&#10024; Beneficio ULTIMATE:</strong> Descarga gratis para ti.</div>'
 
-                f'<a class="btn btn-primary" style="display:block;text-align:center;margin-top:10px;" href="/api/student/marketplace/{item_id}/download">&#11015; Download Full File</a>'
+                f'<a class="btn btn-primary" style="display:block;text-align:center;margin-top:10px;" href="/api/student/marketplace/{item_id}/download">&#11015; Descargar archivo completo</a>'
 
             )
 
@@ -15327,11 +15327,11 @@ No markdown, no code fences. ONLY JSON.
 
             disabled = "disabled" if coins < price else ""
 
-            label = ("Buy for " + str(price) + " coins") if coins >= price else f"Need {price - coins} more coins"
+            label = ("Comprar por " + str(price) + " monedas") if coins >= price else f"Te faltan {price - coins} monedas"
 
             cta = (
 
-                f'<div style="text-align:center;margin-bottom:8px;">Your balance: <strong style="color:#f59e0b;">&#129689; {coins}</strong></div>'
+                f'<div style="text-align:center;margin-bottom:8px;">Tu saldo: <strong style="color:#f59e0b;">&#129689; {coins}</strong></div>'
 
                 f'<button class="btn btn-primary" style="width:100%;" id="buy-btn" {disabled} onclick="buyItem({item_id})">&#129689; {label}</button>'
 
@@ -15341,21 +15341,21 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        preview_html = _esc(item.get("preview") or "(No preview provided.)").replace("\n", "<br>")
+        preview_html = _esc(item.get("preview") or "(No hay vista previa.)").replace("\n", "<br>")
 
         desc_html = _esc(item.get("description") or "").replace("\n", "<br>")
 
 
 
-        return _s_render(item.get("title", "Marketplace"), f"""
+        return _s_render(item.get("title", "Mercado"), f"""
 
-        <a href="/student/marketplace" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Back to Marketplace</a>
+        <a href="/student/marketplace" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Volver al mercado</a>
 
-        <h1 style="margin:8px 0;">{_esc(item.get('title','Untitled'))}</h1>
+        <h1 style="margin:8px 0;">{_esc(item.get('title','Sin título'))}</h1>
 
         <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">
 
-          by <strong>{_esc(item.get('seller_name','Unknown'))}</strong> &middot; {_esc(item.get('subject') or 'General')} &middot; {ext} &middot; {size_kb} KB &middot; {int(item.get('downloads') or 0)} downloads
+          por <strong>{_esc(item.get('seller_name','Desconocido'))}</strong> &middot; {_esc(item.get('subject') or 'General')} &middot; {ext} &middot; {size_kb} KB &middot; {int(item.get('downloads') or 0)} descargas
 
         </div>
 
@@ -15365,15 +15365,15 @@ No markdown, no code fences. ONLY JSON.
 
           <div>
 
-            {('<div class="card"><h3 style="margin-top:0;font-size:14px;color:var(--text-muted);">Description</h3><div>' + desc_html + '</div></div>') if item.get('description') else ''}
+            {('<div class="card"><h3 style="margin-top:0;font-size:14px;color:var(--text-muted);">Descripción</h3><div>' + desc_html + '</div></div>') if item.get('description') else ''}
 
             <div class="card">
 
-              <h3 style="margin-top:0;font-size:14px;color:var(--text-muted);">Preview</h3>
+              <h3 style="margin-top:0;font-size:14px;color:var(--text-muted);">Vista previa</h3>
 
               <div style="white-space:pre-wrap;line-height:1.5;">{preview_html}</div>
 
-              {'' if has_access else '<div style="margin-top:12px;padding:8px;background:var(--bg-elev);border-radius:6px;font-size:12px;color:var(--text-muted);text-align:center;">&#128274; Full file unlocks after purchase.</div>'}
+              {'' if has_access else '<div style="margin-top:12px;padding:8px;background:var(--bg-elev);border-radius:6px;font-size:12px;color:var(--text-muted);text-align:center;">&#128274; El archivo completo se desbloquea después de comprarlo.</div>'}
 
             </div>
 
@@ -15385,7 +15385,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="font-size:32px;font-weight:800;color:#f59e0b;">&#129689; {price}</div>
 
-              <div style="font-size:12px;color:var(--text-muted);">coins</div>
+              <div style="font-size:12px;color:var(--text-muted);">monedas</div>
 
             </div>
 
@@ -15407,7 +15407,7 @@ No markdown, no code fences. ONLY JSON.
 
           if (btn) btn.disabled = true;
 
-          msg.textContent = 'Processing...';
+          msg.textContent = 'Procesando...';
 
           msg.style.color = 'var(--text-muted)';
 
@@ -15423,7 +15423,7 @@ No markdown, no code fences. ONLY JSON.
 
             if (j && j.ok) {{
 
-              msg.textContent = 'Purchased! Refreshing...';
+              msg.textContent = 'Comprado. Actualizando...';
 
               msg.style.color = 'var(--green)';
 
@@ -15431,7 +15431,7 @@ No markdown, no code fences. ONLY JSON.
 
             }} else {{
 
-              msg.textContent = (j && j.error) || 'Purchase failed.';
+              msg.textContent = (j && j.error) || 'No se pudo comprar.';
 
               msg.style.color = 'var(--red)';
 
@@ -15675,6 +15675,23 @@ No markdown, no code fences. ONLY JSON.
 
         rank_full_name = rank_info.get("full_name", "Unranked")
 
+        rank_translations = {
+            "Initiates": "Iniciados",
+            "Apprentices": "Aprendices",
+            "Scholars": "Estudiosos",
+            "Researchers": "Investigadores",
+            "Academics": "Académicos",
+            "Masterminds": "Mentes maestras",
+            "Grand Scholars": "Grandes estudiosos",
+            "Legends": "Leyendas",
+            "Arch Scholars": "Archisabios",
+            "High Sages": "Grandes sabios",
+            "Oracles of Knowledge": "Oráculos del conocimiento",
+            "Unranked": "Sin rango",
+        }
+        for src, dst in sorted(rank_translations.items(), key=lambda item: len(item[0]), reverse=True):
+            rank_full_name = rank_full_name.replace(src, dst)
+
 
 
         badges_html = ""
@@ -15713,7 +15730,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div>{_esc(b.get('desc',''))}</div>
 
-                <div style="opacity:0.7;margin-top:3px">Earned: {earned_date}</div>
+                <div style="opacity:0.7;margin-top:3px">Conseguido: {earned_date}</div>
 
                 <div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--text)"></div>
 
@@ -15735,7 +15752,7 @@ No markdown, no code fences. ONLY JSON.
 
             border = "var(--primary)" if earned else "var(--border)"
 
-            status_text = "Earned!" if earned else "Not yet earned"
+            status_text = "Conseguido" if earned else "Aún no conseguido"
 
             status_color = "#22c55e" if earned else "#94a3b8"
 
@@ -15854,11 +15871,11 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        return _s_render("Achievements", f"""
+        return _s_render("Logros", f"""
 
         <div style="max-width:800px;margin:0 auto">
 
-          <h2 style="margin-bottom:20px"><span style="font-size:1.3em">🏆</span> Achievements & Progress</h2>
+          <h2 style="margin-bottom:20px"><span style="font-size:1.3em">🏆</span> Logros y progreso</h2>
 
 
 
@@ -15872,7 +15889,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div style="position:absolute;top:-20px;right:-20px;font-size:120px;opacity:0.08">🏆</div>
 
-            <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1.5px;font-weight:600">Rank</div>
+            <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1.5px;font-weight:600">Posición</div>
 
             <div style="font-size:2.2em;font-weight:800;margin:6px 0;letter-spacing:-1px">{_esc(rank_full_name)}</div>
 
@@ -15884,7 +15901,7 @@ No markdown, no code fences. ONLY JSON.
 
             </div>
 
-            <div style="font-size:13px;opacity:0.75">{total_xp - rank_floor} / {max(1, rank_ceil - rank_floor)} XP to next rank</div>
+            <div style="font-size:13px;opacity:0.75">{total_xp - rank_floor} / {max(1, rank_ceil - rank_floor)} XP para el siguiente rango</div>
 
           </div>
 

@@ -808,7 +808,7 @@ LAYOUT = """<!DOCTYPE html>
     .nav .brand:hover { opacity: .88; }
     .nav .brand-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--primary) 0%, #8B5CF6 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,0.06) inset; }
     .nav-links { display: flex; align-items: center; gap: 2px; flex-shrink: 0; overflow: visible; }
-    .nav-links a { color: #A0AAB8; text-decoration: none; font-size: 13px; font-weight: 500; padding: 7px 12px; border-radius: 8px; transition: color .15s var(--ease), background .15s var(--ease); }
+    .nav-links a { color: #A0AAB8; text-decoration: none; font-size: 13px; font-weight: 500; padding: 7px 12px; border-radius: 8px; transition: color .15s var(--ease), background .15s var(--ease); display:flex; align-items:center; height:34px; line-height:1; box-sizing:border-box; position:relative; }
     .nav-links a:hover { color: #F8FAFC; background: rgba(255,255,255,0.06); }
     .nav-links a.active { color: #fff; background: rgba(255,255,255,0.09); box-shadow: 0 0 0 1px rgba(255,255,255,0.05) inset; }
     .nav-links a:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(129,140,248,0.55); }
@@ -820,7 +820,7 @@ LAYOUT = """<!DOCTYPE html>
     .nav-dropdown > a:focus, .nav-dropdown > a:focus-visible, .nav-dropdown > a:active { outline: none !important; box-shadow: none !important; text-decoration: none !important; }
     .nav-dropdown-menu { display:none; position:absolute; top:calc(100% + 10px); left:0; transform:translateY(4px); opacity:0; background:#0F172A; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px; min-width:220px; z-index:5000; box-shadow:0 18px 45px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.02); transition:opacity .15s var(--ease), transform .15s var(--ease); }
     .nav-dropdown:hover .nav-dropdown-menu, .nav-dropdown.open .nav-dropdown-menu { display:block; opacity:1; transform:translateY(0); }
-    .nav-dropdown-menu a { display:block; padding:8px 12px; font-size:13px; color:#A0AAB8; border-radius:8px; transition: color .15s var(--ease), background .15s var(--ease); }
+    .nav-dropdown-menu a { display:block; height:auto; padding:8px 12px; font-size:13px; color:#A0AAB8; border-radius:8px; transition: color .15s var(--ease), background .15s var(--ease); }
     .nav-dropdown-menu a:hover { color:#fff; background:rgba(99,102,241,0.18); }
     /* Floating focus widget */
     #focus-float { position:fixed; bottom:20px; right:20px; background:linear-gradient(135deg,#1e293b,#334155); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:12px 18px; z-index:500; box-shadow:0 8px 32px rgba(0,0,0,0.4); display:none; cursor:pointer; color:#fff; font-family:monospace; min-width:140px; text-align:center; transition:all 0.3s; }
@@ -1294,7 +1294,7 @@ LAYOUT = """<!DOCTYPE html>
     .nav.is-scrolled { box-shadow: 0 6px 24px rgba(0,0,0,0.25); border-bottom-color: rgba(255,255,255,0.1); }
 
     /* Animated underline for nav active state */
-    .nav-links a.active::after { content: ''; display: block; height: 2px; background: linear-gradient(90deg, var(--primary), #8B5CF6); border-radius: 2px; margin-top: 4px; animation: mrUnderlineIn .4s var(--ease); }
+    .nav-links a.active::after { content: ''; position:absolute; left:12px; right:12px; bottom:-3px; height: 2px; background: linear-gradient(90deg, var(--primary), #8B5CF6); border-radius: 2px; animation: mrUnderlineIn .4s var(--ease); }
     @keyframes mrUnderlineIn { from { transform: scaleX(.2); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
 
     /* Spotlight hover: soft glow follows cursor on cards */
