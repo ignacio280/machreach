@@ -4310,6 +4310,9 @@ def admin_dashboard():
       <h1>&#128227; Admin</h1>
       <p class="subtitle">Broadcast to users and manage accounts. Owner access is locked to ignaciomachuca2005@gmail.com.</p>
     </div>
+    <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="btn btn-outline btn-sm" href="/admin/leaderboard-winners-test">&#127942; Preview monthly leaderboard winners email</a>
+    </div>
     {'<div class="alert alert-red" style="margin-bottom:16px;">' + _esc(error_msg) + '</div>' if error_msg else ''}
     <div class="card" style="max-width:820px;">
       <div class="card-header"><h2>Send Email to All Users</h2></div>
@@ -4340,6 +4343,111 @@ def admin_dashboard():
       </table>
     </div>
     """, active_page="admin", wide=True)
+
+
+@app.route("/admin/leaderboard-winners-test")
+def admin_leaderboard_winners_test():
+    """Admin preview / dry-run for the monthly leaderboard winners email.
+
+    Query params:
+        month=YYYY-MM   — calendar month to preview (defaults to last month)
+        send=1          — actually send the email to the configured recipient
+                          instead of just rendering the preview
+    """
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+
+    from datetime import date
+    from student.academic import monthly_winners
+
+    raw = (request.args.get("month") or "").strip()
+    if raw:
+        try:
+            year_s, month_s = raw.split("-", 1)
+            year, month = int(year_s), int(month_s)
+            if not (1 <= month <= 12):
+                raise ValueError
+        except (ValueError, AttributeError):
+            return ("Invalid month — use YYYY-MM (e.g. 2026-03).", 400)
+    else:
+        today = date.today()
+        if today.month == 1:
+            year, month = today.year - 1, 12
+        else:
+            year, month = today.year, today.month - 1
+
+    if (request.args.get("send") or "").strip() in ("1", "true", "yes"):
+        from worker import send_monthly_leaderboard_email, LEADERBOARD_WINNERS_RECIPIENT
+        send_monthly_leaderboard_email()
+        flash(("success", f"Triggered monthly winners email for previous month → {LEADERBOARD_WINNERS_RECIPIENT}"))
+        return redirect(url_for("admin_leaderboard_winners_test"))
+
+    data = monthly_winners(year, month, top_n=3)
+
+    def _rows(rows):
+        if not rows:
+            return "<div style='color:var(--text-muted);font-size:13px;'>(no participants)</div>"
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        out = ["<table style='width:100%;border-collapse:collapse;font-size:13px;'>"]
+        for r in rows:
+            m = medals.get(r["rank"], f"#{r['rank']}")
+            out.append(
+                f"<tr><td style='padding:4px 8px;width:36px;'>{m}</td>"
+                f"<td style='padding:4px 8px;'>{_esc(r['name'])}</td>"
+                f"<td style='padding:4px 8px;text-align:right;font-variant-numeric:tabular-nums;'>{r['xp']:,} XP</td>"
+                f"<td style='padding:4px 8px;color:var(--text-muted);font-size:11px;'>client #{r['client_id']}</td></tr>"
+            )
+        out.append("</table>")
+        return "".join(out)
+
+    sections = [
+        f"<h2 style='margin:0 0 4px;font-size:22px;'>🏆 Leaderboard winners — {data['label']}</h2>",
+        f"<div style='color:var(--text-muted);font-size:13px;margin-bottom:18px;'>"
+        f"Period: {data['start']} → {data['end_exclusive']} (exclusive)</div>",
+        "<div class='card' style='padding:16px;margin-bottom:14px;'>",
+        "<div style='font-weight:700;margin-bottom:8px;'>🌍 Global — top 3</div>",
+        _rows(data["global"]),
+        "</div>",
+    ]
+
+    def _section(title, groups):
+        if not groups:
+            return ""
+        parts = [f"<div class='card' style='padding:16px;margin-bottom:14px;'>",
+                 f"<div style='font-weight:700;margin-bottom:8px;'>{title}</div>"]
+        for grp in groups:
+            parts.append(
+                f"<div style='margin:10px 0 4px;font-weight:600;font-size:13px;color:var(--text-secondary);'>"
+                f"{_esc(str(grp['label']))}</div>"
+            )
+            parts.append(_rows(grp["rows"]))
+        parts.append("</div>")
+        return "".join(parts)
+
+    sections.append(_section("🏳️ By country", data["by_country"]))
+    sections.append(_section("🎓 By university", data["by_university"]))
+    sections.append(_section("📚 By major", data["by_major"]))
+
+    # Month switcher + send button
+    prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
+    next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+    nav = (
+        f"<div style='display:flex;gap:8px;align-items:center;margin-bottom:18px;flex-wrap:wrap;'>"
+        f"<a class='btn btn-outline btn-sm' href='?month={prev_year:04d}-{prev_month:02d}'>← {prev_year:04d}-{prev_month:02d}</a>"
+        f"<a class='btn btn-outline btn-sm' href='?month={next_year:04d}-{next_month:02d}'>{next_year:04d}-{next_month:02d} →</a>"
+        f"<form method='get' action='' style='display:inline-flex;gap:6px;align-items:center;margin:0;'>"
+        f"<input type='month' name='month' value='{year:04d}-{month:02d}' "
+        f"style='padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);'>"
+        f"<button type='submit' class='btn btn-primary btn-sm'>Load</button>"
+        f"</form>"
+        f"<a class='btn btn-secondary btn-sm' href='?send=1' "
+        f"onclick=\"return confirm('Send the *previous month* email to the recipient now?');\" "
+        f"style='margin-left:auto;'>📤 Send email now (prev month)</a>"
+        f"</div>"
+    )
+
+    body = nav + "".join(sections)
+    return _render("Monthly leaderboard winners", body, active_page="admin", wide=True)
 
 
 # ---------------------------------------------------------------------------
