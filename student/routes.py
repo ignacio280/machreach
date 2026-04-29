@@ -10224,6 +10224,9 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+    _quiz_gen_status: dict[int, dict] = {}
+
+
     @app.route("/api/student/quizzes/generate", methods=["POST"])
 
     @csrf.exempt
@@ -10434,6 +10437,123 @@ def register_student_routes(app, csrf, limiter):
 
         })
 
+
+
+    @app.route("/api/student/quizzes/generate-async", methods=["POST"])
+
+    @csrf.exempt
+
+    @limiter.limit("5 per minute")
+
+    def student_generate_quiz_async():
+
+        """Start quiz generation in the background so long AI calls do not time out the browser."""
+
+        if not _logged_in():
+
+            return jsonify({"error": "Unauthorized"}), 401
+
+        client_id = _cid()
+
+        from student import subscription as _sub
+        _ok, _why = _sub.can_generate_quiz_today(client_id)
+        if not _ok:
+            return jsonify({"error": _why, "upgrade_required": True}), 402
+
+        existing = _quiz_gen_status.get(client_id, {})
+        if existing.get("status") == "running":
+            return jsonify({"queued": True, "quiz_status": existing})
+
+        data = request.get_json(force=True) if request.is_json else {}
+        _quiz_gen_status[client_id] = {"status": "running", "progress": "Generating your quiz..."}
+
+        def _do_quiz():
+            try:
+                course_id = data.get("course_id")
+                ad_hoc_source = (data.get("source_text") or "").strip()
+                ad_hoc_title = (data.get("title") or "").strip()
+                topics = data.get("topics", [])
+                exam_id = data.get("exam_id")
+                difficulty = data.get("difficulty", "medium")
+                if difficulty not in ("easy", "medium", "hard"):
+                    difficulty = "medium"
+                try:
+                    count = int(data.get("count", 10))
+                except (TypeError, ValueError):
+                    count = 10
+                count = _sub.cap_questions(client_id, max(1, min(count, 100)))
+                training_published = None
+
+                if ad_hoc_source:
+                    course_name = ad_hoc_title or "Custom Material"
+                    questions = generate_quiz(course_name=course_name, topics=topics or None, source_text=ad_hoc_source, difficulty=difficulty, count=count)
+                    if not questions:
+                        raise ValueError("Failed to generate quiz. Try again.")
+                    title = ad_hoc_title or f"Quiz: {course_name} ({difficulty})"
+                    quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id or None, exam_id=exam_id)
+                    sdb.add_quiz_questions(quiz_id, questions)
+                else:
+                    if not course_id:
+                        raise ValueError("course_id required")
+                    course = sdb.get_course(course_id)
+                    if not course or course["client_id"] != client_id:
+                        raise ValueError("Course not found")
+                    source_text = ""
+                    for f in sdb.get_course_files(client_id, course_id, exam_id=exam_id):
+                        if f.get("extracted_text"):
+                            source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text']}\n\n"
+                    for n in sdb.get_notes(client_id, course_id):
+                        if n.get("content_html"):
+                            source_text += n["content_html"] + "\n\n"
+                    if not source_text.strip():
+                        raise ValueError("No files uploaded for this course/exam. Please upload your study material first.")
+                    questions = generate_quiz(course_name=course["name"], topics=topics or None, source_text=source_text, difficulty=difficulty, count=count)
+                    if not questions:
+                        raise ValueError("Failed to generate quiz. Try again.")
+                    title = data.get("title", f"Quiz: {course['name']} ({difficulty})")
+                    quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id, exam_id=exam_id)
+                    sdb.add_quiz_questions(quiz_id, questions)
+                    try:
+                        from student import training as _tr
+                        _uni = _tr._ensure_university_for_client(client_id)
+                        if _uni:
+                            _tc = _tr.get_or_create_course(_uni, course["name"], course.get("code") or None, created_by=client_id)
+                            training_published = _tr.publish_quiz(_tc["id"], quiz_id, client_id, [dict(q) for q in questions], title=title)
+                    except Exception as _e:
+                        log.warning("training: auto-publish failed for quiz %s: %s", quiz_id, _e)
+
+                try:
+                    _sub.record_generation(client_id, "quiz_generated")
+                except Exception:
+                    pass
+
+                _quiz_gen_status[client_id] = {
+                    "status": "done",
+                    "progress": "Quiz generated!",
+                    "quiz_id": quiz_id,
+                    "training_quiz_id": training_published,
+                    "question_count": len(questions),
+                    "requested": count,
+                    "short": len(questions) < count,
+                }
+            except Exception as e:
+                log.error("Quiz generation failed for client %s: %s", client_id, e)
+                _quiz_gen_status[client_id] = {"status": "error", "progress": str(e), "error": str(e)}
+
+        threading.Thread(target=_do_quiz, daemon=True).start()
+
+        return jsonify({"queued": True, "quiz_status": _quiz_gen_status[client_id]})
+
+
+    @app.route("/api/student/quizzes/generate/status", methods=["GET"])
+
+    def student_generate_quiz_status():
+
+        if not _logged_in():
+
+            return jsonify({"error": "Unauthorized"}), 401
+
+        return jsonify(_quiz_gen_status.get(_cid(), {"status": "idle"}))
 
 
     @app.route("/api/student/quizzes", methods=["GET"])
@@ -12671,6 +12791,36 @@ No markdown, no code fences. ONLY JSON.
           return null;
         }}
 
+        async function pollQuizGeneration() {{
+          for (var i = 0; i < 180; i++) {{
+            await new Promise(function(resolve) {{ setTimeout(resolve, 2000); }});
+            try {{
+              var sr = await fetch('/api/student/quizzes/generate/status', {{ credentials: 'same-origin' }});
+              var sd = await _safeJson(sr);
+              if (sr.ok && sd.status === 'done' && sd.quiz_id) return sd;
+              if (sr.ok && sd.status === 'error') {{
+                var genErr = new Error(sd.error || sd.progress || 'Quiz generation failed.');
+                genErr.isGenerationError = true;
+                throw genErr;
+              }}
+            }} catch (statusErr) {{
+              if (statusErr && statusErr.isGenerationError) throw statusErr;
+            }}
+            var qr = await fetch('/api/student/quizzes', {{ credentials: 'same-origin' }});
+            var qd = await _safeJson(qr);
+            if (qr.ok) {{
+              var quizzes = qd.quizzes || [];
+              for (var j = 0; j < quizzes.length; j++) {{
+                var id = parseInt(quizzes[j].id, 10);
+                if (id && !QZ_KNOWN_QUIZ_IDS.has(id)) {{
+                  return {{ quiz_id: id, question_count: quizzes[j].question_count || 0, requested: quizzes[j].question_count || 0, short: false }};
+                }}
+              }}
+            }}
+          }}
+          throw new Error('Quiz generation is still running. Refresh this page in a moment.');
+        }}
+
         var qzMode = 'test';
 
         function qzSetMode(m) {{
@@ -12813,7 +12963,7 @@ No markdown, no code fences. ONLY JSON.
 
             }}
 
-            var r = await fetch('/api/student/quizzes/generate', {{
+            var r = await fetch('/api/student/quizzes/generate-async', {{
 
               method: 'POST', headers: {{'Content-Type':'application/json'}},
 
@@ -12823,7 +12973,23 @@ No markdown, no code fences. ONLY JSON.
 
             var d = await _safeJson(r);
 
-            if (r.ok) {{
+            if (r.ok && d.queued) {{
+
+              btn.innerHTML = '&#9203; Creating quiz...';
+
+              d = await pollQuizGeneration();
+
+              var msg = 'Generated ' + d.question_count + ' questions!';
+
+              if (d.short) {{ msg += '\\n(You requested ' + d.requested + ' but the source material only supported ' + d.question_count + ' unique questions.)'; }}
+
+              alert(msg);
+
+              mrGo('/student/quizzes/' + d.quiz_id);
+
+              return;
+
+            }} else if (r.ok) {{
 
               var msg = 'Generated ' + d.question_count + ' questions!';
 
@@ -12842,7 +13008,9 @@ No markdown, no code fences. ONLY JSON.
               mrGo('/student/quizzes/' + recoveredQuizId);
               return;
             }}
-            mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.');
+            var msg = e && e.message ? e.message : 'No se pudo generar el quiz.';
+            if (typeof showToast === 'function') showToast('No se pudo generar el quiz: ' + msg, 'error');
+            else alert('No se pudo generar el quiz: ' + msg);
           }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
