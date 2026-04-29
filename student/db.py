@@ -4131,6 +4131,18 @@ def bundle_price(bundle_key: str) -> int:
 STREAK_FREEZE_PRICE = 10
 STREAK_FREEZE_BUNDLE_QTY = 3
 STREAK_FREEZE_BUNDLE_PRICE = 25  # vs. 30 if bought one-by-one (saves 5)
+FREE_STREAK_FREEZE_CAP = 3
+PAID_STREAK_FREEZE_CAP = 5
+
+
+def _streak_freeze_cap(client_id: int) -> int:
+    try:
+        from student.subscription import get_tier
+        if get_tier(client_id) in ("plus", "ultimate"):
+            return PAID_STREAK_FREEZE_CAP
+    except Exception:
+        pass
+    return FREE_STREAK_FREEZE_CAP
 
 # ── Coin microtransactions ──────────────────────────────────────────
 # Real-money packs that credit virtual coins. Prices are in USD; the actual
@@ -4311,9 +4323,10 @@ def _grant_weekly_free_freeze(db, client_id: int) -> None:
                 due = True
         if not due:
             return
-        # Grant if under cap
+        # Grant if under cap. Paid plans can hold a few extra freezes through
+        # Streak Insurance+.
         cur = _fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
-        if int(cur) < 3:
+        if int(cur) < _streak_freeze_cap(client_id):
             _exec(db, "UPDATE student_wallet SET streak_freezes = streak_freezes + 1 WHERE client_id = %s",
                   (client_id,))
         # Always update the timestamp so the cycle advances even if at cap.
@@ -4389,7 +4402,7 @@ def credit_coin_pack(client_id: int, pack_key: str) -> dict:
 
 
 def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dict:
-    """Spend coins to buy `qty` streak freezes (max 3 owned at once).
+    """Spend coins to buy `qty` streak freezes.
     If `bundle=True` and qty==STREAK_FREEZE_BUNDLE_QTY, use the discounted
     bundle price."""
     qty = max(1, min(3, int(qty)))
@@ -4402,8 +4415,9 @@ def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dic
         row = _fetchone(db, "SELECT coins, streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,))
         coins = int(row.get("coins") or 0)
         owned = int(row.get("streak_freezes") or 0)
-        if owned + qty > 3:
-            return {"ok": False, "error": "Max 3 freezes at a time."}
+        cap = _streak_freeze_cap(client_id)
+        if owned + qty > cap:
+            return {"ok": False, "error": f"Max {cap} freezes at a time."}
         if coins < cost:
             return {"ok": False, "error": "Not enough coins."}
         _exec(
@@ -5093,7 +5107,14 @@ def submit_duel_answer(
             )
         except Exception:
             # Already submitted — treat as no-op for that question
-            return {"ok": True, "duplicate": True}
+            return {
+                "ok": True,
+                "duplicate": True,
+                "is_correct": is_correct,
+                "correct": correct_letter,
+                "correct_text": qs[question_idx].get("option_" + correct_letter, ""),
+                "explanation": qs[question_idx].get("explanation", ""),
+            }
 
         # Recount score + total time for this player
         if is_chal:
@@ -5169,7 +5190,13 @@ def submit_duel_answer(
                     (int(score), int(total_ms), int(done_flag), duel_id),
                 )
     settle_quiz_duel_if_done(duel_id)
-    return {"ok": True, "is_correct": is_correct}
+    return {
+        "ok": True,
+        "is_correct": is_correct,
+        "correct": correct_letter,
+        "correct_text": qs[question_idx].get("option_" + correct_letter, ""),
+        "explanation": qs[question_idx].get("explanation", ""),
+    }
 
 
 def forfeit_quiz_duel(duel_id: int, loser_id: int, reason: str = "") -> dict:

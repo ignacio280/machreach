@@ -19001,11 +19001,12 @@ No markdown, no code fences. ONLY JSON.
         flags_html = "".join(flag_cards)
         coins = wallet["coins"]
         freezes = wallet["streak_freezes"]
-        freeze_btn_disabled = "disabled" if (coins < sdb.STREAK_FREEZE_PRICE or freezes >= 3) else ""
+        freeze_cap = sdb._streak_freeze_cap(cid)
+        freeze_btn_disabled = "disabled" if (coins < sdb.STREAK_FREEZE_PRICE or freezes >= freeze_cap) else ""
         bundle_qty   = sdb.STREAK_FREEZE_BUNDLE_QTY
         bundle_price = sdb.STREAK_FREEZE_BUNDLE_PRICE
         bundle_save  = sdb.STREAK_FREEZE_PRICE * bundle_qty - bundle_price
-        bundle_disabled = "disabled" if (coins < bundle_price or freezes + bundle_qty > 3) else ""
+        bundle_disabled = "disabled" if (coins < bundle_price or freezes + bundle_qty > freeze_cap) else ""
 
         # Boosts activos banner
         active_boosts = sdb.get_active_boosts(cid)
@@ -19195,7 +19196,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div class="card">
           <div class="card-header"><h2>\u2744\ufe0f Congeladores de racha</h2></div>
-          <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Máximo 3 a la vez.</p>
+          <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Plus incluye Streak Insurance+: 1 congelador extra al mes y capacidad para guardar hasta 5.</p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;">
             <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} \U0001FA99 cada uno</div>
             <button class="btn btn-primary btn-sm" id="buy-freeze-btn" onclick="buyFreeze()" {freeze_btn_disabled}>Comprar 1</button>
@@ -20093,6 +20094,12 @@ No markdown, no code fences. ONLY JSON.
           .qd-opt {{ display:block; width:100%; text-align:left; padding:14px 16px; margin:8px 0; background:var(--bg); border:1px solid var(--border); border-radius:10px; cursor:pointer; font-size:14px; color:var(--text); transition:all .12s; }}
           .qd-opt:hover {{ border-color:var(--primary); background: rgba(99,102,241,.06); }}
           .qd-opt.picked {{ border-color:var(--primary); background: rgba(99,102,241,.12); }}
+          .qd-opt.correct {{ border-color:#22c55e; background:rgba(34,197,94,.16); color:#dcfce7; }}
+          .qd-opt.wrong {{ border-color:#ef4444; background:rgba(239,68,68,.16); color:#fee2e2; }}
+          .qd-opt[disabled] {{ cursor:default; opacity:.95; }}
+          .qd-feedback {{ margin-top:12px; padding:10px 12px; border-radius:10px; font-size:13px; line-height:1.4; }}
+          .qd-feedback.ok {{ background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.45); color:#86efac; }}
+          .qd-feedback.bad {{ background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.45); color:#fca5a5; }}
           .qd-meta {{ display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); margin-bottom:12px; }}
           .qd-overlay {{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:10000; }}
           .qd-overlay .box {{ background:var(--card); padding:32px; border-radius:14px; max-width:420px; text-align:center; }}
@@ -20140,8 +20147,9 @@ No markdown, no code fences. ONLY JSON.
               const meIsChal = r.me === r.challenger_id;
               document.getElementById('qd-opp-name').textContent =
                 meIsChal ? r.opponent_name : r.challenger_name;
-              const myScore = meIsChal ? r.challenger_score : r.opponent_score;
+              const polledMyScore = meIsChal ? r.challenger_score : r.opponent_score;
               const theirScore = meIsChal ? r.opponent_score : r.challenger_score;
+              myScore = Math.max(myScore, Number(polledMyScore || 0));
               document.getElementById('qd-score').textContent = myScore;
               document.getElementById('qd-their-score').textContent = theirScore;
               if (questions.length === 0 && r.questions && r.questions.length) {{
@@ -20182,6 +20190,7 @@ No markdown, no code fences. ONLY JSON.
                 <button class="qd-opt" data-k="b">B) ${{escapeHtml(q.option_b)}}</button>
                 <button class="qd-opt" data-k="c">C) ${{escapeHtml(q.option_c)}}</button>
                 <button class="qd-opt" data-k="d">D) ${{escapeHtml(q.option_d)}}</button>
+                <div id="qd-feedback"></div>
               </div>`;
             stage.querySelectorAll('.qd-opt').forEach(b => {{
               b.addEventListener('click', () => answer(b.dataset.k));
@@ -20192,18 +20201,56 @@ No markdown, no code fences. ONLY JSON.
             if (busy) return;
             busy = true;
             const elapsed = Date.now() - qStart;
+            const buttons = Array.from(document.querySelectorAll('.qd-opt'));
+            buttons.forEach(b => b.disabled = true);
+            const picked = buttons.find(b => b.dataset.k === k);
+            if (picked) picked.classList.add('picked');
+            const feedback = document.getElementById('qd-feedback');
+            let shouldAdvance = false;
             try {{
               const r = await fetch('/api/student/duels/quiz/' + DUEL_ID + '/submit', {{
                 method:'POST', headers:{{'Content-Type':'application/json'}},
                 body: JSON.stringify({{question_idx: idx, answer: k, time_ms: elapsed}}),
               }}).then(r=>r.json());
-              if (r && r.is_correct) myScore++;
-            }} catch(e) {{}}
+              if (r && r.ok) {{
+                shouldAdvance = true;
+                const correct = String(r.correct || '').toLowerCase();
+                const correctBtn = buttons.find(b => b.dataset.k === correct);
+                if (correctBtn) correctBtn.classList.add('correct');
+                if (r.is_correct) {{
+                  myScore++;
+                  document.getElementById('qd-score').textContent = myScore;
+                  if (feedback) feedback.innerHTML = '<div class="qd-feedback ok"><b>Correcto.</b>' + (r.explanation ? ' ' + escapeHtml(r.explanation) : '') + '</div>';
+                }} else {{
+                  if (picked) picked.classList.add('wrong');
+                  const label = correct ? correct.toUpperCase() : '?';
+                  if (feedback) feedback.innerHTML = '<div class="qd-feedback bad"><b>Incorrecto.</b> Respuesta correcta: ' + label + (r.correct_text ? ') ' + escapeHtml(r.correct_text) : '') + (r.explanation ? '<br>' + escapeHtml(r.explanation) : '') + '</div>';
+                }}
+                await sleep(r.is_correct ? 650 : 1100);
+              }} else {{
+                if (feedback) feedback.innerHTML = '<div class="qd-feedback bad">' + escapeHtml((r && r.error) || 'No se pudo guardar la respuesta.') + '</div>';
+                await sleep(900);
+              }}
+            }} catch(e) {{
+              if (feedback) feedback.innerHTML = '<div class="qd-feedback bad">No se pudo guardar la respuesta. Inténtalo de nuevo.</div>';
+              buttons.forEach(b => b.disabled = false);
+              if (picked) picked.classList.remove('picked');
+              busy = false;
+              return;
+            }}
+            if (!shouldAdvance) {{
+              buttons.forEach(b => b.disabled = false);
+              if (picked) picked.classList.remove('picked');
+              busy = false;
+              return;
+            }}
             idx++;
             renderBar();
             renderQ();
             busy = false;
           }}
+
+          function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
 
           function escapeHtml(s) {{
             return String(s||'').replace(/[&<>'\\"]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','\\'':'&#39;','\\"':'&quot;'}}[c]));
@@ -20234,9 +20281,9 @@ No markdown, no code fences. ONLY JSON.
             document.getElementById('qd-time').textContent = ((Date.now()-startedAt)/1000).toFixed(1) + 's';
           }}, 100);
 
-          // Poll opponent state every 2s
+          // Poll opponent state every 1s
           poll();
-          setInterval(poll, 2000);
+          setInterval(poll, 1000);
         }})();
         </script>
         """, active_page="student_duels")

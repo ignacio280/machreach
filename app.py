@@ -819,7 +819,7 @@ LAYOUT = """<!DOCTYPE html>
     .nav-dropdown > a { cursor: pointer; text-decoration: none; outline: none; user-select: none; }
     .nav-dropdown > a:focus, .nav-dropdown > a:focus-visible, .nav-dropdown > a:active { outline: none !important; box-shadow: none !important; text-decoration: none !important; }
     .nav-dropdown-menu { display:none; position:absolute; top:calc(100% + 10px); left:0; transform:translateY(4px); opacity:0; background:#0F172A; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px; min-width:220px; z-index:5000; box-shadow:0 18px 45px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.02); transition:opacity .15s var(--ease), transform .15s var(--ease); }
-    .nav-dropdown:hover .nav-dropdown-menu, .nav-dropdown.open .nav-dropdown-menu { display:block; opacity:1; transform:translateY(0); }
+    .nav-dropdown:hover .nav-dropdown-menu { display:block; opacity:1; transform:translateY(0); }
     .nav-dropdown-menu a { display:block; height:auto; padding:8px 12px; font-size:13px; color:#A0AAB8; border-radius:8px; transition: color .15s var(--ease), background .15s var(--ease); }
     .nav-dropdown-menu a:hover { color:#fff; background:rgba(99,102,241,0.18); }
     /* Floating focus widget */
@@ -1431,7 +1431,7 @@ LAYOUT = """<!DOCTYPE html>
         {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Cursos</a>
         <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Herramientas de Estudio &#9662;</a>
+          <a href="javascript:void(0)" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Herramientas de Estudio &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/flashcards">&#127183; Tarjetas</a>
             <a href="/student/quizzes">&#128221; Quizzes</a>
@@ -1442,7 +1442,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Mercado</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>Más &#9662;</a>
+          <a href="javascript:void(0)" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>Más &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/friends">&#128101; Amigos</a>
             <a href="/student/shop">&#129534; Tienda</a>
@@ -1456,7 +1456,7 @@ LAYOUT = """<!DOCTYPE html>
         {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
+          <a href="javascript:void(0)" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/flashcards">&#127183; Flashcards</a>
             <a href="/student/quizzes">&#128221; Quizzes</a>
@@ -1467,7 +1467,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Marketplace</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>More &#9662;</a>
+          <a href="javascript:void(0)" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>More &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/friends">&#128101; Friends</a>
             <a href="/student/shop">&#129534; Shop</a>

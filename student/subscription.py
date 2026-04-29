@@ -41,6 +41,7 @@ FREE_DAILY_FLASHCARD_SETS = 1
 FREE_DAILY_QUIZ_DUELS_SENT = 3
 FREE_FLASHCARD_MAX_CARDS  = 30
 PLUS_MONTHLY_BONUS_COINS  = 300
+PLUS_MONTHLY_STREAK_FREEZES = 1
 
 PLANS = {
     "free": {
@@ -66,6 +67,7 @@ PLANS = {
             "Quizzes y tarjetas IA ilimitados",
             "Tarjetas / preguntas ilimitadas por generación",
             f"{PLUS_MONTHLY_BONUS_COINS} monedas extra al mes",
+            "Streak Insurance+: 1 congelador de racha extra al mes",
             "Insignia PLUS y cosméticos exclusivos",
             "Analítica detallada y reportes exportables",
         ],
@@ -140,6 +142,22 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
             changed = True
         except Exception as e:
             log.warning("Plus monthly coin grant failed for %s: %s", client_id, e)
+    if prefs.get("plus_streak_insurance_month") != month_key:
+        try:
+            from outreach.db import _exec, _fetchval
+            from student import db as sdb
+            sdb._ensure_wallet(db, client_id)
+            cur = int(_fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,)) or 0)
+            if cur < sdb.PAID_STREAK_FREEZE_CAP:
+                _exec(
+                    db,
+                    "UPDATE student_wallet SET streak_freezes = streak_freezes + %s WHERE client_id = %s",
+                    (PLUS_MONTHLY_STREAK_FREEZES, client_id),
+                )
+            prefs["plus_streak_insurance_month"] = month_key
+            changed = True
+        except Exception as e:
+            log.warning("Plus monthly streak-insurance grant failed for %s: %s", client_id, e)
     try:
         from outreach.db import _exec, _fetchone
         has_badge = _fetchone(
