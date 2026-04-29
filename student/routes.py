@@ -19511,8 +19511,11 @@ No markdown, no code fences. ONLY JSON.
             progress_pct = max(0, min(100, int((total_xp - floor) * 100 / (ceil - floor))))
         return _s_render("My Profile", f"""
         <style>{sdb.BANNER_ANIM_CSS}
-{sdb.FLAG_ANIM_CSS}</style>
-        <div style="max-width:900px;margin:0 auto;">
+{sdb.FLAG_ANIM_CSS}
+          .student-profile-wrap {{ max-width:900px;margin:-16px auto 0; }}
+          @media (max-width: 768px) {{ .student-profile-wrap {{ margin-top:-8px; }} }}
+        </style>
+        <div class="student-profile-wrap">
           <div style="margin-bottom:22px;">
             <div id="profile-banner" class="bnr-anim-host {equipped_banner_anim}" style="height:140px;background:{banner_css};border:1px solid var(--border);border-bottom:none;border-radius:14px 14px 0 0;"></div>
             <div style="background:#0B1220;border:1px solid var(--border);border-top:none;border-radius:0 0 14px 14px;padding:14px 22px 18px;position:relative;">
