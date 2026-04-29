@@ -1439,7 +1439,6 @@ LAYOUT = """<!DOCTYPE html>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Enfoque</a>
-        <a href="/student/training" {% if active_page == 'student_training' %}class="active"{% endif %}>&#128170; Entrenamiento</a>
         <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Mercado</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
@@ -1465,7 +1464,6 @@ LAYOUT = """<!DOCTYPE html>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
-        <a href="/student/training" {% if active_page == 'student_training' %}class="active"{% endif %}>&#128170; Training</a>
         <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Marketplace</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
@@ -4830,14 +4828,12 @@ def privacy_page():
         <p><strong>Canvas LMS data:</strong> if you connect Canvas, we fetch your courses, assignments, and exam dates. Your Canvas access token is encrypted at rest and can be disconnected in Settings.</p>
         <p><strong>Study materials:</strong> PDFs, DOCX files, notes, and text you provide for flashcards, quizzes, AI notes, and the AI tutor.</p>
         <p><strong>Gamification data:</strong> XP events, study streaks, badges, quiz scores, flashcard reviews, focus sessions, leaderboard rank, and in-app coin activity.</p>
-        <p><strong>Training tab data:</strong> quizzes you publish for a university course, aggregate ratings, and aggregate attempt stats.</p>
         <p><strong>Focus Guard extension:</strong> blocklists and active-session state are stored locally in your browser and are not sent to our servers.</p>
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. How We Use Your Information</h2>
         <ul style="padding-left:20px;">
           <li>To generate study plans, flashcards, quizzes, notes, tutor answers, essay feedback, and panic-mode plans</li>
           <li>To track XP, streaks, leaderboard rankings, and coin payouts</li>
-          <li>To power course Training pages and aggregate community quiz ratings</li>
           <li>To process subscriptions and service notifications such as password resets and study emails you opted into</li>
           <li>To keep the service secure, reliable, and improving over time</li>
         </ul>
@@ -4870,7 +4866,7 @@ def terms_page():
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. Description of Service</h2>
-        <p>MachReach provides student study tools including Canvas LMS integration, AI-generated study plans, flashcards, practice quizzes, AI tutor support, essay feedback, panic-mode cram plans, weekly schedule tools, focus timers, XP, leaderboards, coin rewards, a student marketplace, course Training pages, and the optional Focus Guard browser extension.</p>
+        <p>MachReach provides student study tools including Canvas LMS integration, AI-generated study plans, flashcards, practice quizzes, AI tutor support, essay feedback, panic-mode cram plans, weekly schedule tools, focus timers, XP, leaderboards, coin rewards, a student marketplace, and the optional Focus Guard browser extension.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Account Responsibilities</h2>
         <ul style="padding-left:20px;">
           <li>You must provide accurate information when registering</li>
@@ -4881,17 +4877,15 @@ def terms_page():
         </ul>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Academic Integrity</h2>
         <p>You are responsible for complying with your institution's academic-integrity policies. MachReach is a study aid; using it to plagiarize, cheat, or violate honor codes is prohibited.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Training Tab and Shared Quizzes</h2>
-        <p>When you publish or generate a quiz for a course, you grant MachReach and students at your university a non-exclusive, revocable license to display and take that quiz. You must own the content or have permission to share it.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. Subscriptions and Billing</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Subscriptions and Billing</h2>
         <p>Paid student plans are billed through Lemon Squeezy. You can cancel at any time; access continues until the end of the billing period. Refunds are handled case by case.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. AI Features</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. AI Features</h2>
         <p>AI output is provided as a suggestion. You are responsible for reviewing it before relying on it academically. The AI tutor is not a substitute for professional, academic, legal, medical, or financial advice.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. Leaderboards and Coins</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. Leaderboards and Coins</h2>
         <p>Coins have no cash value, cannot be transferred between accounts, and can be redeemed only inside MachReach. We may withhold or reverse rewards for suspected abuse.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">9. Limitation of Liability</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. Limitation of Liability</h2>
         <p>MachReach is provided as is without warranties of any kind. We are not liable for service interruptions, data loss beyond our control, or indirect, incidental, or consequential damages.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">10. Contact</h2>
+        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">9. Contact</h2>
         <p>Questions about these terms? Contact <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
       </div>
     </div>
