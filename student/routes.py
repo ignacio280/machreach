@@ -8827,9 +8827,23 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Canvas Settings", f"""
 
+        <style>
+          .canvas-settings-grid {{
+            display:grid;
+            grid-template-columns:minmax(320px,600px) minmax(320px,520px);
+            gap:22px;
+            align-items:start;
+          }}
+          @media (max-width: 900px) {{
+            .canvas-settings-grid {{ grid-template-columns:1fr; }}
+          }}
+        </style>
+
         <h1 style="margin-bottom:20px;">&#128279; Conexión a Canvas</h1>
 
-        <div class="card" style="max-width:600px;">
+        <div class="canvas-settings-grid">
+
+        <div class="card">
 
           <div style="margin-bottom:20px;">
 
@@ -8880,6 +8894,20 @@ def register_student_routes(app, csrf, limiter):
             <div id="canvas-connect-status" style="display:none;margin-top:12px;font-size:13px;font-weight:600;"></div>
 
           </form>
+
+        </div>
+
+        <div class="card">
+
+          <div class="card-header" style="margin-bottom:14px;">
+            <h2 style="font-size:18px;margin:0;">Tutorial de conexión</h2>
+          </div>
+
+          <video controls preload="metadata" playsinline style="width:100%;display:block;border-radius:8px;border:1px solid var(--border);background:#000;">
+            <source src="/static/tutorials/canvas-connection-tutorial.mp4" type="video/mp4">
+          </video>
+
+        </div>
 
         </div>
 
