@@ -17193,14 +17193,14 @@ No markdown, no code fences. ONLY JSON.
   }
   #mr-lb-page .lb-medal-cell { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
   #mr-lb-page .lb-podium {
-    display:grid; grid-template-columns:1fr 1.12fr 1fr; gap:18px; align-items:end;
-    margin: 18px 0 18px; padding: 28px 24px 22px;
+    display:grid; grid-template-columns:1fr 1.14fr 1fr; gap:18px; align-items:end;
+    margin: 18px 0 20px; padding: 34px 24px 24px;
     border:1px solid rgba(148,163,184,.18); border-radius:24px;
     background:
       radial-gradient(circle at 50% 0%, rgba(250,204,21,.20), transparent 34%),
       radial-gradient(circle at 12% 18%, rgba(124,156,255,.18), transparent 28%),
       radial-gradient(circle at 86% 24%, rgba(192,132,252,.16), transparent 30%),
-      linear-gradient(135deg, rgba(15,23,42,.88), rgba(30,41,59,.72));
+      linear-gradient(135deg, rgba(15,23,42,.94), rgba(30,41,59,.78));
     position:relative; overflow:hidden; box-shadow:0 24px 70px rgba(2,6,23,.28);
   }
   #mr-lb-page .lb-podium::before {
@@ -17217,9 +17217,12 @@ No markdown, no code fences. ONLY JSON.
     position:relative; z-index:1; min-height:220px; display:flex; flex-direction:column;
     justify-content:flex-end; border-radius:20px; overflow:hidden; color:#fff;
     border:1px solid rgba(255,255,255,.16); box-shadow:0 18px 45px rgba(0,0,0,.28);
-    background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.035));
+    background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.035));
+    transition: transform .18s var(--ease), box-shadow .18s var(--ease), border-color .18s var(--ease);
   }
+  #mr-lb-page .lb-podium-card:hover { transform:translateY(-4px); box-shadow:0 22px 58px rgba(0,0,0,.36); }
   #mr-lb-page .lb-podium-card.place-1 { min-height:280px; transform:translateY(-10px); border-color:rgba(250,204,21,.55); box-shadow:0 24px 70px rgba(250,204,21,.18), 0 18px 45px rgba(0,0,0,.32); }
+  #mr-lb-page .lb-podium-card.place-1:hover { transform:translateY(-16px); box-shadow:0 34px 80px rgba(250,204,21,.24), 0 22px 58px rgba(0,0,0,.38); }
   #mr-lb-page .lb-podium-card.place-2 { min-height:238px; border-color:rgba(203,213,225,.35); }
   #mr-lb-page .lb-podium-card.place-3 { min-height:218px; border-color:rgba(251,146,60,.45); }
   #mr-lb-page .lb-podium-flag { position:absolute; inset:0; opacity:.30; z-index:0; }
@@ -17240,6 +17243,14 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-podium-name { font-size:17px; font-weight:800; letter-spacing:-.02em; line-height:1.18; }
   #mr-lb-page .place-1 .lb-podium-name { font-size:21px; }
   #mr-lb-page .lb-podium-xp { margin-top:6px; font-size:13px; color:rgba(255,255,255,.76); font-variant-numeric:tabular-nums; }
+  #mr-lb-page .lb-podium-prize {
+    display:inline-flex; align-items:center; justify-content:center; gap:5px;
+    margin-top:12px; padding:6px 12px; border-radius:999px;
+    background:linear-gradient(135deg, rgba(250,204,21,.22), rgba(245,158,11,.16));
+    color:#fde68a; border:1px solid rgba(250,204,21,.45);
+    font-size:12px; font-weight:900; box-shadow:0 0 24px rgba(250,204,21,.14);
+  }
+  #mr-lb-page .lb-podium-prize.empty { color:rgba(255,255,255,.62); border-color:rgba(255,255,255,.14); background:rgba(255,255,255,.07); box-shadow:none; }
   #mr-lb-page .lb-podium-step {
     position:relative; z-index:2; margin-top:16px; padding:10px 12px;
     border-radius:14px 14px 0 0; font-size:12px; font-weight:900; letter-spacing:.18em;
@@ -17321,12 +17332,32 @@ No markdown, no code fences. ONLY JSON.
     if (!base) return 0;
     return period === 'week' ? Math.floor(base/2) : base;
   }
+  function t(en, es) { return document.documentElement.lang === 'es' ? es : en; }
+  function leagueName(name) {
+    const map = {
+      'Initiate':'Iniciado',
+      'Apprentice':'Aprendiz',
+      'Adept':'Competente',
+      'Scholar':'Académico',
+      'Specialist':'Especialista',
+      'Erudite':'Erudito',
+      'Master':'Maestro',
+      'Grandmaster':'Gran maestro',
+      'Legend':'Leyenda'
+    };
+    return document.documentElement.lang === 'es' ? (map[name] || name) : name;
+  }
   function podiumCard(r) {
     const flagBg = r.flag_css
       ? `<div class="lb-podium-flag ${r.flag_anim_class||''}" style="background:${r.flag_css};"></div>`
       : '';
     const crown = r.rank === 1 ? '<div class="lb-crown">&#128081;</div>' : '';
-    const title = r.rank === 1 ? 'Champion' : (r.rank === 2 ? 'Runner-up' : 'Third place');
+    const title = r.rank === 1 ? t('Champion', 'Campeón') : (r.rank === 2 ? t('Runner-up', 'Segundo lugar') : t('Third place', 'Tercer lugar'));
+    const prize = prizeFor(lbState.scope, r.rank, lbState.period);
+    const prizeHtml = prize > 0
+      ? `<div class="lb-podium-prize" title="${t('Prize if this position holds when the period closes', 'Premio si esta posición se mantiene al cierre del período')}">&#129689; +${prize} ${t('coins', 'monedas')}</div>`
+      : `<div class="lb-podium-prize empty">${t('All-time glory', 'Gloria histórica')}</div>`;
+    const translatedLeague = leagueName(r.league_name);
     return `
       <a class="lb-podium-card place-${r.rank} ${r.is_you?'me':''}" href="/student/profile/${r.client_id}" style="text-decoration:none;">
         ${flagBg}
@@ -17335,7 +17366,8 @@ No markdown, no code fences. ONLY JSON.
           <div class="lb-podium-medal">${medal(r.rank)}</div>
           <div class="lb-podium-avatar">${initials(r.name)}</div>
           <div class="lb-podium-name">${r.badge_left_emoji?`<span title="${escapeHtml(r.badge_left_name||'')}" style="margin-right:5px;">${r.badge_left_emoji}</span>`:''}${escapeHtml(r.name)}${r.badge_right_emoji?`<span title="${escapeHtml(r.badge_right_name||'')}" style="margin-left:5px;">${r.badge_right_emoji}</span>`:''}</div>
-          <div class="lb-podium-xp">${r.xp.toLocaleString()} XP &middot; <span style="color:${r.league_color};font-weight:800;">${escapeHtml(r.league_name)}</span></div>
+          <div class="lb-podium-xp">${r.xp.toLocaleString()} XP &middot; <span style="color:${r.league_color};font-weight:800;">${escapeHtml(translatedLeague)}</span></div>
+          ${prizeHtml}
         </div>
         <div class="lb-podium-step">#${r.rank} ${title}</div>
       </a>`;
@@ -17384,7 +17416,12 @@ No markdown, no code fences. ONLY JSON.
       } else {
         podium.style.display = 'none';
       }
-      board.innerHTML = rows.map(r => {
+      const tableRows = rows.filter(r => r.rank > 3);
+      if (!tableRows.length) {
+        board.innerHTML = `<div class="lb-empty">${t('The rest of the leaderboard starts at #4. No other ranked students yet.', 'El resto del ranking empieza en el #4. Todavía no hay más estudiantes rankeados.')}</div>`;
+        return;
+      }
+      board.innerHTML = tableRows.map(r => {
         const flagBg = r.flag_css
           ? `<div class="lb-flag-bg ${r.flag_anim_class||''}" style="background:${r.flag_css};"></div>`
           : '';
@@ -17402,10 +17439,10 @@ No markdown, no code fences. ONLY JSON.
           <div class="lb-who">
             <div class="lb-avatar">${initials(r.name)}</div>
             <div><div>${r.badge_left_emoji?`<span title="${escapeHtml(r.badge_left_name||'')}" style="margin-right:4px;">${r.badge_left_emoji}</span>`:''}${escapeHtml(r.name)}${r.badge_right_emoji?`<span title="${escapeHtml(r.badge_right_name||'')}" style="margin-left:4px;">${r.badge_right_emoji}</span>`:''}${r.is_you?' <span style="color:#7C9CFF;font-size:12px;">(you)</span>':''}</div>
-                 <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div></div>
+                 <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${escapeHtml(leagueName(r.league_name))}</span></div></div>
           </div>
           <div class="lb-xp">${r.xp.toLocaleString()} XP</div>
-          <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${r.league_name}</span></div>
+          <div class="lb-pill-col"><span class="lb-pill" style="background:${r.league_color}22;color:${r.league_color};">${escapeHtml(leagueName(r.league_name))}</span></div>
         </a>
       `;
       }).join('');
