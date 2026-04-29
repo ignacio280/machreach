@@ -11567,6 +11567,8 @@ No markdown, no code fences. ONLY JSON.
 
 
 
+        existing_deck_ids = [int(d["id"]) for d in decks if d.get("id") is not None]
+
         return _s_render("Flashcards", f"""
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
@@ -11674,6 +11676,24 @@ No markdown, no code fences. ONLY JSON.
         <script>
 
         var fcDropText = "";
+        var FC_KNOWN_DECK_IDS = new Set({json.dumps(existing_deck_ids)});
+
+        async function waitForGeneratedDeck() {{
+          for (var i = 0; i < 18; i++) {{
+            try {{
+              await new Promise(function(resolve) {{ setTimeout(resolve, i === 0 ? 1200 : 2000); }});
+              var r = await fetch('/api/student/flashcards/decks', {{ credentials: 'same-origin' }});
+              var d = await _safeJson(r);
+              if (!r.ok) continue;
+              var decks = d.decks || [];
+              for (var j = 0; j < decks.length; j++) {{
+                var id = parseInt(decks[j].id, 10);
+                if (id && !FC_KNOWN_DECK_IDS.has(id)) return id;
+              }}
+            }} catch (_) {{}}
+          }}
+          return null;
+        }}
 
         async function fcHandleDrop(e) {{
 
@@ -11793,7 +11813,15 @@ No markdown, no code fences. ONLY JSON.
 
             }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
+          }} catch(e) {{
+            btn.innerHTML = '&#9203; Finalizing...';
+            var recoveredDeckId = await waitForGeneratedDeck();
+            if (recoveredDeckId) {{
+              mrGo('/student/flashcards/' + recoveredDeckId);
+              return;
+            }}
+            mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.');
+          }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
@@ -12479,6 +12507,8 @@ No markdown, no code fences. ONLY JSON.
 
 
 
+        existing_quiz_ids = [int(q["id"]) for q in quizzes if q.get("id") is not None]
+
         return _s_render("Quizzes", f"""
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
@@ -12622,6 +12652,24 @@ No markdown, no code fences. ONLY JSON.
         <script>
 
         var qzDropText = "";
+        var QZ_KNOWN_QUIZ_IDS = new Set({json.dumps(existing_quiz_ids)});
+
+        async function waitForGeneratedQuiz() {{
+          for (var i = 0; i < 18; i++) {{
+            try {{
+              await new Promise(function(resolve) {{ setTimeout(resolve, i === 0 ? 1200 : 2000); }});
+              var r = await fetch('/api/student/quizzes', {{ credentials: 'same-origin' }});
+              var d = await _safeJson(r);
+              if (!r.ok) continue;
+              var quizzes = d.quizzes || [];
+              for (var j = 0; j < quizzes.length; j++) {{
+                var id = parseInt(quizzes[j].id, 10);
+                if (id && !QZ_KNOWN_QUIZ_IDS.has(id)) return id;
+              }}
+            }} catch (_) {{}}
+          }}
+          return null;
+        }}
 
         var qzMode = 'test';
 
@@ -12787,7 +12835,15 @@ No markdown, no code fences. ONLY JSON.
 
             }} else {{ alert(d.error || 'Error al generar'); }}
 
-          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
+          }} catch(e) {{
+            btn.innerHTML = '&#9203; Finalizing...';
+            var recoveredQuizId = await waitForGeneratedQuiz();
+            if (recoveredQuizId) {{
+              mrGo('/student/quizzes/' + recoveredQuizId);
+              return;
+            }}
+            mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.');
+          }}
 
           btn.disabled = false; btn.innerHTML = '&#10024; Generate';
 
