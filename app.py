@@ -3032,7 +3032,7 @@ LAYOUT = """<!DOCTYPE html>
     var origAlert = window.alert;
     window.alert = function(msg) {
       var raw = String(msg || '').trim();
-      origAlert(T[msg] || _replaceAll(raw));
+      origAlert(T[raw] || raw);
     };
   })();
   </script>
