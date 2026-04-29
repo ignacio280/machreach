@@ -4404,10 +4404,7 @@ def admin_leaderboard_winners_test():
         f"<h2 style='margin:0 0 4px;font-size:22px;'>🏆 Leaderboard winners — {data['label']}</h2>",
         f"<div style='color:var(--text-muted);font-size:13px;margin-bottom:18px;'>"
         f"Period: {data['start']} → {data['end_exclusive']} (exclusive)</div>",
-        "<div class='card' style='padding:16px;margin-bottom:14px;'>",
-        "<div style='font-weight:700;margin-bottom:8px;'>🌍 Global — top 3</div>",
-        _rows(data["global"]),
-        "</div>",
+        # Global leaderboard intentionally hidden while only Chile is active.
     ]
 
     def _section(title, groups):

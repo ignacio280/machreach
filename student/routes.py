@@ -3949,8 +3949,7 @@ def register_student_routes(app, csrf, limiter):
             </div>
             <a href="/student/leaderboard" class="btn btn-outline btn-sm">{"Ver tabla completa" if _lang == "es" else "View full leaderboards"} &rarr;</a>
           </div>
-          <div id="mr-ranks-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
-            <div class="mr-rank-cell"><div class="mr-rank-label">Global</div><div class="mr-rank-val" id="mr-rank-global">—</div></div>
+          <div id="mr-ranks-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
             <div class="mr-rank-cell"><div class="mr-rank-label">País</div><div class="mr-rank-val" id="mr-rank-country">—</div></div>
             <div class="mr-rank-cell"><div class="mr-rank-label">Universidad</div><div class="mr-rank-val" id="mr-rank-university">—</div></div>
             <div class="mr-rank-cell"><div class="mr-rank-label">Carrera</div><div class="mr-rank-val" id="mr-rank-major">—</div></div>
@@ -3974,7 +3973,6 @@ def register_student_routes(app, csrf, limiter):
               if (!r.ok) return;
               const j = await r.json();
               const fmt = (obj) => obj ? ('#' + obj.rank + ' <span class="of">/ ' + obj.total + '</span>') : '—';
-              document.getElementById('mr-rank-global').innerHTML = fmt(j.ranks.global);
               document.getElementById('mr-rank-country').innerHTML = fmt(j.ranks.country);
               document.getElementById('mr-rank-university').innerHTML = fmt(j.ranks.university);
               document.getElementById('mr-rank-major').innerHTML = fmt(j.ranks.major);
@@ -17337,7 +17335,7 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-hero h2 { margin:0 0 8px; font-size: 28px; letter-spacing:-.03em; }
   #mr-lb-page .lb-hero p  { margin:0; color: var(--text-muted); }
   #mr-lb-page .lb-rank-strip {
-    display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 20px; position:relative; z-index:1;
+    display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; position:relative; z-index:1;
   }
   #mr-lb-page .lb-rank-card {
     background: rgba(255,255,255,.02); border:1px solid var(--border);
@@ -17580,9 +17578,8 @@ No markdown, no code fences. ONLY JSON.
 <div id="mr-lb-page">
   <section class="lb-hero">
     <h2>🏆 Sube en el ranking.</h2>
-    <p>Tu XP se cuenta en vivo contra todos los demás estudiantes — globalmente y en tu país, universidad y carrera.</p>
+    <p>Tu XP se cuenta en vivo contra todos los demás estudiantes — en tu país, universidad y carrera.</p>
     <div class="lb-rank-strip" id="lbRankStrip">
-      <div class="lb-rank-card"><div class="label">Global</div><div class="rank-big" id="lb_r_global">—</div></div>
       <div class="lb-rank-card"><div class="label">País</div><div class="rank-big" id="lb_r_country">—</div></div>
       <div class="lb-rank-card"><div class="label">Universidad</div><div class="rank-big" id="lb_r_university">—</div></div>
       <div class="lb-rank-card"><div class="label">Carrera</div><div class="rank-big" id="lb_r_major">—</div></div>
@@ -17590,8 +17587,7 @@ No markdown, no code fences. ONLY JSON.
   </section>
 
   <div class="lb-tabs" id="lbTabs">
-    <div class="lb-tab active" data-scope="global">🌍 Global</div>
-    <div class="lb-tab" data-scope="country">🏳️ País</div>
+    <div class="lb-tab active" data-scope="country">🏳️ País</div>
     <div class="lb-tab" data-scope="university">🎓 Universidad</div>
     <div class="lb-tab" data-scope="major">📚 Carrera</div>
     <div class="lb-tab" data-scope="retirement" title="Solo egresados">🏖️ Egresados</div>
@@ -17620,7 +17616,8 @@ No markdown, no code fences. ONLY JSON.
   function escapeHtml(s){return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
   // Currently-selected scope + period. Period starts at "all" = all-time.
-  const lbState = { scope: 'global', period: 'all' };
+  // Global scope is disabled while only Chile is active — defaults to country.
+  const lbState = { scope: 'country', period: 'all' };
 
   // Monthly prize table (weekly = monthly // 2). Mirrors student/leaderboard_prizes.py.
   // Retirement scope has no payouts — left out intentionally.
@@ -17683,7 +17680,6 @@ No markdown, no code fences. ONLY JSON.
       if (!r.ok) return;
       const j = await r.json();
       const fmt = (obj) => obj ? `#${obj.rank} <span class="of">/ ${obj.total}</span>` : '—';
-      document.getElementById('lb_r_global').innerHTML = fmt(j.ranks.global);
       document.getElementById('lb_r_country').innerHTML = fmt(j.ranks.country);
       document.getElementById('lb_r_university').innerHTML = fmt(j.ranks.university);
       document.getElementById('lb_r_major').innerHTML = fmt(j.ranks.major);

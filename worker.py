@@ -576,8 +576,8 @@ def send_monthly_leaderboard_email():
         body.append("")
         body.append(f"Period: {data['start']} → {data['end_exclusive']} (exclusive)")
         body.append("")
-        body.append("🌍 GLOBAL — top 3")
-        body.append(_fmt_rows(data["global"]))
+        # Global leaderboard intentionally disabled — only Chile is active.
+        # The country leaderboard is the de-facto top scope right now.
 
         if data["by_country"]:
             body.append("🏳️ BY COUNTRY")
