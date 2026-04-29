@@ -1417,12 +1417,11 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Panel</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Cursos</a>
         <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Herramientas de Estudio &#9662;</a>
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Herramientas de Estudio &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/flashcards">&#127183; Tarjetas</a>
             <a href="/student/quizzes">&#128221; Quizzes</a>
             <a href="/student/essay">&#9999;&#65039; Ensayos</a>
-            <a href="/student/practice">&#128736; Práctica</a>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Enfoque</a>
@@ -1443,12 +1442,11 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <div class="nav-dropdown">
-          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay','student_practice'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
+          <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/flashcards">&#127183; Flashcards</a>
             <a href="/student/quizzes">&#128221; Quizzes</a>
             <a href="/student/essay">&#9999;&#65039; Essay</a>
-            <a href="/student/practice">&#128736; Practice</a>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
@@ -1898,7 +1896,6 @@ LAYOUT = """<!DOCTYPE html>
         {t:'Quizzes', u:'/student/quizzes', i:'📝', s:'Study'},
         {t:'Notes', u:'/student/notes', i:'📖', s:'Study'},
         {t:'Essay Assistant', u:'/student/essay', i:'\u270F\uFE0F', s:'Study'},
-        {t:'Practice Problems', u:'/student/practice', i:'🛠\uFE0F', s:'Study'},
         {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
         {t:'Panic Mode', u:'/student/panic', i:'🚨', s:'Tools'},
         {t:'Schedule', u:'/student/schedule', i:'🗓\uFE0F', s:'Tools'},
