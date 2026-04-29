@@ -529,6 +529,97 @@ def settle_student_duels():
         print(f"[DUELS] error (non-fatal): {e}")
 
 
+# ── Monthly leaderboard winners email ────────────────────────────────────
+LEADERBOARD_WINNERS_RECIPIENT = "ignaciomachuca2005@gmail.com"
+
+
+def send_monthly_leaderboard_email():
+    """First of the month: email the previous month's leaderboard winners.
+
+    Sent to LEADERBOARD_WINNERS_RECIPIENT (currently ignaciomachuca2005@gmail.com).
+    Includes: global top 3 plus per-country, per-university and per-major top 3.
+    """
+    try:
+        from datetime import date
+        import smtplib
+        from email.mime.text import MIMEText
+        from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+
+        if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
+            print("[MONTHLY_WINNERS] SMTP not configured, skipping.")
+            return
+
+        # Compute previous calendar month.
+        today = date.today()
+        if today.month == 1:
+            year, month = today.year - 1, 12
+        else:
+            year, month = today.year, today.month - 1
+
+        from student.academic import monthly_winners
+        data = monthly_winners(year, month, top_n=3)
+        label = data["label"]
+
+        def _fmt_rows(rows):
+            if not rows:
+                return "  (no participants)\n"
+            medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+            lines = []
+            for r in rows:
+                m = medals.get(r["rank"], f"#{r['rank']}")
+                lines.append(f"  {m} {r['name']} — {r['xp']:,} XP (client {r['client_id']})")
+            return "\n".join(lines) + "\n"
+
+        body = []
+        body.append(f"MachReach — Leaderboard winners for {label}")
+        body.append("=" * 60)
+        body.append("")
+        body.append(f"Period: {data['start']} → {data['end_exclusive']} (exclusive)")
+        body.append("")
+        body.append("🌍 GLOBAL — top 3")
+        body.append(_fmt_rows(data["global"]))
+
+        if data["by_country"]:
+            body.append("🏳️ BY COUNTRY")
+            for grp in data["by_country"]:
+                body.append(f"\n  [{grp['label']}]")
+                body.append(_fmt_rows(grp["rows"]))
+
+        if data["by_university"]:
+            body.append("🎓 BY UNIVERSITY")
+            for grp in data["by_university"]:
+                body.append(f"\n  [{grp['label']}]")
+                body.append(_fmt_rows(grp["rows"]))
+
+        if data["by_major"]:
+            body.append("📚 BY MAJOR")
+            for grp in data["by_major"]:
+                body.append(f"\n  [{grp['label']}]")
+                body.append(_fmt_rows(grp["rows"]))
+
+        body.append("")
+        body.append("— MachReach")
+
+        msg = MIMEText("\n".join(body), "plain", "utf-8")
+        msg["From"] = SMTP_USER
+        msg["To"] = LEADERBOARD_WINNERS_RECIPIENT
+        msg["Subject"] = f"MachReach leaderboard winners — {label}"
+
+        if int(SMTP_PORT) == 587:
+            with smtplib.SMTP(SMTP_HOST, int(SMTP_PORT), timeout=30) as srv:
+                srv.starttls()
+                srv.login(SMTP_USER, SMTP_PASSWORD)
+                srv.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(SMTP_HOST, int(SMTP_PORT), timeout=30) as srv:
+                srv.login(SMTP_USER, SMTP_PASSWORD)
+                srv.send_message(msg)
+
+        print(f"[MONTHLY_WINNERS] sent {label} report to {LEADERBOARD_WINNERS_RECIPIENT}")
+    except Exception as e:
+        print(f"[MONTHLY_WINNERS] error (non-fatal): {e}")
+
+
 if __name__ == "__main__":
     init_db()
 
@@ -550,6 +641,9 @@ if __name__ == "__main__":
     scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
     scheduler.add_job(send_streak_risk_pushes, "cron", hour=20, minute=0, id="streak_risk_push")
     scheduler.add_job(settle_student_duels, "cron", hour="*", minute=15, id="settle_duels")
+    # First of every month at 01:00 UTC: email previous month's leaderboard winners.
+    scheduler.add_job(send_monthly_leaderboard_email, "cron", day=1, hour=1, minute=0,
+                      id="monthly_leaderboard_email")
 
     def _apply_recurring_income_all():
         try:

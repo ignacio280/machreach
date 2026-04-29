@@ -1051,3 +1051,140 @@ def ranks_summary(client_id: int, period: str = "all") -> dict:
         "retirement": None,
         "is_retired": False,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Monthly winners report (for end-of-month admin email)
+# ═══════════════════════════════════════════════════════════════════════
+
+def monthly_winners(year: int, month: int, top_n: int = 3) -> dict:
+    """Return top winners across all leaderboard scopes for a given calendar month.
+
+    Returns a dict:
+      {
+        "year": YYYY, "month": MM, "label": "Month YYYY",
+        "global": [ {rank, client_id, name, xp}, ... ],
+        "by_country":    [ {label, rows: [...]}, ... ],
+        "by_university": [ {label, rows: [...]}, ... ],
+        "by_major":      [ {label, rows: [...]}, ... ],
+      }
+    Each scope is sorted by total XP desc and limited to `top_n` rows. Only
+    groups with at least one student earning XP in the period are included.
+    """
+    from datetime import date
+    from calendar import monthrange
+
+    start = date(year, month, 1).strftime("%Y-%m-%d")
+    last_day = monthrange(year, month)[1]
+    end_excl = date(year + (1 if month == 12 else 0),
+                    1 if month == 12 else month + 1, 1).strftime("%Y-%m-%d")
+
+    period_clause = (
+        " AND x.created_at >= %s AND x.created_at < %s "
+    )
+
+    base_q = (
+        "SELECT c.id AS client_id, c.name AS display_name, "
+        "       c.country_iso, c.university_id, c.major_id, "
+        "       COALESCE(SUM(x.xp), 0) AS total_xp "
+        "FROM clients c "
+        "LEFT JOIN student_xp x ON x.client_id = c.id " + period_clause +
+        "WHERE c.account_type = 'student' AND COALESCE(c.retired, 0) = 0 "
+    )
+
+    def _rows_for(extra_where: str, extra_params: tuple) -> list[dict]:
+        q = base_q + extra_where + (
+            " GROUP BY c.id, c.name, c.country_iso, c.university_id, c.major_id "
+            " HAVING COALESCE(SUM(x.xp), 0) > 0 "
+            " ORDER BY total_xp DESC, c.id ASC LIMIT %s "
+        )
+        params = (start, end_excl) + extra_params + (top_n,)
+        with get_db() as db:
+            rows = _fetchall(db, q, params)
+        out = []
+        for idx, r in enumerate(rows, start=1):
+            out.append({
+                "rank":      idx,
+                "client_id": r["client_id"],
+                "name":      r.get("display_name") or "Student",
+                "xp":        int(r.get("total_xp") or 0),
+            })
+        return out
+
+    # Global
+    global_rows = _rows_for("", ())
+
+    # Per-country: enumerate distinct country_iso codes that have any earner.
+    by_country: list[dict] = []
+    by_university: list[dict] = []
+    by_major: list[dict] = []
+
+    with get_db() as db:
+        country_rows = _fetchall(
+            db,
+            "SELECT DISTINCT c.country_iso FROM clients c "
+            "JOIN student_xp x ON x.client_id = c.id "
+            "WHERE c.account_type='student' AND COALESCE(c.retired,0)=0 "
+            "AND c.country_iso IS NOT NULL AND c.country_iso != '' "
+            "AND x.created_at >= %s AND x.created_at < %s",
+            (start, end_excl),
+        )
+        univ_rows = _fetchall(
+            db,
+            "SELECT DISTINCT c.university_id, u.name AS uname "
+            "FROM clients c "
+            "JOIN student_xp x ON x.client_id = c.id "
+            "LEFT JOIN universities u ON u.id = c.university_id "
+            "WHERE c.account_type='student' AND COALESCE(c.retired,0)=0 "
+            "AND c.university_id IS NOT NULL "
+            "AND x.created_at >= %s AND x.created_at < %s",
+            (start, end_excl),
+        )
+        major_rows = _fetchall(
+            db,
+            "SELECT DISTINCT c.major_id, m.name AS mname "
+            "FROM clients c "
+            "JOIN student_xp x ON x.client_id = c.id "
+            "LEFT JOIN majors m ON m.id = c.major_id "
+            "WHERE c.account_type='student' AND COALESCE(c.retired,0)=0 "
+            "AND c.major_id IS NOT NULL "
+            "AND x.created_at >= %s AND x.created_at < %s",
+            (start, end_excl),
+        )
+
+    for r in country_rows:
+        iso = r.get("country_iso")
+        if not iso:
+            continue
+        rows = _rows_for(" AND c.country_iso = %s ", (iso,))
+        if rows:
+            by_country.append({"label": iso, "rows": rows})
+
+    for r in univ_rows:
+        uid = r.get("university_id")
+        if not uid:
+            continue
+        rows = _rows_for(" AND c.university_id = %s ", (uid,))
+        if rows:
+            by_university.append({"label": r.get("uname") or f"University #{uid}", "rows": rows})
+
+    for r in major_rows:
+        mid = r.get("major_id")
+        if not mid:
+            continue
+        rows = _rows_for(" AND c.major_id = %s ", (mid,))
+        if rows:
+            by_major.append({"label": r.get("mname") or f"Major #{mid}", "rows": rows})
+
+    month_label = date(year, month, 1).strftime("%B %Y")
+    return {
+        "year": year,
+        "month": month,
+        "label": month_label,
+        "start": start,
+        "end_exclusive": end_excl,
+        "global": global_rows,
+        "by_country": by_country,
+        "by_university": by_university,
+        "by_major": by_major,
+    }

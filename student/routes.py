@@ -3665,6 +3665,8 @@ def register_student_routes(app, csrf, limiter):
 
         cid = _cid()
 
+        _lang = session.get("lang", "es")
+
         canvas_tok = sdb.get_canvas_token(cid)
 
         courses = sdb.get_courses(cid)
@@ -3929,21 +3931,7 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Dashboard", f"""
 
-        <div class="reveal" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-
-          <div>
-
-            <h1 style="margin:0;font-size:28px;">&#127891; <span class="gradient-text">MachReach</span> Student</h1>
-
-            <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">AI-powered study planner &middot; Canvas integration</p>
-
-          </div>
-
-          <div style="display:flex;gap:10px;"></div>
-
-        </div>
-
-
+        <div style="height:8px;"></div>
 
         {analytics_strip_html}
 
@@ -3959,7 +3947,7 @@ def register_student_routes(app, csrf, limiter):
                 <div style="font-size:12px;color:var(--text-muted);" id="mr-ranks-league">Cargando…</div>
               </div>
             </div>
-            <a href="/student/leaderboard" class="btn btn-outline btn-sm">View full leaderboards &rarr;</a>
+            <a href="/student/leaderboard" class="btn btn-outline btn-sm">{"Ver tabla completa" if _lang == "es" else "View full leaderboards"} &rarr;</a>
           </div>
           <div id="mr-ranks-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
             <div class="mr-rank-cell"><div class="mr-rank-label">Global</div><div class="mr-rank-val" id="mr-rank-global">—</div></div>
@@ -3991,11 +3979,17 @@ def register_student_routes(app, csrf, limiter):
               document.getElementById('mr-rank-university').innerHTML = fmt(j.ranks.university);
               document.getElementById('mr-rank-major').innerHTML = fmt(j.ranks.major);
               if (j.league) {{
+                var _isES = {("true" if _lang == "es" else "false")};
+                var _LEAGUE_ES = {{
+                  'Initiate':'Iniciado','Scholar':'Erudito','Researcher':'Investigador',
+                  'Academic':'Académico','Mastermind':'Maestro','Grand Scholar':'Gran Erudito','Legend':'Leyenda'
+                }};
+                var _trLeague = function(n) {{ return (_isES && _LEAGUE_ES[n]) ? _LEAGUE_ES[n] : n; }};
                 var nextTxt = j.league.next_name
-                  ? (' &rarr; ' + j.league.next_name + ' in ' + (j.league.next_min_xp - ((j.ranks.global && j.ranks.global.xp) || 0)).toLocaleString() + ' XP')
-                  : ' &middot; Max league achieved!';
+                  ? (' &rarr; ' + _trLeague(j.league.next_name) + (_isES ? ' en ' : ' in ') + (j.league.next_min_xp - ((j.ranks.global && j.ranks.global.xp) || 0)).toLocaleString() + ' XP')
+                  : (_isES ? ' &middot; ¡Liga máxima alcanzada!' : ' &middot; Max league achieved!');
                 document.getElementById('mr-ranks-league').innerHTML =
-                  ('<span style="color:' + j.league.color + ';font-weight:600;">' + j.league.name + '</span>') + nextTxt;
+                  ('<span style="color:' + j.league.color + ';font-weight:600;">' + _trLeague(j.league.name) + '</span>') + nextTxt;
                 document.getElementById('mr-league-bar').style.width = (j.league.progress_pct||0) + '%';
                 document.getElementById('mr-league-bar').style.background = 'linear-gradient(90deg,' + j.league.color + ',' + (j.league.glow||j.league.color) + ')';
               }}
@@ -17417,72 +17411,155 @@ No markdown, no code fences. ONLY JSON.
   }
   #mr-lb-page .lb-medal-cell { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
   #mr-lb-page .lb-podium {
-    display:grid; grid-template-columns:1fr 1.14fr 1fr; gap:18px; align-items:end;
-    margin: 18px 0 20px; padding: 34px 24px 24px;
-    border:1px solid rgba(148,163,184,.18); border-radius:24px;
+    display:grid; grid-template-columns:1fr 1.22fr 1fr; gap:22px; align-items:end;
+    margin: 22px 0 28px; padding: 56px 28px 32px;
+    border:1px solid rgba(148,163,184,.20); border-radius:28px;
     background:
-      radial-gradient(circle at 50% 0%, rgba(250,204,21,.20), transparent 34%),
-      radial-gradient(circle at 12% 18%, rgba(124,156,255,.18), transparent 28%),
-      radial-gradient(circle at 86% 24%, rgba(192,132,252,.16), transparent 30%),
-      linear-gradient(135deg, rgba(15,23,42,.94), rgba(30,41,59,.78));
-    position:relative; overflow:hidden; box-shadow:0 24px 70px rgba(2,6,23,.28);
+      radial-gradient(ellipse at 50% -10%, rgba(250,204,21,.30), transparent 42%),
+      radial-gradient(circle at 10% 20%, rgba(124,156,255,.22), transparent 32%),
+      radial-gradient(circle at 90% 28%, rgba(192,132,252,.20), transparent 32%),
+      linear-gradient(160deg, rgba(15,23,42,.96), rgba(30,41,59,.82));
+    position:relative; overflow:hidden;
+    box-shadow:0 30px 80px rgba(2,6,23,.42), inset 0 1px 0 rgba(255,255,255,.06);
   }
   #mr-lb-page .lb-podium::before {
-    content:""; position:absolute; inset:-40% -20% auto; height:70%;
-    background:linear-gradient(115deg, transparent 15%, rgba(255,255,255,.18) 45%, transparent 75%);
-    transform:rotate(-5deg); opacity:.45; pointer-events:none;
+    content:""; position:absolute; inset:-50% -20% auto; height:80%;
+    background:linear-gradient(115deg, transparent 15%, rgba(255,255,255,.12) 45%, transparent 75%);
+    transform:rotate(-4deg); opacity:.55; pointer-events:none;
+    animation: lbPodiumShine 9s ease-in-out infinite;
+  }
+  @keyframes lbPodiumShine {
+    0%, 100% { transform: translateX(-8%) rotate(-4deg); opacity:.4; }
+    50%      { transform: translateX(8%)  rotate(-4deg); opacity:.65; }
   }
   #mr-lb-page .lb-podium::after {
-    content:""; position:absolute; left:7%; right:7%; bottom:16px; height:2px;
-    background:linear-gradient(90deg, transparent, rgba(250,204,21,.8), rgba(124,156,255,.75), transparent);
-    filter:blur(.2px); opacity:.9;
+    content:""; position:absolute; left:6%; right:6%; bottom:18px; height:2px;
+    background:linear-gradient(90deg, transparent, rgba(250,204,21,.85), rgba(124,156,255,.75), transparent);
+    filter:blur(.4px); opacity:.95;
+  }
+  /* Confetti dots above the champion */
+  #mr-lb-page .lb-podium .lb-confetti {
+    position:absolute; top:0; left:0; right:0; height:90px; pointer-events:none; z-index:2;
+    background-image:
+      radial-gradient(circle, #fbbf24 1.5px, transparent 2px),
+      radial-gradient(circle, #f472b6 1.5px, transparent 2px),
+      radial-gradient(circle, #60a5fa 1.5px, transparent 2px),
+      radial-gradient(circle, #34d399 1.5px, transparent 2px);
+    background-size: 110px 90px, 130px 90px, 90px 90px, 150px 90px;
+    background-position: 12% 30%, 64% 18%, 28% 60%, 80% 70%;
+    opacity:.85;
   }
   #mr-lb-page .lb-podium-card {
-    position:relative; z-index:1; min-height:220px; display:flex; flex-direction:column;
-    justify-content:flex-end; border-radius:20px; overflow:hidden; color:#fff;
-    border:1px solid rgba(255,255,255,.16); box-shadow:0 18px 45px rgba(0,0,0,.28);
-    background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.035));
-    transition: transform .18s var(--ease), box-shadow .18s var(--ease), border-color .18s var(--ease);
+    position:relative; z-index:1; min-height:230px; display:flex; flex-direction:column;
+    justify-content:flex-end; border-radius:22px; overflow:hidden; color:#fff;
+    border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 20px 50px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.08);
+    background:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.04));
+    transition: transform .25s var(--ease), box-shadow .25s var(--ease), border-color .25s var(--ease);
   }
-  #mr-lb-page .lb-podium-card:hover { transform:translateY(-4px); box-shadow:0 22px 58px rgba(0,0,0,.36); }
-  #mr-lb-page .lb-podium-card.place-1 { min-height:280px; transform:translateY(-10px); border-color:rgba(250,204,21,.55); box-shadow:0 24px 70px rgba(250,204,21,.18), 0 18px 45px rgba(0,0,0,.32); }
-  #mr-lb-page .lb-podium-card.place-1:hover { transform:translateY(-16px); box-shadow:0 34px 80px rgba(250,204,21,.24), 0 22px 58px rgba(0,0,0,.38); }
-  #mr-lb-page .lb-podium-card.place-2 { min-height:238px; border-color:rgba(203,213,225,.35); }
-  #mr-lb-page .lb-podium-card.place-3 { min-height:218px; border-color:rgba(251,146,60,.45); }
-  #mr-lb-page .lb-podium-flag { position:absolute; inset:0; opacity:.30; z-index:0; }
+  #mr-lb-page .lb-podium-card:hover { transform:translateY(-6px); }
+  #mr-lb-page .lb-podium-card.place-1 {
+    min-height:310px; transform:translateY(-14px);
+    border-color:rgba(250,204,21,.65);
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(250,204,21,.22), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.04));
+    box-shadow:0 30px 80px rgba(250,204,21,.22), 0 20px 50px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.14);
+    animation: lbCrownFloat 4s ease-in-out infinite;
+  }
+  @keyframes lbCrownFloat {
+    0%, 100% { transform: translateY(-14px); }
+    50%      { transform: translateY(-19px); }
+  }
+  #mr-lb-page .lb-podium-card.place-1:hover { transform:translateY(-22px); }
+  #mr-lb-page .lb-podium-card.place-2 {
+    min-height:258px; border-color:rgba(226,232,240,.45);
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(226,232,240,.16), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.035));
+    box-shadow:0 22px 55px rgba(148,163,184,.16), 0 16px 40px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.10);
+  }
+  #mr-lb-page .lb-podium-card.place-3 {
+    min-height:228px; border-color:rgba(251,146,60,.55);
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(251,146,60,.18), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.035));
+    box-shadow:0 20px 50px rgba(251,146,60,.18), 0 14px 36px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.10);
+  }
+  #mr-lb-page .lb-podium-flag { position:absolute; inset:0; opacity:.28; z-index:0; }
   #mr-lb-page .lb-podium-card::after {
     content:""; position:absolute; inset:0; z-index:0;
-    background:linear-gradient(180deg, rgba(2,6,23,.02), rgba(2,6,23,.82) 72%);
+    background:linear-gradient(180deg, rgba(2,6,23,0) 0%, rgba(2,6,23,.85) 78%);
   }
-  #mr-lb-page .lb-podium-body { position:relative; z-index:2; padding:20px; text-align:center; }
-  #mr-lb-page .lb-crown { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:3; font-size:34px; filter:drop-shadow(0 5px 14px rgba(0,0,0,.5)); }
-  #mr-lb-page .lb-podium-medal { font-size:30px; line-height:1; margin-bottom:8px; }
+  #mr-lb-page .lb-podium-body { position:relative; z-index:2; padding:22px 18px 18px; text-align:center; }
+  #mr-lb-page .lb-crown {
+    position:absolute; top:-26px; left:50%; transform:translateX(-50%); z-index:3;
+    font-size:42px; filter:drop-shadow(0 8px 18px rgba(250,204,21,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.5));
+    animation: lbCrownBob 2.4s ease-in-out infinite;
+  }
+  @keyframes lbCrownBob {
+    0%, 100% { transform: translate(-50%, 0) rotate(-3deg); }
+    50%      { transform: translate(-50%, -4px) rotate(3deg); }
+  }
+  #mr-lb-page .lb-podium-medal { font-size:34px; line-height:1; margin-bottom:10px; filter:drop-shadow(0 4px 10px rgba(0,0,0,.45)); }
+  #mr-lb-page .place-1 .lb-podium-medal { font-size:42px; }
   #mr-lb-page .lb-podium-avatar {
-    width:68px; height:68px; border-radius:50%; margin:0 auto 10px;
-    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:22px;
-    background:linear-gradient(135deg,#334155,#7c3aed); border:3px solid rgba(255,255,255,.24);
-    box-shadow:0 0 0 5px rgba(255,255,255,.06);
+    width:72px; height:72px; border-radius:50%; margin:0 auto 12px;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:24px;
+    background:linear-gradient(135deg,#334155,#7c3aed); border:3px solid rgba(255,255,255,.28);
+    box-shadow:0 0 0 5px rgba(255,255,255,.05), 0 8px 22px rgba(0,0,0,.30);
   }
-  #mr-lb-page .place-1 .lb-podium-avatar { width:82px; height:82px; font-size:26px; border-color:rgba(250,204,21,.78); box-shadow:0 0 0 6px rgba(250,204,21,.10), 0 0 34px rgba(250,204,21,.35); }
-  #mr-lb-page .lb-podium-name { font-size:17px; font-weight:800; letter-spacing:-.02em; line-height:1.18; }
-  #mr-lb-page .place-1 .lb-podium-name { font-size:21px; }
-  #mr-lb-page .lb-podium-xp { margin-top:6px; font-size:13px; color:rgba(255,255,255,.76); font-variant-numeric:tabular-nums; }
+  #mr-lb-page .place-1 .lb-podium-avatar {
+    width:92px; height:92px; font-size:30px;
+    border-color:rgba(250,204,21,.85);
+    box-shadow:0 0 0 6px rgba(250,204,21,.12), 0 0 38px rgba(250,204,21,.55), 0 10px 24px rgba(0,0,0,.34);
+  }
+  #mr-lb-page .place-2 .lb-podium-avatar {
+    width:78px; height:78px;
+    border-color:rgba(226,232,240,.70);
+    box-shadow:0 0 0 5px rgba(226,232,240,.10), 0 0 26px rgba(226,232,240,.30), 0 8px 22px rgba(0,0,0,.30);
+  }
+  #mr-lb-page .place-3 .lb-podium-avatar {
+    width:74px; height:74px;
+    border-color:rgba(251,146,60,.80);
+    box-shadow:0 0 0 5px rgba(251,146,60,.10), 0 0 24px rgba(251,146,60,.32), 0 8px 22px rgba(0,0,0,.30);
+  }
+  #mr-lb-page .lb-podium-name {
+    font-size:17px; font-weight:800; letter-spacing:-.02em; line-height:1.2;
+    text-shadow:0 2px 8px rgba(0,0,0,.45);
+  }
+  #mr-lb-page .place-1 .lb-podium-name { font-size:23px; }
+  #mr-lb-page .lb-podium-xp {
+    margin-top:8px; font-size:13.5px; color:rgba(255,255,255,.82);
+    font-variant-numeric:tabular-nums;
+  }
+  #mr-lb-page .place-1 .lb-podium-xp { font-size:14.5px; }
   #mr-lb-page .lb-podium-prize {
     display:inline-flex; align-items:center; justify-content:center; gap:5px;
-    margin-top:12px; padding:6px 12px; border-radius:999px;
-    background:linear-gradient(135deg, rgba(250,204,21,.22), rgba(245,158,11,.16));
-    color:#fde68a; border:1px solid rgba(250,204,21,.45);
-    font-size:12px; font-weight:900; box-shadow:0 0 24px rgba(250,204,21,.14);
+    margin-top:14px; padding:7px 14px; border-radius:999px;
+    background:linear-gradient(135deg, rgba(250,204,21,.28), rgba(245,158,11,.18));
+    color:#fde68a; border:1px solid rgba(250,204,21,.55);
+    font-size:12px; font-weight:900; box-shadow:0 0 26px rgba(250,204,21,.18), 0 4px 14px rgba(0,0,0,.20);
   }
-  #mr-lb-page .lb-podium-prize.empty { color:rgba(255,255,255,.62); border-color:rgba(255,255,255,.14); background:rgba(255,255,255,.07); box-shadow:none; }
+  #mr-lb-page .lb-podium-prize.empty { color:rgba(255,255,255,.66); border-color:rgba(255,255,255,.16); background:rgba(255,255,255,.06); box-shadow:none; }
+  /* Podium step / pedestal — gives the cards a real "podium" base */
   #mr-lb-page .lb-podium-step {
-    position:relative; z-index:2; margin-top:16px; padding:10px 12px;
-    border-radius:14px 14px 0 0; font-size:12px; font-weight:900; letter-spacing:.18em;
-    text-transform:uppercase; color:rgba(15,23,42,.86);
+    position:relative; z-index:2; margin-top:18px; padding:12px 12px;
+    border-radius:14px 14px 0 0;
+    font-size:13px; font-weight:900; letter-spacing:.20em;
+    text-transform:uppercase; color:rgba(15,23,42,.92);
+    text-shadow:0 1px 0 rgba(255,255,255,.45);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.55), inset 0 -8px 18px rgba(0,0,0,.18);
   }
-  #mr-lb-page .place-1 .lb-podium-step { height:58px; background:linear-gradient(180deg,#fde68a,#f59e0b); }
-  #mr-lb-page .place-2 .lb-podium-step { height:42px; background:linear-gradient(180deg,#e2e8f0,#94a3b8); }
-  #mr-lb-page .place-3 .lb-podium-step { height:34px; background:linear-gradient(180deg,#fdba74,#c2410c); }
+  #mr-lb-page .place-1 .lb-podium-step { height:72px; background:linear-gradient(180deg,#fef3c7 0%,#fde68a 35%,#f59e0b 100%); }
+  #mr-lb-page .place-2 .lb-podium-step { height:54px; background:linear-gradient(180deg,#f8fafc 0%,#e2e8f0 35%,#94a3b8 100%); }
+  #mr-lb-page .place-3 .lb-podium-step { height:42px; background:linear-gradient(180deg,#fed7aa 0%,#fdba74 35%,#c2410c 100%); }
+  /* "ME" highlight — outline the user's own podium card */
+  #mr-lb-page .lb-podium-card.me {
+    outline: 2px solid rgba(124,156,255,.85);
+    outline-offset: 2px;
+  }
   #mr-lb-page .lb-empty, #mr-lb-page .lb-loading { padding: 36px 20px; text-align:center; color: var(--text-muted);}
   #mr-lb-page .lb-skeleton { display:flex; flex-direction:column; gap: 10px; padding: 14px 20px;}
   #mr-lb-page .lb-sk-row { height: 48px; background: linear-gradient(90deg, rgba(148,163,184,.06), rgba(148,163,184,.14), rgba(148,163,184,.06));
@@ -17490,8 +17567,11 @@ No markdown, no code fences. ONLY JSON.
   @keyframes lbShimmer { from { background-position: 0 0;} to { background-position: -200% 0;}}
   @media (max-width: 600px) {
     #mr-lb-page .lb-rank-strip { grid-template-columns: repeat(2, 1fr); }
-    #mr-lb-page .lb-podium { grid-template-columns:1fr; padding:18px; }
-    #mr-lb-page .lb-podium-card, #mr-lb-page .lb-podium-card.place-1, #mr-lb-page .lb-podium-card.place-2, #mr-lb-page .lb-podium-card.place-3 { min-height:210px; transform:none; }
+    #mr-lb-page .lb-podium { grid-template-columns:1fr; padding:36px 18px 22px; gap:14px; }
+    #mr-lb-page .lb-podium-card, #mr-lb-page .lb-podium-card.place-1, #mr-lb-page .lb-podium-card.place-2, #mr-lb-page .lb-podium-card.place-3 { min-height:220px; transform:none; animation:none; }
+    #mr-lb-page .lb-podium-card.place-1:hover, #mr-lb-page .lb-podium-card:hover { transform:translateY(-3px); }
+    #mr-lb-page .lb-crown { font-size:34px; top:-22px; }
+    #mr-lb-page .place-1 .lb-podium-name { font-size:20px; }
     #mr-lb-page .lb-row { grid-template-columns: 40px 1fr 80px; }
     #mr-lb-page .lb-row .lb-pill-col { display:none;}
   }
@@ -17635,7 +17715,7 @@ No markdown, no code fences. ONLY JSON.
         const byRank = {};
         top.forEach(r => { byRank[r.rank] = r; });
         const ordered = [byRank[2], byRank[1], byRank[3]].filter(Boolean);
-        podium.innerHTML = ordered.map(podiumCard).join('');
+        podium.innerHTML = '<div class="lb-confetti" aria-hidden="true"></div>' + ordered.map(podiumCard).join('');
         podium.style.display = 'grid';
       } else {
         podium.style.display = 'none';
