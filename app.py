@@ -800,14 +800,14 @@ LAYOUT = """<!DOCTYPE html>
     .nav {
       background: #0B1220;
       padding: 0 32px; display: flex; align-items: center; justify-content: space-between;
-      height: 60px; position: sticky; top: 0; z-index: 100;
+      height: 60px; position: sticky; top: 0; z-index: 2000; overflow: visible;
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: saturate(140%) blur(12px);
     }
     .nav .brand { color: #fff; font-weight: 700; font-size: 16px; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; text-decoration: none; transition: opacity .18s var(--ease); }
     .nav .brand:hover { opacity: .88; }
     .nav .brand-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--primary) 0%, #8B5CF6 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,0.06) inset; }
-    .nav-links { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+    .nav-links { display: flex; align-items: center; gap: 2px; flex-shrink: 0; overflow: visible; }
     .nav-links a { color: #A0AAB8; text-decoration: none; font-size: 13px; font-weight: 500; padding: 7px 12px; border-radius: 8px; transition: color .15s var(--ease), background .15s var(--ease); }
     .nav-links a:hover { color: #F8FAFC; background: rgba(255,255,255,0.06); }
     .nav-links a.active { color: #fff; background: rgba(255,255,255,0.09); box-shadow: 0 0 0 1px rgba(255,255,255,0.05) inset; }
@@ -815,11 +815,11 @@ LAYOUT = """<!DOCTYPE html>
     .nav-links .nav-divider { width: 1px; height: 18px; background: rgba(255,255,255,0.08); margin: 0 6px; }
     .nav-links .nav-user { color: #64748B; font-size: 12px; margin-right: 4px; }
     /* Nav dropdown */
-    .nav-dropdown { position: relative; }
+    .nav-dropdown { position: relative; z-index: 2100; }
     .nav-dropdown > a { cursor: pointer; text-decoration: none; outline: none; user-select: none; }
     .nav-dropdown > a:focus, .nav-dropdown > a:focus-visible, .nav-dropdown > a:active { outline: none !important; box-shadow: none !important; text-decoration: none !important; }
-    .nav-dropdown-menu { display:none; position:absolute; top:100%; left:50%; transform:translateX(-50%) translateY(4px); opacity:0; background:#0F172A; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px; min-width:200px; z-index:300; box-shadow:0 12px 32px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.02); margin-top:4px; transition:opacity .15s var(--ease), transform .15s var(--ease); }
-    .nav-dropdown:hover .nav-dropdown-menu, .nav-dropdown.open .nav-dropdown-menu { display:block; opacity:1; transform:translateX(-50%) translateY(0); }
+    .nav-dropdown-menu { display:none; position:absolute; top:calc(100% + 10px); left:0; transform:translateY(4px); opacity:0; background:#0F172A; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px; min-width:220px; z-index:5000; box-shadow:0 18px 45px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.02); transition:opacity .15s var(--ease), transform .15s var(--ease); }
+    .nav-dropdown:hover .nav-dropdown-menu, .nav-dropdown.open .nav-dropdown-menu { display:block; opacity:1; transform:translateY(0); }
     .nav-dropdown-menu a { display:block; padding:8px 12px; font-size:13px; color:#A0AAB8; border-radius:8px; transition: color .15s var(--ease), background .15s var(--ease); }
     .nav-dropdown-menu a:hover { color:#fff; background:rgba(99,102,241,0.18); }
     /* Floating focus widget */
@@ -1428,6 +1428,7 @@ LAYOUT = """<!DOCTYPE html>
         {% if account_type|default('student') == 'student' %}
         {% if lang == 'es' %}
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Panel</a>
+        {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Cursos</a>
         <div class="nav-dropdown">
           <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Herramientas de Estudio &#9662;</a>
@@ -1453,6 +1454,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/leaderboard" {% if active_page == 'student_leaderboard' %}class="active"{% endif %}>&#127942; Ranking</a>
         {% else %}
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
+        {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <div class="nav-dropdown">
           <a href="#" onclick="this.parentElement.classList.toggle('open');return false" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
@@ -1479,7 +1481,6 @@ LAYOUT = """<!DOCTYPE html>
         {% endif %}
         <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881;</a>
         {% endif %}
-        {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
         <div class="nav-divider"></div>
         <a href="/student/profile" class="nav-user" style="text-decoration:none;cursor:pointer;color:#94A3B8;" title="My profile">{{client_name}}</a>
