@@ -1177,6 +1177,38 @@ def monthly_winners(year: int, month: int, top_n: int = 3) -> dict:
             by_major.append({"label": r.get("mname") or f"Major #{mid}", "rows": rows})
 
     month_label = date(year, month, 1).strftime("%B %Y")
+
+    # Summary stats: makes the email useful even on quiet months.
+    with get_db() as db:
+        total_xp = _fetchval(
+            db,
+            "SELECT COALESCE(SUM(x.xp), 0) FROM student_xp x "
+            "JOIN clients c ON c.id = x.client_id "
+            "WHERE c.account_type='student' AND COALESCE(c.retired,0)=0 "
+            "AND x.created_at >= %s AND x.created_at < %s",
+            (start, end_excl),
+        ) or 0
+        active_students = _fetchval(
+            db,
+            "SELECT COUNT(DISTINCT x.client_id) FROM student_xp x "
+            "JOIN clients c ON c.id = x.client_id "
+            "WHERE c.account_type='student' AND COALESCE(c.retired,0)=0 "
+            "AND x.created_at >= %s AND x.created_at < %s",
+            (start, end_excl),
+        ) or 0
+        total_students = _fetchval(
+            db,
+            "SELECT COUNT(*) FROM clients "
+            "WHERE account_type='student' AND COALESCE(retired,0)=0",
+        ) or 0
+        new_students = _fetchval(
+            db,
+            "SELECT COUNT(*) FROM clients "
+            "WHERE account_type='student' AND COALESCE(retired,0)=0 "
+            "AND created_at >= %s AND created_at < %s",
+            (start, end_excl),
+        ) or 0
+
     return {
         "year": year,
         "month": month,
@@ -1187,4 +1219,10 @@ def monthly_winners(year: int, month: int, top_n: int = 3) -> dict:
         "by_country": by_country,
         "by_university": by_university,
         "by_major": by_major,
+        "summary": {
+            "total_xp_awarded": int(total_xp),
+            "active_students": int(active_students),
+            "total_students": int(total_students),
+            "new_students": int(new_students),
+        },
     }

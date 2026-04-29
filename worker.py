@@ -533,11 +533,15 @@ def settle_student_duels():
 LEADERBOARD_WINNERS_RECIPIENT = "ignaciomachuca2005@gmail.com"
 
 
-def send_monthly_leaderboard_email():
-    """First of the month: email the previous month's leaderboard winners.
+def send_monthly_leaderboard_email(year: int | None = None, month: int | None = None):
+    """Email the leaderboard winners for a given calendar month.
 
-    Sent to LEADERBOARD_WINNERS_RECIPIENT (currently ignaciomachuca2005@gmail.com).
-    Includes: global top 3 plus per-country, per-university and per-major top 3.
+    With no arguments: sends *previous* calendar month (cron entry point).
+    With (year, month): sends that specific month — used by the admin
+    preview "Send" button.
+
+    Recipient: LEADERBOARD_WINNERS_RECIPIENT (currently ignaciomachuca2005@gmail.com).
+    Includes monthly summary stats + per-country/university/major top 3.
     """
     try:
         from datetime import date
@@ -549,20 +553,21 @@ def send_monthly_leaderboard_email():
             print("[MONTHLY_WINNERS] SMTP not configured, skipping.")
             return
 
-        # Compute previous calendar month.
-        today = date.today()
-        if today.month == 1:
-            year, month = today.year - 1, 12
-        else:
-            year, month = today.year, today.month - 1
+        if year is None or month is None:
+            today = date.today()
+            if today.month == 1:
+                year, month = today.year - 1, 12
+            else:
+                year, month = today.year, today.month - 1
 
         from student.academic import monthly_winners
         data = monthly_winners(year, month, top_n=3)
         label = data["label"]
+        summary = data.get("summary", {}) or {}
 
         def _fmt_rows(rows):
             if not rows:
-                return "  (no participants)\n"
+                return "  (sin participantes este mes)\n"
             medals = {1: "🥇", 2: "🥈", 3: "🥉"}
             lines = []
             for r in rows:
@@ -570,32 +575,36 @@ def send_monthly_leaderboard_email():
                 lines.append(f"  {m} {r['name']} — {r['xp']:,} XP (client {r['client_id']})")
             return "\n".join(lines) + "\n"
 
+        def _section(title: str, groups: list):
+            out = [f"\n{title}"]
+            if not groups:
+                out.append("  (sin participantes este mes)\n")
+                return "\n".join(out)
+            for grp in groups:
+                out.append(f"\n  [{grp['label']}]")
+                out.append(_fmt_rows(grp["rows"]))
+            return "\n".join(out)
+
         body = []
         body.append(f"MachReach — Leaderboard winners for {label}")
         body.append("=" * 60)
         body.append("")
         body.append(f"Period: {data['start']} → {data['end_exclusive']} (exclusive)")
         body.append("")
+        body.append("📊 RESUMEN DEL MES")
+        body.append(f"  Total XP otorgado:    {summary.get('total_xp_awarded', 0):,}")
+        body.append(f"  Estudiantes activos:  {summary.get('active_students', 0)} / {summary.get('total_students', 0)}")
+        body.append(f"  Nuevas inscripciones: {summary.get('new_students', 0)}")
+        body.append("")
         # Global leaderboard intentionally disabled — only Chile is active.
-        # The country leaderboard is the de-facto top scope right now.
 
-        if data["by_country"]:
-            body.append("🏳️ BY COUNTRY")
-            for grp in data["by_country"]:
-                body.append(f"\n  [{grp['label']}]")
-                body.append(_fmt_rows(grp["rows"]))
+        body.append(_section("🏳️ POR PAÍS", data["by_country"]))
+        body.append(_section("🎓 POR UNIVERSIDAD", data["by_university"]))
+        body.append(_section("📚 POR CARRERA", data["by_major"]))
 
-        if data["by_university"]:
-            body.append("🎓 BY UNIVERSITY")
-            for grp in data["by_university"]:
-                body.append(f"\n  [{grp['label']}]")
-                body.append(_fmt_rows(grp["rows"]))
-
-        if data["by_major"]:
-            body.append("📚 BY MAJOR")
-            for grp in data["by_major"]:
-                body.append(f"\n  [{grp['label']}]")
-                body.append(_fmt_rows(grp["rows"]))
+        if not (data["by_country"] or data["by_university"] or data["by_major"]):
+            body.append("")
+            body.append("ℹ️ No hubo XP ganado en este período. Vuelve a revisar el próximo mes.")
 
         body.append("")
         body.append("— MachReach")

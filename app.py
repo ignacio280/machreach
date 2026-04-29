@@ -4378,15 +4378,16 @@ def admin_leaderboard_winners_test():
 
     if (request.args.get("send") or "").strip() in ("1", "true", "yes"):
         from worker import send_monthly_leaderboard_email, LEADERBOARD_WINNERS_RECIPIENT
-        send_monthly_leaderboard_email()
-        flash(("success", f"Triggered monthly winners email for previous month → {LEADERBOARD_WINNERS_RECIPIENT}"))
-        return redirect(url_for("admin_leaderboard_winners_test"))
+        send_monthly_leaderboard_email(year=year, month=month)
+        flash(("success", f"Triggered monthly winners email ({year:04d}-{month:02d}) → {LEADERBOARD_WINNERS_RECIPIENT}"))
+        return redirect(url_for("admin_leaderboard_winners_test", month=f"{year:04d}-{month:02d}"))
 
     data = monthly_winners(year, month, top_n=3)
+    summary = data.get("summary", {}) or {}
 
     def _rows(rows):
         if not rows:
-            return "<div style='color:var(--text-muted);font-size:13px;'>(no participants)</div>"
+            return "<div style='color:var(--text-muted);font-size:13px;padding:6px 8px;'>(sin participantes este mes)</div>"
         medals = {1: "🥇", 2: "🥈", 3: "🥉"}
         out = ["<table style='width:100%;border-collapse:collapse;font-size:13px;'>"]
         for r in rows:
@@ -4400,30 +4401,47 @@ def admin_leaderboard_winners_test():
         out.append("</table>")
         return "".join(out)
 
+    summary_card = (
+        "<div class='card' style='padding:16px;margin-bottom:14px;display:grid;"
+        "grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;'>"
+        f"<div><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Total XP otorgado</div>"
+        f"<div style='font-size:22px;font-weight:800;margin-top:4px;'>{summary.get('total_xp_awarded', 0):,}</div></div>"
+        f"<div><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Estudiantes activos</div>"
+        f"<div style='font-size:22px;font-weight:800;margin-top:4px;'>{summary.get('active_students', 0)} <span style='color:var(--text-muted);font-size:14px;font-weight:500;'>/ {summary.get('total_students', 0)}</span></div></div>"
+        f"<div><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Nuevas inscripciones</div>"
+        f"<div style='font-size:22px;font-weight:800;margin-top:4px;'>{summary.get('new_students', 0)}</div></div>"
+        "</div>"
+    )
+
     sections = [
         f"<h2 style='margin:0 0 4px;font-size:22px;'>🏆 Leaderboard winners — {data['label']}</h2>",
         f"<div style='color:var(--text-muted);font-size:13px;margin-bottom:18px;'>"
         f"Period: {data['start']} → {data['end_exclusive']} (exclusive)</div>",
+        summary_card,
         # Global leaderboard intentionally hidden while only Chile is active.
     ]
 
     def _section(title, groups):
-        if not groups:
-            return ""
         parts = [f"<div class='card' style='padding:16px;margin-bottom:14px;'>",
                  f"<div style='font-weight:700;margin-bottom:8px;'>{title}</div>"]
-        for grp in groups:
+        if not groups:
             parts.append(
-                f"<div style='margin:10px 0 4px;font-weight:600;font-size:13px;color:var(--text-secondary);'>"
-                f"{_esc(str(grp['label']))}</div>"
+                "<div style='color:var(--text-muted);font-size:13px;padding:6px 8px;'>"
+                "(sin participantes este mes)</div>"
             )
-            parts.append(_rows(grp["rows"]))
+        else:
+            for grp in groups:
+                parts.append(
+                    f"<div style='margin:10px 0 4px;font-weight:600;font-size:13px;color:var(--text-secondary);'>"
+                    f"{_esc(str(grp['label']))}</div>"
+                )
+                parts.append(_rows(grp["rows"]))
         parts.append("</div>")
         return "".join(parts)
 
-    sections.append(_section("🏳️ By country", data["by_country"]))
-    sections.append(_section("🎓 By university", data["by_university"]))
-    sections.append(_section("📚 By major", data["by_major"]))
+    sections.append(_section("🏳️ Por país", data["by_country"]))
+    sections.append(_section("🎓 Por universidad", data["by_university"]))
+    sections.append(_section("📚 Por carrera", data["by_major"]))
 
     # Month switcher + send button
     prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
@@ -4437,9 +4455,9 @@ def admin_leaderboard_winners_test():
         f"style='padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);'>"
         f"<button type='submit' class='btn btn-primary btn-sm'>Load</button>"
         f"</form>"
-        f"<a class='btn btn-secondary btn-sm' href='?send=1' "
-        f"onclick=\"return confirm('Send the *previous month* email to the recipient now?');\" "
-        f"style='margin-left:auto;'>📤 Send email now (prev month)</a>"
+        f"<a class='btn btn-secondary btn-sm' href='?month={year:04d}-{month:02d}&send=1' "
+        f"onclick=\"return confirm('Send the {year:04d}-{month:02d} email to the recipient now?');\" "
+        f"style='margin-left:auto;'>📤 Send email for {year:04d}-{month:02d}</a>"
         f"</div>"
     )
 
