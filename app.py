@@ -356,6 +356,19 @@ def _logged_in() -> bool:
     return "client_id" in session
 
 
+ADMIN_EMAILS = {"ignaciomachuca2005@gmail.com"}
+
+
+def _is_admin() -> bool:
+    if not _logged_in():
+        return False
+    c = get_client(session["client_id"])
+    if not c:
+        return False
+    email = (c.get("email") or "").strip().lower()
+    return bool(c.get("is_admin")) or email in ADMIN_EMAILS
+
+
 def _effective_client_id() -> int:
     """Return the client_id to use for data access.
     If the user is a full-access team member, returns the owner's client_id
@@ -1466,7 +1479,7 @@ LAYOUT = """<!DOCTYPE html>
         {% endif %}
         <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881;</a>
         {% endif %}
-        {% if is_admin %}<a href="/admin/broadcast" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
+        {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
         <div class="nav-divider"></div>
         <a href="/student/profile" class="nav-user" style="text-decoration:none;cursor:pointer;color:#94A3B8;" title="My profile">{{client_name}}</a>
@@ -3369,7 +3382,7 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
     acct_type = session.get("account_type", "student")
     if _logged_in():
         c = get_client(session["client_id"])
-        is_admin = bool(c and c.get("is_admin"))
+        is_admin = _is_admin()
         acct_type = (c.get("account_type") or "student") if c else acct_type
     return render_template_string(
         LAYOUT,
@@ -4130,43 +4143,177 @@ def dashboard():
         return redirect(url_for("login"))
     return redirect(url_for("student_dashboard_page"))
 
+def _admin_delete_client_account(client_id: int) -> dict:
+    """Best-effort full account removal for the admin panel."""
+    from outreach.db import get_db, _exec, _fetchall, _fetchone, _USE_PG
+
+    target = get_client(client_id)
+    if not target:
+        return {"ok": False, "error": "User not found."}
+    if (target.get("email") or "").strip().lower() in ADMIN_EMAILS:
+        return {"ok": False, "error": "The owner admin account cannot be deleted from the panel."}
+
+    deleted_steps = []
+    with get_db() as db:
+        for column in ("owner_id", "member_client_id"):
+            try:
+                _exec(db, f"DELETE FROM team_members WHERE {column} = %s", (client_id,))
+            except Exception:
+                pass
+
+        campaigns = _fetchall(db, "SELECT id FROM campaigns WHERE client_id = %s", (client_id,))
+        for campaign in campaigns:
+            campaign_id = campaign["id"]
+            contacts = _fetchall(db, "SELECT id FROM contacts WHERE campaign_id = %s", (campaign_id,))
+            for contact in contacts:
+                _exec(db, "DELETE FROM sent_emails WHERE contact_id = %s", (contact["id"],))
+            _exec(db, "DELETE FROM email_sequences WHERE campaign_id = %s", (campaign_id,))
+            _exec(db, "DELETE FROM contacts WHERE campaign_id = %s", (campaign_id,))
+        _exec(db, "DELETE FROM campaigns WHERE client_id = %s", (client_id,))
+        deleted_steps.append("campaign data")
+
+        for table, column in [
+            ("email_verification_tokens", "client_id"),
+            ("password_reset_tokens", "client_id"),
+            ("contacts_book", "client_id"),
+            ("mail_inbox", "client_id"),
+            ("scheduled_emails", "client_id"),
+            ("email_accounts", "client_id"),
+            ("usage_tracking", "client_id"),
+            ("subscriptions", "client_id"),
+            ("email_suppressions", "client_id"),
+        ]:
+            try:
+                _exec(db, f"DELETE FROM {table} WHERE {column} = %s", (client_id,))
+            except Exception:
+                pass
+        deleted_steps.append("account-linked data")
+
+        try:
+            if _USE_PG:
+                rows = _fetchall(db, """
+                    SELECT table_name, column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND column_name IN ('client_id','owner_id','member_client_id','friend_client_id','challenger_id','opponent_id','seller_id','buyer_id')
+                    ORDER BY table_name
+                """)
+            else:
+                tables = _fetchall(db, "SELECT name AS table_name FROM sqlite_master WHERE type='table'")
+                rows = []
+                for tbl in tables:
+                    name = tbl["table_name"]
+                    if name.startswith("sqlite_"):
+                        continue
+                    for col in _fetchall(db, f"PRAGMA table_info({name})"):
+                        if col.get("name") in ("client_id", "owner_id", "member_client_id", "friend_client_id", "challenger_id", "opponent_id", "seller_id", "buyer_id"):
+                            rows.append({"table_name": name, "column_name": col["name"]})
+            by_table: dict[str, list[str]] = {}
+            for row in rows:
+                table = row["table_name"]
+                if table == "clients":
+                    continue
+                by_table.setdefault(table, []).append(row["column_name"])
+            for _ in range(3):
+                for table, cols in by_table.items():
+                    where = " OR ".join(f"{col} = %s" for col in cols)
+                    try:
+                        _exec(db, f"DELETE FROM {table} WHERE {where}", tuple([client_id] * len(cols)))
+                    except Exception:
+                        pass
+            deleted_steps.append("student data")
+        except Exception as e:
+            print(f"[ADMIN] dynamic user cleanup skipped for {client_id}: {e}", flush=True)
+
+        _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
+
+    return {"ok": True, "email": target.get("email"), "steps": deleted_steps}
+
+
+@app.route("/admin", methods=["GET", "POST"])
 @app.route("/admin/broadcast", methods=["GET", "POST"])
-def admin_broadcast():
-    """Send an announcement email to all registered users."""
+def admin_dashboard():
+    """Owner-only admin dashboard for broadcasts and user management."""
     if not _is_admin():
         return redirect(url_for("dashboard"))
 
     from outreach.db import get_all_client_emails
-    from outreach.sender import send_email as smtp_send
 
     users = get_all_client_emails()
-    sent_count = 0
     error_msg = ""
 
     if request.method == "POST":
-        subject = request.form.get("subject", "").strip()
-        body = request.form.get("body", "").strip()
-        if not subject or not body:
-            error_msg = "Subject and body are required."
-        else:
-            for u in users:
-                try:
-                    smtp_send(u["email"], subject, body)
-                    sent_count += 1
-                except Exception as e:
-                    print(f"Broadcast send error to {u['email']}: {e}")
-            flash(("success", f"Broadcast sent to {sent_count} of {len(users)} users."))
-            return redirect(url_for("admin_broadcast"))
+        action = request.form.get("action", "").strip()
+        if action == "broadcast":
+            subject = request.form.get("subject", "").strip()
+            body = request.form.get("body", "").strip()
+            if not subject or not body:
+                error_msg = "Subject and body are required."
+            else:
+                sent_count = 0
+                failed = []
+                for u in users:
+                    email = (u.get("email") or "").strip()
+                    if not email:
+                        continue
+                    ok = _send_system_email(email, subject, body)
+                    if ok:
+                        sent_count += 1
+                    else:
+                        failed.append(email)
+                if failed:
+                    flash(("warning", f"Broadcast sent to {sent_count} users. Failed: {len(failed)}."))
+                else:
+                    flash(("success", f"Broadcast sent to {sent_count} users."))
+                return redirect(url_for("admin_dashboard"))
+        elif action == "delete_user":
+            target_id = int(request.form.get("client_id") or 0)
+            typed_email = (request.form.get("confirm_email") or "").strip().lower()
+            target = get_client(target_id)
+            if not target:
+                error_msg = "User not found."
+            elif typed_email != (target.get("email") or "").strip().lower():
+                error_msg = "Type the user's exact email to confirm deletion."
+            elif target_id == session.get("client_id"):
+                error_msg = "You cannot delete your own logged-in account."
+            else:
+                result = _admin_delete_client_account(target_id)
+                if result.get("ok"):
+                    flash(("success", f"Deleted account: {result.get('email')}"))
+                    return redirect(url_for("admin_dashboard"))
+                error_msg = result.get("error") or "Could not delete that account."
 
-    return _render("Admin Broadcast", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Admin Broadcast</div>
+    users = get_all_client_emails()
+    user_rows = "".join(
+        f"""
+        <tr>
+          <td>{_esc(u.get("name") or "")}</td>
+          <td style="font-family:monospace;font-size:13px;">{_esc(u.get("email") or "")}</td>
+          <td>{_esc(str(u.get("id") or ""))}</td>
+          <td style="width:320px;">
+            <form method="POST" style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;">
+              <input type="hidden" name="action" value="delete_user">
+              <input type="hidden" name="client_id" value="{_esc(str(u.get("id") or ""))}">
+              <input name="confirm_email" placeholder="Type email to delete" autocomplete="off" style="font-size:12px;padding:8px;">
+              <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);" onclick="return confirm('Delete this user and their data?')">Delete</button>
+            </form>
+          </td>
+        </tr>
+        """
+        for u in users
+    )
+
+    return _render("Admin", f"""
+    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Admin</div>
     <div class="page-header">
-      <h1>&#128227; Admin Broadcast</h1>
-      <p class="subtitle">Send an announcement email to all {len(users)} registered users.</p>
+      <h1>&#128227; Admin</h1>
+      <p class="subtitle">Broadcast to users and manage accounts. Owner access is locked to ignaciomachuca2005@gmail.com.</p>
     </div>
     {'<div class="alert alert-red" style="margin-bottom:16px;">' + _esc(error_msg) + '</div>' if error_msg else ''}
-    <div class="card" style="max-width:700px;">
+    <div class="card" style="max-width:820px;">
+      <div class="card-header"><h2>Send Email to All Users</h2></div>
       <form method="POST">
+        <input type="hidden" name="action" value="broadcast">
         <div class="form-group">
           <label>Subject</label>
           <input name="subject" placeholder="Important: MachReach Platform Update" required style="font-size:15px;">
@@ -4178,21 +4325,20 @@ def admin_broadcast():
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <button type="submit" class="btn btn-primary" style="font-size:15px;padding:10px 28px;" onclick="return confirm('Send this email to ALL {len(users)} registered users?')">&#128640; Send to {len(users)} Users</button>
-          <a href="/dashboard" class="btn btn-ghost">Cancelar</a>
         </div>
       </form>
     </div>
 
-    <div class="card" style="margin-top:20px;max-width:700px;">
-      <div class="card-header"><h2>Registered Users ({len(users)})</h2></div>
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header"><h2>User Accounts ({len(users)})</h2></div>
       <table>
-        <thead><tr><th>Name</th><th>Email</th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>ID</th><th>Delete Account</th></tr></thead>
         <tbody>
-          {''.join(f'<tr><td>{_esc(u["name"])}</td><td style="font-family:monospace;font-size:13px;">{_esc(u["email"])}</td></tr>' for u in users)}
+          {user_rows}
         </tbody>
       </table>
     </div>
-    """)
+    """, active_page="admin", wide=True)
 
 
 # ---------------------------------------------------------------------------
