@@ -17435,18 +17435,6 @@ No markdown, no code fences. ONLY JSON.
     background:linear-gradient(90deg, transparent, rgba(250,204,21,.85), rgba(124,156,255,.75), transparent);
     filter:blur(.4px); opacity:.95;
   }
-  /* Confetti dots above the champion */
-  #mr-lb-page .lb-podium .lb-confetti {
-    position:absolute; top:0; left:0; right:0; height:90px; pointer-events:none; z-index:2;
-    background-image:
-      radial-gradient(circle, #fbbf24 1.5px, transparent 2px),
-      radial-gradient(circle, #f472b6 1.5px, transparent 2px),
-      radial-gradient(circle, #60a5fa 1.5px, transparent 2px),
-      radial-gradient(circle, #34d399 1.5px, transparent 2px);
-    background-size: 110px 90px, 130px 90px, 90px 90px, 150px 90px;
-    background-position: 12% 30%, 64% 18%, 28% 60%, 80% 70%;
-    opacity:.85;
-  }
   #mr-lb-page .lb-podium-card {
     position:relative; z-index:1; min-height:230px; display:flex; flex-direction:column;
     justify-content:flex-end; border-radius:22px; overflow:hidden; color:#fff;
@@ -17711,7 +17699,7 @@ No markdown, no code fences. ONLY JSON.
         const byRank = {};
         top.forEach(r => { byRank[r.rank] = r; });
         const ordered = [byRank[2], byRank[1], byRank[3]].filter(Boolean);
-        podium.innerHTML = '<div class="lb-confetti" aria-hidden="true"></div>' + ordered.map(podiumCard).join('');
+        podium.innerHTML = ordered.map(podiumCard).join('');
         podium.style.display = 'grid';
       } else {
         podium.style.display = 'none';
