@@ -10580,7 +10580,16 @@ def register_student_routes(app, csrf, limiter):
 
         questions = sdb.get_quiz_questions(quiz_id)
 
-        return jsonify({"quiz": dict(quiz), "questions": [dict(q) for q in questions]})
+        from student import subscription as _sub
+        is_plus = _sub.has_unlimited_ai(_cid())
+        clean_questions = []
+        for q in questions:
+            qd = dict(q)
+            if not is_plus:
+                qd["explanation"] = ""
+            clean_questions.append(qd)
+
+        return jsonify({"quiz": dict(quiz), "questions": clean_questions})
 
 
 
@@ -10717,6 +10726,9 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Not found"}), 404
 
+        from student import subscription as _sub
+        is_plus = _sub.has_unlimited_ai(_cid())
+
 
 
         data = request.get_json(force=True) or {}
@@ -10795,7 +10807,7 @@ def register_student_routes(app, csrf, limiter):
 
                 "correct_answer_text": q.get(f"option_{q['correct']}", ""),
 
-                "explanation": q.get("explanation", ""),
+                "explanation": q.get("explanation", "") if is_plus else "",
 
                 "is_correct": is_correct,
 
@@ -11029,6 +11041,31 @@ No markdown, no code fences. ONLY JSON.
 
         }
 
+        weak_topics = []
+        for b in breakdown:
+            if int(b.get("percent") or 0) < 70:
+                weak_topics.append({
+                    "topic": b.get("topic") or "General",
+                    "score": b.get("percent") or 0,
+                    "correct": b.get("correct") or 0,
+                    "total": b.get("total") or 0,
+                    "avg_time": b.get("avg_time") or 0,
+                })
+        weak_topics = weak_topics[:5]
+        plus_report = {
+            "unlocked": is_plus,
+            "weak_topics": weak_topics if is_plus else [],
+            "weaknesses": ai.get("weaknesses", []) if is_plus else [],
+            "next_actions": ai.get("next_actions", []) if is_plus else [],
+            "study_plan_30min": ai.get("study_plan_30min", []) if is_plus else [],
+        }
+
+        if not is_plus:
+            ai = dict(ai)
+            ai["weaknesses"] = []
+            ai["next_actions"] = []
+            ai["study_plan_30min"] = []
+
 
 
         return jsonify({
@@ -11046,6 +11083,8 @@ No markdown, no code fences. ONLY JSON.
             "items": items,
 
             "ai": ai,
+
+            "plus_report": plus_report,
 
         })
 
@@ -13972,11 +14011,36 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-          // Weaknesses
+          // Plus weak-topic report
 
           var wEl = document.getElementById('qz-weaknesses');
+          var plusReport = data.plus_report || {{}};
 
-          if ((ai.weaknesses || []).length) {{
+          if (!plusReport.unlocked) {{
+
+            wEl.innerHTML =
+              '<div class="qz-ai-item" style="border-bottom:none;">'
+              + '<span class="qz-ai-topic">&#128274; Plus weakness report</span>'
+              + 'Unlock the exact weak topics, fixes, next actions, and a 30-minute recovery plan for this quiz.'
+              + '<span class="qz-ai-fix"><a href="/student/shop" style="color:#FBBF24;text-decoration:underline;font-weight:700;">Upgrade to PLUS &rarr;</a></span>'
+              + '</div>';
+
+          }} else if ((plusReport.weak_topics || []).length || (plusReport.weaknesses || []).length) {{
+
+            var weakRows = (plusReport.weak_topics || []).map(function(t) {{
+              return '<div class="qz-ai-item"><span class="qz-ai-topic">&#128202; ' + escH(t.topic || '') + '</span>'
+                + 'Score: ' + (t.score || 0) + '% (' + (t.correct || 0) + '/' + (t.total || 0) + ')'
+                + '<span class="qz-ai-fix">&#8594; Prioritize this before the next attempt.</span></div>';
+            }}).join('');
+            var fixRows = (plusReport.weaknesses || []).map(function(w) {{
+              return '<div class="qz-ai-item"><span class="qz-ai-topic">&#9888;&#65039; ' + escH(w.topic || '') + '</span>'
+                + escH(w.detail || '')
+                + (w.fix ? '<span class="qz-ai-fix">&#8594; ' + escH(w.fix) + '</span>' : '')
+                + '</div>';
+            }}).join('');
+            wEl.innerHTML = weakRows + fixRows;
+
+          }} else if ((ai.weaknesses || []).length) {{
 
             wEl.innerHTML = ai.weaknesses.map(function(w) {{
 

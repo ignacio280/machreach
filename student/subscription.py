@@ -40,6 +40,7 @@ FREE_DAILY_FLASHCARD_SETS = 1
 # is penalized; the receiver is unaffected).
 FREE_DAILY_QUIZ_DUELS_SENT = 3
 FREE_FLASHCARD_MAX_CARDS  = 30
+PLUS_MONTHLY_BONUS_COINS  = 300
 
 PLANS = {
     "free": {
@@ -64,7 +65,7 @@ PLANS = {
         "features": [
             "Quizzes y tarjetas IA ilimitados",
             "Tarjetas / preguntas ilimitadas por generación",
-            "300 monedas extra al mes",
+            f"{PLUS_MONTHLY_BONUS_COINS} monedas extra al mes",
             "Insignia PLUS y cosméticos exclusivos",
             "Analítica detallada y reportes exportables",
         ],
@@ -110,14 +111,60 @@ def _save_prefs(db, client_id: int, prefs: dict) -> None:
     )
 
 
+def _current_bonus_month() -> str:
+    return datetime.utcnow().strftime("%Y-%m")
+
+
+def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
+    """Grant recurring paid-plan benefits once per UTC month.
+
+    Kept here instead of a scheduler so rewards are applied reliably the next
+    time an active subscriber uses the product, including webhook/manual tier
+    changes.
+    """
+    if tier not in ("plus", "ultimate"):
+        return False
+    changed = False
+    month_key = _current_bonus_month()
+    if prefs.get("plus_benefit_month") != month_key:
+        try:
+            from outreach.db import _exec
+            from student import db as sdb
+            sdb._ensure_wallet(db, client_id)
+            _exec(
+                db,
+                "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
+                (PLUS_MONTHLY_BONUS_COINS, client_id),
+            )
+            prefs["plus_benefit_month"] = month_key
+            changed = True
+        except Exception as e:
+            log.warning("Plus monthly coin grant failed for %s: %s", client_id, e)
+    try:
+        from outreach.db import _exec, _fetchone
+        has_badge = _fetchone(
+            db,
+            "SELECT 1 FROM student_badges WHERE client_id = %s AND badge_key = %s",
+            (client_id, "plus_member"),
+        )
+        if not has_badge:
+            _exec(db, "INSERT INTO student_badges (client_id, badge_key) VALUES (%s, %s)", (client_id, "plus_member"))
+    except Exception:
+        pass
+    return changed
+
+
 def get_tier(client_id: int) -> str:
     """Return 'free', 'plus', or 'ultimate'. Defaults to 'free'."""
     try:
         with get_db() as db:
             prefs = _load_prefs(db, client_id)
-        sub = (prefs.get("subscription") or {})
-        tier = sub.get("tier") or "free"
-        return tier if tier in PLANS else "free"
+            sub = (prefs.get("subscription") or {})
+            tier = sub.get("tier") or "free"
+            tier = tier if tier in PLANS else "free"
+            if _grant_paid_benefits(db, client_id, prefs, tier):
+                _save_prefs(db, client_id, prefs)
+        return tier
     except Exception:
         return "free"
 
@@ -131,6 +178,7 @@ def set_tier(client_id: int, tier: str) -> dict:
             "tier": tier,
             "since": datetime.utcnow().isoformat(),
         }
+        _grant_paid_benefits(db, client_id, prefs, tier)
         _save_prefs(db, client_id, prefs)
     return {"ok": True, "tier": tier}
 
