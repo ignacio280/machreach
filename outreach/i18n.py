@@ -41,7 +41,7 @@ TRANSLATIONS = {
 
     # ── Auth ────────────────────────────────────────────────────
     "auth.create_account": {"en": "Create your account", "es": "Crea tu cuenta"},
-    "auth.create_subtitle": {"en": "Start sending smarter cold emails in minutes.", "es": "Empieza a enviar cold emails más inteligentes en minutos."},
+    "auth.create_subtitle": {"en": "Start studying smarter in minutes.", "es": "Empieza a estudiar mejor en minutos."},
     "auth.full_name": {"en": "Full Name", "es": "Nombre Completo"},
     "auth.email": {"en": "Email", "es": "Correo Electrónico"},
     "auth.password": {"en": "Password", "es": "Contraseña"},
@@ -51,7 +51,7 @@ TRANSLATIONS = {
     "auth.have_account": {"en": "Already have an account?", "es": "¿Ya tienes cuenta?"},
     "auth.log_in": {"en": "Log in", "es": "Iniciar sesión"},
     "auth.welcome_back": {"en": "Welcome back", "es": "Bienvenido de vuelta"},
-    "auth.sign_in_desc": {"en": "Sign in to manage your campaigns.", "es": "Inicia sesión para gestionar tus campañas."},
+    "auth.sign_in_desc": {"en": "Sign in to continue studying.", "es": "Inicia sesión para seguir estudiando."},
     "auth.sign_in": {"en": "Sign In", "es": "Iniciar Sesión"},
     "auth.no_account": {"en": "Don't have an account?", "es": "¿No tienes cuenta?"},
     "auth.sign_up_free": {"en": "Sign up free", "es": "Regístrate gratis"},

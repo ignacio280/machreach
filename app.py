@@ -1382,6 +1382,176 @@ LAYOUT = """<!DOCTYPE html>
     #topbar-progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, #6366F1, #A78BFA, #F472B6); background-size: 200% 100%; transition: width .35s var(--ease), opacity .25s var(--ease); box-shadow: 0 0 10px rgba(124,58,237,.55), 0 0 4px rgba(99,102,241,.45); animation: topbarShimmer 2s linear infinite; }
     #topbar-progress.done .bar { opacity: 0; }
     @keyframes topbarShimmer { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+
+    /* Claude-style MachReach app skin. This sits after the legacy theme so the
+       whole logged-in product shares the landing/dashboard visual language. */
+    :root {
+      --bg: #F4F1EA;
+      --card: #FFFFFF;
+      --card-bg: #FFFFFF;
+      --text: #1A1A1F;
+      --text-secondary: #5C5C66;
+      --text-muted: #94939C;
+      --border: #E2DCCC;
+      --border-light: #EEE8DA;
+      --primary: #5B4694;
+      --primary-hover: #493777;
+      --primary-light: #ECE6FB;
+      --primary-dark: #3E2E69;
+      --green: #2E9266;
+      --green-light: #D7EDDF;
+      --red: #E04A4A;
+      --red-light: #FBDADA;
+      --yellow: #F4B73A;
+      --yellow-light: #FFF0C6;
+      --radius: 18px;
+      --radius-sm: 12px;
+      --radius-xs: 10px;
+      --shadow: 0 1px 0 rgba(20,18,30,.04), 0 2px 6px rgba(20,18,30,.04);
+      --shadow-md: 0 2px 0 rgba(20,18,30,.04), 0 8px 22px rgba(20,18,30,.06);
+      --shadow-lg: 0 6px 0 rgba(20,18,30,.05), 0 18px 44px rgba(20,18,30,.08);
+    }
+    body {
+      font-family: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
+      background: #F4F1EA !important;
+      color: #1A1A1F;
+      font-feature-settings: "ss01", "ss02";
+    }
+    .nav {
+      height: 68px;
+      padding: 0 32px;
+      background: rgba(255,255,255,0.88) !important;
+      border-bottom: 1px solid #E2DCCC !important;
+      box-shadow: 0 1px 0 rgba(20,18,30,.03);
+      backdrop-filter: blur(18px) saturate(150%);
+    }
+    .nav .brand {
+      color: #1A1A1F !important;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .nav .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #1A1A1F;
+      color: #FFF8E1;
+      box-shadow: inset 0 -3px 0 rgba(0,0,0,.22), 0 2px 0 rgba(20,18,30,.1);
+    }
+    .nav-links { gap: 4px; align-items: center; }
+    .nav-links a,
+    .nav-dropdown > a {
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      color: #5C5C66 !important;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 8px 11px;
+      line-height: 1;
+      vertical-align: middle;
+    }
+    .nav-links a:hover,
+    .nav-dropdown:hover > a {
+      color: #1A1A1F !important;
+      background: #EDE7DA !important;
+    }
+    .nav-links a.active,
+    .nav-dropdown > a.active {
+      color: #5B4694 !important;
+      background: #ECE6FB !important;
+    }
+    .nav-links a.active::after { display: none; }
+    .nav-divider { height: 28px; background: #E2DCCC; opacity: 1; }
+    .nav-user { color: #94939C !important; }
+    .nav-dropdown::after { height: 18px; }
+    .nav-dropdown-menu {
+      top: calc(100% + 8px);
+      background: #FFFFFF !important;
+      border: 1px solid #E2DCCC !important;
+      border-radius: 14px;
+      padding: 8px;
+      box-shadow: 0 18px 42px rgba(20,18,30,.12), 0 2px 0 rgba(20,18,30,.04) !important;
+      min-width: 236px;
+    }
+    .nav-dropdown-menu a {
+      display: flex;
+      width: 100%;
+      color: #5C5C66 !important;
+      padding: 11px 12px;
+      border-radius: 10px;
+    }
+    .nav-dropdown-menu a:hover {
+      color: #1A1A1F !important;
+      background: #F4F1EA !important;
+    }
+    .container {
+      width: 100%;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 28px 32px 70px;
+    }
+    .container-wide { max-width: 1560px; }
+    .card, .stat-card, .auth-card, .feature, .preview-content, .cmdk-panel,
+    .empty-state, .skeleton-card, .skeleton-stat {
+      background: #FFFFFF;
+      border-color: #E2DCCC;
+      border-radius: 18px;
+      box-shadow: 0 1px 0 rgba(20,18,30,.04), 0 2px 6px rgba(20,18,30,.04);
+    }
+    .page-header h1, .card-header h2, h1, h2 { letter-spacing: -0.03em; }
+    .page-header h1 {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: clamp(30px, 3vw, 48px) !important;
+      font-weight: 600;
+      color: #1A1A1F;
+    }
+    .page-header p { color: #5C5C66; }
+    input, textarea, select {
+      background: #FBF8F0 !important;
+      color: #1A1A1F !important;
+      border: 1px solid #D8D0BE !important;
+      border-radius: 12px !important;
+      box-shadow: none !important;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: #5B4694 !important;
+      box-shadow: 0 0 0 4px rgba(91,70,148,.14) !important;
+    }
+    .btn, button, input[type="submit"] { border-radius: 12px; font-weight: 800; }
+    .btn-primary, button.primary, .empty-state .empty-actions a.primary,
+    .empty-state .empty-actions button.primary {
+      background: #1A1A1F !important;
+      color: #FFF8E1 !important;
+      border-color: #1A1A1F !important;
+      box-shadow: 0 4px 0 rgba(0,0,0,.18), 0 10px 24px rgba(20,18,30,.12) !important;
+    }
+    .btn-primary:hover, button.primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 5px 0 rgba(0,0,0,.18), 0 14px 30px rgba(20,18,30,.16) !important;
+    }
+    table { border-color: #E2DCCC; }
+    th {
+      color: #77756F;
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      background: #FBF8F0;
+    }
+    td { border-bottom-color: #E2DCCC; }
+    tbody tr:hover td { background: #FBF8F0; }
+    .toast { border-radius: 14px; box-shadow: 0 18px 40px rgba(20,18,30,.14); }
+    @media (max-width: 768px) {
+      .nav { padding: 0 16px; height: 60px; }
+      .container { padding: 22px 16px 54px; }
+      .nav-links {
+        background: #FFFFFF;
+        border: 1px solid #E2DCCC;
+        box-shadow: 0 18px 42px rgba(20,18,30,.12);
+      }
+      .nav .nav-dropdown .nav-dropdown-menu { background: #FBF8F0 !important; }
+    }
   </style>
 </head>
 <body>

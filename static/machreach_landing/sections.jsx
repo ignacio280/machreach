@@ -90,7 +90,7 @@ function CanvasCallout() {
               OAuth estándar. Una vez conectado, todo se sincroniza solo: cursos, módulos, fechas y materiales. Sin copiar y pegar nada.
             </p>
             <div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}>
-              <a href="#cta" className="btn btn-primary btn-lg" style={{ borderColor: "white" }}>
+        <a href="/register" className="btn btn-primary btn-lg" style={{ borderColor: "white" }}>
                 <IconCanvas size={20}/> Conectar Canvas
               </a>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14, color: "color-mix(in oklab, white 70%, transparent)" }}>

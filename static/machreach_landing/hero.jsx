@@ -223,7 +223,7 @@ function Hero() {
               MachReach convierte tu semestre en un juego que <em style={{ color: "var(--ink)", fontStyle: "normal", fontWeight: 700, textDecoration: "underline wavy var(--brand)", textUnderlineOffset: 4 }}>sí quieres ganar</em>.
             </p>
             <div style={heroStyles.ctaRow}>
-              <a href="#cta" className="btn btn-primary btn-lg">
+              <a href="/register" className="btn btn-primary btn-lg">
                 <IconCanvas size={20}/> Conectar Canvas
               </a>
               <a href="#how" className="btn btn-ghost btn-lg">

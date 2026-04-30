@@ -146,7 +146,7 @@ function Pricing() {
                     </li>
                   ))}
                 </ul>
-                <a href="#cta" className="btn btn-lg" style={{
+        <a href="/register" className="btn btn-lg" style={{
                   background: t.primary ? "white" : "var(--ink)",
                   color: t.primary ? "var(--brand)" : "white",
                   borderColor: t.primary ? "white" : "var(--ink)",
@@ -201,7 +201,7 @@ function FinalCTA() {
             Conecta Canvas en 30 segundos y empieza a sumar XP hoy mismo. Tu yo del lunes te lo va a agradecer.
           </p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-            <a className="btn btn-lg" href="#" style={{
+          <a className="btn btn-lg" href="/register" style={{
               background: "var(--ink)", color: "white", borderColor: "var(--ink)",
               boxShadow: "0 4px 0 0 color-mix(in oklab, black 50%, transparent)",
             }}>
