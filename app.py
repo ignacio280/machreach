@@ -835,10 +835,11 @@ LAYOUT = """<!DOCTYPE html>
     .nav-links .nav-user { color: #64748B; font-size: 12px; margin-right: 4px; }
     /* Nav dropdown */
     .nav-dropdown { position: relative; z-index: 2100; }
+    .nav-dropdown::after { content:""; position:absolute; left:-6px; right:-6px; top:100%; height:12px; }
     .nav-dropdown > a { cursor: pointer; text-decoration: none; outline: none; user-select: none; }
     .nav-dropdown > a:focus, .nav-dropdown > a:focus-visible, .nav-dropdown > a:active { outline: none !important; box-shadow: none !important; text-decoration: none !important; }
-    .nav-dropdown-menu { display:none; position:absolute; top:calc(100% + 10px); left:0; transform:translateY(4px); opacity:0; background:#0F172A; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px; min-width:220px; z-index:5000; box-shadow:0 18px 45px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.02); transition:opacity .15s var(--ease), transform .15s var(--ease); }
-    .nav-dropdown:hover .nav-dropdown-menu { display:block; opacity:1; transform:translateY(0); }
+    .nav-dropdown-menu { position:absolute; top:100%; left:0; transform:translateY(4px); opacity:0; visibility:hidden; pointer-events:none; background:#0F172A; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:6px; min-width:220px; z-index:5000; box-shadow:0 18px 45px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.02); transition:opacity .15s var(--ease), transform .15s var(--ease), visibility 0s linear .15s; }
+    .nav-dropdown:hover .nav-dropdown-menu, .nav-dropdown:focus-within .nav-dropdown-menu, .nav-dropdown.open .nav-dropdown-menu { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); transition-delay:0s; }
     .nav-dropdown-menu a { display:block; height:auto; padding:8px 12px; font-size:13px; color:#A0AAB8; border-radius:8px; transition: color .15s var(--ease), background .15s var(--ease); }
     .nav-dropdown-menu a:hover { color:#fff; background:rgba(99,102,241,0.18); }
     /* Floating focus widget */
@@ -1237,8 +1238,9 @@ LAYOUT = """<!DOCTYPE html>
       .nav-links .nav-user { font-size: 14px; padding: 12px 16px; }
       /* On mobile, dropdowns expand inline so every link is reachable by tap */
       .nav-dropdown { width: 100%; position: static; }
+      .nav-dropdown::after { display: none; }
       .nav-dropdown > a { display: block; }
-      .nav .nav-dropdown .nav-dropdown-menu { display: block; position: static; opacity: 1; transform: none; background: rgba(255,255,255,0.04); border: none; box-shadow: none; padding: 4px 0 8px 12px; margin-top: 0; min-width: 0; }
+      .nav .nav-dropdown .nav-dropdown-menu { display: block; position: static; opacity: 1; visibility: visible; pointer-events: auto; transform: none; background: rgba(255,255,255,0.04); border: none; box-shadow: none; padding: 4px 0 8px 12px; margin-top: 0; min-width: 0; }
       .nav .nav-dropdown .nav-dropdown-menu a { font-size: 14px; padding: 10px 14px; }
       .toast-container { right: 12px; left: 12px; max-width: none; }
       table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
