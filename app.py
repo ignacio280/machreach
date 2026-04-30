@@ -1552,6 +1552,225 @@ LAYOUT = """<!DOCTYPE html>
       }
       .nav .nav-dropdown .nav-dropdown-menu { background: #FBF8F0 !important; }
     }
+
+    /* Exact Claude dashboard shell */
+    .mr-app-shell.app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+      background: #F4F1EA;
+      color: #1A1A1F;
+      font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    }
+    .mr-app-shell .side {
+      background: #FFFFFF;
+      border-right: 1px solid #E2DCCC;
+      padding: 22px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      z-index: 2200;
+    }
+    .mr-app-shell .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 8px 22px;
+      text-decoration: none;
+      color: #1A1A1F;
+    }
+    .mr-app-shell .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #1A1A1F;
+      color: #FFF8E1;
+      display: grid;
+      place-items: center;
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: -0.05em;
+      box-shadow: inset 0 -3px 0 rgba(0,0,0,.25), 0 2px 0 rgba(20,18,30,.1);
+      position: relative;
+    }
+    .mr-app-shell .brand-mark::after {
+      content: "";
+      position: absolute;
+      right: 4px;
+      top: 4px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #FF7A3D;
+    }
+    .mr-app-shell .brand-name { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
+    .mr-app-shell .brand-name span { color: #FF7A3D; }
+    .mr-side-nav { display: flex; flex-direction: column; gap: 2px; }
+    .mr-app-shell .nav-section {
+      font-size: 10px;
+      font-weight: 700;
+      color: #94939C;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      padding: 14px 10px 6px;
+    }
+    .mr-app-shell .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      color: #5C5C66;
+      text-decoration: none;
+      transition: background .15s, color .15s;
+      position: relative;
+      min-height: 40px;
+    }
+    .mr-app-shell .nav-item:hover { background: #EDE7DA; color: #1A1A1F; }
+    .mr-app-shell .nav-item.active { background: #ECE6FB; color: #5B4694; }
+    .mr-app-shell .nav-item.active::before {
+      content: "";
+      position: absolute;
+      left: -16px;
+      top: 8px;
+      bottom: 8px;
+      width: 3px;
+      background: #5B4694;
+      border-radius: 2px;
+    }
+    .mr-app-shell .nav-item .ic { width: 20px; height: 20px; flex-shrink: 0; display: inline-grid; place-items: center; }
+    .mr-app-shell .side-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid #E2DCCC; }
+    .mr-app-shell .me-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 12px;
+      background: #FBF8F0;
+      text-decoration: none;
+      color: #1A1A1F;
+    }
+    .mr-app-shell .me-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #FFB199, #FF6CAB);
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      display: grid;
+      place-items: center;
+    }
+    .mr-app-shell .me-info { font-size: 13px; line-height: 1.2; min-width: 0; flex: 1; }
+    .mr-app-shell .me-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mr-app-shell .me-meta { font-size: 11px; color: #94939C; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+    .mr-app-shell .main { min-width: 0; display: flex; flex-direction: column; }
+    .mr-app-shell .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 2100;
+      background: rgba(244,241,234,0.85);
+      backdrop-filter: saturate(140%) blur(12px);
+      border-bottom: 1px solid #E2DCCC;
+      padding: 12px 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .mr-app-shell .greet { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+    .mr-app-shell .greet .em { color: #FF7A3D; }
+    .mr-app-shell .greet small { display: block; font-size: 12px; color: #94939C; font-weight: 500; margin-top: 1px; }
+    .mr-app-shell .topbar-stats { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .mr-app-shell .stat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      background: #FFFFFF;
+      border: 1px solid #E2DCCC;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1A1A1F;
+      text-decoration: none;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .mr-app-shell .stat-pill:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(20,18,30,.04), 0 2px 6px rgba(20,18,30,.04); }
+    .mr-app-shell .stat-pill.streak { background: linear-gradient(135deg, #FFE9D6, #FFD1A4); border-color: #F8B97A; color: #863500; }
+    .mr-app-shell .stat-pill.coins { background: #FFF6D6; border-color: #F4B73A; color: #C98A0E; }
+    .mr-app-shell .xp-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 5px 14px 5px 5px;
+      background: #FFFFFF;
+      border: 1px solid #E2DCCC;
+      border-radius: 999px;
+      color: #1A1A1F;
+      text-decoration: none;
+    }
+    .mr-app-shell .xp-ring { width: 30px; height: 30px; position: relative; display: inline-block; }
+    .mr-app-shell .xp-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .mr-app-shell .xp-ring .ring-bg { stroke: #E2DCCC; }
+    .mr-app-shell .xp-ring .ring-fg { stroke: #5B4694; transition: stroke-dashoffset 1s ease; }
+    .mr-app-shell .xp-ring .lvl { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #5B4694; }
+    .mr-app-shell .xp-meta { line-height: 1.1; display: flex; flex-direction: column; }
+    .mr-app-shell .league-name { font-size: 13px; font-weight: 700; }
+    .mr-app-shell .xp-num { font-size: 10px; color: #94939C; font-variant-numeric: tabular-nums; }
+    .mr-app-shell .top-icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      border: 1px solid #E2DCCC;
+      display: grid;
+      place-items: center;
+      color: #1A1A1F;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .mr-app-shell .top-icon-btn:hover { background: #EDE7DA; }
+    .mr-app-shell .content {
+      padding: 28px 28px 80px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0;
+    }
+    .mr-app-shell .content-wide { max-width: 1560px; }
+    .mr-mobile-menu { display: none; background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 10px; width: 38px; height: 38px; }
+    @media (max-width: 1100px) {
+      .mr-app-shell.app { grid-template-columns: 80px 1fr; }
+      .mr-app-shell .side { padding: 22px 10px; }
+      .mr-app-shell .brand-name, .mr-app-shell .nav-item span:not(.ic), .mr-app-shell .nav-section, .mr-app-shell .me-info { display: none; }
+      .mr-app-shell .nav-item { justify-content: center; }
+      .mr-app-shell .me-card { justify-content: center; padding: 4px; }
+      .mr-app-shell .nav-item.active::before { left: -10px; }
+    }
+    @media (max-width: 720px) {
+      .mr-app-shell.app { grid-template-columns: 1fr; }
+      .mr-app-shell .side {
+        position: fixed;
+        left: 0;
+        top: 0;
+        transform: translateX(-100%);
+        transition: transform .2s ease;
+        width: 260px;
+      }
+      .mr-app-shell.side-open .side { transform: translateX(0); }
+      .mr-mobile-menu { display: grid; place-items: center; }
+      .mr-app-shell .topbar-stats .stat-pill { display: none; }
+      .mr-app-shell .topbar-stats .xp-meta { display: none; }
+      .mr-app-shell .greet { font-size: 14px; }
+      .mr-app-shell .greet small { display: none; }
+      .mr-app-shell .content { padding: 18px 16px 100px; }
+    }
   </style>
 </head>
 <body>
@@ -1608,6 +1827,83 @@ LAYOUT = """<!DOCTYPE html>
       });
     })();
   </script>
+  {% if logged_in and account_type|default('student') == 'student' %}
+  <div class="mr-app-shell app">
+    <aside class="side">
+      <a href="/student" class="brand">
+        <div class="brand-mark">M</div>
+        <div class="brand-name">Mach<span>Reach</span></div>
+      </a>
+      <nav class="mr-side-nav">
+        <div class="nav-section">{% if lang == 'es' %}Principal{% else %}Main{% endif %}</div>
+        <a class="nav-item {% if active_page == 'student_dashboard' %}active{% endif %}" href="/student"><span class="ic">&#127891;</span><span>{% if lang == 'es' %}Inicio{% else %}Home{% endif %}</span></a>
+        {% if is_admin %}<a class="nav-item {% if active_page == 'admin' %}active{% endif %}" href="/admin"><span class="ic">&#128227;</span><span>Admin</span></a>{% endif %}
+        <a class="nav-item {% if active_page == 'student_focus' %}active{% endif %}" href="/student/focus"><span class="ic">&#127919;</span><span>{% if lang == 'es' %}Enfoque{% else %}Focus{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_courses' %}active{% endif %}" href="/student/courses"><span class="ic">&#128218;</span><span>{% if lang == 'es' %}Mis cursos{% else %}Courses{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_exams' %}active{% endif %}" href="/student/exams"><span class="ic">&#128467;</span><span>{% if lang == 'es' %}Pruebas{% else %}Exams{% endif %}</span></a>
+
+        <div class="nav-section">{% if lang == 'es' %}Estudio{% else %}Study{% endif %}</div>
+        <a class="nav-item {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes"><span class="ic">&#128221;</span><span>Quizzes</span></a>
+        <a class="nav-item {% if active_page == 'student_flashcards' %}active{% endif %}" href="/student/flashcards"><span class="ic">&#127183;</span><span>{% if lang == 'es' %}Tarjetas{% else %}Flashcards{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_essay' %}active{% endif %}" href="/student/essay"><span class="ic">&#9999;</span><span>{% if lang == 'es' %}Ensayos{% else %}Essays{% endif %}</span></a>
+
+        <div class="nav-section">{% if lang == 'es' %}Comunidad{% else %}Community{% endif %}</div>
+        <a class="nav-item {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard"><span class="ic">&#127942;</span><span>{% if lang == 'es' %}Ranking{% else %}Leaderboard{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_friends' %}active{% endif %}" href="/student/friends"><span class="ic">&#128101;</span><span>{% if lang == 'es' %}Amigos{% else %}Friends{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_marketplace' %}active{% endif %}" href="/student/marketplace"><span class="ic">&#128722;</span><span>{% if lang == 'es' %}Mercado{% else %}Marketplace{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop"><span class="ic">&#129534;</span><span>{% if lang == 'es' %}Tienda{% else %}Shop{% endif %}</span></a>
+
+        <div class="nav-section">{% if lang == 'es' %}Cuenta{% else %}Account{% endif %}</div>
+        <a class="nav-item {% if active_page == 'student_profile' %}active{% endif %}" href="/student/profile"><span class="ic">&#128100;</span><span>{% if lang == 'es' %}Perfil{% else %}Profile{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_gpa' %}active{% endif %}" href="/student/gpa"><span class="ic">&#128200;</span><span>{% if lang == 'es' %}Notas{% else %}Grades{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_achievements' %}active{% endif %}" href="/student/achievements"><span class="ic">&#127941;</span><span>XP</span></a>
+        <a class="nav-item {% if active_page == 'student_settings' %}active{% endif %}" href="/student/settings"><span class="ic">&#9881;</span><span>{% if lang == 'es' %}Ajustes{% else %}Settings{% endif %}</span></a>
+      </nav>
+      <div class="side-foot">
+        <a class="me-card" href="/student/profile">
+          <div class="me-avatar">{{ (client_name[:1] or 'M')|upper }}</div>
+          <div class="me-info">
+            <div class="me-name">{{client_name}}</div>
+            <div class="me-meta"><span class="league-crest">&#127942;</span> MachReach</div>
+          </div>
+        </a>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <button class="mr-mobile-menu" onclick="document.querySelector('.mr-app-shell').classList.toggle('side-open')" aria-label="Menu">&#9776;</button>
+        <div class="greet">
+          {% if lang == 'es' %}¡Hola, <span class="em">{{ (client_name.split()[0] if client_name else 'estudiante') }}</span>!{% else %}Hi, <span class="em">{{ (client_name.split()[0] if client_name else 'student') }}</span>!{% endif %}
+          <small>{% if lang == 'es' %}Listo para ganar el semestre.{% else %}Ready to win the semester.{% endif %}</small>
+        </div>
+        <div class="topbar-stats">
+          <a class="stat-pill coins" href="/student/shop">&#129689; <span class="num">Coins</span></a>
+          <a class="stat-pill streak" href="/student/focus">&#128293; <span class="num">Racha</span></a>
+          <a class="xp-pill" href="/student/achievements">
+            <span class="xp-ring"><svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15" fill="none" stroke-width="4"/><circle class="ring-fg" cx="18" cy="18" r="15" fill="none" stroke-width="4" stroke-dasharray="94" stroke-dashoffset="34"/></svg><span class="lvl">XP</span></span>
+            <span class="xp-meta"><span class="league-name">{% if lang == 'es' %}Liga activa{% else %}Active league{% endif %}</span><span class="xp-num">{% if lang == 'es' %}sigue subiendo{% else %}keep climbing{% endif %}</span></span>
+          </a>
+          <a class="top-icon-btn" href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
+          <a class="top-icon-btn" href="/logout" title="{{nav.logout}}">&#10162;</a>
+        </div>
+      </div>
+      <div class="content{% if wide %} content-wide{% endif %}">
+        <div class="toast-container" id="toast-container">
+        {% for cat, msg in messages %}
+          <div class="toast toast-{{cat}}" onclick="dismissToast(this)">
+            {% if cat == 'success' %}&#10003;{% elif cat == 'error' %}&#10007;{% else %}&#8505;{% endif %}
+            <span style="flex:1;">{{msg}}</span>
+            <button class="toast-close" onclick="event.stopPropagation();dismissToast(this.parentElement)">&times;</button>
+            <div class="toast-progress"></div>
+          </div>
+        {% endfor %}
+        </div>
+        {{content|safe}}
+      </div>
+    </main>
+  </div>
+  {% else %}
   <div class="nav">
     <a href="/" class="brand">
       <div class="brand-icon">&#9993;</div>
@@ -1711,6 +2007,7 @@ LAYOUT = """<!DOCTYPE html>
     </div>
     {% endif %}
   </footer>
+  {% endif %}
   <script>
     // Toast notifications
     function dismissToast(el) {
