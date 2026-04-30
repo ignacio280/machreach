@@ -3427,6 +3427,9 @@ def index():
         return redirect(url_for("dashboard"))
 
     lang = session.get("lang", "es")
+    from student.landing_design import render_landing_page
+    return make_response(render_landing_page(lang))
+
     is_es = (lang == "es")
 
     # ── i18n copy (en + es) ────────────────────────────────────

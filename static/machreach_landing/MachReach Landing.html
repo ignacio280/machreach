@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>MachReach — Estudiar deja de ser una lata</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Nunito:wght@500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="hero.jsx"></script>
+  <script type="text/babel" src="features.jsx"></script>
+  <script type="text/babel" src="sections.jsx"></script>
+  <script type="text/babel" src="pricing.jsx"></script>
+
+  <script type="text/babel">
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "theme": "light",
+      "accent": "sky"
+    }/*EDITMODE-END*/;
+
+    function Nav({ tweaks, setTweak }) {
+      return (
+        <nav className="nav">
+          <div className="container nav-inner">
+            <a href="#" className="logo">
+              <div className="logo-mark"><IconLogo size={20} color="white"/></div>
+              <span className="logo-text">Mach<span className="dot">Reach</span></span>
+            </a>
+            <div className="nav-links">
+              <a href="#features">Features</a>
+              <a href="#how">Cómo funciona</a>
+              <a href="#pricing">Precios</a>
+              <a href="#faq">FAQ</a>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setTweak("theme", tweaks.theme === "dark" ? "light" : "dark")}
+                aria-label="Cambiar tema"
+                style={{
+                  width: 38, height: 38, borderRadius: 12,
+                  background: "var(--surface)", border: "2px solid var(--ink)",
+                  display: "grid", placeItems: "center",
+                  boxShadow: "0 2px 0 0 var(--ink)",
+                }}>
+                {tweaks.theme === "dark"
+                  ? <Icon><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></Icon>
+                  : <Icon><path d="M20 14a8 8 0 11-10-10 7 7 0 0010 10z"/></Icon>}
+              </button>
+              <a href="#cta" className="btn btn-primary btn-sm">
+                <IconCanvas size={14}/> Conectar Canvas
+              </a>
+            </div>
+          </div>
+        </nav>
+      );
+    }
+
+    function App() {
+      const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+      React.useEffect(() => {
+        document.documentElement.dataset.theme = tweaks.theme || "light";
+        document.documentElement.dataset.accent = tweaks.accent || "coral";
+      }, [tweaks.theme, tweaks.accent]);
+
+      return (
+        <>
+          <Nav tweaks={tweaks} setTweak={setTweak}/>
+          <Hero/>
+          <StatsStrip/>
+          <Features/>
+          <HowItWorks/>
+          <CanvasCallout/>
+          <LeaderboardShowcase/>
+          <QuizDemo/>
+          <Pricing/>
+          <div id="faq"><FAQ/></div>
+          <FinalCTA/>
+          <Footer/>
+
+          <TweaksPanel title="Tweaks">
+            <TweakSection title="Tema">
+              <TweakRadio
+                label="Modo"
+                value={tweaks.theme}
+                onChange={(v) => setTweak("theme", v)}
+                options={[
+                  { value: "light", label: "Claro" },
+                  { value: "dark",  label: "Oscuro" },
+                ]}
+              />
+              <TweakRadio
+                label="Color de acento"
+                value={tweaks.accent}
+                onChange={(v) => setTweak("accent", v)}
+                options={[
+                  { value: "coral",  label: "Coral" },
+                  { value: "lime",   label: "Lima" },
+                  { value: "violet", label: "Violeta" },
+                  { value: "sky",    label: "Cielo" },
+                ]}
+              />
+            </TweakSection>
+          </TweaksPanel>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>

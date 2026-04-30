@@ -3741,801 +3741,835 @@ def register_student_routes(app, csrf, limiter):
 
         _streak_focus = int((focus_stats or {}).get("streak_days", 0) or 0)
 
-        analytics_strip_html = (
+        # ── Claude Design "Inicio" data prep ────────────────────
+        # Daily quests
+        try:
+            _mr_quests = sdb.get_or_create_daily_quests(cid) or []
+        except Exception:
+            _mr_quests = []
 
-            "<div class='card reveal' style='margin-bottom:20px;padding:18px;'>"
+        # Friends + leaderboard preview
+        try:
+            _mr_friends_data = sdb.list_friends(cid) or {}
+        except Exception:
+            _mr_friends_data = {}
+        _mr_friends = (_mr_friends_data.get("friends") or [])[:4]
 
-            "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;'>"
+        try:
+            _mr_lb_rows = sdb.get_leaderboard(limit=50) or []
+        except Exception:
+            _mr_lb_rows = []
+        try:
+            _mr_my_rank = int(sdb.get_student_rank(cid) or 0)
+        except Exception:
+            _mr_my_rank = 0
 
-            "<div style='display:flex;align-items:center;gap:10px;'>"
+        _mr_palette = ["#FF7B95", "#7DA0FF", "#A593FF", "#5DE3B0",
+                       "#FFB37A", "#9CD9F0", "#FFC857", "#FF89B5"]
 
-            "<span style='font-size:22px;'>&#128202;</span>"
+        def _mr_initials(name: str) -> str:
+            parts = (name or "").strip().split()
+            if not parts:
+                return "··"
+            if len(parts) == 1:
+                return parts[0][:2].upper()
+            return (parts[0][:1] + parts[-1][:1]).upper()
 
-            "<div><div style='font-weight:700;font-size:16px;'>Analítica de estudio</div>"
+        # Build small board: top 5 if I'm there, else 2 above me + me + 2 below
+        _mr_me_idx = next((i for i, r in enumerate(_mr_lb_rows)
+                           if int(r.get("client_id") or 0) == cid), -1)
+        if _mr_me_idx < 0:
+            _mr_board = _mr_lb_rows[:5]
+            _mr_board_offset = 0
+        elif _mr_me_idx < 5:
+            _mr_board = _mr_lb_rows[:5]
+            _mr_board_offset = 0
+        else:
+            _start = max(0, _mr_me_idx - 2)
+            _end = min(len(_mr_lb_rows), _start + 5)
+            _mr_board = _mr_lb_rows[_start:_end]
+            _mr_board_offset = _start
 
-            "<div style='font-size:12px;color:var(--text-muted);'>Last 30 days at a glance</div></div></div>"
+        # Heatmap: focus minutes per day for the last 35 days
+        from datetime import date as _date_cls, timedelta as _td_cls
+        _mr_today = _date_cls.today()
+        _mr_heat_start = _mr_today - _td_cls(days=34)
+        _mr_heat = {}
+        try:
+            with sdb.get_db() as _hdb:
+                _heat_rows = sdb._fetchall(
+                    _hdb,
+                    "SELECT plan_date, COALESCE(SUM(focus_minutes), 0) AS m "
+                    "FROM student_study_progress "
+                    "WHERE client_id = %s AND plan_date >= %s "
+                    "GROUP BY plan_date",
+                    (cid, _mr_heat_start.isoformat()),
+                ) or []
+            for _r in _heat_rows:
+                _ds = (_r.get("plan_date") or "")[:10]
+                if not _ds:
+                    continue
+                try:
+                    _dd = datetime.strptime(_ds, "%Y-%m-%d").date()
+                except (ValueError, TypeError):
+                    continue
+                _mr_heat[_dd] = int(_r.get("m") or 0)
+        except Exception:
+            _mr_heat = {}
 
-            "</div>"
+        # Course tile data: progress = past_exams / total_exams
+        _mr_course_tiles = []
+        for _c in (courses or [])[:4]:
+            _ce = []
+            try:
+                _ce = sdb.get_course_exams(_c["id"]) or []
+            except Exception:
+                _ce = []
+            _total_e = len(_ce)
+            _past_e = 0
+            _next_label = ""
+            _next_days = None
+            for _ex in _ce:
+                _ed = (_ex.get("exam_date") or "")[:10]
+                if not _ed:
+                    continue
+                try:
+                    _ed_d = datetime.strptime(_ed, "%Y-%m-%d").date()
+                except ValueError:
+                    continue
+                if _ed_d < _mr_today:
+                    _past_e += 1
+                else:
+                    _di = (_ed_d - _mr_today).days
+                    if _next_days is None or _di < _next_days:
+                        _next_days = _di
+                        _next_label = _ex.get("name") or "Próxima evaluación"
+            _pct = int(100 * _past_e / _total_e) if _total_e > 0 else 0
+            _mr_course_tiles.append({
+                "id": _c.get("id"),
+                "name": _c.get("name") or "Curso",
+                "code": _c.get("code") or "—",
+                "pct": _pct,
+                "next_label": _next_label,
+                "next_days": _next_days,
+            })
 
-            "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;'>"
+        # XP earned today (for the topbar pill / one of the stat cards)
+        try:
+            _xp_history = sdb.get_xp_history(cid, limit=200) or []
+        except Exception:
+            _xp_history = []
+        _today_iso = _mr_today.isoformat()
+        _mr_xp_today = 0
+        for _row in _xp_history:
+            _e = (_row.get("earned_at") or "")[:10]
+            if _e == _today_iso:
+                _mr_xp_today += int(_row.get("xp") or 0)
 
-            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Tiempo total</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_total_mins//60}h {_total_mins%60}m</div></div>"
+        analytics_strip_html = ""  # legacy placeholder, no longer rendered
 
-            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Sesiones</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_total_sessions}</div></div>"
 
-            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Promedio por sesión</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_avg_session} min</div></div>"
 
-            f"<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;'><div style='font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;'>Racha</div><div style='font-size:24px;font-weight:800;margin-top:4px;'>{_streak_focus} day" + ("s" if _streak_focus != 1 else "") + "</div></div>"
+        # =============================================================
+        # Claude Design "Inicio" dashboard. The CSS below is self-contained
+        # so colors match the mockup regardless of the active LAYOUT theme.
+        # All numbers and lists come from real Flask data.
+        # =============================================================
+        _mr_css = """
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
 
-            "</div></div>"
+  .mr-home { font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif; color: #1A1A1F; }
+  .mr-home .serif, .mr-home h1, .mr-home h2 { font-family: "Fraunces", Georgia, serif; letter-spacing: -0.02em; }
+  .mr-home, .mr-home * { box-sizing: border-box; }
+  .mr-home button { font: inherit; color: inherit; cursor: pointer; }
+  .mr-home a { color: inherit; text-decoration: none; }
 
+  /* page bg */
+  body:has(.mr-home) .content { background: #F4F1EA !important; }
+  :root[data-theme="dark"] body:has(.mr-home) .content { background: #0E0D14 !important; }
+
+  .mr-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; max-width: 1400px; margin: 0 auto; padding: 6px 0 80px; }
+  @media (max-width: 1100px) { .mr-layout { grid-template-columns: 1fr; } }
+
+  /* ── HERO MISSION ── */
+  .mr-mission {
+    background: linear-gradient(135deg, #FFF1E2 0%, #FFE3CB 50%, #FBD3B0 100%);
+    border: 1px solid #F1C896;
+    border-radius: 24px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    color: #3A1A06;
+    margin-bottom: 20px;
+  }
+  .mr-mission::before {
+    content: ""; position: absolute; right: -40px; top: -40px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,.5), transparent 70%);
+    border-radius: 50%; pointer-events: none;
+  }
+  .mr-mission-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; position: relative; z-index: 1; }
+  .mr-mission-eye { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.7; margin-bottom: 6px; }
+  .mr-mission-title { font-weight: 600; font-size: 38px; line-height: 1.05; margin: 0; color: #3A1A06; }
+  .mr-mission-title em { font-style: italic; color: #B33C00; }
+  .mr-mission-cta {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 22px;
+    background: #1A1A1F; color: #FFF8E1;
+    border-radius: 14px;
+    font-weight: 800; font-size: 15px;
+    border: none;
+    box-shadow: 0 4px 0 rgba(0,0,0,.25), 0 8px 20px rgba(58,26,6,.25);
+    transition: transform .12s;
+    text-decoration: none;
+  }
+  .mr-mission-cta:hover { transform: translateY(-1px); }
+  .mr-mission-cta:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,.25); }
+
+  .mr-quests-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; position: relative; z-index: 1; }
+  @media (max-width: 720px) { .mr-quests-row { grid-template-columns: 1fr; } }
+  .mr-quest {
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.9);
+    border-radius: 16px;
+    padding: 14px;
+    transition: transform .15s;
+  }
+  .mr-quest:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(58,26,6,.18); }
+  .mr-quest.done { opacity: 0.65; }
+  .mr-quest.done .mr-quest-title { text-decoration: line-through; }
+  .mr-quest-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .mr-quest-icon {
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    display: grid; place-items: center;
+    font-size: 18px;
+    background: #FFD08C;
+  }
+  .mr-quest-icon.q1 { background: #FFD08C; }
+  .mr-quest-icon.q2 { background: #BFE0FF; }
+  .mr-quest-icon.q3 { background: #FFB9D6; }
+  .mr-quest-reward { font-size: 11px; font-weight: 800; color: #C98A0E; }
+  .mr-quest-title { font-weight: 700; font-size: 13px; line-height: 1.3; margin-bottom: 8px; color: #3A1A06; }
+  .mr-quest-prog { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .mr-quest-bar { flex: 1; height: 6px; background: rgba(0,0,0,0.08); border-radius: 999px; overflow: hidden; }
+  .mr-quest-fill { height: 100%; background: linear-gradient(90deg, #FF7A3D, #FFB37A); border-radius: 999px; }
+  .mr-quest.done .mr-quest-fill { background: #2E9266; }
+  .mr-quest-num { font-weight: 700; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; color: #3A1A06; }
+  .mr-quest-check { color: #2E9266; font-size: 18px; }
+
+  /* ── STAT GRID ── */
+  .mr-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  @media (max-width: 900px) { .mr-stats-grid { grid-template-columns: repeat(2, 1fr); } }
+  .mr-stat-card { background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 18px; padding: 18px; position: relative; overflow: hidden; }
+  .mr-stat-card.tilted { background: linear-gradient(135deg, #5B4694, #7A65BA); color: #fff; border: none; }
+  .mr-stat-card.tilted .mr-stat-label { color: rgba(255,255,255,0.8); }
+  .mr-stat-card.tilted .mr-stat-sub { color: rgba(255,255,255,0.85); }
+  .mr-stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94939C; }
+  .mr-stat-value { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 36px; letter-spacing: -0.03em; line-height: 1; margin-top: 8px; color: inherit; }
+  .mr-stat-sub { font-size: 12px; color: #5C5C66; margin-top: 8px; }
+  .mr-stat-sub .up { color: #2E9266; font-weight: 700; }
+  .mr-stat-deco { position: absolute; right: -10px; bottom: -10px; font-size: 64px; opacity: 0.12; pointer-events: none; }
+
+  /* ── GENERIC CARD ── */
+  .mr-card { background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 18px; padding: 22px; margin-bottom: 20px; }
+  .mr-card-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .mr-card-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; color: #1A1A1F; }
+  .mr-card-link { font-size: 12px; color: #94939C; font-weight: 600; }
+  .mr-card-link:hover { color: #5B4694; }
+
+  /* ── SCHEDULE / TODAY PLAN ── */
+  .mr-sched-list { display: flex; flex-direction: column; gap: 10px; }
+  .mr-sess { display: flex; align-items: center; gap: 14px; padding: 14px; background: #FBF8F0; border: 1px solid #E2DCCC; border-radius: 14px; transition: transform .15s; }
+  .mr-sess:hover { transform: translateX(3px); }
+  .mr-sess.done { opacity: 0.55; }
+  .mr-sess.done .mr-sess-topic { text-decoration: line-through; }
+  .mr-sess-check { width: 22px; height: 22px; border: 2px solid #E2DCCC; border-radius: 7px; flex-shrink: 0; display: grid; place-items: center; background: #FFFFFF; cursor: pointer; transition: all .15s; padding: 0; }
+  .mr-sess.done .mr-sess-check { background: #2E9266; border-color: #2E9266; color: #fff; }
+  .mr-sess-time { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 18px; color: #5C5C66; width: 56px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .mr-sess-body { flex: 1; min-width: 0; }
+  .mr-sess-course { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 999px; margin-bottom: 4px; background: #ECE6FB; color: #5B4694; }
+  .mr-sess-topic { font-weight: 700; font-size: 14px; color: #1A1A1F; }
+  .mr-sess-meta { font-size: 12px; color: #94939C; margin-top: 2px; }
+  .mr-sess-prio { flex-shrink: 0; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; }
+  .mr-sess-prio.high { background: #FBDADA; color: #E04A4A; }
+  .mr-sess-prio.med  { background: #FFEFCC; color: #C98A0E; }
+  .mr-sess-prio.low  { background: #D7EDDF; color: #2E9266; }
+
+  .mr-empty { padding: 20px; text-align: center; color: #94939C; font-size: 13px; background: #FBF8F0; border-radius: 14px; border: 1px dashed #E2DCCC; }
+  .mr-empty .icon { font-size: 28px; display: block; margin-bottom: 8px; }
+  .mr-empty .cta { display: inline-block; margin-top: 10px; padding: 8px 14px; border-radius: 10px; background: #1A1A1F; color: #FFF8E1; font-weight: 700; font-size: 12px; }
+
+  /* ── COURSES TILES ── */
+  .mr-courses-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .mr-courses-row { grid-template-columns: repeat(2, 1fr); } }
+  .mr-course-tile { background: #FBF8F0; border: 1px solid #E2DCCC; border-radius: 14px; padding: 14px; position: relative; overflow: hidden; transition: transform .15s; display: block; color: inherit; }
+  .mr-course-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(20,18,30,.06); }
+  .mr-course-tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #5B4694; }
+  .mr-course-tile.c0::before { background: #3B6FE6; }
+  .mr-course-tile.c1::before { background: #E85B9C; }
+  .mr-course-tile.c2::before { background: #2E9266; }
+  .mr-course-tile.c3::before { background: #FF7A3D; }
+  .mr-course-code { font-size: 11px; font-weight: 800; color: #94939C; letter-spacing: 0.06em; }
+  .mr-course-name { font-weight: 700; font-size: 14px; margin-top: 2px; line-height: 1.2; color: #1A1A1F; }
+  .mr-course-prog { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 11px; }
+  .mr-course-bar { flex: 1; height: 6px; background: rgba(0,0,0,0.06); border-radius: 999px; overflow: hidden; }
+  .mr-course-fill { height: 100%; border-radius: 999px; }
+  .mr-course-tile.c0 .mr-course-fill { background: #3B6FE6; }
+  .mr-course-tile.c1 .mr-course-fill { background: #E85B9C; }
+  .mr-course-tile.c2 .mr-course-fill { background: #2E9266; }
+  .mr-course-tile.c3 .mr-course-fill { background: #FF7A3D; }
+  .mr-course-pct { font-weight: 700; color: #5C5C66; }
+  .mr-course-next { font-size: 11px; color: #94939C; margin-top: 6px; }
+  .mr-course-next.urgent { color: #E04A4A; font-weight: 700; }
+
+  /* ── EXAMS ── */
+  .mr-exams { display: flex; flex-direction: column; gap: 10px; }
+  .mr-exam { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 14px; border: 1px solid #E2DCCC; background: #FBF8F0; transition: transform .15s; }
+  .mr-exam:hover { transform: translateY(-2px); box-shadow: 0 1px 0 rgba(20,18,30,.04), 0 2px 6px rgba(20,18,30,.04); }
+  .mr-exam-day { width: 56px; flex-shrink: 0; border-radius: 12px; background: #1A1A1F; color: #FFF8E1; text-align: center; padding: 8px 4px; line-height: 1; }
+  .mr-exam-day.urgent { background: #E04A4A; }
+  .mr-exam-day.warn { background: #FF7A3D; }
+  .mr-exam-day .d-num { font-family: "Fraunces", Georgia, serif; font-size: 26px; font-weight: 600; }
+  .mr-exam-day .d-mon { font-size: 10px; text-transform: uppercase; font-weight: 700; opacity: 0.75; margin-top: 2px; letter-spacing: 0.05em; }
+  .mr-exam-body { flex: 1; min-width: 0; }
+  .mr-exam-title { font-weight: 700; font-size: 14px; color: #1A1A1F; }
+  .mr-exam-meta { font-size: 12px; color: #94939C; margin-top: 2px; }
+  .mr-exam-cd { flex-shrink: 0; font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 18px; color: #1A1A1F; text-align: right; line-height: 1; }
+  .mr-exam-cd.urgent { color: #E04A4A; }
+  .mr-exam-cd small { display: block; font-size: 10px; color: #94939C; font-family: "Plus Jakarta Sans", sans-serif; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-top: 2px; }
+
+  /* ── RIGHT COLUMN ── */
+  .mr-right { display: flex; flex-direction: column; gap: 18px; }
+
+  /* league */
+  .mr-league-card { background: linear-gradient(160deg, #5B4694 0%, #4A3470 100%); color: #fff; border-radius: 18px; padding: 22px; position: relative; overflow: hidden; }
+  .mr-league-card::before { content: ""; position: absolute; left: -30px; bottom: -30px; width: 180px; height: 180px; background: radial-gradient(circle, rgba(255,255,255,0.15), transparent 70%); border-radius: 50%; pointer-events: none; }
+  .mr-league-eye { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; }
+  .mr-league-name { font-family: "Fraunces", Georgia, serif; font-size: 24px; font-weight: 600; margin-top: 2px; display: flex; align-items: center; gap: 8px; color: #fff; }
+  .mr-league-rank { display: flex; align-items: baseline; gap: 6px; margin-top: 14px; position: relative; z-index: 1; }
+  .mr-league-rank-num { font-family: "Fraunces", Georgia, serif; font-size: 44px; font-weight: 600; line-height: 1; color: #fff; }
+  .mr-league-rank-of { font-size: 13px; opacity: 0.7; }
+  .mr-league-promo { margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.15); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; gap: 8px; position: relative; z-index: 1; }
+  .mr-mini-board { margin-top: 14px; display: flex; flex-direction: column; gap: 4px; position: relative; z-index: 1; }
+  .mr-lmrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255,255,255,0.08); border-radius: 10px; font-size: 13px; }
+  .mr-lmrow.me { background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.3); }
+  .mr-lmrow .lm-rank { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 14px; width: 22px; text-align: center; opacity: 0.9; }
+  .mr-lmrow .lm-rank.gold { color: #F4B73A; }
+  .mr-lmrow .lm-av { width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #fff; }
+  .mr-lmrow .lm-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mr-lmrow .lm-xp { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12px; opacity: 0.95; }
+
+  /* streak */
+  .mr-streak-num { font-family: "Fraunces", Georgia, serif; font-size: 42px; font-weight: 600; color: #FF7A3D; line-height: 1; letter-spacing: -0.03em; }
+  .mr-heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
+  .mr-heat-cell { aspect-ratio: 1; border-radius: 5px; background: #EDE7DA; }
+  .mr-heat-cell.l1 { background: #F8E2C9; }
+  .mr-heat-cell.l2 { background: #F4B886; }
+  .mr-heat-cell.l3 { background: #FF7A3D; }
+  .mr-heat-cell.l4 { background: #C8501F; }
+  .mr-heat-cell.today { outline: 2px solid #1A1A1F; outline-offset: 1px; }
+  .mr-week-labels { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 6px; }
+  .mr-week-labels span { font-size: 9px; color: #94939C; text-align: center; font-weight: 700; }
+  .mr-streak-row { display: flex; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #E2DCCC; }
+  .mr-streak-row > div { flex: 1; }
+  .mr-srn { font-family: "Fraunces", Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1; color: #FF7A3D; }
+  .mr-srl { font-size: 10px; color: #94939C; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-top: 4px; }
+
+  /* friends */
+  .mr-friends-list { display: flex; flex-direction: column; gap: 10px; }
+  .mr-friend-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; }
+  .mr-friend-row:hover { background: #FBF8F0; }
+  .mr-friend-av { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; position: relative; }
+  .mr-friend-av .pres { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; background: #94939C; }
+  .mr-friend-av .pres.online { background: #2E9266; }
+  .mr-friend-info { flex: 1; min-width: 0; }
+  .mr-friend-name { font-weight: 700; font-size: 13px; color: #1A1A1F; }
+  .mr-friend-status { font-size: 11px; color: #94939C; }
+  .mr-friend-status.online { color: #2E9266; font-weight: 700; }
+  .mr-friend-act { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 8px; background: #FBF8F0; color: #5C5C66; border: 1px solid #E2DCCC; cursor: pointer; }
+  .mr-friend-act:hover { background: #5B4694; color: #fff; border-color: #5B4694; }
+
+  @keyframes mrPop { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: none; } }
+  .mr-pop-1 { animation: mrPop .5s .05s both; }
+  .mr-pop-2 { animation: mrPop .5s .12s both; }
+  .mr-pop-3 { animation: mrPop .5s .19s both; }
+  .mr-pop-4 { animation: mrPop .5s .26s both; }
+</style>
+"""
+
+        # ── greeting copy ───────────────────────────────────────
+        _first_name = (session.get("client_name", "") or "estudiante").split()[0] or "estudiante"
+        _dows_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+        _months_es_long = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+                           "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+        _today_human = f"{_dows_es[_mr_today.weekday()]} {_mr_today.day} de {_months_es_long[_mr_today.month - 1]}"
+        _semester = ""
+        try:
+            _semester = sdb.get_current_semester(cid) or ""
+        except Exception:
+            _semester = ""
+
+        # ── mission card with quests ────────────────────────────
+        # Build quest chips from real daily quests (fallback to placeholders).
+        _quest_icons = ["q1", "q2", "q3"]
+        _quest_emojis = ["⏱", "🎯", "🔥"]
+        _quest_chips_html = ""
+        for _i, _q in enumerate((_mr_quests or [])[:3]):
+            _icon = _quest_icons[_i % 3]
+            _emoji = _quest_emojis[_i % 3]
+            # Map quest_key -> label using student.db.QUEST_POOL
+            _label = next((p["label"] for p in sdb.QUEST_POOL if p["key"] == _q.get("quest_key")), _q.get("quest_key", "Misión"))
+            _target = int(_q.get("target") or 1)
+            _progress = int(_q.get("progress") or 0)
+            _xp_reward = int(_q.get("xp_reward") or 0)
+            _completed = bool(_q.get("completed_at"))
+            _pct = min(100, int(100 * _progress / max(1, _target)))
+            _done_cls = " done" if _completed else ""
+            if _completed:
+                _right = '<div class="mr-quest-check">✓</div>'
+            else:
+                _right = f'<div class="mr-quest-reward">+{_xp_reward} XP</div>'
+            _quest_chips_html += (
+                f'<div class="mr-quest{_done_cls}">'
+                f'  <div class="mr-quest-head">'
+                f'    <div class="mr-quest-icon {_icon}">{_emoji}</div>'
+                f'    {_right}'
+                f'  </div>'
+                f'  <div class="mr-quest-title">{_esc(_label)}</div>'
+                f'  <div class="mr-quest-prog">'
+                f'    <div class="mr-quest-bar"><div class="mr-quest-fill" style="width:{_pct}%"></div></div>'
+                f'    <div class="mr-quest-num">{_progress}/{_target}</div>'
+                f'  </div>'
+                f'</div>'
+            )
+        if not _quest_chips_html:
+            _quest_chips_html = (
+                '<div class="mr-quest" style="grid-column:1/-1;">'
+                '  <div class="mr-quest-head">'
+                '    <div class="mr-quest-icon q1">⏱</div>'
+                '    <div class="mr-quest-reward">+ XP</div>'
+                '  </div>'
+                '  <div class="mr-quest-title">Empieza tu primera sesión de enfoque para desbloquear misiones.</div>'
+                '</div>'
+            )
+
+        # Mission headline copy: built from real plan if present.
+        _today_session_count = len((today_plan or {}).get("sessions", []) or []) if today_plan else 0
+        _today_total_min = sum(int((s.get("hours") or 0) * 60) for s in ((today_plan or {}).get("sessions") or []))
+        if _today_session_count > 0:
+            _hh, _mm = divmod(_today_total_min, 60)
+            _time_str = (f"{_hh}h {_mm}min" if _hh else f"{_mm}min")
+            _headline = (
+                f'{_today_session_count} {"sesiones" if _today_session_count != 1 else "sesión"}, '
+                f'<em>{_time_str}</em><br/>y vas con todo.'
+            )
+        else:
+            _headline = 'Hoy es un buen día para<br/><em>empezar</em> a estudiar.'
+
+        _mr_mission_html = (
+            '<section class="mr-mission mr-pop-1">'
+            '  <div class="mr-mission-head">'
+            '    <div>'
+            f'      <div class="mr-mission-eye">Misión de hoy · {_esc(_today_human)}</div>'
+            f'      <h1 class="mr-mission-title serif">¡Hola, {_esc(_first_name)}! {_headline}</h1>'
+            '    </div>'
+            '    <a class="mr-mission-cta" href="/student/focus">▶ Empezar enfoque · 25 min</a>'
+            '  </div>'
+            f'  <div class="mr-quests-row">{_quest_chips_html}</div>'
+            '</section>'
         )
 
+        # ── 4 stat cards ───────────────────────────────────────
+        _hours_total = round(_total_mins / 60.0, 1)
+        # Best day-of-week label (last 30 days). Use Python to compute.
+        _best_dow = "—"
+        _best_dow_min = 0
+        if _mr_heat:
+            _by_dow = {}
+            for _d, _m in _mr_heat.items():
+                _by_dow.setdefault(_d.weekday(), 0)
+                _by_dow[_d.weekday()] += int(_m or 0)
+            if _by_dow:
+                _bdw = max(_by_dow.items(), key=lambda kv: kv[1])
+                _dow_es = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+                _best_dow = _dow_es[_bdw[0]]
+                _best_dow_min = _bdw[1]
+        _bdw_h, _bdw_m = divmod(int(_best_dow_min), 60)
+        _bdw_label = (f"{_bdw_h}h {_bdw_m}min" if _bdw_h else f"{_bdw_m}min")
+
+        _xp_to_next = max(0, level_ceil - total_xp)
+
+        _mr_stats_html = (
+            '<div class="mr-stats-grid">'
+            '  <div class="mr-stat-card mr-pop-2">'
+            '    <div class="mr-stat-label">Total estudiado</div>'
+            f'   <div class="mr-stat-value">{_hours_total}h</div>'
+            f'   <div class="mr-stat-sub">{_total_sessions} sesiones</div>'
+            '    <div class="mr-stat-deco">📚</div>'
+            '  </div>'
+            '  <div class="mr-stat-card mr-pop-2">'
+            '    <div class="mr-stat-label">Mejor día</div>'
+            f'   <div class="mr-stat-value">{_esc(_best_dow)}</div>'
+            f'   <div class="mr-stat-sub">{_bdw_label} en últimos 35d</div>'
+            '    <div class="mr-stat-deco">⚡</div>'
+            '  </div>'
+            '  <div class="mr-stat-card mr-pop-3">'
+            '    <div class="mr-stat-label">Racha</div>'
+            f'   <div class="mr-stat-value">{streak_days}</div>'
+            f'   <div class="mr-stat-sub"><span class="up">{streak_days} día' + ("s" if streak_days != 1 else "") + ' seguidos</span></div>'
+            '    <div class="mr-stat-deco">🔥</div>'
+            '  </div>'
+            '  <div class="mr-stat-card tilted mr-pop-3">'
+            '    <div class="mr-stat-label">XP de hoy</div>'
+            f'   <div class="mr-stat-value">{_mr_xp_today}</div>'
+            f'   <div class="mr-stat-sub">↑ subes a siguiente nivel en {_xp_to_next} XP</div>'
+            '    <div class="mr-stat-deco" style="opacity:.2;color:#fff;">★</div>'
+            '  </div>'
+            '</div>'
+        )
+
+        # ── Today plan card ────────────────────────────────────
+        _today_rows_html = ""
+        if today_plan:
+            _sessions = today_plan.get("sessions", []) or []
+            for _idx, _s in enumerate(_sessions):
+                _prio = (_s.get("priority") or "medium").lower()
+                _prio_cls = {"high": "high", "medium": "med", "low": "low"}.get(_prio, "med")
+                _prio_label = {"high": "Urgente", "medium": "Media", "low": "Baja"}.get(_prio, "Media")
+                _is_done = bool(today_assignment_progress.get(_idx, False))
+                _done_cls = " done" if _is_done else ""
+                _check_inner = "✓" if _is_done else ""
+                _course = _s.get("course", "") or ""
+                _topic = _s.get("topic", "") or ""
+                _hours = _s.get("hours", 0) or 0
+                _hours_min = int(float(_hours) * 60)
+                _start_t = _s.get("start_time", "") or ""
+                if not _start_t:
+                    _start_t = ["08:30", "11:00", "14:00", "17:30", "20:00"][_idx] if _idx < 5 else "—"
+                _meta = f'{_hours_min} min · {_s.get("type", "estudio")}'
+                _today_rows_html += (
+                    f'<div class="mr-sess{_done_cls}" id="mr-sess-{_idx}">'
+                    f'  <button type="button" class="mr-sess-check" onclick="mrToggleSess({_idx})" title="Marcar como hecho">{_check_inner}</button>'
+                    f'  <div class="mr-sess-time">{_esc(_start_t)}</div>'
+                    f'  <div class="mr-sess-body">'
+                    f'    <div class="mr-sess-course">{_esc(_course)}</div>'
+                    f'    <div class="mr-sess-topic">{_esc(_topic)}</div>'
+                    f'    <div class="mr-sess-meta">{_esc(_meta)}</div>'
+                    f'  </div>'
+                    f'  <span class="mr-sess-prio {_prio_cls}">{_prio_label}</span>'
+                    f'</div>'
+                )
+        if not _today_rows_html:
+            _today_rows_html = (
+                '<div class="mr-empty">'
+                '  <span class="icon">📚</span>'
+                '  Aún no hay sesiones para hoy.'
+                '  <br/><a class="cta" href="/student/focus">🎯 Empezar enfoque</a>'
+                '</div>'
+            )
+
+        _mr_today_card = (
+            '<section class="mr-card mr-pop-2">'
+            '  <div class="mr-card-h">'
+            '    <div class="mr-card-title">🎯 Plan de hoy</div>'
+            '    <a class="mr-card-link" href="/student/schedule">Ver semana →</a>'
+            '  </div>'
+            f' <div class="mr-sched-list">{_today_rows_html}</div>'
+            '</section>'
+        )
+
+        # ── Courses tiles ──────────────────────────────────────
+        _courses_tiles_html = ""
+        for _i, _ct in enumerate(_mr_course_tiles):
+            _next = ""
+            _next_cls = ""
+            if _ct["next_days"] is not None:
+                if _ct["next_days"] <= 7:
+                    _next_cls = " urgent"
+                _next = f'⏳ {_esc(_ct["next_label"])} en {_ct["next_days"]} días'
+            else:
+                _next = "Sin pruebas próximas"
+            _courses_tiles_html += (
+                f'<a class="mr-course-tile c{_i % 4}" href="/student/courses/{_ct["id"]}">'
+                f'  <div class="mr-course-code">{_esc(_ct["code"])}</div>'
+                f'  <div class="mr-course-name">{_esc(_ct["name"])}</div>'
+                f'  <div class="mr-course-prog">'
+                f'    <div class="mr-course-bar"><div class="mr-course-fill" style="width:{_ct["pct"]}%"></div></div>'
+                f'    <span class="mr-course-pct">{_ct["pct"]}%</span>'
+                f'  </div>'
+                f'  <div class="mr-course-next{_next_cls}">{_next}</div>'
+                f'</a>'
+            )
+        if not _courses_tiles_html:
+            _courses_tiles_html = (
+                '<div class="mr-empty" style="grid-column:1/-1;">'
+                '  <span class="icon">📚</span>'
+                '  No tienes cursos todavía.'
+                '  <br/><a class="cta" href="/student/canvas">🔗 Conectar Canvas</a>'
+                '</div>'
+            )
+
+        _mr_courses_card = (
+            '<section class="mr-card mr-pop-3">'
+            '  <div class="mr-card-h">'
+            f'   <div class="mr-card-title">📘 Mis cursos{(" · " + _esc(_semester)) if _semester else ""}</div>'
+            '    <a class="mr-card-link" href="/student/courses">Ver todos →</a>'
+            '  </div>'
+            f' <div class="mr-courses-row">{_courses_tiles_html}</div>'
+            '</section>'
+        )
+
+        # ── Upcoming exams (rebuild with new style) ────────────
+        _exam_rows_html = ""
+        _months_es = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
+        for _e in (exams or [])[:5]:
+            _ed = (_e.get("exam_date") or "")[:10]
+            _days = None
+            _day_num = "—"
+            _mon = "—"
+            if _ed:
+                try:
+                    _ed_d = datetime.strptime(_ed, "%Y-%m-%d").date()
+                    _days = (_ed_d - _mr_today).days
+                    _day_num = _ed_d.strftime("%d")
+                    _mon = _months_es[_ed_d.month - 1]
+                except (ValueError, TypeError):
+                    pass
+            _badge_cls = ""
+            _cd_cls = ""
+            if _days is not None and _days <= 7:
+                _badge_cls = " urgent"
+                _cd_cls = " urgent"
+            elif _days is not None and _days <= 14:
+                _badge_cls = " warn"
+            _topics_raw = _e.get("topics_json") or "[]"
+            try:
+                _topics = json.loads(_topics_raw) if isinstance(_topics_raw, str) else (_topics_raw or [])
+            except Exception:
+                _topics = []
+            _topic_str = ""
+            if _topics:
+                _topic_str = ", ".join(_topics[:3])
+                if len(_topics) > 3:
+                    _topic_str += "…"
+            _meta_parts = []
+            if _e.get("weight_pct"):
+                _meta_parts.append(f'{_e.get("weight_pct")}% nota')
+            if _topic_str:
+                _meta_parts.append(_esc(_topic_str))
+            _meta_str = " · ".join(_meta_parts) if _meta_parts else "Sin temas listados"
+            _cd_text = (f"{_days}d" if _days is not None else "?")
+            _cd_sub = "faltan" if (_days is not None and _days >= 0) else "atrasada"
+            _exam_rows_html += (
+                f'<a class="mr-exam" href="/student/exams">'
+                f'  <div class="mr-exam-day{_badge_cls}">'
+                f'    <div class="d-num">{_day_num}</div>'
+                f'    <div class="d-mon">{_mon}</div>'
+                f'  </div>'
+                f'  <div class="mr-exam-body">'
+                f'    <div class="mr-exam-title">{_esc(_e.get("name", "Evaluación"))} — {_esc(_e.get("course_name", ""))}</div>'
+                f'    <div class="mr-exam-meta">{_meta_str}</div>'
+                f'  </div>'
+                f'  <div class="mr-exam-cd{_cd_cls}">{_cd_text}<small>{_cd_sub}</small></div>'
+                f'</a>'
+            )
+        if not _exam_rows_html:
+            _exam_rows_html = (
+                '<div class="mr-empty">'
+                '  <span class="icon">📝</span>'
+                '  Sin pruebas próximas.'
+                '  <br/><a class="cta" href="/student/exams">📝 Administrar pruebas</a>'
+                '</div>'
+            )
+
+        _mr_exams_card = (
+            '<section class="mr-card mr-pop-4">'
+            '  <div class="mr-card-h">'
+            '    <div class="mr-card-title">📝 Próximas evaluaciones</div>'
+            '    <a class="mr-card-link" href="/student/exams">Calendario completo →</a>'
+            '  </div>'
+            f' <div class="mr-exams">{_exam_rows_html}</div>'
+            '</section>'
+        )
+
+        # ── Right column: League card ──────────────────────────
+        _board_rows_html = ""
+        for _bi, _br in enumerate(_mr_board):
+            _abs_rank = _mr_board_offset + _bi + 1
+            _is_me = int(_br.get("client_id") or 0) == cid
+            _name = _br.get("name") or "Estudiante"
+            _xp = int(_br.get("total_xp") or 0)
+            _color = _mr_palette[(_abs_rank - 1) % len(_mr_palette)]
+            _ini = _mr_initials(_name)
+            _rank_cls = " gold" if _abs_rank <= 2 else ""
+            _row_cls = " me" if _is_me else ""
+            _disp_name = "Tú · " + _name.split()[0] if _is_me else _name
+            _board_rows_html += (
+                f'<div class="mr-lmrow{_row_cls}">'
+                f'  <div class="lm-rank{_rank_cls}">{_abs_rank}</div>'
+                f'  <div class="lm-av" style="background:{_color};">{_esc(_ini)}</div>'
+                f'  <div class="lm-name">{_esc(_disp_name)}</div>'
+                f'  <div class="lm-xp">{_xp:,}</div>'
+                f'</div>'
+            )
+        _league_label = _esc(level_name)
+        _my_rank_disp = f"#{_mr_my_rank}" if _mr_my_rank > 0 else "—"
+        _mr_league_card = (
+            '<section class="mr-league-card mr-pop-1">'
+            '  <div class="mr-league-eye">Liga semanal</div>'
+            f' <div class="mr-league-name serif">🏆 {_league_label}</div>'
+            '  <div class="mr-league-rank">'
+            f'   <span class="mr-league-rank-num">{_my_rank_disp}</span>'
+            f'   <span class="mr-league-rank-of">de {len(_mr_lb_rows)}</span>'
+            '  </div>'
+            '  <div class="mr-league-promo">'
+            f'   <span>{_xp_to_next} XP para subir</span>'
+            f'   <span style="font-weight:800;">{xp_pct}%</span>'
+            '  </div>'
+            f' <div class="mr-mini-board">{_board_rows_html or "<div style=\'opacity:.7;font-size:12px;text-align:center;padding:8px;\'>Sé el primero en sumar XP</div>"}</div>'
+            '</section>'
+        )
+
+        # ── Right column: Streak heatmap ───────────────────────
+        _heat_html = ""
+        _hd = _mr_heat_start
+        for _i in range(35):
+            _m = _mr_heat.get(_hd, 0)
+            if _m <= 0:
+                _lvl = ""
+            elif _m < 25:
+                _lvl = "l1"
+            elif _m < 60:
+                _lvl = "l2"
+            elif _m < 120:
+                _lvl = "l3"
+            else:
+                _lvl = "l4"
+            _today_cls = " today" if _hd == _mr_today else ""
+            _heat_html += f'<div class="mr-heat-cell {_lvl}{_today_cls}" title="{_hd.isoformat()}: {_m}m"></div>'
+            _hd += _td_cls(days=1)
+
+        # Frozen (insurance) status
+        try:
+            _freeze = sdb.get_freeze_status(cid) or {}
+            _freezes_avail = int(_freeze.get("available") or 0) if isinstance(_freeze, dict) else 0
+        except Exception:
+            _freezes_avail = 0
+
+        _attendance_pct = 0
+        _active_days = sum(1 for _v in _mr_heat.values() if _v > 0)
+        if _mr_heat:
+            _attendance_pct = int(round(100 * _active_days / 35))
+
+        _mr_streak_card = (
+            '<section class="mr-card mr-pop-2">'
+            '  <div class="mr-card-h">'
+            '    <div class="mr-card-title">🔥 Tu racha</div>'
+            '    <a class="mr-card-link" href="/student/analytics">Detalle →</a>'
+            '  </div>'
+            '  <div style="display:flex; align-items:baseline; gap:10px;">'
+            f'   <div class="mr-streak-num">{streak_days}</div>'
+            f'   <div style="font-size:13px; color:#5C5C66;">días seguidos<br/><span style="color:#94939C;font-size:11px;">últimos 35 días</span></div>'
+            '  </div>'
+            f' <div class="mr-heat-grid">{_heat_html}</div>'
+            '  <div class="mr-week-labels">'
+            '    <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>'
+            '  </div>'
+            '  <div class="mr-streak-row">'
+            f'   <div><div class="mr-srn">{_active_days}</div><div class="mr-srl">Días activos</div></div>'
+            f'   <div><div class="mr-srn">{_freezes_avail}</div><div class="mr-srl">Congeladores</div></div>'
+            f'   <div><div class="mr-srn">{_attendance_pct}%</div><div class="mr-srl">Asistencia</div></div>'
+            '  </div>'
+            '</section>'
+        )
+
+        # ── Right column: Friends list ─────────────────────────
+        _friend_rows_html = ""
+        for _fi, _f in enumerate(_mr_friends):
+            _fname = _f.get("name") or "Amigo"
+            _online = bool(_f.get("online"))
+            _color = _mr_palette[_fi % len(_mr_palette)]
+            _ini = _mr_initials(_fname)
+            _pres_cls = " online" if _online else ""
+            _status = ("en línea" if _online else "offline")
+            _status_cls = " online" if _online else ""
+            _friend_rows_html += (
+                f'<div class="mr-friend-row">'
+                f'  <div class="mr-friend-av" style="background:{_color};">{_esc(_ini)}<div class="pres{_pres_cls}"></div></div>'
+                f'  <div class="mr-friend-info">'
+                f'    <div class="mr-friend-name">{_esc(_fname)}</div>'
+                f'    <div class="mr-friend-status{_status_cls}">{_status}</div>'
+                f'  </div>'
+                f'  <a class="mr-friend-act" href="/student/friends">Ver →</a>'
+                f'</div>'
+            )
+        if not _friend_rows_html:
+            _friend_rows_html = (
+                '<div class="mr-empty">'
+                '  <span class="icon">👥</span>'
+                '  Aún no tienes amigos.'
+                '  <br/><a class="cta" href="/student/friends">+ Agregar amigos</a>'
+                '</div>'
+            )
+
+        _mr_friends_card = (
+            '<section class="mr-card mr-pop-3">'
+            '  <div class="mr-card-h">'
+            '    <div class="mr-card-title">👥 Tus amigos</div>'
+            '    <a class="mr-card-link" href="/student/friends">Ver todos →</a>'
+            '  </div>'
+            f' <div class="mr-friends-list">{_friend_rows_html}</div>'
+            '</section>'
+        )
+
+        # ── final assembly ─────────────────────────────────────
+        _mr_scripts = """
+<script>
+  // Toggle a session row's "done" state. Mirrors the existing
+  // /api/student/assignments/toggle endpoint that the legacy dashboard used.
+  window.mrToggleSess = async function(idx) {
+    const row = document.getElementById('mr-sess-' + idx);
+    if (!row) return;
+    const isDone = row.classList.toggle('done');
+    const btn = row.querySelector('.mr-sess-check');
+    if (btn) btn.textContent = isDone ? '✓' : '';
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await fetch('/api/student/assignments/toggle', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ date: today, session_index: idx, completed: isDone })
+      });
+    } catch (e) { /* offline-tolerant */ }
+  };
+</script>
+"""
+
+        _mr_html = (
+            _mr_css
+            + '<div class="mr-home">'
+            + '<div class="mr-layout">'
+            + '<div class="mr-left">'
+            + _mr_mission_html
+            + _mr_stats_html
+            + _mr_today_card
+            + _mr_courses_card
+            + _mr_exams_card
+            + '</div>'
+            + '<aside class="mr-right">'
+            + _mr_league_card
+            + _mr_streak_card
+            + _mr_friends_card
+            + '</aside>'
+            + '</div>'
+            + '</div>'
+            + _mr_scripts
+        )
+
+        return _s_render("Dashboard", _mr_html, active_page="student_dashboard")
 
-
-        return _s_render("Dashboard", f"""
-
-        <div style="height:8px;"></div>
-
-        {analytics_strip_html}
-
-
-
-        <!-- Academic Ranks strip — live hierarchical leaderboard preview -->
-        <div id="mr-ranks-strip" class="card reveal r-delay-1" style="margin-bottom:20px;padding:20px;position:relative;overflow:hidden;border:1px solid var(--border);background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.04));">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <span style="font-size:22px;">&#127942;</span>
-              <div>
-                <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Tus rangos</div>
-                <div style="font-size:12px;color:var(--text-muted);" id="mr-ranks-league">Cargando…</div>
-              </div>
-            </div>
-            <a href="/student/leaderboard" class="btn btn-outline btn-sm">{"Ver tabla completa" if _lang == "es" else "View full leaderboards"} &rarr;</a>
-          </div>
-          <div id="mr-ranks-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-            <div class="mr-rank-cell"><div class="mr-rank-label">País</div><div class="mr-rank-val" id="mr-rank-country">—</div></div>
-            <div class="mr-rank-cell"><div class="mr-rank-label">Universidad</div><div class="mr-rank-val" id="mr-rank-university">—</div></div>
-            <div class="mr-rank-cell"><div class="mr-rank-label">Carrera</div><div class="mr-rank-val" id="mr-rank-major">—</div></div>
-          </div>
-          <div id="mr-league-progress" style="margin-top:14px;height:6px;background:rgba(148,163,184,.15);border-radius:999px;overflow:hidden;">
-            <div id="mr-league-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7C9CFF,#C084FC);transition:width .6s cubic-bezier(.22,.61,.36,1);"></div>
-          </div>
-        </div>
-        <style>
-          .mr-rank-cell {{ background:rgba(255,255,255,.4); border:1px solid var(--border); border-radius:10px; padding:10px 12px; }}
-          :root[data-theme="dark"] .mr-rank-cell {{ background:rgba(15,23,42,.5); }}
-          .mr-rank-label {{ font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; }}
-          .mr-rank-val {{ font-size:20px; font-weight:700; letter-spacing:-.02em; margin-top:2px; }}
-          .mr-rank-val .of {{ color:var(--text-muted); font-size:13px; font-weight:500; }}
-          @media (max-width: 640px) {{ #mr-ranks-grid {{ grid-template-columns:repeat(2,1fr); }} }}
-        </style>
-        <script>
-          (async function(){{
-            try {{
-              const r = await fetch('/api/academic/ranks');
-              if (!r.ok) return;
-              const j = await r.json();
-              const fmt = (obj) => obj ? ('#' + obj.rank + ' <span class="of">/ ' + obj.total + '</span>') : '—';
-              document.getElementById('mr-rank-country').innerHTML = fmt(j.ranks.country);
-              document.getElementById('mr-rank-university').innerHTML = fmt(j.ranks.university);
-              document.getElementById('mr-rank-major').innerHTML = fmt(j.ranks.major);
-              if (j.league) {{
-                var _isES = {("true" if _lang == "es" else "false")};
-                var _LEAGUE_ES = {{
-                  'Initiate':'Iniciado','Scholar':'Erudito','Researcher':'Investigador',
-                  'Academic':'Académico','Mastermind':'Maestro','Grand Scholar':'Gran Erudito','Legend':'Leyenda'
-                }};
-                var _trLeague = function(n) {{ return (_isES && _LEAGUE_ES[n]) ? _LEAGUE_ES[n] : n; }};
-                var nextTxt = j.league.next_name
-                  ? (' &rarr; ' + _trLeague(j.league.next_name) + (_isES ? ' en ' : ' in ') + (j.league.next_min_xp - ((j.ranks.global && j.ranks.global.xp) || 0)).toLocaleString() + ' XP')
-                  : (_isES ? ' &middot; ¡Liga máxima alcanzada!' : ' &middot; Max league achieved!');
-                document.getElementById('mr-ranks-league').innerHTML =
-                  ('<span style="color:' + j.league.color + ';font-weight:600;">' + _trLeague(j.league.name) + '</span>') + nextTxt;
-                document.getElementById('mr-league-bar').style.width = (j.league.progress_pct||0) + '%';
-                document.getElementById('mr-league-bar').style.background = 'linear-gradient(90deg,' + j.league.color + ',' + (j.league.glow||j.league.color) + ')';
-              }}
-            }} catch(e) {{ /* silent */ }}
-          }})();
-        </script>
-
-        <!-- Analytics widget — full study analytics -->
-        <div id="mr-analytics" class="card reveal r-delay-1" style="margin-bottom:20px;padding:22px;border:1px solid var(--border);">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <span style="font-size:22px;">&#128200;</span>
-              <div>
-                <div style="font-weight:700;font-size:16px;letter-spacing:-.01em;">Tu analítica de estudio</div>
-                <div style="font-size:12px;color:var(--text-muted);">Cuánto, cuándo y en qué &mdash; histórico.</div>
-              </div>
-            </div>
-          </div>
-          <div id="mr-an-tiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;">
-            <div class="mr-an-stat"><div class="mr-an-label">Horas totales</div><div class="mr-an-val" id="an-hours">—</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Sesiones</div><div class="mr-an-val" id="an-sessions">—</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Racha actual</div><div class="mr-an-val" id="an-streak">—</div></div>
-            <div class="mr-an-stat"><div class="mr-an-label">Mejor día</div><div class="mr-an-val" id="an-bestdow">—</div></div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;" id="mr-an-charts">
-            <div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Últimos 14 días</div>
-              <div id="an-bars14" class="mr-line-host"></div>
-            </div>
-            <div>
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;" id="an-dow-title">Día de la semana (esta semana)</div>
-                <div style="display:flex;gap:4px;">
-                  <button type="button" id="an-dow-prev" onclick="anDowShift(-1)" title="Semana anterior" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:24px;height:22px;cursor:pointer;color:var(--text);font-size:14px;line-height:1;padding:0;">&#8249;</button>
-                  <button type="button" id="an-dow-next" onclick="anDowShift(1)" title="Semana siguiente" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:24px;height:22px;cursor:pointer;color:var(--text);font-size:14px;line-height:1;padding:0;">&#8250;</button>
-                </div>
-              </div>
-              <div id="an-bars7" class="mr-line-host"></div>
-            </div>
-          </div>
-
-          <!-- Interactive time-per-course breakdown with drill-downs. -->
-          <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--border);" id="cb-section">
-            <div id="cb-head" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
-              <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-                <button type="button" id="cb-back" onclick="cbBack()" style="display:none;background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text);font-size:13px;flex-shrink:0;">&#8592; Volver</button>
-                <div style="min-width:0;">
-                  <div id="cb-title" style="font-weight:700;font-size:15px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tiempo de estudio por curso</div>
-                  <div id="cb-subtitle" style="font-size:12px;color:var(--text-muted);">Haz clic en una barra para ver el desglose día a día.</div>
-                </div>
-              </div>
-              <div id="cb-week-nav" style="display:none;align-items:center;gap:4px;flex-shrink:0;">
-                <button type="button" id="cb-week-prev" onclick="cbWeekShift(-1)" title="Semana anterior" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8249;</button>
-                <div id="cb-week-label" style="font-size:12px;color:var(--text-muted);min-width:90px;text-align:center;">esta semana</div>
-                <button type="button" id="cb-week-next" onclick="cbWeekShift(1)" title="Semana siguiente" style="background:rgba(148,163,184,.1);border:1px solid var(--border);border-radius:6px;width:28px;height:26px;cursor:pointer;color:var(--text);font-size:16px;line-height:1;padding:0;">&#8250;</button>
-              </div>
-            </div>
-            <div id="cb-stage" style="position:relative;min-height:260px;">
-              <div id="cb-view-courses" class="cb-view"></div>
-              <div id="cb-view-course" class="cb-view" style="display:none;"></div>
-              <div id="cb-view-exam" class="cb-view" style="display:none;"></div>
-            </div>
-            <div id="cb-empty" style="display:none;text-align:center;padding:20px 10px 0;color:var(--text-muted);font-size:13px;">
-              Aún no hay sesiones etiquetadas con un curso. Inicia un temporizador en <a href="/student/focus" style="color:var(--primary);">Modo Enfoque</a> y elige un curso para llenar este gráfico.
-            </div>
-          </div>
-        </div>
-        <style>
-          .mr-an-stat {{ background:rgba(148,163,184,.06); border:1px solid var(--border); border-radius:10px; padding:10px 12px; }}
-          .mr-an-label {{ font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; }}
-          .mr-an-val {{ font-size:22px; font-weight:700; letter-spacing:-.02em; margin-top:2px; }}
-          .mr-an-bar {{ flex:1; background:linear-gradient(180deg,#7C9CFF,#5B4694); border-radius:4px 4px 2px 2px; position:relative; min-height:2px; transition:all .3s; }}
-          .mr-an-bar:hover {{ filter:brightness(1.2); }}
-          .mr-an-bar .tip {{ position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:#0B1220; color:#fff; font-size:11px; padding:3px 8px; border-radius:6px; white-space:nowrap; display:none; margin-bottom:4px; }}
-          .mr-an-bar:hover .tip {{ display:block; }}
-          .mr-an-bar-lbl {{ font-size:9px; color:var(--text-muted); text-align:center; margin-top:4px; }}
-          .mr-course-row {{ display:flex; align-items:center; gap:8px; font-size:13px; }}
-          .mr-course-name {{ flex:0 0 130px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }}
-          .mr-course-bar {{ flex:1; height:8px; border-radius:4px; background:rgba(148,163,184,.15); overflow:hidden; }}
-          .mr-course-fill {{ height:100%; background:linear-gradient(90deg,#7C9CFF,#C084FC); border-radius:4px; }}
-          .mr-course-val {{ font-size:11px; color:var(--text-muted); min-width:56px; text-align:right; font-variant-numeric:tabular-nums; }}
-          .mr-line-host {{ position:relative; width:100%; height:220px; }}
-          .mr-line-host svg {{ display:block; width:100%; height:100%; overflow:visible; }}
-          .mr-line-pt {{ cursor:pointer; }}
-          .mr-line-pt:hover .mr-line-dot {{ r:5.5; }}
-          .mr-line-tip {{ position:absolute; pointer-events:none; display:none; background:rgba(11,18,32,.95); color:#fff; font-size:12px; line-height:1.3; padding:6px 10px; border-radius:8px; white-space:nowrap; box-shadow:0 8px 22px rgba(15,23,42,.3); transform:translate(-50%, -110%); z-index:20; }}
-          @media (max-width: 720px) {{ #mr-an-charts {{ grid-template-columns:1fr; }} }}
-        </style>
-        <script>
-          window.mrShowLineTip = function(evt, hostId) {{
-            var host = document.getElementById(hostId);
-            if (!host) return;
-            var pt = evt.target.closest('.mr-line-pt');
-            if (!pt) return;
-            var tip = host.querySelector('.mr-line-tip');
-            if (!tip) return;
-            tip.textContent = pt.getAttribute('data-tip') || '';
-            tip.style.display = 'block';
-            var hostRect = host.getBoundingClientRect();
-            tip.style.left = (evt.clientX - hostRect.left) + 'px';
-            tip.style.top = (evt.clientY - hostRect.top - 6) + 'px';
-          }};
-          window.mrHideLineTip = function(hostId) {{
-            var host = document.getElementById(hostId);
-            if (!host) return;
-            var tip = host.querySelector('.mr-line-tip');
-            if (tip) tip.style.display = 'none';
-          }};
-          (async function(){{
-            function escAttr(s) {{
-              return String(s == null ? '' : s)
-                .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
-                .replace(/</g,'&lt;').replace(/>/g,'&gt;');
-            }}
-            function renderLine(hostId, points, maxV){{
-              if (!points || !points.length) return '';
-              const host = document.getElementById(hostId);
-              const W = Math.max(180, (host && host.clientWidth) || 360);
-              const H = Math.max(120, (host && host.clientHeight) || 220);
-              const padL = 18, padR = 18, padT = 14, padB = 28;
-              const innerW = W - padL - padR, innerH = H - padT - padB;
-              const n = points.length;
-              const stepX = n > 1 ? innerW / (n - 1) : innerW;
-              const m = Math.max(1, maxV);
-              const xy = points.map((p, i) => {{
-                const x = padL + i * stepX;
-                const y = padT + innerH - (Math.max(0, p.v) / m) * innerH;
-                return [x, y];
-              }});
-              const path = xy.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
-              const area = path + ' L' + xy[xy.length-1][0].toFixed(1) + ',' + (padT+innerH) + ' L' + xy[0][0].toFixed(1) + ',' + (padT+innerH) + ' Z';
-              const grid = [0.25, 0.5, 0.75].map(f => {{
-                const y = padT + innerH * f;
-                return '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+y+'" y2="'+y+'" stroke="rgba(148,163,184,.18)" stroke-dasharray="2,3" />';
-              }}).join('');
-              const baseline = '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+(padT+innerH)+'" y2="'+(padT+innerH)+'" stroke="rgba(148,163,184,.35)" />';
-              const dots = xy.map((p, i) => {{
-                const tipAttr = escAttr(points[i].tip || '');
-                const handler = 'onmousemove="mrShowLineTip(event,&quot;'+hostId+'&quot;)" onmouseleave="mrHideLineTip(&quot;'+hostId+'&quot;)"';
-                return '<g class="mr-line-pt" data-tip="'+tipAttr+'" '+handler+'>'
-                  + '<circle class="mr-line-dot" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3.5" fill="#7C9CFF" stroke="#fff" stroke-width="1.5" />'
-                  + '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="14" fill="transparent" />'
-                  + '</g>';
-              }}).join('');
-              const labels = points.map((p, i) => {{
-                if (!p.label) return '';
-                const x = padL + i * stepX;
-                return '<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="10" fill="rgba(148,163,184,.9)" pointer-events="none">'+p.label+'</text>';
-              }}).join('');
-              const gradId = 'anFill_' + hostId;
-              return ''+
-                '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="100%">'+
-                  '<defs><linearGradient id="'+gradId+'" x1="0" x2="0" y1="0" y2="1">'+
-                    '<stop offset="0%" stop-color="#7C9CFF" stop-opacity="0.32" />'+
-                    '<stop offset="100%" stop-color="#7C9CFF" stop-opacity="0" />'+
-                  '</linearGradient></defs>'+
-                  grid + baseline +
-                  '<path d="'+area+'" fill="url(#'+gradId+')" stroke="none" />'+
-                  '<path d="'+path+'" fill="none" stroke="#7C9CFF" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'+
-                  dots + labels +
-                '</svg>'+
-                '<div class="mr-line-tip"></div>';
-            }}
-            window.__anFmtM = m => m >= 60 ? (Math.floor(m/60)+'h '+(m%60)+'m') : (m+'m');
-            window.__anWeekOffset = 0;
-            window.anRenderDow = function(dow_dist, label) {{
-              const fmtM = window.__anFmtM;
-              const max7 = Math.max(1, ...dow_dist.map(d => d.minutes));
-              document.getElementById('an-bars7').innerHTML = renderLine('an-bars7', dow_dist.map(d => ({{
-                v: d.minutes, label: d.day, tip: d.day + ': ' + fmtM(d.minutes)
-              }})), max7);
-              const titleEl = document.getElementById('an-dow-title');
-              if (titleEl) titleEl.textContent = 'Day-of-week (' + label + ')';
-              const nextBtn = document.getElementById('an-dow-next');
-              if (nextBtn) {{
-                nextBtn.disabled = (window.__anWeekOffset >= 0);
-                nextBtn.style.opacity = nextBtn.disabled ? '0.4' : '1';
-                nextBtn.style.cursor = nextBtn.disabled ? 'default' : 'pointer';
-              }}
-            }};
-            window.anDowShift = async function(delta) {{
-              const next = window.__anWeekOffset + delta;
-              if (next > 0) return;
-              window.__anWeekOffset = next;
-              try {{
-                const r = await fetch('/api/academic/analytics?week_offset=' + window.__anWeekOffset);
-                if (!r.ok) return;
-                const a = await r.json();
-                const label = (a.week_label) || (window.__anWeekOffset === 0 ? 'this week' : (window.__anWeekOffset === -1 ? 'last week' : (Math.abs(window.__anWeekOffset) + ' weeks ago')));
-                window.anRenderDow(a.dow_dist, label);
-              }} catch(e) {{}}
-            }};
-            try {{
-              const r = await fetch('/api/academic/analytics?week_offset=0');
-              if (!r.ok) return;
-              const a = await r.json();
-              const fmtM = window.__anFmtM;
-              document.getElementById('an-hours').textContent = a.totals.hours.toFixed(1);
-              document.getElementById('an-sessions').textContent = a.totals.sessions;
-              document.getElementById('an-streak').textContent = a.totals.streak + ' día' + (a.totals.streak===1?'':'s');
-              document.getElementById('an-bestdow').textContent = a.best_dow ? a.best_dow.day : '—';
-              const max14 = Math.max(1, ...a.last_14_days.map(d => d.minutes));
-              document.getElementById('an-bars14').innerHTML = renderLine('an-bars14', a.last_14_days.map(d => ({{
-                v: d.minutes, label: d.label[0], tip: d.date + ': ' + fmtM(d.minutes)
-              }})), max14);
-              window.anRenderDow(a.dow_dist, a.week_label || 'this week');
-            }} catch(e) {{ /* silent */ }}
-            // Expose the renderer and esc helper for the breakdown card below.
-            window.__mrRenderLine = renderLine;
-            window.__mrEscAttr = escAttr;
-          }})();
-        </script>
-
-
-
-
-
-        <style>
-          .cb-view {{ animation: cbFadeIn .25s ease; }}
-          .cb-slide-left {{ animation: cbSlideInLeft .28s ease; }}
-          .cb-slide-right {{ animation: cbSlideInRight .28s ease; }}
-          @keyframes cbFadeIn {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: translateY(0); }} }}
-          @keyframes cbSlideInLeft {{ from {{ opacity: 0; transform: translateX(-14px); }} to {{ opacity: 1; transform: translateX(0); }} }}
-          @keyframes cbSlideInRight {{ from {{ opacity: 0; transform: translateX(14px); }} to {{ opacity: 1; transform: translateX(0); }} }}
-          .cb-bars {{ display:flex; align-items:flex-end; gap:10px; height:200px; padding:24px 4px 0; border-bottom:1px solid var(--border); position:relative; }}
-          .cb-bar {{ flex:1 1 0; min-width:24px; background:linear-gradient(180deg,#7C9CFF,#5B4694); border-radius:6px 6px 2px 2px; cursor:pointer; position:relative; transition:transform .2s ease, filter .2s ease; min-height:3px; }}
-          .cb-bar:hover {{ filter:brightness(1.15); transform:translateY(-2px); }}
-          .cb-bar.cb-muted {{ background:linear-gradient(180deg,rgba(148,163,184,.45),rgba(148,163,184,.25)); cursor:default; }}
-          .cb-bar.cb-muted:hover {{ transform:none; filter:none; }}
-          .cb-bar .cb-val {{ position:absolute; bottom:calc(100% + 4px); left:50%; transform:translateX(-50%); font-size:10px; color:var(--text); font-weight:600; white-space:nowrap; pointer-events:none; }}
-          .cb-bar-label {{ font-size:11px; color:var(--text-muted); text-align:center; margin-top:10px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; min-height:16px; }}
-          .cb-tip {{ position:absolute; background:rgba(11,18,32,.95); color:#fff; font-size:11px; padding:4px 8px; border-radius:6px; white-space:nowrap; pointer-events:none; transform:translate(-50%,-110%); display:none; z-index:5; }}
-          .cb-section-title {{ font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 8px; }}
-          .cb-col {{ display:flex; flex-direction:column; align-items:center; flex:1 1 0; min-width:42px; max-width:140px; overflow:hidden; }}
-          .cb-line-host {{ position:relative; width:100%; height:220px; }}
-          .cb-line-host svg {{ display:block; width:100%; height:100%; overflow:visible; }}
-          .cb-line-pt {{ cursor:pointer; }}
-          .cb-line-pt:hover .cb-line-dot {{ r:5.5; }}
-          .cb-line-tip {{ position:absolute; pointer-events:none; display:none; background:rgba(11,18,32,.95); color:#fff; font-size:12px; line-height:1.3; padding:6px 10px; border-radius:8px; white-space:nowrap; box-shadow:0 8px 22px rgba(15,23,42,.3); transform:translate(-50%, -110%); z-index:20; }}
-        </style>
-        <script>
-          window.__cbState = {{ view: 'courses', courseId: null, examId: null, weekOffset: 0 }};
-          window.__cbFmtM = function(m) {{ m = m|0; return m >= 60 ? (Math.floor(m/60)+'h '+(m%60)+'m') : (m+'m'); }};
-          window.__cbEsc = function(s) {{ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }};
-
-          function cbWeekLabel(offset) {{
-            if (offset === 0) return 'this week';
-            if (offset === -1) return 'last week';
-            return Math.abs(offset) + ' weeks ago';
-          }}
-
-          function cbShowView(id, direction) {{
-            var ids = ['cb-view-courses','cb-view-course','cb-view-exam'];
-            ids.forEach(function(x){{ var el = document.getElementById(x); if (el) el.style.display = (x===id?'':'none'); }});
-            var el = document.getElementById(id);
-            if (!el) return;
-            el.classList.remove('cb-slide-left','cb-slide-right','cb-view');
-            void el.offsetWidth;
-            if (direction === 'in') el.classList.add('cb-slide-right');
-            else if (direction === 'out') el.classList.add('cb-slide-left');
-            else el.classList.add('cb-view');
-          }}
-
-          function cbRenderBars(host, items) {{
-            var maxV = Math.max(1, ...items.map(function(d){{ return d.value||0; }}));
-            var fmtM = window.__cbFmtM;
-            var esc = window.__cbEsc;
-            var out = '<div class="cb-bars">';
-            items.forEach(function(d){{
-              var hpct = Math.max(2, (d.value||0) / maxV * 100);
-              var muted = !d.value;
-              var cls = 'cb-bar' + (muted ? ' cb-muted' : '');
-              var onClick = d.onClick && !muted ? (' data-click="'+esc(d.onClick)+'" onclick="cbBarClick(this)"') : '';
-              var tipText = d.tip || (d.label + ': ' + fmtM(d.value||0));
-              out += '<div class="cb-col">';
-              // Bar — value floats above it via CSS so it never overlaps the label below.
-              out += '<div class="'+cls+'" style="height:'+hpct+'%;"'+onClick+' data-tip="'+esc(tipText)+'" onmouseover="cbShowTip(event,this)" onmouseout="cbHideTip(this)">';
-              if ((d.value||0) > 0) out += '<span class="cb-val">'+fmtM(d.value||0)+'</span>';
-              out += '</div>';
-              out += '<div class="cb-bar-label" title="'+esc(d.label||'')+'">'+esc(d.label||'')+'</div>';
-              out += '</div>';
-            }});
-            out += '</div>';
-            host.innerHTML = out;
-          }}
-
-          // Line-chart renderer for the day-by-day breakdown.
-          // Uses the same SVG primitive as the top "Last 14 days" chart.
-          function cbRenderLine(host, items) {{
-            if (!host) return;
-            host.classList.add('cb-line-host');
-            host.id = host.id || ('cb-line-' + Math.random().toString(36).slice(2,8));
-            var fmtM = window.__cbFmtM;
-            var pts = items.map(function(d){{
-              return {{
-                v: d.value || 0,
-                label: d.label || '',
-                tip: d.tip || ((d.label||'') + ': ' + fmtM(d.value||0))
-              }};
-            }});
-            var maxV = Math.max(1, ...items.map(function(d){{ return d.value||0; }}));
-            if (window.__mrRenderLine) {{
-              host.innerHTML = window.__mrRenderLine(host.id, pts, maxV);
-            }} else {{
-              // Fallback: bars, in case the analytics IIFE hasn't run yet.
-              cbRenderBars(host, items);
-            }}
-          }}
-
-          window.cbShowTip = function(ev, el) {{
-            var tip = document.getElementById('cb-tip-host');
-            if (!tip) {{
-              tip = document.createElement('div');
-              tip.id = 'cb-tip-host';
-              tip.className = 'cb-tip';
-              document.body.appendChild(tip);
-            }}
-            tip.textContent = el.getAttribute('data-tip') || '';
-            tip.style.display = 'block';
-            var rect = el.getBoundingClientRect();
-            tip.style.left = (rect.left + rect.width/2) + 'px';
-            tip.style.top = (rect.top + window.scrollY) + 'px';
-          }};
-          window.cbHideTip = function(el) {{
-            var tip = document.getElementById('cb-tip-host');
-            if (tip) tip.style.display = 'none';
-          }};
-          window.cbBarClick = function(el) {{
-            var action = el.getAttribute('data-click') || '';
-            if (action.indexOf('course:') === 0) {{
-              var cid = parseInt(action.slice(7), 10);
-              cbOpenCourse(cid);
-            }} else if (action.indexOf('exam:') === 0) {{
-              var eid = parseInt(action.slice(5), 10);
-              cbOpenExam(eid);
-            }}
-          }};
-
-          async function cbLoadCourses() {{
-            window.__cbState = {{ view: 'courses', courseId: null, examId: null, weekOffset: 0 }};
-            document.getElementById('cb-back').style.display = 'none';
-            document.getElementById('cb-week-nav').style.display = 'none';
-            document.getElementById('cb-title').textContent = 'Tiempo de estudio por curso';
-            document.getElementById('cb-subtitle').textContent = 'Haz clic en una barra para ver el desglose día a día.';
-            try {{
-              var r = await fetch('/api/student/stats/per_course');
-              if (!r.ok) return;
-              var data = await r.json();
-              var host = document.getElementById('cb-view-courses');
-              var any = (data.courses || []).some(function(c){{ return c.minutes > 0; }});
-              if (!(data.courses || []).length || !any) {{
-                host.innerHTML = '';
-                document.getElementById('cb-empty').style.display = 'block';
-              }} else {{
-                document.getElementById('cb-empty').style.display = 'none';
-                cbRenderBars(host, data.courses.map(function(c){{
-                  return {{
-                    label: c.name,
-                    value: c.minutes,
-                    onClick: 'course:' + c.course_id,
-                    tip: c.name + ': ' + window.__cbFmtM(c.minutes) + ' · ' + c.sessions + ' session' + (c.sessions===1?'':'s')
-                  }};
-                }}));
-              }}
-              cbShowView('cb-view-courses');
-            }} catch(e) {{}}
-          }}
-
-          async function cbOpenCourse(courseId, direction) {{
-            window.__cbState.view = 'course';
-            window.__cbState.courseId = courseId;
-            window.__cbState.examId = null;
-            window.__cbState.weekOffset = 0;
-            document.getElementById('cb-back').style.display = '';
-            document.getElementById('cb-week-nav').style.display = 'flex';
-            await cbRenderCourse(direction || 'in');
-          }}
-
-          async function cbRenderCourse(direction) {{
-            var cid = window.__cbState.courseId;
-            var wo = window.__cbState.weekOffset;
-            try {{
-              var r = await fetch('/api/student/stats/course_detail?course_id='+cid+'&week_offset='+wo);
-              if (!r.ok) return;
-              var data = await r.json();
-              document.getElementById('cb-title').textContent = data.course.name;
-              document.getElementById('cb-subtitle').textContent = 'Días estudiados esta semana · evaluaciones de este curso.';
-              document.getElementById('cb-week-label').textContent = cbWeekLabel(wo);
-              var nextBtn = document.getElementById('cb-week-next');
-              if (nextBtn) {{
-                nextBtn.disabled = (wo >= 0);
-                nextBtn.style.opacity = nextBtn.disabled ? '0.4' : '1';
-                nextBtn.style.cursor = nextBtn.disabled ? 'default' : 'pointer';
-              }}
-              var host = document.getElementById('cb-view-course');
-              var fmtM = window.__cbFmtM;
-              var esc = window.__cbEsc;
-              var today = new Date().toISOString().slice(0,10);
-              var dayItems = data.days.map(function(d){{
-                return {{
-                  label: d.dow + (d.date===today?' *':''),
-                  value: d.minutes,
-                  tip: d.date + ': ' + fmtM(d.minutes) + ' · ' + d.sessions + ' session' + (d.sessions===1?'':'s')
-                }};
-              }});
-              var examItems = (data.exams || []).map(function(e){{
-                return {{
-                  label: e.name + (e.exam_date?(' · '+e.exam_date):''),
-                  value: e.minutes,
-                  onClick: 'exam:' + e.exam_id,
-                  tip: e.name + ': ' + fmtM(e.minutes) + ' · ' + e.sessions + ' session' + (e.sessions===1?'':'s')
-                }};
-              }});
-              var weekTotal = data.days.reduce(function(a,d){{ return a + (d.minutes||0); }}, 0);
-              var html = '';
-              html += '<div class="cb-section-title">Days — '+esc(cbWeekLabel(wo))+' · total '+fmtM(weekTotal)+'</div>';
-              html += '<div id="cb-course-days"></div>';
-              html += '<div style="height:18px;"></div>';
-              html += '<div class="cb-section-title">Pruebas de este curso <span style="color:var(--text-muted);text-transform:none;letter-spacing:0;font-weight:400;font-size:11px;">— click a bar to drill down</span></div>';
-              html += '<div id="cb-course-exams"></div>';
-              if (!examItems.length) html += '<div style="font-size:12px;color:var(--text-muted);padding:10px 2px;">No exams added for this course yet.</div>';
-              host.innerHTML = html;
-              cbRenderLine(document.getElementById('cb-course-days'), dayItems);
-              if (examItems.length) cbRenderBars(document.getElementById('cb-course-exams'), examItems);
-              cbShowView('cb-view-course', direction || 'in');
-            }} catch(e) {{}}
-          }}
-
-          async function cbOpenExam(examId) {{
-            window.__cbState.view = 'exam';
-            window.__cbState.examId = examId;
-            window.__cbState.weekOffset = 0;
-            document.getElementById('cb-back').style.display = '';
-            document.getElementById('cb-week-nav').style.display = 'flex';
-            await cbRenderExam('in');
-          }}
-
-          async function cbRenderExam(direction) {{
-            var eid = window.__cbState.examId;
-            var wo = window.__cbState.weekOffset;
-            try {{
-              var r = await fetch('/api/student/stats/exam_detail?exam_id='+eid+'&week_offset='+wo);
-              if (!r.ok) return;
-              var data = await r.json();
-              document.getElementById('cb-title').textContent = data.exam.name;
-              document.getElementById('cb-subtitle').textContent = data.exam.course_name + (data.exam.exam_date ? (' · ' + data.exam.exam_date) : '');
-              document.getElementById('cb-week-label').textContent = cbWeekLabel(wo);
-              var nextBtn = document.getElementById('cb-week-next');
-              if (nextBtn) {{
-                nextBtn.disabled = (wo >= 0);
-                nextBtn.style.opacity = nextBtn.disabled ? '0.4' : '1';
-                nextBtn.style.cursor = nextBtn.disabled ? 'default' : 'pointer';
-              }}
-              var host = document.getElementById('cb-view-exam');
-              var fmtM = window.__cbFmtM;
-              var esc = window.__cbEsc;
-              var today = new Date().toISOString().slice(0,10);
-              var dayItems = data.days.map(function(d){{
-                return {{
-                  label: d.dow + (d.date===today?' *':''),
-                  value: d.minutes,
-                  tip: d.date + ': ' + fmtM(d.minutes) + ' · ' + d.sessions + ' session' + (d.sessions===1?'':'s')
-                }};
-              }});
-              var weekTotal = data.days.reduce(function(a,d){{ return a + (d.minutes||0); }}, 0);
-              var html = '';
-              html += '<div class="cb-section-title">Days — '+esc(cbWeekLabel(wo))+' · total '+fmtM(weekTotal)+'</div>';
-              html += '<div id="cb-exam-days"></div>';
-              host.innerHTML = html;
-              cbRenderLine(document.getElementById('cb-exam-days'), dayItems);
-              cbShowView('cb-view-exam', direction || 'in');
-            }} catch(e) {{}}
-          }}
-
-          function cbBack() {{
-            var st = window.__cbState;
-            if (st.view === 'exam') {{
-              st.view = 'course';
-              st.examId = null;
-              st.weekOffset = 0;
-              cbRenderCourse('out');
-            }} else if (st.view === 'course') {{
-              st.view = 'courses';
-              st.courseId = null;
-              st.weekOffset = 0;
-              cbLoadCourses();
-            }}
-          }}
-
-          function cbWeekShift(delta) {{
-            var st = window.__cbState;
-            var next = st.weekOffset + delta;
-            if (next > 0) return;
-            st.weekOffset = next;
-            if (st.view === 'course') cbRenderCourse();
-            else if (st.view === 'exam') cbRenderExam();
-          }}
-
-          cbLoadCourses();
-        </script>
-
-
-        <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:24px;">
-
-          <div class="stat-card stat-purple"><div class="num">{len(courses)}</div><div class="label">Courses</div></div>
-
-        </div>
-
-
-
-        <!-- Upcoming exams -->
-
-        <div class="card" style="margin-bottom:24px">
-
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-
-            <h2 style="margin:0">&#128221; Pruebas próximas</h2>
-
-            <a href="/student/exams" style="font-size:13px;color:var(--text-muted);text-decoration:none;">Administrar &rarr;</a>
-
-          </div>
-
-          <div style="padding:6px 14px 14px 14px">{exams_html}</div>
-
-        </div>
-
-
-
-        <!-- Daily Quests -->
-
-        <div class="card" style="margin-bottom:24px">
-
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-
-            <h2 style="margin:0">&#127919; Misiones diarias</h2>
-
-            <span id="dq-streak" style="font-size:13px;color:var(--text-muted)"></span>
-
-          </div>
-
-          <div id="dq-list" style="padding:6px 14px 14px 14px">Cargando…</div>
-
-        </div>
-
-        <script>
-
-        (async function(){{
-
-          try {{
-
-            const r = await fetch('/api/student/quests/today').then(r=>r.json());
-
-            const s = await fetch('/api/student/streak/status').then(r=>r.json());
-
-            const list = document.getElementById('dq-list');
-
-            const sBox = document.getElementById('dq-streak');
-
-            if (s && s.streak !== undefined) {{
-
-              const fz = s.freeze && s.freeze.available ? '&#128737;&#65039; congelador listo' : (s.freeze ? '&#128737;&#65039; congelador usado' : '');
-
-              sBox.innerHTML = '&#128293; racha de ' + s.streak + ' días' + (fz ? ' &middot; ' + fz : '');
-
-            }}
-
-            if (!r.quests || !r.quests.length) {{ list.textContent = 'Sin misiones todavía.'; return; }}
-
-            list.innerHTML = r.quests.map(q => {{
-
-              const pct = Math.min(100, Math.round(100 * q.progress / Math.max(1, q.target)));
-
-              const done = q.completed;
-
-              return `<div style="margin:10px 0">
-
-                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-
-                  <span style="color:${{done ? 'var(--text-muted)' : 'var(--text)'}};text-decoration:${{done ? 'line-through' : 'none'}}">${{q.label}}</span>
-
-                  <span style="color:#16a34a;font-weight:600">+${{q.xp_reward}} XP</span>
-
-                </div>
-
-                <div style="background:var(--border);border-radius:6px;height:8px;overflow:hidden">
-
-                  <div style="background:${{done ? '#22c55e' : 'var(--primary)'}};height:8px;width:${{pct}}%;transition:width 0.4s"></div>
-
-                </div>
-
-                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${{q.progress}}/${{q.target}}</div>
-
-              </div>`;
-
-            }}).join('') + `<div style="font-size:12px;color:var(--text-muted);margin-top:10px">Completa las 3 para un bono de <b style="color:#8b5cf6">+${{r.bundle_bonus_xp}} XP</b>.</div>`;
-
-          }} catch(e) {{ document.getElementById('dq-list').textContent = 'No se pudieron cargar las misiones.'; }}
-
-        }})();
-
-        </script>
-
-
-
-        <script>
-
-
-        async function generatePlan() {{
-
-          var btn = document.getElementById('plan-btn');
-
-          btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
-
-          try {{
-
-            var r = await fetch('/api/student/plan/generate', {{method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({{preferences: {{hours_per_day: 5}}}}) }});
-
-            var d = await _safeJson(r);
-
-            if (!r.ok) {{ alert(d.error || 'Error al generar'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; return; }}
-
-            var iv = setInterval(async function() {{
-
-              try {{
-
-                var r2 = await fetch('/api/student/plan/status');
-
-                var s = await r2.json();
-
-                if (s.status === 'done') {{
-
-                  clearInterval(iv);
-
-                  if (window.showToast) window.showToast('Study plan generated!', 'success'); else alert('Study plan generated!');
-
-                  if (window.confettiBurst) window.confettiBurst(60);
-
-                  setTimeout(function(){{ mrReload(); }}, 900);
-
-                }} else if (s.status === 'error') {{
-
-                  clearInterval(iv);
-
-                  alert(s.progress || 'Plan generation failed');
-
-                  btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan';
-
-                }}
-
-              }} catch(e) {{}}
-
-            }}, 2000);
-
-          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); btn.disabled = false; btn.innerHTML = '&#129302; Generate Plan'; }}
-
-        }}
-
-        async function markComplete() {{
-
-          var r = await fetch('/api/student/progress/complete', {{method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({{}})}});
-
-          if (r.ok) {{ alert('Today marked as complete!'); mrReload(); }}
-
-        }}
-
-        async function toggleDashAssignment(idx, completed) {{
-
-          var today = new Date().toISOString().split('T')[0];
-
-          var row = document.getElementById('dash-session-' + idx);
-
-          if (completed) {{
-
-            row.style.textDecoration = 'line-through';
-
-            row.style.opacity = '0.6';
-
-          }} else {{
-
-            row.style.textDecoration = '';
-
-            row.style.opacity = '1';
-
-          }}
-
-          try {{
-
-            await fetch('/api/student/assignments/toggle', {{
-
-              method: 'POST',
-
-              headers: {{'Content-Type':'application/json'}},
-
-              body: JSON.stringify({{ date: today, session_index: idx, completed: completed }})
-
-            }});
-
-          }} catch(e) {{}}
-
-        }}
-
-        </script>
-
-        """, active_page="student_dashboard")
 
 
 
