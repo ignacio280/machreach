@@ -43,6 +43,12 @@ if not _secret and os.getenv("RENDER", ""):
 SECRET_KEY = _secret or "dev-secret-change-me"
 BASE_URL = os.getenv("BASE_URL", "http://localhost:5000")
 SENDER_NAME = os.getenv("SENDER_NAME", "Ignacio")
+ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.getenv("ADMIN_EMAILS", "ignaciomachuca2005@gmail.com").split(",")
+    if e.strip()
+}
+ADMIN_ACTION_SECRET = os.getenv("ADMIN_ACTION_SECRET", "")
 
 # System/transactional email sender (verification, password reset, etc.)
 # This should be support@machreach.com or noreply@machreach.com

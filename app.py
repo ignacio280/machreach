@@ -15,7 +15,7 @@ from flask import Flask, flash, jsonify, make_response, redirect, render_templat
 from markupsafe import Markup
 
 from outreach.ai import generate_sequence, personalize_email, generate_reply_draft, get_optimal_send_hour
-from outreach.config import SECRET_KEY, SENDER_NAME
+from outreach.config import ADMIN_ACTION_SECRET, ADMIN_EMAILS, SECRET_KEY, SENDER_NAME
 from outreach.i18n import t, t_dict
 
 # ── Sentry error tracking (production only — set SENTRY_DSN env var) ──
@@ -223,7 +223,6 @@ def debug_smtp_send_test():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/admin/check-db", methods=["POST"])
-@csrf.exempt
 @limiter.exempt
 def admin_check_db():
     from outreach.config import SECRET_KEY
@@ -252,10 +251,10 @@ def admin_check_db():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/admin/reset-all-accounts", methods=["POST"])
-@csrf.exempt
 @limiter.exempt
 def admin_reset_all_accounts():
     """One-time admin action: notify all users and delete all accounts."""
+    return jsonify({"error": "This one-time destructive endpoint has been removed."}), 410
     from outreach.config import SECRET_KEY
     auth = request.headers.get("X-Admin-Key", "")
     if auth != SECRET_KEY:
@@ -356,9 +355,6 @@ def _logged_in() -> bool:
     return "client_id" in session
 
 
-ADMIN_EMAILS = {"ignaciomachuca2005@gmail.com"}
-
-
 def _is_admin() -> bool:
     if not _logged_in():
         return False
@@ -367,6 +363,29 @@ def _is_admin() -> bool:
         return False
     email = (c.get("email") or "").strip().lower()
     return bool(c.get("is_admin")) or email in ADMIN_EMAILS
+
+
+def _log_admin_action(action: str, target: str = "", **extra):
+    """Audit high-risk admin actions in the app logs."""
+    admin_id = session.get("client_id")
+    admin_email = ""
+    if admin_id:
+        c = get_client(admin_id)
+        admin_email = (c.get("email") or "") if c else ""
+    _log_security(
+        f"admin.{action}",
+        admin_id=admin_id,
+        admin_email=admin_email,
+        target=target,
+        **extra,
+    )
+
+
+def _admin_secret_ok() -> bool:
+    """Optional second admin factor for production/admin consoles."""
+    if not ADMIN_ACTION_SECRET:
+        return True
+    return request.form.get("admin_secret", "") == ADMIN_ACTION_SECRET
 
 
 def _effective_client_id() -> int:
@@ -4246,8 +4265,13 @@ def admin_dashboard():
         if action == "broadcast":
             subject = request.form.get("subject", "").strip()
             body = request.form.get("body", "").strip()
+            confirm_phrase = request.form.get("confirm_phrase", "").strip()
             if not subject or not body:
                 error_msg = "Subject and body are required."
+            elif confirm_phrase != "SEND TO ALL USERS":
+                error_msg = "Type SEND TO ALL USERS to confirm the broadcast."
+            elif not _admin_secret_ok():
+                error_msg = "Admin action secret is incorrect."
             else:
                 sent_count = 0
                 failed = []
@@ -4264,20 +4288,27 @@ def admin_dashboard():
                     flash(("warning", f"Broadcast sent to {sent_count} users. Failed: {len(failed)}."))
                 else:
                     flash(("success", f"Broadcast sent to {sent_count} users."))
+                _log_admin_action("broadcast", target="all_users", sent=sent_count, failed=len(failed), subject=subject[:120])
                 return redirect(url_for("admin_dashboard"))
         elif action == "delete_user":
             target_id = int(request.form.get("client_id") or 0)
             typed_email = (request.form.get("confirm_email") or "").strip().lower()
+            confirm_phrase = request.form.get("confirm_phrase", "").strip()
             target = get_client(target_id)
             if not target:
                 error_msg = "User not found."
             elif typed_email != (target.get("email") or "").strip().lower():
                 error_msg = "Type the user's exact email to confirm deletion."
+            elif confirm_phrase != "DELETE USER":
+                error_msg = "Type DELETE USER to confirm account deletion."
+            elif not _admin_secret_ok():
+                error_msg = "Admin action secret is incorrect."
             elif target_id == session.get("client_id"):
                 error_msg = "You cannot delete your own logged-in account."
             else:
                 result = _admin_delete_client_account(target_id)
                 if result.get("ok"):
+                    _log_admin_action("delete_user", target=str(target_id), email=result.get("email", ""))
                     flash(("success", f"Deleted account: {result.get('email')}"))
                     return redirect(url_for("admin_dashboard"))
                 error_msg = result.get("error") or "Could not delete that account."
@@ -4290,10 +4321,12 @@ def admin_dashboard():
           <td style="font-family:monospace;font-size:13px;">{_esc(u.get("email") or "")}</td>
           <td>{_esc(str(u.get("id") or ""))}</td>
           <td style="width:320px;">
-            <form method="POST" style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;">
+            <form method="POST" style="display:grid;grid-template-columns:1fr 120px auto;gap:8px;align-items:center;">
               <input type="hidden" name="action" value="delete_user">
               <input type="hidden" name="client_id" value="{_esc(str(u.get("id") or ""))}">
               <input name="confirm_email" placeholder="Type email to delete" autocomplete="off" style="font-size:12px;padding:8px;">
+              <input name="confirm_phrase" placeholder="DELETE USER" autocomplete="off" style="font-size:12px;padding:8px;">
+              {'<input name="admin_secret" placeholder="Admin secret" autocomplete="off" style="font-size:12px;padding:8px;grid-column:1 / -1;">' if ADMIN_ACTION_SECRET else ''}
               <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);" onclick="return confirm('Delete this user and their data?')">Delete</button>
             </form>
           </td>
@@ -4306,7 +4339,7 @@ def admin_dashboard():
     <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Admin</div>
     <div class="page-header">
       <h1>&#128227; Admin</h1>
-      <p class="subtitle">Broadcast to users and manage accounts. Owner access is locked to ignaciomachuca2005@gmail.com.</p>
+      <p class="subtitle">Broadcast to users and manage accounts. Admin access comes from configured admin emails and is audited.</p>
     </div>
     <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
       <a class="btn btn-outline btn-sm" href="/admin/leaderboard-winners-test">&#127942; Preview monthly leaderboard winners email</a>
@@ -4325,6 +4358,11 @@ def admin_dashboard():
           <textarea name="body" rows="10" placeholder="Hi there,&#10;&#10;We have an important update..." required style="font-size:14px;line-height:1.7;"></textarea>
           <p class="form-hint">Plain text. Will be wrapped in the standard MachReach email template.</p>
         </div>
+        <div class="form-group">
+          <label>Confirmation</label>
+          <input name="confirm_phrase" placeholder="Type SEND TO ALL USERS" autocomplete="off" required style="font-size:15px;">
+        </div>
+        {'<div class="form-group"><label>Admin action secret</label><input name="admin_secret" type="password" autocomplete="off" required style="font-size:15px;"></div>' if ADMIN_ACTION_SECRET else ''}
         <div style="display:flex;gap:12px;align-items:center;">
           <button type="submit" class="btn btn-primary" style="font-size:15px;padding:10px 28px;" onclick="return confirm('Send this email to ALL {len(users)} registered users?')">&#128640; Send to {len(users)} Users</button>
         </div>

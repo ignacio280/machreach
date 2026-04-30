@@ -814,6 +814,7 @@ def register_student_routes(app, csrf, limiter):
                                   analyze_essay, generate_cram_plan)
 
     from student import db as sdb
+    from student.removed_features import DEPRECATED_STUDENT_PATHS, REMOVED_API_PREFIXES
 
 
 
@@ -1202,29 +1203,11 @@ def register_student_routes(app, csrf, limiter):
 
     # ── Hard-block deprecated student pages ─────────────────
 
-    # Plan, Notes, AI Tutor, Schedule, Panic have been removed from the product.
+    # Plan, Notes, AI Tutor, Schedule, Panic, Practice, and Training have been removed from the product.
 
     # Their old route handlers still exist deeper in this file, but a
 
     # before_request guard intercepts them and redirects to the dashboard.
-
-    _DEPRECATED_STUDENT_PATHS = {
-
-        "/student/plan",
-
-        "/student/notes",
-
-        "/student/chat",
-
-        "/student/schedule",
-
-        "/student/panic",
-
-        "/student/training",
-
-    }
-
-
 
     @app.before_request
 
@@ -1232,12 +1215,13 @@ def register_student_routes(app, csrf, limiter):
 
         p = request.path or ""
 
-        if p == "/api/student/training" or p.startswith("/api/student/training/"):
-            return jsonify({"error": "Training has been removed"}), 410
+        for api_prefix, message in REMOVED_API_PREFIXES.items():
+            if p == api_prefix or p.startswith(api_prefix + "/"):
+                return jsonify({"error": message}), 410
 
         # Match exact path or sub-paths like /student/notes/123
 
-        for dead in _DEPRECATED_STUDENT_PATHS:
+        for dead in DEPRECATED_STUDENT_PATHS:
 
             if p == dead or p.startswith(dead + "/"):
 
@@ -2722,9 +2706,6 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/api/student/focus/save", methods=["POST"])
-
-    @csrf.exempt
-
     def student_save_focus():
 
         if not _logged_in():
@@ -3230,7 +3211,6 @@ def register_student_routes(app, csrf, limiter):
     # ── Grade-Sheet semester sync ────────────────────────────
 
     @app.route("/api/student/semester/current", methods=["GET", "POST"])
-    @csrf.exempt
     def student_semester_current():
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
@@ -7989,7 +7969,7 @@ def register_student_routes(app, csrf, limiter):
 
         courses = sdb.get_courses(_cid())
 
-        course_options = '<option value="">Select a course...</option>'
+        course_options = '<option value="">Selecciona un curso...</option>'
 
         for c in courses:
 
@@ -8574,9 +8554,6 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/api/student/schedule", methods=["PUT"])
-
-    @csrf.exempt
-
     def student_set_schedule():
 
         if not _logged_in():
@@ -8642,7 +8619,6 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": str(e)[:200]}), 500
 
     @app.route("/api/student/date-overrides", methods=["POST"])
-    @csrf.exempt
     def student_save_date_override():
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
@@ -8667,7 +8643,6 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": str(e)[:200]}), 500
 
     @app.route("/api/student/date-overrides/<date_str>", methods=["DELETE"])
-    @csrf.exempt
     def student_delete_date_override(date_str):
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
@@ -9750,9 +9725,6 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/api/student/quizzes/generate", methods=["POST"])
-
-    @csrf.exempt
-
     @limiter.limit("5 per minute")
 
     def student_generate_quiz():
@@ -9937,9 +9909,6 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/api/student/quizzes/generate-async", methods=["POST"])
-
-    @csrf.exempt
-
     @limiter.limit("5 per minute")
 
     def student_generate_quiz_async():
@@ -10089,9 +10058,6 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/api/student/quizzes/<int:quiz_id>/score", methods=["POST"])
-
-    @csrf.exempt
-
     def student_submit_quiz_score(quiz_id):
 
         if not _logged_in():
@@ -10150,9 +10116,6 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/api/student/quizzes/<int:quiz_id>", methods=["DELETE"])
-
-    @csrf.exempt
-
     def student_delete_quiz(quiz_id):
 
         if not _logged_in():
@@ -10166,9 +10129,6 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/api/student/quizzes/<int:quiz_id>/analyze", methods=["POST"])
-
-    @csrf.exempt
-
     @limiter.limit("10 per minute")
 
     def student_analyze_quiz(quiz_id):
@@ -11129,7 +11089,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        course_options = '<option value="">Select a course...</option>'
+        course_options = '<option value="">Selecciona un curso...</option>'
 
         for c in courses:
 
@@ -12079,7 +12039,7 @@ No markdown, no code fences. ONLY JSON.
 
             diff_color = {"easy": "#10B981", "medium": "#F59E0B", "hard": "#EF4444"}.get(q.get("difficulty", "medium"), "#94A3B8")
 
-            score_txt = f"{q.get('best_score',0)}%" if q.get("attempts", 0) > 0 else "Not taken"
+            score_txt = f"{q.get('best_score',0)}%" if q.get("attempts", 0) > 0 else "Sin intentar"
 
             quizzes_html += f"""
 
@@ -12091,7 +12051,7 @@ No markdown, no code fences. ONLY JSON.
 
                   <h3 style="margin:0;font-size:16px;">{_esc(q.get('title','Untitled'))}</h3>
 
-                  <span style="font-size:13px;color:var(--text-muted);">{_esc(q.get('course_name',''))} &middot; {q.get('question_count',0)} questions</span>
+                  <span style="font-size:13px;color:var(--text-muted);">{_esc(q.get('course_name',''))} &middot; {q.get('question_count',0)} preguntas</span>
 
                 </div>
 
@@ -12101,7 +12061,7 @@ No markdown, no code fences. ONLY JSON.
 
                   <span style="font-size:13px;font-weight:600;color:var(--text);">{score_txt}</span>
 
-                  <span style="font-size:12px;color:var(--text-muted);">{q.get('attempts',0)} attempts</span>
+                  <span style="font-size:12px;color:var(--text-muted);">{q.get('attempts',0)} intentos</span>
 
                   <button onclick="event.stopPropagation();window.location='/student/exam-sim/{q['id']}'" class="btn btn-ghost btn-sm" style="color:var(--primary);font-size:12px;" title="Exam Simulator">&#9889;</button>
 
@@ -12119,7 +12079,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="font-size:48px;margin-bottom:12px;">&#128221;</div>
 
-              <p>No quizzes yet. Generate your first practice quiz from a course!</p>
+              <p>Aún no hay quizzes. Genera tu primer quiz desde un curso o archivo.</p>
 
             </div>"""
 
@@ -12133,13 +12093,13 @@ No markdown, no code fences. ONLY JSON.
 
           <div>
 
-            <h1 style="margin:0;">&#128221; Practice Quizzes</h1>
+            <h1 style="margin:0;">&#128221; Quizzes de práctica</h1>
 
             <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Elige de dónde vienen tus preguntas &mdash; una prueba oficial o tus propios apuntes.</p>
 
           </div>
 
-          <button onclick="document.getElementById('qz-form').style.display=document.getElementById('qz-form').style.display==='none'?'block':'none'" class="btn btn-primary btn-sm">&#10024; Generate Quiz</button>
+          <button onclick="document.getElementById('qz-form').style.display=document.getElementById('qz-form').style.display==='none'?'block':'none'" class="btn btn-primary btn-sm">&#10024; Generar quiz</button>
 
         </div>
 
@@ -12149,7 +12109,7 @@ No markdown, no code fences. ONLY JSON.
 
           <h3 style="margin:0 0 6px;">Generar quiz con IA</h3>
 
-          <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px;">Two ways to build a quiz. Pick one.</p>
+          <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px;">Dos formas de crear un quiz. Elige una.</p>
 
 
 
@@ -12161,7 +12121,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div class="qz-mode-t">Prueba oficial</div>
 
-              <div class="qz-mode-s">Upload a past exam (PDF / DOCX). We re-type it verbatim. Only multiple-choice tests work.</div>
+              <div class="qz-mode-s">Sube una prueba pasada (PDF / DOCX). La transcribimos literal. Funciona mejor con selección múltiple.</div>
 
             </button>
 
@@ -12169,9 +12129,9 @@ No markdown, no code fences. ONLY JSON.
 
               <div class="qz-mode-ic">&#128214;</div>
 
-              <div class="qz-mode-t">Notes</div>
+              <div class="qz-mode-t">Apuntes</div>
 
-              <div class="qz-mode-s">Upload your class notes (PDF / DOCX / TXT) and we'll generate quiz questions from them.</div>
+              <div class="qz-mode-s">Sube tus apuntes (PDF / DOCX / TXT) y generamos preguntas desde ese material.</div>
 
             </button>
 
@@ -12183,9 +12143,9 @@ No markdown, no code fences. ONLY JSON.
 
             <div style="font-size:32px;">&#128206;</div>
 
-            <div style="font-weight:600;margin-top:6px;" id="qz-drop-t">Drop a PDF / DOCX / TXT here</div>
+            <div style="font-weight:600;margin-top:6px;" id="qz-drop-t">Suelta un PDF / DOCX / TXT aquí</div>
 
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="qz-drop-s">or click to browse</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="qz-drop-s">o haz clic para buscar</div>
 
             <input type="file" id="qz-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="qzHandleFile(this.files[0])">
 
@@ -12195,7 +12155,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">&mdash; or pick a course you've synced from Canvas &mdash;</div>
+          <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:12px 0;">&mdash; o elige un curso sincronizado desde Canvas &mdash;</div>
 
 
 
@@ -12203,7 +12163,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div class="form-group">
 
-              <label>Course</label>
+              <label>Curso</label>
 
               <select id="qz-course" class="edit-input" onchange="loadExams(this.value,'qz-exam')">{course_options}</select>
 
@@ -12211,7 +12171,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div class="form-group">
 
-              <label>Exam (optional)</label>
+              <label>Evaluación (opcional)</label>
 
               <select id="qz-exam" class="edit-input"><option value="">Todos los temas</option></select>
 
@@ -12223,13 +12183,13 @@ No markdown, no code fences. ONLY JSON.
 
               <input type="number" id="qz-count" value="10" min="5" max="100" class="edit-input">
 
-              <small style="display:block;color:var(--text-muted);font-size:11px;margin-top:4px;">Up to 100. Large quizzes generate in batches &mdash; give it a few seconds.</small>
+              <small style="display:block;color:var(--text-muted);font-size:11px;margin-top:4px;">Hasta 100. Los quizzes grandes se generan por partes; dale unos segundos.</small>
 
             </div>
 
           </div>
 
-          <button onclick="genQuiz()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="qz-gen-btn">&#10024; Generate</button>
+          <button onclick="genQuiz()" class="btn btn-primary btn-sm" style="margin-top:12px;" id="qz-gen-btn">&#10024; Generar</button>
 
         </div>
 
@@ -12316,7 +12276,7 @@ No markdown, no code fences. ONLY JSON.
               }}
             }}
           }}
-          throw new Error('Quiz generation is still running. Refresh this page in a moment.');
+          throw new Error('El quiz sigue generándose. Refresca esta página en un momento.');
         }}
 
         var qzMode = 'test';
@@ -12341,17 +12301,17 @@ No markdown, no code fences. ONLY JSON.
 
           if (m === 'test') {{
 
-            t.innerHTML = 'Drop an official test (PDF / DOCX)';
+            t.innerHTML = 'Suelta una prueba oficial (PDF / DOCX)';
 
-            s.innerHTML = 'Reminder: only multiple-choice tests transcribe correctly.';
+            s.innerHTML = 'Recuerda: las pruebas de selección múltiple se transcriben mejor.';
 
             document.getElementById('qz-file').accept = '.pdf,.docx,.doc';
 
           }} else {{
 
-            t.innerHTML = 'Drop your notes (PDF / DOCX / TXT)';
+            t.innerHTML = 'Suelta tus apuntes (PDF / DOCX / TXT)';
 
-            s.innerHTML = "We'll generate quiz questions from the material.";
+            s.innerHTML = "Generaremos preguntas desde ese material.";
 
             document.getElementById('qz-file').accept = '.pdf,.docx,.doc,.txt';
 
@@ -12375,13 +12335,13 @@ No markdown, no code fences. ONLY JSON.
 
           var ext = file.name.split('.').pop().toLowerCase();
 
-          if (!['pdf','docx','doc','txt'].includes(ext)) {{ alert('Only PDF, DOCX, and TXT files'); return; }}
+          if (!['pdf','docx','doc','txt'].includes(ext)) {{ alert('Solo archivos PDF, DOCX y TXT'); return; }}
 
-          if (file.size > 50*1024*1024) {{ alert('File too large (max 50MB)'); return; }}
+          if (file.size > 50*1024*1024) {{ alert('Archivo demasiado grande (máx. 50MB)'); return; }}
 
           var info = document.getElementById('qz-file-info');
 
-          info.textContent = '⏳ Extracting text from ' + file.name + '...';
+          info.textContent = '⏳ Extrayendo texto de ' + file.name + '...';
 
           var fd = new FormData(); fd.append('file', file);
 
@@ -12391,13 +12351,13 @@ No markdown, no code fences. ONLY JSON.
 
             var d = await _safeJson(r);
 
-            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
+            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Falló'); return; }}
 
             qzDropText = d.text;
 
             qzDropTitle = d.title;
 
-            info.innerHTML = '✅ ' + d.filename + ' — ' + d.char_count.toLocaleString() + ' chars ready';
+            info.innerHTML = '✅ ' + d.filename + ' — ' + d.char_count.toLocaleString() + ' caracteres listos';
 
           }} catch(e) {{ info.textContent = '❌ Error de red'; }}
 
@@ -12433,11 +12393,11 @@ No markdown, no code fences. ONLY JSON.
 
           var courseId = document.getElementById('qz-course').value;
 
-          if (!courseId && !qzDropText) {{ alert('Drop a file or select a course'); return; }}
+          if (!courseId && !qzDropText) {{ alert('Suelta un archivo o selecciona un curso'); return; }}
 
           var btn = document.getElementById('qz-gen-btn');
 
-          btn.disabled = true; btn.innerHTML = '&#9203; Generating...';
+          btn.disabled = true; btn.innerHTML = '&#9203; Generando...';
 
           try {{
 
@@ -12473,13 +12433,13 @@ No markdown, no code fences. ONLY JSON.
 
             if (r.ok && d.queued) {{
 
-              btn.innerHTML = '&#9203; Creating quiz...';
+              btn.innerHTML = '&#9203; Creando quiz...';
 
               d = await pollQuizGeneration();
 
-              var msg = 'Generated ' + d.question_count + ' questions!';
+              var msg = 'Se generaron ' + d.question_count + ' preguntas.';
 
-              if (d.short) {{ msg += '\\n(You requested ' + d.requested + ' but the source material only supported ' + d.question_count + ' unique questions.)'; }}
+              if (d.short) {{ msg += '\\n(Pediste ' + d.requested + ', pero el material solo alcanzó para ' + d.question_count + ' preguntas únicas.)'; }}
 
               alert(msg);
 
@@ -12489,9 +12449,9 @@ No markdown, no code fences. ONLY JSON.
 
             }} else if (r.ok) {{
 
-              var msg = 'Generated ' + d.question_count + ' questions!';
+              var msg = 'Se generaron ' + d.question_count + ' preguntas.';
 
-              if (d.short) {{ msg += '\\n(You requested ' + d.requested + ' but the source material only supported ' + d.question_count + ' unique questions.)'; }}
+              if (d.short) {{ msg += '\\n(Pediste ' + d.requested + ', pero el material solo alcanzó para ' + d.question_count + ' preguntas únicas.)'; }}
 
               alert(msg);
 
@@ -12500,7 +12460,7 @@ No markdown, no code fences. ONLY JSON.
             }} else {{ alert(d.error || 'Error al generar'); }}
 
           }} catch(e) {{
-            btn.innerHTML = '&#9203; Finalizing...';
+            btn.innerHTML = '&#9203; Finalizando...';
             var recoveredQuizId = await waitForGeneratedQuiz();
             if (recoveredQuizId) {{
               mrGo('/student/quizzes/' + recoveredQuizId);
@@ -12511,13 +12471,13 @@ No markdown, no code fences. ONLY JSON.
             else alert('No se pudo generar el quiz: ' + msg);
           }}
 
-          btn.disabled = false; btn.innerHTML = '&#10024; Generate';
+          btn.disabled = false; btn.innerHTML = '&#10024; Generar';
 
         }}
 
         async function deleteQuiz(id) {{
 
-          if (!confirm('Delete this quiz?')) return;
+          if (!confirm('¿Eliminar este quiz?')) return;
 
           await fetch('/api/student/quizzes/' + id, {{method:'DELETE'}});
 
@@ -15992,9 +15952,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/email-prefs", methods=["GET", "POST"])
-
-    @csrf.exempt
-
     def student_email_prefs_api():
 
         if not _logged_in():
@@ -16641,7 +16598,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/presence/heartbeat", methods=["POST"])
-    @csrf.exempt
     def student_presence_heartbeat_api():
         """Friend tab pings this every few seconds while open so others can
         see them as online. The before_request hook also touches presence on
@@ -16749,7 +16705,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/duels/marathon/<int:duel_id>/accept", methods=["POST"])
-    @csrf.exempt
     def student_duels_marathon_accept_api(duel_id):
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -16757,7 +16712,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/duels/marathon/<int:duel_id>/decline", methods=["POST"])
-    @csrf.exempt
     def student_duels_marathon_decline_api(duel_id):
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -18933,14 +18887,14 @@ No markdown, no code fences. ONLY JSON.
                 tag = '<span style="color:#a855f7;">Requiere suscripción PLUS</span>'
                 btn = '<button class="btn btn-sm btn-outline" disabled>Solo PLUS</button>'
             elif not xp_ok:
-                tag = f'<span style="color:#94a3b8;">Reach {cfg["xp_required"]} XP to unlock</span>'
+                tag = f'<span style="color:#94a3b8;">Alcanza {cfg["xp_required"]} XP para desbloquear</span>'
                 btn = ''
             elif wallet["coins"] < cfg["price_coins"]:
-                tag = f'<span style="color:#ef4444;">Need {cfg["price_coins"]} coins</span>'
-                btn = f'<button class="btn btn-sm btn-outline" disabled>Buy ({cfg["price_coins"]} \U0001FA99)</button>'
+                tag = f'<span style="color:#ef4444;">Necesitas {cfg["price_coins"]} monedas</span>'
+                btn = f'<button class="btn btn-sm btn-outline" disabled>Comprar ({cfg["price_coins"]} \U0001FA99)</button>'
             else:
-                tag = f'<span style="color:#94a3b8;">{cfg["xp_required"]} XP unlocked</span>'
-                btn = f'<button class="btn btn-sm btn-primary" onclick="buyBanner(\'{key}\')">Buy ({cfg["price_coins"]} \U0001FA99)</button>'
+                tag = f'<span style="color:#94a3b8;">{cfg["xp_required"]} XP desbloqueado</span>'
+                btn = f'<button class="btn btn-sm btn-primary" onclick="buyBanner(\'{key}\')">Comprar ({cfg["price_coins"]} \U0001FA99)</button>'
             banner_cards.append(
                 f'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
                 f'<div class="bnr-anim-host {(cfg.get("anim_class") or "") if cfg.get("animated") else ""}" style="height:90px;background:{cfg["css"]};"></div>'
@@ -18973,14 +18927,14 @@ No markdown, no code fences. ONLY JSON.
                 tag = '<span style="color:#a855f7;">Requiere suscripción PLUS</span>'
                 btn = '<button class="btn btn-sm btn-outline" disabled>Solo PLUS</button>'
             elif not xp_ok:
-                tag = f'<span style="color:#94a3b8;">Reach {cfg["xp_required"]} XP to unlock</span>'
+                tag = f'<span style="color:#94a3b8;">Alcanza {cfg["xp_required"]} XP para desbloquear</span>'
                 btn = ''
             elif wallet["coins"] < cfg["price_coins"]:
-                tag = f'<span style="color:#ef4444;">Need {cfg["price_coins"]} coins</span>'
-                btn = f'<button class="btn btn-sm btn-outline" disabled>Buy ({cfg["price_coins"]} \U0001FA99)</button>'
+                tag = f'<span style="color:#ef4444;">Necesitas {cfg["price_coins"]} monedas</span>'
+                btn = f'<button class="btn btn-sm btn-outline" disabled>Comprar ({cfg["price_coins"]} \U0001FA99)</button>'
             else:
-                tag = f'<span style="color:#94a3b8;">{cfg["xp_required"]} XP unlocked</span>'
-                btn = f'<button class="btn btn-sm btn-primary" onclick="buyFlag(\'{key}\')">Buy ({cfg["price_coins"]} \U0001FA99)</button>'
+                tag = f'<span style="color:#94a3b8;">{cfg["xp_required"]} XP desbloqueado</span>'
+                btn = f'<button class="btn btn-sm btn-primary" onclick="buyFlag(\'{key}\')">Comprar ({cfg["price_coins"]} \U0001FA99)</button>'
             # Preview the L\u2192R fade exactly like the leaderboard renders it.
             _flag_anim = (cfg.get("anim_class") or "") if cfg.get("animated") else ""
             preview = (
@@ -18988,7 +18942,7 @@ No markdown, no code fences. ONLY JSON.
                 f'<div class="{_flag_anim}" style="position:absolute;inset:0;background:{cfg["css"]};'
                 '-webkit-mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);'
                 'mask-image:linear-gradient(to right, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 35%, rgba(0,0,0,.15) 65%, transparent 100%);"></div>'
-                '<div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 12px;color:#fff;font-size:12px;font-weight:600;letter-spacing:.05em;">PREVIEW</div>'
+                '<div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 12px;color:#fff;font-size:12px;font-weight:600;letter-spacing:.05em;">VISTA PREVIA</div>'
                 '</div>'
             )
             flag_cards.append(
@@ -19053,7 +19007,7 @@ No markdown, no code fences. ONLY JSON.
                     for f in cfg.get("features", [])
                 )
                 price = cfg.get("price_usd_month", 0)
-                price_html = "Free" if not price else f"${price:.2f}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mo</span>"
+                price_html = "Gratis" if not price else f"${price:.2f}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mes</span>"
                 label_name = cfg.get("name", key.title())
                 if is_current:
                     btn = '<button class="btn btn-sm" disabled style="width:100%;background:#10b981;color:#fff;border:none;">Plan actual</button>'
@@ -19103,7 +19057,7 @@ No markdown, no code fences. ONLY JSON.
             )
             subscription_section = (
                 '<div class="card">'
-                '<div class="card-header"><h2>\U0001F48E Subscription</h2></div>'
+                '<div class="card-header"><h2>\U0001F48E Suscripción</h2></div>'
                 '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">'
                 + subscriptions_html +
                 '</div>'
@@ -19130,9 +19084,9 @@ No markdown, no code fences. ONLY JSON.
             if both:
                 cta = '<button class="btn btn-sm btn-outline" disabled>Comprado</button>'
             elif wallet["coins"] < price:
-                cta = f'<button class="btn btn-sm btn-outline" disabled>Buy ({price} \U0001FA99)</button>'
+                cta = f'<button class="btn btn-sm btn-outline" disabled>Comprar ({price} \U0001FA99)</button>'
             else:
-                cta = f'<button class="btn btn-sm btn-primary" onclick="buyBundle(\'{bkey}\')">Buy ({price} \U0001FA99)</button>'
+                cta = f'<button class="btn btn-sm btn-primary" onclick="buyBundle(\'{bkey}\')">Comprar ({price} \U0001FA99)</button>'
             anim_b = (bnr.get("anim_class") or "") if bnr.get("animated") else ""
             bundle_cards.append(
                 f'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
@@ -19146,7 +19100,7 @@ No markdown, no code fences. ONLY JSON.
                 f'  </div>'
                 f'</div>'
             )
-        bundles_html = "".join(bundle_cards) or '<div style="color:var(--text-muted);font-size:13px;">No bundles available right now.</div>'
+        bundles_html = "".join(bundle_cards) or '<div style="color:var(--text-muted);font-size:13px;">No hay packs disponibles ahora.</div>'
 
         # ── Coin packs (real-money microtransactions) ─────────────────
         coin_pack_cards = []
@@ -19161,7 +19115,7 @@ No markdown, no code fences. ONLY JSON.
                 f'  {tag_html}'
                 f'  <div style="font-size:38px;line-height:1;">\U0001FA99</div>'
                 f'  <div style="font-size:13px;color:var(--text-muted);margin-top:6px;">{pcfg["name"]}</div>'
-                f'  <div style="font-size:24px;font-weight:800;margin-top:6px;">{total:,} coins</div>'
+                f'  <div style="font-size:24px;font-weight:800;margin-top:6px;">{total:,} monedas</div>'
                 f'  {bonus_html}'
                 f'  <div style="font-size:18px;font-weight:700;margin-top:10px;">${pcfg["price_usd"]:.2f}</div>'
                 f'  <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px;" onclick="buyCoinPack(\'{pkey}\')">Comprar</button>'
@@ -19233,53 +19187,53 @@ No markdown, no code fences. ONLY JSON.
         <script>
         async function buyFreeze() {{
           const r = await fetch('/api/student/wallet/buy-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
           mrReload();
         }}
         async function buyCoinPack(packKey) {{
-          if (!confirm('Buy this coin pack? You will be redirected to checkout.')) return;
+          if (!confirm('¿Comprar este paquete de monedas? Serás redirigido al checkout.')) return;
           const r = await fetch('/api/student/wallet/buy-coin-pack', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{pack_key: packKey}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not start checkout.'); return; }}
+          if (!r.ok) {{ alert(r.error || 'No se pudo iniciar el checkout.'); return; }}
           if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
           mrReload();
         }}
         async function buyFreezeBundle() {{
           const r = await fetch('/api/student/wallet/buy-freeze-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
           mrReload();
         }}
         async function buyBoost(key) {{
           const r = await fetch('/api/student/wallet/buy-boost', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{boost_key:key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
           mrReload();
         }}
         async function buyBanner(key) {{
           const r = await fetch('/api/student/wallet/buy-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key: key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
           mrReload();
         }}
         async function buyFlag(key) {{
           const r = await fetch('/api/student/wallet/buy-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key: key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not buy.'); return; }}
+          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
           mrReload();
         }}
         async function buyBundle(key) {{
-          if (!confirm('Buy this bundle? Coins will be deducted immediately.')) return;
+          if (!confirm('¿Comprar este pack? Las monedas se descontarán altiro.')) return;
           const r = await fetch('/api/student/wallet/buy-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{bundle_key: key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not purchase.'); return; }}
-          alert('Unlocked: ' + r.banner_name + ' + ' + r.flag_name);
+          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
+          alert('Desbloqueado: ' + r.banner_name + ' + ' + r.flag_name);
           mrReload();
         }}
         async function equipFlag(key) {{
           const r = await fetch('/api/student/wallet/set-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key: key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not equip.'); return; }}
+          if (!r.ok) {{ alert(r.error || 'No se pudo equipar.'); return; }}
           mrReload();
         }}
         async function changeTier(tier) {{
-          const labels = {{free:'Free', plus:'Plus', ultimate:'Ultimate'}};
-          if (!confirm('Switch to the ' + (labels[tier]||tier) + ' plan?')) return;
+          const labels = {{free:'Gratis', plus:'Plus', ultimate:'Ultimate'}};
+          if (!confirm('¿Cambiar al plan ' + (labels[tier]||tier) + '?')) return;
           const r = await fetch('/api/student/subscription/change', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{tier:tier}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not change plan.'); return; }}
+          if (!r.ok) {{ alert(r.error || 'No se pudo cambiar el plan.'); return; }}
           if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
           mrReload();
         }}
@@ -19293,7 +19247,7 @@ No markdown, no code fences. ONLY JSON.
             chips.forEach(chip => {{
               const exp = new Date(chip.dataset.exp).getTime();
               const ms = exp - now;
-              if (ms <= 0) {{ chip.querySelector('.sh-cd').textContent = 'expired'; return; }}
+              if (ms <= 0) {{ chip.querySelector('.sh-cd').textContent = 'expirado'; return; }}
               const s = Math.floor(ms / 1000);
               const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
               chip.querySelector('.sh-cd').textContent = pad(h) + ':' + pad(m) + ':' + pad(sec);
@@ -19624,7 +19578,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/buy-freeze", methods=["POST"])
-    @csrf.exempt
     def student_wallet_buy_freeze_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19632,7 +19585,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/buy-freeze-bundle", methods=["POST"])
-    @csrf.exempt
     def student_wallet_buy_freeze_bundle_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19640,7 +19592,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/buy-boost", methods=["POST"])
-    @csrf.exempt
     def student_wallet_buy_boost_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19649,7 +19600,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/buy-banner", methods=["POST"])
-    @csrf.exempt
     def student_wallet_buy_banner_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19658,7 +19608,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/buy-coin-pack", methods=["POST"])
-    @csrf.exempt
     def student_wallet_buy_coin_pack_api():
         """Microtransaction: kick off a Lemon Squeezy hosted-checkout for a
         coin pack. The actual credit happens server-side in the LS webhook
@@ -19697,7 +19646,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/set-banner", methods=["POST"])
-    @csrf.exempt
     def student_wallet_set_banner_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19706,7 +19654,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/buy-flag", methods=["POST"])
-    @csrf.exempt
     def student_wallet_buy_flag_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19715,7 +19662,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/set-flag", methods=["POST"])
-    @csrf.exempt
     def student_wallet_set_flag_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19724,7 +19670,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/set-badge", methods=["POST"])
-    @csrf.exempt
     def student_wallet_set_badge_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19734,7 +19679,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/set-cosmetic", methods=["POST"])
-    @csrf.exempt
     def student_wallet_set_cosmetic_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19747,7 +19691,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/buy-bundle", methods=["POST"])
-    @csrf.exempt
     def student_wallet_buy_bundle_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19756,7 +19699,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/wallet/use-freeze", methods=["POST"])
-    @csrf.exempt
     def student_wallet_use_freeze_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19764,7 +19706,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/subscription/change", methods=["POST"])
-    @csrf.exempt
     def student_subscription_change_api():
         """Switch student tier.
 
@@ -19826,7 +19767,6 @@ No markdown, no code fences. ONLY JSON.
         return d and cid in (d.get("challenger_id"), d.get("opponent_id"))
 
     @app.route("/api/student/duels/quiz/create", methods=["POST"])
-    @csrf.exempt
     def student_duels_quiz_create_api():
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19935,7 +19875,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/duels/quiz/<int:duel_id>/accept", methods=["POST"])
-    @csrf.exempt
     def student_duels_quiz_accept_api(duel_id):
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19943,7 +19882,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/duels/quiz/<int:duel_id>/decline", methods=["POST"])
-    @csrf.exempt
     def student_duels_quiz_decline_api(duel_id):
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19951,7 +19889,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/duels/quiz/<int:duel_id>/submit", methods=["POST"])
-    @csrf.exempt
     def student_duels_quiz_submit_api(duel_id):
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -19966,7 +19903,6 @@ No markdown, no code fences. ONLY JSON.
 
 
     @app.route("/api/student/duels/quiz/<int:duel_id>/forfeit", methods=["POST"])
-    @csrf.exempt
     def student_duels_quiz_forfeit_api(duel_id):
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
