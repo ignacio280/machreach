@@ -5048,9 +5048,119 @@ def register_student_routes(app, csrf, limiter):
             sel = " selected" if _lbl == current_sem else ""
             sem_options += f'<option value="{_lbl}"{sel}>{_lbl}</option>'
 
+        try:
+            _time_by_course = {int(x.get("course_id") or 0): x for x in (sdb.get_time_per_course(_cid()) or [])}
+        except Exception:
+            _time_by_course = {}
+        _course_classes = ["cs", "mat", "fil", "fis"]
+        course_cards_html = ""
+        _total_exams = 0
+        for _i, c in enumerate(courses):
+            _course_id = int(c["id"])
+            try:
+                _exams = sdb.get_course_exams(_course_id) or []
+            except Exception:
+                _exams = []
+            _total_exams += len(_exams)
+            _stats = _time_by_course.get(_course_id) or {}
+            _minutes = int(_stats.get("minutes") or 0)
+            _sessions = int(_stats.get("sessions") or 0)
+            _pct = max(8, min(100, int((_minutes / 600) * 100))) if _minutes else 8
+            _state_cls = " warn" if _pct < 40 else (" good" if _pct >= 75 else "")
+            _next_label = "Sin evaluaciones próximas"
+            _urgent = ""
+            _today_d = datetime.now().date()
+            _future = []
+            for _e in _exams:
+                _ed = (_e.get("exam_date") or "")[:10]
+                if not _ed:
+                    continue
+                try:
+                    _future.append((datetime.strptime(_ed, "%Y-%m-%d").date(), _e))
+                except Exception:
+                    pass
+            _future.sort(key=lambda x: x[0])
+            if _future:
+                _date_obj, _e = _future[0]
+                _days = (_date_obj - _today_d).days
+                _next_label = f"{_esc(_e.get('name') or 'Evaluación')} · {_date_obj.strftime('%d/%m')}"
+                if _days >= 0:
+                    _next_label += f" ({_days}d)"
+                if 0 <= _days <= 7:
+                    _urgent = " urgent"
+            _cls = _course_classes[_i % len(_course_classes)]
+            course_cards_html += f"""
+            <article class="ccard {_cls}">
+              <div class="ccard-head">
+                <div class="ccard-code">{_esc(c.get("code") or f"CURSO {_i+1}")}</div>
+                <button onclick="event.stopPropagation();deleteCourse({_course_id},'{_esc((c.get("name") or "")[:30])}')" class="ccard-menu" title="Eliminar curso">&#8942;</button>
+              </div>
+              <h2 class="ccard-name">{_esc(c.get("name") or "Curso")}</h2>
+              <div class="ccard-prof">Canvas / manual · {_sessions} sesiones registradas</div>
+              <div class="ccard-stats">
+                <div class="ccs{_state_cls}"><div class="ccs-n">{_pct}%</div><div class="ccs-l">Avance</div></div>
+                <div class="ccs"><div class="ccs-n">{_minutes//60}h {_minutes%60}m</div><div class="ccs-l">Estudiado</div></div>
+                <div class="ccs"><div class="ccs-n">{len(_exams)}</div><div class="ccs-l">Evaluaciones</div></div>
+              </div>
+              <div class="ccard-bar"><div class="ccard-fill{_state_cls}" style="width:{_pct}%"></div></div>
+              <div class="ccard-foot">
+                <span class="ccard-next{_urgent}">↗ {_next_label}</span>
+                <button class="ccard-go{_state_cls}" onclick="toggleCourse({_course_id})" type="button">Ver detalles →</button>
+              </div>
+              <div class="course-detail-card" id="detail-{_course_id}" style="display:none;">
+                <div id="exams-panel-{_course_id}" class="course-exams-panel">Cargando evaluaciones...</div>
+              </div>
+            </article>
+            """
+        if not course_cards_html:
+            course_cards_html = """
+            <div class="course-empty">
+              <div class="deck-add-icon">+</div>
+              <div class="deck-add-l">Aún no hay cursos</div>
+              <div class="deck-add-s">Conecta Canvas o agrega uno manualmente.</div>
+            </div>
+            """
+
         return _s_render("Mis Cursos", f"""
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="page-head-cd">
+          <div>
+            <div class="page-eyebrow-cd">Semestre {current_sem or "actual"} · {len(courses)} cursos · {_total_exams} evaluaciones</div>
+            <h1 class="page-title-cd">Mis cursos</h1>
+          </div>
+          <div class="page-actions-cd">
+            <select id="cur-sem-select" onchange="setCurrentSemester(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-weight:600;">
+              <option value="" {'selected' if not current_sem else ''}>—</option>
+              {sem_options}
+            </select>
+            <button onclick="showNewCourseModal()" class="btn-pop-cd" type="button">+ Agregar manual</button>
+          </div>
+        </div>
+        <div class="canvas-banner">
+          <div class="cb-icon">⌬</div>
+          <div class="cb-body">
+            <div class="cb-title">Canvas conectado</div>
+            <div class="cb-meta">Cursos sincronizados automáticamente · los ramos nuevos caen en el semestre activo</div>
+          </div>
+          <a class="cb-btn" href="/student/canvas">Configurar</a>
+        </div>
+        <div class="course-cards">{course_cards_html}</div>
+        <div id="new-course-modal" class="mr-modal" style="display:none;">
+          <div class="mr-modal-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;">
+              <h3 style="margin:0;">Agregar curso manual</h3>
+              <button onclick="hideNewCourseModal()" class="ccard-menu" type="button">×</button>
+            </div>
+            <label>Nombre</label>
+            <input id="nc-name" class="ex-input" placeholder="Ej: Cálculo III">
+            <label>Código</label>
+            <input id="nc-code" class="ex-input" placeholder="Ej: MA2001">
+            <label>Semestre</label>
+            <input id="nc-term" class="ex-input" placeholder="Ej: II">
+            <button id="nc-save" onclick="saveNewCourse()" class="btn-pop-cd" style="margin-top:14px;width:100%;">Crear</button>
+          </div>
+        </div>
+        <div style="display:none">
 
           <h1>&#128218; Mis Cursos</h1>
 
@@ -5088,7 +5198,49 @@ def register_student_routes(app, csrf, limiter):
 
         </div>
 
+        </div>
+
         <style>
+        .page-head-cd {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px; }}
+        .page-eyebrow-cd {{ font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7B61FF; }}
+        .page-title-cd {{ margin:4px 0 0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .page-actions-cd {{ display:flex;align-items:center;gap:10px;flex-wrap:wrap; }}
+        .btn-pop-cd {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:10px 16px;border-radius:999px;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center; }}
+        .canvas-banner {{ background:linear-gradient(135deg,#F0ECFF,#FBF8F0);border:1px solid #E2DCCC;border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:16px;margin-bottom:18px;box-shadow:0 8px 24px rgba(20,18,30,.05); }}
+        .cb-icon {{ width:44px;height:44px;border-radius:12px;background:#7B61FF;color:#fff;display:grid;place-items:center;font-size:22px;font-weight:900; }}
+        .cb-body {{ flex:1; }}
+        .cb-title {{ font-weight:900;font-size:14px;color:#1A1A1F; }}
+        .cb-meta {{ font-size:12px;color:#94939C;margin-top:2px; }}
+        .cb-btn {{ background:#fff;border:1px solid #E2DCCC;padding:8px 14px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;color:#1A1A1F;text-decoration:none; }}
+        .course-cards {{ display:grid;grid-template-columns:repeat(2,1fr);gap:16px; }}
+        @media (max-width:900px) {{ .course-cards {{ grid-template-columns:1fr; }} .page-title-cd{{font-size:38px;}} }}
+        .ccard {{ background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:22px;box-shadow:0 12px 32px rgba(20,18,30,.06);position:relative;overflow:hidden; }}
+        .ccard::before {{ content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:#7B61FF; }}
+        .ccard.cs::before {{ background:#3B82F6; }}.ccard.mat::before {{ background:#EC4899; }}.ccard.fil::before {{ background:#10B981; }}.ccard.fis::before {{ background:#FF7A3D; }}
+        .ccard-head {{ display:flex;justify-content:space-between;align-items:center; }}
+        .ccard-code {{ font-size:11px;font-weight:900;color:#94939C;letter-spacing:.08em;text-transform:uppercase; }}
+        .ccard-menu {{ background:transparent;border:0;cursor:pointer;color:#94939C;font-size:20px;line-height:1; }}
+        .ccard-name {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:22px;margin:6px 0 4px;line-height:1.15;letter-spacing:-.015em;color:#1A1A1F; }}
+        .ccard-prof {{ font-size:12px;color:#94939C;margin-bottom:16px; }}
+        .ccard-stats {{ display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px; }}
+        .ccs {{ background:#FBF8F0;border-radius:12px;padding:10px 8px;text-align:center;min-width:0; }}
+        .ccs-n {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:18px;letter-spacing:-.02em;color:#1A1A1F;white-space:nowrap; }}
+        .ccs-l {{ font-size:10px;color:#94939C;margin-top:2px; }}
+        .ccs.warn .ccs-n {{ color:#FF7A3D; }}.ccs.good .ccs-n {{ color:#10B981; }}
+        .ccard-bar {{ height:6px;background:#FBF8F0;border-radius:999px;overflow:hidden;margin-bottom:14px; }}
+        .ccard-fill {{ height:100%;border-radius:999px;background:#7B61FF; }}
+        .ccard-fill.warn {{ background:#FF7A3D; }}.ccard-fill.good {{ background:#10B981; }}
+        .ccard.cs .ccard-fill {{ background:#3B82F6; }}.ccard.mat .ccard-fill {{ background:#EC4899; }}.ccard.fil .ccard-fill {{ background:#10B981; }}.ccard.fis .ccard-fill {{ background:#FF7A3D; }}
+        .ccard-foot {{ display:flex;justify-content:space-between;align-items:center;gap:12px; }}
+        .ccard-next {{ font-size:12px;font-weight:700;color:#5C5C66; }}
+        .ccard-next.urgent {{ color:#FF7A3D;font-weight:900; }}
+        .ccard-go {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:8px 14px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap; }}
+        .ccard-go.warn {{ background:#FF7A3D;color:#fff; }}.ccard-go.good {{ background:#10B981;color:#fff; }}
+        .course-detail-card {{ margin-top:16px;padding-top:14px;border-top:1px dashed #E2DCCC; }}
+        .course-empty {{ grid-column:1/-1;border:2px dashed #E2DCCC;border-radius:18px;padding:32px;text-align:center;color:#94939C; }}
+        .mr-modal {{ position:fixed;inset:0;background:rgba(26,26,31,.36);display:flex;align-items:center;justify-content:center;z-index:1000;padding:18px; }}
+        .mr-modal-card {{ width:min(420px,100%);background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:20px;box-shadow:0 24px 80px rgba(20,18,30,.18); }}
+        .mr-modal-card label {{ display:block;margin:10px 0 5px;font-size:12px;font-weight:900;color:#5C5C66;text-transform:uppercase;letter-spacing:.08em; }}
 
         .ex-input {{ padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px; }}
 
@@ -8608,6 +8760,8 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+        </div>
+
         <div id="gen-form" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:20px;">
 
           <h3 style="margin:0 0 14px;">Generar problemas de práctica</h3>
@@ -8701,6 +8855,46 @@ def register_student_routes(app, csrf, limiter):
           .mp-row {{ grid-template-columns:1fr; }}
         }}
 
+        .fc-page-head {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px; }}
+        .fc-eyebrow {{ font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7B61FF; }}
+        .fc-page-title {{ margin:4px 0 0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .fc-today {{ background:linear-gradient(135deg,#1A1A1F,#2A2440);color:#F4F1EA;border-radius:22px;padding:26px;display:flex;align-items:center;gap:24px;margin-bottom:18px;box-shadow:0 18px 42px rgba(20,18,30,.18); }}
+        .fct-l {{ flex:1; }}
+        .fct-eye {{ font-size:11px;font-weight:900;letter-spacing:.12em;opacity:.8;text-transform:uppercase; }}
+        .fct-title {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:26px;margin:6px 0 12px;letter-spacing:-.02em; }}
+        .fct-pills {{ display:flex;gap:8px;flex-wrap:wrap; }}
+        .fct-pill {{ background:rgba(255,255,255,.12);padding:5px 12px;border-radius:999px;font-size:12px;font-weight:800; }}
+        .fct-pill.new {{ background:#7B61FF; }}.fct-pill.due {{ background:#10B981; }}.fct-pill.late {{ background:#EF4444; }}
+        .btn-pop-cd {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:10px 16px;border-radius:999px;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center; }}
+        .btn-pop-cd.accent {{ background:#FF7A3D;color:#fff; }}.btn-pop-cd.dark {{ background:#F4F1EA;color:#1A1A1F; }}
+        .fc-preview-row {{ display:grid;grid-template-columns:1.2fr;gap:18px;margin-bottom:18px; }}
+        .fc-card-flip {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:30px;min-height:240px;box-shadow:0 18px 42px rgba(20,18,30,.08);display:flex;flex-direction:column; }}
+        .fc-tag {{ font-size:11px;font-weight:800;color:#94939C;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.06em; }}
+        .dot {{ width:9px;height:9px;border-radius:50%;display:inline-block; }}
+        .fc-q {{ font-family:Fraunces,Georgia,serif;font-weight:500;font-size:28px;line-height:1.25;letter-spacing:-.02em;flex:1;display:grid;place-items:center;text-align:center;padding:16px;color:#1A1A1F; }}
+        .fc-foot {{ display:flex;justify-content:space-between;font-size:11px;color:#94939C;gap:12px; }}
+        .fc-decks-card {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:18px;box-shadow:0 12px 34px rgba(20,18,30,.06); }}
+        .fc-card-h {{ display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px; }}
+        .fc-card-title {{ font-weight:900;color:#1A1A1F; }}
+        .fc-card-link {{ background:transparent;border:0;color:#7B61FF;font-size:13px;font-weight:900;cursor:pointer; }}
+        .deck-grid {{ display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px; }}
+        @media (max-width:1100px) {{ .deck-grid {{ grid-template-columns:repeat(2,1fr); }} }}
+        @media (max-width:700px) {{ .deck-grid {{ grid-template-columns:1fr; }} .fc-today {{ flex-direction:column;align-items:flex-start; }} .fc-page-title {{ font-size:38px; }} }}
+        .deck {{ background:#FBF8F0;border:1px solid #E2DCCC;border-radius:14px;padding:14px;cursor:pointer;transition:all .15s ease; }}
+        .deck:hover {{ transform:translateY(-2px);box-shadow:0 14px 28px rgba(20,18,30,.08); }}
+        .deck-head {{ display:flex;align-items:center;gap:6px; }}
+        .deck-tag {{ font-size:11px;font-weight:900;color:#94939C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
+        .deck-delete {{ margin-left:auto;background:transparent;border:0;color:#EF4444;cursor:pointer;font-size:13px; }}
+        .deck-name {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:16px;margin:6px 0 4px;line-height:1.15;color:#1A1A1F; }}
+        .deck-meta {{ font-size:11px;color:#94939C; }}
+        .deck-bar {{ height:5px;background:#fff;border-radius:999px;overflow:hidden;margin:10px 0 6px; }}
+        .deck-fill {{ height:100%;border-radius:999px; }}
+        .deck-due {{ font-size:11px;font-weight:800;color:#FF7A3D; }}
+        .deck-due.urgent {{ color:#EF4444; }}.deck-due.muted {{ color:#94939C;font-weight:700; }}
+        .deck.add {{ border:2px dashed #E2DCCC;background:transparent;display:grid;place-items:center;text-align:center;min-height:145px; }}
+        .deck-add-icon {{ font-size:32px;color:#94939C; }}
+        .deck-add-l {{ font-weight:900;font-size:13px;color:#1A1A1F; }}
+        .deck-add-s {{ font-size:11px;color:#94939C; }}
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
 
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
@@ -11921,58 +12115,95 @@ No markdown, no code fences. ONLY JSON.
 
 
         decks_html = ""
+        total_cards = sum(int(d.get("card_count") or 0) for d in decks)
+        due_total = 0
+        mastered_est = 0
+        _deck_classes = ["mat", "cs", "fil", "fis"]
+        _deck_colors = ["#EC4899", "#3B82F6", "#10B981", "#FF7A3D"]
 
-        for d in decks:
+        for _i, d in enumerate(decks):
 
             due = sdb.count_due_flashcards(d["id"])
-
-            due_badge = f'<span style="background:#F59E0B22;color:#F59E0B;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">{due} due</span>' if due > 0 else ''
+            due_total += due
+            card_count = int(d.get("card_count") or 0)
+            mastered = max(0, card_count - due)
+            mastered_est += mastered
+            pct = int((mastered / card_count) * 100) if card_count else 0
+            _cls = _deck_classes[_i % len(_deck_classes)]
+            _color = _deck_colors[_i % len(_deck_colors)]
+            _due_cls = " urgent" if due >= 3 else ("" if due > 0 else " muted")
+            _due_text = f"⚠ {due} atrasadas" if due >= 3 else (f"⏰ {due} cartas hoy" if due > 0 else "Sin pendientes")
 
             decks_html += f"""
-
-            <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/flashcards/{d['id']}'">
-
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-
-                <div>
-
-                  <h3 style="margin:0;font-size:16px;">{_esc(d.get('title','Untitled'))}</h3>
-
-                  <span style="font-size:13px;color:var(--text-muted);">{_esc(d.get('course_name',''))} &middot; {d.get('card_count',0)} cards</span>
-
-                </div>
-
-                <div style="display:flex;gap:8px;align-items:center;">
-
-                  {due_badge}
-
-                  <span style="font-size:12px;color:var(--text-muted);">{str(d.get('created_at',''))[:10]}</span>
-
-                  <button onclick="event.stopPropagation();deleteDeck({d['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
-
-                </div>
-
+            <div class="deck {_cls}" onclick="window.location='/student/flashcards/{d['id']}'">
+              <div class="deck-head">
+                <span class="dot" style="background:{_color};"></span>
+                <span class="deck-tag">{_esc(d.get('course_name','Sin curso'))}</span>
+                <button onclick="event.stopPropagation();deleteDeck({d['id']})" class="deck-delete" title="Eliminar">&#128465;</button>
               </div>
-
+              <div class="deck-name">{_esc(d.get('title','Untitled'))}</div>
+              <div class="deck-meta">{card_count} cartas · {mastered} dominadas</div>
+              <div class="deck-bar"><div class="deck-fill" style="width:{pct}%;background:{_color};"></div></div>
+              <div class="deck-due{_due_cls}">{_due_text}</div>
             </div>"""
 
         if not decks_html:
 
-            decks_html = """<div style="text-align:center;padding:40px;color:var(--text-muted);">
-
-              <div style="font-size:48px;margin-bottom:12px;">&#127183;</div>
-
-              <p>No flashcard decks yet. Generate your first set from a course!</p>
-
-            </div>"""
+            decks_html = ""
 
 
 
         existing_deck_ids = [int(d["id"]) for d in decks if d.get("id") is not None]
+        sample_front = "Elige un mazo para empezar a estudiar."
+        sample_course = "Flashcards"
+        if decks:
+            sample_course = decks[0].get("course_name") or "Mazo"
+            try:
+                _sample_cards = sdb.get_flashcards(int(decks[0]["id"])) or []
+                if _sample_cards:
+                    sample_front = _sample_cards[0].get("front") or sample_front
+            except Exception:
+                pass
 
         return _s_render("Flashcards", f"""
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+        <div class="fc-page-head">
+          <div>
+            <div class="fc-eyebrow">{total_cards} cartas · {mastered_est} dominadas · {due_total} para hoy</div>
+            <h1 class="fc-page-title">Flashcards</h1>
+          </div>
+          <div class="page-actions-cd">
+            <button onclick="document.getElementById('gen-form').style.display=document.getElementById('gen-form').style.display==='none'?'block':'none'" class="btn-pop-cd accent">⚡ Crear mazo</button>
+          </div>
+        </div>
+
+        <div class="fc-today">
+          <div class="fct-l">
+            <div class="fct-eye">REPASO ESPACIADO · HOY</div>
+            <div class="fct-title">{due_total} cartas listas para repasar</div>
+            <div class="fct-pills">
+              <span class="fct-pill new">{max(0, total_cards - mastered_est)} nuevas</span>
+              <span class="fct-pill due">{due_total} pendientes</span>
+              <span class="fct-pill late">{max(0, due_total - 2)} atrasadas</span>
+            </div>
+          </div>
+          <div class="fct-r">
+            <a class="btn-pop-cd dark" href="{('/student/flashcards/' + str(decks[0]['id'])) if decks else '#'}">▶ Empezar repaso · {max(3, min(20, due_total or 8))} min</a>
+          </div>
+        </div>
+
+        <div class="fc-preview-row">
+          <div class="fc-card-flip">
+            <div class="fc-tag"><span class="dot" style="background:#EC4899;"></span> {_esc(sample_course)} · Vista previa</div>
+            <div class="fc-q">{_esc(sample_front)}</div>
+            <div class="fc-foot">
+              <span class="muted">Entra al mazo para girar y responder</span>
+              <span class="muted">{1 if decks else 0}/{max(len(decks), 1)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:none;">
 
           <div>
 
@@ -12058,7 +12289,22 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        {decks_html}
+        <div class="fc-decks-card">
+          <div class="fc-card-h">
+            <div class="fc-card-title"><span class="badge-emoji">🗃</span> Tus mazos</div>
+            <button onclick="document.getElementById('gen-form').style.display='block'" class="fc-card-link" type="button">Importar →</button>
+          </div>
+          <div class="deck-grid">
+            {decks_html}
+            <div class="deck add" onclick="document.getElementById('gen-form').style.display='block'">
+              <div>
+                <div class="deck-add-icon">+</div>
+                <div class="deck-add-l">Crear mazo nuevo</div>
+                <div class="deck-add-s">Genera con IA · sube PDF</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
 
 
