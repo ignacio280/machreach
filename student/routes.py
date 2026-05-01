@@ -1194,6 +1194,201 @@ def register_student_routes(app, csrf, limiter):
             .replace("__ROWS__", rows_html)
 
         )
+        # Richer analytics view for the redesigned student shell.
+        def _fmt_minutes(_mins: int) -> str:
+            _mins = int(_mins or 0)
+            if _mins >= 60:
+                return f"{_mins // 60}h {_mins % 60}m"
+            return f"{_mins}m"
+
+        _today = datetime.now().date()
+        _start_14 = _today - timedelta(days=13)
+        _daily_map = {}
+        _heat_map = {}
+        try:
+            from outreach.db import get_db, _fetchall
+            with get_db() as db:
+                _daily_rows = _fetchall(
+                    db,
+                    "SELECT plan_date, COALESCE(SUM(focus_minutes), 0) AS mins "
+                    "FROM student_study_progress "
+                    "WHERE client_id = %s AND plan_date >= %s "
+                    "GROUP BY plan_date ORDER BY plan_date",
+                    (cid, _start_14.isoformat()),
+                )
+                _heat_rows = _fetchall(
+                    db,
+                    "SELECT plan_date, COALESCE(SUM(focus_minutes), 0) AS mins "
+                    "FROM student_study_progress "
+                    "WHERE client_id = %s AND plan_date >= %s "
+                    "GROUP BY plan_date ORDER BY plan_date",
+                    (cid, (_today - timedelta(days=34)).isoformat()),
+                )
+            for _r in _daily_rows:
+                _key = str(_r.get("plan_date") or "")[:10]
+                _daily_map[_key] = _daily_map.get(_key, 0) + int(_r.get("mins") or 0)
+            for _r in _heat_rows:
+                _key = str(_r.get("plan_date") or "")[:10]
+                _heat_map[_key] = _heat_map.get(_key, 0) + int(_r.get("mins") or 0)
+        except Exception:
+            pass
+
+        _daily_vals = []
+        for _i in range(14):
+            _d = _start_14 + timedelta(days=_i)
+            _daily_vals.append((_d, int(_daily_map.get(_d.isoformat(), 0) or 0)))
+        _max_day = max([_v for _, _v in _daily_vals] or [1]) or 1
+        _day_bars_html = "".join(
+            "<div class='an-day' title='" + _d.strftime("%d/%m") + ": " + _fmt_minutes(_v) + "'>"
+            "<div class='an-day-bar' style='height:" + str(max(6, int((_v / _max_day) * 150))) + "px'></div>"
+            "<span>" + _d.strftime("%d") + "</span></div>"
+            for _d, _v in _daily_vals
+        )
+
+        _max_course = max([int(_p.get("mins") or 0) for _p in per_course] or [1]) or 1
+        _course_bars_html = "".join(
+            "<div class='an-course-row'><div><strong>" + _esc(_p.get("name", "Curso")) + "</strong>"
+            "<span>" + _fmt_minutes(int(_p.get("mins") or 0)) + "</span></div>"
+            "<div class='an-track'><div style='width:" + str(max(4, int((int(_p.get("mins") or 0) / _max_course) * 100))) + "%'></div></div></div>"
+            for _p in per_course[:7]
+        ) or "<div class='an-empty'>Todavia no hay sesiones por curso. Entra a Enfoque y registra una sesion.</div>"
+
+        _xp_history = []
+        try:
+            _xp_history = sdb.get_xp_history(cid, limit=14) or []
+        except Exception:
+            _xp_history = []
+        _xp_vals = list(reversed([int(_x.get("xp") or 0) for _x in _xp_history]))
+        _max_xp = max(_xp_vals or [1]) or 1
+        _xp_bars_html = "".join(
+            "<div class='an-xp' title='" + str(_v) + " XP'><div style='height:" + str(max(6, int((_v / _max_xp) * 120))) + "px'></div><span>" + str(_v) + "</span></div>"
+            for _v in _xp_vals
+        ) or "<div class='an-empty'>Cuando ganes XP, aca vas a ver el ritmo de progreso.</div>"
+
+        _heat_start = _today - timedelta(days=34)
+        _heat_html = ""
+        for _i in range(35):
+            _d = _heat_start + timedelta(days=_i)
+            _m = int(_heat_map.get(_d.isoformat(), 0) or 0)
+            _lvl = "l0"
+            if _m >= 120:
+                _lvl = "l4"
+            elif _m >= 60:
+                _lvl = "l3"
+            elif _m >= 25:
+                _lvl = "l2"
+            elif _m > 0:
+                _lvl = "l1"
+            _heat_html += "<div class='an-heat " + _lvl + "' title='" + _d.strftime("%d/%m") + ": " + _fmt_minutes(_m) + "'></div>"
+
+        _best_course = per_course[0]["name"] if per_course else "Sin curso dominante"
+        _best_hour = max(range(24), key=lambda _h: hour_hist[_h]) if any(hour_hist) else None
+        _best_hour_text = (f"{_best_hour:02d}:00" if _best_hour is not None else "Sin patron todavia")
+        _focus_consistency = sum(1 for _, _v in _daily_vals if _v > 0)
+
+        body = f"""
+        <style>
+        .an-page {{ display:flex; flex-direction:column; gap:22px; }}
+        .an-hero {{ display:grid; grid-template-columns:minmax(0,1.5fr) minmax(240px,.6fr); gap:18px; align-items:stretch; }}
+        .an-title-card {{ border:1px solid rgba(124,92,255,.18); border-radius:28px; padding:26px; background:linear-gradient(135deg,#ffffff 0%,#f7f3ff 48%,#eefbff 100%); box-shadow:0 18px 50px rgba(18,24,38,.08); }}
+        .an-kicker {{ color:#7b61ff; font-size:12px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; }}
+        .an-title-card h1 {{ margin:8px 0 8px; font-size:clamp(32px,4vw,54px); line-height:1; color:#171720; letter-spacing:0; }}
+        .an-title-card p {{ margin:0; max-width:720px; color:#6a6776; font-size:16px; line-height:1.55; }}
+        .an-rank-wrap .card {{ height:100%; margin:0 !important; border-radius:28px !important; box-shadow:0 18px 45px rgba(18,24,38,.08); }}
+        .an-stat-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }}
+        .an-stat {{ border:1px solid rgba(20,20,28,.1); border-radius:24px; padding:20px; background:#fff; box-shadow:0 14px 38px rgba(18,24,38,.06); }}
+        .an-stat .label {{ color:#85818f; font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
+        .an-stat .num {{ margin-top:8px; color:#15151d; font-size:34px; line-height:1; font-weight:900; }}
+        .an-stat .sub {{ margin-top:8px; color:#8a8794; font-size:13px; }}
+        .an-grid {{ display:grid; grid-template-columns:minmax(0,1.35fr) minmax(320px,.8fr); gap:18px; align-items:start; }}
+        .an-card {{ border:1px solid rgba(20,20,28,.1); border-radius:26px; padding:22px; background:#fff; box-shadow:0 16px 45px rgba(18,24,38,.06); overflow:hidden; }}
+        .an-card h2 {{ margin:0 0 4px; font-size:19px; color:#15151d; }}
+        .an-card p {{ margin:0 0 18px; color:#777382; font-size:14px; }}
+        .an-days {{ height:190px; display:grid; grid-template-columns:repeat(14,1fr); gap:8px; align-items:end; padding-top:10px; }}
+        .an-day {{ min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:8px; }}
+        .an-day-bar {{ width:100%; max-width:42px; border-radius:14px 14px 8px 8px; background:linear-gradient(180deg,#7b61ff,#21c7a8); box-shadow:0 10px 24px rgba(124,97,255,.2); }}
+        .an-day span,.an-xp span {{ color:#8b8794; font-size:11px; font-weight:800; }}
+        .an-course-row {{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }}
+        .an-course-row > div:first-child {{ display:flex; justify-content:space-between; gap:14px; color:#171720; font-size:14px; }}
+        .an-course-row span {{ color:#85818f; font-weight:800; }}
+        .an-track {{ height:12px; border-radius:999px; background:#f0edf7; overflow:hidden; }}
+        .an-track div {{ height:100%; border-radius:999px; background:linear-gradient(90deg,#111827,#7b61ff,#21c7a8); }}
+        .an-xp-row {{ height:150px; display:flex; gap:8px; align-items:flex-end; }}
+        .an-xp {{ flex:1; min-width:18px; display:flex; flex-direction:column; align-items:center; gap:7px; }}
+        .an-xp div {{ width:100%; border-radius:12px 12px 5px 5px; background:linear-gradient(180deg,#ffbe3d,#ff6b6b); }}
+        .an-heat-grid {{ display:grid; grid-template-columns:repeat(7,1fr); gap:8px; }}
+        .an-heat {{ aspect-ratio:1; border-radius:9px; background:#efedf4; border:1px solid rgba(20,20,28,.06); }}
+        .an-heat.l1 {{ background:#d8f6eb; }}
+        .an-heat.l2 {{ background:#8de6c6; }}
+        .an-heat.l3 {{ background:#35cfa2; }}
+        .an-heat.l4 {{ background:#07936f; }}
+        .an-insights {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }}
+        .an-insight {{ border-radius:22px; padding:18px; background:#171720; color:#fff; min-height:118px; }}
+        .an-insight span {{ color:#bdb7ff; font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
+        .an-insight strong {{ display:block; margin-top:10px; font-size:22px; }}
+        .an-insight p {{ margin:6px 0 0; color:#c9c6d2; font-size:13px; line-height:1.4; }}
+        .an-empty {{ padding:18px; border-radius:18px; background:#f7f5fb; color:#777382; text-align:center; }}
+        .an-table-wrap table {{ width:100%; border-collapse:collapse; }}
+        .an-table-wrap tr + tr {{ border-top:1px solid #ece8f2; }}
+        @media (max-width:980px) {{ .an-hero,.an-grid,.an-insights {{ grid-template-columns:1fr; }} .an-stat-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} }}
+        @media (max-width:560px) {{ .an-stat-grid {{ grid-template-columns:1fr; }} .an-title-card {{ padding:20px; border-radius:22px; }} .an-days {{ gap:4px; }} }}
+        </style>
+        <div class="an-page">
+          <div class="an-hero">
+            <section class="an-title-card">
+              <div class="an-kicker">ANALYTICS DE ESTUDIO</div>
+              <h1>Tu rendimiento, sin humo.</h1>
+              <p>Minutos de enfoque, XP, cursos dominantes y consistencia real. Esto es para ver si estas estudiando de verdad o solo abriendo la app.</p>
+            </section>
+            <div class="an-rank-wrap">{rank_html}</div>
+          </div>
+
+          <div class="an-stat-grid">
+            <div class="an-stat"><div class="label">Tiempo total</div><div class="num">{_fmt_minutes(total_mins)}</div><div class="sub">acumulado en enfoque</div></div>
+            <div class="an-stat"><div class="label">Sesiones</div><div class="num">{total_sessions}</div><div class="sub">registros guardados</div></div>
+            <div class="an-stat"><div class="label">Promedio</div><div class="num">{avg_session}m</div><div class="sub">por sesion</div></div>
+            <div class="an-stat"><div class="label">Racha</div><div class="num">{streak}</div><div class="sub">dias seguidos</div></div>
+          </div>
+
+          <div class="an-insights">
+            <div class="an-insight"><span>Curso fuerte</span><strong>{_esc(_best_course)}</strong><p>Es donde mas tiempo estas metiendo. Si no era tu prioridad, ajusta.</p></div>
+            <div class="an-insight"><span>Hora activa</span><strong>{_best_hour_text}</strong><p>Tu patron mas repetido de estudio en los ultimos registros.</p></div>
+            <div class="an-insight"><span>Consistencia</span><strong>{_focus_consistency}/14 dias</strong><p>Dias con al menos una sesion en las ultimas dos semanas.</p></div>
+          </div>
+
+          <div class="an-grid">
+            <section class="an-card">
+              <h2>Tendencia de enfoque</h2>
+              <p>Minutos estudiados durante los ultimos 14 dias.</p>
+              <div class="an-days">{_day_bars_html}</div>
+            </section>
+            <section class="an-card">
+              <h2>Tiempo por curso</h2>
+              <p>Donde se esta yendo tu energia.</p>
+              {_course_bars_html}
+            </section>
+          </div>
+
+          <div class="an-grid">
+            <section class="an-card">
+              <h2>Ritmo de XP</h2>
+              <p>Ultimas ganancias registradas.</p>
+              <div class="an-xp-row">{_xp_bars_html}</div>
+            </section>
+            <section class="an-card">
+              <h2>Mapa de constancia</h2>
+              <p>Ultimos 35 dias. Mas verde significa mas minutos.</p>
+              <div class="an-heat-grid">{_heat_html}</div>
+            </section>
+          </div>
+
+          <section class="an-card an-table-wrap">
+            <h2>Detalle por curso</h2>
+            <p>Resumen exacto de minutos acumulados.</p>
+            <table>{rows_html}</table>
+          </section>
+        </div>
+        """
 
         return _s_render("Analytics", body, active_page="student_analytics")
 
@@ -4552,7 +4747,6 @@ def register_student_routes(app, csrf, limiter):
             + '<div class="mr-left">'
             + _mr_mission_html
             + _mr_stats_html
-            + _mr_today_card
             + _mr_courses_card
             + _mr_exams_card
             + '</div>'

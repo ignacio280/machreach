@@ -1840,7 +1840,6 @@ LAYOUT = """<!DOCTYPE html>
         {% if is_admin %}<a class="nav-item {% if active_page == 'admin' %}active{% endif %}" href="/admin"><span class="ic">&#128227;</span><span>Admin</span></a>{% endif %}
         <a class="nav-item {% if active_page == 'student_focus' %}active{% endif %}" href="/student/focus"><span class="ic">&#127919;</span><span>{% if lang == 'es' %}Enfoque{% else %}Focus{% endif %}</span></a>
         <a class="nav-item {% if active_page == 'student_courses' %}active{% endif %}" href="/student/courses"><span class="ic">&#128218;</span><span>{% if lang == 'es' %}Mis cursos{% else %}Courses{% endif %}</span></a>
-        <a class="nav-item {% if active_page == 'student_schedule' %}active{% endif %}" href="/student/schedule"><span class="ic">&#128197;</span><span>{% if lang == 'es' %}Calendario{% else %}Calendar{% endif %}</span></a>
 
         <div class="nav-section">{% if lang == 'es' %}Estudio{% else %}Study{% endif %}</div>
         <a class="nav-item {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes"><span class="ic">&#128221;</span><span>Quizzes</span></a>
@@ -2398,7 +2397,6 @@ LAYOUT = """<!DOCTYPE html>
         {t:'Essay Assistant', u:'/student/essay', i:'\u270F\uFE0F', s:'Study'},
         {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
         {t:'Panic Mode', u:'/student/panic', i:'🚨', s:'Tools'},
-        {t:'Schedule', u:'/student/schedule', i:'🗓\uFE0F', s:'Tools'},
         {t:'Grade Sheet', u:'/student/gpa', i:'📈', s:'Tools'},
         {t:'Leaderboard', u:'/student/leaderboard', i:'🏆', s:'Social'},
         {t:'Marketplace', u:'/student/marketplace', i:'🛒', s:'Social'},

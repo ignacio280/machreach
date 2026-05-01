@@ -6,6 +6,7 @@ DEPRECATED_STUDENT_PATHS = {
     "/student/chat",
     "/student/panic",
     "/student/practice",
+    "/student/schedule",
     "/student/training",
 }
 
