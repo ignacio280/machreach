@@ -5180,19 +5180,18 @@ def register_student_routes(app, csrf, limiter):
 
         </div>
 
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+        <div style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:14px;">
 
-          Los ramos sin semestre se asignarán al que selecciones aquí. Cuando avances al siguiente semestre, los nuevos cursos que llegan de Canvas caen automáticamente en el slot que tengas activo.
 
         </div>
 
-        <div class="card">
+        <div class="card" style="display:none;">
 
           <table>
 
             <thead><tr><th>Curso</th><th>Código</th><th>Pruebas</th><th></th></tr></thead>
 
-            <tbody>{rows}</tbody>
+            <tbody></tbody>
 
           </table>
 
@@ -5212,7 +5211,7 @@ def register_student_routes(app, csrf, limiter):
         .cb-title {{ font-weight:900;font-size:14px;color:#1A1A1F; }}
         .cb-meta {{ font-size:12px;color:#94939C;margin-top:2px; }}
         .cb-btn {{ background:#fff;border:1px solid #E2DCCC;padding:8px 14px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;color:#1A1A1F;text-decoration:none; }}
-        .course-cards {{ display:grid;grid-template-columns:repeat(2,1fr);gap:16px; }}
+        .course-cards {{ display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start; }}
         @media (max-width:900px) {{ .course-cards {{ grid-template-columns:1fr; }} .page-title-cd{{font-size:38px;}} }}
         .ccard {{ background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:22px;box-shadow:0 12px 32px rgba(20,18,30,.06);position:relative;overflow:hidden; }}
         .ccard::before {{ content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:#7B61FF; }}
@@ -9946,6 +9945,48 @@ def register_student_routes(app, csrf, limiter):
 
         <style>
 
+        .fc-page-head {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px; }}
+        .fc-eyebrow {{ font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7B61FF; }}
+        .fc-page-title {{ margin:4px 0 0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .fc-today {{ background:linear-gradient(135deg,#1A1A1F,#2A2440);color:#F4F1EA;border-radius:22px;padding:26px;display:flex;align-items:center;gap:24px;margin-bottom:18px;box-shadow:0 18px 42px rgba(20,18,30,.18); }}
+        .fct-l {{ flex:1; }}
+        .fct-eye {{ font-size:11px;font-weight:900;letter-spacing:.12em;opacity:.8;text-transform:uppercase; }}
+        .fct-title {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:26px;margin:6px 0 12px;letter-spacing:-.02em; }}
+        .fct-pills {{ display:flex;gap:8px;flex-wrap:wrap; }}
+        .fct-pill {{ background:rgba(255,255,255,.12);padding:5px 12px;border-radius:999px;font-size:12px;font-weight:800; }}
+        .fct-pill.new {{ background:#7B61FF; }}.fct-pill.due {{ background:#10B981; }}.fct-pill.late {{ background:#EF4444; }}
+        .btn-pop-cd {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:10px 16px;border-radius:999px;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center; }}
+        .btn-pop-cd.accent {{ background:#FF7A3D;color:#fff; }}.btn-pop-cd.dark {{ background:#F4F1EA;color:#1A1A1F; }}
+        .page-actions-cd {{ display:flex;align-items:center;gap:10px;flex-wrap:wrap; }}
+        .fc-preview-row {{ display:grid;grid-template-columns:1.2fr;gap:18px;margin-bottom:18px; }}
+        .fc-card-flip {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:30px;min-height:240px;box-shadow:0 18px 42px rgba(20,18,30,.08);display:flex;flex-direction:column; }}
+        .fc-tag {{ font-size:11px;font-weight:800;color:#94939C;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.06em; }}
+        .dot {{ width:9px;height:9px;border-radius:50%;display:inline-block; }}
+        .fc-q {{ font-family:Fraunces,Georgia,serif;font-weight:500;font-size:28px;line-height:1.25;letter-spacing:-.02em;flex:1;display:grid;place-items:center;text-align:center;padding:16px;color:#1A1A1F; }}
+        .fc-foot {{ display:flex;justify-content:space-between;font-size:11px;color:#94939C;gap:12px; }}
+        .fc-decks-card {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:18px;box-shadow:0 12px 34px rgba(20,18,30,.06); }}
+        .fc-card-h {{ display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px; }}
+        .fc-card-title {{ font-weight:900;color:#1A1A1F; }}
+        .fc-card-link {{ background:transparent;border:0;color:#7B61FF;font-size:13px;font-weight:900;cursor:pointer; }}
+        .deck-grid {{ display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px; }}
+        @media (max-width:1100px) {{ .deck-grid {{ grid-template-columns:repeat(2,1fr); }} }}
+        @media (max-width:700px) {{ .deck-grid {{ grid-template-columns:1fr; }} .fc-today {{ flex-direction:column;align-items:flex-start; }} .fc-page-title {{ font-size:38px; }} }}
+        .deck {{ background:#FBF8F0;border:1px solid #E2DCCC;border-radius:14px;padding:14px;cursor:pointer;transition:all .15s ease; }}
+        .deck:hover {{ transform:translateY(-2px);box-shadow:0 14px 28px rgba(20,18,30,.08); }}
+        .deck-head {{ display:flex;align-items:center;gap:6px; }}
+        .deck-tag {{ font-size:11px;font-weight:900;color:#94939C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
+        .deck-delete {{ margin-left:auto;background:transparent;border:0;color:#EF4444;cursor:pointer;font-size:13px; }}
+        .deck-name {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:16px;margin:6px 0 4px;line-height:1.15;color:#1A1A1F; }}
+        .deck-meta {{ font-size:11px;color:#94939C; }}
+        .deck-bar {{ height:5px;background:#fff;border-radius:999px;overflow:hidden;margin:10px 0 6px; }}
+        .deck-fill {{ height:100%;border-radius:999px; }}
+        .deck-due {{ font-size:11px;font-weight:800;color:#FF7A3D; }}
+        .deck-due.urgent {{ color:#EF4444; }}.deck-due.muted {{ color:#94939C;font-weight:700; }}
+        .deck.add {{ border:2px dashed #E2DCCC;background:transparent;display:grid;place-items:center;text-align:center;min-height:145px; }}
+        .deck-add-icon {{ font-size:32px;color:#94939C; }}
+        .deck-add-l {{ font-weight:900;font-size:13px;color:#1A1A1F; }}
+        .deck-add-s {{ font-size:11px;color:#94939C; }}
+
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
 
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
@@ -12309,6 +12350,48 @@ No markdown, no code fences. ONLY JSON.
 
 
         <style>
+
+        .fc-page-head {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px; }}
+        .fc-eyebrow {{ font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7B61FF; }}
+        .fc-page-title {{ margin:4px 0 0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .fc-today {{ background:linear-gradient(135deg,#1A1A1F,#2A2440);color:#F4F1EA;border-radius:22px;padding:26px;display:flex;align-items:center;gap:24px;margin-bottom:18px;box-shadow:0 18px 42px rgba(20,18,30,.18); }}
+        .fct-l {{ flex:1; }}
+        .fct-eye {{ font-size:11px;font-weight:900;letter-spacing:.12em;opacity:.8;text-transform:uppercase; }}
+        .fct-title {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:26px;margin:6px 0 12px;letter-spacing:-.02em; }}
+        .fct-pills {{ display:flex;gap:8px;flex-wrap:wrap; }}
+        .fct-pill {{ background:rgba(255,255,255,.12);padding:5px 12px;border-radius:999px;font-size:12px;font-weight:800; }}
+        .fct-pill.new {{ background:#7B61FF; }}.fct-pill.due {{ background:#10B981; }}.fct-pill.late {{ background:#EF4444; }}
+        .btn-pop-cd {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:10px 16px;border-radius:999px;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center; }}
+        .btn-pop-cd.accent {{ background:#FF7A3D;color:#fff; }}.btn-pop-cd.dark {{ background:#F4F1EA;color:#1A1A1F; }}
+        .page-actions-cd {{ display:flex;align-items:center;gap:10px;flex-wrap:wrap; }}
+        .fc-preview-row {{ display:grid;grid-template-columns:1.2fr;gap:18px;margin-bottom:18px; }}
+        .fc-card-flip {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:30px;min-height:240px;box-shadow:0 18px 42px rgba(20,18,30,.08);display:flex;flex-direction:column; }}
+        .fc-tag {{ font-size:11px;font-weight:800;color:#94939C;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.06em; }}
+        .dot {{ width:9px;height:9px;border-radius:50%;display:inline-block; }}
+        .fc-q {{ font-family:Fraunces,Georgia,serif;font-weight:500;font-size:28px;line-height:1.25;letter-spacing:-.02em;flex:1;display:grid;place-items:center;text-align:center;padding:16px;color:#1A1A1F; }}
+        .fc-foot {{ display:flex;justify-content:space-between;font-size:11px;color:#94939C;gap:12px; }}
+        .fc-decks-card {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:18px;box-shadow:0 12px 34px rgba(20,18,30,.06); }}
+        .fc-card-h {{ display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px; }}
+        .fc-card-title {{ font-weight:900;color:#1A1A1F; }}
+        .fc-card-link {{ background:transparent;border:0;color:#7B61FF;font-size:13px;font-weight:900;cursor:pointer; }}
+        .deck-grid {{ display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px; }}
+        @media (max-width:1100px) {{ .deck-grid {{ grid-template-columns:repeat(2,1fr); }} }}
+        @media (max-width:700px) {{ .deck-grid {{ grid-template-columns:1fr; }} .fc-today {{ flex-direction:column;align-items:flex-start; }} .fc-page-title {{ font-size:38px; }} }}
+        .deck {{ background:#FBF8F0;border:1px solid #E2DCCC;border-radius:14px;padding:14px;cursor:pointer;transition:all .15s ease; }}
+        .deck:hover {{ transform:translateY(-2px);box-shadow:0 14px 28px rgba(20,18,30,.08); }}
+        .deck-head {{ display:flex;align-items:center;gap:6px; }}
+        .deck-tag {{ font-size:11px;font-weight:900;color:#94939C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
+        .deck-delete {{ margin-left:auto;background:transparent;border:0;color:#EF4444;cursor:pointer;font-size:13px; }}
+        .deck-name {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:16px;margin:6px 0 4px;line-height:1.15;color:#1A1A1F; }}
+        .deck-meta {{ font-size:11px;color:#94939C; }}
+        .deck-bar {{ height:5px;background:#fff;border-radius:999px;overflow:hidden;margin:10px 0 6px; }}
+        .deck-fill {{ height:100%;border-radius:999px; }}
+        .deck-due {{ font-size:11px;font-weight:800;color:#FF7A3D; }}
+        .deck-due.urgent {{ color:#EF4444; }}.deck-due.muted {{ color:#94939C;font-weight:700; }}
+        .deck.add {{ border:2px dashed #E2DCCC;background:transparent;display:grid;place-items:center;text-align:center;min-height:145px; }}
+        .deck-add-icon {{ font-size:32px;color:#94939C; }}
+        .deck-add-l {{ font-weight:900;font-size:13px;color:#1A1A1F; }}
+        .deck-add-s {{ font-size:11px;color:#94939C; }}
 
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
 
