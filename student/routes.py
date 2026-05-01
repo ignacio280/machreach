@@ -901,9 +901,7 @@ def register_student_routes(app, csrf, limiter):
     @app.route("/student/analytics")
 
     def student_analytics_page():
-        # Analytics tab was deprecated — the dashboard already shows the
-        # full study breakdown. Bounce visitors there.
-        return redirect(url_for("student_dashboard_page"))
+        return _student_analytics_page_legacy()
 
     def _student_analytics_page_legacy():
 
@@ -5386,23 +5384,66 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Focus Mode", f"""
 
-        <h1 style="margin-bottom:6px;">&#127917; Modo Enfoque</h1>
-        <p style="margin:0 0 20px;color:var(--text-muted);font-size:13px;">
-          Mostrando lo que has estudiado <b style="color:var(--text);">hoy</b> &middot; <span id="focus-today-label">{_today_label}</span>
-        </p>
+        <style>
+        .focus-page-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px; }}
+        .focus-eye {{ font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
+        .focus-title {{ margin:0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .page-stats {{ display:flex;gap:10px;flex-wrap:wrap; }}
+        .ps {{ background:#fff;border:1px solid #E2DCCC;border-radius:14px;padding:10px 14px;min-width:95px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
+        .ps-n {{ font-family:Fraunces,Georgia,serif;font-size:24px;font-weight:600;line-height:1;color:#1A1A1F; }}
+        .ps-l {{ font-size:11px;font-weight:800;color:#94939C;text-transform:uppercase;letter-spacing:.08em;margin-top:3px; }}
+        .focus-grid {{ display:grid;grid-template-columns:1.4fr 1fr;gap:18px; }}
+        @media (max-width:1100px) {{ .focus-grid {{ grid-template-columns:1fr; }} }}
+        .focus-timer-card {{ padding:26px;display:flex;flex-direction:column;gap:22px; }}
+        .ft-tabs {{ display:flex;gap:6px;flex-wrap:wrap; }}
+        .ft-tab {{ background:#EDE7DA;border:0;padding:8px 14px;border-radius:999px;font-weight:700;font-size:12px;color:#5C5C66;cursor:pointer; }}
+        .ft-tab.active {{ background:#1A1A1F;color:#FFF8E1; }}
+        .ft-stage {{ display:grid;place-items:center;padding:8px 0; }}
+        .ft-ring-wrap {{ position:relative;width:min(320px,80vw);height:min(320px,80vw); }}
+        .ft-ring {{ width:100%;height:100%; }}
+        .ft-time {{ position:absolute;inset:0;display:grid;place-items:center;text-align:center; }}
+        #timer-display {{ font-family:Fraunces,Georgia,serif !important;font-weight:500 !important;font-size:80px !important;letter-spacing:-.04em !important;line-height:1 !important;color:#1A1A1F !important; }}
+        #timer-label {{ font-size:13px !important;color:#94939C !important;margin-top:8px !important;font-weight:700; }}
+        #pomo-count {{ font-size:12px !important;color:#94939C !important;margin-top:4px !important;font-weight:700; }}
+        .ft-controls {{ display:flex;gap:12px;justify-content:center;align-items:center; }}
+        .ft-btn-main,.ft-controls #start-btn {{ background:#FF7A3D !important;color:#fff !important;border:0 !important;padding:14px 32px !important;border-radius:999px !important;font-weight:800 !important;font-size:16px !important;box-shadow:0 2px 0 rgba(20,18,30,.04),0 8px 22px rgba(20,18,30,.06) !important; }}
+        .ft-btn-sec,.ft-controls #reset-btn,.ft-controls #pause-btn,.ft-controls #skip-btn {{ width:44px !important;height:44px !important;border-radius:50% !important;background:#EDE7DA !important;border:1px solid #E2DCCC !important;color:#1A1A1F !important;padding:0 !important;display:grid !important;place-items:center !important; }}
+        .ft-context {{ border-top:1px solid #E2DCCC;padding-top:18px; }}
+        .ft-lab {{ font-size:11px;font-weight:800;color:#94939C;text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px; }}
+        .ft-select,.ft-input {{ width:100%;padding:10px 12px;border-radius:12px;border:1px solid #E2DCCC;background:#FBF8F0;font-size:13px;font-weight:700;color:#1A1A1F; }}
+        .focus-side {{ display:flex;flex-direction:column;gap:14px; }}
+        .ses-pills {{ display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px; }}
+        .sp {{ background:#EDE7DA;border:1px solid #E2DCCC;border-radius:12px;padding:10px 6px;text-align:center;font-weight:800;font-size:16px;color:#94939C; }}
+        .sp small {{ display:block;font-size:10px;font-weight:700;color:#94939C;margin-top:2px; }}
+        .sp.done {{ background:#D7EDDF;color:#2E9266;border-color:#2E9266; }}
+        .sp.active {{ background:#FF7A3D;color:#fff;border-color:#FF7A3D; }}
+        .break-row {{ display:flex;align-items:center;gap:10px;margin-top:10px;font-size:11px;color:#94939C; }}
+        .break-bar {{ flex:1;height:4px;background:linear-gradient(90deg,#FF7A3D,#F4B73A);border-radius:2px;opacity:.5; }}
+        .amb-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px; }}
+        .amb {{ background:#FBF8F0;border:1px solid #E2DCCC;border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;transition:all .15s; }}
+        .amb:hover {{ transform:translateY(-2px); }}
+        .amb-ic {{ font-size:22px; }}
+        .amb-n {{ font-size:11px;font-weight:700;margin-top:4px;color:#5C5C66; }}
+        .amb.on {{ background:#ECE6FB;border-color:#5B4694; }}
+        .vol-row {{ display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px; }}
+        .vol-bar {{ flex:1;height:6px;background:#EDE7DA;border-radius:999px;overflow:hidden; }}
+        .vol-fill {{ height:100%;background:#1A1A1F;border-radius:999px;width:45%; }}
+        .block-list {{ margin-top:8px;display:flex;flex-direction:column;gap:4px; }}
+        .block-item {{ display:flex;justify-content:space-between;padding:8px 10px;background:#FBF8F0;border-radius:10px;font-size:12px;font-weight:700; }}
+        .muted {{ color:#94939C; }}
+        </style>
 
-
-
-        <!-- Stats bar -->
-
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px;">
-
-          <div class="stat-card stat-purple"><div class="num" id="stat-hours">{focus_stats['total_hours']}</div><div class="label">Horas hoy</div></div>
-
-          <div class="stat-card stat-blue"><div class="num" id="stat-sessions">{focus_stats['sessions']}</div><div class="label">Sesiones hoy</div></div>
-
-          <div class="stat-card stat-red"><div class="num" id="stat-streak">{focus_stats['streak_days']}</div><div class="label">Racha de d&iacute;as &#128293;</div></div>
-
+        <div class="focus-page-head">
+          <div class="focus-side">
+            <div class="focus-eye">Estudia con foco</div>
+            <h1 class="focus-title">Modo Enfoque</h1>
+            <p style="margin:6px 0 0;color:#94939C;font-size:13px;">Mostrando lo que has estudiado <b style="color:#1A1A1F;">hoy</b> &middot; <span id="focus-today-label">{_today_label}</span></p>
+          </div>
+          <div class="page-stats">
+            <div class="ps"><div class="ps-n" id="stat-hours">{focus_stats['total_hours']}</div><div class="ps-l">Hoy</div></div>
+            <div class="ps"><div class="ps-n" id="stat-sessions">{focus_stats['sessions']}</div><div class="ps-l">Sesiones</div></div>
+            <div class="ps"><div class="ps-n" id="stat-streak">{focus_stats['streak_days']}</div><div class="ps-l">Racha</div></div>
+          </div>
         </div>
 
         <script>
@@ -5437,17 +5478,19 @@ def register_student_routes(app, csrf, limiter):
 
           <div class="card">
 
-            <div class="card-header"><h2>&#9201; Temporizador de estudio</h2></div>
+            <div style="display:none;" class="card-header"><h2>&#9201; Temporizador de estudio</h2></div>
 
 
 
             <!-- Mode tabs -->
 
-            <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <div class="ft-tabs">
 
-              <button onclick="setMode('pomodoro')" class="btn btn-sm mode-btn active" id="mode-pomodoro">&#127813; Pomodoro</button>
+              <button onclick="setMode('pomodoro')" class="ft-tab mode-btn active" id="mode-pomodoro">Pomodoro &middot; 25</button>
 
-              <button onclick="setMode('custom')" class="btn btn-outline btn-sm mode-btn" id="mode-custom">&#9881; Personalizado</button>
+              <button onclick="setDeepMode(50,this)" class="ft-tab" type="button">Profundo &middot; 50</button>
+              <button onclick="setDeepMode(15,this)" class="ft-tab" type="button">Sprint &middot; 15</button>
+              <button onclick="setMode('custom')" class="ft-tab mode-btn" id="mode-custom">&#9881; Personal</button>
 
             </div>
 
@@ -5615,7 +5658,7 @@ def register_student_routes(app, csrf, limiter):
 
             <!-- Timer display -->
 
-            <div style="text-align:center;padding:24px 0;">
+            <div class="ft-stage"><div class="ft-ring-wrap"><svg class="ft-ring" viewBox="0 0 200 200"><circle cx="100" cy="100" r="92" fill="none" stroke="#E2DCCC" stroke-width="6"/><circle id="ft-ring-progress" cx="100" cy="100" r="92" fill="none" stroke="#FF7A3D" stroke-width="6" stroke-linecap="round" stroke-dasharray="578" stroke-dashoffset="0" transform="rotate(-90 100 100)"/></svg><div class="ft-time"><div>
 
               <div id="timer-display" style="font-size:64px;font-weight:800;font-family:monospace;color:var(--text);letter-spacing:2px;">25:00</div>
 
@@ -5623,13 +5666,13 @@ def register_student_routes(app, csrf, limiter):
 
               <div id="pomo-count" style="font-size:12px;color:var(--text-muted);margin-top:4px;">Sesión 1 de 4</div>
 
-            </div>
+            </div></div></div></div>
 
 
 
             <!-- Controls -->
 
-            <div style="display:flex;justify-content:center;gap:12px;">
+            <div class="ft-controls">
 
               <button onclick="startTimer()" id="start-btn" class="btn btn-primary">&#9654; Empezar</button>
 
@@ -5713,9 +5756,34 @@ def register_student_routes(app, csrf, limiter):
 
           <div>
 
-            <!-- Spotify card -->
+            <div class="card">
+              <div class="card-header"><h2>&#9881;&#65039; Sesi&oacute;n de hoy</h2></div>
+              <div class="ses-pills">
+                <div class="sp done">1<small>25:00</small></div>
+                <div class="sp done">2<small>25:00</small></div>
+                <div class="sp active">3<small>25:00</small></div>
+                <div class="sp">4<small>25:00</small></div>
+              </div>
+              <div class="break-row"><div class="break-bar"></div><span>Descanso largo despu&eacute;s de sesi&oacute;n 4</span></div>
+            </div>
 
-            <div class="card" style="margin-bottom:16px;">
+            <div class="card">
+              <div class="card-header"><h2>&#127807; Ambiente</h2></div>
+              <div class="amb-grid">
+                <div class="amb on" onclick="setAmbience(this,'rain')"><div class="amb-ic">&#127783;</div><div class="amb-n">Lluvia</div></div>
+                <div class="amb" onclick="setAmbience(this,'cafe')"><div class="amb-ic">&#9749;</div><div class="amb-n">Caf&eacute;</div></div>
+                <div class="amb" onclick="setAmbience(this,'ocean')"><div class="amb-ic">&#127754;</div><div class="amb-n">Mar</div></div>
+                <div class="amb" onclick="setAmbience(this,'forest')"><div class="amb-ic">&#127794;</div><div class="amb-n">Bosque</div></div>
+                <div class="amb" onclick="setAmbience(this,'lofi')"><div class="amb-ic">&#127929;</div><div class="amb-n">Lo-fi</div></div>
+                <div class="amb" onclick="setAmbience(this,'fire')"><div class="amb-ic">&#128293;</div><div class="amb-n">Fuego</div></div>
+              </div>
+              <div class="vol-row"><span>&#128264;</span><div class="vol-bar"><div class="vol-fill" id="amb-vol-fill"></div></div><span>&#128266;</span></div>
+              <audio id="amb-audio" loop preload="none"></audio>
+            </div>
+
+            <!-- Spotify card removed from UI -->
+
+            <div class="card" style="display:none;margin-bottom:16px;">
 
               <div class="card-header"><h2>&#127925; M&uacute;sica para estudiar</h2></div>
 
@@ -6234,6 +6302,7 @@ def register_student_routes(app, csrf, limiter):
 
           currentMode = mode;
 
+          document.querySelectorAll('.ft-tab').forEach(function(b) {{ b.classList.remove('active'); }});
           document.querySelectorAll('.mode-btn').forEach(function(b) {{ b.classList.remove('active'); b.classList.add('btn-outline'); }});
 
           var modeBtn = document.getElementById('mode-' + mode);
@@ -6264,6 +6333,21 @@ def register_student_routes(app, csrf, limiter):
 
         }}
 
+        function setDeepMode(mins, btn) {{
+          currentMode = 'custom';
+          document.querySelectorAll('.ft-tab').forEach(function(b) {{ b.classList.remove('active'); }});
+          if (btn) btn.classList.add('active');
+          var custom = document.getElementById('custom-mins');
+          if (custom) custom.value = mins;
+          document.getElementById('settings-pomodoro').style.display = 'none';
+          document.getElementById('settings-custom').style.display = 'none';
+          document.getElementById('pomo-count').style.display = 'none';
+          resetTimer();
+          timeLeft = mins * 60;
+          totalTime = timeLeft;
+          updateDisplay();
+        }}
+
 
 
         function updateDisplay() {{
@@ -6273,7 +6357,46 @@ def register_student_routes(app, csrf, limiter):
           var s = timeLeft % 60;
 
           document.getElementById('timer-display').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+          var ring = document.getElementById('ft-ring-progress');
+          if (ring && totalTime) {{
+            var pct = Math.max(0, Math.min(1, timeLeft / totalTime));
+            ring.style.strokeDashoffset = String(578 * (1 - pct));
+          }}
 
+        }}
+
+        function setAmbience(el, type) {{
+          document.querySelectorAll('.amb').forEach(function(a) {{ a.classList.remove('on'); }});
+          if (el) el.classList.add('on');
+          try {{
+            if (!window.__ambCtx) window.__ambCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var ctx = window.__ambCtx;
+            if (window.__ambStop) window.__ambStop();
+            var gain = ctx.createGain();
+            gain.gain.value = 0.045;
+            gain.connect(ctx.destination);
+            var nodes = [];
+            function osc(freq, typeName) {{
+              var o = ctx.createOscillator();
+              o.type = typeName || 'sine';
+              o.frequency.value = freq;
+              o.connect(gain);
+              o.start();
+              nodes.push(o);
+            }}
+            function noise() {{
+              var buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+              var data = buffer.getChannelData(0);
+              for (var i=0;i<data.length;i++) data[i] = Math.random() * 2 - 1;
+              var src = ctx.createBufferSource();
+              src.buffer = buffer; src.loop = true; src.connect(gain); src.start(); nodes.push(src);
+            }}
+            if (type === 'rain' || type === 'cafe' || type === 'fire') noise();
+            if (type === 'ocean') {{ osc(80,'sine'); noise(); }}
+            if (type === 'forest') {{ osc(220,'triangle'); osc(330,'sine'); }}
+            if (type === 'lofi') {{ osc(196,'sine'); osc(246.94,'triangle'); osc(329.63,'sine'); }}
+            window.__ambStop = function() {{ nodes.forEach(function(n) {{ try {{ n.stop(); }} catch(e) {{}} }}); try {{ gain.disconnect(); }} catch(e) {{}} }};
+          }} catch(e) {{}}
         }}
 
 
@@ -8099,6 +8222,29 @@ def register_student_routes(app, csrf, limiter):
 
         <style>
 
+        .mp-calendar {{ margin-top:14px; }}
+        .mp-head,.mp-grid {{ display:grid;grid-template-columns:repeat(7,1fr);gap:8px; }}
+        .mp-dow {{ text-align:center;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:#94939C;padding:8px 0; }}
+        .mp-day {{ min-height:120px;background:#FBF8F0;border:1px solid #E2DCCC;border-radius:16px;padding:10px;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;display:flex;flex-direction:column;gap:6px; }}
+        .mp-day:hover {{ transform:translateY(-2px);box-shadow:0 10px 24px rgba(20,18,30,.08);border-color:#5B4694; }}
+        .mp-empty {{ background:transparent;border:none;cursor:default; }}
+        .mp-empty:hover {{ transform:none;box-shadow:none; }}
+        .mp-num {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:22px;line-height:1;color:#1A1A1F; }}
+        .mp-today {{ box-shadow:0 0 0 2px #FF7A3D inset; }}
+        .mp-task {{ border-radius:10px;padding:5px 7px;background:#ECE6FB;color:#5B4694;font-size:11px;font-weight:800;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
+        .mp-task.high {{ background:#FBDADA;color:#E04A4A; }}
+        .mp-task.low {{ background:#D7EDDF;color:#2E9266; }}
+        .mp-more {{ color:#94939C;font-size:11px;font-weight:700;margin-top:auto; }}
+        .mp-row {{ display:grid;grid-template-columns:82px 1fr 82px 110px 34px;gap:8px;align-items:center; }}
+        .mp-row input,.mp-row select {{ width:100%;padding:10px 11px;border:1px solid #D8D0BE;border-radius:12px;background:#FBF8F0;color:#1A1A1F; }}
+        .mp-del {{ width:34px;height:34px;border-radius:10px;border:1px solid #E2DCCC;background:#fff;cursor:pointer;color:#E04A4A;font-weight:900; }}
+        @media (max-width: 780px) {{
+          .mp-head,.mp-grid {{ gap:5px; }}
+          .mp-day {{ min-height:86px;padding:7px; }}
+          .mp-task {{ font-size:10px;padding:4px 6px; }}
+          .mp-row {{ grid-template-columns:1fr; }}
+        }}
+
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
 
         .edit-input:focus {{ border-color:var(--primary); outline:none; }}
@@ -8777,6 +8923,50 @@ def register_student_routes(app, csrf, limiter):
         return jsonify({"incomplete": incomplete})
 
 
+    @app.route("/api/student/manual-plan", methods=["GET"])
+    def student_manual_plan_get():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        plan_row = sdb.get_latest_plan(_cid()) or {}
+        plan = plan_row.get("plan_json") or {}
+        return jsonify({"daily_plan": plan.get("daily_plan") or []})
+
+
+    @app.route("/api/student/manual-plan", methods=["POST"])
+    def student_manual_plan_save():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(force=True) or {}
+        day = (data.get("date") or "").strip()[:10]
+        sessions = data.get("sessions") or []
+        if len(day) != 10 or not isinstance(sessions, list):
+            return jsonify({"error": "Invalid plan payload"}), 400
+
+        clean_sessions = []
+        for item in sessions[:12]:
+            topic = (item.get("topic") or "").strip()[:160]
+            if not topic:
+                continue
+            clean_sessions.append({
+                "start_time": (item.get("start_time") or "").strip()[:8],
+                "course": (item.get("course") or "General").strip()[:80],
+                "topic": topic,
+                "hours": max(0.25, min(8.0, float(item.get("hours") or 0.5))),
+                "type": (item.get("type") or "estudio").strip()[:40],
+                "priority": (item.get("priority") or "medium").strip()[:16],
+            })
+
+        latest = sdb.get_latest_plan(_cid()) or {}
+        plan = latest.get("plan_json") or {}
+        daily = [d for d in (plan.get("daily_plan") or []) if (d.get("date") or "")[:10] != day]
+        if clean_sessions:
+            daily.append({"date": day, "sessions": clean_sessions})
+        daily.sort(key=lambda d: d.get("date") or "")
+        plan.update({"source": "manual_calendar", "daily_plan": daily})
+        sdb.save_study_plan(_cid(), plan, {"source": "manual_calendar"})
+        return jsonify({"ok": True, "date": day, "sessions": clean_sessions, "daily_plan": daily})
+
+
 
     # ── Schedule settings page ──────────────────────────────
 
@@ -8892,13 +9082,45 @@ def register_student_routes(app, csrf, limiter):
 
         return _s_render("Study Schedule", f"""
 
-        <h1 style="margin-bottom:20px;">&#128197; Study Schedule & Difficulty</h1>
+        <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px;">
+          <div>
+            <div class="page-eyebrow" style="font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D;">Planifica tu semana</div>
+            <h1 class="page-title" style="margin:0;font-family:Fraunces,Georgia,serif;font-size:44px;font-weight:600;">Calendario</h1>
+            <p style="margin:6px 0 0;color:var(--text-muted);">Crea tu plan de estudio por d&iacute;a. Lo que pongas aqu&iacute; aparece en el Plan de hoy del dashboard.</p>
+          </div>
+          <button onclick="mpOpen(new Date())" class="btn btn-primary">&#10010; Agregar tarea</button>
+        </div>
+
+        <div class="card mr-calendar-card" style="margin-bottom:20px;">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h2 style="margin:0;">&#128197; Plan de estudio</h2>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button onclick="mpMove(-1)" class="btn btn-outline btn-sm">&#9664;</button>
+              <strong id="mp-month-label" style="min-width:160px;text-align:center;">&mdash;</strong>
+              <button onclick="mpMove(1)" class="btn btn-outline btn-sm">&#9654;</button>
+            </div>
+          </div>
+          <div id="mp-calendar" class="mp-calendar"></div>
+        </div>
+
+        <div id="mp-modal" style="display:none;position:fixed;inset:0;background:rgba(20,18,30,.55);z-index:10000;align-items:center;justify-content:center;padding:20px;">
+          <div style="background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:24px;max-width:560px;width:100%;box-shadow:0 22px 60px rgba(20,18,30,.18);">
+            <h3 style="margin:0 0 4px;font-family:Fraunces,Georgia,serif;font-size:28px;">Editar d&iacute;a</h3>
+            <p id="mp-date-label" style="margin:0 0 16px;color:#94939C;font-weight:700;"></p>
+            <div id="mp-task-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;"></div>
+            <button onclick="mpAddRow()" class="btn btn-outline btn-sm" type="button">&#10010; Agregar bloque</button>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+              <button onclick="mpClose()" class="btn btn-outline">Cancelar</button>
+              <button onclick="mpSave()" class="btn btn-primary" id="mp-save-btn">Guardar plan</button>
+            </div>
+          </div>
+        </div>
 
 
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="focus-grid">
 
-          <div class="card">
+          <div class="card focus-timer-card">
 
             <div class="card-header">
 
@@ -9109,6 +9331,117 @@ def register_student_routes(app, csrf, limiter):
         </style>
 
         <script>
+
+        var mpState = {{ year:new Date().getFullYear(), month:new Date().getMonth(), daily:[], editing:null }};
+        function mpPad(n) {{ return n < 10 ? '0' + n : '' + n; }}
+        function mpIso(y,m,d) {{ return y + '-' + mpPad(m+1) + '-' + mpPad(d); }}
+        function mpEsc(s) {{ return String(s||'').replace(/[&<>"']/g, function(c) {{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }}
+        function mpDay(date) {{ return (mpState.daily || []).find(function(d) {{ return (d.date||'').slice(0,10) === date; }}) || {{ date:date, sessions:[] }}; }}
+        function mpMonthLabel() {{
+          return new Date(mpState.year, mpState.month, 1).toLocaleDateString('es-CL', {{ month:'long', year:'numeric' }});
+        }}
+        async function mpLoad() {{
+          try {{
+            var r = await fetch('/api/student/manual-plan');
+            var j = await r.json();
+            mpState.daily = j.daily_plan || [];
+          }} catch(e) {{ mpState.daily = []; }}
+          mpRender();
+        }}
+        function mpRender() {{
+          var label = document.getElementById('mp-month-label');
+          if (label) label.textContent = mpMonthLabel();
+          var first = new Date(mpState.year, mpState.month, 1).getDay();
+          var leading = (first + 6) % 7;
+          var days = new Date(mpState.year, mpState.month + 1, 0).getDate();
+          var today = new Date();
+          var todayIso = mpIso(today.getFullYear(), today.getMonth(), today.getDate());
+          var html = '<div class="mp-head">' + ['Lun','Mar','Mi&eacute;','Jue','Vie','S&aacute;b','Dom'].map(function(d) {{ return '<div class="mp-dow">'+d+'</div>'; }}).join('') + '</div><div class="mp-grid">';
+          for (var i=0;i<leading;i++) html += '<div class="mp-day mp-empty"></div>';
+          for (var d=1; d<=days; d++) {{
+            var iso = mpIso(mpState.year, mpState.month, d);
+            var day = mpDay(iso);
+            var sessions = day.sessions || [];
+            html += '<div class="mp-day '+(iso===todayIso?'mp-today':'')+'" onclick="mpOpenDate(\\''+iso+'\\')"><div class="mp-num">'+d+'</div>';
+            sessions.slice(0,3).forEach(function(s) {{
+              html += '<div class="mp-task '+mpEsc(s.priority||'medium')+'">'+mpEsc((s.start_time ? s.start_time+' · ' : '') + (s.topic||''))+'</div>';
+            }});
+            if (sessions.length > 3) html += '<div class="mp-more">+'+(sessions.length-3)+' m&aacute;s</div>';
+            if (!sessions.length) html += '<div class="mp-more">Agregar plan</div>';
+            html += '</div>';
+          }}
+          html += '</div>';
+          var cal = document.getElementById('mp-calendar');
+          if (cal) cal.innerHTML = html;
+        }}
+        function mpMove(delta) {{
+          mpState.month += delta;
+          if (mpState.month < 0) {{ mpState.month = 11; mpState.year--; }}
+          if (mpState.month > 11) {{ mpState.month = 0; mpState.year++; }}
+          mpRender();
+        }}
+        function mpOpen(dateObj) {{
+          var d = dateObj || new Date();
+          mpState.year = d.getFullYear(); mpState.month = d.getMonth();
+          mpOpenDate(mpIso(d.getFullYear(), d.getMonth(), d.getDate()));
+        }}
+        function mpOpenDate(iso) {{
+          mpState.editing = iso;
+          document.getElementById('mp-date-label').textContent = new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', {{ weekday:'long', day:'numeric', month:'long' }});
+          var sessions = (mpDay(iso).sessions || []).slice();
+          var list = document.getElementById('mp-task-list');
+          list.innerHTML = '';
+          if (!sessions.length) sessions = [{{ start_time:'09:00', course:'General', topic:'', hours:0.5, type:'estudio', priority:'medium' }}];
+          sessions.forEach(function(s) {{ mpAddRow(s); }});
+          document.getElementById('mp-modal').style.display = 'flex';
+        }}
+        function mpAddRow(s) {{
+          s = s || {{ start_time:'', course:'General', topic:'', hours:0.5, type:'estudio', priority:'medium' }};
+          var row = document.createElement('div');
+          row.className = 'mp-row';
+          row.innerHTML =
+            '<input class="mp-time" type="time" value="'+mpEsc(s.start_time||'')+'">' +
+            '<input class="mp-topic" placeholder="Qu&eacute; vas a estudiar" value="'+mpEsc(s.topic||'')+'">' +
+            '<input class="mp-hours" type="number" min="0.25" max="8" step="0.25" value="'+mpEsc(s.hours||0.5)+'">' +
+            '<select class="mp-priority"><option value="high">Urgente</option><option value="medium">Normal</option><option value="low">Suave</option></select>' +
+            '<button class="mp-del" onclick="this.parentElement.remove()" type="button">&times;</button>';
+          row.querySelector('.mp-priority').value = s.priority || 'medium';
+          document.getElementById('mp-task-list').appendChild(row);
+        }}
+        function mpClose() {{ document.getElementById('mp-modal').style.display = 'none'; mpState.editing = null; }}
+        async function mpSave() {{
+          var rows = Array.from(document.querySelectorAll('#mp-task-list .mp-row'));
+          var sessions = rows.map(function(r) {{
+            return {{
+              start_time: r.querySelector('.mp-time').value,
+              course: 'General',
+              topic: r.querySelector('.mp-topic').value.trim(),
+              hours: parseFloat(r.querySelector('.mp-hours').value || '0.5'),
+              type: 'estudio',
+              priority: r.querySelector('.mp-priority').value
+            }};
+          }}).filter(function(s) {{ return s.topic; }});
+          var btn = document.getElementById('mp-save-btn');
+          btn.disabled = true; btn.textContent = 'Guardando...';
+          try {{
+            var r = await fetch('/api/student/manual-plan', {{
+              method:'POST',
+              headers:{{'Content-Type':'application/json'}},
+              body:JSON.stringify({{date:mpState.editing, sessions:sessions}})
+            }});
+            var j = await r.json();
+            if (!r.ok) throw new Error(j.error || 'No se pudo guardar');
+            mpState.daily = j.daily_plan || [];
+            mpClose();
+            mpRender();
+          }} catch(e) {{
+            alert(e.message || 'No se pudo guardar');
+          }}
+          btn.disabled = false; btn.textContent = 'Guardar plan';
+        }}
+        var mpModal = document.getElementById('mp-modal');
+        if (mpModal) mpModal.addEventListener('click', function(e) {{ if (e.target === mpModal) mpClose(); }});
+        mpLoad();
 
         function toggleFreeDay(day, free) {{
 

@@ -1840,7 +1840,7 @@ LAYOUT = """<!DOCTYPE html>
         {% if is_admin %}<a class="nav-item {% if active_page == 'admin' %}active{% endif %}" href="/admin"><span class="ic">&#128227;</span><span>Admin</span></a>{% endif %}
         <a class="nav-item {% if active_page == 'student_focus' %}active{% endif %}" href="/student/focus"><span class="ic">&#127919;</span><span>{% if lang == 'es' %}Enfoque{% else %}Focus{% endif %}</span></a>
         <a class="nav-item {% if active_page == 'student_courses' %}active{% endif %}" href="/student/courses"><span class="ic">&#128218;</span><span>{% if lang == 'es' %}Mis cursos{% else %}Courses{% endif %}</span></a>
-        <a class="nav-item {% if active_page == 'student_exams' %}active{% endif %}" href="/student/exams"><span class="ic">&#128467;</span><span>{% if lang == 'es' %}Pruebas{% else %}Exams{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_schedule' %}active{% endif %}" href="/student/schedule"><span class="ic">&#128197;</span><span>{% if lang == 'es' %}Calendario{% else %}Calendar{% endif %}</span></a>
 
         <div class="nav-section">{% if lang == 'es' %}Estudio{% else %}Study{% endif %}</div>
         <a class="nav-item {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes"><span class="ic">&#128221;</span><span>Quizzes</span></a>
@@ -1879,7 +1879,7 @@ LAYOUT = """<!DOCTYPE html>
         </div>
         <div class="topbar-stats">
           <a class="stat-pill coins" href="/student/shop">&#129689; <span class="num">Coins</span></a>
-          <a class="stat-pill streak" href="/student/focus">&#128293; <span class="num">Racha</span></a>
+          <a class="stat-pill streak" href="/student/analytics">&#128293; <span class="num">Racha</span></a>
           <a class="xp-pill" href="/student/achievements">
             <span class="xp-ring"><svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15" fill="none" stroke-width="4"/><circle class="ring-fg" cx="18" cy="18" r="15" fill="none" stroke-width="4" stroke-dasharray="94" stroke-dashoffset="34"/></svg><span class="lvl">XP</span></span>
             <span class="xp-meta"><span class="league-name">{% if lang == 'es' %}Liga activa{% else %}Active league{% endif %}</span><span class="xp-num">{% if lang == 'es' %}sigue subiendo{% else %}keep climbing{% endif %}</span></span>
