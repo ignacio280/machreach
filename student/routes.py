@@ -1155,7 +1155,7 @@ def register_student_routes(app, csrf, limiter):
 
           <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Promedio por sesión</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__AVG__ min</div></div>
 
-          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Racha</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__STREAK__</div></div>
+          <div class='card' style='padding:18px'><div style='font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em'>Racha 🔥</div><div style='font-size:30px;font-weight:800;margin-top:6px'>__STREAK__</div></div>
 
         </div>
 
@@ -1288,6 +1288,20 @@ def register_student_routes(app, csrf, limiter):
 
         body = f"""
         <style>
+        .quiz-cd {{ --ink:#1A1A1F; --paper:#F4F1EA; --card:#FFFFFF; --line:#E2DCCC; --muted:#77756F; --accent:#FF7A3D; --pink:#EF5DA8; font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink); }}
+        .quiz-cd h1 {{ font-family:"Fraunces",Georgia,serif!important;font-size:clamp(44px,6vw,76px)!important;line-height:.9!important;margin:0!important;font-weight:600!important;letter-spacing:-.055em!important; }}
+        .quiz-cd .btn-pop {{ background:#1A1A1F;color:#FFF8E1;border:0;border-radius:999px;padding:12px 18px;font-weight:900;box-shadow:0 4px 0 rgba(0,0,0,.18);cursor:pointer;text-decoration:none; }}
+        .quiz-cd .btn-pop.accent {{ background:#FF7A3D;color:#1A1A1F; }}
+        .quiz-hero {{ background:linear-gradient(135deg,#FF7A3D,#EF5DA8);color:#fff;border-radius:22px;padding:26px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:18px;box-shadow:0 10px 30px rgba(255,122,61,.20); }}
+        .qh-eye {{ font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;opacity:.85; }}
+        .qh-title {{ font-family:"Fraunces",Georgia,serif;font-size:34px;line-height:1;margin:6px 0;font-weight:600;letter-spacing:-.04em; }}
+        .qh-sub {{ margin:0;font-size:14px;opacity:.9; }}
+        .quiz-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:14px; }}
+        .qcard {{ background:#fff;border:1px solid #E2DCCC;border-radius:16px;padding:18px;position:relative;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04);display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:transform .16s,box-shadow .16s; }}
+        .qcard:hover {{ transform:translateY(-2px);box-shadow:0 6px 0 rgba(20,18,30,.05),0 18px 44px rgba(20,18,30,.08); }}
+        .qcard.warn {{ border-color:#FF7A3D;background:linear-gradient(180deg,#FFF0E8 0%,#fff 52%); }}
+        @media(max-width:1100px) {{ .quiz-grid {{ grid-template-columns:repeat(2,1fr); }} }}
+        @media(max-width:700px) {{ .quiz-grid {{ grid-template-columns:1fr; }} .quiz-hero {{ align-items:flex-start;flex-direction:column; }} }}
         .an-page {{ display:flex; flex-direction:column; gap:22px; }}
         .an-hero {{ display:grid; grid-template-columns:minmax(0,1.5fr) minmax(240px,.6fr); gap:18px; align-items:stretch; }}
         .an-title-card {{ border:1px solid rgba(124,92,255,.18); border-radius:28px; padding:26px; background:linear-gradient(135deg,#ffffff 0%,#f7f3ff 48%,#eefbff 100%); box-shadow:0 18px 50px rgba(18,24,38,.08); }}
@@ -1347,7 +1361,7 @@ def register_student_routes(app, csrf, limiter):
             <div class="an-stat"><div class="label">Tiempo total</div><div class="num">{_fmt_minutes(total_mins)}</div><div class="sub">acumulado en enfoque</div></div>
             <div class="an-stat"><div class="label">Sesiones</div><div class="num">{total_sessions}</div><div class="sub">registros guardados</div></div>
             <div class="an-stat"><div class="label">Promedio</div><div class="num">{avg_session}m</div><div class="sub">por sesion</div></div>
-            <div class="an-stat"><div class="label">Racha</div><div class="num">{streak}</div><div class="sub">dias seguidos</div></div>
+            <div class="an-stat"><div class="label">Racha 🔥</div><div class="num">{streak}</div><div class="sub">dias seguidos</div></div>
           </div>
 
           <div class="an-insights">
@@ -4623,7 +4637,7 @@ def register_student_routes(app, csrf, limiter):
             '    <div class="mr-stat-deco">⚡</div>'
             '  </div>'
             '  <div class="mr-stat-card mr-pop-3">'
-            '    <div class="mr-stat-label">Racha</div>'
+            '    <div class="mr-stat-label">Racha 🔥</div>'
             f'   <div class="mr-stat-value">{streak_days}</div>'
             f'   <div class="mr-stat-sub"><span class="up">{streak_days} día' + ("s" if streak_days != 1 else "") + ' seguidos</span></div>'
             '    <div class="mr-stat-deco">🔥</div>'
@@ -5348,7 +5362,8 @@ def register_student_routes(app, csrf, limiter):
 
             + '</div>';
 
-          document.getElementById('exam-count-' + courseId).textContent = exams.length;
+          var countEl = document.getElementById('exam-count-' + courseId);
+          if (countEl) countEl.textContent = exams.length;
 
         }}
 
@@ -6166,7 +6181,7 @@ def register_student_routes(app, csrf, limiter):
           <div class="page-stats">
             <div class="ps"><div class="ps-n" id="stat-hours">{focus_stats['total_hours']}</div><div class="ps-l">Hoy</div></div>
             <div class="ps"><div class="ps-n" id="stat-sessions">{focus_stats['sessions']}</div><div class="ps-l">Sesiones</div></div>
-            <div class="ps"><div class="ps-n" id="stat-streak">{focus_stats['streak_days']}</div><div class="ps-l">Racha</div></div>
+            <div class="ps"><div class="ps-n" id="stat-streak">{focus_stats['streak_days']}</div><div class="ps-l">Racha 🔥</div></div>
           </div>
         </div>
 
@@ -13361,13 +13376,13 @@ No markdown, no code fences. ONLY JSON.
 
             quizzes_html += f"""
 
-            <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/quizzes/{q['id']}'">
+            <article class="qcard {'warn' if q.get('difficulty') == 'hard' else ''}" onclick="window.location='/student/quizzes/{q['id']}'">
 
               <div style="display:flex;justify-content:space-between;align-items:center;">
 
                 <div>
 
-                  <h3 style="margin:0;font-size:16px;">{_esc(q.get('title','Untitled'))}</h3>
+                  <h3 style="margin:0;font-size:22px;">{_esc(q.get('title','Untitled'))}</h3>
 
                   <span style="font-size:13px;color:var(--text-muted);">{_esc(q.get('course_name',''))} &middot; {q.get('question_count',0)} preguntas</span>
 
@@ -13389,7 +13404,7 @@ No markdown, no code fences. ONLY JSON.
 
               </div>
 
-            </div>"""
+            </article>"""
 
         if not quizzes_html:
 
@@ -13407,6 +13422,7 @@ No markdown, no code fences. ONLY JSON.
 
         return _s_render("Quizzes", f"""
 
+        <div class="quiz-cd">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
 
           <div>
@@ -13417,8 +13433,17 @@ No markdown, no code fences. ONLY JSON.
 
           </div>
 
-          <button onclick="document.getElementById('qz-form').style.display=document.getElementById('qz-form').style.display==='none'?'block':'none'" class="btn btn-primary btn-sm">&#10024; Generar quiz</button>
+          <button onclick="document.getElementById('qz-form').style.display=document.getElementById('qz-form').style.display==='none'?'block':'none'" class="btn-pop accent">&#10024; Generar quiz</button>
 
+        </div>
+
+        <div class="quiz-hero">
+          <div>
+            <div class="qh-eye">Reto diario</div>
+            <h2 class="qh-title">5 preguntas · todos tus cursos</h2>
+            <p class="qh-sub">Calienta antes de estudiar y gana XP extra cuando completas quizzes.</p>
+          </div>
+          <button class="btn-pop" onclick="document.getElementById('qz-form').style.display='block'">Generar ahora</button>
         </div>
 
 
@@ -13513,7 +13538,10 @@ No markdown, no code fences. ONLY JSON.
 
 
 
+        <div class="quiz-grid">
         {quizzes_html}
+        </div>
+        </div>
 
 
 
@@ -18390,12 +18418,13 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-rank-card .rank-big, #mr-lb-page .lb-xp { color:#1A1A1F; }
   #mr-lb-page .lb-tab { background:#FBF8F0; border-color:#E2DCCC; color:#5C5C66; border-radius:999px; font-weight:800; }
   #mr-lb-page .lb-tab.active { background:#1A1A1F; color:#FFF8E1; border-color:#1A1A1F; box-shadow:0 4px 0 rgba(0,0,0,.16); }
-  #mr-lb-page .lb-podium { background:linear-gradient(135deg,#2C211E,#1A1A1F); border-color:#2C211E; border-radius:28px; box-shadow:0 10px 0 rgba(20,18,30,.08),0 24px 70px rgba(20,18,30,.14); }
-  #mr-lb-page .lb-podium-card { background:#FFF8E1; color:#1A1A1F; border-color:rgba(255,255,255,.4); box-shadow:0 8px 0 rgba(0,0,0,.16); }
+  #mr-lb-page .lb-podium { background:linear-gradient(135deg,#FFFFFF,#F4F1EA); border-color:#E2DCCC; border-radius:28px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 18px 44px rgba(20,18,30,.08); }
+  #mr-lb-page .lb-podium::before { opacity:.25; background:radial-gradient(circle at 50% 0%, rgba(255,122,61,.25), transparent 45%), radial-gradient(circle at 10% 100%, rgba(0,155,114,.16), transparent 40%); }
+  #mr-lb-page .lb-podium-card { background:#FFFFFF; color:#1A1A1F; border-color:#E2DCCC; box-shadow:0 6px 0 rgba(20,18,30,.06),0 14px 30px rgba(20,18,30,.08); }
   #mr-lb-page .lb-podium-card.place-1 { background:linear-gradient(180deg,#FFF8E1,#FFE0A3); }
   #mr-lb-page .lb-podium-card.place-2 { background:linear-gradient(180deg,#FFFFFF,#EDE7DA); }
   #mr-lb-page .lb-podium-card.place-3 { background:linear-gradient(180deg,#FFE7D8,#FFB199); }
-  #mr-lb-page .lb-podium-name, #mr-lb-page .lb-podium-xp { color:#1A1A1F; }
+  #mr-lb-page .lb-podium-name, #mr-lb-page .lb-podium-xp { color:#1A1A1F; text-shadow:none; }
   #mr-lb-page .lb-row:hover { background:#FBF8F0; }
 </style>
 
@@ -19954,7 +19983,7 @@ No markdown, no code fences. ONLY JSON.
         .essay-active {{ display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start; }}
         .essay-cd .card {{ background:#fff;border:1px solid #E2DCCC;border-radius:24px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); }}
         .essay-cd .essay-side {{ padding:22px;position:sticky;top:92px; }}
-        .essay-cd .essay-doc {{ overflow:hidden;padding:0; }}
+        .essay-cd .essay-doc {{ display:none; }}
         .essay-kicker {{ font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#009B72;margin-bottom:8px; }}
         .essay-title {{ font-family:"Fraunces",Georgia,serif;font-size:clamp(42px,6vw,72px);line-height:.92;margin:0;font-weight:600;letter-spacing:-.05em; }}
         .essay-title em {{ color:#FF7A3D;font-style:italic; }}
@@ -19968,7 +19997,7 @@ No markdown, no code fences. ONLY JSON.
         .essay-doc-head strong {{ font-family:"Fraunces",Georgia,serif;font-size:26px;font-weight:600;letter-spacing:-.03em; }}
         .essay-doc-head span {{ color:#77756F;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase; }}
         #ea-essay {{ min-height:560px!important;border:0!important;border-radius:0!important;background:#fff!important;padding:34px 42px!important;color:#1A1A1F!important;font-family:"Fraunces",Georgia,serif!important;font-size:22px!important;line-height:1.75!important;resize:vertical;box-shadow:none!important; }}
-        #ea-result {{ margin-top:20px!important; }}
+        #ea-result {{ margin-top:0!important; }}
         #ea-result .card {{ border-radius:20px;border-color:#E2DCCC;background:#fff;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04);margin-top:14px; }}
         @media (max-width:980px) {{ .essay-active {{ grid-template-columns:1fr; }} .essay-cd .essay-side {{ position:relative;top:auto; }} #ea-essay {{ min-height:420px!important;padding:24px!important;font-size:19px!important; }} }}
         </style>
@@ -19987,6 +20016,7 @@ No markdown, no code fences. ONLY JSON.
           if (firstCard && result) {{
             firstCard.classList.add('essay-side');
             var essayGroup = document.getElementById('ea-essay') && document.getElementById('ea-essay').closest('.form-group');
+            if (essayGroup) essayGroup.style.display = 'none';
             var doc = document.createElement('section');
             doc.className = 'card essay-doc';
             doc.innerHTML = '<div class="essay-doc-head"><strong>Borrador</strong><span>Editor</span></div>';
@@ -20001,7 +20031,7 @@ No markdown, no code fences. ONLY JSON.
             grid.appendChild(main);
           }}
           var prompt = document.getElementById('ea-prompt'); if (prompt) prompt.placeholder = '¿Qué tenía que responder el ensayo?';
-          var essay = document.getElementById('ea-essay'); if (essay) essay.placeholder = 'Pega tu ensayo acá...';
+          var essay = document.getElementById('ea-essay'); if (essay) essay.placeholder = 'El texto extraído del archivo aparecerá aquí internamente.';
           var btn = document.getElementById('ea-btn'); if (btn) btn.textContent = 'Analizar ensayo';
           document.querySelectorAll('.essay-cd label').forEach(function(l){{
             l.innerHTML = l.innerHTML.replace('Assignment prompt', 'Instrucción o pregunta').replace('Or drop your essay file', 'Archivo').replace('Your essay', 'Borrador');
@@ -20127,7 +20157,7 @@ No markdown, no code fences. ONLY JSON.
 
           var essay = document.getElementById('ea-essay').value.trim();
 
-          if (essay.length < 80) {{ alert('Paste at least a couple of paragraphs.'); return; }}
+          if (essay.length < 80) {{ alert('Sube un archivo primero. No se analiza texto pegado manualmente.'); return; }}
 
           var btn = document.getElementById('ea-btn');
 
@@ -20520,9 +20550,20 @@ No markdown, no code fences. ONLY JSON.
         return _s_render("Shop", f"""
         <style>{sdb.BANNER_ANIM_CSS}
 {sdb.FLAG_ANIM_CSS}</style>
+        <div class="shop-cd">
         <h1 style="margin-bottom:6px;">\U0001f6d2 Tienda</h1>
-        <p style="color:var(--text-muted);margin:0 0 24px;">Gasta monedas en congeladores de racha, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes, tarjetas y duelos.</p>
+        <p style="color:var(--text-muted);margin:0 0 24px;">Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes, tarjetas y duelos.</p>
         <style>
+          .shop-cd {{ --card:#FFFFFF; --card-bg:#FFFFFF; --bg:#F4F1EA; --text:#1A1A1F; --text-muted:#6E6A60; --border:#E2DCCC; font-family:"Plus Jakarta Sans",system-ui,sans-serif; color:#1A1A1F; }}
+          .shop-cd h1 {{ font-family:"Fraunces",Georgia,serif;font-size:clamp(42px,6vw,72px);line-height:.92;letter-spacing:-.05em;font-weight:600;color:#1A1A1F; }}
+          .shop-cd .card, .shop-cd .stat-card {{ background:#FFFFFF!important;border:1px solid #E2DCCC!important;border-radius:22px!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04)!important;color:#1A1A1F!important; }}
+          .shop-cd .card-header {{ border-bottom:1px solid #E2DCCC!important; }}
+          .shop-cd .card-header h2 {{ font-family:"Plus Jakarta Sans",system-ui,sans-serif!important;font-size:16px!important;letter-spacing:0!important;font-weight:900!important;color:#1A1A1F!important; }}
+          .shop-cd .btn-primary {{ background:#1A1A1F!important;color:#FFF8E1!important;border-color:#1A1A1F!important;box-shadow:0 4px 0 rgba(0,0,0,.16)!important;border-radius:999px!important; }}
+          .shop-cd .btn-outline, .shop-cd .btn-ghost {{ background:#FBF8F0!important;color:#1A1A1F!important;border:1px solid #D8D0BE!important;border-radius:999px!important; }}
+          .shop-cd [style*="background:var(--card)"] {{ background:#FFFFFF!important; }}
+          .shop-cd [style*="color:#334155"] {{ color:#5C5C66!important; }}
+          .shop-cd [style*="color:#94a3b8"], .shop-cd [style*="color:#64748b"] {{ color:#77756F!important; }}
           .sh-active-chip {{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:rgba(255,255,255,.7); border-radius:999px; font-size:12px; font-weight:600; color:#78350f; }}
           .sh-cd {{ font-variant-numeric: tabular-nums; }}
         </style>
@@ -20530,7 +20571,7 @@ No markdown, no code fences. ONLY JSON.
         {subscription_section}
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;">
           <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \U0001FA99</div><div class="label">Monedas</div></div>
-          <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Congeladores de racha</div></div>
+          <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Congeladores de racha 🔥</div></div>
           <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">XP total</div></div>
         </div>
 
@@ -20543,7 +20584,7 @@ No markdown, no code fences. ONLY JSON.
         </div>
 
         <div class="card">
-          <div class="card-header"><h2>\u2744\ufe0f Congeladores de racha</h2></div>
+          <div class="card-header"><h2>\u2744\ufe0f Congeladores de racha 🔥</h2></div>
           <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Plus incluye Streak Insurance+: 1 congelador extra al mes y capacidad para guardar hasta 5.</p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;">
             <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} \U0001FA99 cada uno</div>
@@ -20578,6 +20619,7 @@ No markdown, no code fences. ONLY JSON.
           </div>
         </div>
 
+        </div>
         <script>
         async function buyFreeze() {{
           const r = await fetch('/api/student/wallet/buy-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
@@ -20842,7 +20884,7 @@ No markdown, no code fences. ONLY JSON.
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
                   <div class="stat-card stat-yellow" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['coins']} \U0001FA99</div><div class="label">Coins</div></div>
                   <div class="stat-card stat-blue" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['streak_freezes']} ❄️</div><div class="label">Freezes</div></div>
-                  <div class="stat-card stat-red" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{focus_stats.get('streak_days',0)} 🔥</div><div class="label">Racha</div></div>
+                  <div class="stat-card stat-red" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{focus_stats.get('streak_days',0)} 🔥</div><div class="label">Racha 🔥</div></div>
                 </div>
               </div>
             </div>

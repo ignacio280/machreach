@@ -1852,7 +1852,6 @@ LAYOUT = """<!DOCTYPE html>
         <a class="nav-item {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes"><span class="ic">&#128221;</span><span>Quizzes</span></a>
         <a class="nav-item {% if active_page == 'student_flashcards' %}active{% endif %}" href="/student/flashcards"><span class="ic">&#127183;</span><span>{% if lang == 'es' %}Tarjetas{% else %}Flashcards{% endif %}</span></a>
         <a class="nav-item {% if active_page == 'student_essay' %}active{% endif %}" href="/student/essay"><span class="ic">&#9999;</span><span>{% if lang == 'es' %}Ensayos{% else %}Essays{% endif %}</span></a>
-        <a class="nav-item {% if active_page == 'student_exams' %}active{% endif %}" href="/student/exams"><span class="ic">&#128197;</span><span>{% if lang == 'es' %}Exámenes{% else %}Exams{% endif %}</span></a>
 
         <div class="nav-section">{% if lang == 'es' %}Comunidad{% else %}Community{% endif %}</div>
         <a class="nav-item {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard"><span class="ic">&#127942;</span><span>{% if lang == 'es' %}Ranking{% else %}Leaderboard{% endif %}</span></a>
@@ -1885,7 +1884,7 @@ LAYOUT = """<!DOCTYPE html>
         </div>
         <div class="topbar-stats">
           <a class="stat-pill coins" href="/student/shop">&#129689; <span class="num">Coins</span></a>
-          <a class="stat-pill streak" href="/student/analytics">&#128293; <span class="num">Racha</span></a>
+          <a class="stat-pill streak" href="/student/analytics">&#128293; <span class="num">Racha 🔥</span></a>
           <a class="xp-pill" href="/student/achievements">
             <span class="xp-ring"><svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15" fill="none" stroke-width="4"/><circle class="ring-fg" cx="18" cy="18" r="15" fill="none" stroke-width="4" stroke-dasharray="94" stroke-dashoffset="34"/></svg><span class="lvl">XP</span></span>
             <span class="xp-meta"><span class="league-name">{% if lang == 'es' %}Liga activa{% else %}Active league{% endif %}</span><span class="xp-num">{% if lang == 'es' %}sigue subiendo{% else %}keep climbing{% endif %}</span></span>
@@ -2903,7 +2902,7 @@ LAYOUT = """<!DOCTYPE html>
       "Click any bar to see the day-by-day breakdown.": "Haz clic en una barra para ver el desglose día a día.",
       "Total hours": "Horas totales",
       "Pages read": "Páginas leídas",
-      "Current streak": "Racha actual",
+      "Current streak": "Racha actual 🔥",
       "Best day": "Mejor día",
       "Last 14 days": "Últimos 14 días",
       "Day-of-week (this week)": "Día de la semana (esta semana)",
@@ -2920,7 +2919,7 @@ LAYOUT = """<!DOCTYPE html>
       "Settings": "Ajustes", "Leaderboard": "Clasificación",
       // Achievements page
       "Achievements & Progress": "Logros y Progreso", "Level": "Nivel",
-      "XP to next level": "XP para el siguiente nivel", "Day Streak": "Racha de Días",
+      "XP to next level": "XP para el siguiente nivel", "Day Streak": "Racha de Días 🔥",
       "Badges Earned": "Insignias Obtenidas", "Your Badges": "Tus Insignias",
       "All Badges": "Todas las Insignias", "Recent Activity": "Actividad Reciente",
       "No badges yet — keep studying!": "¡Aún no tienes insignias — sigue estudiando!",
@@ -2940,9 +2939,9 @@ LAYOUT = """<!DOCTYPE html>
       "Completed your first quiz": "Completaste tu primer examen",
       "Scored 100% on a quiz": "Obtuviste 100% en un examen",
       "Reviewed 100 flashcards": "Revisaste 100 tarjetas",
-      "3-day study streak": "Racha de estudio de 3 días",
-      "7-day study streak": "Racha de estudio de 7 días",
-      "30-day study streak": "Racha de estudio de 30 días",
+      "3-day study streak": "Racha 🔥 de estudio de 3 días",
+      "7-day study streak": "Racha 🔥 de estudio de 7 días",
+      "30-day study streak": "Racha 🔥 de estudio de 30 días",
       "Created 10 notes": "Creaste 10 apuntes",
       "Earned 100 XP": "Ganaste 100 XP", "Earned 500 XP": "Ganaste 500 XP",
       "Earned 1000 XP": "Ganaste 1000 XP",
@@ -3236,8 +3235,8 @@ LAYOUT = """<!DOCTYPE html>
       "Plan Progress": "Progreso del Plan",
       "Hours Focused": "Horas de Estudio",
       "Focus Hours": "Horas de Estudio",
-      "day streak": "días de racha",
-      "Day Streak": "Racha de Días",
+      "day streak": "días de racha 🔥",
+      "Day Streak": "Racha de Días 🔥",
       "XP to next level": "XP para el siguiente nivel",
       "What can I do here?": "¿Qué puedo hacer aquí?",
       "A visual map of every feature — click any card to jump there.":
