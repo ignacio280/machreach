@@ -1389,6 +1389,218 @@ def register_student_routes(app, csrf, limiter):
           </section>
         </div>
         """
+        _focus_rows = []
+        _focus_since = (datetime.now().date() - timedelta(days=7 * 26)).isoformat()
+        try:
+            from outreach.db import get_db, _fetchall
+            with get_db() as db:
+                _raw_focus_rows = _fetchall(
+                    db,
+                    "SELECT sp.plan_date, COALESCE(sp.focus_minutes, 0) AS mins, "
+                    "COALESCE(sp.notes, '') AS notes, COALESCE(c.name, '') AS course_name "
+                    "FROM student_study_progress sp "
+                    "LEFT JOIN student_courses c ON c.id = sp.course_id "
+                    "WHERE sp.client_id = %s AND COALESCE(sp.focus_minutes, 0) > 0 AND sp.plan_date >= %s "
+                    "ORDER BY sp.plan_date",
+                    (cid, _focus_since),
+                )
+            for _r in _raw_focus_rows:
+                _course = (_r.get("course_name") or "").strip()
+                if not _course:
+                    _notes = (_r.get("notes") or "").strip()
+                    if ":" in _notes:
+                        _course = _notes.split(":", 1)[1].strip()
+                    elif _notes:
+                        _course = _notes.title()
+                if not _course:
+                    _course = "Sin curso"
+                _focus_rows.append({
+                    "date": str(_r.get("plan_date") or "")[:10],
+                    "course": _course,
+                    "minutes": int(_r.get("mins") or 0),
+                })
+        except Exception:
+            _focus_rows = []
+        _focus_json = json.dumps(_focus_rows, ensure_ascii=False).replace("<", "\\u003c")
+
+        body = f"""
+        <style>
+        .wa-page {{ display:flex; flex-direction:column; gap:18px; }}
+        .wa-head {{ display:flex; justify-content:space-between; align-items:flex-end; gap:18px; flex-wrap:wrap; }}
+        .wa-eye {{ color:#7b61ff; font-size:12px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; }}
+        .wa-head h1 {{ margin:6px 0 0; font-size:clamp(34px,4vw,56px); line-height:.98; color:#171720; letter-spacing:0; }}
+        .wa-head p {{ margin:8px 0 0; color:#777382; max-width:720px; line-height:1.5; }}
+        .wa-week-nav {{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid rgba(20,20,28,.1); border-radius:999px; padding:8px; box-shadow:0 12px 30px rgba(18,24,38,.06); }}
+        .wa-week-nav button {{ border:0; border-radius:999px; background:#f1edf8; color:#171720; width:38px; height:38px; font-weight:900; cursor:pointer; }}
+        .wa-week-nav button:disabled {{ opacity:.35; cursor:not-allowed; }}
+        #wa-week-label {{ min-width:230px; text-align:center; font-weight:900; color:#171720; }}
+        .wa-stats {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }}
+        .wa-stat,.wa-card {{ background:#fff; border:1px solid rgba(20,20,28,.1); border-radius:26px; box-shadow:0 16px 45px rgba(18,24,38,.06); }}
+        .wa-stat {{ padding:18px; }}
+        .wa-stat span {{ color:#85818f; font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
+        .wa-stat strong {{ display:block; margin-top:8px; font-size:32px; line-height:1; color:#171720; }}
+        .wa-grid {{ display:grid; grid-template-columns:minmax(0,1.35fr) minmax(330px,.85fr); gap:18px; align-items:start; }}
+        .wa-card {{ padding:22px; overflow:hidden; }}
+        .wa-card h2 {{ margin:0; font-size:20px; color:#171720; }}
+        .wa-card p {{ margin:6px 0 18px; color:#777382; font-size:14px; }}
+        .wa-line-wrap {{ width:100%; min-height:300px; }}
+        .wa-line-svg {{ width:100%; height:300px; overflow:visible; }}
+        .wa-axis {{ stroke:#e8e2f0; stroke-width:1; }}
+        .wa-line {{ fill:none; stroke:#7b61ff; stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }}
+        .wa-dot {{ fill:#fff; stroke:#7b61ff; stroke-width:4; }}
+        .wa-label {{ fill:#777382; font-size:12px; font-weight:800; }}
+        .wa-value {{ fill:#171720; font-size:12px; font-weight:900; }}
+        .wa-course-list {{ display:flex; flex-direction:column; gap:12px; }}
+        .wa-course-btn {{ display:block; width:100%; text-align:left; border:1px solid #eee7f5; background:#fbf9ff; border-radius:18px; padding:13px; cursor:pointer; transition:all .15s ease; }}
+        .wa-course-btn:hover,.wa-course-btn.active {{ border-color:#7b61ff; transform:translateY(-1px); box-shadow:0 12px 24px rgba(123,97,255,.12); }}
+        .wa-course-top {{ display:flex; justify-content:space-between; gap:12px; font-weight:900; color:#171720; }}
+        .wa-course-track {{ margin-top:9px; height:12px; background:#eee9f6; border-radius:999px; overflow:hidden; }}
+        .wa-course-track div {{ height:100%; border-radius:999px; background:linear-gradient(90deg,#111827,#7b61ff,#21c7a8); }}
+        .wa-detail-bars {{ display:grid; grid-template-columns:repeat(7,1fr); align-items:end; gap:10px; height:220px; margin-top:12px; }}
+        .wa-detail-day {{ display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:8px; min-width:0; }}
+        .wa-detail-bar {{ width:100%; max-width:46px; min-height:7px; border-radius:14px 14px 7px 7px; background:linear-gradient(180deg,#21c7a8,#7b61ff); }}
+        .wa-detail-day span {{ color:#85818f; font-size:12px; font-weight:900; }}
+        .wa-empty {{ padding:24px; border-radius:20px; background:#f8f5fb; color:#777382; text-align:center; }}
+        @media (max-width:1000px) {{ .wa-grid {{ grid-template-columns:1fr; }} .wa-stats {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} }}
+        @media (max-width:580px) {{ .wa-stats {{ grid-template-columns:1fr; }} .wa-week-nav {{ width:100%; justify-content:space-between; }} #wa-week-label {{ min-width:0; }} }}
+        </style>
+        <div class="wa-page">
+          <div class="wa-head">
+            <div>
+              <div class="wa-eye">ANALYTICS SEMANALES</div>
+              <h1>Tu semana de estudio.</h1>
+              <p>Revisa cuanto estudiaste cada dia, cambia de semana, compara cursos y haz click en cualquier curso para ver su detalle diario.</p>
+            </div>
+            <div class="wa-week-nav">
+              <button id="wa-prev" type="button" aria-label="Semana anterior">&lsaquo;</button>
+              <div id="wa-week-label">Semana actual</div>
+              <button id="wa-next" type="button" aria-label="Semana siguiente">&rsaquo;</button>
+            </div>
+          </div>
+
+          <div class="wa-stats">
+            <div class="wa-stat"><span>Total semana</span><strong id="wa-total">0m</strong></div>
+            <div class="wa-stat"><span>Mejor dia</span><strong id="wa-best-day">-</strong></div>
+            <div class="wa-stat"><span>Cursos activos</span><strong id="wa-course-count">0</strong></div>
+            <div class="wa-stat"><span>Promedio diario</span><strong id="wa-average">0m</strong></div>
+          </div>
+
+          <div class="wa-grid">
+            <section class="wa-card">
+              <h2>Minutos por dia</h2>
+              <p>Linea de lunes a domingo para la semana seleccionada.</p>
+              <div id="wa-line" class="wa-line-wrap"></div>
+            </section>
+            <section class="wa-card">
+              <h2>Horas por curso</h2>
+              <p>Haz click en una barra para ver el detalle diario.</p>
+              <div id="wa-courses" class="wa-course-list"></div>
+            </section>
+          </div>
+
+          <section class="wa-card">
+            <h2 id="wa-detail-title">Detalle diario por curso</h2>
+            <p id="wa-detail-sub">Selecciona un curso para ver como se repartio durante la semana.</p>
+            <div id="wa-detail" class="wa-detail-bars"></div>
+          </section>
+        </div>
+
+        <script>
+        (function(){{
+          var rows = {_focus_json};
+          var selectedCourse = null;
+          var weekOffset = 0;
+          var dayNames = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
+          function pad(n) {{ return String(n).padStart(2,'0'); }}
+          function key(d) {{ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }}
+          function minsText(m) {{ m = Math.round(m || 0); return m >= 60 ? (Math.floor(m/60) + 'h ' + (m%60) + 'm') : (m + 'm'); }}
+          function monday(base) {{
+            var d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+            var day = d.getDay();
+            var diff = day === 0 ? -6 : 1 - day;
+            d.setDate(d.getDate() + diff + weekOffset * 7);
+            return d;
+          }}
+          function renderLine(days, totals) {{
+            var max = Math.max(30, ...totals);
+            var w = 700, h = 250, padX = 42, padY = 28;
+            var pts = totals.map(function(v,i){{
+              var x = padX + i * ((w - padX*2) / 6);
+              var y = h - padY - (v / max) * (h - padY*2);
+              return {{x:x,y:y,v:v,i:i}};
+            }});
+            var path = pts.map(function(p,i){{ return (i?'L':'M') + p.x + ' ' + p.y; }}).join(' ');
+            var grid = [0,.25,.5,.75,1].map(function(t){{
+              var y = h - padY - t * (h - padY*2);
+              return '<line class="wa-axis" x1="'+padX+'" x2="'+(w-padX)+'" y1="'+y+'" y2="'+y+'"></line>';
+            }}).join('');
+            var circles = pts.map(function(p){{
+              return '<circle class="wa-dot" cx="'+p.x+'" cy="'+p.y+'" r="7"></circle><text class="wa-value" x="'+p.x+'" y="'+(p.y-13)+'" text-anchor="middle">'+minsText(p.v)+'</text>';
+            }}).join('');
+            var labels = pts.map(function(p){{
+              return '<text class="wa-label" x="'+p.x+'" y="'+(h-4)+'" text-anchor="middle">'+dayNames[p.i]+'</text>';
+            }}).join('');
+            document.getElementById('wa-line').innerHTML = '<svg class="wa-line-svg" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'+grid+'<path class="wa-line" d="'+path+'"></path>'+circles+labels+'</svg>';
+          }}
+          function render() {{
+            var start = monday(new Date());
+            var days = Array.from({{length:7}}, function(_,i){{ var d = new Date(start); d.setDate(start.getDate()+i); return d; }});
+            var dayKeys = days.map(key);
+            var weekRows = rows.filter(function(r){{ return dayKeys.indexOf((r.date || '').slice(0,10)) !== -1; }});
+            var totals = dayKeys.map(function(k){{ return weekRows.filter(function(r){{ return r.date === k; }}).reduce(function(a,r){{ return a + (parseInt(r.minutes)||0); }}, 0); }});
+            var total = totals.reduce(function(a,b){{ return a+b; }},0);
+            var bestIdx = totals.indexOf(Math.max(...totals));
+            var courseTotals = {{}};
+            weekRows.forEach(function(r){{ var c = r.course || 'Sin curso'; courseTotals[c] = (courseTotals[c] || 0) + (parseInt(r.minutes)||0); }});
+            var courses = Object.keys(courseTotals).sort(function(a,b){{ return courseTotals[b] - courseTotals[a]; }});
+            if (!selectedCourse || courses.indexOf(selectedCourse) === -1) selectedCourse = courses[0] || null;
+            document.getElementById('wa-week-label').textContent = days[0].toLocaleDateString(undefined, {{day:'numeric', month:'short'}}) + ' - ' + days[6].toLocaleDateString(undefined, {{day:'numeric', month:'short'}});
+            document.getElementById('wa-next').disabled = weekOffset >= 0;
+            document.getElementById('wa-total').textContent = minsText(total);
+            document.getElementById('wa-best-day').textContent = total ? dayNames[bestIdx] : '-';
+            document.getElementById('wa-course-count').textContent = courses.length;
+            document.getElementById('wa-average').textContent = minsText(total / 7);
+            renderLine(days, totals);
+            var maxCourse = Math.max(1, ...courses.map(function(c){{ return courseTotals[c]; }}));
+            var list = document.getElementById('wa-courses');
+            if (!courses.length) {{
+              list.innerHTML = '<div class="wa-empty">No hay sesiones registradas esta semana.</div>';
+            }} else {{
+              list.innerHTML = courses.map(function(c){{
+                var pct = Math.max(5, Math.round(courseTotals[c] / maxCourse * 100));
+                return '<button type="button" class="wa-course-btn '+(c===selectedCourse?'active':'')+'" data-course="'+encodeURIComponent(c)+'"><div class="wa-course-top"><span>'+c+'</span><span>'+minsText(courseTotals[c])+'</span></div><div class="wa-course-track"><div style="width:'+pct+'%"></div></div></button>';
+              }}).join('');
+              list.querySelectorAll('.wa-course-btn').forEach(function(btn){{
+                btn.addEventListener('click', function(){{ selectedCourse = decodeURIComponent(btn.getAttribute('data-course') || ''); render(); }});
+              }});
+            }}
+            renderDetail(dayKeys, weekRows);
+          }}
+          function renderDetail(dayKeys, weekRows) {{
+            var title = document.getElementById('wa-detail-title');
+            var sub = document.getElementById('wa-detail-sub');
+            var detail = document.getElementById('wa-detail');
+            if (!selectedCourse) {{
+              title.textContent = 'Detalle diario por curso';
+              sub.textContent = 'Selecciona un curso para ver como se repartio durante la semana.';
+              detail.innerHTML = '<div class="wa-empty" style="grid-column:1/-1;">No hay datos para esta semana.</div>';
+              return;
+            }}
+            var vals = dayKeys.map(function(k){{ return weekRows.filter(function(r){{ return r.date === k && r.course === selectedCourse; }}).reduce(function(a,r){{ return a + (parseInt(r.minutes)||0); }}, 0); }});
+            var max = Math.max(15, ...vals);
+            title.textContent = selectedCourse;
+            sub.textContent = 'Minutos estudiados por dia en la semana seleccionada.';
+            detail.innerHTML = vals.map(function(v,i){{
+              var h = Math.max(7, Math.round(v / max * 180));
+              return '<div class="wa-detail-day" title="'+dayNames[i]+': '+minsText(v)+'"><div class="wa-detail-bar" style="height:'+h+'px"></div><strong>'+minsText(v)+'</strong><span>'+dayNames[i]+'</span></div>';
+            }}).join('');
+          }}
+          document.getElementById('wa-prev').addEventListener('click', function(){{ weekOffset--; render(); }});
+          document.getElementById('wa-next').addEventListener('click', function(){{ if (weekOffset < 0) weekOffset++; render(); }});
+          render();
+        }})();
+        </script>
+        """
 
         return _s_render("Analytics", body, active_page="student_analytics")
 
@@ -5589,7 +5801,7 @@ def register_student_routes(app, csrf, limiter):
         .focus-grid {{ display:grid;grid-template-columns:1.4fr 1fr;gap:18px; }}
         @media (max-width:1100px) {{ .focus-grid {{ grid-template-columns:1fr; }} }}
         .focus-timer-card {{ padding:26px;display:flex;flex-direction:column;gap:22px; }}
-        .ft-tabs {{ display:flex;gap:6px;flex-wrap:wrap; }}
+        .ft-tabs {{ display:none; }}
         .ft-tab {{ background:#EDE7DA;border:0;padding:8px 14px;border-radius:999px;font-weight:700;font-size:12px;color:#5C5C66;cursor:pointer; }}
         .ft-tab.active {{ background:#1A1A1F;color:#FFF8E1; }}
         .ft-stage {{ display:grid;place-items:center;padding:8px 0; }}
@@ -5599,20 +5811,21 @@ def register_student_routes(app, csrf, limiter):
         #timer-display {{ font-family:Fraunces,Georgia,serif !important;font-weight:500 !important;font-size:80px !important;letter-spacing:-.04em !important;line-height:1 !important;color:#1A1A1F !important; }}
         #timer-label {{ font-size:13px !important;color:#94939C !important;margin-top:8px !important;font-weight:700; }}
         #pomo-count {{ font-size:12px !important;color:#94939C !important;margin-top:4px !important;font-weight:700; }}
-        .ft-controls {{ display:flex;gap:12px;justify-content:center;align-items:center; }}
+        .ft-controls {{ display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap; }}
         .ft-btn-main,.ft-controls #start-btn {{ background:#FF7A3D !important;color:#fff !important;border:0 !important;padding:14px 32px !important;border-radius:999px !important;font-weight:800 !important;font-size:16px !important;box-shadow:0 2px 0 rgba(20,18,30,.04),0 8px 22px rgba(20,18,30,.06) !important; }}
-        .ft-btn-sec,.ft-controls #reset-btn,.ft-controls #pause-btn,.ft-controls #skip-btn {{ width:44px !important;height:44px !important;border-radius:50% !important;background:#EDE7DA !important;border:1px solid #E2DCCC !important;color:#1A1A1F !important;padding:0 !important;display:grid !important;place-items:center !important; }}
+        .ft-btn-sec,.ft-controls #reset-btn,.ft-controls #pause-btn,.ft-controls #skip-btn {{ min-width:110px !important;height:44px !important;border-radius:999px !important;background:#EDE7DA !important;border:1px solid #E2DCCC !important;color:#1A1A1F !important;padding:0 16px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:7px !important;font-weight:800 !important;white-space:nowrap !important;font-size:13px !important;box-shadow:none !important; }}
         .ft-context {{ border-top:1px solid #E2DCCC;padding-top:18px; }}
         .ft-lab {{ font-size:11px;font-weight:800;color:#94939C;text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px; }}
         .ft-select,.ft-input {{ width:100%;padding:10px 12px;border-radius:12px;border:1px solid #E2DCCC;background:#FBF8F0;font-size:13px;font-weight:700;color:#1A1A1F; }}
         .focus-side {{ display:flex;flex-direction:column;gap:14px; }}
         .ses-pills {{ display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px; }}
-        .sp {{ background:#EDE7DA;border:1px solid #E2DCCC;border-radius:12px;padding:10px 6px;text-align:center;font-weight:800;font-size:16px;color:#94939C; }}
+        .sp {{ background:#EDE7DA;border:1px solid #E2DCCC;border-radius:12px;padding:10px 6px;text-align:center;font-weight:800;font-size:16px;color:#94939C;transition:all .18s ease; }}
         .sp small {{ display:block;font-size:10px;font-weight:700;color:#94939C;margin-top:2px; }}
         .sp.done {{ background:#D7EDDF;color:#2E9266;border-color:#2E9266; }}
         .sp.active {{ background:#FF7A3D;color:#fff;border-color:#FF7A3D; }}
         .break-row {{ display:flex;align-items:center;gap:10px;margin-top:10px;font-size:11px;color:#94939C; }}
-        .break-bar {{ flex:1;height:4px;background:linear-gradient(90deg,#FF7A3D,#F4B73A);border-radius:2px;opacity:.5; }}
+        .break-bar {{ flex:1;height:6px;background:#EDE7DA;border-radius:999px;overflow:hidden;opacity:1; }}
+        .break-bar span {{ display:block;height:100%;width:0%;background:linear-gradient(90deg,#FF7A3D,#F4B73A);border-radius:999px;transition:width .25s ease; }}
         .amb-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px; }}
         .amb {{ background:#FBF8F0;border:1px solid #E2DCCC;border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;transition:all .15s; }}
         .amb:hover {{ transform:translateY(-2px); }}
@@ -5681,10 +5894,6 @@ def register_student_routes(app, csrf, limiter):
             <div class="ft-tabs">
 
               <button onclick="setMode('pomodoro')" class="ft-tab mode-btn active" id="mode-pomodoro">Pomodoro &middot; 25</button>
-
-              <button onclick="setDeepMode(50,this)" class="ft-tab" type="button">Profundo &middot; 50</button>
-              <button onclick="setDeepMode(15,this)" class="ft-tab" type="button">Sprint &middot; 15</button>
-              <button onclick="setMode('custom')" class="ft-tab mode-btn" id="mode-custom">&#9881; Personal</button>
 
             </div>
 
@@ -5870,11 +6079,11 @@ def register_student_routes(app, csrf, limiter):
 
               <button onclick="startTimer()" id="start-btn" class="btn btn-primary">&#9654; Empezar</button>
 
-              <button onclick="pauseTimer()" id="pause-btn" class="btn btn-outline" style="display:none;">&#10074;&#10074; Pausar</button>
+              <button onclick="pauseTimer()" id="pause-btn" class="btn btn-outline" style="display:none;"><span>&#10074;&#10074;</span><span>Pausar</span></button>
 
-              <button onclick="resetTimer()" id="reset-btn" class="btn btn-outline">&#8635; Reiniciar</button>
+              <button onclick="resetTimer()" id="reset-btn" class="btn btn-outline"><span>&#8635;</span><span>Reiniciar</span></button>
 
-              <button onclick="skipPhase()" id="skip-btn" class="btn btn-ghost btn-sm" style="display:none;">Saltar &raquo;</button>
+              <button onclick="skipPhase()" id="skip-btn" class="btn btn-ghost btn-sm" style="display:none;"><span>Saltar</span><span>&raquo;</span></button>
 
             </div>
 
@@ -5952,24 +6161,24 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="card">
               <div class="card-header"><h2>&#9881;&#65039; Sesi&oacute;n de hoy</h2></div>
-              <div class="ses-pills">
-                <div class="sp done">1<small>25:00</small></div>
-                <div class="sp done">2<small>25:00</small></div>
-                <div class="sp active">3<small>25:00</small></div>
+              <div class="ses-pills" id="today-session-pills">
+                <div class="sp">1<small>25:00</small></div>
+                <div class="sp">2<small>25:00</small></div>
+                <div class="sp">3<small>25:00</small></div>
                 <div class="sp">4<small>25:00</small></div>
               </div>
-              <div class="break-row"><div class="break-bar"></div><span>Descanso largo despu&eacute;s de sesi&oacute;n 4</span></div>
+              <div class="break-row"><div class="break-bar"><span id="today-session-progress"></span></div><span id="today-session-caption">Empieza una sesi&oacute;n para activar el ciclo.</span></div>
             </div>
 
             <div class="card">
               <div class="card-header"><h2>&#127807; Ambiente</h2></div>
               <div class="amb-grid">
-                <div class="amb on" onclick="setAmbience(this,'rain')"><div class="amb-ic">&#127783;</div><div class="amb-n">Lluvia</div></div>
-                <div class="amb" onclick="setAmbience(this,'cafe')"><div class="amb-ic">&#9749;</div><div class="amb-n">Caf&eacute;</div></div>
-                <div class="amb" onclick="setAmbience(this,'ocean')"><div class="amb-ic">&#127754;</div><div class="amb-n">Mar</div></div>
+                <div class="amb on" onclick="setAmbience(this,'off')"><div class="amb-ic">&#128263;</div><div class="amb-n">Silencio</div></div>
+                <div class="amb" onclick="setAmbience(this,'rain')"><div class="amb-ic">&#127783;</div><div class="amb-n">Lluvia suave</div></div>
+                <div class="amb" onclick="setAmbience(this,'ocean')"><div class="amb-ic">&#127754;</div><div class="amb-n">Olas</div></div>
                 <div class="amb" onclick="setAmbience(this,'forest')"><div class="amb-ic">&#127794;</div><div class="amb-n">Bosque</div></div>
-                <div class="amb" onclick="setAmbience(this,'lofi')"><div class="amb-ic">&#127929;</div><div class="amb-n">Lo-fi</div></div>
                 <div class="amb" onclick="setAmbience(this,'fire')"><div class="amb-ic">&#128293;</div><div class="amb-n">Fuego</div></div>
+                <div class="amb" onclick="setAmbience(this,'brown')"><div class="amb-ic">&#127769;</div><div class="amb-n">Ruido bajo</div></div>
               </div>
               <div class="vol-row"><span>&#128264;</span><div class="vol-bar"><div class="vol-fill" id="amb-vol-fill"></div></div><span>&#128266;</span></div>
               <audio id="amb-audio" loop preload="none"></audio>
@@ -6556,7 +6765,40 @@ def register_student_routes(app, csrf, limiter):
             var pct = Math.max(0, Math.min(1, timeLeft / totalTime));
             ring.style.strokeDashoffset = String(578 * (1 - pct));
           }}
+          updateTodaySessionCard();
 
+        }}
+
+        function updateTodaySessionCard() {{
+          try {{
+            var wrap = document.getElementById('today-session-pills');
+            if (!wrap) return;
+            var workMins = parseInt(document.getElementById('pomo-work').value, 10) || 25;
+            var completed = 0;
+            try {{ completed = getPendingPhases().length || 0; }} catch(e) {{ completed = pomoCount || 0; }}
+            if (pomoCount > completed) completed = pomoCount;
+            var cycleCompleted = completed % 4;
+            var activeIndex = isBreak ? -1 : Math.min(3, cycleCompleted);
+            var pills = wrap.querySelectorAll('.sp');
+            for (var i = 0; i < pills.length; i++) {{
+              pills[i].classList.remove('done','active');
+              pills[i].innerHTML = (i + 1) + '<small>' + workMins + ':00</small>';
+              if (i < cycleCompleted) pills[i].classList.add('done');
+              if (i === activeIndex && (isRunning || sessionStarted)) pills[i].classList.add('active');
+            }}
+            var progress = document.getElementById('today-session-progress');
+            var caption = document.getElementById('today-session-caption');
+            var pct = 0;
+            if (isRunning && totalTime > 0) pct = Math.max(0, Math.min(100, Math.round((1 - (timeLeft / totalTime)) * 100)));
+            else pct = cycleCompleted * 25;
+            if (progress) progress.style.width = pct + '%';
+            if (caption) {{
+              if (isBreak) caption.textContent = (cycleCompleted === 0 ? 'Descanso largo desbloqueado. Reclama para guardar.' : 'Descanso activo antes de la siguiente sesion.');
+              else if (isRunning) caption.textContent = 'Sesion ' + (activeIndex + 1) + ' en progreso.';
+              else if (completed > 0) caption.textContent = completed + ' sesiones listas para reclamar.';
+              else caption.textContent = 'Empieza una sesion para activar el ciclo.';
+            }}
+          }} catch(e) {{}}
         }}
 
         function setAmbience(el, type) {{
@@ -6566,29 +6808,44 @@ def register_student_routes(app, csrf, limiter):
             if (!window.__ambCtx) window.__ambCtx = new (window.AudioContext || window.webkitAudioContext)();
             var ctx = window.__ambCtx;
             if (window.__ambStop) window.__ambStop();
+            if (type === 'off') {{
+              window.__ambStop = null;
+              var vf0 = document.getElementById('amb-vol-fill');
+              if (vf0) vf0.style.width = '0%';
+              return;
+            }}
             var gain = ctx.createGain();
-            gain.gain.value = 0.045;
+            gain.gain.value = 0.018;
             gain.connect(ctx.destination);
             var nodes = [];
-            function osc(freq, typeName) {{
-              var o = ctx.createOscillator();
-              o.type = typeName || 'sine';
-              o.frequency.value = freq;
-              o.connect(gain);
-              o.start();
-              nodes.push(o);
+            function filter(freq, q, kind) {{
+              var f = ctx.createBiquadFilter();
+              f.type = kind || 'lowpass';
+              f.frequency.value = freq;
+              f.Q.value = q || 0.7;
+              f.connect(gain);
+              nodes.push(f);
+              return f;
             }}
-            function noise() {{
-              var buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+            function noise(target, smooth) {{
+              var buffer = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate);
               var data = buffer.getChannelData(0);
-              for (var i=0;i<data.length;i++) data[i] = Math.random() * 2 - 1;
+              var last = 0;
+              for (var i=0;i<data.length;i++) {{
+                var white = Math.random() * 2 - 1;
+                last = (last * (smooth || 0.94)) + (white * (1 - (smooth || 0.94)));
+                data[i] = last;
+              }}
               var src = ctx.createBufferSource();
-              src.buffer = buffer; src.loop = true; src.connect(gain); src.start(); nodes.push(src);
+              src.buffer = buffer; src.loop = true; src.connect(target || gain); src.start(); nodes.push(src);
             }}
-            if (type === 'rain' || type === 'cafe' || type === 'fire') noise();
-            if (type === 'ocean') {{ osc(80,'sine'); noise(); }}
-            if (type === 'forest') {{ osc(220,'triangle'); osc(330,'sine'); }}
-            if (type === 'lofi') {{ osc(196,'sine'); osc(246.94,'triangle'); osc(329.63,'sine'); }}
+            if (type === 'rain') {{ noise(filter(1600, 0.4, 'lowpass'), 0.72); }}
+            if (type === 'ocean') {{ noise(filter(420, 0.9, 'lowpass'), 0.96); }}
+            if (type === 'forest') {{ noise(filter(2600, 1.2, 'bandpass'), 0.9); }}
+            if (type === 'fire') {{ noise(filter(900, 0.8, 'lowpass'), 0.82); }}
+            if (type === 'brown') {{ noise(filter(320, 0.5, 'lowpass'), 0.985); }}
+            var vf = document.getElementById('amb-vol-fill');
+            if (vf) vf.style.width = '26%';
             window.__ambStop = function() {{ nodes.forEach(function(n) {{ try {{ n.stop(); }} catch(e) {{}} }}); try {{ gain.disconnect(); }} catch(e) {{}} }};
           }} catch(e) {{}}
         }}
@@ -7146,6 +7403,7 @@ def register_student_routes(app, csrf, limiter):
           updateDisplay();
 
           document.getElementById('timer-label').textContent = 'Listo para enfocarte';
+          updateTodaySessionCard();
 
         }}
 
@@ -7341,6 +7599,7 @@ def register_student_routes(app, csrf, limiter):
           arr.push(phase);
 
           setPendingPhases(arr);
+          updateTodaySessionCard();
 
         }}
 
@@ -7379,6 +7638,7 @@ def register_student_routes(app, csrf, limiter):
           if (xEl) xEl.textContent = t.xp;
 
           box.style.display = (t.sessions > 0 || __mandatoryEndAt) ? '' : 'none';
+          updateTodaySessionCard();
 
         }}
 
@@ -7759,6 +8019,8 @@ def register_student_routes(app, csrf, limiter):
           }} catch(e) {{}}
 
         }})();
+
+        updateTodaySessionCard();
 
 
 
