@@ -7137,15 +7137,38 @@ def register_student_routes(app, csrf, limiter):
           document.querySelectorAll('.amb').forEach(function(a) {{ a.classList.remove('on'); }});
           if (el) el.classList.add('on');
           try {{
-            if (!window.__ambCtx) window.__ambCtx = new (window.AudioContext || window.webkitAudioContext)();
-            var ctx = window.__ambCtx;
+            var audioMap = {{
+              rain: '/static/audio/rain.mp3',
+              ocean: '/static/audio/beach.mp3',
+              forest: '/static/audio/forest.mp3',
+              fire: '/static/audio/fire-crackling.mp3'
+            }};
+            var audioEl = document.getElementById('amb-audio');
             if (window.__ambStop) window.__ambStop();
+            if (audioEl) {{
+              try {{ audioEl.pause(); audioEl.currentTime = 0; }} catch(e) {{}}
+            }}
             if (type === 'off') {{
               window.__ambStop = null;
               var vf0 = document.getElementById('amb-vol-fill');
               if (vf0) vf0.style.width = '0%';
               return;
             }}
+            if (audioEl && audioMap[type]) {{
+              audioEl.src = audioMap[type];
+              audioEl.loop = true;
+              audioEl.volume = 0.34;
+              var p = audioEl.play();
+              if (p && p.catch) p.catch(function(){{}});
+              var vfMp3 = document.getElementById('amb-vol-fill');
+              if (vfMp3) vfMp3.style.width = '42%';
+              window.__ambStop = function() {{
+                try {{ audioEl.pause(); audioEl.currentTime = 0; }} catch(e) {{}}
+              }};
+              return;
+            }}
+            if (!window.__ambCtx) window.__ambCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var ctx = window.__ambCtx;
             var gain = ctx.createGain();
             gain.gain.value = 0.018;
             gain.connect(ctx.destination);
@@ -13427,7 +13450,8 @@ No markdown, no code fences. ONLY JSON.
 
           <div>
 
-            <h1 style="margin:0;">&#128221; Quizzes de práctica</h1>
+            <div class="page-eyebrow">87% precisión global · quizzes resueltos</div>
+            <h1 style="margin:0;">Quizzes</h1>
 
             <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Elige de dónde vienen tus preguntas &mdash; una prueba oficial o tus propios apuntes.</p>
 
@@ -13546,6 +13570,25 @@ No markdown, no code fences. ONLY JSON.
 
 
         <style>
+
+        .quiz-cd {{ --ink:#1A1A1F; --paper:#F4F1EA; --card:#FFFFFF; --line:#E2DCCC; --muted:#77756F; --accent:#FF7A3D; --pink:#EF5DA8; font-family:"Plus Jakarta Sans",system-ui,sans-serif; color:var(--ink); }}
+        .quiz-cd > div:first-child {{ margin-bottom: 18px !important; }}
+        .quiz-cd .page-eyebrow {{ font-size:12px!important; font-weight:800!important; letter-spacing:.16em!important; text-transform:uppercase!important; color:#009B72!important; margin-bottom:6px!important; }}
+        .quiz-cd h1 {{ font-family:"Fraunces",Georgia,serif!important; font-size:clamp(44px,6vw,76px)!important; line-height:.9!important; margin:0!important; font-weight:600!important; letter-spacing:-.055em!important; }}
+        .quiz-cd h1::before {{ content:""; }}
+        .quiz-cd > div:first-child p {{ color:#8A98AD!important; font-weight:700; }}
+        .quiz-cd .btn-pop {{ background:#1A1A1F!important; color:#FFF8E1!important; border:0!important; border-radius:999px!important; padding:12px 18px!important; font-weight:900!important; box-shadow:0 4px 0 rgba(0,0,0,.18),0 16px 34px rgba(20,18,30,.12)!important; cursor:pointer; text-decoration:none; }}
+        .quiz-cd .btn-pop.accent {{ background:#1A1A1F!important; color:#FFF8E1!important; }}
+        .quiz-hero {{ background:linear-gradient(135deg,#FF7A3D,#EF5DA8)!important; color:#fff!important; border-radius:22px!important; padding:26px!important; display:flex!important; align-items:center!important; justify-content:space-between!important; gap:24px!important; margin-bottom:18px!important; box-shadow:0 10px 30px rgba(255,122,61,.20)!important; }}
+        .qh-eye {{ font-size:12px!important; font-weight:900!important; letter-spacing:.14em!important; text-transform:uppercase!important; opacity:.85!important; }}
+        .qh-title {{ font-family:"Fraunces",Georgia,serif!important; font-size:34px!important; line-height:1!important; margin:6px 0!important; font-weight:600!important; letter-spacing:-.04em!important; color:#fff!important; }}
+        .qh-sub {{ margin:0!important; font-size:14px!important; opacity:.9!important; color:#fff!important; }}
+        .quiz-grid {{ display:grid!important; grid-template-columns:repeat(3,1fr)!important; gap:14px!important; }}
+        .qcard {{ background:#fff!important; border:1px solid #E2DCCC!important; border-radius:16px!important; padding:18px!important; position:relative!important; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04)!important; display:flex!important; flex-direction:column!important; gap:10px!important; cursor:pointer!important; transition:transform .16s,box-shadow .16s!important; }}
+        .qcard:hover {{ transform:translateY(-2px)!important; box-shadow:0 6px 0 rgba(20,18,30,.05),0 18px 44px rgba(20,18,30,.08)!important; }}
+        .qcard.warn {{ border-color:#FF7A3D!important; background:linear-gradient(180deg,#FFF0E8 0%,#fff 52%)!important; }}
+        @media(max-width:1100px) {{ .quiz-grid {{ grid-template-columns:repeat(2,1fr)!important; }} }}
+        @media(max-width:700px) {{ .quiz-grid {{ grid-template-columns:1fr!important; }} .quiz-hero {{ align-items:flex-start!important; flex-direction:column!important; }} }}
 
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
 
@@ -18424,6 +18467,8 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-podium-card.place-1 { background:linear-gradient(180deg,#FFF8E1,#FFE0A3); }
   #mr-lb-page .lb-podium-card.place-2 { background:linear-gradient(180deg,#FFFFFF,#EDE7DA); }
   #mr-lb-page .lb-podium-card.place-3 { background:linear-gradient(180deg,#FFE7D8,#FFB199); }
+  #mr-lb-page .lb-podium-card::after { display:none; }
+  #mr-lb-page .lb-podium-flag { opacity:.14; }
   #mr-lb-page .lb-podium-name, #mr-lb-page .lb-podium-xp { color:#1A1A1F; text-shadow:none; }
   #mr-lb-page .lb-row:hover { background:#FBF8F0; }
 </style>
