@@ -5149,7 +5149,6 @@ def register_student_routes(app, csrf, limiter):
               <option value="" {'selected' if not current_sem else ''}>—</option>
               {sem_options}
             </select>
-            <button onclick="showNewCourseModal()" class="btn-pop-cd" type="button">+ Agregar manual</button>
           </div>
         </div>
         <div class="canvas-banner">
@@ -5161,21 +5160,6 @@ def register_student_routes(app, csrf, limiter):
           <a class="cb-btn" href="/student/canvas">Configurar</a>
         </div>
         <div class="course-cards">{course_cards_html}</div>
-        <div id="new-course-modal" class="mr-modal" style="display:none;">
-          <div class="mr-modal-card">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;">
-              <h3 style="margin:0;">Agregar curso manual</h3>
-              <button onclick="hideNewCourseModal()" class="ccard-menu" type="button">×</button>
-            </div>
-            <label>Nombre</label>
-            <input id="nc-name" class="ex-input" placeholder="Ej: Cálculo III">
-            <label>Código</label>
-            <input id="nc-code" class="ex-input" placeholder="Ej: MA2001">
-            <label>Semestre</label>
-            <input id="nc-term" class="ex-input" placeholder="Ej: II">
-            <button id="nc-save" onclick="saveNewCourse()" class="btn-pop-cd" style="margin-top:14px;width:100%;">Crear</button>
-          </div>
-        </div>
         <div style="display:none">
 
           <h1>&#128218; Mis Cursos</h1>
@@ -5534,64 +5518,6 @@ def register_student_routes(app, csrf, limiter):
             else {{ var d = await _safeJson(r); alert(d.error || 'No se pudo eliminar el curso'); }}
 
           }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); }}
-
-        }}
-
-        function showNewCourseModal() {{
-
-          document.getElementById('new-course-modal').style.display = 'flex';
-
-          setTimeout(function(){{ document.getElementById('nc-name').focus(); }}, 50);
-
-        }}
-
-        function hideNewCourseModal() {{
-
-          document.getElementById('new-course-modal').style.display = 'none';
-
-          document.getElementById('nc-name').value = '';
-
-          document.getElementById('nc-code').value = '';
-
-          document.getElementById('nc-term').value = '';
-
-        }}
-
-        async function saveNewCourse() {{
-
-          var name = document.getElementById('nc-name').value.trim();
-
-          if (!name) {{ alert('Course name is required'); return; }}
-
-          var code = document.getElementById('nc-code').value.trim();
-
-          var term = document.getElementById('nc-term').value.trim();
-
-          var btn = document.getElementById('nc-save');
-
-          btn.disabled = true; btn.textContent = 'Creating...';
-
-          try {{
-
-            var meta = document.querySelector('meta[name=\"csrf-token\"]');
-
-            var headers = {{'Content-Type':'application/json'}};
-
-            if (meta) headers['X-CSRFToken'] = meta.getAttribute('content');
-
-            var r = await fetch('/api/student/courses/manual', {{
-
-              method:'POST', headers: headers,
-
-              body: JSON.stringify({{name:name, code:code, term:term}})
-
-            }});
-
-            if (r.ok) {{ mrReload(); }}
-
-            else {{ var d = await _safeJson(r); alert(d.error || 'Failed to create course'); btn.disabled=false; btn.textContent='Create'; }}
-
-          }} catch(e) {{ mrNetworkError(e, 'No se pudo completar la acción. Revisa tu conexión e inténtalo de nuevo.'); btn.disabled=false; btn.textContent='Create'; }}
 
         }}
 
@@ -13459,15 +13385,6 @@ No markdown, no code fences. ONLY JSON.
 
           <button onclick="document.getElementById('qz-form').style.display=document.getElementById('qz-form').style.display==='none'?'block':'none'" class="btn-pop accent">&#10024; Generar quiz</button>
 
-        </div>
-
-        <div class="quiz-hero">
-          <div>
-            <div class="qh-eye">Reto diario</div>
-            <h2 class="qh-title">5 preguntas · todos tus cursos</h2>
-            <p class="qh-sub">Calienta antes de estudiar y gana XP extra cuando completas quizzes.</p>
-          </div>
-          <button class="btn-pop" onclick="document.getElementById('qz-form').style.display='block'">Generar ahora</button>
         </div>
 
 

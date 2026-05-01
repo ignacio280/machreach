@@ -1289,35 +1289,17 @@ def get_focus_stats(client_id: int) -> dict:
             db, "SELECT COUNT(*) FROM student_study_progress WHERE client_id = %s AND focus_minutes > 0",
             (client_id,),
         ) or 0
-        # Streak: consecutive days with focus sessions
-        rows = _fetchall(
-            db, "SELECT DISTINCT plan_date FROM student_study_progress "
-                "WHERE client_id = %s AND focus_minutes > 0 ORDER BY plan_date DESC",
-            (client_id,),
-        )
-        streak = 0
-        today = datetime.now().date()
-        from datetime import timedelta as _td
-        # Build set of unique activity dates
-        activity_dates = set()
-        for r in rows:
-            d_str = r["plan_date"][:10]
-            try:
-                activity_dates.add(datetime.strptime(d_str, "%Y-%m-%d").date())
-            except ValueError:
-                continue
-        # Allow today to be missing without breaking — start counting from yesterday
-        cur = today if today in activity_dates else (today - _td(days=1))
-        while cur in activity_dates:
-            streak += 1
-            cur -= _td(days=1)
-        return {
-            "total_minutes": total_min,
-            "total_hours": round(total_min / 60, 1),
-            "total_pages": total_pages,
-            "sessions": sessions,
-            "streak_days": streak,
-        }
+    # Use the unified streak (XP-based, with weekly freeze) so every page
+    # shows the same Racha number. A focus-only streak diverged from the
+    # dashboard/analytics value and confused users.
+    streak = get_streak_days(client_id)
+    return {
+        "total_minutes": total_min,
+        "total_hours": round(total_min / 60, 1),
+        "total_pages": total_pages,
+        "sessions": sessions,
+        "streak_days": streak,
+    }
 
 
 def get_focus_stats_today(client_id: int, local_date: str | None = None) -> dict:
@@ -1354,8 +1336,7 @@ def get_focus_stats_today(client_id: int, local_date: str | None = None) -> dict
             "WHERE client_id = %s AND plan_date LIKE %s AND focus_minutes > 0",
             (client_id, like_today),
         ) or 0
-    # Reuse the lifetime call only for the streak number (cheap, single query already done)
-    streak = get_focus_stats(client_id).get("streak_days", 0)
+    streak = get_streak_days(client_id)
     return {
         "total_minutes": total_min,
         "total_hours": round(total_min / 60, 1),
