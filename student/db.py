@@ -2472,13 +2472,13 @@ BADGE_DEFS = {
 }
 
 LEVEL_THRESHOLDS = [
-    (0, "Freshman"),
-    (100, "Sophomore"),
-    (300, "Junior"),
-    (600, "Senior"),
-    (1000, "Scholar"),
-    (2000, "Master"),
-    (5000, "Professor"),
+    (0, "Iniciado"),
+    (100, "Aprendiz"),
+    (300, "Estudioso"),
+    (600, "Investigador"),
+    (1000, "Académico"),
+    (2000, "Mente maestra"),
+    (5000, "Gran estudioso"),
 ]
 
 
@@ -2488,42 +2488,42 @@ LEVEL_THRESHOLDS = [
 # Elite ranks at the top have no divisions and are rare globally.
 STUDY_RANKS = [
     # (xp_floor, "Full rank name", "Short tier", "division or ''", "emoji/color")
-    (0,      "Initiates IV",       "Initiates",    "IV", "#94A3B8"),
-    (50,     "Initiates III",      "Initiates",    "III","#94A3B8"),
-    (120,    "Initiates II",       "Initiates",    "II", "#94A3B8"),
-    (200,    "Initiates I",        "Initiates",    "I",  "#94A3B8"),
-    (300,    "Apprentices IV",     "Apprentices",  "IV", "#A3A380"),
-    (450,    "Apprentices III",    "Apprentices",  "III","#A3A380"),
-    (650,    "Apprentices II",     "Apprentices",  "II", "#A3A380"),
-    (900,    "Apprentices I",      "Apprentices",  "I",  "#A3A380"),
-    (1200,   "Scholars IV",        "Scholars",     "IV", "#10B981"),
-    (1600,   "Scholars III",       "Scholars",     "III","#10B981"),
-    (2100,   "Scholars II",        "Scholars",     "II", "#10B981"),
-    (2700,   "Scholars I",         "Scholars",     "I",  "#10B981"),
-    (3400,   "Researchers IV",     "Researchers",  "IV", "#3B82F6"),
-    (4200,   "Researchers III",    "Researchers",  "III","#3B82F6"),
-    (5100,   "Researchers II",     "Researchers",  "II", "#3B82F6"),
-    (6100,   "Researchers I",      "Researchers",  "I",  "#3B82F6"),
-    (7200,   "Academics IV",       "Academics",    "IV", "#8B5CF6"),
-    (8500,   "Academics III",      "Academics",    "III","#8B5CF6"),
-    (10000,  "Academics II",       "Academics",    "II", "#8B5CF6"),
-    (11800,  "Academics I",        "Academics",    "I",  "#8B5CF6"),
-    (13800,  "Masterminds IV",     "Masterminds",  "IV", "#EC4899"),
-    (16200,  "Masterminds III",    "Masterminds",  "III","#EC4899"),
-    (18800,  "Masterminds II",     "Masterminds",  "II", "#EC4899"),
-    (21800,  "Masterminds I",      "Masterminds",  "I",  "#EC4899"),
-    (25200,  "Grand Scholars IV",  "Grand Scholars","IV","#F59E0B"),
-    (29000,  "Grand Scholars III", "Grand Scholars","III","#F59E0B"),
-    (33200,  "Grand Scholars II",  "Grand Scholars","II", "#F59E0B"),
-    (37800,  "Grand Scholars I",   "Grand Scholars","I",  "#F59E0B"),
-    (43000,  "Legends IV",         "Legends",      "IV", "#EF4444"),
-    (49000,  "Legends III",        "Legends",      "III","#EF4444"),
-    (55800,  "Legends II",         "Legends",      "II", "#EF4444"),
-    (63500,  "Legends I",          "Legends",      "I",  "#EF4444"),
+    (0,      "Iniciados IV",       "Iniciados",       "IV", "#94A3B8"),
+    (50,     "Iniciados III",      "Iniciados",       "III","#94A3B8"),
+    (120,    "Iniciados II",       "Iniciados",       "II", "#94A3B8"),
+    (200,    "Iniciados I",        "Iniciados",       "I",  "#94A3B8"),
+    (300,    "Aprendices IV",      "Aprendices",      "IV", "#A3A380"),
+    (450,    "Aprendices III",     "Aprendices",      "III","#A3A380"),
+    (650,    "Aprendices II",      "Aprendices",      "II", "#A3A380"),
+    (900,    "Aprendices I",       "Aprendices",      "I",  "#A3A380"),
+    (1200,   "Estudiosos IV",      "Estudiosos",      "IV", "#10B981"),
+    (1600,   "Estudiosos III",     "Estudiosos",      "III","#10B981"),
+    (2100,   "Estudiosos II",      "Estudiosos",      "II", "#10B981"),
+    (2700,   "Estudiosos I",       "Estudiosos",      "I",  "#10B981"),
+    (3400,   "Investigadores IV",  "Investigadores",  "IV", "#3B82F6"),
+    (4200,   "Investigadores III", "Investigadores",  "III","#3B82F6"),
+    (5100,   "Investigadores II",  "Investigadores",  "II", "#3B82F6"),
+    (6100,   "Investigadores I",   "Investigadores",  "I",  "#3B82F6"),
+    (7200,   "Académicos IV",      "Académicos",      "IV", "#8B5CF6"),
+    (8500,   "Académicos III",     "Académicos",      "III","#8B5CF6"),
+    (10000,  "Académicos II",      "Académicos",      "II", "#8B5CF6"),
+    (11800,  "Académicos I",       "Académicos",      "I",  "#8B5CF6"),
+    (13800,  "Mentes maestras IV", "Mentes maestras", "IV", "#EC4899"),
+    (16200,  "Mentes maestras III","Mentes maestras", "III","#EC4899"),
+    (18800,  "Mentes maestras II", "Mentes maestras", "II", "#EC4899"),
+    (21800,  "Mentes maestras I",  "Mentes maestras", "I",  "#EC4899"),
+    (25200,  "Grandes estudiosos IV",  "Grandes estudiosos","IV","#F59E0B"),
+    (29000,  "Grandes estudiosos III", "Grandes estudiosos","III","#F59E0B"),
+    (33200,  "Grandes estudiosos II",  "Grandes estudiosos","II", "#F59E0B"),
+    (37800,  "Grandes estudiosos I",   "Grandes estudiosos","I",  "#F59E0B"),
+    (43000,  "Leyendas IV",        "Leyendas",        "IV", "#EF4444"),
+    (49000,  "Leyendas III",       "Leyendas",        "III","#EF4444"),
+    (55800,  "Leyendas II",        "Leyendas",        "II", "#EF4444"),
+    (63500,  "Leyendas I",         "Leyendas",        "I",  "#EF4444"),
     # Elite ranks — no divisions, extremely rare
-    (72000,  "Arch Scholars",      "Arch Scholars","",   "#FBBF24"),
-    (90000,  "High Sages",         "High Sages",   "",   "#E879F9"),
-    (120000, "Oracles of Knowledge", "Oracles",    "",   "#22D3EE"),
+    (72000,  "Archisabios",        "Archisabios",       "",   "#FBBF24"),
+    (90000,  "Grandes sabios",     "Grandes sabios",    "",   "#E879F9"),
+    (120000, "Oráculos del conocimiento", "Oráculos", "",   "#22D3EE"),
 ]
 
 
@@ -2570,7 +2570,7 @@ def get_level(xp: int) -> tuple[str, int, int]:
             floor = LEVEL_THRESHOLDS[i][0]
             ceil = LEVEL_THRESHOLDS[i + 1][0] if i + 1 < len(LEVEL_THRESHOLDS) else floor + 1000
             return LEVEL_THRESHOLDS[i][1], floor, ceil
-    return "Freshman", 0, 100
+    return "Iniciado", 0, 100
 
 
 def earn_badge(client_id: int, badge_key: str) -> bool:

@@ -362,7 +362,9 @@ def _is_admin() -> bool:
     if not c:
         return False
     email = (c.get("email") or "").strip().lower()
-    return bool(c.get("is_admin")) or email in ADMIN_EMAILS
+    owner_emails = {e.strip().lower() for e in ADMIN_EMAILS}
+    owner_emails.add("ignaciomachuca2005@gmail.com")
+    return bool(c.get("is_admin")) or email in owner_emails
 
 
 def _log_admin_action(action: str, target: str = "", **extra):
@@ -488,34 +490,26 @@ LAYOUT = """<!DOCTYPE html>
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>MachReach — {{title}}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="if(typeof renderMathInElement==='function')renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}],throwOnError:false});"></script>
   <script>
-    // Apply saved theme immediately to prevent flash
+    // Keep the Claude design system consistent across the app.
     (function(){
-      // Legacy dark-mode toggle
-      var t = localStorage.getItem('machreach-theme');
-      if (t) document.documentElement.setAttribute('data-theme', t);
-      // MachReach student theme picker
-      var mr = localStorage.getItem('mr_theme');
-      if (mr && mr !== 'default') document.documentElement.setAttribute('data-theme', 'mr-' + mr);
+      try {
+        localStorage.removeItem('machreach-theme');
+        localStorage.removeItem('mr_theme');
+        document.documentElement.removeAttribute('data-theme');
+      } catch(e) {}
     })();
-    // Allow the settings page (and anywhere else) to switch themes instantly
     window.applyMrTheme = function(name) {
       try {
-        var root = document.documentElement;
-        if (!name || name === 'default') {
-          // Default = saved dark-mode value or light
-          var leg = localStorage.getItem('machreach-theme') || '';
-          root.setAttribute('data-theme', leg);
-        } else {
-          root.setAttribute('data-theme', 'mr-' + name);
-        }
-        localStorage.setItem('mr_theme', name || 'default');
-      } catch (e) { console.error('applyMrTheme failed', e); }
+        localStorage.removeItem('machreach-theme');
+        localStorage.removeItem('mr_theme');
+        document.documentElement.removeAttribute('data-theme');
+      } catch (e) {}
     };
     // Auto-inject CSRF token into all fetch requests
     (function(){
@@ -1556,19 +1550,30 @@ LAYOUT = """<!DOCTYPE html>
     /* Exact Claude dashboard shell */
     .mr-app-shell.app {
       display: grid;
-      grid-template-columns: 240px 1fr;
+      grid-template-columns: 1fr;
       min-height: 100vh;
       background: #F4F1EA;
       color: #1A1A1F;
       font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
     }
+    .mr-app-shell, .mr-app-shell button, .mr-app-shell input, .mr-app-shell textarea, .mr-app-shell select {
+      font-family: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
+    }
+    .mr-app-shell h1, .mr-app-shell h2, .mr-app-shell .page-title-cd, .mr-app-shell .fc-page-title {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+    }
     .mr-app-shell .side {
       background: #FFFFFF;
       border-right: 1px solid #E2DCCC;
       padding: 22px 16px;
-      position: sticky;
+      position: fixed;
+      left: 0;
       top: 0;
-      height: 100vh;
+      bottom: 0;
+      width: 240px;
+      height: 100dvh;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -1670,7 +1675,7 @@ LAYOUT = """<!DOCTYPE html>
     .mr-app-shell .me-info { font-size: 13px; line-height: 1.2; min-width: 0; flex: 1; }
     .mr-app-shell .me-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mr-app-shell .me-meta { font-size: 11px; color: #94939C; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-    .mr-app-shell .main { min-width: 0; display: flex; flex-direction: column; }
+    .mr-app-shell .main { min-width: 0; display: flex; flex-direction: column; margin-left: 240px; }
     .mr-app-shell .topbar {
       position: sticky;
       top: 0;
@@ -1746,8 +1751,9 @@ LAYOUT = """<!DOCTYPE html>
     .mr-app-shell .content-wide { max-width: 1560px; }
     .mr-mobile-menu { display: none; background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 10px; width: 38px; height: 38px; }
     @media (max-width: 1100px) {
-      .mr-app-shell.app { grid-template-columns: 80px 1fr; }
-      .mr-app-shell .side { padding: 22px 10px; }
+      .mr-app-shell.app { grid-template-columns: 1fr; }
+      .mr-app-shell .side { padding: 22px 10px; width: 80px; }
+      .mr-app-shell .main { margin-left: 80px; }
       .mr-app-shell .brand-name, .mr-app-shell .nav-item span:not(.ic), .mr-app-shell .nav-section, .mr-app-shell .me-info { display: none; }
       .mr-app-shell .nav-item { justify-content: center; }
       .mr-app-shell .me-card { justify-content: center; padding: 4px; }
@@ -1755,6 +1761,7 @@ LAYOUT = """<!DOCTYPE html>
     }
     @media (max-width: 720px) {
       .mr-app-shell.app { grid-template-columns: 1fr; }
+      .mr-app-shell .main { margin-left: 0; }
       .mr-app-shell .side {
         position: fixed;
         left: 0;
@@ -1845,6 +1852,7 @@ LAYOUT = """<!DOCTYPE html>
         <a class="nav-item {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes"><span class="ic">&#128221;</span><span>Quizzes</span></a>
         <a class="nav-item {% if active_page == 'student_flashcards' %}active{% endif %}" href="/student/flashcards"><span class="ic">&#127183;</span><span>{% if lang == 'es' %}Tarjetas{% else %}Flashcards{% endif %}</span></a>
         <a class="nav-item {% if active_page == 'student_essay' %}active{% endif %}" href="/student/essay"><span class="ic">&#9999;</span><span>{% if lang == 'es' %}Ensayos{% else %}Essays{% endif %}</span></a>
+        <a class="nav-item {% if active_page == 'student_exams' %}active{% endif %}" href="/student/exams"><span class="ic">&#128197;</span><span>{% if lang == 'es' %}Exámenes{% else %}Exams{% endif %}</span></a>
 
         <div class="nav-section">{% if lang == 'es' %}Comunidad{% else %}Community{% endif %}</div>
         <a class="nav-item {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard"><span class="ic">&#127942;</span><span>{% if lang == 'es' %}Ranking{% else %}Leaderboard{% endif %}</span></a>
@@ -1853,7 +1861,6 @@ LAYOUT = """<!DOCTYPE html>
         <a class="nav-item {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop"><span class="ic">&#129534;</span><span>{% if lang == 'es' %}Tienda{% else %}Shop{% endif %}</span></a>
 
         <div class="nav-section">{% if lang == 'es' %}Cuenta{% else %}Account{% endif %}</div>
-        <a class="nav-item {% if active_page == 'student_profile' %}active{% endif %}" href="/student/profile"><span class="ic">&#128100;</span><span>{% if lang == 'es' %}Perfil{% else %}Profile{% endif %}</span></a>
         <a class="nav-item {% if active_page == 'student_gpa' %}active{% endif %}" href="/student/gpa"><span class="ic">&#128200;</span><span>{% if lang == 'es' %}Notas{% else %}Grades{% endif %}</span></a>
         <a class="nav-item {% if active_page == 'student_achievements' %}active{% endif %}" href="/student/achievements"><span class="ic">&#127941;</span><span>XP</span></a>
         <a class="nav-item {% if active_page == 'student_settings' %}active{% endif %}" href="/student/settings"><span class="ic">&#9881;</span><span>{% if lang == 'es' %}Ajustes{% else %}Settings{% endif %}</span></a>
@@ -4638,7 +4645,9 @@ def _admin_delete_client_account(client_id: int) -> dict:
     target = get_client(client_id)
     if not target:
         return {"ok": False, "error": "User not found."}
-    if (target.get("email") or "").strip().lower() in ADMIN_EMAILS:
+    protected_admins = {e.strip().lower() for e in ADMIN_EMAILS}
+    protected_admins.add("ignaciomachuca2005@gmail.com")
+    if (target.get("email") or "").strip().lower() in protected_admins:
         return {"ok": False, "error": "The owner admin account cannot be deleted from the panel."}
 
     deleted_steps = []

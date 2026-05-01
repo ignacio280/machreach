@@ -3666,7 +3666,9 @@ def register_student_routes(app, csrf, limiter):
 
             email = (c.get("email") or "").strip().lower() if c else ""
 
-            is_admin = bool(c and c.get("is_admin")) or email in ADMIN_EMAILS
+            owner_emails = {e.strip().lower() for e in ADMIN_EMAILS}
+            owner_emails.add("ignaciomachuca2005@gmail.com")
+            is_admin = bool(c and c.get("is_admin")) or email in owner_emails
 
         # End-of-week / end-of-month leaderboard results popup. Shows once
         # per period to every authenticated student.
@@ -5596,9 +5598,173 @@ def register_student_routes(app, csrf, limiter):
 
     def student_exams_page():
 
-        # Exams page retired — exam progress is on the leaderboard now.
+        # Claude-style exams hub built from the user's saved course evaluations.
 
-        return redirect(url_for("student_leaderboard_page"))
+        if not _logged_in():
+            return redirect(url_for("login"))
+
+        cid = _cid()
+        courses = sdb.get_courses(cid) or []
+        today = datetime.now().date()
+        exams = []
+        for course in courses:
+            for exam in (sdb.get_course_exams(int(course["id"])) or []):
+                exam = dict(exam)
+                raw_topics = exam.get("topics_json") or []
+                if isinstance(raw_topics, str):
+                    try:
+                        raw_topics = json.loads(raw_topics)
+                    except Exception:
+                        raw_topics = []
+                raw_date = exam.get("exam_date") or ""
+                date_obj = None
+                if raw_date:
+                    try:
+                        date_obj = datetime.strptime(str(raw_date)[:10], "%Y-%m-%d").date()
+                    except Exception:
+                        date_obj = None
+                days_left = (date_obj - today).days if date_obj else None
+                exams.append({
+                    "id": int(exam.get("id") or 0),
+                    "name": exam.get("name") or "Evaluación",
+                    "date_obj": date_obj,
+                    "days_left": days_left,
+                    "weight": int(exam.get("weight_pct") or 0),
+                    "topics": raw_topics[:5] if isinstance(raw_topics, list) else [],
+                    "course_id": int(course["id"]),
+                    "course_name": course.get("name") or "Curso",
+                    "course_code": course.get("code") or "",
+                })
+
+        exams.sort(key=lambda e: (e["date_obj"] is None, e["date_obj"] or today + timedelta(days=9999), e["course_name"]))
+        this_week = [e for e in exams if e["days_left"] is not None and 0 <= e["days_left"] <= 7]
+        next_two = [e for e in exams if e["days_left"] is not None and 8 <= e["days_left"] <= 14]
+        later = [e for e in exams if e["days_left"] is not None and e["days_left"] > 14]
+        no_date = [e for e in exams if e["days_left"] is None]
+
+        def month_name(d):
+            months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"]
+            return months[d.month - 1] if d else "sin fecha"
+
+        def date_label(e):
+            if e["days_left"] is None:
+                return "Sin fecha"
+            if e["days_left"] == 0:
+                return "Hoy"
+            if e["days_left"] == 1:
+                return "Mañana"
+            if e["days_left"] > 0:
+                return f"en {e['days_left']} días"
+            return "vencida"
+
+        def exam_card(e):
+            d = e["date_obj"]
+            topics = "".join(f'<span class="topic">{_esc(str(t))}</span>' for t in (e["topics"] or []))
+            if not topics:
+                topics = '<span class="topic muted">Sin temas guardados</span>'
+            urgency = "urgent" if e["days_left"] is not None and e["days_left"] <= 7 else ("soon" if e["days_left"] is not None and e["days_left"] <= 14 else "")
+            prep_pct = 0
+            if e["days_left"] is not None:
+                prep_pct = max(12, min(100, 100 - (e["days_left"] * 4))) if e["days_left"] >= 0 else 100
+            return f"""
+            <article class="exam-big {urgency}">
+              <div class="eb-date"><div class="eb-day">{_esc(str(d.day if d else "—"))}</div><div class="eb-mon">{_esc(month_name(d))}</div></div>
+              <div class="eb-main">
+                <div class="eb-cd">{_esc(e["course_code"] or e["course_name"])} · {_esc(date_label(e))}</div>
+                <h3 class="eb-title">{_esc(e["name"])}</h3>
+                <div class="eb-meta">{_esc(e["course_name"])} · {e["weight"]}% de la nota</div>
+                <div class="eb-topics">{topics}</div>
+                <div class="eb-progress"><div class="ebp-row"><span>Preparación estimada</span><strong>{prep_pct}%</strong></div><div class="ebp-bar"><div class="ebp-fill" style="width:{prep_pct}%"></div></div></div>
+              </div>
+              <div class="eb-actions">
+                <a href="/student/focus?course_id={e["course_id"]}&exam_id={e["id"]}">Estudiar</a>
+                <a href="/student/quizzes">Quiz</a>
+                <a href="/student/flashcards">Tarjetas</a>
+              </div>
+            </article>
+            """
+
+        def group(title, items):
+            cards = "".join(exam_card(e) for e in items) or '<div class="exam-empty">Nada pendiente aquí.</div>'
+            return f'<section class="tl-group"><h2>{_esc(title)}</h2>{cards}</section>'
+
+        empty_state = """
+          <div class="exam-empty big">
+            <strong>No tienes pruebas guardadas todavía.</strong>
+            <span>Agrega evaluaciones desde Mis cursos para que aparezcan acá con calendario y prioridad.</span>
+            <a href="/student/courses">Ir a Mis cursos</a>
+          </div>
+        """ if not exams else ""
+
+        content = f"""
+        <style>
+        .exams-cd {{ max-width:1180px;margin:0 auto 80px;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:#1A1A1F; }}
+        .ex-head {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:22px; }}
+        .ex-kicker {{ font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#009B72;margin-bottom:8px; }}
+        .ex-title {{ font-family:"Fraunces",Georgia,serif;font-size:clamp(42px,6vw,72px);line-height:.92;margin:0;font-weight:600;letter-spacing:-.05em; }}
+        .ex-title em {{ color:#FF7A3D;font-style:italic; }}
+        .ex-sub {{ color:#6E6A60;font-size:15px;margin:12px 0 0;max-width:620px;line-height:1.6; }}
+        .ex-head a {{ background:#1A1A1F;color:#FFF8E1;text-decoration:none;border-radius:999px;padding:12px 18px;font-weight:800;box-shadow:0 4px 0 rgba(0,0,0,.16);white-space:nowrap; }}
+        .urg-strip {{ display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0 26px; }}
+        .urg-card {{ background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:18px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 8px rgba(20,18,30,.04); }}
+        .urg-card .lab {{ font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#77756F;margin-bottom:10px; }}
+        .urg-card .num {{ font-family:"Fraunces",Georgia,serif;font-size:42px;line-height:1;font-weight:600; }}
+        .urg-card.hot {{ background:#2C211E;color:#FFF8E1;border-color:#2C211E; }}
+        .urg-card.hot .lab {{ color:#FFB199; }}
+        .exam-timeline {{ display:grid;gap:18px; }}
+        .tl-group {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:22px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); }}
+        .tl-group h2 {{ font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#77756F;margin:0 0 16px;font-weight:800; }}
+        .exam-big {{ display:grid;grid-template-columns:78px 1fr auto;gap:18px;align-items:center;border:1px solid #E2DCCC;background:#FBF8F0;border-radius:18px;padding:16px;margin-top:12px; }}
+        .exam-big:first-of-type {{ margin-top:0; }}
+        .exam-big.urgent {{ border-color:#FF7A3D;box-shadow:inset 5px 0 0 #FF7A3D; }}
+        .exam-big.soon {{ border-color:#F4B73A;box-shadow:inset 5px 0 0 #F4B73A; }}
+        .eb-date {{ background:#1A1A1F;color:#FFF8E1;border-radius:16px;min-height:76px;display:grid;place-items:center;text-align:center;padding:10px; }}
+        .eb-day {{ font-family:"Fraunces",Georgia,serif;font-size:30px;line-height:1;font-weight:600; }}
+        .eb-mon {{ text-transform:uppercase;font-size:11px;letter-spacing:.14em;font-weight:800;color:#F4B73A;margin-top:4px; }}
+        .eb-cd {{ font-size:11px;color:#009B72;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px; }}
+        .eb-title {{ font-family:"Fraunces",Georgia,serif;font-size:28px;margin:0 0 4px;font-weight:600;letter-spacing:-.03em; }}
+        .eb-meta {{ color:#6E6A60;font-size:13px;font-weight:700;margin-bottom:12px; }}
+        .eb-topics {{ display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px; }}
+        .topic {{ border:1px solid #D8D0BE;background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700;color:#3D3932; }}
+        .topic.muted {{ color:#94939C; }}
+        .ebp-row {{ display:flex;justify-content:space-between;font-size:12px;color:#6E6A60;margin-bottom:6px;font-weight:800; }}
+        .ebp-bar {{ height:8px;background:#EDE7DA;border-radius:999px;overflow:hidden; }}
+        .ebp-fill {{ height:100%;background:linear-gradient(90deg,#FF7A3D,#F4B73A);border-radius:999px; }}
+        .eb-actions {{ display:flex;flex-direction:column;gap:8px; }}
+        .eb-actions a {{ color:#1A1A1F;background:#fff;border:1px solid #D8D0BE;border-radius:999px;padding:9px 12px;text-decoration:none;font-size:12px;font-weight:800;text-align:center;white-space:nowrap; }}
+        .eb-actions a:first-child {{ background:#1A1A1F;color:#FFF8E1;border-color:#1A1A1F; }}
+        .exam-empty {{ border:1px dashed #D8D0BE;border-radius:16px;padding:18px;color:#77756F;background:#FBF8F0; }}
+        .exam-empty.big {{ display:grid;gap:10px;text-align:center;padding:46px 22px; }}
+        .exam-empty.big strong {{ font-family:"Fraunces",Georgia,serif;font-size:28px;color:#1A1A1F; }}
+        .exam-empty.big a {{ justify-self:center;background:#1A1A1F;color:#FFF8E1;text-decoration:none;border-radius:999px;padding:11px 16px;font-weight:800; }}
+        @media (max-width:800px) {{ .urg-strip {{ grid-template-columns:repeat(2,1fr); }} .ex-head {{ align-items:flex-start;flex-direction:column; }} .exam-big {{ grid-template-columns:1fr; }} .eb-actions {{ flex-direction:row;flex-wrap:wrap; }} }}
+        </style>
+        <div class="exams-cd">
+          <div class="ex-head">
+            <div>
+              <div class="ex-kicker">Calendario académico</div>
+              <h1 class="ex-title">Pruebas <em>y entregas.</em></h1>
+              <p class="ex-sub">Una vista clara de lo que viene, cuánto pesa y qué deberías atacar primero.</p>
+            </div>
+            <a href="/student/courses">+ Agregar en Mis cursos</a>
+          </div>
+          <div class="urg-strip">
+            <div class="urg-card hot"><div class="lab">Esta semana</div><div class="num">{len(this_week)}</div></div>
+            <div class="urg-card"><div class="lab">Próximas 2 semanas</div><div class="num">{len(next_two)}</div></div>
+            <div class="urg-card"><div class="lab">Más adelante</div><div class="num">{len(later)}</div></div>
+            <div class="urg-card"><div class="lab">Sin fecha</div><div class="num">{len(no_date)}</div></div>
+          </div>
+          {empty_state}
+          <div class="exam-timeline">
+            {group("Esta semana", this_week) if exams else ""}
+            {group("Próximas 2 semanas", next_two) if exams else ""}
+            {group("Más adelante", later) if exams else ""}
+            {group("Sin fecha", no_date) if exams else ""}
+          </div>
+        </div>
+        """
+
+        return _s_render("Exámenes", content, active_page="student_exams")
 
 
 
@@ -18215,6 +18381,22 @@ No markdown, no code fences. ONLY JSON.
     #mr-lb-page .lb-row { grid-template-columns: 40px 1fr 80px; }
     #mr-lb-page .lb-row .lb-pill-col { display:none;}
   }
+  /* Claude-inspired Ranking polish: same warm paper system as the rest of the product. */
+  #mr-lb-page { --lb-panel:#FFFFFF; --lb-panel-2:#FBF8F0; --lb-border:#E2DCCC; --lb-text:#1A1A1F; --lb-muted:#77756F; --lb-accent:#5B4694; --lb-accent-2:#FF7A3D; font-family:"Plus Jakarta Sans",system-ui,sans-serif; color:#1A1A1F; }
+  #mr-lb-page .lb-hero { background:#FFFFFF; border-color:#E2DCCC; border-radius:28px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); }
+  #mr-lb-page .lb-hero::after { background:linear-gradient(135deg,rgba(255,122,61,.16),rgba(0,155,114,.10)); filter:blur(18px); }
+  #mr-lb-page .lb-hero h2 { font-family:"Fraunces",Georgia,serif; font-size:clamp(42px,5vw,70px); line-height:.94; font-weight:600; color:#1A1A1F; }
+  #mr-lb-page .lb-rank-card, #mr-lb-page .lb-controls, #mr-lb-page .lb-row { background:#FFFFFF; border-color:#E2DCCC; color:#1A1A1F; box-shadow:0 1px 0 rgba(20,18,30,.04); }
+  #mr-lb-page .lb-rank-card .rank-big, #mr-lb-page .lb-xp { color:#1A1A1F; }
+  #mr-lb-page .lb-tab { background:#FBF8F0; border-color:#E2DCCC; color:#5C5C66; border-radius:999px; font-weight:800; }
+  #mr-lb-page .lb-tab.active { background:#1A1A1F; color:#FFF8E1; border-color:#1A1A1F; box-shadow:0 4px 0 rgba(0,0,0,.16); }
+  #mr-lb-page .lb-podium { background:linear-gradient(135deg,#2C211E,#1A1A1F); border-color:#2C211E; border-radius:28px; box-shadow:0 10px 0 rgba(20,18,30,.08),0 24px 70px rgba(20,18,30,.14); }
+  #mr-lb-page .lb-podium-card { background:#FFF8E1; color:#1A1A1F; border-color:rgba(255,255,255,.4); box-shadow:0 8px 0 rgba(0,0,0,.16); }
+  #mr-lb-page .lb-podium-card.place-1 { background:linear-gradient(180deg,#FFF8E1,#FFE0A3); }
+  #mr-lb-page .lb-podium-card.place-2 { background:linear-gradient(180deg,#FFFFFF,#EDE7DA); }
+  #mr-lb-page .lb-podium-card.place-3 { background:linear-gradient(180deg,#FFE7D8,#FFB199); }
+  #mr-lb-page .lb-podium-name, #mr-lb-page .lb-podium-xp { color:#1A1A1F; }
+  #mr-lb-page .lb-row:hover { background:#FBF8F0; }
 </style>
 
 <div id="mr-lb-page">
@@ -19429,9 +19611,9 @@ No markdown, no code fences. ONLY JSON.
 
           </div>
 
-          <!-- Theme Selector -->
+          <!-- Theme selector removed: MachReach now uses one Claude-aligned design system. -->
 
-          <div class="card">
+          <div class="card" style="display:none" aria-hidden="true">
 
             <div class="card-header"><h2>🎨 {_T("Theme")}</h2></div>
 
@@ -19765,7 +19947,67 @@ No markdown, no code fences. ONLY JSON.
 
             return redirect(url_for("login"))
 
-        return _s_render("Essay Assistant", f"""
+        return _s_render("Ensayos", f"""
+
+        <style>
+        .essay-cd {{ max-width:1260px;margin:0 auto 80px;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:#1A1A1F; }}
+        .essay-active {{ display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start; }}
+        .essay-cd .card {{ background:#fff;border:1px solid #E2DCCC;border-radius:24px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); }}
+        .essay-cd .essay-side {{ padding:22px;position:sticky;top:92px; }}
+        .essay-cd .essay-doc {{ overflow:hidden;padding:0; }}
+        .essay-kicker {{ font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#009B72;margin-bottom:8px; }}
+        .essay-title {{ font-family:"Fraunces",Georgia,serif;font-size:clamp(42px,6vw,72px);line-height:.92;margin:0;font-weight:600;letter-spacing:-.05em; }}
+        .essay-title em {{ color:#FF7A3D;font-style:italic; }}
+        .essay-sub {{ color:#6E6A60;font-size:15px;margin:12px 0 24px;max-width:680px;line-height:1.6; }}
+        .essay-cd label {{ display:block;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:#77756F;margin-bottom:8px; }}
+        .essay-cd input,.essay-cd textarea {{ width:100%;background:#FBF8F0!important;border:1px solid #D8D0BE!important;border-radius:14px!important;padding:12px 13px!important; }}
+        #ea-drop {{ border:1.5px dashed #D8D0BE!important;border-radius:18px!important;padding:20px!important;background:#FBF8F0!important; }}
+        #ea-drop:hover {{ border-color:#5B4694!important;background:#F5F0FF!important; }}
+        #ea-btn {{ width:100%;border:0!important;border-radius:999px!important;background:#1A1A1F!important;color:#FFF8E1!important;padding:14px 18px!important;font-weight:900!important;box-shadow:0 4px 0 rgba(0,0,0,.16)!important; }}
+        .essay-doc-head {{ display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid #E2DCCC;background:#FBF8F0; }}
+        .essay-doc-head strong {{ font-family:"Fraunces",Georgia,serif;font-size:26px;font-weight:600;letter-spacing:-.03em; }}
+        .essay-doc-head span {{ color:#77756F;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase; }}
+        #ea-essay {{ min-height:560px!important;border:0!important;border-radius:0!important;background:#fff!important;padding:34px 42px!important;color:#1A1A1F!important;font-family:"Fraunces",Georgia,serif!important;font-size:22px!important;line-height:1.75!important;resize:vertical;box-shadow:none!important; }}
+        #ea-result {{ margin-top:20px!important; }}
+        #ea-result .card {{ border-radius:20px;border-color:#E2DCCC;background:#fff;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04);margin-top:14px; }}
+        @media (max-width:980px) {{ .essay-active {{ grid-template-columns:1fr; }} .essay-cd .essay-side {{ position:relative;top:auto; }} #ea-essay {{ min-height:420px!important;padding:24px!important;font-size:19px!important; }} }}
+        </style>
+        <script>
+        document.addEventListener('DOMContentLoaded', function(){{
+          var outer = document.querySelector('h1');
+          var oldWrap = outer && outer.parentElement && outer.parentElement.style.maxWidth ? outer.parentElement : null;
+          if (!oldWrap || oldWrap.classList.contains('essay-cd')) return;
+          oldWrap.className = 'essay-cd';
+          oldWrap.removeAttribute('style');
+          var firstCard = oldWrap.querySelector('.card');
+          var result = document.getElementById('ea-result');
+          if (outer) outer.outerHTML = '<div class="essay-kicker">Asistente de escritura</div><h1 class="essay-title">Ensayos <em>sin vueltas.</em></h1>';
+          var sub = oldWrap.querySelector('p');
+          if (sub) {{ sub.className = 'essay-sub'; sub.textContent = 'Sube o pega tu borrador y recibe feedback claro sobre tesis, estructura, gramática y fluidez.'; }}
+          if (firstCard && result) {{
+            firstCard.classList.add('essay-side');
+            var essayGroup = document.getElementById('ea-essay') && document.getElementById('ea-essay').closest('.form-group');
+            var doc = document.createElement('section');
+            doc.className = 'card essay-doc';
+            doc.innerHTML = '<div class="essay-doc-head"><strong>Borrador</strong><span>Editor</span></div>';
+            if (essayGroup) doc.appendChild(essayGroup);
+            var main = document.createElement('main');
+            main.appendChild(doc);
+            main.appendChild(result);
+            var grid = document.createElement('div');
+            grid.className = 'essay-active';
+            firstCard.parentNode.insertBefore(grid, firstCard);
+            grid.appendChild(firstCard);
+            grid.appendChild(main);
+          }}
+          var prompt = document.getElementById('ea-prompt'); if (prompt) prompt.placeholder = '¿Qué tenía que responder el ensayo?';
+          var essay = document.getElementById('ea-essay'); if (essay) essay.placeholder = 'Pega tu ensayo acá...';
+          var btn = document.getElementById('ea-btn'); if (btn) btn.textContent = 'Analizar ensayo';
+          document.querySelectorAll('.essay-cd label').forEach(function(l){{
+            l.innerHTML = l.innerHTML.replace('Assignment prompt', 'Instrucción o pregunta').replace('Or drop your essay file', 'Archivo').replace('Your essay', 'Borrador');
+          }});
+        }});
+        </script>
 
         <div style="max-width:900px;margin:0 auto">
 
