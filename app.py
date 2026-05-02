@@ -1789,6 +1789,56 @@ LAYOUT = """<!DOCTYPE html>
       color: #F7F0E4 !important;
       border-color: #3B3741 !important;
     }
+    /* Warm Claude theme cleanup for older inline student pages. Several
+       legacy widgets carried navy cards into the new paper/orange product. */
+    :root:not([data-theme="dark"]) .pl-wrap {
+      --card:#FFFFFF; --bg:#F4F1EA; --text:#1A1A1F; --text-muted:#77756F; --border:#E2DCCC; --border-light:#EEE8DA; --primary:#FF7A3D;
+    }
+    :root:not([data-theme="dark"]) .pl-card,
+    :root:not([data-theme="dark"]) .pl-course,
+    :root:not([data-theme="dark"]) .pl-help,
+    :root:not([data-theme="dark"]) .pl-empty {
+      background:#FFFFFF !important; color:#1A1A1F !important; border-color:#E2DCCC !important;
+      box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04) !important;
+    }
+    :root:not([data-theme="dark"]) .pl-btn.primary,
+    :root:not([data-theme="dark"]) .pl-tab.active,
+    :root:not([data-theme="dark"]) .pl-add-course:hover {
+      border-color:#FF7A3D !important; color:#FF7A3D !important;
+    }
+    :root:not([data-theme="dark"]) .pl-btn.primary {
+      background:#1A1A1F !important; color:#FFF8E1 !important; border-color:#1A1A1F !important;
+    }
+    :root:not([data-theme="dark"]) .student-profile-wrap [style*="background:#0B1220"] {
+      background:#FFFFFF !important; border-color:#E2DCCC !important; box-shadow:0 6px 0 rgba(20,18,30,.05),0 18px 44px rgba(20,18,30,.08) !important;
+    }
+    :root:not([data-theme="dark"]) .student-profile-wrap [style*="border:3px solid #0B1220"] {
+      border-color:#FFFFFF !important;
+    }
+    :root:not([data-theme="dark"]) .student-profile-wrap [style*="color:#fff"],
+    :root:not([data-theme="dark"]) .student-profile-wrap [style*="color:#fff;"],
+    :root:not([data-theme="dark"]) .student-profile-wrap [style*="color:#fff;font"] {
+      color:#1A1A1F !important;
+    }
+    :root:not([data-theme="dark"]) .student-profile-wrap .me-avatar,
+    :root:not([data-theme="dark"]) .student-profile-wrap [style*="background:linear-gradient(135deg,#3B4A7A,#5B4694)"] {
+      color:#FFFFFF !important;
+    }
+    :root:not([data-theme="dark"]) .shop-cd [style*="background:#0f172a"],
+    :root:not([data-theme="dark"]) .shop-cd [style*="background:#374151"],
+    :root:not([data-theme="dark"]) .shop-cd [style*="background:#1e293b"],
+    :root:not([data-theme="dark"]) .shop-cd [style*="background:#111827"] {
+      background:#FBF8F0 !important; color:#1A1A1F !important; border:1px solid #E2DCCC !important;
+    }
+    :root:not([data-theme="dark"]) .shop-cd [style*="color:#334155"],
+    :root:not([data-theme="dark"]) .shop-cd [style*="color:#94a3b8"],
+    :root:not([data-theme="dark"]) .shop-cd [style*="color:#64748b"] {
+      color:#77756F !important;
+    }
+    :root:not([data-theme="dark"]) .shop-cd .stat-card,
+    :root:not([data-theme="dark"]) .student-profile-wrap .stat-card {
+      background:#FFFFFF !important; border-color:#E2DCCC !important; color:#1A1A1F !important;
+    }
     .mr-app-shell .content {
       padding: 28px 28px 80px;
       max-width: 1400px;
@@ -5057,6 +5107,22 @@ def admin_product_analytics():
         "SELECT action, COUNT(*) AS n, COALESCE(SUM(xp),0) AS xp FROM student_xp WHERE created_at >= NOW() - INTERVAL '30 days' GROUP BY action ORDER BY xp DESC, n DESC LIMIT 16",
         "SELECT action, COUNT(*) AS n, COALESCE(SUM(xp),0) AS xp FROM student_xp WHERE datetime(created_at) >= datetime('now','localtime','-30 days') GROUP BY action ORDER BY xp DESC, n DESC LIMIT 16",
     )
+    traffic_daily = _admin_rows(
+        "SELECT created_at::date::text AS d, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND created_at >= CURRENT_DATE - INTERVAL '13 days' GROUP BY created_at::date ORDER BY d",
+        "SELECT date(created_at) AS d, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND date(created_at) >= date('now','localtime','-13 days') GROUP BY date(created_at) ORDER BY d",
+    )
+    focus_daily = _admin_rows(
+        "SELECT plan_date::date::text AS d, COALESCE(SUM(focus_minutes),0) AS n FROM student_study_progress WHERE plan_date::date >= CURRENT_DATE - INTERVAL '13 days' GROUP BY plan_date::date ORDER BY d",
+        "SELECT date(plan_date) AS d, COALESCE(SUM(focus_minutes),0) AS n FROM student_study_progress WHERE date(plan_date) >= date('now','localtime','-13 days') GROUP BY date(plan_date) ORDER BY d",
+    )
+    ai_daily = _admin_rows(
+        "SELECT created_at::date::text AS d, COUNT(*) AS n FROM student_quizzes WHERE created_at >= CURRENT_DATE - INTERVAL '13 days' GROUP BY created_at::date ORDER BY d",
+        "SELECT date(created_at) AS d, COUNT(*) AS n FROM student_quizzes WHERE date(created_at) >= date('now','localtime','-13 days') GROUP BY date(created_at) ORDER BY d",
+    )
+    flash_daily = _admin_rows(
+        "SELECT created_at::date::text AS d, COUNT(*) AS n FROM student_flashcard_decks WHERE created_at >= CURRENT_DATE - INTERVAL '13 days' GROUP BY created_at::date ORDER BY d",
+        "SELECT date(created_at) AS d, COUNT(*) AS n FROM student_flashcard_decks WHERE date(created_at) >= date('now','localtime','-13 days') GROUP BY date(created_at) ORDER BY d",
+    )
 
     def table(headers, rows, keys):
         if not rows:
@@ -5064,6 +5130,66 @@ def admin_product_analytics():
         head = "".join(f"<th>{_esc(h)}</th>" for h in headers)
         body = "".join("<tr>" + "".join(f"<td>{_esc(str(r.get(k, '')))}</td>" for k in keys) + "</tr>" for r in rows)
         return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+    def line_chart(title, rows, color="#FF7A3D", suffix=""):
+        vals = [int(r.get("n") or 0) for r in rows]
+        if not vals:
+            return f"<div class='admin-chart'><h2>{_esc(title)}</h2><div class='admin-empty'>Sin datos para graficar todavía.</div></div>"
+        max_v = max(vals) or 1
+        width, height, pad = 720, 220, 28
+        step = (width - pad * 2) / max(1, len(vals) - 1)
+        pts = []
+        dots = []
+        labels = []
+        for i, r in enumerate(rows):
+            x = pad + i * step
+            y = height - pad - ((int(r.get("n") or 0) / max_v) * (height - pad * 2))
+            pts.append(f"{x:.1f},{y:.1f}")
+            dots.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='4' fill='{color}'><title>{_esc(str(r.get('d') or ''))}: {int(r.get('n') or 0)}{suffix}</title></circle>")
+            if i == 0 or i == len(rows)-1 or len(rows) <= 7 or i % 3 == 0:
+                labels.append(f"<text x='{x:.1f}' y='{height-6}' text-anchor='middle' font-size='10' fill='#77756F'>{_esc(str(r.get('d') or '')[-5:])}</text>")
+        area = f"{pad},{height-pad} " + " ".join(pts) + f" {width-pad},{height-pad}"
+        return f"""
+        <div class="admin-chart">
+          <h2>{_esc(title)}</h2>
+          <svg viewBox="0 0 {width} {height}" role="img" aria-label="{_esc(title)}">
+            <defs><linearGradient id="g{abs(hash(title))}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="{color}" stop-opacity=".24"/><stop offset="100%" stop-color="{color}" stop-opacity="0"/></linearGradient></defs>
+            <line x1="{pad}" y1="{height-pad}" x2="{width-pad}" y2="{height-pad}" stroke="#E2DCCC" stroke-width="1"/>
+            <polyline points="{area}" fill="url(#g{abs(hash(title))})"/>
+            <polyline points="{' '.join(pts)}" fill="none" stroke="{color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            {''.join(dots)}
+            {''.join(labels)}
+          </svg>
+          <div class="admin-chart-foot"><b>{sum(vals):,}{suffix}</b> acumulado · máximo diario {max_v:,}{suffix}</div>
+        </div>
+        """
+
+    def bar_chart(title, rows, label_key, value_key, color="#1A1A1F", suffix=""):
+        clean = rows[:10]
+        if not clean:
+            return f"<div class='admin-chart'><h2>{_esc(title)}</h2><div class='admin-empty'>Sin datos para graficar todavía.</div></div>"
+        max_v = max([int(r.get(value_key) or 0) for r in clean] or [1]) or 1
+        bars = []
+        for r in clean:
+            value = int(r.get(value_key) or 0)
+            pct = max(3, int(value * 100 / max_v))
+            bars.append(
+                f"<div class='admin-bar-row'><span>{_esc(str(r.get(label_key) or ''))}</span>"
+                f"<div class='admin-bar-track'><i style='width:{pct}%;background:{color};'></i></div>"
+                f"<b>{value:,}{suffix}</b></div>"
+            )
+        return f"<div class='admin-chart'><h2>{_esc(title)}</h2>{''.join(bars)}</div>"
+
+    charts_html = (
+        '<div class="admin-chart-grid">'
+        + line_chart("Tráfico diario · 14 días", traffic_daily, "#FF7A3D")
+        + line_chart("Minutos de estudio · 14 días", focus_daily, "#2E9266", " min")
+        + line_chart("Quizzes creados · 14 días", ai_daily, "#EF5DA8")
+        + line_chart("Mazos de tarjetas · 14 días", flash_daily, "#5B4694")
+        + bar_chart("Features más usadas · 7 días", feature_rows, "event_type", "n", "#FF7A3D")
+        + bar_chart("Páginas más vistas · 7 días", top_pages, "path", "n", "#1A1A1F")
+        + "</div>"
+    )
 
     body = f"""
     <style>
@@ -5075,11 +5201,24 @@ def admin_product_analytics():
       .admin-panel {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:18px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
       .admin-panel h2 {{ margin:0 0 12px; font-family:Fraunces,Georgia,serif; font-size:25px; }}
       .admin-empty {{ color:#94939C; background:#FBF8F0; border:1px dashed #D8D0BE; border-radius:14px; padding:16px; }}
+      .admin-chart-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }}
+      .admin-chart {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:18px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); min-width:0; }}
+      .admin-chart h2 {{ margin:0 0 12px; font-family:Fraunces,Georgia,serif; font-size:24px; font-weight:650; color:#1A1A1F; }}
+      .admin-chart svg {{ width:100%; height:auto; display:block; overflow:visible; }}
+      .admin-chart-foot {{ margin-top:8px; color:#77756F; font-size:12px; }}
+      .admin-bar-row {{ display:grid; grid-template-columns:minmax(110px,1fr) 2.4fr auto; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #EEE8DA; }}
+      .admin-bar-row:last-child {{ border-bottom:0; }}
+      .admin-bar-row span {{ color:#5C5C66; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+      .admin-bar-row b {{ font-variant-numeric:tabular-nums; color:#1A1A1F; font-size:12px; }}
+      .admin-bar-track {{ height:12px; background:#F4F1EA; border:1px solid #E2DCCC; border-radius:999px; overflow:hidden; }}
+      .admin-bar-track i {{ display:block; height:100%; border-radius:999px; }}
+      @media (max-width: 900px) {{ .admin-chart-grid {{ grid-template-columns:1fr; }} .admin-bar-row {{ grid-template-columns:1fr; }} }}
     </style>
     <div class="admin-analytics">
       <div class="breadcrumb"><a href="/admin">Admin</a> / Analytics</div>
       <div class="page-header"><h1>&#128202; Analytics de producto</h1><p class="subtitle">Tráfico, uso de IA, estudio real y señales para decidir qué merece ser Plus o Ultimate.</p></div>
       <div class="admin-grid">{card_html}</div>
+      {charts_html}
       <div class="admin-panel"><h2>Páginas más vistas · 7 días</h2>{table(["Ruta","Visitas"], top_pages, ["path","n"])}</div>
       <div class="admin-panel"><h2>Eventos de producto · 7 días</h2>{table(["Evento","Acciones","Usuarios"], feature_rows, ["event_type","n","users"])}</div>
       <div class="admin-panel"><h2>XP por fuente · 30 días</h2>{table(["Acción","Eventos","XP"], xp_rows, ["action","n","xp"])}</div>

@@ -17217,8 +17217,18 @@ No markdown, no code fences. ONLY JSON.
 
 
         return _s_render("Logros", f"""
+        <style>
+          .achievements-cd {{ max-width:900px;margin:0 auto 80px;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:#1A1A1F; }}
+          .achievements-cd h2 {{ font-family:"Fraunces",Georgia,serif;font-size:34px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+          .achievements-cd .ach-rank-card {{ background:linear-gradient(135deg,#FFFFFF,#F4F1EA)!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important;border-radius:24px!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 18px 44px rgba(20,18,30,.08)!important; }}
+          .achievements-cd .ach-stat-card,.achievements-cd .ach-badge-card,.achievements-cd .ach-activity-card {{ background:#FFFFFF!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04)!important; }}
+          .achievements-cd [style*="background:var(--card)"] {{ background:#FFFFFF!important;color:#1A1A1F!important;border-color:#E2DCCC!important; }}
+          .achievements-cd [style*="background:#0f172a"], .achievements-cd [style*="background:#1e293b"], .achievements-cd [style*="background:#111827"] {{ background:#FFFFFF!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important; }}
+          .achievements-cd .ach-stat-card .big {{ color:#FF7A3D!important; }}
+          .achievements-cd .ach-activity-card [style*="color:#fff"], .achievements-cd [style*="color:#fff"] {{ color:#1A1A1F!important; }}
+        </style>
 
-        <div style="max-width:800px;margin:0 auto">
+        <div class="achievements-cd">
 
           <h2 style="margin-bottom:20px"><span style="font-size:1.3em">🏆</span> Logros y progreso</h2>
 
@@ -17226,7 +17236,7 @@ No markdown, no code fences. ONLY JSON.
 
           <!-- Rank & XP Bar -->
 
-          <div style="background:linear-gradient(135deg,{rank_color} 0%,{rank_color}cc 60%,{rank_color}99 100%);color:#fff;
+          <div class="ach-rank-card" style="background:linear-gradient(135deg,{rank_color} 0%,{rank_color}cc 60%,{rank_color}99 100%);color:#fff;
 
                       border-radius:var(--radius);padding:28px 32px;margin-bottom:24px;text-align:center;
 
@@ -17238,7 +17248,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div style="font-size:2.2em;font-weight:800;margin:6px 0;letter-spacing:-1px">{_esc(rank_full_name)}</div>
 
-            <div style="font-size:1.4em;font-weight:600;opacity:0.95">{total_xp} XP</div>
+            <div style="font-size:1.4em;font-weight:600;opacity:0.95;color:#FF7A3D;">{total_xp} XP</div>
 
             <div style="background:rgba(255,255,255,0.2);border-radius:8px;height:10px;margin:14px auto;max-width:320px">
 
@@ -17256,7 +17266,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px">
 
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+            <div class="ach-stat-card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
 
                         padding:20px;text-align:center;transition:transform 0.2s"
 
@@ -17270,7 +17280,7 @@ No markdown, no code fences. ONLY JSON.
 
             </div>
 
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+            <div class="ach-stat-card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
 
                         padding:20px;text-align:center;transition:transform 0.2s"
 
@@ -17316,7 +17326,7 @@ No markdown, no code fences. ONLY JSON.
 
           <h3 style="color:var(--text);margin-bottom:12px">📊 Recent Activity</h3>
 
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px">
+          <div class="ach-activity-card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px">
 
             {history_html if history_html else '<p style="color:var(--text-muted)">No activity yet.</p>'}
 
