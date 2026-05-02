@@ -1742,6 +1742,53 @@ LAYOUT = """<!DOCTYPE html>
       font-weight: 800;
     }
     .mr-app-shell .top-icon-btn:hover { background: #EDE7DA; }
+    :root[data-theme="dark"] .mr-app-shell.app {
+      background: #11131A;
+      color: #F7F0E4;
+    }
+    :root[data-theme="dark"] .mr-app-shell .side,
+    :root[data-theme="dark"] .mr-app-shell .topbar {
+      background: rgba(24,26,36,0.92);
+      border-color: #34313A;
+    }
+    :root[data-theme="dark"] .mr-app-shell .content {
+      background: #11131A;
+    }
+    :root[data-theme="dark"] .mr-app-shell .brand,
+    :root[data-theme="dark"] .mr-app-shell .nav-item,
+    :root[data-theme="dark"] .mr-app-shell .greet,
+    :root[data-theme="dark"] .mr-app-shell .stat-pill,
+    :root[data-theme="dark"] .mr-app-shell .xp-pill,
+    :root[data-theme="dark"] .mr-app-shell .top-icon-btn,
+    :root[data-theme="dark"] .mr-app-shell .me-card {
+      color: #F7F0E4;
+    }
+    :root[data-theme="dark"] .mr-app-shell .nav-item:hover,
+    :root[data-theme="dark"] .mr-app-shell .nav-item.active,
+    :root[data-theme="dark"] .mr-app-shell .top-icon-btn:hover {
+      background: #2A2630;
+      color: #FFB17C;
+    }
+    :root[data-theme="dark"] .mr-app-shell .nav-item.active::before {
+      background: #FF7A3D;
+    }
+    :root[data-theme="dark"] .mr-app-shell .card,
+    :root[data-theme="dark"] .mr-app-shell .admin-metric,
+    :root[data-theme="dark"] .mr-app-shell .admin-panel,
+    :root[data-theme="dark"] .mr-app-shell .me-card,
+    :root[data-theme="dark"] .mr-app-shell .stat-pill,
+    :root[data-theme="dark"] .mr-app-shell .xp-pill,
+    :root[data-theme="dark"] .mr-app-shell .top-icon-btn {
+      background: #1D202A;
+      border-color: #34313A;
+    }
+    :root[data-theme="dark"] .mr-app-shell input,
+    :root[data-theme="dark"] .mr-app-shell textarea,
+    :root[data-theme="dark"] .mr-app-shell select {
+      background: #141720 !important;
+      color: #F7F0E4 !important;
+      border-color: #3B3741 !important;
+    }
     .mr-app-shell .content {
       padding: 28px 28px 80px;
       max-width: 1400px;
@@ -1889,6 +1936,7 @@ LAYOUT = """<!DOCTYPE html>
             <span class="xp-ring"><svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15" fill="none" stroke-width="4"/><circle class="ring-fg" cx="18" cy="18" r="15" fill="none" stroke-width="4" stroke-dasharray="94" stroke-dashoffset="34"/></svg><span class="lvl">XP</span></span>
             <span class="xp-meta"><span class="league-name">{% if lang == 'es' %}Liga activa{% else %}Active league{% endif %}</span><span class="xp-num">{% if lang == 'es' %}sigue subiendo{% else %}keep climbing{% endif %}</span></span>
           </a>
+          <button id="theme-toggle" class="top-icon-btn" type="button" onclick="toggleDarkMode()" title="{% if lang == 'es' %}Cambiar modo{% else %}Toggle theme{% endif %}">&#127769;</button>
           <a class="top-icon-btn" href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
           <a class="top-icon-btn" href="/logout" title="{{nav.logout}}">&#10162;</a>
         </div>
@@ -2238,6 +2286,7 @@ LAYOUT = """<!DOCTYPE html>
       const next = current === 'dark' ? '' : 'dark';
       html.setAttribute('data-theme', next);
       localStorage.setItem('machreach-theme', next);
+      localStorage.setItem('mr_theme', 'default');
       const btn = document.getElementById('theme-toggle');
       if (btn) btn.innerHTML = next === 'dark' ? '&#9728;' : '&#127769;';
     }
@@ -4820,6 +4869,7 @@ def admin_dashboard():
       <p class="subtitle">Broadcast to users and manage accounts. Admin access comes from configured admin emails and is audited.</p>
     </div>
     <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="btn btn-primary btn-sm" href="/admin/analytics">&#128202; Analytics de producto</a>
       <a class="btn btn-outline btn-sm" href="/admin/leaderboard-winners-test">&#127942; Preview monthly leaderboard winners email</a>
     </div>
     {'<div class="alert alert-red" style="margin-bottom:16px;">' + _esc(error_msg) + '</div>' if error_msg else ''}
@@ -4857,6 +4907,185 @@ def admin_dashboard():
       </table>
     </div>
     """, active_page="admin", wide=True)
+
+
+_ANALYTICS_TABLE_READY = False
+
+
+def _ensure_product_analytics_table():
+    """Create lightweight product analytics storage lazily."""
+    global _ANALYTICS_TABLE_READY
+    if _ANALYTICS_TABLE_READY:
+        return
+    try:
+        from outreach.db import get_db, _USE_PG, _exec
+        with get_db() as db:
+            if _USE_PG:
+                _exec(db, """
+                    CREATE TABLE IF NOT EXISTS product_analytics_events (
+                      id SERIAL PRIMARY KEY,
+                      client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+                      event_type TEXT NOT NULL,
+                      path TEXT DEFAULT '',
+                      method TEXT DEFAULT '',
+                      metadata TEXT DEFAULT '',
+                      created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """)
+            else:
+                _exec(db, """
+                    CREATE TABLE IF NOT EXISTS product_analytics_events (
+                      id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+                      event_type TEXT NOT NULL,
+                      path TEXT DEFAULT '',
+                      method TEXT DEFAULT '',
+                      metadata TEXT DEFAULT '',
+                      created_at TEXT DEFAULT (datetime('now','localtime'))
+                    )
+                """)
+            _exec(db, "CREATE INDEX IF NOT EXISTS idx_product_events_created ON product_analytics_events(created_at)")
+            _exec(db, "CREATE INDEX IF NOT EXISTS idx_product_events_type ON product_analytics_events(event_type)")
+        _ANALYTICS_TABLE_READY = True
+    except Exception as e:
+        print(f"[analytics] table init skipped: {e}", flush=True)
+
+
+def _record_product_event(event_type: str, metadata: dict | None = None):
+    try:
+        _ensure_product_analytics_table()
+        from outreach.db import get_db, _exec
+        cid = session.get("client_id")
+        with get_db() as db:
+            _exec(
+                db,
+                "INSERT INTO product_analytics_events (client_id, event_type, path, method, metadata) VALUES (%s, %s, %s, %s, %s)",
+                (cid, event_type, request.path[:300], request.method, json.dumps(metadata or {}, ensure_ascii=False)[:1200]),
+            )
+    except Exception:
+        pass
+
+
+@app.before_request
+def _machreach_product_analytics_hook():
+    """Track product usage for the owner analytics dashboard."""
+    path = request.path or ""
+    if path.startswith(("/static/", "/favicon", "/health", "/admin/analytics")):
+        return
+    if request.method == "GET":
+        wants_html = "text/html" in (request.headers.get("Accept") or "")
+        if wants_html and not path.startswith("/api/"):
+            _record_product_event("page_view")
+        return
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return
+    feature_map = [
+        ("/api/student/focus/save", "focus_session_saved"),
+        ("/api/student/quiz", "quiz_action"),
+        ("/api/student/quizzes", "quiz_action"),
+        ("/api/student/flashcard", "flashcard_action"),
+        ("/api/student/flashcards", "flashcard_action"),
+        ("/api/student/essay", "essay_action"),
+        ("/student/essay", "essay_action"),
+        ("/api/student/marketplace", "marketplace_action"),
+        ("/student/marketplace", "marketplace_action"),
+        ("/api/student/canvas", "canvas_action"),
+    ]
+    for prefix, event in feature_map:
+        if path.startswith(prefix):
+            _record_product_event(event)
+            return
+
+
+def _admin_metric(sql_pg: str, sql_lite: str | None = None, params=()) -> int:
+    try:
+        from outreach.db import get_db, _USE_PG, _fetchval
+        with get_db() as db:
+            return int(_fetchval(db, sql_pg if _USE_PG else (sql_lite or sql_pg), params) or 0)
+    except Exception:
+        return 0
+
+
+def _admin_rows(sql_pg: str, sql_lite: str | None = None, params=()) -> list[dict]:
+    try:
+        from outreach.db import get_db, _USE_PG, _fetchall
+        with get_db() as db:
+            return _fetchall(db, sql_pg if _USE_PG else (sql_lite or sql_pg), params) or []
+    except Exception:
+        return []
+
+
+@app.route("/admin/analytics")
+def admin_product_analytics():
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    _ensure_product_analytics_table()
+
+    today_pg = "created_at >= CURRENT_DATE"
+    today_lite = "date(created_at) = date('now','localtime')"
+    week_pg = "created_at >= NOW() - INTERVAL '7 days'"
+    week_lite = "datetime(created_at) >= datetime('now','localtime','-7 days')"
+
+    cards = [
+        ("Visitas hoy", _admin_metric(f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_pg}", f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_lite}")),
+        ("Usuarios únicos hoy", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_pg}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_lite}")),
+        ("Registros hoy", _admin_metric(f"SELECT COUNT(*) FROM clients WHERE created_at >= CURRENT_DATE", "SELECT COUNT(*) FROM clients WHERE date(created_at)=date('now','localtime')")),
+        ("Focus min hoy", _admin_metric("SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress WHERE plan_date::date = CURRENT_DATE", "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress WHERE date(plan_date)=date('now','localtime')")),
+        ("XP hoy", _admin_metric(f"SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE {today_pg}", f"SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE {today_lite}")),
+        ("Quizzes hoy", _admin_metric(f"SELECT COUNT(*) FROM student_quizzes WHERE {today_pg}", f"SELECT COUNT(*) FROM student_quizzes WHERE {today_lite}")),
+        ("Mazos hoy", _admin_metric(f"SELECT COUNT(*) FROM student_flashcard_decks WHERE {today_pg}", f"SELECT COUNT(*) FROM student_flashcard_decks WHERE {today_lite}")),
+        ("Tarjetas hoy", _admin_metric(f"SELECT COUNT(*) FROM student_flashcards WHERE {today_pg}", f"SELECT COUNT(*) FROM student_flashcards WHERE {today_lite}")),
+        ("Apuntes/ensayos hoy", _admin_metric(f"SELECT COUNT(*) FROM student_notes WHERE {today_pg}", f"SELECT COUNT(*) FROM student_notes WHERE {today_lite}")),
+        ("Mercado ventas hoy", _admin_metric(f"SELECT COUNT(*) FROM student_marketplace_purchases WHERE {today_pg}", f"SELECT COUNT(*) FROM student_marketplace_purchases WHERE {today_lite}")),
+        ("Usuarios totales", _admin_metric("SELECT COUNT(*) FROM clients WHERE COALESCE(account_type,'student')='student'", "SELECT COUNT(*) FROM clients WHERE COALESCE(account_type,'student')='student'")),
+        ("Activos 7 días", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_pg}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_lite}")),
+    ]
+    card_html = "".join(
+        f"<div class='admin-metric'><div class='k'>{_esc(label)}</div><div class='v'>{value:,}</div></div>"
+        for label, value in cards
+    )
+
+    top_pages = _admin_rows(
+        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_pg} GROUP BY path ORDER BY n DESC LIMIT 12",
+        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_lite} GROUP BY path ORDER BY n DESC LIMIT 12",
+    )
+    feature_rows = _admin_rows(
+        f"SELECT event_type, COUNT(*) AS n, COUNT(DISTINCT client_id) AS users FROM product_analytics_events WHERE {week_pg} GROUP BY event_type ORDER BY n DESC LIMIT 20",
+        f"SELECT event_type, COUNT(*) AS n, COUNT(DISTINCT client_id) AS users FROM product_analytics_events WHERE {week_lite} GROUP BY event_type ORDER BY n DESC LIMIT 20",
+    )
+    xp_rows = _admin_rows(
+        "SELECT action, COUNT(*) AS n, COALESCE(SUM(xp),0) AS xp FROM student_xp WHERE created_at >= NOW() - INTERVAL '30 days' GROUP BY action ORDER BY xp DESC, n DESC LIMIT 16",
+        "SELECT action, COUNT(*) AS n, COALESCE(SUM(xp),0) AS xp FROM student_xp WHERE datetime(created_at) >= datetime('now','localtime','-30 days') GROUP BY action ORDER BY xp DESC, n DESC LIMIT 16",
+    )
+
+    def table(headers, rows, keys):
+        if not rows:
+            return "<div class='admin-empty'>Sin datos todavía. Desde ahora MachReach empezará a registrar esta señal.</div>"
+        head = "".join(f"<th>{_esc(h)}</th>" for h in headers)
+        body = "".join("<tr>" + "".join(f"<td>{_esc(str(r.get(k, '')))}</td>" for k in keys) + "</tr>" for r in rows)
+        return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+    body = f"""
+    <style>
+      .admin-analytics {{ display:grid; gap:18px; }}
+      .admin-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }}
+      .admin-metric {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:16px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
+      .admin-metric .k {{ color:#77756F; font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
+      .admin-metric .v {{ font-family:Fraunces,Georgia,serif; font-size:34px; font-weight:650; margin-top:8px; color:#1A1A1F; }}
+      .admin-panel {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:18px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
+      .admin-panel h2 {{ margin:0 0 12px; font-family:Fraunces,Georgia,serif; font-size:25px; }}
+      .admin-empty {{ color:#94939C; background:#FBF8F0; border:1px dashed #D8D0BE; border-radius:14px; padding:16px; }}
+    </style>
+    <div class="admin-analytics">
+      <div class="breadcrumb"><a href="/admin">Admin</a> / Analytics</div>
+      <div class="page-header"><h1>&#128202; Analytics de producto</h1><p class="subtitle">Tráfico, uso de IA, estudio real y señales para decidir qué merece ser Plus o Ultimate.</p></div>
+      <div class="admin-grid">{card_html}</div>
+      <div class="admin-panel"><h2>Páginas más vistas · 7 días</h2>{table(["Ruta","Visitas"], top_pages, ["path","n"])}</div>
+      <div class="admin-panel"><h2>Eventos de producto · 7 días</h2>{table(["Evento","Acciones","Usuarios"], feature_rows, ["event_type","n","users"])}</div>
+      <div class="admin-panel"><h2>XP por fuente · 30 días</h2>{table(["Acción","Eventos","XP"], xp_rows, ["action","n","xp"])}</div>
+    </div>
+    """
+    return _render("Admin analytics", body, active_page="admin", wide=True)
 
 
 @app.route("/admin/leaderboard-winners-test")

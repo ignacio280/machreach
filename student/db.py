@@ -1275,6 +1275,16 @@ def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
         )
 
 
+def get_focus_session_entry(entry_id: int, client_id: int) -> dict | None:
+    """Return one saved focus/progress row owned by a student."""
+    with get_db() as db:
+        return _fetchone(
+            db,
+            "SELECT * FROM student_study_progress WHERE id = %s AND client_id = %s",
+            (int(entry_id), int(client_id)),
+        )
+
+
 def get_focus_stats(client_id: int) -> dict:
     with get_db() as db:
         total_min = _fetchval(

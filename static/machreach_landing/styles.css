@@ -17,13 +17,13 @@
   --line-2: oklch(0.78 0.01 80);
 
   /* brand — coral default */
-  --brand: oklch(0.72 0.19 28);
-  --brand-ink: oklch(0.32 0.10 28);
-  --brand-soft: oklch(0.94 0.06 28);
+  --brand: oklch(0.73 0.22 38);
+  --brand-ink: oklch(0.34 0.12 38);
+  --brand-soft: oklch(0.94 0.075 38);
   --accent: oklch(0.84 0.19 130);
   --accent-ink: oklch(0.30 0.10 130);
-  --secondary: oklch(0.62 0.20 290);
-  --secondary-soft: oklch(0.94 0.04 290);
+  --secondary: oklch(0.74 0.17 58);
+  --secondary-soft: oklch(0.95 0.055 58);
 
   /* semantic */
   --gold: oklch(0.84 0.16 85);
@@ -53,14 +53,14 @@
   --ink-3: oklch(0.60 0.02 270);
   --line: oklch(0.32 0.02 270);
   --line-2: oklch(0.42 0.02 270);
-  --brand-soft: oklch(0.30 0.08 28);
+  --brand-soft: oklch(0.30 0.09 38);
   --secondary-soft: oklch(0.30 0.06 290);
 }
 
 [data-accent="lime"]   { --brand: oklch(0.84 0.18 130); --brand-ink: oklch(0.32 0.10 130); --brand-soft: oklch(0.95 0.07 130); }
 [data-accent="violet"] { --brand: oklch(0.66 0.20 290); --brand-ink: oklch(0.30 0.12 290); --brand-soft: oklch(0.94 0.05 290); }
 [data-accent="sky"]    { --brand: oklch(0.74 0.15 240); --brand-ink: oklch(0.32 0.10 240); --brand-soft: oklch(0.95 0.05 240); }
-[data-accent="coral"]  { --brand: oklch(0.72 0.19 28);  --brand-ink: oklch(0.32 0.10 28);  --brand-soft: oklch(0.94 0.06 28); }
+[data-accent="coral"]  { --brand: oklch(0.73 0.22 38);  --brand-ink: oklch(0.34 0.12 38);  --brand-soft: oklch(0.94 0.075 38); }
 
 /* ============ reset ============ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

@@ -3156,6 +3156,7 @@ def register_student_routes(app, csrf, limiter):
             exam_id = int(data.get("exam_id") or 0) or None
         except (TypeError, ValueError):
             exam_id = None
+        phase_id = re.sub(r"[^A-Za-z0-9_.:-]", "", str(data.get("phase_id") or ""))[:80]
 
         # Backwards-compat: older clients still send only course_name. If we
         # have the name but not the id, look the id up so stats queries stay
@@ -3193,6 +3194,27 @@ def register_student_routes(app, csrf, limiter):
         if minutes <= 0 and pages <= 0:
             return jsonify({"ok": True, "saved": False, "reason": "empty"})
 
+        if phase_id:
+            try:
+                with sdb.get_db() as db:
+                    already = sdb._fetchval(
+                        db,
+                        "SELECT id FROM student_xp WHERE client_id = %s AND action = 'focus_session' AND detail LIKE %s LIMIT 1",
+                        (cid, f"%phase:{phase_id}%"),
+                    )
+                if already:
+                    local_date = (request.args.get("local_date") or "").strip() or None
+                    return jsonify({
+                        "ok": True,
+                        "saved": False,
+                        "reason": "duplicate-phase",
+                        "stats": sdb.get_focus_stats_today(cid, local_date=local_date),
+                        "minutes_saved": 0,
+                        "xp_awarded": 0,
+                    })
+            except Exception:
+                pass
+
         # save_focus_session itself will further clamp by per-day total and
         # may return 0 if the day is already maxed out.
         saved_id = sdb.save_focus_session(
@@ -3202,21 +3224,31 @@ def register_student_routes(app, csrf, limiter):
         if not saved_id:
             return jsonify({"ok": True, "saved": False, "reason": "daily-cap-or-empty"})
 
+        saved_row = sdb.get_focus_session_entry(saved_id, cid) or {}
+        try:
+            minutes_saved = int(saved_row.get("focus_minutes") or minutes or 0)
+        except (TypeError, ValueError):
+            minutes_saved = minutes
+        try:
+            pages_saved = int(saved_row.get("pages_read") or pages or 0)
+        except (TypeError, ValueError):
+            pages_saved = pages
+
 
 
         # Daily-quest progress (focus minutes + sessions + pages)
 
         try:
 
-            if minutes > 0:
+            if minutes_saved > 0:
 
-                sdb.progress_quests_by_metric(cid, "focus_minutes", minutes)
+                sdb.progress_quests_by_metric(cid, "focus_minutes", minutes_saved)
 
                 sdb.progress_quests_by_metric(cid, "sessions_completed", 1)
 
-            if pages > 0:
+            if pages_saved > 0:
 
-                sdb.progress_quests_by_metric(cid, "pages_read", pages)
+                sdb.progress_quests_by_metric(cid, "pages_read", pages_saved)
 
         except Exception:
 
@@ -3234,17 +3266,21 @@ def register_student_routes(app, csrf, limiter):
 
         _focus_xp_awarded = 0
 
-        if minutes > 0:
+        if minutes_saved > 0:
 
-            xp = (minutes * 5) // 10  # 25 min → 12 XP, 50 min → 25 XP
+            xp = (minutes_saved * 5) // 10  # 25 min -> 12 XP, 50 min -> 25 XP
 
             if xp > 0:
 
-                detail = f"{mode.title()} {minutes}min"
+                detail = f"{mode.title()} {minutes_saved}min"
 
                 if course_name:
 
                     detail += f" — {course_name}"
+
+                if phase_id:
+
+                    detail += f" · phase:{phase_id}"
 
                 sdb.award_xp(cid, "focus_session", xp, detail)
 
@@ -3254,11 +3290,11 @@ def register_student_routes(app, csrf, limiter):
 
         _page_xp_awarded = 0
 
-        if pages > 0:
+        if pages_saved > 0:
 
-            page_xp = max(1, pages)
+            page_xp = max(1, pages_saved)
 
-            sdb.award_xp(cid, "pages_read", page_xp, f"Read {pages} pages")
+            sdb.award_xp(cid, "pages_read", page_xp, f"Read {pages_saved} pages")
 
             _page_xp_awarded = page_xp
 
@@ -3320,7 +3356,7 @@ def register_student_routes(app, csrf, limiter):
 
         hour_now = datetime.now().hour
 
-        if minutes > 0:
+        if minutes_saved > 0:
 
             if hour_now < 7:
 
@@ -3345,7 +3381,16 @@ def register_student_routes(app, csrf, limiter):
         local_date = (request.args.get("local_date") or "").strip() or None
         today_stats = sdb.get_focus_stats_today(cid, local_date=local_date)
 
-        return jsonify({"ok": True, "stats": today_stats, "promotion": promotion})
+        return jsonify({
+            "ok": True,
+            "saved": True,
+            "session_id": saved_id,
+            "minutes_saved": minutes_saved,
+            "pages_saved": pages_saved,
+            "xp_awarded": _focus_xp_awarded + _page_xp_awarded,
+            "stats": today_stats,
+            "promotion": promotion,
+        })
 
 
 
@@ -7751,6 +7796,11 @@ def register_student_routes(app, csrf, limiter):
               }}
 
               if (phaseMinutes > 0) {{
+                var currentPhaseId = null;
+                try {{
+                  var currentFloat = JSON.parse(localStorage.getItem('focus_float') || 'null');
+                  currentPhaseId = currentFloat && currentFloat.phaseId ? currentFloat.phaseId : null;
+                }} catch(e) {{}}
 
                 addPendingPhase({{
 
@@ -7764,7 +7814,9 @@ def register_student_routes(app, csrf, limiter):
 
                   mode: 'pomodoro',
 
-                  ts: Date.now()
+                  ts: Date.now(),
+
+                  phaseId: currentPhaseId
 
                 }});
 
@@ -7989,6 +8041,10 @@ def register_student_routes(app, csrf, limiter):
 
           // One save call per pending phase so the server counts each as a
           // distinct session (sessions_completed quest, focus stats, etc.).
+          var failed = [];
+          var savedCount = 0;
+          var xpAwarded = 0;
+          var minutesSaved = 0;
 
           for (var i = 0; i < phases.length; i++) {{
 
@@ -8006,7 +8062,9 @@ def register_student_routes(app, csrf, limiter):
 
               course_id: p.courseId || null,
 
-              exam_id: p.examId || null
+              exam_id: p.examId || null,
+
+              phase_id: p.phaseId || null
 
             }};
 
@@ -8014,7 +8072,7 @@ def register_student_routes(app, csrf, limiter):
 
             try {{
 
-              await fetch('/api/student/focus/save?local_date=' + encodeURIComponent(__ldStr_save), {{
+              var saveResp = await fetch('/api/student/focus/save?local_date=' + encodeURIComponent(__ldStr_save), {{
 
                 method: 'POST',
 
@@ -8025,8 +8083,21 @@ def register_student_routes(app, csrf, limiter):
                 body: JSON.stringify(payload)
 
               }});
+              var result = null;
+              try {{ result = await saveResp.json(); }} catch(_) {{}}
+              if (!saveResp.ok || !result || result.ok === false) {{
+                failed.push(p);
+                continue;
+              }}
+              if (result.saved !== false) {{
+                savedCount += 1;
+                xpAwarded += parseInt(result.xp_awarded || 0, 10) || 0;
+                minutesSaved += parseInt(result.minutes_saved || payload.minutes || 0, 10) || 0;
+              }}
 
-            }} catch(e) {{}}
+            }} catch(e) {{
+              failed.push(p);
+            }}
 
           }}
 
@@ -8060,7 +8131,15 @@ def register_student_routes(app, csrf, limiter):
 
           }} catch(e) {{}}
 
-          setPendingPhases([]);
+          setPendingPhases(failed);
+          refreshClaimCounter();
+
+          if (failed.length) {{
+            if (btn) {{ btn.disabled = false; btn.textContent = 'Reintentar reclamo'; }}
+            var lblFail = document.getElementById('timer-label');
+            if (lblFail) lblFail.textContent = 'No se guardaron ' + failed.length + ' sesión(es). Reintenta para no perderlas.';
+            return;
+          }}
 
           exitMandatoryClaimMode();
 
@@ -8070,7 +8149,7 @@ def register_student_routes(app, csrf, limiter):
 
           var lblDone = document.getElementById('timer-label');
 
-          if (lblDone) lblDone.textContent = '✓ ¡Reclamado! Listo para enfocarte';
+          if (lblDone) lblDone.textContent = '✓ Reclamado: +' + xpAwarded + ' XP · ' + minutesSaved + ' min guardados';
 
         }}
 
