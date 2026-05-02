@@ -1439,42 +1439,42 @@ def register_student_routes(app, csrf, limiter):
 
         body = f"""
         <style>
-        .wa-page {{ display:flex; flex-direction:column; gap:18px; }}
+        .wa-page {{ --warm-bg:#F4F1EA; --warm-card:#FFFFFF; --warm-line:#E2DCCC; --warm-ink:#1A1A1F; --warm-muted:#77756F; --warm-orange:#FF7A3D; --warm-green:#2E9266; display:flex; flex-direction:column; gap:18px; }}
         .wa-head {{ display:flex; justify-content:space-between; align-items:flex-end; gap:18px; flex-wrap:wrap; }}
-        .wa-eye {{ color:#7b61ff; font-size:12px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; }}
-        .wa-head h1 {{ margin:6px 0 0; font-size:clamp(34px,4vw,56px); line-height:.98; color:#171720; letter-spacing:0; }}
-        .wa-head p {{ margin:8px 0 0; color:#777382; max-width:720px; line-height:1.5; }}
-        .wa-week-nav {{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid rgba(20,20,28,.1); border-radius:999px; padding:8px; box-shadow:0 12px 30px rgba(18,24,38,.06); }}
-        .wa-week-nav button {{ border:0; border-radius:999px; background:#f1edf8; color:#171720; width:38px; height:38px; font-weight:900; cursor:pointer; }}
+        .wa-eye {{ color:var(--warm-orange); font-size:12px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; }}
+        .wa-head h1 {{ margin:6px 0 0; font-family:"Fraunces",Georgia,serif; font-size:clamp(38px,4vw,60px); line-height:.98; color:var(--warm-ink); letter-spacing:-.04em; font-weight:650; }}
+        .wa-head p {{ margin:8px 0 0; color:var(--warm-muted); max-width:720px; line-height:1.5; }}
+        .wa-week-nav {{ display:flex; align-items:center; gap:10px; background:var(--warm-card); border:1px solid var(--warm-line); border-radius:999px; padding:8px; box-shadow:0 14px 36px rgba(26,26,31,.08); }}
+        .wa-week-nav button {{ border:1px solid var(--warm-line); border-radius:999px; background:#FFF8EE; color:var(--warm-ink); width:38px; height:38px; font-weight:900; cursor:pointer; }}
         .wa-week-nav button:disabled {{ opacity:.35; cursor:not-allowed; }}
-        #wa-week-label {{ min-width:230px; text-align:center; font-weight:900; color:#171720; }}
+        #wa-week-label {{ min-width:230px; text-align:center; font-weight:900; color:var(--warm-ink); }}
         .wa-stats {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }}
-        .wa-stat,.wa-card {{ background:#fff; border:1px solid rgba(20,20,28,.1); border-radius:26px; box-shadow:0 16px 45px rgba(18,24,38,.06); }}
+        .wa-stat,.wa-card {{ background:var(--warm-card); border:1px solid var(--warm-line); border-radius:24px; box-shadow:0 18px 48px rgba(26,26,31,.07); }}
         .wa-stat {{ padding:18px; }}
-        .wa-stat span {{ color:#85818f; font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
-        .wa-stat strong {{ display:block; margin-top:8px; font-size:32px; line-height:1; color:#171720; }}
+        .wa-stat span {{ color:var(--warm-muted); font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
+        .wa-stat strong {{ display:block; margin-top:8px; font-family:"Fraunces",Georgia,serif; font-size:34px; line-height:1; color:var(--warm-ink); font-weight:650; }}
         .wa-grid {{ display:grid; grid-template-columns:minmax(0,1.35fr) minmax(330px,.85fr); gap:18px; align-items:start; }}
         .wa-card {{ padding:22px; overflow:hidden; }}
-        .wa-card h2 {{ margin:0; font-size:20px; color:#171720; }}
-        .wa-card p {{ margin:6px 0 18px; color:#777382; font-size:14px; }}
+        .wa-card h2 {{ margin:0; font-family:"Fraunces",Georgia,serif; font-size:24px; color:var(--warm-ink); font-weight:650; }}
+        .wa-card p {{ margin:6px 0 18px; color:var(--warm-muted); font-size:14px; }}
         .wa-line-wrap {{ width:100%; min-height:300px; }}
         .wa-line-svg {{ width:100%; height:300px; overflow:visible; }}
-        .wa-axis {{ stroke:#e8e2f0; stroke-width:1; }}
-        .wa-line {{ fill:none; stroke:#7b61ff; stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }}
-        .wa-dot {{ fill:#fff; stroke:#7b61ff; stroke-width:4; }}
-        .wa-label {{ fill:#777382; font-size:12px; font-weight:800; }}
-        .wa-value {{ fill:#171720; font-size:12px; font-weight:900; }}
+        .wa-axis {{ stroke:#EEE6D6; stroke-width:1; }}
+        .wa-line {{ fill:none; stroke:var(--warm-orange); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }}
+        .wa-dot {{ fill:#FFF8EE; stroke:var(--warm-orange); stroke-width:4; }}
+        .wa-label {{ fill:var(--warm-muted); font-size:12px; font-weight:800; }}
+        .wa-value {{ fill:var(--warm-ink); font-size:12px; font-weight:900; }}
         .wa-course-list {{ display:flex; flex-direction:column; gap:12px; }}
-        .wa-course-btn {{ display:block; width:100%; text-align:left; border:1px solid #eee7f5; background:#fbf9ff; border-radius:18px; padding:13px; cursor:pointer; transition:all .15s ease; }}
-        .wa-course-btn:hover,.wa-course-btn.active {{ border-color:#7b61ff; transform:translateY(-1px); box-shadow:0 12px 24px rgba(123,97,255,.12); }}
-        .wa-course-top {{ display:flex; justify-content:space-between; gap:12px; font-weight:900; color:#171720; }}
-        .wa-course-track {{ margin-top:9px; height:12px; background:#eee9f6; border-radius:999px; overflow:hidden; }}
-        .wa-course-track div {{ height:100%; border-radius:999px; background:linear-gradient(90deg,#111827,#7b61ff,#21c7a8); }}
+        .wa-course-btn {{ display:block; width:100%; text-align:left; border:1px solid var(--warm-line); background:#FFFDF8; border-radius:18px; padding:13px; cursor:pointer; transition:all .15s ease; }}
+        .wa-course-btn:hover,.wa-course-btn.active {{ border-color:var(--warm-orange); transform:translateY(-1px); box-shadow:0 12px 24px rgba(255,122,61,.14); }}
+        .wa-course-top {{ display:flex; justify-content:space-between; gap:12px; font-weight:900; color:var(--warm-ink); }}
+        .wa-course-track {{ margin-top:9px; height:12px; background:#F1EBDD; border-radius:999px; overflow:hidden; }}
+        .wa-course-track div {{ height:100%; border-radius:999px; background:linear-gradient(90deg,var(--warm-orange),#FFB84D,var(--warm-green)); }}
         .wa-detail-bars {{ display:grid; grid-template-columns:repeat(7,1fr); align-items:end; gap:10px; height:220px; margin-top:12px; }}
         .wa-detail-day {{ display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:8px; min-width:0; }}
-        .wa-detail-bar {{ width:100%; max-width:46px; min-height:7px; border-radius:14px 14px 7px 7px; background:linear-gradient(180deg,#21c7a8,#7b61ff); }}
-        .wa-detail-day span {{ color:#85818f; font-size:12px; font-weight:900; }}
-        .wa-empty {{ padding:24px; border-radius:20px; background:#f8f5fb; color:#777382; text-align:center; }}
+        .wa-detail-bar {{ width:100%; max-width:46px; min-height:7px; border-radius:14px 14px 7px 7px; background:linear-gradient(180deg,var(--warm-green),var(--warm-orange)); }}
+        .wa-detail-day span {{ color:var(--warm-muted); font-size:12px; font-weight:900; }}
+        .wa-empty {{ padding:24px; border-radius:20px; background:#FFF8EE; color:var(--warm-muted); text-align:center; }}
         @media (max-width:1000px) {{ .wa-grid {{ grid-template-columns:1fr; }} .wa-stats {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} }}
         @media (max-width:580px) {{ .wa-stats {{ grid-template-columns:1fr; }} .wa-week-nav {{ width:100%; justify-content:space-between; }} #wa-week-label {{ min-width:0; }} }}
         </style>
@@ -1501,7 +1501,7 @@ def register_student_routes(app, csrf, limiter):
 
           <div class="wa-grid">
             <section class="wa-card">
-              <h2>Minutos por dia</h2>
+              <h2>Minutos por día</h2>
               <p>Linea de lunes a domingo para la semana seleccionada.</p>
               <div id="wa-line" class="wa-line-wrap"></div>
             </section>

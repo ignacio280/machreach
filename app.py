@@ -2271,8 +2271,10 @@ LAYOUT = """<!DOCTYPE html>
     };
     // Theme system — applies named themes via CSS variables on <body>
     window.MR_THEMES = {
+      // ── MachReach base ──
+      default: { bg:'#F4F1EA', card:'#FFFFFF', border:'#E2DCCC', text:'#1A1A1F', textMuted:'#77756F', primary:'#FF7A3D' },
+      dashboard_dark: { bg:'#11131A', card:'#1D202A', border:'#34313A', text:'#F7F0E4', textMuted:'#B9B0A5', primary:'#FF7A3D' },
       // ── Dark ──
-      default: { bg:'#0f172a', card:'#1e293b', border:'#334155', text:'#f1f5f9', textMuted:'#94a3b8', primary:'#6366f1' },
       midnight:{ bg:'#050816', card:'#0c1026', border:'#1e1b4b', text:'#e2e8f0', textMuted:'#94a3b8', primary:'#8b5cf6' },
       forest:  { bg:'#0b2018', card:'#11322a', border:'#14532d', text:'#d1fae5', textMuted:'#6ee7b7', primary:'#10b981' },
       ocean:   { bg:'#082f49', card:'#0c4a6e', border:'#075985', text:'#e0f2fe', textMuted:'#7dd3fc', primary:'#06b6d4' },
@@ -2293,7 +2295,11 @@ LAYOUT = """<!DOCTYPE html>
       seafoam:  { bg:'#a5f3fc', card:'#cffafe', border:'#67e8f9', text:'#164e63', textMuted:'#0e7490', primary:'#0891b2' },
     };
     window.applyMrTheme = function(name) {
+      var legacyMode = localStorage.getItem('machreach-theme') || '';
       var t = window.MR_THEMES[name] || window.MR_THEMES['default'];
+      if (!name || name === 'default') {
+        t = legacyMode === 'dark' ? window.MR_THEMES.dashboard_dark : window.MR_THEMES.default;
+      }
       var r = document.documentElement;
       r.style.setProperty('--bg', t.bg);
       r.style.setProperty('--card', t.card);
@@ -2305,8 +2311,7 @@ LAYOUT = """<!DOCTYPE html>
       // (:root[data-theme="mr-lavender"] body { ... } etc.) kick in
       // for nav background, body bg, input colors, etc.
       if (!name || name === 'default') {
-        var leg = localStorage.getItem('machreach-theme') || '';
-        r.setAttribute('data-theme', leg);
+        r.setAttribute('data-theme', legacyMode);
       } else {
         r.setAttribute('data-theme', 'mr-' + name);
       }
@@ -2334,9 +2339,9 @@ LAYOUT = """<!DOCTYPE html>
       const html = document.documentElement;
       const current = html.getAttribute('data-theme');
       const next = current === 'dark' ? '' : 'dark';
-      html.setAttribute('data-theme', next);
       localStorage.setItem('machreach-theme', next);
       localStorage.setItem('mr_theme', 'default');
+      window.applyMrTheme && window.applyMrTheme('default');
       const btn = document.getElementById('theme-toggle');
       if (btn) btn.innerHTML = next === 'dark' ? '&#9728;' : '&#127769;';
     }
@@ -5016,16 +5021,64 @@ def _record_product_event(event_type: str, metadata: dict | None = None):
         pass
 
 
+def _analytics_admin_filter_sql() -> str:
+    emails = {str(e).strip().lower() for e in (ADMIN_EMAILS or set()) if str(e).strip()}
+    emails.add("ignaciomachuca2005@gmail.com")
+    quoted = ",".join("'" + email.replace("'", "''") + "'" for email in sorted(emails))
+    return f"(client_id IS NULL OR client_id NOT IN (SELECT id FROM clients WHERE LOWER(email) IN ({quoted})))"
+
+
+def _analytics_should_skip_request() -> bool:
+    path = request.path or ""
+    if path.startswith(("/static/", "/favicon", "/health", "/admin/analytics")):
+        return True
+    try:
+        if _is_admin():
+            return True
+    except Exception:
+        pass
+    remote = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip().lower()
+    return remote in {"127.0.0.1", "::1", "localhost"}
+
+
+def _analytics_feature_event_for_path(path: str) -> str | None:
+    feature_pages = [
+        ("/student/focus", "view_focus"),
+        ("/student/analytics", "view_analytics"),
+        ("/student/courses", "view_courses"),
+        ("/student/quizzes", "view_quizzes"),
+        ("/student/quiz", "view_quizzes"),
+        ("/student/flashcards", "view_flashcards"),
+        ("/student/essay", "view_essays"),
+        ("/student/leaderboard", "view_leaderboard"),
+        ("/student/marketplace", "view_marketplace"),
+        ("/student/shop", "view_shop"),
+        ("/student/canvas", "view_canvas"),
+        ("/student/grades", "view_grades"),
+        ("/student/profile", "view_profile"),
+        ("/student/dashboard", "view_dashboard"),
+    ]
+    for prefix, event in feature_pages:
+        if path == prefix or path.startswith(prefix + "/"):
+            return event
+    if path in {"/dashboard", "/student"}:
+        return "view_dashboard"
+    return None
+
+
 @app.before_request
 def _machreach_product_analytics_hook():
     """Track product usage for the owner analytics dashboard."""
     path = request.path or ""
-    if path.startswith(("/static/", "/favicon", "/health", "/admin/analytics")):
+    if _analytics_should_skip_request():
         return
     if request.method == "GET":
         wants_html = "text/html" in (request.headers.get("Accept") or "")
         if wants_html and not path.startswith("/api/"):
             _record_product_event("page_view")
+            feature_event = _analytics_feature_event_for_path(path)
+            if feature_event:
+                _record_product_event(feature_event)
         return
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return
@@ -5075,10 +5128,33 @@ def admin_product_analytics():
     today_lite = "date(created_at) = date('now','localtime')"
     week_pg = "created_at >= NOW() - INTERVAL '7 days'"
     week_lite = "datetime(created_at) >= datetime('now','localtime','-7 days')"
+    external_events = _analytics_admin_filter_sql()
+
+    event_labels = {
+        "view_dashboard": "Inicio",
+        "view_focus": "Modo enfoque",
+        "view_analytics": "Analytics estudiante",
+        "view_courses": "Cursos",
+        "view_quizzes": "Quizzes",
+        "view_flashcards": "Tarjetas",
+        "view_essays": "Ensayos",
+        "view_leaderboard": "Ranking",
+        "view_marketplace": "Mercado",
+        "view_shop": "Tienda",
+        "view_canvas": "Canvas",
+        "view_grades": "Planilla de notas",
+        "view_profile": "Perfil",
+        "focus_session_saved": "Sesion de enfoque guardada",
+        "quiz_action": "Acciones de quiz",
+        "flashcard_action": "Acciones de tarjetas",
+        "essay_action": "Acciones de ensayo",
+        "marketplace_action": "Acciones de mercado",
+        "canvas_action": "Acciones de Canvas",
+    }
 
     cards = [
-        ("Visitas hoy", _admin_metric(f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_pg}", f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_lite}")),
-        ("Usuarios únicos hoy", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_pg}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_lite}")),
+        ("Visitas hoy", _admin_metric(f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_pg} AND {external_events}", f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_lite} AND {external_events}")),
+        ("Usuarios únicos hoy", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_pg} AND {external_events}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_lite} AND {external_events}")),
         ("Registros hoy", _admin_metric(f"SELECT COUNT(*) FROM clients WHERE created_at >= CURRENT_DATE", "SELECT COUNT(*) FROM clients WHERE date(created_at)=date('now','localtime')")),
         ("Focus min hoy", _admin_metric("SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress WHERE plan_date::date = CURRENT_DATE", "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress WHERE date(plan_date)=date('now','localtime')")),
         ("XP hoy", _admin_metric(f"SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE {today_pg}", f"SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE {today_lite}")),
@@ -5088,7 +5164,7 @@ def admin_product_analytics():
         ("Apuntes/ensayos hoy", _admin_metric(f"SELECT COUNT(*) FROM student_notes WHERE {today_pg}", f"SELECT COUNT(*) FROM student_notes WHERE {today_lite}")),
         ("Mercado ventas hoy", _admin_metric(f"SELECT COUNT(*) FROM student_marketplace_purchases WHERE {today_pg}", f"SELECT COUNT(*) FROM student_marketplace_purchases WHERE {today_lite}")),
         ("Usuarios totales", _admin_metric("SELECT COUNT(*) FROM clients WHERE COALESCE(account_type,'student')='student'", "SELECT COUNT(*) FROM clients WHERE COALESCE(account_type,'student')='student'")),
-        ("Activos 7 días", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_pg}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_lite}")),
+        ("Activos 7 días", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_pg} AND {external_events}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_lite} AND {external_events}")),
     ]
     card_html = "".join(
         f"<div class='admin-metric'><div class='k'>{_esc(label)}</div><div class='v'>{value:,}</div></div>"
@@ -5096,20 +5172,22 @@ def admin_product_analytics():
     )
 
     top_pages = _admin_rows(
-        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_pg} GROUP BY path ORDER BY n DESC LIMIT 12",
-        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_lite} GROUP BY path ORDER BY n DESC LIMIT 12",
+        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_pg} AND {external_events} GROUP BY path ORDER BY n DESC LIMIT 12",
+        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_lite} AND {external_events} GROUP BY path ORDER BY n DESC LIMIT 12",
     )
     feature_rows = _admin_rows(
-        f"SELECT event_type, COUNT(*) AS n, COUNT(DISTINCT client_id) AS users FROM product_analytics_events WHERE {week_pg} GROUP BY event_type ORDER BY n DESC LIMIT 20",
-        f"SELECT event_type, COUNT(*) AS n, COUNT(DISTINCT client_id) AS users FROM product_analytics_events WHERE {week_lite} GROUP BY event_type ORDER BY n DESC LIMIT 20",
+        f"SELECT event_type, COUNT(*) AS n, COUNT(DISTINCT client_id) AS users FROM product_analytics_events WHERE event_type <> 'page_view' AND {week_pg} AND {external_events} GROUP BY event_type ORDER BY n DESC LIMIT 20",
+        f"SELECT event_type, COUNT(*) AS n, COUNT(DISTINCT client_id) AS users FROM product_analytics_events WHERE event_type <> 'page_view' AND {week_lite} AND {external_events} GROUP BY event_type ORDER BY n DESC LIMIT 20",
     )
+    for row in feature_rows:
+        row["label"] = event_labels.get(str(row.get("event_type") or ""), str(row.get("event_type") or ""))
     xp_rows = _admin_rows(
         "SELECT action, COUNT(*) AS n, COALESCE(SUM(xp),0) AS xp FROM student_xp WHERE created_at >= NOW() - INTERVAL '30 days' GROUP BY action ORDER BY xp DESC, n DESC LIMIT 16",
         "SELECT action, COUNT(*) AS n, COALESCE(SUM(xp),0) AS xp FROM student_xp WHERE datetime(created_at) >= datetime('now','localtime','-30 days') GROUP BY action ORDER BY xp DESC, n DESC LIMIT 16",
     )
     traffic_daily = _admin_rows(
-        "SELECT created_at::date::text AS d, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND created_at >= CURRENT_DATE - INTERVAL '13 days' GROUP BY created_at::date ORDER BY d",
-        "SELECT date(created_at) AS d, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND date(created_at) >= date('now','localtime','-13 days') GROUP BY date(created_at) ORDER BY d",
+        f"SELECT created_at::date::text AS d, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND created_at >= CURRENT_DATE - INTERVAL '13 days' AND {external_events} GROUP BY created_at::date ORDER BY d",
+        f"SELECT date(created_at) AS d, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND date(created_at) >= date('now','localtime','-13 days') AND {external_events} GROUP BY date(created_at) ORDER BY d",
     )
     focus_daily = _admin_rows(
         "SELECT plan_date::date::text AS d, COALESCE(SUM(focus_minutes),0) AS n FROM student_study_progress WHERE plan_date::date >= CURRENT_DATE - INTERVAL '13 days' GROUP BY plan_date::date ORDER BY d",
@@ -5186,7 +5264,7 @@ def admin_product_analytics():
         + line_chart("Minutos de estudio · 14 días", focus_daily, "#2E9266", " min")
         + line_chart("Quizzes creados · 14 días", ai_daily, "#EF5DA8")
         + line_chart("Mazos de tarjetas · 14 días", flash_daily, "#5B4694")
-        + bar_chart("Features más usadas · 7 días", feature_rows, "event_type", "n", "#FF7A3D")
+        + bar_chart("Features más usadas · 7 días", feature_rows, "label", "n", "#FF7A3D")
         + bar_chart("Páginas más vistas · 7 días", top_pages, "path", "n", "#1A1A1F")
         + "</div>"
     )
@@ -5220,7 +5298,7 @@ def admin_product_analytics():
       <div class="admin-grid">{card_html}</div>
       {charts_html}
       <div class="admin-panel"><h2>Páginas más vistas · 7 días</h2>{table(["Ruta","Visitas"], top_pages, ["path","n"])}</div>
-      <div class="admin-panel"><h2>Eventos de producto · 7 días</h2>{table(["Evento","Acciones","Usuarios"], feature_rows, ["event_type","n","users"])}</div>
+      <div class="admin-panel"><h2>Eventos de producto · 7 días</h2>{table(["Evento","Acciones","Usuarios"], feature_rows, ["label","n","users"])}</div>
       <div class="admin-panel"><h2>XP por fuente · 30 días</h2>{table(["Acción","Eventos","XP"], xp_rows, ["action","n","xp"])}</div>
     </div>
     """
