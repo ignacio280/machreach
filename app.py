@@ -3632,6 +3632,233 @@ LAYOUT = """<!DOCTYPE html>
   </script>
   {% endif %}
 
+  <!-- Student i18n: English fallback for newer pages that were authored in Spanish -->
+  {% if lang == 'en' and account_type|default('student') == 'student' %}
+  <script>
+  (function(){
+    var T = {
+      "Principal": "Main",
+      "Inicio": "Home",
+      "Enfoque": "Focus",
+      "Mis cursos": "My courses",
+      "Mis Cursos": "My Courses",
+      "Estudio": "Study",
+      "Tarjetas": "Flashcards",
+      "Ensayos": "Essays",
+      "Comunidad": "Community",
+      "Ranking": "Leaderboard",
+      "Amigos": "Friends",
+      "Mercado": "Marketplace",
+      "Tienda": "Shop",
+      "Cuenta": "Account",
+      "Notas": "Grades",
+      "Ajustes": "Settings",
+      "Cambiar modo": "Toggle theme",
+      "Listo para ganar el semestre.": "Ready to win the semester.",
+      "Liga activa": "Active league",
+      "sigue subiendo": "keep climbing",
+
+      "ANALYTICS SEMANALES": "WEEKLY ANALYTICS",
+      "Tu semana de estudio.": "Your study week.",
+      "Revisa cuanto estudiaste cada dia, cambia de semana, compara cursos y haz click en cualquier curso para ver su detalle diario.": "Review how much you studied each day, switch weeks, compare courses, and click any course to see the daily breakdown.",
+      "Semana actual": "Current week",
+      "Total semana": "Week total",
+      "Mejor dia": "Best day",
+      "Mejor día": "Best day",
+      "Cursos activos": "Active courses",
+      "Promedio diario": "Daily average",
+      "Minutos por día": "Minutes per day",
+      "Minutos por dia": "Minutes per day",
+      "Linea de lunes a domingo para la semana seleccionada.": "Line from Monday to Sunday for the selected week.",
+      "Línea de lunes a domingo para la semana seleccionada.": "Line from Monday to Sunday for the selected week.",
+      "Horas por curso": "Hours per course",
+      "Haz click en una barra para ver el detalle diario.": "Click a bar to see the daily detail.",
+      "Detalle diario por curso": "Daily detail by course",
+      "Selecciona un curso para ver como se repartio durante la semana.": "Select a course to see how it was distributed during the week.",
+      "Selecciona un curso para ver cómo se repartió durante la semana.": "Select a course to see how it was distributed during the week.",
+      "Minutos estudiados por dia en la semana seleccionada.": "Minutes studied per day in the selected week.",
+      "No hay sesiones registradas esta semana.": "No sessions recorded this week.",
+      "No hay datos para esta semana.": "No data for this week.",
+
+      "ANALYTICS DE ESTUDIO": "STUDY ANALYTICS",
+      "Tu rendimiento, sin humo.": "Your performance, no fluff.",
+      "Minutos de enfoque, XP, cursos dominantes y consistencia real. Esto es para ver si estas estudiando de verdad o solo abriendo la app.": "Focus minutes, XP, dominant courses, and real consistency. This shows whether you are actually studying or just opening the app.",
+      "Tiempo total": "Total time",
+      "Sesiones": "Sessions",
+      "Promedio": "Average",
+      "Racha 🔥": "Streak 🔥",
+      "acumulado en enfoque": "total in focus",
+      "registros guardados": "saved records",
+      "por sesion": "per session",
+      "por sesión": "per session",
+      "dias seguidos": "days in a row",
+      "días seguidos": "days in a row",
+      "Curso fuerte": "Strongest course",
+      "Hora activa": "Active hour",
+      "Consistencia": "Consistency",
+      "Tendencia de enfoque": "Focus trend",
+      "Minutos estudiados durante los ultimos 14 dias.": "Minutes studied during the last 14 days.",
+      "Minutos estudiados durante los últimos 14 días.": "Minutes studied during the last 14 days.",
+      "Tiempo por curso": "Time per course",
+      "Donde se esta yendo tu energia.": "Where your energy is going.",
+      "Donde se está yendo tu energía.": "Where your energy is going.",
+      "Ritmo de XP": "XP rhythm",
+      "Ultimas ganancias registradas.": "Latest recorded gains.",
+      "Últimas ganancias registradas.": "Latest recorded gains.",
+      "Mapa de constancia": "Consistency map",
+      "Ultimos 35 dias. Mas verde significa mas minutos.": "Last 35 days. Greener means more minutes.",
+      "Últimos 35 días. Más verde significa más minutos.": "Last 35 days. Greener means more minutes.",
+      "Detalle por curso": "Course detail",
+      "Resumen exacto de minutos acumulados.": "Exact summary of accumulated minutes.",
+
+      "Quizzes de práctica": "Practice quizzes",
+      "Elige de dónde vienen tus preguntas — una prueba oficial o tus propios apuntes.": "Choose where your questions come from — an official exam or your own notes.",
+      "Generar quiz": "Generate quiz",
+      "Reto diario": "Daily challenge",
+      "5 preguntas · todos tus cursos": "5 questions · all your courses",
+      "Calienta antes de estudiar y gana XP extra cuando completas quizzes.": "Warm up before studying and earn extra XP when you complete quizzes.",
+      "Generar ahora": "Generate now",
+      "preguntas": "questions",
+      "intentos": "attempts",
+
+      "Modo Enfoque": "Focus Mode",
+      "Sesión de hoy": "Today's session",
+      "Pausa": "Pause",
+      "Reiniciar": "Restart",
+      "Saltar": "Skip",
+      "Ambiente": "Ambience",
+      "Fuego": "Fire",
+      "Lluvia": "Rain",
+      "Bosque": "Forest",
+      "Playa": "Beach",
+
+      "Conexión a Canvas": "Canvas Connection",
+      "No conectado": "Not connected",
+      "Conectado": "Connected",
+      "URL DE CANVAS": "CANVAS URL",
+      "TOKEN DE ACCESO API": "API ACCESS TOKEN",
+      "Conectar Canvas": "Connect Canvas",
+      "Actualizar": "Update",
+      "Desconectar": "Disconnect",
+
+      "Planilla de Notas": "Grade Sheet",
+      "Promedio del semestre": "Semester average",
+      "Créditos del semestre": "Semester credits",
+      "Promedio de la carrera": "Career average",
+      "Créditos de la carrera": "Career credits",
+      "Agregar evaluación": "Add evaluation",
+      "Agregar ramo": "Add course",
+      "Evaluación": "Evaluation",
+      "Nota": "Grade",
+      "Necesitas": "You need",
+
+      "Logros y progreso": "Achievements and progress",
+      "POSICIÓN": "POSITION",
+      "Insignias Obtenidas": "Badges earned",
+      "Todas las Insignias": "All badges",
+      "Actividad Reciente": "Recent activity",
+
+      "Perfil": "Profile",
+      "Profile banner": "Profile banner",
+      "Leaderboard flag": "Leaderboard flag",
+      "Predeterminado": "Default",
+      "Equipado": "Equipped",
+      "EQUIPADO": "EQUIPPED",
+      "Sin bandera": "No flag",
+
+      "Suscripción": "Subscription",
+      "Gratis": "Free",
+      "GRATIS": "FREE",
+      "ACTIVO": "ACTIVE",
+      "Plan actual": "Current plan",
+      "Mejorar a Plus": "Upgrade to Plus",
+      "Mejorar a Ultimate": "Upgrade to Ultimate",
+      "Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes, tarjetas y duelos.": "Spend coins on streak 🔥 freezes, profile banners, and temporary boosts. Earn coins by completing focus sessions, quizzes, flashcards, and duels.",
+
+      "Mercado": "Marketplace",
+      "Comprar": "Buy",
+      "Vender": "Sell",
+      "Buscar": "Search",
+      "Mis publicaciones": "My listings",
+      "Vender archivo": "Sell a file",
+      "Aún no hay apuntes compartidos.": "No shared notes yet.",
+
+      "Borrador": "Draft",
+      "Asistente de escritura": "Writing assistant",
+      "Ensayos sin vueltas.": "Essays, no fluff.",
+      "Suelta tu archivo": "Drop your file",
+      "Sube un archivo": "Upload a file",
+      "Corregir ensayo": "Review essay",
+
+      "Admin": "Admin",
+      "Analytics de producto": "Product analytics",
+      "Tráfico diario · 14 días": "Daily traffic · 14 days",
+      "Minutos de estudio · 14 días": "Study minutes · 14 days",
+      "Quizzes creados · 14 días": "Quizzes created · 14 days",
+      "Mazos de tarjetas · 14 días": "Flashcard decks · 14 days",
+      "Features más usadas · 7 días": "Most used features · 7 days",
+      "Páginas más vistas · 7 días": "Most viewed pages · 7 days",
+      "Eventos de producto · 7 días": "Product events · 7 days",
+      "XP por fuente · 30 días": "XP by source · 30 days",
+      "Visitas hoy": "Visits today",
+      "Usuarios únicos hoy": "Unique users today",
+      "Registros hoy": "Signups today",
+      "Focus min hoy": "Focus min today",
+      "Quizzes hoy": "Quizzes today",
+      "Mazos hoy": "Decks today",
+      "Tarjetas hoy": "Cards today",
+      "Apuntes/ensayos hoy": "Notes/essays today",
+      "Mercado ventas hoy": "Marketplace sales today",
+      "Usuarios totales": "Total users",
+      "Activos 7 días": "Active 7 days"
+    };
+
+    function translate(el) {
+      if (el.childElementCount === 0) {
+        var raw = el.textContent || "";
+        var txt = raw.trim();
+        if (txt && T[txt]) el.textContent = raw.replace(txt, T[txt]);
+      }
+      if (el.placeholder && T[el.placeholder]) el.placeholder = T[el.placeholder];
+      if (el.title && T[el.title]) el.title = T[el.title];
+      if (el.getAttribute && el.getAttribute("aria-label") && T[el.getAttribute("aria-label")]) {
+        el.setAttribute("aria-label", T[el.getAttribute("aria-label")]);
+      }
+    }
+    function runTranslate(){
+      var root = document.querySelector('.container') || document.body;
+      var walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null, false);
+      while(walker.nextNode()) translate(walker.currentNode);
+      document.querySelectorAll('h1,h2,h3,h4,h5,label,button,a,th,td,li,p,span,div,option,summary,figcaption,small,strong,em,b,i').forEach(translate);
+      document.querySelectorAll('input[type="button"],input[type="submit"]').forEach(function(el){
+        if (el.value && T[el.value]) el.value = T[el.value];
+      });
+    }
+    runTranslate();
+    setTimeout(runTranslate, 400);
+    setTimeout(runTranslate, 1200);
+    setTimeout(runTranslate, 3000);
+    try {
+      var _mo = new MutationObserver(function(muts){
+        for (var i=0; i<muts.length; i++){
+          if (muts[i].addedNodes && muts[i].addedNodes.length){
+            clearTimeout(window._mrEnTrTimer);
+            window._mrEnTrTimer = setTimeout(runTranslate, 150);
+            break;
+          }
+        }
+      });
+      _mo.observe(document.body, {childList:true, subtree:true});
+    } catch(_){}
+    var origAlert = window.alert;
+    window.alert = function(msg) {
+      var raw = String(msg || '').trim();
+      origAlert(T[raw] || raw);
+    };
+  })();
+  </script>
+  {% endif %}
+
   {% if logged_in and account_type|default('student') == 'student' %}
   <!-- ── Academic onboarding modal + preserved-XP welcome banner ── -->
   <div id="mrXpBanner" style="display:none;position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:9998;
