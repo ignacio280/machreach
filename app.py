@@ -1372,10 +1372,9 @@ LAYOUT = """<!DOCTYPE html>
     .empty-state.compact p { font-size: 13.5px; }
 
     /* ─── Top progress bar ─── */
-    #topbar-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: transparent; z-index: 10000; pointer-events: none; }
-    #topbar-progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, #6366F1, #A78BFA, #F472B6); background-size: 200% 100%; transition: width .35s var(--ease), opacity .25s var(--ease); box-shadow: 0 0 10px rgba(124,58,237,.55), 0 0 4px rgba(99,102,241,.45); animation: topbarShimmer 2s linear infinite; }
+    #topbar-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: transparent; z-index: 10000; pointer-events: none; overflow: hidden; }
+    #topbar-progress .bar { height: 100%; width: 100%; transform: scaleX(0); transform-origin: left center; background: linear-gradient(90deg, #FF7A3D, #F59E0B); transition: transform .28s var(--ease), opacity .18s var(--ease); box-shadow: 0 0 6px rgba(255,122,61,.42); will-change: transform, opacity; }
     #topbar-progress.done .bar { opacity: 0; }
-    @keyframes topbarShimmer { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
 
     /* Claude-style MachReach app skin. This sits after the legacy theme so the
        whole logged-in product shares the landing/dashboard visual language. */
@@ -1890,20 +1889,20 @@ LAYOUT = """<!DOCTYPE html>
       window.topbarStart = function(){
         if (!bar) init();
         if (!bar) return;
-        progress = 8; tp.classList.remove('done'); bar.style.width = '8%';
+        progress = 8; tp.classList.remove('done'); bar.style.opacity = '1'; bar.style.transform = 'scaleX(.08)';
         clearInterval(timer);
         timer = setInterval(function(){
           // Asymptotic approach to 90%
           progress += (92 - progress) * 0.08;
-          if (bar) bar.style.width = progress.toFixed(1) + '%';
+          if (bar) bar.style.transform = 'scaleX(' + Math.min(progress / 100, .92).toFixed(3) + ')';
           if (progress > 91.5) clearInterval(timer);
         }, 220);
       };
       window.topbarDone = function(){
         if (!bar) return;
         clearInterval(timer);
-        bar.style.width = '100%';
-        setTimeout(function(){ tp.classList.add('done'); setTimeout(function(){ bar.style.width = '0%'; }, 260); }, 180);
+        bar.style.transform = 'scaleX(1)';
+        setTimeout(function(){ tp.classList.add('done'); setTimeout(function(){ bar.style.transform = 'scaleX(0)'; }, 220); }, 120);
       };
       // Trigger on link clicks (same-origin, non-modifier)
       document.addEventListener('click', function(e){
