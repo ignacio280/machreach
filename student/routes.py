@@ -7191,6 +7191,33 @@ def register_student_routes(app, csrf, limiter):
           }} catch(e) {{}}
         }}
 
+        function playClaimAlarm() {{
+          // Stronger, unmistakable cue for the mandatory XP claim window.
+          try {{
+            if (alarmAudio) {{
+              alarmAudio.currentTime = 0;
+              var p = alarmAudio.play();
+              if (p && p.catch) p.catch(function(){{}});
+              setTimeout(function() {{
+                try {{
+                  alarmAudio.currentTime = 0;
+                  var p2 = alarmAudio.play();
+                  if (p2 && p2.catch) p2.catch(function(){{}});
+                }} catch(e) {{}}
+              }}, 850);
+            }}
+          }} catch(e) {{}}
+          try {{
+            if (!alarmCtx) alarmCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var ctx = alarmCtx;
+            if (ctx.state === 'suspended' && ctx.resume) {{
+              ctx.resume().then(function(){{ playClaimAlarmTones(ctx); }}).catch(function(){{}});
+            }} else {{
+              playClaimAlarmTones(ctx);
+            }}
+          }} catch(e) {{}}
+        }}
+
         function playAlarmTones(ctx) {{
 
           try {{
@@ -7252,6 +7279,75 @@ def register_student_routes(app, csrf, limiter):
               osc.start(now + 1.8);
 
               osc.stop(now + 3.8);
+
+            }});
+
+          }} catch(e) {{}}
+
+        }}
+
+        function playClaimAlarmTones(ctx) {{
+
+          try {{
+
+            var now = ctx.currentTime;
+
+            // Urgent two-note pulse, repeated, so it feels different from the
+            // normal gentle chime without becoming painfully loud.
+
+            var pattern = [880, 1174.66, 880, 1174.66, 659.25, 987.77];
+
+            pattern.forEach(function(freq, i) {{
+
+              var osc = ctx.createOscillator();
+
+              var gain = ctx.createGain();
+
+              osc.type = i % 2 ? 'triangle' : 'square';
+
+              osc.frequency.value = freq;
+
+              var start = now + i * 0.22;
+
+              gain.gain.setValueAtTime(0.0001, start);
+
+              gain.gain.linearRampToValueAtTime(0.22, start + 0.025);
+
+              gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+
+              osc.connect(gain);
+
+              gain.connect(ctx.destination);
+
+              osc.start(start);
+
+              osc.stop(start + 0.2);
+
+            }});
+
+            [523.25, 659.25, 880].forEach(function(freq) {{
+
+              var osc = ctx.createOscillator();
+
+              var gain = ctx.createGain();
+
+              osc.type = 'sine';
+
+              osc.frequency.value = freq;
+
+              gain.gain.setValueAtTime(0.0001, now + 1.55);
+
+              gain.gain.linearRampToValueAtTime(0.16, now + 1.62);
+
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 2.8);
+
+              osc.connect(gain);
+
+              gain.connect(ctx.destination);
+
+              osc.start(now + 1.55);
+
+              osc.stop(now + 2.9);
 
             }});
 
@@ -8120,11 +8216,14 @@ def register_student_routes(app, csrf, limiter):
 
           stopKeepalive();
 
-          playAlarm();
+          var willEnterMandatoryClaim = (currentMode === 'pomodoro' && !isBreak && ((pomoCount + 1) % 4 === 0));
+
+          if (willEnterMandatoryClaim) playClaimAlarm();
+          else playAlarm();
 
           // Desktop notification works even when tab is hidden / muted
           if (currentMode === 'pomodoro' && !isBreak) {{
-            showNotification(focusText.focusDoneTitle, 'Time for a break!');
+            showNotification(focusText.focusDoneTitle, willEnterMandatoryClaim ? focusText.longBreakUnlockedSave : 'Time for a break!');
           }} else if (currentMode === 'pomodoro' && isBreak) {{
             showNotification('Break over', 'Back to focus!');
           }} else {{
