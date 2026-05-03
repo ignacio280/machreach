@@ -1939,27 +1939,27 @@ LAYOUT = """<!DOCTYPE html>
         <div class="brand-name">Mach<span>Reach</span></div>
       </a>
       <nav class="mr-side-nav">
-        <div class="nav-section">{% if lang == 'es' %}Principal{% else %}Main{% endif %}</div>
-        <a class="nav-item {% if active_page == 'student_dashboard' %}active{% endif %}" href="/student"><span class="ic">&#127891;</span><span>{% if lang == 'es' %}Inicio{% else %}Home{% endif %}</span></a>
-        {% if is_admin %}<a class="nav-item {% if active_page == 'admin' %}active{% endif %}" href="/admin"><span class="ic">&#128227;</span><span>Admin</span></a>{% endif %}
-        <a class="nav-item {% if active_page == 'student_focus' %}active{% endif %}" href="/student/focus"><span class="ic">&#127919;</span><span>{% if lang == 'es' %}Enfoque{% else %}Focus{% endif %}</span></a>
-        <a class="nav-item {% if active_page == 'student_courses' %}active{% endif %}" href="/student/courses"><span class="ic">&#128218;</span><span>{% if lang == 'es' %}Mis cursos{% else %}Courses{% endif %}</span></a>
+        <div class="nav-section">{{ student_ui.main }}</div>
+        <a class="nav-item {% if active_page == 'student_dashboard' %}active{% endif %}" href="/student"><span class="ic">&#127891;</span><span>{{ student_ui.home }}</span></a>
+        {% if is_admin %}<a class="nav-item {% if active_page == 'admin' %}active{% endif %}" href="/admin"><span class="ic">&#128227;</span><span>{{ student_ui.admin }}</span></a>{% endif %}
+        <a class="nav-item {% if active_page == 'student_focus' %}active{% endif %}" href="/student/focus"><span class="ic">&#127919;</span><span>{{ student_ui.focus }}</span></a>
+        <a class="nav-item {% if active_page == 'student_courses' %}active{% endif %}" href="/student/courses"><span class="ic">&#128218;</span><span>{{ student_ui.courses }}</span></a>
 
-        <div class="nav-section">{% if lang == 'es' %}Estudio{% else %}Study{% endif %}</div>
-        <a class="nav-item {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes"><span class="ic">&#128221;</span><span>Quizzes</span></a>
-        <a class="nav-item {% if active_page == 'student_flashcards' %}active{% endif %}" href="/student/flashcards"><span class="ic">&#127183;</span><span>{% if lang == 'es' %}Tarjetas{% else %}Flashcards{% endif %}</span></a>
-        <a class="nav-item {% if active_page == 'student_essay' %}active{% endif %}" href="/student/essay"><span class="ic">&#9999;</span><span>{% if lang == 'es' %}Ensayos{% else %}Essays{% endif %}</span></a>
+        <div class="nav-section">{{ student_ui.study }}</div>
+        <a class="nav-item {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes"><span class="ic">&#128221;</span><span>{{ student_ui.quizzes }}</span></a>
+        <a class="nav-item {% if active_page == 'student_flashcards' %}active{% endif %}" href="/student/flashcards"><span class="ic">&#127183;</span><span>{{ student_ui.flashcards }}</span></a>
+        <a class="nav-item {% if active_page == 'student_essay' %}active{% endif %}" href="/student/essay"><span class="ic">&#9999;</span><span>{{ student_ui.essays }}</span></a>
 
-        <div class="nav-section">{% if lang == 'es' %}Comunidad{% else %}Community{% endif %}</div>
-        <a class="nav-item {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard"><span class="ic">&#127942;</span><span>{% if lang == 'es' %}Ranking{% else %}Leaderboard{% endif %}</span></a>
-        <a class="nav-item {% if active_page == 'student_friends' %}active{% endif %}" href="/student/friends"><span class="ic">&#128101;</span><span>{% if lang == 'es' %}Amigos{% else %}Friends{% endif %}</span></a>
-        <a class="nav-item {% if active_page == 'student_marketplace' %}active{% endif %}" href="/student/marketplace"><span class="ic">&#128722;</span><span>{% if lang == 'es' %}Mercado{% else %}Marketplace{% endif %}</span></a>
-        <a class="nav-item {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop"><span class="ic">&#129534;</span><span>{% if lang == 'es' %}Tienda{% else %}Shop{% endif %}</span></a>
+        <div class="nav-section">{{ student_ui.community }}</div>
+        <a class="nav-item {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard"><span class="ic">&#127942;</span><span>{{ student_ui.leaderboard }}</span></a>
+        <a class="nav-item {% if active_page == 'student_friends' %}active{% endif %}" href="/student/friends"><span class="ic">&#128101;</span><span>{{ student_ui.friends }}</span></a>
+        <a class="nav-item {% if active_page == 'student_marketplace' %}active{% endif %}" href="/student/marketplace"><span class="ic">&#128722;</span><span>{{ student_ui.marketplace }}</span></a>
+        <a class="nav-item {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop"><span class="ic">&#129534;</span><span>{{ student_ui.shop }}</span></a>
 
-        <div class="nav-section">{% if lang == 'es' %}Cuenta{% else %}Account{% endif %}</div>
-        <a class="nav-item {% if active_page == 'student_gpa' %}active{% endif %}" href="/student/gpa"><span class="ic">&#128200;</span><span>{% if lang == 'es' %}Notas{% else %}Grades{% endif %}</span></a>
-        <a class="nav-item {% if active_page == 'student_achievements' %}active{% endif %}" href="/student/achievements"><span class="ic">&#127941;</span><span>XP</span></a>
-        <a class="nav-item {% if active_page == 'student_settings' %}active{% endif %}" href="/student/settings"><span class="ic">&#9881;</span><span>{% if lang == 'es' %}Ajustes{% else %}Settings{% endif %}</span></a>
+        <div class="nav-section">{{ student_ui.account }}</div>
+        <a class="nav-item {% if active_page == 'student_gpa' %}active{% endif %}" href="/student/gpa"><span class="ic">&#128200;</span><span>{{ student_ui.grades }}</span></a>
+        <a class="nav-item {% if active_page == 'student_achievements' %}active{% endif %}" href="/student/achievements"><span class="ic">&#127941;</span><span>{{ student_ui.xp }}</span></a>
+        <a class="nav-item {% if active_page == 'student_settings' %}active{% endif %}" href="/student/settings"><span class="ic">&#9881;</span><span>{{ student_ui.settings }}</span></a>
       </nav>
       <div class="side-foot">
         <a class="me-card" href="/student/profile">
@@ -1976,17 +1976,18 @@ LAYOUT = """<!DOCTYPE html>
       <div class="topbar">
         <button class="mr-mobile-menu" onclick="document.querySelector('.mr-app-shell').classList.toggle('side-open')" aria-label="Menu">&#9776;</button>
         <div class="greet">
-          {% if lang == 'es' %}¡Hola, <span class="em">{{ (client_name.split()[0] if client_name else 'estudiante') }}</span>!{% else %}Hi, <span class="em">{{ (client_name.split()[0] if client_name else 'student') }}</span>!{% endif %}
-          <small>{% if lang == 'es' %}Listo para ganar el semestre.{% else %}Ready to win the semester.{% endif %}</small>
+          {% set first_name = (client_name.split()[0] if client_name else student_ui.student_fallback) %}
+          {{ student_ui.greeting|replace('{name}', first_name)|safe }}
+          <small>{{ student_ui.ready }}</small>
         </div>
         <div class="topbar-stats">
           <a class="stat-pill coins" href="/student/shop">&#129689; <span class="num">Coins</span></a>
           <a class="stat-pill streak" href="/student/analytics">&#128293; <span class="num">Racha 🔥</span></a>
           <a class="xp-pill" href="/student/achievements">
             <span class="xp-ring"><svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15" fill="none" stroke-width="4"/><circle class="ring-fg" cx="18" cy="18" r="15" fill="none" stroke-width="4" stroke-dasharray="94" stroke-dashoffset="34"/></svg><span class="lvl">XP</span></span>
-            <span class="xp-meta"><span class="league-name">{% if lang == 'es' %}Liga activa{% else %}Active league{% endif %}</span><span class="xp-num">{% if lang == 'es' %}sigue subiendo{% else %}keep climbing{% endif %}</span></span>
+            <span class="xp-meta"><span class="league-name">{{ student_ui.active_league }}</span><span class="xp-num">{{ student_ui.keep_climbing }}</span></span>
           </a>
-          <button id="theme-toggle" class="top-icon-btn" type="button" onclick="toggleDarkMode()" title="{% if lang == 'es' %}Cambiar modo{% else %}Toggle theme{% endif %}">&#127769;</button>
+          <button id="theme-toggle" class="top-icon-btn" type="button" onclick="toggleDarkMode()" title="{{ student_ui.toggle_theme }}">&#127769;</button>
           <a class="top-icon-btn" href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
           <a class="top-icon-btn" href="/logout" title="{{nav.logout}}">&#10162;</a>
         </div>
@@ -4200,6 +4201,7 @@ LAYOUT = """<!DOCTYPE html>
 def _render(title: str, content: str, active_page: str = "", wide: bool = False, **kwargs):
     flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
     nav = t_dict("nav")
+    student_ui = t_dict("student_ui")
     is_admin = False
     acct_type = session.get("account_type", "student")
     if _logged_in():
@@ -4216,6 +4218,8 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
         client_name=session.get("client_name", ""),
         wide=wide,
         nav=nav,
+        student_ui=student_ui,
+        tr=t,
         lang=session.get("lang", "es"),
         is_admin=is_admin,
         account_type=acct_type,
@@ -6187,6 +6191,8 @@ def _render_error_page(code, heading, message, sub=""):
         active_page="",
         client_name=session.get("client_name", "") if _logged_in() else "",
         nav=t_dict("nav"),
+        student_ui=t_dict("student_ui"),
+        tr=t,
         lang=session.get("lang", "es"),
         wide=True,
         content=Markup(body),

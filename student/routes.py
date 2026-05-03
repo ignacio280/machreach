@@ -1286,6 +1286,10 @@ def register_student_routes(app, csrf, limiter):
         _best_hour_text = (f"{_best_hour:02d}:00" if _best_hour is not None else "Sin patron todavia")
         _focus_consistency = sum(1 for _, _v in _daily_vals if _v > 0)
 
+        from outreach.i18n import t_dict as _t_dict
+        _an = _t_dict("student_analytics")
+        _an_json = {k: json.dumps(v, ensure_ascii=False) for k, v in _an.items()}
+
         body = f"""
         <style>
         .quiz-cd {{ --ink:#1A1A1F; --paper:#F4F1EA; --card:#FFFFFF; --line:#E2DCCC; --muted:#77756F; --accent:#FF7A3D; --pink:#EF5DA8; font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink); }}
@@ -1427,7 +1431,7 @@ def register_student_routes(app, csrf, limiter):
                     elif _notes:
                         _course = _notes.title()
                 if not _course:
-                    _course = "Sin curso"
+                    _course = _an.get("no_course", "No course")
                 _focus_rows.append({
                     "date": str(_r.get("plan_date") or "")[:10],
                     "course": _course,
@@ -1481,40 +1485,40 @@ def register_student_routes(app, csrf, limiter):
         <div class="wa-page">
           <div class="wa-head">
             <div>
-              <div class="wa-eye">ANALYTICS SEMANALES</div>
-              <h1>Tu semana de estudio.</h1>
-              <p>Revisa cuanto estudiaste cada dia, cambia de semana, compara cursos y haz click en cualquier curso para ver su detalle diario.</p>
+              <div class="wa-eye">{_esc(_an.get("kicker", "WEEKLY ANALYTICS"))}</div>
+              <h1>{_esc(_an.get("hero", "Your study week."))}</h1>
+              <p>{_esc(_an.get("subtitle", ""))}</p>
             </div>
             <div class="wa-week-nav">
               <button id="wa-prev" type="button" aria-label="Semana anterior">&lsaquo;</button>
-              <div id="wa-week-label">Semana actual</div>
+              <div id="wa-week-label">{_esc(_an.get("current_week", "Current week"))}</div>
               <button id="wa-next" type="button" aria-label="Semana siguiente">&rsaquo;</button>
             </div>
           </div>
 
           <div class="wa-stats">
-            <div class="wa-stat"><span>Total semana</span><strong id="wa-total">0m</strong></div>
-            <div class="wa-stat"><span>Mejor dia</span><strong id="wa-best-day">-</strong></div>
-            <div class="wa-stat"><span>Cursos activos</span><strong id="wa-course-count">0</strong></div>
-            <div class="wa-stat"><span>Promedio diario</span><strong id="wa-average">0m</strong></div>
+            <div class="wa-stat"><span>{_esc(_an.get("week_total", "Week total"))}</span><strong id="wa-total">0m</strong></div>
+            <div class="wa-stat"><span>{_esc(_an.get("best_day", "Best day"))}</span><strong id="wa-best-day">-</strong></div>
+            <div class="wa-stat"><span>{_esc(_an.get("active_courses", "Active courses"))}</span><strong id="wa-course-count">0</strong></div>
+            <div class="wa-stat"><span>{_esc(_an.get("daily_average", "Daily average"))}</span><strong id="wa-average">0m</strong></div>
           </div>
 
           <div class="wa-grid">
             <section class="wa-card">
-              <h2>Minutos por día</h2>
-              <p>Linea de lunes a domingo para la semana seleccionada.</p>
+              <h2>{_esc(_an.get("minutes_per_day", "Minutes per day"))}</h2>
+              <p>{_esc(_an.get("minutes_per_day_sub", ""))}</p>
               <div id="wa-line" class="wa-line-wrap"></div>
             </section>
             <section class="wa-card">
-              <h2>Horas por curso</h2>
-              <p>Haz click en una barra para ver el detalle diario.</p>
+              <h2>{_esc(_an.get("hours_per_course", "Hours per course"))}</h2>
+              <p>{_esc(_an.get("hours_per_course_sub", ""))}</p>
               <div id="wa-courses" class="wa-course-list"></div>
             </section>
           </div>
 
           <section class="wa-card">
-            <h2 id="wa-detail-title">Detalle diario por curso</h2>
-            <p id="wa-detail-sub">Selecciona un curso para ver como se repartio durante la semana.</p>
+            <h2 id="wa-detail-title">{_esc(_an.get("course_detail", "Daily detail by course"))}</h2>
+            <p id="wa-detail-sub">{_esc(_an.get("course_detail_sub", ""))}</p>
             <div id="wa-detail" class="wa-detail-bars"></div>
           </section>
         </div>
@@ -1522,9 +1526,17 @@ def register_student_routes(app, csrf, limiter):
         <script>
         (function(){{
           var rows = {_focus_json};
+          var I18N = {{
+            currentWeek: {_an_json.get("current_week", json.dumps("Current week"))},
+            courseDetail: {_an_json.get("course_detail", json.dumps("Daily detail by course"))},
+            courseDetailSub: {_an_json.get("course_detail_sub", json.dumps("Select a course to see how it was distributed during the week."))},
+            noWeekSessions: {_an_json.get("no_week_sessions", json.dumps("No sessions recorded this week."))},
+            noWeekData: {_an_json.get("no_week_data", json.dumps("No data for this week."))},
+            courseDayDetail: {_an_json.get("course_day_detail", json.dumps("Minutes studied per day in the selected week."))}
+          }};
           var selectedCourse = null;
           var weekOffset = 0;
-          var dayNames = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
+          var dayNames = {json.dumps(["Lun","Mar","Mie","Jue","Vie","Sab","Dom"] if session.get("lang", "es") == "es" else ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"])};
           function pad(n) {{ return String(n).padStart(2,'0'); }}
           function key(d) {{ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }}
           function minsText(m) {{ m = Math.round(m || 0); return m >= 60 ? (Math.floor(m/60) + 'h ' + (m%60) + 'm') : (m + 'm'); }}
@@ -1578,7 +1590,7 @@ def register_student_routes(app, csrf, limiter):
             var maxCourse = Math.max(1, ...courses.map(function(c){{ return courseTotals[c]; }}));
             var list = document.getElementById('wa-courses');
             if (!courses.length) {{
-              list.innerHTML = '<div class="wa-empty">No hay sesiones registradas esta semana.</div>';
+              list.innerHTML = '<div class="wa-empty">' + I18N.noWeekSessions + '</div>';
             }} else {{
               list.innerHTML = courses.map(function(c){{
                 var pct = Math.max(5, Math.round(courseTotals[c] / maxCourse * 100));
@@ -1595,15 +1607,15 @@ def register_student_routes(app, csrf, limiter):
             var sub = document.getElementById('wa-detail-sub');
             var detail = document.getElementById('wa-detail');
             if (!selectedCourse) {{
-              title.textContent = 'Detalle diario por curso';
-              sub.textContent = 'Selecciona un curso para ver como se repartio durante la semana.';
-              detail.innerHTML = '<div class="wa-empty" style="grid-column:1/-1;">No hay datos para esta semana.</div>';
+              title.textContent = I18N.courseDetail;
+              sub.textContent = I18N.courseDetailSub;
+              detail.innerHTML = '<div class="wa-empty" style="grid-column:1/-1;">' + I18N.noWeekData + '</div>';
               return;
             }}
             var vals = dayKeys.map(function(k){{ return weekRows.filter(function(r){{ return r.date === k && r.course === selectedCourse; }}).reduce(function(a,r){{ return a + (parseInt(r.minutes)||0); }}, 0); }});
             var max = Math.max(15, ...vals);
             title.textContent = selectedCourse;
-            sub.textContent = 'Minutos estudiados por dia en la semana seleccionada.';
+            sub.textContent = I18N.courseDayDetail;
             detail.innerHTML = vals.map(function(v,i){{
               var h = Math.max(7, Math.round(v / max * 180));
               return '<div class="wa-detail-day" title="'+dayNames[i]+': '+minsText(v)+'"><div class="wa-detail-bar" style="height:'+h+'px"></div><strong>'+minsText(v)+'</strong><span>'+dayNames[i]+'</span></div>';
@@ -3711,11 +3723,12 @@ def register_student_routes(app, csrf, limiter):
 
         from outreach.db import get_client
 
-        from outreach.i18n import t_dict
+        from outreach.i18n import t, t_dict
 
         flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
 
         nav = t_dict("nav")
+        student_ui = t_dict("student_ui")
 
         is_admin = False
 
@@ -3752,6 +3765,8 @@ def register_student_routes(app, csrf, limiter):
             wide=False,
 
             nav=nav,
+            student_ui=student_ui,
+            tr=t,
 
             lang=session.get("lang", "es"),
 
