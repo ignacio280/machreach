@@ -16,7 +16,6 @@
 > - **Se conecta a Canvas** (el LMS que usan casi todas las universidades) y baja automáticamente los cursos y materiales del alumno.
 > - **Modo Focus** tipo Pomodoro: el alumno dice qué ramo y qué prueba está estudiando, le da start, y la plataforma le cuenta el tiempo.
 > - **Analítica de estudio**: cuántas horas lleva esta semana, qué día rinde más, cuánto tiempo le ha dedicado a cada ramo y a cada examen — con gráficos de tiempo por día, por ramo y por prueba.
-> - **Training**: quizzes compartidos entre alumnos de la misma universidad. Si alguien sube un cuestionario de Cálculo I en mi misma universidad, yo puedo practicar con él.
 > - **Rankings (leaderboards)** por nivel global, país, universidad y carrera. Se cierran cada semana y cada mes con premios en monedas virtuales.
 > - **XP, badges, rachas, ligas** — el sistema se siente como un juego. El alumno gana XP por estudiar y sube de liga.
 > - **Monedas virtuales** para comprar banners y cosméticos de perfil.
@@ -31,7 +30,7 @@
 >
 > - **Backend** en Python con Flask — es el cerebro que maneja los usuarios, las sesiones de estudio, los ranking, y los pagos.
 > - **Base de datos** PostgreSQL en la nube — ahí viven los usuarios, los cursos bajados de Canvas, el tiempo estudiado, el XP, los rankings.
-> - **IA** — uso la API de OpenAI, específicamente el modelo `gpt-4o-mini` (la variante más barata, ~60 veces más económica que GPT-4 estándar). Sirve para tres cosas puntuales: **(1)** parsear material desordenado de Canvas (syllabus en PDF, programas de curso) y convertirlo en datos estructurados (nombres de pruebas, fechas, unidades); **(2)** generar **quizzes** a partir de ese material para el módulo Training; **(3)** generar **flashcards** para estudio. No hay tutor conversacional ni chat abierto — cada llamada a IA es una tarea corta, estructurada y con prompt optimizado, así que el costo por usuario es de centavos.
+> - **IA** — uso la API de OpenAI, específicamente el modelo `gpt-4o-mini` (la variante más barata, ~60 veces más económica que GPT-4 estándar). Sirve para tres cosas puntuales: **(1)** parsear material desordenado de Canvas (syllabus en PDF, programas de curso) y convertirlo en datos estructurados (nombres de pruebas, fechas, unidades); **(2)** generar **quizzes** a partir de ese material; **(3)** generar **flashcards** para estudio. No hay tutor conversacional ni chat abierto — cada llamada a IA es una tarea corta, estructurada y con prompt optimizado, así que el costo por usuario es de centavos.
 > - **Frontend** servido desde el mismo backend (HTML + JS responsive) — funciona en celular y notebook sin necesidad de instalar una app.
 > - **Pagos** con **Lemon Squeezy** (cobra mundial, emite factura, se queda con 5%). La plata me llega en USD a una cuenta y de ahí se convierte a CLP.
 > - **Hosting** en Render.com — un servicio web + un worker de background + la base de datos. Auto-escala.

@@ -906,8 +906,8 @@ def extract_quiz_from_test(test_text: str, course_name: str = "") -> list[dict]:
     questions. Multiple choice ONLY — anything else is dropped.
 
     The model is told to *transcribe*, not invent: the exact questions
-    and options that appear in the source. Used by the Training tab's
-    "Upload official test" flow."""
+    and options that appear in the source. Used by the official-test
+    quiz generation flow."""
     if not (test_text or "").strip():
         return []
 

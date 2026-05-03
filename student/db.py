@@ -520,19 +520,6 @@ def init_student_db():
         init_prize_tables()
     except Exception as e:
         log.exception("init_prize_tables failed: %s", e)
-    # Training tab (community quizzes per university course).
-    try:
-        from student.training import init_training_tables, backfill_courses_from_all_syncs
-        init_training_tables()
-        # One-shot backfill: fold any previously-synced Canvas courses into
-        # the shared catalog. get_or_create_course is idempotent, so repeat
-        # boots are cheap.
-        try:
-            backfill_courses_from_all_syncs()
-        except Exception as be:
-            log.warning("backfill_courses_from_all_syncs failed: %s", be)
-    except Exception as e:
-        log.exception("init_training_tables failed: %s", e)
     log.info("Student tables initialized.")
 
 
@@ -2557,13 +2544,6 @@ BADGE_DEFS = {
     "duel_100":        {"emoji": "👑", "name": "Duel Champion",   "desc": "Won 100 quiz duels"},
     "duel_perfect":    {"emoji": "💥", "name": "Flawless Victory","desc": "Won a duel with a perfect score"},
     "duel_underdog":   {"emoji": "🐺", "name": "Underdog",        "desc": "Beat an opponent with 2x your XP"},
-    # ── Community training ──────────────────────────────────────────
-    # New badges tied to the Training tab (community-shared quizzes per course).
-    "training_first": {"emoji": "🏫", "name": "Training Day",     "desc": "Completed your first community training quiz"},
-    "training_10":    {"emoji": "📚", "name": "Training Regular", "desc": "Completed 10 community training quizzes"},
-    "training_50":    {"emoji": "🎓", "name": "Training Scholar", "desc": "Completed 50 community training quizzes"},
-    "training_publish":{"emoji": "📣", "name": "Course Contributor","desc": "Published a quiz to your university's training tab"},
-    "hard_quiz":      {"emoji": "🪨", "name": "Hard Mode",        "desc": "Aced a Hard-rated community quiz"},
     # ── Weekly / monthly payouts ────────────────────────────────────
     "first_prize":    {"emoji": "🪙", "name": "First Prize",      "desc": "Earned your first leaderboard coin payout"},
     "podium_week":    {"emoji": "🥇", "name": "Podium Finisher",  "desc": "Finished top-3 on any weekly leaderboard"},

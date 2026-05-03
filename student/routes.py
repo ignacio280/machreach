@@ -1637,7 +1637,7 @@ def register_student_routes(app, csrf, limiter):
 
     # ── Hard-block deprecated student pages ─────────────────
 
-    # Plan, Notes, AI Tutor, Schedule, Panic, Practice, and Training have been removed from the product.
+        # Plan, Notes, AI Tutor, Schedule, Panic, and Practice have been removed from the product.
 
     # Their old route handlers still exist deeper in this file, but a
 

@@ -7,10 +7,8 @@ DEPRECATED_STUDENT_PATHS = {
     "/student/panic",
     "/student/practice",
     "/student/schedule",
-    "/student/training",
 }
 
 REMOVED_API_PREFIXES = {
     "/api/student/practice": "Practice has been removed",
-    "/api/student/training": "Training has been removed",
 }

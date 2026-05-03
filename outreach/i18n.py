@@ -1029,7 +1029,6 @@ SPANISH_TO_EN_VISIBLE.update({
     "Lee 15 páginas de material": "Read 15 pages of material",
     "Lee 15 paginas de material": "Read 15 pages of material",
     "15 min repasando para una prueba": "15 min reviewing for an exam",
-    "Completa 1 quiz de entrenamiento comunitario": "Complete 1 community training quiz",
     "faltan": "left",
     "FALTAN": "LEFT",
     "atrasada": "overdue",

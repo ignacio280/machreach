@@ -320,9 +320,9 @@ function QuizDemo() {
     <section>
       <div className="container">
         <div className="section-head">
-          <span className="eyebrow"><span className="dot"/> Training</span>
+          <span className="eyebrow"><span className="dot"/> Quizzes</span>
           <h2>Quizzes con IA, hechos<br/>por tu propia universidad.</h2>
-          <p>Practica con cuestionarios generados a partir del material real de tus cursos. Comparte los tuyos y gana monedas.</p>
+          <p>Practica con cuestionarios generados a partir del material real de tus cursos. Son herramientas privadas de estudio, no una red comunitaria.</p>
         </div>
         <div className="quiz-wrap" style={{ display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 36, alignItems: "center" }}>
           <div>
@@ -333,8 +333,8 @@ function QuizDemo() {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {[
                 { ic: <IconBook/>,   t: "Aprende del material real, no de internet aleatorio" },
-                { ic: <IconPeople/>, t: "Comparte tus quizzes con compañeros de tu universidad" },
-                { ic: <IconCoin/>,   t: "Cada quiz que otros usen te paga monedas" },
+                { ic: <IconPeople/>, t: "Mant?n tus materiales y preguntas dentro de tu cuenta" },
+                { ic: <IconCoin/>,   t: "El progreso real viene del Focus, no de farmear quizzes" },
               ].map((r, k) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div style={{

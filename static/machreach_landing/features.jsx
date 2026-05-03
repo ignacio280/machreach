@@ -267,7 +267,7 @@ function Features() {
     { id: 0, color: "var(--brand)",     icon: <IconCanvas/>,  title: "Canvas en automático",   desc: "Conecta tu universidad y bajamos cursos, syllabus y fechas de prueba sin tocar nada.", mini: <MiniCanvas/> },
     { id: 1, color: "var(--secondary)", icon: <IconTimer/>,   title: "Modo Focus",             desc: "Pomodoro pegado a tu ramo y tu prueba. Cada minuto cuenta como XP real.",         mini: <MiniFocus/> },
     { id: 2, color: "var(--accent)",    icon: <IconChart/>,   title: "Analítica de estudio",   desc: "Cuántas horas, qué día rindes más, cuánto tiempo le diste a cada examen.",        mini: <MiniChart/> },
-    { id: 3, color: "var(--brand)",     icon: <IconBrain/>,   title: "Training comunitario",   desc: "Quizzes y flashcards generados con IA, compartidos entre alumnos de tu uni.",     mini: <MiniQuiz/> },
+    { id: 3, color: "var(--brand)",     icon: <IconBrain/>,   title: "Quizzes con IA",          desc: "Genera preguntas desde tus apuntes o pruebas oficiales para practicar sin perder tiempo.", mini: <MiniQuiz/> },
     { id: 4, color: "var(--secondary)", icon: <IconMedal/>,   title: "Badges, ligas y rachas", desc: "Sistema de logros que premia constancia, no solo talento. Sube de liga semanal.", mini: <MiniBadges/> },
     { id: 5, color: "var(--accent)",    icon: <IconCoin/>,    title: "Economía de monedas",    desc: "Gana monedas estudiando y cámbialas por cosméticos, banners y temas exclusivos.",  mini: <MiniCoins/> },
   ];
