@@ -7192,7 +7192,8 @@ def register_student_routes(app, csrf, limiter):
         }}
 
         function playClaimAlarm() {{
-          // Stronger, unmistakable cue for the mandatory XP claim window.
+          // Same bell family as the normal break, just longer and more
+          // recognizable for the mandatory XP claim window.
           try {{
             if (alarmAudio) {{
               alarmAudio.currentTime = 0;
@@ -7204,7 +7205,7 @@ def register_student_routes(app, csrf, limiter):
                   var p2 = alarmAudio.play();
                   if (p2 && p2.catch) p2.catch(function(){{}});
                 }} catch(e) {{}}
-              }}, 850);
+              }}, 1600);
             }}
           }} catch(e) {{}}
           try {{
@@ -7292,28 +7293,36 @@ def register_student_routes(app, csrf, limiter):
 
             var now = ctx.currentTime;
 
-            // Urgent two-note pulse, repeated, so it feels different from the
-            // normal gentle chime without becoming painfully loud.
+            // Variation of the normal C-E-G bell: same soft identity, but with
+            // a higher final note and a second phrase so users notice it.
 
-            var pattern = [880, 1174.66, 880, 1174.66, 659.25, 987.77];
+            var pattern = [
+              {{ freq: 523.25, start: 0.00, dur: 1.55, gain: 0.23 }},
+              {{ freq: 659.25, start: 0.42, dur: 1.55, gain: 0.23 }},
+              {{ freq: 783.99, start: 0.84, dur: 1.65, gain: 0.23 }},
+              {{ freq: 1046.5, start: 1.26, dur: 1.70, gain: 0.18 }},
+              {{ freq: 659.25, start: 2.15, dur: 1.45, gain: 0.16 }},
+              {{ freq: 783.99, start: 2.52, dur: 1.45, gain: 0.16 }},
+              {{ freq: 1046.5, start: 2.90, dur: 1.80, gain: 0.15 }}
+            ];
 
-            pattern.forEach(function(freq, i) {{
+            pattern.forEach(function(note) {{
 
               var osc = ctx.createOscillator();
 
               var gain = ctx.createGain();
 
-              osc.type = i % 2 ? 'triangle' : 'square';
+              osc.type = 'sine';
 
-              osc.frequency.value = freq;
+              osc.frequency.value = note.freq;
 
-              var start = now + i * 0.22;
+              var start = now + note.start;
 
               gain.gain.setValueAtTime(0.0001, start);
 
-              gain.gain.linearRampToValueAtTime(0.22, start + 0.025);
+              gain.gain.linearRampToValueAtTime(note.gain, start + 0.05);
 
-              gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+              gain.gain.exponentialRampToValueAtTime(0.001, start + note.dur);
 
               osc.connect(gain);
 
@@ -7321,11 +7330,11 @@ def register_student_routes(app, csrf, limiter):
 
               osc.start(start);
 
-              osc.stop(start + 0.2);
+              osc.stop(start + note.dur + 0.12);
 
             }});
 
-            [523.25, 659.25, 880].forEach(function(freq) {{
+            [523.25, 659.25, 783.99, 1046.5].forEach(function(freq) {{
 
               var osc = ctx.createOscillator();
 
@@ -7335,19 +7344,19 @@ def register_student_routes(app, csrf, limiter):
 
               osc.frequency.value = freq;
 
-              gain.gain.setValueAtTime(0.0001, now + 1.55);
+              gain.gain.setValueAtTime(0.0001, now + 4.05);
 
-              gain.gain.linearRampToValueAtTime(0.16, now + 1.62);
+              gain.gain.linearRampToValueAtTime(0.11, now + 4.14);
 
-              gain.gain.exponentialRampToValueAtTime(0.001, now + 2.8);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 5.55);
 
               osc.connect(gain);
 
               gain.connect(ctx.destination);
 
-              osc.start(now + 1.55);
+              osc.start(now + 4.05);
 
-              osc.stop(now + 2.9);
+              osc.stop(now + 5.7);
 
             }});
 
