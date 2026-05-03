@@ -17694,7 +17694,95 @@ No markdown, no code fences. ONLY JSON.
 
         cid = _cid()
 
-        return _s_render("Amigos y Duelos", f"""
+        _lang = session.get("lang", "es")
+        _fr = {
+            "kicker": "SOCIAL STUDY" if _lang == "en" else "ESTUDIO SOCIAL",
+            "title": "Friends<br/>and duels." if _lang == "en" else "Amigos<br/>y duelos.",
+            "subtitle": "Find classmates, challenge friends, and turn focus time into pressure that actually helps." if _lang == "en" else "Encuentra compañeros, desafía amigos y convierte el tiempo de estudio en presión que de verdad ayuda.",
+            "your_id": "Your ID" if _lang == "en" else "Tu ID",
+            "search_ph": "Search by name, email, or #ID" if _lang == "en" else "Buscar por nombre, correo o #ID",
+            "search": "Search" if _lang == "en" else "Buscar",
+            "requests": "Friend requests" if _lang == "en" else "Solicitudes de amistad",
+            "pending": "Pending" if _lang == "en" else "Pendientes",
+            "friends": "Your friends" if _lang == "en" else "Tus amigos",
+            "squad": "Squad" if _lang == "en" else "Equipo",
+            "quiz_duels": "Quiz duels" if _lang == "en" else "Duelos de quiz",
+            "live": "Live" if _lang == "en" else "En vivo",
+            "marathons": "Study marathons" if _lang == "en" else "Maratones de estudio",
+            "days7": "7 days" if _lang == "en" else "7 días",
+            "active_duels": "Active duels" if _lang == "en" else "Duelos activos",
+            "now": "Now" if _lang == "en" else "Ahora",
+            "history": "Duel history" if _lang == "en" else "Historial de duelos",
+            "archive": "Archive" if _lang == "en" else "Archivo",
+            "loading": "Loading..." if _lang == "en" else "Cargando...",
+            "no_pending": "No pending invitations." if _lang == "en" else "Sin invitaciones pendientes.",
+            "no_active": "No active duels." if _lang == "en" else "Sin duelos activos.",
+            "no_history": "No completed duels yet." if _lang == "en" else "Aún no hay duelos completados.",
+            "no_matches": "No matches." if _lang == "en" else "Sin resultados.",
+            "no_name": "(no name)" if _lang == "en" else "(sin nombre)",
+            "add_friend": "Add friend" if _lang == "en" else "Agregar amigo",
+            "friends_done": "Friends!" if _lang == "en" else "¡Amigos!",
+            "requested": "Requested" if _lang == "en" else "Solicitado",
+            "already": "Already" if _lang == "en" else "Ya agregado",
+            "self": "Self" if _lang == "en" else "Eres tú",
+            "remove_friend": "Remove this friend?" if _lang == "en" else "¿Eliminar este amigo?",
+            "user": "User" if _lang == "en" else "Usuario",
+            "challenge": "Challenge" if _lang == "en" else "Desafiar",
+            "remove": "Remove" if _lang == "en" else "Eliminar",
+            "accept": "Accept" if _lang == "en" else "Aceptar",
+            "decline": "Decline" if _lang == "en" else "Rechazar",
+            "cancel": "Cancel" if _lang == "en" else "Cancelar",
+            "send_invite": "Send invite" if _lang == "en" else "Enviar invitación",
+            "pick_format": "Pick a duel format" if _lang == "en" else "Elige un formato de duelo",
+            "quiz_duel": "Quiz Duel" if _lang == "en" else "Duelo de quiz",
+            "online": "online" if _lang == "en" else "en línea",
+            "online_now": "Online now" if _lang == "en" else "En línea ahora",
+            "offline": "offline" if _lang == "en" else "desconectado",
+            "offline_unavailable": "offline — unavailable" if _lang == "en" else "desconectado — no disponible",
+            "quiz_duel_desc": "Upload a study file. AI builds 10 questions. Both must be online — first to finish at the highest score wins. Tab-switch = instant loss." if _lang == "en" else "Sube un archivo de estudio. La IA crea 10 preguntas. Ambos deben estar en línea: gana quien termine primero con mejor puntaje. Cambiar de pestaña = derrota instantánea.",
+            "quiz_duel_reward": "Win: +5 XP · +50 coins" if _lang == "en" else "Ganar: +5 XP · +50 coins",
+            "marathon_title": "Study Marathon (7 days)" if _lang == "en" else "Maratón de estudio (7 días)",
+            "marathon_desc": "Most focus minutes over the next 7 days wins. Asynchronous — they don't need to be online; they just need to accept on their friends tab to start the clock." if _lang == "en" else "Gana quien acumule más minutos de enfoque en los próximos 7 días. Es asincrónico: no necesitan estar en línea, solo aceptar en su pestaña de amigos para iniciar el reloj.",
+            "marathon_reward": "Win: +8 XP · +70 coins · Tie: +3 XP · +25 coins" if _lang == "en" else "Ganar: +8 XP · +70 coins · Empate: +3 XP · +25 coins",
+            "upload_quiz_file": "Upload a PDF, DOCX or TXT (max 8 MB). The AI will generate 10 multiple-choice questions." if _lang == "en" else "Sube un PDF, DOCX o TXT (máx. 8 MB). La IA generará 10 preguntas de selección múltiple.",
+            "topic_ph": "Topic (optional, e.g. Cell Biology Ch. 4)" if _lang == "en" else "Tema (opcional, ej. Biología celular cap. 4)",
+            "send_marathon_confirm": "Send a 7-day Study Marathon invite to " if _lang == "en" else "¿Enviar una invitación de maratón de estudio de 7 días a ",
+            "send_marathon_suffix": "? They have to accept it on their friends tab before the clock starts." if _lang == "en" else "? Debe aceptarla en su pestaña de amigos antes de que empiece el reloj.",
+            "marathon_sent": "Marathon invite sent! It will start once they accept on their friends tab." if _lang == "en" else "¡Invitación de maratón enviada! Empezará cuando la acepte en su pestaña de amigos.",
+            "offline_quiz": "That friend is offline. Quiz duels need both players online — try a Study Marathon instead." if _lang == "en" else "Ese amigo está desconectado. Los duelos de quiz necesitan a ambos jugadores en línea; prueba una maratón de estudio.",
+            "pick_file": "Pick a file." if _lang == "en" else "Elige un archivo.",
+            "generating_quiz": "Generating quiz..." if _lang == "en" else "Generando quiz...",
+            "failed": "Failed." if _lang == "en" else "Falló.",
+            "network_error": "Network error." if _lang == "en" else "Error de red.",
+            "no_friends": "No friends yet. Search above to add someone." if _lang == "en" else "Aún no tienes amigos. Busca arriba para agregar a alguien.",
+            "challenged_marathon": "challenged you to a 7-day Study Marathon." if _lang == "en" else "te desafió a una maratón de estudio de 7 días.",
+            "marathon_invite_meta": "Most focus minutes over the next 7 days wins. Clock starts when you accept." if _lang == "en" else "Gana quien acumule más minutos de enfoque en los próximos 7 días. El reloj empieza cuando aceptas.",
+            "waiting_on": "Waiting on" if _lang == "en" else "Esperando a",
+            "accept_marathon": "to accept your marathon invite." if _lang == "en" else "para que acepte tu invitación de maratón.",
+            "clock_not_started": "Clock hasn't started. They need to accept on their friends tab." if _lang == "en" else "El reloj aún no empieza. Debe aceptar en su pestaña de amigos.",
+            "ends": "ends" if _lang == "en" else "termina",
+            "you": "You" if _lang == "en" else "Tú",
+            "them": "Them" if _lang == "en" else "Rival",
+            "tie": "TIE" if _lang == "en" else "EMPATE",
+            "win": "WIN" if _lang == "en" else "VICTORIA",
+            "loss": "LOSS" if _lang == "en" else "DERROTA",
+            "challenged_you": "challenged you" if _lang == "en" else "te desafió",
+            "no_topic": "No topic" if _lang == "en" else "Sin tema",
+            "accept_play": "Accept & play" if _lang == "en" else "Aceptar y jugar",
+            "waiting_status": "waiting on opponent" if _lang == "en" else "esperando al rival",
+            "ready_status": "ready" if _lang == "en" else "listo",
+            "progress_status": "in progress" if _lang == "en" else "en progreso",
+            "open": "Open" if _lang == "en" else "Abrir",
+            "no_quiz_duels": "No active quiz duels. Challenge a friend to start one." if _lang == "en" else "No hay duelos de quiz activos. Desafía a un amigo para empezar uno.",
+            "could_not_accept": "Could not accept." if _lang == "en" else "No se pudo aceptar.",
+            "decline_quiz_confirm": "Decline this quiz duel?" if _lang == "en" else "¿Rechazar este duelo de quiz?",
+            "could_not_decline": "Could not decline." if _lang == "en" else "No se pudo rechazar.",
+            "decline_marathon_confirm": "Decline this marathon invite?" if _lang == "en" else "¿Rechazar esta invitación de maratón?",
+            "cancel_marathon_confirm": "Cancel your marathon invite?" if _lang == "en" else "¿Cancelar tu invitación de maratón?",
+            "could_not_cancel": "Could not cancel." if _lang == "en" else "No se pudo cancelar.",
+        }
+
+        return _s_render("Friends and Duels" if _lang == "en" else "Amigos y Duelos", f"""
 
         <style>
           .friends-cd {{ max-width:1180px;margin:0 auto;padding:4px 0 42px;--ink:#1A1A1F;--muted:#6E6A60;--line:#E2DCCC;--paper:#FFFDF8;--cream:#F4F1EA;--orange:#FF7A3D;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink); }}
@@ -17742,18 +17830,18 @@ No markdown, no code fences. ONLY JSON.
 
           <header class="fr-hero">
             <div>
-              <div class="fr-eye">SOCIAL STUDY</div>
-              <h1 class="fr-title serif">Friends<br/>and duels.</h1>
-              <p class="fr-sub">Find classmates, challenge friends, and turn focus time into pressure that actually helps.</p>
+              <div class="fr-eye">{_fr["kicker"]}</div>
+              <h1 class="fr-title serif">{_fr["title"]}</h1>
+              <p class="fr-sub">{_fr["subtitle"]}</p>
             </div>
-            <div class="fr-id">Your ID <span>#{cid}</span></div>
+            <div class="fr-id">{_fr["your_id"]} <span>#{cid}</span></div>
           </header>
 
           <section class="fr-search-card">
             <div class="fr-search-inner">
               <div class="fr-search-row">
-                <input id="fr-search" class="fr-input" placeholder="Search by name, email, or #ID">
-                <button class="fr-btn" onclick="frSearch()">Search</button>
+                <input id="fr-search" class="fr-input" placeholder="{_fr["search_ph"]}">
+                <button class="fr-btn" onclick="frSearch()">{_fr["search"]}</button>
               </div>
               <div id="fr-results" class="fr-list" style="margin-top:14px"></div>
             </div>
@@ -17762,35 +17850,35 @@ No markdown, no code fences. ONLY JSON.
           <div class="fr-grid">
             <main>
               <section id="fr-incoming-wrap" class="fr-panel alt" style="display:none">
-                <div class="fr-panel-top"><h3>Friend requests</h3><span class="fr-count">Pending</span></div>
+                <div class="fr-panel-top"><h3>{_fr["requests"]}</h3><span class="fr-count">{_fr["pending"]}</span></div>
                 <div id="fr-incoming" class="fr-list"></div>
               </section>
 
               <section class="fr-panel">
-                <div class="fr-panel-top"><h3>Your friends</h3><span class="fr-count">Squad</span></div>
-                <div id="fr-friends" class="fr-list"><div class="fr-empty">Loading...</div></div>
+                <div class="fr-panel-top"><h3>{_fr["friends"]}</h3><span class="fr-count">{_fr["squad"]}</span></div>
+                <div id="fr-friends" class="fr-list"><div class="fr-empty">{_fr["loading"]}</div></div>
               </section>
 
               <section class="fr-panel">
-                <div class="fr-panel-top"><h3>Quiz duels</h3><span class="fr-count">Live</span></div>
-                <div id="fr-quiz-duels" class="fr-list"><div class="fr-empty">Loading...</div></div>
+                <div class="fr-panel-top"><h3>{_fr["quiz_duels"]}</h3><span class="fr-count">{_fr["live"]}</span></div>
+                <div id="fr-quiz-duels" class="fr-list"><div class="fr-empty">{_fr["loading"]}</div></div>
               </section>
             </main>
 
             <aside>
               <section class="fr-panel alt">
-                <div class="fr-panel-top"><h3>Study marathons</h3><span class="fr-count">7 days</span></div>
-                <div id="fr-marathon-pending" class="fr-list"><div class="fr-empty">No pending invitations.</div></div>
+                <div class="fr-panel-top"><h3>{_fr["marathons"]}</h3><span class="fr-count">{_fr["days7"]}</span></div>
+                <div id="fr-marathon-pending" class="fr-list"><div class="fr-empty">{_fr["no_pending"]}</div></div>
               </section>
 
               <section class="fr-panel">
-                <div class="fr-panel-top"><h3>Active duels</h3><span class="fr-count">Now</span></div>
-                <div id="fr-active-duels" class="fr-list"><div class="fr-empty">No active duels.</div></div>
+                <div class="fr-panel-top"><h3>{_fr["active_duels"]}</h3><span class="fr-count">{_fr["now"]}</span></div>
+                <div id="fr-active-duels" class="fr-list"><div class="fr-empty">{_fr["no_active"]}</div></div>
               </section>
 
               <section class="fr-panel">
-                <div class="fr-panel-top"><h3>Duel history</h3><span class="fr-count">Archive</span></div>
-                <div id="fr-history" class="fr-list"><div class="fr-empty">No completed duels yet.</div></div>
+                <div class="fr-panel-top"><h3>{_fr["history"]}</h3><span class="fr-count">{_fr["archive"]}</span></div>
+                <div id="fr-history" class="fr-list"><div class="fr-empty">{_fr["no_history"]}</div></div>
               </section>
             </aside>
           </div>
@@ -17800,6 +17888,7 @@ No markdown, no code fences. ONLY JSON.
         <script>
 
         const ME_CID = {cid};
+        const FR = {json.dumps(_fr, ensure_ascii=False)};
 
         function esc(s) {{ return (s||'').replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]); }}
         function initials(name) {{
@@ -17817,15 +17906,15 @@ No markdown, no code fences. ONLY JSON.
 
           const box = document.getElementById('fr-results');
 
-          if (!r.results || !r.results.length) {{ box.innerHTML = '<div class="fr-empty">No matches.</div>'; return; }}
+          if (!r.results || !r.results.length) {{ box.innerHTML = `<div class="fr-empty">${{FR.no_matches}}</div>`; return; }}
 
           box.innerHTML = r.results.map(u =>
 
             `<div class="fr-row">
 
-              <div class="fr-person"><div class="fr-avatar">${{initials(u.name)}}</div><div><div class="fr-name">${{esc(u.name) || '(no name)'}}</div><div class="fr-meta">#${{u.id}}</div></div></div>
+              <div class="fr-person"><div class="fr-avatar">${{initials(u.name)}}</div><div><div class="fr-name">${{esc(u.name) || FR.no_name}}</div><div class="fr-meta">#${{u.id}}</div></div></div>
 
-              <button class="fr-btn small ghost" onclick="frAdd(${{u.id}}, this)">Add friend</button>
+              <button class="fr-btn small ghost" onclick="frAdd(${{u.id}}, this)">${{FR.add_friend}}</button>
 
             </div>`).join('');
 
@@ -17837,7 +17926,7 @@ No markdown, no code fences. ONLY JSON.
 
           const r = await fetch('/api/student/friends/add', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{friend_id: uid}})}}).then(r=>r.json());
 
-          btn.textContent = r.status === 'accepted' ? 'Friends!' : (r.status === 'requested' ? 'Requested' : (r.status === 'already' ? 'Already' : 'Self'));
+          btn.textContent = r.status === 'accepted' ? FR.friends_done : (r.status === 'requested' ? FR.requested : (r.status === 'already' ? FR.already : FR.self));
 
           loadAll();
 
@@ -17847,7 +17936,7 @@ No markdown, no code fences. ONLY JSON.
 
         async function frRemove(uid) {{
 
-          if (!confirm('Remove this friend?')) return;
+          if (!confirm(FR.remove_friend)) return;
 
           await fetch('/api/student/friends/remove', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{friend_id: uid}})}});
 
@@ -17857,7 +17946,7 @@ No markdown, no code fences. ONLY JSON.
 
         async function frChallenge(uid, uname, isOnline) {{
 
-          openChallengeModal(uid, uname || ('User #' + uid), isOnline);
+          openChallengeModal(uid, uname || (FR.user + ' #' + uid), isOnline);
 
         }}
 
@@ -17875,33 +17964,33 @@ No markdown, no code fences. ONLY JSON.
             <div class="fr-modal-card">
               <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:14px">
                 <div>
-                  <h2 class="serif" style="margin:0;font-size:30px;letter-spacing:-.04em">Challenge ${{esc(uname)}}</h2>
-                  <div class="fr-note" style="margin-top:2px">Pick a duel format</div>
+                  <h2 class="serif" style="margin:0;font-size:30px;letter-spacing:-.04em">${{FR.challenge}} ${{esc(uname)}}</h2>
+                  <div class="fr-note" style="margin-top:2px">${{FR.pick_format}}</div>
                 </div>
                 <button onclick="closeChallengeModal()" class="fr-btn small ghost" style="width:34px;padding:0">×</button>
               </div>
 
               <div id="chal-pick" style="display:flex;flex-direction:column;gap:10px">
                 <button class="fr-chal-card" onclick="pickQuiz()" ${{window.__chalOnline ? '' : 'disabled style="opacity:.55;cursor:not-allowed"'}}>
-                  <div style="font-size:16px;font-weight:700">🥊 Quiz Duel ${{window.__chalOnline ? '<span style=&quot;font-size:11px;color:#22c55e;font-weight:600;margin-left:6px&quot;>● online</span>' : '<span style=&quot;font-size:11px;color:#94a3b8;font-weight:600;margin-left:6px&quot;>● offline — unavailable</span>'}}</div>
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Upload a study file. AI builds 10 questions. Both must be online — first to finish at the highest score wins. Tab-switch = instant loss.</div>
-                  <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +5 XP · +50 🪙</div>
+                  <div style="font-size:16px;font-weight:700">🥊 ${{FR.quiz_duel}} ${{window.__chalOnline ? '<span style=&quot;font-size:11px;color:#22c55e;font-weight:600;margin-left:6px&quot;>● ' + FR.online + '</span>' : '<span style=&quot;font-size:11px;color:#94a3b8;font-weight:600;margin-left:6px&quot;>● ' + FR.offline_unavailable + '</span>'}}</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${{FR.quiz_duel_desc}}</div>
+                  <div style="font-size:11px;color:#22c55e;margin-top:6px">${{FR.quiz_duel_reward}}</div>
                 </button>
                 <button class="fr-chal-card" onclick="pickMarathon()">
-                  <div style="font-size:16px;font-weight:700">📅 Study Marathon (7 days)</div>
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Most focus minutes over the next 7 days wins. Asynchronous — they don't need to be online; they just need to accept on their friends tab to start the clock.</div>
-                  <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +8 XP · +70 🪙 · Tie: +3 XP · +25 🪙</div>
+                  <div style="font-size:16px;font-weight:700">📅 ${{FR.marathon_title}}</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${{FR.marathon_desc}}</div>
+                  <div style="font-size:11px;color:#22c55e;margin-top:6px">${{FR.marathon_reward}}</div>
                 </button>
               </div>
 
               <div id="chal-quiz" style="display:none">
-                <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Upload a PDF, DOCX or TXT (max 8 MB). The AI will generate 10 multiple-choice questions.</div>
-                <input id="chal-topic" class="fr-input" type="text" placeholder="Topic (optional, e.g. Cell Biology Ch. 4)" style="width:100%;margin-bottom:10px;border-radius:14px">
+                <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">${{FR.upload_quiz_file}}</div>
+                <input id="chal-topic" class="fr-input" type="text" placeholder="${{FR.topic_ph}}" style="width:100%;margin-bottom:10px;border-radius:14px">
                 <input id="chal-file" type="file" accept=".pdf,.docx,.txt,.md" style="width:100%;margin-bottom:14px">
                 <div id="chal-err" style="color:#ef4444;font-size:12px;margin-bottom:8px"></div>
                 <div style="display:flex;gap:8px;justify-content:flex-end">
-                  <button class="fr-btn small ghost" onclick="closeChallengeModal()">Cancel</button>
-                  <button class="fr-btn small orange" id="chal-go" onclick="sendQuizDuel(${{uid}})">Send invite</button>
+                  <button class="fr-btn small ghost" onclick="closeChallengeModal()">${{FR.cancel}}</button>
+                  <button class="fr-btn small orange" id="chal-go" onclick="sendQuizDuel(${{uid}})">${{FR.send_invite}}</button>
                 </div>
               </div>
             </div>`;
@@ -17913,17 +18002,17 @@ No markdown, no code fences. ONLY JSON.
           if (m) m.remove();
         }}
         function pickMarathon() {{
-          if (!confirm('Send a 7-day Study Marathon invite to ' + window.__chalName + '? They have to accept it on their friends tab before the clock starts.')) return;
+          if (!confirm(FR.send_marathon_confirm + window.__chalName + FR.send_marathon_suffix)) return;
           fetch('/api/student/duels/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{opponent_id: window.__chalUid}})}})
             .then(r=>r.json()).then(r => {{
               if (r.error) {{ alert(r.error); return; }}
               closeChallengeModal();
-              alert('Marathon invite sent! It will start once they accept on their friends tab.');
+              alert(FR.marathon_sent);
               loadAll();
             }});
         }}
         function pickQuiz() {{
-          if (!window.__chalOnline) {{ alert('That friend is offline. Quiz duels need both players online — try a Study Marathon instead.'); return; }}
+          if (!window.__chalOnline) {{ alert(FR.offline_quiz); return; }}
           document.getElementById('chal-pick').style.display = 'none';
           document.getElementById('chal-quiz').style.display = 'block';
         }}
@@ -17932,22 +18021,22 @@ No markdown, no code fences. ONLY JSON.
           const topic = document.getElementById('chal-topic').value.trim();
           const errEl = document.getElementById('chal-err');
           errEl.textContent = '';
-          if (!fileEl.files || !fileEl.files[0]) {{ errEl.textContent = 'Pick a file.'; return; }}
+          if (!fileEl.files || !fileEl.files[0]) {{ errEl.textContent = FR.pick_file; return; }}
           const fd = new FormData();
           fd.append('opponent_id', uid);
           fd.append('topic', topic);
           fd.append('file', fileEl.files[0]);
           const btn = document.getElementById('chal-go');
-          btn.disabled = true; btn.textContent = 'Generating quiz…';
+          btn.disabled = true; btn.textContent = FR.generating_quiz;
           try {{
             const r = await fetch('/api/student/duels/quiz/create', {{method:'POST', body: fd}}).then(r=>r.json());
-            if (!r.ok) {{ errEl.textContent = r.error || 'Failed.'; btn.disabled = false; btn.textContent = 'Send invite'; return; }}
+            if (!r.ok) {{ errEl.textContent = r.error || FR.failed; btn.disabled = false; btn.textContent = FR.send_invite; return; }}
             closeChallengeModal();
             // Take the challenger straight into the play page (it auto-starts when opponent accepts)
             mrGo('/student/duels/quiz/' + r.duel_id + '/play');
           }} catch(e) {{
-            errEl.textContent = 'Error de red.';
-            btn.disabled = false; btn.textContent = 'Send invite';
+            errEl.textContent = FR.network_error;
+            btn.disabled = false; btn.textContent = FR.send_invite;
           }}
         }}
 
@@ -17973,7 +18062,7 @@ No markdown, no code fences. ONLY JSON.
 
                 <div class="fr-person"><div class="fr-avatar">${{initials(u.name)}}</div><div><div class="fr-name">${{esc(u.name)}}</div><div class="fr-meta">#${{u.id}}</div></div></div>
 
-                <button class="fr-btn small orange" onclick="frAccept(${{u.id}})">Accept</button>
+                <button class="fr-btn small orange" onclick="frAccept(${{u.id}})">${{FR.accept}}</button>
 
               </div>`).join('');
 
@@ -17990,11 +18079,11 @@ No markdown, no code fences. ONLY JSON.
             const parts = await Promise.all(uniq.map(async u => {{
               const h2h = await fetch('/api/student/duels/h2h?friend_id=' + u.id).then(r=>r.json());
               const onlineDot = u.online
-                ? '<span class="fr-dot on" title="Online now"></span>'
-                : '<span class="fr-dot" title="Offline"></span>';
+                ? `<span class="fr-dot on" title="${{FR.online_now}}"></span>`
+                : `<span class="fr-dot" title="${{FR.offline}}"></span>`;
               const onlineLabel = u.online
-                ? '<span style="color:#22c55e;font-size:11px;font-weight:600;margin-left:6px">online</span>'
-                : '<span style="color:#94a3b8;font-size:11px;margin-left:6px">offline</span>';
+                ? `<span style="color:#22c55e;font-size:11px;font-weight:600;margin-left:6px">${{FR.online}}</span>`
+                : `<span style="color:#94a3b8;font-size:11px;margin-left:6px">${{FR.offline}}</span>`;
               return `<div class="fr-row">
 
                 <div class="fr-person"><div class="fr-avatar">${{initials(u.name)}}</div><div>
@@ -18007,9 +18096,9 @@ No markdown, no code fences. ONLY JSON.
 
                 <div class="fr-actions">
 
-                  <button class="fr-btn small orange" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" data-online="${{u.online ? '1' : '0'}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname, this.dataset.online === '1')">Challenge</button>
+                  <button class="fr-btn small orange" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" data-online="${{u.online ? '1' : '0'}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname, this.dataset.online === '1')">${{FR.challenge}}</button>
 
-                  <button class="fr-btn small ghost" onclick="frRemove(${{u.id}})">Remove</button>
+                  <button class="fr-btn small ghost" onclick="frRemove(${{u.id}})">${{FR.remove}}</button>
 
                 </div>
 
@@ -18017,7 +18106,7 @@ No markdown, no code fences. ONLY JSON.
             }}));
             fl.innerHTML = parts.join('');
 
-          }} else {{ fl.innerHTML = '<div class="fr-empty">No friends yet. Search above to add someone.</div>'; }}
+          }} else {{ fl.innerHTML = `<div class="fr-empty">${{FR.no_friends}}</div>`; }}
 
           // ── Marathon invites (pending) ────────────────────────
           try {{
@@ -18026,23 +18115,23 @@ No markdown, no code fences. ONLY JSON.
             const inc = (mp.incoming || []).map(d => `
               <div class="fr-row">
                 <div>
-                  <b>${{esc(d.challenger_name)}}</b> challenged you to a 7-day Study Marathon.
-                  <div class="fr-meta">Most focus minutes over the next 7 days wins. Clock starts when you accept.</div>
+                  <b>${{esc(d.challenger_name)}}</b> ${{FR.challenged_marathon}}
+                  <div class="fr-meta">${{FR.marathon_invite_meta}}</div>
                 </div>
                 <div class="fr-actions">
-                  <button class="fr-btn small orange" onclick="mAccept(${{d.id}})">Accept</button>
-                  <button class="fr-btn small ghost" onclick="mDecline(${{d.id}})">Decline</button>
+                  <button class="fr-btn small orange" onclick="mAccept(${{d.id}})">${{FR.accept}}</button>
+                  <button class="fr-btn small ghost" onclick="mDecline(${{d.id}})">${{FR.decline}}</button>
                 </div>
               </div>`).join('');
             const out = (mp.outgoing || []).map(d => `
               <div class="fr-row">
                 <div>
-                  Waiting on <b>${{esc(d.opponent_name)}}</b> to accept your marathon invite.
-                  <div class="fr-meta">Clock hasn't started. They need to accept on their friends tab.</div>
+                  ${{FR.waiting_on}} <b>${{esc(d.opponent_name)}}</b> ${{FR.accept_marathon}}
+                  <div class="fr-meta">${{FR.clock_not_started}}</div>
                 </div>
-                <button class="fr-btn small ghost" onclick="mCancel(${{d.id}})">Cancel</button>
+                <button class="fr-btn small ghost" onclick="mCancel(${{d.id}})">${{FR.cancel}}</button>
               </div>`).join('');
-            mbox.innerHTML = (inc + out) || '<div class="fr-empty">No pending invitations.</div>';
+            mbox.innerHTML = (inc + out) || `<div class="fr-empty">${{FR.no_pending}}</div>`;
           }} catch(e) {{}}
 
           const d = await fetch('/api/student/duels/list').then(r=>r.json());
@@ -18063,15 +18152,15 @@ No markdown, no code fences. ONLY JSON.
 
               return `<div class="fr-row">
 
-                <div><div class="fr-name">vs ${{esc(themName)}}</div><div class="fr-meta">ends ${{esc(String(x.ends_at).slice(0,16))}}</div></div>
+                <div><div class="fr-name">vs ${{esc(themName)}}</div><div class="fr-meta">${{FR.ends}} ${{esc(String(x.ends_at).slice(0,16))}}</div></div>
 
-                <div class="fr-actions"><span class="fr-duel-stat">You: ${{myMin}} min</span><span class="fr-duel-stat">Them: ${{themMin}} min</span></div>
+                <div class="fr-actions"><span class="fr-duel-stat">${{FR.you}}: ${{myMin}} min</span><span class="fr-duel-stat">${{FR.them}}: ${{themMin}} min</span></div>
 
               </div>`;
 
             }}).join('');
 
-          }} else {{ ad.innerHTML = '<div class="fr-empty">No active duels.</div>'; }}
+          }} else {{ ad.innerHTML = `<div class="fr-empty">${{FR.no_active}}</div>`; }}
 
           const hist = document.getElementById('fr-history');
 
@@ -18087,7 +18176,7 @@ No markdown, no code fences. ONLY JSON.
 
               const tie = !x.winner_id;
 
-              const tag = tie ? '<span style="color:#94a3b8">TIE</span>' : (won ? '<span style="color:#22c55e">WIN</span>' : '<span style="color:#ef4444">LOSS</span>');
+              const tag = tie ? `<span style="color:#94a3b8">${{FR.tie}}</span>` : (won ? `<span style="color:#22c55e">${{FR.win}}</span>` : `<span style="color:#ef4444">${{FR.loss}}</span>`);
 
               return `<div class="fr-row">
 
@@ -18095,7 +18184,7 @@ No markdown, no code fences. ONLY JSON.
 
             }}).join('');
 
-          }} else {{ hist.innerHTML = '<div class="fr-empty">No completed duels yet.</div>'; }}
+          }} else {{ hist.innerHTML = `<div class="fr-empty">${{FR.no_history}}</div>`; }}
 
           // Quiz duels (v2 — file-upload + AI)
           try {{
@@ -18104,28 +18193,28 @@ No markdown, no code fences. ONLY JSON.
             const incoming = (qd.pending||[]).map(x =>
               `<div class="fr-row">
                 <div>
-                  <div class="fr-name">${{esc(x.challenger_name)}} challenged you</div>
-                  <div class="fr-meta">${{esc(x.topic||'No topic')}} · ${{esc(x.file_name||'')}}</div>
+                  <div class="fr-name">${{esc(x.challenger_name)}} ${{FR.challenged_you}}</div>
+                  <div class="fr-meta">${{esc(x.topic||FR.no_topic)}} · ${{esc(x.file_name||'')}}</div>
                 </div>
                 <div class="fr-actions">
-                  <button class="fr-btn small orange" onclick="qdAccept(${{x.id}})">Accept &amp; play</button>
-                  <button class="fr-btn small ghost" onclick="qdDecline(${{x.id}})">Decline</button>
+                  <button class="fr-btn small orange" onclick="qdAccept(${{x.id}})">${{FR.accept_play}}</button>
+                  <button class="fr-btn small ghost" onclick="qdDecline(${{x.id}})">${{FR.decline}}</button>
                 </div>
               </div>`).join('');
             const playable = (qd.playable||[]).map(x => {{
               const meIsChall = x.challenger_id === ME_CID;
               const themName = meIsChall ? x.opponent_name : x.challenger_name;
-              const labelStatus = x.status === 'pending' ? 'waiting on opponent' : (x.status === 'ready' ? 'ready' : 'in progress');
+              const labelStatus = x.status === 'pending' ? FR.waiting_status : (x.status === 'ready' ? FR.ready_status : FR.progress_status);
               return `<div class="fr-row">
                 <div>
                   <div class="fr-name">vs ${{esc(themName)}}</div>
                   <div class="fr-meta">${{esc(x.topic||'')}} · ${{labelStatus}}</div>
                 </div>
-                <a class="fr-btn small orange" href="/student/duels/quiz/${{x.id}}/play">Open</a>
+                <a class="fr-btn small orange" href="/student/duels/quiz/${{x.id}}/play">${{FR.open}}</a>
               </div>`;
             }}).join('');
             const inner = (incoming + playable);
-            qbox.innerHTML = inner || '<div class="fr-empty">No active quiz duels. Challenge a friend to start one.</div>';
+            qbox.innerHTML = inner || `<div class="fr-empty">${{FR.no_quiz_duels}}</div>`;
           }} catch(e) {{}}
 
           }} finally {{ __loadingAll = false; }}
@@ -18133,31 +18222,31 @@ No markdown, no code fences. ONLY JSON.
 
         async function qdAccept(id) {{
           const r = await fetch('/api/student/duels/quiz/' + id + '/accept', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not accept.'); return; }}
+          if (!r.ok) {{ alert(r.error || FR.could_not_accept); return; }}
           mrGo('/student/duels/quiz/' + id + '/play');
         }}
         async function qdDecline(id) {{
-          if (!confirm('Decline this quiz duel?')) return;
+          if (!confirm(FR.decline_quiz_confirm)) return;
           const r = await fetch('/api/student/duels/quiz/' + id + '/decline', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not decline.'); return; }}
+          if (!r.ok) {{ alert(r.error || FR.could_not_decline); return; }}
           loadAll();
         }}
 
         async function mAccept(id) {{
           const r = await fetch('/api/student/duels/marathon/' + id + '/accept', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not accept.'); return; }}
+          if (!r.ok) {{ alert(r.error || FR.could_not_accept); return; }}
           loadAll();
         }}
         async function mDecline(id) {{
-          if (!confirm('Decline this marathon invite?')) return;
+          if (!confirm(FR.decline_marathon_confirm)) return;
           const r = await fetch('/api/student/duels/marathon/' + id + '/decline', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not decline.'); return; }}
+          if (!r.ok) {{ alert(r.error || FR.could_not_decline); return; }}
           loadAll();
         }}
         async function mCancel(id) {{
-          if (!confirm('Cancel your marathon invite?')) return;
+          if (!confirm(FR.cancel_marathon_confirm)) return;
           const r = await fetch('/api/student/duels/marathon/' + id + '/decline', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'Could not cancel.'); return; }}
+          if (!r.ok) {{ alert(r.error || FR.could_not_cancel); return; }}
           loadAll();
         }}
 
