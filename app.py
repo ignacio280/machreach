@@ -5466,6 +5466,13 @@ def admin_product_analytics():
         "SELECT created_at::date::text AS d, COUNT(*) AS n FROM student_flashcard_decks WHERE created_at >= CURRENT_DATE - INTERVAL '13 days' GROUP BY created_at::date ORDER BY d",
         "SELECT date(created_at) AS d, COUNT(*) AS n FROM student_flashcard_decks WHERE date(created_at) >= date('now','localtime','-13 days') GROUP BY date(created_at) ORDER BY d",
     )
+    try:
+        from student import db as sdb
+        course_outcomes = sdb.get_course_outcomes_admin(limit=80)
+        course_outcome_reports = sdb.get_course_outcome_reports_admin(limit=200)
+    except Exception:
+        course_outcomes = []
+        course_outcome_reports = []
 
     def table(headers, rows, keys):
         if not rows:
@@ -5565,6 +5572,8 @@ def admin_product_analytics():
       <div class="admin-panel"><h2>Páginas más vistas · 7 días</h2>{table(["Ruta","Visitas"], top_pages, ["path","n"])}</div>
       <div class="admin-panel"><h2>Eventos de producto · 7 días</h2>{table(["Evento","Acciones","Usuarios"], feature_rows, ["label","n","users"])}</div>
       <div class="admin-panel"><h2>XP por fuente · 30 días</h2>{table(["Acción","Eventos","XP"], xp_rows, ["action","n","xp"])}</div>
+      <div class="admin-panel"><h2>Resultados por ramo</h2>{table(["Curso","Código","Reportes","Aprobados","Reprobados","Promedio aprobado"], course_outcomes, ["course_name","course_code","reports","passed_reports","failed_reports","avg_pass_hours"])}</div>
+      <div class="admin-panel"><h2>Reportes individuales de ramos</h2>{table(["Usuario","Correo","Curso","Código","Resultado","Horas estudiadas","Reportado"], course_outcome_reports, ["user_name","user_email","course_name","course_code","result","total_focus_hours","reported_at"])}</div>
     </div>
     """
     return _render("Admin analytics", body, active_page="admin", wide=True)

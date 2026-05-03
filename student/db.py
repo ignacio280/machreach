@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 
 from outreach.db import (
@@ -581,6 +582,8 @@ def _student_migrations():
         # course is the slot the course belongs to in the grade sheet.
         ("clients", "current_semester", "TEXT DEFAULT ''"),
         ("student_courses", "semester_label", "TEXT DEFAULT ''"),
+        ("student_quiz_duels", "stake_coins", "INTEGER NOT NULL DEFAULT 0"),
+        ("student_quiz_duels", "stake_collected", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -751,6 +754,30 @@ def _student_migrations():
         "challenger_minutes INTEGER NOT NULL DEFAULT 0, "
         "opponent_minutes INTEGER NOT NULL DEFAULT 0, "
         "settled_at TEXT)",
+    )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_course_outcomes ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "course_id INTEGER NOT NULL REFERENCES student_courses(id) ON DELETE CASCADE, "
+        "course_key TEXT NOT NULL, "
+        "course_name TEXT DEFAULT '', "
+        "course_code TEXT DEFAULT '', "
+        "passed BOOLEAN NOT NULL DEFAULT FALSE, "
+        "total_focus_minutes INTEGER NOT NULL DEFAULT 0, "
+        "reported_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(client_id, course_id))",
+        "CREATE TABLE IF NOT EXISTS student_course_outcomes ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "course_id INTEGER NOT NULL REFERENCES student_courses(id) ON DELETE CASCADE, "
+        "course_key TEXT NOT NULL, "
+        "course_name TEXT DEFAULT '', "
+        "course_code TEXT DEFAULT '', "
+        "passed INTEGER NOT NULL DEFAULT 0, "
+        "total_focus_minutes INTEGER NOT NULL DEFAULT 0, "
+        "reported_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(client_id, course_id))",
     )
 
 
@@ -1463,6 +1490,124 @@ def get_course_week(client_id: int, course_db_id: int, week_offset: int = 0) -> 
         "week_end": sunday.strftime("%Y-%m-%d"),
         "days": days,
     }
+
+def _course_benchmark_key(name: str = "", code: str = "") -> str:
+    raw = (code or "").strip() or (name or "").strip()
+    key = re.sub(r"[^a-z0-9]+", "", raw.lower())
+    return key[:80] or "course"
+
+
+def record_course_outcome(client_id: int, course_id: int, passed: bool) -> dict:
+    with get_db() as db:
+        course = _fetchone(
+            db,
+            "SELECT id, name, code FROM student_courses WHERE id = %s AND client_id = %s",
+            (course_id, client_id),
+        )
+        if not course:
+            return {"ok": False, "error": "Course not found."}
+        minutes = _fetchval(
+            db,
+            "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress "
+            "WHERE client_id = %s AND course_id = %s",
+            (client_id, course_id),
+        ) or 0
+        key = _course_benchmark_key(course.get("name") or "", course.get("code") or "")
+        if _USE_PG:
+            _exec(
+                db,
+                "INSERT INTO student_course_outcomes "
+                "(client_id, course_id, course_key, course_name, course_code, passed, total_focus_minutes, reported_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,NOW()) "
+                "ON CONFLICT (client_id, course_id) DO UPDATE SET "
+                "course_key=EXCLUDED.course_key, course_name=EXCLUDED.course_name, "
+                "course_code=EXCLUDED.course_code, passed=EXCLUDED.passed, "
+                "total_focus_minutes=EXCLUDED.total_focus_minutes, reported_at=NOW()",
+                (client_id, course_id, key, course.get("name") or "", course.get("code") or "", bool(passed), int(minutes)),
+            )
+        else:
+            _exec(
+                db,
+                "INSERT INTO student_course_outcomes "
+                "(client_id, course_id, course_key, course_name, course_code, passed, total_focus_minutes, reported_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,datetime('now','localtime')) "
+                "ON CONFLICT(client_id, course_id) DO UPDATE SET "
+                "course_key=excluded.course_key, course_name=excluded.course_name, "
+                "course_code=excluded.course_code, passed=excluded.passed, "
+                "total_focus_minutes=excluded.total_focus_minutes, reported_at=datetime('now','localtime')",
+                (client_id, course_id, key, course.get("name") or "", course.get("code") or "", 1 if passed else 0, int(minutes)),
+            )
+    return {"ok": True, "passed": bool(passed), "total_focus_minutes": int(minutes), "benchmark": get_course_success_benchmark(course_id)}
+
+
+def get_course_success_benchmark(course_id: int) -> dict:
+    with get_db() as db:
+        course = _fetchone(db, "SELECT name, code FROM student_courses WHERE id = %s", (course_id,))
+        if not course:
+            return {"has_data": False}
+        key = _course_benchmark_key(course.get("name") or "", course.get("code") or "")
+        row = _fetchone(
+            db,
+            "SELECT COUNT(*) AS passed_count, "
+            "COALESCE(AVG(total_focus_minutes),0) AS avg_minutes, "
+            "COALESCE(MIN(total_focus_minutes),0) AS min_minutes, "
+            "COALESCE(MAX(total_focus_minutes),0) AS max_minutes "
+            "FROM student_course_outcomes WHERE course_key = %s AND passed = %s",
+            (key, True),
+        ) or {}
+    passed_count = int(row.get("passed_count") or 0)
+    avg_minutes = int(round(float(row.get("avg_minutes") or 0)))
+    return {
+        "has_data": passed_count > 0 and avg_minutes > 0,
+        "course_key": key,
+        "passed_count": passed_count,
+        "avg_minutes": avg_minutes,
+        "avg_hours": round(avg_minutes / 60, 1),
+        "min_minutes": int(row.get("min_minutes") or 0),
+        "max_minutes": int(row.get("max_minutes") or 0),
+    }
+
+
+def get_course_outcomes_admin(limit: int = 80) -> list[dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT course_key, MAX(course_name) AS course_name, MAX(course_code) AS course_code, "
+            "COUNT(*) AS reports, "
+            "SUM(CASE WHEN passed THEN 1 ELSE 0 END) AS passed_reports, "
+            "SUM(CASE WHEN NOT passed THEN 1 ELSE 0 END) AS failed_reports, "
+            "COALESCE(AVG(CASE WHEN passed THEN total_focus_minutes END),0) AS avg_pass_minutes "
+            "FROM student_course_outcomes GROUP BY course_key "
+            "ORDER BY reports DESC, passed_reports DESC, course_name ASC LIMIT %s",
+            (limit,),
+        ) or []
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["avg_pass_minutes"] = int(round(float(d.get("avg_pass_minutes") or 0)))
+        d["avg_pass_hours"] = round(d["avg_pass_minutes"] / 60, 1) if d["avg_pass_minutes"] else 0
+        out.append(d)
+    return out
+
+
+def get_course_outcome_reports_admin(limit: int = 200) -> list[dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT o.course_name, o.course_code, c.name AS user_name, c.email AS user_email, "
+            "o.passed, o.total_focus_minutes, o.reported_at "
+            "FROM student_course_outcomes o "
+            "JOIN clients c ON c.id = o.client_id "
+            "ORDER BY o.reported_at DESC LIMIT %s",
+            (limit,),
+        ) or []
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["result"] = "Aprobado" if d.get("passed") else "No aprobado"
+        d["total_focus_hours"] = round(int(d.get("total_focus_minutes") or 0) / 60, 1)
+        out.append(d)
+    return out
 
 
 def get_exam_week(client_id: int, exam_db_id: int, week_offset: int = 0) -> dict:
@@ -2979,17 +3124,13 @@ def get_note_fork_count(author_id: int) -> int:
 # -- Daily Quests --------------------------------------------
 
 QUEST_POOL = [
-    {"key": "focus_25",    "label": "Enfócate 25 minutos",            "target": 25,  "xp": 3,  "metric": "focus_minutes"},
-    {"key": "focus_60",    "label": "Enfócate 60 minutos",            "target": 60,  "xp": 5,  "metric": "focus_minutes"},
-    {"key": "flashcards_20","label": "Repasa 20 tarjetas",            "target": 20,  "xp": 15, "metric": "flashcards_reviewed"},
-    {"key": "quiz_1",      "label": "Completa 1 quiz",                "target": 1,   "xp": 20, "metric": "quizzes_completed"},
-    {"key": "session_3",   "label": "Completa 3 sesiones de estudio", "target": 3,   "xp": 20, "metric": "sessions_completed"},
-    {"key": "pages_15",    "label": "Lee 15 páginas de material",     "target": 15,  "xp": 15, "metric": "pages_read"},
-    {"key": "exam_review_15","label": "15 min repasando para una prueba", "target": 15, "xp": 4, "metric": "focus_minutes"},
-    {"key": "training_1",  "label": "Completa 1 quiz de entrenamiento comunitario", "target": 1, "xp": 20, "metric": "training_completed"},
+    {"key": "focus_25",    "label": "Enfócate 25 minutos",            "target": 25,  "xp": 0,  "metric": "focus_minutes"},
+    {"key": "focus_60",    "label": "Enfócate 60 minutos",            "target": 60,  "xp": 0,  "metric": "focus_minutes"},
+    {"key": "session_3",   "label": "Completa 3 sesiones de estudio", "target": 3,   "xp": 0,  "metric": "sessions_completed"},
+    {"key": "exam_review_15","label": "15 min repasando para una prueba", "target": 15, "xp": 0, "metric": "focus_minutes"},
 ]
 
-QUEST_BUNDLE_BONUS_XP = 30  # awarded when all 3 daily quests complete
+QUEST_BUNDLE_BONUS_XP = 0  # quests track habits; Focus grants rewards
 
 
 def get_or_create_daily_quests(client_id: int) -> list[dict]:
@@ -3070,13 +3211,6 @@ def progress_quests_by_metric(client_id: int, metric: str, amount: int = 1) -> l
                     + " WHERE id = %s",
                     (new_prog, row["id"]),
                 )
-                # Award XP for the quest itself
-                _insert_returning_id(
-                    db,
-                    "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s) RETURNING id",
-                    (client_id, "daily_quest", int(row["xp_reward"]), f"Quest: {row['quest_key']}"),
-                    "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (?, ?, ?, ?)",
-                )
                 newly_completed.append(dict(row, progress=new_prog, completed_at="just now"))
             else:
                 _exec(
@@ -3111,12 +3245,6 @@ def progress_quests_by_metric(client_id: int, metric: str, amount: int = 1) -> l
                         db,
                         "INSERT INTO student_daily_quest_bundles (client_id, quest_date) VALUES (%s, %s)",
                         (client_id, today if _USE_PG else today_s),
-                    )
-                    _insert_returning_id(
-                        db,
-                        "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s) RETURNING id",
-                        (client_id, "quest_bundle", QUEST_BUNDLE_BONUS_XP, "All 3 daily quests complete"),
-                        "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (?, ?, ?, ?)",
                     )
                 except Exception:
                     pass
@@ -3488,18 +3616,7 @@ def settle_due_duels() -> int:
                 + " WHERE id = %s",
                 (c_min, o_min, winner, status, d["id"]),
             )
-        # Payout XP + coins to the marathon winner (or both on a tie).
-        try:
-            if status == "tied":
-                add_coins(d["challenger_id"], MARATHON_TIE_COINS, "marathon_tie")
-                add_coins(d["opponent_id"],   MARATHON_TIE_COINS, "marathon_tie")
-                award_xp(d["challenger_id"], "marathon_tie", MARATHON_TIE_XP, f"marathon {d['id']}")
-                award_xp(d["opponent_id"],   "marathon_tie", MARATHON_TIE_XP, f"marathon {d['id']}")
-            elif winner:
-                add_coins(winner, MARATHON_WIN_COINS, "marathon_win")
-                award_xp(winner, "marathon_win", MARATHON_WIN_XP, f"marathon {d['id']}")
-        except Exception:
-            log.exception("marathon payout failed for duel %s", d["id"])
+        # Status-only duel. Focus is the only source that grants XP and coins.
         settled += 1
     return settled
 
@@ -4835,19 +4952,19 @@ def use_streak_freeze(client_id: int) -> dict:
 QUIZ_DUEL_INVITE_TTL_MIN  = 10   # opponent must accept within 10 min
 QUIZ_DUEL_PLAY_TTL_MIN    = 15   # match must be finished within 15 min of start
 QUIZ_DUEL_QUESTION_COUNT  = 10
-QUIZ_DUEL_WIN_COINS       = 5
-QUIZ_DUEL_WIN_XP          = 5
-QUIZ_DUEL_TIE_COINS       = 2
-QUIZ_DUEL_TIE_XP          = 2
+QUIZ_DUEL_WIN_COINS       = 0
+QUIZ_DUEL_WIN_XP          = 0
+QUIZ_DUEL_TIE_COINS       = 0
+QUIZ_DUEL_TIE_XP          = 0
 QUIZ_DUEL_DAILY_PAY_CAP   = 3    # rewards capped at N matches per opponent per day
 
 # ── Study Marathon (7-day asynchronous duel) rewards ──
 # Coins are kept token-small on purpose: real income is the Marketplace,
 # duels exist for status / streaks / XP — not as a coin farm.
-MARATHON_WIN_COINS  = 8
-MARATHON_WIN_XP     = 8
-MARATHON_TIE_COINS  = 3
-MARATHON_TIE_XP     = 3
+MARATHON_WIN_COINS  = 0
+MARATHON_WIN_XP     = 0
+MARATHON_TIE_COINS  = 0
+MARATHON_TIE_XP     = 0
 
 
 def init_quiz_duels_tables() -> None:
@@ -4867,6 +4984,8 @@ def init_quiz_duels_tables() -> None:
         "opponent_time_ms INTEGER NOT NULL DEFAULT 0, "
         "challenger_done BOOLEAN NOT NULL DEFAULT FALSE, "
         "opponent_done BOOLEAN NOT NULL DEFAULT FALSE, "
+        "stake_coins INTEGER NOT NULL DEFAULT 0, "
+        "stake_collected BOOLEAN NOT NULL DEFAULT FALSE, "
         "winner_id INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
         "forfeit_by INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
         "created_at TIMESTAMP DEFAULT NOW(), "
@@ -4887,6 +5006,8 @@ def init_quiz_duels_tables() -> None:
         "opponent_time_ms INTEGER NOT NULL DEFAULT 0, "
         "challenger_done INTEGER NOT NULL DEFAULT 0, "
         "opponent_done INTEGER NOT NULL DEFAULT 0, "
+        "stake_coins INTEGER NOT NULL DEFAULT 0, "
+        "stake_collected INTEGER NOT NULL DEFAULT 0, "
         "winner_id INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
         "forfeit_by INTEGER REFERENCES clients(id) ON DELETE SET NULL, "
         "created_at TEXT DEFAULT (datetime('now','localtime')), "
@@ -4916,6 +5037,18 @@ def init_quiz_duels_tables() -> None:
         "submitted_at TEXT DEFAULT (datetime('now','localtime')), "
         "UNIQUE(duel_id, client_id, question_idx))",
     )
+    for col, col_type in (
+        ("stake_coins", "INTEGER NOT NULL DEFAULT 0"),
+        ("stake_collected", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ):
+        try:
+            with get_db() as db:
+                if _USE_PG:
+                    db.cursor().execute(f"ALTER TABLE student_quiz_duels ADD COLUMN {col} {col_type}")
+                else:
+                    db.execute(f"ALTER TABLE student_quiz_duels ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass
 
 
 def _qd_row(duel_id: int) -> dict | None:
@@ -4940,23 +5073,29 @@ def create_quiz_duel(
     questions: list[dict],
     topic: str = "",
     file_name: str = "",
+    stake_coins: int = 0,
 ) -> int:
     """Persist a new pending quiz-duel with the AI-generated questions."""
     from datetime import datetime, timedelta
     if not questions:
         raise ValueError("No questions to store.")
+    stake_coins = max(0, min(5000, int(stake_coins or 0)))
+    if stake_coins:
+        bal = int(get_wallet(challenger_id).get("coins") or 0)
+        if bal < stake_coins:
+            raise ValueError(f"You need {stake_coins} coins to create this duel.")
     expires = datetime.now() + timedelta(minutes=QUIZ_DUEL_INVITE_TTL_MIN)
     payload = json.dumps(questions, ensure_ascii=False)
     with get_db() as db:
         return _insert_returning_id(
             db,
             "INSERT INTO student_quiz_duels "
-            "(challenger_id, opponent_id, topic, file_name, questions_json, status, expires_at) "
-            "VALUES (%s, %s, %s, %s, %s, 'pending', %s) RETURNING id",
-            (challenger_id, opponent_id, topic[:200], file_name[:200], payload, expires),
+            "(challenger_id, opponent_id, topic, file_name, questions_json, status, stake_coins, expires_at) "
+            "VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s) RETURNING id",
+            (challenger_id, opponent_id, topic[:200], file_name[:200], payload, stake_coins, expires),
             "INSERT INTO student_quiz_duels "
-            "(challenger_id, opponent_id, topic, file_name, questions_json, status, expires_at) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?)",
+            "(challenger_id, opponent_id, topic, file_name, questions_json, status, stake_coins, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)",
         )
 
 
@@ -5057,21 +5196,31 @@ def accept_quiz_duel(duel_id: int, opponent_id: int) -> dict:
         return {"ok": False, "error": "Not your invite."}
     if d["status"] != "pending":
         return {"ok": False, "error": f"Duel is {d['status']}."}
+    stake = int(d.get("stake_coins") or 0)
+    if stake > 0 and not d.get("stake_collected"):
+        challenger_balance = int(get_wallet(int(d["challenger_id"])).get("coins") or 0)
+        opponent_balance = int(get_wallet(int(d["opponent_id"])).get("coins") or 0)
+        if challenger_balance < stake:
+            return {"ok": False, "error": "The challenger no longer has enough coins for this stake."}
+        if opponent_balance < stake:
+            return {"ok": False, "error": f"You need {stake} coins to accept this duel."}
+        add_coins(int(d["challenger_id"]), -stake, f"quiz_duel_stake_{duel_id}")
+        add_coins(int(d["opponent_id"]), -stake, f"quiz_duel_stake_{duel_id}")
     new_exp = datetime.now() + timedelta(minutes=QUIZ_DUEL_PLAY_TTL_MIN)
     with get_db() as db:
         if _USE_PG:
             _exec(
                 db,
                 "UPDATE student_quiz_duels SET status = 'ready', accepted_at = NOW(), "
-                "expires_at = %s WHERE id = %s",
-                (new_exp, duel_id),
+                "expires_at = %s, stake_collected = %s WHERE id = %s",
+                (new_exp, bool(stake > 0), duel_id),
             )
         else:
             _exec(
                 db,
                 "UPDATE student_quiz_duels SET status = 'ready', "
-                "accepted_at = datetime('now','localtime'), expires_at = ? WHERE id = ?",
-                (new_exp, duel_id),
+                "accepted_at = datetime('now','localtime'), expires_at = ?, stake_collected = ? WHERE id = ?",
+                (new_exp, 1 if stake > 0 else 0, duel_id),
             )
     return {"ok": True}
 
@@ -5326,32 +5475,25 @@ def _count_paid_quiz_duels_today(winner_id: int, opponent_id: int) -> int:
 
 
 def _payout_quiz_duel(duel_id: int, winner_id: int | None, tied: bool, reason: str = "") -> None:
-    """Apply XP + coin rewards with the per-friend per-day cap."""
+    """Settle the coin stake. Duels never mint XP or extra coins."""
     d = _qd_row(duel_id)
     if not d:
         return
     a, b = d["challenger_id"], d["opponent_id"]
-    paid_a = _count_paid_quiz_duels_today(a, b)
-    # The current match itself has already been counted (settled_at was set
-    # before payout), so cap is "<= cap" inclusive.
-    over_cap = paid_a > QUIZ_DUEL_DAILY_PAY_CAP
-    if over_cap:
-        log.info("Quiz-duel %s skipped payout (anti-farm cap, %s vs %s)", duel_id, a, b)
+    stake = int(d.get("stake_coins") or 0)
+    if stake <= 0 or not d.get("stake_collected"):
         return
     if tied:
         try:
-            add_coins(a, QUIZ_DUEL_TIE_COINS, "quiz_duel_tie")
-            add_coins(b, QUIZ_DUEL_TIE_COINS, "quiz_duel_tie")
-            award_xp(a, "quiz_duel_tie", QUIZ_DUEL_TIE_XP, f"duel {duel_id}")
-            award_xp(b, "quiz_duel_tie", QUIZ_DUEL_TIE_XP, f"duel {duel_id}")
+            add_coins(a, stake, "quiz_duel_refund")
+            add_coins(b, stake, "quiz_duel_refund")
         except Exception as e:
-            log.exception("tie payout failed: %s", e)
+            log.exception("stake refund failed: %s", e)
     elif winner_id:
         try:
-            add_coins(winner_id, QUIZ_DUEL_WIN_COINS, f"quiz_duel_win {reason}".strip())
-            award_xp(winner_id, "quiz_duel_win", QUIZ_DUEL_WIN_XP, f"duel {duel_id}")
+            add_coins(winner_id, stake * 2, f"quiz_duel_pot {reason}".strip())
         except Exception as e:
-            log.exception("win payout failed: %s", e)
+            log.exception("stake payout failed: %s", e)
 
 
 def get_quiz_duel_history(client_id: int, limit: int = 20) -> list[dict]:

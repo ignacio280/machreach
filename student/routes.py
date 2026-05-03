@@ -2571,6 +2571,28 @@ def register_student_routes(app, csrf, limiter):
         return jsonify({"exams": result})
 
 
+    @app.route("/api/student/courses/<int:course_id>/benchmark", methods=["GET"])
+    def student_course_benchmark_api(course_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Not found"}), 404
+        return jsonify(sdb.get_course_success_benchmark(course_id))
+
+
+    @app.route("/api/student/courses/<int:course_id>/outcome", methods=["POST"])
+    def student_course_outcome_api(course_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != _cid():
+            return jsonify({"error": "Not found"}), 404
+        data = request.get_json(silent=True) or {}
+        result = sdb.record_course_outcome(_cid(), course_id, bool(data.get("passed")))
+        return jsonify(result), (200 if result.get("ok") else 400)
+
+
 
     @app.route("/api/student/courses/<int:course_id>/exams", methods=["POST"])
 
@@ -3271,19 +3293,17 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Focus is the ONLY XP source now. 5 XP per 10 minutes of study.
-        # Quizzes / flashcards / training give coins instead of XP, so the
-        # only way to climb the ranks is to actually study.
+        # Focus is the ONLY reward source now: 5 XP + 1 coin per 10 minutes.
+        # Quizzes, flashcards and duels are study/social tools, not faucets.
         # Breaks aren't counted — `minutes` arrives study-only because the
         # frontend reports phaseWorkMinutes=0 for break phases.
-        # No coins from focus on purpose: coins come from quizzes/flashcards
-        # and the cosmetic grind, XP comes from focus. Two separate loops.
-
         _focus_xp_awarded = 0
+        _focus_coins_awarded = 0
 
         if minutes_saved > 0:
 
             xp = (minutes_saved * 5) // 10  # 25 min -> 12 XP, 50 min -> 25 XP
+            coins = minutes_saved // 10
 
             detail = f"{mode.title()} {minutes_saved}min"
 
@@ -3300,24 +3320,14 @@ def register_student_routes(app, csrf, limiter):
                 sdb.award_xp(cid, "focus_session", xp, detail)
 
                 _focus_xp_awarded = xp
+            if coins > 0:
+                sdb.add_coins(cid, coins, f"focus_session {minutes_saved}min")
+                _focus_coins_awarded = coins
             elif phase_id:
 
                 # 0-XP micro phases still need a marker so phase-id dedupe
                 # works on retries/refreshes. This does not affect total XP.
                 sdb.award_xp(cid, "focus_session", 0, detail)
-
-
-
-        _page_xp_awarded = 0
-
-        if pages_saved > 0:
-
-            page_xp = max(1, pages_saved)
-
-            sdb.award_xp(cid, "pages_read", page_xp, f"Read {pages_saved} pages")
-
-            _page_xp_awarded = page_xp
-
 
 
         # Auto-award focus badges
@@ -3407,7 +3417,8 @@ def register_student_routes(app, csrf, limiter):
             "session_id": saved_id,
             "minutes_saved": minutes_saved,
             "pages_saved": pages_saved,
-            "xp_awarded": _focus_xp_awarded + _page_xp_awarded,
+            "xp_awarded": _focus_xp_awarded,
+            "coins_awarded": _focus_coins_awarded,
             "stats": today_stats,
             "promotion": promotion,
         })
@@ -5425,6 +5436,11 @@ def register_student_routes(app, csrf, limiter):
                 <button class="ccard-go{_state_cls}" onclick="toggleCourse({_course_id})" type="button">Ver detalles →</button>
               </div>
               <div class="course-detail-card" id="detail-{_course_id}" style="display:none;">
+                <div class="course-benchmark" id="bench-{_course_id}"></div>
+                <div class="course-outcome-actions">
+                  <button class="btn btn-outline btn-sm" onclick="markCourseOutcome({_course_id}, true)" type="button">Marcar aprobado</button>
+                  <button class="btn btn-outline btn-sm" onclick="markCourseOutcome({_course_id}, false)" type="button">Marcar no aprobado</button>
+                </div>
                 <div id="exams-panel-{_course_id}" class="course-exams-panel">Cargando evaluaciones...</div>
               </div>
             </article>
@@ -5537,6 +5553,8 @@ def register_student_routes(app, csrf, limiter):
         .ccard-go {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:8px 14px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap; }}
         .ccard-go.warn {{ background:#FF7A3D;color:#fff; }}.ccard-go.good {{ background:#10B981;color:#fff; }}
         .course-detail-card {{ margin-top:16px;padding-top:14px;border-top:1px dashed #E2DCCC; }}
+        .course-benchmark {{ margin-bottom:10px;padding:10px 12px;border-radius:12px;background:#FFF3E8;border:1px solid #FFD0B5;color:#7A3518;font-size:12px;font-weight:800;display:none; }}
+        .course-outcome-actions {{ display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px; }}
         .course-empty {{ grid-column:1/-1;border:2px dashed #E2DCCC;border-radius:18px;padding:32px;text-align:center;color:#94939C; }}
         .mr-modal {{ position:fixed;inset:0;background:rgba(26,26,31,.36);display:flex;align-items:center;justify-content:center;z-index:1000;padding:18px; }}
         .mr-modal-card {{ width:min(420px,100%);background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:20px;box-shadow:0 24px 80px rgba(20,18,30,.18); }}
@@ -5575,6 +5593,8 @@ def register_student_routes(app, csrf, limiter):
 
             row.style.display = '';
 
+            await loadCourseBenchmark(courseId);
+
             await loadCourseExams(courseId);
 
           }} else {{
@@ -5583,6 +5603,40 @@ def register_student_routes(app, csrf, limiter):
 
           }}
 
+        }}
+
+        async function loadCourseBenchmark(courseId) {{
+          var box = document.getElementById('bench-' + courseId);
+          if (!box) return;
+          box.style.display = 'none';
+          try {{
+            var r = await fetch('/api/student/courses/' + courseId + '/benchmark');
+            var d = await r.json();
+            if (d && d.has_data) {{
+              var reports = d.passed_count === 1 ? 'reporte' : 'reportes';
+              box.textContent = 'Estudiantes que aprobaron este ramo estudiaron en promedio ' + d.avg_hours + 'h (' + d.passed_count + ' ' + reports + ').';
+              box.style.display = 'block';
+            }}
+          }} catch(e) {{}}
+        }}
+
+        async function markCourseOutcome(courseId, passed) {{
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var headers = {{'Content-Type':'application/json'}};
+          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+          try {{
+            var r = await fetch('/api/student/courses/' + courseId + '/outcome', {{
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify({{passed: !!passed}})
+            }});
+            var d = await r.json();
+            if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo guardar.');
+            await loadCourseBenchmark(courseId);
+            alert(passed ? 'Curso marcado como aprobado.' : 'Curso marcado como no aprobado.');
+          }} catch(e) {{
+            alert(e.message || 'No se pudo guardar el resultado.');
+          }}
         }}
 
         async function loadCourseExams(courseId) {{
@@ -7263,6 +7317,7 @@ def register_student_routes(app, csrf, limiter):
             examSel.value = '';
             return;
           }}
+          showCourseBenchmarkToast(cid);
           var exams = FOCUS_COURSE_EXAMS[cid] || [];
           // Wipe and rebuild options.
           while (examSel.options.length > 1) examSel.remove(1);
@@ -7275,6 +7330,19 @@ def register_student_routes(app, csrf, limiter):
           }});
           examGroup.style.display = '';
           emptyMsg.style.display = exams.length ? 'none' : 'block';
+        }}
+
+        var _lastBenchmarkCourseToast = '';
+        async function showCourseBenchmarkToast(courseId) {{
+          if (!courseId || _lastBenchmarkCourseToast === String(courseId)) return;
+          try {{
+            var r = await fetch('/api/student/courses/' + courseId + '/benchmark');
+            var d = await r.json();
+            if (!d || !d.has_data) return;
+            _lastBenchmarkCourseToast = String(courseId);
+            var msg = {json.dumps("Students who passed this same course studied about " if _focus_is_en else "Estudiantes que aprobaron este mismo ramo estudiaron cerca de ")} + d.avg_hours + 'h ' + {json.dumps("on average." if _focus_is_en else "en promedio.")};
+            if (window.showToast) window.showToast(msg, 'info'); else console.info(msg);
+          }} catch(e) {{}}
         }}
 
         function saveFocusTimerState() {{
@@ -11187,16 +11255,8 @@ def register_student_routes(app, csrf, limiter):
 
         sdb.update_flashcard_progress(data["card_id"], correct, quality=quality)
 
-        # Coins only — flashcards give 1 coin per correct, no XP.
-        # We still log a 0-XP row so the badge counter (which queries
-        # student_xp WHERE action='flashcard_review') keeps working.
+        # Flashcards are practice only. Focus is the only XP/coin source.
         cid = _cid()
-        if correct:
-            try:
-                sdb.award_xp(cid, "flashcard_review", 0, "Flashcard correct")
-                sdb.add_coins(cid, 1, "flashcard_correct")
-            except Exception:
-                pass
 
         # Check flashcard badges
 
@@ -11204,7 +11264,13 @@ def register_student_routes(app, csrf, limiter):
 
         with get_db() as db:
 
-            fc_count = _fetchval(db, "SELECT COUNT(*) FROM student_xp WHERE client_id = %s AND action = 'flashcard_review'", (cid,)) or 0
+            fc_count = _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_flashcards f "
+                "JOIN student_flashcard_decks d ON d.id = f.deck_id "
+                "WHERE d.client_id = %s AND COALESCE(f.times_correct, 0) > 0",
+                (cid,),
+            ) or 0
 
         for key, threshold in [("flashcard_fan", 100), ("flashcard_500", 500), ("flashcard_1000", 1000)]:
 
@@ -11665,18 +11731,8 @@ def register_student_routes(app, csrf, limiter):
 
         sdb.update_quiz_score(quiz_id, score)
 
-        # Quizzes give COINS only, no XP. Focus sessions are the only XP
-        # source. Coins are intentionally low so the cosmetics still take
-        # real grind. We log a 0-XP action row so badge queries keep working.
+        # Quizzes are practice only. Focus is the only XP/coin source.
         cid = _cid()
-        try:
-            coins = max(1, score // 25)      # 50% -> 2, 80% -> 3, 100% -> 4
-            if score >= 90:
-                coins += 2                   # small bonus for excellence
-            sdb.award_xp(cid, "quiz_score", 0, f"Quiz {quiz_id}: {score}%")
-            sdb.add_coins(cid, coins, f"quiz_{quiz_id}_{score}pct")
-        except Exception:
-            pass
 
         if score == 100:
 
@@ -17871,10 +17927,12 @@ No markdown, no code fences. ONLY JSON.
             "offline": "offline" if _lang == "en" else "desconectado",
             "offline_unavailable": "offline — unavailable" if _lang == "en" else "desconectado — no disponible",
             "quiz_duel_desc": "Upload a study file. AI builds 10 questions. Both must be online — first to finish at the highest score wins. Tab-switch = instant loss." if _lang == "en" else "Sube un archivo de estudio. La IA crea 10 preguntas. Ambos deben estar en línea: gana quien termine primero con mejor puntaje. Cambiar de pestaña = derrota instantánea.",
-            "quiz_duel_reward": "Win: +5 XP · +50 coins" if _lang == "en" else "Ganar: +5 XP · +50 coins",
+            "quiz_duel_reward": "Winner takes the coin pot. No XP." if _lang == "en" else "El ganador se lleva el pozo de monedas. Sin XP.",
             "marathon_title": "Study Marathon (7 days)" if _lang == "en" else "Maratón de estudio (7 días)",
             "marathon_desc": "Most focus minutes over the next 7 days wins. Asynchronous — they don't need to be online; they just need to accept on their friends tab to start the clock." if _lang == "en" else "Gana quien acumule más minutos de enfoque en los próximos 7 días. Es asincrónico: no necesitan estar en línea, solo aceptar en su pestaña de amigos para iniciar el reloj.",
-            "marathon_reward": "Win: +8 XP · +70 coins · Tie: +3 XP · +25 coins" if _lang == "en" else "Ganar: +8 XP · +70 coins · Empate: +3 XP · +25 coins",
+            "marathon_reward": "Status-only challenge. No XP or coins." if _lang == "en" else "Desafio solo por estado. Sin XP ni monedas.",
+            "stake_ph": "Coins each player bets" if _lang == "en" else "Monedas que apuesta cada jugador",
+            "stake_each": "coins each" if _lang == "en" else "monedas cada uno",
             "upload_quiz_file": "Upload a PDF, DOCX or TXT (max 8 MB). The AI will generate 10 multiple-choice questions." if _lang == "en" else "Sube un PDF, DOCX o TXT (máx. 8 MB). La IA generará 10 preguntas de selección múltiple.",
             "topic_ph": "Topic (optional, e.g. Cell Biology Ch. 4)" if _lang == "en" else "Tema (opcional, ej. Biología celular cap. 4)",
             "send_marathon_confirm": "Send a 7-day Study Marathon invite to " if _lang == "en" else "¿Enviar una invitación de maratón de estudio de 7 días a ",
@@ -18117,6 +18175,7 @@ No markdown, no code fences. ONLY JSON.
               <div id="chal-quiz" style="display:none">
                 <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">${{FR.upload_quiz_file}}</div>
                 <input id="chal-topic" class="fr-input" type="text" placeholder="${{FR.topic_ph}}" style="width:100%;margin-bottom:10px;border-radius:14px">
+                <input id="chal-stake" class="fr-input" type="number" min="0" max="5000" value="25" placeholder="${{FR.stake_ph}}" style="width:100%;margin-bottom:10px;border-radius:14px">
                 <input id="chal-file" type="file" accept=".pdf,.docx,.txt,.md" style="width:100%;margin-bottom:14px">
                 <div id="chal-err" style="color:#ef4444;font-size:12px;margin-bottom:8px"></div>
                 <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -18156,6 +18215,7 @@ No markdown, no code fences. ONLY JSON.
           const fd = new FormData();
           fd.append('opponent_id', uid);
           fd.append('topic', topic);
+          fd.append('stake_coins', Math.max(0, Math.min(5000, parseInt(document.getElementById('chal-stake').value || '0', 10) || 0)));
           fd.append('file', fileEl.files[0]);
           const btn = document.getElementById('chal-go');
           btn.disabled = true; btn.textContent = FR.generating_quiz;
@@ -18325,7 +18385,7 @@ No markdown, no code fences. ONLY JSON.
               `<div class="fr-row">
                 <div>
                   <div class="fr-name">${{esc(x.challenger_name)}} ${{FR.challenged_you}}</div>
-                  <div class="fr-meta">${{esc(x.topic||FR.no_topic)}} · ${{esc(x.file_name||'')}}</div>
+                  <div class="fr-meta">${{esc(x.topic||FR.no_topic)}} · ${{esc(x.file_name||'')}} · ${{parseInt(x.stake_coins||0,10)}} ${{FR.stake_each}}</div>
                 </div>
                 <div class="fr-actions">
                   <button class="fr-btn small orange" onclick="qdAccept(${{x.id}})">${{FR.accept_play}}</button>
@@ -18339,7 +18399,7 @@ No markdown, no code fences. ONLY JSON.
               return `<div class="fr-row">
                 <div>
                   <div class="fr-name">vs ${{esc(themName)}}</div>
-                  <div class="fr-meta">${{esc(x.topic||'')}} · ${{labelStatus}}</div>
+                  <div class="fr-meta">${{esc(x.topic||'')}} · ${{labelStatus}} · ${{parseInt(x.stake_coins||0,10)}} ${{FR.stake_each}}</div>
                 </div>
                 <a class="fr-btn small orange" href="/student/duels/quiz/${{x.id}}/play">${{FR.open}}</a>
               </div>`;
@@ -21697,6 +21757,10 @@ No markdown, no code fences. ONLY JSON.
         except Exception:
             return jsonify(ok=False, error="Invalid opponent_id"), 400
         topic = (request.form.get("topic") or "").strip()[:200]
+        try:
+            stake_coins = max(0, min(5000, int(request.form.get("stake_coins") or 0)))
+        except Exception:
+            stake_coins = 0
         if opp == cid or opp <= 0:
             return jsonify(ok=False, error="Pick a friend to challenge."), 400
         # Must be friends
@@ -21786,7 +21850,10 @@ No markdown, no code fences. ONLY JSON.
         if len(clean) < 4:
             return jsonify(ok=False, error="Could not generate enough quality questions from this file."), 500
 
-        did = sdb.create_quiz_duel(cid, opp, clean, topic=topic, file_name=fname)
+        try:
+            did = sdb.create_quiz_duel(cid, opp, clean, topic=topic, file_name=fname, stake_coins=stake_coins)
+        except ValueError as e:
+            return jsonify(ok=False, error=str(e)), 400
         try:
             from student import subscription as _sub
             _sub.record_generation(cid, "quiz_duel_sent")
@@ -21878,6 +21945,7 @@ No markdown, no code fences. ONLY JSON.
             "opponent_score": d.get("opponent_score", 0),
             "challenger_time_ms": d.get("challenger_time_ms", 0),
             "opponent_time_ms": d.get("opponent_time_ms", 0),
+            "stake_coins": int(d.get("stake_coins") or 0),
             "challenger_done": bool(d.get("challenger_done")),
             "opponent_done": bool(d.get("opponent_done")),
             "winner_id": d.get("winner_id"),
@@ -21910,6 +21978,7 @@ No markdown, no code fences. ONLY JSON.
                 "challenger_name": x.get("challenger_name", ""),
                 "topic": x.get("topic", ""),
                 "file_name": x.get("file_name", ""),
+                "stake_coins": int(x.get("stake_coins") or 0),
                 "expires_at": str(x.get("expires_at") or ""),
             } for x in pend],
             playable=[{
@@ -21920,6 +21989,7 @@ No markdown, no code fences. ONLY JSON.
                 "challenger_name": x.get("challenger_name", ""),
                 "opponent_name": x.get("opponent_name", ""),
                 "topic": x.get("topic", ""),
+                "stake_coins": int(x.get("stake_coins") or 0),
             } for x in playable],
         )
 
@@ -21936,7 +22006,9 @@ No markdown, no code fences. ONLY JSON.
             return redirect(url_for("student_duels_quiz_result_page", duel_id=duel_id))
         # Auto-accept on first visit by the opponent (so play page can immediately render)
         if d["status"] == "pending" and cid == d["opponent_id"]:
-            sdb.accept_quiz_duel(duel_id, cid)
+            accepted = sdb.accept_quiz_duel(duel_id, cid)
+            if not accepted.get("ok"):
+                return _s_render("Quiz Duel", f"<div class='card' style='padding:40px;text-align:center'>{accepted.get('error') or 'Could not accept duel.'}</div>", active_page="student_friends")
 
         return _s_render("Quiz Duel", f"""
         <style>
@@ -22161,6 +22233,7 @@ No markdown, no code fences. ONLY JSON.
         won = (d.get("winner_id") == cid)
         lost = (d.get("winner_id") and d.get("winner_id") != cid)
         tied = not d.get("winner_id") and d["status"] in ("tied", "settled")
+        stake = int(d.get("stake_coins") or 0)
         forfeit_msg = ""
         if d["status"] == "forfeit":
             if d.get("forfeit_by") == cid:
@@ -22169,13 +22242,13 @@ No markdown, no code fences. ONLY JSON.
                 forfeit_msg = "<div class='qd-tag' style='background:rgba(34,197,94,.15);color:#22c55e'>Opponent forfeited.</div>"
         if won:
             head = "<div style='font-size:48px'>🏆</div><h1 style='margin:8px 0'>You won!</h1>"
-            payout = f"<div style='color:#22c55e;margin-top:6px'>+{sdb.QUIZ_DUEL_WIN_XP} XP · +{sdb.QUIZ_DUEL_WIN_COINS} coins</div>"
+            payout = f"<div style='color:#22c55e;margin-top:6px'>You won the pot: +{stake * 2} coins</div>" if stake else "<div style='color:var(--text-muted);margin-top:6px'>No coin stake.</div>"
         elif lost:
             head = "<div style='font-size:48px'>💔</div><h1 style='margin:8px 0'>You lost</h1>"
-            payout = "<div style='color:var(--text-muted);margin-top:6px'>No reward this time.</div>"
+            payout = f"<div style='color:#ef4444;margin-top:6px'>You lost your {stake} coin stake.</div>" if stake else "<div style='color:var(--text-muted);margin-top:6px'>No reward this time.</div>"
         elif tied:
             head = "<div style='font-size:48px'>🤝</div><h1 style='margin:8px 0'>It's a tie</h1>"
-            payout = f"<div style='color:#f59e0b;margin-top:6px'>+{sdb.QUIZ_DUEL_TIE_XP} XP · +{sdb.QUIZ_DUEL_TIE_COINS} coins each</div>"
+            payout = f"<div style='color:#f59e0b;margin-top:6px'>{stake} coins refunded each.</div>" if stake else "<div style='color:var(--text-muted);margin-top:6px'>No coin stake.</div>"
         else:
             head = "<h1>Duel ended</h1>"
             payout = ""
