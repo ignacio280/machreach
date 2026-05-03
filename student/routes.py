@@ -3723,7 +3723,7 @@ def register_student_routes(app, csrf, limiter):
 
         from outreach.db import get_client
 
-        from outreach.i18n import t, t_dict, translate_student_html_fragment
+        from outreach.i18n import SPANISH_TO_EN_VISIBLE, t, t_dict, translate_student_html_fragment
 
         flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
 
@@ -3768,6 +3768,7 @@ def register_student_routes(app, csrf, limiter):
 
             nav=nav,
             student_ui=student_ui,
+            student_en_visible=SPANISH_TO_EN_VISIBLE,
             tr=t,
 
             lang=lang,

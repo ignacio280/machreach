@@ -3814,16 +3814,32 @@ LAYOUT = """<!DOCTYPE html>
       "Activos 7 días": "Active 7 days"
     };
 
+    Object.assign(T, {{ student_en_visible|default({})|tojson }});
+
+    function trText(txt) {
+      if (!txt) return null;
+      if (T[txt]) return T[txt];
+      var out = txt;
+      Object.keys(T).sort(function(a,b){ return b.length - a.length; }).forEach(function(k){
+        if (out.indexOf(k) !== -1) out = out.split(k).join(T[k]);
+      });
+      return out !== txt ? out : null;
+    }
+
     function translate(el) {
       if (el.childElementCount === 0) {
         var raw = el.textContent || "";
         var txt = raw.trim();
-        if (txt && T[txt]) el.textContent = raw.replace(txt, T[txt]);
+        var repl = trText(txt);
+        if (txt && repl) el.textContent = raw.replace(txt, repl);
       }
-      if (el.placeholder && T[el.placeholder]) el.placeholder = T[el.placeholder];
-      if (el.title && T[el.title]) el.title = T[el.title];
-      if (el.getAttribute && el.getAttribute("aria-label") && T[el.getAttribute("aria-label")]) {
-        el.setAttribute("aria-label", T[el.getAttribute("aria-label")]);
+      var ph = trText(el.placeholder || "");
+      if (ph) el.placeholder = ph;
+      var ttl = trText(el.title || "");
+      if (ttl) el.title = ttl;
+      if (el.getAttribute && el.getAttribute("aria-label")) {
+        var aria = trText(el.getAttribute("aria-label"));
+        if (aria) el.setAttribute("aria-label", aria);
       }
     }
     function runTranslate(){
@@ -3832,7 +3848,8 @@ LAYOUT = """<!DOCTYPE html>
       while(walker.nextNode()) translate(walker.currentNode);
       document.querySelectorAll('h1,h2,h3,h4,h5,label,button,a,th,td,li,p,span,div,option,summary,figcaption,small,strong,em,b,i').forEach(translate);
       document.querySelectorAll('input[type="button"],input[type="submit"]').forEach(function(el){
-        if (el.value && T[el.value]) el.value = T[el.value];
+        var val = trText(el.value || "");
+        if (val) el.value = val;
       });
     }
     runTranslate();
@@ -3854,7 +3871,7 @@ LAYOUT = """<!DOCTYPE html>
     var origAlert = window.alert;
     window.alert = function(msg) {
       var raw = String(msg || '').trim();
-      origAlert(T[raw] || raw);
+      origAlert(trText(raw) || raw);
     };
   })();
   </script>

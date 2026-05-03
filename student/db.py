@@ -2537,6 +2537,13 @@ def get_study_rank(xp: int) -> dict:
             idx = i
             break
     floor, full, tier, div, color = STUDY_RANKS[idx]
+    try:
+        from outreach.i18n import translate_rank_name
+
+        full = translate_rank_name(full)
+        tier = translate_rank_name(tier)
+    except Exception:
+        pass
     ceil_xp = STUDY_RANKS[idx + 1][0] if idx + 1 < len(STUDY_RANKS) else None
     if ceil_xp is not None and ceil_xp > floor:
         progress = int(((xp - floor) / (ceil_xp - floor)) * 100)
@@ -2560,8 +2567,18 @@ def get_level(xp: int) -> tuple[str, int, int]:
         if xp >= LEVEL_THRESHOLDS[i][0]:
             floor = LEVEL_THRESHOLDS[i][0]
             ceil = LEVEL_THRESHOLDS[i + 1][0] if i + 1 < len(LEVEL_THRESHOLDS) else floor + 1000
-            return LEVEL_THRESHOLDS[i][1], floor, ceil
-    return "Iniciado", 0, 100
+            try:
+                from outreach.i18n import translate_rank_name
+
+                return translate_rank_name(LEVEL_THRESHOLDS[i][1]), floor, ceil
+            except Exception:
+                return LEVEL_THRESHOLDS[i][1], floor, ceil
+    try:
+        from outreach.i18n import translate_rank_name
+
+        return translate_rank_name("Iniciado"), 0, 100
+    except Exception:
+        return "Iniciado", 0, 100
 
 
 def earn_badge(client_id: int, badge_key: str) -> bool:

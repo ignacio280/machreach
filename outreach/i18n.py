@@ -327,7 +327,10 @@ TRANSLATIONS = {
 def get_lang() -> str:
     """Get current language from session. Defaults to Spanish — Machreach
     is rolling out Chile-first."""
-    return session.get("lang", "es")
+    try:
+        return session.get("lang", "es")
+    except RuntimeError:
+        return "es"
 
 
 def t(key: str) -> str:
@@ -356,6 +359,25 @@ def t_dict(prefix: str) -> dict:
 SPANISH_TO_EN_VISIBLE = {
     # Student shell / shared nav
     "Principal": "Main",
+    "¡Hola,": "Hi,",
+    "Hola,": "Hi,",
+    "Plan de hoy": "Today's plan",
+    "Ver semana →": "View week →",
+    "Ver todos →": "View all →",
+    "Ver todo →": "View all →",
+    "Ver →": "View →",
+    "Detalle →": "Details →",
+    "Calendario completo →": "Full calendar →",
+    "Próximas evaluaciones": "Upcoming evaluations",
+    "Proximas evaluaciones": "Upcoming evaluations",
+    "Tu racha": "Your streak",
+    "Tus amigos": "Your friends",
+    "Aún no tienes amigos.": "You do not have friends yet.",
+    "Aun no tienes amigos.": "You do not have friends yet.",
+    "+ Agregar amigos": "+ Add friends",
+    "Empieza tu primera sesión de enfoque para desbloquear misiones.": "Start your first focus session to unlock missions.",
+    "Empieza tu primera sesion de enfoque para desbloquear misiones.": "Start your first focus session to unlock missions.",
+    "Marcar como hecho": "Mark as done",
     "Inicio": "Home",
     "Enfoque": "Focus",
     "Mis cursos": "My courses",
@@ -524,7 +546,264 @@ SPANISH_TO_EN_VISIBLE = {
     "Features mas usadas · 7 dias": "Most used features · 7 days",
     "Páginas más vistas · 7 días": "Most viewed pages · 7 days",
     "Paginas mas vistas · 7 dias": "Most viewed pages · 7 days",
+    "de la nota": "of the grade",
+    "días": "days",
+    "dias": "days",
+    "día": "day",
+    "dia": "day",
+    "cartas": "cards",
+    "dominadas": "mastered",
+    "cartas listas para repasar": "cards ready to review",
+    "Generar tarjetas con IA": "Generate flashcards with AI",
+    "Cantidad de tarjetas": "Number of cards",
+    "Ensayos sin vueltas.": "Essays, no fluff.",
+    "sin vueltas.": "no fluff.",
+    "Banderas del ranking": "Leaderboard flags",
+    "Lúcete en el ranking. Tu bandera fluye detrás de tu fila, desvaneciéndose de izquierda a derecha — visible para todos los estudiantes.": "Stand out on the leaderboard. Your flag flows behind your row, fading from left to right — visible to every student.",
+    "Sube en el ranking.": "Climb the leaderboard.",
+    "Tu XP se cuenta en vivo contra todos los demás estudiantes — en tu país, universidad y carrera.": "Your XP counts live against every other student — in your country, university, and major.",
+    "País": "Country",
+    "Pais": "Country",
+    "Universidad": "University",
+    "Carrera": "Major",
+    "Egresados": "Graduates",
+    "Histórico": "All-time",
+    "Historico": "All-time",
+    "Mensual": "Monthly",
+    "Semanal": "Weekly",
+    "Campeón": "Champion",
+    "Campeon": "Champion",
+    "Segundo lugar": "Second place",
+    "Tercer lugar": "Third place",
+    "Gloria histórica": "All-time glory",
+    "Gloria historica": "All-time glory",
+    "monedas": "coins",
+    "Mazo": "Deck",
+    "Mazos": "Decks",
+    "Tus mazos": "Your decks",
+    "Crear mazo": "Create deck",
+    "Crear mazo nuevo": "Create new deck",
+    "Importar": "Import",
+    "Empezar repaso": "Start review",
+    "REPASO ESPACIADO": "SPACED REPETITION",
+    "para hoy": "due today",
+    "nuevas": "new",
+    "pendientes": "pending",
+    "atrasadas": "overdue",
+    "Vista previa": "Preview",
+    "Entra al mazo para girar y responder": "Open the deck to flip and answer",
+    "Genera con IA": "Generate with AI",
+    "Genera con IA · sube PDF": "Generate with AI · upload PDF",
+    "¿Qué tan bien la sabías?": "How well did you know it?",
+    "De nuevo": "Again",
+    "Difícil": "Hard",
+    "Dificil": "Hard",
+    "Bien": "Good",
+    "Fácil": "Easy",
+    "Facil": "Easy",
+    "en 1 min": "in 1 min",
+    "en 6 min": "in 6 min",
+    "en 1 día": "in 1 day",
+    "en 1 dia": "in 1 day",
+    "en 4 días": "in 4 days",
+    "en 4 dias": "in 4 days",
+    "Tus archivos": "Your files",
+    "Publicar archivo": "Publish file",
+    "Título": "Title",
+    "Titulo": "Title",
+    "Descripción": "Description",
+    "Descripcion": "Description",
+    "Materia": "Subject",
+    "Precio": "Price",
+    "Sin publicaciones todavía.": "No listings yet.",
+    "Sin publicaciones todavia.": "No listings yet.",
+    "Sé el primero en compartir.": "Be the first to share.",
+    "Se el primero en compartir.": "Be the first to share.",
+    "Comprar apuntes": "Buy notes",
+    "Mis compras": "My purchases",
+    "Mis ventas": "My sales",
+    "Buscar título o descripción": "Search title or description",
+    "Buscar titulo o descripcion": "Search title or description",
+    "Filtro por materia": "Subject filter",
+    "Gratis con Ultimate": "Free with Ultimate",
+    "Acceso gratis con Ultimate": "Free access with Ultimate",
+    "Amigos": "Friends",
+    "Buscar amigos": "Find friends",
+    "Solicitudes": "Requests",
+    "Enviar solicitud": "Send request",
+    "Aceptar": "Accept",
+    "Rechazar": "Decline",
+    "Eliminar amigo": "Remove friend",
+    "Sin amigos todavía.": "No friends yet.",
+    "Sin amigos todavia.": "No friends yet.",
+    "Invita a alguien para competir y estudiar juntos.": "Invite someone to compete and study together.",
+    "Rango": "Rank",
+    "Puesto": "Position",
+    "Posición": "Position",
+    "Posicion": "Position",
+    "Nacional": "National",
+    "Global": "Global",
+    "Tienda de recompensas": "Rewards shop",
+    "Tienda": "Shop",
+    "Suscripción": "Subscription",
+    "Suscripcion": "Subscription",
+    "Cosméticos": "Cosmetics",
+    "Cosmeticos": "Cosmetics",
+    "Banners": "Banners",
+    "Banderas": "Flags",
+    "Packs": "Packs",
+    "Congeladores": "Freezes",
+    "Monedas": "Coins",
+    "Desbloquear": "Unlock",
+    "Equipar": "Equip",
+    "Quitar": "Remove",
+    "Ya comprado": "Already owned",
+    "Agotado": "Sold out",
+    "Sin monedas suficientes": "Not enough coins",
+    "Racha de días": "Day streak",
+    "Racha de Dias": "Day streak",
+    "Insignias obtenidas": "Badges earned",
+    "Tus insignias": "Your badges",
+    "Todas las insignias": "All badges",
+    "Iniciador": "Starter",
+    "Bienvenido": "Welcome",
+    "Plus Member": "Plus Member",
+    "¡En Llamas!": "On Fire!",
+    "En Llamas": "On Fire",
+    "Novato en Exámenes": "Exam Rookie",
+    "Novato en Examenes": "Exam Rookie",
+    "Maestro de Exámenes": "Exam Master",
+    "Maestro de Examenes": "Exam Master",
+    "Fan de Tarjetas": "Flashcard Fan",
+    "Imparable": "Unstoppable",
+    "Estudiante Diamante": "Diamond Student",
+    "Estrella Naciente": "Rising Star",
+    "Superestrella": "Superstar",
+    "Enfocado": "Focused",
+    "Enfoque Profundo": "Deep Focus",
+    "Maestro del Enfoque": "Focus Master",
+    "Lector Ávido": "Avid Reader",
+    "Lector Avido": "Avid Reader",
+    "Pro de Exámenes": "Exam Pro",
+    "Pro de Examenes": "Exam Pro",
 }
+
+
+RANK_ES_TO_EN = {
+    "Iniciado": "Initiate",
+    "Aprendiz": "Apprentice",
+    "Estudioso": "Scholar",
+    "Investigador": "Researcher",
+    "Académico": "Academic",
+    "Academico": "Academic",
+    "Mente maestra": "Mastermind",
+    "Gran estudioso": "Grand Scholar",
+    "Iniciados": "Initiates",
+    "Aprendices": "Apprentices",
+    "Estudiosos": "Scholars",
+    "Investigadores": "Researchers",
+    "Académicos": "Academics",
+    "Academicos": "Academics",
+    "Mentes maestras": "Masterminds",
+    "Grandes estudiosos": "Grand Scholars",
+    "Sabios": "Sages",
+    "Leyendas": "Legends",
+    "Archisabios": "Archsages",
+    "Grandes sabios": "Grand Sages",
+}
+
+SPANISH_TO_EN_VISIBLE.update({
+    "Cursos": "Courses",
+    "Ramos": "Courses",
+    "Ramo": "Course",
+    "Pruebas": "Exams",
+    "Exámenes": "Exams",
+    "Examenes": "Exams",
+    "Pruebas y Evaluaciones": "Exams and Evaluations",
+    "Quizzes": "Quizzes",
+    "Tarjetas": "Flashcards",
+    "Ensayo": "Essay",
+    "Ensayos": "Essays",
+    "Leaderboard": "Leaderboard",
+    "Tabla de posiciones": "Leaderboard",
+    "Tabla de Posiciones": "Leaderboard",
+    "Compañeros": "Classmates",
+    "Companeros": "Classmates",
+    "Actividad": "Activity",
+    "Reciente": "Recent",
+    "Hoy": "Today",
+    "Esta semana": "This week",
+    "Semana pasada": "Last week",
+    "Siguiente semana": "Next week",
+    "Semana anterior": "Previous week",
+    "Anterior": "Previous",
+    "Siguiente": "Next",
+    "Guardar": "Save",
+    "Eliminar": "Delete",
+    "Editar": "Edit",
+    "Cancelar": "Cancel",
+    "Cerrar": "Close",
+    "Crear": "Create",
+    "Generar": "Generate",
+    "Subir": "Upload",
+    "Descargar": "Download",
+    "Exportar": "Export",
+    "Importar": "Import",
+    "Reiniciar": "Reset",
+    "Sin datos": "No data",
+    "Sin resultados": "No results",
+    "No hay datos": "No data",
+    "Ver detalles": "View details",
+    "Ver detalle": "View details",
+    "Ver más": "View more",
+    "Ver mas": "View more",
+    "Ocultar": "Hide",
+    "Mostrar": "Show",
+    "Progreso": "Progress",
+    "Promedio": "Average",
+    "Sesiones": "Sessions",
+    "Tiempo": "Time",
+    "Minutos": "Minutes",
+    "Horas": "Hours",
+    "Hora": "Hour",
+    "Nombre": "Name",
+    "Correo": "Email",
+    "Universidad": "University",
+    "Carrera": "Major",
+    "País": "Country",
+    "Pais": "Country",
+    "Racha": "Streak",
+    "Insignias": "Badges",
+    "Banners de perfil": "Profile banners",
+    "Banners del perfil": "Profile banners",
+    "Banderas del leaderboard": "Leaderboard flags",
+    "Banderas de ranking": "Leaderboard flags",
+})
+
+
+for _tier_es, _tier_en in list(RANK_ES_TO_EN.items()):
+    for _div in ("IV", "III", "II", "I"):
+        RANK_ES_TO_EN.setdefault(f"{_tier_es} {_div}", f"{_tier_en} {_div}")
+
+SPANISH_TO_EN_VISIBLE.update(RANK_ES_TO_EN)
+
+
+def translate_rank_name(name: str, lang: str | None = None) -> str:
+    if (lang or get_lang()) != "en":
+        return name
+    return RANK_ES_TO_EN.get(str(name or ""), str(name or ""))
+
+
+def _translate_visible_text(value: str) -> str | None:
+    replacement = SPANISH_TO_EN_VISIBLE.get(value)
+    if replacement:
+        return replacement
+
+    translated = value
+    for source, target in sorted(SPANISH_TO_EN_VISIBLE.items(), key=lambda item: len(item[0]), reverse=True):
+        if source in translated:
+            translated = translated.replace(source, target)
+    return translated if translated != value else None
 
 
 def translate_student_html_fragment(markup: str, lang: str | None = None) -> str:
@@ -548,7 +827,7 @@ def translate_student_html_fragment(markup: str, lang: str | None = None) -> str
     def replace_text(match: re.Match) -> str:
         text = match.group(1)
         stripped = html.unescape(text.strip())
-        replacement = SPANISH_TO_EN_VISIBLE.get(stripped)
+        replacement = _translate_visible_text(stripped)
         if not replacement:
             return text
         leading = text[: len(text) - len(text.lstrip())]
@@ -559,7 +838,7 @@ def translate_student_html_fragment(markup: str, lang: str | None = None) -> str
 
     def replace_attr(match: re.Match) -> str:
         prefix, value, suffix = match.groups()
-        replacement = SPANISH_TO_EN_VISIBLE.get(html.unescape(value.strip()))
+        replacement = _translate_visible_text(html.unescape(value.strip()))
         return prefix + (html.escape(replacement, quote=True) if replacement else value) + suffix
 
     out = re.sub(r'(\b(?:placeholder|title|aria-label|value)=["\'])(.*?)(["\'])', replace_attr, out)
