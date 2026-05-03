@@ -3703,98 +3703,158 @@ BANNERS = {
 # every animated banner in BANNERS (matched by anim_class). Background-size
 # is set generously so the gradient has room to drift.
 BANNER_ANIM_CSS = """
-@keyframes bnr-breathe {
-  0%,100% { opacity: .94; transform: translateZ(0) scale(1); }
-  50%     { opacity: 1;   transform: translateZ(0) scale(1.015); }
+@keyframes bnr-pan-x { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+@keyframes bnr-pan-diag { 0% { background-position: 0% 0%; } 50% { background-position: 100% 100%; } 100% { background-position: 0% 0%; } }
+@keyframes bnr-pan-slow { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+@keyframes bnr-pan-vert { 0% { background-position: 50% 0%; } 100% { background-position: 50% 200%; } }
+@keyframes bnr-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes bnr-glow-pulse {
+  0%,100% { filter: brightness(1) saturate(1); }
+  50%     { filter: brightness(1.25) saturate(1.4); }
 }
-@keyframes bnr-soft-drift {
-  0%,100% { transform: translate3d(0,0,0) scale(1); }
-  50%     { transform: translate3d(0,-1px,0) scale(1.012); }
+@keyframes bnr-twinkle {
+  0%,100% { opacity: .85; transform: scale(1); }
+  50%     { opacity: 1;   transform: scale(1.04); }
+}
+@keyframes bnr-grid-scan { 0% { background-position: 0 0, 0 0, 50% 50%, 0 0; } 100% { background-position: 28px 28px, 28px 28px, 50% 50%, 0 0; } }
+@keyframes bnr-void-pulse {
+  0%,100% { background-position: 50% 50%, 30% 30%, 70% 70%, 20% 80%, 0 0; filter: brightness(1); }
+  50%     { background-position: 50% 50%, 35% 25%, 65% 75%, 25% 85%, 0 0; filter: brightness(1.3); }
+}
+@keyframes bnr-andromeda-drift {
+  0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%; transform: scale(1) rotate(0deg); }
+  50%  { transform: scale(1.04) rotate(.6deg); }
+  100% { background-position: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%; transform: scale(1) rotate(0deg); }
 }
 
-.bnr-anim-host { overflow:hidden; position:relative; will-change: transform, opacity; backface-visibility:hidden; }
+.bnr-anim-host { overflow:hidden; position:relative; }
 
 /* Aurora-family pan banners (Plus animated set) */
 .bnr-anim-aurora,.bnr-anim-magma,.bnr-anim-neon,.bnr-anim-sunset { background-size: 300% 300% !important; }
-.bnr-anim-aurora { animation: bnr-soft-drift 12s ease-in-out infinite; }
-.bnr-anim-magma  { animation: bnr-breathe 11s ease-in-out infinite; }
-.bnr-anim-neon   { animation: bnr-breathe 9s ease-in-out infinite; }
-.bnr-anim-sunset { animation: bnr-soft-drift 14s ease-in-out infinite; }
+.bnr-anim-aurora { animation: bnr-pan-x 18s linear infinite; }
+.bnr-anim-magma  { animation: bnr-pan-diag 14s ease-in-out infinite; }
+.bnr-anim-neon   { animation: bnr-pan-x 10s linear infinite; }
+.bnr-anim-sunset { animation: bnr-pan-x 24s linear infinite; }
 
 /* Static-art banners that now drift / pulse */
-.bnr-anim-deepsea,.bnr-anim-starfield,.bnr-anim-neongrid,.bnr-anim-void,.bnr-anim-cosmic,.bnr-anim-andromeda {
-  transform-origin:center;
-  animation: bnr-breathe 12s ease-in-out infinite;
-}
+.bnr-anim-deepsea   { background-size: 200% 200% !important; animation: bnr-pan-diag 22s ease-in-out infinite, bnr-glow-pulse 6s ease-in-out infinite; }
+.bnr-anim-starfield { background-size: 200% 200% !important; animation: bnr-pan-vert 60s linear infinite, bnr-twinkle 3.5s ease-in-out infinite; }
+.bnr-anim-neongrid  { background-size: 28px 28px, 28px 28px, 200% 200%, 100% 100% !important; animation: bnr-grid-scan 4s linear infinite, bnr-glow-pulse 5s ease-in-out infinite; }
+.bnr-anim-void      { background-size: 200% 200%, 200% 200%, 200% 200%, 200% 200%, 100% 100% !important; animation: bnr-void-pulse 8s ease-in-out infinite; }
+.bnr-anim-cosmic    { background-size: 200% 200% !important; animation: bnr-pan-diag 30s ease-in-out infinite, bnr-twinkle 4s ease-in-out infinite; }
+.bnr-anim-andromeda { background-size: 220% 220%, 220% 220%, 220% 220%, 220% 220%, 220% 220%, 220% 220%, 220% 220%; transform-origin: center; animation: bnr-andromeda-drift 28s ease-in-out infinite, bnr-twinkle 5s ease-in-out infinite; }
 
 /* Matrix Rain — actual falling 1s and 0s (SVG layer scrolls down). The SVG
    tile is 84px x 480px (3 staggered columns) and is set as the first
    background-image via the banner's css value. We just animate Y. */
+@keyframes bnr-matrix-rain {
+  0%   { background-position: 0 0,    0 0; }
+  100% { background-position: 0 480px, 0 0; }
+}
 .bnr-anim-matrix {
   background-size: 84px 480px, 100% 100% !important;
   background-repeat: repeat, no-repeat !important;
-  animation: bnr-breathe 10s ease-in-out infinite;
+  animation: bnr-matrix-rain 4s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(74,222,128,.45));
 }
 
 /* Aurora Borealis — luminous green/cyan ribbons swimming */
+@keyframes bnr-aurora-borealis {
+  0%,100% { background-position: 30% 0%, 70% 100%, 50% 50%, 0 0; filter: hue-rotate(0deg) brightness(1); }
+  50%     { background-position: 60% 10%, 40% 90%, 55% 45%, 0 0; filter: hue-rotate(25deg) brightness(1.2); }
+}
 .bnr-anim-aurora-borealis {
   background-size: 220% 220%, 220% 220%, 220% 220%, 100% 100% !important;
-  animation: bnr-soft-drift 12s ease-in-out infinite;
+  animation: bnr-aurora-borealis 14s ease-in-out infinite;
 }
 
 /* Deep Abyss — slow swirling pressure with breathing glow */
+@keyframes bnr-abyss {
+  0%,100% { background-position: 20% 30%, 80% 70%, 50% 50%; filter: brightness(.85); }
+  50%     { background-position: 30% 35%, 70% 65%, 55% 50%; filter: brightness(1.15); }
+}
 .bnr-anim-abyss {
   background-size: 180% 180%, 180% 180%, 180% 180% !important;
-  animation: bnr-breathe 13s ease-in-out infinite;
+  animation: bnr-abyss 11s ease-in-out infinite;
 }
 
 /* Cherry Blossom — petals drifting diagonally */
+@keyframes bnr-cherry {
+  0%   { background-position: 20% 30%, 80% 60%, 0 -40px, 0 -40px, 0 -40px, 0 -40px, 0 0; }
+  100% { background-position: 25% 32%, 75% 58%, 40px 320px, -40px 320px, 30px 320px, -30px 320px, 0 0; }
+}
 .bnr-anim-cherry {
   background-size: 100% 100%, 100% 100%, 200px 220px, 220px 240px, 180px 200px, 240px 260px, 100% 100% !important;
-  animation: bnr-soft-drift 14s ease-in-out infinite;
+  animation: bnr-cherry 9s linear infinite;
 }
 
 /* Velvet (PLUS) — soft purple/pink blooms breathing */
+@keyframes bnr-velvet {
+  0%,100% { background-position: 30% 30%, 70% 70%, 0 0; filter: saturate(1) brightness(1); }
+  50%     { background-position: 35% 28%, 65% 72%, 0 0; filter: saturate(1.25) brightness(1.15); }
+}
 .bnr-anim-velvet {
   background-size: 200% 200%, 200% 200%, 100% 100% !important;
-  animation: bnr-breathe 12s ease-in-out infinite;
+  animation: bnr-velvet 10s ease-in-out infinite;
 }
 
 /* Polar Aurora (PLUS) — northern lights drifting both ways */
+@keyframes bnr-polar {
+  0%,100% { background-position: 50% 0%,  50% 100%, 30% 50%, 0 0; filter: hue-rotate(0deg)   brightness(1); }
+  33%     { background-position: 35% 5%,  65% 95%,  40% 45%, 0 0; filter: hue-rotate(-15deg) brightness(1.18); }
+  66%     { background-position: 65% 8%,  35% 92%,  20% 55%, 0 0; filter: hue-rotate(20deg)  brightness(1.1); }
+}
 .bnr-anim-polar {
   background-size: 240% 240%, 240% 240%, 200% 200%, 100% 100% !important;
-  animation: bnr-soft-drift 13s ease-in-out infinite;
+  animation: bnr-polar 16s ease-in-out infinite;
 }
 
 /* Monsoon — diagonal rain streaks scrolling */
+@keyframes bnr-monsoon { 0% { background-position: 0 0, 0 0; } 100% { background-position: -200px 600px, 0 0; } }
 .bnr-anim-monsoon {
   background-size: 100% 100%, 100% 100% !important;
-  animation: bnr-breathe 9s ease-in-out infinite;
+  animation: bnr-monsoon 1.4s linear infinite;
 }
 
 /* Molten Core — heat shimmer + slow drift */
+@keyframes bnr-molten {
+  0%,100% { background-position: 30% 70%, 70% 30%, 0 0; filter: brightness(1) hue-rotate(0deg); }
+  50%     { background-position: 35% 65%, 65% 35%, 0 0; filter: brightness(1.2) hue-rotate(8deg); }
+}
 .bnr-anim-molten {
   background-size: 200% 200%, 200% 200%, 100% 100% !important;
-  animation: bnr-breathe 10s ease-in-out infinite;
+  animation: bnr-molten 7s ease-in-out infinite;
 }
 
 /* Glacial — cold breath drifting */
+@keyframes bnr-glacial {
+  0%,100% { background-position: 30% 30%, 70% 70%, 0 0; filter: brightness(1); }
+  50%     { background-position: 35% 28%, 65% 72%, 0 0; filter: brightness(1.12); }
+}
 .bnr-anim-glacial {
   background-size: 220% 220%, 220% 220%, 100% 100% !important;
-  animation: bnr-soft-drift 14s ease-in-out infinite;
+  animation: bnr-glacial 12s ease-in-out infinite;
 }
 
 /* Supernova — pulsing radial burst */
+@keyframes bnr-supernova {
+  0%,100% { background-size: 200% 200% !important; filter: brightness(1); }
+  50%     { background-size: 240% 240% !important; filter: brightness(1.35); }
+}
 .bnr-anim-supernova {
   background-size: 200% 200% !important;
   background-position: center center;
-  animation: bnr-breathe 8s ease-in-out infinite;
+  animation: bnr-supernova 6s ease-in-out infinite;
 }
 
 /* Zen Garden — gentle horizontal drift */
+@keyframes bnr-zen {
+  0%,100% { background-position: 30% 50%, 70% 50%, 0 0; }
+  50%     { background-position: 33% 50%, 67% 50%, 0 0; }
+}
 .bnr-anim-zen {
   background-size: 200% 200%, 200% 200%, 100% 100% !important;
-  animation: bnr-soft-drift 16s ease-in-out infinite;
+  animation: bnr-zen 18s ease-in-out infinite;
 }
 """
 
@@ -3975,21 +4035,6 @@ FLAG_ANIM_CSS = """
   56%       { filter: brightness(.96)  saturate(1);   transform: scale(1); }
 }
 .flg-heartbeat { animation: flg-heartbeat 1.2s ease-in-out infinite; transform-origin: center; }
-
-/* Performance override: leaderboard rows can render many flags at once.
-   Keep animated cosmetics compositor-only instead of repainting gradients,
-   SVG tiles, filters, and background-position every frame. */
-@keyframes flg-breathe-lite {
-  0%,100% { opacity: .94; transform: translateZ(0) scale(1); }
-  50%     { opacity: 1;   transform: translateZ(0) scale(1.01); }
-}
-.flag-anim-pan,.flag-anim-fast,.flag-anim-shimmer,.flag-anim-matrix,.flag-anim-matrix-h,
-.flag-anim-racing,.flag-anim-checker,.flag-anim-candy,.flag-anim-pulse,.flag-anim-scan,.flg-heartbeat {
-  animation: flg-breathe-lite 8s ease-in-out infinite !important;
-  filter: none !important;
-  will-change: transform, opacity;
-  backface-visibility: hidden;
-}
 """
 
 
