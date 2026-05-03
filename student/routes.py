@@ -3723,7 +3723,7 @@ def register_student_routes(app, csrf, limiter):
 
         from outreach.db import get_client
 
-        from outreach.i18n import t, t_dict
+        from outreach.i18n import t, t_dict, translate_student_html_fragment
 
         flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
 
@@ -3745,6 +3745,8 @@ def register_student_routes(app, csrf, limiter):
         # End-of-week / end-of-month leaderboard results popup. Shows once
         # per period to every authenticated student.
         period_popup_html = _PERIOD_POPUP_HTML if _logged_in() else ""
+        lang = session.get("lang", "es")
+        rendered_content = translate_student_html_fragment(period_popup_html + content_html, lang)
 
         return render_template_string(
 
@@ -3752,7 +3754,7 @@ def register_student_routes(app, csrf, limiter):
 
             title=f"Student — {title}",
 
-            content=Markup(period_popup_html + content_html),
+            content=Markup(rendered_content),
 
             logged_in=_logged_in(),
 
@@ -3768,7 +3770,7 @@ def register_student_routes(app, csrf, limiter):
             student_ui=student_ui,
             tr=t,
 
-            lang=session.get("lang", "es"),
+            lang=lang,
 
             is_admin=is_admin,
 

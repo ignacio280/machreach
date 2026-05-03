@@ -4,6 +4,8 @@ Usage:  from outreach.i18n import t
         t("nav.dashboard")  # returns translated string based on session lang
 """
 from __future__ import annotations
+import html
+import re
 from flask import session
 
 TRANSLATIONS = {
@@ -349,3 +351,219 @@ def t_dict(prefix: str) -> dict:
             short_key = key[len(prefix_dot):]
             result[short_key] = val.get(lang, val.get("en", key))
     return result
+
+
+SPANISH_TO_EN_VISIBLE = {
+    # Student shell / shared nav
+    "Principal": "Main",
+    "Inicio": "Home",
+    "Enfoque": "Focus",
+    "Mis cursos": "My courses",
+    "Mis Cursos": "My Courses",
+    "Estudio": "Study",
+    "Tarjetas": "Flashcards",
+    "Ensayos": "Essays",
+    "Comunidad": "Community",
+    "Ranking": "Leaderboard",
+    "Amigos": "Friends",
+    "Mercado": "Marketplace",
+    "Tienda": "Shop",
+    "Cuenta": "Account",
+    "Notas": "Grades",
+    "Ajustes": "Settings",
+    "Listo para ganar el semestre.": "Ready to win the semester.",
+    "Liga activa": "Active league",
+    "sigue subiendo": "keep climbing",
+    "Cambiar modo": "Toggle theme",
+
+    # Dashboard / home
+    "Aún no hay sesiones registradas hoy": "No sessions recorded today yet",
+    "Aun no hay sesiones registradas hoy": "No sessions recorded today yet",
+    "Sin pruebas próximas": "No upcoming exams",
+    "Sin pruebas proximas": "No upcoming exams",
+    "Agrega una evaluación desde cualquier curso y aparecerá aquí, ordenada por urgencia.": "Add an evaluation from any course and it will appear here, sorted by urgency.",
+    "Agrega una evaluacion desde cualquier curso y aparecera aqui, ordenada por urgencia.": "Add an evaluation from any course and it will appear here, sorted by urgency.",
+    "Administrar pruebas": "Manage exams",
+    "Próxima evaluación": "Next evaluation",
+    "Proxima evaluacion": "Next evaluation",
+    "Curso": "Course",
+
+    # Analytics
+    "ANALYTICS SEMANALES": "WEEKLY ANALYTICS",
+    "Tu semana de estudio.": "Your study week.",
+    "Revisa cuanto estudiaste cada dia, cambia de semana, compara cursos y haz click en cualquier curso para ver su detalle diario.": "Review how much you studied each day, switch weeks, compare courses, and click any course to see the daily breakdown.",
+    "Semana actual": "Current week",
+    "Total semana": "Week total",
+    "Mejor dia": "Best day",
+    "Mejor día": "Best day",
+    "Cursos activos": "Active courses",
+    "Promedio diario": "Daily average",
+    "Minutos por día": "Minutes per day",
+    "Minutos por dia": "Minutes per day",
+    "Linea de lunes a domingo para la semana seleccionada.": "Line from Monday to Sunday for the selected week.",
+    "Línea de lunes a domingo para la semana seleccionada.": "Line from Monday to Sunday for the selected week.",
+    "Horas por curso": "Hours per course",
+    "Haz click en una barra para ver el detalle diario.": "Click a bar to see the daily detail.",
+    "Detalle diario por curso": "Daily detail by course",
+    "Selecciona un curso para ver como se repartio durante la semana.": "Select a course to see how it was distributed during the week.",
+    "Selecciona un curso para ver cómo se repartió durante la semana.": "Select a course to see how it was distributed during the week.",
+    "No hay sesiones registradas esta semana.": "No sessions recorded this week.",
+    "No hay datos para esta semana.": "No data for this week.",
+    "Minutos estudiados por dia en la semana seleccionada.": "Minutes studied per day in the selected week.",
+    "Sin curso": "No course",
+    "ANALYTICS DE ESTUDIO": "STUDY ANALYTICS",
+    "Tu rendimiento, sin humo.": "Your performance, no fluff.",
+    "Tiempo total": "Total time",
+    "Sesiones": "Sessions",
+    "Promedio": "Average",
+    "Racha 🔥": "Streak 🔥",
+    "acumulado en enfoque": "total in focus",
+    "registros guardados": "saved records",
+    "por sesion": "per session",
+    "por sesión": "per session",
+    "dias seguidos": "days in a row",
+    "días seguidos": "days in a row",
+    "Curso fuerte": "Strongest course",
+    "Hora activa": "Active hour",
+    "Consistencia": "Consistency",
+    "Tendencia de enfoque": "Focus trend",
+    "Tiempo por curso": "Time per course",
+    "Ritmo de XP": "XP rhythm",
+    "Mapa de constancia": "Consistency map",
+    "Detalle por curso": "Course detail",
+    "Resumen exacto de minutos acumulados.": "Exact summary of accumulated minutes.",
+
+    # Courses / grades
+    "Planilla de Notas": "Grade Sheet",
+    "Promedio del semestre": "Semester average",
+    "Créditos del semestre": "Semester credits",
+    "Creditos del semestre": "Semester credits",
+    "Promedio de la carrera": "Career average",
+    "Créditos de la carrera": "Career credits",
+    "Creditos de la carrera": "Career credits",
+    "Agregar evaluación": "Add evaluation",
+    "Agregar evaluacion": "Add evaluation",
+    "Agregar ramo": "Add course",
+    "Evaluación": "Evaluation",
+    "Evaluacion": "Evaluation",
+    "Nota": "Grade",
+    "Avance": "Progress",
+    "Estudiado": "Studied",
+    "Evaluaciones": "Evaluations",
+    "Ver detalles →": "View details →",
+    "No se pudieron cargar las evaluaciones.": "Evaluations could not be loaded.",
+
+    # Quizzes / flashcards / focus
+    "Quizzes de práctica": "Practice quizzes",
+    "Quizzes de practica": "Practice quizzes",
+    "Elige de dónde vienen tus preguntas — una prueba oficial o tus propios apuntes.": "Choose where your questions come from — an official exam or your own notes.",
+    "Elige de donde vienen tus preguntas — una prueba oficial o tus propios apuntes.": "Choose where your questions come from — an official exam or your own notes.",
+    "Generar quiz": "Generate quiz",
+    "Reto diario": "Daily challenge",
+    "Generar ahora": "Generate now",
+    "preguntas": "questions",
+    "intentos": "attempts",
+    "Modo Enfoque": "Focus Mode",
+    "Sesión de hoy": "Today's session",
+    "Sesion de hoy": "Today's session",
+    "Pausa": "Pause",
+    "Reiniciar": "Restart",
+    "Saltar": "Skip",
+    "Ambiente": "Ambience",
+    "Fuego": "Fire",
+    "Lluvia": "Rain",
+    "Bosque": "Forest",
+    "Playa": "Beach",
+
+    # Canvas / profile / shop
+    "Conexión a Canvas": "Canvas Connection",
+    "Conexion a Canvas": "Canvas Connection",
+    "No conectado": "Not connected",
+    "Conectado": "Connected",
+    "URL DE CANVAS": "CANVAS URL",
+    "TOKEN DE ACCESO API": "API ACCESS TOKEN",
+    "Conectar Canvas": "Connect Canvas",
+    "Actualizar": "Update",
+    "Desconectar": "Disconnect",
+    "Logros y progreso": "Achievements and progress",
+    "POSICIÓN": "POSITION",
+    "POSICION": "POSITION",
+    "Insignias Obtenidas": "Badges earned",
+    "Todas las Insignias": "All badges",
+    "Actividad Reciente": "Recent activity",
+    "Perfil": "Profile",
+    "Equipado": "Equipped",
+    "EQUIPADO": "EQUIPPED",
+    "Sin bandera": "No flag",
+    "Suscripción": "Subscription",
+    "Suscripcion": "Subscription",
+    "Gratis": "Free",
+    "GRATIS": "FREE",
+    "ACTIVO": "ACTIVE",
+    "Plan actual": "Current plan",
+    "Mejorar a Plus": "Upgrade to Plus",
+    "Mejorar a Ultimate": "Upgrade to Ultimate",
+    "Comprar": "Buy",
+    "Vender": "Sell",
+    "Buscar": "Search",
+    "Mis publicaciones": "My listings",
+    "Vender archivo": "Sell a file",
+    "Aún no hay apuntes compartidos.": "No shared notes yet.",
+    "Aun no hay apuntes compartidos.": "No shared notes yet.",
+
+    # Essay/admin
+    "Borrador": "Draft",
+    "Asistente de escritura": "Writing assistant",
+    "Suelta tu archivo": "Drop your file",
+    "Sube un archivo": "Upload a file",
+    "Corregir ensayo": "Review essay",
+    "Analytics de producto": "Product analytics",
+    "Tráfico diario · 14 días": "Daily traffic · 14 days",
+    "Trafico diario · 14 dias": "Daily traffic · 14 days",
+    "Features más usadas · 7 días": "Most used features · 7 days",
+    "Features mas usadas · 7 dias": "Most used features · 7 days",
+    "Páginas más vistas · 7 días": "Most viewed pages · 7 days",
+    "Paginas mas vistas · 7 dias": "Most viewed pages · 7 days",
+}
+
+
+def translate_student_html_fragment(markup: str, lang: str | None = None) -> str:
+    """Translate visible Spanish-authored student HTML to English server-side.
+
+    This is an interim bridge while the large student module is migrated to
+    explicit `t(...)` calls. It only runs for English and skips script/style
+    blocks so generated JavaScript is not corrupted.
+    """
+    if (lang or get_lang()) != "en" or not markup:
+        return markup
+
+    protected: list[str] = []
+
+    def protect(match: re.Match) -> str:
+        protected.append(match.group(0))
+        return f"__MR_I18N_BLOCK_{len(protected) - 1}__"
+
+    out = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", protect, markup, flags=re.I | re.S)
+
+    def replace_text(match: re.Match) -> str:
+        text = match.group(1)
+        stripped = html.unescape(text.strip())
+        replacement = SPANISH_TO_EN_VISIBLE.get(stripped)
+        if not replacement:
+            return text
+        leading = text[: len(text) - len(text.lstrip())]
+        trailing = text[len(text.rstrip()) :]
+        return leading + html.escape(replacement, quote=False) + trailing
+
+    out = re.sub(r"(?<=>)([^<>]+)(?=<)", replace_text, out)
+
+    def replace_attr(match: re.Match) -> str:
+        prefix, value, suffix = match.groups()
+        replacement = SPANISH_TO_EN_VISIBLE.get(html.unescape(value.strip()))
+        return prefix + (html.escape(replacement, quote=True) if replacement else value) + suffix
+
+    out = re.sub(r'(\b(?:placeholder|title|aria-label|value)=["\'])(.*?)(["\'])', replace_attr, out)
+
+    for idx, block in enumerate(protected):
+        out = out.replace(f"__MR_I18N_BLOCK_{idx}__", block)
+    return out
