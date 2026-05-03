@@ -17696,90 +17696,103 @@ No markdown, no code fences. ONLY JSON.
 
         return _s_render("Amigos y Duelos", f"""
 
-        <div style="max-width:900px;margin:0 auto">
+        <style>
+          .friends-cd {{ max-width:1180px;margin:0 auto;padding:4px 0 42px;--ink:#1A1A1F;--muted:#6E6A60;--line:#E2DCCC;--paper:#FFFDF8;--cream:#F4F1EA;--orange:#FF7A3D;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink); }}
+          .friends-cd .serif {{ font-family:"Fraunces",Georgia,serif;font-weight:600;letter-spacing:-.045em; }}
+          .fr-hero {{ display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px; }}
+          .fr-eye {{ font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);margin-bottom:8px; }}
+          .fr-title {{ margin:0;font-size:clamp(44px,7vw,76px);line-height:.92;color:var(--ink); }}
+          .fr-sub {{ margin:10px 0 0;color:var(--muted);font-size:15px;max-width:620px;line-height:1.55; }}
+          .fr-id {{ display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:10px 14px;font-weight:900;box-shadow:0 1px 0 rgba(20,18,30,.04),0 10px 28px rgba(20,18,30,.06); }}
+          .fr-id span {{ color:var(--orange);font-family:"Fraunces",Georgia,serif;font-size:22px;line-height:1; }}
+          .fr-grid {{ display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:18px;align-items:start; }}
+          @media(max-width:980px) {{ .fr-grid {{ grid-template-columns:1fr; }} }}
+          .fr-panel {{ background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 18px 46px rgba(20,18,30,.07);padding:24px;margin-bottom:18px;overflow:hidden; }}
+          .fr-panel.alt {{ background:linear-gradient(180deg,#FFFFFF 0%,#FFF8EE 100%); }}
+          .fr-panel h3 {{ margin:0;font-family:"Fraunces",Georgia,serif;font-size:25px;font-weight:600;color:var(--ink);letter-spacing:-.035em; }}
+          .fr-panel-top {{ display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:14px; }}
+          .fr-count {{ font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:var(--orange); }}
+          .fr-search-card {{ padding:0;margin-bottom:18px; }}
+          .fr-search-inner {{ padding:22px;background:linear-gradient(135deg,#FFE5D2 0%,#FFF8EE 60%,#FFFFFF 100%);border:1px solid #FFBD94;border-radius:22px; }}
+          .fr-search-row {{ display:flex;gap:10px;align-items:center;flex-wrap:wrap; }}
+          .fr-input {{ flex:1;min-width:240px;height:48px;border:1px solid var(--line);border-radius:999px;background:#FFFDF8;color:var(--ink);padding:0 18px;font-weight:750;outline:none;box-sizing:border-box; }}
+          .fr-input:focus {{ border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,122,61,.16); }}
+          .fr-btn {{ border:0;border-radius:999px;background:#1A1A1F;color:#FFF8E1;padding:0 18px;height:44px;font-weight:900;box-shadow:0 4px 0 rgba(0,0,0,.16),0 18px 28px rgba(20,18,30,.16);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap; }}
+          .fr-btn.orange {{ background:var(--orange);color:#fff; }}
+          .fr-btn.ghost {{ background:#FFFDF8;color:#1A1A1F;border:1px solid var(--line);box-shadow:none; }}
+          .fr-btn.small {{ height:34px;padding:0 12px;font-size:12px; }}
+          .fr-list {{ display:flex;flex-direction:column;gap:10px; }}
+          .fr-row {{ display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--line);background:#FFFDF8;border-radius:18px;padding:14px; }}
+          .fr-person {{ display:flex;align-items:center;gap:12px;min-width:0; }}
+          .fr-avatar {{ width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#FF7A3D,#FFB36B);display:grid;place-items:center;color:#fff;font-weight:900;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);flex-shrink:0; }}
+          .fr-name {{ font-weight:900;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
+          .fr-meta {{ color:var(--muted);font-size:12px;margin-top:3px; }}
+          .fr-actions {{ display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end; }}
+          .fr-empty {{ border:1px dashed var(--line);border-radius:18px;background:#FFFDF8;padding:22px;color:var(--muted);font-size:14px;text-align:center; }}
+          .fr-dot {{ display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#94a3b8; }}
+          .fr-dot.on {{ background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.14); }}
+          .fr-note {{ color:var(--muted);font-size:13px;line-height:1.5; }}
+          .fr-duel-stat {{ display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:850;color:var(--muted); }}
+          .fr-modal-card {{ background:#fff;border:1px solid var(--line);border-radius:26px;max-width:560px;width:92%;padding:26px;box-shadow:0 28px 90px rgba(20,18,30,.22); }}
+          .fr-chal-card {{ text-align:left;padding:18px;border:1px solid var(--line);border-radius:18px;background:#FFFDF8;cursor:pointer;color:var(--ink); }}
+          .fr-chal-card:hover {{ border-color:var(--orange);box-shadow:0 12px 28px rgba(255,122,61,.13);transform:translateY(-1px); }}
+        </style>
 
-          <h2 style="margin-bottom:6px"><span style="font-size:1.3em">&#128101;</span> Amigos y Duelos</h2>
+        <div class="friends-cd">
 
-          <div style="color:var(--text-muted);margin-bottom:14px;font-size:13px">
-
-            Tu ID de usuario: <b style="color:var(--text)">#{cid}</b> &middot; compártelo para que tus amigos te encuentren.
-
-          </div>
-
-
-
-          <div class="card" style="margin-bottom:18px;padding:16px">
-
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-
-              <input id="fr-search" placeholder="Buscar por nombre, correo o #ID" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
-
-              <button class="btn btn-primary" onclick="frSearch()">Buscar</button>
-
+          <header class="fr-hero">
+            <div>
+              <div class="fr-eye">SOCIAL STUDY</div>
+              <h1 class="fr-title serif">Friends<br/>and duels.</h1>
+              <p class="fr-sub">Find classmates, challenge friends, and turn focus time into pressure that actually helps.</p>
             </div>
+            <div class="fr-id">Your ID <span>#{cid}</span></div>
+          </header>
 
-            <div id="fr-results" style="margin-top:12px"></div>
+          <section class="fr-search-card">
+            <div class="fr-search-inner">
+              <div class="fr-search-row">
+                <input id="fr-search" class="fr-input" placeholder="Search by name, email, or #ID">
+                <button class="fr-btn" onclick="frSearch()">Search</button>
+              </div>
+              <div id="fr-results" class="fr-list" style="margin-top:14px"></div>
+            </div>
+          </section>
 
-          </div>
+          <div class="fr-grid">
+            <main>
+              <section id="fr-incoming-wrap" class="fr-panel alt" style="display:none">
+                <div class="fr-panel-top"><h3>Friend requests</h3><span class="fr-count">Pending</span></div>
+                <div id="fr-incoming" class="fr-list"></div>
+              </section>
 
+              <section class="fr-panel">
+                <div class="fr-panel-top"><h3>Your friends</h3><span class="fr-count">Squad</span></div>
+                <div id="fr-friends" class="fr-list"><div class="fr-empty">Loading...</div></div>
+              </section>
 
+              <section class="fr-panel">
+                <div class="fr-panel-top"><h3>Quiz duels</h3><span class="fr-count">Live</span></div>
+                <div id="fr-quiz-duels" class="fr-list"><div class="fr-empty">Loading...</div></div>
+              </section>
+            </main>
 
-          <div id="fr-incoming-wrap" class="card" style="margin-bottom:18px;padding:16px;display:none">
+            <aside>
+              <section class="fr-panel alt">
+                <div class="fr-panel-top"><h3>Study marathons</h3><span class="fr-count">7 days</span></div>
+                <div id="fr-marathon-pending" class="fr-list"><div class="fr-empty">No pending invitations.</div></div>
+              </section>
 
-            <h3 style="margin:0 0 10px 0">Solicitudes de amistad</h3>
+              <section class="fr-panel">
+                <div class="fr-panel-top"><h3>Active duels</h3><span class="fr-count">Now</span></div>
+                <div id="fr-active-duels" class="fr-list"><div class="fr-empty">No active duels.</div></div>
+              </section>
 
-            <div id="fr-incoming"></div>
-
-          </div>
-
-
-
-          <div class="card" style="margin-bottom:18px;padding:16px">
-
-            <h3 style="margin:0 0 10px 0">Tus amigos</h3>
-
-            <div id="fr-friends">Cargando…</div>
-
-          </div>
-
-
-
-          <div class="card" style="margin-bottom:18px;padding:16px">
-
-            <h3 style="margin:0 0 10px 0">⚔️ Duelos de quiz</h3>
-
-            <div id="fr-quiz-duels" style="font-size:13px;color:var(--text-muted)">Cargando…</div>
-
-          </div>
-
-
-
-          <div class="card" style="margin-bottom:18px;padding:16px">
-
-            <h3 style="margin:0 0 10px 0">📅 Invitaciones a maratón de estudio</h3>
-
-            <div id="fr-marathon-pending" style="font-size:13px;color:var(--text-muted)">Sin invitaciones pendientes.</div>
-
-          </div>
-
-
-
-          <div class="card" style="margin-bottom:18px;padding:16px">
-
-            <h3 style="margin:0 0 10px 0">Duelos activos</h3>
-
-            <div id="fr-active-duels">Sin duelos activos.</div>
-
-          </div>
-
-
-
-          <div class="card" style="margin-bottom:18px;padding:16px">
-
-            <h3 style="margin:0 0 10px 0">Historial de duelos</h3>
-
-            <div id="fr-history">Aún no hay duelos completados.</div>
-
+              <section class="fr-panel">
+                <div class="fr-panel-top"><h3>Duel history</h3><span class="fr-count">Archive</span></div>
+                <div id="fr-history" class="fr-list"><div class="fr-empty">No completed duels yet.</div></div>
+              </section>
+            </aside>
           </div>
 
         </div>
@@ -17789,6 +17802,10 @@ No markdown, no code fences. ONLY JSON.
         const ME_CID = {cid};
 
         function esc(s) {{ return (s||'').replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]); }}
+        function initials(name) {{
+          const parts = String(name || 'MR').trim().split(/\s+/).filter(Boolean);
+          return esc(((parts[0] || 'M')[0] || 'M') + ((parts[1] || parts[0] || 'R')[0] || 'R')).toUpperCase();
+        }}
 
         async function frSearch() {{
 
@@ -17800,15 +17817,15 @@ No markdown, no code fences. ONLY JSON.
 
           const box = document.getElementById('fr-results');
 
-          if (!r.results || !r.results.length) {{ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No matches.</div>'; return; }}
+          if (!r.results || !r.results.length) {{ box.innerHTML = '<div class="fr-empty">No matches.</div>'; return; }}
 
           box.innerHTML = r.results.map(u =>
 
-            `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+            `<div class="fr-row">
 
-              <div><b>${{esc(u.name) || '(no name)'}}</b> <span style="color:var(--text-muted);font-size:12px">#${{u.id}}</span></div>
+              <div class="fr-person"><div class="fr-avatar">${{initials(u.name)}}</div><div><div class="fr-name">${{esc(u.name) || '(no name)'}}</div><div class="fr-meta">#${{u.id}}</div></div></div>
 
-              <button class="btn btn-sm btn-outline" onclick="frAdd(${{u.id}}, this)">Add friend</button>
+              <button class="fr-btn small ghost" onclick="frAdd(${{u.id}}, this)">Add friend</button>
 
             </div>`).join('');
 
@@ -17851,26 +17868,26 @@ No markdown, no code fences. ONLY JSON.
           if (!m) {{
             m = document.createElement('div');
             m.id = 'chal-modal';
-            m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
+            m.style.cssText = 'position:fixed;inset:0;background:rgba(20,18,30,.42);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(8px);';
             document.body.appendChild(m);
           }}
           m.innerHTML = `
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;max-width:520px;width:92%;padding:24px;">
+            <div class="fr-modal-card">
               <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:14px">
                 <div>
-                  <h2 style="margin:0;font-size:20px">⚔️ Challenge ${{esc(uname)}}</h2>
-                  <div style="color:var(--text-muted);font-size:13px;margin-top:2px">Pick a duel format</div>
+                  <h2 class="serif" style="margin:0;font-size:30px;letter-spacing:-.04em">Challenge ${{esc(uname)}}</h2>
+                  <div class="fr-note" style="margin-top:2px">Pick a duel format</div>
                 </div>
-                <button onclick="closeChallengeModal()" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1">×</button>
+                <button onclick="closeChallengeModal()" class="fr-btn small ghost" style="width:34px;padding:0">×</button>
               </div>
 
               <div id="chal-pick" style="display:flex;flex-direction:column;gap:10px">
-                <button class="chal-card" onclick="pickQuiz()" ${{window.__chalOnline ? '' : 'disabled style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:not-allowed;color:var(--text);opacity:.55"'}} style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer;color:var(--text)">
+                <button class="fr-chal-card" onclick="pickQuiz()" ${{window.__chalOnline ? '' : 'disabled style="opacity:.55;cursor:not-allowed"'}}>
                   <div style="font-size:16px;font-weight:700">🥊 Quiz Duel ${{window.__chalOnline ? '<span style=&quot;font-size:11px;color:#22c55e;font-weight:600;margin-left:6px&quot;>● online</span>' : '<span style=&quot;font-size:11px;color:#94a3b8;font-weight:600;margin-left:6px&quot;>● offline — unavailable</span>'}}</div>
                   <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Upload a study file. AI builds 10 questions. Both must be online — first to finish at the highest score wins. Tab-switch = instant loss.</div>
                   <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +5 XP · +50 🪙</div>
                 </button>
-                <button class="chal-card" onclick="pickMarathon()" style="text-align:left;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);cursor:pointer;color:var(--text)">
+                <button class="fr-chal-card" onclick="pickMarathon()">
                   <div style="font-size:16px;font-weight:700">📅 Study Marathon (7 days)</div>
                   <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Most focus minutes over the next 7 days wins. Asynchronous — they don't need to be online; they just need to accept on their friends tab to start the clock.</div>
                   <div style="font-size:11px;color:#22c55e;margin-top:6px">Win: +8 XP · +70 🪙 · Tie: +3 XP · +25 🪙</div>
@@ -17879,12 +17896,12 @@ No markdown, no code fences. ONLY JSON.
 
               <div id="chal-quiz" style="display:none">
                 <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Upload a PDF, DOCX or TXT (max 8 MB). The AI will generate 10 multiple-choice questions.</div>
-                <input id="chal-topic" type="text" placeholder="Topic (optional, e.g. Cell Biology Ch. 4)" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);margin-bottom:10px;box-sizing:border-box">
+                <input id="chal-topic" class="fr-input" type="text" placeholder="Topic (optional, e.g. Cell Biology Ch. 4)" style="width:100%;margin-bottom:10px;border-radius:14px">
                 <input id="chal-file" type="file" accept=".pdf,.docx,.txt,.md" style="width:100%;margin-bottom:14px">
                 <div id="chal-err" style="color:#ef4444;font-size:12px;margin-bottom:8px"></div>
                 <div style="display:flex;gap:8px;justify-content:flex-end">
-                  <button class="btn btn-sm btn-outline" onclick="closeChallengeModal()">Cancelar</button>
-                  <button class="btn btn-sm btn-primary" id="chal-go" onclick="sendQuizDuel(${{uid}})">Send invite</button>
+                  <button class="fr-btn small ghost" onclick="closeChallengeModal()">Cancel</button>
+                  <button class="fr-btn small orange" id="chal-go" onclick="sendQuizDuel(${{uid}})">Send invite</button>
                 </div>
               </div>
             </div>`;
@@ -17952,11 +17969,11 @@ No markdown, no code fences. ONLY JSON.
 
             inc.innerHTML = f.incoming.map(u =>
 
-              `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+              `<div class="fr-row">
 
-                <div><b>${{esc(u.name)}}</b> <span style="color:var(--text-muted);font-size:12px">#${{u.id}}</span></div>
+                <div class="fr-person"><div class="fr-avatar">${{initials(u.name)}}</div><div><div class="fr-name">${{esc(u.name)}}</div><div class="fr-meta">#${{u.id}}</div></div></div>
 
-                <button class="btn btn-sm btn-primary" onclick="frAccept(${{u.id}})">Aceptar</button>
+                <button class="fr-btn small orange" onclick="frAccept(${{u.id}})">Accept</button>
 
               </div>`).join('');
 
@@ -17973,26 +17990,26 @@ No markdown, no code fences. ONLY JSON.
             const parts = await Promise.all(uniq.map(async u => {{
               const h2h = await fetch('/api/student/duels/h2h?friend_id=' + u.id).then(r=>r.json());
               const onlineDot = u.online
-                ? '<span title="Online now" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.18);margin-right:6px;vertical-align:middle"></span>'
-                : '<span title="Offline" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#94a3b8;margin-right:6px;vertical-align:middle;opacity:.6"></span>';
+                ? '<span class="fr-dot on" title="Online now"></span>'
+                : '<span class="fr-dot" title="Offline"></span>';
               const onlineLabel = u.online
                 ? '<span style="color:#22c55e;font-size:11px;font-weight:600;margin-left:6px">online</span>'
                 : '<span style="color:#94a3b8;font-size:11px;margin-left:6px">offline</span>';
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+              return `<div class="fr-row">
 
-                <div>
+                <div class="fr-person"><div class="fr-avatar">${{initials(u.name)}}</div><div>
 
-                  ${{onlineDot}}<b>${{esc(u.name)}}</b> <span style="color:var(--text-muted);font-size:12px">#${{u.id}}</span>${{onlineLabel}}
+                  <div class="fr-name">${{onlineDot}}${{esc(u.name)}} <span class="fr-meta">#${{u.id}}</span>${{onlineLabel}}</div>
 
-                  <div style="font-size:12px;color:var(--text-muted)">vs you: ${{h2h.wins}}W &middot; ${{h2h.losses}}L &middot; ${{h2h.ties}}T</div>
+                  <div class="fr-meta"><span class="fr-duel-stat">${{h2h.wins}}W</span> <span class="fr-duel-stat">${{h2h.losses}}L</span> <span class="fr-duel-stat">${{h2h.ties}}T</span></div>
 
-                </div>
+                </div></div>
 
-                <div style="display:flex;gap:6px">
+                <div class="fr-actions">
 
-                  <button class="btn btn-sm btn-primary" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" data-online="${{u.online ? '1' : '0'}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname, this.dataset.online === '1')">Desafiar</button>
+                  <button class="fr-btn small orange" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" data-online="${{u.online ? '1' : '0'}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname, this.dataset.online === '1')">Challenge</button>
 
-                  <button class="btn btn-sm btn-outline" onclick="frRemove(${{u.id}})">Remove</button>
+                  <button class="fr-btn small ghost" onclick="frRemove(${{u.id}})">Remove</button>
 
                 </div>
 
@@ -18000,32 +18017,32 @@ No markdown, no code fences. ONLY JSON.
             }}));
             fl.innerHTML = parts.join('');
 
-          }} else {{ fl.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No friends yet — search above to add some.</div>'; }}
+          }} else {{ fl.innerHTML = '<div class="fr-empty">No friends yet. Search above to add someone.</div>'; }}
 
           // ── Marathon invites (pending) ────────────────────────
           try {{
             const mp = await fetch('/api/student/duels/marathon/pending').then(r=>r.json());
             const mbox = document.getElementById('fr-marathon-pending');
             const inc = (mp.incoming || []).map(d => `
-              <div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              <div class="fr-row">
                 <div>
                   <b>${{esc(d.challenger_name)}}</b> challenged you to a 7-day Study Marathon.
-                  <div style="font-size:12px;color:var(--text-muted)">Most focus minutes over the next 7 days wins. Clock starts when you accept.</div>
+                  <div class="fr-meta">Most focus minutes over the next 7 days wins. Clock starts when you accept.</div>
                 </div>
-                <div style="display:flex;gap:6px">
-                  <button class="btn btn-sm btn-primary" onclick="mAccept(${{d.id}})">Aceptar</button>
-                  <button class="btn btn-sm btn-outline" onclick="mDecline(${{d.id}})">Rechazar</button>
+                <div class="fr-actions">
+                  <button class="fr-btn small orange" onclick="mAccept(${{d.id}})">Accept</button>
+                  <button class="fr-btn small ghost" onclick="mDecline(${{d.id}})">Decline</button>
                 </div>
               </div>`).join('');
             const out = (mp.outgoing || []).map(d => `
-              <div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              <div class="fr-row">
                 <div>
                   Waiting on <b>${{esc(d.opponent_name)}}</b> to accept your marathon invite.
-                  <div style="font-size:12px;color:var(--text-muted)">Clock hasn't started — they need to accept on their friends tab.</div>
+                  <div class="fr-meta">Clock hasn't started. They need to accept on their friends tab.</div>
                 </div>
-                <button class="btn btn-sm btn-outline" onclick="mCancel(${{d.id}})">Cancelar</button>
+                <button class="fr-btn small ghost" onclick="mCancel(${{d.id}})">Cancel</button>
               </div>`).join('');
-            mbox.innerHTML = (inc + out) || '<div style="color:var(--text-muted);font-size:13px">Sin invitaciones pendientes.</div>';
+            mbox.innerHTML = (inc + out) || '<div class="fr-empty">No pending invitations.</div>';
           }} catch(e) {{}}
 
           const d = await fetch('/api/student/duels/list').then(r=>r.json());
@@ -18044,17 +18061,17 @@ No markdown, no code fences. ONLY JSON.
 
               const themName = meIsChall ? x.opponent_name : x.challenger_name;
 
-              return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+              return `<div class="fr-row">
 
-                <div><b>vs ${{esc(themName)}}</b> <span style="color:var(--text-muted);font-size:12px">ends ${{esc(String(x.ends_at).slice(0,16))}}</span></div>
+                <div><div class="fr-name">vs ${{esc(themName)}}</div><div class="fr-meta">ends ${{esc(String(x.ends_at).slice(0,16))}}</div></div>
 
-                <div style="font-size:13px;margin-top:4px">You: <b>${{myMin}} min</b> &middot; Them: <b>${{themMin}} min</b></div>
+                <div class="fr-actions"><span class="fr-duel-stat">You: ${{myMin}} min</span><span class="fr-duel-stat">Them: ${{themMin}} min</span></div>
 
               </div>`;
 
             }}).join('');
 
-          }} else {{ ad.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Sin duelos activos.</div>'; }}
+          }} else {{ ad.innerHTML = '<div class="fr-empty">No active duels.</div>'; }}
 
           const hist = document.getElementById('fr-history');
 
@@ -18072,43 +18089,43 @@ No markdown, no code fences. ONLY JSON.
 
               const tag = tie ? '<span style="color:#94a3b8">TIE</span>' : (won ? '<span style="color:#22c55e">WIN</span>' : '<span style="color:#ef4444">LOSS</span>');
 
-              return `<div style="padding:6px 0;font-size:13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">
+              return `<div class="fr-row">
 
-                <div>vs ${{esc(themName)}}</div><div>${{tag}}</div></div>`;
+                <div class="fr-name">vs ${{esc(themName)}}</div><div>${{tag}}</div></div>`;
 
             }}).join('');
 
-          }} else {{ hist.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Aún no hay duelos completados.</div>'; }}
+          }} else {{ hist.innerHTML = '<div class="fr-empty">No completed duels yet.</div>'; }}
 
           // Quiz duels (v2 — file-upload + AI)
           try {{
             const qd = await fetch('/api/student/duels/quiz/pending').then(r=>r.json());
             const qbox = document.getElementById('fr-quiz-duels');
             const incoming = (qd.pending||[]).map(x =>
-              `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              `<div class="fr-row">
                 <div>
-                  <b>${{esc(x.challenger_name)}}</b> challenged you
-                  <div style="font-size:12px;color:var(--text-muted)">${{esc(x.topic||'No topic')}} · ${{esc(x.file_name||'')}}</div>
+                  <div class="fr-name">${{esc(x.challenger_name)}} challenged you</div>
+                  <div class="fr-meta">${{esc(x.topic||'No topic')}} · ${{esc(x.file_name||'')}}</div>
                 </div>
-                <div style="display:flex;gap:6px">
-                  <button class="btn btn-sm btn-primary" onclick="qdAccept(${{x.id}})">Accept &amp; play</button>
-                  <button class="btn btn-sm btn-outline" onclick="qdDecline(${{x.id}})">Rechazar</button>
+                <div class="fr-actions">
+                  <button class="fr-btn small orange" onclick="qdAccept(${{x.id}})">Accept &amp; play</button>
+                  <button class="fr-btn small ghost" onclick="qdDecline(${{x.id}})">Decline</button>
                 </div>
               </div>`).join('');
             const playable = (qd.playable||[]).map(x => {{
               const meIsChall = x.challenger_id === ME_CID;
               const themName = meIsChall ? x.opponent_name : x.challenger_name;
               const labelStatus = x.status === 'pending' ? 'waiting on opponent' : (x.status === 'ready' ? 'ready' : 'in progress');
-              return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              return `<div class="fr-row">
                 <div>
-                  <b>vs ${{esc(themName)}}</b>
-                  <div style="font-size:12px;color:var(--text-muted)">${{esc(x.topic||'')}} · ${{labelStatus}}</div>
+                  <div class="fr-name">vs ${{esc(themName)}}</div>
+                  <div class="fr-meta">${{esc(x.topic||'')}} · ${{labelStatus}}</div>
                 </div>
-                <a class="btn btn-sm btn-primary" href="/student/duels/quiz/${{x.id}}/play">Open</a>
+                <a class="fr-btn small orange" href="/student/duels/quiz/${{x.id}}/play">Open</a>
               </div>`;
             }}).join('');
             const inner = (incoming + playable);
-            qbox.innerHTML = inner || '<div style="color:var(--text-muted);font-size:13px">No hay duelos activos. Haz clic en <b>Desafiar</b> a un amigo para empezar uno.</div>';
+            qbox.innerHTML = inner || '<div class="fr-empty">No active quiz duels. Challenge a friend to start one.</div>';
           }} catch(e) {{}}
 
           }} finally {{ __loadingAll = false; }}
