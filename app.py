@@ -5417,6 +5417,60 @@ def admin_product_analytics():
         "canvas_action": "Acciones de Canvas",
     }
 
+    def is_noise_path(path: str) -> bool:
+        p = (path or "").lower().strip()
+        if not p:
+            return True
+        noise_bits = (
+            ".php", "wp-admin", "wp-login", "wordpress", "phpmyadmin",
+            ".env", "config.", "xmlrpc", "/cgi-bin", "/vendor/",
+        )
+        return any(bit in p for bit in noise_bits)
+
+    page_labels = [
+        ("/student/focus", "Modo enfoque", "Usuarios entrando a estudiar con temporizador"),
+        ("/student/analytics", "Analytics del estudiante", "Usuarios revisando su rendimiento"),
+        ("/student/courses", "Cursos", "Usuarios revisando sus ramos y evaluaciones"),
+        ("/student/quizzes", "Quizzes", "Usuarios usando quizzes de práctica"),
+        ("/student/quiz", "Quizzes", "Usuarios usando quizzes de práctica"),
+        ("/student/flashcards", "Tarjetas", "Usuarios usando flashcards"),
+        ("/student/essay", "Ensayos", "Usuarios revisando ensayos"),
+        ("/student/leaderboard", "Ranking", "Usuarios mirando la competencia"),
+        ("/student/friends", "Amigos y duelos", "Usuarios usando funciones sociales"),
+        ("/student/marketplace", "Mercado", "Usuarios comprando o vendiendo apuntes"),
+        ("/student/shop", "Tienda", "Usuarios revisando planes, coins y cosméticos"),
+        ("/student/canvas", "Conexión Canvas", "Usuarios intentando sincronizar Canvas"),
+        ("/student/grades", "Planilla de notas", "Usuarios usando cálculo de notas"),
+        ("/student/profile", "Perfil", "Usuarios editando o mirando su perfil"),
+        ("/set-language/en", "Cambio a inglés", "Usuarios cambiando el idioma a inglés"),
+        ("/set-language/es", "Cambio a español", "Usuarios cambiando el idioma a español"),
+        ("/register", "Registro", "Usuarios llegando a crear cuenta"),
+        ("/login", "Login", "Usuarios entrando a su cuenta"),
+        ("/student", "Inicio estudiante", "Usuarios entrando al panel principal"),
+        ("/", "Landing page", "Visitantes viendo la página principal"),
+    ]
+
+    def describe_page(path: str) -> tuple[str, str]:
+        clean = (path or "/").split("?")[0].rstrip("/") or "/"
+        for prefix, label, meaning in page_labels:
+            if clean == prefix or (prefix != "/" and clean.startswith(prefix + "/")):
+                return label, meaning
+        if clean.startswith("/api/"):
+            return "Acción interna", "Actividad técnica de la app, no una página visible"
+        return "Otra página", clean
+
+    def readable_pages(rows: list[dict]) -> list[dict]:
+        grouped: dict[str, dict] = {}
+        for row in rows:
+            path = str(row.get("path") or "")
+            if is_noise_path(path):
+                continue
+            label, meaning = describe_page(path)
+            if label not in grouped:
+                grouped[label] = {"page": label, "meaning": meaning, "n": 0}
+            grouped[label]["n"] += int(row.get("n") or 0)
+        return sorted(grouped.values(), key=lambda r: r["n"], reverse=True)[:12]
+
     cards = [
         ("Visitas hoy", _admin_metric(f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_pg} AND {external_events}", f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_lite} AND {external_events}")),
         ("Usuarios únicos hoy", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_pg} AND {external_events}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_lite} AND {external_events}")),
@@ -5437,9 +5491,10 @@ def admin_product_analytics():
     )
 
     top_pages = _admin_rows(
-        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_pg} AND {external_events} GROUP BY path ORDER BY n DESC LIMIT 12",
-        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_lite} AND {external_events} GROUP BY path ORDER BY n DESC LIMIT 12",
+        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_pg} AND {external_events} GROUP BY path ORDER BY n DESC LIMIT 80",
+        f"SELECT path, COUNT(*) AS n FROM product_analytics_events WHERE event_type='page_view' AND {week_lite} AND {external_events} GROUP BY path ORDER BY n DESC LIMIT 80",
     )
+    top_pages = readable_pages(top_pages)
     feature_rows = _admin_rows(
         f"SELECT event_type, COUNT(*) AS n, COUNT(DISTINCT client_id) AS users FROM product_analytics_events WHERE event_type <> 'page_view' AND {week_pg} AND {external_events} GROUP BY event_type ORDER BY n DESC LIMIT 20",
         f"SELECT event_type, COUNT(*) AS n, COUNT(DISTINCT client_id) AS users FROM product_analytics_events WHERE event_type <> 'page_view' AND {week_lite} AND {external_events} GROUP BY event_type ORDER BY n DESC LIMIT 20",
@@ -5537,7 +5592,7 @@ def admin_product_analytics():
         + line_chart("Quizzes creados · 14 días", ai_daily, "#EF5DA8")
         + line_chart("Mazos de tarjetas · 14 días", flash_daily, "#5B4694")
         + bar_chart("Features más usadas · 7 días", feature_rows, "label", "n", "#FF7A3D")
-        + bar_chart("Páginas más vistas · 7 días", top_pages, "path", "n", "#1A1A1F")
+        + bar_chart("Páginas más vistas · 7 días", top_pages, "page", "n", "#1A1A1F")
         + "</div>"
     )
 
@@ -5569,7 +5624,7 @@ def admin_product_analytics():
       <div class="page-header"><h1>&#128202; Analytics de producto</h1><p class="subtitle">Tráfico, uso de IA, estudio real y señales para decidir qué merece ser Plus o Ultimate.</p></div>
       <div class="admin-grid">{card_html}</div>
       {charts_html}
-      <div class="admin-panel"><h2>Páginas más vistas · 7 días</h2>{table(["Ruta","Visitas"], top_pages, ["path","n"])}</div>
+      <div class="admin-panel"><h2>Páginas más vistas · 7 días</h2>{table(["Página","Qué significa","Visitas"], top_pages, ["page","meaning","n"])}</div>
       <div class="admin-panel"><h2>Eventos de producto · 7 días</h2>{table(["Evento","Acciones","Usuarios"], feature_rows, ["label","n","users"])}</div>
       <div class="admin-panel"><h2>XP por fuente · 30 días</h2>{table(["Acción","Eventos","XP"], xp_rows, ["action","n","xp"])}</div>
       <div class="admin-panel"><h2>Resultados por ramo</h2>{table(["Curso","Código","Reportes","Aprobados","Reprobados","Promedio aprobado"], course_outcomes, ["course_name","course_code","reports","passed_reports","failed_reports","avg_pass_hours"])}</div>
