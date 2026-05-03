@@ -1467,7 +1467,9 @@ def register_student_routes(app, csrf, limiter):
         .wa-line {{ fill:none; stroke:var(--warm-orange); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }}
         .wa-dot {{ fill:#FFF8EE; stroke:var(--warm-orange); stroke-width:4; }}
         .wa-label {{ fill:var(--warm-muted); font-size:12px; font-weight:800; }}
-        .wa-value {{ fill:var(--warm-ink); font-size:12px; font-weight:900; }}
+        .wa-value {{ fill:var(--warm-ink); font-size:12px; font-weight:900; opacity:0; pointer-events:none; transition:opacity .14s ease; }}
+        .wa-point:hover .wa-value, .wa-point:focus-within .wa-value {{ opacity:1; }}
+        .wa-hit {{ fill:transparent; cursor:help; }}
         .wa-course-list {{ display:flex; flex-direction:column; gap:12px; }}
         .wa-course-btn {{ display:block; width:100%; text-align:left; border:1px solid var(--warm-line); background:#FFFDF8; border-radius:18px; padding:13px; cursor:pointer; transition:all .15s ease; }}
         .wa-course-btn:hover,.wa-course-btn.active {{ border-color:var(--warm-orange); transform:translateY(-1px); box-shadow:0 12px 24px rgba(255,122,61,.14); }}
@@ -1561,7 +1563,8 @@ def register_student_routes(app, csrf, limiter):
               return '<line class="wa-axis" x1="'+padX+'" x2="'+(w-padX)+'" y1="'+y+'" y2="'+y+'"></line>';
             }}).join('');
             var circles = pts.map(function(p){{
-              return '<circle class="wa-dot" cx="'+p.x+'" cy="'+p.y+'" r="7"></circle><text class="wa-value" x="'+p.x+'" y="'+(p.y-13)+'" text-anchor="middle">'+minsText(p.v)+'</text>';
+              var value = minsText(p.v);
+              return '<g class="wa-point" tabindex="0"><title>'+value+'</title><circle class="wa-hit" cx="'+p.x+'" cy="'+p.y+'" r="20"></circle><circle class="wa-dot" cx="'+p.x+'" cy="'+p.y+'" r="7"></circle><text class="wa-value" x="'+p.x+'" y="'+(p.y-13)+'" text-anchor="middle">'+value+'</text></g>';
             }}).join('');
             var labels = pts.map(function(p){{
               return '<text class="wa-label" x="'+p.x+'" y="'+(h-4)+'" text-anchor="middle">'+dayNames[p.i]+'</text>';
@@ -6137,6 +6140,16 @@ def register_student_routes(app, csrf, limiter):
         _json_course_exams = json.dumps({str(k): v for k, v in course_exams_map.items()},
                                         ensure_ascii=False).replace("<", "\\u003c")
 
+        _focus_is_en = session.get("lang", "es") == "en"
+        _start_btn_label = "Start" if _focus_is_en else "Empezar"
+        _pause_btn_label = "Pause" if _focus_is_en else "Pausar"
+        _reset_btn_label = "Reset" if _focus_is_en else "Reiniciar"
+        _skip_btn_label = "Skip" if _focus_is_en else "Saltar"
+        _timer_ready_label = "Ready to focus" if _focus_is_en else "Listo para enfocarte"
+        _pomo_count_label = "Session 1 of 4" if _focus_is_en else "Sesi&oacute;n 1 de 4"
+        _fg_inactive_label = "Inactive" if _focus_is_en else "Inactivo"
+        _fg_active_label = "Active — sites blocked" if _focus_is_en else "Activo — sitios bloqueados"
+
 
 
         return _s_render("Focus Mode", f"""
@@ -6416,9 +6429,9 @@ def register_student_routes(app, csrf, limiter):
 
               <div id="timer-display" style="font-size:64px;font-weight:800;font-family:monospace;color:var(--text);letter-spacing:2px;">25:00</div>
 
-              <div id="timer-label" style="font-size:14px;color:var(--text-muted);margin-top:4px;">Listo para enfocarte</div>
+              <div id="timer-label" style="font-size:14px;color:var(--text-muted);margin-top:4px;">{_timer_ready_label}</div>
 
-              <div id="pomo-count" style="font-size:12px;color:var(--text-muted);margin-top:4px;">Sesión 1 de 4</div>
+              <div id="pomo-count" style="font-size:12px;color:var(--text-muted);margin-top:4px;">{_pomo_count_label}</div>
 
             </div></div></div></div>
 
@@ -6428,13 +6441,13 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="ft-controls">
 
-              <button onclick="startTimer()" id="start-btn" class="btn btn-primary">&#9654; Empezar</button>
+              <button onclick="startTimer()" id="start-btn" class="btn btn-primary">&#9654; {_start_btn_label}</button>
 
-              <button onclick="pauseTimer()" id="pause-btn" class="btn btn-outline" style="display:none;"><span>&#10074;&#10074;</span><span>Pausar</span></button>
+              <button onclick="pauseTimer()" id="pause-btn" class="btn btn-outline" style="display:none;"><span>&#10074;&#10074;</span><span>{_pause_btn_label}</span></button>
 
-              <button onclick="resetTimer()" id="reset-btn" class="btn btn-outline"><span>&#8635;</span><span>Reiniciar</span></button>
+              <button onclick="resetTimer()" id="reset-btn" class="btn btn-outline"><span>&#8635;</span><span>{_reset_btn_label}</span></button>
 
-              <button onclick="skipPhase()" id="skip-btn" class="btn btn-ghost btn-sm" style="display:none;"><span>Saltar</span><span>&raquo;</span></button>
+              <button onclick="skipPhase()" id="skip-btn" class="btn btn-ghost btn-sm" style="display:none;"><span>{_skip_btn_label}</span><span>&raquo;</span></button>
 
             </div>
 
@@ -6607,7 +6620,7 @@ def register_student_routes(app, csrf, limiter):
 
                   <span id="fg-dot" style="width:8px;height:8px;border-radius:50%;background:#64748b;display:inline-block;"></span>
 
-                  <span id="fg-label">Inactivo</span>
+                  <span id="fg-label">{_fg_inactive_label}</span>
 
                 </span>
 
@@ -8934,13 +8947,13 @@ def register_student_routes(app, csrf, limiter):
 
               s.classList.add('active');
 
-              l.textContent = 'Activo — sitios bloqueados';
+              l.textContent = {json.dumps(_fg_active_label)};
 
             }} else {{
 
               s.classList.remove('active');
 
-              l.textContent = 'Inactivo';
+              l.textContent = {json.dumps(_fg_inactive_label)};
 
             }}
 
