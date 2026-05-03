@@ -6149,6 +6149,40 @@ def register_student_routes(app, csrf, limiter):
         _pomo_count_label = "Session 1 of 4" if _focus_is_en else "Sesi&oacute;n 1 de 4"
         _fg_inactive_label = "Inactive" if _focus_is_en else "Inactivo"
         _fg_active_label = "Active — sites blocked" if _focus_is_en else "Activo — sitios bloqueados"
+        _focus_js_i18n = {
+            "breakTime": "☕ Break time!" if _focus_is_en else "☕ ¡Hora de descanso!",
+            "focusTime": "🔥 Focus!" if _focus_is_en else "🔥 ¡Enfoque!",
+            "longBreak": "🎉 Long break" if _focus_is_en else "🎉 Descanso largo",
+            "break": "☕ Break" if _focus_is_en else "☕ Descanso",
+            "sessionOne": "Session 1 of 4" if _focus_is_en else "Sesión 1 de 4",
+            "sessionPrefix": "Session " if _focus_is_en else "Sesión ",
+            "completedPrefix": "Completed " if _focus_is_en else "Completadas ",
+            "ofFour": " of 4" if _focus_is_en else " de 4",
+            "nextSession": "🔥 Starting the next session..." if _focus_is_en else "🔥 Empezando la siguiente sesión...",
+            "sessionCompleted": "✓ Session completed!" if _focus_is_en else "✓ ¡Sesión completada!",
+            "longBreakUnlocked": "🎉 Long break unlocked! Claim or lose everything" if _focus_is_en else "🎉 ¡Descanso largo desbloqueado! Reclama o pierdes todo",
+            "claimWindowHelp": "You have 30 min to claim. Otherwise, everything accumulated is lost." if _focus_is_en else "Tienes 30 min para reclamar. Si no, todo lo acumulado se pierde.",
+            "claimNow": "🎁 Claim now" if _focus_is_en else "🎁 Reclamar ahora",
+            "pendingRewards": "Pending rewards" if _focus_is_en else "Recompensas pendientes",
+            "claimRestartHelp": "Claiming finishes your session and restarts the timer." if _focus_is_en else "Reclamar termina tu sesión y reinicia el temporizador.",
+            "claimRestart": "🎁 Claim and restart" if _focus_is_en else "🎁 Reclamar y reiniciar",
+            "claiming": "Claiming..." if _focus_is_en else "Reclamando...",
+            "retryClaim": "Retry claim" if _focus_is_en else "Reintentar reclamo",
+            "longBreakClaimRewards": "🎉 Long break! Claim your rewards" if _focus_is_en else "🎉 ¡Descanso largo! Reclama tus recompensas",
+            "claimThirty": "⏳ 30 min to claim — otherwise you lose everything" if _focus_is_en else "⏳ 30 min para reclamar — si no, pierdes todo",
+            "sessionLost": "⌛ Session lost — you did not claim in time" if _focus_is_en else "⌛ Sesión perdida — no reclamaste a tiempo",
+            "claimedPrefix": "✓ Claimed: +" if _focus_is_en else "✓ Reclamado: +",
+            "minutesSavedSuffix": " min saved" if _focus_is_en else " min guardados",
+            "unsavedPrefix": "Could not save " if _focus_is_en else "No se guardaron ",
+            "unsavedSuffix": " session(s). Retry so you do not lose them." if _focus_is_en else " sesión(es). Reintenta para no perderlas.",
+            "focusDoneTitle": "Focus session completed" if _focus_is_en else "Sesión de focus completada",
+            "xpGranted": "Good work — XP granted!" if _focus_is_en else "¡Buen trabajo — XP otorgado!",
+            "longBreakUnlockedSave": "Long break unlocked. Claim to save." if _focus_is_en else "Descanso largo desbloqueado. Reclama para guardar.",
+            "activeBreak": "Active break before the next session." if _focus_is_en else "Descanso activo antes de la siguiente sesion.",
+            "sessionInProgressSuffix": " in progress." if _focus_is_en else " en progreso.",
+            "sessionsReadySuffix": " sessions ready to claim." if _focus_is_en else " sesiones listas para reclamar.",
+            "startCycle": "Start a session to activate the cycle." if _focus_is_en else "Empieza una sesion para activar el ciclo.",
+        }
 
 
 
@@ -6987,6 +7021,7 @@ def register_student_routes(app, csrf, limiter):
         var phaseEnded = false;       // guard so onTimerEnd fires only once per phase
 
         var currentMode = 'pomodoro';
+        var focusText = {json.dumps(_focus_js_i18n, ensure_ascii=False)};
 
         var totalFocusSeconds = 0;
 
@@ -7157,10 +7192,10 @@ def register_student_routes(app, csrf, limiter):
             else pct = cycleCompleted * 25;
             if (progress) progress.style.width = pct + '%';
             if (caption) {{
-              if (isBreak) caption.textContent = (cycleCompleted === 0 ? 'Descanso largo desbloqueado. Reclama para guardar.' : 'Descanso activo antes de la siguiente sesion.');
-              else if (isRunning) caption.textContent = 'Sesion ' + (activeIndex + 1) + ' en progreso.';
-              else if (completed > 0) caption.textContent = completed + ' sesiones listas para reclamar.';
-              else caption.textContent = 'Empieza una sesion para activar el ciclo.';
+              if (isBreak) caption.textContent = (cycleCompleted === 0 ? focusText.longBreakUnlockedSave : focusText.activeBreak);
+              else if (isRunning) caption.textContent = focusText.sessionPrefix + (activeIndex + 1) + focusText.sessionInProgressSuffix;
+              else if (completed > 0) caption.textContent = completed + focusText.sessionsReadySuffix;
+              else caption.textContent = focusText.startCycle;
             }}
           }} catch(e) {{}}
         }}
@@ -7427,7 +7462,7 @@ def register_student_routes(app, csrf, limiter):
 
           }} else {{
 
-            document.getElementById('timer-label').textContent = isBreak ? '☕ ¡Hora de descanso!' : '🔥 ¡Enfoque!';
+            document.getElementById('timer-label').textContent = isBreak ? focusText.breakTime : focusText.focusTime;
 
             var phaseStart = Date.now();
 
@@ -7482,7 +7517,7 @@ def register_student_routes(app, csrf, limiter):
 
                   endAt: endAt + nextBreakMins*60*1000,
 
-                  label: (nextPomoCount % 4 === 0) ? '🎉 Descanso largo' : '☕ Descanso',
+                  label: (nextPomoCount % 4 === 0) ? focusText.longBreak : focusText.break,
 
                   originalMode:'pomodoro', isBreak:true, course:courseName, workMinutes:0,
 
@@ -7771,7 +7806,7 @@ def register_student_routes(app, csrf, limiter):
 
             timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
 
-            document.getElementById('pomo-count').textContent = 'Sesión 1 de 4';
+            document.getElementById('pomo-count').textContent = focusText.sessionOne;
 
           }} else if (currentMode === 'custom') {{
 
@@ -7816,11 +7851,11 @@ def register_student_routes(app, csrf, limiter):
 
           // Desktop notification works even when tab is hidden / muted
           if (currentMode === 'pomodoro' && !isBreak) {{
-            showNotification('Sesión de focus completada', 'Time for a break!');
+            showNotification(focusText.focusDoneTitle, 'Time for a break!');
           }} else if (currentMode === 'pomodoro' && isBreak) {{
             showNotification('Break over', 'Back to focus!');
           }} else {{
-            showNotification('Sesión de focus completada', '¡Buen trabajo — XP otorgado!');
+            showNotification(focusText.focusDoneTitle, focusText.xpGranted);
           }}
 
           if (currentMode === 'pomodoro') {{
@@ -7889,7 +7924,7 @@ def register_student_routes(app, csrf, limiter):
 
               var pcLabelEnd = document.getElementById('pomo-count');
 
-              if (pcLabelEnd) pcLabelEnd.textContent = 'Completadas ' + pomoCount + ' de 4';
+              if (pcLabelEnd) pcLabelEnd.textContent = focusText.completedPrefix + pomoCount + focusText.ofFour;
 
               if (pomoCount > 0 && pomoCount % 4 === 0) {{
 
@@ -7921,7 +7956,7 @@ def register_student_routes(app, csrf, limiter):
 
               timeLeft = parseInt(document.getElementById('pomo-work').value) * 60;
 
-              document.getElementById('timer-label').textContent = '🔥 Empezando la siguiente sesión...';
+              document.getElementById('timer-label').textContent = focusText.nextSession;
 
               isBreak = false;
 
@@ -7945,7 +7980,7 @@ def register_student_routes(app, csrf, limiter):
 
             saveFocusSession();
 
-            document.getElementById('timer-label').textContent = '✓ ¡Sesión completada!';
+            document.getElementById('timer-label').textContent = focusText.sessionCompleted;
 
             document.getElementById('start-btn').style.display = '';
 
@@ -8054,11 +8089,11 @@ def register_student_routes(app, csrf, limiter):
 
             box.style.background = 'rgba(245,158,11,0.10)';
 
-            if (headline) {{ headline.textContent = '🎉 ¡Descanso largo desbloqueado! Reclama o pierdes todo'; headline.style.color = '#92400e'; }}
+            if (headline) {{ headline.textContent = focusText.longBreakUnlocked; headline.style.color = '#92400e'; }}
 
-            if (help) help.textContent = 'Tienes 30 min para reclamar. Si no, todo lo acumulado se pierde.';
+            if (help) help.textContent = focusText.claimWindowHelp;
 
-            if (btn) btn.textContent = '🎁 Reclamar ahora';
+            if (btn) btn.textContent = focusText.claimNow;
 
           }} else {{
 
@@ -8066,11 +8101,11 @@ def register_student_routes(app, csrf, limiter):
 
             box.style.background = 'rgba(139,92,246,0.08)';
 
-            if (headline) {{ headline.textContent = 'Recompensas pendientes'; headline.style.color = ''; }}
+            if (headline) {{ headline.textContent = focusText.pendingRewards; headline.style.color = ''; }}
 
-            if (help) help.textContent = 'Reclamar termina tu sesión y reinicia el temporizador.';
+            if (help) help.textContent = focusText.claimRestartHelp;
 
-            if (btn) btn.textContent = '🎁 Reclamar y reiniciar';
+            if (btn) btn.textContent = focusText.claimRestart;
 
           }}
 
@@ -8094,7 +8129,7 @@ def register_student_routes(app, csrf, limiter):
 
           var btn = document.getElementById('claim-btn');
 
-          if (btn) {{ btn.disabled = true; btn.textContent = 'Reclamando...'; }}
+          if (btn) {{ btn.disabled = true; btn.textContent = focusText.claiming; }}
 
           var __ld_save = new Date();
 
@@ -8196,9 +8231,9 @@ def register_student_routes(app, csrf, limiter):
           refreshClaimCounter();
 
           if (failed.length) {{
-            if (btn) {{ btn.disabled = false; btn.textContent = 'Reintentar reclamo'; }}
+            if (btn) {{ btn.disabled = false; btn.textContent = focusText.retryClaim; }}
             var lblFail = document.getElementById('timer-label');
-            if (lblFail) lblFail.textContent = 'No se guardaron ' + failed.length + ' sesión(es). Reintenta para no perderlas.';
+            if (lblFail) lblFail.textContent = focusText.unsavedPrefix + failed.length + focusText.unsavedSuffix;
             return;
           }}
 
@@ -8210,7 +8245,7 @@ def register_student_routes(app, csrf, limiter):
 
           var lblDone = document.getElementById('timer-label');
 
-          if (lblDone) lblDone.textContent = '✓ Reclamado: +' + xpAwarded + ' XP · ' + minutesSaved + ' min guardados';
+          if (lblDone) lblDone.textContent = focusText.claimedPrefix + xpAwarded + ' XP · ' + minutesSaved + focusText.minutesSavedSuffix;
 
         }}
 
@@ -8249,11 +8284,11 @@ def register_student_routes(app, csrf, limiter):
 
           var lbl = document.getElementById('timer-label');
 
-          if (lbl) lbl.textContent = '🎉 ¡Descanso largo! Reclama tus recompensas';
+          if (lbl) lbl.textContent = focusText.longBreakClaimRewards;
 
           var pc = document.getElementById('pomo-count');
 
-          if (pc) pc.textContent = '⏳ 30 min para reclamar — si no, pierdes todo';
+          if (pc) pc.textContent = focusText.claimThirty;
 
           setClaimMandatoryStyling(true);
 
@@ -8347,7 +8382,7 @@ def register_student_routes(app, csrf, limiter):
 
           var lbl = document.getElementById('timer-label');
 
-          if (lbl) lbl.textContent = '⌛ Sesión perdida — no reclamaste a tiempo';
+          if (lbl) lbl.textContent = focusText.sessionLost;
 
           refreshClaimCounter();
 
@@ -8389,11 +8424,11 @@ def register_student_routes(app, csrf, limiter):
 
                 var lbl = document.getElementById('timer-label');
 
-                if (lbl) lbl.textContent = '🎉 ¡Descanso largo! Reclama tus recompensas';
+                if (lbl) lbl.textContent = focusText.longBreakClaimRewards;
 
                 var pc = document.getElementById('pomo-count');
 
-                if (pc) pc.textContent = '⏳ 30 min para reclamar — si no, pierdes todo';
+                if (pc) pc.textContent = focusText.claimThirty;
 
                 setClaimMandatoryStyling(true);
 
@@ -8429,7 +8464,7 @@ def register_student_routes(app, csrf, limiter):
 
                 var pc2 = document.getElementById('pomo-count');
 
-                if (pc2) pc2.textContent = 'Completadas ' + pomoCount + ' de 4';
+                if (pc2) pc2.textContent = focusText.completedPrefix + pomoCount + focusText.ofFour;
 
                 refreshClaimCounter();
 
@@ -8856,9 +8891,9 @@ def register_student_routes(app, csrf, limiter):
 
                 document.getElementById('pomo-count').textContent = isBreak
 
-                  ? 'Completadas ' + pomoCount + ' de 4'
+                  ? focusText.completedPrefix + pomoCount + focusText.ofFour
 
-                  : 'Sesión ' + (pomoCount + 1) + ' de 4';
+                  : focusText.sessionPrefix + (pomoCount + 1) + focusText.ofFour;
 
               }}
 
