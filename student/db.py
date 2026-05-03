@@ -3711,8 +3711,31 @@ BANNER_ANIM_CSS = """
   0%,100% { transform: translate3d(0,0,0) scale(1); }
   50%     { transform: translate3d(0,-1px,0) scale(1.012); }
 }
+@keyframes bnr-sweep-lite {
+  0%   { transform: translate3d(-130%,0,0) skewX(-18deg); opacity: 0; }
+  12%  { opacity: .55; }
+  45%  { opacity: .55; }
+  72%  { opacity: 0; }
+  100% { transform: translate3d(130%,0,0) skewX(-18deg); opacity: 0; }
+}
 
 .bnr-anim-host { overflow:hidden; position:relative; will-change: transform, opacity; backface-visibility:hidden; }
+.bnr-anim-host::after,
+.bnr-anim-aurora::after,.bnr-anim-magma::after,.bnr-anim-neon::after,.bnr-anim-sunset::after,
+.bnr-anim-deepsea::after,.bnr-anim-starfield::after,.bnr-anim-neongrid::after,.bnr-anim-void::after,
+.bnr-anim-cosmic::after,.bnr-anim-andromeda::after,.bnr-anim-matrix::after,.bnr-anim-aurora-borealis::after,
+.bnr-anim-abyss::after,.bnr-anim-cherry::after,.bnr-anim-velvet::after,.bnr-anim-polar::after,
+.bnr-anim-monsoon::after,.bnr-anim-molten::after,.bnr-anim-glacial::after,.bnr-anim-supernova::after,.bnr-anim-zen::after {
+  content:"";
+  position:absolute;
+  inset:-18% -35%;
+  pointer-events:none;
+  z-index:1;
+  background:linear-gradient(90deg, transparent 0%, rgba(255,255,255,.06) 38%, rgba(255,255,255,.34) 50%, rgba(255,255,255,.06) 62%, transparent 100%);
+  transform:translate3d(-130%,0,0) skewX(-18deg);
+  animation:bnr-sweep-lite 4.8s ease-in-out infinite;
+  will-change:transform, opacity;
+}
 
 /* Aurora-family pan banners (Plus animated set) */
 .bnr-anim-aurora,.bnr-anim-magma,.bnr-anim-neon,.bnr-anim-sunset { background-size: 300% 300% !important; }
@@ -3980,15 +4003,35 @@ FLAG_ANIM_CSS = """
    Keep animated cosmetics compositor-only instead of repainting gradients,
    SVG tiles, filters, and background-position every frame. */
 @keyframes flg-breathe-lite {
-  0%,100% { opacity: .94; transform: translateZ(0) scale(1); }
-  50%     { opacity: 1;   transform: translateZ(0) scale(1.01); }
+  0%,100% { opacity: .96; transform: translateZ(0) scale(1); }
+  50%     { opacity: 1;   transform: translateZ(0) scale(1.018); }
+}
+@keyframes flg-sweep-lite {
+  0%   { transform: translate3d(-140%,0,0) skewX(-16deg); opacity: 0; }
+  15%  { opacity: .65; }
+  55%  { opacity: .65; }
+  85%  { opacity: 0; }
+  100% { transform: translate3d(140%,0,0) skewX(-16deg); opacity: 0; }
 }
 .flag-anim-pan,.flag-anim-fast,.flag-anim-shimmer,.flag-anim-matrix,.flag-anim-matrix-h,
 .flag-anim-racing,.flag-anim-checker,.flag-anim-candy,.flag-anim-pulse,.flag-anim-scan,.flg-heartbeat {
   animation: flg-breathe-lite 8s ease-in-out infinite !important;
   filter: none !important;
+  position: relative;
+  overflow: hidden;
   will-change: transform, opacity;
   backface-visibility: hidden;
+}
+.flag-anim-pan::after,.flag-anim-fast::after,.flag-anim-shimmer::after,.flag-anim-matrix::after,.flag-anim-matrix-h::after,
+.flag-anim-racing::after,.flag-anim-checker::after,.flag-anim-candy::after,.flag-anim-pulse::after,.flag-anim-scan::after,.flg-heartbeat::after {
+  content:"";
+  position:absolute;
+  inset:-30% -45%;
+  pointer-events:none;
+  background:linear-gradient(90deg, transparent 0%, rgba(255,255,255,.08) 38%, rgba(255,255,255,.42) 50%, rgba(255,255,255,.08) 62%, transparent 100%);
+  transform:translate3d(-140%,0,0) skewX(-16deg);
+  animation: flg-sweep-lite 3.2s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 """
 
