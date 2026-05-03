@@ -3299,7 +3299,6 @@ def register_student_routes(app, csrf, limiter):
         # frontend reports phaseWorkMinutes=0 for break phases.
         _focus_xp_awarded = 0
         _focus_coins_awarded = 0
-        promotion = None
 
         if minutes_saved > 0:
 
@@ -3318,18 +3317,9 @@ def register_student_routes(app, csrf, limiter):
 
             if xp > 0:
 
-                _rank_award = sdb.award_xp_with_rank_change(cid, "focus_session", xp, detail)
+                sdb.award_xp(cid, "focus_session", xp, detail)
 
                 _focus_xp_awarded = xp
-                if _rank_award.get("promoted"):
-                    promotion = {
-                        "from": (_rank_award.get("rank_before") or {}).get("full_name"),
-                        "to": (_rank_award.get("rank_after") or {}).get("full_name"),
-                        "color": (_rank_award.get("rank_after") or {}).get("color") or "#FF7A3D",
-                        "xp_awarded": xp,
-                        "tier_up": bool(_rank_award.get("tier_up")),
-                        "reached_elite": bool(_rank_award.get("reached_elite")),
-                    }
             if coins > 0:
                 sdb.add_coins(cid, coins, f"focus_session {minutes_saved}min")
                 _focus_coins_awarded = coins
@@ -3405,6 +3395,13 @@ def register_student_routes(app, csrf, limiter):
             if hour_now >= 23:
 
                 sdb.earn_badge(cid, "night_owl")
+
+
+
+        # Promotion / demotion toasts intentionally disabled.
+        # Leagues are XP-monotonic (no demotions) and the celebration toast
+        # was distracting. Keep the response key for client back-compat.
+        promotion = None
 
 
 
@@ -3484,20 +3481,7 @@ def register_student_routes(app, csrf, limiter):
             pass
 
         if extra_xp > 0:
-            _rank_award = sdb.award_xp_with_rank_change(cid, "focus_claim_adjustment", extra_xp, detail)
-            if _rank_award.get("promoted"):
-                promotion = {
-                    "from": (_rank_award.get("rank_before") or {}).get("full_name"),
-                    "to": (_rank_award.get("rank_after") or {}).get("full_name"),
-                    "color": (_rank_award.get("rank_after") or {}).get("color") or "#FF7A3D",
-                    "xp_awarded": extra_xp,
-                    "tier_up": bool(_rank_award.get("tier_up")),
-                    "reached_elite": bool(_rank_award.get("reached_elite")),
-                }
-            else:
-                promotion = None
-        else:
-            promotion = None
+            sdb.award_xp(cid, "focus_claim_adjustment", extra_xp, detail)
 
         local_date = (request.args.get("local_date") or "").strip() or None
         return jsonify({
@@ -3506,7 +3490,6 @@ def register_student_routes(app, csrf, limiter):
             "xp_awarded": extra_xp,
             "expected_xp": expected_xp,
             "stats": sdb.get_focus_stats_today(cid, local_date=local_date),
-            "promotion": promotion,
         })
 
 
@@ -8925,61 +8908,14 @@ def register_student_routes(app, csrf, limiter):
 
               }}
 
-              if (result.promotion) {{
-                showRankUpModal(result.promotion);
+              if (result.promotion && window.showPromotionToast) {{
+                /* promotion toasts disabled */
               }}
 
             }}
 
           }} catch(e) {{}}
 
-        }}
-
-        function showRankUpModal(promo) {{
-          try {{
-            var old = document.getElementById('rank-up-modal');
-            if (old) old.remove();
-            var color = promo.color || '#FF7A3D';
-            var toRank = promo.to || 'Nuevo rango';
-            var fromRank = promo.from || '';
-            var rankEsc = function(s) {{ return String(s || '').replace(/[&<>"']/g, function(c) {{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }};
-            var labels = {json.dumps({
-                "newRank": "New rank" if _focus_is_en else "Nuevo rango",
-                "rankUp": "Rank up" if _focus_is_en else "Subiste de rango",
-                "from": "You moved up from " if _focus_is_en else "Subiste desde ",
-                "saved": " XP saved from Focus." if _focus_is_en else " XP guardados en Focus.",
-                "frame": "Frame" if _focus_is_en else "Marco",
-                "frameDesc": "Rank identity" if _focus_is_en else "Identidad de rango",
-                "shop": "Shop" if _focus_is_en else "Tienda",
-                "shopDesc": "New unlocks" if _focus_is_en else "Nuevos desbloqueos",
-                "profile": "Profile" if _focus_is_en else "Perfil",
-                "profileDesc": "More prestige" if _focus_is_en else "Más prestigio",
-                "continue": "Keep studying" if _focus_is_en else "Seguir estudiando",
-                "path": "View rank path ->" if _focus_is_en else "Ver camino de rangos ->",
-            })};
-            if (!promo.to) toRank = labels.newRank;
-            var modal = document.createElement('div');
-            modal.id = 'rank-up-modal';
-            modal.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(20,18,30,.48);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);';
-            modal.innerHTML =
-              '<div style="width:min(520px,100%);background:#FFFDF8;border:1px solid #E2DCCC;border-radius:28px;box-shadow:0 30px 90px rgba(20,18,30,.28);padding:30px;text-align:center;color:#1A1A1F;position:relative;overflow:hidden;">' +
-                '<div style="position:absolute;inset:-80px;background:radial-gradient(circle at 50% 0,' + color + '38,transparent 55%);pointer-events:none;"></div>' +
-                '<div style="position:relative;">' +
-                  '<div style="font-size:54px;margin-bottom:4px;">🏆</div>' +
-                  '<div style="font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:' + color + ';">' + labels.rankUp + '</div>' +
-                  '<h2 style="font-family:Fraunces,Georgia,serif;font-size:42px;line-height:1;margin:8px 0 12px;letter-spacing:-.04em;">' + rankEsc(toRank) + '</h2>' +
-                  '<p style="margin:0 auto 18px;color:#6E6A60;max-width:360px;">' + (fromRank ? labels.from + rankEsc(fromRank) + '. ' : '') + '+' + (promo.xp_awarded || 0) + labels.saved + '</p>' +
-                  '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0;">' +
-                    '<div style="border:1px solid #E2DCCC;border-radius:16px;padding:12px;background:#fff;"><b>' + labels.frame + '</b><br><span style="font-size:12px;color:#77756F;">' + labels.frameDesc + '</span></div>' +
-                    '<div style="border:1px solid #E2DCCC;border-radius:16px;padding:12px;background:#fff;"><b>' + labels.shop + '</b><br><span style="font-size:12px;color:#77756F;">' + labels.shopDesc + '</span></div>' +
-                    '<div style="border:1px solid #E2DCCC;border-radius:16px;padding:12px;background:#fff;"><b>' + labels.profile + '</b><br><span style="font-size:12px;color:#77756F;">' + labels.profileDesc + '</span></div>' +
-                  '</div>' +
-                  '<button onclick="document.getElementById(\\'rank-up-modal\\').remove()" style="width:100%;height:48px;border:0;border-radius:999px;background:#1A1A1F;color:#FFF8E1;font-weight:900;box-shadow:0 4px 0 rgba(0,0,0,.18);cursor:pointer;">' + labels.continue + '</button>' +
-                  '<a href="/student/achievements" style="display:block;margin-top:12px;color:' + color + ';font-size:13px;font-weight:900;text-decoration:none;">' + labels.path + '</a>' +
-                '</div>' +
-              '</div>';
-            document.body.appendChild(modal);
-          }} catch(e) {{}}
         }}
 
 
@@ -16567,8 +16503,6 @@ No markdown, no code fences. ONLY JSON.
             return jsonify(error="Login required"), 401
 
         cid = _cid()
-        _lang = session.get("lang", "es")
-        _is_en = (_lang == "en")
 
         total_xp = sdb.get_total_xp(cid)
 
@@ -17429,8 +17363,6 @@ No markdown, no code fences. ONLY JSON.
             return redirect(url_for("login"))
 
         cid = _cid()
-        _lang = session.get("lang", "es")
-        _is_en = (_lang == "en")
 
         total_xp = sdb.get_total_xp(cid)
 
@@ -17486,92 +17418,8 @@ No markdown, no code fences. ONLY JSON.
             "Oracles of Knowledge": "Oráculos del conocimiento",
             "Unranked": "Sin rango",
         }
-        if not _is_en:
-            for src, dst in sorted(rank_translations.items(), key=lambda item: len(item[0]), reverse=True):
-                rank_full_name = rank_full_name.replace(src, dst)
-
-        def _rank_unlocks_for(idx, floor):
-            if _is_en:
-                if floor >= 72000:
-                    return ["Elite frame", "Leaderboard glow", "Legendary title"]
-                if floor >= 43000:
-                    return ["Legend frame", "Epic flag", "Advanced shop"]
-                if floor >= 25200:
-                    return ["Gold row", "Premium banners", "Featured title"]
-                if floor >= 13800:
-                    return ["Master aura", "Rare cosmetics", "Superior profile"]
-                if floor >= 7200:
-                    return ["Academic frame", "Animated banners", "Visible badge"]
-                if floor >= 3400:
-                    return ["Researcher frame", "Animated flags", "More presence"]
-                if floor >= 1200:
-                    return ["Scholar frame", "Shop unlocked", "Stronger profile"]
-                if floor >= 300:
-                    return ["Apprentice frame", "First banners", "Rank identity"]
-                return ["Starter rank", "Path unlocked", "First achievements"]
-            if floor >= 72000:
-                return ["Marco élite", "Brillo en ranking", "Título legendario"]
-            if floor >= 43000:
-                return ["Marco leyenda", "Flag épica", "Tienda avanzada"]
-            if floor >= 25200:
-                return ["Fila dorada", "Banners premium", "Título destacado"]
-            if floor >= 13800:
-                return ["Aura maestra", "Cosméticos raros", "Perfil superior"]
-            if floor >= 7200:
-                return ["Marco académico", "Banners animados", "Insignia visible"]
-            if floor >= 3400:
-                return ["Marco investigador", "Flags animadas", "Más presencia"]
-            if floor >= 1200:
-                return ["Marco estudioso", "Tienda desbloqueada", "Perfil más fuerte"]
-            if floor >= 300:
-                return ["Marco aprendiz", "Primeros banners", "Identidad de rango"]
-            return ["Rango inicial", "Camino desbloqueado", "Primeros logros"]
-
-        rank_roadmap_html = ""
-        current_rank_index = int(rank_info.get("index", 0) or 0)
-        for idx, (floor, _full, _tier, _div, color) in enumerate(sdb.STUDY_RANKS):
-            info = sdb.get_study_rank(floor)
-            name = info.get("full_name") or _full
-            if not _is_en:
-                for src, dst in sorted(rank_translations.items(), key=lambda item: len(item[0]), reverse=True):
-                    name = name.replace(src, dst)
-            state = "done" if idx < current_rank_index else ("current" if idx == current_rank_index else "locked")
-            xp_left = max(0, int(floor) - int(total_xp))
-            unlocks = "".join(f"<span>{_esc(u)}</span>" for u in _rank_unlocks_for(idx, int(floor)))
-            if _is_en:
-                state_label = "Current" if state == "current" else ("Unlocked" if state == "done" else f"{xp_left} XP left")
-            else:
-                state_label = "Actual" if state == "current" else ("Desbloqueado" if state == "done" else f"Faltan {xp_left} XP")
-            rank_roadmap_html += f"""
-              <article class="rank-road-card {state}" style="--rank-color:{color};">
-                <div class="rank-road-top">
-                  <div class="rank-road-medal">{idx + 1}</div>
-                  <div>
-                    <strong>{_esc(name)}</strong>
-                    <small>{floor:,} XP</small>
-                  </div>
-                </div>
-                <div class="rank-road-state">{_esc(state_label)}</div>
-                <div class="rank-road-unlocks">{unlocks}</div>
-              </article>
-            """
-
-        rank_identity_html = "".join(
-            f'<div class="rank-perk"><b>{_esc(title)}</b><span>{_esc(desc)}</span></div>'
-            for title, desc in (
-                [
-                    ("Profile frame", "Your rank should be visible on your profile, not only in text."),
-                    ("Leaderboard row", "Higher ranks get stronger visual presence on the board."),
-                    ("Rank shop", "Cosmetics show the XP needed to unlock them."),
-                    ("Promotion ceremony", "Ranking up triggers a celebration with your new rank."),
-                ] if _is_en else [
-                    ("Marco de perfil", "Tu rango debe sentirse en tu perfil, no solo en texto."),
-                    ("Fila de ranking", "Mientras más alto tu rango, más presencia visual tiene tu fila."),
-                    ("Tienda por rango", "Los cosméticos muestran cuánto XP necesitas para desbloquearlos."),
-                    ("Ceremonia de ascenso", "Cuando subes, aparece una celebración con tu nuevo rango."),
-                ]
-            )
-        )
+        for src, dst in sorted(rank_translations.items(), key=lambda item: len(item[0]), reverse=True):
+            rank_full_name = rank_full_name.replace(src, dst)
 
 
 
@@ -17750,22 +17598,9 @@ No markdown, no code fences. ONLY JSON.
 
             </div>"""
 
-        _ach_title = "Achievements and progress" if _is_en else "Logros y progreso"
-        _position_label = "Position" if _is_en else "Posición"
-        _next_rank_label = "XP to the next rank" if _is_en else "XP para el siguiente rango"
-        _rank_path_title = "Rank path" if _is_en else "Camino de rangos"
-        _rank_path_copy = ("Your XP is permanent. Every rank unlocks identity, presence, and visible cosmetics."
-                           if _is_en else
-                           "Tu XP es permanente. Cada rango desbloquea identidad, presencia y cosméticos visibles.")
-        _rank_path_cta = "View unlocks" if _is_en else "Ver desbloqueos"
-        _day_streak_label = "Day streak" if _is_en else "Racha de días"
-        _badges_count_label = "Badges earned" if _is_en else "Insignias obtenidas"
-        _your_badges_label = "Your badges" if _is_en else "Tus insignias"
-        _no_badges_label = "No badges yet - keep studying!" if _is_en else "Aún no tienes insignias - sigue estudiando."
 
 
-
-        return _s_render(("Achievements" if _is_en else "Logros"), f"""
+        return _s_render("Logros", f"""
         <style>
           .achievements-cd {{ max-width:900px;margin:0 auto 80px;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:#1A1A1F; }}
           .achievements-cd h2 {{ font-family:"Fraunces",Georgia,serif;font-size:34px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
@@ -17775,31 +17610,11 @@ No markdown, no code fences. ONLY JSON.
           .achievements-cd [style*="background:#0f172a"], .achievements-cd [style*="background:#1e293b"], .achievements-cd [style*="background:#111827"] {{ background:#FFFFFF!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important; }}
           .achievements-cd .ach-stat-card .big {{ color:#FF7A3D!important; }}
           .achievements-cd .ach-activity-card [style*="color:#fff"], .achievements-cd [style*="color:#fff"] {{ color:#1A1A1F!important; }}
-          .rank-perk-grid {{ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 24px; }}
-          .rank-perk {{ background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:14px;box-shadow:0 1px 0 rgba(20,18,30,.04); }}
-          .rank-perk b {{ display:block;font-size:13px;color:#1A1A1F;margin-bottom:4px; }}
-          .rank-perk span {{ display:block;font-size:12px;line-height:1.35;color:#6E6A60; }}
-          .rank-road-wrap {{ background:#fff;border:1px solid #E2DCCC;border-radius:24px;padding:18px;margin:0 0 28px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 16px 34px rgba(20,18,30,.06); }}
-          .rank-road-head {{ display:flex;justify-content:space-between;gap:16px;align-items:flex-end;border-bottom:1px solid #EEE8DA;padding-bottom:12px;margin-bottom:14px; }}
-          .rank-road-head p {{ margin:4px 0 0;color:#6E6A60;font-size:13px; }}
-          .rank-road-grid {{ display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;max-height:520px;overflow:auto;padding-right:4px; }}
-          .rank-road-card {{ border:1px solid #E2DCCC;border-radius:18px;padding:13px;background:#FFFDF8;position:relative;overflow:hidden; }}
-          .rank-road-card::before {{ content:"";position:absolute;inset:0 0 auto 0;height:4px;background:var(--rank-color);opacity:.45; }}
-          .rank-road-card.current {{ border-color:var(--rank-color);box-shadow:0 12px 30px color-mix(in srgb,var(--rank-color) 24%,transparent); }}
-          .rank-road-card.locked {{ opacity:.58;filter:saturate(.65); }}
-          .rank-road-top {{ display:flex;align-items:center;gap:10px; }}
-          .rank-road-medal {{ width:34px;height:34px;border-radius:12px;background:var(--rank-color);color:#fff;display:grid;place-items:center;font-weight:900;font-size:12px;flex-shrink:0; }}
-          .rank-road-card strong {{ display:block;font-size:13px;color:#1A1A1F; }}
-          .rank-road-card small {{ display:block;color:#77756F;font-size:11px;margin-top:2px; }}
-          .rank-road-state {{ margin:10px 0 8px;font-size:11px;font-weight:900;color:var(--rank-color);text-transform:uppercase;letter-spacing:.08em; }}
-          .rank-road-unlocks {{ display:flex;flex-wrap:wrap;gap:5px; }}
-          .rank-road-unlocks span {{ border:1px solid #E2DCCC;border-radius:999px;padding:3px 7px;font-size:10px;color:#5C5C66;background:#fff; }}
-          @media(max-width:760px) {{ .rank-perk-grid {{ grid-template-columns:1fr 1fr; }} .rank-road-head {{ display:block; }} }}
         </style>
 
         <div class="achievements-cd">
 
-          <h2 style="margin-bottom:20px"><span style="font-size:1.3em">🏆</span> {_ach_title}</h2>
+          <h2 style="margin-bottom:20px"><span style="font-size:1.3em">🏆</span> Logros y progreso</h2>
 
 
 
@@ -17813,7 +17628,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div style="position:absolute;top:-20px;right:-20px;font-size:120px;opacity:0.08">🏆</div>
 
-            <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1.5px;font-weight:600">{_position_label}</div>
+            <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1.5px;font-weight:600">Posición</div>
 
             <div style="font-size:2.2em;font-weight:800;margin:6px 0;letter-spacing:-1px">{_esc(rank_full_name)}</div>
 
@@ -17825,22 +17640,9 @@ No markdown, no code fences. ONLY JSON.
 
             </div>
 
-            <div style="font-size:13px;opacity:0.75">{total_xp - rank_floor} / {max(1, rank_ceil - rank_floor)} {_next_rank_label}</div>
+            <div style="font-size:13px;opacity:0.75">{total_xp - rank_floor} / {max(1, rank_ceil - rank_floor)} XP para el siguiente rango</div>
 
           </div>
-
-          <div class="rank-perk-grid">{rank_identity_html}</div>
-
-          <section class="rank-road-wrap">
-            <div class="rank-road-head">
-              <div>
-                <h2 style="margin:0;font-size:30px">{_rank_path_title}</h2>
-                <p>{_rank_path_copy}</p>
-              </div>
-              <a href="/student/shop" class="btn btn-primary btn-sm">{_rank_path_cta}</a>
-            </div>
-            <div class="rank-road-grid">{rank_roadmap_html}</div>
-          </section>
 
 
 
@@ -17858,7 +17660,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="font-size:2.4em;font-weight:800;color:#ea580c;margin:4px 0">{streak}</div>
 
-              <div style="font-size:13px;color:var(--text-muted);font-weight:500">{_day_streak_label}</div>
+              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Day Streak</div>
 
             </div>
 
@@ -17872,7 +17674,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="font-size:2.4em;font-weight:800;color:#16a34a;margin:4px 0">{len(badges)}</div>
 
-              <div style="font-size:13px;color:var(--text-muted);font-weight:500">{_badges_count_label}</div>
+              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Badges Earned</div>
 
             </div>
 
@@ -17882,11 +17684,11 @@ No markdown, no code fences. ONLY JSON.
 
           <!-- Earned Badges -->
 
-          <h3 style="color:var(--text);margin-bottom:12px">🏅 {_your_badges_label}</h3>
+          <h3 style="color:var(--text);margin-bottom:12px">🏅 Your Badges</h3>
 
           <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:28px">
 
-            {badges_html if badges_html else f'<p style="color:var(--text-muted)">{_no_badges_label}</p>'}
+            {badges_html if badges_html else '<p style="color:var(--text-muted)">No badges yet — keep studying!</p>'}
 
           </div>
 
@@ -21036,48 +20838,8 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return redirect(url_for("login"))
         cid = _cid()
-        _lang = session.get("lang", "es")
-        _is_en = (_lang == "en")
         wallet = sdb.get_wallet(cid)
         total_xp = sdb.get_total_xp(cid)
-        rank_info = sdb.get_study_rank(total_xp)
-        rank_name = rank_info.get("full_name") or "Sin rango"
-        if not _is_en:
-            for _src, _dst in {
-                "Initiates": "Iniciados",
-                "Apprentices": "Aprendices",
-                "Scholars": "Estudiosos",
-                "Researchers": "Investigadores",
-                "Academics": "Académicos",
-                "Masterminds": "Mentes maestras",
-                "Grand Scholars": "Grandes estudiosos",
-                "Legends": "Leyendas",
-                "Arch Scholars": "Archisabios",
-                "High Sages": "Grandes sabios",
-                "Oracles of Knowledge": "Oráculos del conocimiento",
-                "Unranked": "Sin rango",
-            }.items():
-                rank_name = rank_name.replace(_src, _dst)
-        rank_color = rank_info.get("color") or "#FF7A3D"
-        next_xp = int(rank_info.get("xp_ceil") or total_xp)
-        xp_to_next = max(0, next_xp - int(total_xp))
-        _rank_label = "Current rank" if _is_en else "Rango actual"
-        _rank_help = (
-            f"Shop cosmetics unlock with Focus XP. You need <b>{xp_to_next} XP</b> to reach the next rank."
-            if _is_en else
-            f"Los cosméticos de esta tienda se desbloquean con XP de Focus. Te faltan <b>{xp_to_next} XP</b> para el siguiente rango."
-        )
-        _rank_cta = "View rank path" if _is_en else "Ver camino de rangos"
-        rank_shop_html = (
-            f'<div class="card" style="border-color:{rank_color}!important;background:linear-gradient(135deg,#FFFFFF,#FFF7ED)!important;">'
-            f'  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">'
-            f'    <div><div style="font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:{rank_color};">{_rank_label}</div>'
-            f'    <div style="font-family:Fraunces,Georgia,serif;font-size:30px;font-weight:650;letter-spacing:-.04em;color:#1A1A1F;">{_esc(rank_name)}</div>'
-            f'    <div style="font-size:13px;color:#6E6A60;">{_rank_help}</div></div>'
-            f'    <a class="btn btn-primary btn-sm" href="/student/achievements">{_rank_cta}</a>'
-            f'  </div>'
-            f'</div>'
-        )
         # Build banner cards HTML
         is_plus = sdb._is_plus_user(cid)
         banner_cards = []
@@ -21357,7 +21119,6 @@ No markdown, no code fences. ONLY JSON.
           <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Congeladores de racha 🔥</div></div>
           <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">XP total</div></div>
         </div>
-        {rank_shop_html}
 
         <div class="card">
           <div class="card-header"><h2>\U0001FA99 Comprar monedas</h2></div>
