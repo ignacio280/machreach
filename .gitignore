@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 data/
 _debug_*.py
+_debug_*.html
+*.bak
+recovery_local/
 *.db
 *.db-wal
 *.db-shm
