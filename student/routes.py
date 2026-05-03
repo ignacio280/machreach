@@ -3285,21 +3285,26 @@ def register_student_routes(app, csrf, limiter):
 
             xp = (minutes_saved * 5) // 10  # 25 min -> 12 XP, 50 min -> 25 XP
 
+            detail = f"{mode.title()} {minutes_saved}min"
+
+            if course_name:
+
+                detail += f" — {course_name}"
+
+            if phase_id:
+
+                detail += f" · phase:{phase_id}"
+
             if xp > 0:
-
-                detail = f"{mode.title()} {minutes_saved}min"
-
-                if course_name:
-
-                    detail += f" — {course_name}"
-
-                if phase_id:
-
-                    detail += f" · phase:{phase_id}"
 
                 sdb.award_xp(cid, "focus_session", xp, detail)
 
                 _focus_xp_awarded = xp
+            elif phase_id:
+
+                # 0-XP micro phases still need a marker so phase-id dedupe
+                # works on retries/refreshes. This does not affect total XP.
+                sdb.award_xp(cid, "focus_session", 0, detail)
 
 
 
@@ -3405,6 +3410,75 @@ def register_student_routes(app, csrf, limiter):
             "xp_awarded": _focus_xp_awarded + _page_xp_awarded,
             "stats": today_stats,
             "promotion": promotion,
+        })
+
+
+    @app.route("/api/student/focus/claim-adjust", methods=["POST"])
+    def student_focus_claim_adjust():
+
+        if not _logged_in():
+
+            return jsonify({"error": "Unauthorized"}), 401
+
+        data = request.get_json(force=True) or {}
+
+        cid = _cid()
+
+        claim_id = re.sub(r"[^A-Za-z0-9_.:-]", "", str(data.get("claim_id") or ""))[:120]
+
+        try:
+            total_minutes = int(data.get("total_minutes") or 0)
+        except (TypeError, ValueError):
+            total_minutes = 0
+
+        try:
+            already_awarded = int(data.get("already_awarded") or 0)
+        except (TypeError, ValueError):
+            already_awarded = 0
+
+        if not claim_id:
+            return jsonify({"ok": False, "error": "Missing claim id"}), 400
+
+        if total_minutes < 0:
+            total_minutes = 0
+        if total_minutes > 16 * 60:
+            total_minutes = 16 * 60
+        if already_awarded < 0:
+            already_awarded = 0
+
+        expected_xp = (total_minutes * 5) // 10
+        extra_xp = max(0, expected_xp - already_awarded)
+        detail = f"Claim total {total_minutes}min · claim:{claim_id}"
+
+        try:
+            with sdb.get_db() as db:
+                existing = sdb._fetchval(
+                    db,
+                    "SELECT id FROM student_xp WHERE client_id = %s AND action = 'focus_claim_adjustment' AND detail LIKE %s LIMIT 1",
+                    (cid, f"%claim:{claim_id}%"),
+                )
+            if existing:
+                local_date = (request.args.get("local_date") or "").strip() or None
+                return jsonify({
+                    "ok": True,
+                    "saved": False,
+                    "reason": "duplicate-claim-adjustment",
+                    "xp_awarded": 0,
+                    "stats": sdb.get_focus_stats_today(cid, local_date=local_date),
+                })
+        except Exception:
+            pass
+
+        if extra_xp > 0:
+            sdb.award_xp(cid, "focus_claim_adjustment", extra_xp, detail)
+
+        local_date = (request.args.get("local_date") or "").strip() or None
+        return jsonify({
+            "ok": True,
+            "saved": bool(extra_xp),
+            "xp_awarded": extra_xp,
+            "expected_xp": expected_xp,
+            "stats": sdb.get_focus_stats_today(cid, local_date=local_date),
         })
 
 
@@ -8141,6 +8215,7 @@ def register_student_routes(app, csrf, limiter):
           var savedCount = 0;
           var xpAwarded = 0;
           var minutesSaved = 0;
+          var savedPhaseKeys = [];
 
           for (var i = 0; i < phases.length; i++) {{
 
@@ -8189,12 +8264,38 @@ def register_student_routes(app, csrf, limiter):
                 savedCount += 1;
                 xpAwarded += parseInt(result.xp_awarded || 0, 10) || 0;
                 minutesSaved += parseInt(result.minutes_saved || payload.minutes || 0, 10) || 0;
+                savedPhaseKeys.push(String(p.phaseId || (payload.mode + ':' + payload.minutes + ':' + i)));
               }}
 
             }} catch(e) {{
               failed.push(p);
             }}
 
+          }}
+
+          if (minutesSaved > 0 && savedPhaseKeys.length) {{
+            var expectedClaimXp = Math.floor(minutesSaved * 5 / 10);
+            if (expectedClaimXp > xpAwarded) {{
+              try {{
+                var adjustId = savedPhaseKeys.join(':').replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 120);
+                var adjustResp = await fetch('/api/student/focus/claim-adjust?local_date=' + encodeURIComponent(__ldStr_save), {{
+                  method: 'POST',
+                  headers: {{ 'Content-Type': 'application/json' }},
+                  keepalive: true,
+                  body: JSON.stringify({{
+                    claim_id: adjustId,
+                    total_minutes: minutesSaved,
+                    already_awarded: xpAwarded
+                  }})
+                }});
+                if (adjustResp.ok) {{
+                  var adjust = await adjustResp.json();
+                  if (adjust && adjust.ok !== false) {{
+                    xpAwarded += parseInt(adjust.xp_awarded || 0, 10) || 0;
+                  }}
+                }}
+              }} catch(e) {{}}
+            }}
           }}
 
           // Refresh today's stat tiles in one call.
