@@ -4584,11 +4584,19 @@ def register_student_routes(app, csrf, limiter):
 """
 
         # ── greeting copy ───────────────────────────────────────
-        _first_name = (session.get("client_name", "") or "estudiante").split()[0] or "estudiante"
+        _lang = session.get("lang", "es")
+        _is_en = (_lang == "en")
+        _first_name = (session.get("client_name", "") or ("student" if _is_en else "estudiante")).split()[0] or ("student" if _is_en else "estudiante")
         _dows_es = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
         _months_es_long = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
                            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-        _today_human = f"{_dows_es[_mr_today.weekday()]} {_mr_today.day} de {_months_es_long[_mr_today.month - 1]}"
+        _dows_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        _months_en_long = ["January", "February", "March", "April", "May", "June",
+                           "July", "August", "September", "October", "November", "December"]
+        if _is_en:
+            _today_human = f"{_dows_en[_mr_today.weekday()]} {_months_en_long[_mr_today.month - 1]} {_mr_today.day}"
+        else:
+            _today_human = f"{_dows_es[_mr_today.weekday()]} {_mr_today.day} de {_months_es_long[_mr_today.month - 1]}"
         _semester = ""
         try:
             _semester = sdb.get_current_semester(cid) or ""
@@ -4604,7 +4612,13 @@ def register_student_routes(app, csrf, limiter):
             _icon = _quest_icons[_i % 3]
             _emoji = _quest_emojis[_i % 3]
             # Map quest_key -> label using student.db.QUEST_POOL
-            _label = next((p["label"] for p in sdb.QUEST_POOL if p["key"] == _q.get("quest_key")), _q.get("quest_key", "Misión"))
+            _label = next((p["label"] for p in sdb.QUEST_POOL if p["key"] == _q.get("quest_key")), _q.get("quest_key", "Mission" if _is_en else "Misión"))
+            if _is_en:
+                try:
+                    from outreach.i18n import _translate_visible_text
+                    _label = _translate_visible_text(str(_label)) or str(_label)
+                except Exception:
+                    _label = str(_label)
             _target = int(_q.get("target") or 1)
             _progress = int(_q.get("progress") or 0)
             _xp_reward = int(_q.get("xp_reward") or 0)
@@ -4629,13 +4643,14 @@ def register_student_routes(app, csrf, limiter):
                 f'</div>'
             )
         if not _quest_chips_html:
+            _empty_quest = "Start your first focus session to unlock missions." if _is_en else "Empieza tu primera sesión de enfoque para desbloquear misiones."
             _quest_chips_html = (
                 '<div class="mr-quest" style="grid-column:1/-1;">'
                 '  <div class="mr-quest-head">'
                 '    <div class="mr-quest-icon q1">⏱</div>'
                 '    <div class="mr-quest-reward">+ XP</div>'
                 '  </div>'
-                '  <div class="mr-quest-title">Empieza tu primera sesión de enfoque para desbloquear misiones.</div>'
+                f'  <div class="mr-quest-title">{_empty_quest}</div>'
                 '</div>'
             )
 
@@ -4645,27 +4660,37 @@ def register_student_routes(app, csrf, limiter):
         if _today_session_count > 0:
             _hh, _mm = divmod(_today_total_min, 60)
             _time_str = (f"{_hh}h {_mm}min" if _hh else f"{_mm}min")
-            _headline = (
-                f'{_today_session_count} {"sesiones" if _today_session_count != 1 else "sesión"}, '
-                f'<em>{_time_str}</em><br/>y vas con todo.'
-            )
+            if _is_en:
+                _headline = (
+                    f'{_today_session_count} {"sessions" if _today_session_count != 1 else "session"}, '
+                    f'<em>{_time_str}</em><br/>and you are on track.'
+                )
+            else:
+                _headline = (
+                    f'{_today_session_count} {"sesiones" if _today_session_count != 1 else "sesi\u00f3n"}, '
+                    f'<em>{_time_str}</em><br/>y vas con todo.'
+                )
         else:
-            _headline = 'Hoy es un buen día para<br/><em>empezar</em> a estudiar.'
+            _headline = 'Today is a good day to<br/><em>start</em> studying.' if _is_en else 'Hoy es un buen d\u00eda para<br/><em>empezar</em> a estudiar.'
 
+
+        _mission_eye = f"TODAY'S MISSION - {_today_human}" if _is_en else f"Misi\u00f3n de hoy - {_today_human}"
+        _hello = "Hi" if _is_en else "\u00a1Hola"
+        _focus_cta = "Start focus - 25 min" if _is_en else "Empezar enfoque - 25 min"
         _mr_mission_html = (
             '<section class="mr-mission mr-pop-1">'
             '  <div class="mr-mission-head">'
             '    <div>'
-            f'      <div class="mr-mission-eye">Misión de hoy · {_esc(_today_human)}</div>'
-            f'      <h1 class="mr-mission-title serif">¡Hola, {_esc(_first_name)}! {_headline}</h1>'
+            f'      <div class="mr-mission-eye">{_esc(_mission_eye)}</div>'
+            f'      <h1 class="mr-mission-title serif">{_hello}, {_esc(_first_name)}! {_headline}</h1>'
             '    </div>'
-            '    <a class="mr-mission-cta" href="/student/focus">▶ Empezar enfoque · 25 min</a>'
+            f'    <a class="mr-mission-cta" href="/student/focus">{_focus_cta}</a>'
             '  </div>'
             f'  <div class="mr-quests-row">{_quest_chips_html}</div>'
             '</section>'
         )
 
-        # ── 4 stat cards ───────────────────────────────────────
+        # ?? 4 stat cards ???????????????????????????????????????
         _hours_total = round(_total_mins / 60.0, 1)
         # Best day-of-week label (last 30 days). Use Python to compute.
         _best_dow = "—"
@@ -4808,6 +4833,7 @@ def register_student_routes(app, csrf, limiter):
         # ── Upcoming exams (rebuild with new style) ────────────
         _exam_rows_html = ""
         _months_es = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
+        _months_en = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
         for _e in (exams or [])[:5]:
             _ed = (_e.get("exam_date") or "")[:10]
             _days = None
@@ -4818,7 +4844,7 @@ def register_student_routes(app, csrf, limiter):
                     _ed_d = datetime.strptime(_ed, "%Y-%m-%d").date()
                     _days = (_ed_d - _mr_today).days
                     _day_num = _ed_d.strftime("%d")
-                    _mon = _months_es[_ed_d.month - 1]
+                    _mon = (_months_en if _is_en else _months_es)[_ed_d.month - 1]
                 except (ValueError, TypeError):
                     pass
             _badge_cls = ""
@@ -4845,7 +4871,10 @@ def register_student_routes(app, csrf, limiter):
                 _meta_parts.append(_esc(_topic_str))
             _meta_str = " · ".join(_meta_parts) if _meta_parts else "Sin temas listados"
             _cd_text = (f"{_days}d" if _days is not None else "?")
-            _cd_sub = "faltan" if (_days is not None and _days >= 0) else "atrasada"
+            if _is_en:
+                _cd_sub = "left" if (_days is not None and _days >= 0) else "overdue"
+            else:
+                _cd_sub = "faltan" if (_days is not None and _days >= 0) else "atrasada"
             _exam_rows_html += (
                 f'<a class="mr-exam" href="/student/exams">'
                 f'  <div class="mr-exam-day{_badge_cls}">'
@@ -4883,13 +4912,13 @@ def register_student_routes(app, csrf, limiter):
         for _bi, _br in enumerate(_mr_board):
             _abs_rank = _mr_board_offset + _bi + 1
             _is_me = int(_br.get("client_id") or 0) == cid
-            _name = _br.get("name") or "Estudiante"
+            _name = _br.get("name") or ("Student" if _is_en else "Estudiante")
             _xp = int(_br.get("total_xp") or 0)
             _color = _mr_palette[(_abs_rank - 1) % len(_mr_palette)]
             _ini = _mr_initials(_name)
             _rank_cls = " gold" if _abs_rank <= 2 else ""
             _row_cls = " me" if _is_me else ""
-            _disp_name = "Tú · " + _name.split()[0] if _is_me else _name
+            _disp_name = (("You · " if _is_en else "Tú · ") + _name.split()[0]) if _is_me else _name
             _board_rows_html += (
                 f'<div class="mr-lmrow{_row_cls}">'
                 f'  <div class="lm-rank{_rank_cls}">{_abs_rank}</div>'
@@ -4900,23 +4929,24 @@ def register_student_routes(app, csrf, limiter):
             )
         _league_label = _esc(level_name)
         _my_rank_disp = f"#{_mr_my_rank}" if _mr_my_rank > 0 else "—"
+        _empty_board = "<div style='opacity:.7;font-size:12px;text-align:center;padding:8px;'>Be the first to earn XP</div>" if _is_en else "<div style='opacity:.7;font-size:12px;text-align:center;padding:8px;'>S? el primero en sumar XP</div>"
         _mr_league_card = (
             '<section class="mr-league-card mr-pop-1">'
-            '  <div class="mr-league-eye">Liga semanal</div>'
-            f' <div class="mr-league-name serif">🏆 {_league_label}</div>'
-            '  <div class="mr-league-rank">'
-            f'   <span class="mr-league-rank-num">{_my_rank_disp}</span>'
-            f'   <span class="mr-league-rank-of">de {len(_mr_lb_rows)}</span>'
-            '  </div>'
-            '  <div class="mr-league-promo">'
-            f'   <span>{_xp_to_next} XP para subir</span>'
-            f'   <span style="font-weight:800;">{xp_pct}%</span>'
-            '  </div>'
-            f' <div class="mr-mini-board">{_board_rows_html or "<div style=\'opacity:.7;font-size:12px;text-align:center;padding:8px;\'>Sé el primero en sumar XP</div>"}</div>'
-            '</section>'
+            + ('  <div class="mr-league-eye">WEEKLY LEAGUE</div>' if _is_en else '  <div class="mr-league-eye">Liga semanal</div>')
+            + f' <div class="mr-league-name serif">&#127942; {_league_label}</div>'
+            + '  <div class="mr-league-rank">'
+            + f'   <span class="mr-league-rank-num">{_my_rank_disp}</span>'
+            + f'   <span class="mr-league-rank-of">{"of" if _is_en else "de"} {len(_mr_lb_rows)}</span>'
+            + '  </div>'
+            + '  <div class="mr-league-promo">'
+            + f'   <span>{_xp_to_next} XP {"to rank up" if _is_en else "para subir"}</span>'
+            + f'   <span style="font-weight:800;">{xp_pct}%</span>'
+            + '  </div>'
+            + f' <div class="mr-mini-board">{_board_rows_html or _empty_board}</div>'
+            + '</section>'
         )
 
-        # ── Right column: Streak heatmap ───────────────────────
+        # ?? Right column: Streak heatmap ????????????????????????
         _heat_html = ""
         _hd = _mr_heat_start
         for _i in range(35):
@@ -4949,27 +4979,27 @@ def register_student_routes(app, csrf, limiter):
 
         _mr_streak_card = (
             '<section class="mr-card mr-pop-2">'
-            '  <div class="mr-card-h">'
-            '    <div class="mr-card-title">🔥 Tu racha</div>'
-            '    <a class="mr-card-link" href="/student/analytics">Detalle →</a>'
-            '  </div>'
-            '  <div style="display:flex; align-items:baseline; gap:10px;">'
-            f'   <div class="mr-streak-num">{streak_days}</div>'
-            f'   <div style="font-size:13px; color:#5C5C66;">días seguidos<br/><span style="color:#94939C;font-size:11px;">últimos 35 días</span></div>'
-            '  </div>'
-            f' <div class="mr-heat-grid">{_heat_html}</div>'
-            '  <div class="mr-week-labels">'
-            '    <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>'
-            '  </div>'
-            '  <div class="mr-streak-row">'
-            f'   <div><div class="mr-srn">{_active_days}</div><div class="mr-srl">Días activos</div></div>'
-            f'   <div><div class="mr-srn">{_freezes_avail}</div><div class="mr-srl">Congeladores</div></div>'
-            f'   <div><div class="mr-srn">{_attendance_pct}%</div><div class="mr-srl">Asistencia</div></div>'
-            '  </div>'
-            '</section>'
+            + '  <div class="mr-card-h">'
+            + ('    <div class="mr-card-title">&#128293; Your streak</div>' if _is_en else '    <div class="mr-card-title">&#128293; Tu racha</div>')
+            + ('    <a class="mr-card-link" href="/student/analytics">Details &rarr;</a>' if _is_en else '    <a class="mr-card-link" href="/student/analytics">Detalle &rarr;</a>')
+            + '  </div>'
+            + '  <div style="display:flex; align-items:baseline; gap:10px;">'
+            + f'   <div class="mr-streak-num">{streak_days}</div>'
+            + f'   <div style="font-size:13px; color:#5C5C66;">{"days in a row" if _is_en else "d\u00edas seguidos"}<br/><span style="color:#94939C;font-size:11px;">{"last 35 days" if _is_en else "\u00faltimos 35 d\u00edas"}</span></div>'
+            + '  </div>'
+            + f' <div class="mr-heat-grid">{_heat_html}</div>'
+            + '  <div class="mr-week-labels">'
+            + ('    <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>' if _is_en else '    <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>')
+            + '  </div>'
+            + '  <div class="mr-streak-row">'
+            + f'   <div><div class="mr-srn">{_active_days}</div><div class="mr-srl">{"Active days" if _is_en else "D\u00edas activos"}</div></div>'
+            + f'   <div><div class="mr-srn">{_freezes_avail}</div><div class="mr-srl">{"Freezes" if _is_en else "Congeladores"}</div></div>'
+            + f'   <div><div class="mr-srn">{_attendance_pct}%</div><div class="mr-srl">{"Attendance" if _is_en else "Asistencia"}</div></div>'
+            + '  </div>'
+            + '</section>'
         )
 
-        # ── Right column: Friends list ─────────────────────────
+        # ?? Right column: Friends list ??????????????????????????
         _friend_rows_html = ""
         for _fi, _f in enumerate(_mr_friends):
             _fname = _f.get("name") or "Amigo"
