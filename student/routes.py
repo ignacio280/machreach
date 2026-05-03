@@ -17429,6 +17429,8 @@ No markdown, no code fences. ONLY JSON.
             return redirect(url_for("login"))
 
         cid = _cid()
+        _lang = session.get("lang", "es")
+        _is_en = (_lang == "en")
 
         total_xp = sdb.get_total_xp(cid)
 
