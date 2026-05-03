@@ -3857,6 +3857,137 @@ def register_student_routes(app, csrf, limiter):
         )
 
 
+    @app.route("/dev/cosmetics")
+    def dev_cosmetics_preview_page():
+        """Local-only preview of every profile banner and leaderboard flag."""
+        host = (request.host or "").split(":")[0].lower()
+        remote = (request.remote_addr or "").lower()
+        if host not in {"127.0.0.1", "localhost", "::1"} and remote not in {"127.0.0.1", "::1"}:
+            return "Local preview only", 403
+
+        banners = [
+            {
+                "key": key,
+                "name": cfg.get("name", key),
+                "css": cfg.get("css", "transparent"),
+                "animated": bool(cfg.get("animated")),
+                "anim_class": cfg.get("anim_class", "") if cfg.get("animated") else "",
+                "price": cfg.get("price_coins", 0),
+                "xp": cfg.get("xp_required", 0),
+                "plus": bool(cfg.get("plus_only")),
+            }
+            for key, cfg in sdb.BANNERS.items()
+        ]
+        flags = [
+            {
+                "key": key,
+                "name": cfg.get("name", key),
+                "css": cfg.get("css", "transparent"),
+                "animated": bool(cfg.get("animated")),
+                "anim_class": cfg.get("anim_class", "") if cfg.get("animated") else "",
+                "price": cfg.get("price_coins", 0),
+                "xp": cfg.get("xp_required", 0),
+                "plus": bool(cfg.get("plus_only")),
+            }
+            for key, cfg in sdb.FLAGS.items()
+        ]
+        return render_template_string("""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MachReach Cosmetics Preview</title>
+  <style>{{ anim_css|safe }}</style>
+  <style>
+    :root { --bg:#F4F1EA; --paper:#FFFDF8; --ink:#1A1A1F; --muted:#77756F; --line:#E2DCCC; --orange:#FF7A3D; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,sans-serif; }
+    .wrap { max-width:1280px; margin:0 auto; padding:34px 28px 80px; }
+    .top { display:flex; justify-content:space-between; gap:20px; align-items:end; flex-wrap:wrap; margin-bottom:26px; }
+    .eyebrow { color:var(--orange); font-size:12px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; margin-bottom:8px; }
+    h1 { margin:0; font-family:Georgia,serif; font-size:clamp(44px,6vw,78px); line-height:.92; letter-spacing:-.05em; font-weight:600; }
+    .sub { color:var(--muted); margin:12px 0 0; max-width:720px; line-height:1.55; }
+    .tabs { display:flex; gap:10px; position:sticky; top:0; background:rgba(244,241,234,.9); backdrop-filter:blur(10px); padding:12px 0; z-index:5; }
+    .tabs a { text-decoration:none; color:var(--ink); border:1px solid var(--line); background:#fff; padding:10px 16px; border-radius:999px; font-weight:900; }
+    section { margin-top:30px; }
+    h2 { font-family:Georgia,serif; font-size:34px; letter-spacing:-.035em; margin:0 0 16px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:18px; overflow:hidden; box-shadow:0 1px 0 rgba(20,18,30,.04),0 12px 32px rgba(20,18,30,.06); }
+    .banner-preview { height:118px; position:relative; overflow:hidden; background:#111827; }
+    .flag-preview { height:84px; position:relative; overflow:hidden; background:#111827; }
+    .flag-fade { position:absolute; inset:0; -webkit-mask-image:linear-gradient(to right, rgba(0,0,0,.95) 0%, rgba(0,0,0,.65) 44%, rgba(0,0,0,.18) 76%, transparent 100%); mask-image:linear-gradient(to right, rgba(0,0,0,.95) 0%, rgba(0,0,0,.65) 44%, rgba(0,0,0,.18) 76%, transparent 100%); }
+    .meta { padding:13px 14px 15px; }
+    .name { font-weight:950; margin-bottom:5px; }
+    .key { color:var(--muted); font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; }
+    .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+    .chip { border:1px solid var(--line); border-radius:999px; padding:4px 8px; color:var(--muted); font-size:11px; font-weight:850; background:var(--paper); }
+    .chip.hot { color:#9A3412; border-color:#FDBA74; background:#FFF7ED; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="top">
+      <div>
+        <div class="eyebrow">Local preview</div>
+        <h1>Cosmetics<br>gallery.</h1>
+        <p class="sub">Every MachReach profile banner and leaderboard flag, using the real CSS and animation classes from the app.</p>
+      </div>
+      <div class="tabs">
+        <a href="#banners">Banners · {{ banners|length }}</a>
+        <a href="#flags">Flags · {{ flags|length }}</a>
+      </div>
+    </div>
+
+    <section id="banners">
+      <h2>Profile banners</h2>
+      <div class="grid">
+        {% for item in banners %}
+        <article class="card">
+          <div class="banner-preview bnr-anim-host {{ item.anim_class }}" style="background:{{ item.css }};"></div>
+          <div class="meta">
+            <div class="name">{{ item.name }}</div>
+            <div class="key">{{ item.key }}</div>
+            <div class="chips">
+              {% if item.animated %}<span class="chip hot">animated</span>{% endif %}
+              {% if item.plus %}<span class="chip hot">PLUS</span>{% endif %}
+              <span class="chip">{{ item.price }} coins</span>
+              <span class="chip">{{ item.xp }} XP</span>
+            </div>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section id="flags">
+      <h2>Leaderboard flags</h2>
+      <div class="grid">
+        {% for item in flags %}
+        <article class="card">
+          <div class="flag-preview">
+            <div class="flag-fade {{ item.anim_class }}" style="background:{{ item.css }};"></div>
+          </div>
+          <div class="meta">
+            <div class="name">{{ item.name }}</div>
+            <div class="key">{{ item.key }}</div>
+            <div class="chips">
+              {% if item.animated %}<span class="chip hot">animated</span>{% endif %}
+              {% if item.plus %}<span class="chip hot">PLUS</span>{% endif %}
+              <span class="chip">{{ item.price }} coins</span>
+              <span class="chip">{{ item.xp }} XP</span>
+            </div>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+        """, banners=banners, flags=flags, anim_css=Markup(sdb.BANNER_ANIM_CSS + "\n" + sdb.FLAG_ANIM_CSS))
+
+
 
     @app.route("/student/setup")
     def student_setup_page():
