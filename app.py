@@ -363,7 +363,7 @@ def _is_admin() -> bool:
         return False
     email = (c.get("email") or "").strip().lower()
     owner_emails = {e.strip().lower() for e in ADMIN_EMAILS}
-    owner_emails.add("ignaciomachuca2005@gmail.com")
+    owner_emails.update({"ignaciomachuca2005@gmail.com", "fernanda.machuca@uc.cl"})
     return bool(c.get("is_admin")) or email in owner_emails
 
 
@@ -5014,7 +5014,7 @@ def _admin_delete_client_account(client_id: int) -> dict:
     if not target:
         return {"ok": False, "error": "User not found."}
     protected_admins = {e.strip().lower() for e in ADMIN_EMAILS}
-    protected_admins.add("ignaciomachuca2005@gmail.com")
+    protected_admins.update({"ignaciomachuca2005@gmail.com", "fernanda.machuca@uc.cl"})
     if (target.get("email") or "").strip().lower() in protected_admins:
         return {"ok": False, "error": "The owner admin account cannot be deleted from the panel."}
 
@@ -5288,7 +5288,7 @@ def _record_product_event(event_type: str, metadata: dict | None = None):
 
 def _analytics_admin_filter_sql() -> str:
     emails = {str(e).strip().lower() for e in (ADMIN_EMAILS or set()) if str(e).strip()}
-    emails.add("ignaciomachuca2005@gmail.com")
+    emails.update({"ignaciomachuca2005@gmail.com", "fernanda.machuca@uc.cl"})
     quoted = ",".join("'" + email.replace("'", "''") + "'" for email in sorted(emails))
     return f"(client_id IS NULL OR client_id NOT IN (SELECT id FROM clients WHERE LOWER(email) IN ({quoted})))"
 

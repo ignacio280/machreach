@@ -3827,7 +3827,7 @@ def register_student_routes(app, csrf, limiter):
             email = (c.get("email") or "").strip().lower() if c else ""
 
             owner_emails = {e.strip().lower() for e in ADMIN_EMAILS}
-            owner_emails.add("ignaciomachuca2005@gmail.com")
+            owner_emails.update({"ignaciomachuca2005@gmail.com", "fernanda.machuca@uc.cl"})
             is_admin = bool(c and c.get("is_admin")) or email in owner_emails
 
         # End-of-week / end-of-month leaderboard results popup. Shows once

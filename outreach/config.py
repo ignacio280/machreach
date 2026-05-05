@@ -45,7 +45,10 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:5000")
 SENDER_NAME = os.getenv("SENDER_NAME", "Ignacio")
 ADMIN_EMAILS = {
     e.strip().lower()
-    for e in os.getenv("ADMIN_EMAILS", "ignaciomachuca2005@gmail.com").split(",")
+    for e in os.getenv(
+        "ADMIN_EMAILS",
+        "ignaciomachuca2005@gmail.com,fernanda.machuca@uc.cl",
+    ).split(",")
     if e.strip()
 }
 ADMIN_ACTION_SECRET = os.getenv("ADMIN_ACTION_SECRET", "")
