@@ -3,7 +3,7 @@
 /* -------- HOW IT WORKS -------- */
 function HowItWorks() {
   const steps = [
-    { n: "01", t: "Conecta Canvas", d: "OAuth en 30 segundos. Bajamos tus cursos, syllabus y fechas de prueba.", icon: <IconCanvas/> },
+    { n: "01", t: "Conecta Canvas", d: "Agrega tu URL y token para detectar tus cursos. Fechas y materiales se organizan manualmente cuando los necesites.", icon: <IconCanvas/> },
     { n: "02", t: "Estudia con Focus", d: "Elige ramo, prueba y dale start. El reloj cuenta y la app te suma XP.", icon: <IconTimer/> },
     { n: "03", t: "Sube de liga", d: "Compite cada semana con tu universidad. Premios reales en monedas.", icon: <IconTrophy/> },
   ];
@@ -57,11 +57,11 @@ function HowItWorks() {
 /* -------- CANVAS CALLOUT -------- */
 function CanvasCallout() {
   const lines = [
-    { c: "var(--accent)", t: "→ canvas.uc.cl/oauth/login", d: 0 },
+    { c: "var(--accent)", t: "→ canvas.uc.cl/profile/settings", d: 0 },
     { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ autenticado como s.diaz@uc.cl", d: 200 },
     { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ 6 cursos detectados", d: 400 },
-    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ 14 fechas de prueba", d: 600 },
-    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ 38 archivos sincronizados", d: 800 },
+    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ok cursos listos para ordenar", d: 600 },
+    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ok herramientas listas", d: 800 },
     { c: "var(--brand)", t: "→ listo para estudiar.", d: 1100 },
   ];
   const [shown, setShown] = React.useState(0);
@@ -81,13 +81,13 @@ function CanvasCallout() {
         }}>
           <div>
             <span className="eyebrow" style={{ background: "color-mix(in oklab, white 14%, transparent)", borderColor: "white", color: "white" }}>
-              <span className="dot" style={{ background: "var(--accent)" }}/> Integración nativa
+              <span className="dot" style={{ background: "var(--accent)" }}/> Conexion simple
             </span>
             <h2 style={{ fontSize: "clamp(34px, 4.5vw, 56px)", marginTop: 18, color: "white" }}>
-              Si tu uni usa Canvas,<br/>nosotros también.
+              Conecta Canvas,<br/>ordena tus cursos.
             </h2>
             <p style={{ color: "color-mix(in oklab, white 75%, transparent)", fontSize: 18, marginTop: 16, maxWidth: 480 }}>
-              OAuth estándar. Una vez conectado, todo se sincroniza solo: cursos, módulos, fechas y materiales. Sin copiar y pegar nada.
+              Con tu URL y token de Canvas, MachReach detecta tus cursos para que estudies por ramo. Las fechas, pruebas y materiales se agregan manualmente dentro de MachReach cuando los necesites.
             </p>
             <div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}>
         <a href="/register" className="btn btn-primary btn-lg" style={{ borderColor: "white" }}>
@@ -173,13 +173,13 @@ function LeaderboardShowcase() {
             </div>
             <h3 style={{ fontSize: 28, marginBottom: 10 }}>Tres ligas, un objetivo: <span style={{ color: "var(--brand)" }}>quedar arriba.</span></h3>
             <p style={{ color: "var(--ink-2)", fontSize: 16, marginBottom: 16 }}>
-              Cada semana arranca un nuevo ranking. Acumula XP estudiando con Focus o haciendo quizzes y sube hasta la Liga Diamante.
+              Cada semana arranca un nuevo ranking. Acumula XP estudiando con Focus y sube por rangos reales como Iniciados, Aprendices, Estudiosos e Investigadores.
             </p>
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
               {[
                 { t: "Top 3 semanal: 500 monedas + badge exclusivo", c: "var(--gold)" },
                 { t: "Top 10 mensual: 2.000 monedas + cosmético dorado", c: "var(--silver)" },
-                { t: "Liga Diamante: acceso a quizzes premium", c: "var(--secondary)" },
+                { t: "Investigadores: status visible y premios especiales", c: "var(--secondary)" },
               ].map((r, i) => (
                 <li key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 15 }}>
                   <span style={{
@@ -204,7 +204,7 @@ function LeaderboardShowcase() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18 }}>
-                    Liga Diamante · {scope === "pais" ? "Chile" : scope === "uni" ? "UDP" : "Ingeniería"}
+                    Investigadores · {scope === "pais" ? "Chile" : scope === "uni" ? "UDP" : "Ingeniería"}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".06em", marginTop: 2 }}>
                     SEMANA 26 · CIERRA LUN 09:00
@@ -328,7 +328,7 @@ function QuizDemo() {
           <div>
             <h3 style={{ fontSize: 26, marginBottom: 14 }}>Material desordenado entra. Quiz ordenado sale.</h3>
             <p style={{ color: "var(--ink-2)", fontSize: 16, marginBottom: 22 }}>
-              Sube un PDF, un syllabus o pega tus apuntes. La IA genera preguntas relevantes para tu próxima prueba en segundos.
+              Sube un PDF o tus propios apuntes. La IA genera preguntas relevantes para tu próxima prueba en segundos.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {[
@@ -496,11 +496,11 @@ function StatsStrip() {
 function FAQ() {
   const [open, setOpen] = React.useState(0);
   const faqs = [
-    { q: "¿Por qué pagaría por estudiar si tengo Notion gratis?", a: "Notion no se conecta a Canvas, no mide tu tiempo de estudio por ramo, no tiene quizzes generados por IA, ni rankings con tu universidad. MachReach hace todo eso integrado." },
+    { q: "¿Por qué usar MachReach si ya tengo mis apuntes?", a: "MachReach no solo guarda material: mide tu estudio por curso, te da Focus con XP, quizzes IA, flashcards, analytics y rankings en un mismo lugar." },
     { q: "¿Mi universidad usa Canvas?", a: "La mayoría de las grandes en Chile sí: UC, UDP, UAndes, UAI, USACH, USS, PUCV. Si la tuya no, igual puedes subir cursos a mano y usar el resto de la app." },
-    { q: "¿Es seguro conectar mi cuenta Canvas?", a: "Usamos OAuth oficial de Canvas — el mismo protocolo que usan cientos de apps integradas. Nunca vemos tu contraseña, y puedes revocar el acceso cuando quieras desde Canvas." },
+    { q: "¿Es seguro conectar mi cuenta Canvas?", a: "Usas un token personal de Canvas para detectar tus cursos. Nunca vemos tu contraseña y puedes revocar el token cuando quieras desde Canvas." },
     { q: "¿Qué pasa con mis datos de estudio?", a: "Son tuyos. No vendemos datos a terceros. Puedes exportar todo o borrar tu cuenta en cualquier momento." },
-    { q: "¿Cómo funciona la economía de monedas?", a: "Ganas monedas estudiando con Focus, completando quizzes, manteniendo racha y subiendo en el ranking. Las gastas en cosméticos, banners y temas. Pura cosa estética — no afecta tu desempeño académico." },
+    { q: "¿Cómo funciona la economía de monedas?", a: "Ganas monedas estudiando con Focus. Las gastas en cosméticos, banners y temas. Pura cosa estética — no afecta tu desempeño académico." },
     { q: "¿Puedo cancelar la suscripción cuando quiera?", a: "Sí. Sin contratos ni letra chica. La cancelas con un click y mantienes acceso hasta el fin del ciclo pagado." },
   ];
   return (

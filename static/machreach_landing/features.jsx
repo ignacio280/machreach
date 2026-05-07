@@ -264,7 +264,7 @@ function MiniCoins() {
 function Features() {
   const [hover, setHover] = React.useState(null);
   const items = [
-    { id: 0, color: "var(--brand)",     icon: <IconCanvas/>,  title: "Canvas en automático",   desc: "Conecta tu universidad y bajamos cursos, syllabus y fechas de prueba sin tocar nada.", mini: <MiniCanvas/> },
+    { id: 0, color: "var(--brand)",     icon: <IconCanvas/>,  title: "Canvas en automático",   desc: "Conecta Canvas y MachReach detecta tus cursos para organizar tu estudio por ramo.", mini: <MiniCanvas/> },
     { id: 1, color: "var(--secondary)", icon: <IconTimer/>,   title: "Modo Focus",             desc: "Pomodoro pegado a tu ramo y tu prueba. Cada minuto cuenta como XP real.",         mini: <MiniFocus/> },
     { id: 2, color: "var(--accent)",    icon: <IconChart/>,   title: "Analítica de estudio",   desc: "Cuántas horas, qué día rindes más, cuánto tiempo le diste a cada examen.",        mini: <MiniChart/> },
     { id: 3, color: "var(--brand)",     icon: <IconBrain/>,   title: "Quizzes con IA",          desc: "Genera preguntas desde tus apuntes o pruebas oficiales para practicar sin perder tiempo.", mini: <MiniQuiz/> },
@@ -276,7 +276,7 @@ function Features() {
       <div className="container">
         <div className="section-head">
           <span className="eyebrow"><span className="dot"/> Todo en un lugar</span>
-          <h2>Notion + Duolingo + Canvas,<br/>en una sola app.</h2>
+          <h2>Tu semestre completo,<br/>convertido en progreso.</h2>
           <p>Seis piezas que se hablan entre sí para que estudiar sea ordenado, medible y, por fin, divertido.</p>
         </div>
         <div className="feat-grid" style={featStyles.grid}>

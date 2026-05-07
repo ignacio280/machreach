@@ -110,7 +110,7 @@ function HeroLeaderboard() {
           </div>
           <div>
             <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, display: "flex", alignItems: "center", gap: 6 }}>
-              Liga Diamante
+              Investigadores
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 10,
                 padding: "2px 6px", borderRadius: 5,
@@ -219,7 +219,6 @@ function Hero() {
               <span style={heroStyles.h1Highlight}>lata.</span>
             </h1>
             <p style={heroStyles.sub}>
-              Sincroniza Canvas, mide cada minuto que estudias, gana XP y compite con tu universidad.
               MachReach convierte tu semestre en un juego que <em style={{ color: "var(--ink)", fontStyle: "normal", fontWeight: 700, textDecoration: "underline wavy var(--brand)", textUnderlineOffset: 4 }}>sí quieres ganar</em>.
             </p>
             <div style={heroStyles.ctaRow}>

@@ -2,8 +2,8 @@
 
 Tiers:
   - free      : 1 quiz/day (max 30 q), 1 flashcard set/day (max 30 c).
-  - plus      : Unlimited AI generation, ad-free, smarter tutor, no MailHub.
-  - ultimate  : Everything Plus has + MailHub access.
+  - plus      : Unlimited AI generation, analytics, streak protection and cosmetics.
+  - ultimate  : Reserved for a future higher tier; locked for now.
 
 Storage: re-uses the existing `clients` table via `mail_preferences` JSON-blob
 column (already exists in the schema). Keys used:
@@ -49,12 +49,13 @@ PLANS = {
         "name": "Gratis",
         "price_usd_month": 0.00,
         "price_usd_year": 0.00,
-        "blurb": "Empieza con herramientas de estudio con IA diarias.",
+        "blurb": "Empieza con Focus, Canvas, cursos y herramientas IA limitadas.",
         "features": [
-            f"{FREE_DAILY_QUIZZES} quiz IA / día  (hasta {FREE_QUIZ_MAX_QUESTIONS} preguntas)",
-            f"{FREE_DAILY_FLASHCARD_SETS} set de tarjetas IA / día  (hasta {FREE_FLASHCARD_MAX_CARDS} tarjetas)",
-            "Temporizador, rachas, rankings, duelos, tienda",
-            "Intercambio comunitario (explorar + comprar apuntes)",
+            "Canvas, cursos, Focus, XP, monedas y rachas",
+            "Planilla de notas, ranking, amigos, tienda y marketplace",
+            f"{FREE_DAILY_QUIZZES} quiz IA / dia (hasta {FREE_QUIZ_MAX_QUESTIONS} preguntas)",
+            f"{FREE_DAILY_FLASHCARD_SETS} mazo de tarjetas IA / dia (hasta {FREE_FLASHCARD_MAX_CARDS} tarjetas)",
+            "1 congelador de racha guardado",
         ],
     },
     "plus": {
@@ -62,14 +63,17 @@ PLANS = {
         "name": "Plus",
         "price_usd_month": 4.99,
         "price_usd_year": 39.99,
-        "blurb": "Herramientas de estudio con IA ilimitadas.",
+        "blurb": "Para estudiantes que usan MachReach todas las semanas.",
         "features": [
-            "Quizzes y tarjetas IA ilimitados",
-            "Tarjetas / preguntas ilimitadas por generación",
+            "Quizzes IA ilimitados",
+            "Flashcards IA ilimitadas",
+            "Mas preguntas/tarjetas por generacion",
+            "Mas revisiones de ensayos",
+            "Analitica avanzada por curso y semana",
             f"{PLUS_MONTHLY_BONUS_COINS} monedas extra al mes",
-            "Streak Insurance+: 1 congelador de racha extra al mes",
-            "Insignia PLUS y cosméticos exclusivos",
-            "Analítica detallada y reportes exportables",
+            "Streak Insurance+: 1 reparacion de racha al mes",
+            "Mas capacidad de congeladores",
+            "Banners, flags e insignias exclusivas PLUS",
         ],
     },
     "ultimate": {
@@ -77,16 +81,17 @@ PLANS = {
         "name": "Ultimate",
         "price_usd_month": 9.99,
         "price_usd_year": 79.99,
-        "blurb": "Todo lo de Plus más herramientas de correo.",
+        "blurb": "Bloqueado por ahora. Lo abriremos cuando tenga valor real.",
         "features": [
             "Todo lo de Plus",
-            "Organización de correo",
-            "Respuesta de correo con IA",
-            "Soporte prioritario",
+            "Limites maximos de IA",
+            "Historial completo de analitica",
+            "Mas monedas, reparaciones y cosmeticos Ultimate",
+            "Early access a herramientas nuevas",
         ],
+        "locked": True,
     },
 }
-
 PLAN_ORDER = ["free", "plus", "ultimate"]
 
 

@@ -16,30 +16,29 @@ function Pricing() {
       name: "Free",
       tag: "Para probar",
       m: 0, y: 0,
-      blurb: "Lo justo para arrancar el semestre.",
-      features: ["Conectar 1 cuenta Canvas", "Modo Focus ilimitado", "Analítica básica de estudio", "Acceso a rankings", "5 quizzes / mes"],
+      blurb: "Lo justo para empezar a estudiar con estructura.",
+      features: ["Canvas, cursos y Focus", "XP, monedas, rachas y rankings", "Planilla de notas, amigos, tienda y marketplace", "1 quiz IA / dia", "1 mazo de flashcards IA / dia"],
       cta: "Empezar gratis", primary: false,
     },
     {
       key: "plus",
       name: "PLUS",
-      tag: "Más popular",
+      tag: "Mas popular",
       m: 4.99, y: 39.99,
       blurb: "Para los que estudian en serio cada semana.",
-      features: ["Todo lo de Free", "+150 monedas mensuales", "Quizzes ilimitados", "Cosméticos exclusivos PLUS", "Analítica avanzada por prueba", "Soporte prioritario"],
+      features: ["Todo lo de Free", "Quizzes IA ilimitados", "Flashcards IA ilimitadas", "Mas ensayos y analitica avanzada", "+300 monedas mensuales", "Streak Insurance+ y cosmeticos PLUS"],
       cta: "Subirme a PLUS", primary: true,
     },
     {
-      key: "pro",
-      name: "PRO",
-      tag: "Para tryhards",
+      key: "ultimate",
+      name: "Ultimate",
+      tag: "Bloqueado",
       m: 9.99, y: 79.99,
-      blurb: "Para quienes apuntan al top 1.",
-      features: ["Todo lo de PLUS", "+400 monedas mensuales", "Acceso a Liga Diamante", "Quizzes premium con IA avanzada", "Banners y badges PRO", "Estadísticas comparativas"],
-      cta: "Subirme a PRO", primary: false,
+      blurb: "Lo abriremos cuando tenga valor real.",
+      features: ["Todo lo de PLUS", "Limites maximos de IA", "Historial completo de analitica", "Mas monedas y reparaciones", "Cosmeticos Ultimate y early access"],
+      cta: "Bloqueado por ahora", primary: false, locked: true,
     },
   ];
-
   return (
     <section id="pricing">
       <div className="container">
@@ -146,13 +145,20 @@ function Pricing() {
                     </li>
                   ))}
                 </ul>
-        <a href="/register" className="btn btn-lg" style={{
+        {t.locked ? <button className="btn btn-lg" disabled style={{
+                  background: "var(--surface-2)",
+                  color: "var(--ink-3)",
+                  borderColor: "var(--line)",
+                  width: "100%",
+                  boxShadow: "none",
+                  cursor: "not-allowed",
+                }}>{t.cta}</button> : <a href="/register" className="btn btn-lg" style={{
                   background: t.primary ? "white" : "var(--ink)",
                   color: t.primary ? "var(--brand)" : "white",
                   borderColor: t.primary ? "white" : "var(--ink)",
                   width: "100%",
                   boxShadow: "0 4px 0 0 " + (t.primary ? "color-mix(in oklab, var(--ink) 30%, transparent)" : "color-mix(in oklab, var(--ink) 50%, var(--brand))"),
-                }}>{t.cta}</a>
+                }}>{t.cta}</a>}
               </div>
             );
           })}

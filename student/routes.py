@@ -3293,8 +3293,9 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        # Focus is the ONLY reward source now: 5 XP + 1 coin per 10 minutes.
-        # Quizzes, flashcards and duels are study/social tools, not faucets.
+        # Focus is the primary reward source: 5 XP + 1 coin per 10 minutes.
+        # Daily missions can add small XP bonuses, but quizzes, flashcards and
+        # duels remain study/social tools, not faucets.
         # Breaks aren't counted — `minutes` arrives study-only because the
         # frontend reports phaseWorkMinutes=0 for break phases.
         _focus_xp_awarded = 0
@@ -4619,16 +4620,16 @@ def register_student_routes(app, csrf, limiter):
   .mr-mission-cta {
     display: inline-flex; align-items: center; gap: 8px;
     padding: 14px 22px;
-    background: #1A1A1F; color: #FFF8E1;
+    background: linear-gradient(135deg, #FF7A3D, #FF9F5F); color: #FFFFFF;
     border-radius: 14px;
     font-weight: 800; font-size: 15px;
-    border: none;
-    box-shadow: 0 4px 0 rgba(0,0,0,.25), 0 8px 20px rgba(58,26,6,.25);
+    border: 1px solid #E65F20;
+    box-shadow: 0 4px 0 rgba(179,60,0,.35), 0 8px 20px rgba(255,122,61,.28);
     transition: transform .12s;
     text-decoration: none;
   }
   .mr-mission-cta:hover { transform: translateY(-1px); }
-  .mr-mission-cta:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,.25); }
+  .mr-mission-cta:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(179,60,0,.35); }
 
   .mr-quests-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; position: relative; z-index: 1; }
   @media (max-width: 720px) { .mr-quests-row { grid-template-columns: 1fr; } }
@@ -8567,7 +8568,12 @@ def register_student_routes(app, csrf, limiter):
                 failed.push(p);
                 continue;
               }}
-              if (result.saved !== false) {{
+              if (result.saved === false && result.reason === 'duplicate-phase') {{
+                savedCount += 1;
+                var dupMinutes = parseInt(payload.minutes || 0, 10) || 0;
+                minutesSaved += dupMinutes;
+                xpAwarded += Math.floor(dupMinutes * 5 / 10);
+              }} else if (result.saved !== false) {{
                 savedCount += 1;
                 xpAwarded += parseInt(result.xp_awarded || 0, 10) || 0;
                 minutesSaved += parseInt(result.minutes_saved || payload.minutes || 0, 10) || 0;
@@ -8641,7 +8647,9 @@ def register_student_routes(app, csrf, limiter):
           if (failed.length) {{
             if (btn) {{ btn.disabled = false; btn.textContent = focusText.retryClaim; }}
             var lblFail = document.getElementById('timer-label');
-            if (lblFail) lblFail.textContent = focusText.unsavedPrefix + failed.length + focusText.unsavedSuffix;
+            if (lblFail) lblFail.textContent = savedCount > 0
+              ? (focusText.claimedPrefix + xpAwarded + ' XP Â· ' + minutesSaved + focusText.minutesSavedSuffix + ' Â· ' + failed.length + focusText.unsavedSuffix)
+              : (focusText.unsavedPrefix + failed.length + focusText.unsavedSuffix);
             return;
           }}
 
@@ -21086,13 +21094,16 @@ No markdown, no code fences. ONLY JSON.
                 price = cfg.get("price_usd_month", 0)
                 price_html = "Gratis" if not price else f"${price:.2f}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mes</span>"
                 label_name = cfg.get("name", key.title())
+                locked = bool(cfg.get("locked"))
                 if is_current:
                     btn = '<button class="btn btn-sm" disabled style="width:100%;background:#10b981;color:#fff;border:none;">Plan actual</button>'
+                elif locked:
+                    btn = '<button class="btn btn-sm" disabled style="width:100%;background:#EDE7DA;color:#77756F;border:1px solid #D8CFBD;">Bloqueado por ahora</button>'
                 elif key == "free":
                     btn = f'<button class="btn btn-sm btn-outline" style="width:100%;" onclick="changeTier(\'{key}\')">Bajar a Gratis</button>'
                 else:
                     btn = f'<button class="btn btn-sm btn-primary" style="width:100%;" onclick="changeTier(\'{key}\')">Mejorar a {_esc(label_name)}</button>'
-                badge = '<div style="position:absolute;top:10px;right:10px;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;">ACTIVO</div>' if is_current else ""
+                badge = '<div style="position:absolute;top:10px;right:10px;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;">ACTIVO</div>' if is_current else ('<div style="position:absolute;top:10px;right:10px;background:#EDE7DA;color:#77756F;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;">PRONTO</div>' if locked else "")
                 sub_cards.append(
                     f'<div style="position:relative;background:var(--card);border:2px solid {border};border-radius:16px;padding:18px;display:flex;flex-direction:column;">'
                     f'{badge}'
@@ -21205,14 +21216,14 @@ No markdown, no code fences. ONLY JSON.
 {sdb.FLAG_ANIM_CSS}</style>
         <div class="shop-cd">
         <h1 style="margin-bottom:6px;">\U0001f6d2 Tienda</h1>
-        <p style="color:var(--text-muted);margin:0 0 24px;">Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes, tarjetas y duelos.</p>
+        <p style="color:var(--text-muted);margin:0 0 24px;">Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque.</p>
         <style>
           .shop-cd {{ --card:#FFFFFF; --card-bg:#FFFFFF; --bg:#F4F1EA; --text:#1A1A1F; --text-muted:#6E6A60; --border:#E2DCCC; font-family:"Plus Jakarta Sans",system-ui,sans-serif; color:#1A1A1F; }}
           .shop-cd h1 {{ font-family:"Fraunces",Georgia,serif;font-size:clamp(42px,6vw,72px);line-height:.92;letter-spacing:-.05em;font-weight:600;color:#1A1A1F; }}
           .shop-cd .card, .shop-cd .stat-card {{ background:#FFFFFF!important;border:1px solid #E2DCCC!important;border-radius:22px!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04)!important;color:#1A1A1F!important; }}
           .shop-cd .card-header {{ border-bottom:1px solid #E2DCCC!important; }}
           .shop-cd .card-header h2 {{ font-family:"Plus Jakarta Sans",system-ui,sans-serif!important;font-size:16px!important;letter-spacing:0!important;font-weight:900!important;color:#1A1A1F!important; }}
-          .shop-cd .btn-primary {{ background:#1A1A1F!important;color:#FFF8E1!important;border-color:#1A1A1F!important;box-shadow:0 4px 0 rgba(0,0,0,.16)!important;border-radius:999px!important; }}
+          .shop-cd .btn-primary {{ background:linear-gradient(135deg,#FF7A3D,#FF9F5F)!important;color:#FFFFFF!important;border:1px solid #E65F20!important;box-shadow:0 4px 0 rgba(179,60,0,.28)!important;border-radius:999px!important; }}
           .shop-cd .btn-outline, .shop-cd .btn-ghost {{ background:#FBF8F0!important;color:#1A1A1F!important;border:1px solid #D8D0BE!important;border-radius:999px!important; }}
           .shop-cd [style*="background:var(--card)"] {{ background:#FFFFFF!important; }}
           .shop-cd [style*="color:#334155"] {{ color:#5C5C66!important; }}
@@ -21810,6 +21821,8 @@ No markdown, no code fences. ONLY JSON.
             from student import subscription as _sub
             if tier not in _sub.PLANS:
                 return jsonify(ok=False, error="Unknown plan"), 400
+            if _sub.PLANS.get(tier, {}).get("locked"):
+                return jsonify(ok=False, error="Este plan todavia esta bloqueado."), 403
             cid = _cid()
             if tier == "free":
                 # Cancel the active LS subscription if we have its id stashed.

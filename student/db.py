@@ -3104,13 +3104,30 @@ def get_note_fork_count(author_id: int) -> int:
 # -- Daily Quests --------------------------------------------
 
 QUEST_POOL = [
-    {"key": "focus_25",    "label": "Enfócate 25 minutos",            "target": 25,  "xp": 0,  "metric": "focus_minutes"},
-    {"key": "focus_60",    "label": "Enfócate 60 minutos",            "target": 60,  "xp": 0,  "metric": "focus_minutes"},
-    {"key": "session_3",   "label": "Completa 3 sesiones de estudio", "target": 3,   "xp": 0,  "metric": "sessions_completed"},
-    {"key": "exam_review_15","label": "15 min repasando para una prueba", "target": 15, "xp": 0, "metric": "focus_minutes"},
+    {"key": "focus_25",    "label": "Enfocate 25 minutos",            "target": 25, "xp": 10, "metric": "focus_minutes"},
+    {"key": "focus_60",    "label": "Enfocate 60 minutos",            "target": 60, "xp": 25, "metric": "focus_minutes"},
+    {"key": "session_3",   "label": "Completa 3 sesiones de estudio", "target": 3,  "xp": 20, "metric": "sessions_completed"},
+    {"key": "exam_review_15", "label": "15 min repasando para una prueba", "target": 15, "xp": 8, "metric": "focus_minutes"},
 ]
 
-QUEST_BUNDLE_BONUS_XP = 0  # quests track habits; Focus grants rewards
+QUEST_BUNDLE_BONUS_XP = 15
+_QUEST_XP_BY_KEY = {q["key"]: int(q.get("xp") or 0) for q in QUEST_POOL}
+
+
+def _sync_daily_quest_rewards(client_id: int, quest_date) -> None:
+    """Keep already-created daily quests aligned with the current reward table."""
+    try:
+        with get_db() as db:
+            for key, xp in _QUEST_XP_BY_KEY.items():
+                _exec(
+                    db,
+                    "UPDATE student_daily_quests SET xp_reward = %s "
+                    "WHERE client_id = %s AND quest_date = %s AND quest_key = %s "
+                    "AND (xp_reward IS NULL OR xp_reward <> %s)",
+                    (xp, client_id, quest_date, key, xp),
+                )
+    except Exception:
+        pass
 
 
 def get_or_create_daily_quests(client_id: int) -> list[dict]:
@@ -3133,7 +3150,13 @@ def get_or_create_daily_quests(client_id: int) -> list[dict]:
                 (client_id, today_s),
             )
     if rows:
-        return [dict(r) for r in rows]
+        _sync_daily_quest_rewards(client_id, today if _USE_PG else today_s)
+        fixed = []
+        for r in rows:
+            d = dict(r)
+            d["xp_reward"] = _QUEST_XP_BY_KEY.get(d.get("quest_key"), int(d.get("xp_reward") or 0))
+            fixed.append(d)
+        return fixed
     # Pick 3 distinct quests deterministically per (client, day)
     rng = random.Random(f"{client_id}-{today_s}")
     picks = rng.sample(QUEST_POOL, 3)
@@ -3191,7 +3214,13 @@ def progress_quests_by_metric(client_id: int, metric: str, amount: int = 1) -> l
                     + " WHERE id = %s",
                     (new_prog, row["id"]),
                 )
-                newly_completed.append(dict(row, progress=new_prog, completed_at="just now"))
+                reward = int(row.get("xp_reward") or _QUEST_XP_BY_KEY.get(row["quest_key"], 0) or 0)
+                if reward > 0:
+                    try:
+                        award_xp(client_id, "daily_quest", reward, f"Quest completed: {row['quest_key']}")
+                    except Exception:
+                        pass
+                newly_completed.append(dict(row, progress=new_prog, completed_at="just now", xp_reward=reward))
             else:
                 _exec(
                     db,
@@ -3226,6 +3255,8 @@ def progress_quests_by_metric(client_id: int, metric: str, amount: int = 1) -> l
                         "INSERT INTO student_daily_quest_bundles (client_id, quest_date) VALUES (%s, %s)",
                         (client_id, today if _USE_PG else today_s),
                     )
+                    if QUEST_BUNDLE_BONUS_XP > 0:
+                        award_xp(client_id, "daily_quest_bundle", QUEST_BUNDLE_BONUS_XP, "Completed all daily missions")
                 except Exception:
                     pass
     return newly_completed
