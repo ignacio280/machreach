@@ -5394,8 +5394,6 @@ def register_student_routes(app, csrf, limiter):
             _stats = _time_by_course.get(_course_id) or {}
             _minutes = int(_stats.get("minutes") or 0)
             _sessions = int(_stats.get("sessions") or 0)
-            _pct = max(8, min(100, int((_minutes / 600) * 100))) if _minutes else 8
-            _state_cls = " warn" if _pct < 40 else (" good" if _pct >= 75 else "")
             _next_label = "Sin evaluaciones próximas"
             _urgent = ""
             _today_d = datetime.now().date()
@@ -5427,14 +5425,12 @@ def register_student_routes(app, csrf, limiter):
               <h2 class="ccard-name">{_esc(c.get("name") or "Curso")}</h2>
               <div class="ccard-prof">Canvas / manual · {_sessions} sesiones registradas</div>
               <div class="ccard-stats">
-                <div class="ccs{_state_cls}"><div class="ccs-n">{_pct}%</div><div class="ccs-l">Avance</div></div>
                 <div class="ccs"><div class="ccs-n">{_minutes//60}h {_minutes%60}m</div><div class="ccs-l">Estudiado</div></div>
                 <div class="ccs"><div class="ccs-n">{len(_exams)}</div><div class="ccs-l">Evaluaciones</div></div>
               </div>
-              <div class="ccard-bar"><div class="ccard-fill{_state_cls}" style="width:{_pct}%"></div></div>
               <div class="ccard-foot">
                 <span class="ccard-next{_urgent}">↗ {_next_label}</span>
-                <button class="ccard-go{_state_cls}" onclick="toggleCourse({_course_id})" type="button">Ver detalles →</button>
+                <button class="ccard-go" onclick="toggleCourse({_course_id})" type="button">Ver detalles →</button>
               </div>
               <div class="course-detail-card" id="detail-{_course_id}" style="display:none;">
                 <div class="course-benchmark" id="bench-{_course_id}"></div>
@@ -5539,15 +5535,10 @@ def register_student_routes(app, csrf, limiter):
         .ccard-menu {{ background:transparent;border:0;cursor:pointer;color:#94939C;font-size:20px;line-height:1; }}
         .ccard-name {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:22px;margin:6px 0 4px;line-height:1.15;letter-spacing:-.015em;color:#1A1A1F; }}
         .ccard-prof {{ font-size:12px;color:#94939C;margin-bottom:16px; }}
-        .ccard-stats {{ display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px; }}
+        .ccard-stats {{ display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px; }}
         .ccs {{ background:#FBF8F0;border-radius:12px;padding:10px 8px;text-align:center;min-width:0; }}
         .ccs-n {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:18px;letter-spacing:-.02em;color:#1A1A1F;white-space:nowrap; }}
         .ccs-l {{ font-size:10px;color:#94939C;margin-top:2px; }}
-        .ccs.warn .ccs-n {{ color:#FF7A3D; }}.ccs.good .ccs-n {{ color:#10B981; }}
-        .ccard-bar {{ height:6px;background:#FBF8F0;border-radius:999px;overflow:hidden;margin-bottom:14px; }}
-        .ccard-fill {{ height:100%;border-radius:999px;background:#7B61FF; }}
-        .ccard-fill.warn {{ background:#FF7A3D; }}.ccard-fill.good {{ background:#10B981; }}
-        .ccard.cs .ccard-fill {{ background:#3B82F6; }}.ccard.mat .ccard-fill {{ background:#EC4899; }}.ccard.fil .ccard-fill {{ background:#10B981; }}.ccard.fis .ccard-fill {{ background:#FF7A3D; }}
         .ccard-foot {{ display:flex;justify-content:space-between;align-items:center;gap:12px; }}
         .ccard-next {{ font-size:12px;font-weight:700;color:#5C5C66; }}
         .ccard-next.urgent {{ color:#FF7A3D;font-weight:900; }}
