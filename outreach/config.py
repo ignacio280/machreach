@@ -4,6 +4,7 @@ Configuration — loads environment, defines constants.
 from __future__ import annotations
 
 import os
+import warnings
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -65,8 +66,13 @@ SYSTEM_SMTP_PASSWORD = os.getenv("SYSTEM_SMTP_PASSWORD", "") or os.getenv("SMTP_
 # Encryption key for email account passwords at rest (Fernet, 32-byte base64)
 _enc_key = os.getenv("ENCRYPTION_KEY", "")
 if not _enc_key and os.getenv("RENDER", ""):
-    raise RuntimeError("ENCRYPTION_KEY must be set in production")
-ENCRYPTION_KEY = _enc_key or "RGV2LWVuY3J5cHRpb24ta2V5LW5vdC1mb3ItcHJvZA=="  # dev-only placeholder
+    warnings.warn(
+        "ENCRYPTION_KEY is not set; deriving a fallback from SECRET_KEY so the app can start. "
+        "Set ENCRYPTION_KEY in Render for stable token/password encryption.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+ENCRYPTION_KEY = _enc_key or (f"{SECRET_KEY}:machreach-encryption-fallback" if os.getenv("RENDER", "") else "RGV2LWVuY3J5cHRpb24ta2V5LW5vdC1mb3ItcHJvZA==")
 
 # Sending limits
 DELAY_BETWEEN_EMAILS_SEC = int(os.getenv("DELAY_BETWEEN_EMAILS_SEC", "5"))  # seconds between sends
