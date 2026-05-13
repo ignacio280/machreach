@@ -2,9 +2,9 @@
 
 :root {
   /* type */
-  --font-display: "Bricolage Grotesque", "Nunito", system-ui, sans-serif;
-  --font-body: "Nunito", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Bricolage Grotesque", sans-serif;
+  --font-body: "Nunito", sans-serif;
+  --font-mono: "Nunito", sans-serif;
 
   /* base — light theme by default */
   --bg: oklch(0.985 0.005 80);

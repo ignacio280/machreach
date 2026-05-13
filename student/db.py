@@ -3770,8 +3770,8 @@ BANNERS = {
                    "animated": True, "anim_class": "bnr-anim-matrix",
                    "css": ("url('data:image/svg+xml;utf8,"
                            "<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2284%22 height=%22480%22>"
-                           "<style>.g{font:bold 18px ui-monospace,Menlo,monospace;fill:%2322c55e}"
-                           ".h{font:bold 18px ui-monospace,Menlo,monospace;fill:%23dcfce7}</style>"
+                           "<style>.g{font:bold 18px Nunito,sans-serif;fill:%2322c55e}"
+                           ".h{font:bold 18px Nunito,sans-serif;fill:%23dcfce7}</style>"
                            "<text class=%22h%22 x=%228%22 y=%2218%22>1</text>"
                            "<text class=%22g%22 x=%228%22 y=%2248%22>0</text>"
                            "<text class=%22g%22 x=%228%22 y=%2278%22>1</text>"
@@ -4068,8 +4068,8 @@ FLAGS = {
                         "animated": True, "anim_class": "flag-anim-matrix",
                         "css": ("url('data:image/svg+xml;utf8,"
                                 "<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2284%22 height=%22120%22>"
-                                "<style>.g{font:bold 14px ui-monospace,Menlo,monospace;fill:%2322c55e}"
-                                ".h{font:bold 14px ui-monospace,Menlo,monospace;fill:%23dcfce7}</style>"
+                                "<style>.g{font:bold 14px Nunito,sans-serif;fill:%2322c55e}"
+                                ".h{font:bold 14px Nunito,sans-serif;fill:%23dcfce7}</style>"
                                 "<text class=%22h%22 x=%226%22 y=%2214%22>1</text>"
                                 "<text class=%22g%22 x=%226%22 y=%2238%22>0</text>"
                                 "<text class=%22g%22 x=%226%22 y=%2262%22>1</text>"

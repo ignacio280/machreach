@@ -1292,13 +1292,13 @@ def register_student_routes(app, csrf, limiter):
 
         body = f"""
         <style>
-        .quiz-cd {{ --ink:#1A1A1F; --paper:#F4F1EA; --card:#FFFFFF; --line:#E2DCCC; --muted:#77756F; --accent:#FF7A3D; --pink:#EF5DA8; font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink); }}
-        .quiz-cd h1 {{ font-family:"Fraunces",Georgia,serif!important;font-size:clamp(44px,6vw,76px)!important;line-height:.9!important;margin:0!important;font-weight:600!important;letter-spacing:-.055em!important; }}
+        .quiz-cd {{ --ink:#1A1A1F; --paper:#F4F1EA; --card:#FFFFFF; --line:#E2DCCC; --muted:#77756F; --accent:#FF7A3D; --pink:#EF5DA8; font-family:'Nunito',sans-serif;color:var(--ink); }}
+        .quiz-cd h1 {{ font-family:"Bricolage Grotesque",sans-serif!important;font-size:clamp(44px,6vw,76px)!important;line-height:.9!important;margin:0!important;font-weight:600!important;letter-spacing:-.055em!important; }}
         .quiz-cd .btn-pop {{ background:#1A1A1F;color:#FFF8E1;border:0;border-radius:999px;padding:12px 18px;font-weight:900;box-shadow:0 4px 0 rgba(0,0,0,.18);cursor:pointer;text-decoration:none; }}
         .quiz-cd .btn-pop.accent {{ background:#FF7A3D;color:#1A1A1F; }}
         .quiz-hero {{ background:linear-gradient(135deg,#FF7A3D,#EF5DA8);color:#fff;border-radius:22px;padding:26px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:18px;box-shadow:0 10px 30px rgba(255,122,61,.20); }}
         .qh-eye {{ font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;opacity:.85; }}
-        .qh-title {{ font-family:"Fraunces",Georgia,serif;font-size:34px;line-height:1;margin:6px 0;font-weight:600;letter-spacing:-.04em; }}
+        .qh-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:34px;line-height:1;margin:6px 0;font-weight:600;letter-spacing:-.04em; }}
         .qh-sub {{ margin:0;font-size:14px;opacity:.9; }}
         .quiz-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:14px; }}
         .qcard {{ background:#fff;border:1px solid #E2DCCC;border-radius:16px;padding:18px;position:relative;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04);display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:transform .16s,box-shadow .16s; }}
@@ -1446,7 +1446,7 @@ def register_student_routes(app, csrf, limiter):
         .wa-page {{ --warm-bg:#F4F1EA; --warm-card:#FFFFFF; --warm-line:#E2DCCC; --warm-ink:#1A1A1F; --warm-muted:#77756F; --warm-orange:#FF7A3D; --warm-green:#2E9266; display:flex; flex-direction:column; gap:18px; }}
         .wa-head {{ display:flex; justify-content:space-between; align-items:flex-end; gap:18px; flex-wrap:wrap; }}
         .wa-eye {{ color:var(--warm-orange); font-size:12px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; }}
-        .wa-head h1 {{ margin:6px 0 0; font-family:"Fraunces",Georgia,serif; font-size:clamp(38px,4vw,60px); line-height:.98; color:var(--warm-ink); letter-spacing:-.04em; font-weight:650; }}
+        .wa-head h1 {{ margin:6px 0 0; font-family:'Bricolage Grotesque',sans-serif; font-size:clamp(38px,4vw,60px); line-height:.98; color:var(--warm-ink); letter-spacing:-.04em; font-weight:650; }}
         .wa-head p {{ margin:8px 0 0; color:var(--warm-muted); max-width:720px; line-height:1.5; }}
         .wa-week-nav {{ display:flex; align-items:center; gap:10px; background:var(--warm-card); border:1px solid var(--warm-line); border-radius:999px; padding:8px; box-shadow:0 14px 36px rgba(26,26,31,.08); }}
         .wa-week-nav button {{ border:1px solid var(--warm-line); border-radius:999px; background:#FFF8EE; color:var(--warm-ink); width:38px; height:38px; font-weight:900; cursor:pointer; }}
@@ -1456,10 +1456,10 @@ def register_student_routes(app, csrf, limiter):
         .wa-stat,.wa-card {{ background:var(--warm-card); border:1px solid var(--warm-line); border-radius:24px; box-shadow:0 18px 48px rgba(26,26,31,.07); }}
         .wa-stat {{ padding:18px; }}
         .wa-stat span {{ color:var(--warm-muted); font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
-        .wa-stat strong {{ display:block; margin-top:8px; font-family:"Fraunces",Georgia,serif; font-size:34px; line-height:1; color:var(--warm-ink); font-weight:650; }}
+        .wa-stat strong {{ display:block; margin-top:8px; font-family:'Bricolage Grotesque',sans-serif; font-size:34px; line-height:1; color:var(--warm-ink); font-weight:650; }}
         .wa-grid {{ display:grid; grid-template-columns:minmax(0,1.35fr) minmax(330px,.85fr); gap:18px; align-items:start; }}
         .wa-card {{ padding:22px; overflow:hidden; }}
-        .wa-card h2 {{ margin:0; font-family:"Fraunces",Georgia,serif; font-size:24px; color:var(--warm-ink); font-weight:650; }}
+        .wa-card h2 {{ margin:0; font-family:'Bricolage Grotesque',sans-serif; font-size:24px; color:var(--warm-ink); font-weight:650; }}
         .wa-card p {{ margin:6px 0 18px; color:var(--warm-muted); font-size:14px; }}
         .wa-line-wrap {{ width:100%; min-height:300px; }}
         .wa-line-svg {{ width:100%; height:300px; overflow:visible; }}
@@ -3914,16 +3914,16 @@ def register_student_routes(app, csrf, limiter):
   <style>
     :root { --bg:#F4F1EA; --paper:#FFFDF8; --ink:#1A1A1F; --muted:#77756F; --line:#E2DCCC; --orange:#FF7A3D; }
     * { box-sizing:border-box; }
-    body { margin:0; background:var(--bg); color:var(--ink); font-family:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,sans-serif; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:'Nunito',sans-serif; }
     .wrap { max-width:1280px; margin:0 auto; padding:34px 28px 80px; }
     .top { display:flex; justify-content:space-between; gap:20px; align-items:end; flex-wrap:wrap; margin-bottom:26px; }
     .eyebrow { color:var(--orange); font-size:12px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; margin-bottom:8px; }
-    h1 { margin:0; font-family:Georgia,serif; font-size:clamp(44px,6vw,78px); line-height:.92; letter-spacing:-.05em; font-weight:600; }
+    h1 { margin:0; font-family:'Bricolage Grotesque',sans-serif; font-size:clamp(44px,6vw,78px); line-height:.92; letter-spacing:-.05em; font-weight:600; }
     .sub { color:var(--muted); margin:12px 0 0; max-width:720px; line-height:1.55; }
     .tabs { display:flex; gap:10px; position:sticky; top:0; background:rgba(244,241,234,.9); backdrop-filter:blur(10px); padding:12px 0; z-index:5; }
     .tabs a { text-decoration:none; color:var(--ink); border:1px solid var(--line); background:#fff; padding:10px 16px; border-radius:999px; font-weight:900; }
     section { margin-top:30px; }
-    h2 { font-family:Georgia,serif; font-size:34px; letter-spacing:-.035em; margin:0 0 16px; }
+    h2 { font-family:'Bricolage Grotesque',sans-serif; font-size:34px; letter-spacing:-.035em; margin:0 0 16px; }
     .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; }
     .card { background:#fff; border:1px solid var(--line); border-radius:18px; overflow:hidden; box-shadow:0 1px 0 rgba(20,18,30,.04),0 12px 32px rgba(20,18,30,.06); }
     .banner-preview { height:118px; position:relative; overflow:hidden; background:#111827; }
@@ -3931,7 +3931,7 @@ def register_student_routes(app, csrf, limiter):
     .flag-fade { position:absolute; inset:0; -webkit-mask-image:linear-gradient(to right, rgba(0,0,0,.95) 0%, rgba(0,0,0,.65) 44%, rgba(0,0,0,.18) 76%, transparent 100%); mask-image:linear-gradient(to right, rgba(0,0,0,.95) 0%, rgba(0,0,0,.65) 44%, rgba(0,0,0,.18) 76%, transparent 100%); }
     .meta { padding:13px 14px 15px; }
     .name { font-weight:950; margin-bottom:5px; }
-    .key { color:var(--muted); font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; }
+    .key { color:var(--muted); font-size:12px; font-family:'Nunito',sans-serif; word-break:break-all; }
     .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
     .chip { border:1px solid var(--line); border-radius:999px; padding:4px 8px; color:var(--muted); font-size:11px; font-weight:850; background:var(--paper); }
     .chip.hot { color:#9A3412; border-color:#FDBA74; background:#FFF7ED; }
@@ -4581,10 +4581,10 @@ def register_student_routes(app, csrf, limiter):
         # =============================================================
         _mr_css = """
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Nunito:wght@400;500;600;700;800;900&display=swap');
 
-  .mr-home { font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif; color: #1A1A1F; }
-  .mr-home .serif, .mr-home h1, .mr-home h2 { font-family: "Fraunces", Georgia, serif; letter-spacing: -0.02em; }
+  .mr-home { font-family: "Nunito", sans-serif; color: #1A1A1F; }
+  .mr-home .serif, .mr-home h1, .mr-home h2 { font-family: "Bricolage Grotesque", sans-serif; letter-spacing: -0.02em; }
   .mr-home, .mr-home * { box-sizing: border-box; }
   .mr-home button { font: inherit; color: inherit; cursor: pointer; }
   .mr-home a { color: inherit; text-decoration: none; }
@@ -4671,7 +4671,7 @@ def register_student_routes(app, csrf, limiter):
   .mr-stat-card.tilted .mr-stat-label { color: rgba(255,255,255,0.8); }
   .mr-stat-card.tilted .mr-stat-sub { color: rgba(255,255,255,0.85); }
   .mr-stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94939C; }
-  .mr-stat-value { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 36px; letter-spacing: -0.03em; line-height: 1; margin-top: 8px; color: inherit; }
+  .mr-stat-value { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 36px; letter-spacing: -0.03em; line-height: 1; margin-top: 8px; color: inherit; }
   .mr-stat-sub { font-size: 12px; color: #5C5C66; margin-top: 8px; }
   .mr-stat-sub .up { color: #2E9266; font-weight: 700; }
   .mr-stat-deco { position: absolute; right: -10px; bottom: -10px; font-size: 64px; opacity: 0.12; pointer-events: none; }
@@ -4691,7 +4691,7 @@ def register_student_routes(app, csrf, limiter):
   .mr-sess.done .mr-sess-topic { text-decoration: line-through; }
   .mr-sess-check { width: 22px; height: 22px; border: 2px solid #E2DCCC; border-radius: 7px; flex-shrink: 0; display: grid; place-items: center; background: #FFFFFF; cursor: pointer; transition: all .15s; padding: 0; }
   .mr-sess.done .mr-sess-check { background: #2E9266; border-color: #2E9266; color: #fff; }
-  .mr-sess-time { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 18px; color: #5C5C66; width: 56px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .mr-sess-time { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 18px; color: #5C5C66; width: 56px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
   .mr-sess-body { flex: 1; min-width: 0; }
   .mr-sess-course { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 999px; margin-bottom: 4px; background: #ECE6FB; color: #5B4694; }
   .mr-sess-topic { font-weight: 700; font-size: 14px; color: #1A1A1F; }
@@ -4735,14 +4735,14 @@ def register_student_routes(app, csrf, limiter):
   .mr-exam-day { width: 56px; flex-shrink: 0; border-radius: 12px; background: #1A1A1F; color: #FFF8E1; text-align: center; padding: 8px 4px; line-height: 1; }
   .mr-exam-day.urgent { background: #E04A4A; }
   .mr-exam-day.warn { background: #FF7A3D; }
-  .mr-exam-day .d-num { font-family: "Fraunces", Georgia, serif; font-size: 26px; font-weight: 600; }
+  .mr-exam-day .d-num { font-family: "Bricolage Grotesque", sans-serif; font-size: 26px; font-weight: 600; }
   .mr-exam-day .d-mon { font-size: 10px; text-transform: uppercase; font-weight: 700; opacity: 0.75; margin-top: 2px; letter-spacing: 0.05em; }
   .mr-exam-body { flex: 1; min-width: 0; }
   .mr-exam-title { font-weight: 700; font-size: 14px; color: #1A1A1F; }
   .mr-exam-meta { font-size: 12px; color: #94939C; margin-top: 2px; }
-  .mr-exam-cd { flex-shrink: 0; font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 18px; color: #1A1A1F; text-align: right; line-height: 1; }
+  .mr-exam-cd { flex-shrink: 0; font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 18px; color: #1A1A1F; text-align: right; line-height: 1; }
   .mr-exam-cd.urgent { color: #E04A4A; }
-  .mr-exam-cd small { display: block; font-size: 10px; color: #94939C; font-family: "Plus Jakarta Sans", sans-serif; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-top: 2px; }
+  .mr-exam-cd small { display: block; font-size: 10px; color: #94939C; font-family: "Nunito", sans-serif; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-top: 2px; }
 
   /* ── RIGHT COLUMN ── */
   .mr-right { display: flex; flex-direction: column; gap: 18px; }
@@ -4751,22 +4751,22 @@ def register_student_routes(app, csrf, limiter):
   .mr-league-card { background: linear-gradient(160deg, #5B4694 0%, #4A3470 100%); color: #fff; border-radius: 18px; padding: 22px; position: relative; overflow: hidden; }
   .mr-league-card::before { content: ""; position: absolute; left: -30px; bottom: -30px; width: 180px; height: 180px; background: radial-gradient(circle, rgba(255,255,255,0.15), transparent 70%); border-radius: 50%; pointer-events: none; }
   .mr-league-eye { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; }
-  .mr-league-name { font-family: "Fraunces", Georgia, serif; font-size: 24px; font-weight: 600; margin-top: 2px; display: flex; align-items: center; gap: 8px; color: #fff; }
+  .mr-league-name { font-family: "Bricolage Grotesque", sans-serif; font-size: 24px; font-weight: 600; margin-top: 2px; display: flex; align-items: center; gap: 8px; color: #fff; }
   .mr-league-rank { display: flex; align-items: baseline; gap: 6px; margin-top: 14px; position: relative; z-index: 1; }
-  .mr-league-rank-num { font-family: "Fraunces", Georgia, serif; font-size: 44px; font-weight: 600; line-height: 1; color: #fff; }
+  .mr-league-rank-num { font-family: "Bricolage Grotesque", sans-serif; font-size: 44px; font-weight: 600; line-height: 1; color: #fff; }
   .mr-league-rank-of { font-size: 13px; opacity: 0.7; }
   .mr-league-promo { margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.15); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; gap: 8px; position: relative; z-index: 1; }
   .mr-mini-board { margin-top: 14px; display: flex; flex-direction: column; gap: 4px; position: relative; z-index: 1; }
   .mr-lmrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255,255,255,0.08); border-radius: 10px; font-size: 13px; }
   .mr-lmrow.me { background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.3); }
-  .mr-lmrow .lm-rank { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 14px; width: 22px; text-align: center; opacity: 0.9; }
+  .mr-lmrow .lm-rank { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 14px; width: 22px; text-align: center; opacity: 0.9; }
   .mr-lmrow .lm-rank.gold { color: #F4B73A; }
   .mr-lmrow .lm-av { width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #fff; }
   .mr-lmrow .lm-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mr-lmrow .lm-xp { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12px; opacity: 0.95; }
 
   /* streak */
-  .mr-streak-num { font-family: "Fraunces", Georgia, serif; font-size: 42px; font-weight: 600; color: #FF7A3D; line-height: 1; letter-spacing: -0.03em; }
+  .mr-streak-num { font-family: "Bricolage Grotesque", sans-serif; font-size: 42px; font-weight: 600; color: #FF7A3D; line-height: 1; letter-spacing: -0.03em; }
   .mr-heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
   .mr-heat-cell { aspect-ratio: 1; border-radius: 5px; background: #EDE7DA; }
   .mr-heat-cell.l1 { background: #F8E2C9; }
@@ -4778,7 +4778,7 @@ def register_student_routes(app, csrf, limiter):
   .mr-week-labels span { font-size: 9px; color: #94939C; text-align: center; font-weight: 700; }
   .mr-streak-row { display: flex; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #E2DCCC; }
   .mr-streak-row > div { flex: 1; }
-  .mr-srn { font-family: "Fraunces", Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1; color: #FF7A3D; }
+  .mr-srn { font-family: "Bricolage Grotesque", sans-serif; font-size: 22px; font-weight: 600; line-height: 1; color: #FF7A3D; }
   .mr-srl { font-size: 10px; color: #94939C; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-top: 4px; }
 
   /* friends */
@@ -5516,7 +5516,7 @@ def register_student_routes(app, csrf, limiter):
         <style>
         .page-head-cd {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px; }}
         .page-eyebrow-cd {{ font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7B61FF; }}
-        .page-title-cd {{ margin:4px 0 0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .page-title-cd {{ margin:4px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
         .page-actions-cd {{ display:flex;align-items:center;gap:10px;flex-wrap:wrap; }}
         .btn-pop-cd {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:10px 16px;border-radius:999px;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center; }}
         .canvas-banner {{ background:linear-gradient(135deg,#F0ECFF,#FBF8F0);border:1px solid #E2DCCC;border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:16px;margin-bottom:18px;box-shadow:0 8px 24px rgba(20,18,30,.05); }}
@@ -5533,11 +5533,11 @@ def register_student_routes(app, csrf, limiter):
         .ccard-head {{ display:flex;justify-content:space-between;align-items:center; }}
         .ccard-code {{ font-size:11px;font-weight:900;color:#94939C;letter-spacing:.08em;text-transform:uppercase; }}
         .ccard-menu {{ background:transparent;border:0;cursor:pointer;color:#94939C;font-size:20px;line-height:1; }}
-        .ccard-name {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:22px;margin:6px 0 4px;line-height:1.15;letter-spacing:-.015em;color:#1A1A1F; }}
+        .ccard-name {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:22px;margin:6px 0 4px;line-height:1.15;letter-spacing:-.015em;color:#1A1A1F; }}
         .ccard-prof {{ font-size:12px;color:#94939C;margin-bottom:16px; }}
         .ccard-stats {{ display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px; }}
         .ccs {{ background:#FBF8F0;border-radius:12px;padding:10px 8px;text-align:center;min-width:0; }}
-        .ccs-n {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:18px;letter-spacing:-.02em;color:#1A1A1F;white-space:nowrap; }}
+        .ccs-n {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:18px;letter-spacing:-.02em;color:#1A1A1F;white-space:nowrap; }}
         .ccs-l {{ font-size:10px;color:#94939C;margin-top:2px; }}
         .ccard-foot {{ display:flex;justify-content:space-between;align-items:center;gap:12px; }}
         .ccard-next {{ font-size:12px;font-weight:700;color:#5C5C66; }}
@@ -5986,31 +5986,31 @@ def register_student_routes(app, csrf, limiter):
 
         content = f"""
         <style>
-        .exams-cd {{ max-width:1180px;margin:0 auto 80px;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:#1A1A1F; }}
+        .exams-cd {{ max-width:1180px;margin:0 auto 80px;font-family:'Nunito',sans-serif;color:#1A1A1F; }}
         .ex-head {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:22px; }}
         .ex-kicker {{ font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#009B72;margin-bottom:8px; }}
-        .ex-title {{ font-family:"Fraunces",Georgia,serif;font-size:clamp(42px,6vw,72px);line-height:.92;margin:0;font-weight:600;letter-spacing:-.05em; }}
+        .ex-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(42px,6vw,72px);line-height:.92;margin:0;font-weight:600;letter-spacing:-.05em; }}
         .ex-title em {{ color:#FF7A3D;font-style:italic; }}
         .ex-sub {{ color:#6E6A60;font-size:15px;margin:12px 0 0;max-width:620px;line-height:1.6; }}
         .ex-head a {{ background:#1A1A1F;color:#FFF8E1;text-decoration:none;border-radius:999px;padding:12px 18px;font-weight:800;box-shadow:0 4px 0 rgba(0,0,0,.16);white-space:nowrap; }}
         .urg-strip {{ display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0 26px; }}
         .urg-card {{ background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:18px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 8px rgba(20,18,30,.04); }}
         .urg-card .lab {{ font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#77756F;margin-bottom:10px; }}
-        .urg-card .num {{ font-family:"Fraunces",Georgia,serif;font-size:42px;line-height:1;font-weight:600; }}
+        .urg-card .num {{ font-family:'Bricolage Grotesque',sans-serif;font-size:42px;line-height:1;font-weight:600; }}
         .urg-card.hot {{ background:#2C211E;color:#FFF8E1;border-color:#2C211E; }}
         .urg-card.hot .lab {{ color:#FFB199; }}
         .exam-timeline {{ display:grid;gap:18px; }}
         .tl-group {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:22px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); }}
-        .tl-group h2 {{ font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#77756F;margin:0 0 16px;font-weight:800; }}
+        .tl-group h2 {{ font-family:'Nunito',sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#77756F;margin:0 0 16px;font-weight:800; }}
         .exam-big {{ display:grid;grid-template-columns:78px 1fr auto;gap:18px;align-items:center;border:1px solid #E2DCCC;background:#FBF8F0;border-radius:18px;padding:16px;margin-top:12px; }}
         .exam-big:first-of-type {{ margin-top:0; }}
         .exam-big.urgent {{ border-color:#FF7A3D;box-shadow:inset 5px 0 0 #FF7A3D; }}
         .exam-big.soon {{ border-color:#F4B73A;box-shadow:inset 5px 0 0 #F4B73A; }}
         .eb-date {{ background:#1A1A1F;color:#FFF8E1;border-radius:16px;min-height:76px;display:grid;place-items:center;text-align:center;padding:10px; }}
-        .eb-day {{ font-family:"Fraunces",Georgia,serif;font-size:30px;line-height:1;font-weight:600; }}
+        .eb-day {{ font-family:'Bricolage Grotesque',sans-serif;font-size:30px;line-height:1;font-weight:600; }}
         .eb-mon {{ text-transform:uppercase;font-size:11px;letter-spacing:.14em;font-weight:800;color:#F4B73A;margin-top:4px; }}
         .eb-cd {{ font-size:11px;color:#009B72;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px; }}
-        .eb-title {{ font-family:"Fraunces",Georgia,serif;font-size:28px;margin:0 0 4px;font-weight:600;letter-spacing:-.03em; }}
+        .eb-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:28px;margin:0 0 4px;font-weight:600;letter-spacing:-.03em; }}
         .eb-meta {{ color:#6E6A60;font-size:13px;font-weight:700;margin-bottom:12px; }}
         .eb-topics {{ display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px; }}
         .topic {{ border:1px solid #D8D0BE;background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700;color:#3D3932; }}
@@ -6023,7 +6023,7 @@ def register_student_routes(app, csrf, limiter):
         .eb-actions a:first-child {{ background:#1A1A1F;color:#FFF8E1;border-color:#1A1A1F; }}
         .exam-empty {{ border:1px dashed #D8D0BE;border-radius:16px;padding:18px;color:#77756F;background:#FBF8F0; }}
         .exam-empty.big {{ display:grid;gap:10px;text-align:center;padding:46px 22px; }}
-        .exam-empty.big strong {{ font-family:"Fraunces",Georgia,serif;font-size:28px;color:#1A1A1F; }}
+        .exam-empty.big strong {{ font-family:'Bricolage Grotesque',sans-serif;font-size:28px;color:#1A1A1F; }}
         .exam-empty.big a {{ justify-self:center;background:#1A1A1F;color:#FFF8E1;text-decoration:none;border-radius:999px;padding:11px 16px;font-weight:800; }}
         @media (max-width:800px) {{ .urg-strip {{ grid-template-columns:repeat(2,1fr); }} .ex-head {{ align-items:flex-start;flex-direction:column; }} .exam-big {{ grid-template-columns:1fr; }} .eb-actions {{ flex-direction:row;flex-wrap:wrap; }} }}
         </style>
@@ -6442,10 +6442,10 @@ def register_student_routes(app, csrf, limiter):
         <style>
         .focus-page-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px; }}
         .focus-eye {{ font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
-        .focus-title {{ margin:0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .focus-title {{ margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
         .page-stats {{ display:flex;gap:10px;flex-wrap:wrap; }}
         .ps {{ background:#fff;border:1px solid #E2DCCC;border-radius:14px;padding:10px 14px;min-width:95px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
-        .ps-n {{ font-family:Fraunces,Georgia,serif;font-size:24px;font-weight:600;line-height:1;color:#1A1A1F; }}
+        .ps-n {{ font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:600;line-height:1;color:#1A1A1F; }}
         .ps-l {{ font-size:11px;font-weight:800;color:#94939C;text-transform:uppercase;letter-spacing:.08em;margin-top:3px; }}
         .focus-grid {{ display:grid;grid-template-columns:1.4fr 1fr;gap:18px; }}
         @media (max-width:1100px) {{ .focus-grid {{ grid-template-columns:1fr; }} }}
@@ -6457,7 +6457,7 @@ def register_student_routes(app, csrf, limiter):
         .ft-ring-wrap {{ position:relative;width:min(320px,80vw);height:min(320px,80vw); }}
         .ft-ring {{ width:100%;height:100%; }}
         .ft-time {{ position:absolute;inset:0;display:grid;place-items:center;text-align:center; }}
-        #timer-display {{ font-family:Fraunces,Georgia,serif !important;font-weight:500 !important;font-size:80px !important;letter-spacing:-.04em !important;line-height:1 !important;color:#1A1A1F !important; }}
+        #timer-display {{ font-family:"Bricolage Grotesque",sans-serif !important;font-weight:500 !important;font-size:80px !important;letter-spacing:-.04em !important;line-height:1 !important;color:#1A1A1F !important; }}
         #timer-label {{ font-size:13px !important;color:#94939C !important;margin-top:8px !important;font-weight:700; }}
         #pomo-count {{ font-size:12px !important;color:#94939C !important;margin-top:4px !important;font-weight:700; }}
         .ft-controls {{ display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap; }}
@@ -6712,7 +6712,7 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="ft-stage"><div class="ft-ring-wrap"><svg class="ft-ring" viewBox="0 0 200 200"><circle cx="100" cy="100" r="92" fill="none" stroke="#E2DCCC" stroke-width="6"/><circle id="ft-ring-progress" cx="100" cy="100" r="92" fill="none" stroke="#FF7A3D" stroke-width="6" stroke-linecap="round" stroke-dasharray="578" stroke-dashoffset="0" transform="rotate(-90 100 100)"/></svg><div class="ft-time"><div>
 
-              <div id="timer-display" style="font-size:64px;font-weight:800;font-family:monospace;color:var(--text);letter-spacing:2px;">25:00</div>
+              <div id="timer-display" style="font-size:64px;font-weight:800;font-family:'Nunito',sans-serif;color:var(--text);letter-spacing:2px;">25:00</div>
 
               <div id="timer-label" style="font-size:14px;color:var(--text-muted);margin-top:4px;">{_timer_ready_label}</div>
 
@@ -9550,7 +9550,7 @@ def register_student_routes(app, csrf, limiter):
         .mp-day:hover {{ transform:translateY(-2px);box-shadow:0 10px 24px rgba(20,18,30,.08);border-color:#5B4694; }}
         .mp-empty {{ background:transparent;border:none;cursor:default; }}
         .mp-empty:hover {{ transform:none;box-shadow:none; }}
-        .mp-num {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:22px;line-height:1;color:#1A1A1F; }}
+        .mp-num {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:22px;line-height:1;color:#1A1A1F; }}
         .mp-today {{ box-shadow:0 0 0 2px #FF7A3D inset; }}
         .mp-task {{ border-radius:10px;padding:5px 7px;background:#ECE6FB;color:#5B4694;font-size:11px;font-weight:800;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
         .mp-task.high {{ background:#FBDADA;color:#E04A4A; }}
@@ -9568,11 +9568,11 @@ def register_student_routes(app, csrf, limiter):
 
         .fc-page-head {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px; }}
         .fc-eyebrow {{ font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7B61FF; }}
-        .fc-page-title {{ margin:4px 0 0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .fc-page-title {{ margin:4px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
         .fc-today {{ background:linear-gradient(135deg,#1A1A1F,#2A2440);color:#F4F1EA;border-radius:22px;padding:26px;display:flex;align-items:center;gap:24px;margin-bottom:18px;box-shadow:0 18px 42px rgba(20,18,30,.18); }}
         .fct-l {{ flex:1; }}
         .fct-eye {{ font-size:11px;font-weight:900;letter-spacing:.12em;opacity:.8;text-transform:uppercase; }}
-        .fct-title {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:26px;margin:6px 0 12px;letter-spacing:-.02em; }}
+        .fct-title {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:26px;margin:6px 0 12px;letter-spacing:-.02em; }}
         .fct-pills {{ display:flex;gap:8px;flex-wrap:wrap; }}
         .fct-pill {{ background:rgba(255,255,255,.12);padding:5px 12px;border-radius:999px;font-size:12px;font-weight:800; }}
         .fct-pill.new {{ background:#7B61FF; }}.fct-pill.due {{ background:#10B981; }}.fct-pill.late {{ background:#EF4444; }}
@@ -9582,7 +9582,7 @@ def register_student_routes(app, csrf, limiter):
         .fc-card-flip {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:30px;min-height:240px;box-shadow:0 18px 42px rgba(20,18,30,.08);display:flex;flex-direction:column; }}
         .fc-tag {{ font-size:11px;font-weight:800;color:#94939C;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.06em; }}
         .dot {{ width:9px;height:9px;border-radius:50%;display:inline-block; }}
-        .fc-q {{ font-family:Fraunces,Georgia,serif;font-weight:500;font-size:28px;line-height:1.25;letter-spacing:-.02em;flex:1;display:grid;place-items:center;text-align:center;padding:16px;color:#1A1A1F; }}
+        .fc-q {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:500;font-size:28px;line-height:1.25;letter-spacing:-.02em;flex:1;display:grid;place-items:center;text-align:center;padding:16px;color:#1A1A1F; }}
         .fc-foot {{ display:flex;justify-content:space-between;font-size:11px;color:#94939C;gap:12px; }}
         .fc-decks-card {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:18px;box-shadow:0 12px 34px rgba(20,18,30,.06); }}
         .fc-card-h {{ display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px; }}
@@ -9596,7 +9596,7 @@ def register_student_routes(app, csrf, limiter):
         .deck-head {{ display:flex;align-items:center;gap:6px; }}
         .deck-tag {{ font-size:11px;font-weight:900;color:#94939C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
         .deck-delete {{ margin-left:auto;background:transparent;border:0;color:#EF4444;cursor:pointer;font-size:13px; }}
-        .deck-name {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:16px;margin:6px 0 4px;line-height:1.15;color:#1A1A1F; }}
+        .deck-name {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:16px;margin:6px 0 4px;line-height:1.15;color:#1A1A1F; }}
         .deck-meta {{ font-size:11px;color:#94939C; }}
         .deck-bar {{ height:5px;background:#fff;border-radius:999px;overflow:hidden;margin:10px 0 6px; }}
         .deck-fill {{ height:100%;border-radius:999px; }}
@@ -10446,7 +10446,7 @@ def register_student_routes(app, csrf, limiter):
         <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px;">
           <div>
             <div class="page-eyebrow" style="font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D;">Planifica tu semana</div>
-            <h1 class="page-title" style="margin:0;font-family:Fraunces,Georgia,serif;font-size:44px;font-weight:600;">Calendario</h1>
+            <h1 class="page-title" style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:44px;font-weight:600;">Calendario</h1>
             <p style="margin:6px 0 0;color:var(--text-muted);">Crea tu plan de estudio por d&iacute;a. Lo que pongas aqu&iacute; aparece en el Plan de hoy del dashboard.</p>
           </div>
           <button onclick="mpOpen(new Date())" class="btn btn-primary">&#10010; Agregar tarea</button>
@@ -10466,7 +10466,7 @@ def register_student_routes(app, csrf, limiter):
 
         <div id="mp-modal" style="display:none;position:fixed;inset:0;background:rgba(20,18,30,.55);z-index:10000;align-items:center;justify-content:center;padding:20px;">
           <div style="background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:24px;max-width:560px;width:100%;box-shadow:0 22px 60px rgba(20,18,30,.18);">
-            <h3 style="margin:0 0 4px;font-family:Fraunces,Georgia,serif;font-size:28px;">Editar d&iacute;a</h3>
+            <h3 style="margin:0 0 4px;font-family:'Bricolage Grotesque',sans-serif;font-size:28px;">Editar d&iacute;a</h3>
             <p id="mp-date-label" style="margin:0 0 16px;color:#94939C;font-weight:700;"></p>
             <div id="mp-task-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;"></div>
             <button onclick="mpAddRow()" class="btn btn-outline btn-sm" type="button">&#10010; Agregar bloque</button>
@@ -10659,11 +10659,11 @@ def register_student_routes(app, csrf, limiter):
 
         .fc-page-head {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px; }}
         .fc-eyebrow {{ font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7B61FF; }}
-        .fc-page-title {{ margin:4px 0 0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .fc-page-title {{ margin:4px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
         .fc-today {{ background:linear-gradient(135deg,#1A1A1F,#2A2440);color:#F4F1EA;border-radius:22px;padding:26px;display:flex;align-items:center;gap:24px;margin-bottom:18px;box-shadow:0 18px 42px rgba(20,18,30,.18); }}
         .fct-l {{ flex:1; }}
         .fct-eye {{ font-size:11px;font-weight:900;letter-spacing:.12em;opacity:.8;text-transform:uppercase; }}
-        .fct-title {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:26px;margin:6px 0 12px;letter-spacing:-.02em; }}
+        .fct-title {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:26px;margin:6px 0 12px;letter-spacing:-.02em; }}
         .fct-pills {{ display:flex;gap:8px;flex-wrap:wrap; }}
         .fct-pill {{ background:rgba(255,255,255,.12);padding:5px 12px;border-radius:999px;font-size:12px;font-weight:800; }}
         .fct-pill.new {{ background:#7B61FF; }}.fct-pill.due {{ background:#10B981; }}.fct-pill.late {{ background:#EF4444; }}
@@ -10674,7 +10674,7 @@ def register_student_routes(app, csrf, limiter):
         .fc-card-flip {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:30px;min-height:240px;box-shadow:0 18px 42px rgba(20,18,30,.08);display:flex;flex-direction:column; }}
         .fc-tag {{ font-size:11px;font-weight:800;color:#94939C;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.06em; }}
         .dot {{ width:9px;height:9px;border-radius:50%;display:inline-block; }}
-        .fc-q {{ font-family:Fraunces,Georgia,serif;font-weight:500;font-size:28px;line-height:1.25;letter-spacing:-.02em;flex:1;display:grid;place-items:center;text-align:center;padding:16px;color:#1A1A1F; }}
+        .fc-q {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:500;font-size:28px;line-height:1.25;letter-spacing:-.02em;flex:1;display:grid;place-items:center;text-align:center;padding:16px;color:#1A1A1F; }}
         .fc-foot {{ display:flex;justify-content:space-between;font-size:11px;color:#94939C;gap:12px; }}
         .fc-decks-card {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:18px;box-shadow:0 12px 34px rgba(20,18,30,.06); }}
         .fc-card-h {{ display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px; }}
@@ -10688,7 +10688,7 @@ def register_student_routes(app, csrf, limiter):
         .deck-head {{ display:flex;align-items:center;gap:6px; }}
         .deck-tag {{ font-size:11px;font-weight:900;color:#94939C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
         .deck-delete {{ margin-left:auto;background:transparent;border:0;color:#EF4444;cursor:pointer;font-size:13px; }}
-        .deck-name {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:16px;margin:6px 0 4px;line-height:1.15;color:#1A1A1F; }}
+        .deck-name {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:16px;margin:6px 0 4px;line-height:1.15;color:#1A1A1F; }}
         .deck-meta {{ font-size:11px;color:#94939C; }}
         .deck-bar {{ height:5px;background:#fff;border-radius:999px;overflow:hidden;margin:10px 0 6px; }}
         .deck-fill {{ height:100%;border-radius:999px; }}
@@ -13053,11 +13053,11 @@ No markdown, no code fences. ONLY JSON.
 
         .fc-page-head {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px; }}
         .fc-eyebrow {{ font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7B61FF; }}
-        .fc-page-title {{ margin:4px 0 0;font-family:Fraunces,Georgia,serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .fc-page-title {{ margin:4px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
         .fc-today {{ background:linear-gradient(135deg,#1A1A1F,#2A2440);color:#F4F1EA;border-radius:22px;padding:26px;display:flex;align-items:center;gap:24px;margin-bottom:18px;box-shadow:0 18px 42px rgba(20,18,30,.18); }}
         .fct-l {{ flex:1; }}
         .fct-eye {{ font-size:11px;font-weight:900;letter-spacing:.12em;opacity:.8;text-transform:uppercase; }}
-        .fct-title {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:26px;margin:6px 0 12px;letter-spacing:-.02em; }}
+        .fct-title {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:26px;margin:6px 0 12px;letter-spacing:-.02em; }}
         .fct-pills {{ display:flex;gap:8px;flex-wrap:wrap; }}
         .fct-pill {{ background:rgba(255,255,255,.12);padding:5px 12px;border-radius:999px;font-size:12px;font-weight:800; }}
         .fct-pill.new {{ background:#7B61FF; }}.fct-pill.due {{ background:#10B981; }}.fct-pill.late {{ background:#EF4444; }}
@@ -13068,7 +13068,7 @@ No markdown, no code fences. ONLY JSON.
         .fc-card-flip {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:30px;min-height:240px;box-shadow:0 18px 42px rgba(20,18,30,.08);display:flex;flex-direction:column; }}
         .fc-tag {{ font-size:11px;font-weight:800;color:#94939C;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.06em; }}
         .dot {{ width:9px;height:9px;border-radius:50%;display:inline-block; }}
-        .fc-q {{ font-family:Fraunces,Georgia,serif;font-weight:500;font-size:28px;line-height:1.25;letter-spacing:-.02em;flex:1;display:grid;place-items:center;text-align:center;padding:16px;color:#1A1A1F; }}
+        .fc-q {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:500;font-size:28px;line-height:1.25;letter-spacing:-.02em;flex:1;display:grid;place-items:center;text-align:center;padding:16px;color:#1A1A1F; }}
         .fc-foot {{ display:flex;justify-content:space-between;font-size:11px;color:#94939C;gap:12px; }}
         .fc-decks-card {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:18px;box-shadow:0 12px 34px rgba(20,18,30,.06); }}
         .fc-card-h {{ display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px; }}
@@ -13082,7 +13082,7 @@ No markdown, no code fences. ONLY JSON.
         .deck-head {{ display:flex;align-items:center;gap:6px; }}
         .deck-tag {{ font-size:11px;font-weight:900;color:#94939C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
         .deck-delete {{ margin-left:auto;background:transparent;border:0;color:#EF4444;cursor:pointer;font-size:13px; }}
-        .deck-name {{ font-family:Fraunces,Georgia,serif;font-weight:600;font-size:16px;margin:6px 0 4px;line-height:1.15;color:#1A1A1F; }}
+        .deck-name {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:16px;margin:6px 0 4px;line-height:1.15;color:#1A1A1F; }}
         .deck-meta {{ font-size:11px;color:#94939C; }}
         .deck-bar {{ height:5px;background:#fff;border-radius:999px;overflow:hidden;margin:10px 0 6px; }}
         .deck-fill {{ height:100%;border-radius:999px; }}
@@ -14058,17 +14058,17 @@ No markdown, no code fences. ONLY JSON.
 
         <style>
 
-        .quiz-cd {{ --ink:#1A1A1F; --paper:#F4F1EA; --card:#FFFFFF; --line:#E2DCCC; --muted:#77756F; --accent:#FF7A3D; --pink:#EF5DA8; font-family:"Plus Jakarta Sans",system-ui,sans-serif; color:var(--ink); }}
+        .quiz-cd {{ --ink:#1A1A1F; --paper:#F4F1EA; --card:#FFFFFF; --line:#E2DCCC; --muted:#77756F; --accent:#FF7A3D; --pink:#EF5DA8; font-family:'Nunito',sans-serif; color:var(--ink); }}
         .quiz-cd > div:first-child {{ margin-bottom: 18px !important; }}
         .quiz-cd .page-eyebrow {{ font-size:12px!important; font-weight:800!important; letter-spacing:.16em!important; text-transform:uppercase!important; color:#009B72!important; margin-bottom:6px!important; }}
-        .quiz-cd h1 {{ font-family:"Fraunces",Georgia,serif!important; font-size:clamp(44px,6vw,76px)!important; line-height:.9!important; margin:0!important; font-weight:600!important; letter-spacing:-.055em!important; }}
+        .quiz-cd h1 {{ font-family:"Bricolage Grotesque",sans-serif!important; font-size:clamp(44px,6vw,76px)!important; line-height:.9!important; margin:0!important; font-weight:600!important; letter-spacing:-.055em!important; }}
         .quiz-cd h1::before {{ content:""; }}
         .quiz-cd > div:first-child p {{ color:#8A98AD!important; font-weight:700; }}
         .quiz-cd .btn-pop {{ background:#1A1A1F!important; color:#FFF8E1!important; border:0!important; border-radius:999px!important; padding:12px 18px!important; font-weight:900!important; box-shadow:0 4px 0 rgba(0,0,0,.18),0 16px 34px rgba(20,18,30,.12)!important; cursor:pointer; text-decoration:none; }}
         .quiz-cd .btn-pop.accent {{ background:#1A1A1F!important; color:#FFF8E1!important; }}
         .quiz-hero {{ background:linear-gradient(135deg,#FF7A3D,#EF5DA8)!important; color:#fff!important; border-radius:22px!important; padding:26px!important; display:flex!important; align-items:center!important; justify-content:space-between!important; gap:24px!important; margin-bottom:18px!important; box-shadow:0 10px 30px rgba(255,122,61,.20)!important; }}
         .qh-eye {{ font-size:12px!important; font-weight:900!important; letter-spacing:.14em!important; text-transform:uppercase!important; opacity:.85!important; }}
-        .qh-title {{ font-family:"Fraunces",Georgia,serif!important; font-size:34px!important; line-height:1!important; margin:6px 0!important; font-weight:600!important; letter-spacing:-.04em!important; color:#fff!important; }}
+        .qh-title {{ font-family:"Bricolage Grotesque",sans-serif!important; font-size:34px!important; line-height:1!important; margin:6px 0!important; font-weight:600!important; letter-spacing:-.04em!important; color:#fff!important; }}
         .qh-sub {{ margin:0!important; font-size:14px!important; opacity:.9!important; color:#fff!important; }}
         .quiz-grid {{ display:grid!important; grid-template-columns:repeat(3,1fr)!important; gap:14px!important; }}
         .qcard {{ background:#fff!important; border:1px solid #E2DCCC!important; border-radius:16px!important; padding:18px!important; position:relative!important; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04)!important; display:flex!important; flex-direction:column!important; gap:10px!important; cursor:pointer!important; transition:transform .16s,box-shadow .16s!important; }}
@@ -14441,7 +14441,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div id="qz-timer-wrap" style="display:none;text-align:right;">
 
-              <div id="qz-timer" style="font-size:22px;font-weight:700;font-family:monospace;letter-spacing:1px;color:var(--text);">00:00</div>
+              <div id="qz-timer" style="font-size:22px;font-weight:700;font-family:'Nunito',sans-serif;letter-spacing:1px;color:var(--text);">00:00</div>
 
               <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;">Remaining</div>
 
@@ -15681,7 +15681,7 @@ No markdown, no code fences. ONLY JSON.
 
               <span style="font-size:14px;font-weight:600;color:var(--text);" id="exam-q-txt">Question 1 / {len(questions)}</span>
 
-              <span style="font-size:20px;font-weight:700;font-family:monospace;" id="exam-timer" style="color:var(--text);">00:00</span>
+              <span style="font-size:20px;font-weight:700;font-family:'Nunito',sans-serif;" id="exam-timer" style="color:var(--text);">00:00</span>
 
             </div>
 
@@ -17709,8 +17709,8 @@ No markdown, no code fences. ONLY JSON.
 
         return _s_render("Logros", f"""
         <style>
-          .achievements-cd {{ max-width:900px;margin:0 auto 80px;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:#1A1A1F; }}
-          .achievements-cd h2 {{ font-family:"Fraunces",Georgia,serif;font-size:34px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+          .achievements-cd {{ max-width:900px;margin:0 auto 80px;font-family:'Nunito',sans-serif;color:#1A1A1F; }}
+          .achievements-cd h2 {{ font-family:'Bricolage Grotesque',sans-serif;font-size:34px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
           .achievements-cd .ach-rank-card {{ background:linear-gradient(135deg,#FFFFFF,#F4F1EA)!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important;border-radius:24px!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 18px 44px rgba(20,18,30,.08)!important; }}
           .achievements-cd .ach-stat-card,.achievements-cd .ach-badge-card,.achievements-cd .ach-activity-card {{ background:#FFFFFF!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04)!important; }}
           .achievements-cd [style*="background:var(--card)"] {{ background:#FFFFFF!important;color:#1A1A1F!important;border-color:#E2DCCC!important; }}
@@ -18081,19 +18081,19 @@ No markdown, no code fences. ONLY JSON.
         return _s_render("Friends and Duels" if _lang == "en" else "Amigos y Duelos", f"""
 
         <style>
-          .friends-cd {{ max-width:1180px;margin:0 auto;padding:4px 0 42px;--ink:#1A1A1F;--muted:#6E6A60;--line:#E2DCCC;--paper:#FFFDF8;--cream:#F4F1EA;--orange:#FF7A3D;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink); }}
-          .friends-cd .serif {{ font-family:"Fraunces",Georgia,serif;font-weight:600;letter-spacing:-.045em; }}
+          .friends-cd {{ max-width:1180px;margin:0 auto;padding:4px 0 42px;--ink:#1A1A1F;--muted:#6E6A60;--line:#E2DCCC;--paper:#FFFDF8;--cream:#F4F1EA;--orange:#FF7A3D;font-family:'Nunito',sans-serif;color:var(--ink); }}
+          .friends-cd .serif {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;letter-spacing:-.045em; }}
           .fr-hero {{ display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px; }}
           .fr-eye {{ font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);margin-bottom:8px; }}
           .fr-title {{ margin:0;font-size:clamp(44px,7vw,76px);line-height:.92;color:var(--ink); }}
           .fr-sub {{ margin:10px 0 0;color:var(--muted);font-size:15px;max-width:620px;line-height:1.55; }}
           .fr-id {{ display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:10px 14px;font-weight:900;box-shadow:0 1px 0 rgba(20,18,30,.04),0 10px 28px rgba(20,18,30,.06); }}
-          .fr-id span {{ color:var(--orange);font-family:"Fraunces",Georgia,serif;font-size:22px;line-height:1; }}
+          .fr-id span {{ color:var(--orange);font-family:'Bricolage Grotesque',sans-serif;font-size:22px;line-height:1; }}
           .fr-grid {{ display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:18px;align-items:start; }}
           @media(max-width:980px) {{ .fr-grid {{ grid-template-columns:1fr; }} }}
           .fr-panel {{ background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 18px 46px rgba(20,18,30,.07);padding:24px;margin-bottom:18px;overflow:hidden; }}
           .fr-panel.alt {{ background:linear-gradient(180deg,#FFFFFF 0%,#FFF8EE 100%); }}
-          .fr-panel h3 {{ margin:0;font-family:"Fraunces",Georgia,serif;font-size:25px;font-weight:600;color:var(--ink);letter-spacing:-.035em; }}
+          .fr-panel h3 {{ margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:25px;font-weight:600;color:var(--ink);letter-spacing:-.035em; }}
           .fr-panel-top {{ display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:14px; }}
           .fr-count {{ font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:var(--orange); }}
           .fr-search-card {{ padding:0;margin-bottom:18px; }}
@@ -19060,10 +19060,10 @@ No markdown, no code fences. ONLY JSON.
     #mr-lb-page .lb-row .lb-pill-col { display:none;}
   }
   /* Claude-inspired Ranking polish: same warm paper system as the rest of the product. */
-  #mr-lb-page { --lb-panel:#FFFFFF; --lb-panel-2:#FBF8F0; --lb-border:#E2DCCC; --lb-text:#1A1A1F; --lb-muted:#77756F; --lb-accent:#5B4694; --lb-accent-2:#FF7A3D; font-family:"Plus Jakarta Sans",system-ui,sans-serif; color:#1A1A1F; }
+  #mr-lb-page { --lb-panel:#FFFFFF; --lb-panel-2:#FBF8F0; --lb-border:#E2DCCC; --lb-text:#1A1A1F; --lb-muted:#77756F; --lb-accent:#5B4694; --lb-accent-2:#FF7A3D; font-family:'Nunito',sans-serif; color:#1A1A1F; }
   #mr-lb-page .lb-hero { background:#FFFFFF; border-color:#E2DCCC; border-radius:28px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); }
   #mr-lb-page .lb-hero::after { background:linear-gradient(135deg,rgba(255,122,61,.16),rgba(0,155,114,.10)); filter:blur(18px); }
-  #mr-lb-page .lb-hero h2 { font-family:"Fraunces",Georgia,serif; font-size:clamp(42px,5vw,70px); line-height:.94; font-weight:600; color:#1A1A1F; }
+  #mr-lb-page .lb-hero h2 { font-family:'Bricolage Grotesque',sans-serif; font-size:clamp(42px,5vw,70px); line-height:.94; font-weight:600; color:#1A1A1F; }
   #mr-lb-page .lb-rank-card, #mr-lb-page .lb-controls, #mr-lb-page .lb-row { background:#FFFFFF; border-color:#E2DCCC; color:#1A1A1F; box-shadow:0 1px 0 rgba(20,18,30,.04); }
   #mr-lb-page .lb-rank-card .rank-big, #mr-lb-page .lb-xp { color:#1A1A1F; }
   #mr-lb-page .lb-tab { background:#FBF8F0; border-color:#E2DCCC; color:#5C5C66; border-radius:999px; font-weight:800; }
@@ -19322,7 +19322,7 @@ No markdown, no code fences. ONLY JSON.
   #mr-prof .pf-id-body { padding-top: 42px; }
   #mr-prof .pf-name { font-size:22px; font-weight:800; margin:0 0 4px; letter-spacing:-.02em; color:#fff; }
   #mr-prof .pf-rankline {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: "Nunito", sans-serif;
     font-size:13px; color: var(--text-muted); letter-spacing:.02em;
   }
   #mr-prof .pf-rankline b { color:#fff; font-weight:700; }
@@ -20631,13 +20631,13 @@ No markdown, no code fences. ONLY JSON.
         return _s_render("Ensayos", f"""
 
         <style>
-        .essay-cd {{ max-width:1260px;margin:0 auto 80px;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:#1A1A1F; }}
+        .essay-cd {{ max-width:1260px;margin:0 auto 80px;font-family:'Nunito',sans-serif;color:#1A1A1F; }}
         .essay-active {{ display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start; }}
         .essay-cd .card {{ background:#fff;border:1px solid #E2DCCC;border-radius:24px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); }}
         .essay-cd .essay-side {{ padding:22px;position:sticky;top:92px; }}
         .essay-cd .essay-doc {{ display:none; }}
         .essay-kicker {{ font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#009B72;margin-bottom:8px; }}
-        .essay-title {{ font-family:"Fraunces",Georgia,serif;font-size:clamp(42px,6vw,72px);line-height:.92;margin:0;font-weight:600;letter-spacing:-.05em; }}
+        .essay-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(42px,6vw,72px);line-height:.92;margin:0;font-weight:600;letter-spacing:-.05em; }}
         .essay-title em {{ color:#FF7A3D;font-style:italic; }}
         .essay-sub {{ color:#6E6A60;font-size:15px;margin:12px 0 24px;max-width:680px;line-height:1.6; }}
         .essay-cd label {{ display:block;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:#77756F;margin-bottom:8px; }}
@@ -20646,9 +20646,9 @@ No markdown, no code fences. ONLY JSON.
         #ea-drop:hover {{ border-color:#5B4694!important;background:#F5F0FF!important; }}
         #ea-btn {{ width:100%;border:0!important;border-radius:999px!important;background:#1A1A1F!important;color:#FFF8E1!important;padding:14px 18px!important;font-weight:900!important;box-shadow:0 4px 0 rgba(0,0,0,.16)!important; }}
         .essay-doc-head {{ display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid #E2DCCC;background:#FBF8F0; }}
-        .essay-doc-head strong {{ font-family:"Fraunces",Georgia,serif;font-size:26px;font-weight:600;letter-spacing:-.03em; }}
+        .essay-doc-head strong {{ font-family:'Bricolage Grotesque',sans-serif;font-size:26px;font-weight:600;letter-spacing:-.03em; }}
         .essay-doc-head span {{ color:#77756F;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase; }}
-        #ea-essay {{ min-height:560px!important;border:0!important;border-radius:0!important;background:#fff!important;padding:34px 42px!important;color:#1A1A1F!important;font-family:"Fraunces",Georgia,serif!important;font-size:22px!important;line-height:1.75!important;resize:vertical;box-shadow:none!important; }}
+        #ea-essay {{ min-height:560px!important;border:0!important;border-radius:0!important;background:#fff!important;padding:34px 42px!important;color:#1A1A1F!important;font-family:"Bricolage Grotesque",sans-serif!important;font-size:22px!important;line-height:1.75!important;resize:vertical;box-shadow:none!important; }}
         #ea-result {{ margin-top:0!important; }}
         #ea-result .card {{ border-radius:20px;border-color:#E2DCCC;background:#fff;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04);margin-top:14px; }}
         @media (max-width:980px) {{ .essay-active {{ grid-template-columns:1fr; }} .essay-cd .essay-side {{ position:relative;top:auto; }} #ea-essay {{ min-height:420px!important;padding:24px!important;font-size:19px!important; }} }}
@@ -21209,11 +21209,11 @@ No markdown, no code fences. ONLY JSON.
         <h1 style="margin-bottom:6px;">\U0001f6d2 Tienda</h1>
         <p style="color:var(--text-muted);margin:0 0 24px;">Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque.</p>
         <style>
-          .shop-cd {{ --card:#FFFFFF; --card-bg:#FFFFFF; --bg:#F4F1EA; --text:#1A1A1F; --text-muted:#6E6A60; --border:#E2DCCC; font-family:"Plus Jakarta Sans",system-ui,sans-serif; color:#1A1A1F; }}
-          .shop-cd h1 {{ font-family:"Fraunces",Georgia,serif;font-size:clamp(42px,6vw,72px);line-height:.92;letter-spacing:-.05em;font-weight:600;color:#1A1A1F; }}
+          .shop-cd {{ --card:#FFFFFF; --card-bg:#FFFFFF; --bg:#F4F1EA; --text:#1A1A1F; --text-muted:#6E6A60; --border:#E2DCCC; font-family:'Nunito',sans-serif; color:#1A1A1F; }}
+          .shop-cd h1 {{ font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(42px,6vw,72px);line-height:.92;letter-spacing:-.05em;font-weight:600;color:#1A1A1F; }}
           .shop-cd .card, .shop-cd .stat-card {{ background:#FFFFFF!important;border:1px solid #E2DCCC!important;border-radius:22px!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04)!important;color:#1A1A1F!important; }}
           .shop-cd .card-header {{ border-bottom:1px solid #E2DCCC!important; }}
-          .shop-cd .card-header h2 {{ font-family:"Plus Jakarta Sans",system-ui,sans-serif!important;font-size:16px!important;letter-spacing:0!important;font-weight:900!important;color:#1A1A1F!important; }}
+          .shop-cd .card-header h2 {{ font-family:"Nunito",sans-serif!important;font-size:16px!important;letter-spacing:0!important;font-weight:900!important;color:#1A1A1F!important; }}
           .shop-cd .btn-primary {{ background:linear-gradient(135deg,#FF7A3D,#FF9F5F)!important;color:#FFFFFF!important;border:1px solid #E65F20!important;box-shadow:0 4px 0 rgba(179,60,0,.28)!important;border-radius:999px!important; }}
           .shop-cd .btn-outline, .shop-cd .btn-ghost {{ background:#FBF8F0!important;color:#1A1A1F!important;border:1px solid #D8D0BE!important;border-radius:999px!important; }}
           .shop-cd [style*="background:var(--card)"] {{ background:#FFFFFF!important; }}
@@ -21534,7 +21534,7 @@ No markdown, no code fences. ONLY JSON.
                 <div>
                   <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em;">{name}</div>
                   <div style="color:var(--text-muted);font-size:12px;">{email}</div>
-                  <div style="margin-top:4px;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;color:var(--text-muted);letter-spacing:.02em;">Rank <b style="color:#fff;font-weight:700;">{rank_display}</b> &middot; <b style="color:#fff;font-weight:700;">{total_xp:,}</b> XP</div>
+                  <div style="margin-top:4px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--text-muted);letter-spacing:.02em;">Rank <b style="color:#fff;font-weight:700;">{rank_display}</b> &middot; <b style="color:#fff;font-weight:700;">{total_xp:,}</b> XP</div>
                 </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
                   <div class="stat-card stat-yellow" style="min-width:110px;padding:10px 14px;"><div class="num" style="font-size:20px;">{wallet['coins']} \U0001FA99</div><div class="label">Coins</div></div>

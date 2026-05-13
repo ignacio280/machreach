@@ -1,4 +1,4 @@
-﻿"""
+"""
 Flask web dashboard — client-facing campaign management.
 """
 from __future__ import annotations
@@ -490,7 +490,7 @@ LAYOUT = """<!DOCTYPE html>
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>MachReach — {{title}}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -806,7 +806,7 @@ LAYOUT = """<!DOCTYPE html>
     /* ─── end themes ─── */
 
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
     html { overflow-x: hidden; }
 
     /* Nav */
@@ -837,7 +837,7 @@ LAYOUT = """<!DOCTYPE html>
     .nav-dropdown-menu a { display:block; height:auto; padding:8px 12px; font-size:13px; color:#A0AAB8; border-radius:8px; transition: color .15s var(--ease), background .15s var(--ease); }
     .nav-dropdown-menu a:hover { color:#fff; background:rgba(99,102,241,0.18); }
     /* Floating focus widget */
-    #focus-float { position:fixed; bottom:20px; right:20px; background:linear-gradient(135deg,#1e293b,#334155); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:12px 18px; z-index:500; box-shadow:0 8px 32px rgba(0,0,0,0.4); display:none; cursor:pointer; color:#fff; font-family:monospace; min-width:140px; text-align:center; transition:all 0.3s; }
+    #focus-float { position:fixed; bottom:20px; right:20px; background:linear-gradient(135deg,#1e293b,#334155); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:12px 18px; z-index:500; box-shadow:0 8px 32px rgba(0,0,0,0.4); display:none; cursor:pointer; color:#fff; font-family:'Nunito',sans-serif; min-width:140px; text-align:center; transition:all 0.3s; }
     #focus-float:hover { transform:scale(1.05); box-shadow:0 12px 40px rgba(99,102,241,0.3); }
     #focus-float .ff-time { font-size:28px; font-weight:800; letter-spacing:1px; }
     #focus-float .ff-label { font-size:11px; color:#94a3b8; margin-top:2px; }
@@ -1406,7 +1406,7 @@ LAYOUT = """<!DOCTYPE html>
       --shadow-lg: 0 6px 0 rgba(20,18,30,.05), 0 18px 44px rgba(20,18,30,.08);
     }
     body {
-      font-family: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
+      font-family: "Nunito", sans-serif;
       background: #F4F1EA !important;
       color: #1A1A1F;
       font-feature-settings: "ss01", "ss02";
@@ -1496,7 +1496,7 @@ LAYOUT = """<!DOCTYPE html>
     }
     .page-header h1, .card-header h2, h1, h2 { letter-spacing: -0.03em; }
     .page-header h1 {
-      font-family: "Fraunces", Georgia, serif;
+      font-family: "Bricolage Grotesque", sans-serif;
       font-size: clamp(30px, 3vw, 48px) !important;
       font-weight: 600;
       color: #1A1A1F;
@@ -1554,13 +1554,13 @@ LAYOUT = """<!DOCTYPE html>
       min-height: 100vh;
       background: #F4F1EA;
       color: #1A1A1F;
-      font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+      font-family: "Nunito", sans-serif;
     }
     .mr-app-shell, .mr-app-shell button, .mr-app-shell input, .mr-app-shell textarea, .mr-app-shell select {
-      font-family: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
+      font-family: "Nunito", sans-serif;
     }
     .mr-app-shell h1, .mr-app-shell h2, .mr-app-shell .page-title-cd, .mr-app-shell .fc-page-title {
-      font-family: "Fraunces", Georgia, serif;
+      font-family: "Bricolage Grotesque", sans-serif;
       font-weight: 600;
       letter-spacing: -0.03em;
     }
@@ -1595,7 +1595,7 @@ LAYOUT = """<!DOCTYPE html>
       color: #FFF8E1;
       display: grid;
       place-items: center;
-      font-family: "Fraunces", Georgia, serif;
+      font-family: "Bricolage Grotesque", sans-serif;
       font-weight: 700;
       font-size: 22px;
       letter-spacing: -0.05em;
@@ -5165,7 +5165,7 @@ def admin_dashboard():
         f"""
         <tr>
           <td>{_esc(u.get("name") or "")}</td>
-          <td style="font-family:monospace;font-size:13px;">{_esc(u.get("email") or "")}</td>
+          <td style="font-family:'Nunito',sans-serif;font-size:13px;">{_esc(u.get("email") or "")}</td>
           <td>{_esc(str(u.get("id") or ""))}</td>
           <td style="width:320px;">
             <form method="POST" style="display:grid;grid-template-columns:1fr 120px auto;gap:8px;align-items:center;">
@@ -5602,13 +5602,13 @@ def admin_product_analytics():
       .admin-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }}
       .admin-metric {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:16px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
       .admin-metric .k {{ color:#77756F; font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
-      .admin-metric .v {{ font-family:Fraunces,Georgia,serif; font-size:34px; font-weight:650; margin-top:8px; color:#1A1A1F; }}
+      .admin-metric .v {{ font-family:'Bricolage Grotesque',sans-serif; font-size:34px; font-weight:650; margin-top:8px; color:#1A1A1F; }}
       .admin-panel {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:18px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
-      .admin-panel h2 {{ margin:0 0 12px; font-family:Fraunces,Georgia,serif; font-size:25px; }}
+      .admin-panel h2 {{ margin:0 0 12px; font-family:'Bricolage Grotesque',sans-serif; font-size:25px; }}
       .admin-empty {{ color:#94939C; background:#FBF8F0; border:1px dashed #D8D0BE; border-radius:14px; padding:16px; }}
       .admin-chart-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }}
       .admin-chart {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:18px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); min-width:0; }}
-      .admin-chart h2 {{ margin:0 0 12px; font-family:Fraunces,Georgia,serif; font-size:24px; font-weight:650; color:#1A1A1F; }}
+      .admin-chart h2 {{ margin:0 0 12px; font-family:'Bricolage Grotesque',sans-serif; font-size:24px; font-weight:650; color:#1A1A1F; }}
       .admin-chart svg {{ width:100%; height:auto; display:block; overflow:visible; }}
       .admin-chart-foot {{ margin-top:8px; color:#77756F; font-size:12px; }}
       .admin-bar-row {{ display:grid; grid-template-columns:minmax(110px,1fr) 2.4fr auto; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #EEE8DA; }}
@@ -6255,7 +6255,7 @@ def _render_error_page(code, heading, message, sub=""):
       @keyframes errFloat {{ 0%,100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-8px); }} }}
       .err-head {{ font-size: 26px; font-weight: 800; letter-spacing: -.5px; margin: 0 0 8px; }}
       .err-msg {{ color: var(--text-secondary); font-size: 15px; line-height: 1.6; margin: 0 0 10px; }}
-      .err-sub {{ color: var(--text-muted); font-size: 12.5px; margin: 0 0 28px; font-family: ui-monospace,SFMono-Regular,Menlo,monospace; background: var(--border-light); display: inline-block; padding: 4px 10px; border-radius: 6px; }}
+      .err-sub {{ color: var(--text-muted); font-size: 12.5px; margin: 0 0 28px; font-family: "Nunito",sans-serif; background: var(--border-light); display: inline-block; padding: 4px 10px; border-radius: 6px; }}
       .err-actions {{ display: inline-flex; gap: 10px; flex-wrap: wrap; justify-content: center; }}
       .err-actions a, .err-actions button {{ padding: 11px 22px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; border: none; cursor: pointer; transition: transform .2s var(--ease), box-shadow .2s var(--ease); }}
       .err-actions a.primary {{ background: linear-gradient(135deg,#6366F1,#8B5CF6); color: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.14), inset 0 1px 0 rgba(255,255,255,.14); }}
