@@ -5352,6 +5352,138 @@ def _admin_rows(sql_pg: str, sql_lite: str | None = None, params=()) -> list[dic
         return []
 
 
+def _current_process_rss_mb() -> float | None:
+    """Best-effort current worker memory in MB.
+
+    Render runs Linux, where /proc/self/status gives the actual RSS. Local
+    Windows/dev installs may fall back to psutil when it is available.
+    """
+    try:
+        with open("/proc/self/status", "r", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("VmRSS:"):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        return round(int(parts[1]) / 1024, 1)
+    except Exception:
+        pass
+    try:
+        import psutil  # type: ignore
+        return round(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024), 1)
+    except Exception:
+        pass
+    try:
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+
+            class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+                _fields_ = [
+                    ("cb", wintypes.DWORD),
+                    ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t),
+                ]
+
+            counters = PROCESS_MEMORY_COUNTERS()
+            counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
+            kernel32 = ctypes.windll.kernel32
+            psapi = ctypes.windll.psapi
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            psapi.GetProcessMemoryInfo.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(PROCESS_MEMORY_COUNTERS),
+                wintypes.DWORD,
+            ]
+            psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+            ok = psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb)
+            if ok:
+                return round(float(counters.WorkingSetSize) / (1024 * 1024), 1)
+    except Exception:
+        pass
+    try:
+        import resource  # type: ignore
+        rss = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        return round(rss / 1024, 1)
+    except Exception:
+        return None
+
+
+def _estimate_user_ram_pressure(row: dict) -> tuple[str, str]:
+    """Estimate transient RAM pressure from recent activity.
+
+    Flask users share the same Python worker, so this is not an exact per-user
+    memory allocation. The estimate is intentionally conservative and meant to
+    highlight users likely to create temporary memory spikes.
+    """
+    events = int(row.get("events_15m") or 0)
+    actions = int(row.get("actions_15m") or 0)
+    heavy = int(row.get("heavy_15m") or 0)
+    est = min(96.0, round((events * 0.08) + (actions * 0.7) + (heavy * 3.5), 1))
+    if heavy >= 6 or est >= 24:
+        level = "Alto"
+    elif heavy >= 2 or est >= 8:
+        level = "Medio"
+    else:
+        level = "Bajo"
+    return f"~{est:.1f} MB", level
+
+
+def _admin_user_ram_rows(external_events: str) -> list[dict]:
+    rows = _admin_rows(
+        f"""
+        SELECT
+          c.id,
+          c.name,
+          c.email,
+          COUNT(e.id) AS events_15m,
+          SUM(CASE WHEN e.event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views_15m,
+          SUM(CASE WHEN e.event_type <> 'page_view' THEN 1 ELSE 0 END) AS actions_15m,
+          SUM(CASE WHEN e.event_type IN ('quiz_action','flashcard_action','canvas_action','focus_session_saved','marketplace_action') THEN 1 ELSE 0 END) AS heavy_15m,
+          MAX(e.created_at)::text AS last_seen
+        FROM product_analytics_events e
+        JOIN clients c ON c.id = e.client_id
+        WHERE e.client_id IS NOT NULL
+          AND e.created_at >= NOW() - INTERVAL '15 minutes'
+          AND {external_events}
+        GROUP BY c.id, c.name, c.email
+        ORDER BY heavy_15m DESC, events_15m DESC, last_seen DESC
+        LIMIT 30
+        """,
+        f"""
+        SELECT
+          c.id,
+          c.name,
+          c.email,
+          COUNT(e.id) AS events_15m,
+          SUM(CASE WHEN e.event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views_15m,
+          SUM(CASE WHEN e.event_type <> 'page_view' THEN 1 ELSE 0 END) AS actions_15m,
+          SUM(CASE WHEN e.event_type IN ('quiz_action','flashcard_action','canvas_action','focus_session_saved','marketplace_action') THEN 1 ELSE 0 END) AS heavy_15m,
+          MAX(e.created_at) AS last_seen
+        FROM product_analytics_events e
+        JOIN clients c ON c.id = e.client_id
+        WHERE e.client_id IS NOT NULL
+          AND datetime(e.created_at) >= datetime('now','localtime','-15 minutes')
+          AND {external_events}
+        GROUP BY c.id, c.name, c.email
+        ORDER BY heavy_15m DESC, events_15m DESC, last_seen DESC
+        LIMIT 30
+        """,
+    )
+    for row in rows:
+        estimate, level = _estimate_user_ram_pressure(row)
+        row["user"] = f"{row.get('name') or 'Sin nombre'} · {row.get('email') or 'sin correo'}"
+        row["ram_pressure"] = estimate
+        row["load_level"] = level
+    return rows
+
+
 @app.route("/admin/analytics")
 def admin_product_analytics():
     if not _is_admin():
@@ -5363,6 +5495,9 @@ def admin_product_analytics():
     week_pg = "created_at >= NOW() - INTERVAL '7 days'"
     week_lite = "datetime(created_at) >= datetime('now','localtime','-7 days')"
     external_events = _analytics_admin_filter_sql()
+    rss_mb = _current_process_rss_mb()
+    active_15m_pg = f"created_at >= NOW() - INTERVAL '15 minutes' AND {external_events}"
+    active_15m_lite = f"datetime(created_at) >= datetime('now','localtime','-15 minutes') AND {external_events}"
 
     event_labels = {
         "view_dashboard": "Inicio",
@@ -5438,6 +5573,8 @@ def admin_product_analytics():
         return sorted(grouped.values(), key=lambda r: r["n"], reverse=True)[:12]
 
     cards = [
+        ("RAM servidor", f"{rss_mb:.1f} MB" if rss_mb is not None else "N/D"),
+        ("Activos 15 min", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {active_15m_pg}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {active_15m_lite}")),
         ("Visitas hoy", _admin_metric(f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_pg} AND {external_events}", f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_lite} AND {external_events}")),
         ("Usuarios únicos hoy", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_pg} AND {external_events}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_lite} AND {external_events}")),
         ("Registros hoy", _admin_metric(f"SELECT COUNT(*) FROM clients WHERE created_at >= CURRENT_DATE", "SELECT COUNT(*) FROM clients WHERE date(created_at)=date('now','localtime')")),
@@ -5453,6 +5590,8 @@ def admin_product_analytics():
     ]
     card_html = "".join(
         f"<div class='admin-metric'><div class='k'>{_esc(label)}</div><div class='v'>{value:,}</div></div>"
+        if isinstance(value, int)
+        else f"<div class='admin-metric'><div class='k'>{_esc(label)}</div><div class='v'>{_esc(str(value))}</div></div>"
         for label, value in cards
     )
 
@@ -5467,6 +5606,7 @@ def admin_product_analytics():
     )
     for row in feature_rows:
         row["label"] = event_labels.get(str(row.get("event_type") or ""), str(row.get("event_type") or ""))
+    user_ram_rows = _admin_user_ram_rows(external_events)
     xp_rows = _admin_rows(
         "SELECT action, COUNT(*) AS n, COALESCE(SUM(xp),0) AS xp FROM student_xp WHERE created_at >= NOW() - INTERVAL '30 days' GROUP BY action ORDER BY xp DESC, n DESC LIMIT 16",
         "SELECT action, COUNT(*) AS n, COALESCE(SUM(xp),0) AS xp FROM student_xp WHERE datetime(created_at) >= datetime('now','localtime','-30 days') GROUP BY action ORDER BY xp DESC, n DESC LIMIT 16",
@@ -5571,6 +5711,7 @@ def admin_product_analytics():
       .admin-metric .v {{ font-family:'Bricolage Grotesque',sans-serif; font-size:34px; font-weight:650; margin-top:8px; color:#1A1A1F; }}
       .admin-panel {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:18px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
       .admin-panel h2 {{ margin:0 0 12px; font-family:'Bricolage Grotesque',sans-serif; font-size:25px; }}
+      .admin-note {{ color:#77756F; background:#FBF8F0; border:1px solid #E2DCCC; border-radius:14px; padding:12px 14px; margin:0 0 14px; line-height:1.45; }}
       .admin-empty {{ color:#94939C; background:#FBF8F0; border:1px dashed #D8D0BE; border-radius:14px; padding:16px; }}
       .admin-chart-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }}
       .admin-chart {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:18px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); min-width:0; }}
@@ -5590,6 +5731,11 @@ def admin_product_analytics():
       <div class="page-header"><h1>&#128202; Analytics de producto</h1><p class="subtitle">Tráfico, uso de IA, estudio real y señales para decidir qué merece ser Plus o Ultimate.</p></div>
       <div class="admin-grid">{card_html}</div>
       {charts_html}
+      <div class="admin-panel">
+        <h2>RAM por usuario · últimos 15 min</h2>
+        <div class="admin-note">La RAM exacta por usuario no existe en un worker compartido: todos usan el mismo proceso Python. Esta tabla muestra la RAM real del servidor y una estimación de presión temporal por usuario según vistas, acciones y operaciones pesadas recientes. Úsala para detectar quién está generando carga, no como medición contable perfecta.</div>
+        {table(["Usuario","Vistas","Acciones","Acciones pesadas","Presión RAM","Nivel","Última actividad"], user_ram_rows, ["user","page_views_15m","actions_15m","heavy_15m","ram_pressure","load_level","last_seen"])}
+      </div>
       <div class="admin-panel"><h2>Páginas más vistas · 7 días</h2>{table(["Página","Qué significa","Visitas"], top_pages, ["page","meaning","n"])}</div>
       <div class="admin-panel"><h2>Eventos de producto · 7 días</h2>{table(["Evento","Acciones","Usuarios"], feature_rows, ["label","n","users"])}</div>
       <div class="admin-panel"><h2>XP por fuente · 30 días</h2>{table(["Acción","Eventos","XP"], xp_rows, ["action","n","xp"])}</div>
