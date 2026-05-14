@@ -3042,6 +3042,52 @@ def delete_lb_group(group_id: int, owner_id: int):
               (group_id, owner_id))
 
 
+def get_lb_group_members(group_id: int) -> list[dict]:
+    """Return members for a personal leaderboard group."""
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT c.id as client_id, COALESCE(c.name, c.email, 'Student') as name, "
+            "m.joined_at as joined_at, (g.owner_id = c.id) as is_owner "
+            "FROM student_lb_members m "
+            "JOIN student_lb_groups g ON g.id = m.group_id "
+            "JOIN clients c ON c.id = m.client_id "
+            "WHERE m.group_id = %s "
+            "ORDER BY is_owner DESC, c.name ASC",
+            (group_id,),
+        )
+
+
+def remove_lb_group_member(group_id: int, owner_id: int, member_id: int) -> bool:
+    """Let a group owner remove another member. Owners cannot remove themselves."""
+    if int(owner_id) == int(member_id):
+        return False
+    with get_db() as db:
+        group = _fetchone(
+            db,
+            "SELECT id FROM student_lb_groups WHERE id = %s AND owner_id = %s",
+            (group_id, owner_id),
+        )
+        if not group:
+            return False
+        _exec(
+            db,
+            "DELETE FROM student_lb_members WHERE group_id = %s AND client_id = %s",
+            (group_id, member_id),
+        )
+        try:
+            _exec(
+                db,
+                "UPDATE student_lb_group_invites SET status = 'removed', responded_at = "
+                + ("NOW()" if _USE_PG else "datetime('now','localtime')")
+                + " WHERE group_id = %s AND invitee_id = %s AND status IN ('pending','accepted')",
+                (group_id, member_id),
+            )
+        except Exception:
+            pass
+        return True
+
+
 def get_my_lb_groups(client_id: int) -> list[dict]:
     """Get all leaderboard groups the user is a member of."""
     with get_db() as db:

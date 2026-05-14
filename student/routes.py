@@ -18094,6 +18094,13 @@ No markdown, no code fences. ONLY JSON.
             "group_invites": "Group invites" if _lang == "en" else "Invitaciones a grupos",
             "invited_by": "Invited by" if _lang == "en" else "Invitado por",
             "group_failed": "Could not create the group." if _lang == "en" else "No se pudo crear el grupo.",
+            "owner": "Owner" if _lang == "en" else "Dueño",
+            "delete_group": "Delete" if _lang == "en" else "Borrar",
+            "delete_group_confirm": "Delete this study group? This removes the board for everyone." if _lang == "en" else "¿Borrar este grupo de estudio? Esto elimina el ranking para todos.",
+            "remove_member": "Remove" if _lang == "en" else "Quitar",
+            "remove_member_confirm": "Remove this member from the study group?" if _lang == "en" else "¿Quitar a este miembro del grupo de estudio?",
+            "group_deleted": "Study group deleted." if _lang == "en" else "Grupo de estudio borrado.",
+            "member_removed": "Member removed." if _lang == "en" else "Miembro quitado.",
         }
 
         return _s_render("Friends and Duels" if _lang == "en" else "Amigos y Duelos", f"""
@@ -18428,8 +18435,20 @@ No markdown, no code fences. ONLY JSON.
           }}
           box.innerHTML = groups.map(g => `
             <div class="fr-group-card">
-              <div><div class="fr-name">${{esc(g.name)}}</div><div class="fr-meta">${{g.member_count || 1}} ${{FR.members}}</div></div>
-              <button class="fr-btn small ghost" type="button" onclick="switchFriendBoard('group:${{g.id}}')">${{FR.open_group}}</button>
+              <div style="min-width:0;flex:1">
+                <div class="fr-name">${{esc(g.name)}}</div>
+                <div class="fr-meta">${{g.member_count || 1}} ${{FR.members}}${{g.is_owner ? ' · ' + FR.owner : ''}}</div>
+                ${{g.is_owner && g.members && g.members.length ? `<div class="fr-list" style="margin-top:10px;gap:6px">${{g.members.map(m => `
+                  <div class="fr-row" style="padding:8px 10px;border-radius:12px">
+                    <div class="fr-person"><div class="fr-avatar" style="width:30px;height:30px;border-radius:10px;font-size:11px">${{initials(m.name)}}</div><div><div class="fr-name" style="font-size:12px">${{esc(m.name)}}</div><div class="fr-meta">#${{m.client_id}}${{m.is_owner ? ' · ' + FR.owner : ''}}</div></div></div>
+                    ${{!m.is_owner ? `<button class="fr-btn small ghost" type="button" onclick="removeGroupMember(${{g.id}}, ${{m.client_id}})">${{FR.remove_member}}</button>` : ''}}
+                  </div>
+                `).join('')}}</div>` : ''}}
+              </div>
+              <div class="fr-actions">
+                <button class="fr-btn small ghost" type="button" onclick="switchFriendBoard('group:${{g.id}}')">${{FR.open_group}}</button>
+                ${{g.is_owner ? `<button class="fr-btn small ghost" type="button" style="color:#ef4444;border-color:rgba(239,68,68,.35)" onclick="deleteStudyGroup(${{g.id}})">${{FR.delete_group}}</button>` : ''}}
+              </div>
             </div>
           `).join('');
         }}
@@ -18577,6 +18596,23 @@ No markdown, no code fences. ONLY JSON.
           }}).then(r => r.json());
           if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
           await loadFriendCompetition();
+        }}
+
+        async function deleteStudyGroup(groupId) {{
+          if (!confirm(FR.delete_group_confirm)) return;
+          const r = await fetch('/api/student/friends/groups/' + groupId, {{ method:'DELETE' }}).then(r => r.json());
+          if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
+          frBoardKey = 'friends';
+          await loadFriendCompetition('friends');
+          alert(FR.group_deleted);
+        }}
+
+        async function removeGroupMember(groupId, memberId) {{
+          if (!confirm(FR.remove_member_confirm)) return;
+          const r = await fetch('/api/student/friends/groups/' + groupId + '/members/' + memberId, {{ method:'DELETE' }}).then(r => r.json());
+          if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
+          await loadFriendCompetition(frBoardKey);
+          alert(FR.member_removed);
         }}
 
         async function frChallenge(uid, uname, isOnline) {{
@@ -18943,15 +18979,26 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return jsonify(error="Login required"), 401
         cid = _cid()
-        groups = [
-            {
+        groups = []
+        for g in (sdb.get_my_lb_groups(cid) or []):
+            is_owner = bool(g.get("is_owner"))
+            members = []
+            if is_owner:
+                members = [
+                    {
+                        "client_id": int(m.get("client_id") or 0),
+                        "name": m.get("name") or "Student",
+                        "is_owner": bool(m.get("is_owner")),
+                    }
+                    for m in (sdb.get_lb_group_members(int(g.get("id") or 0)) or [])
+                ]
+            groups.append({
                 "id": g.get("id"),
                 "name": g.get("name") or "Study group",
                 "member_count": int(g.get("member_count") or 1),
-                "is_owner": bool(g.get("is_owner")),
-            }
-            for g in (sdb.get_my_lb_groups(cid) or [])
-        ]
+                "is_owner": is_owner,
+                "members": members,
+            })
         invites = [
             {
                 "id": inv.get("id"),
@@ -19058,6 +19105,29 @@ No markdown, no code fences. ONLY JSON.
         inv = sdb.respond_lb_group_invite(_cid(), invite_id, bool(data.get("accept")))
         if not inv:
             return jsonify(ok=False, error="Invite not found"), 404
+        return jsonify(ok=True)
+
+
+    @app.route("/api/student/friends/groups/<int:group_id>", methods=["DELETE"])
+    @csrf.exempt
+    def student_friends_delete_group_api(group_id):
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        group = sdb.get_lb_group(group_id)
+        if not group or int(group.get("owner_id") or 0) != _cid():
+            return jsonify(ok=False, error="Group not found"), 404
+        sdb.delete_lb_group(group_id, _cid())
+        return jsonify(ok=True)
+
+
+    @app.route("/api/student/friends/groups/<int:group_id>/members/<int:member_id>", methods=["DELETE"])
+    @csrf.exempt
+    def student_friends_remove_group_member_api(group_id, member_id):
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        ok = sdb.remove_lb_group_member(group_id, _cid(), member_id)
+        if not ok:
+            return jsonify(ok=False, error="Could not remove member"), 403
         return jsonify(ok=True)
 
 
