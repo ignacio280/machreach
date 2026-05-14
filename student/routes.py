@@ -18098,6 +18098,7 @@ No markdown, no code fences. ONLY JSON.
 
         return _s_render("Friends and Duels" if _lang == "en" else "Amigos y Duelos", f"""
 
+        <style>{sdb.FLAG_ANIM_CSS}</style>
         <style>
           .friends-cd {{ max-width:1180px;margin:0 auto;padding:4px 0 42px;--ink:#1A1A1F;--muted:#6E6A60;--line:#E2DCCC;--paper:#FFFDF8;--cream:#F4F1EA;--orange:#FF7A3D;font-family:'Nunito',sans-serif;color:var(--ink); }}
           .friends-cd .serif {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;letter-spacing:-.045em; }}
@@ -18161,6 +18162,59 @@ No markdown, no code fences. ONLY JSON.
           .fr-check {{ display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:14px;background:#FFFDF8;padding:10px;font-weight:850;font-size:13px; }}
           .fr-check input {{ accent-color:var(--orange); }}
           .fr-group-card {{ display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:18px;background:#FFFDF8;padding:14px; }}
+          .fr-lb-embed {{ --text:#1A1A1F;--text-muted:#77756F;--card:#FFFFFF;--border:#E2DCCC;--ease:cubic-bezier(.2,.8,.2,1); }}
+          .fr-lb-embed .lb-tabs {{ display:flex;gap:6px;background:#FFFFFF;border:1px solid var(--border);border-radius:14px;padding:6px;margin-bottom:16px;overflow:auto; }}
+          .fr-lb-embed .lb-tab {{ flex:1;min-width:max-content;padding:10px 14px;border-radius:999px;text-align:center;cursor:pointer;color:#5C5C66;font-weight:900;transition:all .18s;user-select:none;background:#FBF8F0;border:1px solid #E2DCCC; }}
+          .fr-lb-embed .lb-tab:hover {{ color:#1A1A1F;transform:translateY(-1px); }}
+          .fr-lb-embed .lb-tab.active {{ background:#1A1A1F;color:#FFF8E1;border-color:#1A1A1F;box-shadow:0 4px 0 rgba(0,0,0,.16); }}
+          .fr-lb-embed .lb-board {{ background:#FFFFFF;border:1px solid #E2DCCC;border-radius:18px;overflow:hidden; }}
+          .fr-lb-embed .lb-row {{ display:grid;grid-template-columns:56px 1fr 110px 110px;align-items:center;padding:14px 20px;border-top:1px solid #E2DCCC;transition:background .15s;position:relative;overflow:hidden;color:#1A1A1F;box-shadow:0 1px 0 rgba(20,18,30,.04); }}
+          .fr-lb-embed .lb-row:first-child {{ border-top:0; }}
+          .fr-lb-embed .lb-row:hover {{ background:#FBF8F0; }}
+          .fr-lb-embed .lb-row.me {{ background:linear-gradient(90deg,#FFE5D2,#FFFFFF);border-left:3px solid #FF7A3D; }}
+          .fr-lb-embed .lb-flag-bg {{ position:absolute;inset:0;pointer-events:none;z-index:0;-webkit-mask-image:linear-gradient(to right,transparent 0%,transparent 22%,rgba(0,0,0,.6) 36%,rgba(0,0,0,1) 50%,rgba(0,0,0,1) 100%);mask-image:linear-gradient(to right,transparent 0%,transparent 22%,rgba(0,0,0,.6) 36%,rgba(0,0,0,1) 50%,rgba(0,0,0,1) 100%);opacity:.28; }}
+          .fr-lb-embed .lb-row > *:not(.lb-flag-bg) {{ position:relative;z-index:1; }}
+          .fr-lb-embed .lb-medal {{ font-size:22px;text-align:center; }}
+          .fr-lb-embed .lb-medal-cell {{ display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0; }}
+          .fr-lb-embed .lb-pos {{ font-weight:900;text-align:center;color:#77756F; }}
+          .fr-lb-embed .lb-who {{ display:flex;align-items:center;gap:10px;min-width:0; }}
+          .fr-lb-embed .lb-avatar {{ width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#3B4A7A,#5B4694);display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;flex-shrink:0; }}
+          .fr-lb-embed .lb-xp {{ font-variant-numeric:tabular-nums;color:#1A1A1F;font-weight:900; }}
+          .fr-lb-embed .lb-pill {{ display:inline-block;padding:3px 9px;font-size:11px;border-radius:999px;font-weight:900;letter-spacing:.02em; }}
+          .fr-lb-embed .lb-podium {{ display:grid;grid-template-columns:1fr 1.22fr 1fr;gap:22px;align-items:end;margin:22px 0 28px;padding:56px 28px 32px;border:1px solid #E2DCCC;border-radius:28px;background:linear-gradient(135deg,#FFFFFF,#F4F1EA);position:relative;overflow:hidden;box-shadow:0 1px 0 rgba(20,18,30,.04),0 18px 44px rgba(20,18,30,.08); }}
+          .fr-lb-embed .lb-podium::before {{ content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(255,122,61,.25),transparent 45%),radial-gradient(circle at 10% 100%,rgba(0,155,114,.16),transparent 40%);opacity:.25;pointer-events:none; }}
+          .fr-lb-embed .lb-podium::after {{ content:"";position:absolute;left:6%;right:6%;bottom:18px;height:2px;background:linear-gradient(90deg,transparent,rgba(250,204,21,.85),rgba(255,122,61,.75),transparent);filter:blur(.4px);opacity:.95; }}
+          .fr-lb-embed .lb-podium-card {{ position:relative;z-index:1;min-height:230px;display:flex;flex-direction:column;justify-content:flex-end;border-radius:22px;overflow:hidden;color:#1A1A1F;border:1px solid #E2DCCC;background:#FFFFFF;box-shadow:0 6px 0 rgba(20,18,30,.06),0 14px 30px rgba(20,18,30,.08);transition:transform .25s var(--ease),box-shadow .25s var(--ease),border-color .25s var(--ease); }}
+          .fr-lb-embed .lb-podium-card:hover {{ transform:translateY(-6px); }}
+          .fr-lb-embed .lb-podium-card.place-1 {{ min-height:310px;transform:translateY(-14px);border-color:rgba(250,204,21,.65);background:linear-gradient(180deg,#FFF8E1,#FFE0A3);animation:lbCrownFloat 4s ease-in-out infinite; }}
+          .fr-lb-embed .lb-podium-card.place-1:hover {{ transform:translateY(-22px); }}
+          .fr-lb-embed .lb-podium-card.place-2 {{ min-height:258px;background:linear-gradient(180deg,#FFFFFF,#EDE7DA); }}
+          .fr-lb-embed .lb-podium-card.place-3 {{ min-height:228px;background:linear-gradient(180deg,#FFE7D8,#FFB199);border-color:#FFB36B; }}
+          @keyframes lbCrownFloat {{ 0%,100% {{ transform:translateY(-14px); }} 50% {{ transform:translateY(-19px); }} }}
+          .fr-lb-embed .lb-podium-flag {{ position:absolute;inset:0;opacity:.14;z-index:0; }}
+          .fr-lb-embed .lb-podium-body {{ position:relative;z-index:2;padding:22px 18px 18px;text-align:center; }}
+          .fr-lb-embed .lb-crown {{ position:absolute;top:-26px;left:50%;transform:translateX(-50%);z-index:3;font-size:42px;filter:drop-shadow(0 8px 18px rgba(250,204,21,.55));animation:lbCrownBob 2.4s ease-in-out infinite; }}
+          @keyframes lbCrownBob {{ 0%,100% {{ transform:translate(-50%,0) rotate(-3deg); }} 50% {{ transform:translate(-50%,-4px) rotate(3deg); }} }}
+          .fr-lb-embed .lb-podium-medal {{ font-size:34px;line-height:1;margin-bottom:10px; }}
+          .fr-lb-embed .place-1 .lb-podium-medal {{ font-size:42px; }}
+          .fr-lb-embed .lb-podium-avatar {{ width:72px;height:72px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:24px;background:linear-gradient(135deg,#334155,#7c3aed);border:3px solid rgba(255,255,255,.6);box-shadow:0 0 0 5px rgba(20,18,30,.05),0 8px 22px rgba(20,18,30,.18); }}
+          .fr-lb-embed .place-1 .lb-podium-avatar {{ width:92px;height:92px;font-size:30px;border-color:rgba(250,204,21,.85);box-shadow:0 0 0 6px rgba(250,204,21,.12),0 0 38px rgba(250,204,21,.35),0 10px 24px rgba(20,18,30,.18); }}
+          .fr-lb-embed .place-2 .lb-podium-avatar {{ width:78px;height:78px;border-color:rgba(226,232,240,.85); }}
+          .fr-lb-embed .place-3 .lb-podium-avatar {{ width:74px;height:74px;border-color:rgba(251,146,60,.85); }}
+          .fr-lb-embed .lb-podium-name {{ font-size:17px;font-weight:900;letter-spacing:-.02em;line-height:1.2;color:#1A1A1F; }}
+          .fr-lb-embed .place-1 .lb-podium-name {{ font-size:23px; }}
+          .fr-lb-embed .lb-podium-xp {{ margin-top:8px;font-size:13.5px;color:#1A1A1F;font-variant-numeric:tabular-nums; }}
+          .fr-lb-embed .lb-podium-prize {{ display:inline-flex;align-items:center;justify-content:center;gap:5px;margin-top:14px;padding:7px 14px;border-radius:999px;background:rgba(255,255,255,.38);color:#5C4033;border:1px solid rgba(255,255,255,.46);font-size:12px;font-weight:900; }}
+          .fr-lb-embed .lb-podium-step {{ position:relative;z-index:2;margin-top:18px;padding:12px;border-radius:14px 14px 0 0;font-size:13px;font-weight:900;letter-spacing:.20em;text-transform:uppercase;color:rgba(15,23,42,.92);text-shadow:0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -8px 18px rgba(0,0,0,.18); }}
+          .fr-lb-embed .place-1 .lb-podium-step {{ height:72px;background:linear-gradient(180deg,#fef3c7 0%,#fde68a 35%,#f59e0b 100%); }}
+          .fr-lb-embed .place-2 .lb-podium-step {{ height:54px;background:linear-gradient(180deg,#f8fafc 0%,#e2e8f0 35%,#94a3b8 100%); }}
+          .fr-lb-embed .place-3 .lb-podium-step {{ height:42px;background:linear-gradient(180deg,#fed7aa 0%,#fdba74 35%,#c2410c 100%); }}
+          .fr-lb-embed .lb-podium-card.me {{ outline:2px solid rgba(255,122,61,.85);outline-offset:2px; }}
+          .fr-lb-embed .lb-empty,.fr-lb-embed .lb-loading {{ padding:36px 20px;text-align:center;color:#77756F; }}
+          .fr-lb-embed .lb-skeleton {{ display:flex;flex-direction:column;gap:10px;padding:14px 20px; }}
+          .fr-lb-embed .lb-sk-row {{ height:48px;background:linear-gradient(90deg,rgba(148,163,184,.06),rgba(148,163,184,.14),rgba(148,163,184,.06));background-size:200% 100%;border-radius:10px;animation:lbShimmer 1.6s infinite linear; }}
+          @keyframes lbShimmer {{ from {{ background-position:0 0; }} to {{ background-position:-200% 0; }} }}
+          @media(max-width:720px) {{ .fr-lb-embed .lb-podium {{ grid-template-columns:1fr;padding:36px 18px 22px;gap:14px; }} .fr-lb-embed .lb-podium-card,.fr-lb-embed .lb-podium-card.place-1,.fr-lb-embed .lb-podium-card.place-2,.fr-lb-embed .lb-podium-card.place-3 {{ min-height:220px;transform:none;animation:none; }} .fr-lb-embed .lb-row {{ grid-template-columns:40px 1fr 80px; }} .fr-lb-embed .lb-row .lb-pill-col {{ display:none; }} }}
         </style>
 
         <div class="friends-cd">
@@ -18187,8 +18241,13 @@ No markdown, no code fences. ONLY JSON.
           <section class="fr-rank-wrap">
             <div class="fr-panel">
               <div class="fr-panel-top"><div><h3>{_fr["friend_ranking"]}</h3><div class="fr-note">{_fr["friend_ranking_sub"]}</div></div><span class="fr-count">XP</span></div>
-              <div id="fr-rank-podium" class="fr-rank-podium"></div>
-              <div id="fr-rank-list" class="fr-rank-list"><div class="fr-empty">{_fr["loading"]}</div></div>
+              <div id="mr-lb-page" class="fr-lb-embed">
+                <div class="lb-tabs" id="fr-lb-tabs"></div>
+                <div class="lb-podium" id="fr-rank-podium" style="display:none;"></div>
+                <div id="fr-rank-list" class="lb-board">
+                  <div class="lb-skeleton"><div class="lb-sk-row"></div><div class="lb-sk-row"></div><div class="lb-sk-row"></div></div>
+                </div>
+              </div>
             </div>
             <div class="fr-panel alt">
               <div class="fr-panel-top"><div><h3>{_fr["study_groups"]}</h3><div class="fr-note">{_fr["study_groups_sub"]}</div></div></div>
@@ -18370,7 +18429,7 @@ No markdown, no code fences. ONLY JSON.
           box.innerHTML = groups.map(g => `
             <div class="fr-group-card">
               <div><div class="fr-name">${{esc(g.name)}}</div><div class="fr-meta">${{g.member_count || 1}} ${{FR.members}}</div></div>
-              <a class="fr-btn small ghost" href="/student/leaderboard/group/${{g.id}}">${{FR.open_group}}</a>
+              <button class="fr-btn small ghost" type="button" onclick="switchFriendBoard('group:${{g.id}}')">${{FR.open_group}}</button>
             </div>
           `).join('');
         }}
@@ -18382,6 +18441,114 @@ No markdown, no code fences. ONLY JSON.
             renderStudyGroups(r.groups || [], r.invites || []);
           }} catch (e) {{}}
         }}
+
+        const frMedal = (rank) => rank === 1 ? '🏅' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+        let frBoardKey = 'friends';
+        function frT(en, es) {{ return document.documentElement.lang === 'es' ? es : en; }}
+        function leagueName(name) {{
+          const map = {{
+            'Initiate':'Iniciado',
+            'Scholar':'Académico',
+            'Researcher':'Investigador',
+            'Academic':'Erudito',
+            'Mastermind':'Mente maestra',
+            'Grand Scholar':'Gran estudioso',
+            'Legend':'Leyenda'
+          }};
+          return document.documentElement.lang === 'es' ? (map[name] || name) : name;
+        }}
+        function frPodiumCard(r) {{
+          const xp = Number(r.xp ?? r.total_xp ?? 0);
+          const flagBg = r.flag_css ? `<div class="lb-podium-flag ${{r.flag_anim_class||''}}" style="background:${{r.flag_css}};"></div>` : '';
+          const crown = r.rank === 1 ? '<div class="lb-crown">👑</div>' : '';
+          const title = r.rank === 1 ? frT('Champion', 'Campeón') : (r.rank === 2 ? frT('Runner-up', 'Segundo lugar') : frT('Third place', 'Tercer lugar'));
+          const translatedLeague = leagueName(r.league_name || '');
+          return `
+            <a class="lb-podium-card place-${{r.rank}} ${{r.is_you?'me':''}}" href="/student/profile/${{r.client_id}}" style="text-decoration:none;">
+              ${{flagBg}}
+              ${{crown}}
+              <div class="lb-podium-body">
+                <div class="lb-podium-medal">${{frMedal(r.rank)}}</div>
+                <div class="lb-podium-avatar">${{initials(r.name)}}</div>
+                <div class="lb-podium-name">${{r.badge_left_emoji?`<span title="${{esc(r.badge_left_name||'')}}" style="margin-right:5px;">${{r.badge_left_emoji}}</span>`:''}}${{esc(r.name)}}${{r.badge_right_emoji?`<span title="${{esc(r.badge_right_name||'')}}" style="margin-left:5px;">${{r.badge_right_emoji}}</span>`:''}}</div>
+                <div class="lb-podium-xp">${{xp.toLocaleString()}} XP &middot; <span style="color:${{r.league_color || '#FF7A3D'}};font-weight:900;">${{esc(translatedLeague)}}</span></div>
+                <div class="lb-podium-prize">${{frT('Private group glory', 'Gloria privada')}}</div>
+              </div>
+              <div class="lb-podium-step">#${{r.rank}} ${{title}}</div>
+            </a>`;
+        }}
+        function renderFriendBoardTabs(boards, activeKey) {{
+          const box = document.getElementById('fr-lb-tabs');
+          if (!box) return;
+          const items = boards && boards.length ? boards : [{{key:'friends', label:FR.friend_ranking}}];
+          box.innerHTML = items.map(b => `
+            <div class="lb-tab ${{b.key === activeKey ? 'active' : ''}}" data-board="${{esc(b.key)}}">${{esc(b.label)}}</div>
+          `).join('');
+        }}
+        renderFriendRanking = function(rows) {{
+          const podium = document.getElementById('fr-rank-podium');
+          const board = document.getElementById('fr-rank-list');
+          if (!podium || !board) return;
+          if (!rows || !rows.length) {{
+            podium.style.display = 'none';
+            podium.innerHTML = '';
+            board.innerHTML = `<div class="lb-empty">${{FR.friends_empty_rank}}</div>`;
+            return;
+          }}
+          const top = rows.filter(r => Number(r.rank) <= 3);
+          if (top.length) {{
+            const byRank = {{}};
+            top.forEach(r => {{ byRank[r.rank] = r; }});
+            podium.innerHTML = [byRank[2], byRank[1], byRank[3]].filter(Boolean).map(frPodiumCard).join('');
+            podium.style.display = 'grid';
+          }} else {{
+            podium.style.display = 'none';
+            podium.innerHTML = '';
+          }}
+          const tableRows = rows.filter(r => Number(r.rank) > 3);
+          if (!tableRows.length) {{
+            board.innerHTML = `<div class="lb-empty">${{frT('The rest of the ranking starts at #4. No other friends ranked yet.', 'El resto del ranking empieza en el #4. Todavía no hay más amigos rankeados.')}}</div>`;
+            return;
+          }}
+          board.innerHTML = tableRows.map(r => {{
+            const xp = Number(r.xp ?? r.total_xp ?? 0);
+            const flagBg = r.flag_css ? `<div class="lb-flag-bg ${{r.flag_anim_class||''}}" style="background:${{r.flag_css}};"></div>` : '';
+            const translatedLeague = leagueName(r.league_name || '');
+            return `
+              <a class="lb-row ${{r.is_you?'me':''}}" href="/student/profile/${{r.client_id}}" style="color:inherit;text-decoration:none;cursor:pointer;">
+                ${{flagBg}}
+                <div class="lb-medal-cell"><div class="${{r.rank<=3?'lb-medal':'lb-pos'}}">${{r.rank<=3 ? frMedal(r.rank) : '#'+r.rank}}</div></div>
+                <div class="lb-who">
+                  <div class="lb-avatar">${{initials(r.name)}}</div>
+                  <div>
+                    <div>${{r.badge_left_emoji?`<span title="${{esc(r.badge_left_name||'')}}" style="margin-right:4px;">${{r.badge_left_emoji}}</span>`:''}}${{esc(r.name)}}${{r.badge_right_emoji?`<span title="${{esc(r.badge_right_name||'')}}" style="margin-left:4px;">${{r.badge_right_emoji}}</span>`:''}}${{r.is_you?' <span style="color:#FF7A3D;font-size:12px;font-weight:900;">('+FR.you+')</span>':''}}</div>
+                    <div class="lb-pill-col"><span class="lb-pill" style="background:${{r.league_color || '#FF7A3D'}}22;color:${{r.league_color || '#FF7A3D'}};">${{esc(translatedLeague)}}</span></div>
+                  </div>
+                </div>
+                <div class="lb-xp">${{xp.toLocaleString()}} XP</div>
+                <div class="lb-pill-col"><span class="lb-pill" style="background:${{r.league_color || '#FF7A3D'}}22;color:${{r.league_color || '#FF7A3D'}};">${{esc(translatedLeague)}}</span></div>
+              </a>`;
+          }}).join('');
+        }};
+        function switchFriendBoard(key) {{
+          frBoardKey = key || 'friends';
+          loadFriendCompetition(frBoardKey);
+        }}
+        loadFriendCompetition = async function(boardKey) {{
+          if (boardKey) frBoardKey = boardKey;
+          try {{
+            const r = await fetch('/api/student/friends/competition?board=' + encodeURIComponent(frBoardKey)).then(r => r.json());
+            frBoardKey = r.active_key || frBoardKey || 'friends';
+            renderFriendBoardTabs(r.boards || [], frBoardKey);
+            renderFriendRanking(r.ranking || []);
+            renderStudyGroups(r.groups || [], r.invites || []);
+          }} catch (e) {{}}
+        }};
+        document.addEventListener('click', (e) => {{
+          const tab = e.target.closest('#fr-lb-tabs .lb-tab');
+          if (!tab) return;
+          switchFriendBoard(tab.dataset.board || 'friends');
+        }});
 
         async function createStudyGroup() {{
           const name = (document.getElementById('fr-group-name').value || '').trim() || FR.group_name;
@@ -18776,15 +18943,6 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return jsonify(error="Login required"), 401
         cid = _cid()
-        rows = []
-        for i, row in enumerate(sdb.get_friend_leaderboard(cid) or [], start=1):
-            rows.append({
-                "rank": i,
-                "client_id": row.get("client_id"),
-                "name": row.get("name") or "Student",
-                "total_xp": int(row.get("total_xp") or 0),
-                "is_you": int(row.get("client_id") or 0) == cid,
-            })
         groups = [
             {
                 "id": g.get("id"),
@@ -18803,7 +18961,75 @@ No markdown, no code fences. ONLY JSON.
             }
             for inv in (sdb.list_lb_group_invites(cid) or [])
         ]
-        return jsonify(ranking=rows, groups=groups, invites=invites)
+
+        def _decorate_lb_rows(raw_rows):
+            from student import academic as ac
+            out = []
+            for i, row in enumerate(raw_rows or [], start=1):
+                client_id = int(row.get("client_id") or 0)
+                xp = int(row.get("total_xp") or row.get("xp") or 0)
+                lg = ac.league_for_xp(xp)
+                out.append({
+                    "rank": i,
+                    "client_id": client_id,
+                    "name": row.get("name") or row.get("display_name") or "Student",
+                    "xp": xp,
+                    "total_xp": xp,
+                    "league_key": lg.get("key"),
+                    "league_name": lg.get("name"),
+                    "league_color": lg.get("color"),
+                    "is_you": client_id == cid,
+                })
+            ids = [int(r["client_id"]) for r in out if r.get("client_id")]
+            try:
+                flags = sdb.get_flags_for_clients(ids)
+                for row in out:
+                    f = flags.get(int(row["client_id"]))
+                    if f:
+                        row["flag_css"] = f.get("css", "")
+                        row["flag_anim_class"] = f.get("anim_class", "")
+                        row["flag_name"] = f.get("name", "")
+            except Exception:
+                pass
+            try:
+                badges = sdb.get_equipped_badges_for_clients(ids)
+                for row in out:
+                    b = badges.get(int(row["client_id"]))
+                    if not b:
+                        continue
+                    left = b.get("left") or {}
+                    right = b.get("right") or {}
+                    if left:
+                        row["badge_left_emoji"] = left.get("emoji", "")
+                        row["badge_left_name"] = left.get("name", "")
+                    if right:
+                        row["badge_right_emoji"] = right.get("emoji", "")
+                        row["badge_right_name"] = right.get("name", "")
+            except Exception:
+                pass
+            return out
+
+        boards = [{"key": "friends", "label": "Friends" if session.get("lang", "es") == "en" else "Amigos", "kind": "friends"}]
+        for g in groups:
+            boards.append({"key": f"group:{int(g['id'])}", "label": g["name"], "kind": "group", "group_id": int(g["id"])})
+
+        active_key = (request.args.get("board") or "friends").strip() or "friends"
+        raw_rows = sdb.get_friend_leaderboard(cid) or []
+        if active_key.startswith("group:"):
+            try:
+                group_id = int(active_key.split(":", 1)[1])
+            except Exception:
+                group_id = 0
+            allowed = {int(g["id"]) for g in groups}
+            if group_id in allowed and sdb.is_lb_member(cid, group_id):
+                raw_rows = sdb.get_lb_group_leaderboard(group_id) or []
+            else:
+                active_key = "friends"
+        elif active_key != "friends":
+            active_key = "friends"
+
+        rows = _decorate_lb_rows(raw_rows)
+        return jsonify(ranking=rows, boards=boards, active_key=active_key, groups=groups, invites=invites)
 
 
     @app.route("/api/student/friends/groups", methods=["POST"])
