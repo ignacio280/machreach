@@ -625,6 +625,26 @@ def _student_migrations():
         "joined_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
         "UNIQUE(group_id, client_id))",
     )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_lb_group_invites ("
+        "id SERIAL PRIMARY KEY, "
+        "group_id INTEGER NOT NULL REFERENCES student_lb_groups(id) ON DELETE CASCADE, "
+        "inviter_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "invitee_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "status TEXT NOT NULL DEFAULT 'pending', "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "responded_at TIMESTAMP, "
+        "UNIQUE(group_id, invitee_id))",
+        "CREATE TABLE IF NOT EXISTS student_lb_group_invites ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "group_id INTEGER NOT NULL REFERENCES student_lb_groups(id) ON DELETE CASCADE, "
+        "inviter_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "invitee_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "status TEXT NOT NULL DEFAULT 'pending', "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), "
+        "responded_at TEXT, "
+        "UNIQUE(group_id, invitee_id))",
+    )
     # Track unique users who forked/used a shared note (for XP)
     _create_table_safe(
         "CREATE TABLE IF NOT EXISTS student_note_forks ("
@@ -3066,6 +3086,115 @@ def get_lb_group_leaderboard(group_id: int) -> list[dict]:
 def get_lb_group(group_id: int) -> dict | None:
     with get_db() as db:
         return _fetchone(db, "SELECT * FROM student_lb_groups WHERE id = %s", (group_id,))
+
+
+def invite_friends_to_lb_group(owner_id: int, group_id: int, friend_ids: list[int]) -> int:
+    """Invite accepted friends to a leaderboard group owned by owner_id."""
+    clean_ids = sorted({int(fid) for fid in (friend_ids or []) if str(fid).isdigit()})
+    if not clean_ids:
+        return 0
+    with get_db() as db:
+        group = _fetchone(
+            db,
+            "SELECT id FROM student_lb_groups WHERE id = %s AND owner_id = %s",
+            (group_id, owner_id),
+        )
+        if not group:
+            return 0
+        friends = _fetchall(
+            db,
+            "SELECT friend_client_id FROM student_friends "
+            "WHERE client_id = %s AND status = 'accepted'",
+            (owner_id,),
+        )
+        allowed = {int(r["friend_client_id"]) for r in friends}
+        invited = 0
+        for fid in clean_ids:
+            if fid not in allowed:
+                continue
+            try:
+                _exec(
+                    db,
+                    "INSERT INTO student_lb_group_invites (group_id, inviter_id, invitee_id, status) "
+                    "VALUES (%s, %s, %s, 'pending')",
+                    (group_id, owner_id, fid),
+                )
+                invited += 1
+            except Exception:
+                pass
+        return invited
+
+
+def list_lb_group_invites(client_id: int) -> list[dict]:
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT gi.id, gi.group_id, gi.status, gi.created_at, "
+            "g.name as group_name, g.owner_id, COALESCE(c.name, c.email, 'Student') as inviter_name "
+            "FROM student_lb_group_invites gi "
+            "JOIN student_lb_groups g ON g.id = gi.group_id "
+            "JOIN clients c ON c.id = gi.inviter_id "
+            "WHERE gi.invitee_id = %s AND gi.status = 'pending' "
+            "ORDER BY gi.created_at DESC",
+            (client_id,),
+        )
+
+
+def respond_lb_group_invite(client_id: int, invite_id: int, accept: bool) -> dict | None:
+    with get_db() as db:
+        inv = _fetchone(
+            db,
+            "SELECT * FROM student_lb_group_invites WHERE id = %s AND invitee_id = %s AND status = 'pending'",
+            (invite_id, client_id),
+        )
+        if not inv:
+            return None
+        status = "accepted" if accept else "declined"
+        _exec(
+            db,
+            "UPDATE student_lb_group_invites SET status = %s, responded_at = "
+            + ("NOW()" if _USE_PG else "datetime('now','localtime')")
+            + " WHERE id = %s",
+            (status, invite_id),
+        )
+        if accept:
+            try:
+                _exec(
+                    db,
+                    "INSERT INTO student_lb_members (group_id, client_id) VALUES (%s, %s)",
+                    (inv["group_id"], client_id),
+                )
+            except Exception:
+                pass
+        return inv
+
+
+def get_friend_leaderboard(client_id: int) -> list[dict]:
+    """Return the current user plus accepted friends ranked by all-time XP."""
+    with get_db() as db:
+        ids = [client_id] + [
+            int(r["friend_client_id"]) for r in _fetchall(
+                db,
+                "SELECT friend_client_id FROM student_friends "
+                "WHERE client_id = %s AND status = 'accepted'",
+                (client_id,),
+            )
+        ]
+        if not ids:
+            return []
+        placeholders = ",".join(["%s"] * len(ids))
+        rows = _fetchall(
+            db,
+            f"SELECT c.id as client_id, COALESCE(c.name, c.email, 'Student') as name, "
+            f"COALESCE(SUM(x.xp), 0) as total_xp "
+            f"FROM clients c "
+            f"LEFT JOIN student_xp x ON x.client_id = c.id "
+            f"WHERE c.id IN ({placeholders}) "
+            f"GROUP BY c.id, c.name, c.email "
+            f"ORDER BY total_xp DESC, name ASC",
+            tuple(ids),
+        )
+        return rows
 
 
 def is_lb_member(client_id: int, group_id: int) -> bool:

@@ -1948,7 +1948,6 @@ LAYOUT = """<!DOCTYPE html>
         <div class="nav-section">{{ student_ui.study }}</div>
         <a class="nav-item {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes"><span class="ic">&#128221;</span><span>{{ student_ui.quizzes }}</span></a>
         <a class="nav-item {% if active_page == 'student_flashcards' %}active{% endif %}" href="/student/flashcards"><span class="ic">&#127183;</span><span>{{ student_ui.flashcards }}</span></a>
-        <a class="nav-item {% if active_page == 'student_essay' %}active{% endif %}" href="/student/essay"><span class="ic">&#9999;</span><span>{{ student_ui.essays }}</span></a>
 
         <div class="nav-section">{{ student_ui.community }}</div>
         <a class="nav-item {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard"><span class="ic">&#127942;</span><span>{{ student_ui.leaderboard }}</span></a>
@@ -2022,11 +2021,10 @@ LAYOUT = """<!DOCTYPE html>
         {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Cursos</a>
         <div class="nav-dropdown">
-          <a href="javascript:void(0)" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Herramientas de Estudio &#9662;</a>
+          <a href="javascript:void(0)" {% if active_page in ['student_flashcards','student_quizzes'] %}class="active"{% endif %}>&#128218; Herramientas de Estudio &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/flashcards">&#127183; Tarjetas</a>
             <a href="/student/quizzes">&#128221; Quizzes</a>
-            <a href="/student/essay">&#9999;&#65039; Ensayos</a>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Enfoque</a>
@@ -2047,11 +2045,10 @@ LAYOUT = """<!DOCTYPE html>
         {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
         <div class="nav-dropdown">
-          <a href="javascript:void(0)" {% if active_page in ['student_flashcards','student_quizzes','student_essay'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
+          <a href="javascript:void(0)" {% if active_page in ['student_flashcards','student_quizzes'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/flashcards">&#127183; Flashcards</a>
             <a href="/student/quizzes">&#128221; Quizzes</a>
-            <a href="/student/essay">&#9999;&#65039; Essay</a>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
@@ -2505,7 +2502,6 @@ LAYOUT = """<!DOCTYPE html>
         {t:'Flashcards', u:'/student/flashcards', i:'📇', s:'Study'},
         {t:'Quizzes', u:'/student/quizzes', i:'📝', s:'Study'},
         {t:'Notes', u:'/student/notes', i:'📖', s:'Study'},
-        {t:'Essay Assistant', u:'/student/essay', i:'\u270F\uFE0F', s:'Study'},
         {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
         {t:'Panic Mode', u:'/student/panic', i:'🚨', s:'Tools'},
         {t:'Grade Sheet', u:'/student/gpa', i:'📈', s:'Tools'},
@@ -3190,7 +3186,6 @@ LAYOUT = """<!DOCTYPE html>
         "Resumir con IA en apuntes estructurados (recomendado para libros y PDFs con varios capítulos)",
       "Drop a PDF / DOCX / TXT": "Suelta un PDF / DOCX / TXT",
       "we'll extract the text into the editor below": "extraeremos el texto en el editor de abajo",
-      "Or drop your essay file": "O suelta tu archivo de ensayo",
       "Attach a file (PDF/DOCX/TXT)": "Adjuntar un archivo (PDF/DOCX/TXT)",
       "Ask your tutor... (or drag a PDF onto the chat)":
         "Pregúntale a tu tutor... (o arrastra un PDF al chat)",
@@ -3251,24 +3246,6 @@ LAYOUT = """<!DOCTYPE html>
       "PDF, DOCX, or TXT only": "Solo PDF, DOCX, o TXT",
       "File too large (max 15MB)": "Archivo demasiado grande (máx 15MB)",
       "Only PDF, DOCX, and TXT files": "Solo archivos PDF, DOCX y TXT",
-
-      // Essay assistant
-      "Essay Assistant": "Asistente de Ensayos",
-      "Paste your draft. Get brutally honest feedback on thesis, structure, grammar, and flow.":
-        "Pega tu borrador. Recibe feedback honesto sobre tesis, estructura, gramática y flujo.",
-      "Assignment prompt": "Enunciado del trabajo",
-      "What was the essay supposed to answer?": "¿Qué debía responder el ensayo?",
-      "Your essay": "Tu ensayo",
-      "Paste your draft here...": "Pega tu borrador aquí...",
-      "This takes ~10 seconds.": "Esto tarda ~10 segundos.",
-      "Thesis": "Tesis", "Structure": "Estructura", "Grammar": "Gramática",
-      "Clarity": "Claridad", "Words": "Palabras", "Level": "Nivel",
-      "Strengths": "Fortalezas", "Weaknesses": "Debilidades",
-      "Grammar & Style": "Gramática y Estilo", "Rewritten Intro": "Introducción Reescrita",
-      "Thesis Feedback": "Feedback de Tesis", "Overall": "General",
-      "No major grammar issues detected.": "No se detectaron problemas graves de gramática.",
-      "Paste at least a couple of paragraphs.": "Pega al menos un par de párrafos.",
-      "Analyzing...": "Analizando...",
 
       // Panic mode
       "Panic Mode": "Modo Pánico",
@@ -3645,7 +3622,6 @@ LAYOUT = """<!DOCTYPE html>
       "Mis Cursos": "My Courses",
       "Estudio": "Study",
       "Tarjetas": "Flashcards",
-      "Ensayos": "Essays",
       "Comunidad": "Community",
       "Ranking": "Leaderboard",
       "Amigos": "Friends",
@@ -3784,12 +3760,8 @@ LAYOUT = """<!DOCTYPE html>
       "Vender archivo": "Sell a file",
       "Aún no hay apuntes compartidos.": "No shared notes yet.",
 
-      "Borrador": "Draft",
-      "Asistente de escritura": "Writing assistant",
-      "Ensayos sin vueltas.": "Essays, no fluff.",
       "Suelta tu archivo": "Drop your file",
       "Sube un archivo": "Upload a file",
-      "Corregir ensayo": "Review essay",
 
       "Admin": "Admin",
       "Analytics de producto": "Product analytics",
@@ -3808,7 +3780,7 @@ LAYOUT = """<!DOCTYPE html>
       "Quizzes hoy": "Quizzes today",
       "Mazos hoy": "Decks today",
       "Tarjetas hoy": "Cards today",
-      "Apuntes/ensayos hoy": "Notes/essays today",
+      "Apuntes hoy": "Notes today",
       "Mercado ventas hoy": "Marketplace sales today",
       "Usuarios totales": "Total users",
       "Activos 7 días": "Active 7 days"
@@ -5314,7 +5286,6 @@ def _analytics_feature_event_for_path(path: str) -> str | None:
         ("/student/quizzes", "view_quizzes"),
         ("/student/quiz", "view_quizzes"),
         ("/student/flashcards", "view_flashcards"),
-        ("/student/essay", "view_essays"),
         ("/student/leaderboard", "view_leaderboard"),
         ("/student/marketplace", "view_marketplace"),
         ("/student/shop", "view_shop"),
@@ -5353,8 +5324,6 @@ def _machreach_product_analytics_hook():
         ("/api/student/quizzes", "quiz_action"),
         ("/api/student/flashcard", "flashcard_action"),
         ("/api/student/flashcards", "flashcard_action"),
-        ("/api/student/essay", "essay_action"),
-        ("/student/essay", "essay_action"),
         ("/api/student/marketplace", "marketplace_action"),
         ("/student/marketplace", "marketplace_action"),
         ("/api/student/canvas", "canvas_action"),
@@ -5402,7 +5371,6 @@ def admin_product_analytics():
         "view_courses": "Cursos",
         "view_quizzes": "Quizzes",
         "view_flashcards": "Tarjetas",
-        "view_essays": "Ensayos",
         "view_leaderboard": "Ranking",
         "view_marketplace": "Mercado",
         "view_shop": "Tienda",
@@ -5412,7 +5380,6 @@ def admin_product_analytics():
         "focus_session_saved": "Sesion de enfoque guardada",
         "quiz_action": "Acciones de quiz",
         "flashcard_action": "Acciones de tarjetas",
-        "essay_action": "Acciones de ensayo",
         "marketplace_action": "Acciones de mercado",
         "canvas_action": "Acciones de Canvas",
     }
@@ -5434,7 +5401,6 @@ def admin_product_analytics():
         ("/student/quizzes", "Quizzes", "Usuarios usando quizzes de práctica"),
         ("/student/quiz", "Quizzes", "Usuarios usando quizzes de práctica"),
         ("/student/flashcards", "Tarjetas", "Usuarios usando flashcards"),
-        ("/student/essay", "Ensayos", "Usuarios revisando ensayos"),
         ("/student/leaderboard", "Ranking", "Usuarios mirando la competencia"),
         ("/student/friends", "Amigos y duelos", "Usuarios usando funciones sociales"),
         ("/student/marketplace", "Mercado", "Usuarios comprando o vendiendo apuntes"),
@@ -5480,7 +5446,7 @@ def admin_product_analytics():
         ("Quizzes hoy", _admin_metric(f"SELECT COUNT(*) FROM student_quizzes WHERE {today_pg}", f"SELECT COUNT(*) FROM student_quizzes WHERE {today_lite}")),
         ("Mazos hoy", _admin_metric(f"SELECT COUNT(*) FROM student_flashcard_decks WHERE {today_pg}", f"SELECT COUNT(*) FROM student_flashcard_decks WHERE {today_lite}")),
         ("Tarjetas hoy", _admin_metric(f"SELECT COUNT(*) FROM student_flashcards WHERE {today_pg}", f"SELECT COUNT(*) FROM student_flashcards WHERE {today_lite}")),
-        ("Apuntes/ensayos hoy", _admin_metric(f"SELECT COUNT(*) FROM student_notes WHERE {today_pg}", f"SELECT COUNT(*) FROM student_notes WHERE {today_lite}")),
+        ("Apuntes hoy", _admin_metric(f"SELECT COUNT(*) FROM student_notes WHERE {today_pg}", f"SELECT COUNT(*) FROM student_notes WHERE {today_lite}")),
         ("Mercado ventas hoy", _admin_metric(f"SELECT COUNT(*) FROM student_marketplace_purchases WHERE {today_pg}", f"SELECT COUNT(*) FROM student_marketplace_purchases WHERE {today_lite}")),
         ("Usuarios totales", _admin_metric("SELECT COUNT(*) FROM clients WHERE COALESCE(account_type,'student')='student'", "SELECT COUNT(*) FROM clients WHERE COALESCE(account_type,'student')='student'")),
         ("Activos 7 días", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_pg} AND {external_events}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_lite} AND {external_events}")),
@@ -6123,7 +6089,7 @@ def privacy_page():
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. How We Use Your Information</h2>
         <ul style="padding-left:20px;">
-          <li>To generate study plans, flashcards, quizzes, notes, tutor answers, essay feedback, and panic-mode plans</li>
+          <li>To generate study plans, flashcards, quizzes, notes, tutor answers, and panic-mode plans</li>
           <li>To track XP, streaks, leaderboard rankings, and coin payouts</li>
           <li>To process subscriptions and service notifications such as password resets and study emails you opted into</li>
           <li>To keep the service secure, reliable, and improving over time</li>
@@ -6157,7 +6123,7 @@ def terms_page():
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. Description of Service</h2>
-        <p>MachReach provides student study tools including Canvas LMS integration, AI-generated study plans, flashcards, practice quizzes, AI tutor support, essay feedback, panic-mode cram plans, weekly schedule tools, focus timers, XP, leaderboards, coin rewards, a student marketplace, and the optional Focus Guard browser extension.</p>
+        <p>MachReach provides student study tools including Canvas LMS integration, AI-generated study plans, flashcards, practice quizzes, AI tutor support, panic-mode cram plans, weekly schedule tools, focus timers, XP, leaderboards, coin rewards, a student marketplace, and the optional Focus Guard browser extension.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Account Responsibilities</h2>
         <ul style="padding-left:20px;">
           <li>You must provide accurate information when registering</li>

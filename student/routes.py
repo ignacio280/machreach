@@ -247,8 +247,8 @@ def _gpa_planilla_html(lang: str = "en") -> str:
         return html
     EN_REPL = [
         ("📊 Planilla de Notas", "📊 Grade Sheet"),
-        ("Calcula tus promedios por semestre y la nota mínima que necesitas para aprobar — basado en la planilla que circula en la PUC.",
-         "Calculate your semester averages and the minimum grade you need to pass — based on the spreadsheet that circulates at PUC."),
+        ("Calcula tus promedios por semestre y la nota mínima que necesitas para aprobar.",
+         "Calculate your semester averages and the minimum grade you need to pass."),
         (">⬇ Export<",  ">⬇ Export<"),
         (">⬆ Import<",  ">⬆ Import<"),
         (">🗑 Reset<",   ">🗑 Reset<"),
@@ -363,7 +363,7 @@ _GPA_PLANILLA_HTML_ES = r"""
   <div class="pl-h">
     <div>
       <h1>📊 Planilla de Notas</h1>
-      <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Calcula tus promedios por semestre y la nota mínima que necesitas para aprobar — basado en la planilla que circula en la PUC.</p>
+      <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Calcula tus promedios por semestre y la nota mínima que necesitas para aprobar.</p>
     </div>
     <div class="pl-actions">
       <button class="pl-btn" onclick="plExport()">⬇ Export</button>
@@ -811,7 +811,7 @@ def register_student_routes(app, csrf, limiter):
 
                                   generate_practice_problems,
 
-                                  analyze_essay, generate_cram_plan)
+                                  generate_cram_plan)
 
     from student import db as sdb
     from student.removed_features import DEPRECATED_STUDENT_PATHS, REMOVED_API_PREFIXES
@@ -12745,7 +12745,7 @@ No markdown, no code fences. ONLY JSON.
 
     # ── Shared file-extract endpoint (used by drag-drop on
 
-    #    quizzes / flashcards / essays / tutor / notes) ──────
+    #    quizzes / flashcards / tutor / notes) ──────
 
     @app.route("/api/student/extract-file", methods=["POST"])
 
@@ -18076,6 +18076,24 @@ No markdown, no code fences. ONLY JSON.
             "decline_marathon_confirm": "Decline this marathon invite?" if _lang == "en" else "¿Rechazar esta invitación de maratón?",
             "cancel_marathon_confirm": "Cancel your marathon invite?" if _lang == "en" else "¿Cancelar tu invitación de maratón?",
             "could_not_cancel": "Could not cancel." if _lang == "en" else "No se pudo cancelar.",
+            "friend_ranking": "Friends ranking" if _lang == "en" else "Ranking de amigos",
+            "friend_ranking_sub": "Same energy as the main ranking, but only you and your friends." if _lang == "en" else "La misma energía del ranking principal, pero solo tú y tus amigos.",
+            "study_groups": "Study groups" if _lang == "en" else "Grupos de estudio",
+            "study_groups_sub": "Create private leaderboards with selected friends." if _lang == "en" else "Crea rankings privados con amigos específicos.",
+            "create_group": "Create group" if _lang == "en" else "Crear grupo",
+            "group_name": "Group name" if _lang == "en" else "Nombre del grupo",
+            "group_name_ph": "Civil law final sprint" if _lang == "en" else "Sprint examen derecho civil",
+            "pick_friends": "Pick friends" if _lang == "en" else "Elige amigos",
+            "no_group_friends": "Add friends first to create a study group." if _lang == "en" else "Agrega amigos primero para crear un grupo.",
+            "no_groups": "No study groups yet." if _lang == "en" else "Aún no hay grupos de estudio.",
+            "members": "members" if _lang == "en" else "miembros",
+            "open_group": "Open board" if _lang == "en" else "Abrir ranking",
+            "friends_empty_rank": "Add friends to unlock your private friends ranking." if _lang == "en" else "Agrega amigos para desbloquear tu ranking privado.",
+            "xp": "XP" if _lang == "en" else "XP",
+            "group_created": "Study group created." if _lang == "en" else "Grupo de estudio creado.",
+            "group_invites": "Group invites" if _lang == "en" else "Invitaciones a grupos",
+            "invited_by": "Invited by" if _lang == "en" else "Invitado por",
+            "group_failed": "Could not create the group." if _lang == "en" else "No se pudo crear el grupo.",
         }
 
         return _s_render("Friends and Duels" if _lang == "en" else "Amigos y Duelos", f"""
@@ -18120,6 +18138,29 @@ No markdown, no code fences. ONLY JSON.
           .fr-modal-card {{ background:#fff;border:1px solid var(--line);border-radius:26px;max-width:560px;width:92%;padding:26px;box-shadow:0 28px 90px rgba(20,18,30,.22); }}
           .fr-chal-card {{ text-align:left;padding:18px;border:1px solid var(--line);border-radius:18px;background:#FFFDF8;cursor:pointer;color:var(--ink); }}
           .fr-chal-card:hover {{ border-color:var(--orange);box-shadow:0 12px 28px rgba(255,122,61,.13);transform:translateY(-1px); }}
+          .fr-rank-wrap {{ display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:18px;margin-bottom:18px;align-items:start; }}
+          @media(max-width:980px) {{ .fr-rank-wrap {{ grid-template-columns:1fr; }} }}
+          .fr-rank-podium {{ display:grid;grid-template-columns:1fr 1.14fr 1fr;gap:12px;align-items:end;margin:14px 0 16px; }}
+          @media(max-width:720px) {{ .fr-rank-podium {{ grid-template-columns:1fr; }} }}
+          .fr-podium-card {{ min-height:150px;border:1px solid var(--line);border-radius:20px;background:#FFFDF8;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;box-shadow:0 6px 0 rgba(20,18,30,.05),0 18px 34px rgba(20,18,30,.07); }}
+          .fr-podium-card.p1 {{ min-height:190px;background:linear-gradient(180deg,#FFF8E1,#FFE0A3);border-color:#F4B73A; }}
+          .fr-podium-card.p2 {{ background:linear-gradient(180deg,#FFFFFF,#EDE7DA); }}
+          .fr-podium-card.p3 {{ background:linear-gradient(180deg,#FFE7D8,#FFB199);border-color:#FFB36B; }}
+          .fr-podium-medal {{ font-size:30px;line-height:1;margin-bottom:8px; }}
+          .fr-podium-card.p1 .fr-podium-medal {{ font-size:38px; }}
+          .fr-podium-name {{ font-weight:950;color:var(--ink); }}
+          .fr-podium-xp {{ color:var(--muted);font-size:13px;font-weight:850;margin-top:3px; }}
+          .fr-rank-list {{ border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#fff; }}
+          .fr-rank-row {{ display:grid;grid-template-columns:52px 1fr 96px;gap:10px;align-items:center;padding:13px 16px;border-top:1px solid var(--line);background:#fff; }}
+          .fr-rank-row:first-child {{ border-top:0; }}
+          .fr-rank-row.me {{ background:linear-gradient(90deg,#FFE5D2,#FFFFFF);border-left:3px solid var(--orange); }}
+          .fr-rank-pos {{ font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;color:var(--muted);text-align:center; }}
+          .fr-rank-xp {{ font-weight:950;text-align:right;font-variant-numeric:tabular-nums; }}
+          .fr-group-form {{ display:grid;gap:10px;margin-top:14px; }}
+          .fr-check-grid {{ display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px; }}
+          .fr-check {{ display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:14px;background:#FFFDF8;padding:10px;font-weight:850;font-size:13px; }}
+          .fr-check input {{ accent-color:var(--orange); }}
+          .fr-group-card {{ display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:18px;background:#FFFDF8;padding:14px; }}
         </style>
 
         <div class="friends-cd">
@@ -18140,6 +18181,25 @@ No markdown, no code fences. ONLY JSON.
                 <button class="fr-btn" onclick="frSearch()">{_fr["search"]}</button>
               </div>
               <div id="fr-results" class="fr-list" style="margin-top:14px"></div>
+            </div>
+          </section>
+
+          <section class="fr-rank-wrap">
+            <div class="fr-panel">
+              <div class="fr-panel-top"><div><h3>{_fr["friend_ranking"]}</h3><div class="fr-note">{_fr["friend_ranking_sub"]}</div></div><span class="fr-count">XP</span></div>
+              <div id="fr-rank-podium" class="fr-rank-podium"></div>
+              <div id="fr-rank-list" class="fr-rank-list"><div class="fr-empty">{_fr["loading"]}</div></div>
+            </div>
+            <div class="fr-panel alt">
+              <div class="fr-panel-top"><div><h3>{_fr["study_groups"]}</h3><div class="fr-note">{_fr["study_groups_sub"]}</div></div></div>
+              <div class="fr-group-form">
+                <input id="fr-group-name" class="fr-input" placeholder="{_fr["group_name_ph"]}" style="border-radius:14px;width:100%;">
+                <div class="fr-note">{_fr["pick_friends"]}</div>
+                <div id="fr-group-friends" class="fr-check-grid"><div class="fr-empty">{_fr["loading"]}</div></div>
+                <button class="fr-btn orange" onclick="createStudyGroup()">{_fr["create_group"]}</button>
+              </div>
+              <div id="fr-group-invites" class="fr-list" style="margin-top:16px"></div>
+              <div id="fr-groups" class="fr-list" style="margin-top:16px"><div class="fr-empty">{_fr["loading"]}</div></div>
             </div>
           </section>
 
@@ -18238,6 +18298,118 @@ No markdown, no code fences. ONLY JSON.
 
           loadAll();
 
+        }}
+
+        function renderGroupFriendPicker(friends) {{
+          const box = document.getElementById('fr-group-friends');
+          if (!box) return;
+          if (!friends || !friends.length) {{
+            box.innerHTML = `<div class="fr-empty">${{FR.no_group_friends}}</div>`;
+            return;
+          }}
+          box.innerHTML = friends.map(u => `
+            <label class="fr-check">
+              <input type="checkbox" value="${{u.id}}">
+              <span>${{esc(u.name || (FR.user + ' #' + u.id))}}</span>
+            </label>
+          `).join('');
+        }}
+
+        function renderFriendRanking(rows) {{
+          const podium = document.getElementById('fr-rank-podium');
+          const list = document.getElementById('fr-rank-list');
+          if (!podium || !list) return;
+          if (!rows || rows.length <= 1) {{
+            podium.innerHTML = '';
+            list.innerHTML = `<div class="fr-empty">${{FR.friends_empty_rank}}</div>`;
+            return;
+          }}
+          const medal = r => r === 1 ? '🥇' : (r === 2 ? '🥈' : '🥉');
+          const top = rows.filter(r => r.rank <= 3);
+          const byRank = {{}};
+          top.forEach(r => byRank[r.rank] = r);
+          podium.innerHTML = [byRank[2], byRank[1], byRank[3]].filter(Boolean).map(r => `
+            <a class="fr-podium-card p${{r.rank}} ${{r.is_you ? 'me' : ''}}" href="/student/profile/${{r.client_id}}" style="text-decoration:none;color:inherit;">
+              <div class="fr-podium-medal">${{medal(r.rank)}}</div>
+              <div class="fr-avatar" style="margin-bottom:10px;">${{initials(r.name)}}</div>
+              <div class="fr-podium-name">${{esc(r.name)}}</div>
+              <div class="fr-podium-xp">${{Number(r.total_xp || 0).toLocaleString()}} ${{FR.xp}}</div>
+            </a>
+          `).join('');
+          list.innerHTML = rows.map(r => `
+            <a class="fr-rank-row ${{r.is_you ? 'me' : ''}}" href="/student/profile/${{r.client_id}}" style="text-decoration:none;color:inherit;">
+              <div class="fr-rank-pos">#${{r.rank}}</div>
+              <div class="fr-person"><div class="fr-avatar">${{initials(r.name)}}</div><div><div class="fr-name">${{esc(r.name)}}${{r.is_you ? ' · ' + FR.you : ''}}</div><div class="fr-meta">#${{r.client_id}}</div></div></div>
+              <div class="fr-rank-xp">${{Number(r.total_xp || 0).toLocaleString()}} ${{FR.xp}}</div>
+            </a>
+          `).join('');
+        }}
+
+        function renderStudyGroups(groups, invites) {{
+          const box = document.getElementById('fr-groups');
+          const inviteBox = document.getElementById('fr-group-invites');
+          if (inviteBox) {{
+            inviteBox.innerHTML = (invites && invites.length) ? `
+              <div class="fr-note" style="font-weight:900;color:var(--orange);margin-bottom:8px">${{FR.group_invites}}</div>
+              ${{invites.map(inv => `
+                <div class="fr-group-card">
+                  <div><div class="fr-name">${{esc(inv.group_name)}}</div><div class="fr-meta">${{FR.invited_by}} ${{esc(inv.inviter_name)}}</div></div>
+                  <div class="fr-actions">
+                    <button class="fr-btn small orange" onclick="respondStudyGroup(${{inv.id}}, true)">${{FR.accept}}</button>
+                    <button class="fr-btn small ghost" onclick="respondStudyGroup(${{inv.id}}, false)">${{FR.decline}}</button>
+                  </div>
+                </div>
+              `).join('')}}`
+            : '';
+          }}
+          if (!box) return;
+          if (!groups || !groups.length) {{
+            box.innerHTML = `<div class="fr-empty">${{FR.no_groups}}</div>`;
+            return;
+          }}
+          box.innerHTML = groups.map(g => `
+            <div class="fr-group-card">
+              <div><div class="fr-name">${{esc(g.name)}}</div><div class="fr-meta">${{g.member_count || 1}} ${{FR.members}}</div></div>
+              <a class="fr-btn small ghost" href="/student/leaderboard/group/${{g.id}}">${{FR.open_group}}</a>
+            </div>
+          `).join('');
+        }}
+
+        async function loadFriendCompetition() {{
+          try {{
+            const r = await fetch('/api/student/friends/competition').then(r => r.json());
+            renderFriendRanking(r.ranking || []);
+            renderStudyGroups(r.groups || [], r.invites || []);
+          }} catch (e) {{}}
+        }}
+
+        async function createStudyGroup() {{
+          const name = (document.getElementById('fr-group-name').value || '').trim() || FR.group_name;
+          const ids = Array.from(document.querySelectorAll('#fr-group-friends input:checked')).map(i => parseInt(i.value, 10)).filter(Boolean);
+          try {{
+            const r = await fetch('/api/student/friends/groups', {{
+              method:'POST',
+              headers:{{'Content-Type':'application/json'}},
+              body: JSON.stringify({{name, friend_ids: ids}})
+            }}).then(r => r.json());
+            if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
+            document.getElementById('fr-group-name').value = '';
+            document.querySelectorAll('#fr-group-friends input:checked').forEach(i => i.checked = false);
+            await loadFriendCompetition();
+            alert(FR.group_created);
+          }} catch(e) {{
+            alert(FR.group_failed);
+          }}
+        }}
+
+        async function respondStudyGroup(inviteId, accept) {{
+          const r = await fetch('/api/student/friends/groups/invites/' + inviteId, {{
+            method:'POST',
+            headers:{{'Content-Type':'application/json'}},
+            body: JSON.stringify({{accept: !!accept}})
+          }}).then(r => r.json());
+          if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
+          await loadFriendCompetition();
         }}
 
         async function frChallenge(uid, uname, isOnline) {{
@@ -18374,6 +18546,7 @@ No markdown, no code fences. ONLY JSON.
             // Dedupe by id in case the API ever returns duplicates.
             const seen = new Set();
             const uniq = f.friends.filter(u => {{ if (seen.has(u.id)) return false; seen.add(u.id); return true; }});
+            renderGroupFriendPicker(uniq);
             const parts = await Promise.all(uniq.map(async u => {{
               const h2h = await fetch('/api/student/duels/h2h?friend_id=' + u.id).then(r=>r.json());
               const onlineDot = u.online
@@ -18404,7 +18577,12 @@ No markdown, no code fences. ONLY JSON.
             }}));
             fl.innerHTML = parts.join('');
 
-          }} else {{ fl.innerHTML = `<div class="fr-empty">${{FR.no_friends}}</div>`; }}
+          }} else {{
+            fl.innerHTML = `<div class="fr-empty">${{FR.no_friends}}</div>`;
+            renderGroupFriendPicker([]);
+          }}
+
+          await loadFriendCompetition();
 
           // ── Marathon invites (pending) ────────────────────────
           try {{
@@ -18591,6 +18769,70 @@ No markdown, no code fences. ONLY JSON.
         cid = _cid()
 
         return jsonify(**sdb.list_friends(cid))
+
+
+    @app.route("/api/student/friends/competition")
+    def student_friends_competition_api():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        cid = _cid()
+        rows = []
+        for i, row in enumerate(sdb.get_friend_leaderboard(cid) or [], start=1):
+            rows.append({
+                "rank": i,
+                "client_id": row.get("client_id"),
+                "name": row.get("name") or "Student",
+                "total_xp": int(row.get("total_xp") or 0),
+                "is_you": int(row.get("client_id") or 0) == cid,
+            })
+        groups = [
+            {
+                "id": g.get("id"),
+                "name": g.get("name") or "Study group",
+                "member_count": int(g.get("member_count") or 1),
+                "is_owner": bool(g.get("is_owner")),
+            }
+            for g in (sdb.get_my_lb_groups(cid) or [])
+        ]
+        invites = [
+            {
+                "id": inv.get("id"),
+                "group_id": inv.get("group_id"),
+                "group_name": inv.get("group_name") or "Study group",
+                "inviter_name": inv.get("inviter_name") or "Student",
+            }
+            for inv in (sdb.list_lb_group_invites(cid) or [])
+        ]
+        return jsonify(ranking=rows, groups=groups, invites=invites)
+
+
+    @app.route("/api/student/friends/groups", methods=["POST"])
+    def student_friends_create_group_api():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        cid = _cid()
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+        friend_ids = data.get("friend_ids") or []
+        if not name or len(name) > 60:
+            return jsonify(ok=False, error="Group name required"), 400
+        existing = sdb.get_my_lb_groups(cid)
+        if len(existing) >= 10:
+            return jsonify(ok=False, error="Maximum 10 groups reached"), 400
+        result = sdb.create_lb_group(cid, name)
+        invited = sdb.invite_friends_to_lb_group(cid, int(result["id"]), friend_ids)
+        return jsonify(ok=True, group_id=result["id"], invite_code=result["invite_code"], invited=invited)
+
+
+    @app.route("/api/student/friends/groups/invites/<int:invite_id>", methods=["POST"])
+    def student_friends_group_invite_response_api(invite_id):
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        inv = sdb.respond_lb_group_invite(_cid(), invite_id, bool(data.get("accept")))
+        if not inv:
+            return jsonify(ok=False, error="Invite not found"), 404
+        return jsonify(ok=True)
 
 
     @app.route("/api/student/presence/heartbeat", methods=["POST"])
@@ -20618,327 +20860,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # ── Essay Assistant ──────────────────────────────────────
-
-    @app.route("/student/essay")
-
-    def student_essay_page():
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        return _s_render("Ensayos", f"""
-
-        <style>
-        .essay-cd {{ max-width:1260px;margin:0 auto 80px;font-family:'Nunito',sans-serif;color:#1A1A1F; }}
-        .essay-active {{ display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start; }}
-        .essay-cd .card {{ background:#fff;border:1px solid #E2DCCC;border-radius:24px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); }}
-        .essay-cd .essay-side {{ padding:22px;position:sticky;top:92px; }}
-        .essay-cd .essay-doc {{ display:none; }}
-        .essay-kicker {{ font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#009B72;margin-bottom:8px; }}
-        .essay-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(42px,6vw,72px);line-height:.92;margin:0;font-weight:600;letter-spacing:-.05em; }}
-        .essay-title em {{ color:#FF7A3D;font-style:italic; }}
-        .essay-sub {{ color:#6E6A60;font-size:15px;margin:12px 0 24px;max-width:680px;line-height:1.6; }}
-        .essay-cd label {{ display:block;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:#77756F;margin-bottom:8px; }}
-        .essay-cd input,.essay-cd textarea {{ width:100%;background:#FBF8F0!important;border:1px solid #D8D0BE!important;border-radius:14px!important;padding:12px 13px!important; }}
-        #ea-drop {{ border:1.5px dashed #D8D0BE!important;border-radius:18px!important;padding:20px!important;background:#FBF8F0!important; }}
-        #ea-drop:hover {{ border-color:#5B4694!important;background:#F5F0FF!important; }}
-        #ea-btn {{ width:100%;border:0!important;border-radius:999px!important;background:#1A1A1F!important;color:#FFF8E1!important;padding:14px 18px!important;font-weight:900!important;box-shadow:0 4px 0 rgba(0,0,0,.16)!important; }}
-        .essay-doc-head {{ display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid #E2DCCC;background:#FBF8F0; }}
-        .essay-doc-head strong {{ font-family:'Bricolage Grotesque',sans-serif;font-size:26px;font-weight:600;letter-spacing:-.03em; }}
-        .essay-doc-head span {{ color:#77756F;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase; }}
-        #ea-essay {{ min-height:560px!important;border:0!important;border-radius:0!important;background:#fff!important;padding:34px 42px!important;color:#1A1A1F!important;font-family:"Bricolage Grotesque",sans-serif!important;font-size:22px!important;line-height:1.75!important;resize:vertical;box-shadow:none!important; }}
-        #ea-result {{ margin-top:0!important; }}
-        #ea-result .card {{ border-radius:20px;border-color:#E2DCCC;background:#fff;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04);margin-top:14px; }}
-        @media (max-width:980px) {{ .essay-active {{ grid-template-columns:1fr; }} .essay-cd .essay-side {{ position:relative;top:auto; }} #ea-essay {{ min-height:420px!important;padding:24px!important;font-size:19px!important; }} }}
-        </style>
-        <script>
-        document.addEventListener('DOMContentLoaded', function(){{
-          var outer = document.querySelector('h1');
-          var oldWrap = outer && outer.parentElement && outer.parentElement.style.maxWidth ? outer.parentElement : null;
-          if (!oldWrap || oldWrap.classList.contains('essay-cd')) return;
-          oldWrap.className = 'essay-cd';
-          oldWrap.removeAttribute('style');
-          var firstCard = oldWrap.querySelector('.card');
-          var result = document.getElementById('ea-result');
-          if (outer) outer.outerHTML = '<div class="essay-kicker">Asistente de escritura</div><h1 class="essay-title">Ensayos <em>sin vueltas.</em></h1>';
-          var sub = oldWrap.querySelector('p');
-          if (sub) {{ sub.className = 'essay-sub'; sub.textContent = 'Sube o pega tu borrador y recibe feedback claro sobre tesis, estructura, gramática y fluidez.'; }}
-          if (firstCard && result) {{
-            firstCard.classList.add('essay-side');
-            var essayGroup = document.getElementById('ea-essay') && document.getElementById('ea-essay').closest('.form-group');
-            if (essayGroup) essayGroup.style.display = 'none';
-            var doc = document.createElement('section');
-            doc.className = 'card essay-doc';
-            doc.innerHTML = '<div class="essay-doc-head"><strong>Borrador</strong><span>Editor</span></div>';
-            if (essayGroup) doc.appendChild(essayGroup);
-            var main = document.createElement('main');
-            main.appendChild(doc);
-            main.appendChild(result);
-            var grid = document.createElement('div');
-            grid.className = 'essay-active';
-            firstCard.parentNode.insertBefore(grid, firstCard);
-            grid.appendChild(firstCard);
-            grid.appendChild(main);
-          }}
-          var prompt = document.getElementById('ea-prompt'); if (prompt) prompt.placeholder = '¿Qué tenía que responder el ensayo?';
-          var essay = document.getElementById('ea-essay'); if (essay) essay.placeholder = 'El texto extraído del archivo aparecerá aquí internamente.';
-          var btn = document.getElementById('ea-btn'); if (btn) btn.textContent = 'Analizar ensayo';
-          document.querySelectorAll('.essay-cd label').forEach(function(l){{
-            l.innerHTML = l.innerHTML.replace('Assignment prompt', 'Instrucción o pregunta').replace('Or drop your essay file', 'Archivo').replace('Your essay', 'Borrador');
-          }});
-        }});
-        </script>
-
-        <div style="max-width:900px;margin:0 auto">
-
-          <h1 style="margin:0 0 6px">✏️ Essay Assistant</h1>
-
-          <p style="color:var(--text-muted);margin:0 0 18px">Paste your draft. Get brutally honest feedback on thesis, structure, grammar, and flow.</p>
-
-          <div class="card">
-
-            <div class="form-group">
-
-              <label>Assignment prompt <span style="color:var(--text-muted);font-size:12px">(optional)</span></label>
-
-              <input id="ea-prompt" type="text" placeholder="What was the essay supposed to answer?" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
-
-            </div>
-
-
-
-            <!-- Drag & drop file -->
-
-            <div class="form-group">
-
-              <label>Or drop your essay file</label>
-
-              <div id="ea-drop" style="border:2px dashed var(--border);border-radius:10px;padding:18px;text-align:center;cursor:pointer;background:var(--bg);transition:all .2s"
-
-                ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
-
-                ondragleave="this.style.borderColor='var(--border)'"
-
-                ondrop="eaHandleDrop(event)" onclick="document.getElementById('ea-file').click()">
-
-                <div style="font-size:28px">📄</div>
-
-                <div style="font-weight:600;margin-top:4px;font-size:14px">Drop a PDF / DOCX / TXT</div>
-
-                <div style="font-size:12px;color:var(--text-muted)">we'll extract the text into the editor below</div>
-
-                <input type="file" id="ea-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="eaHandleFile(this.files[0])">
-
-                <div id="ea-file-info" style="margin-top:6px;font-size:12px;color:var(--primary)"></div>
-
-              </div>
-
-            </div>
-
-
-
-            <div class="form-group">
-
-              <label>Your essay</label>
-
-              <textarea id="ea-essay" placeholder="Paste your draft here..." style="width:100%;min-height:260px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
-
-            </div>
-
-            <div style="display:flex;gap:8px;align-items:center">
-
-              <button onclick="analyzeEssay()" class="btn btn-primary" id="ea-btn">Analyze</button>
-
-              <span id="ea-status" style="color:var(--text-muted);font-size:13px"></span>
-
-            </div>
-
-          </div>
-
-          <div id="ea-result" style="margin-top:18px"></div>
-
-        </div>
-
-        <script>
-
-        async function eaHandleDrop(e) {{
-
-          e.preventDefault();
-
-          e.currentTarget.style.borderColor = 'var(--border)';
-
-          if (e.dataTransfer.files.length) await eaHandleFile(e.dataTransfer.files[0]);
-
-        }}
-
-        async function eaHandleFile(file) {{
-
-          if (!file) return;
-
-          var ext = file.name.split('.').pop().toLowerCase();
-
-          if (!['pdf','docx','doc','txt'].includes(ext)) {{ alert('PDF, DOCX, or TXT only'); return; }}
-
-          if (file.size > 50*1024*1024) {{ alert('File too large (max 50MB)'); return; }}
-
-          var info = document.getElementById('ea-file-info');
-
-          info.textContent = '⏳ Extracting ' + file.name + '...';
-
-          var fd = new FormData(); fd.append('file', file);
-
-          try {{
-
-            var r = await fetch('/api/student/extract-file', {{ method:'POST', body: fd }});
-
-            var d = await r.json();
-
-            if (!r.ok) {{ info.textContent = '❌ ' + (d.error || 'Failed'); return; }}
-
-            document.getElementById('ea-essay').value = d.text;
-
-            info.textContent = '✅ Loaded ' + d.filename + ' (' + d.char_count.toLocaleString() + ' chars)';
-
-          }} catch(e) {{ info.textContent = '❌ Error de red'; }}
-
-        }}
-
-        async function analyzeEssay() {{
-
-          var essay = document.getElementById('ea-essay').value.trim();
-
-          if (essay.length < 80) {{ alert('Sube un archivo primero. No se analiza texto pegado manualmente.'); return; }}
-
-          var btn = document.getElementById('ea-btn');
-
-          var status = document.getElementById('ea-status');
-
-          btn.disabled = true; btn.textContent = 'Analyzing...';
-
-          status.textContent = 'This takes ~10 seconds.';
-
-          var meta = document.querySelector('meta[name="csrf-token"]');
-
-          var headers = {{'Content-Type':'application/json'}};
-
-          if (meta) headers['X-CSRFToken'] = meta.getAttribute('content');
-
-          try {{
-
-            var r = await fetch('/api/student/essay/analyze', {{
-
-              method:'POST', headers: headers,
-
-              body: JSON.stringify({{essay: essay, prompt: document.getElementById('ea-prompt').value}})
-
-            }});
-
-            var d = await r.json();
-
-            if (!r.ok) throw new Error(d.error || 'Analyze failed');
-
-            renderEssay(d);
-
-          }} catch(e) {{ status.innerHTML = '<span style="color:var(--red)">' + e.message + '</span>'; }}
-
-          finally {{ btn.disabled = false; btn.textContent = 'Analyze'; }}
-
-        }}
-
-        function renderEssay(d) {{
-
-          var out = document.getElementById('ea-result');
-
-          function bar(label, val) {{
-
-            var color = val >= 85 ? '#22c55e' : (val >= 70 ? '#eab308' : '#ef4444');
-
-            return '<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><span>' + label + '</span><span style="font-weight:700">' + val + '</span></div>'
-
-              + '<div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden"><div style="width:' + val + '%;height:100%;background:' + color + '"></div></div></div>';
-
-          }}
-
-          var strengths = (d.strengths || []).map(function(s){{ return '<li>' + s + '</li>'; }}).join('');
-
-          var weaknesses = (d.weaknesses || []).map(function(s){{ return '<li>' + s + '</li>'; }}).join('');
-
-          var grammar = (d.grammar_issues || []).map(function(g){{
-
-            return '<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">'
-
-              + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">' + (g.reason || '') + '</div>'
-
-              + '<div style="text-decoration:line-through;color:#ef4444">' + (g.original || '') + '</div>'
-
-              + '<div style="color:#22c55e;margin-top:4px">→ ' + (g.suggestion || '') + '</div></div>';
-
-          }}).join('') || '<p style="color:var(--text-muted);font-size:13px">No major grammar issues detected.</p>';
-
-          out.innerHTML =
-
-            '<div class="card"><h2 style="margin:0 0 10px">Overall: ' + (d.overall_score || 0) + '/100</h2>'
-
-            + bar('Thesis', d.thesis_strength || 0)
-
-            + bar('Structure', d.structure_score || 0)
-
-            + bar('Grammar', d.grammar_score || 0)
-
-            + bar('Clarity', d.clarity_score || 0)
-
-            + '<div style="margin-top:14px;font-size:13px;color:var(--text-muted)">Words: ' + (d.word_count || 0) + ' · Level: ' + (d.reading_level || '—') + '</div></div>'
-
-            + (d.thesis_feedback ? '<div class="card"><h3 style="margin:0 0 8px">Thesis Feedback</h3><p style="margin:0">' + d.thesis_feedback + '</p></div>' : '')
-
-            + (strengths ? '<div class="card"><h3 style="margin:0 0 8px;color:#22c55e">Strengths</h3><ul style="margin:0;padding-left:20px">' + strengths + '</ul></div>' : '')
-
-            + (weaknesses ? '<div class="card"><h3 style="margin:0 0 8px;color:#ef4444">Weaknesses</h3><ul style="margin:0;padding-left:20px">' + weaknesses + '</ul></div>' : '')
-
-            + '<div class="card"><h3 style="margin:0 0 8px">Grammar & Style</h3>' + grammar + '</div>'
-
-            + (d.improved_intro ? '<div class="card"><h3 style="margin:0 0 8px">Rewritten Intro</h3><p style="margin:0;white-space:pre-wrap">' + d.improved_intro + '</p></div>' : '');
-
-        }}
-
-        </script>
-
-        """, active_page="student_essay")
-
-
-
-    @app.route("/api/student/essay/analyze", methods=["POST"])
-
-    def student_essay_analyze_api():
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        data = request.get_json(force=True) or {}
-
-        essay = (data.get("essay") or "").strip()
-
-        if len(essay) < 50:
-
-            return jsonify({"error": "Essay too short"}), 400
-
-        try:
-
-            result = analyze_essay(essay, data.get("prompt", ""))
-
-            return jsonify(result)
-
-        except Exception as e:
-
-            log.exception("essay analyze failed")
-
-            return jsonify({"error": str(e)}), 500
-
-
-    # ── Shop / Wallet / Profile ─────────────────────────────
+    # Writing review surface removed. Study tools now use quizzes and flashcards only.
 
     @app.route("/student/shop")
     def student_shop_page():
