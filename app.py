@@ -1885,6 +1885,124 @@ LAYOUT = """<!DOCTYPE html>
     :root[data-theme="dark"] .fr-rank-row:hover {
       background: #252936 !important;
     }
+    :root[data-theme="dark"] .page-head-cd,
+    :root[data-theme="dark"] .course-cards,
+    :root[data-theme="dark"] #mr-lb-page {
+      color: #F7F0E4 !important;
+    }
+    :root[data-theme="dark"] .page-title-cd,
+    :root[data-theme="dark"] .ccard-name,
+    :root[data-theme="dark"] .cb-title,
+    :root[data-theme="dark"] .ccs-n,
+    :root[data-theme="dark"] #mr-lb-page .lb-hero h2,
+    :root[data-theme="dark"] #mr-lb-page .lb-rank-card .rank-big,
+    :root[data-theme="dark"] #mr-lb-page .lb-xp,
+    :root[data-theme="dark"] #mr-lb-page .lb-podium-name,
+    :root[data-theme="dark"] #mr-lb-page .lb-podium-xp {
+      color: #F7F0E4 !important;
+    }
+    :root[data-theme="dark"] .cb-meta,
+    :root[data-theme="dark"] .ccard-code,
+    :root[data-theme="dark"] .ccard-prof,
+    :root[data-theme="dark"] .ccs-l,
+    :root[data-theme="dark"] .ccard-next,
+    :root[data-theme="dark"] #mr-lb-page .lb-hero p,
+    :root[data-theme="dark"] #mr-lb-page .lb-rank-card .label,
+    :root[data-theme="dark"] #mr-lb-page .lb-rank-card .of,
+    :root[data-theme="dark"] #mr-lb-page .lb-pos,
+    :root[data-theme="dark"] #mr-lb-page .lb-empty,
+    :root[data-theme="dark"] #mr-lb-page .lb-loading {
+      color: #B9B0A5 !important;
+    }
+    :root[data-theme="dark"] .canvas-banner,
+    :root[data-theme="dark"] .ccard,
+    :root[data-theme="dark"] .course-empty,
+    :root[data-theme="dark"] .mr-modal-card,
+    :root[data-theme="dark"] #mr-lb-page .lb-hero,
+    :root[data-theme="dark"] #mr-lb-page .lb-rank-card,
+    :root[data-theme="dark"] #mr-lb-page .lb-tabs,
+    :root[data-theme="dark"] #mr-lb-page .lb-board,
+    :root[data-theme="dark"] #mr-lb-page .lb-row,
+    :root[data-theme="dark"] #mr-lb-page .lb-controls,
+    :root[data-theme="dark"] #mr-lb-page .lb-podium,
+    :root[data-theme="dark"] #mr-lb-page .lb-podium-card {
+      background: #1D202A !important;
+      border-color: #34313A !important;
+      color: #F7F0E4 !important;
+      box-shadow: 0 1px 0 rgba(255,255,255,.03), 0 18px 46px rgba(0,0,0,.24) !important;
+    }
+    :root[data-theme="dark"] .ccs,
+    :root[data-theme="dark"] .cb-btn,
+    :root[data-theme="dark"] .course-benchmark,
+    :root[data-theme="dark"] #mr-lb-page .lb-tab {
+      background: #141720 !important;
+      border-color: #34313A !important;
+      color: #F7F0E4 !important;
+    }
+    :root[data-theme="dark"] #mr-lb-page .lb-tab.active,
+    :root[data-theme="dark"] #mr-lb-page .lb-tab:hover {
+      background: #FF7A3D !important;
+      border-color: #FF7A3D !important;
+      color: #11131A !important;
+    }
+    :root[data-theme="dark"] #mr-lb-page .lb-podium-card.place-1,
+    :root[data-theme="dark"] #mr-lb-page .lb-podium-card.place-2,
+    :root[data-theme="dark"] #mr-lb-page .lb-podium-card.place-3 {
+      background: linear-gradient(180deg,#242936,#171B25) !important;
+    }
+    :root[data-theme="dark"] #mr-lb-page .lb-row:hover {
+      background: #252936 !important;
+    }
+    :root[data-theme="dark"] .content [style*="background:#fff"],
+    :root[data-theme="dark"] .content [style*="background: #fff"],
+    :root[data-theme="dark"] .content [style*="background:#FFF"],
+    :root[data-theme="dark"] .content [style*="background: #FFF"],
+    :root[data-theme="dark"] .content [style*="background:#FFFFFF"],
+    :root[data-theme="dark"] .content [style*="background: #FFFFFF"],
+    :root[data-theme="dark"] .content [style*="background:#FFFDF8"],
+    :root[data-theme="dark"] .content [style*="background: #FFFDF8"],
+    :root[data-theme="dark"] .content [style*="background:#FBF8F0"],
+    :root[data-theme="dark"] .content [style*="background: #FBF8F0"],
+    :root[data-theme="dark"] .content [style*="background:#F4F1EA"],
+    :root[data-theme="dark"] .content [style*="background: #F4F1EA"],
+    :root[data-theme="dark"] .content [style*="background:#f8fafc"],
+    :root[data-theme="dark"] .content [style*="background: #f8fafc"] {
+      background: #1D202A !important;
+      border-color: #34313A !important;
+      color: #F7F0E4 !important;
+    }
+    :root[data-theme="dark"] .content [style*="background:#fff7ed"],
+    :root[data-theme="dark"] .content [style*="background: #fff7ed"],
+    :root[data-theme="dark"] .content [style*="background:#ffedd5"],
+    :root[data-theme="dark"] .content [style*="background: #ffedd5"],
+    :root[data-theme="dark"] .content [style*="background:#FFF7ED"],
+    :root[data-theme="dark"] .content [style*="background: #FFF7ED"],
+    :root[data-theme="dark"] .content [style*="background:#FFF3E8"],
+    :root[data-theme="dark"] .content [style*="background: #FFF3E8"] {
+      background: #241A14 !important;
+      border-color: #5A3728 !important;
+      color: #F7D0B7 !important;
+    }
+    :root[data-theme="dark"] .content [style*="color:#1A1A1F"],
+    :root[data-theme="dark"] .content [style*="color: #1A1A1F"],
+    :root[data-theme="dark"] .content [style*="color:#111827"],
+    :root[data-theme="dark"] .content [style*="color: #111827"],
+    :root[data-theme="dark"] .content [style*="color:#0f172a"],
+    :root[data-theme="dark"] .content [style*="color: #0f172a"],
+    :root[data-theme="dark"] .content [style*="color:#334155"],
+    :root[data-theme="dark"] .content [style*="color: #334155"] {
+      color: #F7F0E4 !important;
+    }
+    :root[data-theme="dark"] .content [style*="color:#94939C"],
+    :root[data-theme="dark"] .content [style*="color: #94939C"],
+    :root[data-theme="dark"] .content [style*="color:#77756F"],
+    :root[data-theme="dark"] .content [style*="color: #77756F"],
+    :root[data-theme="dark"] .content [style*="color:#64748b"],
+    :root[data-theme="dark"] .content [style*="color: #64748b"],
+    :root[data-theme="dark"] .content [style*="color:#94a3b8"],
+    :root[data-theme="dark"] .content [style*="color: #94a3b8"] {
+      color: #B9B0A5 !important;
+    }
     /* Warm Claude theme cleanup for older inline student pages. Several
        legacy widgets carried navy cards into the new paper/orange product. */
     :root:not([data-theme="dark"]) .pl-wrap {
