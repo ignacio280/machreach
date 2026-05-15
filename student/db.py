@@ -897,6 +897,25 @@ def set_current_semester(client_id: int, label: str) -> None:
         _exec(db, "UPDATE clients SET current_semester = %s WHERE id = %s", (label, client_id))
 
 
+def get_pending_course_outcomes(client_id: int, semester_label: str | None = None) -> list[dict]:
+    """Courses in a semester that still need a final grade report."""
+    sem = (semester_label if semester_label is not None else get_current_semester(client_id) or "").strip()
+    if not sem:
+        return []
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT c.id, c.name, c.code, COALESCE(c.semester_label,'') AS semester_label "
+            "FROM student_courses c "
+            "LEFT JOIN student_course_outcomes o ON o.client_id = c.client_id AND o.course_id = c.id "
+            "WHERE c.client_id = %s AND COALESCE(c.semester_label,'') = %s "
+            "AND (o.id IS NULL OR o.final_grade IS NULL) "
+            "ORDER BY c.name ASC",
+            (client_id, sem),
+        ) or []
+    return [dict(r) for r in rows]
+
+
 def get_courses_by_semester(client_id: int) -> dict:
     """Return {semester_label: [{id, name, code, exams: [...]}]} for the
     Grade Sheet to overlay onto its localStorage data."""

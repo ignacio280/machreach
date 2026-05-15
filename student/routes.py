@@ -841,6 +841,19 @@ def register_student_routes(app, csrf, limiter):
         return session["client_id"]
 
 
+    def _semester_outcome_gate(client_id: int | None = None, semester_label: str | None = None) -> dict:
+        cid = client_id if client_id is not None else _cid()
+        current = (semester_label if semester_label is not None else sdb.get_current_semester(cid) or "").strip()
+        pending = sdb.get_pending_course_outcomes(cid, current) if current else []
+        return {
+            "blocked": bool(pending),
+            "semester": current,
+            "pending_count": len(pending),
+            "pending_courses": pending,
+            "message": "Antes de avanzar de semestre o reconectar Canvas, registra la nota final de todos tus ramos del semestre actual.",
+        }
+
+
 
     def _get_canvas(client_id: int) -> CanvasClient | None:
 
@@ -1800,6 +1813,15 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "canvas_url and token are required"}), 400
 
+        gate = _semester_outcome_gate()
+        if gate["blocked"]:
+            return jsonify({
+                "error": gate["message"],
+                "requires_course_outcomes": True,
+                "semester": gate["semester"],
+                "pending_courses": gate["pending_courses"],
+            }), 409
+
 
 
         # Test connection AND persist courses immediately. No AI/file analysis —
@@ -2403,6 +2425,15 @@ def register_student_routes(app, csrf, limiter):
         code = (data.get("code") or "").strip()
 
         term = (data.get("term") or "").strip()
+
+        gate = _semester_outcome_gate()
+        if gate["blocked"]:
+            return jsonify({
+                "error": gate["message"],
+                "requires_course_outcomes": True,
+                "semester": gate["semester"],
+                "pending_courses": gate["pending_courses"],
+            }), 409
 
         try:
 
@@ -4132,6 +4163,16 @@ def register_student_routes(app, csrf, limiter):
             label = (data.get("label") or "").strip()
             if not label:
                 return jsonify({"error": "label required"}), 400
+            current = (sdb.get_current_semester(cid) or "").strip()
+            if current and label != current:
+                gate = _semester_outcome_gate(cid, current)
+                if gate["blocked"]:
+                    return jsonify({
+                        "error": gate["message"],
+                        "requires_course_outcomes": True,
+                        "semester": gate["semester"],
+                        "pending_courses": gate["pending_courses"],
+                    }), 409
             sdb.set_current_semester(cid, label)
             return jsonify({"ok": True, "current": sdb.get_current_semester(cid)})
         return jsonify({"current": sdb.get_current_semester(cid)})
@@ -5759,6 +5800,13 @@ def register_student_routes(app, csrf, limiter):
                     _next_label += f" ({_days}d)"
                 if 0 <= _days <= 7:
                     _urgent = " urgent"
+            _outcome = sdb.get_course_outcome(_cid(), _course_id)
+            _needs_outcome = (not _outcome) and (not _future)
+            _outcome_notice = ""
+            if _needs_outcome:
+                _outcome_notice = '<div class="ccard-outcome-pending">Resultado pendiente: registra tu nota final para poder avanzar de semestre.</div>'
+            elif _outcome:
+                _outcome_notice = f'<div class="ccard-outcome-done">Resultado guardado: {"aprobado" if _outcome.get("passed") else "no aprobado"} · nota {float(_outcome.get("final_grade") or 0):.2f}</div>'
             _cls = _course_classes[_i % len(_course_classes)]
             course_cards_html += f"""
             <article class="ccard {_cls}">
@@ -5772,6 +5820,7 @@ def register_student_routes(app, csrf, limiter):
                 <div class="ccs"><div class="ccs-n">{_minutes//60}h {_minutes%60}m</div><div class="ccs-l">Estudiado</div></div>
                 <div class="ccs"><div class="ccs-n">{len(_exams)}</div><div class="ccs-l">Evaluaciones</div></div>
               </div>
+              {_outcome_notice}
               <div class="ccard-foot">
                 <span class="ccard-next{_urgent}">↗ {_next_label}</span>
                 <button class="ccard-go" onclick="toggleCourse({_course_id})" type="button">Ver detalles →</button>
@@ -5901,6 +5950,15 @@ def register_student_routes(app, csrf, limiter):
         .course-outcome-actions label {{ display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#94939C; }}
         .course-grade-input {{ width:120px;border:1px solid #E2DCCC;border-radius:10px;background:#FBF8F0;color:#1A1A1F;padding:9px 10px;font-weight:800; }}
         .course-outcome-state {{ font-size:12px;font-weight:900;color:#5C5C66; }}
+        .ccard-outcome-pending,.ccard-outcome-done {{ margin:-4px 0 12px;padding:9px 11px;border-radius:12px;font-size:12px;font-weight:900;line-height:1.25; }}
+        .ccard-outcome-pending {{ background:#FFF3E8;border:1px solid #FFD0B5;color:#9A3B12; }}
+        .ccard-outcome-done {{ background:#EAFBF2;border:1px solid #B7E8CE;color:#0F7A4B; }}
+        :root[data-theme="dark"] .course-benchmark {{ background:#2A221A;border-color:#7C4A25;color:#FFD9C2; }}
+        :root[data-theme="dark"] .course-benchmark.locked {{ background:#221D33;border-color:#5D4A9D;color:#E8DDFF; }}
+        :root[data-theme="dark"] .course-grade-input {{ background:#151A23;border-color:#343C4C;color:#F8F3EA; }}
+        :root[data-theme="dark"] .course-outcome-state {{ color:#D7DCE6; }}
+        :root[data-theme="dark"] .ccard-outcome-pending {{ background:#2A221A;border-color:#7C4A25;color:#FFD9C2; }}
+        :root[data-theme="dark"] .ccard-outcome-done {{ background:#10251D;border-color:#246B4D;color:#BDF5D8; }}
         .course-empty {{ grid-column:1/-1;border:2px dashed #E2DCCC;border-radius:18px;padding:32px;text-align:center;color:#94939C; }}
         .mr-modal {{ position:fixed;inset:0;background:rgba(26,26,31,.36);display:flex;align-items:center;justify-content:center;z-index:1000;padding:18px; }}
         .mr-modal-card {{ width:min(420px,100%);background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:20px;box-shadow:0 24px 80px rgba(20,18,30,.18); }}
@@ -5925,8 +5983,13 @@ def register_student_routes(app, csrf, limiter):
             await fetch('/api/student/semester/current', {{
               method: 'POST', headers: headers,
               body: JSON.stringify({{ label: label }})
+            }}).then(async function(r) {{
+              var d = await _safeJson(r);
+              if (!r.ok) throw new Error(d.error || 'No se pudo guardar el semestre.');
+              return d;
             }});
-          }} catch(e) {{ alert('No se pudo guardar el semestre.'); }}
+            mrReload();
+          }} catch(e) {{ alert(e.message || 'No se pudo guardar el semestre.'); }}
         }}
 
         async function toggleCourse(courseId) {{
@@ -6722,6 +6785,12 @@ def register_student_routes(app, csrf, limiter):
         .ps {{ background:#fff;border:1px solid #E2DCCC;border-radius:14px;padding:10px 14px;min-width:95px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
         .ps-n {{ font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:600;line-height:1;color:#1A1A1F; }}
         .ps-l {{ font-size:11px;font-weight:800;color:#94939C;text-transform:uppercase;letter-spacing:.08em;margin-top:3px; }}
+        :root[data-theme="dark"] .focus-title,
+        :root[data-theme="dark"] .focus-page-head b,
+        :root[data-theme="dark"] .ps-n {{ color:#F8F3EA !important; }}
+        :root[data-theme="dark"] .focus-page-head p,
+        :root[data-theme="dark"] .ps-l {{ color:#B9C0CC !important; }}
+        :root[data-theme="dark"] .ps {{ background:#1A202B !important;border-color:#343C4C !important;box-shadow:none !important; }}
         .focus-grid {{ display:grid;grid-template-columns:1.4fr 1fr;gap:18px; }}
         @media (max-width:1100px) {{ .focus-grid {{ grid-template-columns:1fr; }} }}
         .focus-timer-card {{ padding:26px;display:flex;flex-direction:column;gap:22px; }}
@@ -10443,6 +10512,27 @@ def register_student_routes(app, csrf, limiter):
 
         url_val = tok["canvas_url"] if tok else ""
 
+        gate = _semester_outcome_gate()
+        pending_html = ""
+        if gate["blocked"]:
+            pending_items = "".join(
+                f"<li>{_esc(c.get('name') or 'Ramo')} <span>{_esc(c.get('code') or '')}</span></li>"
+                for c in gate["pending_courses"][:8]
+            )
+            extra = gate["pending_count"] - min(gate["pending_count"], 8)
+            if extra > 0:
+                pending_items += f"<li>+ {extra} ramos más</li>"
+            pending_html = f"""
+            <div class="canvas-gate">
+              <div class="canvas-gate-title">Cierra el semestre { _esc(gate["semester"]) } antes de reconectar Canvas</div>
+              <p>{ _esc(gate["message"]) }</p>
+              <ul>{pending_items}</ul>
+              <a class="btn btn-primary" href="/student/courses">Registrar notas finales</a>
+            </div>
+            """
+        canvas_form_disabled = "disabled" if gate["blocked"] else ""
+        canvas_form_hint = "Completa los resultados pendientes para habilitar Canvas." if gate["blocked"] else ""
+
 
 
         return _s_render("Canvas Settings", f"""
@@ -10457,6 +10547,18 @@ def register_student_routes(app, csrf, limiter):
           @media (max-width: 900px) {{
             .canvas-settings-grid {{ grid-template-columns:1fr; }}
           }}
+          .canvas-gate {{
+            background:var(--card);
+            border:1px solid var(--orange);
+            border-radius:18px;
+            padding:16px;
+            margin-bottom:16px;
+            box-shadow:0 12px 32px rgba(255,122,61,.10);
+          }}
+          .canvas-gate-title {{ font-weight:900;color:var(--text);font-size:15px;margin-bottom:6px; }}
+          .canvas-gate p {{ margin:0 0 10px;color:var(--text-muted);font-size:13px;line-height:1.35; }}
+          .canvas-gate ul {{ margin:0 0 12px 18px;color:var(--text);font-size:13px;font-weight:700; }}
+          .canvas-gate span {{ color:var(--text-muted);font-weight:600; }}
         </style>
 
         <h1 style="margin-bottom:20px;">&#128279; Conexión a Canvas</h1>
@@ -10464,6 +10566,8 @@ def register_student_routes(app, csrf, limiter):
         <div class="canvas-settings-grid">
 
         <div class="card" style="padding:18px;">
+
+          {pending_html}
 
           <div style="margin-bottom:20px;">
 
@@ -10485,7 +10589,7 @@ def register_student_routes(app, csrf, limiter):
 
               <label>URL de Canvas</label>
 
-              <input id="canvas-url" name="canvas_school_url_manual" type="url" placeholder="https://yourschool.instructure.com" value="{_esc(url_val)}" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other">
+              <input id="canvas-url" name="canvas_school_url_manual" type="url" placeholder="https://yourschool.instructure.com" value="{_esc(url_val)}" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" {canvas_form_disabled}>
 
             </div>
 
@@ -10493,7 +10597,7 @@ def register_student_routes(app, csrf, limiter):
 
               <label>Token de acceso API</label>
 
-              <input id="canvas-token" name="canvas_api_token_manual" type="text" placeholder="Paste your Canvas access token" {'value="********"' if connected else ''} required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-form-type="other" style="-webkit-text-security:disc;text-security:disc;">
+              <input id="canvas-token" name="canvas_api_token_manual" type="text" placeholder="Paste your Canvas access token" {'value="********"' if connected else ''} required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-form-type="other" style="-webkit-text-security:disc;text-security:disc;" {canvas_form_disabled}>
 
               <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">
 
@@ -10505,13 +10609,14 @@ def register_student_routes(app, csrf, limiter):
 
             <div style="display:flex;gap:10px;">
 
-              <button type="submit" class="btn btn-primary" id="connect-btn">{'Update' if connected else 'Conectar Canvas'}</button>
+              <button type="submit" class="btn btn-primary" id="connect-btn" {canvas_form_disabled}>{'Update' if connected else 'Conectar Canvas'}</button>
 
               {'<button type="button" onclick="disconnectCanvas()" class="btn btn-outline" style="color:var(--red);border-color:var(--red);">Desconectar</button>' if connected else ''}
 
             </div>
 
             <div id="canvas-connect-status" style="display:none;margin-top:12px;font-size:13px;font-weight:600;"></div>
+            {'<div style="margin-top:10px;color:var(--text-muted);font-size:12px;font-weight:700;">' + _esc(canvas_form_hint) + '</div>' if canvas_form_hint else ''}
 
           </form>
 
