@@ -52,7 +52,7 @@ PLANS = {
         "blurb": "Empieza con Focus, Canvas, cursos y herramientas IA limitadas.",
         "features": [
             "Canvas, cursos, Focus, XP, monedas y rachas",
-            "Planilla de notas, ranking, amigos, tienda y marketplace",
+            "Planilla de notas, ranking, amigos y tienda",
             f"{FREE_DAILY_QUIZZES} quiz IA / dia (hasta {FREE_QUIZ_MAX_QUESTIONS} preguntas)",
             f"{FREE_DAILY_FLASHCARD_SETS} mazo de tarjetas IA / dia (hasta {FREE_FLASHCARD_MAX_CARDS} tarjetas)",
             "1 congelador de racha guardado",

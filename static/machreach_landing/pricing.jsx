@@ -17,7 +17,7 @@ function Pricing() {
       tag: "Para probar",
       m: 0, y: 0,
       blurb: "Lo justo para empezar a estudiar con estructura.",
-      features: ["Canvas, cursos y Focus", "XP, monedas, rachas y rankings", "Planilla de notas, amigos, tienda y marketplace", "1 quiz IA / dia", "1 mazo de flashcards IA / dia"],
+      features: ["Canvas, cursos y Focus", "XP, monedas, rachas y rankings", "Planilla de notas, amigos y tienda", "1 quiz IA / dia", "1 mazo de flashcards IA / dia"],
       cta: "Empezar gratis", primary: false,
     },
     {

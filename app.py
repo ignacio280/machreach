@@ -1952,7 +1952,6 @@ LAYOUT = """<!DOCTYPE html>
         <div class="nav-section">{{ student_ui.community }}</div>
         <a class="nav-item {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard"><span class="ic">&#127942;</span><span>{{ student_ui.leaderboard }}</span></a>
         <a class="nav-item {% if active_page == 'student_friends' %}active{% endif %}" href="/student/friends"><span class="ic">&#128101;</span><span>{{ student_ui.friends }}</span></a>
-        <a class="nav-item {% if active_page == 'student_marketplace' %}active{% endif %}" href="/student/marketplace"><span class="ic">&#128722;</span><span>{{ student_ui.marketplace }}</span></a>
         <a class="nav-item {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop"><span class="ic">&#129534;</span><span>{{ student_ui.shop }}</span></a>
 
         <div class="nav-section">{{ student_ui.account }}</div>
@@ -2028,7 +2027,6 @@ LAYOUT = """<!DOCTYPE html>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Enfoque</a>
-        <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Mercado</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
           <a href="javascript:void(0)" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>Más &#9662;</a>
@@ -2052,7 +2050,6 @@ LAYOUT = """<!DOCTYPE html>
           </div>
         </div>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
-        <a href="/student/marketplace" {% if active_page == 'student_marketplace' %}class="active"{% endif %}>&#128722; Marketplace</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
           <a href="javascript:void(0)" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>More &#9662;</a>
@@ -2506,7 +2503,6 @@ LAYOUT = """<!DOCTYPE html>
         {t:'Panic Mode', u:'/student/panic', i:'🚨', s:'Tools'},
         {t:'Grade Sheet', u:'/student/gpa', i:'📈', s:'Tools'},
         {t:'Leaderboard', u:'/student/leaderboard', i:'🏆', s:'Social'},
-        {t:'Marketplace', u:'/student/marketplace', i:'🛒', s:'Social'},
         {t:'Settings', u:'/student/settings', i:'\u2699\uFE0F', s:'Other'},
         {t:'Log out', u:'/logout', i:'🚪', s:'Other'},
       ] : [
@@ -3625,7 +3621,6 @@ LAYOUT = """<!DOCTYPE html>
       "Comunidad": "Community",
       "Ranking": "Leaderboard",
       "Amigos": "Friends",
-      "Mercado": "Marketplace",
       "Tienda": "Shop",
       "Cuenta": "Account",
       "Notas": "Grades",
@@ -3752,7 +3747,6 @@ LAYOUT = """<!DOCTYPE html>
       "Mejorar a Ultimate": "Upgrade to Ultimate",
       "Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes, tarjetas y duelos.": "Spend coins on streak 🔥 freezes, profile banners, and temporary boosts. Earn coins by completing focus sessions, quizzes, flashcards, and duels.",
 
-      "Mercado": "Marketplace",
       "Comprar": "Buy",
       "Vender": "Sell",
       "Buscar": "Search",
@@ -3781,7 +3775,6 @@ LAYOUT = """<!DOCTYPE html>
       "Mazos hoy": "Decks today",
       "Tarjetas hoy": "Cards today",
       "Apuntes hoy": "Notes today",
-      "Mercado ventas hoy": "Marketplace sales today",
       "Usuarios totales": "Total users",
       "Activos 7 días": "Active 7 days"
     };
@@ -4247,15 +4240,15 @@ def index():
     # ── i18n copy (en + es) ────────────────────────────────────
     if is_es:
         page_title = "MachReach — Estudia más inteligente. Domina cada día."
-        hero_kicker = "ESTUDIO IMPULSADO POR IA  ·  TUTOR  ·  DUELOS  ·  MARKETPLACE"
+        hero_kicker = "ESTUDIO IMPULSADO POR IA  ·  FOCUS  ·  DUELOS  ·  ANALYTICS"
         hero_h1_a = "Tu cerebro,"
         hero_h1_b = "supercargado."
-        hero_sub = "MachReach es la suite de estudio con IA para estudiantes universitarios: generador de quizzes, flashcards, temporizador de enfoque, duelos, ligas y un marketplace para ganar monedas vendiendo tus apuntes."
+        hero_sub = "MachReach es la suite de estudio con IA para estudiantes universitarios: generador de quizzes, flashcards, temporizador de enfoque, duelos, ligas, analytics y recompensas."
         cta_primary = "Empieza gratis"
         cta_secondary = "Iniciar sesión"
         stats = [
             ("∞", "Quizzes con IA en planes pagos"),
-            ("∞", "Marketplace de apuntes activo"),
+            ("∞", "Herramientas de estudio activas"),
             ("3", "Niveles: Free · Plus · Ultimate"),
             ("100%", "Hecho para estudiantes"),
         ]
@@ -4266,15 +4259,15 @@ def index():
             ("&#127919;", "Flashcards inteligentes", "Tarjetas de repaso con repetición espaciada. Dominas el material en menos tiempo."),
             ("&#9201;&#65039;", "Focus Timer + cursos", "Pomodoro con seguimiento por curso. Acumula racha, monedas y XP por cada sesión."),
             ("&#9876;&#65039;", "Duelos de Quiz", "Reta a tus amigos a duelos 1v1 con preguntas IA. Gana monedas, sube en la liga."),
-            ("&#128722;", "Marketplace", "Sube tus apuntes con un precio en monedas. Otros estudiantes los compran y tú ganas."),
+            ("&#128200;", "Analytics", "Mira tu semana, tus ramos fuertes y las pruebas que se vienen."),
             ("&#127942;", "Ligas y badges", "Sube de rango cada temporada compitiendo con otros estudiantes en XP."),
-            ("&#10024;", "Plan Ultimate", "Todo Plus + acceso gratis a TODO el marketplace + herramientas de correo."),
+            ("&#10024;", "Plan Ultimate", "Bloqueado por ahora hasta que tenga valor real."),
         ]
         how_h = "Cómo funciona en 3 pasos"
         how_steps = [
             ("1", "Crea tu cuenta gratis", "Sin tarjeta. Empieza a estudiar en menos de 30 segundos."),
             ("2", "Sube tus materiales", "Apuntes, PDFs, slides — la IA los entiende y te genera quizzes y resúmenes."),
-            ("3", "Estudia, gana y compite", "Acumula XP, sube en la liga, gana monedas en duelos y compra apuntes en el marketplace."),
+            ("3", "Estudia, gana y compite", "Acumula XP, sube en la liga, gana monedas en duelos y desbloquea cosméticos."),
         ]
         plans_h = "Planes pensados para estudiantes"
         plans_sub = "Empieza gratis. Sube de plan cuando quieras desbloquear lo ilimitado."
@@ -4283,7 +4276,7 @@ def index():
                 "1 quiz IA al día (hasta 30 preguntas)",
                 "1 set de flashcards al día (hasta 30)",
                 "Focus timer, rachas, ligas, duelos",
-                "Marketplace (comprar y vender)",
+                "Tienda y cosméticos",
             ], "Empezar gratis", "/register", False),
             ("Plus", "$4.99", "/ mes", [
                 "Quizzes y flashcards ILIMITADOS",
@@ -4294,7 +4287,7 @@ def index():
             ], "Probar Plus", "/register", True),
             ("Ultimate", "$9.99", "/ mes", [
                 "Todo lo de Plus",
-                "Marketplace 100% gratis (todos los archivos)",
+                "Cosméticos Ultimate y límites máximos",
                 "Cosméticos y perks Ultimate",
                 "Soporte prioritario",
             ], "Ir a Ultimate", "/register", False),
@@ -4304,15 +4297,15 @@ def index():
         final_cta = "Crear cuenta gratis"
     else:
         page_title = "MachReach — Study smarter. Win every day."
-        hero_kicker = "AI-POWERED STUDY  ·  TUTOR  ·  DUELS  ·  MARKETPLACE"
+        hero_kicker = "AI-POWERED STUDY  ·  FOCUS  ·  DUELS  ·  ANALYTICS"
         hero_h1_a = "Your brain,"
         hero_h1_b = "supercharged."
-        hero_sub = "MachReach is the AI study suite built for college students: quiz & flashcard generator, focus timer, duels, leagues, and a marketplace where you earn coins selling your notes."
+        hero_sub = "MachReach is the AI study suite built for college students: quiz & flashcard generator, focus timer, duels, leagues, analytics, and rewards."
         cta_primary = "Start free"
         cta_secondary = "Log in"
         stats = [
             ("∞", "AI quizzes on paid plans"),
-            ("∞", "Notes marketplace open 24/7"),
+            ("∞", "Study tools open 24/7"),
             ("3", "Tiers: Free · Plus · Ultimate"),
             ("100%", "Built for students"),
         ]
@@ -4323,15 +4316,15 @@ def index():
             ("&#127919;", "Smart Flashcards", "Spaced-repetition cards. Master the material in less time."),
             ("&#9201;&#65039;", "Focus Timer + Courses", "Pomodoro with per-course tracking. Build streaks, earn coins and XP."),
             ("&#9876;&#65039;", "Quiz Duels", "Challenge friends to AI-generated 1v1 duels. Win coins, climb the league."),
-            ("&#128722;", "Marketplace", "List your notes for a coin price. Other students buy them and you cash in."),
+            ("&#128200;", "Analytics", "Track your week, your strongest courses, and upcoming exam risk."),
             ("&#127942;", "Leagues & Badges", "Climb seasonal ranks competing for XP with other students."),
-            ("&#10024;", "Ultimate plan", "Everything in Plus + FREE access to every marketplace file + mail tools."),
+            ("&#10024;", "Ultimate plan", "Locked for now until it has real value."),
         ]
         how_h = "How it works in 3 steps"
         how_steps = [
             ("1", "Create a free account", "No card. Start studying in under 30 seconds."),
             ("2", "Drop your materials", "Notes, PDFs, slides — the AI reads them and generates quizzes & summaries."),
-            ("3", "Study, earn, compete", "Stack XP, climb the league, win coins in duels, buy notes on the marketplace."),
+            ("3", "Study, earn, compete", "Stack XP, climb the league, win coins in duels, and unlock cosmetics."),
         ]
         plans_h = "Plans built for students"
         plans_sub = "Start free. Upgrade when you want unlimited."
@@ -4340,7 +4333,7 @@ def index():
                 "1 AI quiz / day (up to 30 questions)",
                 "1 flashcard set / day (up to 30 cards)",
                 "Focus timer, streaks, leagues, duels",
-                "Marketplace (buy & sell)",
+                "Shop and cosmetics",
             ], "Start free", "/register", False),
             ("Plus", "$4.99", "/ month", [
                 "UNLIMITED quizzes & flashcards",
@@ -4351,7 +4344,7 @@ def index():
             ], "Try Plus", "/register", True),
             ("Ultimate", "$9.99", "/ month", [
                 "Everything in Plus",
-                "Marketplace 100% FREE (every file)",
+                "Ultimate cosmetics and maximum limits",
                 "Ultimate cosmetics and perks",
                 "Priority support",
             ], "Go Ultimate", "/register", False),
@@ -5287,7 +5280,6 @@ def _analytics_feature_event_for_path(path: str) -> str | None:
         ("/student/quiz", "view_quizzes"),
         ("/student/flashcards", "view_flashcards"),
         ("/student/leaderboard", "view_leaderboard"),
-        ("/student/marketplace", "view_marketplace"),
         ("/student/shop", "view_shop"),
         ("/student/canvas", "view_canvas"),
         ("/student/grades", "view_grades"),
@@ -5324,8 +5316,6 @@ def _machreach_product_analytics_hook():
         ("/api/student/quizzes", "quiz_action"),
         ("/api/student/flashcard", "flashcard_action"),
         ("/api/student/flashcards", "flashcard_action"),
-        ("/api/student/marketplace", "marketplace_action"),
-        ("/student/marketplace", "marketplace_action"),
         ("/api/student/canvas", "canvas_action"),
     ]
     for prefix, event in feature_map:
@@ -5445,7 +5435,7 @@ def _admin_user_ram_rows(external_events: str) -> list[dict]:
           COUNT(e.id) AS events_15m,
           SUM(CASE WHEN e.event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views_15m,
           SUM(CASE WHEN e.event_type <> 'page_view' THEN 1 ELSE 0 END) AS actions_15m,
-          SUM(CASE WHEN e.event_type IN ('quiz_action','flashcard_action','canvas_action','focus_session_saved','marketplace_action') THEN 1 ELSE 0 END) AS heavy_15m,
+          SUM(CASE WHEN e.event_type IN ('quiz_action','flashcard_action','canvas_action','focus_session_saved') THEN 1 ELSE 0 END) AS heavy_15m,
           MAX(e.created_at)::text AS last_seen
         FROM product_analytics_events e
         JOIN clients c ON c.id = e.client_id
@@ -5464,7 +5454,7 @@ def _admin_user_ram_rows(external_events: str) -> list[dict]:
           COUNT(e.id) AS events_15m,
           SUM(CASE WHEN e.event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views_15m,
           SUM(CASE WHEN e.event_type <> 'page_view' THEN 1 ELSE 0 END) AS actions_15m,
-          SUM(CASE WHEN e.event_type IN ('quiz_action','flashcard_action','canvas_action','focus_session_saved','marketplace_action') THEN 1 ELSE 0 END) AS heavy_15m,
+          SUM(CASE WHEN e.event_type IN ('quiz_action','flashcard_action','canvas_action','focus_session_saved') THEN 1 ELSE 0 END) AS heavy_15m,
           MAX(e.created_at) AS last_seen
         FROM product_analytics_events e
         JOIN clients c ON c.id = e.client_id
@@ -5507,7 +5497,6 @@ def admin_product_analytics():
         "view_quizzes": "Quizzes",
         "view_flashcards": "Tarjetas",
         "view_leaderboard": "Ranking",
-        "view_marketplace": "Mercado",
         "view_shop": "Tienda",
         "view_canvas": "Canvas",
         "view_grades": "Planilla de notas",
@@ -5515,7 +5504,6 @@ def admin_product_analytics():
         "focus_session_saved": "Sesion de enfoque guardada",
         "quiz_action": "Acciones de quiz",
         "flashcard_action": "Acciones de tarjetas",
-        "marketplace_action": "Acciones de mercado",
         "canvas_action": "Acciones de Canvas",
     }
 
@@ -5538,7 +5526,6 @@ def admin_product_analytics():
         ("/student/flashcards", "Tarjetas", "Usuarios usando flashcards"),
         ("/student/leaderboard", "Ranking", "Usuarios mirando la competencia"),
         ("/student/friends", "Amigos y duelos", "Usuarios usando funciones sociales"),
-        ("/student/marketplace", "Mercado", "Usuarios comprando o vendiendo apuntes"),
         ("/student/shop", "Tienda", "Usuarios revisando planes, coins y cosméticos"),
         ("/student/canvas", "Conexión Canvas", "Usuarios intentando sincronizar Canvas"),
         ("/student/grades", "Planilla de notas", "Usuarios usando cálculo de notas"),
@@ -5584,7 +5571,6 @@ def admin_product_analytics():
         ("Mazos hoy", _admin_metric(f"SELECT COUNT(*) FROM student_flashcard_decks WHERE {today_pg}", f"SELECT COUNT(*) FROM student_flashcard_decks WHERE {today_lite}")),
         ("Tarjetas hoy", _admin_metric(f"SELECT COUNT(*) FROM student_flashcards WHERE {today_pg}", f"SELECT COUNT(*) FROM student_flashcards WHERE {today_lite}")),
         ("Apuntes hoy", _admin_metric(f"SELECT COUNT(*) FROM student_notes WHERE {today_pg}", f"SELECT COUNT(*) FROM student_notes WHERE {today_lite}")),
-        ("Mercado ventas hoy", _admin_metric(f"SELECT COUNT(*) FROM student_marketplace_purchases WHERE {today_pg}", f"SELECT COUNT(*) FROM student_marketplace_purchases WHERE {today_lite}")),
         ("Usuarios totales", _admin_metric("SELECT COUNT(*) FROM clients WHERE COALESCE(account_type,'student')='student'", "SELECT COUNT(*) FROM clients WHERE COALESCE(account_type,'student')='student'")),
         ("Activos 7 días", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_pg} AND {external_events}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {week_lite} AND {external_events}")),
     ]
@@ -6269,7 +6255,7 @@ def terms_page():
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. Description of Service</h2>
-        <p>MachReach provides student study tools including Canvas LMS integration, AI-generated study plans, flashcards, practice quizzes, AI tutor support, panic-mode cram plans, weekly schedule tools, focus timers, XP, leaderboards, coin rewards, a student marketplace, and the optional Focus Guard browser extension.</p>
+        <p>MachReach provides student study tools including Canvas LMS integration, flashcards, practice quizzes, focus timers, XP, leaderboards, coin rewards, study analytics, and the optional Focus Guard browser extension.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Account Responsibilities</h2>
         <ul style="padding-left:20px;">
           <li>You must provide accurate information when registering</li>

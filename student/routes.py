@@ -1440,6 +1440,38 @@ def register_student_routes(app, csrf, limiter):
         except Exception:
             _focus_rows = []
         _focus_json = json.dumps(_focus_rows, ensure_ascii=False).replace("<", "\\u003c")
+        _exam_cards = []
+        try:
+            _course_minutes_21 = {}
+            _since_21 = (datetime.now().date() - timedelta(days=21)).isoformat()
+            for _r in _focus_rows:
+                if str(_r.get("date") or "") >= _since_21:
+                    _course_minutes_21[_r.get("course") or ""] = _course_minutes_21.get(_r.get("course") or "", 0) + int(_r.get("minutes") or 0)
+            _today_d = datetime.now().date()
+            for _c in courses:
+                for _e in (sdb.get_course_exams(int(_c["id"])) or []):
+                    try:
+                        _d = datetime.strptime(str(_e.get("exam_date") or "")[:10], "%Y-%m-%d").date()
+                    except Exception:
+                        continue
+                    if _d < _today_d:
+                        continue
+                    _days = (_d - _today_d).days
+                    _course_name = _c.get("name") or "Curso"
+                    _mins = int(_course_minutes_21.get(_course_name, 0) or 0)
+                    _risk = "alto" if (_days <= 3 and _mins < 120) or (_days <= 7 and _mins < 180) else ("medio" if _days <= 14 and _mins < 240 else "bien")
+                    _exam_cards.append({"course": _course_name, "exam": _e.get("name") or "Prueba", "days": _days, "mins": _mins, "risk": _risk})
+            _exam_cards = sorted(_exam_cards, key=lambda x: x["days"])[:4]
+        except Exception:
+            _exam_cards = []
+        _risk_label = {"alto": "Riesgo alto", "medio": "Riesgo medio", "bien": "Bien"}
+        _exam_risk_html = "".join(
+            "<div class='wa-risk-card " + _esc(_x["risk"]) + "'>"
+            "<div><span>" + _esc(_risk_label.get(_x["risk"], "Bien")) + "</span><strong>" + _esc(_x["course"]) + "</strong>"
+            "<p>" + _esc(_x["exam"]) + " en " + str(int(_x["days"])) + " dias · " + _fmt_minutes(int(_x["mins"])) + " estudiados ultimos 21 dias</p></div>"
+            "<a href='/student/focus' class='wa-risk-btn'>Estudiar ahora</a></div>"
+            for _x in _exam_cards
+        ) or "<div class='wa-empty'>Sin pruebas proximas cargadas. Cuando agregues evaluaciones, MachReach te va a marcar prioridades reales.</div>"
 
         body = f"""
         <style>
@@ -1481,6 +1513,14 @@ def register_student_routes(app, csrf, limiter):
         .wa-detail-bar {{ width:100%; max-width:46px; min-height:7px; border-radius:14px 14px 7px 7px; background:linear-gradient(180deg,var(--warm-green),var(--warm-orange)); }}
         .wa-detail-day span {{ color:var(--warm-muted); font-size:12px; font-weight:900; }}
         .wa-empty {{ padding:24px; border-radius:20px; background:#FFF8EE; color:var(--warm-muted); text-align:center; }}
+        .wa-risk-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }}
+        .wa-risk-card {{ border:1px solid var(--warm-line); border-left:5px solid var(--warm-green); border-radius:18px; padding:15px; display:flex; justify-content:space-between; gap:12px; align-items:center; background:#FFFDF8; }}
+        .wa-risk-card.alto {{ border-left-color:#EF4444; background:#FFF4F2; }}
+        .wa-risk-card.medio {{ border-left-color:#F59E0B; background:#FFF8ED; }}
+        .wa-risk-card span {{ display:block; color:var(--warm-muted); font-size:10px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; margin-bottom:4px; }}
+        .wa-risk-card strong {{ display:block; color:var(--warm-ink); font-size:15px; }}
+        .wa-risk-card p {{ margin:3px 0 0; color:var(--warm-muted); font-size:12px; }}
+        .wa-risk-btn {{ white-space:nowrap; text-decoration:none; color:#fff; background:#1A1A1F; border-radius:999px; padding:9px 12px; font-size:12px; font-weight:900; }}
         @media (max-width:1000px) {{ .wa-grid {{ grid-template-columns:1fr; }} .wa-stats {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} }}
         @media (max-width:580px) {{ .wa-stats {{ grid-template-columns:1fr; }} .wa-week-nav {{ width:100%; justify-content:space-between; }} #wa-week-label {{ min-width:0; }} }}
         </style>
@@ -1522,6 +1562,12 @@ def register_student_routes(app, csrf, limiter):
             <h2 id="wa-detail-title">{_esc(_an.get("course_detail", "Daily detail by course"))}</h2>
             <p id="wa-detail-sub">{_esc(_an.get("course_detail_sub", ""))}</p>
             <div id="wa-detail" class="wa-detail-bars"></div>
+          </section>
+
+          <section class="wa-card">
+            <h2>Plan anti-prueba</h2>
+            <p>Prioridad basada en pruebas proximas y minutos reales estudiados para cada ramo.</p>
+            <div class="wa-risk-grid">{_exam_risk_html}</div>
           </section>
         </div>
 
@@ -6651,7 +6697,10 @@ def register_student_routes(app, csrf, limiter):
 
         # Build a course→exams map so the exam dropdown can be filtered in JS
         # without a round-trip each time the student picks a different course.
+        _focus_is_en = session.get("lang", "es") == "en"
         course_exams_map = {}
+        next_focus_exam = None
+        today_date = datetime.now().date()
         course_options = ""
         for c in courses:
             course_options += (
@@ -6662,18 +6711,42 @@ def register_student_routes(app, csrf, limiter):
                 cexams = sdb.get_course_exams(int(c["id"]))
             except Exception:
                 cexams = []
-            course_exams_map[int(c["id"])] = [
-                {"id": int(e["id"]), "name": e.get("name") or "Exam",
-                 "date": e.get("exam_date") or ""}
-                for e in cexams
-            ]
+            mapped_exams = []
+            for e in cexams:
+                _topics = []
+                try:
+                    _raw_topics = e.get("topics_json") if isinstance(e, dict) else None
+                    _topics = json.loads(_raw_topics) if isinstance(_raw_topics, str) else (_raw_topics or [])
+                    if not isinstance(_topics, list):
+                        _topics = []
+                except Exception:
+                    _topics = []
+                _exam_date = e.get("exam_date") or ""
+                _item = {
+                    "id": int(e["id"]),
+                    "name": e.get("name") or ("Exam" if _focus_is_en else "Prueba"),
+                    "date": _exam_date,
+                    "course": c.get("name") or "",
+                    "course_id": int(c["id"]),
+                    "topics": [str(t).strip() for t in _topics if str(t).strip()][:6],
+                }
+                mapped_exams.append(_item)
+                try:
+                    _d = datetime.strptime(str(_exam_date)[:10], "%Y-%m-%d").date()
+                    if _d >= today_date:
+                        _candidate = dict(_item)
+                        _candidate["days"] = (_d - today_date).days
+                        if next_focus_exam is None or _candidate["days"] < int(next_focus_exam.get("days", 999999)):
+                            next_focus_exam = _candidate
+                except Exception:
+                    pass
+            course_exams_map[int(c["id"])] = mapped_exams
 
         # JSON-encoded for safe injection into an f-string `{_json_course_exams}`.
         # Keys are coerced to strings so JS can look them up by the select value.
         _json_course_exams = json.dumps({str(k): v for k, v in course_exams_map.items()},
                                         ensure_ascii=False).replace("<", "\\u003c")
 
-        _focus_is_en = session.get("lang", "es") == "en"
         try:
             from student import subscription as _sub
             _focus_tier = _sub.get_tier(_cid())
@@ -6731,10 +6804,22 @@ def register_student_routes(app, csrf, limiter):
             "libraryRitualThree": "You are here to finish one clean block." if _focus_is_en else "Viniste a terminar un bloque limpio.",
             "libraryRitualSkip": "Start now" if _focus_is_en else "Empezar ahora",
             "libraryLeaveConfirm": "Library Mode is active. Leave this focus session?" if _focus_is_en else "Modo Biblioteca esta activo. ¿Salir de esta sesion de enfoque?",
+            "libraryPresetExam": "Exam block" if _focus_is_en else "Bloque prueba",
+            "libraryPresetDeep": "Deep reading" if _focus_is_en else "Lectura profunda",
+            "libraryPresetSprint": "Clean sprint" if _focus_is_en else "Sprint limpio",
+            "libraryPresetApplied": "Library preset applied" if _focus_is_en else "Preset de Biblioteca aplicado",
+            "examNudgeTitle": "Next exam" if _focus_is_en else "Proxima prueba",
+            "examNudgeToday": "today" if _focus_is_en else "hoy",
+            "examNudgeTomorrow": "tomorrow" if _focus_is_en else "manana",
+            "examNudgeDays": "in {days} days" if _focus_is_en else "en {days} dias",
+            "examNudgeStudy": "Recommended: {topics}" if _focus_is_en else "Recomendado: {topics}",
+            "examNudgeFallback": "general review, weak topics, and one practice quiz" if _focus_is_en else "repaso general, puntos debiles y un quiz de practica",
+            "examNudgeToast": "You have {exam} for {course} {when}. Study: {topics}" if _focus_is_en else "Tienes {exam} de {course} {when}. Estudia: {topics}",
             "rivalHeadline": "Beat your friend today" if _focus_is_en else "Ganale a tu amigo hoy",
             "rivalEmpty": "No friend has studied today yet. You can set the pace." if _focus_is_en else "Ningun amigo ha estudiado hoy todavia. Marca el ritmo tu.",
             "rivalTemplate": "{name} studied {minutes} min today. Beat them." if _focus_is_en else "{name} estudio {minutes} min hoy. Ganale.",
         }
+        _json_next_focus_exam = json.dumps(next_focus_exam or {}, ensure_ascii=False).replace("<", "\\u003c")
 
 
 
@@ -6797,6 +6882,13 @@ def register_student_routes(app, csrf, limiter):
         .focus-rival-eyebrow {{ font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#B45309;margin-bottom:3px; }}
         .focus-rival-text {{ font-size:14px;font-weight:900;color:#1A1A1F;line-height:1.25; }}
         .focus-rival-mins {{ white-space:nowrap;font-family:'Bricolage Grotesque',sans-serif;font-size:26px;font-weight:700;color:#FF7A3D; }}
+        .focus-exam-nudge {{ display:none;margin-bottom:16px;padding:16px 18px;border:1px solid #FFD2BA;background:linear-gradient(135deg,#FFF7ED,#FFFFFF);border-radius:18px;box-shadow:0 12px 34px rgba(255,122,61,.10); }}
+        .focus-exam-nudge.show {{ display:flex;align-items:center;justify-content:space-between;gap:16px; }}
+        .focus-exam-eyebrow {{ font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#B45309;margin-bottom:4px; }}
+        .focus-exam-title {{ font-size:16px;font-weight:900;color:#1A1A1F;line-height:1.2; }}
+        .focus-exam-topics {{ margin-top:6px;font-size:13px;color:#5C5C66;font-weight:700;line-height:1.35; }}
+        .focus-exam-days {{ white-space:nowrap;font-family:'Bricolage Grotesque',sans-serif;font-size:28px;font-weight:700;color:#FF7A3D;text-align:right; }}
+        .library-preset {{ border-color:#FFD2BA;background:#FFF7ED;color:#B45309; }}
         #library-exit-btn {{ display:none;position:fixed;top:18px;right:18px;z-index:8990;border:1px solid #D8D0C0;background:#FFFDF8;color:#1A1A1F;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:900;box-shadow:0 12px 36px rgba(20,18,30,.10);cursor:pointer; }}
         #library-ritual {{ position:fixed;inset:0;z-index:99980;display:none;align-items:center;justify-content:center;background:rgba(251,248,240,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px); }}
         #library-ritual.show {{ display:flex; }}
@@ -6810,6 +6902,7 @@ def register_student_routes(app, csrf, limiter):
         body.focus-library-mode .focus-page-head,
         body.focus-library-mode .focus-mode-toolbar,
         body.focus-library-mode #focus-rival-card,
+        body.focus-library-mode #focus-exam-nudge,
         body.focus-library-mode #focus-guard-card,
         body.focus-library-mode #today-session-card,
         body.focus-library-mode .focus-shortcuts,
@@ -6878,6 +6971,7 @@ def register_student_routes(app, csrf, limiter):
           <button id="library-mode-btn" class="focus-mode-chip {'locked' if not _focus_is_plus else ''}" type="button" onclick="toggleLibraryMode()">
             &#128218; {('Library Mode' if _focus_is_en else 'Modo Biblioteca')} {'PLUS' if not _focus_is_plus else ''}
           </button>
+          {'<button class="focus-mode-chip library-preset" type="button" onclick="applyLibraryPreset(50,10,25)">&#127891; ' + ('Exam block' if _focus_is_en else 'Bloque prueba') + '</button><button class="focus-mode-chip library-preset" type="button" onclick="applyLibraryPreset(40,8,20)">&#128214; ' + ('Deep reading' if _focus_is_en else 'Lectura profunda') + '</button><button class="focus-mode-chip library-preset" type="button" onclick="applyLibraryPreset(25,5,15)">&#9889; ' + ('Clean sprint' if _focus_is_en else 'Sprint limpio') + '</button>' if _focus_is_plus else ''}
         </div>
 
         <button id="library-exit-btn" type="button" onclick="toggleLibraryMode()">&#128218; {('Exit Library' if _focus_is_en else 'Salir de Biblioteca')}</button>
@@ -6902,6 +6996,15 @@ def register_student_routes(app, csrf, limiter):
             <div class="focus-rival-text" id="focus-rival-text">{'Loading friend pressure...' if _focus_is_en else 'Buscando presion de amigos...'}</div>
           </div>
           <div class="focus-rival-mins" id="focus-rival-mins">0m</div>
+        </div>
+
+        <div id="focus-exam-nudge" class="focus-exam-nudge" aria-live="polite">
+          <div>
+            <div class="focus-exam-eyebrow" id="focus-exam-eyebrow">{('Next exam' if _focus_is_en else 'Proxima prueba')}</div>
+            <div class="focus-exam-title" id="focus-exam-title"></div>
+            <div class="focus-exam-topics" id="focus-exam-topics"></div>
+          </div>
+          <div class="focus-exam-days" id="focus-exam-days"></div>
         </div>
 
         <div class="focus-layout" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
@@ -7755,6 +7858,7 @@ def register_student_routes(app, csrf, limiter):
         var currentMode = 'pomodoro';
         var focusText = {json.dumps(_focus_js_i18n, ensure_ascii=False)};
         var FOCUS_IS_PLUS = {str(bool(_focus_is_plus)).lower()};
+        var FOCUS_NEXT_EXAM = {_json_next_focus_exam};
         var __libraryRitualTimer = null;
         var __libraryRitualPendingStart = false;
         var __libraryRitualBypassOnce = false;
@@ -7807,6 +7911,26 @@ def register_student_routes(app, csrf, limiter):
           var next = !document.body.classList.contains('focus-library-mode');
           applyLibraryMode(next);
           if (next) requestLibraryFullscreen();
+        }}
+
+        function applyLibraryPreset(work, shortBreak, longBreak) {{
+          if (!FOCUS_IS_PLUS) {{
+            if (window.showToast) window.showToast(focusText.libraryLocked, 'info');
+            return;
+          }}
+          try {{
+            var w = document.getElementById('pomo-work');
+            var b = document.getElementById('pomo-break');
+            var l = document.getElementById('pomo-long');
+            if (w) w.value = work;
+            if (b) b.value = shortBreak;
+            if (l) l.value = longBreak;
+            currentMode = 'pomodoro';
+            if (!document.body.classList.contains('focus-library-mode')) applyLibraryMode(true);
+            resetTimer();
+            requestLibraryFullscreen();
+            if (window.showToast) window.showToast(focusText.libraryPresetApplied + ': ' + work + '/' + shortBreak, 'success');
+          }} catch(e) {{}}
         }}
 
         (function restoreLibraryMode() {{
@@ -7901,6 +8025,42 @@ def register_student_routes(app, csrf, limiter):
         }}
 
         loadFocusRival();
+
+        function examWhenText(days) {{
+          days = parseInt(days || 0, 10) || 0;
+          if (days === 0) return focusText.examNudgeToday;
+          if (days === 1) return focusText.examNudgeTomorrow;
+          return focusText.examNudgeDays.replace('{{days}}', days);
+        }}
+
+        function showNextExamNudge() {{
+          try {{
+            if (!FOCUS_NEXT_EXAM || !FOCUS_NEXT_EXAM.course) return;
+            var topics = (FOCUS_NEXT_EXAM.topics || []).filter(Boolean).slice(0, 3);
+            var topicText = topics.length ? topics.join(', ') : focusText.examNudgeFallback;
+            var when = examWhenText(FOCUS_NEXT_EXAM.days);
+            var card = document.getElementById('focus-exam-nudge');
+            var title = document.getElementById('focus-exam-title');
+            var topicEl = document.getElementById('focus-exam-topics');
+            var daysEl = document.getElementById('focus-exam-days');
+            if (title) title.textContent = (FOCUS_NEXT_EXAM.exam || FOCUS_NEXT_EXAM.name || focusText.examNudgeTitle) + ' - ' + FOCUS_NEXT_EXAM.course;
+            if (topicEl) topicEl.textContent = focusText.examNudgeStudy.replace('{{topics}}', topicText);
+            if (daysEl) daysEl.textContent = when;
+            if (card) card.classList.add('show');
+            setTimeout(function() {{
+              try {{
+                var msg = focusText.examNudgeToast
+                  .replace('{{exam}}', FOCUS_NEXT_EXAM.exam || FOCUS_NEXT_EXAM.name || focusText.examNudgeTitle)
+                  .replace('{{course}}', FOCUS_NEXT_EXAM.course)
+                  .replace('{{when}}', when)
+                  .replace('{{topics}}', topicText);
+                if (window.showToast) window.showToast(msg, 'info');
+              }} catch(e) {{}}
+            }}, 1100);
+          }} catch(e) {{}}
+        }}
+
+        showNextExamNudge();
 
         var totalFocusSeconds = 0;
 
@@ -17146,783 +17306,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    # ── Marketplace ─────────────────────────────────────────
-
-
-
-    @app.route("/student/marketplace")
-
-    def student_marketplace_page():
-
-        """Marketplace — buy & sell study files for coins."""
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        cid = _cid()
-
-        search = (request.args.get("q") or "").strip()
-
-        subject = (request.args.get("subject") or "").strip()
-
-        items = sdb.marketplace_browse(viewer_id=cid, search=search, subject=subject, limit=80)
-
-        wallet = sdb.get_wallet(cid)
-
-        coins = int(wallet.get("coins") or 0)
-
-
-
-        try:
-
-            from student.subscription import get_tier as _get_tier
-
-            tier = _get_tier(cid)
-
-        except Exception:
-
-            tier = "free"
-
-        is_ultimate = (tier == "ultimate")
-
-
-
-        cards_html = ""
-
-        for it in items:
-
-            owned = bool(it.get("owned"))
-
-            price = int(it.get("price_coins") or 0)
-
-            size_kb = max(1, int((it.get("file_size") or 0) / 1024))
-
-            ext = (it.get("file_ext") or "").upper() or "FILE"
-
-            preview = (it.get("preview") or it.get("description") or "")[:240]
-
-            badge = ""
-
-            if is_ultimate:
-
-                badge = '<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;">GRATIS ULTIMATE</span>'
-
-            elif owned:
-
-                badge = '<span style="background:var(--green);color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;">COMPRADO</span>'
-
-            cards_html += f"""
-
-            <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="window.location='/student/marketplace/{it['id']}'">
-
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-
-                <div style="flex:1;min-width:0;">
-
-                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-
-                    <h3 style="margin:0;font-size:16px;">{_esc(it.get('title','Sin título'))}</h3>
-
-                    {badge}
-
-                  </div>
-
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-
-                    por {_esc(it.get('seller_name','Desconocido'))} &middot; {_esc(it.get('subject') or 'General')} &middot; {ext} &middot; {size_kb} KB &middot; {int(it.get('downloads') or 0)} descargas
-
-                  </div>
-
-                  <p style="margin:8px 0 0;font-size:13px;color:var(--text-muted);">{_esc(preview)}</p>
-
-                </div>
-
-                <div style="text-align:right;white-space:nowrap;">
-
-                  <div style="font-size:18px;font-weight:700;color:#f59e0b;">&#129689; {price}</div>
-
-                  <div style="font-size:11px;color:var(--text-muted);">monedas</div>
-
-                </div>
-
-              </div>
-
-            </div>"""
-
-        if not cards_html:
-
-            cards_html = '<div class="card" style="text-align:center;color:var(--text-muted);padding:24px;">Todavía no hay publicaciones. Sé el primero en compartir.</div>'
-
-
-
-        ultimate_note = ""
-
-        if is_ultimate:
-
-            ultimate_note = (
-
-                '<div class="card" style="background:linear-gradient(90deg,#7c3aed22,#a855f722);'
-
-                'border:1px solid #7c3aed;margin-bottom:12px;">'
-
-                '<strong style="color:#a855f7;">&#10024; Beneficio ULTIMATE:</strong> '
-
-                'Tienes acceso gratis a todos los archivos del mercado.</div>'
-
-            )
-
-
-
-        return _s_render("Mercado", f"""
-
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
-
-          <div>
-
-            <h1 style="margin:0;">&#128722; Mercado</h1>
-
-            <p style="color:var(--text-muted);margin:4px 0 0;">Compra y vende materiales de estudio con monedas.</p>
-
-          </div>
-
-          <div style="display:flex;gap:8px;align-items:center;">
-
-            <span style="padding:6px 12px;background:var(--bg-elev);border-radius:8px;font-weight:700;color:#f59e0b;">&#129689; {coins} monedas</span>
-
-            <a href="/student/marketplace/my" class="btn btn-outline btn-sm">&#128193; Mis publicaciones</a>
-
-            <button class="btn btn-primary btn-sm" onclick="document.getElementById('upload-modal').style.display='flex'">&#10133; Vender archivo</button>
-
-          </div>
-
-        </div>
-
-
-
-        {ultimate_note}
-
-
-
-        <form method="GET" action="/student/marketplace" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-
-          <input type="text" name="q" placeholder="Buscar por título o descripción..." value="{_esc(search)}" style="flex:1;min-width:200px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
-
-          <input type="text" name="subject" placeholder="Filtrar por materia..." value="{_esc(subject)}" style="width:180px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
-
-          <button class="btn btn-outline btn-sm" type="submit">Buscar</button>
-
-        </form>
-
-
-
-        {cards_html}
-
-
-
-        <div id="upload-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)this.style.display='none'">
-
-          <div class="card" style="max-width:540px;width:100%;max-height:90vh;overflow:auto;">
-
-            <h2 style="margin-top:0;">&#128722; Vender archivo de estudio</h2>
-
-            <p style="color:var(--text-muted);font-size:13px;">Sube un archivo de estudio. Los compradores solo ven el título, la materia y la vista previa; desbloquean el archivo completo pagando tu precio en monedas.</p>
-
-            <form id="upload-form" enctype="multipart/form-data">
-
-              <label style="display:block;margin-top:12px;font-size:13px;">Título *</label>
-
-              <input name="title" type="text" required maxlength="200" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
-
-              <label style="display:block;margin-top:12px;font-size:13px;">Materia (opcional)</label>
-
-              <input name="subject" type="text" maxlength="120" placeholder="Ej. Cálculo, Biología" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
-
-              <label style="display:block;margin-top:12px;font-size:13px;">Descripción corta (opcional)</label>
-
-              <textarea name="description" rows="2" maxlength="500" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);"></textarea>
-
-              <label style="display:block;margin-top:12px;font-size:13px;">Vista previa (lo que ven antes de pagar)</label>
-
-              <textarea name="preview" rows="3" maxlength="1500" placeholder="Muestra un adelanto: primer párrafo, índice, resumen, etc." style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);"></textarea>
-
-              <label style="display:block;margin-top:12px;font-size:13px;">Precio (monedas) *</label>
-
-              <input name="price_coins" type="number" min="1" max="5000" value="20" required style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);">
-
-              <label style="display:block;margin-top:12px;font-size:13px;">Archivo * (máx. 25 MB)</label>
-
-              <input name="file" type="file" required style="width:100%;padding:6px 0;">
-
-              <div id="upload-msg" style="margin-top:10px;font-size:13px;"></div>
-
-              <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
-
-                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('upload-modal').style.display='none'">Cancelar</button>
-
-                <button type="submit" class="btn btn-primary btn-sm">Publicar</button>
-
-              </div>
-
-            </form>
-
-          </div>
-
-        </div>
-
-
-
-        <script>
-
-        document.getElementById('upload-form').addEventListener('submit', async function(ev){{
-
-          ev.preventDefault();
-
-          var msg = document.getElementById('upload-msg');
-
-          msg.textContent = 'Subiendo...';
-
-          msg.style.color = 'var(--text-muted)';
-
-          var fd = new FormData(ev.target);
-
-          try {{
-
-            var r = await fetch('/api/student/marketplace/upload', {{ method:'POST', body: fd }});
-
-            var j = await r.json();
-
-            if (j && j.ok) {{
-
-              msg.textContent = 'Publicado.';
-
-              msg.style.color = 'var(--green)';
-
-              setTimeout(function(){{ mrGo('/student/marketplace/' + j.item_id); }}, 600);
-
-            }} else {{
-
-              msg.textContent = (j && j.error) || 'No se pudo subir.';
-
-              msg.style.color = 'var(--red)';
-
-            }}
-
-          }} catch(e) {{
-
-            msg.textContent = 'Error de red.';
-
-            msg.style.color = 'var(--red)';
-
-          }}
-
-        }});
-
-        </script>
-
-        """, active_page="student_marketplace")
-
-
-
-    @app.route("/student/marketplace/my")
-
-    def student_marketplace_my_page():
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        cid = _cid()
-
-        listings = sdb.marketplace_my_listings(cid)
-
-        purchases = sdb.marketplace_my_purchases(cid)
-
-
-
-        listings_html = ""
-
-        for it in listings:
-
-            size_kb = max(1, int((it.get("file_size") or 0) / 1024))
-
-            ext = (it.get("file_ext") or "").upper() or "FILE"
-
-            listings_html += f"""
-
-            <div class="card" style="margin-bottom:10px;">
-
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-
-                <div style="flex:1;min-width:0;">
-
-                  <a href="/student/marketplace/{it['id']}" style="font-weight:700;color:var(--text);text-decoration:none;">{_esc(it.get('title','Sin título'))}</a>
-
-                  <div style="font-size:12px;color:var(--text-muted);">{ext} &middot; {size_kb} KB &middot; {int(it.get('downloads') or 0)} descargas &middot; {int(it.get('price_coins') or 0)} monedas</div>
-
-                </div>
-
-                <button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="deleteListing({it['id']})">&#128465;</button>
-
-              </div>
-
-            </div>"""
-
-        if not listings_html:
-
-            listings_html = '<div class="card" style="color:var(--text-muted);">Todavía no has publicado nada.</div>'
-
-
-
-        purchases_html = ""
-
-        for it in purchases:
-
-            ext = (it.get("file_ext") or "").upper() or "FILE"
-
-            purchases_html += f"""
-
-            <div class="card" style="margin-bottom:10px;">
-
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-
-                <div style="flex:1;min-width:0;">
-
-                  <a href="/student/marketplace/{it['id']}" style="font-weight:700;color:var(--text);text-decoration:none;">{_esc(it.get('title','Sin título'))}</a>
-
-                  <div style="font-size:12px;color:var(--text-muted);">por {_esc(it.get('seller_name','Desconocido'))} &middot; {ext} &middot; pagado {int(it.get('price_paid') or 0)} monedas</div>
-
-                </div>
-
-                <a class="btn btn-outline btn-sm" href="/api/student/marketplace/{it['id']}/download">&#11015; Descargar</a>
-
-              </div>
-
-            </div>"""
-
-        if not purchases_html:
-
-            purchases_html = '<div class="card" style="color:var(--text-muted);">Todavía no tienes compras.</div>'
-
-
-
-        return _s_render("Mi mercado", f"""
-
-        <a href="/student/marketplace" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Volver al mercado</a>
-
-        <h1>&#128193; Mi mercado</h1>
-
-
-
-        <h2 style="margin-top:24px;font-size:18px;">Mis publicaciones</h2>
-
-        {listings_html}
-
-
-
-        <h2 style="margin-top:24px;font-size:18px;">Mis compras</h2>
-
-        {purchases_html}
-
-
-
-        <script>
-
-        async function deleteListing(id) {{
-
-          if (!confirm('¿Eliminar esta publicación? Los compradores que ya pagaron mantienen el acceso.')) return;
-
-          var r = await fetch('/api/student/marketplace/' + id + '/delete', {{ method:'DELETE' }});
-
-          var j = await r.json();
-
-          if (j && j.ok) mrReload();
-
-          else alert((j && j.error) || 'No se pudo eliminar.');
-
-        }}
-
-        </script>
-
-        """, active_page="student_marketplace")
-
-
-
-    @app.route("/student/marketplace/<int:item_id>")
-
-    def student_marketplace_item_page(item_id):
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        cid = _cid()
-
-        item = sdb.marketplace_get(item_id)
-
-        if not item:
-
-            return redirect(url_for("student_marketplace_page"))
-
-        has_access = sdb.marketplace_has_access(cid, item)
-
-        is_seller = (int(item.get("seller_id") or 0) == cid)
-
-        try:
-
-            from student.subscription import get_tier as _get_tier
-
-            tier = _get_tier(cid)
-
-        except Exception:
-
-            tier = "free"
-
-        is_ultimate = (tier == "ultimate")
-
-
-
-        wallet = sdb.get_wallet(cid)
-
-        coins = int(wallet.get("coins") or 0)
-
-        price = int(item.get("price_coins") or 0)
-
-        ext = (item.get("file_ext") or "").upper() or "FILE"
-
-        size_kb = max(1, int((item.get("file_size") or 0) / 1024))
-
-
-
-        if has_access:
-
-            if is_seller:
-
-                cta = '<div style="padding:12px;background:var(--bg-elev);border-radius:8px;text-align:center;color:var(--text-muted);">Esta es tu publicación.</div>'
-
-            elif is_ultimate and not has_access:
-
-                cta = '<div style="padding:12px;background:#7c3aed22;border:1px solid #7c3aed;border-radius:8px;text-align:center;">&#10024; Acceso Ultimate: descarga gratis.</div>'
-
-            else:
-
-                cta = '<div style="padding:12px;background:var(--green);color:#fff;border-radius:8px;text-align:center;font-weight:700;">&#10003; Ya tienes este archivo.</div>'
-
-            cta += f'<a class="btn btn-primary" style="display:block;text-align:center;margin-top:10px;" href="/api/student/marketplace/{item_id}/download">&#11015; Descargar archivo completo</a>'
-
-        elif is_ultimate:
-
-            cta = (
-
-                '<div style="padding:12px;background:#7c3aed22;border:1px solid #7c3aed;border-radius:8px;text-align:center;">'
-
-                '<strong style="color:#a855f7;">&#10024; Beneficio ULTIMATE:</strong> Descarga gratis para ti.</div>'
-
-                f'<a class="btn btn-primary" style="display:block;text-align:center;margin-top:10px;" href="/api/student/marketplace/{item_id}/download">&#11015; Descargar archivo completo</a>'
-
-            )
-
-        else:
-
-            disabled = "disabled" if coins < price else ""
-
-            label = ("Comprar por " + str(price) + " monedas") if coins >= price else f"Te faltan {price - coins} monedas"
-
-            cta = (
-
-                f'<div style="text-align:center;margin-bottom:8px;">Tu saldo: <strong style="color:#f59e0b;">&#129689; {coins}</strong></div>'
-
-                f'<button class="btn btn-primary" style="width:100%;" id="buy-btn" {disabled} onclick="buyItem({item_id})">&#129689; {label}</button>'
-
-                '<div id="buy-msg" style="margin-top:10px;text-align:center;font-size:13px;"></div>'
-
-            )
-
-
-
-        preview_html = _esc(item.get("preview") or "(No hay vista previa.)").replace("\n", "<br>")
-
-        desc_html = _esc(item.get("description") or "").replace("\n", "<br>")
-
-
-
-        return _s_render(item.get("title", "Mercado"), f"""
-
-        <a href="/student/marketplace" style="color:var(--text-muted);font-size:13px;text-decoration:none;">&larr; Volver al mercado</a>
-
-        <h1 style="margin:8px 0;">{_esc(item.get('title','Sin título'))}</h1>
-
-        <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">
-
-          por <strong>{_esc(item.get('seller_name','Desconocido'))}</strong> &middot; {_esc(item.get('subject') or 'General')} &middot; {ext} &middot; {size_kb} KB &middot; {int(item.get('downloads') or 0)} descargas
-
-        </div>
-
-
-
-        <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start;">
-
-          <div>
-
-            {('<div class="card"><h3 style="margin-top:0;font-size:14px;color:var(--text-muted);">Descripción</h3><div>' + desc_html + '</div></div>') if item.get('description') else ''}
-
-            <div class="card">
-
-              <h3 style="margin-top:0;font-size:14px;color:var(--text-muted);">Vista previa</h3>
-
-              <div style="white-space:pre-wrap;line-height:1.5;">{preview_html}</div>
-
-              {'' if has_access else '<div style="margin-top:12px;padding:8px;background:var(--bg-elev);border-radius:6px;font-size:12px;color:var(--text-muted);text-align:center;">&#128274; El archivo completo se desbloquea después de comprarlo.</div>'}
-
-            </div>
-
-          </div>
-
-          <div class="card" style="position:sticky;top:12px;">
-
-            <div style="text-align:center;margin-bottom:12px;">
-
-              <div style="font-size:32px;font-weight:800;color:#f59e0b;">&#129689; {price}</div>
-
-              <div style="font-size:12px;color:var(--text-muted);">monedas</div>
-
-            </div>
-
-            {cta}
-
-          </div>
-
-        </div>
-
-
-
-        <script>
-
-        async function buyItem(id) {{
-
-          var btn = document.getElementById('buy-btn');
-
-          var msg = document.getElementById('buy-msg');
-
-          if (btn) btn.disabled = true;
-
-          msg.textContent = 'Procesando...';
-
-          msg.style.color = 'var(--text-muted)';
-
-          try {{
-
-            var r = await fetch('/api/student/marketplace/' + id + '/buy', {{
-
-              method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'
-
-            }});
-
-            var j = await r.json();
-
-            if (j && j.ok) {{
-
-              msg.textContent = 'Comprado. Actualizando...';
-
-              msg.style.color = 'var(--green)';
-
-              setTimeout(function(){{ mrReload(); }}, 500);
-
-            }} else {{
-
-              msg.textContent = (j && j.error) || 'No se pudo comprar.';
-
-              msg.style.color = 'var(--red)';
-
-              if (btn) btn.disabled = false;
-
-            }}
-
-          }} catch(e) {{
-
-            msg.textContent = 'Error de red.';
-
-            msg.style.color = 'var(--red)';
-
-            if (btn) btn.disabled = false;
-
-          }}
-
-        }}
-
-        </script>
-
-        """, active_page="student_marketplace")
-
-
-
-    # ── Marketplace API ─────────────────────────────────────
-
-
-
-    @app.route("/api/student/marketplace/upload", methods=["POST"])
-
-    def student_marketplace_upload():
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        cid = _cid()
-
-        if "file" not in request.files:
-
-            return jsonify({"ok": False, "error": "No file uploaded."}), 400
-
-        f = request.files["file"]
-
-        if not f or not (f.filename or "").strip():
-
-            return jsonify({"ok": False, "error": "No file selected."}), 400
-
-
-
-        title = (request.form.get("title") or "").strip()
-
-        description = (request.form.get("description") or "").strip()
-
-        preview = (request.form.get("preview") or "").strip()
-
-        subject = (request.form.get("subject") or "").strip()
-
-        try:
-
-            price = int(request.form.get("price_coins") or 0)
-
-        except (TypeError, ValueError):
-
-            price = 0
-
-
-
-        import tempfile as _tempfile
-
-        import os as _os2
-
-        fd, tmp_path = _tempfile.mkstemp(prefix="mkpl_", suffix="_" + (f.filename[-40:] if f.filename else "upload"))
-
-        _os2.close(fd)
-
-        try:
-
-            f.save(tmp_path)
-
-            file_size = _os2.path.getsize(tmp_path)
-
-            res = sdb.marketplace_create_listing(
-
-                seller_id=cid,
-
-                title=title,
-
-                description=description,
-
-                preview=preview,
-
-                subject=subject,
-
-                src_file_path=tmp_path,
-
-                original_filename=f.filename or "upload",
-
-                file_size=file_size,
-
-                price_coins=price,
-
-            )
-
-        finally:
-
-            try:
-
-                if _os2.path.isfile(tmp_path):
-
-                    _os2.remove(tmp_path)
-
-            except Exception:
-
-                pass
-
-        if not res.get("ok"):
-
-            return jsonify(res), 400
-
-        return jsonify(res)
-
-
-
-    @app.route("/api/student/marketplace/<int:item_id>/buy", methods=["POST"])
-
-    def student_marketplace_buy(item_id):
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        res = sdb.marketplace_purchase(item_id, _cid())
-
-        if not res.get("ok"):
-
-            return jsonify(res), 400
-
-        return jsonify(res)
-
-
-
-    @app.route("/api/student/marketplace/<int:item_id>/download")
-
-    def student_marketplace_download(item_id):
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        cid = _cid()
-
-        item = sdb.marketplace_get(item_id)
-
-        if not item:
-
-            return jsonify({"error": "Not found"}), 404
-
-        if not sdb.marketplace_has_access(cid, item):
-
-            return jsonify({"error": "Purchase required"}), 403
-
-        path = sdb.marketplace_file_path(item)
-
-        import os as _os3
-
-        if not _os3.path.isfile(path):
-
-            return jsonify({"error": "File missing"}), 404
-
-        return send_file(path, as_attachment=True, download_name=item.get("file_name") or "download")
-
-
-
-    @app.route("/api/student/marketplace/<int:item_id>/delete", methods=["DELETE"])
-
-    def student_marketplace_delete(item_id):
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        res = sdb.marketplace_delete(item_id, _cid())
-
-        if not res.get("ok"):
-
-            return jsonify(res), 400
-
-        return jsonify(res)
-
-
+    # Removed market feature paths are blocked by removed_features.py.
 
     @app.route("/student/achievements")
 
