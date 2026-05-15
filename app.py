@@ -2216,6 +2216,265 @@ LAYOUT = """<!DOCTYPE html>
         {% endfor %}
         </div>
         {{content|safe}}
+        <style id="mr-dark-final-overrides">
+          :root[data-theme="dark"] .content {
+            --bg:#11131A;
+            --card:#1D202A;
+            --card-bg:#1D202A;
+            --border:#34313A;
+            --border-light:#34313A;
+            --text:#F7F0E4;
+            --text-secondary:#D8D0C4;
+            --text-muted:#B9B0A5;
+            --ink:#F7F0E4;
+            --muted:#B9B0A5;
+            --line:#34313A;
+            --paper:#1D202A;
+            --cream:#11131A;
+            --warm-line:#34313A;
+            --warm-paper:#1D202A;
+            --warm-cream:#11131A;
+            --orange:#FF7A3D;
+          }
+          :root[data-theme="dark"] .content,
+          :root[data-theme="dark"] .content > *,
+          :root[data-theme="dark"] .mr-app-shell .content {
+            background-color:#11131A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content h1,
+          :root[data-theme="dark"] .content h2,
+          :root[data-theme="dark"] .content h3,
+          :root[data-theme="dark"] .content h4,
+          :root[data-theme="dark"] .content h5,
+          :root[data-theme="dark"] .content h6,
+          :root[data-theme="dark"] .content .page-title-cd,
+          :root[data-theme="dark"] .content .fr-title,
+          :root[data-theme="dark"] .content .focus-title,
+          :root[data-theme="dark"] .content .ccard-name,
+          :root[data-theme="dark"] .content .cb-title,
+          :root[data-theme="dark"] .content .fc-title,
+          :root[data-theme="dark"] .content .deck-title,
+          :root[data-theme="dark"] .content .q-title,
+          :root[data-theme="dark"] .content .ach-title,
+          :root[data-theme="dark"] .content .shop-title,
+          :root[data-theme="dark"] .content .pl-title,
+          :root[data-theme="dark"] .content #timer-display,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-hero h2,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-name,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-xp {
+            color:#F7F0E4 !important;
+            text-shadow:none !important;
+          }
+          :root[data-theme="dark"] .content p,
+          :root[data-theme="dark"] .content small,
+          :root[data-theme="dark"] .content .muted,
+          :root[data-theme="dark"] .content .fr-meta,
+          :root[data-theme="dark"] .content .fr-note,
+          :root[data-theme="dark"] .content .cb-meta,
+          :root[data-theme="dark"] .content .ccard-code,
+          :root[data-theme="dark"] .content .ccard-prof,
+          :root[data-theme="dark"] .content .ccard-next,
+          :root[data-theme="dark"] .content .ccs-l,
+          :root[data-theme="dark"] .content .deck-meta,
+          :root[data-theme="dark"] .content .page-eyebrow-cd,
+          :root[data-theme="dark"] .content #timer-label,
+          :root[data-theme="dark"] .content #pomo-count,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-hero p,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-pos,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-rank-card .label,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-rank-card .of {
+            color:#B9B0A5 !important;
+          }
+          :root[data-theme="dark"] .content .card,
+          :root[data-theme="dark"] .content .stat-card,
+          :root[data-theme="dark"] .content .admin-panel,
+          :root[data-theme="dark"] .content .admin-metric,
+          :root[data-theme="dark"] .content .qcard,
+          :root[data-theme="dark"] .content .an-stat,
+          :root[data-theme="dark"] .content .an-card,
+          :root[data-theme="dark"] .content .wa-course-btn,
+          :root[data-theme="dark"] .content .wa-risk-card,
+          :root[data-theme="dark"] .content .tabs a,
+          :root[data-theme="dark"] .content .canvas-banner,
+          :root[data-theme="dark"] .content .ccard,
+          :root[data-theme="dark"] .content .ccs,
+          :root[data-theme="dark"] .content .course-empty,
+          :root[data-theme="dark"] .content .course-detail-card,
+          :root[data-theme="dark"] .content .course-benchmark,
+          :root[data-theme="dark"] .content .mr-modal-card,
+          :root[data-theme="dark"] .content .urg-card,
+          :root[data-theme="dark"] .content .tl-group,
+          :root[data-theme="dark"] .content .exam-big,
+          :root[data-theme="dark"] .content .topic,
+          :root[data-theme="dark"] .content .exam-empty,
+          :root[data-theme="dark"] .content .ps,
+          :root[data-theme="dark"] .content .focus-timer-card,
+          :root[data-theme="dark"] .content .focus-rival-card,
+          :root[data-theme="dark"] .content .focus-exam-nudge,
+          :root[data-theme="dark"] .content .ft-select,
+          :root[data-theme="dark"] .content .ft-input,
+          :root[data-theme="dark"] .content .amb,
+          :root[data-theme="dark"] .content .block-item,
+          :root[data-theme="dark"] .content .focus-mode-chip,
+          :root[data-theme="dark"] .content .library-theme-select,
+          :root[data-theme="dark"] .content .library-ritual-card,
+          :root[data-theme="dark"] .content .library-ritual-lines div,
+          :root[data-theme="dark"] .content .mp-day,
+          :root[data-theme="dark"] .content .mp-row input,
+          :root[data-theme="dark"] .content .mp-row select,
+          :root[data-theme="dark"] .content .mp-del,
+          :root[data-theme="dark"] .content .fc-card-flip,
+          :root[data-theme="dark"] .content .fc-decks-card,
+          :root[data-theme="dark"] .content .deck,
+          :root[data-theme="dark"] .content .deck-bar,
+          :root[data-theme="dark"] .content .achievements-cd .ach-stat-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-badge-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-activity-card,
+          :root[data-theme="dark"] .content .fr-id,
+          :root[data-theme="dark"] .content .fr-panel,
+          :root[data-theme="dark"] .content .fr-input,
+          :root[data-theme="dark"] .content .fr-row,
+          :root[data-theme="dark"] .content .fr-empty,
+          :root[data-theme="dark"] .content .fr-duel-stat,
+          :root[data-theme="dark"] .content .fr-modal-card,
+          :root[data-theme="dark"] .content .fr-chal-card,
+          :root[data-theme="dark"] .content .fr-podium-card,
+          :root[data-theme="dark"] .content .fr-rank-list,
+          :root[data-theme="dark"] .content .fr-rank-row,
+          :root[data-theme="dark"] .content .fr-check,
+          :root[data-theme="dark"] .content .fr-group-card,
+          :root[data-theme="dark"] .content .fr-group-add select,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-tabs,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-tab,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-board,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-row,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-podium,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-podium-card,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-hero,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-rank-card,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-tabs,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-tab,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-board,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-row,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-controls,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-card,
+          :root[data-theme="dark"] .content .shop-cd .card,
+          :root[data-theme="dark"] .content .shop-cd .stat-card,
+          :root[data-theme="dark"] .content .profile-cosm-card,
+          :root[data-theme="dark"] .content .qd-q,
+          :root[data-theme="dark"] .content .qd-overlay .box,
+          :root[data-theme="dark"] .content .qd-r .scorebox {
+            background:#1D202A !important;
+            background-color:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+            box-shadow:0 1px 0 rgba(255,255,255,.03), 0 18px 46px rgba(0,0,0,.24) !important;
+          }
+          :root[data-theme="dark"] .content input,
+          :root[data-theme="dark"] .content textarea,
+          :root[data-theme="dark"] .content select,
+          :root[data-theme="dark"] .content table,
+          :root[data-theme="dark"] .content th,
+          :root[data-theme="dark"] .content td,
+          :root[data-theme="dark"] .content .btn-ghost,
+          :root[data-theme="dark"] .content .btn-outline,
+          :root[data-theme="dark"] .content .cb-btn,
+          :root[data-theme="dark"] .content .eb-actions a,
+          :root[data-theme="dark"] .content .btn-pop-cd.dark,
+          :root[data-theme="dark"] .content .shop-cd .btn-outline,
+          :root[data-theme="dark"] .content .shop-cd .btn-ghost,
+          :root[data-theme="dark"] .content .badge-side-btn {
+            background:#141720 !important;
+            background-color:#141720 !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content thead,
+          :root[data-theme="dark"] .content tr,
+          :root[data-theme="dark"] .content .lb-row,
+          :root[data-theme="dark"] .content .fr-rank-row {
+            border-color:#34313A !important;
+          }
+          :root[data-theme="dark"] .content .lb-tab.active,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-tab.active,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-tab.active {
+            background:#FF7A3D !important;
+            border-color:#FF7A3D !important;
+            color:#11131A !important;
+          }
+          :root[data-theme="dark"] .content .lb-row:hover,
+          :root[data-theme="dark"] .content .fr-row:hover,
+          :root[data-theme="dark"] .content .fr-rank-row:hover,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-row:hover {
+            background:#252936 !important;
+          }
+          :root[data-theme="dark"] .content .qcard[style],
+          :root[data-theme="dark"] .content .achievements-cd [style*="background:var(--card)"],
+          :root[data-theme="dark"] .content .achievements-cd [style*="background:#0f172a"],
+          :root[data-theme="dark"] .content .achievements-cd [style*="background:#1e293b"],
+          :root[data-theme="dark"] .content .achievements-cd [style*="background:#111827"],
+          :root[data-theme="dark"] .content .shop-cd [style*="background:var(--card)"],
+          :root[data-theme="dark"] .content [style*="background:#fff"],
+          :root[data-theme="dark"] .content [style*="background: #fff"],
+          :root[data-theme="dark"] .content [style*="background:#FFF"],
+          :root[data-theme="dark"] .content [style*="background: #FFF"],
+          :root[data-theme="dark"] .content [style*="background:#FFFFFF"],
+          :root[data-theme="dark"] .content [style*="background: #FFFFFF"],
+          :root[data-theme="dark"] .content [style*="background:#FFFDF8"],
+          :root[data-theme="dark"] .content [style*="background: #FFFDF8"],
+          :root[data-theme="dark"] .content [style*="background:#FBF8F0"],
+          :root[data-theme="dark"] .content [style*="background: #FBF8F0"],
+          :root[data-theme="dark"] .content [style*="background:#F4F1EA"],
+          :root[data-theme="dark"] .content [style*="background: #F4F1EA"],
+          :root[data-theme="dark"] .content [style*="background:#f8fafc"],
+          :root[data-theme="dark"] .content [style*="background: #f8fafc"] {
+            background:#1D202A !important;
+            background-color:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content [style*="background:#fff7ed"],
+          :root[data-theme="dark"] .content [style*="background: #fff7ed"],
+          :root[data-theme="dark"] .content [style*="background:#ffedd5"],
+          :root[data-theme="dark"] .content [style*="background: #ffedd5"],
+          :root[data-theme="dark"] .content [style*="background:#FFF7ED"],
+          :root[data-theme="dark"] .content [style*="background: #FFF7ED"],
+          :root[data-theme="dark"] .content [style*="background:#FFF3E8"],
+          :root[data-theme="dark"] .content [style*="background: #FFF3E8"] {
+            background:#241A14 !important;
+            background-color:#241A14 !important;
+            border-color:#5A3728 !important;
+            color:#F7D0B7 !important;
+          }
+          :root[data-theme="dark"] .content [style*="color:#1A1A1F"],
+          :root[data-theme="dark"] .content [style*="color: #1A1A1F"],
+          :root[data-theme="dark"] .content [style*="color:#111827"],
+          :root[data-theme="dark"] .content [style*="color: #111827"],
+          :root[data-theme="dark"] .content [style*="color:#0f172a"],
+          :root[data-theme="dark"] .content [style*="color: #0f172a"],
+          :root[data-theme="dark"] .content [style*="color:#334155"],
+          :root[data-theme="dark"] .content [style*="color: #334155"] {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content [style*="color:#94939C"],
+          :root[data-theme="dark"] .content [style*="color: #94939C"],
+          :root[data-theme="dark"] .content [style*="color:#77756F"],
+          :root[data-theme="dark"] .content [style*="color: #77756F"],
+          :root[data-theme="dark"] .content [style*="color:#64748b"],
+          :root[data-theme="dark"] .content [style*="color: #64748b"],
+          :root[data-theme="dark"] .content [style*="color:#94a3b8"],
+          :root[data-theme="dark"] .content [style*="color: #94a3b8"] {
+            color:#B9B0A5 !important;
+          }
+          :root[data-theme="dark"] .content svg text {
+            fill:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content canvas {
+            color-scheme:dark;
+          }
+        </style>
       </div>
     </main>
   </div>
