@@ -3494,6 +3494,221 @@ def register_student_routes(app, csrf, limiter):
         })
 
 
+    @app.route("/api/student/focus/claim", methods=["POST"])
+    def student_focus_claim_batch():
+        """Claim all pending focus phases in one recoverable request.
+
+        The old browser flow sent one request per phase. If the long-break claim
+        had four phases and one request failed, the UI kept the user trapped in
+        "retry claim" until a reload. This endpoint treats duplicate phase ids
+        as already claimed and non-retryable skips as handled, so a refresh or a
+        repeated click cannot double-credit or soft-lock the session.
+        """
+
+        if not _logged_in():
+            return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+        data = request.get_json(force=True) or {}
+        phases = data.get("phases") or []
+        if not isinstance(phases, list):
+            phases = []
+        phases = phases[:16]
+
+        cid = _cid()
+        local_date = (request.args.get("local_date") or "").strip() or None
+        courses_cache = None
+        fallback_course_name = (data.get("course_name") or data.get("fallback_course_name") or "").strip()
+        try:
+            fallback_course_id = int(data.get("course_id") or data.get("fallback_course_id") or 0) or None
+        except (TypeError, ValueError):
+            fallback_course_id = None
+        try:
+            fallback_exam_id = int(data.get("exam_id") or data.get("fallback_exam_id") or 0) or None
+        except (TypeError, ValueError):
+            fallback_exam_id = None
+
+        def _clean_phase_id(raw) -> str:
+            return re.sub(r"[^A-Za-z0-9_.:-]", "", str(raw or ""))[:80]
+
+        def _resolve_course(course_name: str, course_id):
+            nonlocal courses_cache
+            try:
+                resolved_id = int(course_id or 0) or None
+            except (TypeError, ValueError):
+                resolved_id = None
+            resolved_name = (course_name or "").strip()
+            if courses_cache is None:
+                courses_cache = sdb.get_courses(cid) or []
+            if resolved_id and not resolved_name:
+                for c in courses_cache:
+                    if int(c.get("id") or 0) == resolved_id:
+                        resolved_name = c.get("name") or ""
+                        break
+            if resolved_name and not resolved_id:
+                for c in courses_cache:
+                    if (c.get("name") or "") == resolved_name:
+                        resolved_id = int(c.get("id") or 0)
+                        break
+            return resolved_name, resolved_id
+
+        saved_count = 0
+        duplicate_count = 0
+        skipped_count = 0
+        failed_count = 0
+        minutes_saved = 0
+        xp_awarded = 0
+        coins_awarded = 0
+        results = []
+
+        for idx, raw in enumerate(phases):
+            if not isinstance(raw, dict):
+                skipped_count += 1
+                results.append({"index": idx, "ok": True, "saved": False, "reason": "invalid-phase"})
+                continue
+
+            try:
+                minutes = int(raw.get("minutes") or 0)
+            except (TypeError, ValueError):
+                minutes = 0
+            if minutes < 0:
+                minutes = 0
+            if minutes > 480:
+                minutes = 480
+            if minutes <= 0:
+                skipped_count += 1
+                results.append({"index": idx, "ok": True, "saved": False, "reason": "empty"})
+                continue
+
+            mode = (raw.get("mode") or "pomodoro").strip() or "pomodoro"
+            phase_id = _clean_phase_id(raw.get("phaseId") or raw.get("phase_id"))
+            course_name, course_id = _resolve_course(raw.get("courseName") or raw.get("course_name") or "", raw.get("courseId") or raw.get("course_id"))
+            try:
+                exam_id = int(raw.get("examId") or raw.get("exam_id") or 0) or None
+            except (TypeError, ValueError):
+                exam_id = None
+
+            if not course_name:
+                course_name, course_id = _resolve_course(fallback_course_name, fallback_course_id)
+                if not exam_id:
+                    exam_id = fallback_exam_id
+            if not course_name:
+                skipped_count += 1
+                results.append({"index": idx, "ok": True, "saved": False, "reason": "missing-course"})
+                continue
+
+            if phase_id:
+                try:
+                    with sdb.get_db() as db:
+                        already = sdb._fetchval(
+                            db,
+                            "SELECT id FROM student_xp WHERE client_id = %s AND action = 'focus_session' AND detail LIKE %s LIMIT 1",
+                            (cid, f"%phase:{phase_id}%"),
+                        )
+                    if already:
+                        duplicate_count += 1
+                        saved_count += 1
+                        minutes_saved += minutes
+                        xp_awarded += (minutes * 5) // 10
+                        results.append({"index": idx, "ok": True, "saved": False, "reason": "duplicate-phase"})
+                        continue
+                except Exception:
+                    pass
+
+            try:
+                saved_id = sdb.save_focus_session(
+                    cid,
+                    mode=mode,
+                    minutes=minutes,
+                    pages=0,
+                    course_name=course_name,
+                    course_id=course_id,
+                    exam_id=exam_id,
+                )
+                if not saved_id:
+                    skipped_count += 1
+                    results.append({"index": idx, "ok": True, "saved": False, "reason": "daily-cap-or-empty"})
+                    continue
+
+                saved_row = sdb.get_focus_session_entry(saved_id, cid) or {}
+                actual_minutes = int(saved_row.get("focus_minutes") or minutes or 0)
+                actual_pages = int(saved_row.get("pages_read") or 0)
+
+                try:
+                    if actual_minutes > 0:
+                        sdb.progress_quests_by_metric(cid, "focus_minutes", actual_minutes)
+                        sdb.progress_quests_by_metric(cid, "sessions_completed", 1)
+                    if actual_pages > 0:
+                        sdb.progress_quests_by_metric(cid, "pages_read", actual_pages)
+                except Exception:
+                    pass
+
+                phase_xp = (actual_minutes * 5) // 10
+                phase_coins = actual_minutes // 10
+                detail = f"{mode.title()} {actual_minutes}min"
+                if course_name:
+                    detail += f" — {course_name}"
+                if phase_id:
+                    detail += f" · phase:{phase_id}"
+                if phase_xp > 0:
+                    sdb.award_xp(cid, "focus_session", phase_xp, detail)
+                elif phase_id:
+                    sdb.award_xp(cid, "focus_session", 0, detail)
+                if phase_coins > 0:
+                    sdb.add_coins(cid, phase_coins, f"focus_session {actual_minutes}min")
+
+                saved_count += 1
+                minutes_saved += actual_minutes
+                xp_awarded += phase_xp
+                coins_awarded += phase_coins
+                results.append({
+                    "index": idx,
+                    "ok": True,
+                    "saved": True,
+                    "session_id": saved_id,
+                    "minutes_saved": actual_minutes,
+                    "xp_awarded": phase_xp,
+                    "coins_awarded": phase_coins,
+                })
+            except Exception as e:
+                logging.getLogger("student.routes").exception("focus batch claim failed for client %s phase %s: %s", cid, idx, e)
+                failed_count += 1
+                results.append({"index": idx, "ok": False, "saved": False, "reason": "server-error"})
+
+        try:
+            stats = sdb.get_focus_stats(cid)
+            total_hours = stats.get("total_hours", 0)
+            if isinstance(total_hours, str):
+                total_hours = float(total_hours.replace("h", "").replace(",", ""))
+            else:
+                total_hours = float(total_hours)
+            if total_hours >= 1:
+                sdb.earn_badge(cid, "focus_1h")
+            if total_hours >= 10:
+                sdb.earn_badge(cid, "focus_10h")
+            if total_hours >= 50:
+                sdb.earn_badge(cid, "focus_50h")
+            if total_hours >= 100:
+                sdb.earn_badge(cid, "focus_100h")
+        except Exception:
+            pass
+
+        retryable = [phases[i] for i, r in enumerate(results) if not r.get("ok") and r.get("reason") == "server-error" and i < len(phases)]
+        return jsonify({
+            "ok": failed_count == 0,
+            "saved": saved_count > 0,
+            "saved_count": saved_count,
+            "duplicate_count": duplicate_count,
+            "skipped_count": skipped_count,
+            "failed_count": failed_count,
+            "minutes_saved": minutes_saved,
+            "xp_awarded": xp_awarded,
+            "coins_awarded": coins_awarded,
+            "results": results,
+            "retryable_phases": retryable,
+            "stats": sdb.get_focus_stats_today(cid, local_date=local_date),
+        }), (200 if failed_count == 0 or saved_count > 0 or skipped_count > 0 else 500)
+
+
 
     @app.route("/api/student/focus/stats", methods=["GET"])
 
@@ -3506,6 +3721,73 @@ def register_student_routes(app, csrf, limiter):
         local_date = (request.args.get("local_date") or "").strip() or None
 
         return jsonify(sdb.get_focus_stats_today(_cid(), local_date=local_date))
+
+
+    @app.route("/api/student/focus/rival", methods=["GET"])
+    def student_focus_rival_api():
+        """Return the accepted friend with the most focus minutes today."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+
+        cid = _cid()
+        local_date = (request.args.get("local_date") or "").strip()
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", local_date):
+            local_date = datetime.now().strftime("%Y-%m-%d")
+
+        try:
+            with sdb.get_db() as db:
+                if getattr(sdb, "_USE_PG", False):
+                    rows = sdb._fetchall(
+                        db,
+                        """
+                        SELECT c.id, COALESCE(c.name, c.email, 'Student') AS name,
+                               COALESCE(SUM(sp.focus_minutes), 0) AS minutes
+                        FROM student_friends sf
+                        JOIN clients c ON c.id = sf.friend_client_id
+                        LEFT JOIN student_study_progress sp
+                          ON sp.client_id = c.id
+                         AND sp.plan_date::date = %s::date
+                        WHERE sf.client_id = %s AND sf.status = 'accepted'
+                        GROUP BY c.id, c.name, c.email
+                        HAVING COALESCE(SUM(sp.focus_minutes), 0) > 0
+                        ORDER BY minutes DESC, name ASC
+                        LIMIT 1
+                        """,
+                        (local_date, cid),
+                    ) or []
+                else:
+                    rows = sdb._fetchall(
+                        db,
+                        """
+                        SELECT c.id, COALESCE(c.name, c.email, 'Student') AS name,
+                               COALESCE(SUM(sp.focus_minutes), 0) AS minutes
+                        FROM student_friends sf
+                        JOIN clients c ON c.id = sf.friend_client_id
+                        LEFT JOIN student_study_progress sp
+                          ON sp.client_id = c.id
+                         AND date(sp.plan_date) = date(%s)
+                        WHERE sf.client_id = %s AND sf.status = 'accepted'
+                        GROUP BY c.id, c.name, c.email
+                        HAVING COALESCE(SUM(sp.focus_minutes), 0) > 0
+                        ORDER BY minutes DESC, name ASC
+                        LIMIT 1
+                        """,
+                        (local_date, cid),
+                    ) or []
+            if not rows:
+                return jsonify({"ok": True, "rival": None})
+            r = dict(rows[0])
+            return jsonify({
+                "ok": True,
+                "rival": {
+                    "id": int(r.get("id") or 0),
+                    "name": r.get("name") or "Student",
+                    "minutes": int(r.get("minutes") or 0),
+                },
+            })
+        except Exception as e:
+            log.exception("focus rival lookup failed for client %s: %s", cid, e)
+            return jsonify({"ok": False, "error": "Could not load rival."}), 500
 
 
     # ── Study-time breakdown (dashboard bar chart + drill-downs) ──
@@ -6392,6 +6674,12 @@ def register_student_routes(app, csrf, limiter):
                                         ensure_ascii=False).replace("<", "\\u003c")
 
         _focus_is_en = session.get("lang", "es") == "en"
+        try:
+            from student import subscription as _sub
+            _focus_tier = _sub.get_tier(_cid())
+        except Exception:
+            _focus_tier = "free"
+        _focus_is_plus = _focus_tier in ("plus", "ultimate")
         _start_btn_label = "Start" if _focus_is_en else "Empezar"
         _pause_btn_label = "Pause" if _focus_is_en else "Pausar"
         _reset_btn_label = "Reset" if _focus_is_en else "Reiniciar"
@@ -6433,6 +6721,12 @@ def register_student_routes(app, csrf, limiter):
             "sessionInProgressSuffix": " in progress." if _focus_is_en else " en progreso.",
             "sessionsReadySuffix": " sessions ready to claim." if _focus_is_en else " sesiones listas para reclamar.",
             "startCycle": "Start a session to activate the cycle." if _focus_is_en else "Empieza una sesion para activar el ciclo.",
+            "libraryOn": "Library Mode on" if _focus_is_en else "Modo Biblioteca activo",
+            "libraryOff": "Library Mode" if _focus_is_en else "Modo Biblioteca",
+            "libraryLocked": "Library Mode is Plus-only." if _focus_is_en else "Modo Biblioteca es solo Plus.",
+            "rivalHeadline": "Beat your friend today" if _focus_is_en else "Ganale a tu amigo hoy",
+            "rivalEmpty": "No friend has studied today yet. You can set the pace." if _focus_is_en else "Ningun amigo ha estudiado hoy todavia. Marca el ritmo tu.",
+            "rivalTemplate": "{name} studied {minutes} min today. Beat them." if _focus_is_en else "{name} estudio {minutes} min hoy. Ganale.",
         }
 
 
@@ -6487,6 +6781,28 @@ def register_student_routes(app, csrf, limiter):
         .block-list {{ margin-top:8px;display:flex;flex-direction:column;gap:4px; }}
         .block-item {{ display:flex;justify-content:space-between;padding:8px 10px;background:#FBF8F0;border-radius:10px;font-size:12px;font-weight:700; }}
         .muted {{ color:#94939C; }}
+        .focus-mode-toolbar {{ display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px; }}
+        .focus-mode-chip {{ border:1px solid #E2DCCC;background:#FBF8F0;color:#1A1A1F;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 2px 0 rgba(20,18,30,.04); }}
+        .focus-mode-chip.active {{ background:#1A1A1F;color:#FFF8E1;border-color:#1A1A1F; }}
+        .focus-mode-chip.locked {{ cursor:not-allowed;opacity:.72; }}
+        .focus-rival-card {{ display:none;margin-bottom:16px;padding:14px 16px;border:1px solid #FFD2BA;background:linear-gradient(135deg,#FFF7ED,#FFFDF8);border-radius:18px;box-shadow:0 12px 34px rgba(255,122,61,.10); }}
+        .focus-rival-card.show {{ display:flex;align-items:center;justify-content:space-between;gap:14px; }}
+        .focus-rival-eyebrow {{ font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#B45309;margin-bottom:3px; }}
+        .focus-rival-text {{ font-size:14px;font-weight:900;color:#1A1A1F;line-height:1.25; }}
+        .focus-rival-mins {{ white-space:nowrap;font-family:'Bricolage Grotesque',sans-serif;font-size:26px;font-weight:700;color:#FF7A3D; }}
+        body.focus-library-mode .focus-page-head,
+        body.focus-library-mode #focus-rival-card,
+        body.focus-library-mode #focus-guard-card,
+        body.focus-library-mode #today-session-card,
+        body.focus-library-mode .focus-shortcuts,
+        body.focus-library-mode .site-footer {{ display:none !important; }}
+        body.focus-library-mode .main-content,
+        body.focus-library-mode main {{ background:#FBF8F0 !important; }}
+        body.focus-library-mode .focus-layout {{ grid-template-columns:minmax(320px,620px) minmax(280px,420px) !important;justify-content:center;align-items:start;min-height:calc(100vh - 110px);padding-top:5vh; }}
+        body.focus-library-mode .focus-timer-shell,
+        body.focus-library-mode #focus-ambience-card {{ box-shadow:0 24px 80px rgba(20,18,30,.08) !important; }}
+        body.focus-library-mode .focus-timer-shell {{ border-color:#D8D0C0 !important;background:#FFFDF8 !important; }}
+        @media (max-width:900px) {{ body.focus-library-mode .focus-layout {{ grid-template-columns:1fr !important;padding-top:0; }} }}
         </style>
 
         <div class="focus-page-head">
@@ -6528,11 +6844,25 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="focus-mode-toolbar">
+          <button id="library-mode-btn" class="focus-mode-chip {'locked' if not _focus_is_plus else ''}" type="button" onclick="toggleLibraryMode()">
+            &#128218; {('Library Mode' if _focus_is_en else 'Modo Biblioteca')} {'PLUS' if not _focus_is_plus else ''}
+          </button>
+        </div>
+
+        <div id="focus-rival-card" class="focus-rival-card" aria-live="polite">
+          <div>
+            <div class="focus-rival-eyebrow" id="focus-rival-eyebrow">{'Daily rival' if _focus_is_en else 'Rival del dia'}</div>
+            <div class="focus-rival-text" id="focus-rival-text">{'Loading friend pressure...' if _focus_is_en else 'Buscando presion de amigos...'}</div>
+          </div>
+          <div class="focus-rival-mins" id="focus-rival-mins">0m</div>
+        </div>
+
+        <div class="focus-layout" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
 
           <!-- Timer card -->
 
-          <div class="card">
+          <div class="card focus-timer-shell">
 
             <div style="display:none;" class="card-header"><h2>&#9201; Temporizador de estudio</h2></div>
 
@@ -6788,7 +7118,7 @@ def register_student_routes(app, csrf, limiter):
 
             </div>
 
-            <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:10px;">
+            <p class="focus-shortcuts" style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:10px;">
 
               Atajos: <kbd style="background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border);font-size:10px;">Espacio</kbd> iniciar/pausar
 
@@ -6808,7 +7138,7 @@ def register_student_routes(app, csrf, limiter):
 
           <div>
 
-            <div class="card">
+            <div class="card" id="today-session-card">
               <div class="card-header"><h2>&#9881;&#65039; Sesi&oacute;n de hoy</h2></div>
               <div class="ses-pills" id="today-session-pills">
                 <div class="sp">1<small>25:00</small></div>
@@ -6819,7 +7149,7 @@ def register_student_routes(app, csrf, limiter):
               <div class="break-row"><div class="break-bar"><span id="today-session-progress"></span></div><span id="today-session-caption">Empieza una sesi&oacute;n para activar el ciclo.</span></div>
             </div>
 
-            <div class="card">
+            <div class="card" id="focus-ambience-card">
               <div class="card-header"><h2>&#127807; Ambiente</h2></div>
               <div class="amb-grid">
                 <div class="amb on" onclick="setAmbience(this,'off')"><div class="amb-ic">&#128263;</div><div class="amb-n">Silencio</div></div>
@@ -7378,6 +7708,62 @@ def register_student_routes(app, csrf, limiter):
 
         var currentMode = 'pomodoro';
         var focusText = {json.dumps(_focus_js_i18n, ensure_ascii=False)};
+        var FOCUS_IS_PLUS = {str(bool(_focus_is_plus)).lower()};
+
+        function applyLibraryMode(on) {{
+          try {{
+            document.body.classList.toggle('focus-library-mode', !!on);
+            var btn = document.getElementById('library-mode-btn');
+            if (btn) {{
+              btn.classList.toggle('active', !!on);
+              btn.innerHTML = '&#128218; ' + (on ? focusText.libraryOn : focusText.libraryOff);
+            }}
+            localStorage.setItem('machreach_focus_library_mode', on ? '1' : '0');
+          }} catch(e) {{}}
+        }}
+
+        function toggleLibraryMode() {{
+          if (!FOCUS_IS_PLUS) {{
+            if (window.showToast) window.showToast(focusText.libraryLocked, 'info');
+            else alert(focusText.libraryLocked);
+            return;
+          }}
+          applyLibraryMode(!document.body.classList.contains('focus-library-mode'));
+        }}
+
+        (function restoreLibraryMode() {{
+          try {{
+            if (FOCUS_IS_PLUS && localStorage.getItem('machreach_focus_library_mode') === '1') {{
+              applyLibraryMode(true);
+            }}
+          }} catch(e) {{}}
+        }})();
+
+        async function loadFocusRival() {{
+          try {{
+            var now = new Date();
+            var localDate = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+            var r = await fetch('/api/student/focus/rival?local_date=' + encodeURIComponent(localDate));
+            if (!r.ok) return;
+            var d = await r.json();
+            if (!d || !d.rival || !d.rival.minutes) return;
+            var card = document.getElementById('focus-rival-card');
+            var text = document.getElementById('focus-rival-text');
+            var mins = document.getElementById('focus-rival-mins');
+            var name = d.rival.name || 'Friend';
+            var minutes = parseInt(d.rival.minutes || 0, 10) || 0;
+            if (text) text.textContent = focusText.rivalTemplate.replace('{{name}}', name).replace('{{minutes}}', minutes);
+            if (mins) mins.textContent = minutes + 'm';
+            if (card) card.classList.add('show');
+            setTimeout(function() {{
+              try {{
+                if (window.showToast) window.showToast(focusText.rivalTemplate.replace('{{name}}', name).replace('{{minutes}}', minutes), 'info');
+              }} catch(e) {{}}
+            }}, 700);
+          }} catch(e) {{}}
+        }}
+
+        loadFocusRival();
 
         var totalFocusSeconds = 0;
 
@@ -8508,129 +8894,64 @@ def register_student_routes(app, csrf, limiter):
 
           var __ldStr_save = __ld_save.getFullYear()+'-'+String(__ld_save.getMonth()+1).padStart(2,'0')+'-'+String(__ld_save.getDate()).padStart(2,'0');
 
-          // One save call per pending phase so the server counts each as a
-          // distinct session (sessions_completed quest, focus stats, etc.).
           var failed = [];
           var savedCount = 0;
           var xpAwarded = 0;
           var minutesSaved = 0;
-          var savedPhaseKeys = [];
-
-          for (var i = 0; i < phases.length; i++) {{
-
-            var p = phases[i];
-
-            var payload = {{
-
-              mode: p.mode || 'pomodoro',
-
-              minutes: parseInt(p.minutes) || 0,
-
-              pages: 0,
-
-              course_name: p.courseName || '',
-
-              course_id: p.courseId || null,
-
-              exam_id: p.examId || null,
-
-              phase_id: p.phaseId || null
-
-            }};
-
-            if (payload.minutes <= 0) continue;
-
-            try {{
-
-              var saveResp = await fetch('/api/student/focus/save?local_date=' + encodeURIComponent(__ldStr_save), {{
-
-                method: 'POST',
-
-                headers: {{ 'Content-Type': 'application/json' }},
-
-                keepalive: true,
-
-                body: JSON.stringify(payload)
-
-              }});
-              var result = null;
-              try {{ result = await saveResp.json(); }} catch(_) {{}}
-              if (!saveResp.ok || !result || result.ok === false) {{
-                failed.push(p);
-                continue;
-              }}
-              if (result.saved === false && result.reason === 'duplicate-phase') {{
-                savedCount += 1;
-                var dupMinutes = parseInt(payload.minutes || 0, 10) || 0;
-                minutesSaved += dupMinutes;
-                xpAwarded += Math.floor(dupMinutes * 5 / 10);
-              }} else if (result.saved !== false) {{
-                savedCount += 1;
-                xpAwarded += parseInt(result.xp_awarded || 0, 10) || 0;
-                minutesSaved += parseInt(result.minutes_saved || payload.minutes || 0, 10) || 0;
-                savedPhaseKeys.push(String(p.phaseId || (payload.mode + ':' + payload.minutes + ':' + i)));
-              }}
-
-            }} catch(e) {{
-              failed.push(p);
-            }}
-
+          var courseSelClaim = document.getElementById('focus-course');
+          var examSelClaim = document.getElementById('focus-exam');
+          var fallbackCourseId = courseSelClaim ? (parseInt(courseSelClaim.value, 10) || null) : null;
+          var fallbackExamId = examSelClaim ? (parseInt(examSelClaim.value, 10) || null) : null;
+          var fallbackCourseName = '';
+          if (courseSelClaim && courseSelClaim.selectedOptions && courseSelClaim.selectedOptions[0]) {{
+            fallbackCourseName = courseSelClaim.selectedOptions[0].getAttribute('data-name') || courseSelClaim.selectedOptions[0].textContent || '';
           }}
 
-          if (minutesSaved > 0 && savedPhaseKeys.length) {{
-            var expectedClaimXp = Math.floor(minutesSaved * 5 / 10);
-            if (expectedClaimXp > xpAwarded) {{
-              try {{
-                var adjustId = savedPhaseKeys.join(':').replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 120);
-                var adjustResp = await fetch('/api/student/focus/claim-adjust?local_date=' + encodeURIComponent(__ldStr_save), {{
-                  method: 'POST',
-                  headers: {{ 'Content-Type': 'application/json' }},
-                  keepalive: true,
-                  body: JSON.stringify({{
-                    claim_id: adjustId,
-                    total_minutes: minutesSaved,
-                    already_awarded: xpAwarded
-                  }})
-                }});
-                if (adjustResp.ok) {{
-                  var adjust = await adjustResp.json();
-                  if (adjust && adjust.ok !== false) {{
-                    xpAwarded += parseInt(adjust.xp_awarded || 0, 10) || 0;
-                  }}
-                }}
-              }} catch(e) {{}}
+          for (var pi = 0; pi < phases.length; pi++) {{
+            if (!phases[pi].phaseId) {{
+              phases[pi].phaseId = 'claim-' + String(phases[pi].ts || Date.now()) + '-' + pi + '-' + String(phases[pi].minutes || 0);
             }}
           }}
-
-          // Refresh today's stat tiles in one call.
+          setPendingPhases(phases);
 
           try {{
+            var claimResp = await fetch('/api/student/focus/claim?local_date=' + encodeURIComponent(__ldStr_save), {{
+              method: 'POST',
+              headers: {{ 'Content-Type': 'application/json' }},
+              keepalive: true,
+              body: JSON.stringify({{
+                phases: phases,
+                fallback_course_name: fallbackCourseName,
+                fallback_course_id: fallbackCourseId,
+                fallback_exam_id: fallbackExamId
+              }})
+            }});
+            var claim = null;
+            try {{ claim = await claimResp.json(); }} catch(_) {{}}
 
-            var r = await fetch('/api/student/focus/stats?local_date=' + encodeURIComponent(__ldStr_save));
-
-            if (r.ok) {{
-
-              var s = await r.json();
-
-              if (s) {{
-
-                var hh = document.getElementById('stat-hours');
-
-                var ss2 = document.getElementById('stat-sessions');
-
-                var st = document.getElementById('stat-streak');
-
-                if (hh) hh.textContent = s.total_hours;
-
-                if (ss2) ss2.textContent = s.sessions;
-
-                if (st) st.textContent = s.streak_days;
-
-              }}
-
+            if (!claimResp.ok && (!claim || !claim.saved_count)) {{
+              throw new Error((claim && claim.error) || 'claim failed');
             }}
 
-          }} catch(e) {{}}
+            failed = (claim && Array.isArray(claim.retryable_phases)) ? claim.retryable_phases : [];
+            savedCount = parseInt((claim && claim.saved_count) || 0, 10) || 0;
+            xpAwarded = parseInt((claim && claim.xp_awarded) || 0, 10) || 0;
+            minutesSaved = parseInt((claim && claim.minutes_saved) || 0, 10) || 0;
+
+            if (claim && claim.stats) {{
+              var hh = document.getElementById('stat-hours');
+              var ss2 = document.getElementById('stat-sessions');
+              var st = document.getElementById('stat-streak');
+              if (hh) hh.textContent = claim.stats.total_hours;
+              if (ss2) ss2.textContent = claim.stats.sessions;
+              if (st) st.textContent = claim.stats.streak_days;
+            }}
+          }} catch(e) {{
+            // Network/server failure before the server could answer. Keep the
+            // phases so the next click retries safely; the server dedupes any
+            // phase that may actually have been saved before the response died.
+            failed = phases;
+          }}
 
           setPendingPhases(failed);
           refreshClaimCounter();
