@@ -6762,8 +6762,8 @@ def register_student_routes(app, csrf, limiter):
         body.focus-library-mode .main {{ margin-left:0 !important;width:100vw !important;max-width:none !important; }}
         body.focus-library-mode .content,
         body.focus-library-mode .content-wide {{ width:100vw !important;max-width:none !important;min-height:100vh !important;padding:0 !important;overflow-x:hidden !important; }}
-        body.focus-library-mode .focus-cd {{ width:100vw !important;max-width:none !important;min-height:100vh !important;padding:clamp(28px,5vh,64px) clamp(20px,5vw,72px) !important;box-sizing:border-box !important; }}
-        body.focus-library-mode .focus-layout {{ grid-template-columns:minmax(320px,620px) minmax(280px,420px) !important;justify-content:center;align-items:start;gap:20px !important;min-height:auto;padding-top:0;width:min(1060px,calc(100vw - 72px)) !important;max-width:100% !important;margin:0 auto !important; }}
+        body.focus-library-mode .focus-cd {{ width:100vw !important;max-width:none !important;min-height:100vh !important;padding:clamp(28px,5vh,64px) clamp(20px,5vw,72px) !important;box-sizing:border-box !important;display:flex !important;align-items:center !important;justify-content:center !important; }}
+        body.focus-library-mode .focus-layout {{ grid-template-columns:minmax(320px,620px) minmax(280px,420px) !important;justify-content:center;align-items:center;gap:20px !important;min-height:auto;padding-top:0;width:min(1060px,calc(100vw - 72px)) !important;max-width:100% !important;margin:0 auto !important;transform:translateY(-2vh); }}
         body.focus-library-mode .focus-timer-shell,
         body.focus-library-mode #focus-ambience-card {{ box-shadow:0 24px 80px rgba(20,18,30,.08) !important; }}
         body.focus-library-mode .focus-timer-shell {{ border-color:#D8D0C0 !important;background:#FFFDF8 !important; }}
@@ -6785,7 +6785,7 @@ def register_student_routes(app, csrf, limiter):
         :root[data-theme="dark"] body.focus-library-mode .ft-select,
         :root[data-theme="dark"] body.focus-library-mode .ft-input,
         :root[data-theme="dark"] body.focus-library-mode .amb {{ background:#0F1622 !important;border-color:#2A3445 !important;color:#F7F1E8 !important; }}
-        @media (max-width:900px) {{ body.focus-library-mode .focus-layout {{ grid-template-columns:1fr !important;padding-top:0; }} }}
+        @media (max-width:900px) {{ body.focus-library-mode .focus-cd {{ align-items:flex-start !important;padding-top:74px !important; }} body.focus-library-mode .focus-layout {{ grid-template-columns:1fr !important;padding-top:0;transform:none;width:min(620px,calc(100vw - 32px)) !important; }} }}
         </style>
 
         <div class="focus-page-head">
