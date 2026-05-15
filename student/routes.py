@@ -6719,7 +6719,6 @@ def register_student_routes(app, csrf, limiter):
         .focus-exam-title {{ font-size:16px;font-weight:900;color:#1A1A1F;line-height:1.2; }}
         .focus-exam-topics {{ margin-top:6px;font-size:13px;color:#5C5C66;font-weight:700;line-height:1.35; }}
         .focus-exam-days {{ white-space:nowrap;font-family:'Bricolage Grotesque',sans-serif;font-size:28px;font-weight:700;color:#FF7A3D;text-align:right; }}
-        .library-theme-select {{ height:36px;border:1px solid #E2DCCC;background:#FBF8F0;color:#1A1A1F;border-radius:999px;padding:0 34px 0 12px;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 2px 0 rgba(20,18,30,.04); }}
         #library-exit-btn {{ display:none;position:fixed;top:18px;right:18px;z-index:8990;border:1px solid #D8D0C0;background:#FFFDF8;color:#1A1A1F;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:900;box-shadow:0 12px 36px rgba(20,18,30,.10);cursor:pointer; }}
         #library-ritual {{ position:fixed;inset:0;z-index:99980;display:none;align-items:center;justify-content:center;background:rgba(251,248,240,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px); }}
         #library-ritual.show {{ display:flex; }}
@@ -6752,50 +6751,40 @@ def register_student_routes(app, csrf, limiter):
         body.focus-library-mode .student-topbar,
         body.focus-library-mode #focus-float {{ display:none !important; }}
         body.focus-library-mode #library-exit-btn {{ display:block; }}
+        body.focus-library-mode,
+        body.focus-library-mode .mr-app-shell,
+        body.focus-library-mode .content,
+        body.focus-library-mode .content-wide,
         body.focus-library-mode .main-content,
         body.focus-library-mode .main,
         body.focus-library-mode main {{ background:#FBF8F0 !important; }}
-        body.focus-library-mode .mr-app-shell {{ grid-template-columns:1fr !important; }}
-        body.focus-library-mode .main {{ margin-left:0 !important;width:100% !important; }}
-        body.focus-library-mode .focus-layout {{ grid-template-columns:minmax(320px,620px) minmax(280px,420px) !important;justify-content:center;align-items:start;min-height:calc(100vh - 110px);padding-top:5vh; }}
+        body.focus-library-mode .mr-app-shell {{ grid-template-columns:1fr !important;min-height:100vh !important;width:100vw !important;overflow-x:hidden !important; }}
+        body.focus-library-mode .main {{ margin-left:0 !important;width:100vw !important;max-width:none !important; }}
+        body.focus-library-mode .content,
+        body.focus-library-mode .content-wide {{ width:100vw !important;max-width:none !important;min-height:100vh !important;padding:0 !important;overflow-x:hidden !important; }}
+        body.focus-library-mode .focus-cd {{ width:100vw !important;max-width:none !important;min-height:100vh !important;padding:clamp(28px,5vh,64px) clamp(20px,5vw,72px) !important;box-sizing:border-box !important; }}
+        body.focus-library-mode .focus-layout {{ grid-template-columns:minmax(320px,620px) minmax(280px,420px) !important;justify-content:center;align-items:start;gap:20px !important;min-height:auto;padding-top:0;width:min(1060px,calc(100vw - 72px)) !important;max-width:100% !important;margin:0 auto !important; }}
         body.focus-library-mode .focus-timer-shell,
         body.focus-library-mode #focus-ambience-card {{ box-shadow:0 24px 80px rgba(20,18,30,.08) !important; }}
         body.focus-library-mode .focus-timer-shell {{ border-color:#D8D0C0 !important;background:#FFFDF8 !important; }}
         body.focus-library-mode #focus-ambience-card .card-header {{ display:none; }}
-        body.focus-library-mode.library-theme-dark,
-        body.focus-library-mode.library-theme-dark .main,
-        body.focus-library-mode.library-theme-dark main {{ background:#0D1118 !important;color:#F7F1E8 !important; }}
-        body.focus-library-mode.library-theme-dark .focus-timer-shell,
-        body.focus-library-mode.library-theme-dark #focus-ambience-card {{ background:#141A24 !important;border-color:#2A3445 !important;color:#F7F1E8 !important; }}
-        body.focus-library-mode.library-theme-dark #timer-display,
-        body.focus-library-mode.library-theme-dark .card-header,
-        body.focus-library-mode.library-theme-dark .amb-n {{ color:#F7F1E8 !important; }}
-        body.focus-library-mode.library-theme-dark #timer-label,
-        body.focus-library-mode.library-theme-dark #pomo-count,
-        body.focus-library-mode.library-theme-dark .muted {{ color:#A9B1C0 !important; }}
-        body.focus-library-mode.library-theme-dark .ft-select,
-        body.focus-library-mode.library-theme-dark .ft-input,
-        body.focus-library-mode.library-theme-dark .amb {{ background:#0F1622 !important;border-color:#2A3445 !important;color:#F7F1E8 !important; }}
-        body.focus-library-mode.library-theme-lavender,
-        body.focus-library-mode.library-theme-lavender .main,
-        body.focus-library-mode.library-theme-lavender main {{ background:linear-gradient(135deg,#FBF8F0 0%,#F0EAFF 100%) !important; }}
-        body.focus-library-mode.library-theme-lavender .focus-timer-shell,
-        body.focus-library-mode.library-theme-lavender #focus-ambience-card {{ background:#FFFDFF !important;border-color:#D9CCFF !important;box-shadow:0 24px 80px rgba(91,70,148,.12) !important; }}
-        body.focus-library-mode.library-theme-lavender .ft-ring circle:last-child {{ stroke:#8B5CF6 !important; }}
-        body.focus-library-mode.library-theme-dark-library,
-        body.focus-library-mode.library-theme-dark-library .main,
-        body.focus-library-mode.library-theme-dark-library main {{ background:radial-gradient(circle at 22% 18%,rgba(46,146,102,.22),transparent 34%),radial-gradient(circle at 82% 10%,rgba(255,122,61,.12),transparent 30%),#080A0F !important;color:#F7F1E8 !important; }}
-        body.focus-library-mode.library-theme-dark-library .focus-timer-shell,
-        body.focus-library-mode.library-theme-dark-library #focus-ambience-card {{ background:rgba(14,18,26,.94) !important;border-color:#314034 !important;color:#F7F1E8 !important;box-shadow:0 28px 100px rgba(0,0,0,.35) !important; }}
-        body.focus-library-mode.library-theme-dark-library #timer-display,
-        body.focus-library-mode.library-theme-dark-library .card-header,
-        body.focus-library-mode.library-theme-dark-library .amb-n {{ color:#F7F1E8 !important; }}
-        body.focus-library-mode.library-theme-dark-library #timer-label,
-        body.focus-library-mode.library-theme-dark-library #pomo-count,
-        body.focus-library-mode.library-theme-dark-library .muted {{ color:#AEB8AE !important; }}
-        body.focus-library-mode.library-theme-dark-library .ft-select,
-        body.focus-library-mode.library-theme-dark-library .ft-input,
-        body.focus-library-mode.library-theme-dark-library .amb {{ background:rgba(10,13,19,.92) !important;border-color:#314034 !important;color:#F7F1E8 !important; }}
+        :root[data-theme="dark"] body.focus-library-mode,
+        :root[data-theme="dark"] body.focus-library-mode .mr-app-shell,
+        :root[data-theme="dark"] body.focus-library-mode .content,
+        :root[data-theme="dark"] body.focus-library-mode .content-wide,
+        :root[data-theme="dark"] body.focus-library-mode .main,
+        :root[data-theme="dark"] body.focus-library-mode main {{ background:#0D1118 !important;color:#F7F1E8 !important; }}
+        :root[data-theme="dark"] body.focus-library-mode .focus-timer-shell,
+        :root[data-theme="dark"] body.focus-library-mode #focus-ambience-card {{ background:#141A24 !important;border-color:#2A3445 !important;color:#F7F1E8 !important;box-shadow:0 28px 100px rgba(0,0,0,.35) !important; }}
+        :root[data-theme="dark"] body.focus-library-mode #timer-display,
+        :root[data-theme="dark"] body.focus-library-mode .card-header,
+        :root[data-theme="dark"] body.focus-library-mode .amb-n {{ color:#F7F1E8 !important; }}
+        :root[data-theme="dark"] body.focus-library-mode #timer-label,
+        :root[data-theme="dark"] body.focus-library-mode #pomo-count,
+        :root[data-theme="dark"] body.focus-library-mode .muted {{ color:#A9B1C0 !important; }}
+        :root[data-theme="dark"] body.focus-library-mode .ft-select,
+        :root[data-theme="dark"] body.focus-library-mode .ft-input,
+        :root[data-theme="dark"] body.focus-library-mode .amb {{ background:#0F1622 !important;border-color:#2A3445 !important;color:#F7F1E8 !important; }}
         @media (max-width:900px) {{ body.focus-library-mode .focus-layout {{ grid-template-columns:1fr !important;padding-top:0; }} }}
         </style>
 
@@ -6842,7 +6831,6 @@ def register_student_routes(app, csrf, limiter):
           <button id="library-mode-btn" class="focus-mode-chip {'locked' if not _focus_is_plus else ''}" type="button" onclick="toggleLibraryMode()">
             &#128218; {('Library Mode' if _focus_is_en else 'Modo Biblioteca')} {'PLUS' if not _focus_is_plus else ''}
           </button>
-          {'<select id="library-theme-select" class="library-theme-select" title="' + ('Library theme' if _focus_is_en else 'Tema biblioteca') + '" onchange="setLibraryTheme(this.value)"><option value="warm">' + ('Warm' if _focus_is_en else 'Claro calido') + '</option><option value="dark">Dark</option><option value="lavender">Lavender</option><option value="dark-library">' + ('Dark Library' if _focus_is_en else 'Biblioteca dark') + '</option></select>' if _focus_is_plus else ''}
         </div>
 
         <button id="library-exit-btn" type="button" onclick="toggleLibraryMode()">&#128218; {('Exit Library' if _focus_is_en else 'Salir de Biblioteca')}</button>
@@ -7733,8 +7721,7 @@ def register_student_routes(app, csrf, limiter):
         var __libraryRitualTimer = null;
         var __libraryRitualPendingStart = false;
         var __libraryRitualBypassOnce = false;
-        var LIBRARY_THEME_KEY = 'machreach_focus_library_theme';
-        var LIBRARY_THEME_CLASSES = ['library-theme-warm','library-theme-dark','library-theme-lavender','library-theme-dark-library'];
+        var LIBRARY_THEME_CLASSES = ['warm','dark','lavender','dark-library'].map(function(n) {{ return 'library-theme-' + n; }});
 
         function requestLibraryFullscreen() {{
           try {{
@@ -7761,27 +7748,15 @@ def register_student_routes(app, csrf, limiter):
 
         function applyLibraryTheme(theme) {{
           try {{
-            theme = ['warm','dark','lavender','dark-library'].indexOf(theme) >= 0 ? theme : 'warm';
             LIBRARY_THEME_CLASSES.forEach(function(c) {{ document.body.classList.remove(c); }});
-            document.body.classList.add('library-theme-' + theme);
-            localStorage.setItem(LIBRARY_THEME_KEY, theme);
-            var sel = document.getElementById('library-theme-select');
-            if (sel) sel.value = theme;
+            localStorage.removeItem('machreach_focus_library_' + 'theme');
           }} catch(e) {{}}
-        }}
-
-        function setLibraryTheme(theme) {{
-          applyLibraryTheme(theme);
-          if (FOCUS_IS_PLUS && !document.body.classList.contains('focus-library-mode')) {{
-            applyLibraryMode(true);
-            requestLibraryFullscreen();
-          }}
         }}
 
         function applyLibraryMode(on) {{
           try {{
             document.body.classList.toggle('focus-library-mode', !!on);
-            if (on) applyLibraryTheme(localStorage.getItem(LIBRARY_THEME_KEY) || 'warm');
+            if (on) applyLibraryTheme();
             var btn = document.getElementById('library-mode-btn');
             if (btn) {{
               btn.classList.toggle('active', !!on);
@@ -7791,7 +7766,7 @@ def register_student_routes(app, csrf, limiter):
             if (!on) {{
               hideLibraryRitual();
               exitLibraryFullscreen();
-              LIBRARY_THEME_CLASSES.forEach(function(c) {{ document.body.classList.remove(c); }});
+              applyLibraryTheme();
             }}
           }} catch(e) {{}}
         }}
@@ -7809,7 +7784,7 @@ def register_student_routes(app, csrf, limiter):
 
         (function restoreLibraryMode() {{
           try {{
-            if (FOCUS_IS_PLUS) applyLibraryTheme(localStorage.getItem(LIBRARY_THEME_KEY) || 'warm');
+            if (FOCUS_IS_PLUS) applyLibraryTheme();
             if (FOCUS_IS_PLUS && localStorage.getItem('machreach_focus_library_mode') === '1') {{
               applyLibraryMode(true);
             }}

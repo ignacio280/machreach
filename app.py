@@ -2317,7 +2317,6 @@ LAYOUT = """<!DOCTYPE html>
           :root[data-theme="dark"] .content .amb,
           :root[data-theme="dark"] .content .block-item,
           :root[data-theme="dark"] .content .focus-mode-chip,
-          :root[data-theme="dark"] .content .library-theme-select,
           :root[data-theme="dark"] .content .library-ritual-card,
           :root[data-theme="dark"] .content .library-ritual-lines div,
           :root[data-theme="dark"] .content .mp-day,
