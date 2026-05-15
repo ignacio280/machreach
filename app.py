@@ -2468,6 +2468,194 @@ LAYOUT = """<!DOCTYPE html>
           :root[data-theme="dark"] .content [style*="color: #94a3b8"] {
             color:#B9B0A5 !important;
           }
+
+          /* Dashboard home: keep the orange theme readable in dark mode. */
+          :root[data-theme="dark"] .content .mr-home {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-layout,
+          :root[data-theme="dark"] .content .mr-home .mr-left,
+          :root[data-theme="dark"] .content .mr-home .mr-right {
+            background:transparent !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-mission {
+            background:
+              radial-gradient(circle at 88% 14%, rgba(255,154,96,.20), transparent 30%),
+              linear-gradient(135deg,#25140E 0%,#331A10 55%,#442110 100%) !important;
+            border-color:#704126 !important;
+            color:#FBE7D6 !important;
+            box-shadow:0 22px 60px rgba(0,0,0,.28) !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-mission-title,
+          :root[data-theme="dark"] .content .mr-home .mr-mission-eye,
+          :root[data-theme="dark"] .content .mr-home .mr-quest-title,
+          :root[data-theme="dark"] .content .mr-home .mr-quest-num {
+            color:#FFF4EA !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-mission-title em {
+            color:#FF9F5F !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-quest {
+            background:rgba(255,255,255,.08) !important;
+            border-color:rgba(255,255,255,.16) !important;
+            box-shadow:none !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-quest-bar,
+          :root[data-theme="dark"] .content .mr-home .mr-course-bar {
+            background:rgba(255,255,255,.12) !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card,
+          :root[data-theme="dark"] .content .mr-home .mr-card,
+          :root[data-theme="dark"] .content .mr-home .mr-course-tile,
+          :root[data-theme="dark"] .content .mr-home .mr-sess,
+          :root[data-theme="dark"] .content .mr-home .mr-empty,
+          :root[data-theme="dark"] .content .mr-home .mr-exam,
+          :root[data-theme="dark"] .content .mr-home .mr-streak-card {
+            background:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+            box-shadow:0 1px 0 rgba(255,255,255,.03), 0 18px 46px rgba(0,0,0,.22) !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card.tilted,
+          :root[data-theme="dark"] .content .mr-home .mr-league-card {
+            background:linear-gradient(160deg,#4F3A82 0%,#31264F 100%) !important;
+            border-color:#5E4A92 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-card-title,
+          :root[data-theme="dark"] .content .mr-home .mr-stat-value,
+          :root[data-theme="dark"] .content .mr-home .mr-course-name,
+          :root[data-theme="dark"] .content .mr-home .mr-sess-topic,
+          :root[data-theme="dark"] .content .mr-home .mr-exam-title,
+          :root[data-theme="dark"] .content .mr-home .mr-exam-cd {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-stat-label,
+          :root[data-theme="dark"] .content .mr-home .mr-stat-sub,
+          :root[data-theme="dark"] .content .mr-home .mr-card-link,
+          :root[data-theme="dark"] .content .mr-home .mr-course-code,
+          :root[data-theme="dark"] .content .mr-home .mr-course-pct,
+          :root[data-theme="dark"] .content .mr-home .mr-course-next,
+          :root[data-theme="dark"] .content .mr-home .mr-sess-time,
+          :root[data-theme="dark"] .content .mr-home .mr-sess-meta,
+          :root[data-theme="dark"] .content .mr-home .mr-exam-meta,
+          :root[data-theme="dark"] .content .mr-home .mr-exam-cd small {
+            color:#B9B0A5 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-sess-check {
+            background:#141720 !important;
+            border-color:#4B4655 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell {
+            background:#2A2730 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.lv1 { background:#493426 !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.lv2 { background:#7A442A !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.lv3 { background:#B75B30 !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.lv4 { background:#FF7A3D !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.today {
+            outline-color:#F7F0E4 !important;
+          }
+
+          /* Achievements / XP page: rank cards and badge sections should not stay cream-white. */
+          :root[data-theme="dark"] .content .achievements-cd,
+          :root[data-theme="dark"] .content .achievements-cd h2,
+          :root[data-theme="dark"] .content .achievements-cd h3,
+          :root[data-theme="dark"] .content .achievements-cd .big {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card {
+            background:
+              radial-gradient(circle at 88% 10%, rgba(255,122,61,.18), transparent 34%),
+              linear-gradient(135deg,#1D202A 0%,#151821 100%) !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+            box-shadow:0 24px 60px rgba(0,0,0,.28) !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card [style*="background:rgba"] {
+            background:#252936 !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card [style*="background:#fff"],
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card [style*="background: #fff"] {
+            background:#FF7A3D !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd .ach-stat-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-badge-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-activity-card {
+            background:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd [style*="color:#1A1A1F"],
+          :root[data-theme="dark"] .content .achievements-cd [style*="color: #1A1A1F"] {
+            color:#F7F0E4 !important;
+          }
+
+          /* Quiz/exam cards: avoid horizontal cutoffs and broken title wrapping in every theme. */
+          .content .quiz-cd,
+          .content .quiz-cd * {
+            min-width:0;
+          }
+          .content .quiz-cd .quiz-grid {
+            grid-template-columns:repeat(auto-fit,minmax(320px,1fr)) !important;
+            width:100% !important;
+            max-width:100% !important;
+            overflow:visible !important;
+          }
+          .content .quiz-cd .qcard {
+            min-width:0 !important;
+            max-width:100% !important;
+            overflow:hidden !important;
+          }
+          .content .quiz-cd .qcard > div:first-child {
+            display:flex !important;
+            align-items:flex-start !important;
+            gap:14px !important;
+            min-width:0 !important;
+          }
+          .content .quiz-cd .qcard > div:first-child > div:first-child {
+            flex:1 1 auto !important;
+            min-width:0 !important;
+          }
+          .content .quiz-cd .qcard > div:first-child > div:last-child {
+            flex:0 0 auto !important;
+            flex-wrap:wrap !important;
+            justify-content:flex-end !important;
+            max-width:220px !important;
+          }
+          .content .quiz-cd .qcard h3 {
+            max-width:100% !important;
+            overflow-wrap:anywhere !important;
+            word-break:break-word !important;
+            hyphens:auto !important;
+            line-height:1.25 !important;
+          }
+          @media (max-width:900px) {
+            .content .quiz-cd .quiz-grid {
+              grid-template-columns:1fr !important;
+            }
+            .content .quiz-cd .qcard > div:first-child {
+              flex-direction:column !important;
+            }
+            .content .quiz-cd .qcard > div:first-child > div:last-child {
+              max-width:100% !important;
+              justify-content:flex-start !important;
+            }
+          }
+          :root[data-theme="dark"] .content .quiz-cd .qcard,
+          :root[data-theme="dark"] .content .quiz-cd .qcard.warn {
+            background:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+            box-shadow:0 1px 0 rgba(255,255,255,.03), 0 18px 46px rgba(0,0,0,.22) !important;
+          }
+          :root[data-theme="dark"] .content .quiz-cd .qcard h3,
+          :root[data-theme="dark"] .content .quiz-cd .qcard strong {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .quiz-cd .qcard p,
+          :root[data-theme="dark"] .content .quiz-cd .qcard small {
+            color:#B9B0A5 !important;
+          }
           :root[data-theme="dark"] .content svg text {
             fill:#F7F0E4 !important;
           }
