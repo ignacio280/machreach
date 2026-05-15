@@ -766,6 +766,8 @@ def _student_migrations():
         "course_key TEXT NOT NULL, "
         "course_name TEXT DEFAULT '', "
         "course_code TEXT DEFAULT '', "
+        "final_grade REAL, "
+        "passing_grade REAL NOT NULL DEFAULT 3.95, "
         "passed BOOLEAN NOT NULL DEFAULT FALSE, "
         "total_focus_minutes INTEGER NOT NULL DEFAULT 0, "
         "reported_at TIMESTAMP DEFAULT NOW(), "
@@ -777,11 +779,22 @@ def _student_migrations():
         "course_key TEXT NOT NULL, "
         "course_name TEXT DEFAULT '', "
         "course_code TEXT DEFAULT '', "
+        "final_grade REAL, "
+        "passing_grade REAL NOT NULL DEFAULT 3.95, "
         "passed INTEGER NOT NULL DEFAULT 0, "
         "total_focus_minutes INTEGER NOT NULL DEFAULT 0, "
         "reported_at TEXT DEFAULT (datetime('now','localtime')), "
         "UNIQUE(client_id, course_id))",
     )
+    for col, col_type in (("final_grade", "REAL"), ("passing_grade", "REAL DEFAULT 3.95")):
+        try:
+            with get_db() as db:
+                if _USE_PG:
+                    db.cursor().execute(f"ALTER TABLE student_course_outcomes ADD COLUMN {col} {col_type}")
+                else:
+                    db.execute(f"ALTER TABLE student_course_outcomes ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass
 
 
 # ── Canvas tokens ───────────────────────────────────────────
@@ -1500,7 +1513,34 @@ def _course_benchmark_key(name: str = "", code: str = "") -> str:
     return key[:80] or "course"
 
 
-def record_course_outcome(client_id: int, course_id: int, passed: bool) -> dict:
+def get_course_outcome(client_id: int, course_id: int) -> dict | None:
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT final_grade, passing_grade, passed, total_focus_minutes, reported_at "
+            "FROM student_course_outcomes WHERE client_id = %s AND course_id = %s",
+            (client_id, course_id),
+        )
+    if not row:
+        return None
+    d = dict(row)
+    d["final_grade"] = float(d.get("final_grade") or 0)
+    d["passing_grade"] = float(d.get("passing_grade") or 3.95)
+    d["passed"] = bool(d.get("passed"))
+    d["total_focus_minutes"] = int(d.get("total_focus_minutes") or 0)
+    d["total_focus_hours"] = round(d["total_focus_minutes"] / 60, 1)
+    return d
+
+
+def record_course_outcome(client_id: int, course_id: int, final_grade: float, passing_grade: float = 3.95) -> dict:
+    try:
+        final_grade = round(float(final_grade), 2)
+        passing_grade = round(float(passing_grade or 3.95), 2)
+    except Exception:
+        return {"ok": False, "error": "Ingresa una nota valida."}
+    if not (1.0 <= final_grade <= 7.0) or not (1.0 <= passing_grade <= 7.0):
+        return {"ok": False, "error": "La nota debe estar entre 1.0 y 7.0."}
+    passed = final_grade >= passing_grade
     with get_db() as db:
         course = _fetchone(
             db,
@@ -1520,27 +1560,36 @@ def record_course_outcome(client_id: int, course_id: int, passed: bool) -> dict:
             _exec(
                 db,
                 "INSERT INTO student_course_outcomes "
-                "(client_id, course_id, course_key, course_name, course_code, passed, total_focus_minutes, reported_at) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,NOW()) "
+                "(client_id, course_id, course_key, course_name, course_code, final_grade, passing_grade, passed, total_focus_minutes, reported_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
                 "ON CONFLICT (client_id, course_id) DO UPDATE SET "
                 "course_key=EXCLUDED.course_key, course_name=EXCLUDED.course_name, "
-                "course_code=EXCLUDED.course_code, passed=EXCLUDED.passed, "
+                "course_code=EXCLUDED.course_code, final_grade=EXCLUDED.final_grade, "
+                "passing_grade=EXCLUDED.passing_grade, passed=EXCLUDED.passed, "
                 "total_focus_minutes=EXCLUDED.total_focus_minutes, reported_at=NOW()",
-                (client_id, course_id, key, course.get("name") or "", course.get("code") or "", bool(passed), int(minutes)),
+                (client_id, course_id, key, course.get("name") or "", course.get("code") or "", final_grade, passing_grade, bool(passed), int(minutes)),
             )
         else:
             _exec(
                 db,
                 "INSERT INTO student_course_outcomes "
-                "(client_id, course_id, course_key, course_name, course_code, passed, total_focus_minutes, reported_at) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,datetime('now','localtime')) "
+                "(client_id, course_id, course_key, course_name, course_code, final_grade, passing_grade, passed, total_focus_minutes, reported_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,datetime('now','localtime')) "
                 "ON CONFLICT(client_id, course_id) DO UPDATE SET "
                 "course_key=excluded.course_key, course_name=excluded.course_name, "
-                "course_code=excluded.course_code, passed=excluded.passed, "
+                "course_code=excluded.course_code, final_grade=excluded.final_grade, "
+                "passing_grade=excluded.passing_grade, passed=excluded.passed, "
                 "total_focus_minutes=excluded.total_focus_minutes, reported_at=datetime('now','localtime')",
-                (client_id, course_id, key, course.get("name") or "", course.get("code") or "", 1 if passed else 0, int(minutes)),
+                (client_id, course_id, key, course.get("name") or "", course.get("code") or "", final_grade, passing_grade, 1 if passed else 0, int(minutes)),
             )
-    return {"ok": True, "passed": bool(passed), "total_focus_minutes": int(minutes), "benchmark": get_course_success_benchmark(course_id)}
+    return {
+        "ok": True,
+        "final_grade": final_grade,
+        "passing_grade": passing_grade,
+        "passed": bool(passed),
+        "total_focus_minutes": int(minutes),
+        "benchmark": get_course_success_benchmark(course_id),
+    }
 
 
 def get_course_success_benchmark(course_id: int) -> dict:
@@ -1551,21 +1600,32 @@ def get_course_success_benchmark(course_id: int) -> dict:
         key = _course_benchmark_key(course.get("name") or "", course.get("code") or "")
         row = _fetchone(
             db,
-            "SELECT COUNT(*) AS passed_count, "
-            "COALESCE(AVG(total_focus_minutes),0) AS avg_minutes, "
-            "COALESCE(MIN(total_focus_minutes),0) AS min_minutes, "
-            "COALESCE(MAX(total_focus_minutes),0) AS max_minutes "
-            "FROM student_course_outcomes WHERE course_key = %s AND passed = %s",
-            (key, True),
+            "SELECT COUNT(*) AS total_reports, "
+            "SUM(CASE WHEN passed THEN 1 ELSE 0 END) AS passed_count, "
+            "SUM(CASE WHEN NOT passed THEN 1 ELSE 0 END) AS failed_count, "
+            "COALESCE(AVG(CASE WHEN passed THEN total_focus_minutes END),0) AS avg_minutes, "
+            "COALESCE(AVG(CASE WHEN passed THEN final_grade END),0) AS avg_final_grade, "
+            "COALESCE(AVG(final_grade),0) AS avg_all_final_grade, "
+            "COALESCE(MIN(CASE WHEN passed THEN total_focus_minutes END),0) AS min_minutes, "
+            "COALESCE(MAX(CASE WHEN passed THEN total_focus_minutes END),0) AS max_minutes "
+            "FROM student_course_outcomes WHERE course_key = %s",
+            (key,),
         ) or {}
+    total_reports = int(row.get("total_reports") or 0)
     passed_count = int(row.get("passed_count") or 0)
+    failed_count = int(row.get("failed_count") or 0)
     avg_minutes = int(round(float(row.get("avg_minutes") or 0)))
     return {
         "has_data": passed_count > 0 and avg_minutes > 0,
         "course_key": key,
+        "total_reports": total_reports,
         "passed_count": passed_count,
+        "failed_count": failed_count,
+        "pass_rate": round((passed_count / total_reports) * 100, 1) if total_reports else 0,
         "avg_minutes": avg_minutes,
         "avg_hours": round(avg_minutes / 60, 1),
+        "avg_final_grade": round(float(row.get("avg_final_grade") or 0), 2),
+        "avg_all_final_grade": round(float(row.get("avg_all_final_grade") or 0), 2),
         "min_minutes": int(row.get("min_minutes") or 0),
         "max_minutes": int(row.get("max_minutes") or 0),
     }
@@ -1579,6 +1639,7 @@ def get_course_outcomes_admin(limit: int = 80) -> list[dict]:
             "COUNT(*) AS reports, "
             "SUM(CASE WHEN passed THEN 1 ELSE 0 END) AS passed_reports, "
             "SUM(CASE WHEN NOT passed THEN 1 ELSE 0 END) AS failed_reports, "
+            "COALESCE(AVG(CASE WHEN passed THEN final_grade END),0) AS avg_pass_grade, "
             "COALESCE(AVG(CASE WHEN passed THEN total_focus_minutes END),0) AS avg_pass_minutes "
             "FROM student_course_outcomes GROUP BY course_key "
             "ORDER BY reports DESC, passed_reports DESC, course_name ASC LIMIT %s",
@@ -1589,6 +1650,7 @@ def get_course_outcomes_admin(limit: int = 80) -> list[dict]:
         d = dict(r)
         d["avg_pass_minutes"] = int(round(float(d.get("avg_pass_minutes") or 0)))
         d["avg_pass_hours"] = round(d["avg_pass_minutes"] / 60, 1) if d["avg_pass_minutes"] else 0
+        d["avg_pass_grade"] = round(float(d.get("avg_pass_grade") or 0), 2)
         out.append(d)
     return out
 
@@ -1598,7 +1660,7 @@ def get_course_outcome_reports_admin(limit: int = 200) -> list[dict]:
         rows = _fetchall(
             db,
             "SELECT o.course_name, o.course_code, c.name AS user_name, c.email AS user_email, "
-            "o.passed, o.total_focus_minutes, o.reported_at "
+            "o.final_grade, o.passing_grade, o.passed, o.total_focus_minutes, o.reported_at "
             "FROM student_course_outcomes o "
             "JOIN clients c ON c.id = o.client_id "
             "ORDER BY o.reported_at DESC LIMIT %s",

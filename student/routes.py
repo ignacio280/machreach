@@ -2624,7 +2624,21 @@ def register_student_routes(app, csrf, limiter):
         course = sdb.get_course(course_id)
         if not course or course["client_id"] != _cid():
             return jsonify({"error": "Not found"}), 404
-        return jsonify(sdb.get_course_success_benchmark(course_id))
+        try:
+            from student import subscription as _sub
+            is_plus = _sub.get_tier(_cid()) in ("plus", "ultimate")
+        except Exception:
+            is_plus = False
+        benchmark = sdb.get_course_success_benchmark(course_id) or {"has_data": False}
+        response = {
+            "has_data": bool(benchmark.get("has_data")),
+            "is_plus": bool(is_plus),
+            "plus_required": bool(benchmark.get("has_data") and not is_plus),
+            "my_outcome": sdb.get_course_outcome(_cid(), course_id),
+        }
+        if is_plus:
+            response.update(benchmark)
+        return jsonify(response)
 
 
     @app.route("/api/student/courses/<int:course_id>/outcome", methods=["POST"])
@@ -2635,7 +2649,12 @@ def register_student_routes(app, csrf, limiter):
         if not course or course["client_id"] != _cid():
             return jsonify({"error": "Not found"}), 404
         data = request.get_json(silent=True) or {}
-        result = sdb.record_course_outcome(_cid(), course_id, bool(data.get("passed")))
+        result = sdb.record_course_outcome(
+            _cid(),
+            course_id,
+            data.get("final_grade"),
+            data.get("passing_grade") or 3.95,
+        )
         return jsonify(result), (200 if result.get("ok") else 400)
 
 
@@ -5759,9 +5778,15 @@ def register_student_routes(app, csrf, limiter):
               </div>
               <div class="course-detail-card" id="detail-{_course_id}" style="display:none;">
                 <div class="course-benchmark" id="bench-{_course_id}"></div>
-                <div class="course-outcome-actions">
-                  <button class="btn btn-outline btn-sm" onclick="markCourseOutcome({_course_id}, true)" type="button">Marcar aprobado</button>
-                  <button class="btn btn-outline btn-sm" onclick="markCourseOutcome({_course_id}, false)" type="button">Marcar no aprobado</button>
+                <div class="course-outcome-actions" id="outcome-{_course_id}">
+                  <label>Nota final
+                    <input class="course-grade-input" id="final-grade-{_course_id}" inputmode="decimal" min="1" max="7" step="0.01" placeholder="5.40" type="number">
+                  </label>
+                  <label>Nota para aprobar
+                    <input class="course-grade-input" id="passing-grade-{_course_id}" inputmode="decimal" min="1" max="7" step="0.01" value="3.95" type="number">
+                  </label>
+                  <button class="btn btn-outline btn-sm" onclick="saveCourseOutcome({_course_id}, this)" type="button">Guardar resultado</button>
+                  <span class="course-outcome-state" id="outcome-state-{_course_id}"></span>
                 </div>
                 <div id="exams-panel-{_course_id}" class="course-exams-panel">Cargando evaluaciones...</div>
               </div>
@@ -5871,7 +5896,11 @@ def register_student_routes(app, csrf, limiter):
         .ccard-go.warn {{ background:#FF7A3D;color:#fff; }}.ccard-go.good {{ background:#10B981;color:#fff; }}
         .course-detail-card {{ margin-top:16px;padding-top:14px;border-top:1px dashed #E2DCCC; }}
         .course-benchmark {{ margin-bottom:10px;padding:10px 12px;border-radius:12px;background:#FFF3E8;border:1px solid #FFD0B5;color:#7A3518;font-size:12px;font-weight:800;display:none; }}
-        .course-outcome-actions {{ display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px; }}
+        .course-benchmark.locked {{ background:#F7F2FF;border-color:#D9CCFF;color:#3F2A8E; }}
+        .course-outcome-actions {{ display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px; }}
+        .course-outcome-actions label {{ display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#94939C; }}
+        .course-grade-input {{ width:120px;border:1px solid #E2DCCC;border-radius:10px;background:#FBF8F0;color:#1A1A1F;padding:9px 10px;font-weight:800; }}
+        .course-outcome-state {{ font-size:12px;font-weight:900;color:#5C5C66; }}
         .course-empty {{ grid-column:1/-1;border:2px dashed #E2DCCC;border-radius:18px;padding:32px;text-align:center;color:#94939C; }}
         .mr-modal {{ position:fixed;inset:0;background:rgba(26,26,31,.36);display:flex;align-items:center;justify-content:center;z-index:1000;padding:18px; }}
         .mr-modal-card {{ width:min(420px,100%);background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:20px;box-shadow:0 24px 80px rgba(20,18,30,.18); }}
@@ -5925,34 +5954,63 @@ def register_student_routes(app, csrf, limiter):
         async function loadCourseBenchmark(courseId) {{
           var box = document.getElementById('bench-' + courseId);
           if (!box) return;
+          box.classList.remove('locked');
           box.style.display = 'none';
           try {{
             var r = await fetch('/api/student/courses/' + courseId + '/benchmark');
             var d = await r.json();
+            var finalInput = document.getElementById('final-grade-' + courseId);
+            var passingInput = document.getElementById('passing-grade-' + courseId);
+            var state = document.getElementById('outcome-state-' + courseId);
+            if (d && d.my_outcome) {{
+              if (finalInput && d.my_outcome.final_grade) finalInput.value = Number(d.my_outcome.final_grade).toFixed(2);
+              if (passingInput && d.my_outcome.passing_grade) passingInput.value = Number(d.my_outcome.passing_grade).toFixed(2);
+              if (state) state.textContent = d.my_outcome.passed ? 'Guardado: aprobado' : 'Guardado: no aprobado';
+            }}
             if (d && d.has_data) {{
-              var reports = d.passed_count === 1 ? 'reporte' : 'reportes';
-              box.textContent = 'Estudiantes que aprobaron este ramo estudiaron en promedio ' + d.avg_hours + 'h (' + d.passed_count + ' ' + reports + ').';
+              if (d.plus_required) {{
+                box.classList.add('locked');
+                box.textContent = 'Plus desbloquea datos reales de este ramo: horas promedio para aprobar, nota promedio y tasa de aprobación.';
+              }} else {{
+                var reports = d.passed_count === 1 ? 'reporte' : 'reportes';
+                box.textContent = 'Quienes aprobaron estudiaron en promedio ' + d.avg_hours + 'h y terminaron con nota promedio ' + d.avg_final_grade + ' (' + d.passed_count + ' ' + reports + ', ' + d.pass_rate + '% aprobados).';
+              }}
               box.style.display = 'block';
             }}
           }} catch(e) {{}}
         }}
 
-        async function markCourseOutcome(courseId, passed) {{
+        async function saveCourseOutcome(courseId, btn) {{
           var csrfToken = document.querySelector('meta[name="csrf-token"]');
           var headers = {{'Content-Type':'application/json'}};
           if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+          var finalInput = document.getElementById('final-grade-' + courseId);
+          var passingInput = document.getElementById('passing-grade-' + courseId);
+          var finalGrade = finalInput ? finalInput.value : '';
+          var passingGrade = passingInput ? (passingInput.value || '3.95') : '3.95';
+          if (!finalGrade) {{
+            alert('Ingresa tu nota final del ramo.');
+            if (finalInput) finalInput.focus();
+            return;
+          }}
+          var oldText = btn ? btn.textContent : '';
+          if (btn) {{ btn.disabled = true; btn.textContent = 'Guardando...'; }}
           try {{
             var r = await fetch('/api/student/courses/' + courseId + '/outcome', {{
               method: 'POST',
               headers: headers,
-              body: JSON.stringify({{passed: !!passed}})
+              body: JSON.stringify({{final_grade: finalGrade, passing_grade: passingGrade}})
             }});
             var d = await r.json();
             if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo guardar.');
             await loadCourseBenchmark(courseId);
-            alert(passed ? 'Curso marcado como aprobado.' : 'Curso marcado como no aprobado.');
+            var state = document.getElementById('outcome-state-' + courseId);
+            if (state) state.textContent = d.passed ? 'Guardado: aprobado' : 'Guardado: no aprobado';
+            alert(d.passed ? 'Resultado guardado: aprobado.' : 'Resultado guardado: no aprobado.');
           }} catch(e) {{
             alert(e.message || 'No se pudo guardar el resultado.');
+          }} finally {{
+            if (btn) {{ btn.disabled = false; btn.textContent = oldText || 'Guardar resultado'; }}
           }}
         }}
 
@@ -7963,6 +8021,39 @@ def register_student_routes(app, csrf, limiter):
         }}
 
         var _lastBenchmarkCourseToast = '';
+        function showPersistentCourseToast(message) {{
+          try {{
+            var existing = document.getElementById('focus-benchmark-toast');
+            if (existing) existing.remove();
+            var wrap = document.getElementById('toast-container');
+            if (!wrap) {{
+              wrap = document.createElement('div');
+              wrap.id = 'toast-container';
+              document.body.appendChild(wrap);
+            }}
+            var toast = document.createElement('div');
+            toast.id = 'focus-benchmark-toast';
+            toast.className = 'toast toast-info show';
+            toast.style.animation = 'none';
+            toast.style.opacity = '1';
+            toast.style.transform = 'none';
+            var close = document.createElement('button');
+            close.className = 'toast-close';
+            close.type = 'button';
+            close.setAttribute('aria-label', 'Cerrar');
+            close.textContent = '×';
+            close.onclick = function() {{ toast.remove(); }};
+            var body = document.createElement('div');
+            body.className = 'toast-message';
+            body.textContent = message;
+            toast.appendChild(close);
+            toast.appendChild(body);
+            wrap.appendChild(toast);
+          }} catch(e) {{
+            if (window.showToast) window.showToast(message, 'info');
+          }}
+        }}
+
         async function showCourseBenchmarkToast(courseId) {{
           if (!courseId || _lastBenchmarkCourseToast === String(courseId)) return;
           try {{
@@ -7970,8 +8061,19 @@ def register_student_routes(app, csrf, limiter):
             var d = await r.json();
             if (!d || !d.has_data) return;
             _lastBenchmarkCourseToast = String(courseId);
-            var msg = {json.dumps("Students who passed this same course studied about " if _focus_is_en else "Estudiantes que aprobaron este mismo ramo estudiaron cerca de ")} + d.avg_hours + 'h ' + {json.dumps("on average." if _focus_is_en else "en promedio.")};
-            if (window.showToast) window.showToast(msg, 'info'); else console.info(msg);
+            var sel = document.getElementById('focus-course');
+            var courseName = '';
+            if (sel && sel.selectedOptions && sel.selectedOptions[0]) {{
+              courseName = sel.selectedOptions[0].getAttribute('data-name') || sel.selectedOptions[0].textContent || '';
+            }}
+            courseName = (courseName || {json.dumps("this course" if _focus_is_en else "este ramo")}).trim();
+            var msg = '';
+            if (d.plus_required) {{
+              msg = {json.dumps("Want to know how much to study for " if _focus_is_en else "¿Quieres saber cuánto estudiar para ")} + courseName + {json.dumps("? Real data exists for this course. Consider Plus." if _focus_is_en else "? Hay datos reales de este ramo. Considera Plus.")};
+            }} else {{
+              msg = {json.dumps("Real benchmark for " if _focus_is_en else "Benchmark real para ")} + courseName + ': ' + d.avg_hours + 'h ' + {json.dumps("average study time to pass, with average final grade " if _focus_is_en else "promedio para aprobar, con nota final promedio ")} + d.avg_final_grade + '.';
+            }}
+            showPersistentCourseToast(msg);
           }} catch(e) {{}}
         }}
 
