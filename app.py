@@ -496,21 +496,18 @@ LAYOUT = """<!DOCTYPE html>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="if(typeof renderMathInElement==='function')renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}],throwOnError:false});"></script>
   <script>
-    // Keep the Claude design system consistent across the app.
+    // Apply the saved global theme before CSS paints. This prevents the app
+    // from flashing back to light mode when navigating between student tabs.
     (function(){
       try {
-        localStorage.removeItem('machreach-theme');
-        localStorage.removeItem('mr_theme');
-        document.documentElement.removeAttribute('data-theme');
+        var mode = localStorage.getItem('machreach-theme') || '';
+        var named = localStorage.getItem('mr_theme') || 'default';
+        var theme = mode === 'dark' ? 'dark' : ((named && named !== 'default') ? ('mr-' + named) : '');
+        if (theme) document.documentElement.setAttribute('data-theme', theme);
+        else document.documentElement.removeAttribute('data-theme');
+        document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
       } catch(e) {}
     })();
-    window.applyMrTheme = function(name) {
-      try {
-        localStorage.removeItem('machreach-theme');
-        localStorage.removeItem('mr_theme');
-        document.documentElement.removeAttribute('data-theme');
-      } catch (e) {}
-    };
     // Auto-inject CSRF token into all fetch requests
     (function(){
       var _fetch = window.fetch;
@@ -1789,6 +1786,105 @@ LAYOUT = """<!DOCTYPE html>
       color: #F7F0E4 !important;
       border-color: #3B3741 !important;
     }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #11131A;
+      --card: #1D202A;
+      --border: #34313A;
+      --text: #F7F0E4;
+      --text-muted: #B9B0A5;
+      --primary: #FF7A3D;
+      --ink: #F7F0E4;
+      --muted: #B9B0A5;
+      --line: #34313A;
+      --paper: #1D202A;
+      --cream: #11131A;
+      --orange: #FF7A3D;
+    }
+    :root[data-theme="dark"] body {
+      background: #11131A !important;
+      color: #F7F0E4;
+    }
+    :root[data-theme="dark"] .content,
+    :root[data-theme="dark"] .content-wide,
+    :root[data-theme="dark"] .student-page,
+    :root[data-theme="dark"] .page,
+    :root[data-theme="dark"] .mr-home,
+    :root[data-theme="dark"] .friends-cd,
+    :root[data-theme="dark"] .shop-cd,
+    :root[data-theme="dark"] .pl-wrap,
+    :root[data-theme="dark"] .student-profile-wrap {
+      background: #11131A !important;
+      color: #F7F0E4 !important;
+      --ink:#F7F0E4;
+      --muted:#B9B0A5;
+      --line:#34313A;
+      --paper:#1D202A;
+      --cream:#11131A;
+      --orange:#FF7A3D;
+    }
+    :root[data-theme="dark"] .card,
+    :root[data-theme="dark"] .fr-panel,
+    :root[data-theme="dark"] .fr-group-card,
+    :root[data-theme="dark"] .fr-row,
+    :root[data-theme="dark"] .fr-search-inner,
+    :root[data-theme="dark"] .fr-rank-list,
+    :root[data-theme="dark"] .fr-lb-embed .lb-board,
+    :root[data-theme="dark"] .pl-card,
+    :root[data-theme="dark"] .pl-course,
+    :root[data-theme="dark"] .pl-help,
+    :root[data-theme="dark"] .pl-empty,
+    :root[data-theme="dark"] .focus-timer-card,
+    :root[data-theme="dark"] .focus-rival-card,
+    :root[data-theme="dark"] .focus-exam-nudge,
+    :root[data-theme="dark"] .stat-card {
+      background: #1D202A !important;
+      border-color: #34313A !important;
+      color: #F7F0E4 !important;
+      box-shadow: 0 1px 0 rgba(255,255,255,.03), 0 18px 46px rgba(0,0,0,.24) !important;
+    }
+    :root[data-theme="dark"] .fr-empty,
+    :root[data-theme="dark"] .fr-input,
+    :root[data-theme="dark"] .fr-check,
+    :root[data-theme="dark"] .fr-group-add select,
+    :root[data-theme="dark"] .ft-select,
+    :root[data-theme="dark"] .ft-input,
+    :root[data-theme="dark"] .amb,
+    :root[data-theme="dark"] .block-item {
+      background: #141720 !important;
+      border-color: #34313A !important;
+      color: #F7F0E4 !important;
+    }
+    :root[data-theme="dark"] .fr-title,
+    :root[data-theme="dark"] .fr-panel h3,
+    :root[data-theme="dark"] .fr-name,
+    :root[data-theme="dark"] .fr-rank-xp,
+    :root[data-theme="dark"] .focus-title,
+    :root[data-theme="dark"] #timer-display,
+    :root[data-theme="dark"] h1,
+    :root[data-theme="dark"] h2,
+    :root[data-theme="dark"] h3 {
+      color: #F7F0E4 !important;
+    }
+    :root[data-theme="dark"] .fr-sub,
+    :root[data-theme="dark"] .fr-note,
+    :root[data-theme="dark"] .fr-meta,
+    :root[data-theme="dark"] .muted,
+    :root[data-theme="dark"] .ps-l,
+    :root[data-theme="dark"] #timer-label,
+    :root[data-theme="dark"] #pomo-count {
+      color: #B9B0A5 !important;
+    }
+    :root[data-theme="dark"] .fr-lb-embed .lb-row,
+    :root[data-theme="dark"] .fr-rank-row {
+      background: #1D202A !important;
+      border-color: #34313A !important;
+      color: #F7F0E4 !important;
+    }
+    :root[data-theme="dark"] .fr-lb-embed .lb-row:hover,
+    :root[data-theme="dark"] .fr-rank-row:hover {
+      background: #252936 !important;
+    }
     /* Warm Claude theme cleanup for older inline student pages. Several
        legacy widgets carried navy cards into the new paper/orange product. */
     :root:not([data-theme="dark"]) .pl-wrap {
@@ -2292,6 +2388,10 @@ LAYOUT = """<!DOCTYPE html>
     window.applyMrTheme = function(name) {
       var legacyMode = localStorage.getItem('machreach-theme') || '';
       var t = window.MR_THEMES[name] || window.MR_THEMES['default'];
+      if (name && name !== 'default') {
+        legacyMode = '';
+        try { localStorage.removeItem('machreach-theme'); } catch(e) {}
+      }
       if (!name || name === 'default') {
         t = legacyMode === 'dark' ? window.MR_THEMES.dashboard_dark : window.MR_THEMES.default;
       }
@@ -2310,6 +2410,7 @@ LAYOUT = """<!DOCTYPE html>
       } else {
         r.setAttribute('data-theme', 'mr-' + name);
       }
+      r.style.colorScheme = legacyMode === 'dark' ? 'dark' : 'light';
       try { localStorage.setItem('mr_theme', name || 'default'); } catch(e) {}
       document.body && document.body.setAttribute('data-theme', name);
     };
@@ -2337,6 +2438,7 @@ LAYOUT = """<!DOCTYPE html>
       localStorage.setItem('machreach-theme', next);
       localStorage.setItem('mr_theme', 'default');
       window.applyMrTheme && window.applyMrTheme('default');
+      html.style.colorScheme = next === 'dark' ? 'dark' : 'light';
       const btn = document.getElementById('theme-toggle');
       if (btn) btn.innerHTML = next === 'dark' ? '&#9728;' : '&#127769;';
     }
