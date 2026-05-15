@@ -38,4 +38,40 @@ def render_landing_page(lang: str = "es") -> str:
             f'<script type="text/babel" src="{filename}"></script>',
             f'<script type="text/babel">\n{code}\n</script>',
         )
+    footer_fix = """
+<script>
+(function(){
+  var links = {
+    "Features":"#features",
+    "Cómo funciona":"#how",
+    "Precios":"#pricing",
+    "Roadmap":"/roadmap",
+    "Sobre":"/about",
+    "Blog":"/blog",
+    "Contacto":"mailto:support@machreach.com",
+    "Prensa":"/press",
+    "Términos":"/terms",
+    "Privacidad":"/privacy",
+    "Cookies":"/cookies",
+    "Status":"/status"
+  };
+  function patchFooterLinks(){
+    document.querySelectorAll("footer a").forEach(function(a){
+      var text = (a.textContent || "").trim();
+      if (links[text]) a.setAttribute("href", links[text]);
+    });
+  }
+  document.addEventListener("DOMContentLoaded", function(){
+    patchFooterLinks();
+    var tries = 0;
+    var timer = setInterval(function(){
+      patchFooterLinks();
+      tries += 1;
+      if (tries > 20) clearInterval(timer);
+    }, 150);
+  });
+})();
+</script>
+"""
+    html = html.replace("</body>", footer_fix + "\n</body>")
     return html

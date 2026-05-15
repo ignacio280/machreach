@@ -1953,6 +1953,17 @@ def register_student_routes(app, csrf, limiter):
             return
         if not tok:
             return
+        try:
+            gate = _semester_outcome_gate(client_id)
+            if gate.get("blocked"):
+                _sync_status[client_id] = {
+                    "status": "blocked",
+                    "progress": "Final grades required before syncing the next semester.",
+                    "pending_courses": len(gate.get("pending_courses") or []),
+                }
+                return
+        except Exception:
+            return
         if _sync_status.get(client_id, {}).get("status") == "running":
             return
 
@@ -5702,7 +5713,8 @@ def register_student_routes(app, csrf, limiter):
         # No more "Sync Canvas" button — kick a silent background refresh on
         # every visit so the list stays current. Idempotent + non-blocking.
         try:
-            _kick_silent_canvas_resync(_cid())
+            if not _semester_outcome_gate(_cid()).get("blocked"):
+                _kick_silent_canvas_resync(_cid())
         except Exception as _e:
             log.debug("silent resync kick failed: %s", _e)
 

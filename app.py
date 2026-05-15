@@ -6965,6 +6965,68 @@ def terms_page():
     """), active_page="terms")
 
 
+@app.route("/cookies")
+def cookies_page():
+    return _render("Cookies", Markup("""
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
+      <h1 style="font-size:32px;margin-bottom:8px;">Cookies</h1>
+      <p style="color:var(--text-muted);margin-bottom:24px;">MachReach uses only essential cookies for login sessions, CSRF protection, language preference, and basic UI preferences. We do not use advertising cookies.</p>
+      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">If you block essential cookies, login and protected student features may stop working. Questions: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+    </div>
+    """), active_page="cookies")
+
+
+@app.route("/status")
+def public_status_page():
+    return _render("Status", Markup("""
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
+      <h1 style="font-size:32px;margin-bottom:8px;">Status</h1>
+      <p style="color:var(--text-muted);margin-bottom:24px;">Current public status: operational.</p>
+      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">For incidents or support, contact <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+    </div>
+    """), active_page="status")
+
+
+@app.route("/about")
+def about_page():
+    return _render("About MachReach", Markup("""
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
+      <h1 style="font-size:32px;margin-bottom:8px;">About MachReach</h1>
+      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">MachReach is a student study platform built in Santiago, Chile. It turns focus sessions, courses, streaks, rankings, quizzes, and flashcards into one study system.</p>
+    </div>
+    """), active_page="about")
+
+
+@app.route("/blog")
+def blog_page():
+    return _render("Blog", Markup("""
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
+      <h1 style="font-size:32px;margin-bottom:8px;">Blog</h1>
+      <p style="color:var(--text-muted);">Coming soon. Product updates are currently shared inside MachReach.</p>
+    </div>
+    """), active_page="blog")
+
+
+@app.route("/press")
+def press_page():
+    return _render("Press", Markup("""
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
+      <h1 style="font-size:32px;margin-bottom:8px;">Press</h1>
+      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">Press and partnerships: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+    </div>
+    """), active_page="press")
+
+
+@app.route("/roadmap")
+def roadmap_page():
+    return _render("Roadmap", Markup("""
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
+      <h1 style="font-size:32px;margin-bottom:8px;">Roadmap</h1>
+      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">Next priorities: stronger Focus mode, course benchmarks, richer study groups, and smarter Plus analytics.</p>
+    </div>
+    """), active_page="roadmap")
+
+
 # ---------------------------------------------------------------------------
 # API — Usage check
 # ---------------------------------------------------------------------------
