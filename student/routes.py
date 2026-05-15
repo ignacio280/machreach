@@ -4737,7 +4737,7 @@ def register_student_routes(app, csrf, limiter):
 
         if not exams_html:
 
-            exams_html = """<div class="empty-state compact reveal"><div class="empty-icon">&#128221;</div><h3>Sin pruebas próximas</h3><p>Agrega una evaluación desde cualquier curso y aparecerá aquí, ordenada por urgencia.</p><div class="empty-actions"><a href="/student/exams" class="primary">&#128221; Administrar pruebas</a></div></div>"""
+            exams_html = """<div class="empty-state compact reveal"><div class="empty-icon">&#128221;</div><h3>Sin pruebas próximas</h3><p>Agrega una evaluación desde cualquier curso y aparecerá aquí, ordenada por urgencia.</p></div>"""
 
 
 
@@ -5424,7 +5424,7 @@ def register_student_routes(app, csrf, limiter):
             else:
                 _cd_sub = "faltan" if (_days is not None and _days >= 0) else "atrasada"
             _exam_rows_html += (
-                f'<a class="mr-exam" href="/student/exams">'
+                f'<div class="mr-exam">'
                 f'  <div class="mr-exam-day{_badge_cls}">'
                 f'    <div class="d-num">{_day_num}</div>'
                 f'    <div class="d-mon">{_mon}</div>'
@@ -5434,14 +5434,13 @@ def register_student_routes(app, csrf, limiter):
                 f'    <div class="mr-exam-meta">{_meta_str}</div>'
                 f'  </div>'
                 f'  <div class="mr-exam-cd{_cd_cls}">{_cd_text}<small>{_cd_sub}</small></div>'
-                f'</a>'
+                f'</div>'
             )
         if not _exam_rows_html:
             _exam_rows_html = (
                 '<div class="mr-empty">'
                 '  <span class="icon">📝</span>'
                 '  Sin pruebas próximas.'
-                '  <br/><a class="cta" href="/student/exams">📝 Administrar pruebas</a>'
                 '</div>'
             )
 
@@ -5449,7 +5448,6 @@ def register_student_routes(app, csrf, limiter):
             '<section class="mr-card mr-pop-4">'
             '  <div class="mr-card-h">'
             '    <div class="mr-card-title">📝 Próximas evaluaciones</div>'
-            '    <a class="mr-card-link" href="/student/exams">Calendario completo →</a>'
             '  </div>'
             f' <div class="mr-exams">{_exam_rows_html}</div>'
             '</section>'
@@ -5564,7 +5562,6 @@ def register_student_routes(app, csrf, limiter):
                 f'    <div class="mr-friend-name">{_esc(_fname)}</div>'
                 f'    <div class="mr-friend-status{_status_cls}">{_status}</div>'
                 f'  </div>'
-                f'  <a class="mr-friend-act" href="/student/friends">Ver →</a>'
                 f'</div>'
             )
         if not _friend_rows_html:
@@ -6211,176 +6208,13 @@ def register_student_routes(app, csrf, limiter):
 
 
     @app.route("/student/exams")
-
     def student_exams_page():
-
-        # Claude-style exams hub built from the user's saved course evaluations.
-
         if not _logged_in():
             return redirect(url_for("login"))
+        # Standalone exams hub removed: course evaluations now live in Mis cursos.
+        return redirect(url_for("student_courses_page"))
 
-        cid = _cid()
-        courses = sdb.get_courses(cid) or []
-        today = datetime.now().date()
-        exams = []
-        for course in courses:
-            for exam in (sdb.get_course_exams(int(course["id"])) or []):
-                exam = dict(exam)
-                raw_topics = exam.get("topics_json") or []
-                if isinstance(raw_topics, str):
-                    try:
-                        raw_topics = json.loads(raw_topics)
-                    except Exception:
-                        raw_topics = []
-                raw_date = exam.get("exam_date") or ""
-                date_obj = None
-                if raw_date:
-                    try:
-                        date_obj = datetime.strptime(str(raw_date)[:10], "%Y-%m-%d").date()
-                    except Exception:
-                        date_obj = None
-                days_left = (date_obj - today).days if date_obj else None
-                exams.append({
-                    "id": int(exam.get("id") or 0),
-                    "name": exam.get("name") or "Evaluación",
-                    "date_obj": date_obj,
-                    "days_left": days_left,
-                    "weight": int(exam.get("weight_pct") or 0),
-                    "topics": raw_topics[:5] if isinstance(raw_topics, list) else [],
-                    "course_id": int(course["id"]),
-                    "course_name": course.get("name") or "Curso",
-                    "course_code": course.get("code") or "",
-                })
 
-        exams.sort(key=lambda e: (e["date_obj"] is None, e["date_obj"] or today + timedelta(days=9999), e["course_name"]))
-        this_week = [e for e in exams if e["days_left"] is not None and 0 <= e["days_left"] <= 7]
-        next_two = [e for e in exams if e["days_left"] is not None and 8 <= e["days_left"] <= 14]
-        later = [e for e in exams if e["days_left"] is not None and e["days_left"] > 14]
-        no_date = [e for e in exams if e["days_left"] is None]
-
-        def month_name(d):
-            months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"]
-            return months[d.month - 1] if d else "sin fecha"
-
-        def date_label(e):
-            if e["days_left"] is None:
-                return "Sin fecha"
-            if e["days_left"] == 0:
-                return "Hoy"
-            if e["days_left"] == 1:
-                return "Mañana"
-            if e["days_left"] > 0:
-                return f"en {e['days_left']} días"
-            return "vencida"
-
-        def exam_card(e):
-            d = e["date_obj"]
-            topics = "".join(f'<span class="topic">{_esc(str(t))}</span>' for t in (e["topics"] or []))
-            if not topics:
-                topics = '<span class="topic muted">Sin temas guardados</span>'
-            urgency = "urgent" if e["days_left"] is not None and e["days_left"] <= 7 else ("soon" if e["days_left"] is not None and e["days_left"] <= 14 else "")
-            prep_pct = 0
-            if e["days_left"] is not None:
-                prep_pct = max(12, min(100, 100 - (e["days_left"] * 4))) if e["days_left"] >= 0 else 100
-            return f"""
-            <article class="exam-big {urgency}">
-              <div class="eb-date"><div class="eb-day">{_esc(str(d.day if d else "—"))}</div><div class="eb-mon">{_esc(month_name(d))}</div></div>
-              <div class="eb-main">
-                <div class="eb-cd">{_esc(e["course_code"] or e["course_name"])} · {_esc(date_label(e))}</div>
-                <h3 class="eb-title">{_esc(e["name"])}</h3>
-                <div class="eb-meta">{_esc(e["course_name"])} · {e["weight"]}% de la nota</div>
-                <div class="eb-topics">{topics}</div>
-                <div class="eb-progress"><div class="ebp-row"><span>Preparación estimada</span><strong>{prep_pct}%</strong></div><div class="ebp-bar"><div class="ebp-fill" style="width:{prep_pct}%"></div></div></div>
-              </div>
-              <div class="eb-actions">
-                <a href="/student/focus?course_id={e["course_id"]}&exam_id={e["id"]}">Estudiar</a>
-                <a href="/student/quizzes">Quiz</a>
-                <a href="/student/flashcards">Tarjetas</a>
-              </div>
-            </article>
-            """
-
-        def group(title, items):
-            cards = "".join(exam_card(e) for e in items) or '<div class="exam-empty">Nada pendiente aquí.</div>'
-            return f'<section class="tl-group"><h2>{_esc(title)}</h2>{cards}</section>'
-
-        empty_state = """
-          <div class="exam-empty big">
-            <strong>No tienes pruebas guardadas todavía.</strong>
-            <span>Agrega evaluaciones desde Mis cursos para que aparezcan acá con calendario y prioridad.</span>
-            <a href="/student/courses">Ir a Mis cursos</a>
-          </div>
-        """ if not exams else ""
-
-        content = f"""
-        <style>
-        .exams-cd {{ max-width:1180px;margin:0 auto 80px;font-family:'Nunito',sans-serif;color:#1A1A1F; }}
-        .ex-head {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:22px; }}
-        .ex-kicker {{ font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#009B72;margin-bottom:8px; }}
-        .ex-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(42px,6vw,72px);line-height:.92;margin:0;font-weight:600;letter-spacing:-.05em; }}
-        .ex-title em {{ color:#FF7A3D;font-style:italic; }}
-        .ex-sub {{ color:#6E6A60;font-size:15px;margin:12px 0 0;max-width:620px;line-height:1.6; }}
-        .ex-head a {{ background:#1A1A1F;color:#FFF8E1;text-decoration:none;border-radius:999px;padding:12px 18px;font-weight:800;box-shadow:0 4px 0 rgba(0,0,0,.16);white-space:nowrap; }}
-        .urg-strip {{ display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0 26px; }}
-        .urg-card {{ background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:18px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 8px rgba(20,18,30,.04); }}
-        .urg-card .lab {{ font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#77756F;margin-bottom:10px; }}
-        .urg-card .num {{ font-family:'Bricolage Grotesque',sans-serif;font-size:42px;line-height:1;font-weight:600; }}
-        .urg-card.hot {{ background:#2C211E;color:#FFF8E1;border-color:#2C211E; }}
-        .urg-card.hot .lab {{ color:#FFB199; }}
-        .exam-timeline {{ display:grid;gap:18px; }}
-        .tl-group {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:22px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04); }}
-        .tl-group h2 {{ font-family:'Nunito',sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#77756F;margin:0 0 16px;font-weight:800; }}
-        .exam-big {{ display:grid;grid-template-columns:78px 1fr auto;gap:18px;align-items:center;border:1px solid #E2DCCC;background:#FBF8F0;border-radius:18px;padding:16px;margin-top:12px; }}
-        .exam-big:first-of-type {{ margin-top:0; }}
-        .exam-big.urgent {{ border-color:#FF7A3D;box-shadow:inset 5px 0 0 #FF7A3D; }}
-        .exam-big.soon {{ border-color:#F4B73A;box-shadow:inset 5px 0 0 #F4B73A; }}
-        .eb-date {{ background:#1A1A1F;color:#FFF8E1;border-radius:16px;min-height:76px;display:grid;place-items:center;text-align:center;padding:10px; }}
-        .eb-day {{ font-family:'Bricolage Grotesque',sans-serif;font-size:30px;line-height:1;font-weight:600; }}
-        .eb-mon {{ text-transform:uppercase;font-size:11px;letter-spacing:.14em;font-weight:800;color:#F4B73A;margin-top:4px; }}
-        .eb-cd {{ font-size:11px;color:#009B72;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px; }}
-        .eb-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:28px;margin:0 0 4px;font-weight:600;letter-spacing:-.03em; }}
-        .eb-meta {{ color:#6E6A60;font-size:13px;font-weight:700;margin-bottom:12px; }}
-        .eb-topics {{ display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px; }}
-        .topic {{ border:1px solid #D8D0BE;background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700;color:#3D3932; }}
-        .topic.muted {{ color:#94939C; }}
-        .ebp-row {{ display:flex;justify-content:space-between;font-size:12px;color:#6E6A60;margin-bottom:6px;font-weight:800; }}
-        .ebp-bar {{ height:8px;background:#EDE7DA;border-radius:999px;overflow:hidden; }}
-        .ebp-fill {{ height:100%;background:linear-gradient(90deg,#FF7A3D,#F4B73A);border-radius:999px; }}
-        .eb-actions {{ display:flex;flex-direction:column;gap:8px; }}
-        .eb-actions a {{ color:#1A1A1F;background:#fff;border:1px solid #D8D0BE;border-radius:999px;padding:9px 12px;text-decoration:none;font-size:12px;font-weight:800;text-align:center;white-space:nowrap; }}
-        .eb-actions a:first-child {{ background:#1A1A1F;color:#FFF8E1;border-color:#1A1A1F; }}
-        .exam-empty {{ border:1px dashed #D8D0BE;border-radius:16px;padding:18px;color:#77756F;background:#FBF8F0; }}
-        .exam-empty.big {{ display:grid;gap:10px;text-align:center;padding:46px 22px; }}
-        .exam-empty.big strong {{ font-family:'Bricolage Grotesque',sans-serif;font-size:28px;color:#1A1A1F; }}
-        .exam-empty.big a {{ justify-self:center;background:#1A1A1F;color:#FFF8E1;text-decoration:none;border-radius:999px;padding:11px 16px;font-weight:800; }}
-        @media (max-width:800px) {{ .urg-strip {{ grid-template-columns:repeat(2,1fr); }} .ex-head {{ align-items:flex-start;flex-direction:column; }} .exam-big {{ grid-template-columns:1fr; }} .eb-actions {{ flex-direction:row;flex-wrap:wrap; }} }}
-        </style>
-        <div class="exams-cd">
-          <div class="ex-head">
-            <div>
-              <div class="ex-kicker">Calendario académico</div>
-              <h1 class="ex-title">Pruebas <em>y entregas.</em></h1>
-              <p class="ex-sub">Una vista clara de lo que viene, cuánto pesa y qué deberías atacar primero.</p>
-            </div>
-            <a href="/student/courses">+ Agregar en Mis cursos</a>
-          </div>
-          <div class="urg-strip">
-            <div class="urg-card hot"><div class="lab">Esta semana</div><div class="num">{len(this_week)}</div></div>
-            <div class="urg-card"><div class="lab">Próximas 2 semanas</div><div class="num">{len(next_two)}</div></div>
-            <div class="urg-card"><div class="lab">Más adelante</div><div class="num">{len(later)}</div></div>
-            <div class="urg-card"><div class="lab">Sin fecha</div><div class="num">{len(no_date)}</div></div>
-          </div>
-          {empty_state}
-          <div class="exam-timeline">
-            {group("Esta semana", this_week) if exams else ""}
-            {group("Próximas 2 semanas", next_two) if exams else ""}
-            {group("Más adelante", later) if exams else ""}
-            {group("Sin fecha", no_date) if exams else ""}
-          </div>
-        </div>
-        """
-
-        return _s_render("Exámenes", content, active_page="student_exams")
 
 
 
@@ -7100,7 +6934,7 @@ def register_student_routes(app, csrf, limiter):
 
               <div id="focus-exam-empty" style="display:none;font-size:12px;color:var(--text-muted);margin-top:6px;">
 
-                A&uacute;n no hay pruebas para este curso. Agr&eacute;galas en <a href="/student/exams" style="color:var(--primary);">la pesta&ntilde;a de cursos</a>.
+                A&uacute;n no hay pruebas para este curso. Agr&eacute;galas en <a href="/student/courses" style="color:var(--primary);">Mis cursos</a>.
 
               </div>
 

@@ -2524,6 +2524,7 @@ LAYOUT = """<!DOCTYPE html>
           :root[data-theme="dark"] .content .mr-home .mr-card-title,
           :root[data-theme="dark"] .content .mr-home .mr-stat-value,
           :root[data-theme="dark"] .content .mr-home .mr-course-name,
+          :root[data-theme="dark"] .content .mr-home .mr-friend-name,
           :root[data-theme="dark"] .content .mr-home .mr-sess-topic,
           :root[data-theme="dark"] .content .mr-home .mr-exam-title,
           :root[data-theme="dark"] .content .mr-home .mr-exam-cd {
@@ -2535,11 +2536,28 @@ LAYOUT = """<!DOCTYPE html>
           :root[data-theme="dark"] .content .mr-home .mr-course-code,
           :root[data-theme="dark"] .content .mr-home .mr-course-pct,
           :root[data-theme="dark"] .content .mr-home .mr-course-next,
+          :root[data-theme="dark"] .content .mr-home .mr-friend-status,
           :root[data-theme="dark"] .content .mr-home .mr-sess-time,
           :root[data-theme="dark"] .content .mr-home .mr-sess-meta,
           :root[data-theme="dark"] .content .mr-home .mr-exam-meta,
           :root[data-theme="dark"] .content .mr-home .mr-exam-cd small {
             color:#B9B0A5 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-friend-row:hover {
+            background:#252936 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-friend-av .pres {
+            border-color:#1D202A !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-friend-act {
+            background:#141720 !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-friend-act:hover {
+            background:#FF7A3D !important;
+            border-color:#FF7A3D !important;
+            color:#11131A !important;
           }
           :root[data-theme="dark"] .content .mr-home .mr-sess-check {
             background:#141720 !important;
