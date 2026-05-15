@@ -6804,10 +6804,7 @@ def register_student_routes(app, csrf, limiter):
             "libraryRitualThree": "You are here to finish one clean block." if _focus_is_en else "Viniste a terminar un bloque limpio.",
             "libraryRitualSkip": "Start now" if _focus_is_en else "Empezar ahora",
             "libraryLeaveConfirm": "Library Mode is active. Leave this focus session?" if _focus_is_en else "Modo Biblioteca esta activo. ¿Salir de esta sesion de enfoque?",
-            "libraryPresetExam": "Exam block" if _focus_is_en else "Bloque prueba",
-            "libraryPresetDeep": "Deep reading" if _focus_is_en else "Lectura profunda",
-            "libraryPresetSprint": "Clean sprint" if _focus_is_en else "Sprint limpio",
-            "libraryPresetApplied": "Library preset applied" if _focus_is_en else "Preset de Biblioteca aplicado",
+            "libraryTheme": "Library theme" if _focus_is_en else "Tema biblioteca",
             "examNudgeTitle": "Next exam" if _focus_is_en else "Proxima prueba",
             "examNudgeToday": "today" if _focus_is_en else "hoy",
             "examNudgeTomorrow": "tomorrow" if _focus_is_en else "manana",
@@ -6888,7 +6885,7 @@ def register_student_routes(app, csrf, limiter):
         .focus-exam-title {{ font-size:16px;font-weight:900;color:#1A1A1F;line-height:1.2; }}
         .focus-exam-topics {{ margin-top:6px;font-size:13px;color:#5C5C66;font-weight:700;line-height:1.35; }}
         .focus-exam-days {{ white-space:nowrap;font-family:'Bricolage Grotesque',sans-serif;font-size:28px;font-weight:700;color:#FF7A3D;text-align:right; }}
-        .library-preset {{ border-color:#FFD2BA;background:#FFF7ED;color:#B45309; }}
+        .library-theme-select {{ height:36px;border:1px solid #E2DCCC;background:#FBF8F0;color:#1A1A1F;border-radius:999px;padding:0 34px 0 12px;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 2px 0 rgba(20,18,30,.04); }}
         #library-exit-btn {{ display:none;position:fixed;top:18px;right:18px;z-index:8990;border:1px solid #D8D0C0;background:#FFFDF8;color:#1A1A1F;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:900;box-shadow:0 12px 36px rgba(20,18,30,.10);cursor:pointer; }}
         #library-ritual {{ position:fixed;inset:0;z-index:99980;display:none;align-items:center;justify-content:center;background:rgba(251,248,240,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px); }}
         #library-ritual.show {{ display:flex; }}
@@ -6912,6 +6909,9 @@ def register_student_routes(app, csrf, limiter):
         body.focus-library-mode .student-sidebar,
         body.focus-library-mode .side-nav,
         body.focus-library-mode .app-sidebar,
+        body.focus-library-mode .side,
+        body.focus-library-mode .mr-side-nav,
+        body.focus-library-mode .side-foot,
         body.focus-library-mode .topbar,
         body.focus-library-mode .navbar,
         body.focus-library-mode .app-header,
@@ -6919,12 +6919,49 @@ def register_student_routes(app, csrf, limiter):
         body.focus-library-mode #focus-float {{ display:none !important; }}
         body.focus-library-mode #library-exit-btn {{ display:block; }}
         body.focus-library-mode .main-content,
+        body.focus-library-mode .main,
         body.focus-library-mode main {{ background:#FBF8F0 !important; }}
+        body.focus-library-mode .mr-app-shell {{ grid-template-columns:1fr !important; }}
+        body.focus-library-mode .main {{ margin-left:0 !important;width:100% !important; }}
         body.focus-library-mode .focus-layout {{ grid-template-columns:minmax(320px,620px) minmax(280px,420px) !important;justify-content:center;align-items:start;min-height:calc(100vh - 110px);padding-top:5vh; }}
         body.focus-library-mode .focus-timer-shell,
         body.focus-library-mode #focus-ambience-card {{ box-shadow:0 24px 80px rgba(20,18,30,.08) !important; }}
         body.focus-library-mode .focus-timer-shell {{ border-color:#D8D0C0 !important;background:#FFFDF8 !important; }}
         body.focus-library-mode #focus-ambience-card .card-header {{ display:none; }}
+        body.focus-library-mode.library-theme-dark,
+        body.focus-library-mode.library-theme-dark .main,
+        body.focus-library-mode.library-theme-dark main {{ background:#0D1118 !important;color:#F7F1E8 !important; }}
+        body.focus-library-mode.library-theme-dark .focus-timer-shell,
+        body.focus-library-mode.library-theme-dark #focus-ambience-card {{ background:#141A24 !important;border-color:#2A3445 !important;color:#F7F1E8 !important; }}
+        body.focus-library-mode.library-theme-dark #timer-display,
+        body.focus-library-mode.library-theme-dark .card-header,
+        body.focus-library-mode.library-theme-dark .amb-n {{ color:#F7F1E8 !important; }}
+        body.focus-library-mode.library-theme-dark #timer-label,
+        body.focus-library-mode.library-theme-dark #pomo-count,
+        body.focus-library-mode.library-theme-dark .muted {{ color:#A9B1C0 !important; }}
+        body.focus-library-mode.library-theme-dark .ft-select,
+        body.focus-library-mode.library-theme-dark .ft-input,
+        body.focus-library-mode.library-theme-dark .amb {{ background:#0F1622 !important;border-color:#2A3445 !important;color:#F7F1E8 !important; }}
+        body.focus-library-mode.library-theme-lavender,
+        body.focus-library-mode.library-theme-lavender .main,
+        body.focus-library-mode.library-theme-lavender main {{ background:linear-gradient(135deg,#FBF8F0 0%,#F0EAFF 100%) !important; }}
+        body.focus-library-mode.library-theme-lavender .focus-timer-shell,
+        body.focus-library-mode.library-theme-lavender #focus-ambience-card {{ background:#FFFDFF !important;border-color:#D9CCFF !important;box-shadow:0 24px 80px rgba(91,70,148,.12) !important; }}
+        body.focus-library-mode.library-theme-lavender .ft-ring circle:last-child {{ stroke:#8B5CF6 !important; }}
+        body.focus-library-mode.library-theme-dark-library,
+        body.focus-library-mode.library-theme-dark-library .main,
+        body.focus-library-mode.library-theme-dark-library main {{ background:radial-gradient(circle at 22% 18%,rgba(46,146,102,.22),transparent 34%),radial-gradient(circle at 82% 10%,rgba(255,122,61,.12),transparent 30%),#080A0F !important;color:#F7F1E8 !important; }}
+        body.focus-library-mode.library-theme-dark-library .focus-timer-shell,
+        body.focus-library-mode.library-theme-dark-library #focus-ambience-card {{ background:rgba(14,18,26,.94) !important;border-color:#314034 !important;color:#F7F1E8 !important;box-shadow:0 28px 100px rgba(0,0,0,.35) !important; }}
+        body.focus-library-mode.library-theme-dark-library #timer-display,
+        body.focus-library-mode.library-theme-dark-library .card-header,
+        body.focus-library-mode.library-theme-dark-library .amb-n {{ color:#F7F1E8 !important; }}
+        body.focus-library-mode.library-theme-dark-library #timer-label,
+        body.focus-library-mode.library-theme-dark-library #pomo-count,
+        body.focus-library-mode.library-theme-dark-library .muted {{ color:#AEB8AE !important; }}
+        body.focus-library-mode.library-theme-dark-library .ft-select,
+        body.focus-library-mode.library-theme-dark-library .ft-input,
+        body.focus-library-mode.library-theme-dark-library .amb {{ background:rgba(10,13,19,.92) !important;border-color:#314034 !important;color:#F7F1E8 !important; }}
         @media (max-width:900px) {{ body.focus-library-mode .focus-layout {{ grid-template-columns:1fr !important;padding-top:0; }} }}
         </style>
 
@@ -6971,7 +7008,7 @@ def register_student_routes(app, csrf, limiter):
           <button id="library-mode-btn" class="focus-mode-chip {'locked' if not _focus_is_plus else ''}" type="button" onclick="toggleLibraryMode()">
             &#128218; {('Library Mode' if _focus_is_en else 'Modo Biblioteca')} {'PLUS' if not _focus_is_plus else ''}
           </button>
-          {'<button class="focus-mode-chip library-preset" type="button" onclick="applyLibraryPreset(50,10,25)">&#127891; ' + ('Exam block' if _focus_is_en else 'Bloque prueba') + '</button><button class="focus-mode-chip library-preset" type="button" onclick="applyLibraryPreset(40,8,20)">&#128214; ' + ('Deep reading' if _focus_is_en else 'Lectura profunda') + '</button><button class="focus-mode-chip library-preset" type="button" onclick="applyLibraryPreset(25,5,15)">&#9889; ' + ('Clean sprint' if _focus_is_en else 'Sprint limpio') + '</button>' if _focus_is_plus else ''}
+          {'<select id="library-theme-select" class="library-theme-select" title="' + ('Library theme' if _focus_is_en else 'Tema biblioteca') + '" onchange="setLibraryTheme(this.value)"><option value="warm">' + ('Warm' if _focus_is_en else 'Claro calido') + '</option><option value="dark">Dark</option><option value="lavender">Lavender</option><option value="dark-library">' + ('Dark Library' if _focus_is_en else 'Biblioteca dark') + '</option></select>' if _focus_is_plus else ''}
         </div>
 
         <button id="library-exit-btn" type="button" onclick="toggleLibraryMode()">&#128218; {('Exit Library' if _focus_is_en else 'Salir de Biblioteca')}</button>
@@ -7862,6 +7899,8 @@ def register_student_routes(app, csrf, limiter):
         var __libraryRitualTimer = null;
         var __libraryRitualPendingStart = false;
         var __libraryRitualBypassOnce = false;
+        var LIBRARY_THEME_KEY = 'machreach_focus_library_theme';
+        var LIBRARY_THEME_CLASSES = ['library-theme-warm','library-theme-dark','library-theme-lavender','library-theme-dark-library'];
 
         function requestLibraryFullscreen() {{
           try {{
@@ -7886,9 +7925,29 @@ def register_student_routes(app, csrf, limiter):
           }} catch(e) {{}}
         }}
 
+        function applyLibraryTheme(theme) {{
+          try {{
+            theme = ['warm','dark','lavender','dark-library'].indexOf(theme) >= 0 ? theme : 'warm';
+            LIBRARY_THEME_CLASSES.forEach(function(c) {{ document.body.classList.remove(c); }});
+            document.body.classList.add('library-theme-' + theme);
+            localStorage.setItem(LIBRARY_THEME_KEY, theme);
+            var sel = document.getElementById('library-theme-select');
+            if (sel) sel.value = theme;
+          }} catch(e) {{}}
+        }}
+
+        function setLibraryTheme(theme) {{
+          applyLibraryTheme(theme);
+          if (FOCUS_IS_PLUS && !document.body.classList.contains('focus-library-mode')) {{
+            applyLibraryMode(true);
+            requestLibraryFullscreen();
+          }}
+        }}
+
         function applyLibraryMode(on) {{
           try {{
             document.body.classList.toggle('focus-library-mode', !!on);
+            if (on) applyLibraryTheme(localStorage.getItem(LIBRARY_THEME_KEY) || 'warm');
             var btn = document.getElementById('library-mode-btn');
             if (btn) {{
               btn.classList.toggle('active', !!on);
@@ -7898,6 +7957,7 @@ def register_student_routes(app, csrf, limiter):
             if (!on) {{
               hideLibraryRitual();
               exitLibraryFullscreen();
+              LIBRARY_THEME_CLASSES.forEach(function(c) {{ document.body.classList.remove(c); }});
             }}
           }} catch(e) {{}}
         }}
@@ -7913,28 +7973,9 @@ def register_student_routes(app, csrf, limiter):
           if (next) requestLibraryFullscreen();
         }}
 
-        function applyLibraryPreset(work, shortBreak, longBreak) {{
-          if (!FOCUS_IS_PLUS) {{
-            if (window.showToast) window.showToast(focusText.libraryLocked, 'info');
-            return;
-          }}
-          try {{
-            var w = document.getElementById('pomo-work');
-            var b = document.getElementById('pomo-break');
-            var l = document.getElementById('pomo-long');
-            if (w) w.value = work;
-            if (b) b.value = shortBreak;
-            if (l) l.value = longBreak;
-            currentMode = 'pomodoro';
-            if (!document.body.classList.contains('focus-library-mode')) applyLibraryMode(true);
-            resetTimer();
-            requestLibraryFullscreen();
-            if (window.showToast) window.showToast(focusText.libraryPresetApplied + ': ' + work + '/' + shortBreak, 'success');
-          }} catch(e) {{}}
-        }}
-
         (function restoreLibraryMode() {{
           try {{
+            if (FOCUS_IS_PLUS) applyLibraryTheme(localStorage.getItem(LIBRARY_THEME_KEY) || 'warm');
             if (FOCUS_IS_PLUS && localStorage.getItem('machreach_focus_library_mode') === '1') {{
               applyLibraryMode(true);
             }}
@@ -17934,7 +17975,6 @@ No markdown, no code fences. ONLY JSON.
             "no_group_friends": "Add friends first to create a study group." if _lang == "en" else "Agrega amigos primero para crear un grupo.",
             "no_groups": "No study groups yet." if _lang == "en" else "Aún no hay grupos de estudio.",
             "members": "members" if _lang == "en" else "miembros",
-            "open_group": "Open board" if _lang == "en" else "Abrir ranking",
             "friends_empty_rank": "Add friends to unlock your private friends ranking." if _lang == "en" else "Agrega amigos para desbloquear tu ranking privado.",
             "xp": "XP" if _lang == "en" else "XP",
             "group_created": "Study group created." if _lang == "en" else "Grupo de estudio creado.",
@@ -17944,6 +17984,10 @@ No markdown, no code fences. ONLY JSON.
             "owner": "Owner" if _lang == "en" else "Dueño",
             "delete_group": "Delete" if _lang == "en" else "Borrar",
             "delete_group_confirm": "Delete this study group? This removes the board for everyone." if _lang == "en" else "¿Borrar este grupo de estudio? Esto elimina el ranking para todos.",
+            "add_member": "Invite member" if _lang == "en" else "Invitar miembro",
+            "add_member_ph": "Choose a friend" if _lang == "en" else "Elige un amigo",
+            "member_invited": "Invite sent." if _lang == "en" else "Invitación enviada.",
+            "no_more_friends": "All your friends are already in or invited." if _lang == "en" else "Todos tus amigos ya están dentro o invitados.",
             "remove_member": "Remove" if _lang == "en" else "Quitar",
             "remove_member_confirm": "Remove this member from the study group?" if _lang == "en" else "¿Quitar a este miembro del grupo de estudio?",
             "group_deleted": "Study group deleted." if _lang == "en" else "Grupo de estudio borrado.",
@@ -18016,6 +18060,8 @@ No markdown, no code fences. ONLY JSON.
           .fr-check {{ display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:14px;background:#FFFDF8;padding:10px;font-weight:850;font-size:13px; }}
           .fr-check input {{ accent-color:var(--orange); }}
           .fr-group-card {{ display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:18px;background:#FFFDF8;padding:14px; }}
+          .fr-group-add {{ display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px; }}
+          .fr-group-add select {{ flex:1;min-width:190px;height:36px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);padding:0 12px;font-weight:850;outline:none; }}
           .fr-lb-embed {{ --text:#1A1A1F;--text-muted:#77756F;--card:#FFFFFF;--border:#E2DCCC;--ease:cubic-bezier(.2,.8,.2,1); }}
           .fr-lb-embed .lb-tabs {{ display:flex;gap:6px;background:#FFFFFF;border:1px solid var(--border);border-radius:14px;padding:6px;margin-bottom:16px;overflow:auto; }}
           .fr-lb-embed .lb-tab {{ flex:1;min-width:max-content;padding:10px 14px;border-radius:999px;text-align:center;cursor:pointer;color:#5C5C66;font-weight:900;transition:all .18s;user-select:none;background:#FBF8F0;border:1px solid #E2DCCC; }}
@@ -18158,6 +18204,7 @@ No markdown, no code fences. ONLY JSON.
 
         const ME_CID = {cid};
         const FR = {json.dumps(_fr, ensure_ascii=False)};
+        let __frFriends = [];
 
         function esc(s) {{ return (s||'').replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]); }}
         function initials(name) {{
@@ -18228,6 +18275,24 @@ No markdown, no code fences. ONLY JSON.
           `).join('');
         }}
 
+        function renderGroupAddControl(g) {{
+          if (!g || !g.is_owner) return '';
+          const memberIds = new Set((g.members || []).map(m => Number(m.client_id)));
+          const pendingIds = new Set((g.pending_invitee_ids || []).map(Number));
+          const candidates = (__frFriends || []).filter(u => !memberIds.has(Number(u.id)) && !pendingIds.has(Number(u.id)));
+          if (!candidates.length) {{
+            return `<div class="fr-note" style="margin-top:10px">${{FR.no_more_friends}}</div>`;
+          }}
+          return `
+            <form class="fr-group-add" onsubmit="inviteGroupMember(event, ${{g.id}})">
+              <select name="member_id" aria-label="${{FR.add_member}}">
+                <option value="">${{FR.add_member_ph}}</option>
+                ${{candidates.map(u => `<option value="${{u.id}}">${{esc(u.name || (FR.user + ' #' + u.id))}}</option>`).join('')}}
+              </select>
+              <button class="fr-btn small orange" type="submit">${{FR.add_member}}</button>
+            </form>`;
+        }}
+
         function renderFriendRanking(rows) {{
           const podium = document.getElementById('fr-rank-podium');
           const list = document.getElementById('fr-rank-list');
@@ -18291,9 +18356,9 @@ No markdown, no code fences. ONLY JSON.
                     ${{!m.is_owner ? `<button class="fr-btn small ghost" type="button" onclick="removeGroupMember(${{g.id}}, ${{m.client_id}})">${{FR.remove_member}}</button>` : ''}}
                   </div>
                 `).join('')}}</div>` : ''}}
+                ${{renderGroupAddControl(g)}}
               </div>
               <div class="fr-actions">
-                <button class="fr-btn small ghost" type="button" onclick="switchFriendBoard('group:${{g.id}}')">${{FR.open_group}}</button>
                 ${{g.is_owner ? `<button class="fr-btn small ghost" type="button" style="color:#ef4444;border-color:rgba(239,68,68,.35)" onclick="deleteStudyGroup(${{g.id}})">${{FR.delete_group}}</button>` : ''}}
               </div>
             </div>
@@ -18462,6 +18527,30 @@ No markdown, no code fences. ONLY JSON.
           alert(FR.member_removed);
         }}
 
+        async function inviteGroupMember(ev, groupId) {{
+          ev.preventDefault();
+          const form = ev.currentTarget;
+          const select = form.querySelector('select[name="member_id"]');
+          const memberId = parseInt((select && select.value) || '0', 10);
+          if (!memberId) return;
+          const btn = form.querySelector('button[type="submit"]');
+          if (btn) btn.disabled = true;
+          try {{
+            const r = await fetch('/api/student/friends/groups/' + groupId + '/members', {{
+              method:'POST',
+              headers:{{'Content-Type':'application/json'}},
+              body: JSON.stringify({{member_id: memberId}})
+            }}).then(r => r.json());
+            if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
+            await loadFriendCompetition(frBoardKey);
+            alert(FR.member_invited);
+          }} catch(e) {{
+            alert(FR.group_failed);
+          }} finally {{
+            if (btn) btn.disabled = false;
+          }}
+        }}
+
         async function frChallenge(uid, uname, isOnline) {{
 
           openChallengeModal(uid, uname || (FR.user + ' #' + uid), isOnline);
@@ -18596,6 +18685,7 @@ No markdown, no code fences. ONLY JSON.
             // Dedupe by id in case the API ever returns duplicates.
             const seen = new Set();
             const uniq = f.friends.filter(u => {{ if (seen.has(u.id)) return false; seen.add(u.id); return true; }});
+            __frFriends = uniq;
             renderGroupFriendPicker(uniq);
             const parts = await Promise.all(uniq.map(async u => {{
               const h2h = await fetch('/api/student/duels/h2h?friend_id=' + u.id).then(r=>r.json());
@@ -18629,6 +18719,7 @@ No markdown, no code fences. ONLY JSON.
 
           }} else {{
             fl.innerHTML = `<div class="fr-empty">${{FR.no_friends}}</div>`;
+            __frFriends = [];
             renderGroupFriendPicker([]);
           }}
 
@@ -18839,12 +18930,19 @@ No markdown, no code fences. ONLY JSON.
                     }
                     for m in (sdb.get_lb_group_members(int(g.get("id") or 0)) or [])
                 ]
+            pending_invitee_ids = []
+            if is_owner:
+                try:
+                    pending_invitee_ids = sdb.get_pending_lb_group_invitee_ids(int(g.get("id") or 0)) or []
+                except Exception:
+                    pending_invitee_ids = []
             groups.append({
                 "id": g.get("id"),
                 "name": g.get("name") or "Study group",
                 "member_count": int(g.get("member_count") or 1),
                 "is_owner": is_owner,
                 "members": members,
+                "pending_invitee_ids": pending_invitee_ids,
             })
         invites = [
             {
@@ -18976,6 +19074,27 @@ No markdown, no code fences. ONLY JSON.
         if not ok:
             return jsonify(ok=False, error="Could not remove member"), 403
         return jsonify(ok=True)
+
+
+    @app.route("/api/student/friends/groups/<int:group_id>/members", methods=["POST"])
+    @csrf.exempt
+    def student_friends_invite_group_member_api(group_id):
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        try:
+            member_id = int(data.get("member_id") or 0)
+        except Exception:
+            member_id = 0
+        if member_id <= 0:
+            return jsonify(ok=False, error="Member required"), 400
+        group = sdb.get_lb_group(group_id)
+        if not group or int(group.get("owner_id") or 0) != _cid():
+            return jsonify(ok=False, error="Group not found"), 404
+        invited = sdb.invite_friends_to_lb_group(_cid(), group_id, [member_id])
+        if not invited:
+            return jsonify(ok=False, error="Could not invite member"), 400
+        return jsonify(ok=True, invited=invited)
 
 
     @app.route("/api/student/presence/heartbeat", methods=["POST"])

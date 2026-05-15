@@ -3154,6 +3154,23 @@ def invite_friends_to_lb_group(owner_id: int, group_id: int, friend_ids: list[in
         for fid in clean_ids:
             if fid not in allowed:
                 continue
+            existing = _fetchone(
+                db,
+                "SELECT id, status FROM student_lb_group_invites WHERE group_id = %s AND invitee_id = %s",
+                (group_id, fid),
+            )
+            if existing:
+                if existing.get("status") == "pending":
+                    continue
+                _exec(
+                    db,
+                    "UPDATE student_lb_group_invites SET status = 'pending', inviter_id = %s, created_at = "
+                    + ("NOW()" if _USE_PG else "datetime('now','localtime')")
+                    + ", responded_at = NULL WHERE id = %s",
+                    (owner_id, existing["id"]),
+                )
+                invited += 1
+                continue
             try:
                 _exec(
                     db,
@@ -3165,6 +3182,17 @@ def invite_friends_to_lb_group(owner_id: int, group_id: int, friend_ids: list[in
             except Exception:
                 pass
         return invited
+
+
+def get_pending_lb_group_invitee_ids(group_id: int) -> list[int]:
+    """Return users with a pending invite for this leaderboard group."""
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT invitee_id FROM student_lb_group_invites WHERE group_id = %s AND status = 'pending'",
+            (group_id,),
+        )
+    return [int(r["invitee_id"]) for r in (rows or []) if r.get("invitee_id")]
 
 
 def list_lb_group_invites(client_id: int) -> list[dict]:
