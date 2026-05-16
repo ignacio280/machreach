@@ -70,7 +70,6 @@ PLANS = {
             "Mas preguntas/tarjetas por generacion",
             "Mas revisiones de ensayos",
             "Analitica avanzada por curso y semana",
-            "Modo Biblioteca en Focus: pantalla limpia sin ranking, tienda ni ruido",
             f"{PLUS_MONTHLY_BONUS_COINS} monedas extra al mes",
             "Streak Insurance+: 1 reparacion de racha al mes",
             "Mas capacidad de congeladores",

@@ -5116,14 +5116,6 @@ def register_student_routes(app, csrf, limiter):
   .mr-course-tile.c3::before { background: #FF7A3D; }
   .mr-course-code { font-size: 11px; font-weight: 800; color: #94939C; letter-spacing: 0.06em; }
   .mr-course-name { font-weight: 700; font-size: 14px; margin-top: 2px; line-height: 1.2; color: #1A1A1F; }
-  .mr-course-prog { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 11px; }
-  .mr-course-bar { flex: 1; height: 6px; background: rgba(0,0,0,0.06); border-radius: 999px; overflow: hidden; }
-  .mr-course-fill { height: 100%; border-radius: 999px; }
-  .mr-course-tile.c0 .mr-course-fill { background: #3B6FE6; }
-  .mr-course-tile.c1 .mr-course-fill { background: #E85B9C; }
-  .mr-course-tile.c2 .mr-course-fill { background: #2E9266; }
-  .mr-course-tile.c3 .mr-course-fill { background: #FF7A3D; }
-  .mr-course-pct { font-weight: 700; color: #5C5C66; }
   .mr-course-next { font-size: 11px; color: #94939C; margin-top: 6px; }
   .mr-course-next.urgent { color: #E04A4A; font-weight: 700; }
 
@@ -5423,10 +5415,6 @@ def register_student_routes(app, csrf, limiter):
                 f'<a class="mr-course-tile c{_i % 4}" href="/student/courses/{_ct["id"]}">'
                 f'  <div class="mr-course-code">{_esc(_ct["code"])}</div>'
                 f'  <div class="mr-course-name">{_esc(_ct["name"])}</div>'
-                f'  <div class="mr-course-prog">'
-                f'    <div class="mr-course-bar"><div class="mr-course-fill" style="width:{_ct["pct"]}%"></div></div>'
-                f'    <span class="mr-course-pct">{_ct["pct"]}%</span>'
-                f'  </div>'
                 f'  <div class="mr-course-next{_next_cls}">{_next}</div>'
                 f'</a>'
             )
@@ -6714,12 +6702,6 @@ def register_student_routes(app, csrf, limiter):
         _json_course_exams = json.dumps({str(k): v for k, v in course_exams_map.items()},
                                         ensure_ascii=False).replace("<", "\\u003c")
 
-        try:
-            from student import subscription as _sub
-            _focus_tier = _sub.get_tier(_cid())
-        except Exception:
-            _focus_tier = "free"
-        _focus_is_plus = _focus_tier in ("plus", "ultimate")
         _start_btn_label = "Start" if _focus_is_en else "Empezar"
         _pause_btn_label = "Pause" if _focus_is_en else "Pausar"
         _reset_btn_label = "Reset" if _focus_is_en else "Reiniciar"
@@ -6761,17 +6743,6 @@ def register_student_routes(app, csrf, limiter):
             "sessionInProgressSuffix": " in progress." if _focus_is_en else " en progreso.",
             "sessionsReadySuffix": " sessions ready to claim." if _focus_is_en else " sesiones listas para reclamar.",
             "startCycle": "Start a session to activate the cycle." if _focus_is_en else "Empieza una sesion para activar el ciclo.",
-            "libraryOn": "Library Mode on" if _focus_is_en else "Modo Biblioteca activo",
-            "libraryOff": "Library Mode" if _focus_is_en else "Modo Biblioteca",
-            "libraryLocked": "Library Mode is Plus-only." if _focus_is_en else "Modo Biblioteca es solo Plus.",
-            "libraryExit": "Exit Library" if _focus_is_en else "Salir de Biblioteca",
-            "libraryRitualTitle": "Enter Library Mode" if _focus_is_en else "Entrando a Biblioteca",
-            "libraryRitualOne": "Put the phone away." if _focus_is_en else "Deja el celular lejos.",
-            "libraryRitualTwo": "Close whatever is not for studying." if _focus_is_en else "Cierra todo lo que no sea para estudiar.",
-            "libraryRitualThree": "You are here to finish one clean block." if _focus_is_en else "Viniste a terminar un bloque limpio.",
-            "libraryRitualSkip": "Start now" if _focus_is_en else "Empezar ahora",
-            "libraryLeaveConfirm": "Library Mode is active. Leave this focus session?" if _focus_is_en else "Modo Biblioteca esta activo. ¿Salir de esta sesion de enfoque?",
-            "libraryTheme": "Library theme" if _focus_is_en else "Tema biblioteca",
             "examNudgeTitle": "Next exam" if _focus_is_en else "Proxima prueba",
             "examNudgeToday": "today" if _focus_is_en else "hoy",
             "examNudgeTomorrow": "tomorrow" if _focus_is_en else "manana",
@@ -6843,10 +6814,6 @@ def register_student_routes(app, csrf, limiter):
         .block-list {{ margin-top:8px;display:flex;flex-direction:column;gap:4px; }}
         .block-item {{ display:flex;justify-content:space-between;padding:8px 10px;background:#FBF8F0;border-radius:10px;font-size:12px;font-weight:700; }}
         .muted {{ color:#94939C; }}
-        .focus-mode-toolbar {{ display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px; }}
-        .focus-mode-chip {{ border:1px solid #E2DCCC;background:#FBF8F0;color:#1A1A1F;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 2px 0 rgba(20,18,30,.04); }}
-        .focus-mode-chip.active {{ background:#1A1A1F;color:#FFF8E1;border-color:#1A1A1F; }}
-        .focus-mode-chip.locked {{ cursor:not-allowed;opacity:.72; }}
         .focus-rival-card {{ display:none;margin-bottom:16px;padding:14px 16px;border:1px solid #FFD2BA;background:linear-gradient(135deg,#FFF7ED,#FFFDF8);border-radius:18px;box-shadow:0 12px 34px rgba(255,122,61,.10); }}
         .focus-rival-card.show {{ display:flex;align-items:center;justify-content:space-between;gap:14px; }}
         .focus-rival-eyebrow {{ font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#B45309;margin-bottom:3px; }}
@@ -6858,73 +6825,6 @@ def register_student_routes(app, csrf, limiter):
         .focus-exam-title {{ font-size:16px;font-weight:900;color:#1A1A1F;line-height:1.2; }}
         .focus-exam-topics {{ margin-top:6px;font-size:13px;color:#5C5C66;font-weight:700;line-height:1.35; }}
         .focus-exam-days {{ white-space:nowrap;font-family:'Bricolage Grotesque',sans-serif;font-size:28px;font-weight:700;color:#FF7A3D;text-align:right; }}
-        #library-exit-btn {{ display:none;position:fixed;top:18px;right:18px;z-index:8990;border:1px solid #D8D0C0;background:#FFFDF8;color:#1A1A1F;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:900;box-shadow:0 12px 36px rgba(20,18,30,.10);cursor:pointer; }}
-        #library-ritual {{ position:fixed;inset:0;z-index:99980;display:none;align-items:center;justify-content:center;background:rgba(251,248,240,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px); }}
-        #library-ritual.show {{ display:flex; }}
-        .library-ritual-card {{ width:min(520px,calc(100vw - 34px));border:1px solid #D8D0C0;background:#FFFDF8;border-radius:28px;padding:34px 30px;text-align:center;box-shadow:0 28px 90px rgba(20,18,30,.16); }}
-        .library-ritual-eye {{ font-size:11px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#2E9266;margin-bottom:8px; }}
-        .library-ritual-title {{ margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:42px;font-weight:600;letter-spacing:-.045em;color:#1A1A1F; }}
-        .library-ritual-count {{ margin:24px auto 18px;width:118px;height:118px;border:7px solid #FF7A3D;border-radius:50%;display:grid;place-items:center;font-family:'Bricolage Grotesque',sans-serif;font-size:58px;font-weight:600;color:#1A1A1F; }}
-        .library-ritual-lines {{ display:grid;gap:7px;margin:0 auto 22px;max-width:360px;color:#5C5C66;font-size:14px;font-weight:800;line-height:1.3; }}
-        .library-ritual-lines div {{ padding:8px 10px;border-radius:12px;background:#FBF8F0;border:1px solid #E2DCCC; }}
-        .library-ritual-start {{ border:0;background:#1A1A1F;color:#FFF8E1;border-radius:999px;padding:12px 20px;font-weight:900;box-shadow:0 4px 0 rgba(20,18,30,.18);cursor:pointer; }}
-        body.focus-library-mode .focus-page-head,
-        body.focus-library-mode .focus-mode-toolbar,
-        body.focus-library-mode #focus-rival-card,
-        body.focus-library-mode #focus-exam-nudge,
-        body.focus-library-mode #focus-guard-card,
-        body.focus-library-mode #today-session-card,
-        body.focus-library-mode .focus-shortcuts,
-        body.focus-library-mode .site-footer,
-        body.focus-library-mode footer,
-        body.focus-library-mode .sidebar,
-        body.focus-library-mode .student-sidebar,
-        body.focus-library-mode .side-nav,
-        body.focus-library-mode .app-sidebar,
-        body.focus-library-mode .side,
-        body.focus-library-mode .mr-side-nav,
-        body.focus-library-mode .side-foot,
-        body.focus-library-mode .topbar,
-        body.focus-library-mode .navbar,
-        body.focus-library-mode .app-header,
-        body.focus-library-mode .student-topbar,
-        body.focus-library-mode #focus-float {{ display:none !important; }}
-        body.focus-library-mode #library-exit-btn {{ display:block; }}
-        body.focus-library-mode,
-        body.focus-library-mode .mr-app-shell,
-        body.focus-library-mode .content,
-        body.focus-library-mode .content-wide,
-        body.focus-library-mode .main-content,
-        body.focus-library-mode .main,
-        body.focus-library-mode main {{ background:#FBF8F0 !important; }}
-        body.focus-library-mode .mr-app-shell {{ grid-template-columns:1fr !important;min-height:100vh !important;width:100vw !important;overflow-x:hidden !important; }}
-        body.focus-library-mode .main {{ margin-left:0 !important;width:100vw !important;max-width:none !important; }}
-        body.focus-library-mode .content,
-        body.focus-library-mode .content-wide {{ width:100vw !important;max-width:none !important;min-height:100vh !important;padding:0 !important;overflow-x:hidden !important; }}
-        body.focus-library-mode .focus-cd {{ width:100vw !important;max-width:none !important;min-height:100vh !important;padding:clamp(28px,5vh,64px) clamp(20px,5vw,72px) !important;box-sizing:border-box !important;display:flex !important;align-items:center !important;justify-content:center !important; }}
-        body.focus-library-mode .focus-layout {{ grid-template-columns:minmax(320px,620px) minmax(280px,420px) !important;justify-content:center;align-items:center;gap:20px !important;min-height:auto;padding-top:0;width:min(1060px,calc(100vw - 72px)) !important;max-width:100% !important;margin:0 auto !important;transform:translateY(-2vh); }}
-        body.focus-library-mode .focus-timer-shell,
-        body.focus-library-mode #focus-ambience-card {{ box-shadow:0 24px 80px rgba(20,18,30,.08) !important; }}
-        body.focus-library-mode .focus-timer-shell {{ border-color:#D8D0C0 !important;background:#FFFDF8 !important; }}
-        body.focus-library-mode #focus-ambience-card .card-header {{ display:none; }}
-        :root[data-theme="dark"] body.focus-library-mode,
-        :root[data-theme="dark"] body.focus-library-mode .mr-app-shell,
-        :root[data-theme="dark"] body.focus-library-mode .content,
-        :root[data-theme="dark"] body.focus-library-mode .content-wide,
-        :root[data-theme="dark"] body.focus-library-mode .main,
-        :root[data-theme="dark"] body.focus-library-mode main {{ background:#0D1118 !important;color:#F7F1E8 !important; }}
-        :root[data-theme="dark"] body.focus-library-mode .focus-timer-shell,
-        :root[data-theme="dark"] body.focus-library-mode #focus-ambience-card {{ background:#141A24 !important;border-color:#2A3445 !important;color:#F7F1E8 !important;box-shadow:0 28px 100px rgba(0,0,0,.35) !important; }}
-        :root[data-theme="dark"] body.focus-library-mode #timer-display,
-        :root[data-theme="dark"] body.focus-library-mode .card-header,
-        :root[data-theme="dark"] body.focus-library-mode .amb-n {{ color:#F7F1E8 !important; }}
-        :root[data-theme="dark"] body.focus-library-mode #timer-label,
-        :root[data-theme="dark"] body.focus-library-mode #pomo-count,
-        :root[data-theme="dark"] body.focus-library-mode .muted {{ color:#A9B1C0 !important; }}
-        :root[data-theme="dark"] body.focus-library-mode .ft-select,
-        :root[data-theme="dark"] body.focus-library-mode .ft-input,
-        :root[data-theme="dark"] body.focus-library-mode .amb {{ background:#0F1622 !important;border-color:#2A3445 !important;color:#F7F1E8 !important; }}
-        @media (max-width:900px) {{ body.focus-library-mode .focus-cd {{ align-items:flex-start !important;padding-top:74px !important; }} body.focus-library-mode .focus-layout {{ grid-template-columns:1fr !important;padding-top:0;transform:none;width:min(620px,calc(100vw - 32px)) !important; }} }}
         </style>
 
         <div class="focus-page-head">
@@ -6963,30 +6863,6 @@ def register_student_routes(app, csrf, limiter):
           }} catch(e) {{}}
         }})();
         </script>
-
-
-
-        <div class="focus-mode-toolbar">
-          <button id="library-mode-btn" class="focus-mode-chip {'locked' if not _focus_is_plus else ''}" type="button" onclick="toggleLibraryMode()">
-            &#128218; {('Library Mode' if _focus_is_en else 'Modo Biblioteca')} {'PLUS' if not _focus_is_plus else ''}
-          </button>
-        </div>
-
-        <button id="library-exit-btn" type="button" onclick="toggleLibraryMode()">&#128218; {('Exit Library' if _focus_is_en else 'Salir de Biblioteca')}</button>
-
-        <div id="library-ritual" aria-hidden="true">
-          <div class="library-ritual-card" role="dialog" aria-modal="true">
-            <div class="library-ritual-eye">MachReach Focus</div>
-            <h2 class="library-ritual-title">{('Enter Library Mode' if _focus_is_en else 'Entrando a Biblioteca')}</h2>
-            <div class="library-ritual-count" id="library-ritual-count">10</div>
-            <div class="library-ritual-lines">
-              <div>{('Put the phone away.' if _focus_is_en else 'Deja el celular lejos.')}</div>
-              <div>{('Close whatever is not for studying.' if _focus_is_en else 'Cierra todo lo que no sea para estudiar.')}</div>
-              <div>{('You are here to finish one clean block.' if _focus_is_en else 'Viniste a terminar un bloque limpio.')}</div>
-            </div>
-            <button class="library-ritual-start" type="button" onclick="finishLibraryRitual(true)">{('Start now' if _focus_is_en else 'Empezar ahora')}</button>
-          </div>
-        </div>
 
         <div id="focus-rival-card" class="focus-rival-card" aria-live="polite">
           <div>
@@ -7855,139 +7731,7 @@ def register_student_routes(app, csrf, limiter):
 
         var currentMode = 'pomodoro';
         var focusText = {json.dumps(_focus_js_i18n, ensure_ascii=False)};
-        var FOCUS_IS_PLUS = {str(bool(_focus_is_plus)).lower()};
         var FOCUS_NEXT_EXAM = {_json_next_focus_exam};
-        var __libraryRitualTimer = null;
-        var __libraryRitualPendingStart = false;
-        var __libraryRitualBypassOnce = false;
-        var LIBRARY_THEME_CLASSES = ['warm','dark','lavender','dark-library'].map(function(n) {{ return 'library-theme-' + n; }});
-
-        function requestLibraryFullscreen() {{
-          try {{
-            var root = document.documentElement;
-            if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) return;
-            var req = root.requestFullscreen || root.webkitRequestFullscreen || root.msRequestFullscreen;
-            if (req) {{
-              var p = req.call(root);
-              if (p && p.catch) p.catch(function(){{}});
-            }}
-          }} catch(e) {{}}
-        }}
-
-        function exitLibraryFullscreen() {{
-          try {{
-            if (!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement)) return;
-            var exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-            if (exit) {{
-              var p = exit.call(document);
-              if (p && p.catch) p.catch(function(){{}});
-            }}
-          }} catch(e) {{}}
-        }}
-
-        function applyLibraryTheme(theme) {{
-          try {{
-            LIBRARY_THEME_CLASSES.forEach(function(c) {{ document.body.classList.remove(c); }});
-            localStorage.removeItem('machreach_focus_library_' + 'theme');
-          }} catch(e) {{}}
-        }}
-
-        function applyLibraryMode(on) {{
-          try {{
-            document.body.classList.toggle('focus-library-mode', !!on);
-            if (on) applyLibraryTheme();
-            var btn = document.getElementById('library-mode-btn');
-            if (btn) {{
-              btn.classList.toggle('active', !!on);
-              btn.innerHTML = '&#128218; ' + (on ? focusText.libraryOn : focusText.libraryOff);
-            }}
-            localStorage.setItem('machreach_focus_library_mode', on ? '1' : '0');
-            if (!on) {{
-              hideLibraryRitual();
-              exitLibraryFullscreen();
-              applyLibraryTheme();
-            }}
-          }} catch(e) {{}}
-        }}
-
-        function toggleLibraryMode() {{
-          if (!FOCUS_IS_PLUS) {{
-            if (window.showToast) window.showToast(focusText.libraryLocked, 'info');
-            else alert(focusText.libraryLocked);
-            return;
-          }}
-          var next = !document.body.classList.contains('focus-library-mode');
-          applyLibraryMode(next);
-          if (next) requestLibraryFullscreen();
-        }}
-
-        (function restoreLibraryMode() {{
-          try {{
-            if (FOCUS_IS_PLUS) applyLibraryTheme();
-            if (FOCUS_IS_PLUS && localStorage.getItem('machreach_focus_library_mode') === '1') {{
-              applyLibraryMode(true);
-            }}
-          }} catch(e) {{}}
-        }})();
-
-        function hideLibraryRitual() {{
-          try {{
-            if (__libraryRitualTimer) clearInterval(__libraryRitualTimer);
-            __libraryRitualTimer = null;
-            __libraryRitualPendingStart = false;
-            var overlay = document.getElementById('library-ritual');
-            if (overlay) {{
-              overlay.classList.remove('show');
-              overlay.setAttribute('aria-hidden', 'true');
-            }}
-          }} catch(e) {{}}
-        }}
-
-        function finishLibraryRitual(skip) {{
-          var shouldStart = __libraryRitualPendingStart || !!skip;
-          hideLibraryRitual();
-          if (!shouldStart) return;
-          requestLibraryFullscreen();
-          __libraryRitualBypassOnce = true;
-          startTimer(false);
-        }}
-
-        function startLibraryRitual() {{
-          var overlay = document.getElementById('library-ritual');
-          var countEl = document.getElementById('library-ritual-count');
-          if (!overlay || !countEl) return false;
-          requestLibraryFullscreen();
-          __libraryRitualPendingStart = true;
-          var n = 10;
-          countEl.textContent = String(n);
-          overlay.classList.add('show');
-          overlay.setAttribute('aria-hidden', 'false');
-          if (__libraryRitualTimer) clearInterval(__libraryRitualTimer);
-          __libraryRitualTimer = setInterval(function() {{
-            n -= 1;
-            countEl.textContent = String(Math.max(0, n));
-            if (n <= 0) {{
-              finishLibraryRitual(false);
-            }}
-          }}, 1000);
-          return true;
-        }}
-
-        document.addEventListener('click', function(e) {{
-          try {{
-            if (!document.body.classList.contains('focus-library-mode')) return;
-            var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
-            if (!a) return;
-            var href = a.getAttribute('href') || '';
-            if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return;
-            var u = new URL(href, window.location.href);
-            if (u.origin === window.location.origin && u.pathname === '/student/focus') return;
-            if (!confirm(focusText.libraryLeaveConfirm)) {{
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          }} catch(err) {{}}
-        }}, true);
 
         async function loadFocusRival() {{
           try {{
@@ -8472,11 +8216,6 @@ def register_student_routes(app, csrf, limiter):
             }}
             if (__warn) __warn.style.display = 'none';
           }}
-
-          if (document.body.classList.contains('focus-library-mode') && !isRestore && !isBreak && !__libraryRitualBypassOnce) {{
-            if (startLibraryRitual()) return;
-          }}
-          __libraryRitualBypassOnce = false;
 
           // Prime the alarm INSIDE the user-gesture handler so audio can play
           // later even when the tab is hidden.

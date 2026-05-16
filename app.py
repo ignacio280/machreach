@@ -2316,9 +2316,6 @@ LAYOUT = """<!DOCTYPE html>
           :root[data-theme="dark"] .content .ft-input,
           :root[data-theme="dark"] .content .amb,
           :root[data-theme="dark"] .content .block-item,
-          :root[data-theme="dark"] .content .focus-mode-chip,
-          :root[data-theme="dark"] .content .library-ritual-card,
-          :root[data-theme="dark"] .content .library-ritual-lines div,
           :root[data-theme="dark"] .content .mp-day,
           :root[data-theme="dark"] .content .mp-row input,
           :root[data-theme="dark"] .content .mp-row select,
@@ -2499,8 +2496,7 @@ LAYOUT = """<!DOCTYPE html>
             border-color:rgba(255,255,255,.16) !important;
             box-shadow:none !important;
           }
-          :root[data-theme="dark"] .content .mr-home .mr-quest-bar,
-          :root[data-theme="dark"] .content .mr-home .mr-course-bar {
+          :root[data-theme="dark"] .content .mr-home .mr-quest-bar {
             background:rgba(255,255,255,.12) !important;
           }
           :root[data-theme="dark"] .content .mr-home .mr-stat-card,
@@ -2533,7 +2529,6 @@ LAYOUT = """<!DOCTYPE html>
           :root[data-theme="dark"] .content .mr-home .mr-stat-sub,
           :root[data-theme="dark"] .content .mr-home .mr-card-link,
           :root[data-theme="dark"] .content .mr-home .mr-course-code,
-          :root[data-theme="dark"] .content .mr-home .mr-course-pct,
           :root[data-theme="dark"] .content .mr-home .mr-course-next,
           :root[data-theme="dark"] .content .mr-home .mr-friend-status,
           :root[data-theme="dark"] .content .mr-home .mr-sess-time,
@@ -2563,14 +2558,16 @@ LAYOUT = """<!DOCTYPE html>
             border-color:#4B4655 !important;
           }
           :root[data-theme="dark"] .content .mr-home .mr-heat-cell {
-            background:#2A2730 !important;
+            background:#332C2A !important;
+            box-shadow:inset 0 0 0 1px rgba(255,255,255,.035) !important;
           }
-          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.lv1 { background:#493426 !important; }
-          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.lv2 { background:#7A442A !important; }
-          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.lv3 { background:#B75B30 !important; }
-          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.lv4 { background:#FF7A3D !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.l1 { background:#714121 !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.l2 { background:#A94E22 !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.l3 { background:#E5652D !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.l4 { background:#FF9B50 !important; box-shadow:0 0 0 1px rgba(255,155,80,.22), 0 0 16px rgba(255,122,61,.24) !important; }
           :root[data-theme="dark"] .content .mr-home .mr-heat-cell.today {
-            outline-color:#F7F0E4 !important;
+            outline-color:#FFF8E1 !important;
+            box-shadow:0 0 0 2px rgba(255,248,225,.14), 0 0 18px rgba(255,122,61,.22) !important;
           }
 
           /* Achievements / XP page: rank cards and badge sections should not stay cream-white. */
