@@ -5252,15 +5252,7 @@ def register():
           <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{"Sign in with Canvas" if session.get("lang") == "en" else "Entrar con Canvas"}</button>
           <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:8px 0 0;line-height:1.4;">{"We create your account with your Canvas email, then you can log in normally with that email and password." if session.get("lang") == "en" else "Creamos tu cuenta con el correo de Canvas; despu&eacute;s podr&aacute;s entrar normal con ese correo y contrase&ntilde;a."}</p>
         </form>
-        <div style="display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--text-muted);font-size:12px;"><span style="height:1px;background:var(--border);flex:1;"></span>{"or with email" if session.get("lang") == "en" else "o con correo"}<span style="height:1px;background:var(--border);flex:1;"></span></div>
-        <form method="post">
-          <input type="hidden" name="account_type" value="student">
-          <div class="form-group"><label>{t("auth.full_name")}</label><input name="name" placeholder="Alex Garcia" required></div>
-          <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="you@school.edu" required></div>
-          <div class="form-group"><label>{t("auth.password")}</label><input name="password" type="password" placeholder="At least 6 characters" required minlength="6"></div>
-          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.create_btn")}</button>
-          <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:12px;line-height:1.6;">By creating an account, you agree to our <a href="/terms" style="color:var(--primary);">Terms of Service</a> and <a href="/privacy" style="color:var(--primary);">Privacy Policy</a>.</p>
-        </form>
+        <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:12px;line-height:1.6;">By creating an account, you agree to our <a href="/terms" style="color:var(--primary);">Terms of Service</a> and <a href="/privacy" style="color:var(--primary);">Privacy Policy</a>.</p>
         <div class="auth-footer">{t("auth.have_account")} <a href="/login">{t("auth.log_in")}</a></div>
       </div>
     </div>
