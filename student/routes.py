@@ -20,7 +20,10 @@ import logging
 
 import re
 
+import secrets
+
 from datetime import datetime, timedelta
+from urllib.parse import urlencode, urlparse
 
 
 
@@ -864,6 +867,47 @@ def register_student_routes(app, csrf, limiter):
             return None
 
         return CanvasClient(tok["canvas_url"], tok["token"])
+
+    def _sync_canvas_courses_for_user(client_id: int, canvas_url: str, token: str) -> dict:
+        """Persist the authenticated user's current Canvas courses."""
+        canvas = CanvasClient(canvas_url, token)
+        courses = canvas.get_courses()
+        saved = 0
+        for c in courses:
+            try:
+                cid_canvas = int(c.get("id"))
+                name = c.get("name") or c.get("course_code") or f"Course {cid_canvas}"
+                code = c.get("course_code", "") or ""
+                term = ""
+                t = c.get("term") or {}
+                if isinstance(t, dict):
+                    term = t.get("name", "") or ""
+                sdb.upsert_course(client_id, cid_canvas, name, code, term)
+                saved += 1
+            except Exception:
+                continue
+        return {"courses": courses, "saved": saved}
+
+    def _canvas_profile_identity(profile: dict, canvas_url: str) -> tuple[str, str]:
+        name = (
+            profile.get("name")
+            or profile.get("short_name")
+            or profile.get("sortable_name")
+            or "Canvas Student"
+        )
+        email = (
+            profile.get("primary_email")
+            or profile.get("email")
+            or profile.get("login_id")
+            or ""
+        )
+        email = str(email).strip().lower()
+        if "@" not in email:
+            host = urlparse(canvas_url).netloc.replace("www.", "") or "canvas.local"
+            canvas_id = str(profile.get("id") or profile.get("login_id") or secrets.token_hex(6)).strip()
+            safe_id = re.sub(r"[^a-zA-Z0-9._-]+", "-", canvas_id).strip("-") or secrets.token_hex(6)
+            email = f"canvas-{safe_id}@{host}"
+        return str(name).strip() or "Canvas Student", email
 
 
 
@@ -1787,6 +1831,143 @@ def register_student_routes(app, csrf, limiter):
 
 
 
+    @app.route("/student/canvas")
+    def student_canvas_alias():
+        return redirect(url_for("student_canvas_settings_page"))
+
+    @app.route("/canvas/oauth/start")
+    @limiter.limit("20 per minute")
+    def canvas_oauth_start():
+        """Start Canvas OAuth login/connect flow."""
+        from outreach.config import (
+            BASE_URL,
+            CANVAS_OAUTH_CLIENT_ID,
+            CANVAS_OAUTH_CLIENT_SECRET,
+        )
+        if not CANVAS_OAUTH_CLIENT_ID or not CANVAS_OAUTH_CLIENT_SECRET:
+            return render_template_string(
+                "<h1>Canvas OAuth no configurado</h1>"
+                "<p>Agrega CANVAS_OAUTH_CLIENT_ID y CANVAS_OAUTH_CLIENT_SECRET en Render.</p>"
+                "<p>Redirect URI: <code>{{redirect_uri}}</code></p>"
+                "<p><a href='/login'>Volver</a></p>",
+                redirect_uri=f"{BASE_URL.rstrip('/')}/canvas/oauth/callback",
+            ), 503
+
+        canvas_url = normalize_canvas_url(request.args.get("canvas_url") or "")
+        if not canvas_url:
+            return redirect(url_for("login"))
+
+        if _logged_in():
+            gate = _semester_outcome_gate()
+            if gate["blocked"]:
+                session["_flashes"] = session.get("_flashes", []) + [
+                    ("error", gate["message"])
+                ]
+                return redirect(url_for("student_courses_page"))
+
+        state = secrets.token_urlsafe(32)
+        session["canvas_oauth_state"] = state
+        session["canvas_oauth_url"] = canvas_url
+        session["canvas_oauth_next"] = request.args.get("next") or "/student"
+        redirect_uri = f"{BASE_URL.rstrip('/')}/canvas/oauth/callback"
+        params = {
+            "client_id": CANVAS_OAUTH_CLIENT_ID,
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "state": state,
+        }
+        return redirect(f"{canvas_url}/login/oauth2/auth?{urlencode(params)}")
+
+    @app.route("/canvas/oauth/callback")
+    @limiter.limit("20 per minute")
+    def canvas_oauth_callback():
+        """Finish Canvas OAuth, create/login account, and sync courses."""
+        from outreach.config import (
+            BASE_URL,
+            CANVAS_OAUTH_CLIENT_ID,
+            CANVAS_OAUTH_CLIENT_SECRET,
+        )
+        from outreach.db import create_client, get_client_by_email, mark_email_verified
+        import bcrypt
+        import requests
+
+        state = request.args.get("state") or ""
+        code = request.args.get("code") or ""
+        expected = session.get("canvas_oauth_state") or ""
+        canvas_url = session.get("canvas_oauth_url") or ""
+        if not state or not code or not expected or state != expected or not canvas_url:
+            return render_template_string(
+                "<h1>No se pudo conectar Canvas</h1>"
+                "<p>La sesion de OAuth expiro o no coincide. Intentalo de nuevo.</p>"
+                "<p><a href='/login'>Volver</a></p>"
+            ), 400
+
+        redirect_uri = f"{BASE_URL.rstrip('/')}/canvas/oauth/callback"
+        try:
+            token_resp = requests.post(
+                f"{canvas_url}/login/oauth2/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": CANVAS_OAUTH_CLIENT_ID,
+                    "client_secret": CANVAS_OAUTH_CLIENT_SECRET,
+                    "redirect_uri": redirect_uri,
+                    "code": code,
+                },
+                timeout=20,
+            )
+            token_resp.raise_for_status()
+            token_data = token_resp.json()
+            access_token = (token_data.get("access_token") or "").strip()
+            if not access_token:
+                raise ValueError("Canvas no devolvio access_token.")
+
+            canvas = CanvasClient(canvas_url, access_token)
+            profile = canvas.get_profile()
+            name, email = _canvas_profile_identity(profile, canvas_url)
+
+            if _logged_in():
+                client_id = _cid()
+            else:
+                existing = get_client_by_email(email)
+                if existing:
+                    client_id = int(existing["id"])
+                    name = existing.get("name") or name
+                    if not existing.get("email_verified"):
+                        mark_email_verified(client_id)
+                else:
+                    random_pw = secrets.token_urlsafe(32)
+                    password_hash = bcrypt.hashpw(random_pw.encode(), bcrypt.gensalt(12)).decode()
+                    client_id = create_client(name, email, password_hash, "", "student")
+                    mark_email_verified(client_id)
+
+            sdb.save_canvas_token(client_id, canvas_url, access_token)
+            synced = _sync_canvas_courses_for_user(client_id, canvas_url, access_token)
+
+            pending_token = session.get("team_invite_token")
+            next_url = session.get("canvas_oauth_next") or "/student"
+            session.clear()
+            session["client_id"] = client_id
+            session["client_name"] = name
+            session["account_type"] = "student"
+            if pending_token:
+                session["team_invite_token"] = pending_token
+            session["_flashes"] = [
+                ("success", f"Canvas conectado. Cursos sincronizados: {synced.get('saved', 0)}.")
+            ]
+            return redirect(next_url if str(next_url).startswith("/") else "/student")
+        except Exception as e:
+            log.exception("Canvas OAuth callback failed")
+            return render_template_string(
+                "<h1>No se pudo conectar Canvas</h1>"
+                "<p>{{error}}</p>"
+                "<p><a href='/login'>Volver</a></p>",
+                error=str(e),
+            ), 400
+        finally:
+            session.pop("canvas_oauth_state", None)
+            session.pop("canvas_oauth_url", None)
+            session.pop("canvas_oauth_next", None)
+
     @app.route("/api/student/canvas/connect", methods=["POST"])
 
     @limiter.limit("10 per minute")
@@ -1846,35 +2027,8 @@ def register_student_routes(app, csrf, limiter):
 
         # Persist every course immediately so /student/courses shows them right away.
 
-        cid = _cid()
-
-        saved = 0
-
-        for c in courses:
-
-            try:
-
-                cid_canvas = int(c.get("id"))
-
-                name = c.get("name") or c.get("course_code") or f"Course {cid_canvas}"
-
-                code = c.get("course_code", "") or ""
-
-                term = ""
-
-                t = c.get("term") or {}
-
-                if isinstance(t, dict):
-
-                    term = t.get("name", "") or ""
-
-                sdb.upsert_course(cid, cid_canvas, name, code, term)
-
-                saved += 1
-
-            except Exception:
-
-                continue
+        synced = _sync_canvas_courses_for_user(_cid(), canvas_url, token)
+        saved = int(synced.get("saved") or 0)
 
 
 
@@ -10319,6 +10473,16 @@ def register_student_routes(app, csrf, limiter):
         <div class="card" style="padding:18px;">
 
           {pending_html}
+
+          <div style="border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:18px;background:var(--surface);">
+            <div style="font-weight:900;color:var(--text);margin-bottom:6px;">Entrada r&aacute;pida con Canvas</div>
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;line-height:1.4;">Autoriza Canvas y MachReach crear&aacute; tu cuenta/sesi&oacute;n, guardar&aacute; tu conexi&oacute;n y cargar&aacute; tus cursos autom&aacute;ticamente.</p>
+            <form method="get" action="/canvas/oauth/start" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" value="{_esc(url_val)}" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" style="flex:1;min-width:220px;" {canvas_form_disabled}>
+              <input type="hidden" name="next" value="/student/courses">
+              <button class="btn btn-primary" type="submit" {canvas_form_disabled}>Entrar con Canvas</button>
+            </form>
+          </div>
 
           <div style="margin-bottom:20px;">
 

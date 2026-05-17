@@ -54,6 +54,11 @@ ADMIN_EMAILS = {
 }
 ADMIN_ACTION_SECRET = os.getenv("ADMIN_ACTION_SECRET", "")
 
+# Canvas OAuth. These values come from a Canvas Developer Key. The redirect
+# URI configured in Canvas must be: {BASE_URL}/canvas/oauth/callback
+CANVAS_OAUTH_CLIENT_ID = os.getenv("CANVAS_OAUTH_CLIENT_ID", "")
+CANVAS_OAUTH_CLIENT_SECRET = os.getenv("CANVAS_OAUTH_CLIENT_SECRET", "")
+
 # System/transactional email sender (verification, password reset, etc.)
 # This should be support@machreach.com or noreply@machreach.com
 SYSTEM_FROM_EMAIL = os.getenv("SYSTEM_FROM_EMAIL", "") or os.getenv("SMTP_USER", "")

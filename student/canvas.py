@@ -90,6 +90,10 @@ class CanvasClient:
         resp.raise_for_status()
         return resp.content
 
+    def get_profile(self) -> dict:
+        """Return the authenticated Canvas user's profile."""
+        return self._get("/users/self/profile")
+
     # ── courses ─────────────────────────────────────────────
     def get_courses(self, enrollment_state: str = "active") -> list[dict]:
         """Get courses the student is enrolled in for the current term only.

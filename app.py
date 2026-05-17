@@ -5240,6 +5240,13 @@ def register():
       <div class="auth-card">
         <h1>{t("auth.create_account")}</h1>
         <p class="subtitle">{t("auth.create_subtitle")}</p>
+        <form method="get" action="/canvas/oauth/start" style="margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);">
+          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Canvas URL</label>
+          <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" style="margin-bottom:10px;">
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{"Sign in with Canvas" if session.get("lang") == "en" else "Entrar con Canvas"}</button>
+          <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:8px 0 0;line-height:1.4;">{"We create your account and sync your courses automatically." if session.get("lang") == "en" else "Creamos tu cuenta y sincronizamos tus cursos autom&aacute;ticamente."}</p>
+        </form>
+        <div style="display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--text-muted);font-size:12px;"><span style="height:1px;background:var(--border);flex:1;"></span>{"or with email" if session.get("lang") == "en" else "o con correo"}<span style="height:1px;background:var(--border);flex:1;"></span></div>
         <form method="post">
           <input type="hidden" name="account_type" value="student">
           <div class="form-group"><label>{t("auth.full_name")}</label><input name="name" placeholder="Alex Garcia" required></div>
@@ -5284,6 +5291,13 @@ def login():
       <div class="auth-card">
         <h1>{t("auth.welcome_back")}</h1>
         <p class="subtitle">{t("auth.sign_in_desc")}</p>
+        <form method="get" action="/canvas/oauth/start" style="margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);">
+          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Canvas URL</label>
+          <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" style="margin-bottom:10px;">
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{"Sign in with Canvas" if session.get("lang") == "en" else "Entrar con Canvas"}</button>
+          <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:8px 0 0;line-height:1.4;">{"Log in and load your courses with one authorization." if session.get("lang") == "en" else "Inicia sesi&oacute;n y carga tus cursos con una autorizaci&oacute;n."}</p>
+        </form>
+        <div style="display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--text-muted);font-size:12px;"><span style="height:1px;background:var(--border);flex:1;"></span>{"or with email" if session.get("lang") == "en" else "o con correo"}<span style="height:1px;background:var(--border);flex:1;"></span></div>
         <form method="post">
           <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="you@school.edu" required></div>
           <div class="form-group"><label>{t("auth.password")}</label><input name="password" type="password" required></div>
