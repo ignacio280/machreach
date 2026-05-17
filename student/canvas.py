@@ -94,6 +94,15 @@ class CanvasClient:
         """Return the authenticated Canvas user's profile."""
         return self._get("/users/self/profile")
 
+    def get_communication_channels(self) -> list[dict]:
+        """Return email/SMS channels Canvas exposes for the authenticated user."""
+        try:
+            channels = self._get_paginated("/users/self/communication_channels")
+            return channels if isinstance(channels, list) else []
+        except Exception:
+            log.info("Canvas communication channels are not available for this user.", exc_info=True)
+            return []
+
     # ── courses ─────────────────────────────────────────────
     def get_courses(self, enrollment_state: str = "active") -> list[dict]:
         """Get courses the student is enrolled in for the current term only.

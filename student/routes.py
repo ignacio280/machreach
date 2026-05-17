@@ -888,25 +888,38 @@ def register_student_routes(app, csrf, limiter):
                 continue
         return {"courses": courses, "saved": saved}
 
-    def _canvas_profile_identity(profile: dict, canvas_url: str) -> tuple[str, str]:
+    def _canvas_profile_identity(profile: dict, communication_channels: list[dict] | None = None) -> tuple[str, str]:
         name = (
             profile.get("name")
             or profile.get("short_name")
             or profile.get("sortable_name")
             or "Canvas Student"
         )
-        email = (
-            profile.get("primary_email")
-            or profile.get("email")
-            or profile.get("login_id")
-            or ""
-        )
-        email = str(email).strip().lower()
-        if "@" not in email:
-            host = urlparse(canvas_url).netloc.replace("www.", "") or "canvas.local"
-            canvas_id = str(profile.get("id") or profile.get("login_id") or secrets.token_hex(6)).strip()
-            safe_id = re.sub(r"[^a-zA-Z0-9._-]+", "-", canvas_id).strip("-") or secrets.token_hex(6)
-            email = f"canvas-{safe_id}@{host}"
+        email_candidates = [
+            profile.get("primary_email"),
+            profile.get("email"),
+            profile.get("login_id"),
+        ]
+        for ch in communication_channels or []:
+            if not isinstance(ch, dict):
+                continue
+            if str(ch.get("type") or "").lower() == "email":
+                email_candidates.extend([
+                    ch.get("address"),
+                    ch.get("email"),
+                    ch.get("path"),
+                ])
+        email = ""
+        for candidate in email_candidates:
+            value = str(candidate or "").strip().lower()
+            if re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value):
+                email = value
+                break
+        if not email:
+            raise ValueError(
+                "Canvas no compartio un correo real para este usuario. "
+                "Activa o verifica tu email en Canvas y vuelve a intentarlo."
+            )
         return str(name).strip() or "Canvas Student", email
 
 
@@ -1892,7 +1905,8 @@ def register_student_routes(app, csrf, limiter):
         try:
             canvas = CanvasClient(canvas_url, token)
             profile = canvas.get_profile()
-            name, email = _canvas_profile_identity(profile, canvas_url)
+            channels = canvas.get_communication_channels()
+            name, email = _canvas_profile_identity(profile, channels)
             existing = get_client_by_email(email)
             if existing:
                 client_id = int(existing["id"])
@@ -2013,7 +2027,8 @@ def register_student_routes(app, csrf, limiter):
 
             canvas = CanvasClient(canvas_url, access_token)
             profile = canvas.get_profile()
-            name, email = _canvas_profile_identity(profile, canvas_url)
+            channels = canvas.get_communication_channels()
+            name, email = _canvas_profile_identity(profile, channels)
 
             if _logged_in():
                 client_id = _cid()
