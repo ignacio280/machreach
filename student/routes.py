@@ -1889,6 +1889,10 @@ def register_student_routes(app, csrf, limiter):
                 <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true">
                 <label>Token de acceso API</label>
                 <input name="canvas_token" type="text" placeholder="Paste your Canvas access token" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" style="-webkit-text-security:disc;text-security:disc;">
+                <label>Contrase&ntilde;a MachReach</label>
+                <input name="password" type="password" placeholder="M&iacute;nimo 6 caracteres" required minlength="6" autocomplete="new-password">
+                <label>Confirmar contrase&ntilde;a</label>
+                <input name="password2" type="password" placeholder="Repite tu contrase&ntilde;a" required minlength="6" autocomplete="new-password">
                 <p class="hint">En Canvas: Account &rarr; Settings &rarr; <b>+ New Access Token</b>. Si tu universidad no permite OAuth, este m&eacute;todo igual funciona.</p>
                 <button type="submit">Crear cuenta y entrar</button>
                 <p class="hint" style="text-align:center;margin-bottom:0;"><a href="/login">Volver al login</a></p>
@@ -1898,6 +1902,8 @@ def register_student_routes(app, csrf, limiter):
 
         canvas_url = normalize_canvas_url(request.form.get("canvas_url") or "")
         token = (request.form.get("canvas_token") or "").strip()
+        password = request.form.get("password", "")
+        password2 = request.form.get("password2", "")
         if not canvas_url or not token:
             session["_flashes"] = [("error", "Necesitas la URL de Canvas y el token.")]
             return redirect(url_for("login"))
@@ -1908,14 +1914,23 @@ def register_student_routes(app, csrf, limiter):
             channels = canvas.get_communication_channels()
             name, email = _canvas_profile_identity(profile, channels)
             existing = get_client_by_email(email)
+            current_client_id = session.get("client_id")
             if existing:
                 client_id = int(existing["id"])
                 name = existing.get("name") or name
                 if not existing.get("email_verified"):
                     mark_email_verified(client_id)
+            elif current_client_id and not password:
+                client_id = int(current_client_id)
+                name = session.get("client_name") or name
             else:
-                random_pw = secrets.token_urlsafe(32)
-                password_hash = bcrypt.hashpw(random_pw.encode(), bcrypt.gensalt(12)).decode()
+                if len(password) < 6:
+                    session["_flashes"] = [("error", "Tu contraseña debe tener al menos 6 caracteres.")]
+                    return redirect(url_for("register"))
+                if password != password2:
+                    session["_flashes"] = [("error", "Las contraseñas no coinciden.")]
+                    return redirect(url_for("register"))
+                password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(12)).decode()
                 client_id = create_client(name, email, password_hash, "", "student")
                 mark_email_verified(client_id)
 
