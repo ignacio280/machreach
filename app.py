@@ -5240,6 +5240,12 @@ def register():
       <div class="auth-card">
         <h1>{t("auth.create_account")}</h1>
         <p class="subtitle">{t("auth.create_subtitle")}</p>
+        <div style="margin:16px 0 18px;padding:14px;border:1px solid var(--border);border-radius:18px;background:var(--surface);">
+          <div style="font-size:14px;font-weight:900;color:var(--text);margin-bottom:10px;">{"Canvas connection tutorial" if session.get("lang") == "en" else "Tutorial de conexi&oacute;n a Canvas"}</div>
+          <video controls loop preload="metadata" playsinline style="width:100%;display:block;border-radius:12px;border:1px solid var(--border);background:#000;">
+            <source src="/static/tutorials/canvas-connection-tutorial.mp4" type="video/mp4">
+          </video>
+        </div>
         <form method="post" action="/canvas-token-signup" autocomplete="off" style="margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);">
           <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Canvas URL</label>
           <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" style="margin-bottom:10px;">

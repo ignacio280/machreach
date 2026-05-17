@@ -1885,6 +1885,12 @@ def register_student_routes(app, csrf, limiter):
               <form class="card" method="post" autocomplete="off">
                 <h1>Entrar con Canvas</h1>
                 <p>Conecta tu Canvas una vez. MachReach crea tu cuenta, carga tu perfil y sincroniza tus cursos autom&aacute;ticamente.</p>
+                <div style="margin:16px 0 18px;padding:12px;border:1px solid #E2DCCC;border-radius:18px;background:#FFFDF8;">
+                  <div style="font-size:14px;font-weight:900;color:#1A1A1F;margin-bottom:10px;">Tutorial de conexi&oacute;n a Canvas</div>
+                  <video controls loop preload="metadata" playsinline style="width:100%;display:block;border-radius:12px;border:1px solid #E2DCCC;background:#000;">
+                    <source src="/static/tutorials/canvas-connection-tutorial.mp4" type="video/mp4">
+                  </video>
+                </div>
                 <label>URL de Canvas</label>
                 <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true">
                 <label>Token de acceso API</label>
@@ -10593,16 +10599,6 @@ def register_student_routes(app, csrf, limiter):
         <div class="card" style="padding:18px;">
 
           {pending_html}
-
-          <div style="border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:18px;background:var(--surface);">
-            <div style="font-weight:900;color:var(--text);margin-bottom:6px;">Entrada r&aacute;pida con Canvas</div>
-            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;line-height:1.4;">Pega tu token una vez y MachReach cargar&aacute; tu perfil y cursos autom&aacute;ticamente, sin aprobaci&oacute;n del admin de tu universidad.</p>
-            <form method="post" action="/canvas-token-signup" autocomplete="off" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" value="{_esc(url_val)}" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" style="flex:1;min-width:220px;" {canvas_form_disabled}>
-              <input name="canvas_token" type="text" placeholder="Token de acceso API" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-form-type="other" style="-webkit-text-security:disc;text-security:disc;flex:1;min-width:220px;" {canvas_form_disabled}>
-              <button class="btn btn-primary" type="submit" {canvas_form_disabled}>Entrar con Canvas</button>
-            </form>
-          </div>
 
           <div style="margin-bottom:20px;">
 
