@@ -1835,6 +1835,96 @@ def register_student_routes(app, csrf, limiter):
     def student_canvas_alias():
         return redirect(url_for("student_canvas_settings_page"))
 
+    @app.route("/canvas-token-signup", methods=["GET", "POST"])
+    @csrf.exempt
+    @limiter.limit("10 per minute", methods=["POST"])
+    def canvas_token_signup():
+        """Create/login a MachReach account from a user's Canvas API token.
+
+        This does not require university Canvas admin approval. The student
+        creates a personal Canvas access token, we read their Canvas profile,
+        create or reuse their MachReach account, save the token, and sync
+        courses immediately.
+        """
+        from outreach.db import create_client, get_client_by_email, mark_email_verified
+        import bcrypt
+
+        if request.method == "GET":
+            return render_template_string("""
+            <!doctype html>
+            <html><head>
+              <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+              <title>Entrar con Canvas</title>
+              <link rel="preconnect" href="https://fonts.googleapis.com">
+              <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
+              <style>
+                body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F7F3EA;color:#1A1A1F;font-family:Nunito,sans-serif;padding:20px}
+                .card{width:min(520px,100%);background:#FFFDF8;border:1px solid #E2DCCC;border-radius:24px;padding:28px;box-shadow:0 24px 80px rgba(20,18,30,.10)}
+                h1{font-family:"Bricolage Grotesque",sans-serif;font-size:42px;line-height:.95;margin:0 0 10px}
+                p{color:#68636F;line-height:1.45}
+                label{display:block;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#68636F;margin:14px 0 7px}
+                input{width:100%;box-sizing:border-box;border:1px solid #D8D0C0;border-radius:14px;padding:13px 14px;background:#FBF8F0;font:inherit}
+                button{width:100%;margin-top:16px;border:0;border-radius:999px;background:#FF7A3D;color:white;font-weight:900;padding:14px 18px;font:inherit;cursor:pointer}
+                .hint{font-size:12px}
+                a{color:#B94712;font-weight:900}
+              </style>
+            </head><body>
+              <form class="card" method="post" autocomplete="off">
+                <h1>Entrar con Canvas</h1>
+                <p>Conecta tu Canvas una vez. MachReach crea tu cuenta, carga tu perfil y sincroniza tus cursos autom&aacute;ticamente.</p>
+                <label>URL de Canvas</label>
+                <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true">
+                <label>Token de acceso API</label>
+                <input name="canvas_token" type="text" placeholder="Paste your Canvas access token" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" style="-webkit-text-security:disc;text-security:disc;">
+                <p class="hint">En Canvas: Account &rarr; Settings &rarr; <b>+ New Access Token</b>. Si tu universidad no permite OAuth, este m&eacute;todo igual funciona.</p>
+                <button type="submit">Crear cuenta y entrar</button>
+                <p class="hint" style="text-align:center;margin-bottom:0;"><a href="/login">Volver al login</a></p>
+              </form>
+            </body></html>
+            """)
+
+        canvas_url = normalize_canvas_url(request.form.get("canvas_url") or "")
+        token = (request.form.get("canvas_token") or "").strip()
+        if not canvas_url or not token:
+            session["_flashes"] = [("error", "Necesitas la URL de Canvas y el token.")]
+            return redirect(url_for("login"))
+
+        try:
+            canvas = CanvasClient(canvas_url, token)
+            profile = canvas.get_profile()
+            name, email = _canvas_profile_identity(profile, canvas_url)
+            existing = get_client_by_email(email)
+            if existing:
+                client_id = int(existing["id"])
+                name = existing.get("name") or name
+                if not existing.get("email_verified"):
+                    mark_email_verified(client_id)
+            else:
+                random_pw = secrets.token_urlsafe(32)
+                password_hash = bcrypt.hashpw(random_pw.encode(), bcrypt.gensalt(12)).decode()
+                client_id = create_client(name, email, password_hash, "", "student")
+                mark_email_verified(client_id)
+
+            sdb.save_canvas_token(client_id, canvas_url, token)
+            synced = _sync_canvas_courses_for_user(client_id, canvas_url, token)
+            pending_token = session.get("team_invite_token")
+            session.clear()
+            session["client_id"] = client_id
+            session["client_name"] = name
+            session["account_type"] = "student"
+            if pending_token:
+                session["team_invite_token"] = pending_token
+            session["_flashes"] = [
+                ("success", f"Canvas conectado. Cursos sincronizados: {synced.get('saved', 0)}.")
+            ]
+            return redirect(url_for("student_dashboard_page"))
+        except Exception as e:
+            log.warning("Canvas token signup failed: %s", e)
+            session["_flashes"] = [
+                ("error", f"No se pudo conectar Canvas: {str(e)[:180]}")
+            ]
+            return redirect(url_for("login"))
+
     @app.route("/canvas/oauth/start")
     @limiter.limit("20 per minute")
     def canvas_oauth_start():
@@ -10476,10 +10566,10 @@ def register_student_routes(app, csrf, limiter):
 
           <div style="border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:18px;background:var(--surface);">
             <div style="font-weight:900;color:var(--text);margin-bottom:6px;">Entrada r&aacute;pida con Canvas</div>
-            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;line-height:1.4;">Autoriza Canvas y MachReach crear&aacute; tu cuenta/sesi&oacute;n, guardar&aacute; tu conexi&oacute;n y cargar&aacute; tus cursos autom&aacute;ticamente.</p>
-            <form method="get" action="/canvas/oauth/start" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;line-height:1.4;">Pega tu token una vez y MachReach cargar&aacute; tu perfil y cursos autom&aacute;ticamente, sin aprobaci&oacute;n del admin de tu universidad.</p>
+            <form method="post" action="/canvas-token-signup" autocomplete="off" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" value="{_esc(url_val)}" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" style="flex:1;min-width:220px;" {canvas_form_disabled}>
-              <input type="hidden" name="next" value="/student/courses">
+              <input name="canvas_token" type="text" placeholder="Token de acceso API" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-form-type="other" style="-webkit-text-security:disc;text-security:disc;flex:1;min-width:220px;" {canvas_form_disabled}>
               <button class="btn btn-primary" type="submit" {canvas_form_disabled}>Entrar con Canvas</button>
             </form>
           </div>
