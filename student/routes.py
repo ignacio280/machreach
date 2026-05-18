@@ -539,33 +539,35 @@ _GPA_PLANILLA_HTML_ES = r"""
   }
 
   function semStats(sem){
-    var totalWeighted = 0, totalCred = 0, anyDone = false;
+    var totalWeighted = 0, gradedCred = 0, enrolledCred = 0, anyDone = false;
     sem.courses.forEach(function(c){
       var s = courseStats(c);
       var cr = num(c.credits) || 0;
+      if (cr > 0) enrolledCred += cr;
       if (s.hasAny && cr > 0) {
         totalWeighted += s.partial * cr;
-        totalCred += cr;
+        gradedCred += cr;
         anyDone = true;
       }
     });
-    return { avg: anyDone ? (totalWeighted / totalCred) : null, credits: totalCred };
+    return { avg: anyDone ? (totalWeighted / gradedCred) : null, credits: enrolledCred };
   }
 
   function careerStats(){
-    var totalWeighted = 0, totalCred = 0, anyDone = false;
+    var totalWeighted = 0, gradedCred = 0, enrolledCred = 0, anyDone = false;
     data.sems.forEach(function(sem){
       sem.courses.forEach(function(c){
         var s = courseStats(c);
         var cr = num(c.credits) || 0;
+        if (cr > 0) enrolledCred += cr;
         if (s.hasAny && cr > 0) {
           totalWeighted += s.partial * cr;
-          totalCred += cr;
+          gradedCred += cr;
           anyDone = true;
         }
       });
     });
-    return { avg: anyDone ? (totalWeighted / totalCred) : null, credits: totalCred };
+    return { avg: anyDone ? (totalWeighted / gradedCred) : null, credits: enrolledCred };
   }
 
   function fmt(n){ return (n == null || !isFinite(n)) ? '–' : n.toFixed(2); }
