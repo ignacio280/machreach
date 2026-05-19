@@ -1884,7 +1884,7 @@ def register_student_routes(app, csrf, limiter):
                 a{color:#B94712;font-weight:900}
               </style>
             </head><body>
-              <form class="card" method="post" autocomplete="off">
+              <form id="canvasSignupForm" class="card" method="post" autocomplete="off">
                 <h1>Entrar con Canvas</h1>
                 <p>Conecta tu Canvas una vez. MachReach crea tu cuenta, carga tu perfil y sincroniza tus cursos autom&aacute;ticamente.</p>
                 <div style="margin:16px 0 18px;padding:12px;border:1px solid #E2DCCC;border-radius:18px;background:#FFFDF8;">
@@ -1897,6 +1897,10 @@ def register_student_routes(app, csrf, limiter):
                 <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true">
                 <label>Token de acceso API</label>
                 <input name="canvas_token" type="text" placeholder="Paste your Canvas access token" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" style="-webkit-text-security:disc;text-security:disc;">
+                <div id="canvasDetectedEmailWrap" style="display:none;">
+                  <label>Correo detectado de Canvas</label>
+                  <input id="canvasDetectedEmail" name="canvas_detected_email" type="email" readonly autocomplete="username">
+                </div>
                 <label>Contrase&ntilde;a MachReach</label>
                 <input name="password" type="password" placeholder="M&iacute;nimo 6 caracteres" required minlength="6" autocomplete="new-password">
                 <label>Confirmar contrase&ntilde;a</label>
@@ -1905,6 +1909,33 @@ def register_student_routes(app, csrf, limiter):
                 <button type="submit">Crear cuenta y entrar</button>
                 <p class="hint" style="text-align:center;margin-bottom:0;"><a href="/login">Volver al login</a></p>
               </form>
+              <script>
+              (function(){
+                var form = document.getElementById('canvasSignupForm');
+                if (!form) return;
+                form.addEventListener('submit', async function(ev){
+                  var emailInput = document.getElementById('canvasDetectedEmail');
+                  if (!emailInput || emailInput.value) return;
+                  ev.preventDefault();
+                  var btn = form.querySelector('button[type="submit"]');
+                  var old = btn ? btn.textContent : '';
+                  if (btn) { btn.disabled = true; btn.textContent = 'Leyendo correo de Canvas...'; }
+                  try {
+                    var fd = new FormData(form);
+                    fd.set('preview', '1');
+                    var res = await fetch('/canvas-token-signup', { method:'POST', body:fd, credentials:'same-origin' });
+                    var data = await res.json();
+                    if (!res.ok || !data.ok || !data.email) throw new Error(data.error || 'No se pudo leer el correo de Canvas.');
+                    emailInput.value = data.email;
+                    document.getElementById('canvasDetectedEmailWrap').style.display = 'block';
+                    setTimeout(function(){ form.submit(); }, 60);
+                  } catch (err) {
+                    alert(err.message || 'No se pudo leer el correo de Canvas.');
+                    if (btn) { btn.disabled = false; btn.textContent = old; }
+                  }
+                });
+              })();
+              </script>
             </body></html>
             """)
 
@@ -1913,6 +1944,8 @@ def register_student_routes(app, csrf, limiter):
         password = request.form.get("password", "")
         password2 = request.form.get("password2", "")
         if not canvas_url or not token:
+            if request.form.get("preview") == "1":
+                return jsonify({"ok": False, "error": "Necesitas la URL de Canvas y el token."}), 400
             session["_flashes"] = [("error", "Necesitas la URL de Canvas y el token.")]
             return redirect(url_for("login"))
 
@@ -1921,6 +1954,8 @@ def register_student_routes(app, csrf, limiter):
             profile = canvas.get_profile()
             channels = canvas.get_communication_channels()
             name, email = _canvas_profile_identity(profile, channels)
+            if request.form.get("preview") == "1":
+                return jsonify({"ok": True, "name": name, "email": email})
             existing = get_client_by_email(email)
             current_client_id = session.get("client_id")
             if existing:
@@ -1957,6 +1992,8 @@ def register_student_routes(app, csrf, limiter):
             return redirect(url_for("student_dashboard_page"))
         except Exception as e:
             log.warning("Canvas token signup failed: %s", e)
+            if request.form.get("preview") == "1":
+                return jsonify({"ok": False, "error": f"No se pudo leer Canvas: {str(e)[:180]}"}), 400
             session["_flashes"] = [
                 ("error", f"No se pudo conectar Canvas: {str(e)[:180]}")
             ]
