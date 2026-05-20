@@ -1805,6 +1805,65 @@ LAYOUT = """<!DOCTYPE html>
       background: #11131A !important;
       color: #F7F0E4;
     }
+    :root[data-theme="dark"] .auth-card {
+      background: #1D202A !important;
+      color: #F7F0E4 !important;
+      border-color: #34313A !important;
+      box-shadow: 0 18px 54px rgba(0,0,0,.36) !important;
+    }
+    :root[data-theme="dark"] .auth-card h1,
+    :root[data-theme="dark"] .auth-card label,
+    :root[data-theme="dark"] .auth-card strong {
+      color: #F7F0E4 !important;
+    }
+    :root[data-theme="dark"] .auth-card .subtitle,
+    :root[data-theme="dark"] .auth-card p,
+    :root[data-theme="dark"] .auth-footer {
+      color: #B9B0A5 !important;
+    }
+    :root[data-theme="dark"] .auth-card input,
+    :root[data-theme="dark"] .auth-card textarea,
+    :root[data-theme="dark"] .auth-card select {
+      background: #11131A !important;
+      color: #F7F0E4 !important;
+      border-color: #34313A !important;
+    }
+    :root[data-theme="dark"] .auth-card input::placeholder,
+    :root[data-theme="dark"] .auth-card textarea::placeholder {
+      color: #82796F !important;
+    }
+    :root[data-theme="dark"] .auth-card [style*="background:var(--surface)"],
+    :root[data-theme="dark"] .auth-card [style*="background: var(--surface)"] {
+      background: #171A23 !important;
+      border-color: #34313A !important;
+    }
+    :root[data-theme="dark"] .auth-card [style*="rgba(255,122,61,.08)"] {
+      background: rgba(255,122,61,.13) !important;
+      border-color: rgba(255,122,61,.5) !important;
+      color: #F7F0E4 !important;
+    }
+    .auth-theme-toggle {
+      position:absolute;
+      top:16px;
+      right:16px;
+      width:42px;
+      height:42px;
+      border-radius:999px !important;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border:1px solid var(--border) !important;
+      background:var(--card) !important;
+      color:var(--text) !important;
+      box-shadow:var(--shadow) !important;
+      cursor:pointer;
+      font-size:16px;
+    }
+    :root[data-theme="dark"] .auth-theme-toggle {
+      background:#11131A !important;
+      border-color:#34313A !important;
+      color:#F7F0E4 !important;
+    }
     :root[data-theme="dark"] .content,
     :root[data-theme="dark"] .content-wide,
     :root[data-theme="dark"] .student-page,
@@ -5290,7 +5349,8 @@ def register():
             return redirect(url_for("register"))
     return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
-      <div class="auth-card">
+      <div class="auth-card" style="position:relative;">
+        <button id="theme-toggle" class="auth-theme-toggle" type="button" onclick="toggleDarkMode()" aria-label="Cambiar modo">🌙</button>
         <h1>{t("auth.create_account")}</h1>
         <p class="subtitle">{t("auth.create_subtitle")}</p>
         <div style="margin:16px 0 18px;padding:14px;border:1px solid var(--border);border-radius:18px;background:var(--surface);">
@@ -5380,7 +5440,8 @@ def login():
         return redirect(url_for("student_dashboard_page"))
     return render_template_string(LAYOUT, title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
-      <div class="auth-card">
+      <div class="auth-card" style="position:relative;">
+        <button id="theme-toggle" class="auth-theme-toggle" type="button" onclick="toggleDarkMode()" aria-label="Cambiar modo">🌙</button>
         <h1>{t("auth.welcome_back")}</h1>
         <p class="subtitle">{t("auth.sign_in_desc")}</p>
         <form method="post">
