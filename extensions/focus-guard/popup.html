@@ -1,71 +1,140 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
   <style>
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 18px 18px 16px;
-      width: 280px;
-      background: #0f172a;
-      color: #E2E8F0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+      padding: 16px;
+      width: 310px;
+      background: #F4F1EA;
+      color: #1A1A1F;
+      font-family: "Nunito", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    h1 { font-size: 15px; margin: 0 0 4px; font-weight: 700; }
-    .sub { font-size: 11px; color: #94A3B8; margin-bottom: 14px; }
-    .state {
-      padding: 12px 14px;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 600;
-      text-align: center;
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
       margin-bottom: 14px;
-      border: 1px solid transparent;
+    }
+    .mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: #1A1A1F;
+      color: #FFE0C8;
+      font-weight: 1000;
+      box-shadow: inset 0 -3px 0 rgba(0,0,0,.28), 0 2px 0 rgba(20,18,30,.12);
+    }
+    h1 {
+      margin: 0;
+      font-family: "Bricolage Grotesque", "Nunito", sans-serif;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: -.04em;
+      font-weight: 800;
+    }
+    h1 span { color: #FF7A3D; }
+    .sub {
+      margin-top: 3px;
+      color: #77756F;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .state {
+      padding: 13px 14px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 900;
+      text-align: center;
+      margin-bottom: 12px;
+      border: 1px solid #E2DCCC;
+      background: #FFFDF8;
+      box-shadow: 0 1px 0 rgba(20,18,30,.04);
     }
     .state.active {
-      background: linear-gradient(135deg, rgba(99,102,241,.2), rgba(139,92,246,.2));
-      border-color: rgba(139,92,246,.4);
-      color: #C7D2FE;
+      background: #FFE0C8;
+      border-color: rgba(255,122,61,.42);
+      color: #7B3012;
     }
     .state.idle {
-      background: rgba(148,163,184,.08);
-      border-color: rgba(148,163,184,.15);
-      color: #94A3B8;
+      background: #FFFDF8;
+      color: #77756F;
     }
     .dot {
-      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-      margin-right: 6px; vertical-align: middle;
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 7px;
+      vertical-align: middle;
     }
-    .dot.on { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: p 1.4s infinite; }
-    .dot.off { background: #64748b; }
-    @keyframes p { 50% { opacity: .4; } }
+    .dot.on { background: #FF7A3D; box-shadow: 0 0 10px rgba(255,122,61,.7); animation: pulse 1.3s infinite; }
+    .dot.off { background: #B9B0A5; }
+    @keyframes pulse { 50% { opacity: .45; transform: scale(.82); } }
     .list {
-      background: rgba(0,0,0,.2); border-radius: 8px;
-      padding: 10px 12px; font-size: 11px; color: #94A3B8; line-height: 1.7;
+      background: #FFFDF8;
+      border: 1px solid #E2DCCC;
+      border-radius: 16px;
+      padding: 12px 13px;
+      color: #77756F;
+      font-size: 12px;
+      line-height: 1.65;
+      box-shadow: 0 1px 0 rgba(20,18,30,.04);
     }
-    .list b { color: #E2E8F0; }
-    a { color: #A78BFA; text-decoration: none; font-size: 12px; display: block; margin-top: 12px; text-align: center; }
+    .list b {
+      display: block;
+      color: #1A1A1F;
+      margin-bottom: 3px;
+      font-weight: 900;
+    }
+    .list .gap { height: 8px; }
+    a {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      margin-top: 12px;
+      border-radius: 13px;
+      background: #1A1A1F;
+      color: #FFF8E1;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 1000;
+      box-shadow: 0 4px 0 rgba(0,0,0,.18), 0 12px 28px rgba(20,18,30,.12);
+    }
   </style>
 </head>
 <body>
-  <h1>🛡️ Focus Guard</h1>
-  <div class="sub">Bloqueador de distracciones para MachReach</div>
+  <div class="top">
+    <div class="mark">M</div>
+    <div>
+      <h1>Mach<span>Reach</span></h1>
+      <div class="sub">Focus Guard</div>
+    </div>
+  </div>
   <div id="state" class="state idle"><span class="dot off"></span>Inactivo</div>
   <div class="list">
-    <b>Bloqueados durante el enfoque:</b> Instagram · TikTok · Twitter/X · Facebook · Reddit · Snapchat · Pinterest · Twitch · Netflix<br>
-    <b>Siempre permitidos:</b> YouTube (puede que estés estudiando).
+    <b>Bloqueados durante enfoque</b>
+    Instagram, TikTok, Twitter/X, Facebook, Reddit, Snapchat, Pinterest, Twitch y Netflix.
+    <div class="gap"></div>
+    <b>Permitido</b>
+    YouTube queda disponible porque puede ser material de estudio.
   </div>
-  <a href="https://machreach.com/student/focus" target="_blank">Abrir MachReach →</a>
+  <a href="https://machreach.com/student/focus" target="_blank">Abrir Enfoque -></a>
   <script>
     chrome.storage.local.get(["focusActive", "focusExpiresAt"], (d) => {
       const active = d.focusActive && (!d.focusExpiresAt || Date.now() < d.focusExpiresAt);
       const el = document.getElementById("state");
       if (active) {
         el.className = "state active";
-        el.innerHTML = '<span class="dot on"></span>Activo — sitios bloqueados';
+        el.innerHTML = '<span class="dot on"></span>Activo - sitios bloqueados';
       } else {
         el.className = "state idle";
-        el.innerHTML = '<span class="dot off"></span>Sin sesión activa';
+        el.innerHTML = '<span class="dot off"></span>Sin sesion activa';
       }
     });
   </script>
