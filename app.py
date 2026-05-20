@@ -4564,6 +4564,39 @@ LAYOUT = """<!DOCTYPE html>
     </div>
   </div>
 
+  <div id="mrStarterTutorial" style="display:none;position:fixed;inset:0;z-index:9999;
+       background:rgba(10,14,26,.72);backdrop-filter:blur(12px);
+       align-items:center;justify-content:center;padding:20px;">
+    <div style="background:#FFFDF8;color:#1A1A1F;border:1px solid #E2DCCC;border-radius:24px;
+         max-width:760px;width:100%;padding:30px;box-shadow:0 34px 90px rgba(20,18,30,.32);">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px;">
+        <div>
+          <div style="font-size:12px;font-weight:900;letter-spacing:.12em;color:#FF6B35;text-transform:uppercase;margin-bottom:6px;">Primeros 3 pasos</div>
+          <h2 style="font-size:34px;line-height:1;margin:0;font-family:'Bricolage Grotesque',Inter,sans-serif;">Tu cuenta ya está lista.</h2>
+          <p style="margin:10px 0 0;color:#68636F;font-weight:700;">Ahora haz esto para que MachReach empiece a servirte de verdad.</p>
+        </div>
+        <button id="mrStarterClose" type="button" style="border:1px solid #D8D0C0;background:#FBF8F0;border-radius:999px;padding:8px 12px;font-weight:900;cursor:pointer;">Cerrar</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+        <a href="/student/courses" class="mr-starter-card" data-step="courses" style="text-decoration:none;color:inherit;border:1px solid #E2DCCC;border-radius:18px;padding:18px;background:#FFFFFF;display:block;">
+          <div style="font-size:28px;margin-bottom:8px;">📚</div>
+          <strong style="display:block;font-size:17px;margin-bottom:6px;">Revisa tus cursos</strong>
+          <span style="display:block;color:#68636F;font-size:14px;line-height:1.35;">Confirma que Canvas cargó bien tus ramos.</span>
+        </a>
+        <a href="/student/focus" class="mr-starter-card" data-step="focus" style="text-decoration:none;color:inherit;border:1px solid #E2DCCC;border-radius:18px;padding:18px;background:#FFFFFF;display:block;">
+          <div style="font-size:28px;margin-bottom:8px;">🎯</div>
+          <strong style="display:block;font-size:17px;margin-bottom:6px;">Haz tu primera sesión</strong>
+          <span style="display:block;color:#68636F;font-size:14px;line-height:1.35;">El XP y las monedas solo nacen desde Enfoque.</span>
+        </a>
+        <a href="/student/leaderboard" class="mr-starter-card" data-step="rank" style="text-decoration:none;color:inherit;border:1px solid #E2DCCC;border-radius:18px;padding:18px;background:#FFFFFF;display:block;">
+          <div style="font-size:28px;margin-bottom:8px;">🏆</div>
+          <strong style="display:block;font-size:17px;margin-bottom:6px;">Mira tu ranking</strong>
+          <span style="display:block;color:#68636F;font-size:14px;line-height:1.35;">Compites por país, universidad y carrera.</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
   <style>
     @keyframes mrSlideDown { from { transform:translate(-50%,-30px); opacity:0;} to { transform:translate(-50%,0); opacity:1;}}
     @keyframes mrModalIn { from { transform:scale(.92); opacity:0;} to { transform:scale(1); opacity:1;}}
@@ -4582,11 +4615,13 @@ LAYOUT = """<!DOCTYPE html>
     .mr-create-new { padding:12px 16px; color:#7C9CFF; cursor:pointer; font-weight:600; text-align:center;
       border-top:1px solid rgba(148,163,184,.15);}
     .mr-create-new:hover { background:rgba(124,156,255,.1);}
+    .mr-starter-card:hover { transform:translateY(-2px); box-shadow:0 16px 36px rgba(20,18,30,.10); border-color:#FF7A3D!important; }
   </style>
 
   <script>
   (function(){
     const modal = document.getElementById('mrOnboardingModal');
+    const starter = document.getElementById('mrStarterTutorial');
     const banner = document.getElementById('mrXpBanner');
     const stepContent = document.getElementById('mrStepContent');
     const stepDots = document.querySelectorAll('.mr-step-dot');
@@ -4796,8 +4831,7 @@ LAYOUT = """<!DOCTYPE html>
         if (j.ok) {
           modal.style.display = 'none';
           document.body.style.overflow = '';
-          // Reload to refresh any rank/league widgets
-          setTimeout(() => mrReload(), 300);
+          showStarterTutorial();
         } else {
           nextBtn.disabled = false;
           nextBtn.textContent = 'Finish →';
@@ -4840,6 +4874,27 @@ LAYOUT = """<!DOCTYPE html>
       );
     }
 
+    function showStarterTutorial() {
+      if (!starter) return;
+      starter.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+    function closeStarterTutorial() {
+      if (!starter) return;
+      starter.style.display = 'none';
+      document.body.style.overflow = '';
+      try { fetch('/api/academic/starter-tutorial/seen', { method:'POST' }); } catch(_){}
+    }
+    const starterCloseBtn = document.getElementById('mrStarterClose');
+    if (starterCloseBtn) starterCloseBtn.addEventListener('click', closeStarterTutorial);
+    if (starter) {
+      starter.querySelectorAll('a.mr-starter-card').forEach(function(a){
+        a.addEventListener('click', function(){
+          try { fetch('/api/academic/starter-tutorial/seen', { method:'POST' }); } catch(_){}
+        });
+      });
+    }
+
     // Init: check whether we need to show the modal / banner
     async function init() {
       try {
@@ -4852,6 +4907,10 @@ LAYOUT = """<!DOCTYPE html>
           modal.style.display = 'flex';
           document.body.style.overflow = 'hidden';
           go(0);
+          return;
+        }
+        if (!j.starter_tutorial_seen) {
+          showStarterTutorial();
           return;
         }
         // Setup IS complete. Only show the 'previous progress preserved' banner if
@@ -5239,6 +5298,10 @@ def register():
           <video controls loop preload="metadata" playsinline style="width:100%;display:block;border-radius:12px;border:1px solid var(--border);background:#000;">
             <source src="/static/tutorials/canvas-connection-tutorial.mp4" type="video/mp4">
           </video>
+        </div>
+        <div style="margin:0 0 16px;padding:14px;border:1px solid rgba(255,122,61,.35);border-radius:16px;background:rgba(255,122,61,.08);color:var(--text);font-size:13px;line-height:1.5;">
+          <strong>{"Privacy promise:" if session.get("lang") == "en" else "Promesa de privacidad:"}</strong>
+          {" We only read your Canvas profile email and courses. We do not submit assignments, change grades, publish content, or touch your Canvas account." if session.get("lang") == "en" else " Solo leemos tu correo de perfil y tus cursos de Canvas. No entregamos tareas, no cambiamos notas, no publicamos nada ni tocamos tu cuenta de Canvas."}
         </div>
         <form id="canvasSignupForm" method="post" action="/canvas-token-signup" autocomplete="off" style="margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);">
           <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Canvas URL</label>

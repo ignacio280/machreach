@@ -148,6 +148,7 @@ def register_academic_routes(app, csrf, limiter):
             "university": univ,
             "major": major,
             "prior_xp": prior_xp,
+            "starter_tutorial_seen": bool(session.get("starter_tutorial_seen")),
             "xp_preserve_banner_seen": bool(prof.get("xp_preserve_banner_seen")),
         })
 
@@ -185,6 +186,13 @@ def register_academic_routes(app, csrf, limiter):
                 log.warning("canvas save failed: %s", e)
 
         return jsonify({"ok": True, "canvas_saved": canvas_saved})
+
+    @app.route("/api/academic/starter-tutorial/seen", methods=["POST"])
+    def academic_starter_tutorial_seen():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        session["starter_tutorial_seen"] = True
+        return jsonify({"ok": True})
 
     @app.route("/api/academic/banner/seen", methods=["POST"])
     def academic_banner_seen():
