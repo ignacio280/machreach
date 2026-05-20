@@ -267,7 +267,7 @@ function Footer() {
           flexWrap: "wrap", gap: 12,
         }}>
           <span>© 2026 MACHREACH · SANTIAGO, CL</span>
-          <span>BUILT WITH ☕ &amp; STREAKS</span>
+          <span>MACHREACH · SANTIAGO, CHILE</span>
         </div>
       </div>
       <style>{`@media (max-width: 720px) { .foot-grid { grid-template-columns: 1fr 1fr !important; } }`}</style>

@@ -3181,7 +3181,6 @@ LAYOUT = """<!DOCTYPE html>
         {t:'Quizzes', u:'/student/quizzes', i:'📝', s:'Study'},
         {t:'Notes', u:'/student/notes', i:'📖', s:'Study'},
         {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
-        {t:'Panic Mode', u:'/student/panic', i:'🚨', s:'Tools'},
         {t:'Grade Sheet', u:'/student/gpa', i:'📈', s:'Tools'},
         {t:'Leaderboard', u:'/student/leaderboard', i:'🏆', s:'Social'},
         {t:'Settings', u:'/student/settings', i:'\u2699\uFE0F', s:'Other'},
@@ -3882,16 +3881,16 @@ LAYOUT = """<!DOCTYPE html>
       "Hard — Challenge": "Difícil — Desafío",
       "Generate AI Flashcards": "Generar Tarjetas con IA",
       "Generate AI Quiz": "Generar Examen con IA",
-      "Generate AI Notes": "Generar Apuntes con IA",
+      "Generate AI Notes": "Generar material de estudio con IA",
       "AI Flashcards": "Tarjetas IA",
-      "AI Study Tutor": "Tutor de Estudio IA",
+      "AI Study Tutor": "Herramientas de estudio IA",
       "Practice Quizzes": "Exámenes de Práctica",
       "Smart spaced repetition · Generated from your course materials":
         "Repetición espaciada · Generadas desde tus materiales de curso",
       "Unlimited AI-generated questions · Adjustable difficulty":
         "Preguntas ilimitadas con IA · Dificultad ajustable",
-      "Ask anything about your courses — your AI tutor uses your own notes and course material to help.":
-        "Pregunta lo que sea sobre tus cursos — tu tutor IA usa tus propios apuntes para ayudarte.",
+      "Generate study tools from your own notes and course material.":
+        "Genera herramientas de estudio desde tus propios apuntes y materiales.",
       "General (no specific course)": "General (sin curso específico)",
       "Up to 100. Large quizzes generate in batches — give it a few seconds.":
         "Hasta 100. Los exámenes grandes se generan por lotes — dale unos segundos.",
@@ -3923,11 +3922,6 @@ LAYOUT = """<!DOCTYPE html>
       "PDF, DOCX, or TXT only": "Solo PDF, DOCX, o TXT",
       "File too large (max 15MB)": "Archivo demasiado grande (máx 15MB)",
       "Only PDF, DOCX, and TXT files": "Solo archivos PDF, DOCX y TXT",
-
-      // Panic mode
-      "Panic Mode": "Modo Pánico",
-      "Exam tomorrow and nothing's done? Get a ruthless cram plan in 10 seconds.":
-        "¿Examen mañana y nada hecho? Obtén un plan de estudio en 10 segundos.",
 
       // Notes page
       "Generated notes": "Apuntes generados",
@@ -4113,7 +4107,7 @@ LAYOUT = """<!DOCTYPE html>
       "AI Study Notes": "Apuntes de Estudio con IA",
       "Comprehensive notes generated from your course materials":
         "Apuntes completos generados desde tus materiales de curso",
-      "Generate AI Study Notes": "Generar Apuntes con IA",
+      "Generate AI Study Notes": "Generar material de estudio con IA",
       "Export PDF": "Exportar PDF", "Print": "Imprimir",
       "Uploading...": "Subiendo...", "AI-summarizing...": "Resumiendo con IA...",
       "No notes yet": "Aún no hay apuntes",
@@ -6932,29 +6926,31 @@ def privacy_page():
     return _render("Privacy Policy", Markup("""
     <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
       <h1 style="font-size:32px;margin-bottom:8px;">Privacy Policy</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 28, 2026</p>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: May 19, 2026</p>
       <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
-        <p style="background:rgba(139,92,246,.08);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:24px;"><strong>Plain-English summary:</strong> MachReach is focused on student study tools. We collect only what those tools need, we never sell your data, passwords are hashed with bcrypt, and you can export or delete your data from Settings.</p>
+        <p style="background:rgba(255,122,61,.08);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:24px;"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Information We Collect</h2>
-        <p><strong>Account information:</strong> name, email address, and password hashed with bcrypt.</p>
-        <p><strong>Canvas LMS data:</strong> if you connect Canvas, we fetch your courses, assignments, and exam dates. Your Canvas access token is encrypted at rest and can be disconnected in Settings.</p>
-        <p><strong>Study materials:</strong> PDFs, DOCX files, notes, and text you provide for flashcards, quizzes, AI notes, and the AI tutor.</p>
-        <p><strong>Gamification data:</strong> XP events, study streaks, badges, quiz scores, flashcard reviews, focus sessions, leaderboard rank, and in-app coin activity.</p>
-        <p><strong>Focus Guard extension:</strong> blocklists and active-session state are stored locally in your browser and are not sent to our servers.</p>
+        <p><strong>Account information:</strong> your name, institutional or Canvas email address, and password hash. When you create an account through Canvas, MachReach reads the email address exposed by your Canvas profile so you can log in later with that email and the password you set.</p>
+        <p><strong>Canvas LMS data:</strong> if you connect Canvas with a personal access token, we fetch your Canvas profile and courses. Your Canvas access token is stored so MachReach can sync your courses and can be disconnected in Settings.</p>
+        <p><strong>Study materials:</strong> files, notes, and text you choose to upload or type for features such as quizzes and flashcards.</p>
+        <p><strong>Study activity:</strong> focus sessions, minutes studied per course, XP events, streaks, badges, quiz attempts, flashcard reviews, leaderboard rank, course outcomes, grades you enter, and in-app coin activity.</p>
+        <p><strong>Focus Guard extension:</strong> extension settings and active-session state are used to support focus sessions. Some settings may be stored locally in your browser.</p>
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. How We Use Your Information</h2>
         <ul style="padding-left:20px;">
-          <li>To generate study plans, flashcards, quizzes, notes, tutor answers, and panic-mode plans</li>
-          <li>To track XP, streaks, leaderboard rankings, and coin payouts</li>
+          <li>To create your account, authenticate you, and let you reset your password</li>
+          <li>To sync your Canvas courses when you choose to connect Canvas</li>
+          <li>To generate and manage quizzes, flashcards, focus sessions, grade tracking, and course analytics</li>
+          <li>To track XP, streaks, leaderboard rankings, badges, coins, and study-group activity</li>
           <li>To process subscriptions and service notifications such as password resets and study emails you opted into</li>
           <li>To keep the service secure, reliable, and improving over time</li>
         </ul>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Data Security</h2>
-        <p>We use HTTPS/TLS, CSRF protection, rate limiting, strict security headers, parameterized SQL, HTML escaping, secure cookies in production, and encryption for sensitive tokens.</p>
+        <p>We use HTTPS/TLS, CSRF protection, rate limiting, strict security headers, parameterized SQL, HTML escaping, secure cookies in production, hashed passwords, and access controls for sensitive account data.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Sub-processors</h2>
         <ul style="padding-left:20px;">
-          <li><strong>OpenAI:</strong> study materials and questions may be sent to generate student AI features. OpenAI does not train on API data per its API data-usage policy.</li>
-          <li><strong>Instructure / Canvas LMS:</strong> optional course and assignment import.</li>
+          <li><strong>OpenAI:</strong> content you submit for AI-generated quizzes or flashcards may be sent to generate those study tools. OpenAI does not train on API data per its API data-usage policy.</li>
+          <li><strong>Instructure / Canvas LMS:</strong> optional profile and course import when you connect Canvas.</li>
           <li><strong>Lemon Squeezy:</strong> payment and subscription processing.</li>
           <li><strong>Render:</strong> application hosting and database infrastructure.</li>
           <li><strong>Sentry:</strong> error reporting with sensitive fields scrubbed where possible.</li>
@@ -6973,16 +6969,17 @@ def terms_page():
     return _render("Terms of Service", Markup("""
     <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
       <h1 style="font-size:32px;margin-bottom:8px;">Terms of Service</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: April 28, 2026</p>
+      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: May 19, 2026</p>
       <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. Description of Service</h2>
-        <p>MachReach provides student study tools including Canvas LMS integration, flashcards, practice quizzes, focus timers, XP, leaderboards, coin rewards, study analytics, and the optional Focus Guard browser extension.</p>
+        <p>MachReach provides student study tools including Canvas LMS course sync, focus timers, study-time tracking, flashcards, practice quizzes, grade tracking, XP, streaks, leaderboards, study groups, coins, course analytics, and an optional Focus Guard browser extension.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Account Responsibilities</h2>
         <ul style="padding-left:20px;">
           <li>You must provide accurate information when registering</li>
           <li>You are responsible for maintaining the security of your account credentials</li>
+          <li>If you connect Canvas, you must use your own Canvas account and personal access token</li>
           <li>You must not share your account with others</li>
           <li>You must be at least 16 years old to use MachReach</li>
           <li>You must not attempt to probe, scan, or exploit vulnerabilities in the service</li>
@@ -6992,7 +6989,7 @@ def terms_page():
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Subscriptions and Billing</h2>
         <p>Paid student plans are billed through Lemon Squeezy. You can cancel at any time; access continues until the end of the billing period. Refunds are handled case by case.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. AI Features</h2>
-        <p>AI output is provided as a suggestion. You are responsible for reviewing it before relying on it academically. The AI tutor is not a substitute for professional, academic, legal, medical, or financial advice.</p>
+        <p>AI-generated quizzes, flashcards, or other study content are provided as suggestions and may be incomplete or incorrect. You are responsible for reviewing generated content before relying on it academically.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. Leaderboards and Coins</h2>
         <p>Coins have no cash value, cannot be transferred between accounts, and can be redeemed only inside MachReach. We may withhold or reverse rewards for suspected abuse.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. Limitation of Liability</h2>
