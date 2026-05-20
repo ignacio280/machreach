@@ -139,7 +139,7 @@
       gap: 12px;
       flex-wrap: wrap;
     }
-    a.primary, button.ghost {
+    a.primary {
       min-height: 48px;
       padding: 13px 22px;
       border-radius: 14px;
@@ -157,23 +157,6 @@
       box-shadow: 0 5px 0 rgba(123,48,18,.48), 0 18px 34px rgba(255,122,61,.18);
     }
     a.primary:hover { transform: translateY(-2px); box-shadow: 0 7px 0 rgba(123,48,18,.48), 0 24px 42px rgba(255,122,61,.22); }
-    button.ghost {
-      background: transparent;
-      color: var(--ink);
-      border: 1px solid var(--line);
-    }
-    button.ghost:hover {
-      background: rgba(244,241,234,.06);
-      border-color: rgba(247,240,228,.28);
-      transform: translateY(-2px);
-    }
-
-    .note {
-      margin-top: 28px;
-      color: #82796F;
-      font-size: 12px;
-      font-weight: 800;
-    }
 
     @media (prefers-color-scheme: light) {
       :root {
@@ -195,8 +178,6 @@
         background: rgba(255,253,248,.94);
         box-shadow: 0 22px 70px rgba(20,18,30,.12), inset 0 1px 0 rgba(255,255,255,.65);
       }
-      button.ghost { color: var(--black); }
-      button.ghost:hover { background: #F4F1EA; border-color: #D4C9B6; }
     }
 
     @media (max-width: 640px) {
@@ -204,7 +185,7 @@
       .brand { top: 18px; left: 18px; }
       .card { border-radius: 22px; }
       .btns { flex-direction: column; }
-      a.primary, button.ghost { width: 100%; }
+      a.primary { width: 100%; }
     }
   </style>
 </head>
@@ -222,9 +203,7 @@
     <div class="src" id="src"></div>
     <div class="btns">
       <a class="primary" href="https://machreach.com/student/focus">← Volver a Enfoque</a>
-      <button class="ghost" id="history-back">Volver atras</button>
     </div>
-    <div class="note">Tu racha y tu yo del futuro te lo van a agradecer.</div>
   </main>
 
   <script>
@@ -232,7 +211,6 @@
     const src = params.get("src");
     const el = document.getElementById("src");
     if (src) { el.textContent = src; } else { el.style.display = "none"; }
-    document.getElementById("history-back").onclick = () => history.back();
   </script>
 </body>
 </html>

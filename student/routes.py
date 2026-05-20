@@ -8213,9 +8213,9 @@ def register_student_routes(app, csrf, limiter):
             courseName = (courseName || {json.dumps("this course" if _focus_is_en else "este ramo")}).trim();
             var msg = '';
             if (d.plus_required) {{
-              msg = {json.dumps("Want to know how much to study for " if _focus_is_en else "¿Quieres saber cuánto estudiar para ")} + courseName + {json.dumps("? Real data exists for this course. Consider Plus." if _focus_is_en else "? Hay datos reales de este ramo. Considera Plus.")};
+              msg = {json.dumps("Students who passed " if _focus_is_en else "Los estudiantes que aprobaron ")} + courseName + {json.dumps(" have a real study benchmark here. Upgrade to Plus to see the average hours and final grade." if _focus_is_en else " tienen un benchmark real en MachReach. Hazte Plus para ver las horas promedio y la nota final promedio.")};
             }} else {{
-              msg = {json.dumps("Real benchmark for " if _focus_is_en else "Benchmark real para ")} + courseName + ': ' + d.avg_hours + 'h ' + {json.dumps("average study time to pass, with average final grade " if _focus_is_en else "promedio para aprobar, con nota final promedio ")} + d.avg_final_grade + '.';
+              msg = {json.dumps("On average, students who passed " if _focus_is_en else "En promedio, los estudiantes que aprobaron ")} + courseName + {json.dumps(" studied " if _focus_is_en else " estudiaron ")} + d.avg_hours + {json.dumps(" hours and finished with an average final grade of " if _focus_is_en else " horas y terminaron con una nota final promedio de ")} + d.avg_final_grade + '.';
             }}
             showPersistentCourseToast(msg);
           }} catch(e) {{}}
