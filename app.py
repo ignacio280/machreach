@@ -1842,26 +1842,32 @@ LAYOUT = """<!DOCTYPE html>
       border-color: rgba(255,122,61,.5) !important;
       color: #F7F0E4 !important;
     }
-    .auth-theme-toggle {
-      position:absolute;
-      top:16px;
-      right:16px;
-      width:42px;
-      height:42px;
-      border-radius:999px !important;
-      display:inline-flex;
+    .nav-theme-toggle {
+      min-width:38px;
+      height:38px;
+      padding:0 10px !important;
+      border-radius:12px !important;
+      display:inline-flex !important;
       align-items:center;
       justify-content:center;
       border:1px solid var(--border) !important;
-      background:var(--card) !important;
-      color:var(--text) !important;
-      box-shadow:var(--shadow) !important;
+      background:transparent !important;
+      color:var(--text-secondary) !important;
+      box-shadow:none !important;
       cursor:pointer;
-      font-size:16px;
+      font-size:15px;
+      line-height:1;
     }
-    :root[data-theme="dark"] .auth-theme-toggle {
-      background:#11131A !important;
+    .nav-theme-toggle:hover {
+      background:#EDE7DA !important;
+      color:#1A1A1F !important;
+    }
+    :root[data-theme="dark"] .nav-theme-toggle {
       border-color:#34313A !important;
+      color:#F7F0E4 !important;
+    }
+    :root[data-theme="dark"] .nav-theme-toggle:hover {
+      background:#1D202A !important;
       color:#F7F0E4 !important;
     }
     :root[data-theme="dark"] .content,
@@ -2798,6 +2804,7 @@ LAYOUT = """<!DOCTYPE html>
         {% endif %}
         <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881;</a>
         {% endif %}
+        <button id="theme-toggle" class="nav-theme-toggle" type="button" onclick="toggleDarkMode()" title="{{ student_ui.toggle_theme }}">&#127769;</button>
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
         <div class="nav-divider"></div>
         <a href="/student/profile" class="nav-user" style="text-decoration:none;cursor:pointer;color:#94A3B8;" title="My profile">{{client_name}}</a>
@@ -2805,6 +2812,7 @@ LAYOUT = """<!DOCTYPE html>
       {% else %}
         <a href="/login">{{nav.login}}</a>
         <a href="/register" class="btn btn-primary btn-sm" style="color:#fff;">{{nav.get_started}}</a>
+        <button id="theme-toggle" class="nav-theme-toggle" type="button" onclick="toggleDarkMode()" title="{{nav.toggle_theme|default('Cambiar modo')}}">&#127769;</button>
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
       {% endif %}
     </div>
@@ -5349,8 +5357,7 @@ def register():
             return redirect(url_for("register"))
     return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
-      <div class="auth-card" style="position:relative;">
-        <button id="theme-toggle" class="auth-theme-toggle" type="button" onclick="toggleDarkMode()" aria-label="Cambiar modo">🌙</button>
+      <div class="auth-card">
         <h1>{t("auth.create_account")}</h1>
         <p class="subtitle">{t("auth.create_subtitle")}</p>
         <div style="margin:16px 0 18px;padding:14px;border:1px solid var(--border);border-radius:18px;background:var(--surface);">
@@ -5440,8 +5447,7 @@ def login():
         return redirect(url_for("student_dashboard_page"))
     return render_template_string(LAYOUT, title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
-      <div class="auth-card" style="position:relative;">
-        <button id="theme-toggle" class="auth-theme-toggle" type="button" onclick="toggleDarkMode()" aria-label="Cambiar modo">🌙</button>
+      <div class="auth-card">
         <h1>{t("auth.welcome_back")}</h1>
         <p class="subtitle">{t("auth.sign_in_desc")}</p>
         <form method="post">
