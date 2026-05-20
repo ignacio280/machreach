@@ -202,7 +202,7 @@
     <p>Estas estudiando con MachReach. Cierra la distraccion ahora y vuelve cuando termine tu temporizador.</p>
     <div class="src" id="src"></div>
     <div class="btns">
-      <a class="primary" href="https://machreach.com/student/focus">← Volver a Enfoque</a>
+      <a class="primary" id="focus-return" href="https://machreach.com/student/focus">← Volver a Enfoque</a>
     </div>
   </main>
 
@@ -211,6 +211,18 @@
     const src = params.get("src");
     const el = document.getElementById("src");
     if (src) { el.textContent = src; } else { el.style.display = "none"; }
+    document.getElementById("focus-return").addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const focusUrl = "https://machreach.com/student/focus";
+      if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.getCurrent) {
+        chrome.tabs.getCurrent((tab) => {
+          if (tab && tab.id) chrome.tabs.update(tab.id, { url: focusUrl });
+          else location.replace(focusUrl);
+        });
+      } else {
+        location.replace(focusUrl);
+      }
+    });
   </script>
 </body>
 </html>

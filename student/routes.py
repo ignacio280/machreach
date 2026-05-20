@@ -6265,10 +6265,12 @@ def register_student_routes(app, csrf, limiter):
         .course-detail-card {{ margin-top:16px;padding-top:14px;border-top:1px dashed #E2DCCC; }}
         .course-benchmark {{ margin-bottom:10px;padding:10px 12px;border-radius:12px;background:#FFF3E8;border:1px solid #FFD0B5;color:#7A3518;font-size:12px;font-weight:800;display:none; }}
         .course-benchmark.locked {{ background:#F7F2FF;border-color:#D9CCFF;color:#3F2A8E; }}
-        .course-outcome-actions {{ display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px; }}
+        .course-outcome-actions {{ display:grid;grid-template-columns:minmax(120px,150px) minmax(120px,150px) auto 1fr;gap:12px 12px;align-items:end;margin-bottom:18px; }}
         .course-outcome-actions label {{ display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#94939C; }}
         .course-grade-input {{ width:120px;border:1px solid #E2DCCC;border-radius:10px;background:#FBF8F0;color:#1A1A1F;padding:9px 10px;font-weight:800; }}
-        .course-outcome-state {{ font-size:12px;font-weight:900;color:#5C5C66; }}
+        .course-outcome-actions .btn {{ min-height:42px;align-self:end; }}
+        .course-outcome-state {{ min-height:42px;display:inline-flex;align-items:center;font-size:12px;font-weight:900;color:#5C5C66; }}
+        @media (max-width:720px) {{ .course-outcome-actions {{ grid-template-columns:1fr 1fr; }} .course-outcome-actions .btn,.course-outcome-state {{ grid-column:1/-1; }} .course-grade-input {{ width:100%; }} }}
         .ccard-outcome-pending,.ccard-outcome-done {{ margin:-4px 0 12px;padding:9px 11px;border-radius:12px;font-size:12px;font-weight:900;line-height:1.25; }}
         .ccard-outcome-pending {{ background:#FFF3E8;border:1px solid #FFD0B5;color:#9A3B12; }}
         .ccard-outcome-done {{ background:#EAFBF2;border:1px solid #B7E8CE;color:#0F7A4B; }}
@@ -6278,6 +6280,15 @@ def register_student_routes(app, csrf, limiter):
         :root[data-theme="dark"] .course-outcome-state {{ color:#D7DCE6; }}
         :root[data-theme="dark"] .ccard-outcome-pending {{ background:#2A221A;border-color:#7C4A25;color:#FFD9C2; }}
         :root[data-theme="dark"] .ccard-outcome-done {{ background:#10251D;border-color:#246B4D;color:#BDF5D8; }}
+        .course-exams-head {{ display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px; }}
+        .course-exams-title {{ display:inline-flex;align-items:center;gap:8px;color:var(--text);font-size:18px;font-weight:900;line-height:1.1; }}
+        .course-exams-actions {{ display:flex;gap:8px;flex-wrap:wrap;align-items:center; }}
+        .ex-row {{ display:grid;grid-template-columns:minmax(160px,2fr) minmax(140px,1fr) 86px 38px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border); }}
+        .ex-input {{ min-height:38px;display:flex;align-items:center; }}
+        .ex-weight {{ display:flex;align-items:center;justify-content:flex-start;gap:7px;font-weight:900;color:var(--text);line-height:1; }}
+        .ex-weight input {{ width:64px;text-align:center; }}
+        .ex-delete {{ width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;padding:0!important;border-radius:999px!important;justify-self:end;color:var(--red)!important;line-height:1!important; }}
+        @media (max-width:720px) {{ .ex-row {{ grid-template-columns:1fr; }} .ex-delete {{ justify-self:start; }} }}
         .course-empty {{ grid-column:1/-1;border:2px dashed #E2DCCC;border-radius:18px;padding:32px;text-align:center;color:#94939C; }}
         .mr-modal {{ position:fixed;inset:0;background:rgba(26,26,31,.36);display:flex;align-items:center;justify-content:center;z-index:1000;padding:18px; }}
         .mr-modal-card {{ width:min(420px,100%);background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:20px;box-shadow:0 24px 80px rgba(20,18,30,.18); }}
@@ -6355,7 +6366,7 @@ def register_student_routes(app, csrf, limiter):
                 box.textContent = 'Plus desbloquea datos reales de este ramo: horas promedio para aprobar, nota promedio y tasa de aprobación.';
               }} else {{
                 var reports = d.passed_count === 1 ? 'reporte' : 'reportes';
-                box.textContent = 'Quienes aprobaron estudiaron en promedio ' + d.avg_hours + 'h y terminaron con nota promedio ' + d.avg_final_grade + ' (' + d.passed_count + ' ' + reports + ', ' + d.pass_rate + '% aprobados).';
+                box.textContent = 'En promedio, quienes aprobaron este curso estudiaron ' + d.avg_hours + 'h y terminaron con nota final promedio ' + d.avg_final_grade + ' (' + d.passed_count + ' ' + reports + ', ' + d.pass_rate + '% aprobados).';
               }}
               box.style.display = 'block';
             }}
@@ -6438,11 +6449,11 @@ def register_student_routes(app, csrf, limiter):
 
           panel.innerHTML =
 
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">'
+            '<div class="course-exams-head">'
 
-            + '<b style="color:var(--text);">&#128221; Pruebas y Evaluaciones</b>'
+            + '<b class="course-exams-title">&#128221; Pruebas y Evaluaciones</b>'
 
-            + '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+            + '<div class="course-exams-actions">'
 
             + '<button class="btn btn-outline btn-sm" onclick="addExamRow(' + courseId + ')">+ Agregar evaluación</button>'
 
@@ -6467,15 +6478,15 @@ def register_student_routes(app, csrf, limiter):
 
           var idAttr = examId ? examId : 'new';
 
-          return '<div class="ex-row" data-exam-id="' + idAttr + '" style="display:grid;grid-template-columns:2fr 1fr 90px auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">'
+          return '<div class="ex-row" data-exam-id="' + idAttr + '">'
 
             + '<input type="text" class="ex-input" data-field="name" value="' + _esc(name) + '" placeholder="Nombre evaluación">'
 
             + '<input type="date" class="ex-input" data-field="exam_date" value="' + _esc(date) + '">'
 
-            + '<span style="display:flex;align-items:center;gap:4px;"><input type="number" class="ex-input" data-field="weight_pct" value="' + (weight||0) + '" min="0" max="100" style="width:60px;">%</span>'
+            + '<span class="ex-weight"><input type="number" class="ex-input" data-field="weight_pct" value="' + (weight||0) + '" min="0" max="100">%</span>'
 
-            + '<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;padding:2px 8px;" onclick="deleteExamInline(this)" title="Eliminar">&#128465;</button>'
+            + '<button class="btn btn-ghost btn-sm ex-delete" onclick="deleteExamInline(this)" title="Eliminar">&#128465;</button>'
 
             + '</div>';
 
