@@ -1150,13 +1150,6 @@ def mark_day_complete(client_id: int, plan_date: str, notes: str = ""):
                   (client_id, plan_date, notes))
 
 
-def get_progress(client_id: int) -> list[dict]:
-    with get_db() as db:
-        return _fetchall(
-            db,
-            "SELECT * FROM student_study_progress WHERE client_id = %s ORDER BY plan_date",
-            (client_id,),
-        )
 
 
 def get_study_stats(client_id: int) -> dict:
@@ -1184,17 +1177,6 @@ def get_study_stats(client_id: int) -> dict:
 
 # ── Course files (manual uploads) ───────────────────────────
 
-def save_course_file(client_id: int, course_id: int, original_name: str,
-                     file_type: str, extracted_text: str, exam_id: int | None = None) -> int:
-    with get_db() as db:
-        return _insert_returning_id(
-            db,
-            "INSERT INTO student_course_files (client_id, course_id, original_name, file_type, extracted_text, exam_id) "
-            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (client_id, course_id, original_name, file_type, extracted_text, exam_id),
-            "INSERT INTO student_course_files (client_id, course_id, original_name, file_type, extracted_text, exam_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-        )
 
 
 def get_course_files(client_id: int, course_id: int, exam_id: int | None = None) -> list[dict]:
@@ -1737,17 +1719,6 @@ def get_exam_week(client_id: int, exam_db_id: int, week_offset: int = 0) -> dict
 
 # ── Schedule settings (per-day availability) ────────────────
 
-def save_schedule_settings(client_id: int, settings: list[dict]):
-    """Save weekly schedule settings.
-    settings: [{"day": 0, "hours": 4.0, "free": False}, ...]  (day 0=Mon..6=Sun)
-    """
-    with get_db() as db:
-        _exec(db, "DELETE FROM student_schedule_settings WHERE client_id = %s", (client_id,))
-        for s in settings:
-            _exec(db,
-                  "INSERT INTO student_schedule_settings (client_id, day_of_week, available_hours, is_free_day) "
-                  "VALUES (%s, %s, %s, %s)",
-                  (client_id, s["day"], s.get("hours", 0), bool(s.get("free"))))
 
 
 def get_schedule_settings(client_id: int) -> list[dict]:
@@ -1816,13 +1787,6 @@ def set_course_difficulty(client_id: int, course_db_id: int, difficulty: int):
               (difficulty, course_db_id, client_id))
 
 
-def get_course_difficulty(client_id: int, course_db_id: int) -> int:
-    with get_db() as db:
-        val = _fetchval(
-            db, "SELECT difficulty FROM student_courses WHERE id = %s AND client_id = %s",
-            (course_db_id, client_id),
-        )
-        return val if val is not None else 3
 
 
 # ── Assignment-level progress ────────────────────────────────
@@ -1909,22 +1873,6 @@ def get_all_student_client_ids() -> list[int]:
 
 # ── Cleanup ─────────────────────────────────────────────────
 
-def delete_student_data(client_id: int):
-    """Remove all student data for a client (account deletion)."""
-    with get_db() as db:
-        _exec(db, "DELETE FROM student_quiz_questions WHERE quiz_id IN (SELECT id FROM student_quizzes WHERE client_id = %s)", (client_id,))
-        _exec(db, "DELETE FROM student_quizzes WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_flashcards WHERE deck_id IN (SELECT id FROM student_flashcard_decks WHERE client_id = %s)", (client_id,))
-        _exec(db, "DELETE FROM student_flashcard_decks WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_notes WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_assignment_progress WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_schedule_settings WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_study_progress WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_study_plans WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_exams WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_course_files WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_courses WHERE client_id = %s", (client_id,))
-        _exec(db, "DELETE FROM student_canvas_tokens WHERE client_id = %s", (client_id,))
 
 
 # ── Flashcard decks & cards ─────────────────────────────────
@@ -1991,17 +1939,6 @@ def get_flashcards(deck_id: int) -> list[dict]:
         )
 
 
-def get_due_flashcards(deck_id: int) -> list[dict]:
-    """Get flashcards due for review (SRS). Returns due cards first, then new cards."""
-    with get_db() as db:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return _fetchall(
-            db,
-            "SELECT * FROM student_flashcards WHERE deck_id = %s "
-            "AND (next_review IS NULL OR next_review <= %s) "
-            "ORDER BY CASE WHEN next_review IS NULL THEN 0 ELSE 1 END, next_review ASC, id",
-            (deck_id, now),
-        )
 
 
 def count_due_flashcards(deck_id: int) -> int:
@@ -2195,17 +2132,6 @@ def delete_quiz(quiz_id: int, client_id: int):
 
 # ── Notes ───────────────────────────────────────────────────
 
-def create_note(client_id: int, title: str, content_html: str,
-                course_id: int | None = None, source_type: str = "ai") -> int:
-    with get_db() as db:
-        return _insert_returning_id(
-            db,
-            "INSERT INTO student_notes (client_id, course_id, title, content_html, source_type) "
-            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (client_id, course_id, title, content_html, source_type),
-            "INSERT INTO student_notes (client_id, course_id, title, content_html, source_type) "
-            "VALUES (?, ?, ?, ?, ?)",
-        )
 
 
 def get_notes(client_id: int, course_id: int | None = None) -> list[dict]:
@@ -2227,107 +2153,26 @@ def get_notes(client_id: int, course_id: int | None = None) -> list[dict]:
         )
 
 
-def get_note(note_id: int, client_id: int) -> dict | None:
-    with get_db() as db:
-        return _fetchone(
-            db, "SELECT * FROM student_notes WHERE id = %s AND client_id = %s",
-            (note_id, client_id),
-        )
 
 
-def update_note(note_id: int, client_id: int, content_html: str):
-    with get_db() as db:
-        _exec(db,
-              "UPDATE student_notes SET content_html = %s, updated_at = %s WHERE id = %s AND client_id = %s"
-              if _USE_PG else
-              "UPDATE student_notes SET content_html = ?, updated_at = datetime('now','localtime') WHERE id = ? AND client_id = ?",
-              (content_html, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), note_id, client_id)
-              if _USE_PG else (content_html, note_id, client_id))
 
 
-def delete_note(note_id: int, client_id: int):
-    with get_db() as db:
-        _exec(db, "DELETE FROM student_notes WHERE id = %s AND client_id = %s",
-              (note_id, client_id))
 
 
 # ── Chat messages ───────────────────────────────────────────
 
-def add_chat_message(client_id: int, role: str, content: str, course_id: int | None = None) -> int:
-    with get_db() as db:
-        return _insert_returning_id(
-            db,
-            "INSERT INTO student_chat_messages (client_id, course_id, role, content) "
-            "VALUES (%s, %s, %s, %s) RETURNING id",
-            (client_id, course_id, role, content),
-            "INSERT INTO student_chat_messages (client_id, course_id, role, content) "
-            "VALUES (?, ?, ?, ?)",
-        )
 
 
-def get_chat_history(client_id: int, course_id: int | None = None, limit: int = 50) -> list[dict]:
-    with get_db() as db:
-        if course_id:
-            return _fetchall(
-                db,
-                "SELECT * FROM student_chat_messages WHERE client_id = %s AND course_id = %s "
-                "ORDER BY created_at DESC LIMIT %s",
-                (client_id, course_id, limit),
-            )
-        return _fetchall(
-            db,
-            "SELECT * FROM student_chat_messages WHERE client_id = %s "
-            "ORDER BY created_at DESC LIMIT %s",
-            (client_id, limit),
-        )
 
 
-def clear_chat_history(client_id: int, course_id: int | None = None):
-    with get_db() as db:
-        if course_id:
-            _exec(db, "DELETE FROM student_chat_messages WHERE client_id = %s AND course_id = %s",
-                  (client_id, course_id))
-        else:
-            _exec(db, "DELETE FROM student_chat_messages WHERE client_id = %s", (client_id,))
 
 
 # ── YouTube imports ─────────────────────────────────────────
 
-def create_youtube_import(client_id: int, youtube_url: str, video_title: str = "",
-                          transcript: str = "") -> int:
-    with get_db() as db:
-        return _insert_returning_id(
-            db,
-            "INSERT INTO student_youtube_imports (client_id, youtube_url, video_title, transcript) "
-            "VALUES (%s, %s, %s, %s) RETURNING id",
-            (client_id, youtube_url, video_title, transcript),
-            "INSERT INTO student_youtube_imports (client_id, youtube_url, video_title, transcript) "
-            "VALUES (?, ?, ?, ?)",
-        )
 
 
-def update_youtube_import(import_id: int, **kwargs):
-    with get_db() as db:
-        sets = []
-        vals = []
-        for k, v in kwargs.items():
-            if k in ("status", "transcript", "video_title", "note_id", "deck_id", "quiz_id"):
-                sets.append(f"{k} = %s")
-                vals.append(v)
-        if not sets:
-            return
-        vals.append(import_id)
-        _exec(db, f"UPDATE student_youtube_imports SET {', '.join(sets)} WHERE id = %s",
-              tuple(vals))
 
 
-def get_youtube_imports(client_id: int) -> list[dict]:
-    with get_db() as db:
-        return _fetchall(
-            db,
-            "SELECT * FROM student_youtube_imports WHERE client_id = %s ORDER BY created_at DESC",
-            (client_id,),
-        )
 
 
 # ── XP / Gamification ──────────────────────────────────────
@@ -2350,36 +2195,6 @@ def award_xp(client_id: int, action: str, xp: int, detail: str = "") -> int:
         )
 
 
-def award_xp_with_rank_change(client_id: int, action: str, xp: int, detail: str = "") -> dict:
-    """Award XP and return rank-change info for promotion notifications.
-
-    Returns dict with keys:
-        xp_awarded        — int
-        total_xp          — new total
-        promoted          — bool (rank index increased)
-        rank_before       — study-rank dict before award
-        rank_after        — study-rank dict after award
-        tier_up           — bool (tier name changed, e.g. Apprentices -> Scholars)
-        reached_elite     — bool (entered first elite rank)
-    """
-    before_total = get_total_xp(client_id)
-    rank_before = get_study_rank(before_total)
-    award_xp(client_id, action, xp, detail)
-    after_total = before_total + xp
-    rank_after = get_study_rank(after_total)
-    promoted = rank_after["index"] > rank_before["index"]
-    tier_up = promoted and rank_after["tier"] != rank_before["tier"]
-    # Entered elite: before was in a divisioned rank, after has no division
-    reached_elite = promoted and rank_after["division"] == "" and rank_before["division"] != ""
-    return {
-        "xp_awarded": xp,
-        "total_xp": after_total,
-        "promoted": promoted,
-        "rank_before": rank_before,
-        "rank_after": rank_after,
-        "tier_up": tier_up,
-        "reached_elite": reached_elite,
-    }
 
 
 def get_total_xp(client_id: int) -> int:
@@ -2859,54 +2674,12 @@ def upsert_email_prefs(client_id: int, daily_email: bool = True, email_hour: int
                   (client_id, de, email_hour, timezone, university, field_of_study, lang))
 
 
-def set_gpa_country(client_id: int, country: str):
-    with get_db() as db:
-        existing = _fetchone(db, "SELECT id FROM student_email_prefs WHERE client_id = %s",
-                             (client_id,))
-        if existing:
-            _exec(db,
-                  "UPDATE student_email_prefs SET gpa_country = %s WHERE client_id = %s",
-                  (country, client_id))
-        else:
-            _exec(db,
-                  "INSERT INTO student_email_prefs (client_id, gpa_country) VALUES (%s, %s)",
-                  (client_id, country))
 
 
 # ── Weak topics ─────────────────────────────────────────────
 
-def get_flashcard_accuracy(client_id: int) -> list[dict]:
-    """Get per-deck accuracy rates for flashcards."""
-    with get_db() as db:
-        return _fetchall(
-            db,
-            "SELECT d.id, d.title, d.course_id, c.name as course_name, "
-            "SUM(f.times_seen) as total_seen, SUM(f.times_correct) as total_correct, "
-            "CASE WHEN SUM(f.times_seen) > 0 THEN "
-            "ROUND(100.0 * SUM(f.times_correct) / SUM(f.times_seen)) ELSE 0 END as accuracy "
-            "FROM student_flashcard_decks d "
-            "JOIN student_flashcards f ON f.deck_id = d.id "
-            "LEFT JOIN student_courses c ON d.course_id = c.id "
-            "WHERE d.client_id = %s AND f.times_seen > 0 "
-            "GROUP BY d.id, d.title, d.course_id, c.name "
-            "ORDER BY accuracy ASC",
-            (client_id,),
-        )
 
 
-def get_quiz_scores(client_id: int) -> list[dict]:
-    """Get quiz scores for weak topic detection."""
-    with get_db() as db:
-        return _fetchall(
-            db,
-            "SELECT q.id, q.title, q.course_id, c.name as course_name, "
-            "q.best_score, q.attempts, q.question_count "
-            "FROM student_quizzes q "
-            "LEFT JOIN student_courses c ON q.course_id = c.id "
-            "WHERE q.client_id = %s AND q.attempts > 0 "
-            "ORDER BY q.best_score ASC",
-            (client_id,),
-        )
 
 
 # ── Leaderboard ─────────────────────────────────────────────
@@ -2964,112 +2737,18 @@ def get_student_rank(client_id: int) -> int:
 
 # ── Study Exchange ──────────────────────────────────────────
 
-def publish_note(note_id: int, client_id: int, author_name: str, university: str):
-    """Make a note public for the Study Exchange."""
-    with get_db() as db:
-        _exec(db,
-              "UPDATE student_notes SET is_public = TRUE, author_name = %s, university = %s "
-              "WHERE id = %s AND client_id = %s",
-              (author_name, university, note_id, client_id))
 
 
-def unpublish_note(note_id: int, client_id: int):
-    """Remove a note from the Study Exchange."""
-    with get_db() as db:
-        _exec(db,
-              "UPDATE student_notes SET is_public = FALSE WHERE id = %s AND client_id = %s",
-              (note_id, client_id))
 
 
-def browse_public_notes(search: str = "", subject: str = "", university: str = "",
-                        limit: int = 50, offset: int = 0) -> list[dict]:
-    """Browse public notes in the Study Exchange."""
-    with get_db() as db:
-        conditions = ["n.is_public = TRUE"]
-        params = []
-        if search:
-            conditions.append("LOWER(n.title) LIKE %s")
-            params.append(f"%{search.lower()}%")
-        if subject:
-            conditions.append("LOWER(COALESCE(c.name, '')) LIKE %s")
-            params.append(f"%{subject.lower()}%")
-        if university:
-            conditions.append("LOWER(COALESCE(n.university, '')) LIKE %s")
-            params.append(f"%{university.lower()}%")
-        where = " AND ".join(conditions)
-        params.extend([limit, offset])
-        return _fetchall(
-            db,
-            f"SELECT n.id, n.title, n.source_type, n.created_at, n.likes, "
-            f"n.author_name, n.university, COALESCE(c.name, '') as course_name, "
-            f"LENGTH(n.content_html) as content_length "
-            f"FROM student_notes n "
-            f"LEFT JOIN student_courses c ON n.course_id = c.id "
-            f"WHERE {where} "
-            f"ORDER BY n.likes DESC, n.created_at DESC LIMIT %s OFFSET %s",
-            tuple(params),
-        )
 
 
-def get_public_note(note_id: int) -> dict | None:
-    """Get a public note for viewing (anyone can read)."""
-    with get_db() as db:
-        return _fetchone(
-            db,
-            "SELECT n.*, COALESCE(c.name, '') as course_name "
-            "FROM student_notes n "
-            "LEFT JOIN student_courses c ON n.course_id = c.id "
-            "WHERE n.id = %s AND n.is_public = TRUE",
-            (note_id,),
-        )
 
 
-def toggle_note_like(client_id: int, note_id: int) -> bool:
-    """Like/unlike a note. Returns True if liked, False if unliked."""
-    with get_db() as db:
-        existing = _fetchval(
-            db, "SELECT id FROM student_note_likes WHERE client_id = %s AND note_id = %s",
-            (client_id, note_id),
-        )
-        if existing:
-            _exec(db, "DELETE FROM student_note_likes WHERE client_id = %s AND note_id = %s",
-                  (client_id, note_id))
-            _exec(db, "UPDATE student_notes SET likes = CASE WHEN likes > 0 THEN likes - 1 ELSE 0 END WHERE id = %s", (note_id,))
-            return False
-        else:
-            _exec(db,
-                  "INSERT INTO student_note_likes (client_id, note_id) VALUES (%s, %s)",
-                  (client_id, note_id))
-            _exec(db, "UPDATE student_notes SET likes = likes + 1 WHERE id = %s", (note_id,))
-            return True
 
 
-def has_liked_note(client_id: int, note_id: int) -> bool:
-    """Check if a user has liked a note."""
-    with get_db() as db:
-        return bool(_fetchval(
-            db, "SELECT id FROM student_note_likes WHERE client_id = %s AND note_id = %s",
-            (client_id, note_id),
-        ))
 
 
-def fork_note(client_id: int, note_id: int) -> int | None:
-    """Copy a public note to a user's private notes."""
-    with get_db() as db:
-        note = _fetchone(
-            db, "SELECT * FROM student_notes WHERE id = %s AND is_public = TRUE",
-            (note_id,),
-        )
-        if not note:
-            return None
-        return _insert_returning_id(
-            db,
-            "INSERT INTO student_notes (client_id, title, content_html, source_type) "
-            "VALUES (%s, %s, %s, %s) RETURNING id",
-            (client_id, f"[Forked] {note['title']}", note["content_html"], "forked"),
-            "INSERT INTO student_notes (client_id, title, content_html, source_type) "
-            "VALUES (?, ?, ?, ?)",
-        )
 
 
 # ── Personal Leaderboards ──────────────────────────────────
@@ -3358,28 +3037,8 @@ def is_lb_member(client_id: int, group_id: int) -> bool:
 
 # ── Note fork tracking (XP for shared notes) ───────────────
 
-def record_note_fork(note_id: int, forker_id: int, author_id: int) -> bool:
-    """Record that a user forked/used a note. Returns True if new (first time)."""
-    if forker_id == author_id:
-        return False
-    with get_db() as db:
-        try:
-            _exec(db,
-                  "INSERT INTO student_note_forks (note_id, forker_id, author_id) VALUES (%s, %s, %s)",
-                  (note_id, forker_id, author_id))
-            return True
-        except Exception:
-            return False
 
 
-def get_note_fork_count(author_id: int) -> int:
-    """Count unique users who have forked any of this author's notes."""
-    with get_db() as db:
-        return _fetchval(
-            db,
-            "SELECT COUNT(DISTINCT forker_id) FROM student_note_forks WHERE author_id = %s",
-            (author_id,),
-        ) or 0
 
 # -- Daily Quests --------------------------------------------
 
@@ -5026,12 +4685,6 @@ def _badge_slot_keys(prefs: dict) -> tuple[str, str]:
     return left, right
 
 
-def get_equipped_badge(client_id: int, side: str = "right") -> str:
-    """Return the badge key for the requested side ('left' or 'right')."""
-    with get_db() as db:
-        prefs = _load_flag_prefs(db, client_id)
-    left, right = _badge_slot_keys(prefs)
-    return left if str(side).lower() == "left" else right
 
 
 def get_equipped_badges(client_id: int) -> dict:
@@ -5719,34 +5372,6 @@ def settle_quiz_duel_if_done(duel_id: int) -> dict:
     return {"ok": True, "winner_id": winner, "tied": tied}
 
 
-def _count_paid_quiz_duels_today(winner_id: int, opponent_id: int) -> int:
-    """How many already-paid quiz-duel wins/ties this user has racked up
-    against this specific opponent today (for anti-farm cap)."""
-    with get_db() as db:
-        if _USE_PG:
-            v = _fetchval(
-                db,
-                "SELECT COUNT(*) FROM student_quiz_duels "
-                "WHERE settled_at::date = CURRENT_DATE "
-                "AND status IN ('settled','tied','forfeit') "
-                "AND ((challenger_id = %s AND opponent_id = %s) "
-                "  OR (challenger_id = %s AND opponent_id = %s))",
-                (winner_id, opponent_id, opponent_id, winner_id),
-            )
-        else:
-            v = _fetchval(
-                db,
-                "SELECT COUNT(*) FROM student_quiz_duels "
-                "WHERE substr(settled_at,1,10) = date('now','localtime') "
-                "AND status IN ('settled','tied','forfeit') "
-                "AND ((challenger_id = ? AND opponent_id = ?) "
-                "  OR (challenger_id = ? AND opponent_id = ?))",
-                (winner_id, opponent_id, opponent_id, winner_id),
-            )
-    try:
-        return int(v or 0)
-    except Exception:
-        return 0
 
 
 def _payout_quiz_duel(duel_id: int, winner_id: int | None, tied: bool, reason: str = "") -> None:
@@ -5771,33 +5396,6 @@ def _payout_quiz_duel(duel_id: int, winner_id: int | None, tied: bool, reason: s
             log.exception("stake payout failed: %s", e)
 
 
-def get_quiz_duel_history(client_id: int, limit: int = 20) -> list[dict]:
-    with get_db() as db:
-        rows = _fetchall(
-            db,
-            "SELECT d.*, cc.name AS challenger_name, oc.name AS opponent_name "
-            "FROM student_quiz_duels d "
-            "JOIN clients cc ON cc.id = d.challenger_id "
-            "JOIN clients oc ON oc.id = d.opponent_id "
-            "WHERE (d.challenger_id = %s OR d.opponent_id = %s) "
-            "AND d.status IN ('settled','tied','forfeit','declined','expired') "
-            "ORDER BY d.settled_at DESC NULLS LAST LIMIT %s"
-            if _USE_PG else
-            "SELECT d.*, cc.name AS challenger_name, oc.name AS opponent_name "
-            "FROM student_quiz_duels d "
-            "JOIN clients cc ON cc.id = d.challenger_id "
-            "JOIN clients oc ON oc.id = d.opponent_id "
-            "WHERE (d.challenger_id = ? OR d.opponent_id = ?) "
-            "AND d.status IN ('settled','tied','forfeit','declined','expired') "
-            "ORDER BY d.settled_at DESC LIMIT ?",
-            (client_id, client_id, limit),
-        ) or []
-    out = []
-    for r in rows:
-        d = dict(r)
-        d.pop("questions_json", None)
-        out.append(d)
-    return out
 
 
 # ─────────────────────────────────────────────────────────────
