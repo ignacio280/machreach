@@ -5713,7 +5713,7 @@ def register_student_routes(app, csrf, limiter):
             '<section class="mr-card mr-pop-2">'
             '  <div class="mr-card-h">'
             '    <div class="mr-card-title">🎯 Plan de hoy</div>'
-            '    <a class="mr-card-link" href="/student/schedule">Ver semana →</a>'
+            '    <a class="mr-card-link" href="/student/focus">Ir a enfoque →</a>'
             '  </div>'
             f' <div class="mr-sched-list">{_today_rows_html}</div>'
             '</section>'

@@ -3243,10 +3243,8 @@ LAYOUT = """<!DOCTYPE html>
       var CMDK_ITEMS = window.__IS_LOGGED_IN__ ? [
         {t:'Student Dashboard', u:'/student', i:'🎓', s:'Main'},
         {t:'Courses', u:'/student/courses', i:'📚', s:'Main'},
-        {t:'Study Plan', u:'/student/plan', i:'📅', s:'Main'},
         {t:'Flashcards', u:'/student/flashcards', i:'📇', s:'Study'},
         {t:'Quizzes', u:'/student/quizzes', i:'📝', s:'Study'},
-        {t:'Notes', u:'/student/notes', i:'📖', s:'Study'},
         {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
         {t:'Grade Sheet', u:'/student/gpa', i:'📈', s:'Tools'},
         {t:'Leaderboard', u:'/student/leaderboard', i:'🏆', s:'Social'},
@@ -7156,9 +7154,24 @@ def public_status_page():
 @app.route("/about")
 def about_page():
     return _render("About MachReach", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
-      <h1 style="font-size:32px;margin-bottom:8px;">About MachReach</h1>
-      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">MachReach is a student study platform built in Santiago, Chile. It turns focus sessions, courses, streaks, rankings, quizzes, and flashcards into one study system.</p>
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;line-height:1.8;color:var(--text-secondary);font-size:15px;">
+      <h1 style="font-size:32px;margin-bottom:8px;color:var(--text);">About MachReach</h1>
+      <p>MachReach is a student study platform built in Santiago, Chile. We started from a simple frustration: studying tools are scattered across a dozen apps — one for notes, one for flashcards, one for timers, one for tracking grades — and none of them talk to each other. MachReach pulls the whole study workflow into a single place.</p>
+
+      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">What you can do</h2>
+      <ul style="padding-left:20px;">
+        <li><strong>Focus sessions</strong> — distraction-free study timers, with an optional browser extension that blocks distracting sites while a session is active.</li>
+        <li><strong>Courses &amp; Canvas sync</strong> — connect Canvas to import your courses, or add them manually.</li>
+        <li><strong>Flashcards &amp; quizzes</strong> — generate study sets and practice questions from your own material.</li>
+        <li><strong>Grades &amp; analytics</strong> — track marks on the Chilean 1.0–7.0 scale and see what you need to pass.</li>
+        <li><strong>XP, streaks &amp; leaderboards</strong> — stay motivated with friends and live rankings by country, university, and major.</li>
+      </ul>
+
+      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Who it's for</h2>
+      <p>University and high-school students who want one organized study system instead of a pile of disconnected apps. MachReach is built with Chilean students in mind, but the tools work anywhere.</p>
+
+      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Get in touch</h2>
+      <p>Questions, feedback, or partnership ideas? Email us at <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     </div>
     """), active_page="about")
 
@@ -7166,9 +7179,18 @@ def about_page():
 @app.route("/blog")
 def blog_page():
     return _render("Blog", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
-      <h1 style="font-size:32px;margin-bottom:8px;">Blog</h1>
-      <p style="color:var(--text-muted);">Coming soon. Product updates are currently shared inside MachReach.</p>
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;line-height:1.8;color:var(--text-secondary);font-size:15px;">
+      <h1 style="font-size:32px;margin-bottom:8px;color:var(--text);">Blog</h1>
+      <p>We don't run a public blog yet — for now, product updates and new features are announced directly inside MachReach when you log in, so you never miss them.</p>
+
+      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">What we'll write about here</h2>
+      <ul style="padding-left:20px;">
+        <li>Study techniques and how to get the most out of focus sessions</li>
+        <li>New features and product updates</li>
+        <li>How students are using MachReach to stay on top of the semester</li>
+      </ul>
+
+      <p style="margin-top:24px;">Want updates by email? Reach out at <a href="mailto:support@machreach.com">support@machreach.com</a> and we'll keep you posted.</p>
     </div>
     """), active_page="blog")
 
@@ -7176,9 +7198,23 @@ def blog_page():
 @app.route("/press")
 def press_page():
     return _render("Press", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
-      <h1 style="font-size:32px;margin-bottom:8px;">Press</h1>
-      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">Press and partnerships: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+    <div style="max-width:800px;margin:0 auto;padding:40px 20px;line-height:1.8;color:var(--text-secondary);font-size:15px;">
+      <h1 style="font-size:32px;margin-bottom:8px;color:var(--text);">Press</h1>
+      <p>Writing about MachReach or interested in a partnership? Here's the essentials. For interviews, assets, or anything else, email <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+
+      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Boilerplate</h2>
+      <p>MachReach is a student study platform built in Santiago, Chile, that brings focus sessions, course tracking, Canvas sync, flashcards, quizzes, grade analytics, and motivational features like XP, streaks, and leaderboards into a single study system.</p>
+
+      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Fast facts</h2>
+      <ul style="padding-left:20px;">
+        <li><strong>What:</strong> all-in-one study platform for students</li>
+        <li><strong>Based in:</strong> Santiago, Chile</li>
+        <li><strong>Key features:</strong> focus mode, Canvas course sync, flashcards, quizzes, grade tracking, leaderboards</li>
+        <li><strong>Website:</strong> <a href="https://machreach.com">machreach.com</a></li>
+      </ul>
+
+      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Media contact</h2>
+      <p><a href="mailto:support@machreach.com">support@machreach.com</a></p>
     </div>
     """), active_page="press")
 
