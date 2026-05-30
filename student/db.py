@@ -196,30 +196,6 @@ CREATE TABLE IF NOT EXISTS student_notes (
 );
 CREATE INDEX IF NOT EXISTS idx_notes_client ON student_notes(client_id);
 
-CREATE TABLE IF NOT EXISTS student_chat_messages (
-    id          SERIAL PRIMARY KEY,
-    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    course_id   INTEGER REFERENCES student_courses(id) ON DELETE SET NULL,
-    role        TEXT NOT NULL DEFAULT 'user',
-    content     TEXT NOT NULL,
-    created_at  TIMESTAMP DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_chat_client ON student_chat_messages(client_id, course_id);
-
-CREATE TABLE IF NOT EXISTS student_youtube_imports (
-    id          SERIAL PRIMARY KEY,
-    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    youtube_url TEXT NOT NULL,
-    video_title TEXT DEFAULT '',
-    transcript  TEXT DEFAULT '',
-    status      TEXT DEFAULT 'pending',
-    note_id     INTEGER REFERENCES student_notes(id) ON DELETE SET NULL,
-    deck_id     INTEGER REFERENCES student_flashcard_decks(id) ON DELETE SET NULL,
-    quiz_id     INTEGER REFERENCES student_quizzes(id) ON DELETE SET NULL,
-    created_at  TIMESTAMP DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_yt_client ON student_youtube_imports(client_id);
-
 CREATE TABLE IF NOT EXISTS student_xp (
     id          SERIAL PRIMARY KEY,
     client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -421,30 +397,6 @@ CREATE TABLE IF NOT EXISTS student_notes (
 );
 CREATE INDEX IF NOT EXISTS idx_notes_client ON student_notes(client_id);
 
-CREATE TABLE IF NOT EXISTS student_chat_messages (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    course_id   INTEGER REFERENCES student_courses(id) ON DELETE SET NULL,
-    role        TEXT NOT NULL DEFAULT 'user',
-    content     TEXT NOT NULL,
-    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
-);
-CREATE INDEX IF NOT EXISTS idx_chat_client ON student_chat_messages(client_id, course_id);
-
-CREATE TABLE IF NOT EXISTS student_youtube_imports (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    youtube_url TEXT NOT NULL,
-    video_title TEXT DEFAULT '',
-    transcript  TEXT DEFAULT '',
-    status      TEXT DEFAULT 'pending',
-    note_id     INTEGER REFERENCES student_notes(id) ON DELETE SET NULL,
-    deck_id     INTEGER REFERENCES student_flashcard_decks(id) ON DELETE SET NULL,
-    quiz_id     INTEGER REFERENCES student_quizzes(id) ON DELETE SET NULL,
-    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
-);
-CREATE INDEX IF NOT EXISTS idx_yt_client ON student_youtube_imports(client_id);
-
 CREATE TABLE IF NOT EXISTS student_xp (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -577,21 +529,6 @@ def _student_migrations():
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
         except Exception:
             pass  # column already exists
-    # Study Exchange — note likes table
-    _create_table_safe(
-        "CREATE TABLE IF NOT EXISTS student_note_likes ("
-        "id SERIAL PRIMARY KEY, "
-        "client_id INTEGER NOT NULL, "
-        "note_id INTEGER NOT NULL, "
-        "created_at TIMESTAMP DEFAULT NOW(), "
-        "UNIQUE(client_id, note_id))",
-        "CREATE TABLE IF NOT EXISTS student_note_likes ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "client_id INTEGER NOT NULL, "
-        "note_id INTEGER NOT NULL, "
-        "created_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
-        "UNIQUE(client_id, note_id))",
-    )
     # Personal leaderboard groups
     _create_table_safe(
         "CREATE TABLE IF NOT EXISTS student_lb_groups ("
@@ -640,23 +577,6 @@ def _student_migrations():
         "created_at TEXT DEFAULT (datetime('now','localtime')), "
         "responded_at TEXT, "
         "UNIQUE(group_id, invitee_id))",
-    )
-    # Track unique users who forked/used a shared note (for XP)
-    _create_table_safe(
-        "CREATE TABLE IF NOT EXISTS student_note_forks ("
-        "id SERIAL PRIMARY KEY, "
-        "note_id INTEGER NOT NULL, "
-        "forker_id INTEGER NOT NULL, "
-        "author_id INTEGER NOT NULL, "
-        "created_at TIMESTAMP DEFAULT NOW(), "
-        "UNIQUE(note_id, forker_id))",
-        "CREATE TABLE IF NOT EXISTS student_note_forks ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "note_id INTEGER NOT NULL, "
-        "forker_id INTEGER NOT NULL, "
-        "author_id INTEGER NOT NULL, "
-        "created_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
-        "UNIQUE(note_id, forker_id))",
     )
     # Streak freezes — 1 free auto-freeze per ISO week
     _create_table_safe(

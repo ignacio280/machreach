@@ -5407,11 +5407,11 @@ def delete_account():
     from outreach.db import get_db, _exec
     with get_db() as db:
         # Student data (flashcards & quiz_questions cascade-delete via their parent tables)
-        for tbl in ["student_chat_messages", "student_quizzes",
+        for tbl in ["student_quizzes",
                      "student_flashcard_decks", "student_notes",
                      "student_course_files", "student_exams", "student_study_progress",
                      "student_study_plans", "student_assignment_progress",
-                     "student_schedule_settings", "student_youtube_imports",
+                     "student_schedule_settings",
                      "student_xp", "student_badges", "student_email_prefs",
                      "student_canvas_tokens", "student_courses"]:
             try:
