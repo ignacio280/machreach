@@ -76,16 +76,6 @@ def _classify_sentiment(body: str) -> str:
         return "neutral"
 
 
-def _fetch_body(mail, msg_id) -> str:
-    """Fetch the full body of a message by ID."""
-    try:
-        _, data = mail.fetch(msg_id, "(BODY.PEEK[])")
-        if data and data[0]:
-            full_msg = email.message_from_bytes(data[0][1])
-            return _extract_body(full_msg)
-    except Exception:
-        pass
-    return ""
 
 
 def check_replies() -> int:

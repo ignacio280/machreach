@@ -172,27 +172,8 @@ PRO_SQLITE_SCHEMA = PRO_PG_SCHEMA.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY
     .replace("REAL NOT NULL", "REAL NOT NULL")
 
 
-def init_professional_db():
-    """Create pro toolkit tables."""
-    with get_db() as db:
-        if _USE_PG:
-            db.cursor().execute(PRO_PG_SCHEMA)
-        else:
-            db.executescript(PRO_SQLITE_SCHEMA)
-        # Additive migrations (safe to re-run)
-        _safe_add_column(db, "pro_bank_connections", "monthly_income", "REAL DEFAULT 0")
-        _safe_add_column(db, "pro_bank_connections", "income_day", "INTEGER DEFAULT 1")
-        _safe_add_column(db, "pro_bank_connections", "last_income_date", "TEXT DEFAULT ''")
-    log.info("Professional toolkit tables initialized.")
 
 
-def _safe_add_column(db, table: str, col: str, decl: str) -> None:
-    """Idempotent ALTER TABLE ADD COLUMN — works on PG and SQLite."""
-    try:
-        cur = db.cursor()
-        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
-    except Exception:
-        pass  # already exists
 
 
 # ── Tasks ──────────────────────────────────────────────────
@@ -241,122 +222,16 @@ def delete_task(task_id: int, client_id: int) -> None:
 
 # ── Time tracker ──────────────────────────────────────────
 
-def get_running_timer(client_id: int) -> dict | None:
-    with get_db() as db:
-        return _fetchone(
-            db,
-            "SELECT * FROM pro_time_entries WHERE client_id = %s AND ended_at IS NULL "
-            "ORDER BY id DESC LIMIT 1",
-            (client_id,),
-        )
 
 
-def start_timer(client_id: int, project: str, description: str = "",
-                billable: bool = True, hourly_rate: float = 0) -> int:
-    # Stop any existing running timer first
-    running = get_running_timer(client_id)
-    if running:
-        stop_timer(client_id, running["id"])
-    with get_db() as db:
-        now_expr = "NOW()" if _USE_PG else "datetime('now', 'localtime')"
-        return _insert_returning_id(
-            db,
-            f"INSERT INTO pro_time_entries (client_id, project, description, started_at, billable, hourly_rate) "
-            f"VALUES (%s, %s, %s, {now_expr}, %s, %s) RETURNING id",
-            (client_id, project, description, 1 if billable else 0, hourly_rate),
-        )
 
 
-def stop_timer(client_id: int, entry_id: int) -> dict | None:
-    with get_db() as db:
-        entry = _fetchone(db, "SELECT * FROM pro_time_entries WHERE id = %s AND client_id = %s",
-                          (entry_id, client_id))
-        if not entry or entry.get("ended_at"):
-            return entry
-        if _USE_PG:
-            _exec(db,
-                  "UPDATE pro_time_entries SET ended_at = NOW(), "
-                  "duration_seconds = EXTRACT(EPOCH FROM NOW() - started_at)::int "
-                  "WHERE id = %s AND client_id = %s",
-                  (entry_id, client_id))
-        else:
-            _exec(db,
-                  "UPDATE pro_time_entries SET ended_at = datetime('now', 'localtime'), "
-                  "duration_seconds = CAST((julianday('now', 'localtime') - julianday(started_at)) * 86400 AS INTEGER) "
-                  "WHERE id = ? AND client_id = ?",
-                  (entry_id, client_id))
-        return _fetchone(db, "SELECT * FROM pro_time_entries WHERE id = %s", (entry_id,))
 
 
-def list_time_entries(client_id: int, days: int = 30) -> list[dict]:
-    with get_db() as db:
-        if _USE_PG:
-            return _fetchall(
-                db,
-                "SELECT * FROM pro_time_entries WHERE client_id = %s "
-                "AND started_at >= NOW() - (%s || ' days')::interval "
-                "ORDER BY started_at DESC",
-                (client_id, days),
-            )
-        return _fetchall(
-            db,
-            "SELECT * FROM pro_time_entries WHERE client_id = ? "
-            "AND started_at >= datetime('now', 'localtime', ? ) "
-            "ORDER BY started_at DESC",
-            (client_id, f"-{days} days"),
-        )
 
 
-def delete_time_entry(entry_id: int, client_id: int) -> None:
-    with get_db() as db:
-        _exec(db, "DELETE FROM pro_time_entries WHERE id = %s AND client_id = %s",
-              (entry_id, client_id))
 
 
-def time_summary(client_id: int, days: int = 7) -> dict:
-    """Return {'total_seconds': int, 'billable_seconds': int, 'by_project': [{project, seconds}]}."""
-    with get_db() as db:
-        if _USE_PG:
-            totals = _fetchone(
-                db,
-                "SELECT COALESCE(SUM(duration_seconds), 0) AS total, "
-                "COALESCE(SUM(CASE WHEN billable THEN duration_seconds ELSE 0 END), 0) AS billable "
-                "FROM pro_time_entries WHERE client_id = %s "
-                "AND started_at >= NOW() - (%s || ' days')::interval AND ended_at IS NOT NULL",
-                (client_id, days),
-            )
-            by_proj = _fetchall(
-                db,
-                "SELECT COALESCE(NULLIF(project, ''), '(No project)') AS project, "
-                "SUM(duration_seconds) AS seconds "
-                "FROM pro_time_entries WHERE client_id = %s "
-                "AND started_at >= NOW() - (%s || ' days')::interval AND ended_at IS NOT NULL "
-                "GROUP BY project ORDER BY seconds DESC",
-                (client_id, days),
-            )
-        else:
-            totals = _fetchone(
-                db,
-                "SELECT COALESCE(SUM(duration_seconds), 0) AS total, "
-                "COALESCE(SUM(CASE WHEN billable = 1 THEN duration_seconds ELSE 0 END), 0) AS billable "
-                "FROM pro_time_entries WHERE client_id = ? "
-                "AND started_at >= datetime('now', 'localtime', ?) AND ended_at IS NOT NULL",
-                (client_id, f"-{days} days"),
-            )
-            by_proj = _fetchall(
-                db,
-                "SELECT COALESCE(NULLIF(project, ''), '(No project)') AS project, "
-                "SUM(duration_seconds) AS seconds "
-                "FROM pro_time_entries WHERE client_id = ? "
-                "AND started_at >= datetime('now', 'localtime', ?) AND ended_at IS NOT NULL "
-                "GROUP BY project ORDER BY seconds DESC",
-                (client_id, f"-{days} days"),
-            )
-    return {
-        "total_seconds": int((totals or {}).get("total") or 0),
-        "billable_seconds": int((totals or {}).get("billable") or 0),
-        "by_project": by_proj or [],
-    }
 
 
 # ── Invoices ───────────────────────────────────────────────
@@ -474,75 +349,12 @@ EXPENSE_CATEGORIES = [
 ]
 
 
-def list_expenses(client_id: int, days: int = 90) -> list[dict]:
-    with get_db() as db:
-        if _USE_PG:
-            return _fetchall(
-                db,
-                "SELECT * FROM pro_expenses WHERE client_id = %s "
-                "AND (expense_date IS NULL OR expense_date::date >= CURRENT_DATE - (%s || ' days')::interval) "
-                "ORDER BY expense_date DESC NULLS LAST, id DESC",
-                (client_id, days),
-            )
-        return _fetchall(
-            db,
-            "SELECT * FROM pro_expenses WHERE client_id = ? "
-            "AND (expense_date IS NULL OR expense_date >= date('now', 'localtime', ?)) "
-            "ORDER BY COALESCE(expense_date, '0000') DESC, id DESC",
-            (client_id, f"-{days} days"),
-        )
 
 
-def create_expense(client_id: int, amount: float, category: str, description: str,
-                   expense_date: str = "", vendor: str = "", currency: str = "USD") -> int:
-    with get_db() as db:
-        return _insert_returning_id(
-            db,
-            "INSERT INTO pro_expenses (client_id, amount, currency, category, description, expense_date, vendor) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-            (client_id, float(amount), currency, category, description, expense_date or None, vendor),
-        )
 
 
-def delete_expense(expense_id: int, client_id: int) -> None:
-    with get_db() as db:
-        _exec(db, "DELETE FROM pro_expenses WHERE id = %s AND client_id = %s",
-              (expense_id, client_id))
 
 
-def expense_summary(client_id: int, days: int = 30) -> dict:
-    with get_db() as db:
-        if _USE_PG:
-            total = _fetchval(
-                db,
-                "SELECT COALESCE(SUM(amount), 0) FROM pro_expenses WHERE client_id = %s "
-                "AND (expense_date IS NULL OR expense_date::date >= CURRENT_DATE - (%s || ' days')::interval)",
-                (client_id, days),
-            )
-            by_cat = _fetchall(
-                db,
-                "SELECT category, COALESCE(SUM(amount), 0) AS total "
-                "FROM pro_expenses WHERE client_id = %s "
-                "AND (expense_date IS NULL OR expense_date::date >= CURRENT_DATE - (%s || ' days')::interval) "
-                "GROUP BY category ORDER BY total DESC",
-                (client_id, days),
-            )
-        else:
-            total = _fetchval(
-                db,
-                "SELECT COALESCE(SUM(amount), 0) FROM pro_expenses WHERE client_id = ? "
-                "AND (expense_date IS NULL OR expense_date >= date('now', 'localtime', ?))",
-                (client_id, f"-{days} days"),
-            )
-            by_cat = _fetchall(
-                db,
-                "SELECT category, COALESCE(SUM(amount), 0) AS total "
-                "FROM pro_expenses WHERE client_id = ? "
-                "AND (expense_date IS NULL OR expense_date >= date('now', 'localtime', ?)) "
-                "GROUP BY category ORDER BY total DESC",
-                (client_id, f"-{days} days"),
-            )
-    return {"total": float(total or 0), "by_category": by_cat or []}
 
 
 # ── Goals / OKRs ──────────────────────────────────────────
@@ -608,10 +420,6 @@ def delete_goal(goal_id: int, client_id: int) -> None:
               (goal_id, client_id))
 
 
-def update_goal_status(goal_id: int, client_id: int, status: str) -> None:
-    with get_db() as db:
-        _exec(db, "UPDATE pro_goals SET status = %s WHERE id = %s AND client_id = %s",
-              (status, goal_id, client_id))
 
 
 # ------------------------------------------------------------
@@ -854,31 +662,6 @@ def spending_summary(client_id: int, days: int = 30) -> dict:
     }
 
 
-def seed_demo_transactions(client_id: int, connection_id: int) -> int:
-    """Populate demo transactions so the user sees something useful immediately."""
-    import random
-    from datetime import datetime, timedelta
-    samples = [
-        (45.30, "Whole Foods", "groceries"), (12.50, "Starbucks", "food_dining"),
-        (9.99, "Netflix", "subscriptions"), (15.99, "Spotify", "subscriptions"),
-        (82.40, "Shell", "transportation"), (150.00, "Target", "shopping"),
-        (24.00, "Uber", "transportation"), (8.75, "Chipotle", "food_dining"),
-        (120.00, "Electric Co.", "utilities"), (1450.00, "Rent", "rent_mortgage"),
-        (68.00, "Amazon", "shopping"), (55.00, "CVS", "health"),
-        (14.00, "Uber Eats", "food_dining"), (240.00, "Delta Airlines", "travel"),
-        (6500.00, "Payroll", "income"),
-    ]
-    count = 0
-    for days_ago in range(28, -1, -1):
-        if random.random() < 0.6:
-            continue
-        for amount, merchant, cat in random.sample(samples, random.randint(1, 2)):
-            d = (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
-            create_transaction(client_id, amount, merchant=merchant, category=cat,
-                               tx_date=d, description="Demo transaction", currency="USD",
-                               bank_connection_id=connection_id, is_manual=False)
-            count += 1
-    return count
 
 
 # -- Budgets ---------------------------------------------
@@ -982,7 +765,3 @@ def upsert_relationship_note(client_id: int, email: str, **fields) -> int:
             tuple(vals))
 
 
-def delete_relationship_note(client_id: int, email: str) -> None:
-    with get_db() as db:
-        _exec(db, "DELETE FROM pro_relationship_notes WHERE client_id = %s AND contact_email = %s",
-              (client_id, email))

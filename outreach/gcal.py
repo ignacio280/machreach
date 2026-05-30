@@ -120,20 +120,10 @@ def get_token_record(client_id: int) -> Optional[dict]:
         return _fetchone(db, "SELECT * FROM google_calendar_tokens WHERE client_id = %s", (client_id,))
 
 
-def delete_tokens(client_id: int) -> None:
-    _ensure_schema()
-    with get_db() as db:
-        _exec(db, "DELETE FROM google_calendar_tokens WHERE client_id = %s", (client_id,))
 
 
-def is_connected(client_id: int) -> bool:
-    rec = get_token_record(client_id)
-    return bool(rec and rec.get("refresh_token"))
 
 
-def get_connected_email(client_id: int) -> str:
-    rec = get_token_record(client_id)
-    return (rec or {}).get("google_email", "") if rec else ""
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -143,42 +133,10 @@ def is_configured() -> bool:
     return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI)
 
 
-def build_auth_url(state: str) -> str:
-    """Return the URL to redirect the user to for Google's consent screen."""
-    params = {
-        "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
-        "response_type": "code",
-        "scope": " ".join(GCAL_SCOPES),
-        "access_type": "offline",
-        "prompt": "consent",  # force refresh_token return
-        "state": state,
-        "include_granted_scopes": "true",
-    }
-    return AUTH_URL + "?" + urlencode(params)
 
 
-def exchange_code(code: str) -> dict:
-    """Exchange auth code for tokens. Returns dict with access_token, refresh_token, expires_in."""
-    resp = requests.post(TOKEN_URL, data={
-        "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
-        "grant_type": "authorization_code",
-    }, timeout=15)
-    resp.raise_for_status()
-    return resp.json()
 
 
-def fetch_userinfo(access_token: str) -> dict:
-    try:
-        r = requests.get(USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"}, timeout=10)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        log.warning("gcal userinfo failed: %s", e)
-        return {}
 
 
 def refresh_access_token(refresh_token: str) -> dict:
@@ -333,15 +291,3 @@ def delete_event(client_id: int, event_id: str, calendar_id: str = "primary") ->
 # ────────────────────────────────────────────────────────────────────
 # Helpers for AI prompts (used by student/professional planners)
 # ────────────────────────────────────────────────────────────────────
-def events_summary_for_ai(client_id: int, days_ahead: int = 7) -> str:
-    """Compact human-readable summary of upcoming events for AI context."""
-    events = list_events(client_id, days_ahead=days_ahead, max_results=40)
-    if not events:
-        return ""
-    lines = []
-    for e in events[:30]:
-        when = e["start"][:16].replace("T", " ")
-        title = e["title"]
-        loc = f" @ {e['location']}" if e.get("location") else ""
-        lines.append(f"- {when}: {title}{loc}")
-    return "\n".join(lines)

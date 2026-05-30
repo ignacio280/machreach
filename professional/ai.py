@@ -43,12 +43,6 @@ def polish_text(text: str, tone: str = "professional") -> str:
     )
 
 
-def shorten_text(text: str, target_words: int = 50) -> str:
-    return _chat(
-        "You are an editor who shortens business text while keeping all key points and action items. "
-        f"Aim for about {target_words} words. Return only the shortened text.",
-        text,
-    )
 
 
 def meeting_agenda(topic: str, duration_min: int = 30, context: str = "",
@@ -86,43 +80,12 @@ def linkedin_post(topic: str, key_points: str = "", audience: str = "professiona
     )
 
 
-def cold_call_script(offer: str, target: str = "decision-maker", objection_handling: bool = True) -> str:
-    extra = " Include a short section on the 3 most likely objections and how to handle each." \
-        if objection_handling else ""
-    return _chat(
-        "You are a top B2B sales trainer. Write a concise cold-call script: "
-        "opener, permission to continue, value proposition, discovery question, call-to-action." + extra,
-        f"Offer: {offer}\nTarget: {target}",
-        max_tokens=900,
-    )
 
 
-def proposal_outline(project: str, deliverables: str, budget: str = "") -> str:
-    return _chat(
-        "You write professional proposal outlines. Output sections: "
-        "Executive Summary, Scope, Deliverables, Timeline, Investment, Terms, Next Steps.",
-        f"Project: {project}\nDeliverables: {deliverables}\nBudget: {budget or 'TBD'}",
-        max_tokens=1000,
-    )
 
 
-def brainstorm(prompt: str) -> str:
-    return _chat(
-        "You are a senior strategy advisor. Give 8-12 concrete, non-obvious ideas. "
-        "Number each idea. One line per idea. No fluff.",
-        prompt,
-        max_tokens=800,
-    )
 
 
-def summarize_notes(notes: str) -> str:
-    return _chat(
-        "Summarize these meeting or call notes. Output: "
-        "1) TL;DR (2 sentences). 2) Decisions made. 3) Action items with owner if mentioned. "
-        "4) Open questions. Plain text.",
-        notes,
-        max_tokens=900,
-    )
 
 
 def generate_budget_plan(income: float, savings_goal: float, currency: str,

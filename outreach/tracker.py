@@ -14,10 +14,3 @@ TRACKING_PIXEL = (
 )
 
 
-def handle_open(sent_email_id: int) -> bytes:
-    """Record the open event and return the tracking pixel."""
-    try:
-        record_open(sent_email_id)
-    except Exception:
-        pass  # Don't fail on tracking errors
-    return TRACKING_PIXEL
