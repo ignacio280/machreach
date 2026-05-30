@@ -6879,6 +6879,48 @@ def roadmap_page():
 
 
 # ---------------------------------------------------------------------------
+# SEO / crawler files
+# ---------------------------------------------------------------------------
+
+@app.route("/favicon.ico")
+def favicon():
+    return app.send_static_file("favicon.ico")
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /student/\n"
+        "Disallow: /api/\n"
+        "Disallow: /admin/\n"
+        "Sitemap: https://machreach.com/sitemap.xml\n"
+    )
+    resp = make_response(body)
+    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+    return resp
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    paths = ["/", "/about", "/blog", "/press", "/roadmap",
+             "/privacy", "/terms", "/cookies", "/status", "/login", "/register"]
+    urls = "".join(
+        f"  <url><loc>https://machreach.com{p}</loc></url>\n" for p in paths
+    )
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{urls}"
+        "</urlset>\n"
+    )
+    resp = make_response(body)
+    resp.headers["Content-Type"] = "application/xml; charset=utf-8"
+    return resp
+
+
+# ---------------------------------------------------------------------------
 # API — Usage check
 # ---------------------------------------------------------------------------
 
