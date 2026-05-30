@@ -212,8 +212,6 @@ def has_unlimited_ai(client_id: int) -> bool:
     return get_tier(client_id) in ("plus", "ultimate")
 
 
-def has_mailhub(client_id: int) -> bool:
-    return get_tier(client_id) == "ultimate"
 
 
 def cap_questions(client_id: int, requested: int) -> int:

@@ -468,33 +468,8 @@ def run_payouts_if_due() -> dict:
 
 # ── Pop-up support: pending winnings for a single user ──────────────────
 
-def get_unshown_prizes(client_id: int) -> list[dict]:
-    """Return prize records the user hasn't seen the pop-up for yet."""
-    init_prize_tables()
-    from outreach.db import _fetchall
-    with get_db() as db:
-        rows = _fetchall(
-            db,
-            "SELECT id, period_kind, period_key, scope, scope_value, rank, coins, xp_in_period "
-            "FROM student_lb_prize WHERE client_id = %s AND shown = 0 "
-            "ORDER BY id ASC",
-            (client_id,),
-        )
-    return [dict(r) for r in rows]
 
 
-def mark_prizes_shown(client_id: int, prize_ids: list[int]) -> None:
-    if not prize_ids:
-        return
-    from outreach.db import _exec
-    placeholders = ",".join(["%s"] * len(prize_ids))
-    with get_db() as db:
-        _exec(
-            db,
-            f"UPDATE student_lb_prize SET shown = 1 "
-            f"WHERE client_id = %s AND id IN ({placeholders})",
-            (client_id, *prize_ids),
-        )
 
 
 # ── Pop-up support: every-user "here's how you placed" results ──────────
