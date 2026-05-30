@@ -16,9 +16,40 @@ from outreach.config import DATABASE_URL, ENCRYPTION_KEY
 _USE_PG = bool(DATABASE_URL)
 
 if _USE_PG:
+    import os
+    import threading
     import psycopg2
     import psycopg2.extras
     import psycopg2.errors
+    import psycopg2.pool
+
+    # Connection pool — one per process (gunicorn worker / the cron worker).
+    # Without this, every get_db() opened a fresh TCP+TLS+auth connection to
+    # the remote Postgres, which is slow per request and churns connections
+    # (a leading cause of connection-limit exhaustion / "down with no users").
+    # Sized small so web (threads) + worker stay well under the plan's limit.
+    _POOL = None
+    _POOL_LOCK = threading.Lock()
+    _POOL_MIN = int(os.getenv("DB_POOL_MIN", "1"))
+    # Headroom for gunicorn's request threads + background daemon threads
+    # (Canvas sync, quiz/notes generation) that also hit the DB. Still bounded,
+    # so a runaway can't exhaust the shared Postgres connection limit.
+    _POOL_MAX = int(os.getenv("DB_POOL_MAX", "8"))
+
+    def _get_pool():
+        global _POOL
+        if _POOL is None:
+            with _POOL_LOCK:
+                if _POOL is None:
+                    _POOL = psycopg2.pool.ThreadedConnectionPool(
+                        _POOL_MIN, _POOL_MAX, DATABASE_URL,
+                        cursor_factory=psycopg2.extras.RealDictCursor,
+                        # Keepalives so the OS/Postgres drop dead sockets
+                        # instead of handing us a silently-closed connection.
+                        keepalives=1, keepalives_idle=30,
+                        keepalives_interval=10, keepalives_count=3,
+                    )
+        return _POOL
 else:
     import sqlite3
     from outreach.config import DATABASE_PATH
@@ -59,15 +90,35 @@ def _db_fingerprint() -> str:
 @contextmanager
 def get_db():
     if _USE_PG:
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+        pool = _get_pool()
+        conn = pool.getconn()
+        # Discard a connection the server already closed under us.
+        if getattr(conn, "closed", 0):
+            pool.putconn(conn, close=True)
+            conn = pool.getconn()
+        broken = False
         try:
             yield conn
             conn.commit()
-        except Exception:
-            conn.rollback()
+        except Exception as e:
+            # Connection-level failures: discard the connection rather than
+            # returning a poisoned one to the pool. App-level errors just roll back.
+            broken = isinstance(e, (psycopg2.OperationalError, psycopg2.InterfaceError)) \
+                or bool(getattr(conn, "closed", 0))
+            if not broken:
+                try:
+                    conn.rollback()
+                except Exception:
+                    broken = True
             raise
         finally:
-            conn.close()
+            try:
+                pool.putconn(conn, close=broken)
+            except Exception:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
     else:
         DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(DATABASE_PATH))

@@ -23,8 +23,11 @@ if SENTRY_DSN:
     import sentry_sdk
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        traces_sample_rate=0.1,
-        profiles_sample_rate=0.1,
+        # Performance tracing + profiling add CPU/memory overhead on a small
+        # box; default them off (error reporting still works) and make them
+        # env-tunable if you want to sample perf again.
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0")),
+        profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0")),
         environment="production" if os.getenv("RENDER", "") else "development",
     )
 
@@ -337,6 +340,12 @@ def _validate_session():
                 _PRESENCE_LAST_TOUCH[cid] = now
                 from student import db as _sdb
                 _sdb.touch_presence(cid)
+                # Bound memory: evict stale entries so this dict can't grow
+                # without limit over the life of the process.
+                if len(_PRESENCE_LAST_TOUCH) > 2000:
+                    cutoff = now - 300
+                    for _k in [k for k, v in _PRESENCE_LAST_TOUCH.items() if v < cutoff]:
+                        _PRESENCE_LAST_TOUCH.pop(_k, None)
         except Exception:
             pass
 
