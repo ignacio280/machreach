@@ -11,3 +11,5 @@ recovery_local/
 *.db-shm
 
 outreach.zip
+*.log
+*.code-workspace
