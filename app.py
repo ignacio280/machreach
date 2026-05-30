@@ -11,11 +11,10 @@ import os
 import json
 from datetime import datetime
 
-from flask import Flask, flash, jsonify, make_response, redirect, render_template_string, request, session, url_for, Response
+from flask import Flask, flash, jsonify, make_response, redirect, render_template_string, request, session, url_for
 from markupsafe import Markup
 
-from outreach.ai import generate_sequence, personalize_email, generate_reply_draft, get_optimal_send_hour
-from outreach.config import ADMIN_ACTION_SECRET, ADMIN_EMAILS, SECRET_KEY, SENDER_NAME
+from outreach.config import ADMIN_ACTION_SECRET, ADMIN_EMAILS, SECRET_KEY
 from outreach.i18n import t, t_dict
 
 # ── Sentry error tracking (production only — set SENTRY_DSN env var) ──
@@ -30,37 +29,18 @@ if SENTRY_DSN:
     )
 
 from outreach.db import (
-    add_contacts,
-    create_campaign,
     create_client,
     create_reset_token,
     create_verification_token,
-    delete_campaign,
-    delete_contact,
-    delete_sequence,
-    duplicate_campaign,
-    get_campaign,
-    get_campaign_stats,
-    get_campaigns,
     get_client,
     get_client_by_email,
-    get_campaign_contacts,
-    get_contacts,
     get_export_data,
-    get_global_stats,
-    get_reply_context,
-    get_sent_emails,
-    get_sequences,
     get_valid_reset_token,
     get_valid_verification_token,
     init_db,
     mark_email_verified,
     mark_reset_token_used,
-    save_sequence,
-    update_campaign_status,
-    update_client,
     update_client_password,
-    update_sequence,
 )
 
 app = Flask(__name__)
@@ -81,7 +61,7 @@ app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours max session
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB upload limit
 
 # ── Security: CSRF protection ──
-from flask_wtf.csrf import CSRFProtect, generate_csrf
+from flask_wtf.csrf import CSRFProtect
 csrf = CSRFProtect(app)
 
 # ── Security: Rate limiting ──
@@ -5488,7 +5468,7 @@ def dashboard():
 
 def _admin_delete_client_account(client_id: int) -> dict:
     """Best-effort full account removal for the admin panel."""
-    from outreach.db import get_db, _exec, _fetchall, _fetchone, _USE_PG
+    from outreach.db import get_db, _exec, _fetchall, _USE_PG
 
     target = get_client(client_id)
     if not target:
@@ -6380,7 +6360,6 @@ def settings():
 # ---------------------------------------------------------------------------
 # Google Calendar — OAuth + API (shared by student + business)
 # ---------------------------------------------------------------------------
-from outreach import gcal as _gcal
 
 
 # ---------------------------------------------------------------------------
@@ -6919,8 +6898,7 @@ def api_export_my_data():
         return jsonify({"error": "unauthorized"}), 401
     cid = session["client_id"]
     from outreach.db import (
-        get_client, get_campaigns, get_contacts, get_sent_emails,
-        get_email_accounts, get_subscription, get_usage,
+        get_client, get_campaigns, get_contacts, get_email_accounts, get_subscription, get_usage,
     )
     client = get_client(cid)
     if not client:

@@ -1468,7 +1468,7 @@ def get_course_week(client_id: int, course_db_id: int, week_offset: int = 0) -> 
         "days": [{"date": "YYYY-MM-DD", "dow": "Mon", "minutes": int, "sessions": int}, ...]
     }
     """
-    from datetime import timedelta, datetime as _dt
+    from datetime import timedelta
     monday, sunday = _iso_week_anchor(week_offset)
     # plan_date is stored as "YYYY-MM-DD HH:MM:SS" for focus rows, so range
     # compare the prefix substring.
@@ -3534,7 +3534,6 @@ def get_head_to_head(client_id: int, friend_id: int) -> dict:
 def settle_due_duels() -> int:
     """Find duels past their end-time, compute focus minutes for both sides,
     and mark as settled. Returns number of duels settled."""
-    from datetime import datetime
     settled = 0
     with get_db() as db:
         if _USE_PG:

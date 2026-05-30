@@ -5,7 +5,6 @@ Falls back to SQLite via DATABASE_PATH when DATABASE_URL is empty (local dev).
 """
 from __future__ import annotations
 
-import os
 from contextlib import contextmanager
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -22,7 +21,6 @@ if _USE_PG:
     import psycopg2.errors
 else:
     import sqlite3
-    from pathlib import Path
     from outreach.config import DATABASE_PATH
 
 # ---------------------------------------------------------------------------
@@ -803,15 +801,6 @@ def get_default_email_account(client_id: int) -> dict | None:
 # Campaigns
 # ---------------------------------------------------------------------------
 
-def create_campaign(client_id: int, name: str, business_type: str,
-                    target_audience: str, tone: str, scheduled_start: str = "") -> int:
-    with get_db() as db:
-        return _insert_returning_id(
-            db,
-            "INSERT INTO campaigns (client_id, name, business_type, target_audience, tone, scheduled_start) "
-            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (client_id, name, business_type, target_audience, tone, scheduled_start or None),
-        )
 
 
 
@@ -823,47 +812,12 @@ def get_campaigns(client_id: int) -> list[dict]:
             (client_id,))
 
 
-def get_campaign(campaign_id: int) -> dict | None:
-    with get_db() as db:
-        return _fetchone(db, "SELECT * FROM campaigns WHERE id = %s", (campaign_id,))
 
 
-def update_campaign_status(campaign_id: int, status: str):
-    with get_db() as db:
-        _exec(db, "UPDATE campaigns SET status = %s WHERE id = %s", (status, campaign_id))
 
 
-def delete_campaign(campaign_id: int):
-    with get_db() as db:
-        _exec(db, """DELETE FROM sent_emails WHERE contact_id IN
-                     (SELECT id FROM contacts WHERE campaign_id = %s)""", (campaign_id,))
-        _exec(db, """DELETE FROM sent_emails WHERE sequence_id IN
-                     (SELECT id FROM email_sequences WHERE campaign_id = %s)""", (campaign_id,))
-        _exec(db, "DELETE FROM campaigns WHERE id = %s", (campaign_id,))
 
 
-def duplicate_campaign(campaign_id: int, client_id: int) -> int | None:
-    with get_db() as db:
-        camp = _fetchone(db, "SELECT * FROM campaigns WHERE id = %s", (campaign_id,))
-        if not camp:
-            return None
-        new_id = _insert_returning_id(
-            db,
-            "INSERT INTO campaigns (client_id, name, business_type, target_audience, tone, status) "
-            "VALUES (%s, %s, %s, %s, %s, 'draft') RETURNING id",
-            (client_id, camp["name"] + " (copy)", camp["business_type"],
-             camp["target_audience"], camp["tone"]),
-        )
-        seqs = _fetchall(db,
-            "SELECT * FROM email_sequences WHERE campaign_id = %s ORDER BY step",
-            (campaign_id,))
-        for s in seqs:
-            _exec(db,
-                "INSERT INTO email_sequences (campaign_id, step, subject_a, subject_b, body_a, body_b, delay_days) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (new_id, s["step"], s["subject_a"], s["subject_b"],
-                 s["body_a"], s["body_b"], s["delay_days"]))
-        return new_id
 
 
 # ---------------------------------------------------------------------------
@@ -889,57 +843,20 @@ def add_contacts(campaign_id: int, contacts: list[dict]) -> int:
         return count
 
 
-def get_campaign_contacts(campaign_id: int, status: str | None = None) -> list[dict]:
-    with get_db() as db:
-        if status:
-            return _fetchall(db,
-                "SELECT * FROM contacts WHERE campaign_id = %s AND status = %s",
-                (campaign_id, status))
-        return _fetchall(db,
-            "SELECT * FROM contacts WHERE campaign_id = %s",
-            (campaign_id,))
 
 
-def delete_contact(contact_id: int):
-    with get_db() as db:
-        _exec(db, "DELETE FROM sent_emails WHERE contact_id = %s", (contact_id,))
-        _exec(db, "DELETE FROM contacts WHERE id = %s", (contact_id,))
 
 
 # ---------------------------------------------------------------------------
 # Sequences
 # ---------------------------------------------------------------------------
 
-def save_sequence(campaign_id: int, step: int, subject_a: str, subject_b: str,
-                  body_a: str, body_b: str, delay_days: int = 0) -> int:
-    with get_db() as db:
-        return _insert_returning_id(
-            db,
-            "INSERT INTO email_sequences (campaign_id, step, subject_a, subject_b, "
-            "body_a, body_b, delay_days) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-            (campaign_id, step, subject_a, subject_b, body_a, body_b, delay_days),
-        )
 
 
-def get_sequences(campaign_id: int) -> list[dict]:
-    with get_db() as db:
-        return _fetchall(db,
-            "SELECT * FROM email_sequences WHERE campaign_id = %s ORDER BY step",
-            (campaign_id,))
 
 
-def update_sequence(seq_id: int, subject_a: str, subject_b: str,
-                    body_a: str, delay_days: int):
-    with get_db() as db:
-        _exec(db,
-            "UPDATE email_sequences SET subject_a=%s, subject_b=%s, body_a=%s, delay_days=%s "
-            "WHERE id=%s",
-            (subject_a, subject_b, body_a, delay_days, seq_id))
 
 
-def delete_sequence(seq_id: int):
-    with get_db() as db:
-        _exec(db, "DELETE FROM email_sequences WHERE id = %s", (seq_id,))
 
 
 # ---------------------------------------------------------------------------
@@ -967,17 +884,6 @@ def delete_sent_email(sent_id: int, contact_id: int):
             _exec(db, "UPDATE contacts SET status = 'pending' WHERE id = %s", (contact_id,))
 
 
-def record_open(sent_email_id: int):
-    with get_db() as db:
-        now = _now_expr()
-        _exec(db,
-            f"UPDATE sent_emails SET status = 'opened', opened_at = {now} WHERE id = %s AND status = 'sent'",
-            (sent_email_id,))
-        _exec(db, """
-            UPDATE contacts SET status = 'opened'
-            WHERE id = (SELECT contact_id FROM sent_emails WHERE id = %s)
-              AND status = 'sent'
-        """, (sent_email_id,))
 
 
 def record_reply(contact_email: str, reply_body: str = "", reply_sentiment: str = "") -> bool:
@@ -1014,71 +920,10 @@ def get_all_sent_recipient_emails() -> set[str]:
 # Stats
 # ---------------------------------------------------------------------------
 
-def get_campaign_stats(campaign_id: int) -> dict:
-    with get_db() as db:
-        total = _fetchval(db, "SELECT COUNT(*) FROM contacts WHERE campaign_id = %s", (campaign_id,))
-        sent = _fetchval(db,
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "WHERE c.campaign_id = %s", (campaign_id,))
-        opened = _fetchval(db,
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "WHERE c.campaign_id = %s AND se.status IN ('opened', 'clicked', 'replied')",
-            (campaign_id,))
-        replied = _fetchval(db,
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "WHERE c.campaign_id = %s AND se.status = 'replied'", (campaign_id,))
-        bounced = _fetchval(db,
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "WHERE c.campaign_id = %s AND se.status = 'bounced'", (campaign_id,))
-        return {
-            "total_contacts": total or 0,
-            "emails_sent": sent or 0,
-            "opens": opened or 0,
-            "open_rate": (opened or 0) / sent if sent else 0,
-            "replies": replied or 0,
-            "reply_rate": (replied or 0) / sent if sent else 0,
-            "bounced": bounced or 0,
-            "bounce_rate": (bounced or 0) / sent if sent else 0,
-        }
 
 
 
 
-def get_global_stats(client_id: int) -> dict:
-    with get_db() as db:
-        total_camps = _fetchval(db, "SELECT COUNT(*) FROM campaigns WHERE client_id = %s", (client_id,))
-        active_camps = _fetchval(db, "SELECT COUNT(*) FROM campaigns WHERE client_id = %s AND status = 'active'", (client_id,))
-        total_contacts = _fetchval(db,
-            "SELECT COUNT(*) FROM contacts c JOIN campaigns camp ON c.campaign_id = camp.id WHERE camp.client_id = %s",
-            (client_id,))
-        total_sent = _fetchval(db,
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "JOIN campaigns camp ON c.campaign_id = camp.id WHERE camp.client_id = %s", (client_id,))
-        total_opened = _fetchval(db,
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "JOIN campaigns camp ON c.campaign_id = camp.id "
-            "WHERE camp.client_id = %s AND se.status IN ('opened', 'clicked', 'replied')", (client_id,))
-        total_replied = _fetchval(db,
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "JOIN campaigns camp ON c.campaign_id = camp.id "
-            "WHERE camp.client_id = %s AND se.status = 'replied'", (client_id,))
-        total_bounced = _fetchval(db,
-            "SELECT COUNT(*) FROM sent_emails se JOIN contacts c ON se.contact_id = c.id "
-            "JOIN campaigns camp ON c.campaign_id = camp.id "
-            "WHERE camp.client_id = %s AND se.status = 'bounced'", (client_id,))
-        ts = total_sent or 0
-        return {
-            "total_campaigns": total_camps or 0,
-            "active_campaigns": active_camps or 0,
-            "total_contacts": total_contacts or 0,
-            "total_sent": ts,
-            "total_opened": total_opened or 0,
-            "open_rate": (total_opened or 0) / ts if ts else 0,
-            "total_replied": total_replied or 0,
-            "reply_rate": (total_replied or 0) / ts if ts else 0,
-            "total_bounced": total_bounced or 0,
-            "bounce_rate": (total_bounced or 0) / ts if ts else 0,
-        }
 
 
 
@@ -1155,31 +1000,8 @@ def get_emails_to_send(limit: int = 50) -> list[dict]:
 
 
 
-def get_sent_emails(campaign_id: int) -> list[dict]:
-    with get_db() as db:
-        return _fetchall(db, """
-            SELECT se.*, c.name as contact_name, c.email as contact_email,
-                   c.company as contact_company, es.step
-            FROM sent_emails se
-            JOIN contacts c ON se.contact_id = c.id
-            JOIN email_sequences es ON se.sequence_id = es.id
-            WHERE c.campaign_id = %s
-            ORDER BY se.sent_at DESC
-        """, (campaign_id,))
 
 
-def get_reply_context(sent_email_id: int) -> dict | None:
-    with get_db() as db:
-        return _fetchone(db, """
-            SELECT se.subject, se.body, se.reply_body, se.reply_sentiment,
-                   c.name as contact_name, c.email as contact_email,
-                   c.company, c.role,
-                   camp.business_type, camp.target_audience, camp.tone
-            FROM sent_emails se
-            JOIN contacts c ON se.contact_id = c.id
-            JOIN campaigns camp ON c.campaign_id = camp.id
-            WHERE se.id = %s AND se.status = 'replied'
-        """, (sent_email_id,))
 
 
 # ---------------------------------------------------------------------------

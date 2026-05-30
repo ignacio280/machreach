@@ -3,7 +3,6 @@ Open/click tracking — serves a 1x1 pixel and records opens.
 """
 from __future__ import annotations
 
-from outreach.db import record_open
 
 
 # Transparent 1x1 GIF (43 bytes)

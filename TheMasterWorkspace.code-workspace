@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../machfinancial"
+		},
+		{
+			"path": "../machfinance"
+		},
+		{
+			"path": "../social-chaos-stats"
+		}
+	],
+	"settings": {}
+}

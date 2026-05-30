@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import email
 import imaplib
-from email.header import decode_header
 from email.utils import parseaddr
 
 from outreach.config import IMAP_HOST, IMAP_PORT

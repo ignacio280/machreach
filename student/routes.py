@@ -23,11 +23,11 @@ import re
 import secrets
 
 from datetime import datetime, timedelta
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 
 
-from flask import jsonify, redirect, request, session, url_for, render_template_string, send_file
+from flask import jsonify, redirect, request, session, url_for, render_template_string
 
 from markupsafe import Markup
 
@@ -806,17 +806,7 @@ def register_student_routes(app, csrf, limiter):
 
     from student.canvas import CanvasClient, extract_text_from_pdf, extract_text_from_docx, normalize_canvas_url
 
-    from student.analyzer import (analyze_course_material, generate_study_plan,
-
-                                  generate_flashcards, generate_quiz, generate_notes,
-
-                                  notes_from_transcript,
-
-                                  flashcards_from_transcript,
-
-                                  generate_practice_problems,
-
-                                  generate_cram_plan)
+    from student.analyzer import (analyze_course_material, generate_flashcards, generate_quiz)
 
     from student import db as sdb
     from student.removed_features import DEPRECATED_STUDENT_PATHS, REMOVED_API_PREFIXES
@@ -19061,7 +19051,7 @@ No markdown, no code fences. ONLY JSON.
             if tier == "free":
                 # Cancel the active LS subscription if we have its id stashed.
                 try:
-                    from outreach.db import get_db, _fetchone, _exec
+                    from outreach.db import get_db, _fetchone
                     from outreach import lemonsqueezy as ls
                     import json as _json
                     with get_db() as db:

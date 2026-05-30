@@ -1709,7 +1709,7 @@ def register_professional_routes(app, csrf, limiter):
     def pro_rel_get(email):
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
-        from outreach.db import get_contact_email_history, get_db, _fetchval
+        from outreach.db import get_db, _fetchval
         note = pdb.get_relationship_note(_cid(), email) or {}
         with get_db() as db:
             msg_count = _fetchval(db,

@@ -4,7 +4,6 @@ Run separately from the web app: python worker.py
 """
 from __future__ import annotations
 
-import os
 import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -348,7 +347,7 @@ def sync_mail_hub():
     For free users: skip background sync (they sync manually within their limit).
     """
     try:
-        from outreach.db import get_db, check_limit, increment_usage, get_email_accounts, get_subscription, _exec, _fetchval, _fetchall
+        from outreach.db import get_db, check_limit, increment_usage, get_email_accounts, get_subscription, _fetchval, _fetchall
         from outreach.mail_hub import sync_inbox, peek_unseen
         with get_db() as db:
             clients = _fetchall(db, "SELECT id FROM clients")

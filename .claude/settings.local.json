@@ -1,7 +1,30 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c \"import app; print\\('boot OK'\\)\")"
+      "Bash(python -c \"import app; print\\('boot OK'\\)\")",
+      "Read(//c/Users/ignac/projects/social-chaos-stats/**)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"/host pres: %{http_code}\\\\n\" 'http://127.0.0.1:3000/host/PINK?game=president' --max-time 60)",
+      "Bash(curl -s -o /dev/null -w \"/play pres: %{http_code}\\\\n\" 'http://127.0.0.1:3000/play/PINK?game=president' --max-time 60)",
+      "Bash(cat /tmp/pres_prefix.tsx > C:/Users/ignac/projects/social-chaos-stats/src/components/PresidentHostStage.tsx && wc -l C:/Users/ignac/projects/social-chaos-stats/src/components/PresidentHostStage.tsx)",
+      "Read(//tmp/**)",
+      "Bash(grep -n \"body:has\\(.host-page\\)\\\\|.game-page.host-page\\\\|\\\\\\\\.game-page {\" C:/Users/ignac/projects/social-chaos-stats/src/app/globals.css)",
+      "Bash(curl -s -o /dev/null -w \"/host trust: %{http_code}\\\\n\" 'http://127.0.0.1:3000/host/PINK?game=trust' --max-time 60)",
+      "Bash(curl -s -o /dev/null -w \"/host stats: %{http_code}\\\\n\" 'http://127.0.0.1:3000/host/PINK' --max-time 60)",
+      "Bash(taskkill //F //PID 82024)",
+      "Bash(nohup node server.js)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(curl -s -o /dev/null -w \"/: %{http_code}\\\\n\" 'http://127.0.0.1:3000/' --max-time 60)",
+      "Bash(curl -s -o /dev/null -w \"/host alibi: %{http_code}\\\\n\" 'http://127.0.0.1:3000/host/PINK?game=alibi' --max-time 60)",
+      "Bash(curl -s -o /dev/null -w \"/play alibi: %{http_code}\\\\n\" 'http://127.0.0.1:3000/play/PINK?game=alibi' --max-time 60)",
+      "Bash(taskkill //F //PID 50948)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(taskkill //F //PID 71984)",
+      "Bash(curl -s -o /dev/null -w \"hub=%{http_code}\\\\n\" http://127.0.0.1:3000/)",
+      "Bash(curl -s -o /dev/null -w \"host=%{http_code}\\\\n\" \"http://127.0.0.1:3000/host/TEST?game=catcalling\")",
+      "Bash(curl -s -o /dev/null -w \"hub=%{http_code}\\\\nhost=%{http_code}\\\\n\" http://127.0.0.1:3000/ http://127.0.0.1:3000/host/TEST)"
     ]
   }
 }

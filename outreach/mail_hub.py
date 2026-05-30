@@ -427,7 +427,7 @@ def sync_inbox(client_id: int, days: int = 3, account_id: int | None = None) -> 
 def _reclassify_existing(client_id: int, days: int, user_rules: str,
                          campaign_emails: set, campaign_subjects: set):
     """Re-run AI classification on recent existing emails using current rules."""
-    from outreach.db import get_db, _exec, _fetchall
+    from outreach.db import get_db, _exec
     from datetime import date, timedelta
 
     since = (date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
