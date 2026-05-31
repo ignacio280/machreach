@@ -1,0 +1,4 @@
+# Development/test dependencies (not installed in production).
+# Run the suite with:  python -m pytest
+-r requirements.txt
+pytest>=8.0

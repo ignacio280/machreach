@@ -1920,8 +1920,8 @@ def register_student_routes(app, csrf, limiter):
                 _ref = (request.form.get("ref") or session.get("referral_ref") or "").strip().upper()
                 if _ref:
                     try:
-                        _owner = sdb.lookup_referral_owner(_ref)
-                        if _owner and _owner != client_id and sdb.record_referral(_ref, _owner, client_id):
+                        _owner = sdb.redeem_referral(_ref, client_id)
+                        if _owner:
                             from student import subscription as _ssub
                             _ssub.grant_plus_days(_owner, 7)
                     except Exception:

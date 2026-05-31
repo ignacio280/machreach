@@ -2796,6 +2796,21 @@ def referral_count(client_id: int) -> int:
                              (client_id,)) or 0)
 
 
+def redeem_referral(code: str, referred_id: int) -> int | None:
+    """Validate and record a referral for a newly-created user.
+
+    Returns the referrer's client_id (to reward) on a fresh, valid redemption,
+    or None if the code is unknown, it's a self-referral, or this user already
+    redeemed one. Keeps the guard logic in one testable place.
+    """
+    owner = lookup_referral_owner(code)
+    if not owner or owner == referred_id:
+        return None
+    if record_referral(code, owner, referred_id):
+        return owner
+    return None
+
+
 def has_generated_ai(client_id: int) -> bool:
     """True if the user has ever generated an AI quiz or flashcard set
     (used by the onboarding checklist to detect activation)."""

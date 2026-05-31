@@ -1,0 +1,94 @@
+"""Money path: subscription tiers, promotional Plus grants, and free limits."""
+from datetime import datetime, timedelta
+
+from student import subscription as ssub
+from outreach.db import get_db
+
+
+def test_default_tier_is_free(make_user):
+    assert ssub.get_tier(make_user()) == "free"
+    assert ssub.has_unlimited_ai(make_user()) is False
+
+
+def test_paid_tier_set_and_read(make_user):
+    cid = make_user()
+    ssub.set_tier(cid, "plus")
+    assert ssub.get_tier(cid) == "plus"
+    assert ssub.has_unlimited_ai(cid) is True
+
+
+def test_unknown_tier_rejected(make_user):
+    cid = make_user()
+    res = ssub.set_tier(cid, "bogus")
+    assert res["ok"] is False
+    assert ssub.get_tier(cid) == "free"
+
+
+def test_grant_plus_days_makes_user_plus(make_user):
+    cid = make_user()
+    ssub.grant_plus_days(cid, 7)
+    assert ssub.get_tier(cid) == "plus"
+    assert ssub.has_unlimited_ai(cid) is True
+    assert ssub.plus_grant_until(cid) is not None
+
+
+def test_grant_plus_days_stacks(make_user):
+    cid = make_user()
+    ssub.grant_plus_days(cid, 7)
+    first = datetime.fromisoformat(ssub.plus_grant_until(cid))
+    ssub.grant_plus_days(cid, 7)
+    second = datetime.fromisoformat(ssub.plus_grant_until(cid))
+    # Two weeks granted -> roughly 14 days out, and strictly later than one week.
+    assert second > first
+    assert (second - datetime.utcnow()).days >= 13
+
+
+def test_expired_grant_reverts_to_free(make_user):
+    cid = make_user()
+    ssub.grant_plus_days(cid, 7)
+    assert ssub.get_tier(cid) == "plus"
+    # Force the grant into the past.
+    with get_db() as db:
+        prefs = ssub._load_prefs(db, cid)
+        prefs["plus_until"] = (datetime.utcnow() - timedelta(days=1)).isoformat()
+        ssub._save_prefs(db, cid, prefs)
+    assert ssub.get_tier(cid) == "free"
+    assert ssub.plus_grant_until(cid) is None
+
+
+def test_paid_subscription_beats_expired_promo(make_user):
+    cid = make_user()
+    ssub.set_tier(cid, "plus")           # real paid subscription
+    with get_db() as db:                  # expired promo grant present too
+        prefs = ssub._load_prefs(db, cid)
+        prefs["plus_until"] = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        ssub._save_prefs(db, cid, prefs)
+    assert ssub.get_tier(cid) == "plus"   # paid wins, expired promo irrelevant
+
+
+def test_question_and_card_caps(make_user):
+    free = make_user()
+    assert ssub.cap_questions(free, 500) == ssub.FREE_QUIZ_MAX_QUESTIONS
+    assert ssub.cap_cards(free, 500) == ssub.FREE_FLASHCARD_MAX_CARDS
+    plus = make_user()
+    ssub.grant_plus_days(plus, 7)
+    assert ssub.cap_questions(plus, 500) == 500
+    assert ssub.cap_cards(plus, 500) == 500
+
+
+def test_free_daily_quiz_limit(make_user):
+    cid = make_user()
+    allowed, _ = ssub.can_generate_quiz_today(cid)
+    assert allowed is True
+    ssub.record_generation(cid, "quiz_generated")
+    allowed_after, reason = ssub.can_generate_quiz_today(cid)
+    assert allowed_after is False
+    assert reason  # a user-facing upgrade message
+
+
+def test_plus_user_has_no_quiz_limit(make_user):
+    cid = make_user()
+    ssub.grant_plus_days(cid, 7)
+    ssub.record_generation(cid, "quiz_generated")
+    allowed, _ = ssub.can_generate_quiz_today(cid)
+    assert allowed is True
