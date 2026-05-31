@@ -5609,6 +5609,46 @@ def register_student_routes(app, csrf, limiter):
             '</section>'
         )
 
+        # ── Onboarding / activation checklist (new + low-activity users) ──
+        _ob_focus = bool(focus_stats.get("sessions") or focus_stats.get("total_minutes"))
+        _ob_ai = sdb.has_generated_ai(cid)
+        _ob_invite = sdb.referral_count(cid) > 0
+        _ob_items = [
+            (True, "Conectar Canvas", ""),
+            (_ob_focus, "Inicia tu primera sesión de enfoque", "/student/focus"),
+            (_ob_ai, "Genera tu primer quiz o set de flashcards", "/student/quizzes"),
+            (_ob_invite, "Invita a un amigo y gana una semana de Plus gratis", "/student/invite"),
+        ]
+        _ob_done = sum(1 for d, _, _ in _ob_items if d)
+        _mr_onboarding_html = ""
+        if _ob_done < len(_ob_items):
+            _ob_pct = round(_ob_done / len(_ob_items) * 100)
+            _ob_rows = ""
+            for _done, _label, _href in _ob_items:
+                if _done:
+                    _ob_rows += (
+                        '<li style="display:flex;align-items:center;gap:10px;padding:8px 0;color:var(--text-muted);">'
+                        '<span style="width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:900;font-size:13px;">✓</span>'
+                        '<span style="text-decoration:line-through;">' + _label + '</span></li>'
+                    )
+                else:
+                    _ob_rows += (
+                        '<li style="padding:8px 0;"><a href="' + _href + '" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text);font-weight:800;">'
+                        '<span style="width:22px;height:22px;border-radius:50%;border:2px solid var(--border);flex:0 0 auto;"></span>'
+                        '<span>' + _label + '</span><span style="margin-left:auto;color:var(--primary);">→</span></a></li>'
+                    )
+            _mr_onboarding_html = (
+                '<section id="mr-onboarding" class="mr-card mr-pop-1" style="margin-bottom:16px;">'
+                '<div class="mr-card-h"><div class="mr-card-title">\U0001F680 Primeros pasos</div>'
+                '<button id="mr-onboard-x" title="Ocultar" style="background:none;border:0;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1;">×</button></div>'
+                '<div style="height:8px;background:var(--border);border-radius:999px;overflow:hidden;margin:4px 0 10px;">'
+                '<div style="height:100%;width:' + str(_ob_pct) + '%;background:var(--primary);"></div></div>'
+                '<div style="font-size:12px;color:var(--text-muted);font-weight:800;margin-bottom:4px;">' + str(_ob_done) + ' de ' + str(len(_ob_items)) + ' completado</div>'
+                '<ul style="list-style:none;margin:0;padding:0;">' + _ob_rows + '</ul>'
+                '</section>'
+                '<script>(function(){var k="mr_onboard_hidden",e=document.getElementById("mr-onboarding"),b=document.getElementById("mr-onboard-x");if(!e)return;if(localStorage.getItem(k)==="1"){e.remove();return;}if(b)b.addEventListener("click",function(){localStorage.setItem(k,"1");e.remove();});})();</script>'
+            )
+
         # ── final assembly ─────────────────────────────────────
         _mr_scripts = """
 <script>
@@ -5635,6 +5675,7 @@ def register_student_routes(app, csrf, limiter):
         _mr_html = (
             _mr_css
             + '<div class="mr-home">'
+            + _mr_onboarding_html
             + '<div class="mr-layout">'
             + '<div class="mr-left">'
             + _mr_mission_html

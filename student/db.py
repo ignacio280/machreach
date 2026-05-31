@@ -2796,6 +2796,17 @@ def referral_count(client_id: int) -> int:
                              (client_id,)) or 0)
 
 
+def has_generated_ai(client_id: int) -> bool:
+    """True if the user has ever generated an AI quiz or flashcard set
+    (used by the onboarding checklist to detect activation)."""
+    with get_db() as db:
+        return bool(_fetchval(
+            db,
+            "SELECT 1 FROM student_xp WHERE client_id = %s "
+            "AND action IN ('quiz_generated', 'flashcards_generated') LIMIT 1",
+            (client_id,)))
+
+
 def delete_lb_group(group_id: int, owner_id: int):
     """Delete a leaderboard group (owner only)."""
     with get_db() as db:
