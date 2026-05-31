@@ -2304,6 +2304,7 @@ def _consume_wallet_freeze_for_date(client_id: int, target_date) -> bool:
             "WHERE client_id = %s AND streak_freezes > 0",
             (client_id,),
         )
+    earn_badge(client_id, "freeze_used")   # "Saved by Ice"
     return True
 
 
@@ -2369,18 +2370,12 @@ BADGE_DEFS = {
     "quiz_500":        {"emoji": "🧬", "name": "Quiz Scientist",  "desc": "Completed 500 quizzes"},
     "quiz_perfect_5":  {"emoji": "🎯", "name": "Sharpshooter",    "desc": "5 perfect-score quizzes"},
     "quiz_perfect_25": {"emoji": "🏹", "name": "Bullseye",        "desc": "25 perfect-score quizzes"},
-    "quiz_speed":      {"emoji": "⚡", "name": "Speedrunner",     "desc": "Aced a quiz in under 60 seconds"},
-    "quiz_no_skip":    {"emoji": "✅", "name": "No Shortcuts",    "desc": "10 quizzes with no skipped questions"},
-    "comeback_kid":    {"emoji": "💪", "name": "Comeback Kid",    "desc": "Failed a quiz, then aced the retake"},
     # ── Flashcard mastery ──────────────────────────────────────────
-    "flashcard_5000":  {"emoji": "🃏", "name": "Card Master",     "desc": "Reviewed 5,000 flashcards"},
-    "flashcard_streak":{"emoji": "🔁", "name": "Spaced Repetition","desc": "Reviewed flashcards 7 days in a row"},
     "deck_builder":    {"emoji": "🏗️", "name": "Deck Architect",  "desc": "Created 10 flashcard decks"},
     # ── Focus mastery ───────────────────────────────────────────────
     "focus_session_4h":{"emoji": "🪨", "name": "Marathon Mind",   "desc": "Completed a single 4-hour focus session"},
     "focus_500h":      {"emoji": "🌌", "name": "Eternal Focus",   "desc": "500 hours of total focus time"},
     "focus_1000h":     {"emoji": "♾️", "name": "Infinity Mind",   "desc": "1,000 hours of total focus time"},
-    "no_phone_30":     {"emoji": "📵", "name": "Phone Down",      "desc": "30 sessions with no phone interruption"},
     "deep_work_week":  {"emoji": "🌊", "name": "Deep Work Week",  "desc": "20 hours of focus in a single week"},
     # ── Streak elite ────────────────────────────────────────────────
     "streak_180":      {"emoji": "🛡️", "name": "Half-Year Hero",  "desc": "180-day study streak"},
@@ -2395,8 +2390,6 @@ BADGE_DEFS = {
     "weekend_warrior": {"emoji": "🗡️", "name": "Weekend Warrior", "desc": "Studied both Saturday and Sunday"},
     "midnight_oil":    {"emoji": "🕯️", "name": "Midnight Oil",   "desc": "Studied past 2 AM"},
     "sunrise_session": {"emoji": "☀️", "name": "Sunrise Session", "desc": "Studied at exactly 6 AM"},
-    "holiday_grinder": {"emoji": "🎄", "name": "Holiday Grinder", "desc": "Studied on a public holiday"},
-    "birthday_study":  {"emoji": "🎂", "name": "Cake Later",      "desc": "Studied on your birthday"},
     "leap_day":        {"emoji": "🐸", "name": "Leap Year Scholar","desc": "Studied on Feb 29"},
     "new_years":       {"emoji": "🎆", "name": "New Year, New Me","desc": "Studied on January 1st"},
     # ── Duels & social combat ───────────────────────────────────────
@@ -2405,29 +2398,18 @@ BADGE_DEFS = {
     "duel_streak_10":  {"emoji": "🗡️", "name": "Duelist",         "desc": "Won 10 quiz duels in a row"},
     "duel_25":         {"emoji": "🛡️", "name": "Veteran Duelist", "desc": "Won 25 quiz duels"},
     "duel_100":        {"emoji": "👑", "name": "Duel Champion",   "desc": "Won 100 quiz duels"},
-    "duel_perfect":    {"emoji": "💥", "name": "Flawless Victory","desc": "Won a duel with a perfect score"},
     "duel_underdog":   {"emoji": "🐺", "name": "Underdog",        "desc": "Beat an opponent with 2x your XP"},
     # ── Weekly / monthly payouts ────────────────────────────────────
-    "first_prize":    {"emoji": "🪙", "name": "First Prize",      "desc": "Earned your first leaderboard coin payout"},
-    "podium_week":    {"emoji": "🥇", "name": "Podium Finisher",  "desc": "Finished top-3 on any weekly leaderboard"},
-    "podium_month":   {"emoji": "🏅", "name": "Monthly Podium",   "desc": "Finished top-3 on any monthly leaderboard"},
     # ── Course / academic milestones ────────────────────────────────
     "ten_courses":     {"emoji": "🎒", "name": "Course Hoarder",  "desc": "Added 10 courses"},
-    "exam_passer":     {"emoji": "📋", "name": "Exam Ready",      "desc": "Passed 5 practice exams"},
-    "exam_master":     {"emoji": "🎓", "name": "Exam Master",     "desc": "Passed 25 practice exams"},
     "syllabus_synced": {"emoji": "🔄", "name": "Synced Up",       "desc": "Synced Canvas for the first time"},
     # ── Wallet / economy ────────────────────────────────────────────
-    "first_purchase":  {"emoji": "🛍️", "name": "First Splurge",   "desc": "Made your first shop purchase"},
-    "big_spender":     {"emoji": "💰", "name": "Big Spender",     "desc": "Spent 1,000 coins in the shop"},
     "banner_collector":{"emoji": "🎨", "name": "Banner Collector","desc": "Unlocked 5 banners"},
     "flag_collector":  {"emoji": "🚩", "name": "Flag Collector",  "desc": "Unlocked 5 leaderboard flags"},
-    "completionist":   {"emoji": "🏵️", "name": "Completionist",   "desc": "Unlocked every banner in the shop"},
     # ── Page & reading ──────────────────────────────────────────────
     "page_2500":       {"emoji": "📙", "name": "Speed Reader",    "desc": "Read 2,500 pages"},
     "page_5000":       {"emoji": "📕", "name": "Library Lord",    "desc": "Read 5,000 pages"},
     # ── Profile / cosmetics ─────────────────────────────────────────
-    "first_banner":    {"emoji": "🖼️", "name": "Decorator",       "desc": "Equipped a custom profile banner"},
-    "first_flag":      {"emoji": "🎌", "name": "Flying Colors",   "desc": "Equipped a leaderboard flag"},
     "identity":        {"emoji": "🪪", "name": "True Self",       "desc": "Equipped a leaderboard badge"},
     # ── Secret / quirky ─────────────────────────────────────────────
     "lucky_seven":     {"emoji": "🍀", "name": "Lucky Seven",     "desc": "Scored exactly 77% on a quiz"},
@@ -2439,15 +2421,10 @@ BADGE_DEFS = {
     "back_to_school":  {"emoji": "🍎", "name": "Back to School",  "desc": "Studied on September 1st"},
     "speed_demon":     {"emoji": "🏎️", "name": "Speed Demon",    "desc": "Earned 500 XP in a single day"},
     "marathoner":      {"emoji": "🏃", "name": "XP Marathoner",   "desc": "Earned 1,000 XP in a single day"},
-    "comeback":        {"emoji": "🔥", "name": "Comeback Story",  "desc": "Returned after a 30-day break"},
     "loyal":           {"emoji": "💝", "name": "Loyal",           "desc": "Account older than 1 year"},
     "od_loyal":        {"emoji": "🗿", "name": "Old Guard",       "desc": "Account older than 2 years"},
     # ── PLUS-only badges ────────────────────────────────────────────
     "plus_member":     {"emoji": "💎", "name": "Plus Member",     "desc": "Active Plus subscription", "plus_only": True},
-    "plus_supporter":  {"emoji": "🤍", "name": "Supporter",       "desc": "Subscribed to support development", "plus_only": True},
-    "plus_founder":    {"emoji": "🏛️", "name": "Founder",         "desc": "Joined Plus during beta", "plus_only": True},
-    "plus_vip":        {"emoji": "⭐", "name": "VIP",             "desc": "Exclusive Plus VIP badge", "plus_only": True},
-    "plus_gold":       {"emoji": "🥇", "name": "Gold Tier",       "desc": "Exclusive Plus golden badge", "plus_only": True},
 }
 
 LEVEL_THRESHOLDS = [
@@ -2580,6 +2557,151 @@ def earn_badge(client_id: int, badge_key: str) -> bool:
             return True
         except Exception:
             return False
+
+
+# Threshold ladders: (metric_key, [(minimum, badge_key), ...]). Centralizing
+# them here means every event site can just call evaluate_badges() and any
+# newly-qualified milestone is awarded (earn_badge is idempotent).
+_BADGE_LADDERS = {
+    "focus_hours": [(1, "focus_1h"), (10, "focus_10h"), (50, "focus_50h"),
+                    (100, "focus_100h"), (500, "focus_500h"), (1000, "focus_1000h")],
+    "pages": [(100, "page_100"), (500, "page_500"), (1000, "page_1000"),
+              (2500, "page_2500"), (5000, "page_5000")],
+    "streak": [(3, "streak_3"), (7, "streak_7"), (14, "streak_14"), (30, "streak_30"),
+               (60, "streak_60"), (100, "streak_100"), (180, "streak_180"), (365, "streak_365")],
+    "xp": [(100, "xp_100"), (500, "xp_500"), (1000, "xp_1000"), (2500, "xp_2500"),
+           (5000, "xp_5000"), (10000, "xp_10000"), (25000, "xp_25000"),
+           (50000, "xp_50000"), (100000, "xp_100000")],
+    "quizzes": [(1, "first_quiz"), (10, "quiz_10"), (25, "quiz_25"), (50, "quiz_50"),
+                (100, "quiz_100"), (500, "quiz_500")],
+    "perfect_quizzes": [(1, "quiz_master"), (5, "quiz_perfect_5"), (25, "quiz_perfect_25")],
+    "courses": [(1, "first_course"), (5, "five_courses"), (10, "ten_courses")],
+    "decks": [(10, "deck_builder")],
+    "duels_won": [(1, "duel_first"), (25, "duel_25"), (100, "duel_100")],
+}
+
+
+def evaluate_badges(client_id: int, stats: dict | None = None) -> list[str]:
+    """Award every threshold/milestone badge the user now qualifies for.
+
+    Reads cheap totals and runs them through _BADGE_LADDERS. Safe to call after
+    any relevant event (focus save, quiz, course add, duel) — idempotent, so
+    already-earned badges are skipped. Returns the keys newly earned.
+    """
+    earned: list[str] = []
+    try:
+        st = stats or get_focus_stats(client_id)
+    except Exception:
+        st = {}
+    try:
+        hrs = float(str(st.get("total_hours") or 0).replace("h", "").replace(",", "") or 0)
+    except Exception:
+        hrs = 0.0
+    metrics = {
+        "focus_hours": hrs,
+        "pages": int(st.get("total_pages") or 0),
+        "streak": int(st.get("streak_days") or 0),
+    }
+    try:
+        with get_db() as db:
+            metrics["xp"] = int(_fetchval(db, "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s", (client_id,)) or 0)
+            metrics["quizzes"] = int(_fetchval(db, "SELECT COUNT(*) FROM student_quizzes WHERE client_id = %s AND attempts > 0", (client_id,)) or 0)
+            metrics["perfect_quizzes"] = int(_fetchval(db, "SELECT COUNT(*) FROM student_quizzes WHERE client_id = %s AND best_score >= 100", (client_id,)) or 0)
+            metrics["courses"] = int(_fetchval(db, "SELECT COUNT(*) FROM student_courses WHERE client_id = %s", (client_id,)) or 0)
+            metrics["decks"] = int(_fetchval(db, "SELECT COUNT(*) FROM student_flashcard_decks WHERE client_id = %s", (client_id,)) or 0)
+            metrics["duels_won"] = (
+                int(_fetchval(db, "SELECT COUNT(*) FROM student_duels WHERE winner_id = %s", (client_id,)) or 0)
+                + int(_fetchval(db, "SELECT COUNT(*) FROM student_quiz_duels WHERE winner_id = %s", (client_id,)) or 0)
+            )
+    except Exception:
+        pass
+    for metric, ladder in _BADGE_LADDERS.items():
+        value = metrics.get(metric, 0)
+        for minimum, key in ladder:
+            if value >= minimum and earn_badge(client_id, key):
+                earned.append(key)
+    # Account-age loyalty badges.
+    try:
+        from datetime import datetime
+        from outreach.db import get_client
+        c = get_client(client_id) or {}
+        created = c.get("created_at")
+        if created:
+            cdt = created if hasattr(created, "year") else datetime.fromisoformat(str(created)[:19])
+            age_days = (datetime.now() - cdt).days
+            if age_days >= 365 and earn_badge(client_id, "loyal"):
+                earned.append("loyal")
+            if age_days >= 730 and earn_badge(client_id, "od_loyal"):
+                earned.append("od_loyal")
+    except Exception:
+        pass
+    return earned
+
+
+def evaluate_event_badges(client_id: int, session_minutes: int = 0) -> list[str]:
+    """Award time-of-day, calendar, single-session and daily-XP badges.
+
+    Call right after a study event with the minutes credited this session.
+    """
+    from datetime import datetime
+    earned: list[str] = []
+
+    def _try(key):
+        if earn_badge(client_id, key):
+            earned.append(key)
+
+    now = datetime.now()
+    h = now.hour
+
+    if session_minutes >= 240:
+        _try("focus_session_4h")           # single 4h+ session
+    if session_minutes > 0:
+        if h < 7:
+            _try("early_bird")
+        if h == 6:
+            _try("sunrise_session")
+        if h >= 23:
+            _try("night_owl")
+        if 2 <= h < 5:
+            _try("midnight_oil")           # studying in the small hours
+        if now.weekday() >= 5:
+            _try("weekend_warrior")        # studied on a weekend
+        # Calendar dates
+        cal = {(1, 1): "new_years", (2, 14): "valentine", (3, 14): "pi_day",
+               (4, 1): "april_fools", (9, 1): "back_to_school", (10, 31): "ghost",
+               (2, 29): "leap_day"}
+        key = cal.get((now.month, now.day))
+        if key:
+            _try(key)
+
+    # Daily-XP milestones
+    try:
+        with get_db() as db:
+            if _USE_PG:
+                today_xp = int(_fetchval(db, "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s AND created_at::date = CURRENT_DATE", (client_id,)) or 0)
+            else:
+                today_xp = int(_fetchval(db, "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s AND date(created_at) = date('now','localtime')", (client_id,)) or 0)
+    except Exception:
+        today_xp = 0
+    if today_xp >= 500:
+        _try("speed_demon")
+    if today_xp >= 1000:
+        _try("marathoner")
+    if today_xp == 121:
+        _try("palindrome")
+
+    # 20h of focus within the last 7 days
+    try:
+        with get_db() as db:
+            if _USE_PG:
+                week_min = int(_fetchval(db, "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress WHERE client_id = %s AND plan_date::date >= CURRENT_DATE - 7", (client_id,)) or 0)
+            else:
+                week_min = int(_fetchval(db, "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress WHERE client_id = %s AND date(plan_date) >= date('now','localtime','-7 days')", (client_id,)) or 0)
+        if week_min >= 1200:
+            _try("deep_work_week")
+    except Exception:
+        pass
+    return earned
 
 
 def get_badges(client_id: int) -> list[dict]:
@@ -3602,9 +3724,66 @@ def settle_due_duels() -> int:
                 + " WHERE id = %s",
                 (c_min, o_min, winner, status, d["id"]),
             )
-        # Status-only duel. Focus is the only source that grants XP and coins.
+        # Status-only duel (XP/coins still come only from focus), but the
+        # winner earns duel badges.
+        if winner:
+            try:
+                loser = d["opponent_id"] if winner == d["challenger_id"] else d["challenger_id"]
+                _award_duel_badges(winner, loser)
+            except Exception:
+                pass
         settled += 1
     return settled
+
+
+def _award_duel_badges(winner_id: int, loser_id: int | None = None, *, perfect: bool = False) -> None:
+    """Award duel badges to a winner. A "duel" counts across both the focus
+    (student_duels) and quiz (student_quiz_duels) systems: lifetime-win tiers,
+    current win streak, underdog (beat someone with >=2x your XP), and perfect.
+    """
+    if not winner_id:
+        return
+    try:
+        with get_db() as db:
+            wins = (
+                int(_fetchval(db, "SELECT COUNT(*) FROM student_duels WHERE winner_id = %s", (winner_id,)) or 0)
+                + int(_fetchval(db, "SELECT COUNT(*) FROM student_quiz_duels WHERE winner_id = %s", (winner_id,)) or 0)
+            )
+            recent = _fetchall(
+                db,
+                "SELECT winner_id FROM ("
+                "  SELECT winner_id, settled_at FROM student_duels "
+                "    WHERE status IN ('settled','tied') AND (challenger_id = %s OR opponent_id = %s) "
+                "  UNION ALL "
+                "  SELECT winner_id, settled_at FROM student_quiz_duels "
+                "    WHERE status IN ('settled','tied') AND (challenger_id = %s OR opponent_id = %s) "
+                ") t ORDER BY settled_at DESC LIMIT 10",
+                (winner_id, winner_id, winner_id, winner_id),
+            ) or []
+            w_xp = int(_fetchval(db, "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s", (winner_id,)) or 0)
+            l_xp = int(_fetchval(db, "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s", (loser_id,)) or 0) if loser_id else 0
+    except Exception:
+        return
+    if wins >= 1:
+        earn_badge(winner_id, "duel_first")
+    if wins >= 25:
+        earn_badge(winner_id, "duel_25")
+    if wins >= 100:
+        earn_badge(winner_id, "duel_100")
+    streak = 0
+    for r in recent:
+        if int(r.get("winner_id") or 0) == int(winner_id):
+            streak += 1
+        else:
+            break
+    if streak >= 3:
+        earn_badge(winner_id, "duel_streak_3")
+    if streak >= 10:
+        earn_badge(winner_id, "duel_streak_10")
+    if loser_id and l_xp >= 2 * max(1, w_xp):
+        earn_badge(winner_id, "duel_underdog")
+    if perfect:
+        earn_badge(winner_id, "duel_perfect")
 
 
 def _focus_minutes_between(client_id: int, start, end) -> int:
@@ -4572,6 +4751,9 @@ def buy_banner(client_id: int, banner_key: str) -> dict:
             "UPDATE student_wallet SET coins = coins - %s, unlocked_banners = %s WHERE client_id = %s",
             (cfg["price_coins"], _json.dumps(new_unlocked), client_id),
         )
+    # "Banner Collector": 5+ banners unlocked (excludes the free default).
+    if len([b for b in new_unlocked if b != "default"]) >= 5:
+        earn_badge(client_id, "banner_collector")
     return {"ok": True, "coins": wallet["coins"] - cfg["price_coins"], "unlocked_banners": new_unlocked}
 
 
@@ -4684,6 +4866,9 @@ def buy_flag(client_id: int, flag_key: str) -> dict:
         prefs = _load_flag_prefs(db, client_id)
         prefs["unlocked_flags"] = new_unlocked
         _save_flag_prefs(db, client_id, prefs)
+    # "Flag Collector": 5+ flags unlocked (excludes the free "none").
+    if len([f for f in new_unlocked if f != "none"]) >= 5:
+        earn_badge(client_id, "flag_collector")
     return {"ok": True, "coins": wallet["coins"] - cfg["price_coins"], "unlocked_flags": new_unlocked}
 
 
@@ -4754,6 +4939,8 @@ def set_equipped_badge(client_id: int, badge_key: str, side: str = "right") -> d
             # Keep legacy field in sync for any old reader
             prefs["equipped_badge"] = badge_key or ""
         _save_flag_prefs(db, client_id, prefs)
+    if badge_key:
+        earn_badge(client_id, "identity")   # "True Self": equipped a leaderboard badge
     left, right = _badge_slot_keys(prefs)
     return {"ok": True, "equipped_badge_left": left, "equipped_badge_right": right}
 
@@ -4905,6 +5092,7 @@ def use_streak_freeze(client_id: int) -> dict:
               (client_id,))
         new_owned = _fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s",
                               (client_id,)) or 0
+    earn_badge(client_id, "freeze_used")   # "Saved by Ice"
     return {"ok": True, "streak_freezes": new_owned}
 
 
@@ -5405,6 +5593,12 @@ def settle_quiz_duel_if_done(duel_id: int) -> dict:
                 (status, winner, duel_id),
             )
     _payout_quiz_duel(duel_id, winner, tied=tied)
+    if winner:
+        try:
+            loser = d["opponent_id"] if winner == d["challenger_id"] else d["challenger_id"]
+            _award_duel_badges(winner, loser)
+        except Exception:
+            pass
     return {"ok": True, "winner_id": winner, "tied": tied}
 
 

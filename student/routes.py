@@ -878,6 +878,11 @@ def register_student_routes(app, csrf, limiter):
                 saved += 1
             except Exception:
                 continue
+        if saved > 0:
+            try:
+                sdb.earn_badge(client_id, "syllabus_synced")   # "Synced Up"
+            except Exception:
+                pass
         return {"courses": courses, "saved": saved}
 
     def _canvas_profile_identity(profile: dict, communication_channels: list[dict] | None = None) -> tuple[str, str]:
@@ -3387,7 +3392,13 @@ def register_student_routes(app, csrf, limiter):
 
                 sdb.earn_badge(cid, "night_owl")
 
-
+        # Centralized threshold + event/calendar/daily-XP badges.
+        try:
+            sdb.evaluate_badges(cid, stats=stats)
+            if minutes_saved > 0:
+                sdb.evaluate_event_badges(cid, session_minutes=minutes_saved)
+        except Exception:
+            pass
 
         # Promotion / demotion toasts intentionally disabled.
         # Leagues are XP-monotonic (no demotions) and the celebration toast
@@ -4590,6 +4601,13 @@ def register_student_routes(app, csrf, limiter):
         stats = sdb.get_study_stats(cid)
 
         focus_stats = sdb.get_focus_stats(cid)
+
+        # Retroactively award any milestone badge the user already qualifies for
+        # (threshold ladders + account-age), so existing users get their badges.
+        try:
+            sdb.evaluate_badges(cid, stats=focus_stats)
+        except Exception:
+            pass
 
         plan_row = sdb.get_latest_plan(cid)
 
@@ -10687,6 +10705,10 @@ def register_student_routes(app, csrf, limiter):
 
             sdb.earn_badge(cid, "quiz_master")
 
+        if score == 77:
+
+            sdb.earn_badge(cid, "lucky_seven")
+
         if not sdb.get_badges(cid) or not any(b["badge_key"] == "first_quiz" for b in sdb.get_badges(cid)):
 
             sdb.earn_badge(cid, "first_quiz")
@@ -10710,6 +10732,11 @@ def register_student_routes(app, csrf, limiter):
         if quiz_count >= 50:
 
             sdb.earn_badge(cid, "quiz_50")
+
+        try:
+            sdb.evaluate_badges(cid)
+        except Exception:
+            pass
 
         return jsonify({"ok": True})
 
@@ -14529,7 +14556,13 @@ No markdown, no code fences. ONLY JSON.
 
             sdb.earn_badge(cid, "perfect_week")
 
-
+        # Catch-all: retroactively award any threshold/milestone badge the user
+        # already qualifies for, then re-read so they show immediately.
+        try:
+            if sdb.evaluate_badges(cid):
+                badges = sdb.get_badges(cid)
+        except Exception:
+            pass
 
         return jsonify(
 
