@@ -4077,7 +4077,7 @@ def register_student_routes(app, csrf, limiter):
 
         """Render a student page using MachReach's LAYOUT."""
 
-        from app import ADMIN_EMAILS, LAYOUT
+        from app import ADMIN_EMAILS, render_layout
 
         from outreach.db import get_client
 
@@ -4106,9 +4106,7 @@ def register_student_routes(app, csrf, limiter):
         lang = session.get("lang", "es")
         rendered_content = translate_student_html_fragment(period_popup_html + content_html, lang)
 
-        return render_template_string(
-
-            LAYOUT,
+        return render_layout(
 
             title=f"Student — {title}",
 

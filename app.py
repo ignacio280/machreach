@@ -4918,6 +4918,22 @@ LAYOUT = """<!DOCTYPE html>
 </html>"""
 
 
+# LAYOUT is ~4,500 lines; render_template_string would re-lex/parse/compile it
+# on every request. Compile it once here and reuse the Template object.
+_LAYOUT_TEMPLATE = app.jinja_env.from_string(LAYOUT)
+
+
+def render_layout(**context):
+    """Render the shared LAYOUT shell from the pre-compiled template.
+
+    Equivalent to ``render_template_string(LAYOUT, **context)`` (runs Flask's
+    context processors / default context) but without recompiling the 4.5k-line
+    template on every request.
+    """
+    app.update_template_context(context)
+    return _LAYOUT_TEMPLATE.render(context)
+
+
 def _render(title: str, content: str, active_page: str = "", wide: bool = False, **kwargs):
     flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
     nav = t_dict("nav")
@@ -4928,8 +4944,7 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
         c = get_client(session["client_id"])
         is_admin = _is_admin()
         acct_type = (c.get("account_type") or "student") if c else acct_type
-    return render_template_string(
-        LAYOUT,
+    return render_layout(
         title=title,
         content=render_template_string(content, **kwargs),
         logged_in=_logged_in(),
@@ -5012,7 +5027,7 @@ def register():
                 pass
             flash(("error", "We couldn't send the verification email. Please check your email address and try again, or contact support@machreach.com."))
             return redirect(url_for("register"))
-    return render_template_string(LAYOUT, title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
+    return render_layout(title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
         <h1>{t("auth.create_account")}</h1>
@@ -5102,7 +5117,7 @@ def login():
         if pending_token:
             return redirect(url_for("team_accept_invite", token=pending_token))
         return redirect(url_for("student_dashboard_page"))
-    return render_template_string(LAYOUT, title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
+    return render_layout(title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
         <h1>{t("auth.welcome_back")}</h1>
@@ -5192,7 +5207,7 @@ def verify_email_pending():
         '<div class="vep-flash">A new verification link has been sent. '
         'Check your inbox (and your spam folder).</div>' if just_sent else ""
     )
-    return render_template_string(LAYOUT, title="Verify your email", logged_in=False,
+    return render_layout(title="Verify your email", logged_in=False,
         messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
         active_page="login", client_name="", nav=t_dict("nav"),
         lang=session.get("lang", "es"),
@@ -5314,7 +5329,7 @@ def forgot_password():
         # Always show same message to prevent email enumeration
         flash(("success", t("auth.reset_sent")))
         return redirect(url_for("forgot_password"))
-    return render_template_string(LAYOUT, title="Forgot Password", logged_in=False,
+    return render_layout(title="Forgot Password", logged_in=False,
         messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
         active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"),
         content=Markup(f"""
@@ -5353,7 +5368,7 @@ def reset_password(token):
         _log_security("PASSWORD_RESET_OK", client_id=reset["client_id"])
         flash(("success", t("auth.reset_success")))
         return redirect(url_for("login"))
-    return render_template_string(LAYOUT, title="Reset Password", logged_in=False,
+    return render_layout(title="Reset Password", logged_in=False,
         messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
         active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"),
         content=Markup(f"""
