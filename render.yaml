@@ -64,6 +64,10 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
+      - key: POSTHOG_KEY
+        sync: false
+      - key: POSTHOG_HOST
+        sync: false
 
   - type: worker
     name: machreach-worker
