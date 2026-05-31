@@ -65,6 +65,12 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB upload limit
 
 # ── Security: CSRF protection ──
 from flask_wtf.csrf import CSRFProtect
+# Don't expire CSRF tokens faster than the session. The Flask-WTF default of
+# 1 hour caused "The CSRF tokens do not match" when a page was left open and
+# submitted later (very common on mobile). The token is still bound to the
+# session secret, so CSRF protection is unchanged — only the early timeout is
+# removed. It now lasts the session lifetime (24h cookie).
+app.config["WTF_CSRF_TIME_LIMIT"] = None
 csrf = CSRFProtect(app)
 
 # ── Security: Rate limiting ──
