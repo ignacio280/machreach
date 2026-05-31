@@ -1,0 +1,459 @@
+          :root[data-theme="dark"] .content {
+            --bg:#11131A;
+            --card:#1D202A;
+            --card-bg:#1D202A;
+            --border:#34313A;
+            --border-light:#34313A;
+            --text:#F7F0E4;
+            --text-secondary:#D8D0C4;
+            --text-muted:#B9B0A5;
+            --ink:#F7F0E4;
+            --muted:#B9B0A5;
+            --line:#34313A;
+            --paper:#1D202A;
+            --cream:#11131A;
+            --warm-line:#34313A;
+            --warm-paper:#1D202A;
+            --warm-cream:#11131A;
+            --orange:#FF7A3D;
+          }
+          :root[data-theme="dark"] .content,
+          :root[data-theme="dark"] .content > *,
+          :root[data-theme="dark"] .mr-app-shell .content {
+            background-color:#11131A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content h1,
+          :root[data-theme="dark"] .content h2,
+          :root[data-theme="dark"] .content h3,
+          :root[data-theme="dark"] .content h4,
+          :root[data-theme="dark"] .content h5,
+          :root[data-theme="dark"] .content h6,
+          :root[data-theme="dark"] .content .page-title-cd,
+          :root[data-theme="dark"] .content .fr-title,
+          :root[data-theme="dark"] .content .focus-title,
+          :root[data-theme="dark"] .content .ccard-name,
+          :root[data-theme="dark"] .content .cb-title,
+          :root[data-theme="dark"] .content .fc-title,
+          :root[data-theme="dark"] .content .deck-title,
+          :root[data-theme="dark"] .content .q-title,
+          :root[data-theme="dark"] .content .ach-title,
+          :root[data-theme="dark"] .content .shop-title,
+          :root[data-theme="dark"] .content .pl-title,
+          :root[data-theme="dark"] .content #timer-display,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-hero h2,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-name,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-xp {
+            color:#F7F0E4 !important;
+            text-shadow:none !important;
+          }
+          :root[data-theme="dark"] .content p,
+          :root[data-theme="dark"] .content small,
+          :root[data-theme="dark"] .content .muted,
+          :root[data-theme="dark"] .content .fr-meta,
+          :root[data-theme="dark"] .content .fr-note,
+          :root[data-theme="dark"] .content .cb-meta,
+          :root[data-theme="dark"] .content .ccard-code,
+          :root[data-theme="dark"] .content .ccard-prof,
+          :root[data-theme="dark"] .content .ccard-next,
+          :root[data-theme="dark"] .content .ccs-l,
+          :root[data-theme="dark"] .content .deck-meta,
+          :root[data-theme="dark"] .content .page-eyebrow-cd,
+          :root[data-theme="dark"] .content #timer-label,
+          :root[data-theme="dark"] .content #pomo-count,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-hero p,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-pos,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-rank-card .label,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-rank-card .of {
+            color:#B9B0A5 !important;
+          }
+          :root[data-theme="dark"] .content .card,
+          :root[data-theme="dark"] .content .stat-card,
+          :root[data-theme="dark"] .content .admin-panel,
+          :root[data-theme="dark"] .content .admin-metric,
+          :root[data-theme="dark"] .content .qcard,
+          :root[data-theme="dark"] .content .an-stat,
+          :root[data-theme="dark"] .content .an-card,
+          :root[data-theme="dark"] .content .wa-course-btn,
+          :root[data-theme="dark"] .content .wa-risk-card,
+          :root[data-theme="dark"] .content .tabs a,
+          :root[data-theme="dark"] .content .canvas-banner,
+          :root[data-theme="dark"] .content .ccard,
+          :root[data-theme="dark"] .content .ccs,
+          :root[data-theme="dark"] .content .course-empty,
+          :root[data-theme="dark"] .content .course-detail-card,
+          :root[data-theme="dark"] .content .course-benchmark,
+          :root[data-theme="dark"] .content .mr-modal-card,
+          :root[data-theme="dark"] .content .urg-card,
+          :root[data-theme="dark"] .content .tl-group,
+          :root[data-theme="dark"] .content .exam-big,
+          :root[data-theme="dark"] .content .topic,
+          :root[data-theme="dark"] .content .exam-empty,
+          :root[data-theme="dark"] .content .ps,
+          :root[data-theme="dark"] .content .focus-timer-card,
+          :root[data-theme="dark"] .content .focus-rival-card,
+          :root[data-theme="dark"] .content .focus-exam-nudge,
+          :root[data-theme="dark"] .content .ft-select,
+          :root[data-theme="dark"] .content .ft-input,
+          :root[data-theme="dark"] .content .amb,
+          :root[data-theme="dark"] .content .block-item,
+          :root[data-theme="dark"] .content .mp-day,
+          :root[data-theme="dark"] .content .mp-row input,
+          :root[data-theme="dark"] .content .mp-row select,
+          :root[data-theme="dark"] .content .mp-del,
+          :root[data-theme="dark"] .content .fc-card-flip,
+          :root[data-theme="dark"] .content .fc-decks-card,
+          :root[data-theme="dark"] .content .deck,
+          :root[data-theme="dark"] .content .deck-bar,
+          :root[data-theme="dark"] .content .achievements-cd .ach-stat-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-badge-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-activity-card,
+          :root[data-theme="dark"] .content .fr-id,
+          :root[data-theme="dark"] .content .fr-panel,
+          :root[data-theme="dark"] .content .fr-input,
+          :root[data-theme="dark"] .content .fr-row,
+          :root[data-theme="dark"] .content .fr-empty,
+          :root[data-theme="dark"] .content .fr-duel-stat,
+          :root[data-theme="dark"] .content .fr-modal-card,
+          :root[data-theme="dark"] .content .fr-chal-card,
+          :root[data-theme="dark"] .content .fr-podium-card,
+          :root[data-theme="dark"] .content .fr-rank-list,
+          :root[data-theme="dark"] .content .fr-rank-row,
+          :root[data-theme="dark"] .content .fr-check,
+          :root[data-theme="dark"] .content .fr-group-card,
+          :root[data-theme="dark"] .content .fr-group-add select,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-tabs,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-tab,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-board,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-row,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-podium,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-podium-card,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-hero,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-rank-card,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-tabs,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-tab,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-board,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-row,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-controls,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-card,
+          :root[data-theme="dark"] .content .shop-cd .card,
+          :root[data-theme="dark"] .content .shop-cd .stat-card,
+          :root[data-theme="dark"] .content .profile-cosm-card,
+          :root[data-theme="dark"] .content .qd-q,
+          :root[data-theme="dark"] .content .qd-overlay .box,
+          :root[data-theme="dark"] .content .qd-r .scorebox {
+            background:#1D202A !important;
+            background-color:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+            box-shadow:0 1px 0 rgba(255,255,255,.03), 0 18px 46px rgba(0,0,0,.24) !important;
+          }
+          :root[data-theme="dark"] .content input,
+          :root[data-theme="dark"] .content textarea,
+          :root[data-theme="dark"] .content select,
+          :root[data-theme="dark"] .content table,
+          :root[data-theme="dark"] .content th,
+          :root[data-theme="dark"] .content td,
+          :root[data-theme="dark"] .content .btn-ghost,
+          :root[data-theme="dark"] .content .btn-outline,
+          :root[data-theme="dark"] .content .cb-btn,
+          :root[data-theme="dark"] .content .eb-actions a,
+          :root[data-theme="dark"] .content .btn-pop-cd.dark,
+          :root[data-theme="dark"] .content .shop-cd .btn-outline,
+          :root[data-theme="dark"] .content .shop-cd .btn-ghost,
+          :root[data-theme="dark"] .content .badge-side-btn {
+            background:#141720 !important;
+            background-color:#141720 !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content thead,
+          :root[data-theme="dark"] .content tr,
+          :root[data-theme="dark"] .content .lb-row,
+          :root[data-theme="dark"] .content .fr-rank-row {
+            border-color:#34313A !important;
+          }
+          :root[data-theme="dark"] .content .lb-tab.active,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-tab.active,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-tab.active {
+            background:#FF7A3D !important;
+            border-color:#FF7A3D !important;
+            color:#11131A !important;
+          }
+          :root[data-theme="dark"] .content .lb-row:hover,
+          :root[data-theme="dark"] .content .fr-row:hover,
+          :root[data-theme="dark"] .content .fr-rank-row:hover,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-row:hover {
+            background:#252936 !important;
+          }
+          :root[data-theme="dark"] .content .qcard[style],
+          :root[data-theme="dark"] .content .achievements-cd [style*="background:var(--card)"],
+          :root[data-theme="dark"] .content .achievements-cd [style*="background:#0f172a"],
+          :root[data-theme="dark"] .content .achievements-cd [style*="background:#1e293b"],
+          :root[data-theme="dark"] .content .achievements-cd [style*="background:#111827"],
+          :root[data-theme="dark"] .content .shop-cd [style*="background:var(--card)"],
+          :root[data-theme="dark"] .content [style*="background:#fff"],
+          :root[data-theme="dark"] .content [style*="background: #fff"],
+          :root[data-theme="dark"] .content [style*="background:#FFF"],
+          :root[data-theme="dark"] .content [style*="background: #FFF"],
+          :root[data-theme="dark"] .content [style*="background:#FFFFFF"],
+          :root[data-theme="dark"] .content [style*="background: #FFFFFF"],
+          :root[data-theme="dark"] .content [style*="background:#FFFDF8"],
+          :root[data-theme="dark"] .content [style*="background: #FFFDF8"],
+          :root[data-theme="dark"] .content [style*="background:#FBF8F0"],
+          :root[data-theme="dark"] .content [style*="background: #FBF8F0"],
+          :root[data-theme="dark"] .content [style*="background:#F4F1EA"],
+          :root[data-theme="dark"] .content [style*="background: #F4F1EA"],
+          :root[data-theme="dark"] .content [style*="background:#f8fafc"],
+          :root[data-theme="dark"] .content [style*="background: #f8fafc"] {
+            background:#1D202A !important;
+            background-color:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content [style*="background:#fff7ed"],
+          :root[data-theme="dark"] .content [style*="background: #fff7ed"],
+          :root[data-theme="dark"] .content [style*="background:#ffedd5"],
+          :root[data-theme="dark"] .content [style*="background: #ffedd5"],
+          :root[data-theme="dark"] .content [style*="background:#FFF7ED"],
+          :root[data-theme="dark"] .content [style*="background: #FFF7ED"],
+          :root[data-theme="dark"] .content [style*="background:#FFF3E8"],
+          :root[data-theme="dark"] .content [style*="background: #FFF3E8"] {
+            background:#241A14 !important;
+            background-color:#241A14 !important;
+            border-color:#5A3728 !important;
+            color:#F7D0B7 !important;
+          }
+          :root[data-theme="dark"] .content [style*="color:#1A1A1F"],
+          :root[data-theme="dark"] .content [style*="color: #1A1A1F"],
+          :root[data-theme="dark"] .content [style*="color:#111827"],
+          :root[data-theme="dark"] .content [style*="color: #111827"],
+          :root[data-theme="dark"] .content [style*="color:#0f172a"],
+          :root[data-theme="dark"] .content [style*="color: #0f172a"],
+          :root[data-theme="dark"] .content [style*="color:#334155"],
+          :root[data-theme="dark"] .content [style*="color: #334155"] {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content [style*="color:#94939C"],
+          :root[data-theme="dark"] .content [style*="color: #94939C"],
+          :root[data-theme="dark"] .content [style*="color:#77756F"],
+          :root[data-theme="dark"] .content [style*="color: #77756F"],
+          :root[data-theme="dark"] .content [style*="color:#64748b"],
+          :root[data-theme="dark"] .content [style*="color: #64748b"],
+          :root[data-theme="dark"] .content [style*="color:#94a3b8"],
+          :root[data-theme="dark"] .content [style*="color: #94a3b8"] {
+            color:#B9B0A5 !important;
+          }
+
+          /* Dashboard home: keep the orange theme readable in dark mode. */
+          :root[data-theme="dark"] .content .mr-home {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-layout,
+          :root[data-theme="dark"] .content .mr-home .mr-left,
+          :root[data-theme="dark"] .content .mr-home .mr-right {
+            background:transparent !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-mission {
+            background:
+              radial-gradient(circle at 88% 14%, rgba(255,154,96,.20), transparent 30%),
+              linear-gradient(135deg,#25140E 0%,#331A10 55%,#442110 100%) !important;
+            border-color:#704126 !important;
+            color:#FBE7D6 !important;
+            box-shadow:0 22px 60px rgba(0,0,0,.28) !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-mission-title,
+          :root[data-theme="dark"] .content .mr-home .mr-mission-eye,
+          :root[data-theme="dark"] .content .mr-home .mr-quest-title,
+          :root[data-theme="dark"] .content .mr-home .mr-quest-num {
+            color:#FFF4EA !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-mission-title em {
+            color:#FF9F5F !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-quest {
+            background:rgba(255,255,255,.08) !important;
+            border-color:rgba(255,255,255,.16) !important;
+            box-shadow:none !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-quest-bar {
+            background:rgba(255,255,255,.12) !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card,
+          :root[data-theme="dark"] .content .mr-home .mr-card,
+          :root[data-theme="dark"] .content .mr-home .mr-course-tile,
+          :root[data-theme="dark"] .content .mr-home .mr-sess,
+          :root[data-theme="dark"] .content .mr-home .mr-empty,
+          :root[data-theme="dark"] .content .mr-home .mr-exam,
+          :root[data-theme="dark"] .content .mr-home .mr-streak-card {
+            background:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+            box-shadow:0 1px 0 rgba(255,255,255,.03), 0 18px 46px rgba(0,0,0,.22) !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card.tilted,
+          :root[data-theme="dark"] .content .mr-home .mr-league-card {
+            background:linear-gradient(160deg,#4F3A82 0%,#31264F 100%) !important;
+            border-color:#5E4A92 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-card-title,
+          :root[data-theme="dark"] .content .mr-home .mr-stat-value,
+          :root[data-theme="dark"] .content .mr-home .mr-course-name,
+          :root[data-theme="dark"] .content .mr-home .mr-friend-name,
+          :root[data-theme="dark"] .content .mr-home .mr-sess-topic,
+          :root[data-theme="dark"] .content .mr-home .mr-exam-title,
+          :root[data-theme="dark"] .content .mr-home .mr-exam-cd {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-stat-label,
+          :root[data-theme="dark"] .content .mr-home .mr-stat-sub,
+          :root[data-theme="dark"] .content .mr-home .mr-card-link,
+          :root[data-theme="dark"] .content .mr-home .mr-course-code,
+          :root[data-theme="dark"] .content .mr-home .mr-course-next,
+          :root[data-theme="dark"] .content .mr-home .mr-friend-status,
+          :root[data-theme="dark"] .content .mr-home .mr-sess-time,
+          :root[data-theme="dark"] .content .mr-home .mr-sess-meta,
+          :root[data-theme="dark"] .content .mr-home .mr-exam-meta,
+          :root[data-theme="dark"] .content .mr-home .mr-exam-cd small {
+            color:#B9B0A5 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-friend-row:hover {
+            background:#252936 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-friend-av .pres {
+            border-color:#1D202A !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-friend-act {
+            background:#141720 !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-friend-act:hover {
+            background:#FF7A3D !important;
+            border-color:#FF7A3D !important;
+            color:#11131A !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-sess-check {
+            background:#141720 !important;
+            border-color:#4B4655 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell {
+            background:#332C2A !important;
+            box-shadow:inset 0 0 0 1px rgba(255,255,255,.035) !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.l1 { background:#714121 !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.l2 { background:#A94E22 !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.l3 { background:#E5652D !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.l4 { background:#FF9B50 !important; box-shadow:0 0 0 1px rgba(255,155,80,.22), 0 0 16px rgba(255,122,61,.24) !important; }
+          :root[data-theme="dark"] .content .mr-home .mr-heat-cell.today {
+            outline-color:#FFF8E1 !important;
+            box-shadow:0 0 0 2px rgba(255,248,225,.14), 0 0 18px rgba(255,122,61,.22) !important;
+          }
+
+          /* Achievements / XP page: rank cards and badge sections should not stay cream-white. */
+          :root[data-theme="dark"] .content .achievements-cd,
+          :root[data-theme="dark"] .content .achievements-cd h2,
+          :root[data-theme="dark"] .content .achievements-cd h3,
+          :root[data-theme="dark"] .content .achievements-cd .big {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card {
+            background:
+              radial-gradient(circle at 88% 10%, rgba(255,122,61,.18), transparent 34%),
+              linear-gradient(135deg,#1D202A 0%,#151821 100%) !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+            box-shadow:0 24px 60px rgba(0,0,0,.28) !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card [style*="background:rgba"] {
+            background:#252936 !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card [style*="background:#fff"],
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card [style*="background: #fff"] {
+            background:#FF7A3D !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd .ach-stat-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-badge-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-activity-card {
+            background:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .achievements-cd [style*="color:#1A1A1F"],
+          :root[data-theme="dark"] .content .achievements-cd [style*="color: #1A1A1F"] {
+            color:#F7F0E4 !important;
+          }
+
+          /* Quiz/exam cards: avoid horizontal cutoffs and broken title wrapping in every theme. */
+          .content .quiz-cd,
+          .content .quiz-cd * {
+            min-width:0;
+          }
+          .content .quiz-cd .quiz-grid {
+            grid-template-columns:repeat(auto-fit,minmax(320px,1fr)) !important;
+            width:100% !important;
+            max-width:100% !important;
+            overflow:visible !important;
+          }
+          .content .quiz-cd .qcard {
+            min-width:0 !important;
+            max-width:100% !important;
+            overflow:hidden !important;
+          }
+          .content .quiz-cd .qcard > div:first-child {
+            display:flex !important;
+            align-items:flex-start !important;
+            gap:14px !important;
+            min-width:0 !important;
+          }
+          .content .quiz-cd .qcard > div:first-child > div:first-child {
+            flex:1 1 auto !important;
+            min-width:0 !important;
+          }
+          .content .quiz-cd .qcard > div:first-child > div:last-child {
+            flex:0 0 auto !important;
+            flex-wrap:wrap !important;
+            justify-content:flex-end !important;
+            max-width:220px !important;
+          }
+          .content .quiz-cd .qcard h3 {
+            max-width:100% !important;
+            overflow-wrap:anywhere !important;
+            word-break:break-word !important;
+            hyphens:auto !important;
+            line-height:1.25 !important;
+          }
+          @media (max-width:900px) {
+            .content .quiz-cd .quiz-grid {
+              grid-template-columns:1fr !important;
+            }
+            .content .quiz-cd .qcard > div:first-child {
+              flex-direction:column !important;
+            }
+            .content .quiz-cd .qcard > div:first-child > div:last-child {
+              max-width:100% !important;
+              justify-content:flex-start !important;
+            }
+          }
+          :root[data-theme="dark"] .content .quiz-cd .qcard,
+          :root[data-theme="dark"] .content .quiz-cd .qcard.warn {
+            background:#1D202A !important;
+            border-color:#34313A !important;
+            color:#F7F0E4 !important;
+            box-shadow:0 1px 0 rgba(255,255,255,.03), 0 18px 46px rgba(0,0,0,.22) !important;
+          }
+          :root[data-theme="dark"] .content .quiz-cd .qcard h3,
+          :root[data-theme="dark"] .content .quiz-cd .qcard strong {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .quiz-cd .qcard p,
+          :root[data-theme="dark"] .content .quiz-cd .qcard small {
+            color:#B9B0A5 !important;
+          }
+          :root[data-theme="dark"] .content svg text {
+            fill:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content canvas {
+            color-scheme:dark;
+          }
