@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 from outreach.db import get_db
 
@@ -177,19 +177,72 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
     return changed
 
 
+def _parse_iso(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", ""))
+    except Exception:
+        return None
+
+
+def _effective_tier(prefs: dict) -> str:
+    """Effective tier from a prefs blob: a paid subscription wins; otherwise a
+    promotional `plus_until` grant (e.g. referral reward) counts as Plus until
+    it expires; otherwise free."""
+    sub = (prefs.get("subscription") or {})
+    paid = sub.get("tier") or "free"
+    paid = paid if paid in PLANS else "free"
+    if paid in ("plus", "ultimate"):
+        return paid
+    pu = _parse_iso(prefs.get("plus_until"))
+    if pu and pu > datetime.utcnow():
+        return "plus"
+    return "free"
+
+
 def get_tier(client_id: int) -> str:
     """Return 'free', 'plus', or 'ultimate'. Defaults to 'free'."""
     try:
         with get_db() as db:
             prefs = _load_prefs(db, client_id)
-            sub = (prefs.get("subscription") or {})
-            tier = sub.get("tier") or "free"
-            tier = tier if tier in PLANS else "free"
+            tier = _effective_tier(prefs)
             if _grant_paid_benefits(db, client_id, prefs, tier):
                 _save_prefs(db, client_id, prefs)
         return tier
     except Exception:
         return "free"
+
+
+def grant_plus_days(client_id: int, days: int) -> str | None:
+    """Grant `days` of promotional Plus (stacks). Extends from the later of now
+    or any existing grant, so multiple referral rewards add up. Returns the new
+    expiry ISO string, or None on failure. Does not touch paid subscription state.
+    """
+    try:
+        with get_db() as db:
+            prefs = _load_prefs(db, client_id)
+            now = datetime.utcnow()
+            cur = _parse_iso(prefs.get("plus_until"))
+            base = cur if (cur and cur > now) else now
+            prefs["plus_until"] = (base + timedelta(days=int(days))).isoformat()
+            _grant_paid_benefits(db, client_id, prefs, "plus")
+            _save_prefs(db, client_id, prefs)
+            return prefs["plus_until"]
+    except Exception as e:
+        log.warning("grant_plus_days failed for %s: %s", client_id, e)
+        return None
+
+
+def plus_grant_until(client_id: int) -> str | None:
+    """Return the promotional plus_until ISO string if still active, else None."""
+    try:
+        with get_db() as db:
+            prefs = _load_prefs(db, client_id)
+        pu = _parse_iso(prefs.get("plus_until"))
+        return prefs.get("plus_until") if (pu and pu > datetime.utcnow()) else None
+    except Exception:
+        return None
 
 
 def set_tier(client_id: int, tier: str) -> dict:

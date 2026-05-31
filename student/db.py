@@ -678,6 +678,31 @@ def _student_migrations():
         "opponent_minutes INTEGER NOT NULL DEFAULT 0, "
         "settled_at TEXT)",
     )
+    # Referral program: each user owns one code; each new user can be referred once.
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_referral_codes ("
+        "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE, "
+        "code TEXT NOT NULL UNIQUE, "
+        "created_at TIMESTAMP DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS student_referral_codes ("
+        "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE, "
+        "code TEXT NOT NULL UNIQUE, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')))",
+    )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_referrals ("
+        "id SERIAL PRIMARY KEY, "
+        "code TEXT NOT NULL, "
+        "referrer_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "referred_id INTEGER NOT NULL UNIQUE REFERENCES clients(id) ON DELETE CASCADE, "
+        "created_at TIMESTAMP DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS student_referrals ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "code TEXT NOT NULL, "
+        "referrer_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "referred_id INTEGER NOT NULL UNIQUE REFERENCES clients(id) ON DELETE CASCADE, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')))",
+    )
     _create_table_safe(
         "CREATE TABLE IF NOT EXISTS student_course_outcomes ("
         "id SERIAL PRIMARY KEY, "
@@ -2709,6 +2734,66 @@ def leave_lb_group(client_id: int, group_id: int):
     with get_db() as db:
         _exec(db, "DELETE FROM student_lb_members WHERE group_id = %s AND client_id = %s",
               (group_id, client_id))
+
+
+# ── Referral program ───────────────────────────────────────
+
+def get_or_create_referral_code(client_id: int) -> str:
+    """Return this user's stable referral code, creating one on first use."""
+    import secrets
+    with get_db() as db:
+        row = _fetchone(db, "SELECT code FROM student_referral_codes WHERE client_id = %s", (client_id,))
+        if row and row.get("code"):
+            return row["code"]
+        # Generate a short, unambiguous, uppercase code; retry on collision.
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no I/O/0/1
+        for _ in range(8):
+            code = "".join(secrets.choice(alphabet) for _ in range(7))
+            try:
+                _exec(db,
+                      "INSERT INTO student_referral_codes (client_id, code) VALUES (%s, %s)",
+                      (client_id, code))
+                return code
+            except Exception:
+                # Either this client raced and already has one, or code clashed.
+                existing = _fetchone(db, "SELECT code FROM student_referral_codes WHERE client_id = %s", (client_id,))
+                if existing and existing.get("code"):
+                    return existing["code"]
+                continue
+    return ""
+
+
+def lookup_referral_owner(code: str) -> int | None:
+    """Return the client_id that owns a referral code, or None."""
+    code = (code or "").strip().upper()
+    if not code:
+        return None
+    with get_db() as db:
+        row = _fetchone(db, "SELECT client_id FROM student_referral_codes WHERE code = %s", (code,))
+    return int(row["client_id"]) if row and row.get("client_id") is not None else None
+
+
+def record_referral(code: str, referrer_id: int, referred_id: int) -> bool:
+    """Record that `referred_id` joined via `referrer_id`'s code.
+
+    Returns True only if this is a brand-new redemption (referred_id not seen
+    before), so callers grant the reward exactly once.
+    """
+    with get_db() as db:
+        try:
+            _exec(db,
+                  "INSERT INTO student_referrals (code, referrer_id, referred_id) VALUES (%s, %s, %s)",
+                  ((code or "").strip().upper(), referrer_id, referred_id))
+            return True
+        except Exception:
+            return False  # referred_id already redeemed (UNIQUE), or bad ids
+
+
+def referral_count(client_id: int) -> int:
+    """How many users joined with this user's code."""
+    with get_db() as db:
+        return int(_fetchval(db, "SELECT COUNT(*) FROM student_referrals WHERE referrer_id = %s",
+                             (client_id,)) or 0)
 
 
 def delete_lb_group(group_id: int, owner_id: int):

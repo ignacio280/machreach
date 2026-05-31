@@ -1547,11 +1547,27 @@ def register():
                 pass
             flash(("error", "We couldn't send the verification email. Please check your email address and try again, or contact support@machreach.com."))
             return redirect(url_for("register"))
+    # Referral capture: a shared link is /register?ref=CODE. Keep it in the
+    # session so it survives the preview->submit roundtrip, and pass it into the
+    # Canvas signup form as a hidden field.
+    _ref_code = (request.args.get("ref") or session.get("referral_ref") or "").strip().upper()[:16]
+    if _ref_code:
+        session["referral_ref"] = _ref_code
+    _ref_hidden = f'<input type="hidden" name="ref" value="{_esc(_ref_code)}">' if _ref_code else ""
+    _ref_banner = (
+        '<div style="margin:0 0 14px;padding:12px 14px;border:1px solid rgba(255,122,61,.35);'
+        'border-radius:14px;background:rgba(255,122,61,.10);color:var(--text);font-size:13px;font-weight:800;">'
+        + ("&#127873; You were invited! Your friend gets a free week of Plus when you join."
+           if session.get("lang") == "en"
+           else "&#127873; &iexcl;Te invitaron! Tu amigo gana una semana gratis de Plus cuando te unes.")
+        + "</div>"
+    ) if _ref_code else ""
     return render_layout(title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
       <div class="auth-card">
         <h1>{t("auth.create_account")}</h1>
         <p class="subtitle">{t("auth.create_subtitle")}</p>
+        {_ref_banner}
         <div style="margin:16px 0 18px;padding:14px;border:1px solid var(--border);border-radius:18px;background:var(--surface);">
           <div style="font-size:14px;font-weight:900;color:var(--text);margin-bottom:10px;">{"Canvas connection tutorial" if session.get("lang") == "en" else "Tutorial de conexi&oacute;n a Canvas"}</div>
           <video controls loop preload="metadata" playsinline style="width:100%;display:block;border-radius:12px;border:1px solid var(--border);background:#000;">
@@ -1563,6 +1579,7 @@ def register():
           {" We only read your Canvas profile email and courses. We do not submit assignments, change grades, publish content, or touch your Canvas account." if session.get("lang") == "en" else " Solo leemos tu correo de perfil y tus cursos de Canvas. No entregamos tareas, no cambiamos notas, no publicamos nada ni tocamos tu cuenta de Canvas."}
         </div>
         <form id="canvasSignupForm" method="post" action="/canvas-token-signup" autocomplete="off" style="margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);">
+          {_ref_hidden}
           <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Canvas URL</label>
           <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" style="margin-bottom:10px;">
           <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Canvas token</label>

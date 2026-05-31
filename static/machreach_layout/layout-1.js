@@ -62,6 +62,7 @@
         {t:'Focus Mode', u:'/student/focus', i:'🎯', s:'Tools'},
         {t:'Grade Sheet', u:'/student/gpa', i:'📈', s:'Tools'},
         {t:'Leaderboard', u:'/student/leaderboard', i:'🏆', s:'Social'},
+        {t:'Invite friends', u:'/student/invite', i:'🎁', s:'Social'},
         {t:'Settings', u:'/student/settings', i:'\u2699\uFE0F', s:'Other'},
         {t:'Log out', u:'/logout', i:'🚪', s:'Other'},
       ] : [
