@@ -6459,6 +6459,7 @@ def register_student_routes(app, csrf, limiter):
             "minutesSavedSuffix": " min saved" if _focus_is_en else " min guardados",
             "unsavedPrefix": "Could not save " if _focus_is_en else "No se guardaron ",
             "unsavedSuffix": " session(s). Retry so you do not lose them." if _focus_is_en else " sesión(es). Reintenta para no perderlas.",
+            "claimSessionExpired": "Your session expired. Reload the page and claim again — your time is saved." if _focus_is_en else "Tu sesión expiró. Recarga la página y reclama de nuevo — tu tiempo está guardado.",
             "focusDoneTitle": "Focus session completed" if _focus_is_en else "Sesión de focus completada",
             "xpGranted": "Good work — XP granted!" if _focus_is_en else "¡Buen trabajo — XP otorgado!",
             "longBreakUnlockedSave": "Long break unlocked. Claim to save." if _focus_is_en else "Descanso largo desbloqueado. Reclama para guardar.",
@@ -7707,6 +7708,12 @@ def register_student_routes(app, csrf, limiter):
 
         function updateDisplay() {{
 
+          // While the mandatory-claim window is open, its 30-min countdown owns
+          // the big display. Bail here so a stray/auto-advance phase timer can't
+          // overwrite it — this is what made the long-break timer flicker
+          // rapidly between two completely different times.
+          if (__mandatoryEndAt) return;
+
           var m = Math.floor(timeLeft / 60);
 
           var s = timeLeft % 60;
@@ -7926,6 +7933,12 @@ def register_student_routes(app, csrf, limiter):
         function startTimer(isRestore) {{
 
           if (isRunning) return;
+
+          // Never start a phase timer while the mandatory claim window is open.
+          // A queued auto-advance setTimeout (e.g. fired when a backgrounded tab
+          // unthrottles) could otherwise spin up a second interval that fights
+          // the 30-min countdown for the display.
+          if (__mandatoryEndAt) return;
 
           // Block the timer entirely if no course is picked. Mandatory
           // since "general study" was removed.
@@ -8711,6 +8724,7 @@ def register_student_routes(app, csrf, limiter):
           }}
           setPendingPhases(phases);
 
+          var __authError = false;
           try {{
             var claimResp = await fetch('/api/student/focus/claim?local_date=' + encodeURIComponent(__ldStr_save), {{
               method: 'POST',
@@ -8723,6 +8737,12 @@ def register_student_routes(app, csrf, limiter):
                 fallback_exam_id: fallbackExamId
               }})
             }});
+            // A stale CSRF token or lost session (e.g. page open for hours)
+            // returns 400/401/403. Surface a clear "reload" message instead of
+            // looping silently on "Retry claim".
+            if (claimResp.status === 400 || claimResp.status === 401 || claimResp.status === 403) {{
+              __authError = true;
+            }}
             var claim = null;
             try {{ claim = await claimResp.json(); }} catch(_) {{}}
 
@@ -8756,6 +8776,7 @@ def register_student_routes(app, csrf, limiter):
           if (failed.length) {{
             if (btn) {{ btn.disabled = false; btn.textContent = focusText.retryClaim; }}
             var lblFail = document.getElementById('timer-label');
+            if (__authError && lblFail) {{ lblFail.textContent = focusText.claimSessionExpired; return; }}
             if (lblFail) lblFail.textContent = savedCount > 0
               ? (focusText.claimedPrefix + xpAwarded + ' XP Â· ' + minutesSaved + focusText.minutesSavedSuffix + ' Â· ' + failed.length + focusText.unsavedSuffix)
               : (focusText.unsavedPrefix + failed.length + focusText.unsavedSuffix);
