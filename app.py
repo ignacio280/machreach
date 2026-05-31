@@ -73,6 +73,17 @@ from flask_wtf.csrf import CSRFProtect
 app.config["WTF_CSRF_TIME_LIMIT"] = None
 csrf = CSRFProtect(app)
 
+
+@app.before_request
+def _canonical_host_redirect():
+    """Send www.* to the bare apex (machreach.com) with a 301, preserving path
+    and query. Keeps everyone on one host so the session/CSRF cookie can't split
+    across www vs apex. Registered first so it runs before session/CSRF logic.
+    """
+    raw = request.host or ""
+    if raw.lower().startswith("www."):
+        return redirect(request.url.replace("://" + raw, "://" + raw[4:], 1), code=301)
+
 # ── Security: Rate limiting ──
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
