@@ -1252,11 +1252,17 @@ def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
         if minutes <= 0 and pages <= 0:
             return 0
 
+        # Microsecond precision in plan_date: student_study_progress has a
+        # UNIQUE(client_id, plan_date) constraint, and the batch claim inserts
+        # several phases in the same second. Second precision collided on the
+        # 2nd+ insert (only one session claimed, the rest errored out with
+        # "Reintentar" and no XP). Microseconds keep every row distinct; all
+        # date queries match on the YYYY-MM-DD prefix so they're unaffected.
         return _insert_returning_id(
             db,
             "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
             "VALUES (%s, %s, 1, %s, %s, %s, %s, %s) RETURNING id",
-            (client_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            (client_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
              f"{mode}: {course_name}" if course_name else mode, minutes, pages,
              course_id, exam_id),
             "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
