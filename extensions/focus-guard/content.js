@@ -3,6 +3,21 @@
 // chrome.storage.local so the background worker can gate navigation.
 
 (function () {
+  // Announce presence to the page. Content scripts run in an isolated world
+  // (they can't set page-visible window globals), but they SHARE the DOM — so
+  // MachReach detects the extension by reading this attribute / event before
+  // it lets a user start a focus timer.
+  function announce() {
+    try {
+      document.documentElement.setAttribute("data-machreach-focus-guard", "1");
+      document.dispatchEvent(new CustomEvent("machreach-focus-guard-ready"));
+    } catch (_) {}
+  }
+  announce();
+  document.addEventListener("DOMContentLoaded", announce);
+  // Answer on-demand pings from the page (covers any race on first paint).
+  document.addEventListener("machreach-focus-guard-ping", announce);
+
   function readFocus() {
     try {
       const raw = localStorage.getItem("focus_float");

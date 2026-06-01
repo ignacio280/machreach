@@ -7044,33 +7044,15 @@ def register_student_routes(app, csrf, limiter):
 
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
 
-                  <a href="/download/focus-guard.zip" class="btn btn-primary btn-sm" download>&#11015; Descargar extensi&oacute;n</a>
-
-                  <button onclick="document.getElementById('fg-how').style.display='block';this.style.display='none';" class="btn btn-outline btn-sm">Cómo instalar</button>
+                  <a href="https://chromewebstore.google.com/detail/djfnmpaihpkibcngaaekhnbalbaibgnk" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="text-decoration:none;">&#10133; Agregar a Chrome</a>
 
                 </div>
 
 
 
-                <div id="fg-how" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-muted);line-height:1.7;">
-
-                  <b style="color:var(--text);">Instala en 30 segundos:</b>
-
-                  <ol style="margin:6px 0 0 18px;padding:0;">
-
-                    <li>Descomprime el archivo descargado.</li>
-
-                    <li>Abre <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">chrome://extensions</code> (o <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">edge://extensions</code>).</li>
-
-                    <li>Activa <b>Modo desarrollador</b> (arriba a la derecha).</li>
-
-                    <li>Haz clic en <b>Cargar sin empaquetar</b> y selecciona la carpeta <code style="background:rgba(139,92,246,.12);padding:1px 5px;border-radius:3px;">focus-guard</code>.</li>
-
-                    <li>Inicia un temporizador aqu&iacute; — las distracciones externas se bloquean autom&aacute;ticamente.</li>
-
-                  </ol>
-
-                </div>
+                <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.6;">
+                  La extensi&oacute;n es <b style="color:var(--text);">obligatoria para iniciar el temporizador</b>. Inst&aacute;lala gratis desde Chrome Web Store y recarga esta p&aacute;gina.
+                </p>
 
               </div>
 
@@ -7948,6 +7930,37 @@ def register_student_routes(app, csrf, limiter):
 
         /* === Timer controls === */
 
+        var FOCUS_GUARD_STORE_URL = "https://chromewebstore.google.com/detail/djfnmpaihpkibcngaaekhnbalbaibgnk";
+
+        function focusGuardInstalled() {{
+          // Localhost dev is exempt (the published extension only runs on
+          // machreach.com). Otherwise require the content script's DOM marker.
+          var h = location.hostname;
+          if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true;
+          return document.documentElement.getAttribute('data-machreach-focus-guard') === '1';
+        }}
+
+        function showFocusGuardRequired() {{
+          if (document.getElementById('fg-required-modal')) return;
+          // Nudge the extension to re-announce in case of a first-paint race.
+          try {{ document.dispatchEvent(new CustomEvent('machreach-focus-guard-ping')); }} catch(e){{}}
+          var ov = document.createElement('div');
+          ov.id = 'fg-required-modal';
+          ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:rgba(10,8,20,.55);padding:20px;';
+          ov.innerHTML =
+            '<div style="max-width:430px;width:100%;background:var(--paper,#FFFDF8);color:var(--text,#1A1A1F);border:1px solid var(--border,#E2DCCC);border-radius:20px;padding:26px;text-align:center;box-shadow:0 24px 80px rgba(20,18,30,.25);">'
+            + '<div style="font-size:46px;margin-bottom:6px;">&#128737;&#65039;</div>'
+            + '<h2 style="margin:0 0 8px;font-size:22px;">{"Focus Guard required" if _focus_is_en else "Necesitas Focus Guard"}</h2>'
+            + '<p style="margin:0 0 18px;color:var(--text-muted,#77756F);line-height:1.55;">{"Install the free MachReach Focus Guard extension to start a focus session. It blocks distracting sites while you study." if _focus_is_en else "Instala la extensi&oacute;n gratuita MachReach Focus Guard para iniciar una sesi&oacute;n. Bloquea sitios que distraen mientras estudias."}</p>'
+            + '<a href="' + FOCUS_GUARD_STORE_URL + '" target="_blank" rel="noopener" class="btn btn-primary" style="display:flex;justify-content:center;text-decoration:none;width:100%;margin-bottom:10px;">{"Add to Chrome" if _focus_is_en else "Agregar a Chrome"}</a>'
+            + '<button id="fg-installed-btn" class="btn btn-outline" style="width:100%;">{"I already installed it &mdash; reload" if _focus_is_en else "Ya la instal&eacute; &mdash; recargar"}</button>'
+            + '<button id="fg-close-btn" style="display:block;margin:12px auto 0;background:none;border:0;color:var(--text-muted,#77756F);cursor:pointer;font-size:13px;">{"Cancel" if _focus_is_en else "Cancelar"}</button>'
+            + '</div>';
+          document.body.appendChild(ov);
+          document.getElementById('fg-installed-btn').addEventListener('click', function(){{ location.reload(); }});
+          document.getElementById('fg-close-btn').addEventListener('click', function(){{ ov.remove(); }});
+        }}
+
         function startTimer(isRestore) {{
 
           if (isRunning) return;
@@ -7957,6 +7970,12 @@ def register_student_routes(app, csrf, limiter):
           // unthrottles) could otherwise spin up a second interval that fights
           // the 30-min countdown for the display.
           if (__mandatoryEndAt) return;
+
+          // Require the Focus Guard extension before a fresh timer can start.
+          if (!isRestore && !focusGuardInstalled()) {{
+            showFocusGuardRequired();
+            return;
+          }}
 
           // Block the timer entirely if no course is picked. Mandatory
           // since "general study" was removed.
