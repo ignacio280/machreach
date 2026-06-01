@@ -6394,6 +6394,12 @@ def register_student_routes(app, csrf, limiter):
         # Build a course→exams map so the exam dropdown can be filtered in JS
         # without a round-trip each time the student picks a different course.
         _focus_is_en = session.get("lang", "es") == "en"
+        # Hard-block the timer on the Focus Guard extension only when explicitly
+        # enforced. Default OFF so nobody is locked out while the store version
+        # that announces itself (1.0.2+) propagates. Set FOCUS_GUARD_ENFORCE=1
+        # once 1.0.2 is live and auto-updated to flip the hard requirement on.
+        import os as _os
+        _fg_enforce = _os.environ.get("FOCUS_GUARD_ENFORCE", "0") == "1"
         course_exams_map = {}
         next_focus_exam = None
         today_date = datetime.now().date()
@@ -7931,6 +7937,7 @@ def register_student_routes(app, csrf, limiter):
         /* === Timer controls === */
 
         var FOCUS_GUARD_STORE_URL = "https://chromewebstore.google.com/detail/djfnmpaihpkibcngaaekhnbalbaibgnk";
+        var FOCUS_GUARD_ENFORCE = {"true" if _fg_enforce else "false"};
 
         function focusGuardInstalled() {{
           // Localhost dev is exempt (the published extension only runs on
@@ -7971,8 +7978,11 @@ def register_student_routes(app, csrf, limiter):
           // the 30-min countdown for the display.
           if (__mandatoryEndAt) return;
 
-          // Require the Focus Guard extension before a fresh timer can start.
-          if (!isRestore && !focusGuardInstalled()) {{
+          // Require the Focus Guard extension before a fresh timer can start —
+          // but only when enforcement is on (FOCUS_GUARD_ENFORCE). Until the
+          // self-announcing store version (1.0.2+) has propagated, this stays
+          // off so installed users aren't wrongly locked out.
+          if (!isRestore && FOCUS_GUARD_ENFORCE && !focusGuardInstalled()) {{
             showFocusGuardRequired();
             return;
           }}
