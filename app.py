@@ -578,64 +578,39 @@ LAYOUT = """<!DOCTYPE html>
     })();
   </script>
   {% if logged_in and account_type|default('student') == 'student' %}
-  <div class="mr-app-shell app">
-    <aside class="side">
-      <a href="/student" class="brand">
-        <div class="brand-mark"><img src="/static/machreach-logo.svg?v=2" alt="MachReach" /></div>
-        <div class="brand-name">Mach<span>Reach</span></div>
+  <div class="mr-app-shell app top-shell">
+    <header class="mr-topbar">
+      <a href="/student" class="mr-tb-brand">
+        <span class="mr-tb-logo"><img src="/static/machreach-logo.svg?v=2" alt="MachReach" /></span>
+        <span class="mr-tb-name">Mach<span>Reach</span></span>
       </a>
-      <nav class="mr-side-nav">
-        <div class="nav-section">{{ student_ui.main }}</div>
-        <a class="nav-item {% if active_page == 'student_dashboard' %}active{% endif %}" href="/student"><span class="ic">&#127891;</span><span>{{ student_ui.home }}</span></a>
-        {% if is_admin %}<a class="nav-item {% if active_page == 'admin' %}active{% endif %}" href="/admin"><span class="ic">&#128227;</span><span>{{ student_ui.admin }}</span></a>{% endif %}
-        <a class="nav-item {% if active_page == 'student_focus' %}active{% endif %}" href="/student/focus"><span class="ic">&#127919;</span><span>{{ student_ui.focus }}</span></a>
-        <a class="nav-item {% if active_page == 'student_courses' %}active{% endif %}" href="/student/courses"><span class="ic">&#128218;</span><span>{{ student_ui.courses }}</span></a>
-
-        <div class="nav-section">{{ student_ui.study }}</div>
-        <a class="nav-item {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes"><span class="ic">&#128221;</span><span>{{ student_ui.quizzes }}</span></a>
-        <a class="nav-item {% if active_page == 'student_flashcards' %}active{% endif %}" href="/student/flashcards"><span class="ic">&#127183;</span><span>{{ student_ui.flashcards }}</span></a>
-
-        <div class="nav-section">{{ student_ui.community }}</div>
-        <a class="nav-item {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard"><span class="ic">&#127942;</span><span>{{ student_ui.leaderboard }}</span></a>
-        <a class="nav-item {% if active_page == 'student_friends' %}active{% endif %}" href="/student/friends"><span class="ic">&#128101;</span><span>{{ student_ui.friends }}</span></a>
-        <a class="nav-item {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop"><span class="ic">&#129534;</span><span>{{ student_ui.shop }}</span></a>
-
-        <div class="nav-section">{{ student_ui.account }}</div>
-        <a class="nav-item {% if active_page == 'student_gpa' %}active{% endif %}" href="/student/gpa"><span class="ic">&#128200;</span><span>{{ student_ui.grades }}</span></a>
-        <a class="nav-item {% if active_page == 'student_achievements' %}active{% endif %}" href="/student/achievements"><span class="ic">&#127941;</span><span>{{ student_ui.xp }}</span></a>
-        <a class="nav-item {% if active_page == 'student_settings' %}active{% endif %}" href="/student/settings"><span class="ic">&#9881;</span><span>{{ student_ui.settings }}</span></a>
+      <nav class="mr-tb-nav" id="mrTopNav">
+        <a class="mr-tb-link {% if active_page == 'student_dashboard' %}active{% endif %}" href="/student">{{ student_ui.home }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_focus' %}active{% endif %}" href="/student/focus">{{ student_ui.focus }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_courses' %}active{% endif %}" href="/student/courses">{{ student_ui.courses }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes">{{ student_ui.quizzes }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_flashcards' %}active{% endif %}" href="/student/flashcards">{{ student_ui.flashcards }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard">{{ student_ui.leaderboard }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_friends' %}active{% endif %}" href="/student/friends">{{ student_ui.friends }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop">{{ student_ui.shop }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_gpa' %}active{% endif %}" href="/student/gpa">{{ student_ui.grades }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_achievements' %}active{% endif %}" href="/student/achievements">{{ student_ui.xp }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_settings' %}active{% endif %}" href="/student/settings">{{ student_ui.settings }}</a>
+        {% if is_admin %}<a class="mr-tb-link {% if active_page == 'admin' %}active{% endif %}" href="/admin">{{ student_ui.admin }}</a>{% endif %}
       </nav>
-      <div class="side-foot">
-        <a class="me-card" href="/student/profile">
-          <div class="me-avatar">{{ (client_name[:1] or 'M')|upper }}</div>
-          <div class="me-info">
-            <div class="me-name">{{client_name}}</div>
-            <div class="me-meta"><span class="league-crest">&#127942;</span> MachReach</div>
-          </div>
+      <div class="mr-tb-right">
+        <button id="theme-toggle" class="mr-tb-icon" type="button" onclick="toggleDarkMode()" title="{{ student_ui.toggle_theme }}">&#127769;</button>
+        <a class="mr-tb-icon" href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
+        <a class="mr-tb-icon" href="/logout" title="{{nav.logout}}">&#10162;</a>
+        <a class="mr-tb-user" href="/student/profile" title="{{client_name}}">
+          <span class="mr-tb-av">{{ (client_name[:1] or 'M')|upper }}</span>
+          <span class="mr-tb-uname">{{ (client_name.split()[0] if client_name else student_ui.student_fallback) }}</span>
         </a>
+        <button class="mr-tb-burger" type="button" onclick="document.getElementById('mrTopNav').classList.toggle('open')" aria-label="Menu">&#9776;</button>
       </div>
-    </aside>
+    </header>
 
-    <main class="main">
-      <div class="topbar">
-        <button class="mr-mobile-menu" onclick="document.querySelector('.mr-app-shell').classList.toggle('side-open')" aria-label="Menu">&#9776;</button>
-        <div class="greet">
-          {% set first_name = (client_name.split()[0] if client_name else student_ui.student_fallback) %}
-          {{ student_ui.greeting|replace('{name}', first_name)|safe }}
-          <small>{{ student_ui.ready }}</small>
-        </div>
-        <div class="topbar-stats">
-          <a class="stat-pill coins" href="/student/shop">&#129689; <span class="num">Coins</span></a>
-          <a class="stat-pill streak" href="/student/analytics">&#128293; <span class="num">Racha 🔥</span></a>
-          <a class="xp-pill" href="/student/achievements">
-            <span class="xp-ring"><svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15" fill="none" stroke-width="4"/><circle class="ring-fg" cx="18" cy="18" r="15" fill="none" stroke-width="4" stroke-dasharray="94" stroke-dashoffset="34"/></svg><span class="lvl">XP</span></span>
-            <span class="xp-meta"><span class="league-name">{{ student_ui.active_league }}</span><span class="xp-num">{{ student_ui.keep_climbing }}</span></span>
-          </a>
-          <button id="theme-toggle" class="top-icon-btn" type="button" onclick="toggleDarkMode()" title="{{ student_ui.toggle_theme }}">&#127769;</button>
-          <a class="top-icon-btn" href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
-          <a class="top-icon-btn" href="/logout" title="{{nav.logout}}">&#10162;</a>
-        </div>
-      </div>
+    <main class="mr-tb-main">
       <div class="content{% if wide %} content-wide{% endif %}">
         <div class="toast-container" id="toast-container">
         {% for cat, msg in messages %}
@@ -1416,39 +1391,6 @@ LAYOUT = """<!DOCTYPE html>
     </div>
   </div>
 
-  <div id="mrStarterTutorial" style="display:none;position:fixed;inset:0;z-index:9999;
-       background:rgba(10,14,26,.72);backdrop-filter:blur(12px);
-       align-items:center;justify-content:center;padding:20px;">
-    <div style="background:#FFFDF8;color:#1A1A1F;border:1px solid #E2DCCC;border-radius:24px;
-         max-width:760px;width:100%;padding:30px;box-shadow:0 34px 90px rgba(20,18,30,.32);">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px;">
-        <div>
-          <div style="font-size:12px;font-weight:900;letter-spacing:.12em;color:#FF6B35;text-transform:uppercase;margin-bottom:6px;">Primeros 3 pasos</div>
-          <h2 style="font-size:34px;line-height:1;margin:0;font-family:'Bricolage Grotesque',Inter,sans-serif;">Tu cuenta ya está lista.</h2>
-          <p style="margin:10px 0 0;color:#68636F;font-weight:700;">Ahora haz esto para que MachReach empiece a servirte de verdad.</p>
-        </div>
-        <button id="mrStarterClose" type="button" style="border:1px solid #D8D0C0;background:#FBF8F0;border-radius:999px;padding:8px 12px;font-weight:900;cursor:pointer;">Cerrar</button>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
-        <a href="/student/courses" class="mr-starter-card" data-step="courses" style="text-decoration:none;color:inherit;border:1px solid #E2DCCC;border-radius:18px;padding:18px;background:#FFFFFF;display:block;">
-          <div style="font-size:28px;margin-bottom:8px;">📚</div>
-          <strong style="display:block;font-size:17px;margin-bottom:6px;">Revisa tus cursos</strong>
-          <span style="display:block;color:#68636F;font-size:14px;line-height:1.35;">Confirma que Canvas cargó bien tus ramos.</span>
-        </a>
-        <a href="/student/focus" class="mr-starter-card" data-step="focus" style="text-decoration:none;color:inherit;border:1px solid #E2DCCC;border-radius:18px;padding:18px;background:#FFFFFF;display:block;">
-          <div style="font-size:28px;margin-bottom:8px;">🎯</div>
-          <strong style="display:block;font-size:17px;margin-bottom:6px;">Haz tu primera sesión</strong>
-          <span style="display:block;color:#68636F;font-size:14px;line-height:1.35;">El XP y las monedas solo nacen desde Enfoque.</span>
-        </a>
-        <a href="/student/leaderboard" class="mr-starter-card" data-step="rank" style="text-decoration:none;color:inherit;border:1px solid #E2DCCC;border-radius:18px;padding:18px;background:#FFFFFF;display:block;">
-          <div style="font-size:28px;margin-bottom:8px;">🏆</div>
-          <strong style="display:block;font-size:17px;margin-bottom:6px;">Mira tu ranking</strong>
-          <span style="display:block;color:#68636F;font-size:14px;line-height:1.35;">Compites por país, universidad y carrera.</span>
-        </a>
-      </div>
-    </div>
-  </div>
-
   <style>
     @keyframes mrSlideDown { from { transform:translate(-50%,-30px); opacity:0;} to { transform:translate(-50%,0); opacity:1;}}
     @keyframes mrModalIn { from { transform:scale(.92); opacity:0;} to { transform:scale(1); opacity:1;}}
@@ -1467,7 +1409,6 @@ LAYOUT = """<!DOCTYPE html>
     .mr-create-new { padding:12px 16px; color:#7C9CFF; cursor:pointer; font-weight:600; text-align:center;
       border-top:1px solid rgba(148,163,184,.15);}
     .mr-create-new:hover { background:rgba(124,156,255,.1);}
-    .mr-starter-card:hover { transform:translateY(-2px); box-shadow:0 16px 36px rgba(20,18,30,.10); border-color:#FF7A3D!important; }
   </style>
 
   <script src="/static/machreach_layout/layout-4.js"></script>

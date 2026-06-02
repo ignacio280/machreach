@@ -981,10 +981,8 @@
       .nav .nav-dropdown .nav-dropdown-menu { background: #FBF8F0 !important; }
     }
 
-    /* Exact Claude dashboard shell */
+    /* Top-bar app shell */
     .mr-app-shell.app {
-      display: grid;
-      grid-template-columns: 1fr;
       min-height: 100vh;
       background: #F4F1EA;
       color: #1A1A1F;
@@ -998,227 +996,73 @@
       font-weight: 600;
       letter-spacing: -0.03em;
     }
-    .mr-app-shell .side {
-      background: #FFFFFF;
-      border-right: 1px solid #E2DCCC;
-      padding: 22px 16px;
-      position: fixed;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 240px;
-      height: 100dvh;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      z-index: 2200;
-    }
-    .mr-app-shell .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 4px 8px 22px;
-      text-decoration: none;
-      color: #1A1A1F;
-    }
-    .mr-app-shell .brand-mark {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      background: #1A1A1F;
-      color: #FFF8E1;
-      display: grid;
-      place-items: center;
-      font-family: "Bricolage Grotesque", sans-serif;
-      font-weight: 700;
-      font-size: 22px;
-      letter-spacing: -0.05em;
-      box-shadow: inset 0 -3px 0 rgba(0,0,0,.25), 0 2px 0 rgba(20,18,30,.1);
-      position: relative;
-    }
-    .mr-app-shell .brand-mark::after {
-      content: "";
-      position: absolute;
-      right: 4px;
-      top: 4px;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #FF7A3D;
-    }
-    .mr-app-shell .brand-name { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
-    .mr-app-shell .brand-name span { color: #FF7A3D; }
-    /* Animated logo mark: the SVG is the full squircle, so the container is
-       just a transparent frame (no dark box / accent dot / envelope gradient). */
-    .mr-app-shell .brand-mark { background: transparent; box-shadow: none; border-radius: 0; }
-    .mr-app-shell .brand-mark::after { display: none; }
-    .mr-app-shell .brand-mark img, .nav .brand-icon img { width: 100%; height: 100%; display: block; }
+    .nav .brand-icon img { width: 100%; height: 100%; display: block; }
     .nav .brand-icon { background: transparent; box-shadow: none; }
-    .mr-side-nav { display: flex; flex-direction: column; gap: 2px; }
-    .mr-app-shell .nav-section {
-      font-size: 10px;
-      font-weight: 700;
-      color: #94939C;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      padding: 14px 10px 6px;
-    }
-    .mr-app-shell .nav-item {
+
+    /* ── Dark sticky top bar (replaces the old left sidebar) ── */
+    .mr-topbar {
+      height: 60px;
+      background: #14121A;
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 10px;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      color: #5C5C66;
-      text-decoration: none;
-      transition: background .15s, color .15s;
-      position: relative;
-      min-height: 40px;
-    }
-    .mr-app-shell .nav-item:hover { background: #EDE7DA; color: #1A1A1F; }
-    .mr-app-shell .nav-item.active { background: #ECE6FB; color: #5B4694; }
-    .mr-app-shell .nav-item.active::before {
-      content: "";
-      position: absolute;
-      left: -16px;
-      top: 8px;
-      bottom: 8px;
-      width: 3px;
-      background: #5B4694;
-      border-radius: 2px;
-    }
-    .mr-app-shell .nav-item .ic { width: 20px; height: 20px; flex-shrink: 0; display: inline-grid; place-items: center; }
-    .mr-app-shell .side-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid #E2DCCC; }
-    .mr-app-shell .me-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px;
-      border-radius: 12px;
-      background: #FBF8F0;
-      text-decoration: none;
-      color: #1A1A1F;
-    }
-    .mr-app-shell .me-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #FFB199, #FF6CAB);
-      color: #fff;
-      font-weight: 800;
-      font-size: 14px;
-      display: grid;
-      place-items: center;
-    }
-    .mr-app-shell .me-info { font-size: 13px; line-height: 1.2; min-width: 0; flex: 1; }
-    .mr-app-shell .me-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mr-app-shell .me-meta { font-size: 11px; color: #94939C; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-    .mr-app-shell .main { min-width: 0; display: flex; flex-direction: column; margin-left: 240px; }
-    .mr-app-shell .topbar {
+      gap: 22px;
+      padding: 0 24px;
       position: sticky;
       top: 0;
-      z-index: 2100;
-      background: rgba(244,241,234,0.85);
-      backdrop-filter: saturate(140%) blur(12px);
-      border-bottom: 1px solid #E2DCCC;
-      padding: 12px 28px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
+      z-index: 2200;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .mr-app-shell .greet { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
-    .mr-app-shell .greet .em { color: #FF7A3D; }
-    .mr-app-shell .greet small { display: block; font-size: 12px; color: #94939C; font-weight: 500; margin-top: 1px; }
-    .mr-app-shell .topbar-stats { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-    .mr-app-shell .stat-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 12px;
-      background: #FFFFFF;
-      border: 1px solid #E2DCCC;
-      border-radius: 999px;
-      font-size: 13px;
+    .mr-tb-brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; text-decoration: none; flex-shrink: 0; }
+    .mr-tb-logo { width: 32px; height: 32px; display: block; flex-shrink: 0; }
+    .mr-tb-logo img { width: 100%; height: 100%; display: block; }
+    .mr-tb-name { font-size: 16px; letter-spacing: -0.02em; }
+    .mr-tb-name span { color: #FF7A3D; }
+    .mr-tb-nav { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+    .mr-tb-nav::-webkit-scrollbar { display: none; }
+    .mr-tb-link {
+      color: #A09EAB;
+      font-size: 13.5px;
       font-weight: 700;
-      color: #1A1A1F;
+      padding: 8px 12px;
+      border-radius: 9px;
+      white-space: nowrap;
       text-decoration: none;
-      transition: transform .15s, box-shadow .15s;
+      transition: color .15s, background .15s;
     }
-    .mr-app-shell .stat-pill:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(20,18,30,.04), 0 2px 6px rgba(20,18,30,.04); }
-    .mr-app-shell .stat-pill.streak { background: linear-gradient(135deg, #FFE9D6, #FFD1A4); border-color: #F8B97A; color: #863500; }
-    .mr-app-shell .stat-pill.coins { background: #FFF6D6; border-color: #F4B73A; color: #C98A0E; }
-    .mr-app-shell .xp-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 5px 14px 5px 5px;
-      background: #FFFFFF;
-      border: 1px solid #E2DCCC;
-      border-radius: 999px;
-      color: #1A1A1F;
-      text-decoration: none;
-    }
-    .mr-app-shell .xp-ring { width: 30px; height: 30px; position: relative; display: inline-block; }
-    .mr-app-shell .xp-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-    .mr-app-shell .xp-ring .ring-bg { stroke: #E2DCCC; }
-    .mr-app-shell .xp-ring .ring-fg { stroke: #5B4694; transition: stroke-dashoffset 1s ease; }
-    .mr-app-shell .xp-ring .lvl { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #5B4694; }
-    .mr-app-shell .xp-meta { line-height: 1.1; display: flex; flex-direction: column; }
-    .mr-app-shell .league-name { font-size: 13px; font-weight: 700; }
-    .mr-app-shell .xp-num { font-size: 10px; color: #94939C; font-variant-numeric: tabular-nums; }
-    .mr-app-shell .top-icon-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: #FFFFFF;
-      border: 1px solid #E2DCCC;
+    .mr-tb-link:hover { color: #fff; background: rgba(255,255,255,0.07); }
+    .mr-tb-link.active { color: #fff; background: rgba(255,255,255,0.10); }
+    .mr-tb-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .mr-tb-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
       display: grid;
       place-items: center;
-      color: #1A1A1F;
+      color: #C9C7D2;
       text-decoration: none;
       font-size: 12px;
       font-weight: 800;
+      cursor: pointer;
+      transition: background .15s, color .15s;
     }
-    .mr-app-shell .top-icon-btn:hover { background: #EDE7DA; }
+    .mr-tb-icon:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    .mr-tb-user { display: flex; align-items: center; gap: 9px; color: #C9C7D2; text-decoration: none; font-weight: 700; font-size: 13px; margin-left: 4px; }
+    .mr-tb-user:hover { color: #fff; }
+    .mr-tb-av { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #5B4694, #7A65BA); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 12px; flex-shrink: 0; }
+    .mr-tb-burger { display: none; width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: #fff; font-size: 16px; cursor: pointer; }
+    .mr-tb-main { min-width: 0; }
     :root[data-theme="dark"] .mr-app-shell.app {
       background: #11131A;
       color: #F7F0E4;
     }
-    :root[data-theme="dark"] .mr-app-shell .side,
-    :root[data-theme="dark"] .mr-app-shell .topbar {
-      background: rgba(24,26,36,0.92);
-      border-color: #34313A;
-    }
     :root[data-theme="dark"] .mr-app-shell .content {
       background: #11131A;
     }
-    :root[data-theme="dark"] .mr-app-shell .brand,
-    :root[data-theme="dark"] .mr-app-shell .nav-item,
-    :root[data-theme="dark"] .mr-app-shell .greet,
-    :root[data-theme="dark"] .mr-app-shell .stat-pill,
-    :root[data-theme="dark"] .mr-app-shell .xp-pill,
-    :root[data-theme="dark"] .mr-app-shell .top-icon-btn,
-    :root[data-theme="dark"] .mr-app-shell .me-card {
-      color: #F7F0E4;
-    }
-    :root[data-theme="dark"] .mr-app-shell .nav-item:hover,
-    :root[data-theme="dark"] .mr-app-shell .nav-item.active,
-    :root[data-theme="dark"] .mr-app-shell .top-icon-btn:hover {
-      background: #2A2630;
-      color: #FFB17C;
-    }
-    :root[data-theme="dark"] .mr-app-shell .nav-item.active::before {
-      background: #FF7A3D;
-    }
     :root[data-theme="dark"] .mr-app-shell .card,
     :root[data-theme="dark"] .mr-app-shell .admin-metric,
-    :root[data-theme="dark"] .mr-app-shell .admin-panel,
-    :root[data-theme="dark"] .mr-app-shell .me-card,
-    :root[data-theme="dark"] .mr-app-shell .stat-pill,
-    :root[data-theme="dark"] .mr-app-shell .xp-pill,
-    :root[data-theme="dark"] .mr-app-shell .top-icon-btn {
+    :root[data-theme="dark"] .mr-app-shell .admin-panel {
       background: #1D202A;
       border-color: #34313A;
     }
@@ -1563,37 +1407,35 @@
     }
     .mr-app-shell .content {
       padding: 28px 28px 80px;
-      max-width: 1400px;
+      max-width: 1200px;
       width: 100%;
-      margin: 0;
+      margin: 0 auto;
     }
     .mr-app-shell .content-wide { max-width: 1560px; }
-    .mr-mobile-menu { display: none; background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 10px; width: 38px; height: 38px; }
-    @media (max-width: 1100px) {
-      .mr-app-shell.app { grid-template-columns: 1fr; }
-      .mr-app-shell .side { padding: 22px 10px; width: 80px; }
-      .mr-app-shell .main { margin-left: 80px; }
-      .mr-app-shell .brand-name, .mr-app-shell .nav-item span:not(.ic), .mr-app-shell .nav-section, .mr-app-shell .me-info { display: none; }
-      .mr-app-shell .nav-item { justify-content: center; }
-      .mr-app-shell .me-card { justify-content: center; padding: 4px; }
-      .mr-app-shell .nav-item.active::before { left: -10px; }
+    @media (max-width: 860px) {
+      .mr-tb-nav {
+        position: fixed;
+        top: 60px;
+        left: 0;
+        right: 0;
+        display: none;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        background: #14121A;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+        overflow-x: visible;
+        z-index: 2200;
+      }
+      .mr-tb-nav.open { display: flex; }
+      .mr-tb-link { padding: 11px 12px; font-size: 15px; }
+      .mr-tb-burger { display: grid; place-items: center; }
+      .mr-tb-uname { display: none; }
     }
     @media (max-width: 720px) {
-      .mr-app-shell.app { grid-template-columns: 1fr; }
-      .mr-app-shell .main { margin-left: 0; }
-      .mr-app-shell .side {
-        position: fixed;
-        left: 0;
-        top: 0;
-        transform: translateX(-100%);
-        transition: transform .2s ease;
-        width: 260px;
-      }
-      .mr-app-shell.side-open .side { transform: translateX(0); }
-      .mr-mobile-menu { display: grid; place-items: center; }
-      .mr-app-shell .topbar-stats .stat-pill { display: none; }
-      .mr-app-shell .topbar-stats .xp-meta { display: none; }
-      .mr-app-shell .greet { font-size: 14px; }
-      .mr-app-shell .greet small { display: none; }
+      .mr-topbar { padding: 0 14px; gap: 12px; }
       .mr-app-shell .content { padding: 18px 16px 100px; }
     }

@@ -1,6 +1,5 @@
   (function(){
     const modal = document.getElementById('mrOnboardingModal');
-    const starter = document.getElementById('mrStarterTutorial');
     const banner = document.getElementById('mrXpBanner');
     const stepContent = document.getElementById('mrStepContent');
     const stepDots = document.querySelectorAll('.mr-step-dot');
@@ -210,7 +209,6 @@
         if (j.ok) {
           modal.style.display = 'none';
           document.body.style.overflow = '';
-          showStarterTutorial();
         } else {
           nextBtn.disabled = false;
           nextBtn.textContent = 'Finish →';
@@ -253,27 +251,6 @@
       );
     }
 
-    function showStarterTutorial() {
-      if (!starter) return;
-      starter.style.display = 'flex';
-      document.body.style.overflow = 'hidden';
-    }
-    function closeStarterTutorial() {
-      if (!starter) return;
-      starter.style.display = 'none';
-      document.body.style.overflow = '';
-      try { fetch('/api/academic/starter-tutorial/seen', { method:'POST' }); } catch(_){}
-    }
-    const starterCloseBtn = document.getElementById('mrStarterClose');
-    if (starterCloseBtn) starterCloseBtn.addEventListener('click', closeStarterTutorial);
-    if (starter) {
-      starter.querySelectorAll('a.mr-starter-card').forEach(function(a){
-        a.addEventListener('click', function(){
-          try { fetch('/api/academic/starter-tutorial/seen', { method:'POST' }); } catch(_){}
-        });
-      });
-    }
-
     // Init: check whether we need to show the modal / banner
     async function init() {
       try {
@@ -286,10 +263,6 @@
           modal.style.display = 'flex';
           document.body.style.overflow = 'hidden';
           go(0);
-          return;
-        }
-        if (!j.starter_tutorial_seen) {
-          showStarterTutorial();
           return;
         }
         // Setup IS complete. Only show the 'previous progress preserved' banner if
