@@ -1475,13 +1475,22 @@ def index():
 @limiter.limit("10 per minute", methods=["POST"])
 def register():
     if request.method == "POST":
-        name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
+        password2 = request.form.get("password2", "")
+        # Simple signup: email + password only. A display name is derived from
+        # the email local-part; the student can change it later in Settings.
+        name = email.split("@")[0] if "@" in email else email
         business = ""
         account_type = "student"
-        if not name or not email or not password:
+        if not email or not password:
             flash(("error", t("auth.all_required")))
+            return redirect(url_for("register"))
+        if len(password) < 6:
+            flash(("error", "Password must be at least 6 characters." if session.get("lang") == "en" else "La contraseña debe tener al menos 6 caracteres."))
+            return redirect(url_for("register"))
+        if password2 and password2 != password:
+            flash(("error", "Passwords do not match." if session.get("lang") == "en" else "Las contraseñas no coinciden."))
             return redirect(url_for("register"))
         if get_client_by_email(email):
             _log_security("REGISTER_DUPLICATE", email=email)
@@ -1548,60 +1557,17 @@ def register():
         <h1>{t("auth.create_account")}</h1>
         <p class="subtitle">{t("auth.create_subtitle")}</p>
         {_ref_banner}
-        <div style="margin:16px 0 18px;padding:14px;border:1px solid var(--border);border-radius:18px;background:var(--surface);">
-          <div style="font-size:14px;font-weight:900;color:var(--text);margin-bottom:10px;">{"Canvas connection tutorial" if session.get("lang") == "en" else "Tutorial de conexi&oacute;n a Canvas"}</div>
-          <video controls loop preload="metadata" playsinline style="width:100%;display:block;border-radius:12px;border:1px solid var(--border);background:#000;">
-            <source src="/static/tutorials/canvas-connection-tutorial.mp4" type="video/mp4">
-          </video>
-        </div>
-        <div style="margin:0 0 16px;padding:14px;border:1px solid rgba(255,122,61,.35);border-radius:16px;background:rgba(255,122,61,.08);color:var(--text);font-size:13px;line-height:1.5;">
-          <strong>{"Privacy promise:" if session.get("lang") == "en" else "Promesa de privacidad:"}</strong>
-          {" We only read your Canvas profile email and courses. We do not submit assignments, change grades, publish content, or touch your Canvas account." if session.get("lang") == "en" else " Solo leemos tu correo de perfil y tus cursos de Canvas. No entregamos tareas, no cambiamos notas, no publicamos nada ni tocamos tu cuenta de Canvas."}
-        </div>
-        <form id="canvasSignupForm" method="post" action="/canvas-token-signup" autocomplete="off" style="margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);">
+        <form method="post" action="/register" autocomplete="off" style="margin-top:8px;">
           {_ref_hidden}
-          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Canvas URL</label>
-          <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" style="margin-bottom:10px;">
-          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Canvas token</label>
-          <input name="canvas_token" type="text" placeholder="Paste your Canvas access token" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-form-type="other" style="-webkit-text-security:disc;text-security:disc;margin-bottom:10px;">
-          <div id="canvasDetectedEmailWrap" style="display:none;">
-            <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Detected Canvas email" if session.get("lang") == "en" else "Correo detectado de Canvas"}</label>
-            <input id="canvasDetectedEmail" name="canvas_detected_email" type="email" readonly autocomplete="username" style="margin-bottom:10px;">
-          </div>
-          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"MachReach password" if session.get("lang") == "en" else "Contrase&ntilde;a MachReach"}</label>
-          <input name="password" type="password" placeholder="{"At least 6 characters" if session.get("lang") == "en" else "M&iacute;nimo 6 caracteres"}" required minlength="6" autocomplete="new-password" style="margin-bottom:10px;">
+          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Email" if session.get("lang") == "en" else "Correo"}</label>
+          <input name="email" type="email" required autocomplete="username" placeholder="tu@correo.com" style="margin-bottom:10px;">
+          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Password" if session.get("lang") == "en" else "Contrase&ntilde;a"}</label>
+          <input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="{"At least 6 characters" if session.get("lang") == "en" else "M&iacute;nimo 6 caracteres"}" style="margin-bottom:10px;">
           <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Confirm password" if session.get("lang") == "en" else "Confirmar contrase&ntilde;a"}</label>
-          <input name="password2" type="password" placeholder="{"Repeat your password" if session.get("lang") == "en" else "Repite tu contrase&ntilde;a"}" required minlength="6" autocomplete="new-password" style="margin-bottom:10px;">
-          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{"Sign in with Canvas" if session.get("lang") == "en" else "Entrar con Canvas"}</button>
-          <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:8px 0 0;line-height:1.4;">{"We create your account with your Canvas email, then you can log in normally with that email and password." if session.get("lang") == "en" else "Creamos tu cuenta con el correo de Canvas; despu&eacute;s podr&aacute;s entrar normal con ese correo y contrase&ntilde;a."}</p>
+          <input name="password2" type="password" required minlength="6" autocomplete="new-password" placeholder="{"Repeat your password" if session.get("lang") == "en" else "Repite tu contrase&ntilde;a"}" style="margin-bottom:12px;">
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.create_account")}</button>
+          <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:10px 0 0;line-height:1.5;">{"We'll email you a link to confirm your account." if session.get("lang") == "en" else "Te enviaremos un correo para confirmar tu cuenta. Conecta Canvas despu&eacute;s desde Enfoque."}</p>
         </form>
-        <script>
-        (function(){{
-          var form = document.getElementById('canvasSignupForm');
-          if (!form) return;
-          form.addEventListener('submit', async function(ev){{
-            var emailInput = document.getElementById('canvasDetectedEmail');
-            if (!emailInput || emailInput.value) return;
-            ev.preventDefault();
-            var btn = form.querySelector('button[type="submit"]');
-            var old = btn ? btn.textContent : '';
-            if (btn) {{ btn.disabled = true; btn.textContent = '{"Reading Canvas email..." if session.get("lang") == "en" else "Leyendo correo de Canvas..."}'; }}
-            try {{
-              var fd = new FormData(form);
-              fd.set('preview', '1');
-              var res = await fetch('/canvas-token-signup', {{ method:'POST', body:fd, credentials:'same-origin' }});
-              var data = await res.json();
-              if (!res.ok || !data.ok || !data.email) throw new Error(data.error || '{"Could not read your Canvas email." if session.get("lang") == "en" else "No se pudo leer el correo de Canvas."}');
-              emailInput.value = data.email;
-              document.getElementById('canvasDetectedEmailWrap').style.display = 'block';
-              setTimeout(function(){{ form.submit(); }}, 60);
-            }} catch (err) {{
-              alert(err.message || '{"Could not read your Canvas email." if session.get("lang") == "en" else "No se pudo leer el correo de Canvas."}');
-              if (btn) {{ btn.disabled = false; btn.textContent = old; }}
-            }}
-          }});
-        }})();
-        </script>
         <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:12px;line-height:1.6;">By creating an account, you agree to our <a href="/terms" style="color:var(--primary);">Terms of Service</a> and <a href="/privacy" style="color:var(--primary);">Privacy Policy</a>.</p>
         <div class="auth-footer">{t("auth.have_account")} <a href="/login">{t("auth.log_in")}</a></div>
       </div>
