@@ -804,7 +804,7 @@ def register_student_routes(app, csrf, limiter):
 
     # Import here to avoid circular imports at module level
 
-    from student.canvas import CanvasClient, extract_text_from_pdf, extract_text_from_docx, normalize_canvas_url, make_connect_token, verify_connect_token
+    from student.canvas import extract_text_from_pdf, extract_text_from_docx, make_connect_token, verify_connect_token
 
     from student.analyzer import (analyze_course_material, generate_flashcards, generate_quiz)
 
@@ -847,77 +847,6 @@ def register_student_routes(app, csrf, limiter):
             "pending_courses": pending,
             "message": "Antes de avanzar de semestre o reconectar Canvas, registra la nota final de todos tus ramos del semestre actual.",
         }
-
-
-
-    def _get_canvas(client_id: int) -> CanvasClient | None:
-
-        tok = sdb.get_canvas_token(client_id)
-
-        if not tok:
-
-            return None
-
-        return CanvasClient(tok["canvas_url"], tok["token"])
-
-    def _sync_canvas_courses_for_user(client_id: int, canvas_url: str, token: str) -> dict:
-        """Persist the authenticated user's current Canvas courses."""
-        canvas = CanvasClient(canvas_url, token)
-        courses = canvas.get_courses()
-        saved = 0
-        for c in courses:
-            try:
-                cid_canvas = int(c.get("id"))
-                name = c.get("name") or c.get("course_code") or f"Course {cid_canvas}"
-                code = c.get("course_code", "") or ""
-                term = ""
-                t = c.get("term") or {}
-                if isinstance(t, dict):
-                    term = t.get("name", "") or ""
-                sdb.upsert_course(client_id, cid_canvas, name, code, term)
-                saved += 1
-            except Exception:
-                continue
-        if saved > 0:
-            try:
-                sdb.earn_badge(client_id, "syllabus_synced")   # "Synced Up"
-            except Exception:
-                pass
-        return {"courses": courses, "saved": saved}
-
-    def _canvas_profile_identity(profile: dict, communication_channels: list[dict] | None = None) -> tuple[str, str]:
-        name = (
-            profile.get("name")
-            or profile.get("short_name")
-            or profile.get("sortable_name")
-            or "Canvas Student"
-        )
-        email_candidates = [
-            profile.get("primary_email"),
-            profile.get("email"),
-            profile.get("login_id"),
-        ]
-        for ch in communication_channels or []:
-            if not isinstance(ch, dict):
-                continue
-            if str(ch.get("type") or "").lower() == "email":
-                email_candidates.extend([
-                    ch.get("address"),
-                    ch.get("email"),
-                    ch.get("path"),
-                ])
-        email = ""
-        for candidate in email_candidates:
-            value = str(candidate or "").strip().lower()
-            if re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value):
-                email = value
-                break
-        if not email:
-            raise ValueError(
-                "Canvas no compartio un correo real para este usuario. "
-                "Activa o verifica tu email en Canvas y vuelve a intentarlo."
-            )
-        return str(name).strip() or "Canvas Student", email
 
 
 
@@ -1793,254 +1722,6 @@ def register_student_routes(app, csrf, limiter):
     def student_canvas_alias():
         return redirect(url_for("student_canvas_settings_page"))
 
-    @app.route("/canvas/oauth/start")
-    @limiter.limit("20 per minute")
-    def canvas_oauth_start():
-        """Start Canvas OAuth login/connect flow."""
-        from outreach.config import (
-            BASE_URL,
-            CANVAS_OAUTH_CLIENT_ID,
-            CANVAS_OAUTH_CLIENT_SECRET,
-        )
-        if not CANVAS_OAUTH_CLIENT_ID or not CANVAS_OAUTH_CLIENT_SECRET:
-            return render_template_string(
-                "<h1>Canvas OAuth no configurado</h1>"
-                "<p>Agrega CANVAS_OAUTH_CLIENT_ID y CANVAS_OAUTH_CLIENT_SECRET en Render.</p>"
-                "<p>Redirect URI: <code>{{redirect_uri}}</code></p>"
-                "<p><a href='/login'>Volver</a></p>",
-                redirect_uri=f"{BASE_URL.rstrip('/')}/canvas/oauth/callback",
-            ), 503
-
-        canvas_url = normalize_canvas_url(request.args.get("canvas_url") or "")
-        if not canvas_url:
-            return redirect(url_for("login"))
-
-        if _logged_in():
-            gate = _semester_outcome_gate()
-            if gate["blocked"]:
-                session["_flashes"] = session.get("_flashes", []) + [
-                    ("error", gate["message"])
-                ]
-                return redirect(url_for("student_courses_page"))
-
-        state = secrets.token_urlsafe(32)
-        session["canvas_oauth_state"] = state
-        session["canvas_oauth_url"] = canvas_url
-        session["canvas_oauth_next"] = request.args.get("next") or "/student"
-        redirect_uri = f"{BASE_URL.rstrip('/')}/canvas/oauth/callback"
-        params = {
-            "client_id": CANVAS_OAUTH_CLIENT_ID,
-            "response_type": "code",
-            "redirect_uri": redirect_uri,
-            "state": state,
-        }
-        return redirect(f"{canvas_url}/login/oauth2/auth?{urlencode(params)}")
-
-    @app.route("/canvas/oauth/callback")
-    @limiter.limit("20 per minute")
-    def canvas_oauth_callback():
-        """Finish Canvas OAuth, create/login account, and sync courses."""
-        from outreach.config import (
-            BASE_URL,
-            CANVAS_OAUTH_CLIENT_ID,
-            CANVAS_OAUTH_CLIENT_SECRET,
-        )
-        from outreach.db import create_client, get_client_by_email, mark_email_verified
-        import bcrypt
-        import requests
-
-        state = request.args.get("state") or ""
-        code = request.args.get("code") or ""
-        expected = session.get("canvas_oauth_state") or ""
-        canvas_url = session.get("canvas_oauth_url") or ""
-        if not state or not code or not expected or state != expected or not canvas_url:
-            return render_template_string(
-                "<h1>No se pudo conectar Canvas</h1>"
-                "<p>La sesion de OAuth expiro o no coincide. Intentalo de nuevo.</p>"
-                "<p><a href='/login'>Volver</a></p>"
-            ), 400
-
-        redirect_uri = f"{BASE_URL.rstrip('/')}/canvas/oauth/callback"
-        try:
-            token_resp = requests.post(
-                f"{canvas_url}/login/oauth2/token",
-                data={
-                    "grant_type": "authorization_code",
-                    "client_id": CANVAS_OAUTH_CLIENT_ID,
-                    "client_secret": CANVAS_OAUTH_CLIENT_SECRET,
-                    "redirect_uri": redirect_uri,
-                    "code": code,
-                },
-                timeout=20,
-            )
-            token_resp.raise_for_status()
-            token_data = token_resp.json()
-            access_token = (token_data.get("access_token") or "").strip()
-            if not access_token:
-                raise ValueError("Canvas no devolvio access_token.")
-
-            canvas = CanvasClient(canvas_url, access_token)
-            profile = canvas.get_profile()
-            channels = canvas.get_communication_channels()
-            name, email = _canvas_profile_identity(profile, channels)
-
-            if _logged_in():
-                client_id = _cid()
-            else:
-                existing = get_client_by_email(email)
-                if existing:
-                    client_id = int(existing["id"])
-                    name = existing.get("name") or name
-                    if not existing.get("email_verified"):
-                        mark_email_verified(client_id)
-                else:
-                    random_pw = secrets.token_urlsafe(32)
-                    password_hash = bcrypt.hashpw(random_pw.encode(), bcrypt.gensalt(12)).decode()
-                    client_id = create_client(name, email, password_hash, "", "student")
-                    mark_email_verified(client_id)
-
-            sdb.save_canvas_token(client_id, canvas_url, access_token)
-            synced = _sync_canvas_courses_for_user(client_id, canvas_url, access_token)
-
-            pending_token = session.get("team_invite_token")
-            next_url = session.get("canvas_oauth_next") or "/student"
-            session.clear()
-            session["client_id"] = client_id
-            session["client_name"] = name
-            session["account_type"] = "student"
-            if pending_token:
-                session["team_invite_token"] = pending_token
-            session["_flashes"] = [
-                ("success", f"Canvas conectado. Cursos sincronizados: {synced.get('saved', 0)}.")
-            ]
-            return redirect(next_url if str(next_url).startswith("/") else "/student")
-        except Exception as e:
-            log.exception("Canvas OAuth callback failed")
-            return render_template_string(
-                "<h1>No se pudo conectar Canvas</h1>"
-                "<p>{{error}}</p>"
-                "<p><a href='/login'>Volver</a></p>",
-                error=str(e),
-            ), 400
-        finally:
-            session.pop("canvas_oauth_state", None)
-            session.pop("canvas_oauth_url", None)
-            session.pop("canvas_oauth_next", None)
-
-    @app.route("/api/student/canvas/connect", methods=["POST"])
-
-    @limiter.limit("10 per minute")
-
-    def student_canvas_connect():
-
-        """Save Canvas URL + API token and test the connection."""
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-
-
-        data = request.get_json(force=True)
-
-        canvas_url = normalize_canvas_url(data.get("canvas_url") or "")
-
-        token = (data.get("token") or "").strip()
-
-
-
-        if not canvas_url or not token:
-
-            return jsonify({"error": "canvas_url and token are required"}), 400
-
-        gate = _semester_outcome_gate()
-        if gate["blocked"]:
-            return jsonify({
-                "error": gate["message"],
-                "requires_course_outcomes": True,
-                "semester": gate["semester"],
-                "pending_courses": gate["pending_courses"],
-            }), 409
-
-
-
-        # Test connection AND persist courses immediately. No AI/file analysis —
-        # the connection exists purely so we can show the student's class list and
-        # power class-level leaderboards.
-
-        try:
-
-            client = CanvasClient(canvas_url, token)
-
-            courses = client.get_courses()
-
-        except Exception as e:
-
-            return jsonify({"error": f"Canvas connection failed: {e}"}), 400
-
-
-
-        sdb.save_canvas_token(_cid(), canvas_url, token)
-
-
-
-        # Persist every course immediately so /student/courses shows them right away.
-
-        synced = _sync_canvas_courses_for_user(_cid(), canvas_url, token)
-        saved = int(synced.get("saved") or 0)
-
-
-
-        return jsonify({
-
-            "message": "Canvas connected",
-
-            "courses_found": len(courses),
-
-            "courses_saved": saved,
-
-            "courses": [{"id": c["id"], "name": c.get("name", "?")} for c in courses[:20]],
-
-        })
-
-
-
-    @app.route("/api/student/canvas/disconnect", methods=["POST"])
-
-    def student_canvas_disconnect():
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        sdb.delete_canvas_token(_cid())
-
-        return jsonify({"message": "Canvas disconnected"})
-
-
-
-    @app.route("/api/student/canvas/status", methods=["GET"])
-
-    def student_canvas_status():
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        tok = sdb.get_canvas_token(_cid())
-
-        if not tok:
-
-            return jsonify({"connected": False})
-
-        return jsonify({
-
-            "connected": True,
-
-            "canvas_url": tok["canvas_url"],
-
-        })
-
     @app.route("/api/student/canvas/extension-import", methods=["POST"])
     @csrf.exempt
     @limiter.limit("20 per hour")
@@ -2091,462 +1772,7 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-    # ── Sync courses (background) ──────────────────────────
-
-
-
     import threading
-
-
-
-    # In-memory sync status per client  {client_id: {status, progress, ...}}
-
-    _sync_status: dict[int, dict] = {}
-
-
-
-    def _kick_silent_canvas_resync(client_id: int) -> None:
-        """Fire-and-forget Canvas course refresh on page visits.
-        Skips if already running. No UI feedback — courses just appear."""
-        try:
-            tok = sdb.get_canvas_token(client_id)
-        except Exception:
-            return
-        if not tok:
-            return
-        try:
-            gate = _semester_outcome_gate(client_id)
-            if gate.get("blocked"):
-                _sync_status[client_id] = {
-                    "status": "blocked",
-                    "progress": "Final grades required before syncing the next semester.",
-                    "pending_courses": len(gate.get("pending_courses") or []),
-                }
-                return
-        except Exception:
-            return
-        if _sync_status.get(client_id, {}).get("status") == "running":
-            return
-
-        def _bg():
-            _sync_status[client_id] = {"status": "running", "started_at": datetime.now().isoformat()}
-            try:
-                canvas = CanvasClient(tok["canvas_url"], tok["token"])
-                courses = canvas.get_courses()
-                for c in courses:
-                    try:
-                        cid_canvas = int(c.get("id"))
-                        name = c.get("name") or c.get("course_code") or f"Course {cid_canvas}"
-                        code = c.get("course_code", "") or ""
-                        sdb.upsert_course(client_id, cid_canvas, name, code)
-                    except Exception:
-                        continue
-                _sync_status[client_id] = {"status": "done", "courses_done": len(courses)}
-            except Exception as e:
-                log.warning("silent canvas resync failed (client %s): %s", client_id, e)
-                _sync_status[client_id] = {"status": "error", "error": str(e)}
-
-        threading.Thread(target=_bg, daemon=True).start()
-
-
-
-    @app.route("/api/student/sync", methods=["POST"])
-
-    @limiter.limit("3 per minute")
-
-    def student_sync_courses():
-
-        """Kick off a background sync. Returns immediately."""
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-
-
-        client_id = _cid()
-
-        tok = sdb.get_canvas_token(client_id)
-
-        if not tok:
-
-            return jsonify({"error": "Canvas not connected"}), 400
-
-
-
-        # Don't start if already running
-
-        existing = _sync_status.get(client_id, {})
-
-        if existing.get("status") == "running":
-
-            return jsonify({"message": "Sync already in progress", "sync": existing})
-
-
-
-        _sync_status[client_id] = {
-
-            "status": "running",
-
-            "progress": "Starting...",
-
-            "courses_total": 0,
-
-            "courses_done": 0,
-
-            "files_downloaded": 0,
-
-            "started_at": datetime.now().isoformat(),
-
-        }
-
-
-
-        def _do_sync():
-
-            # Courses-only sync. No file downloads, no AI analysis. We just refresh
-
-            # the user's class list so leaderboards & exam tracking stay current.
-
-            try:
-
-                canvas = CanvasClient(tok["canvas_url"], tok["token"])
-
-                courses = canvas.get_courses()
-
-                _sync_status[client_id]["courses_total"] = len(courses)
-
-                synced = []
-
-                for idx, c in enumerate(courses):
-
-                    try:
-
-                        cid_canvas = int(c.get("id"))
-
-                        name = c.get("name") or c.get("course_code") or f"Course {cid_canvas}"
-
-                        code = c.get("course_code", "") or ""
-
-                        sdb.upsert_course(client_id, cid_canvas, name, code)
-
-                        synced.append(name)
-
-                        _sync_status[client_id]["courses_done"] = idx + 1
-
-                        _sync_status[client_id]["progress"] = f"Synced {name}"
-
-                    except Exception:
-
-                        continue
-
-                _sync_status[client_id] = {
-
-                    "status": "done",
-
-                    "progress": f"Synced {len(synced)} courses",
-
-                    "courses_total": len(courses),
-
-                    "courses_done": len(synced),
-
-                    "files_downloaded": 0,
-
-                    "courses": synced,
-
-                    "warnings": [],
-
-                    "no_syllabus": [],
-
-                }
-
-            except Exception as e:
-
-                log.error("Background sync failed for client %s: %s", client_id, e)
-
-                _sync_status[client_id] = {"status": "error", "progress": f"Sync failed: {e}", "courses_total": 0, "courses_done": 0, "files_downloaded": 0}
-
-            return
-
-
-
-        # Old AI-driven sync below is intentionally unreachable.
-
-        def _do_sync_legacy():
-
-            try:
-
-                canvas = CanvasClient(tok["canvas_url"], tok["token"])
-
-                courses = canvas.get_courses()
-
-                _sync_status[client_id]["courses_total"] = len(courses)
-
-                _sync_status[client_id]["progress"] = f"Found {len(courses)} courses"
-
-
-
-                synced = []
-
-                total_files = 0
-
-                no_syllabus_courses = []
-
-
-
-                for idx, c in enumerate(courses):
-
-                    cid_canvas = c["id"]
-
-                    name = c.get("name", "Unknown Course")
-
-                    code = c.get("course_code", "")
-
-                    _sync_status[client_id]["progress"] = f"Syncing {name} ({idx + 1}/{len(courses)})"
-
-
-
-                    db_id = sdb.upsert_course(client_id, cid_canvas, name, code)
-
-
-
-                    syllabus_html = ""
-
-                    file_texts = []
-
-                    assignments = []
-
-                    found_syllabus = False
-
-
-
-                    try:
-
-                        syllabus_html = canvas.get_syllabus(cid_canvas)
-
-                        if syllabus_html and len(syllabus_html.strip()) > 50:
-
-                            found_syllabus = True
-
-                    except Exception:
-
-                        pass
-
-
-
-                    # Download ONLY syllabus-related files (syllabus, programa, guía docente, etc.)
-
-                    try:
-
-                        syllabus_files = canvas.find_syllabus_files(cid_canvas)
-
-                        for sf in syllabus_files:
-
-                            fname = sf.get("display_name", sf.get("filename", ""))
-
-                            fl = fname.lower()
-
-                            if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc")):
-
-                                continue
-
-                            if sf.get("size", 0) > 15 * 1024 * 1024:
-
-                                continue
-
-                            try:
-
-                                _sync_status[client_id]["progress"] = f"{name}: downloading {fname}"
-
-                                content = canvas.get_file_content(sf)
-
-                                text = ""
-
-                                if fl.endswith(".pdf"):
-
-                                    text = extract_text_from_pdf(content)
-
-                                elif fl.endswith((".docx", ".doc")):
-
-                                    text = extract_text_from_docx(content)
-
-                                if text and len(text.strip()) > 50:
-
-                                    file_texts.append({"filename": fname, "text": text[:8000]})
-
-                                    total_files += 1
-
-                                    found_syllabus = True
-
-                                    _sync_status[client_id]["files_downloaded"] = total_files
-
-                            except Exception:
-
-                                pass
-
-                    except Exception:
-
-                        pass
-
-
-
-                    # Include manually-uploaded files
-
-                    try:
-
-                        uploaded = sdb.get_course_files(client_id, db_id)
-
-                        for uf in uploaded:
-
-                            if uf.get("extracted_text") and len(uf["extracted_text"].strip()) > 50:
-
-                                file_texts.append({
-
-                                    "filename": uf["original_name"],
-
-                                    "text": uf["extracted_text"][:8000],
-
-                                })
-
-                                found_syllabus = True
-
-                    except Exception:
-
-                        pass
-
-
-
-                    try:
-
-                        assignments = canvas.get_assignments(cid_canvas)
-
-                    except Exception:
-
-                        pass
-
-
-
-                    if not found_syllabus:
-
-                        no_syllabus_courses.append(name)
-
-
-
-                    # AI analysis
-
-                    _sync_status[client_id]["progress"] = f"{name}: AI analyzing {len(file_texts)} files..."
-
-                    analysis = analyze_course_material(
-
-                        course_name=name,
-
-                        syllabus_html=syllabus_html,
-
-                        file_texts=file_texts,
-
-                        assignments=assignments,
-
-                    )
-
-
-
-                    sdb.update_course_analysis(db_id, analysis)
-
-                    if analysis.get("exams"):
-
-                        sdb.save_exams(client_id, db_id, analysis["exams"])
-
-
-
-                    _sync_status[client_id]["courses_done"] = idx + 1
-
-                    synced.append(name)
-
-
-
-                # Build final status with syllabus warnings
-
-                warnings = []
-
-                if no_syllabus_courses:
-
-                    for cn in no_syllabus_courses:
-
-                        warnings.append(
-
-                            f"Could not find a syllabus/programa for \"{cn}\". "
-
-                            f"Please upload it manually on the course page so the AI can create the best study plan."
-
-                        )
-
-
-
-                _sync_status[client_id] = {
-
-                    "status": "done",
-
-                    "progress": f"Synced {len(synced)} courses, {total_files} syllabus files downloaded",
-
-                    "courses_total": len(courses),
-
-                    "courses_done": len(courses),
-
-                    "files_downloaded": total_files,
-
-                    "courses": synced,
-
-                    "warnings": warnings,
-
-                    "no_syllabus": no_syllabus_courses,
-
-                }
-
-            except Exception as e:
-
-                log.error("Background sync failed for client %s: %s", client_id, e)
-
-                _sync_status[client_id] = {
-
-                    "status": "error",
-
-                    "progress": f"Sync failed: {e}",
-
-                    "courses_total": 0,
-
-                    "courses_done": 0,
-
-                    "files_downloaded": 0,
-
-                }
-
-
-
-        thread = threading.Thread(target=_do_sync, daemon=True)
-
-        thread.start()
-
-
-
-        return jsonify({"message": "Sync started", "sync": _sync_status[client_id]})
-
-
-
-    @app.route("/api/student/sync/status", methods=["GET"])
-
-    def student_sync_status():
-
-        """Poll sync progress."""
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        status = _sync_status.get(_cid(), {"status": "idle", "progress": "No sync running"})
-
-        return jsonify(status)
-
-
 
     # ── Courses ─────────────────────────────────────────────
 
@@ -3828,7 +3054,7 @@ def register_student_routes(app, csrf, limiter):
 
         cid = _cid()
 
-        canvas_tok = sdb.get_canvas_token(cid)
+        canvas_tok = bool(sdb.get_courses(cid))
 
         courses = sdb.get_courses(cid)
 
@@ -4478,7 +3704,7 @@ def register_student_routes(app, csrf, limiter):
 
         _lang = session.get("lang", "es")
 
-        canvas_tok = sdb.get_canvas_token(cid)
+        canvas_tok = bool(sdb.get_courses(cid))
 
         courses = sdb.get_courses(cid)
 
@@ -5518,7 +4744,7 @@ def register_student_routes(app, csrf, limiter):
         _ob_ai = sdb.has_generated_ai(cid)
         _ob_invite = sdb.referral_count(cid) > 0
         _ob_items = [
-            (True, "Conectar Canvas", ""),
+            (bool(courses), "Sincroniza tus cursos de Canvas con la extensión", "/student/canvas"),
             (_ob_focus, "Inicia tu primera sesión de enfoque", "/student/focus"),
             (_ob_ai, "Genera tu primer quiz o set de flashcards", "/student/quizzes"),
             (_ob_invite, "Invita a un amigo y gana una semana de Plus gratis", "/student/invite"),
@@ -5610,14 +4836,8 @@ def register_student_routes(app, csrf, limiter):
 
             return redirect(url_for("login"))
 
-        # No more "Sync Canvas" button — kick a silent background refresh on
-        # every visit so the list stays current. Idempotent + non-blocking.
-        try:
-            if not _semester_outcome_gate(_cid()).get("blocked"):
-                _kick_silent_canvas_resync(_cid())
-        except Exception as _e:
-            log.debug("silent resync kick failed: %s", _e)
-
+        # Courses are populated by the MachReach extension (Canvas sync). The
+        # list just reflects whatever has been imported.
         courses = sdb.get_courses(_cid())
 
         rows = ""
@@ -9529,12 +8749,6 @@ def register_student_routes(app, csrf, limiter):
 
             return redirect(url_for("login"))
 
-        tok = sdb.get_canvas_token(_cid())
-
-        connected = bool(tok)
-
-        url_val = tok["canvas_url"] if tok else ""
-
         gate = _semester_outcome_gate()
         pending_html = ""
         if gate["blocked"]:
@@ -9593,8 +8807,6 @@ def register_student_routes(app, csrf, limiter):
 
           {pending_html}
 
-          {('<div style="margin-bottom:16px;padding:8px 12px;border-radius:12px;background:#D1FAE5;color:#065F46;font-size:13px;font-weight:700;">&#10003; Conexión antigua por token activa: ' + _esc(url_val) + ' <button type="button" onclick="disconnectCanvas()" class="btn btn-sm" style="margin-left:8px;color:#991B1B;background:transparent;border:1px solid #991B1B;">Desconectar</button></div>') if connected else ''}
-
           <p style="color:var(--text-muted);font-size:13.5px;line-height:1.55;margin:0 0 16px;">
             Conecta Canvas con la extensión <b style="color:var(--text);">MachReach Focus Guard</b> &mdash; sin tokens ni permisos de administrador. Leemos tu lista de cursos directamente desde tu propia sesión de Canvas.
           </p>
@@ -9626,20 +8838,6 @@ def register_student_routes(app, csrf, limiter):
         </div>
 
         </div>
-
-        <script>
-
-        async function disconnectCanvas() {{
-
-          if (!confirm('Desconectar Canvas?')) return;
-
-          await fetch('/api/student/canvas/disconnect', {{method:'POST'}});
-
-          mrReload();
-
-        }}
-
-        </script>
 
         """, active_page="student_canvas")
 
@@ -17377,7 +16575,7 @@ No markdown, no code fences. ONLY JSON.
 
         field_of_study = prefs.get("field_of_study", "") or ""
 
-        canvas_tok = sdb.get_canvas_token(cid)
+        canvas_tok = bool(sdb.get_courses(cid))
 
         canvas_status = "Conectado" if canvas_tok else "Sin conectar"
 

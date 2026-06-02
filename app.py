@@ -1209,8 +1209,6 @@ LAYOUT = """<!DOCTYPE html>
       "Conexión a Canvas": "Canvas Connection",
       "No conectado": "Not connected",
       "Conectado": "Connected",
-      "URL DE CANVAS": "CANVAS URL",
-      "TOKEN DE ACCESO API": "API ACCESS TOKEN",
       "Conectar Canvas": "Connect Canvas",
       "Actualizar": "Update",
       "Desconectar": "Disconnect",

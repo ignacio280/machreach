@@ -175,17 +175,7 @@ def register_academic_routes(app, csrf, limiter):
             major_id=major_id,
         )
 
-        canvas_url = (data.get("canvas_url") or "").strip()
-        canvas_token = (data.get("canvas_token") or "").strip()
-        canvas_saved = False
-        if canvas_url and canvas_token:
-            try:
-                sdb.save_canvas_token(cid, canvas_url, canvas_token)
-                canvas_saved = True
-            except Exception as e:
-                log.warning("canvas save failed: %s", e)
-
-        return jsonify({"ok": True, "canvas_saved": canvas_saved})
+        return jsonify({"ok": True})
 
     @app.route("/api/academic/starter-tutorial/seen", methods=["POST"])
     def academic_starter_tutorial_seen():

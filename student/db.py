@@ -25,15 +25,6 @@ log = logging.getLogger(__name__)
 # ── Schema (appended to MachReach's init_db) ────────────────
 
 STUDENT_PG_SCHEMA = """
-CREATE TABLE IF NOT EXISTS student_canvas_tokens (
-    id          SERIAL PRIMARY KEY,
-    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    canvas_url  TEXT NOT NULL,
-    token       TEXT NOT NULL,
-    created_at  TIMESTAMP DEFAULT NOW(),
-    UNIQUE(client_id)
-);
-
 CREATE TABLE IF NOT EXISTS student_courses (
     id              SERIAL PRIMARY KEY,
     client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -226,15 +217,6 @@ CREATE TABLE IF NOT EXISTS student_email_prefs (
 """
 
 STUDENT_SQLITE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS student_canvas_tokens (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-    canvas_url  TEXT NOT NULL,
-    token       TEXT NOT NULL,
-    created_at  TEXT DEFAULT (datetime('now', 'localtime')),
-    UNIQUE(client_id)
-);
-
 CREATE TABLE IF NOT EXISTS student_courses (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -740,41 +722,6 @@ def _student_migrations():
                     db.execute(f"ALTER TABLE student_course_outcomes ADD COLUMN {col} {col_type}")
         except Exception:
             pass
-
-
-# ── Canvas tokens ───────────────────────────────────────────
-
-def save_canvas_token(client_id: int, canvas_url: str, token: str) -> int:
-    with get_db() as db:
-        # Upsert
-        existing = _fetchval(
-            db, "SELECT id FROM student_canvas_tokens WHERE client_id = %s",
-            (client_id,),
-        )
-        if existing:
-            _exec(db,
-                  "UPDATE student_canvas_tokens SET canvas_url = %s, token = %s WHERE client_id = %s",
-                  (canvas_url, token, client_id))
-            return existing
-        return _insert_returning_id(
-            db,
-            "INSERT INTO student_canvas_tokens (client_id, canvas_url, token) VALUES (%s, %s, %s) RETURNING id",
-            (client_id, canvas_url, token),
-            "INSERT INTO student_canvas_tokens (client_id, canvas_url, token) VALUES (?, ?, ?)",
-        )
-
-
-def get_canvas_token(client_id: int) -> dict | None:
-    with get_db() as db:
-        return _fetchone(
-            db, "SELECT * FROM student_canvas_tokens WHERE client_id = %s",
-            (client_id,),
-        )
-
-
-def delete_canvas_token(client_id: int):
-    with get_db() as db:
-        _exec(db, "DELETE FROM student_canvas_tokens WHERE client_id = %s", (client_id,))
 
 
 # ── Courses ─────────────────────────────────────────────────
