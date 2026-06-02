@@ -1362,7 +1362,7 @@ LAYOUT = """<!DOCTYPE html>
   {% endif %}
 
   {% if logged_in and account_type|default('student') == 'student' %}
-  <!-- ── Academic onboarding modal + preserved-XP welcome banner ── -->
+  <!-- ── Preserved-XP welcome banner (academic setup lives on /student/setup) ── -->
   <div id="mrXpBanner" style="display:none;position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:9998;
        background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;padding:12px 20px;border-radius:12px;
        box-shadow:0 10px 40px rgba(99,102,241,.4);font-weight:500;align-items:center;gap:12px;
@@ -1372,43 +1372,8 @@ LAYOUT = """<!DOCTYPE html>
     <button id="mrXpBannerClose" style="background:rgba(255,255,255,.2);border:0;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;">×</button>
   </div>
 
-  <div id="mrOnboardingModal" style="display:none;position:fixed;inset:0;z-index:9999;
-       background:rgba(10,14,26,.88);backdrop-filter:blur(14px);
-       align-items:center;justify-content:center;padding:20px;">
-    <div style="background:linear-gradient(135deg,#10172A 0%,#1A2340 100%);border:1px solid rgba(148,163,184,.15);
-         border-radius:24px;max-width:560px;width:100%;padding:36px;color:#E5EAF5;
-         box-shadow:0 40px 80px rgba(0,0,0,.6);animation:mrModalIn .45s cubic-bezier(.22,.61,.36,1);">
-      <div id="mrStepIndicator" style="display:flex;gap:8px;margin-bottom:22px;">
-        <div class="mr-step-dot active"></div><div class="mr-step-dot"></div><div class="mr-step-dot"></div><div class="mr-step-dot"></div>
-      </div>
-      <div id="mrStepContent"></div>
-      <div style="display:flex;gap:10px;margin-top:26px;justify-content:space-between;align-items:center;">
-        <button id="mrStepBack" style="background:transparent;color:#8B93A7;border:0;cursor:pointer;font-size:14px;">← Back</button>
-        <button id="mrStepNext" style="background:linear-gradient(135deg,#7C9CFF,#C084FC);color:#0A0E1A;
-                border:0;padding:12px 28px;border-radius:12px;font-weight:700;cursor:pointer;font-size:15px;
-                box-shadow:0 8px 24px rgba(124,156,255,.4);">Continue →</button>
-      </div>
-    </div>
-  </div>
-
   <style>
     @keyframes mrSlideDown { from { transform:translate(-50%,-30px); opacity:0;} to { transform:translate(-50%,0); opacity:1;}}
-    @keyframes mrModalIn { from { transform:scale(.92); opacity:0;} to { transform:scale(1); opacity:1;}}
-    .mr-step-dot { flex:1; height:4px; background:rgba(148,163,184,.2); border-radius:2px; transition:all .3s;}
-    .mr-step-dot.active { background:linear-gradient(90deg,#7C9CFF,#C084FC); box-shadow:0 0 12px rgba(124,156,255,.5);}
-    .mr-input { width:100%; background:rgba(255,255,255,.04); border:1px solid rgba(148,163,184,.18);
-      border-radius:12px; padding:13px 16px; color:#E5EAF5; font-size:15px; outline:none; transition:all .2s;
-      font-family:inherit;}
-    .mr-input:focus { border-color:#7C9CFF; box-shadow:0 0 0 3px rgba(124,156,255,.2); background:rgba(255,255,255,.06);}
-    .mr-results { max-height:240px; overflow-y:auto; margin-top:10px; border-radius:12px; background:rgba(0,0,0,.25);}
-    .mr-result { padding:12px 16px; cursor:pointer; transition:background .15s; border-bottom:1px solid rgba(148,163,184,.08);
-      display:flex; justify-content:space-between; align-items:center;}
-    .mr-result:hover, .mr-result.focus { background:rgba(124,156,255,.15);}
-    .mr-result.selected { background:linear-gradient(90deg,rgba(124,156,255,.25),rgba(192,132,252,.15)); border-left:3px solid #7C9CFF;}
-    .mr-result .tag { font-size:11px; color:#8B93A7; background:rgba(148,163,184,.1); padding:3px 8px; border-radius:999px;}
-    .mr-create-new { padding:12px 16px; color:#7C9CFF; cursor:pointer; font-weight:600; text-align:center;
-      border-top:1px solid rgba(148,163,184,.15);}
-    .mr-create-new:hover { background:rgba(124,156,255,.1);}
   </style>
 
   <script src="/static/machreach_layout/layout-4.js"></script>
