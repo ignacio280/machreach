@@ -1793,168 +1793,6 @@ def register_student_routes(app, csrf, limiter):
     def student_canvas_alias():
         return redirect(url_for("student_canvas_settings_page"))
 
-    @app.route("/canvas-token-signup", methods=["GET", "POST"])
-    @csrf.exempt
-    @limiter.limit("10 per minute", methods=["POST"])
-    def canvas_token_signup():
-        """Create/login a MachReach account from a user's Canvas API token.
-
-        This does not require university Canvas admin approval. The student
-        creates a personal Canvas access token, we read their Canvas profile,
-        create or reuse their MachReach account, save the token, and sync
-        courses immediately.
-        """
-        from outreach.db import create_client, get_client_by_email, mark_email_verified
-        import bcrypt
-
-        if request.method == "GET":
-            return render_template_string("""
-            <!doctype html>
-            <html><head>
-              <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-              <title>Entrar con Canvas</title>
-              <link rel="preconnect" href="https://fonts.googleapis.com">
-              <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
-              <style>
-                body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F7F3EA;color:#1A1A1F;font-family:Nunito,sans-serif;padding:20px}
-                .card{width:min(520px,100%);background:#FFFDF8;border:1px solid #E2DCCC;border-radius:24px;padding:28px;box-shadow:0 24px 80px rgba(20,18,30,.10)}
-                h1{font-family:"Bricolage Grotesque",sans-serif;font-size:42px;line-height:.95;margin:0 0 10px}
-                p{color:#68636F;line-height:1.45}
-                label{display:block;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#68636F;margin:14px 0 7px}
-                input{width:100%;box-sizing:border-box;border:1px solid #D8D0C0;border-radius:14px;padding:13px 14px;background:#FBF8F0;font:inherit}
-                button{width:100%;margin-top:16px;border:0;border-radius:999px;background:#FF7A3D;color:white;font-weight:900;padding:14px 18px;font:inherit;cursor:pointer}
-                .hint{font-size:12px}
-                a{color:#B94712;font-weight:900}
-              </style>
-            </head><body>
-              <form id="canvasSignupForm" class="card" method="post" autocomplete="off">
-                <h1>Entrar con Canvas</h1>
-                <p>Conecta tu Canvas una vez. MachReach crea tu cuenta, carga tu perfil y sincroniza tus cursos autom&aacute;ticamente.</p>
-                <div style="margin:16px 0 18px;padding:12px;border:1px solid #E2DCCC;border-radius:18px;background:#FFFDF8;">
-                  <div style="font-size:14px;font-weight:900;color:#1A1A1F;margin-bottom:10px;">Tutorial de conexi&oacute;n a Canvas</div>
-                  <video controls loop preload="metadata" playsinline style="width:100%;display:block;border-radius:12px;border:1px solid #E2DCCC;background:#000;">
-                    <source src="/static/tutorials/canvas-connection-tutorial.mp4" type="video/mp4">
-                  </video>
-                </div>
-                <label>URL de Canvas</label>
-                <input name="canvas_url" type="url" placeholder="https://cursos.canvas.uc.cl" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true">
-                <label>Token de acceso API</label>
-                <input name="canvas_token" type="text" placeholder="Paste your Canvas access token" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" style="-webkit-text-security:disc;text-security:disc;">
-                <div id="canvasDetectedEmailWrap" style="display:none;">
-                  <label>Correo detectado de Canvas</label>
-                  <input id="canvasDetectedEmail" name="canvas_detected_email" type="email" readonly autocomplete="username">
-                </div>
-                <label>Contrase&ntilde;a MachReach</label>
-                <input name="password" type="password" placeholder="M&iacute;nimo 6 caracteres" required minlength="6" autocomplete="new-password">
-                <label>Confirmar contrase&ntilde;a</label>
-                <input name="password2" type="password" placeholder="Repite tu contrase&ntilde;a" required minlength="6" autocomplete="new-password">
-                <p class="hint">En Canvas: Account &rarr; Settings &rarr; <b>+ New Access Token</b>. Si tu universidad no permite OAuth, este m&eacute;todo igual funciona.</p>
-                <button type="submit">Crear cuenta y entrar</button>
-                <p class="hint" style="text-align:center;margin-bottom:0;"><a href="/login">Volver al login</a></p>
-              </form>
-              <script>
-              (function(){
-                var form = document.getElementById('canvasSignupForm');
-                if (!form) return;
-                form.addEventListener('submit', async function(ev){
-                  var emailInput = document.getElementById('canvasDetectedEmail');
-                  if (!emailInput || emailInput.value) return;
-                  ev.preventDefault();
-                  var btn = form.querySelector('button[type="submit"]');
-                  var old = btn ? btn.textContent : '';
-                  if (btn) { btn.disabled = true; btn.textContent = 'Leyendo correo de Canvas...'; }
-                  try {
-                    var fd = new FormData(form);
-                    fd.set('preview', '1');
-                    var res = await fetch('/canvas-token-signup', { method:'POST', body:fd, credentials:'same-origin' });
-                    var data = await res.json();
-                    if (!res.ok || !data.ok || !data.email) throw new Error(data.error || 'No se pudo leer el correo de Canvas.');
-                    emailInput.value = data.email;
-                    document.getElementById('canvasDetectedEmailWrap').style.display = 'block';
-                    setTimeout(function(){ form.submit(); }, 60);
-                  } catch (err) {
-                    alert(err.message || 'No se pudo leer el correo de Canvas.');
-                    if (btn) { btn.disabled = false; btn.textContent = old; }
-                  }
-                });
-              })();
-              </script>
-            </body></html>
-            """)
-
-        canvas_url = normalize_canvas_url(request.form.get("canvas_url") or "")
-        token = (request.form.get("canvas_token") or "").strip()
-        password = request.form.get("password", "")
-        password2 = request.form.get("password2", "")
-        if not canvas_url or not token:
-            if request.form.get("preview") == "1":
-                return jsonify({"ok": False, "error": "Necesitas la URL de Canvas y el token."}), 400
-            session["_flashes"] = [("error", "Necesitas la URL de Canvas y el token.")]
-            return redirect(url_for("login"))
-
-        try:
-            canvas = CanvasClient(canvas_url, token)
-            profile = canvas.get_profile()
-            channels = canvas.get_communication_channels()
-            name, email = _canvas_profile_identity(profile, channels)
-            if request.form.get("preview") == "1":
-                return jsonify({"ok": True, "name": name, "email": email})
-            existing = get_client_by_email(email)
-            current_client_id = session.get("client_id")
-            if existing:
-                client_id = int(existing["id"])
-                name = existing.get("name") or name
-                if not existing.get("email_verified"):
-                    mark_email_verified(client_id)
-            elif current_client_id and not password:
-                client_id = int(current_client_id)
-                name = session.get("client_name") or name
-            else:
-                if len(password) < 6:
-                    session["_flashes"] = [("error", "Tu contraseña debe tener al menos 6 caracteres.")]
-                    return redirect(url_for("register"))
-                if password != password2:
-                    session["_flashes"] = [("error", "Las contraseñas no coinciden.")]
-                    return redirect(url_for("register"))
-                password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(12)).decode()
-                client_id = create_client(name, email, password_hash, "", "student")
-                mark_email_verified(client_id)
-                # Referral reward: if this signup used a friend's code, grant the
-                # referrer a free week of Plus (once per new user). Canvas-gated
-                # signup limits abuse — each redemption needs a real Canvas account.
-                _ref = (request.form.get("ref") or session.get("referral_ref") or "").strip().upper()
-                if _ref:
-                    try:
-                        _owner = sdb.redeem_referral(_ref, client_id)
-                        if _owner:
-                            from student import subscription as _ssub
-                            _ssub.grant_plus_days(_owner, 7)
-                    except Exception:
-                        pass
-                session.pop("referral_ref", None)
-
-            sdb.save_canvas_token(client_id, canvas_url, token)
-            synced = _sync_canvas_courses_for_user(client_id, canvas_url, token)
-            pending_token = session.get("team_invite_token")
-            session.clear()
-            session["client_id"] = client_id
-            session["client_name"] = name
-            session["account_type"] = "student"
-            if pending_token:
-                session["team_invite_token"] = pending_token
-            session["_flashes"] = [
-                ("success", f"Canvas conectado. Cursos sincronizados: {synced.get('saved', 0)}.")
-            ]
-            return redirect(url_for("student_dashboard_page"))
-        except Exception as e:
-            log.warning("Canvas token signup failed: %s", e)
-            if request.form.get("preview") == "1":
-                return jsonify({"ok": False, "error": f"No se pudo leer Canvas: {str(e)[:180]}"}), 400
-            session["_flashes"] = [
-                ("error", f"No se pudo conectar Canvas: {str(e)[:180]}")
-            ]
-            return redirect(url_for("login"))
-
     @app.route("/canvas/oauth/start")
     @limiter.limit("20 per minute")
     def canvas_oauth_start():
@@ -9717,6 +9555,7 @@ def register_student_routes(app, csrf, limiter):
             """
         canvas_form_disabled = "disabled" if gate["blocked"] else ""
         canvas_form_hint = "Completa los resultados pendientes para habilitar Canvas." if gate["blocked"] else ""
+        _ext_connect_token = make_connect_token(_cid())
 
 
 
@@ -9754,134 +9593,41 @@ def register_student_routes(app, csrf, limiter):
 
           {pending_html}
 
-          <div style="margin-bottom:20px;">
+          {('<div style="margin-bottom:16px;padding:8px 12px;border-radius:12px;background:#D1FAE5;color:#065F46;font-size:13px;font-weight:700;">&#10003; Conexión antigua por token activa: ' + _esc(url_val) + ' <button type="button" onclick="disconnectCanvas()" class="btn btn-sm" style="margin-left:8px;color:#991B1B;background:transparent;border:1px solid #991B1B;">Desconectar</button></div>') if connected else ''}
 
-            <span style="display:inline-block;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;background:{'#D1FAE5' if connected else '#FEE2E2'};color:{'#065F46' if connected else '#991B1B'};">
+          <p style="color:var(--text-muted);font-size:13.5px;line-height:1.55;margin:0 0 16px;">
+            Conecta Canvas con la extensión <b style="color:var(--text);">MachReach Focus Guard</b> &mdash; sin tokens ni permisos de administrador. Leemos tu lista de cursos directamente desde tu propia sesión de Canvas.
+          </p>
 
-              {'&#10003; Conectado' if connected else '&#10007; No conectado'}
+          <ol style="margin:0;padding-left:18px;color:var(--text);font-size:14px;line-height:1.75;">
+            <li>Instala la extensión desde la <a href="/student/focus" style="color:var(--primary);font-weight:800;">página Enfoque</a>.</li>
+            <li>Abre tu Canvas con tu sesión iniciada.</li>
+            <li>Pulsa <b>&laquo;Sincronizar cursos con MachReach&raquo;</b> &mdash; el botón aparece abajo a la derecha en Canvas (o usa el icono de la extensión en el navegador).</li>
+          </ol>
 
-            </span>
-
-            {'<span style="color:var(--text-muted);font-size:13px;margin-left:10px;">' + _esc(url_val) + '</span>' if connected else ''}
-
-          </div>
-
-
-
-          <form onsubmit="connectCanvas(event)" autocomplete="off">
-
-            <div class="form-group">
-
-              <label>URL de Canvas</label>
-
-              <input id="canvas-url" name="canvas_school_url_manual" type="url" placeholder="https://yourschool.instructure.com" value="{_esc(url_val)}" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" data-lpignore="true" data-form-type="other" {canvas_form_disabled}>
-
-            </div>
-
-            <div class="form-group">
-
-              <label>Token de acceso API</label>
-
-              <input id="canvas-token" name="canvas_api_token_manual" type="text" placeholder="Paste your Canvas access token" {'value="********"' if connected else ''} required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-lpignore="true" data-form-type="other" style="-webkit-text-security:disc;text-security:disc;" {canvas_form_disabled}>
-
-              <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">
-
-                Go to Canvas &rarr; Account &rarr; Settings &rarr; <b>+ New Access Token</b>
-
-              </p>
-
-            </div>
-
-            <div style="display:flex;gap:10px;">
-
-              <button type="submit" class="btn btn-primary" id="connect-btn" {canvas_form_disabled}>{'Update' if connected else 'Conectar Canvas'}</button>
-
-              {'<button type="button" onclick="disconnectCanvas()" class="btn btn-outline" style="color:var(--red);border-color:var(--red);">Desconectar</button>' if connected else ''}
-
-            </div>
-
-            <div id="canvas-connect-status" style="display:none;margin-top:12px;font-size:13px;font-weight:600;"></div>
-            {'<div style="margin-top:10px;color:var(--text-muted);font-size:12px;font-weight:700;">' + _esc(canvas_form_hint) + '</div>' if canvas_form_hint else ''}
-
-          </form>
+          <span id="mr-ext-connect" data-token="{_ext_connect_token}" hidden></span>
 
         </div>
 
         <div class="card">
 
           <div class="card-header" style="margin-bottom:14px;">
-            <h2 style="font-size:18px;margin:0;">Tutorial de conexión</h2>
+            <h2 style="font-size:18px;margin:0;">Universidades con Canvas</h2>
           </div>
 
-          <video controls loop preload="metadata" playsinline style="width:100%;display:block;border-radius:8px;border:1px solid var(--border);background:#000;">
-            <source src="/static/tutorials/canvas-connection-tutorial.mp4" type="video/mp4">
-          </video>
+          <p style="color:var(--text-muted);font-size:13px;line-height:1.55;margin:0 0 12px;">Funciona en cualquier universidad que use Canvas. Accesos directos:</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <a class="btn btn-outline btn-sm" href="https://cursos.canvas.uc.cl/" target="_blank" rel="noopener">UC</a>
+            <a class="btn btn-outline btn-sm" href="https://canvas.uandes.cl/" target="_blank" rel="noopener">U Andes</a>
+            <a class="btn btn-outline btn-sm" href="https://canvas.unab.cl/login/canvas" target="_blank" rel="noopener">UNAB</a>
+            <a class="btn btn-outline btn-sm" href="https://www.canvas.usach.cl/" target="_blank" rel="noopener">USACH</a>
+          </div>
 
         </div>
 
         </div>
 
         <script>
-
-        function canvasConnectStatus(msg, ok) {{
-          var el = document.getElementById('canvas-connect-status');
-          if (!el) return;
-          el.style.display = msg ? 'block' : 'none';
-          el.style.color = ok ? 'var(--green)' : 'var(--red)';
-          el.textContent = msg || '';
-        }}
-
-        function normalizeCanvasUrlInput(raw) {{
-          var value = (raw || '').trim();
-          if (!value) return value;
-          try {{
-            if (!new RegExp('^https?://', 'i').test(value)) value = 'https://' + value;
-            var u = new URL(value);
-            return u.origin;
-          }} catch(e) {{
-            while (value.endsWith('/')) value = value.slice(0, -1);
-            return value;
-          }}
-        }}
-
-        async function connectCanvas(e) {{
-
-          e.preventDefault();
-
-          var btn = document.getElementById('connect-btn');
-
-          btn.disabled = true; btn.innerHTML = '&#9203; Connecting...';
-          canvasConnectStatus('', false);
-
-          try {{
-            var urlEl = document.getElementById('canvas-url');
-            var tokenEl = document.getElementById('canvas-token');
-            var canvasUrl = normalizeCanvasUrlInput(urlEl.value);
-            urlEl.value = canvasUrl;
-
-            var r = await fetch('/api/student/canvas/connect', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{canvas_url:canvasUrl,token:tokenEl.value}})}});
-
-            var d = await _safeJson(r);
-
-            if (r.ok) {{
-              canvasConnectStatus('Canvas conectado. Cursos encontrados: ' + d.courses_found + '.', true);
-              if (typeof showToast === 'function') showToast('Canvas conectado. Cursos encontrados: ' + d.courses_found + '.', 'success');
-              setTimeout(function(){{ mrReload(); }}, 250);
-            }}
-
-            else {{
-              canvasConnectStatus(d.error || 'No se pudo conectar Canvas. Revisa la URL y el token.', false);
-              btn.disabled = false; btn.innerHTML = 'Conectar Canvas';
-            }}
-
-          }} catch(e) {{
-            canvasConnectStatus('No se pudo contactar el servidor de MachReach. Inténtalo de nuevo.', false);
-            btn.disabled = false; btn.innerHTML = 'Conectar Canvas';
-            console.error('Canvas connect failed', e);
-          }}
-
-
-        }}
 
         async function disconnectCanvas() {{
 

@@ -3180,7 +3180,7 @@ def privacy_page():
         <p style="background:rgba(255,122,61,.08);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:24px;"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
         <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Information We Collect</h2>
         <p><strong>Account information:</strong> your name, institutional or Canvas email address, and password hash. When you create an account through Canvas, MachReach reads the email address exposed by your Canvas profile so you can log in later with that email and the password you set.</p>
-        <p><strong>Canvas LMS data:</strong> if you connect Canvas with a personal access token, we fetch your Canvas profile and courses. Your Canvas access token is stored so MachReach can sync your courses and can be disconnected in Settings.</p>
+        <p><strong>Canvas LMS data:</strong> if you connect Canvas, the MachReach browser extension reads your course list from your own logged-in Canvas session and sends it to MachReach so we can show your classes and power class-level leaderboards. We only read your course list — we do not submit assignments, change grades, or publish content.</p>
         <p><strong>Study materials:</strong> files, notes, and text you choose to upload or type for features such as quizzes and flashcards.</p>
         <p><strong>Study activity:</strong> focus sessions, minutes studied per course, XP events, streaks, badges, quiz attempts, flashcard reviews, leaderboard rank, course outcomes, grades you enter, and in-app coin activity.</p>
         <p><strong>Focus Guard extension:</strong> extension settings and active-session state are used to support focus sessions. Some settings may be stored locally in your browser.</p>
@@ -3228,7 +3228,7 @@ def terms_page():
         <ul style="padding-left:20px;">
           <li>You must provide accurate information when registering</li>
           <li>You are responsible for maintaining the security of your account credentials</li>
-          <li>If you connect Canvas, you must use your own Canvas account and personal access token</li>
+          <li>If you connect Canvas, you must use your own Canvas account and the MachReach browser extension</li>
           <li>You must not share your account with others</li>
           <li>You must be at least 16 years old to use MachReach</li>
           <li>You must not attempt to probe, scan, or exploit vulnerabilities in the service</li>
