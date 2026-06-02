@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "MachReach Focus Guard",
   "version": "1.0.5",
-  "description": "Blocks distracting sites during MachReach focus sessions, allows YouTube for studying, and can sync your Canvas courses to MachReach.",
+  "description": "Blocks distracting sites during MachReach focus sessions and syncs your Canvas courses. YouTube stays allowed for studying.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
