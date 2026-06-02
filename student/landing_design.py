@@ -10,6 +10,9 @@ pre-rendered #root, with no in-browser Babel.
 Regenerate after editing the source::
 
     cd landing_build && node build.mjs
+
+A one-time intro splash (the full animated logo) is injected at serve time
+below — it plays once per session, then fades to reveal the page.
 """
 from __future__ import annotations
 
@@ -21,8 +24,109 @@ _PROD_HTML = (
 )
 
 
+# ── Intro splash: the FULL animated logo (icon pop + M draw-in + wordmark
+# rise + swoosh, with the planet orbiting). Plays once per session, then fades.
+_SPLASH = r"""
+<div id="mr-splash" aria-hidden="true">
+  <div class="mr-lockup">
+    <svg class="mr-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="sp_bg" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#FF9351"/><stop offset="0.5" stop-color="#FF7A3D"/><stop offset="1" stop-color="#E0530F"/></linearGradient>
+        <radialGradient id="sp_gloss" cx="0.5" cy="0.1" r="0.9"><stop offset="0" stop-color="#fff" stop-opacity="0.45"/><stop offset="0.6" stop-color="#fff" stop-opacity="0"/></radialGradient>
+        <radialGradient id="sp_vig" cx="0.5" cy="1.05" r="0.9"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#5a1c00" stop-opacity="0.30"/></radialGradient>
+        <linearGradient id="sp_shine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+        <clipPath id="sp_sqclip"><path d="M50 3 C19 3 3 19 3 50 C3 81 19 97 50 97 C81 97 97 81 97 50 C97 19 81 3 50 3 Z"/></clipPath>
+        <clipPath id="sp_planetClip"><circle cx="0" cy="0" r="6.6"/></clipPath>
+        <radialGradient id="sp_planetShade" cx="0.5" cy="0.5" r="0.5"><stop offset="0.5" stop-color="#241A45" stop-opacity="0"/><stop offset="1" stop-color="#211740" stop-opacity="0.62"/></radialGradient>
+        <radialGradient id="sp_planetGrad" cx="0.36" cy="0.3" r="0.9"><stop offset="0" stop-color="#B49BE8"/><stop offset="0.5" stop-color="#6A53AE"/><stop offset="1" stop-color="#332258"/></radialGradient>
+        <path id="sp_orbitPath" fill="none" d="M14 52 a36 16 0 1 0 72 0 a36 16 0 1 0 -72 0"/>
+      </defs>
+      <path d="M50 3 C19 3 3 19 3 50 C3 81 19 97 50 97 C81 97 97 81 97 50 C97 19 81 3 50 3 Z" fill="url(#sp_bg)"/>
+      <g transform="rotate(-24 50 52)"><g>
+        <animateMotion dur="6s" repeatCount="indefinite"><mpath href="#sp_orbitPath"/></animateMotion>
+        <animate attributeName="opacity" dur="6s" repeatCount="indefinite" calcMode="discrete" keyTimes="0;0.5;1" values="0;1;0"/>
+        <circle r="6.6" fill="url(#sp_planetGrad)"/>
+        <g clip-path="url(#sp_planetClip)"><g><animateTransform attributeName="transform" type="translate" from="0 0" to="-13.2 0" dur="4.5s" repeatCount="indefinite"/>
+          <ellipse cx="-3" cy="-2" rx="3.3" ry="1.6" fill="#3C2C70" opacity="0.6"/><ellipse cx="2.6" cy="2.1" rx="2.6" ry="1.4" fill="#8266C6" opacity="0.5"/><ellipse cx="-0.8" cy="3.6" rx="1.7" ry="1" fill="#3C2C70" opacity="0.5"/><ellipse cx="4.4" cy="-3.4" rx="1.4" ry="0.9" fill="#8266C6" opacity="0.45"/><ellipse cx="10.2" cy="-2" rx="3.3" ry="1.6" fill="#3C2C70" opacity="0.6"/><ellipse cx="15.8" cy="2.1" rx="2.6" ry="1.4" fill="#8266C6" opacity="0.5"/><ellipse cx="12.4" cy="3.6" rx="1.7" ry="1" fill="#3C2C70" opacity="0.5"/><ellipse cx="17.6" cy="-3.4" rx="1.4" ry="0.9" fill="#8266C6" opacity="0.45"/>
+        </g></g>
+        <circle r="6.6" fill="url(#sp_planetShade)"/><ellipse cx="-2.3" cy="-2.7" rx="2.4" ry="1.6" fill="#fff" opacity="0.5"/>
+      </g></g>
+      <path class="mr-mstroke mr-mshadow" d="M28 74 V32 L50 58 L72 32 V74" pathLength="100" fill="none" stroke="rgba(150,55,10,0.5)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" transform="translate(2.4,3)"/>
+      <path class="mr-mstroke mr-mfront" d="M28 74 V32 L50 58 L72 32 V74" pathLength="100" fill="none" stroke="#FFF6E4" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+      <g transform="rotate(-24 50 52)"><g>
+        <animateMotion dur="6s" repeatCount="indefinite"><mpath href="#sp_orbitPath"/></animateMotion>
+        <animate attributeName="opacity" dur="6s" repeatCount="indefinite" calcMode="discrete" keyTimes="0;0.5;1" values="1;0;1"/>
+        <circle r="6.6" fill="url(#sp_planetGrad)"/>
+        <g clip-path="url(#sp_planetClip)"><g><animateTransform attributeName="transform" type="translate" from="0 0" to="-13.2 0" dur="4.5s" repeatCount="indefinite"/>
+          <ellipse cx="-3" cy="-2" rx="3.3" ry="1.6" fill="#3C2C70" opacity="0.6"/><ellipse cx="2.6" cy="2.1" rx="2.6" ry="1.4" fill="#8266C6" opacity="0.5"/><ellipse cx="-0.8" cy="3.6" rx="1.7" ry="1" fill="#3C2C70" opacity="0.5"/><ellipse cx="4.4" cy="-3.4" rx="1.4" ry="0.9" fill="#8266C6" opacity="0.45"/><ellipse cx="10.2" cy="-2" rx="3.3" ry="1.6" fill="#3C2C70" opacity="0.6"/><ellipse cx="15.8" cy="2.1" rx="2.6" ry="1.4" fill="#8266C6" opacity="0.5"/><ellipse cx="12.4" cy="3.6" rx="1.7" ry="1" fill="#3C2C70" opacity="0.5"/><ellipse cx="17.6" cy="-3.4" rx="1.4" ry="0.9" fill="#8266C6" opacity="0.45"/>
+        </g></g>
+        <circle r="6.6" fill="url(#sp_planetShade)"/><ellipse cx="-2.3" cy="-2.7" rx="2.4" ry="1.6" fill="#fff" opacity="0.5"/>
+      </g></g>
+      <path class="mr-twinkle" d="M80 26 C81.5 27 82 27.5 84 28 C82 28.5 81.5 29 80 30 C79.5 29 79 28.5 78 28 C79 27.5 79.5 27 80 26 Z" fill="#FFF6E4" transform="scale(2.4) translate(-46.7,-15.2)"/>
+      <ellipse cx="50" cy="20" rx="54" ry="30" fill="url(#sp_gloss)"/>
+      <g clip-path="url(#sp_sqclip)"><rect class="mr-sweep" x="-30" y="-20" width="34" height="140" fill="url(#sp_shine)" transform="skewX(-16)"/></g>
+      <path d="M50 3 C19 3 3 19 3 50 C3 81 19 97 50 97 C81 97 97 81 97 50 C97 19 81 3 50 3 Z" fill="none" stroke="rgba(255,255,255,0.30)" stroke-width="1.4"/>
+      <path d="M50 3 C19 3 3 19 3 50 C3 81 19 97 50 97 C81 97 97 81 97 50 C97 19 81 3 50 3 Z" fill="url(#sp_vig)"/>
+    </svg>
+    <div class="mr-wm">
+      <span class="mr-txt"><span class="mr-mach">Mach</span><span class="mr-reach">Reach</span></span>
+      <svg class="mr-swoosh" viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M2 12 Q70 2 150 7 Q180 8 198 3" pathLength="100" fill="none" stroke="#FF7A3D" stroke-width="3.6" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+</div>
+<style>
+  #mr-splash{ position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(120% 90% at 50% 18%, #F7F3EA 0%, #EFEADF 60%, #E7E1D3 100%);
+    transition:opacity .55s ease, visibility .55s; }
+  #mr-splash.mr-done{ opacity:0; visibility:hidden; pointer-events:none; }
+  #mr-splash .mr-lockup{ display:flex; align-items:center; gap:10px; }
+  #mr-splash .mr-icon{ width:clamp(110px,22vw,168px); height:clamp(110px,22vw,168px); filter:drop-shadow(0 18px 38px rgba(120,55,10,.30)); }
+  #mr-splash.mr-play .mr-icon{ animation:mr_pop .8s cubic-bezier(.34,1.55,.5,1) backwards; }
+  @keyframes mr_pop{ 0%{transform:scale(.55) rotate(-8deg);opacity:0} 60%{transform:scale(1.06) rotate(2deg);opacity:1} 100%{transform:scale(1) rotate(0);opacity:1} }
+  #mr-splash .mr-mstroke{ stroke-dasharray:100; stroke-dashoffset:0; }
+  #mr-splash.mr-play .mr-mfront{ animation:mr_draw 1s cubic-bezier(.65,0,.35,1) .42s backwards; }
+  #mr-splash.mr-play .mr-mshadow{ animation:mr_draw 1s cubic-bezier(.65,0,.35,1) .34s backwards; }
+  @keyframes mr_draw{ from{stroke-dashoffset:100} to{stroke-dashoffset:0} }
+  #mr-splash .mr-twinkle{ transform-box:fill-box; transform-origin:center; animation:mr_tw 2.4s ease-in-out infinite; }
+  @keyframes mr_tw{ 0%,100%{transform:scale(.65);opacity:.55} 50%{transform:scale(1.15);opacity:1} }
+  #mr-splash .mr-sweep{ opacity:0; animation:mr_shine 4.8s ease-in-out 1.8s infinite; }
+  @keyframes mr_shine{ 0%{transform:translateX(-55px);opacity:0} 8%{opacity:.9} 20%{opacity:0} 100%{transform:translateX(125px);opacity:0} }
+  #mr-splash .mr-wm{ position:relative; }
+  #mr-splash.mr-play .mr-wm{ animation:mr_rise .7s cubic-bezier(.2,.8,.3,1) 1.05s backwards; }
+  @keyframes mr_rise{ from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  #mr-splash .mr-txt{ font-family:"Bricolage Grotesque","Nunito",sans-serif; font-size:clamp(38px,7vw,56px); font-weight:800; letter-spacing:-.045em; line-height:1; }
+  #mr-splash .mr-mach{ color:#171520; }
+  #mr-splash .mr-reach{ background:linear-gradient(95deg,#FF7A3D,#D64E16); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #mr-splash .mr-swoosh{ position:absolute; left:2%; bottom:-6px; width:96%; height:16px; }
+  #mr-splash .mr-swoosh path{ stroke-dasharray:100; stroke-dashoffset:0; }
+  #mr-splash.mr-play .mr-swoosh path{ animation:mr_draw .7s ease 1.5s backwards; }
+  @media (prefers-reduced-motion: reduce){ #mr-splash *{ animation:none !important } #mr-splash{ transition:none } }
+</style>
+<script>
+  (function(){
+    var sp = document.getElementById('mr-splash');
+    if(!sp) return;
+    // Only the first landing view of a session gets the intro.
+    try{ if(sessionStorage.getItem('mr_splash_seen')){ sp.parentNode && sp.parentNode.removeChild(sp); return; } }catch(e){}
+    document.documentElement.style.overflow = 'hidden';
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ sp.classList.add('mr-play'); }); });
+    var done = false;
+    function finish(){
+      if(done) return; done = true;
+      try{ sessionStorage.setItem('mr_splash_seen','1'); }catch(e){}
+      sp.classList.add('mr-done');
+      document.documentElement.style.overflow = '';
+      setTimeout(function(){ if(sp && sp.parentNode) sp.parentNode.removeChild(sp); }, 600);
+    }
+    setTimeout(finish, 2600);          // reveal the page after the entrance settles
+    sp.addEventListener('click', finish);   // let impatient users skip
+  })();
+</script>
+"""
+
+
 def render_landing_page(lang: str = "es") -> str:
     # Always serve the committed production artifact. If it's missing, fail
-    # loudly rather than silently fall back to the slow dev build — the fix is
-    # to run the build, not to ship un-bundled React + in-browser Babel.
-    return _PROD_HTML.read_text(encoding="utf-8")
+    # loudly rather than silently fall back to the slow dev build.
+    html = _PROD_HTML.read_text(encoding="utf-8")
+    return html.replace("</body>", _SPLASH + "</body>", 1)
