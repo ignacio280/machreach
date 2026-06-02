@@ -28,6 +28,7 @@ _PROD_HTML = (
 # rise + swoosh, with the planet orbiting). Plays once per session, then fades.
 _SPLASH = r"""
 <div id="mr-splash" aria-hidden="true">
+  <div class="mr-bg"></div>
   <div class="mr-lockup">
     <svg class="mr-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -75,11 +76,13 @@ _SPLASH = r"""
   </div>
 </div>
 <style>
-  #mr-splash{ position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center;
-    background:radial-gradient(120% 90% at 50% 18%, #F7F3EA 0%, #EFEADF 60%, #E7E1D3 100%);
-    transition:opacity .55s ease, visibility .55s; }
-  #mr-splash.mr-done{ opacity:0; visibility:hidden; pointer-events:none; }
-  #mr-splash .mr-lockup{ display:flex; align-items:center; gap:10px; }
+  #mr-splash{ position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center; }
+  #mr-splash .mr-bg{ position:absolute; inset:0; background:radial-gradient(120% 90% at 50% 18%, #F7F3EA 0%, #EFEADF 60%, #E7E1D3 100%); transition:opacity .6s ease; }
+  #mr-splash.mr-reveal .mr-bg{ opacity:0; }
+  /* The whole lockup flies + shrinks to the nav logo's spot (transform set by
+     JS via FLIP), then cross-fades into the real nav logo as it lands. */
+  #mr-splash .mr-lockup{ position:relative; display:flex; align-items:center; gap:10px; transform-origin:0 0; transition:transform .8s cubic-bezier(.6,.02,.2,1), opacity .45s ease .35s; }
+  #mr-splash.mr-reveal .mr-lockup{ opacity:0; }
   #mr-splash .mr-icon{ width:clamp(110px,22vw,168px); height:clamp(110px,22vw,168px); filter:drop-shadow(0 18px 38px rgba(120,55,10,.30)); }
   #mr-splash.mr-play .mr-icon{ animation:mr_pop .8s cubic-bezier(.34,1.55,.5,1) backwards; }
   @keyframes mr_pop{ 0%{transform:scale(.55) rotate(-8deg);opacity:0} 60%{transform:scale(1.06) rotate(2deg);opacity:1} 100%{transform:scale(1) rotate(0);opacity:1} }
@@ -108,18 +111,38 @@ _SPLASH = r"""
     if(!sp) return;
     // Only the first landing view of a session gets the intro.
     try{ if(sessionStorage.getItem('mr_splash_seen')){ sp.parentNode && sp.parentNode.removeChild(sp); return; } }catch(e){}
+    try{ sessionStorage.setItem('mr_splash_seen','1'); }catch(e){}
+    var lockup = sp.querySelector('.mr-lockup');
+    var icon = sp.querySelector('.mr-icon');
     document.documentElement.style.overflow = 'hidden';
     requestAnimationFrame(function(){ requestAnimationFrame(function(){ sp.classList.add('mr-play'); }); });
-    var done = false;
-    function finish(){
-      if(done) return; done = true;
-      try{ sessionStorage.setItem('mr_splash_seen','1'); }catch(e){}
-      sp.classList.add('mr-done');
+
+    var removed = false;
+    function remove(){
+      if(removed) return; removed = true;
       document.documentElement.style.overflow = '';
-      setTimeout(function(){ if(sp && sp.parentNode) sp.parentNode.removeChild(sp); }, 600);
+      if(sp && sp.parentNode) sp.parentNode.removeChild(sp);
     }
-    setTimeout(finish, 2600);          // reveal the page after the entrance settles
-    sp.addEventListener('click', finish);   // let impatient users skip
+    function reveal(){
+      // FLIP: fly the lockup so its icon lands exactly on the nav logo mark.
+      try{
+        var navMark = document.querySelector('.logo-mark');
+        if(navMark && icon && lockup){
+          var ic = icon.getBoundingClientRect();
+          var L  = lockup.getBoundingClientRect();
+          var nm = navMark.getBoundingClientRect();
+          var scale = nm.width / ic.width;
+          var tx = nm.left - L.left - (ic.left - L.left) * scale;
+          var ty = nm.top  - L.top  - (ic.top  - L.top)  * scale;
+          lockup.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+        }
+      }catch(e){}
+      sp.classList.add('mr-reveal');          // bg fades, page (real nav logo) shows through
+      document.documentElement.style.overflow = '';
+      setTimeout(remove, 900);                // remove once the fly + cross-fade finish
+    }
+    setTimeout(reveal, 1850);                 // after the entrance settles, fly to the nav
+    sp.addEventListener('click', remove);     // let impatient users skip straight to the page
   })();
 </script>
 """
