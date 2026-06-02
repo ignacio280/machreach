@@ -25,11 +25,10 @@ const IconPeople = (p) => <Icon {...p}><circle cx="9" cy="9" r="3"/><circle cx="
 const IconMedal = (p) => <Icon {...p}><circle cx="12" cy="15" r="5"/><path d="M8 4l4 6 4-6M9 14l3 2 3-2"/></Icon>;
 const IconShield = (p) => <Icon {...p}><path d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z"/></Icon>;
 const IconChevron = (p) => <Icon {...p}><path d="M6 9l6 6 6-6"/></Icon>;
-const IconLogo = ({ size = 24, color = "currentColor" }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
-    <path d="M4 18V6l5 7 5-7v12" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M16 11l4-4M20 7h-3M20 7v3" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
+const IconLogo = ({ size = 24 }) => (
+  <img src="/static/machreach-logo.svg?v=2" alt="MachReach"
+       width={size} height={size}
+       style={{ width: "100%", height: "100%", display: "block" }} />
 );
 
 Object.assign(window, {

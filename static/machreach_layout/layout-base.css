@@ -1048,6 +1048,12 @@
     }
     .mr-app-shell .brand-name { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
     .mr-app-shell .brand-name span { color: #FF7A3D; }
+    /* Animated logo mark: the SVG is the full squircle, so the container is
+       just a transparent frame (no dark box / accent dot / envelope gradient). */
+    .mr-app-shell .brand-mark { background: transparent; box-shadow: none; border-radius: 0; }
+    .mr-app-shell .brand-mark::after { display: none; }
+    .mr-app-shell .brand-mark img, .nav .brand-icon img { width: 100%; height: 100%; display: block; }
+    .nav .brand-icon { background: transparent; box-shadow: none; }
     .mr-side-nav { display: flex; flex-direction: column; gap: 2px; }
     .mr-app-shell .nav-section {
       font-size: 10px;
