@@ -1438,15 +1438,13 @@ def index():
 @limiter.limit("10 per minute", methods=["POST"])
 def register():
     if request.method == "POST":
+        name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
         password2 = request.form.get("password2", "")
-        # Simple signup: email + password only. A display name is derived from
-        # the email local-part; the student can change it later in Settings.
-        name = email.split("@")[0] if "@" in email else email
         business = ""
         account_type = "student"
-        if not email or not password:
+        if not name or not email or not password:
             flash(("error", t("auth.all_required")))
             return redirect(url_for("register"))
         if len(password) < 6:
@@ -1522,6 +1520,8 @@ def register():
         {_ref_banner}
         <form method="post" action="/register" autocomplete="off" style="margin-top:8px;">
           {_ref_hidden}
+          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Full name" if session.get("lang") == "en" else "Nombre"}</label>
+          <input name="name" type="text" required autocomplete="name" placeholder="{"Your name" if session.get("lang") == "en" else "Tu nombre"}" style="margin-bottom:10px;">
           <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Email" if session.get("lang") == "en" else "Correo"}</label>
           <input name="email" type="email" required autocomplete="username" placeholder="tu@correo.com" style="margin-bottom:10px;">
           <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Password" if session.get("lang") == "en" else "Contrase&ntilde;a"}</label>
