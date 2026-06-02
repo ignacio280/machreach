@@ -6167,17 +6167,6 @@ def register_student_routes(app, csrf, limiter):
 
 
 
-                <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.6;">
-                  La extensi&oacute;n es <b style="color:var(--text);">obligatoria para iniciar el temporizador</b>. Inst&aacute;lala desde Chrome Web Store, o usa la versi&oacute;n de prueba: descomprime el .zip y c&aacute;rgala en <code>chrome://extensions</code> &rarr; <b style="color:var(--text);">Modo desarrollador</b> &rarr; <b style="color:var(--text);">Cargar descomprimida</b>.
-                </p>
-
-                <div style="border-top:1px solid var(--border);padding-top:12px;">
-                  <h3 style="margin:0 0 6px;font-size:14px;">&#128218; Conectar cursos de Canvas (sin token)</h3>
-                  <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.6;">
-                    Con la extensi&oacute;n instalada: abre tu <b style="color:var(--text);">Canvas</b> con sesi&oacute;n iniciada (en la UC, <a href="https://cursos.canvas.uc.cl/" target="_blank" rel="noopener" style="color:var(--primary);">cursos.canvas.uc.cl</a>) y pulsa el bot&oacute;n <b style="color:var(--text);">&laquo;Sincronizar cursos con MachReach&raquo;</b> que aparece abajo a la derecha &mdash; o haz clic en el icono de MachReach en la barra del navegador. Importamos tu lista de cursos directamente desde tu sesi&oacute;n, sin token ni permisos de administrador.
-                  </p>
-                </div>
-
                 <span id="mr-ext-connect" data-token="{_ext_connect_token}" hidden></span>
 
               </div>
