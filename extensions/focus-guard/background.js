@@ -63,3 +63,30 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ focusActive: false, focusExpiresAt: 0 });
 });
+
+// Canvas course import: the canvas.js content script reads the course list
+// from the student's own Canvas session and asks us to forward it to MachReach.
+// We do the cross-origin POST here (content scripts are blocked by CORS), using
+// the signed connect token captured from a logged-in MachReach page.
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || msg.type !== "mrImportCourses") return;
+  (async () => {
+    try {
+      const { mrConnectToken, mrOrigin } = await chrome.storage.local.get(["mrConnectToken", "mrOrigin"]);
+      if (!mrConnectToken || !mrOrigin) {
+        sendResponse({ ok: false, noToken: true });
+        return;
+      }
+      const r = await fetch(mrOrigin + "/api/student/canvas/extension-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: mrConnectToken, courses: msg.courses || [] })
+      });
+      const body = await r.json().catch(() => ({}));
+      sendResponse({ ok: r.ok && !!body.ok, saved: body.saved || 0, status: r.status });
+    } catch (e) {
+      sendResponse({ ok: false, error: String(e) });
+    }
+  })();
+  return true; // keep the message channel open for the async response
+});

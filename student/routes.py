@@ -7116,7 +7116,7 @@ def register_student_routes(app, csrf, limiter):
                 <div style="border-top:1px solid var(--border);padding-top:12px;">
                   <h3 style="margin:0 0 6px;font-size:14px;">&#128218; Conectar cursos de Canvas (sin token)</h3>
                   <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.6;">
-                    Con la extensi&oacute;n instalada: abre tu <b style="color:var(--text);">Canvas</b> con sesi&oacute;n iniciada, haz clic en el icono de MachReach en la barra del navegador y pulsa <b style="color:var(--text);">&laquo;Sincronizar mis cursos&raquo;</b>. Importamos tu lista de cursos directamente desde tu sesi&oacute;n &mdash; sin token ni permisos de administrador, en cualquier universidad que use Canvas.
+                    Con la extensi&oacute;n instalada: abre tu <b style="color:var(--text);">Canvas</b> con sesi&oacute;n iniciada (en la UC, <a href="https://cursos.canvas.uc.cl/" target="_blank" rel="noopener" style="color:var(--primary);">cursos.canvas.uc.cl</a>) y pulsa el bot&oacute;n <b style="color:var(--text);">&laquo;Sincronizar cursos con MachReach&raquo;</b> que aparece abajo a la derecha &mdash; o haz clic en el icono de MachReach en la barra del navegador. Importamos tu lista de cursos directamente desde tu sesi&oacute;n, sin token ni permisos de administrador.
                   </p>
                 </div>
 
