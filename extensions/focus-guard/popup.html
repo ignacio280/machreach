@@ -92,20 +92,38 @@
       font-weight: 900;
     }
     .list .gap { height: 8px; }
-    a {
+    a, button#sync-canvas {
       display: flex;
       align-items: center;
       justify-content: center;
+      width: 100%;
       min-height: 42px;
       margin-top: 12px;
+      border: none;
       border-radius: 13px;
       background: #1A1A1F;
       color: #FFF8E1;
       text-decoration: none;
+      font-family: inherit;
       font-size: 13px;
       font-weight: 1000;
+      cursor: pointer;
       box-shadow: 0 4px 0 rgba(0,0,0,.18), 0 12px 28px rgba(20,18,30,.12);
     }
+    button#sync-canvas { background: #FF7A3D; color: #fff; }
+    button#sync-canvas:disabled { opacity: .6; cursor: default; }
+    .syncmsg {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.5;
+      border: 1px solid #E2DCCC;
+      background: #FFFDF8;
+    }
+    .syncmsg.ok { background: #E9F7EF; border-color: #B6E2C8; color: #1E6B43; }
+    .syncmsg.err { background: #FDECEC; border-color: #F3C0C0; color: #A22; }
   </style>
 </head>
 <body>
@@ -117,7 +135,15 @@
     </div>
   </div>
   <div id="state" class="state idle"><span class="dot off"></span>Inactivo</div>
+
   <div class="list">
+    <b>Sincronizar cursos de Canvas</b>
+    Abre tu Canvas (estando con sesi&oacute;n iniciada), vuelve aqu&iacute; y pulsa el bot&oacute;n. Importamos tus cursos a MachReach sin token ni permisos de administrador.
+  </div>
+  <button id="sync-canvas">&#128218; Sincronizar mis cursos</button>
+  <div id="sync-msg" class="syncmsg" hidden></div>
+
+  <div class="list" style="margin-top:12px;">
     <b>Bloqueados durante enfoque</b>
     Instagram, TikTok, Twitter/X, Facebook, Reddit, Snapchat, Pinterest, Twitch y Netflix.
     <div class="gap"></div>
@@ -125,18 +151,6 @@
     YouTube queda disponible porque puede ser material de estudio.
   </div>
   <a href="https://machreach.com/student/focus" target="_blank">Abrir Enfoque -></a>
-  <script>
-    chrome.storage.local.get(["focusActive", "focusExpiresAt"], (d) => {
-      const active = d.focusActive && (!d.focusExpiresAt || Date.now() < d.focusExpiresAt);
-      const el = document.getElementById("state");
-      if (active) {
-        el.className = "state active";
-        el.innerHTML = '<span class="dot on"></span>Activo - sitios bloqueados';
-      } else {
-        el.className = "state idle";
-        el.innerHTML = '<span class="dot off"></span>Sin sesion activa';
-      }
-    });
-  </script>
+  <script src="popup.js"></script>
 </body>
 </html>

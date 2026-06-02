@@ -804,7 +804,7 @@ def register_student_routes(app, csrf, limiter):
 
     # Import here to avoid circular imports at module level
 
-    from student.canvas import CanvasClient, extract_text_from_pdf, extract_text_from_docx, normalize_canvas_url
+    from student.canvas import CanvasClient, extract_text_from_pdf, extract_text_from_docx, normalize_canvas_url, make_connect_token, verify_connect_token
 
     from student.analyzer import (analyze_course_material, generate_flashcards, generate_quiz)
 
@@ -2202,6 +2202,54 @@ def register_student_routes(app, csrf, limiter):
             "canvas_url": tok["canvas_url"],
 
         })
+
+    @app.route("/api/student/canvas/extension-import", methods=["POST"])
+    @csrf.exempt
+    @limiter.limit("20 per hour")
+    def student_canvas_extension_import():
+        """Receive a course list read by the Focus Guard extension from the
+        student's own logged-in Canvas session (no API token / admin OAuth).
+
+        Auth is the signed connect token the extension captured from a
+        logged-in MachReach page — NOT the session cookie, because the
+        extension's cross-site POST would have its SameSite cookie stripped.
+        """
+        data = request.get_json(force=True, silent=True) or {}
+        client_id = verify_connect_token(data.get("token") or "")
+        if not client_id:
+            return jsonify({"error": "invalid_token"}), 401
+
+        courses = data.get("courses")
+        if not isinstance(courses, list):
+            return jsonify({"error": "courses must be a list"}), 400
+
+        saved = 0
+        for c in courses[:200]:
+            if not isinstance(c, dict):
+                continue
+            try:
+                cid_canvas = int(c.get("id"))
+            except (TypeError, ValueError):
+                continue
+            name = (c.get("name") or c.get("course_code") or f"Course {cid_canvas}")
+            code = c.get("course_code") or ""
+            term = ""
+            t = c.get("term") or {}
+            if isinstance(t, dict):
+                term = t.get("name", "") or ""
+            try:
+                sdb.upsert_course(client_id, cid_canvas, str(name), str(code), str(term))
+                saved += 1
+            except Exception:
+                continue
+
+        if saved > 0:
+            try:
+                sdb.earn_badge(client_id, "syllabus_synced")
+            except Exception:
+                pass
+
+        return jsonify({"ok": True, "saved": saved})
 
 
 
@@ -6457,6 +6505,9 @@ def register_student_routes(app, csrf, limiter):
         _pomo_count_label = "Session 1 of 4" if _focus_is_en else "Sesi&oacute;n 1 de 4"
         _fg_inactive_label = "Inactive" if _focus_is_en else "Inactivo"
         _fg_active_label = "Active — sites blocked" if _focus_is_en else "Activo — sitios bloqueados"
+        # Signed token the Focus Guard extension captures to import Canvas courses
+        # from the student's own browser session (see student/canvas.py).
+        _ext_connect_token = make_connect_token(_cid())
         _focus_js_i18n = {
             "breakTime": "☕ Break time!" if _focus_is_en else "☕ ¡Hora de descanso!",
             "focusTime": "🔥 Focus!" if _focus_is_en else "🔥 ¡Enfoque!",
@@ -7052,13 +7103,24 @@ def register_student_routes(app, csrf, limiter):
 
                   <a href="https://chromewebstore.google.com/detail/djfnmpaihpkibcngaaekhnbalbaibgnk" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="text-decoration:none;">&#10133; Agregar a Chrome</a>
 
+                  <a href="/download/focus-guard.zip" class="btn btn-ghost btn-sm" style="text-decoration:none;" download>&#11015;&#65039; Descargar versi&oacute;n de prueba (.zip)</a>
+
                 </div>
 
 
 
-                <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.6;">
-                  La extensi&oacute;n es <b style="color:var(--text);">obligatoria para iniciar el temporizador</b>. Inst&aacute;lala gratis desde Chrome Web Store y recarga esta p&aacute;gina.
+                <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.6;">
+                  La extensi&oacute;n es <b style="color:var(--text);">obligatoria para iniciar el temporizador</b>. Inst&aacute;lala desde Chrome Web Store, o usa la versi&oacute;n de prueba: descomprime el .zip y c&aacute;rgala en <code>chrome://extensions</code> &rarr; <b style="color:var(--text);">Modo desarrollador</b> &rarr; <b style="color:var(--text);">Cargar descomprimida</b>.
                 </p>
+
+                <div style="border-top:1px solid var(--border);padding-top:12px;">
+                  <h3 style="margin:0 0 6px;font-size:14px;">&#128218; Conectar cursos de Canvas (sin token)</h3>
+                  <p style="font-size:12px;color:var(--text-muted);margin:0;line-height:1.6;">
+                    Con la extensi&oacute;n instalada: abre tu <b style="color:var(--text);">Canvas</b> con sesi&oacute;n iniciada, haz clic en el icono de MachReach en la barra del navegador y pulsa <b style="color:var(--text);">&laquo;Sincronizar mis cursos&raquo;</b>. Importamos tu lista de cursos directamente desde tu sesi&oacute;n &mdash; sin token ni permisos de administrador, en cualquier universidad que use Canvas.
+                  </p>
+                </div>
+
+                <span id="mr-ext-connect" data-token="{_ext_connect_token}" hidden></span>
 
               </div>
 

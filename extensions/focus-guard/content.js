@@ -18,6 +18,27 @@
   // Answer on-demand pings from the page (covers any race on first paint).
   document.addEventListener("machreach-focus-guard-ping", announce);
 
+  // ── Capture the MachReach "Canvas connect" token ──
+  // Logged-in MachReach pages embed a signed token + their origin. We stash it
+  // so the popup can authenticate the Canvas course import without depending on
+  // cross-site cookies (which SameSite would strip from the extension's POST).
+  function captureConnect() {
+    try {
+      const el = document.getElementById("mr-ext-connect");
+      const token = el && el.getAttribute("data-token");
+      if (token) {
+        chrome.storage.local.set({
+          mrConnectToken: token,
+          mrOrigin: location.origin,
+          mrConnectAt: Date.now()
+        });
+      }
+    } catch (_) {}
+  }
+  captureConnect();
+  document.addEventListener("DOMContentLoaded", captureConnect);
+  document.addEventListener("machreach-focus-guard-ping", captureConnect);
+
   function readFocus() {
     try {
       const raw = localStorage.getItem("focus_float");

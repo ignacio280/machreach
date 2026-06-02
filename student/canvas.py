@@ -21,6 +21,34 @@ log = logging.getLogger(__name__)
 
 _TIMEOUT = 20  # seconds
 
+# ── Browser-extension "connect" token ──────────────────────────────────────
+# The Focus Guard extension can read a student's Canvas course list from their
+# own logged-in browser session (no API token, no admin OAuth key) and POST it
+# back to MachReach. To authenticate that POST without relying on cross-site
+# cookies, the logged-in MachReach page embeds this signed token; the extension
+# captures it and includes it when importing courses. It only authorizes
+# course import for one client_id and carries no other privilege.
+_EXT_CONNECT_SALT = "canvas-ext-connect"
+
+
+def _ext_serializer():
+    from itsdangerous import URLSafeSerializer
+    from outreach.config import SECRET_KEY
+    return URLSafeSerializer(SECRET_KEY, salt=_EXT_CONNECT_SALT)
+
+
+def make_connect_token(client_id: int) -> str:
+    """Stable signed token identifying a student to the browser extension."""
+    return _ext_serializer().dumps(int(client_id))
+
+
+def verify_connect_token(token: str) -> int | None:
+    """Return the client_id encoded in a connect token, or None if invalid."""
+    try:
+        return int(_ext_serializer().loads((token or "").strip()))
+    except Exception:
+        return None
+
 
 def normalize_canvas_url(base_url: str) -> str:
     """Return the Canvas instance origin from either a root URL or a settings page URL."""
