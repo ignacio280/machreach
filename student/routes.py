@@ -3256,7 +3256,7 @@ def register_student_routes(app, csrf, limiter):
 
             client_name=session.get("client_name", ""),
 
-            wide=False,
+            wide=True,
 
             nav=nav,
             student_ui=student_ui,
@@ -4086,8 +4086,11 @@ def register_student_routes(app, csrf, limiter):
   .mr-home a { color: inherit; text-decoration: none; }
 
   /* page bg */
-  body:has(.mr-home) .content { background: #F4F1EA !important; }
-  :root[data-theme="dark"] body:has(.mr-home) .content { background: #0E0D14 !important; }
+  body:has(.mr-home) .content,
+  body:has(.mr-home) .content-wide { background: #F4F1EA !important; }
+  :root[data-theme="dark"] body:has(.mr-home) .content,
+  :root[data-theme="dark"] body:has(.mr-home) .content-wide,
+  :root[data-theme="dark"] body:has(.mr-home) .mr-home { background: transparent !important; }
 
   .mr-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; max-width: 1400px; margin: 0 auto; padding: 6px 0 80px; }
   @media (max-width: 1100px) { .mr-layout { grid-template-columns: 1fr; } }
@@ -5618,14 +5621,16 @@ def register_student_routes(app, csrf, limiter):
         return _s_render("Focus Mode", f"""
 
         <style>
-        .focus-page-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px; }}
+        .focus-page-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px;padding:28px clamp(22px,3vw,34px);border-radius:22px;background:linear-gradient(135deg,#FFFDF8 0%,#FFF3E8 58%,#FFE4D4 100%);border:2px solid #1A1A1F;box-shadow:0 4px 0 #1A1A1F;overflow:hidden; }}
         .focus-eye {{ font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
-        .focus-title {{ margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
+        .focus-title {{ margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F;background:transparent !important;box-shadow:none !important;text-shadow:none !important; }}
+        .focus-page-head .focus-side,.focus-page-head .focus-title,.focus-page-head p,.focus-page-head b {{ background:transparent !important;box-shadow:none !important;border:0 !important; }}
         .page-stats {{ display:flex;gap:10px;flex-wrap:wrap; }}
         .ps {{ background:#fff;border:1px solid #E2DCCC;border-radius:14px;padding:10px 14px;min-width:95px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
         .ps-n {{ font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:600;line-height:1;color:#1A1A1F; }}
         .ps-l {{ font-size:11px;font-weight:800;color:#94939C;text-transform:uppercase;letter-spacing:.08em;margin-top:3px; }}
         :root[data-theme="dark"] .focus-title,
+        :root[data-theme="dark"] .focus-page-head {{ background:linear-gradient(135deg,#191620 0%,#17141D 58%,#241711 100%) !important;border-color:#FF7A3D !important;box-shadow:0 4px 0 #FF7A3D !important; }}
         :root[data-theme="dark"] .focus-page-head b,
         :root[data-theme="dark"] .ps-n {{ color:#F8F3EA !important; }}
         :root[data-theme="dark"] .focus-page-head p,
@@ -5644,6 +5649,14 @@ def register_student_routes(app, csrf, limiter):
         #timer-display {{ font-family:"Bricolage Grotesque",sans-serif !important;font-weight:500 !important;font-size:80px !important;letter-spacing:-.04em !important;line-height:1 !important;color:#1A1A1F !important; }}
         #timer-label {{ font-size:13px !important;color:#94939C !important;margin-top:8px !important;font-weight:700; }}
         #pomo-count {{ font-size:12px !important;color:#94939C !important;margin-top:4px !important;font-weight:700; }}
+        .ft-session-orbit {{ --session-fill:0%;--session-ball:#FF7A3D;position:relative;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:0;width:150px;padding:0 1px; }}
+        .ft-session-orbit::before,.ft-session-orbit::after {{ content:"";position:absolute;left:7px;right:7px;top:50%;height:5px;border-radius:999px;transform:translateY(-50%); }}
+        .ft-session-orbit::before {{ background:#EDE7DA; }}
+        .ft-session-orbit::after {{ right:auto;width:calc((100% - 14px) * var(--session-fill));background:var(--session-ball);transition:width .22s ease,background .22s ease; }}
+        .ft-session-dot {{ position:relative;z-index:1;width:14px;height:14px;border-radius:999px;background:#EDE7DA;border:2px solid #E2DCCC;transition:all .2s ease;box-sizing:border-box; }}
+        .ft-session-dot.done {{ background:#FF7A3D;border-color:#FF7A3D; }}
+        .ft-session-dot.active {{ width:24px;height:24px;background:#FF7A3D;border-color:#FF7A3D;box-shadow:0 0 0 5px rgba(255,122,61,.16); }}
+        .ft-session-status {{ margin-top:8px;font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
         .ft-controls {{ display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap; }}
         .ft-btn-main,.ft-controls #start-btn {{ background:#FF7A3D !important;color:#fff !important;border:0 !important;padding:14px 32px !important;border-radius:999px !important;font-weight:800 !important;font-size:16px !important;box-shadow:0 2px 0 rgba(20,18,30,.04),0 8px 22px rgba(20,18,30,.06) !important; }}
         .ft-btn-sec,.ft-controls #reset-btn,.ft-controls #pause-btn,.ft-controls #skip-btn {{ min-width:110px !important;height:44px !important;border-radius:999px !important;background:#EDE7DA !important;border:1px solid #E2DCCC !important;color:#1A1A1F !important;padding:0 16px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:7px !important;font-weight:800 !important;white-space:nowrap !important;font-size:13px !important;box-shadow:none !important; }}
@@ -5665,9 +5678,16 @@ def register_student_routes(app, csrf, limiter):
         .amb-ic {{ font-size:22px; }}
         .amb-n {{ font-size:11px;font-weight:700;margin-top:4px;color:#5C5C66; }}
         .amb.on {{ background:#ECE6FB;border-color:#5B4694; }}
-        .vol-row {{ display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px; }}
-        .vol-bar {{ flex:1;height:6px;background:#EDE7DA;border-radius:999px;overflow:hidden; }}
-        .vol-fill {{ height:100%;background:#1A1A1F;border-radius:999px;width:45%; }}
+        .vol-row {{ display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px; }}
+        .vol-slider {{ --vol-ball:#1A1A1F;--vol-track:#EDE7DA;flex:1;min-width:0;appearance:none;-webkit-appearance:none;height:24px;margin:0;padding:0;background:transparent !important;border:0 !important;outline:none;cursor:pointer; }}
+        .vol-slider::-webkit-slider-runnable-track {{ height:10px;border-radius:999px;background:linear-gradient(90deg,var(--vol-ball) var(--amb-vol,42%),var(--vol-track) var(--amb-vol,42%)); }}
+        .vol-slider::-webkit-slider-thumb {{ -webkit-appearance:none;appearance:none;width:22px;height:22px;margin-top:-6px;border-radius:50%;background:#FFFFFF;border:3px solid var(--vol-ball);box-shadow:0 2px 0 var(--vol-ball); }}
+        .vol-slider::-moz-range-track {{ height:10px;border-radius:999px;background:var(--vol-track); }}
+        .vol-slider::-moz-range-progress {{ height:10px;border-radius:999px;background:var(--vol-ball); }}
+        .vol-slider::-moz-range-thumb {{ width:22px;height:22px;border-radius:50%;background:#FFFFFF;border:3px solid var(--vol-ball);box-shadow:0 2px 0 var(--vol-ball);box-sizing:border-box; }}
+        :root[data-theme="dark"] .vol-slider {{ --vol-ball:#FF7A3D;--vol-track:#050505; }}
+        :root[data-theme="dark"] .vol-slider::-webkit-slider-thumb {{ background:#FF7A3D;box-shadow:0 2px 0 #050505; }}
+        :root[data-theme="dark"] .vol-slider::-moz-range-thumb {{ background:#FF7A3D;box-shadow:0 2px 0 #050505; }}
         .block-list {{ margin-top:8px;display:flex;flex-direction:column;gap:4px; }}
         .block-item {{ display:flex;justify-content:space-between;padding:8px 10px;background:#FBF8F0;border-radius:10px;font-size:12px;font-weight:700; }}
         .muted {{ color:#94939C; }}
@@ -5928,6 +5948,15 @@ def register_student_routes(app, csrf, limiter):
 
               <div id="pomo-count" style="font-size:12px;color:var(--text-muted);margin-top:4px;">{_pomo_count_label}</div>
 
+              <div class="ft-session-orbit" id="timer-session-dots" aria-label="Focus session progress">
+                <span class="ft-session-dot active"></span>
+                <span class="ft-session-dot"></span>
+                <span class="ft-session-dot"></span>
+                <span class="ft-session-dot"></span>
+              </div>
+
+              <div class="ft-session-status" id="timer-session-status">Sesi&oacute;n 1 de 4</div>
+
             </div></div></div></div>
 
 
@@ -6018,17 +6047,6 @@ def register_student_routes(app, csrf, limiter):
 
           <div>
 
-            <div class="card" id="today-session-card">
-              <div class="card-header"><h2>&#9881;&#65039; Sesi&oacute;n de hoy</h2></div>
-              <div class="ses-pills" id="today-session-pills">
-                <div class="sp">1<small>25:00</small></div>
-                <div class="sp">2<small>25:00</small></div>
-                <div class="sp">3<small>25:00</small></div>
-                <div class="sp">4<small>25:00</small></div>
-              </div>
-              <div class="break-row"><div class="break-bar"><span id="today-session-progress"></span></div><span id="today-session-caption">Empieza una sesi&oacute;n para activar el ciclo.</span></div>
-            </div>
-
             <div class="card" id="focus-ambience-card">
               <div class="card-header"><h2>&#127807; Ambiente</h2></div>
               <div class="amb-grid">
@@ -6039,7 +6057,7 @@ def register_student_routes(app, csrf, limiter):
                 <div class="amb" onclick="setAmbience(this,'fire')"><div class="amb-ic">&#128293;</div><div class="amb-n">Fuego</div></div>
                 <div class="amb" onclick="setAmbience(this,'brown')"><div class="amb-ic">&#127769;</div><div class="amb-n">Ruido bajo</div></div>
               </div>
-              <div class="vol-row"><span>&#128264;</span><div class="vol-bar"><div class="vol-fill" id="amb-vol-fill"></div></div><span>&#128266;</span></div>
+              <div class="vol-row"><span>&#128264;</span><input id="amb-volume" class="vol-slider" type="range" min="0" max="100" value="42" aria-label="Volumen ambiente" oninput="setAmbienceVolume(this.value)"><span>&#128266;</span></div>
               <audio id="amb-audio" loop preload="none"></audio>
             </div>
 
@@ -6845,7 +6863,7 @@ def register_student_routes(app, csrf, limiter):
 
         function updateTodaySessionCard() {{
           try {{
-            var wrap = document.getElementById('today-session-pills');
+            var wrap = document.getElementById('timer-session-dots');
             if (!wrap) return;
             var workMins = parseInt(document.getElementById('pomo-work').value, 10) || 25;
             var completed = 0;
@@ -6853,26 +6871,49 @@ def register_student_routes(app, csrf, limiter):
             if (pomoCount > completed) completed = pomoCount;
             var cycleCompleted = completed % 4;
             var activeIndex = isBreak ? -1 : Math.min(3, cycleCompleted);
-            var pills = wrap.querySelectorAll('.sp');
+            var fillIndex = isBreak ? cycleCompleted : Math.max(cycleCompleted, activeIndex);
+            var fillPct = Math.max(0, Math.min(100, (fillIndex / 3) * 100));
+            wrap.style.setProperty('--session-fill', fillPct + '%');
+            var pills = wrap.querySelectorAll('.ft-session-dot');
             for (var i = 0; i < pills.length; i++) {{
               pills[i].classList.remove('done','active');
-              pills[i].innerHTML = (i + 1) + '<small>' + workMins + ':00</small>';
+              pills[i].setAttribute('title', 'Sesi&oacute;n ' + (i + 1) + ' · ' + workMins + ':00');
               if (i < cycleCompleted) pills[i].classList.add('done');
               if (i === activeIndex && (isRunning || sessionStarted)) pills[i].classList.add('active');
             }}
-            var progress = document.getElementById('today-session-progress');
-            var caption = document.getElementById('today-session-caption');
+            var caption = document.getElementById('timer-session-status');
             var pct = 0;
             if (isRunning && totalTime > 0) pct = Math.max(0, Math.min(100, Math.round((1 - (timeLeft / totalTime)) * 100)));
             else pct = cycleCompleted * 25;
-            if (progress) progress.style.width = pct + '%';
             if (caption) {{
               if (isBreak) caption.textContent = (cycleCompleted === 0 ? focusText.longBreakUnlockedSave : focusText.activeBreak);
               else if (isRunning) caption.textContent = focusText.sessionPrefix + (activeIndex + 1) + focusText.sessionInProgressSuffix;
               else if (completed > 0) caption.textContent = completed + focusText.sessionsReadySuffix;
-              else caption.textContent = focusText.startCycle;
+              else caption.textContent = focusText.sessionOne;
             }}
           }} catch(e) {{}}
+        }}
+
+        function getAmbienceVolume() {{
+          var slider = document.getElementById('amb-volume');
+          var val = slider ? parseInt(slider.value, 10) : 42;
+          if (!isFinite(val)) val = 42;
+          return Math.max(0, Math.min(100, val)) / 100;
+        }}
+
+        function setAmbienceVolume(value) {{
+          var slider = document.getElementById('amb-volume');
+          var n = parseInt(value, 10);
+          if (!isFinite(n)) n = slider ? parseInt(slider.value, 10) : 42;
+          n = Math.max(0, Math.min(100, n));
+          if (slider) slider.value = n;
+          document.documentElement.style.setProperty('--amb-vol', n + '%');
+          try {{ localStorage.setItem('mr_ambience_volume', String(n)); }} catch(e) {{}}
+          var audioEl = document.getElementById('amb-audio');
+          if (audioEl) audioEl.volume = n / 100;
+          if (window.__ambGain) {{
+            try {{ window.__ambGain.gain.value = (n / 100) * 0.055; }} catch(e) {{}}
+          }}
         }}
 
         function setAmbience(el, type) {{
@@ -6892,18 +6933,14 @@ def register_student_routes(app, csrf, limiter):
             }}
             if (type === 'off') {{
               window.__ambStop = null;
-              var vf0 = document.getElementById('amb-vol-fill');
-              if (vf0) vf0.style.width = '0%';
               return;
             }}
             if (audioEl && audioMap[type]) {{
               audioEl.src = audioMap[type];
               audioEl.loop = true;
-              audioEl.volume = 0.34;
+              audioEl.volume = getAmbienceVolume();
               var p = audioEl.play();
               if (p && p.catch) p.catch(function(){{}});
-              var vfMp3 = document.getElementById('amb-vol-fill');
-              if (vfMp3) vfMp3.style.width = '42%';
               window.__ambStop = function() {{
                 try {{ audioEl.pause(); audioEl.currentTime = 0; }} catch(e) {{}}
               }};
@@ -6912,7 +6949,8 @@ def register_student_routes(app, csrf, limiter):
             if (!window.__ambCtx) window.__ambCtx = new (window.AudioContext || window.webkitAudioContext)();
             var ctx = window.__ambCtx;
             var gain = ctx.createGain();
-            gain.gain.value = 0.018;
+            gain.gain.value = getAmbienceVolume() * 0.055;
+            window.__ambGain = gain;
             gain.connect(ctx.destination);
             var nodes = [];
             function filter(freq, q, kind) {{
@@ -6941,11 +6979,17 @@ def register_student_routes(app, csrf, limiter):
             if (type === 'forest') {{ noise(filter(2600, 1.2, 'bandpass'), 0.9); }}
             if (type === 'fire') {{ noise(filter(900, 0.8, 'lowpass'), 0.82); }}
             if (type === 'brown') {{ noise(filter(320, 0.5, 'lowpass'), 0.985); }}
-            var vf = document.getElementById('amb-vol-fill');
-            if (vf) vf.style.width = '26%';
-            window.__ambStop = function() {{ nodes.forEach(function(n) {{ try {{ n.stop(); }} catch(e) {{}} }}); try {{ gain.disconnect(); }} catch(e) {{}} }};
+            window.__ambStop = function() {{ nodes.forEach(function(n) {{ try {{ n.stop(); }} catch(e) {{}} }}); try {{ gain.disconnect(); }} catch(e) {{}} if (window.__ambGain === gain) window.__ambGain = null; }};
           }} catch(e) {{}}
         }}
+
+        (function initAmbienceVolume() {{
+          try {{
+            var saved = parseInt(localStorage.getItem('mr_ambience_volume') || '42', 10);
+            if (!isFinite(saved)) saved = 42;
+            setAmbienceVolume(saved);
+          }} catch(e) {{ setAmbienceVolume(42); }}
+        }})();
 
 
 

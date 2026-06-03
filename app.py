@@ -595,13 +595,13 @@ LAYOUT = """<!DOCTYPE html>
         <a class="mr-tb-link {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop">{{ student_ui.shop }}</a>
         <a class="mr-tb-link {% if active_page == 'student_gpa' %}active{% endif %}" href="/student/gpa">{{ student_ui.grades }}</a>
         <a class="mr-tb-link {% if active_page == 'student_achievements' %}active{% endif %}" href="/student/achievements">{{ student_ui.xp }}</a>
-        <a class="mr-tb-link {% if active_page == 'student_settings' %}active{% endif %}" href="/student/settings">{{ student_ui.settings }}</a>
         {% if is_admin %}<a class="mr-tb-link {% if active_page == 'admin' %}active{% endif %}" href="/admin">{{ student_ui.admin }}</a>{% endif %}
       </nav>
       <div class="mr-tb-right">
         <button id="theme-toggle" class="mr-tb-icon" type="button" onclick="toggleDarkMode()" title="{{ student_ui.toggle_theme }}">&#127769;</button>
         <a class="mr-tb-icon" href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
         <a class="mr-tb-icon" href="/logout" title="{{nav.logout}}">&#10162;</a>
+        <a class="mr-tb-icon mr-tb-settings-gear {% if active_page == 'student_settings' %}active{% endif %}" href="/student/settings" title="{{ student_ui.settings }}" aria-label="{{ student_ui.settings }}">&#9881;</a>
         <a class="mr-tb-user" href="/student/profile" title="{{client_name}}">
           <span class="mr-tb-av">{{ (client_name[:1] or 'M')|upper }}</span>
           <span class="mr-tb-uname">{{ (client_name.split()[0] if client_name else student_ui.student_fallback) }}</span>

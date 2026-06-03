@@ -18,9 +18,11 @@
             --orange:#FF7A3D;
           }
           :root[data-theme="dark"] .content,
-          :root[data-theme="dark"] .content > *,
-          :root[data-theme="dark"] .mr-app-shell .content {
-            background-color:#11131A !important;
+          :root[data-theme="dark"] .content-wide,
+          :root[data-theme="dark"] .mr-app-shell .content,
+          :root[data-theme="dark"] .mr-app-shell .content-wide {
+            background:transparent !important;
+            background-color:transparent !important;
             color:#F7F0E4 !important;
           }
           :root[data-theme="dark"] .content h1,
@@ -46,6 +48,47 @@
           :root[data-theme="dark"] .content #mr-lb-page .lb-podium-xp {
             color:#F7F0E4 !important;
             text-shadow:none !important;
+          }
+          :root[data-theme="dark"] .content > .page-head-cd,
+          :root[data-theme="dark"] .content > .page-header,
+          :root[data-theme="dark"] .content > .pl-h,
+          :root[data-theme="dark"] .content > .fc-page-head,
+          :root[data-theme="dark"] .content > .focus-page-head,
+          :root[data-theme="dark"] .content .page-head-cd,
+          :root[data-theme="dark"] .content .page-header,
+          :root[data-theme="dark"] .content .fc-page-head {
+            background:linear-gradient(135deg,#191620 0%,#17141D 58%,#241711 100%) !important;
+            border:2px solid #FF7A3D !important;
+            border-radius:22px !important;
+            box-shadow:0 4px 0 #FF7A3D !important;
+            padding:clamp(22px,3vw,34px) !important;
+            color:#F7F0E4 !important;
+            overflow:hidden;
+          }
+          :root[data-theme="dark"] .content > .page-head-cd *,
+          :root[data-theme="dark"] .content > .page-header *,
+          :root[data-theme="dark"] .content > .pl-h *,
+          :root[data-theme="dark"] .content > .fc-page-head *,
+          :root[data-theme="dark"] .content > .focus-page-head *,
+          :root[data-theme="dark"] .content .page-head-cd *,
+          :root[data-theme="dark"] .content .page-header *,
+          :root[data-theme="dark"] .content .fc-page-head * {
+            background:transparent !important;
+            box-shadow:none !important;
+          }
+          :root[data-theme="dark"] .content .fc-q,
+          :root[data-theme="dark"] .content .fc-card-title,
+          :root[data-theme="dark"] .content .deck-name,
+          :root[data-theme="dark"] .content .deck-add-l {
+            color:#F7F0E4 !important;
+          }
+          :root[data-theme="dark"] .content .fc-tag,
+          :root[data-theme="dark"] .content .fc-foot,
+          :root[data-theme="dark"] .content .fc-foot .muted,
+          :root[data-theme="dark"] .content .deck-tag,
+          :root[data-theme="dark"] .content .deck-meta,
+          :root[data-theme="dark"] .content .deck-add-s {
+            color:#B9B0A5 !important;
           }
           :root[data-theme="dark"] .content p,
           :root[data-theme="dark"] .content small,
@@ -456,4 +499,67 @@
           }
           :root[data-theme="dark"] .content canvas {
             color-scheme:dark;
+          }
+
+          /* Final dark redesign border pass: landing-style outlines in MachReach orange. */
+          :root[data-theme="dark"] {
+            --border:#FF7A3D;
+            --border-light:#3B3544;
+            --line:#FF7A3D;
+            --warm-line:#FF7A3D;
+          }
+          :root[data-theme="dark"] .content .card,
+          :root[data-theme="dark"] .content .stat-card,
+          :root[data-theme="dark"] .content .mr-card,
+          :root[data-theme="dark"] .content .mr-stat-card,
+          :root[data-theme="dark"] .content .ccard,
+          :root[data-theme="dark"] .content .canvas-banner,
+          :root[data-theme="dark"] .content .focus-timer-card,
+          :root[data-theme="dark"] .content .focus-rival-card,
+          :root[data-theme="dark"] .content .focus-exam-nudge,
+          :root[data-theme="dark"] .content .ps,
+          :root[data-theme="dark"] .content .fc-card-flip,
+          :root[data-theme="dark"] .content .fc-decks-card,
+          :root[data-theme="dark"] .content .deck,
+          :root[data-theme="dark"] .content .qcard,
+          :root[data-theme="dark"] .content .qz-mode,
+          :root[data-theme="dark"] .content .course-empty,
+          :root[data-theme="dark"] .content .dropzone,
+          :root[data-theme="dark"] .content .fr-panel,
+          :root[data-theme="dark"] .content .fr-group-card,
+          :root[data-theme="dark"] .content .fr-row,
+          :root[data-theme="dark"] .content .shop-cd .card,
+          :root[data-theme="dark"] .content .student-profile-wrap .card,
+          :root[data-theme="dark"] .content .pl-card,
+          :root[data-theme="dark"] .content .pl-course,
+          :root[data-theme="dark"] .content .pl-help,
+          :root[data-theme="dark"] .content .pl-tabs,
+          :root[data-theme="dark"] .content .pl-empty,
+          :root[data-theme="dark"] .content .quiz-cd .qcard,
+          :root[data-theme="dark"] .content .quiz-cd .qcard.warn,
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-stat-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-badge-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-activity-card {
+            border:2px solid #FF7A3D !important;
+            box-shadow:0 4px 0 #FF7A3D, 0 18px 46px rgba(0,0,0,.28) !important;
+          }
+          :root[data-theme="dark"] .content .mr-mission,
+          :root[data-theme="dark"] .content .mr-home .mr-mission,
+          :root[data-theme="dark"] .content .mr-league-card,
+          :root[data-theme="dark"] .content .mr-home .mr-league-card,
+          :root[data-theme="dark"] .content .fc-today,
+          :root[data-theme="dark"] .content .pl-h {
+            border:2px solid #FF7A3D !important;
+            box-shadow:0 5px 0 #FF7A3D, 0 22px 56px rgba(0,0,0,.36) !important;
+          }
+          :root[data-theme="dark"] .content table,
+          :root[data-theme="dark"] .content th {
+            border-color:#FF7A3D !important;
+          }
+          :root[data-theme="dark"] .content input,
+          :root[data-theme="dark"] .content textarea,
+          :root[data-theme="dark"] .content select {
+            border-color:#FF7A3D !important;
+            box-shadow:0 2px 0 rgba(255,122,61,.52) !important;
           }

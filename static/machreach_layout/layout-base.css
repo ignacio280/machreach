@@ -1031,6 +1031,7 @@
     }
     .mr-tb-link:hover { color: #fff; background: rgba(255,255,255,0.07); }
     .mr-tb-link.active { color: #fff; background: rgba(255,255,255,0.10); }
+    .mr-tb-settings-gear { font-size: 17px; }
     .mr-tb-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .mr-tb-icon {
       width: 34px;
@@ -1438,4 +1439,1143 @@
     @media (max-width: 720px) {
       .mr-topbar { padding: 0 14px; gap: 12px; }
       .mr-app-shell .content { padding: 18px 16px 100px; }
+    }
+
+    /* Interior redesign: align authenticated student pages with the landing. */
+    :root:not([data-theme="dark"]) {
+      --bg: #F8F4EA;
+      --card: #FFFFFF;
+      --surface: #FFFFFF;
+      --text: #201B20;
+      --text-secondary: #4E4852;
+      --text-muted: #746D73;
+      --border: #201B20;
+      --border-light: #E6DCCB;
+      --primary: #FF7A3D;
+      --primary-hover: #E9662E;
+      --primary-light: #FFE7D8;
+      --green: #42C47D;
+      --green-light: #DDF8E9;
+      --blue: #5FADEB;
+      --blue-light: #E0F1FF;
+      --yellow: #F5BA3D;
+      --yellow-light: #FFF1C7;
+      --red: #E95648;
+      --red-light: #FFE1DC;
+      --radius: 18px;
+      --radius-sm: 12px;
+      --radius-xs: 9px;
+      --shadow-xs: 0 2px 0 rgba(32,27,32,.92);
+      --shadow: 0 4px 0 rgba(32,27,32,.92);
+      --shadow-md: 0 5px 0 rgba(32,27,32,.92), 0 16px 34px rgba(32,27,32,.10);
+      --shadow-lg: 0 6px 0 rgba(32,27,32,.92), 0 22px 52px rgba(32,27,32,.14);
+      --ring: 0 0 0 4px rgba(255,122,61,.22);
+    }
+
+    :root:not([data-theme="dark"]) body,
+    :root:not([data-theme="dark"]) .mr-app-shell.app {
+      background:
+        linear-gradient(180deg, rgba(255,231,216,.58), rgba(248,244,234,0) 260px),
+        #F8F4EA !important;
+      color: var(--text) !important;
+    }
+
+    :root:not([data-theme="dark"]) .mr-topbar {
+      min-height: 72px;
+      height: auto;
+      padding: 12px clamp(18px, 3vw, 42px);
+      gap: 18px;
+      background: color-mix(in srgb, #F8F4EA 88%, transparent);
+      border-bottom: 2px solid #201B20;
+      box-shadow: 0 4px 0 rgba(32,27,32,.92);
+      backdrop-filter: blur(14px) saturate(130%);
+    }
+    :root:not([data-theme="dark"]) .mr-tb-brand {
+      color: #201B20;
+      gap: 12px;
+      min-width: max-content;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-logo {
+      width: 40px;
+      height: 40px;
+      border: 2px solid #201B20;
+      border-radius: 12px;
+      background: #FFFFFF;
+      padding: 4px;
+      box-shadow: 0 3px 0 #201B20;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-name {
+      font-family: "Bricolage Grotesque", sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-name span { color: #FF7A3D; }
+    :root:not([data-theme="dark"]) .mr-tb-nav {
+      gap: 6px;
+      padding: 3px 2px 6px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-link {
+      color: #4E4852;
+      background: #FFFFFF;
+      border: 2px solid #201B20;
+      border-radius: 14px;
+      box-shadow: 0 2px 0 #201B20;
+      font-size: 13px;
+      font-weight: 900;
+      padding: 9px 11px;
+      transition: transform .12s ease, box-shadow .12s ease, background .12s ease, color .12s ease;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-link:hover {
+      color: #201B20;
+      background: #FFF1C7;
+      transform: translate(-1px, -1px);
+      box-shadow: 0 3px 0 #201B20;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-link.active {
+      color: #201B20;
+      background: #FF7A3D;
+      box-shadow: 0 3px 0 #201B20;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-settings-gear.active {
+      background: #FF7A3D;
+      color: #201B20;
+      box-shadow: 0 3px 0 #201B20;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-right { gap: 10px; }
+    :root:not([data-theme="dark"]) .mr-tb-icon,
+    :root:not([data-theme="dark"]) .mr-tb-burger,
+    :root:not([data-theme="dark"]) .mr-tb-av {
+      background: #FFFFFF;
+      color: #201B20;
+      border: 2px solid #201B20;
+      border-radius: 12px;
+      box-shadow: 0 2px 0 #201B20;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-icon:hover,
+    :root:not([data-theme="dark"]) .mr-tb-burger:hover {
+      background: #E6F8D8;
+      color: #201B20;
+      transform: translateY(-1px);
+    }
+    :root:not([data-theme="dark"]) .mr-tb-user {
+      color: #201B20;
+      background: #FFFFFF;
+      border: 2px solid #201B20;
+      border-radius: 14px;
+      padding: 4px 10px 4px 4px;
+      box-shadow: 0 2px 0 #201B20;
+    }
+    :root:not([data-theme="dark"]) .mr-tb-user:hover { color: #201B20; background: #F0ECFF; }
+
+    .mr-app-shell .mr-tb-main {
+      min-height: calc(100vh - 72px);
+    }
+    .mr-app-shell .content,
+    .mr-app-shell .content-wide {
+      max-width: none !important;
+      width: 100%;
+      padding: clamp(22px, 2.5vw, 44px) clamp(18px, 3vw, 54px) 96px !important;
+      margin: 0 !important;
+    }
+    .mr-app-shell .content > * {
+      width: 100%;
+    }
+
+    /* Professional page-build motion for student tabs. */
+    .mr-app-shell .content,
+    .mr-app-shell .content-wide {
+      view-transition-name: mr-page;
+    }
+    .mr-app-shell .content > *,
+    .mr-app-shell .content-wide > * {
+      animation: mrPageStageIn .58s cubic-bezier(.18,.72,.18,1) both;
+      animation-delay: calc(min(var(--mr-stage, 1), 8) * 58ms);
+      transform-origin: 50% 12px;
+    }
+    .mr-app-shell .content > *:nth-child(1),
+    .mr-app-shell .content-wide > *:nth-child(1) { --mr-stage: 1; }
+    .mr-app-shell .content > *:nth-child(2),
+    .mr-app-shell .content-wide > *:nth-child(2) { --mr-stage: 2; }
+    .mr-app-shell .content > *:nth-child(3),
+    .mr-app-shell .content-wide > *:nth-child(3) { --mr-stage: 3; }
+    .mr-app-shell .content > *:nth-child(4),
+    .mr-app-shell .content-wide > *:nth-child(4) { --mr-stage: 4; }
+    .mr-app-shell .content > *:nth-child(5),
+    .mr-app-shell .content-wide > *:nth-child(5) { --mr-stage: 5; }
+    .mr-app-shell .content > *:nth-child(6),
+    .mr-app-shell .content-wide > *:nth-child(6) { --mr-stage: 6; }
+    .mr-app-shell .content .card,
+    .mr-app-shell .content .stat-card,
+    .mr-app-shell .content .mr-card,
+    .mr-app-shell .content .mr-stat-card,
+    .mr-app-shell .content .ccard,
+    .mr-app-shell .content .deck,
+    .mr-app-shell .content .qcard,
+    .mr-app-shell .content .fr-panel,
+    .mr-app-shell .content .fr-row,
+    .mr-app-shell .content .shop-cd .card {
+      position: relative;
+      overflow: hidden;
+      animation: mrFrameBuild .62s cubic-bezier(.18,.72,.18,1) both;
+      animation-delay: calc(90ms + min(var(--mr-stage, 1), 8) * 42ms);
+    }
+    .mr-app-shell .content .card::after,
+    .mr-app-shell .content .stat-card::after,
+    .mr-app-shell .content .mr-card::after,
+    .mr-app-shell .content .mr-stat-card::after,
+    .mr-app-shell .content .ccard::after,
+    .mr-app-shell .content .deck::after,
+    .mr-app-shell .content .qcard::after,
+    .mr-app-shell .content .fr-panel::after,
+    .mr-app-shell .content .fr-row::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(115deg, transparent 0%, rgba(255,122,61,.16) 44%, transparent 62%);
+      transform: translateX(-115%);
+      animation: mrFrameSweep .82s cubic-bezier(.24,.78,.2,1) both;
+      animation-delay: calc(170ms + min(var(--mr-stage, 1), 8) * 52ms);
+    }
+    .mr-app-shell .content input,
+    .mr-app-shell .content select,
+    .mr-app-shell .content textarea,
+    .mr-app-shell .content button,
+    .mr-app-shell .content .btn,
+    .mr-app-shell .content .mr-tile,
+    .mr-app-shell .content .amb,
+    .mr-app-shell .content tr,
+    .mr-app-shell .content li {
+      animation: mrControlBuild .48s cubic-bezier(.2,.7,.2,1) both;
+      animation-delay: calc(160ms + min(var(--mr-stage, 1), 8) * 38ms);
+    }
+    .mr-app-shell .content svg circle,
+    .mr-app-shell .content svg path,
+    .mr-app-shell .content svg line,
+    .mr-app-shell .content svg polyline {
+      stroke-dasharray: 720;
+      stroke-dashoffset: 720;
+      animation: mrStrokeBuild .9s cubic-bezier(.18,.72,.18,1) backwards;
+      animation-delay: 180ms;
+    }
+    @keyframes mrPageStageIn {
+      0% { opacity: 0; transform: translateY(18px) scale(.985); clip-path: inset(0 0 100% 0 round 18px); filter: saturate(.8); }
+      55% { opacity: 1; clip-path: inset(0 0 0 0 round 18px); }
+      100% { opacity: 1; transform: translateY(0) scale(1); clip-path: inset(0 0 0 0 round 0); filter: saturate(1); }
+    }
+    @keyframes mrFrameBuild {
+      0% { opacity: 0; transform: translateY(16px) scale(.975); clip-path: inset(50% 0 50% 0 round 18px); }
+      42% { opacity: 1; clip-path: inset(0 0 0 0 round 18px); }
+      100% { opacity: 1; transform: translateY(0) scale(1); clip-path: inset(0 0 0 0 round 18px); }
+    }
+    @keyframes mrFrameSweep {
+      0% { transform: translateX(-115%); opacity: 0; }
+      18% { opacity: 1; }
+      100% { transform: translateX(115%); opacity: 0; }
+    }
+    @keyframes mrControlBuild {
+      0% { opacity: 0; transform: translateY(8px) scale(.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes mrStrokeBuild {
+      0% { stroke-dashoffset: 720; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mr-app-shell .content *,
+      .mr-app-shell .content-wide * {
+        animation: none !important;
+      }
+    }
+    .mr-app-shell .mr-home .mr-layout {
+      max-width: none;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+      gap: clamp(18px, 2vw, 32px);
+    }
+    .mr-app-shell .mr-home .mr-stats-grid {
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+    }
+    .mr-app-shell .mr-home .mr-courses-row {
+      grid-template-columns: repeat(4, minmax(170px, 1fr));
+    }
+
+    :root:not([data-theme="dark"]) .mr-app-shell .page-header h1,
+    :root:not([data-theme="dark"]) .mr-app-shell h1,
+    :root:not([data-theme="dark"]) .mr-app-shell h2,
+    :root:not([data-theme="dark"]) .page-title-cd,
+    :root:not([data-theme="dark"]) .focus-title,
+    :root:not([data-theme="dark"]) .fc-page-title {
+      font-family: "Bricolage Grotesque", sans-serif !important;
+      color: #201B20 !important;
+      font-weight: 800 !important;
+      letter-spacing: 0 !important;
+    }
+    :root:not([data-theme="dark"]) .page-title-cd,
+    :root:not([data-theme="dark"]) .focus-title,
+    :root:not([data-theme="dark"]) .fc-page-title {
+      font-size: clamp(42px, 5vw, 76px) !important;
+      line-height: .94 !important;
+    }
+    :root:not([data-theme="dark"]) .page-eyebrow-cd,
+    :root:not([data-theme="dark"]) .focus-eye {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      color: #8B3A18 !important;
+      background: #FFE7D8;
+      border: 2px solid #FF7A3D;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .08em;
+    }
+
+    :root:not([data-theme="dark"]) .mr-app-shell .card,
+    :root:not([data-theme="dark"]) .mr-app-shell .stat-card,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-card,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-stat-card,
+    :root:not([data-theme="dark"]) .mr-app-shell .ccard,
+    :root:not([data-theme="dark"]) .mr-app-shell .canvas-banner,
+    :root:not([data-theme="dark"]) .mr-app-shell .focus-timer-card,
+    :root:not([data-theme="dark"]) .mr-app-shell .focus-rival-card,
+    :root:not([data-theme="dark"]) .mr-app-shell .focus-exam-nudge,
+    :root:not([data-theme="dark"]) .mr-app-shell .ps,
+    :root:not([data-theme="dark"]) .mr-app-shell #mr-lb-page .lb-hero,
+    :root:not([data-theme="dark"]) .mr-app-shell #mr-lb-page .lb-board,
+    :root:not([data-theme="dark"]) .mr-app-shell #mr-lb-page .lb-tabs,
+    :root:not([data-theme="dark"]) .mr-app-shell #mr-lb-page .lb-controls,
+    :root:not([data-theme="dark"]) .mr-app-shell #mr-lb-page .lb-podium,
+    :root:not([data-theme="dark"]) .mr-app-shell #mr-lb-page .lb-podium-card,
+    :root:not([data-theme="dark"]) .mr-app-shell .fr-panel,
+    :root:not([data-theme="dark"]) .mr-app-shell .fr-group-card,
+    :root:not([data-theme="dark"]) .mr-app-shell .fr-row,
+    :root:not([data-theme="dark"]) .mr-app-shell .shop-cd .card,
+    :root:not([data-theme="dark"]) .mr-app-shell .student-profile-wrap .card {
+      background: #FFFFFF !important;
+      color: #201B20 !important;
+      border: 2px solid #201B20 !important;
+      border-radius: 18px !important;
+      box-shadow: 0 4px 0 #201B20, 0 18px 34px rgba(32,27,32,.08) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .card:hover,
+    :root:not([data-theme="dark"]) .mr-app-shell .stat-card:hover,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-card:hover,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-stat-card:hover,
+    :root:not([data-theme="dark"]) .mr-app-shell .ccard:hover {
+      transform: translate(-1px, -2px);
+      box-shadow: 0 6px 0 #201B20, 0 22px 44px rgba(32,27,32,.12) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-mission {
+      border: 2px solid #201B20;
+      border-radius: 22px;
+      box-shadow: 0 5px 0 #201B20, 0 20px 42px rgba(255,122,61,.16);
+      background: linear-gradient(135deg, #FFE7D8 0%, #FFD2B4 52%, #FFF1C7 100%);
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-league-card {
+      border: 2px solid #201B20;
+      border-radius: 18px;
+      box-shadow: 0 5px 0 #201B20, 0 20px 42px rgba(91,70,148,.18);
+      background: linear-gradient(145deg, #5B4694, #7A65BA);
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .ccs,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-sess,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-course-tile,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-exam,
+    :root:not([data-theme="dark"]) .mr-app-shell .block-item,
+    :root:not([data-theme="dark"]) .mr-app-shell .amb,
+    :root:not([data-theme="dark"]) .mr-app-shell .fr-empty,
+    :root:not([data-theme="dark"]) .mr-app-shell .course-benchmark,
+    :root:not([data-theme="dark"]) .mr-app-shell .course-detail-card {
+      background: #FFFBF4 !important;
+      border: 2px solid #E6DCCB !important;
+      border-radius: 14px !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .fc-card-flip,
+    :root:not([data-theme="dark"]) .mr-app-shell .fc-decks-card,
+    :root:not([data-theme="dark"]) .mr-app-shell .deck,
+    :root:not([data-theme="dark"]) .mr-app-shell .qcard,
+    :root:not([data-theme="dark"]) .mr-app-shell .qz-mode,
+    :root:not([data-theme="dark"]) .mr-app-shell .course-empty,
+    :root:not([data-theme="dark"]) .mr-app-shell .dropzone,
+    :root:not([data-theme="dark"]) .mr-app-shell .quiz-grid > div:not(.qcard) {
+      background: #FFFFFF !important;
+      color: #201B20 !important;
+      border: 2px solid #201B20 !important;
+      border-radius: 18px !important;
+      box-shadow: 0 4px 0 #201B20, 0 18px 34px rgba(32,27,32,.08) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .quiz-grid > div:not(.qcard) {
+      grid-column: 1 / -1;
+      min-height: 310px;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      padding: 46px 28px !important;
+      background:
+        linear-gradient(135deg, rgba(255,231,216,.92), rgba(255,255,255,.95) 58%, rgba(230,248,216,.8)) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .course-empty,
+    :root:not([data-theme="dark"]) .mr-app-shell .deck.add {
+      min-height: 210px;
+      background:
+        linear-gradient(135deg, rgba(255,251,244,.96), rgba(255,241,199,.72)) !important;
+      border-style: dashed !important;
+      box-shadow: none !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .fc-today {
+      border: 2px solid #201B20 !important;
+      box-shadow: 0 5px 0 #201B20, 0 20px 42px rgba(32,27,32,.16) !important;
+    }
+
+    :root:not([data-theme="dark"]) .mr-app-shell .btn,
+    :root:not([data-theme="dark"]) .mr-app-shell button,
+    :root:not([data-theme="dark"]) .mr-app-shell input[type="submit"],
+    :root:not([data-theme="dark"]) .mr-app-shell .ccard-go,
+    :root:not([data-theme="dark"]) .mr-app-shell .cb-btn,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-mission-cta,
+    :root:not([data-theme="dark"]) .mr-app-shell .ft-controls #start-btn {
+      border-radius: 14px !important;
+      font-weight: 900 !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .btn-primary,
+    :root:not([data-theme="dark"]) .mr-app-shell .ccard-go,
+    :root:not([data-theme="dark"]) .mr-app-shell .ft-controls #start-btn,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-empty .cta {
+      background: #FF7A3D !important;
+      color: #FFFFFF !important;
+      border: 2px solid #201B20 !important;
+      box-shadow: 0 4px 0 #201B20 !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .btn-outline,
+    :root:not([data-theme="dark"]) .mr-app-shell .btn-ghost,
+    :root:not([data-theme="dark"]) .mr-app-shell .cb-btn,
+    :root:not([data-theme="dark"]) .mr-app-shell .ft-controls #pause-btn,
+    :root:not([data-theme="dark"]) .mr-app-shell .ft-controls #reset-btn,
+    :root:not([data-theme="dark"]) .mr-app-shell .ft-controls #skip-btn {
+      background: #FFFFFF !important;
+      color: #201B20 !important;
+      border: 2px solid #201B20 !important;
+      box-shadow: 0 2px 0 #201B20 !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell input,
+    :root:not([data-theme="dark"]) .mr-app-shell textarea,
+    :root:not([data-theme="dark"]) .mr-app-shell select {
+      background: #FFFBF4 !important;
+      color: #201B20 !important;
+      border: 2px solid #201B20 !important;
+      border-radius: 12px !important;
+      box-shadow: 0 2px 0 rgba(32,27,32,.35) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell input:focus,
+    :root:not([data-theme="dark"]) .mr-app-shell textarea:focus,
+    :root:not([data-theme="dark"]) .mr-app-shell select:focus {
+      border-color: #FF7A3D !important;
+      box-shadow: 0 2px 0 #201B20, 0 0 0 4px rgba(255,122,61,.24) !important;
+    }
+
+    :root:not([data-theme="dark"]) .mr-app-shell .course-cards {
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)) !important;
+      gap: clamp(16px, 2vw, 28px) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .focus-grid {
+      grid-template-columns: minmax(520px, 1.35fr) minmax(360px, .9fr) !important;
+      gap: clamp(18px, 2vw, 32px) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .deck-grid,
+    :root:not([data-theme="dark"]) .mr-app-shell .quiz-grid {
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .stats-grid,
+    :root:not([data-theme="dark"]) .mr-app-shell .page-stats {
+      gap: 14px;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell table {
+      border: 2px solid #201B20;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #FFFFFF;
+      box-shadow: 0 3px 0 #201B20;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell th {
+      background: #FFE7D8 !important;
+      color: #201B20 !important;
+      border-bottom: 2px solid #201B20 !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell td {
+      border-bottom-color: #E6DCCB !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell tbody tr:hover td {
+      background: #FFF1C7 !important;
+    }
+
+    @media (max-width: 1180px) {
+      .mr-app-shell .mr-home .mr-layout,
+      :root:not([data-theme="dark"]) .mr-app-shell .focus-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .mr-app-shell .mr-home .mr-right {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+    }
+    @media (max-width: 1380px) and (min-width: 861px) {
+      :root:not([data-theme="dark"]) .mr-tb-nav,
+      :root[data-theme="dark"] .mr-tb-nav {
+        gap: 5px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        align-content: center;
+      }
+      :root:not([data-theme="dark"]) .mr-tb-link,
+      :root[data-theme="dark"] .mr-tb-link {
+        padding: 8px 9px;
+        font-size: 12.5px;
+      }
+      :root:not([data-theme="dark"]) .mr-tb-name,
+      :root[data-theme="dark"] .mr-tb-name {
+        font-size: 19px;
+      }
+      :root:not([data-theme="dark"]) .mr-tb-right,
+      :root[data-theme="dark"] .mr-tb-right {
+        gap: 6px;
+      }
+      :root:not([data-theme="dark"]) .mr-tb-user,
+      :root[data-theme="dark"] .mr-tb-user {
+        padding-right: 7px;
+      }
+    }
+    @media (max-width: 860px) {
+      :root:not([data-theme="dark"]) .mr-topbar,
+      :root[data-theme="dark"] .mr-topbar {
+        min-height: 64px;
+        padding: 10px 14px;
+      }
+      :root:not([data-theme="dark"]) .mr-tb-nav,
+      :root[data-theme="dark"] .mr-tb-nav {
+        top: 64px;
+        padding: 14px;
+      }
+      :root:not([data-theme="dark"]) .mr-tb-nav {
+        background: #F8F4EA;
+        border-bottom: 2px solid #201B20;
+        box-shadow: 0 4px 0 #201B20;
+      }
+      :root[data-theme="dark"] .mr-tb-nav {
+        background: #15131D;
+        border-bottom: 2px solid #FF8A4C;
+        box-shadow: 0 4px 0 #FF8A4C;
+      }
+      :root:not([data-theme="dark"]) .mr-tb-link,
+      :root[data-theme="dark"] .mr-tb-link {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .mr-app-shell .content,
+      .mr-app-shell .content-wide {
+        padding: 18px 14px 90px !important;
+      }
+    }
+    @media (max-width: 640px) {
+      .mr-app-shell .mr-home .mr-stats-grid,
+      .mr-app-shell .mr-home .mr-courses-row,
+      :root:not([data-theme="dark"]) .mr-app-shell .course-cards {
+        grid-template-columns: 1fr !important;
+      }
+      :root:not([data-theme="dark"]) .page-title-cd,
+      :root:not([data-theme="dark"]) .focus-title,
+      :root:not([data-theme="dark"]) .fc-page-title {
+        font-size: 40px !important;
+      }
+    }
+
+    /* Focus Guard: keep actions, remove the distracting-site explainer/list. */
+    .mr-app-shell #focus-guard-card p,
+    .mr-app-shell #focus-guard-card .fg-chip {
+      display: none !important;
+    }
+
+    /* Grade sheet: clearer, denser organization without changing the JS model. */
+    .mr-app-shell .pl-wrap {
+      max-width: none !important;
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+      grid-template-areas:
+        "head summary"
+        "tabs summary"
+        "body body"
+        "help help";
+      gap: 18px 24px;
+      align-items: start;
+    }
+    .mr-app-shell .pl-h {
+      grid-area: head;
+      margin: 0 !important;
+      min-height: 150px;
+      align-items: flex-start !important;
+      padding: clamp(22px, 3vw, 34px);
+      border: 2px solid #201B20;
+      border-radius: 22px;
+      background: linear-gradient(135deg, #FFE7D8 0%, #FFF1C7 62%, #FFFFFF 100%);
+      box-shadow: 0 5px 0 #201B20, 0 20px 42px rgba(255,122,61,.12);
+    }
+    .mr-app-shell .pl-h h1 {
+      font-family: "Bricolage Grotesque", sans-serif !important;
+      font-size: clamp(42px, 5vw, 72px) !important;
+      line-height: .92 !important;
+      margin: 0 !important;
+      color: #201B20 !important;
+    }
+    .mr-app-shell .pl-h p {
+      max-width: 680px;
+      font-size: 15px !important;
+      line-height: 1.45;
+      color: #5F5660 !important;
+      margin-top: 10px !important;
+    }
+    .mr-app-shell .pl-actions {
+      align-self: flex-start;
+      justify-content: flex-end;
+    }
+    .mr-app-shell .pl-summary {
+      grid-area: summary;
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 12px !important;
+      margin: 0 !important;
+      position: sticky;
+      top: 96px;
+    }
+    .mr-app-shell .pl-card {
+      min-height: 106px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: #FFFFFF !important;
+      border: 2px solid #201B20 !important;
+      border-radius: 18px !important;
+      box-shadow: 0 4px 0 #201B20, 0 18px 34px rgba(32,27,32,.08) !important;
+    }
+    .mr-app-shell .pl-card .lbl {
+      color: #746D73 !important;
+      font-size: 10px !important;
+      letter-spacing: .09em !important;
+    }
+    .mr-app-shell .pl-card .val {
+      font-family: "Bricolage Grotesque", sans-serif;
+      font-size: clamp(30px, 3vw, 42px) !important;
+      line-height: .95;
+      color: #201B20;
+    }
+    .mr-app-shell .pl-tabs {
+      grid-area: tabs;
+      margin: 0 !important;
+      padding: 8px;
+      gap: 8px !important;
+      border: 2px solid #201B20 !important;
+      border-radius: 18px;
+      background: #FFFFFF;
+      box-shadow: 0 3px 0 #201B20;
+    }
+    .mr-app-shell .pl-tab {
+      border: 2px solid transparent !important;
+      border-radius: 12px !important;
+      padding: 9px 14px !important;
+      color: #4E4852 !important;
+      background: #FFFBF4 !important;
+      font-weight: 900 !important;
+    }
+    .mr-app-shell .pl-tab.active,
+    .mr-app-shell .pl-tab:hover {
+      color: #201B20 !important;
+      background: #FF7A3D !important;
+      border-color: #201B20 !important;
+      box-shadow: 0 2px 0 #201B20;
+    }
+    .mr-app-shell #pl-body {
+      grid-area: body;
+    }
+    .mr-app-shell .pl-grid {
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)) !important;
+      gap: 18px !important;
+      align-items: start;
+    }
+    .mr-app-shell .pl-course {
+      padding: 18px !important;
+      background: #FFFFFF !important;
+      border: 2px solid #201B20 !important;
+      border-radius: 18px !important;
+      box-shadow: 0 4px 0 #201B20, 0 18px 34px rgba(32,27,32,.08) !important;
+    }
+    .mr-app-shell .pl-course-h {
+      padding-bottom: 12px;
+      margin-bottom: 12px !important;
+      border-bottom: 2px solid #E6DCCB;
+    }
+    .mr-app-shell .pl-course-h input.cname {
+      font-family: "Bricolage Grotesque", sans-serif;
+      font-size: 22px !important;
+      font-weight: 800 !important;
+    }
+    .mr-app-shell .pl-evals {
+      border: 0 !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+    .mr-app-shell .pl-evals th {
+      background: #FFE7D8 !important;
+      border-bottom: 2px solid #201B20 !important;
+      color: #201B20 !important;
+      padding: 9px 8px !important;
+    }
+    .mr-app-shell .pl-evals td {
+      padding: 7px 5px !important;
+    }
+    .mr-app-shell .pl-evals input,
+    .mr-app-shell .pl-course-h input.ccred {
+      background: #FFFBF4 !important;
+      border: 2px solid #E6DCCB !important;
+      box-shadow: none !important;
+    }
+    .mr-app-shell .pl-foot {
+      background: #FFFBF4;
+      border: 2px solid #E6DCCB !important;
+      border-radius: 14px;
+      padding: 12px !important;
+      margin-top: 14px !important;
+    }
+    .mr-app-shell .pl-help {
+      grid-area: help;
+      margin: 0 !important;
+      border: 2px solid #201B20 !important;
+      border-left-width: 8px !important;
+      border-radius: 16px !important;
+      background: #FFFFFF !important;
+      box-shadow: 0 3px 0 #201B20 !important;
+    }
+
+    /* Dark mode interior redesign: same landing energy, night version. */
+    :root[data-theme="dark"] {
+      --bg: #111019;
+      --card: #1D1B26;
+      --surface: #1D1B26;
+      --text: #FFF7EA;
+      --text-secondary: #D6CFC4;
+      --text-muted: #AFA69A;
+      --border: #FF8A4C;
+      --border-light: #3B3544;
+      --primary: #FF8A4C;
+      --primary-hover: #FF7A3D;
+      --primary-light: #3A241D;
+      --green: #65D89B;
+      --green-light: #173426;
+      --blue: #78C8FF;
+      --blue-light: #172B3D;
+      --yellow: #FFD166;
+      --yellow-light: #3A3018;
+      --red: #FF7568;
+      --red-light: #3D1D1A;
+      --shadow-xs: 0 2px 0 #FF8A4C;
+      --shadow: 0 4px 0 #FF8A4C;
+      --shadow-md: 0 5px 0 #FF8A4C, 0 18px 42px rgba(0,0,0,.34);
+      --shadow-lg: 0 6px 0 #FF8A4C, 0 22px 56px rgba(0,0,0,.42);
+      --ring: 0 0 0 4px rgba(255,138,76,.28);
+    }
+    :root[data-theme="dark"] body,
+    :root[data-theme="dark"] .mr-app-shell.app,
+    :root[data-theme="dark"] .mr-app-shell .content,
+    :root[data-theme="dark"] .mr-app-shell .content-wide {
+      background:
+        linear-gradient(180deg, rgba(255,138,76,.14), rgba(17,16,25,0) 260px),
+        #111019 !important;
+      color: #FFF7EA !important;
+    }
+    :root[data-theme="dark"] .mr-topbar {
+      min-height: 72px;
+      height: auto;
+      padding: 12px clamp(18px, 3vw, 42px);
+      gap: 18px;
+      background: color-mix(in srgb, #15131D 88%, transparent) !important;
+      border-bottom: 2px solid #FF8A4C !important;
+      box-shadow: 0 4px 0 #FF8A4C !important;
+      backdrop-filter: blur(14px) saturate(130%);
+    }
+    :root[data-theme="dark"] .mr-tb-brand {
+      gap: 12px;
+      min-width: max-content;
+    }
+    :root[data-theme="dark"] .mr-tb-logo {
+      width: 40px;
+      height: 40px;
+      padding: 4px;
+    }
+    :root[data-theme="dark"] .mr-tb-name {
+      font-family: "Bricolage Grotesque", sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+    }
+    :root[data-theme="dark"] .mr-tb-nav {
+      gap: 6px;
+      padding: 3px 2px 6px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    :root[data-theme="dark"] .mr-tb-link {
+      font-size: 13px;
+      font-weight: 900;
+      padding: 9px 11px;
+      transition: transform .12s ease, box-shadow .12s ease, background .12s ease, color .12s ease;
+    }
+    :root[data-theme="dark"] .mr-tb-right { gap: 10px; }
+    :root[data-theme="dark"] .mr-tb-brand,
+    :root[data-theme="dark"] .mr-tb-user,
+    :root[data-theme="dark"] .mr-tb-name {
+      color: #FFF7EA !important;
+    }
+    :root[data-theme="dark"] .mr-tb-logo,
+    :root[data-theme="dark"] .mr-tb-link,
+    :root[data-theme="dark"] .mr-tb-icon,
+    :root[data-theme="dark"] .mr-tb-burger,
+    :root[data-theme="dark"] .mr-tb-user,
+    :root[data-theme="dark"] .mr-tb-av {
+      background: #1D1B26 !important;
+      color: #FFF7EA !important;
+      border: 2px solid #FF8A4C !important;
+      border-radius: 14px !important;
+      box-shadow: 0 2px 0 #FF8A4C !important;
+    }
+    :root[data-theme="dark"] .mr-tb-user {
+      padding: 4px 10px 4px 4px;
+    }
+    :root[data-theme="dark"] .mr-tb-link:hover,
+    :root[data-theme="dark"] .mr-tb-icon:hover,
+    :root[data-theme="dark"] .mr-tb-burger:hover,
+    :root[data-theme="dark"] .mr-tb-user:hover {
+      background: #2A2434 !important;
+      color: #FFFFFF !important;
+      transform: translateY(-1px);
+    }
+    :root[data-theme="dark"] .mr-tb-link.active {
+      background: #FF8A4C !important;
+      color: #15131D !important;
+      box-shadow: 0 3px 0 #FF8A4C !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .page-header h1,
+    :root[data-theme="dark"] .mr-app-shell h1,
+    :root[data-theme="dark"] .mr-app-shell h2,
+    :root[data-theme="dark"] .page-title-cd,
+    :root[data-theme="dark"] .focus-title,
+    :root[data-theme="dark"] .fc-page-title,
+    :root[data-theme="dark"] .fr-title,
+    :root[data-theme="dark"] .pl-h h1 {
+      font-family: "Bricolage Grotesque", sans-serif !important;
+      color: #FFF7EA !important;
+      font-weight: 800 !important;
+      letter-spacing: 0 !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .card,
+    :root[data-theme="dark"] .mr-app-shell .stat-card,
+    :root[data-theme="dark"] .mr-app-shell .mr-card,
+    :root[data-theme="dark"] .mr-app-shell .mr-stat-card,
+    :root[data-theme="dark"] .mr-app-shell .ccard,
+    :root[data-theme="dark"] .mr-app-shell .canvas-banner,
+    :root[data-theme="dark"] .mr-app-shell .focus-timer-card,
+    :root[data-theme="dark"] .mr-app-shell .focus-rival-card,
+    :root[data-theme="dark"] .mr-app-shell .focus-exam-nudge,
+    :root[data-theme="dark"] .mr-app-shell .ps,
+    :root[data-theme="dark"] .mr-app-shell .fc-card-flip,
+    :root[data-theme="dark"] .mr-app-shell .fc-decks-card,
+    :root[data-theme="dark"] .mr-app-shell .deck,
+    :root[data-theme="dark"] .mr-app-shell .qcard,
+    :root[data-theme="dark"] .mr-app-shell .qz-mode,
+    :root[data-theme="dark"] .mr-app-shell .course-empty,
+    :root[data-theme="dark"] .mr-app-shell .dropzone,
+    :root[data-theme="dark"] .mr-app-shell .quiz-grid > div:not(.qcard),
+    :root[data-theme="dark"] .mr-app-shell .fr-panel,
+    :root[data-theme="dark"] .mr-app-shell .fr-group-card,
+    :root[data-theme="dark"] .mr-app-shell .fr-row,
+    :root[data-theme="dark"] .mr-app-shell .shop-cd .card,
+    :root[data-theme="dark"] .mr-app-shell .student-profile-wrap .card,
+    :root[data-theme="dark"] .mr-app-shell .pl-card,
+    :root[data-theme="dark"] .mr-app-shell .pl-course,
+    :root[data-theme="dark"] .mr-app-shell .pl-help,
+    :root[data-theme="dark"] .mr-app-shell .pl-tabs,
+    :root[data-theme="dark"] .mr-app-shell .pl-empty {
+      background: #1D1B26 !important;
+      color: #FFF7EA !important;
+      border: 2px solid #FF8A4C !important;
+      border-radius: 18px !important;
+      box-shadow: 0 4px 0 #FF8A4C, 0 18px 42px rgba(0,0,0,.34) !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .mr-mission,
+    :root[data-theme="dark"] .mr-app-shell .pl-h {
+      background: linear-gradient(135deg, #3A241D 0%, #2A2434 58%, #1D1B26 100%) !important;
+      border: 2px solid #FF8A4C !important;
+      box-shadow: 0 5px 0 #FF8A4C, 0 22px 52px rgba(0,0,0,.42) !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .mr-league-card,
+    :root[data-theme="dark"] .mr-app-shell .fc-today {
+      border: 2px solid #FF8A4C !important;
+      box-shadow: 0 5px 0 #FF8A4C, 0 22px 52px rgba(0,0,0,.42) !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .ccs,
+    :root[data-theme="dark"] .mr-app-shell .mr-sess,
+    :root[data-theme="dark"] .mr-app-shell .mr-course-tile,
+    :root[data-theme="dark"] .mr-app-shell .mr-exam,
+    :root[data-theme="dark"] .mr-app-shell .block-item,
+    :root[data-theme="dark"] .mr-app-shell .amb,
+    :root[data-theme="dark"] .mr-app-shell .fr-empty,
+    :root[data-theme="dark"] .mr-app-shell .course-benchmark,
+    :root[data-theme="dark"] .mr-app-shell .course-detail-card,
+    :root[data-theme="dark"] .mr-app-shell .pl-foot,
+    :root[data-theme="dark"] .mr-app-shell .pl-evals input,
+    :root[data-theme="dark"] .mr-app-shell .pl-course-h input.ccred {
+      background: #15131D !important;
+      color: #FFF7EA !important;
+      border-color: #3B3544 !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .btn-primary,
+    :root[data-theme="dark"] .mr-app-shell .ccard-go,
+    :root[data-theme="dark"] .mr-app-shell .ft-controls #start-btn,
+    :root[data-theme="dark"] .mr-app-shell .mr-empty .cta {
+      background: #FF8A4C !important;
+      color: #15131D !important;
+      border: 2px solid #FF8A4C !important;
+      box-shadow: 0 4px 0 #FF8A4C !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .btn-outline,
+    :root[data-theme="dark"] .mr-app-shell .btn-ghost,
+    :root[data-theme="dark"] .mr-app-shell .cb-btn,
+    :root[data-theme="dark"] .mr-app-shell .ft-controls #pause-btn,
+    :root[data-theme="dark"] .mr-app-shell .ft-controls #reset-btn,
+    :root[data-theme="dark"] .mr-app-shell .ft-controls #skip-btn {
+      background: #1D1B26 !important;
+      color: #FFF7EA !important;
+      border: 2px solid #FF8A4C !important;
+      box-shadow: 0 2px 0 #FF8A4C !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell input,
+    :root[data-theme="dark"] .mr-app-shell textarea,
+    :root[data-theme="dark"] .mr-app-shell select {
+      background: #15131D !important;
+      color: #FFF7EA !important;
+      border: 2px solid #FF8A4C !important;
+      border-radius: 12px !important;
+      box-shadow: 0 2px 0 rgba(255,138,76,.5) !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell th {
+      background: #3A241D !important;
+      color: #FFF7EA !important;
+      border-bottom: 2px solid #FF8A4C !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell td {
+      border-bottom-color: #3B3544 !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell tbody tr:hover td {
+      background: #2A2434 !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .pl-tab {
+      background: #15131D !important;
+      color: #D6CFC4 !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .pl-tab.active,
+    :root[data-theme="dark"] .mr-app-shell .pl-tab:hover {
+      background: #FF8A4C !important;
+      color: #15131D !important;
+      border-color: #FF8A4C !important;
+      box-shadow: 0 2px 0 #FF8A4C !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .pl-card .val,
+    :root[data-theme="dark"] .mr-app-shell .pl-card .lbl,
+    :root[data-theme="dark"] .mr-app-shell .pl-h p,
+    :root[data-theme="dark"] .mr-app-shell .pl-nmpa,
+    :root[data-theme="dark"] .mr-app-shell .pl-evals input {
+      color: #FFF7EA !important;
+    }
+
+    /* Topbar geometry lock: theme changes can recolor the bar, but not resize it. */
+    .mr-topbar {
+      min-height: 72px;
+      height: auto;
+      padding: 12px clamp(18px, 3vw, 42px);
+      gap: 18px;
+    }
+    .mr-tb-brand {
+      gap: 12px;
+      min-width: max-content;
+    }
+    .mr-tb-logo {
+      width: 40px;
+      height: 40px;
+      padding: 4px;
+    }
+    .mr-tb-name {
+      font-family: "Bricolage Grotesque", sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .mr-tb-nav {
+      gap: 6px;
+      padding: 3px 2px 6px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    .mr-tb-link {
+      font-size: 13px;
+      font-weight: 900;
+      padding: 9px 11px;
+      border-radius: 14px;
+      transition: transform .12s ease, box-shadow .12s ease, background .12s ease, color .12s ease;
+    }
+    .mr-tb-right {
+      gap: 10px;
+    }
+    .mr-tb-user {
+      padding: 4px 10px 4px 4px;
+    }
+    @media (max-width: 1380px) and (min-width: 861px) {
+      .mr-tb-nav {
+        gap: 5px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        align-content: center;
+      }
+      .mr-tb-link {
+        padding: 8px 9px;
+        font-size: 12.5px;
+      }
+      .mr-tb-name {
+        font-size: 19px;
+      }
+      .mr-tb-right {
+        gap: 6px;
+      }
+      .mr-tb-user {
+        padding-right: 7px;
+      }
+    }
+    @media (max-width: 860px) {
+      .mr-topbar {
+        min-height: 64px;
+        padding: 10px 14px;
+      }
+      .mr-tb-nav {
+        top: 64px;
+        padding: 14px;
+      }
+      .mr-tb-link {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+    :root[data-theme="dark"] .mr-topbar {
+      min-height: 72px !important;
+      height: auto !important;
+      padding: 12px clamp(18px, 3vw, 42px) !important;
+      gap: 18px !important;
+    }
+    :root[data-theme="dark"] .mr-tb-brand {
+      gap: 12px !important;
+      min-width: max-content !important;
+    }
+    :root[data-theme="dark"] .mr-tb-logo {
+      width: 40px !important;
+      height: 40px !important;
+      padding: 4px !important;
+      border-radius: 12px !important;
+    }
+    :root[data-theme="dark"] .mr-tb-name {
+      font-family: "Bricolage Grotesque", sans-serif !important;
+      font-size: 22px !important;
+      font-weight: 800 !important;
+    }
+    :root[data-theme="dark"] .mr-tb-nav {
+      gap: 6px !important;
+      padding: 3px 2px 6px !important;
+      flex-wrap: nowrap !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+    }
+    :root[data-theme="dark"] .mr-tb-link {
+      font-size: 13px !important;
+      font-weight: 900 !important;
+      padding: 9px 11px !important;
+      border-radius: 14px !important;
+    }
+    :root[data-theme="dark"] .mr-tb-right {
+      gap: 10px !important;
+    }
+    :root[data-theme="dark"] .mr-tb-user {
+      padding: 4px 10px 4px 4px !important;
+    }
+    :root[data-theme="dark"] .mr-tb-av {
+      border-radius: 12px !important;
+    }
+    @media (max-width: 1380px) and (min-width: 861px) {
+      :root[data-theme="dark"] .mr-tb-nav {
+        gap: 5px !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        align-content: center !important;
+      }
+      :root[data-theme="dark"] .mr-tb-link {
+        padding: 8px 9px !important;
+        font-size: 12.5px !important;
+      }
+      :root[data-theme="dark"] .mr-tb-name {
+        font-size: 19px !important;
+      }
+      :root[data-theme="dark"] .mr-tb-right {
+        gap: 6px !important;
+      }
+      :root[data-theme="dark"] .mr-tb-user {
+        padding-right: 7px !important;
+      }
+    }
+    @media (max-width: 860px) {
+      :root[data-theme="dark"] .mr-topbar {
+        min-height: 64px !important;
+        padding: 10px 14px !important;
+      }
+      :root[data-theme="dark"] .mr-tb-nav {
+        top: 64px !important;
+        padding: 14px !important;
+      }
+      :root[data-theme="dark"] .mr-tb-link {
+        width: 100% !important;
+        justify-content: flex-start !important;
+      }
+    }
+
+    @media (max-width: 1080px) {
+      .mr-app-shell .pl-wrap {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "head"
+          "summary"
+          "tabs"
+          "body"
+          "help";
+      }
+      .mr-app-shell .pl-summary {
+        position: static;
+      }
+    }
+    @media (max-width: 640px) {
+      .mr-app-shell .pl-summary,
+      .mr-app-shell .pl-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .mr-app-shell .pl-h {
+        padding: 20px;
+      }
     }
