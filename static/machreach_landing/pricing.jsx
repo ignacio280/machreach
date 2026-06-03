@@ -204,14 +204,14 @@ function FinalCTA() {
             Estudia distinto<br/>este semestre.
           </h2>
           <p style={{ fontSize: 18, color: "color-mix(in oklab, white 80%, transparent)", maxWidth: 540, margin: "0 auto 32px" }}>
-            Conecta Canvas en 30 segundos y empieza a sumar XP hoy mismo. Tu yo del lunes te lo va a agradecer.
+            Activa la extensión de MachReach y empieza a ordenar tus cursos hoy mismo. Tu yo del lunes te lo va a agradecer.
           </p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
           <a className="btn btn-lg" href="/register" style={{
               background: "var(--ink)", color: "white", borderColor: "var(--ink)",
               boxShadow: "0 4px 0 0 color-mix(in oklab, black 50%, transparent)",
             }}>
-              <IconCanvas size={20}/> Conectar Canvas
+              <IconCanvas size={20}/> Usar la extensión
             </a>
             <a className="btn btn-lg" href="#features" style={{
               background: "white", color: "var(--brand-ink)", borderColor: "var(--ink)",

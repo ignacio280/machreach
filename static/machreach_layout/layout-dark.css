@@ -564,7 +564,6 @@
           }
           :root[data-theme="dark"] .content .shop-cd .card,
           :root[data-theme="dark"] .content .shop-cd .stat-card,
-          :root[data-theme="dark"] .content .shop-cd [style*="background"],
           :root[data-theme="dark"] .content .pl-card,
           :root[data-theme="dark"] .content .pl-course,
           :root[data-theme="dark"] .content .pl-help,
@@ -579,6 +578,109 @@
             background:#1D1B26 !important;
             background-color:#1D1B26 !important;
             color:#FFF7EA !important;
+          }
+          :root[data-theme="dark"] .content #mr-lb-page .lb-flag-bg,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-flag,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-flag-bg,
+          :root[data-theme="dark"] .content .fr-lb-embed .lb-podium-flag {
+            opacity:.46 !important;
+            mix-blend-mode:screen;
+            filter:saturate(1.24) contrast(1.08);
+          }
+          :root[data-theme="dark"] .content .shop-cd .bnr-anim-host,
+          :root[data-theme="dark"] .content .shop-cd [class*="flag-anim"],
+          :root[data-theme="dark"] .content .shop-cd [class*="flg-"] {
+            filter:saturate(1.16) contrast(1.06);
+          }
+          :root[data-theme="dark"] .content .pl-course-h input.cname,
+          :root[data-theme="dark"] .content .pl-course-h input.ccred,
+          :root[data-theme="dark"] .content .pl-evals input {
+            background:rgba(255,255,255,.035) !important;
+            background-color:rgba(255,255,255,.035) !important;
+            border-color:rgba(255,138,76,.42) !important;
+            box-shadow:inset 0 0 0 1px rgba(255,255,255,.035), 0 2px 0 rgba(255,122,61,.36) !important;
+          }
+          :root[data-theme="dark"] .content .pl-evals tr,
+          :root[data-theme="dark"] .content .pl-evals td {
+            background:transparent !important;
+            background-color:transparent !important;
+          }
+          :root[data-theme="dark"] .content .pl-evals th {
+            background:rgba(10,10,16,.34) !important;
+            background-color:rgba(10,10,16,.34) !important;
+          }
+          /* Ranking dark mode keeps the new orange arena styling. */
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-hero,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-hero {
+            background:linear-gradient(135deg,#12101A 0%,#1D1B26 58%,#2A1B16 100%) !important;
+            background-color:#1D1B26 !important;
+            border-color:#FF7A3D !important;
+            box-shadow:0 8px 0 #FF7A3D, 0 30px 76px rgba(0,0,0,.36) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-podium,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium {
+            background:linear-gradient(135deg,#12101A,#1D1B26 58%,#2A1B16) !important;
+            background-color:#1D1B26 !important;
+            border-color:#FF7A3D !important;
+            box-shadow:0 8px 0 #FF7A3D, 0 34px 78px rgba(0,0,0,.38) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-rank-card,
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-tabs,
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-board,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-rank-card,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-tabs,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-board {
+            background:rgba(29,27,38,.92) !important;
+            background-color:rgba(29,27,38,.92) !important;
+            border-color:#FF7A3D !important;
+            box-shadow:0 0 0 1px rgba(255,255,255,.04) inset, 0 7px 0 #FF7A3D, 0 26px 62px rgba(0,0,0,.30) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-podium-card,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-card {
+            background:rgba(255,255,255,.055) !important;
+            background-color:rgba(255,255,255,.055) !important;
+            border-color:#FF7A3D !important;
+            color:#FFF8E1 !important;
+            box-shadow:0 8px 0 #0A0A10, 0 24px 48px rgba(0,0,0,.32) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-podium-card.place-1,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-card.place-1 {
+            background:linear-gradient(180deg,rgba(255,179,107,.30),rgba(255,122,61,.08)) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-podium-card.place-2,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-card.place-2 {
+            background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.04)) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-podium-card.place-3,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-podium-card.place-3 {
+            background:linear-gradient(180deg,rgba(255,122,61,.20),rgba(255,255,255,.04)) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-tab,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-tab {
+            background:rgba(255,255,255,.035) !important;
+            background-color:rgba(255,255,255,.035) !important;
+            border-color:rgba(255,138,76,.44) !important;
+            color:#FFF8E1 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-tab.active,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-tab.active {
+            background:#FF7A3D !important;
+            background-color:#FF7A3D !important;
+            border-color:#FF7A3D !important;
+            color:#141019 !important;
+            box-shadow:0 3px 0 #0A0A10 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-row,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-row {
+            background:rgba(255,255,255,.035) !important;
+            background-color:rgba(255,255,255,.035) !important;
+            border-color:rgba(255,138,76,.28) !important;
+            color:#FFF8E1 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell #mr-lb-page .lb-row:hover,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-row:hover {
+            background:rgba(255,122,61,.09) !important;
+            background-color:rgba(255,122,61,.09) !important;
           }
           :root[data-theme="dark"] .content table,
           :root[data-theme="dark"] .content th {

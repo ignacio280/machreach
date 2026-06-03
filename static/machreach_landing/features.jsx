@@ -155,7 +155,7 @@ function MiniQuiz() {
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
         <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--brand-ink)", background: "var(--brand-soft)", padding: "2px 5px", borderRadius: 4, letterSpacing: ".06em" }}>CÁLCULO I</span>
-        <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)" }}>3/10 · ❤❤❤</span>
+        <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)" }}>3/10</span>
       </div>
       <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>¿Cuál es la derivada de sin(x)?</div>
       {[
@@ -264,7 +264,7 @@ function MiniCoins() {
 function Features() {
   const [hover, setHover] = React.useState(null);
   const items = [
-    { id: 0, color: "var(--brand)",     icon: <IconCanvas/>,  title: "Canvas en automático",   desc: "Conecta Canvas y MachReach detecta tus cursos para organizar tu estudio por ramo.", mini: <MiniCanvas/> },
+    { id: 0, color: "var(--brand)",     icon: <IconCanvas/>,  title: "Canvas por extensión",   desc: "La extensión de MachReach detecta tus cursos desde tu Canvas abierto para organizar tu estudio por ramo.", mini: <MiniCanvas/> },
     { id: 1, color: "var(--secondary)", icon: <IconTimer/>,   title: "Modo Focus",             desc: "Pomodoro pegado a tu ramo y tu prueba. Cada minuto cuenta como XP real.",         mini: <MiniFocus/> },
     { id: 2, color: "var(--accent)",    icon: <IconChart/>,   title: "Analítica de estudio",   desc: "Cuántas horas, qué día rindes más, cuánto tiempo le diste a cada examen.",        mini: <MiniChart/> },
     { id: 3, color: "var(--brand)",     icon: <IconBrain/>,   title: "Quizzes con IA",          desc: "Genera preguntas desde tus apuntes o pruebas oficiales para practicar sin perder tiempo.", mini: <MiniQuiz/> },

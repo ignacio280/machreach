@@ -1361,7 +1361,7 @@ LAYOUT = """<!DOCTYPE html>
 
   {% if logged_in and account_type|default('student') == 'student' %}
   <!-- ── Preserved-XP welcome banner (academic setup lives on /student/setup) ── -->
-  <div id="mrXpBanner" style="display:none;position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:9998;
+  <div id="mrXpBanner" style="display:none;position:fixed;left:50%;top:calc(92px + env(safe-area-inset-top, 0px));transform:translateX(-50%);z-index:1900;
        background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;padding:12px 20px;border-radius:12px;
        box-shadow:0 10px 40px rgba(99,102,241,.4);font-weight:500;align-items:center;gap:12px;
        max-width:90vw;animation:mrSlideDown .5s cubic-bezier(.22,.61,.36,1);">
@@ -1434,6 +1434,72 @@ def index():
     from student.landing_design import render_landing_page
     return make_response(render_landing_page(lang))
 
+
+def _auth_story_panel(kind: str, lang: str) -> str:
+    is_en = lang == "en"
+    if kind == "login":
+        kicker = "Welcome back" if is_en else "Vuelve a tu ritmo"
+        title = "Pick up where<br>you left off." if is_en else "Retoma donde<br>lo dejaste."
+        desc = (
+            "Your courses, focus blocks, notes and rankings stay ready in one place."
+            if is_en else
+            "Tus cursos, bloques de enfoque, notas y rankings siguen listos en un solo lugar."
+        )
+        status = "Session ready" if is_en else "Sesi&oacute;n lista"
+        primary = "Focus streak" if is_en else "Racha de enfoque"
+        secondary = "Courses organized" if is_en else "Cursos ordenados"
+    else:
+        kicker = "Start clean" if is_en else "Empieza limpio"
+        title = "Study stops<br>feeling random." if is_en else "Estudiar deja<br>de ser una lata."
+        desc = (
+            "Create your account, activate the MachReach extension, and turn your semester into visible progress."
+            if is_en else
+            "Crea tu cuenta, activa la extensi&oacute;n de MachReach y convierte tu semestre en progreso visible."
+        )
+        status = "Extension flow" if is_en else "Flujo por extensi&oacute;n"
+        primary = "Canvas detected" if is_en else "Canvas detectado"
+        secondary = "Tools ready" if is_en else "Herramientas listas"
+
+    return f"""
+      <aside class="auth-story" aria-hidden="true">
+        <div>
+          <span class="auth-kicker"><span></span>{kicker}</span>
+          <h2>{title}</h2>
+          <p>{desc}</p>
+          <div class="auth-proof">
+            <span>&#10003; Focus + XP</span>
+            <span>&#10003; Quizzes IA</span>
+            <span>&#10003; Ranking</span>
+          </div>
+        </div>
+        <div class="auth-preview">
+          <div class="auth-preview-top">
+            <div class="auth-dots"><i></i><i></i><i></i></div>
+            <span>{status}</span>
+          </div>
+          <div class="auth-preview-body">
+            <div class="auth-course-row">
+              <div>
+                <div class="auth-course-name">C&aacute;lculo I</div>
+                <div class="auth-course-meta">{primary}</div>
+              </div>
+              <div class="auth-course-xp">+120 XP</div>
+            </div>
+            <div class="auth-course-row">
+              <div>
+                <div class="auth-course-name">&Aacute;lgebra Lineal</div>
+                <div class="auth-course-meta">{secondary}</div>
+              </div>
+              <div class="auth-course-xp">3/4</div>
+            </div>
+            <div class="auth-build">
+              <i style="--w:92%"></i><i style="--w:70%"></i><i style="--w:84%"></i><i style="--w:58%"></i>
+            </div>
+          </div>
+        </div>
+      </aside>
+    """
+
 @app.route("/register", methods=["GET", "POST"])
 @limiter.limit("10 per minute", methods=["POST"])
 def register():
@@ -1505,35 +1571,53 @@ def register():
         session["referral_ref"] = _ref_code
     _ref_hidden = f'<input type="hidden" name="ref" value="{_esc(_ref_code)}">' if _ref_code else ""
     _ref_banner = (
-        '<div style="margin:0 0 14px;padding:12px 14px;border:1px solid rgba(255,122,61,.35);'
-        'border-radius:14px;background:rgba(255,122,61,.10);color:var(--text);font-size:13px;font-weight:800;">'
+        '<div class="auth-ref">'
         + ("&#127873; You were invited! Your friend gets a free week of Plus when you join."
            if session.get("lang") == "en"
            else "&#127873; &iexcl;Te invitaron! Tu amigo gana una semana gratis de Plus cuando te unes.")
         + "</div>"
     ) if _ref_code else ""
+    _is_en = session.get("lang") == "en"
+    _story = _auth_story_panel("register", session.get("lang", "es"))
+    _name_label = "Full name" if _is_en else "Nombre"
+    _name_ph = "Your name" if _is_en else "Tu nombre"
+    _password_label = "Password" if _is_en else "Contrase&ntilde;a"
+    _password_ph = "At least 6 characters" if _is_en else "M&iacute;nimo 6 caracteres"
+    _confirm_label = "Confirm password" if _is_en else "Confirmar contrase&ntilde;a"
+    _confirm_ph = "Repeat your password" if _is_en else "Repite tu contrase&ntilde;a"
+    _account_note = (
+        "We'll email you a link to confirm your account. The extension can be activated after signup."
+        if _is_en else
+        "Te enviaremos un correo para confirmar tu cuenta. La extensi&oacute;n se activa despu&eacute;s de crearla."
+    )
+    _legal = (
+        'By creating an account, you agree to our <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>.'
+        if _is_en else
+        'Al crear una cuenta, aceptas nuestros <a href="/terms">T&eacute;rminos del Servicio</a> y la <a href="/privacy">Pol&iacute;tica de Privacidad</a>.'
+    )
     return render_layout(title="Register", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="register", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
-      <div class="auth-card">
-        <h1>{t("auth.create_account")}</h1>
-        <p class="subtitle">{t("auth.create_subtitle")}</p>
-        {_ref_banner}
-        <form method="post" action="/register" autocomplete="off" style="margin-top:8px;">
-          {_ref_hidden}
-          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Full name" if session.get("lang") == "en" else "Nombre"}</label>
-          <input name="name" type="text" required autocomplete="name" placeholder="{"Your name" if session.get("lang") == "en" else "Tu nombre"}" style="margin-bottom:10px;">
-          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Email" if session.get("lang") == "en" else "Correo"}</label>
-          <input name="email" type="email" required autocomplete="username" placeholder="tu@correo.com" style="margin-bottom:10px;">
-          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Password" if session.get("lang") == "en" else "Contrase&ntilde;a"}</label>
-          <input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="{"At least 6 characters" if session.get("lang") == "en" else "M&iacute;nimo 6 caracteres"}" style="margin-bottom:10px;">
-          <label style="display:block;font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">{"Confirm password" if session.get("lang") == "en" else "Confirmar contrase&ntilde;a"}</label>
-          <input name="password2" type="password" required minlength="6" autocomplete="new-password" placeholder="{"Repeat your password" if session.get("lang") == "en" else "Repite tu contrase&ntilde;a"}" style="margin-bottom:12px;">
-          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.create_account")}</button>
-          <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:10px 0 0;line-height:1.5;">{"We'll email you a link to confirm your account." if session.get("lang") == "en" else "Te enviaremos un correo para confirmar tu cuenta. Conecta Canvas despu&eacute;s desde Enfoque."}</p>
-        </form>
-        <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:12px;line-height:1.6;">By creating an account, you agree to our <a href="/terms" style="color:var(--primary);">Terms of Service</a> and <a href="/privacy" style="color:var(--primary);">Privacy Policy</a>.</p>
-        <div class="auth-footer">{t("auth.have_account")} <a href="/login">{t("auth.log_in")}</a></div>
-      </div>
+      <section class="auth-shell">
+        {_story}
+        <div class="auth-card">
+          <div class="auth-card-head">
+            <h1>{t("auth.create_account")}</h1>
+            <p class="subtitle">{t("auth.create_subtitle")}</p>
+          </div>
+          {_ref_banner}
+          <form class="auth-form" method="post" action="/register" autocomplete="off">
+            {_ref_hidden}
+            <div class="auth-field"><label>{_name_label}</label><input name="name" type="text" required autocomplete="name" placeholder="{_name_ph}"></div>
+            <div class="auth-field"><label>{"Email" if _is_en else "Correo"}</label><input name="email" type="email" required autocomplete="username" placeholder="tu@correo.com"></div>
+            <div class="auth-field"><label>{_password_label}</label><input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="{_password_ph}"></div>
+            <div class="auth-field"><label>{_confirm_label}</label><input name="password2" type="password" required minlength="6" autocomplete="new-password" placeholder="{_confirm_ph}"></div>
+            <button class="btn btn-primary auth-submit" type="submit">{t("auth.create_account")}</button>
+            <p class="auth-note">{_account_note}</p>
+          </form>
+          <p class="auth-legal">{_legal}</p>
+          <div class="auth-footer">{t("auth.have_account")} <a href="/login">{t("auth.log_in")}</a></div>
+        </div>
+      </section>
     </div>
     """))
 
@@ -1563,26 +1647,35 @@ def login():
         if pending_token:
             return redirect(url_for("team_accept_invite", token=pending_token))
         return redirect(url_for("student_dashboard_page"))
+    _is_en = session.get("lang") == "en"
+    _story = _auth_story_panel("login", session.get("lang", "es"))
+    _resend_summary = "Didn't get verification email?" if _is_en else "&iquest;No recibiste el correo de verificaci&oacute;n?"
+    _resend_button = "Resend" if _is_en else "Reenviar"
     return render_layout(title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
-      <div class="auth-card">
-        <h1>{t("auth.welcome_back")}</h1>
-        <p class="subtitle">{t("auth.sign_in_desc")}</p>
-        <form method="post">
-          <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="you@school.edu" required></div>
-          <div class="form-group"><label>{t("auth.password")}</label><input name="password" type="password" required></div>
-          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.sign_in")}</button>
-        </form>
-        <div style="text-align:center;margin-top:12px;"><a href="/forgot-password" style="font-size:13px;color:var(--text-muted);">{t("auth.forgot_password")}</a></div>
-        <details style="text-align:center;margin-top:8px;">
-          <summary style="font-size:12px;color:var(--text-muted);cursor:pointer;list-style:none;">Didn't get verification email?</summary>
-          <form method="post" action="/resend-verification" style="margin-top:8px;display:flex;gap:8px;justify-content:center;">
-            <input name="email" type="email" placeholder="your@email.com" required style="font-size:12px;padding:6px 10px;max-width:200px;">
-            <button class="btn btn-outline btn-sm" type="submit">Resend</button>
+      <section class="auth-shell">
+        {_story}
+        <div class="auth-card">
+          <div class="auth-card-head">
+            <h1>{t("auth.welcome_back")}</h1>
+            <p class="subtitle">{t("auth.sign_in_desc")}</p>
+          </div>
+          <form class="auth-form" method="post" action="/login">
+            <div class="auth-field"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="you@school.edu" autocomplete="username" required></div>
+            <div class="auth-field"><label>{t("auth.password")}</label><input name="password" type="password" autocomplete="current-password" required></div>
+            <button class="btn btn-primary auth-submit" type="submit">{t("auth.sign_in")}</button>
           </form>
-        </details>
-        <div class="auth-footer">{t("auth.no_account")} <a href="/register">{t("auth.sign_up_free")}</a></div>
-      </div>
+          <div class="auth-link-row"><a href="/forgot-password">{t("auth.forgot_password")}</a></div>
+          <details class="auth-details">
+            <summary>{_resend_summary}</summary>
+            <form class="auth-resend-form" method="post" action="/resend-verification">
+              <input name="email" type="email" placeholder="your@email.com" required>
+              <button class="btn btn-outline btn-sm" type="submit">{_resend_button}</button>
+            </form>
+          </details>
+          <div class="auth-footer">{t("auth.no_account")} <a href="/register">{t("auth.sign_up_free")}</a></div>
+        </div>
+      </section>
     </div>
     """))
 

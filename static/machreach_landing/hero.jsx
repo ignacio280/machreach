@@ -223,7 +223,7 @@ function Hero() {
             </p>
             <div style={heroStyles.ctaRow}>
               <a href="/register" className="btn btn-primary btn-lg">
-                <IconCanvas size={20}/> Conectar Canvas
+                <IconCanvas size={20}/> Usar la extensión
               </a>
               <a href="#how" className="btn btn-ghost btn-lg">
                 Ver cómo funciona <IconArrow size={18}/>

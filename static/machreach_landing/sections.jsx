@@ -3,7 +3,7 @@
 /* -------- HOW IT WORKS -------- */
 function HowItWorks() {
   const steps = [
-    { n: "01", t: "Conecta Canvas", d: "Agrega tu URL y token para detectar tus cursos. Fechas y materiales se organizan manualmente cuando los necesites.", icon: <IconCanvas/> },
+    { n: "01", t: "Activa la extensión", d: "La extensión de MachReach detecta tus cursos desde tu sesión abierta de Canvas, sin configuración técnica y sin tocar tus credenciales.", icon: <IconCanvas/> },
     { n: "02", t: "Estudia con Focus", d: "Elige ramo, prueba y dale start. El reloj cuenta y la app te suma XP.", icon: <IconTimer/> },
     { n: "03", t: "Sube de liga", d: "Compite cada semana con tu universidad. Premios reales en monedas.", icon: <IconTrophy/> },
   ];
@@ -57,10 +57,10 @@ function HowItWorks() {
 /* -------- CANVAS CALLOUT -------- */
 function CanvasCallout() {
   const lines = [
-    { c: "var(--accent)", t: "→ canvas.uc.cl/profile/settings", d: 0 },
-    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ autenticado como s.diaz@uc.cl", d: 200 },
-    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ 6 cursos detectados", d: 400 },
-    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ok cursos listos para ordenar", d: 600 },
+    { c: "var(--accent)", t: "→ extension.machreach/canvas", d: 0 },
+    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ Canvas abierto detectado", d: 200 },
+    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ cursos leídos por la extensión", d: 400 },
+    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ok ramos listos para ordenar", d: 600 },
     { c: "color-mix(in oklab, white 50%, transparent)", t: "  ok herramientas listas", d: 800 },
     { c: "var(--brand)", t: "→ listo para estudiar.", d: 1100 },
   ];
@@ -84,14 +84,14 @@ function CanvasCallout() {
               <span className="dot" style={{ background: "var(--accent)" }}/> Conexion simple
             </span>
             <h2 style={{ fontSize: "clamp(34px, 4.5vw, 56px)", marginTop: 18, color: "white" }}>
-              Conecta Canvas,<br/>ordena tus cursos.
+              Activa la extensión,<br/>ordena tus cursos.
             </h2>
             <p style={{ color: "color-mix(in oklab, white 75%, transparent)", fontSize: 18, marginTop: 16, maxWidth: 480 }}>
-              Con tu URL y token de Canvas, MachReach detecta tus cursos para que estudies por ramo. Las fechas, pruebas y materiales se agregan manualmente dentro de MachReach cuando los necesites.
+              La extensión de MachReach lee tu lista de cursos desde tu propia sesión de Canvas y la envía a MachReach para organizar tu estudio por ramo. Solo detecta cursos; no toca tareas, notas ni credenciales.
             </p>
             <div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}>
         <a href="/register" className="btn btn-primary btn-lg" style={{ borderColor: "white" }}>
-                <IconCanvas size={20}/> Conectar Canvas
+                <IconCanvas size={20}/> Usar la extensión
               </a>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14, color: "color-mix(in oklab, white 70%, transparent)" }}>
                 <IconCheck size={16}/> UC, UDP, USACH, UAndes, UAI…
@@ -292,7 +292,7 @@ function LeaderboardShowcase() {
   );
 }
 
-/* -------- QUIZ DEMO — gamified, lives + streak + xp -------- */
+/* -------- QUIZ DEMO -------- */
 function QuizDemo() {
   const questions = [
     { q: "¿Cuál es el límite de sin(x)/x cuando x → 0?", opts: ["0", "1", "∞", "no existe"], correct: 1, ramo: "Cálculo I" },
@@ -301,15 +301,11 @@ function QuizDemo() {
   ];
   const [i, setI] = React.useState(0);
   const [picked, setPicked] = React.useState(null);
-  const [xp, setXp] = React.useState(120);
-  const [lives, setLives] = React.useState(3);
   const q = questions[i];
 
   const choose = (k) => {
     if (picked !== null) return;
     setPicked(k);
-    if (k === q.correct) setXp(x => x + 10);
-    else setLives(l => Math.max(0, l - 1));
   };
   const next = () => {
     setPicked(null);
@@ -333,7 +329,7 @@ function QuizDemo() {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {[
                 { ic: <IconBook/>,   t: "Aprende del material real, no de internet aleatorio" },
-                { ic: <IconPeople/>, t: "Mant?n tus materiales y preguntas dentro de tu cuenta" },
+                { ic: <IconPeople/>, t: "Mantén tus materiales y preguntas dentro de tu cuenta" },
                 { ic: <IconCoin/>,   t: "El progreso real viene del Focus, no de farmear quizzes" },
               ].map((r, k) => (
                 <div key={k} style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -352,7 +348,7 @@ function QuizDemo() {
             <div style={{
               padding: "14px 20px",
               background: "var(--ink)", color: "white",
-              display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 14,
+              display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "center", gap: 14,
             }}>
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
@@ -365,14 +361,6 @@ function QuizDemo() {
                   <div style={{ width: ((i + 1) / questions.length) * 100 + "%", height: "100%", background: "var(--accent)", transition: "width .3s ease" }}/>
                 </div>
                 <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "color-mix(in oklab, white 70%, transparent)" }}>{i + 1}/{questions.length}</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14 }}>
-                  <span style={{ color: "var(--bad)" }}>{Array.from({ length: 3 }).map((_, k) => k < lives ? "❤" : "♡").join("")}</span>
-                </span>
-                <span style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14, color: "var(--accent)" }}>
-                  <IconBolt size={14}/>{xp}
-                </span>
               </div>
             </div>
 
@@ -414,7 +402,7 @@ function QuizDemo() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, paddingTop: 16, borderTop: "2px dashed var(--line)" }}>
                 <span style={{ fontSize: 13, color: picked === null ? "var(--ink-3)" : picked === q.correct ? "var(--good)" : "var(--bad)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
-                  {picked === null ? "Elige una respuesta" : picked === q.correct ? "✓ Correcto · +10 XP" : "✗ Incorrecto · −1 vida"}
+                  {picked === null ? "Elige una respuesta" : picked === q.correct ? "✓ Correcto" : "Revisa la respuesta correcta"}
                 </span>
                 <button onClick={next} className="btn btn-ghost btn-sm">
                   Siguiente <IconArrow size={14}/>
@@ -498,7 +486,7 @@ function FAQ() {
   const faqs = [
     { q: "¿Por qué usar MachReach si ya tengo mis apuntes?", a: "MachReach no solo guarda material: mide tu estudio por curso, te da Focus con XP, quizzes IA, flashcards, analytics y rankings en un mismo lugar." },
     { q: "¿Mi universidad usa Canvas?", a: "La mayoría de las grandes en Chile sí: UC, UDP, UAndes, UAI, USACH, USS, PUCV. Si la tuya no, igual puedes subir cursos a mano y usar el resto de la app." },
-    { q: "¿Es seguro conectar mi cuenta Canvas?", a: "Usas un token personal de Canvas para detectar tus cursos. Nunca vemos tu contraseña y puedes revocar el token cuando quieras desde Canvas." },
+    { q: "¿Es seguro conectar mi cuenta Canvas?", a: "Sí. La extensión de MachReach detecta tus cursos desde tu sesión abierta de Canvas. No pedimos tu contraseña ni tocamos tus tareas, notas o contenido." },
     { q: "¿Qué pasa con mis datos de estudio?", a: "Son tuyos. No vendemos datos a terceros. Puedes exportar todo o borrar tu cuenta en cualquier momento." },
     { q: "¿Cómo funciona la economía de monedas?", a: "Ganas monedas estudiando con Focus. Las gastas en cosméticos, banners y temas. Pura cosa estética — no afecta tu desempeño académico." },
     { q: "¿Puedo cancelar la suscripción cuando quiera?", a: "Sí. Sin contratos ni letra chica. La cancelas con un click y mantienes acceso hasta el fin del ciclo pagado." },
