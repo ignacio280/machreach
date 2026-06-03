@@ -1,28 +1,45 @@
 # MachReach Student
 
-> **Proprietary Software** - (c) 2026 MachReach. All rights reserved. See [LICENSE](LICENSE).
+> **Proprietary Software** — © 2026 MachReach. All rights reserved. See [LICENSE](LICENSE).
 
-AI-powered study tools for students.
+An all-in-one study platform for students.
 
 ## What It Does
-- Generates study plans, quizzes, flashcards, and notes from student materials
-- Provides an AI tutor, essay feedback, panic-mode planning, and practice tools
-- Tracks focus sessions, XP, streaks, leaderboards, badges, and coins
-- Includes a student marketplace for sharing and buying study files
-- Supports Canvas LMS import and the optional Focus Guard browser extension
+- **Focus sessions** — distraction-free study timers, plus an optional Focus Guard browser extension that blocks distracting sites during a session
+- **Canvas LMS import** — connect Canvas to sync your courses (also the bot-resistant signup gate)
+- **AI flashcards & quizzes** — generated from your own course materials, with quiz duels
+- **Grade tracking** — Chilean 1.0–7.0 scale, with "minimum grade to pass" math
+- **Gamification** — XP, streaks, leaderboards, badges, coins, daily quests, and friend/focus duels
+- **Referrals** — invite a friend, earn a free week of Plus (stacks)
+- **Plus subscription** — unlimited AI generation and perks, billed via Lemon Squeezy
 
 ## Setup
 ```bash
 pip install -r requirements.txt
 cp .env.example .env   # fill in your keys
-python app.py
+python app.py          # or run_local.bat on Windows
+```
+
+## Tests
+```bash
+pip install -r requirements-dev.txt
+python -m pytest       # covers the money paths: subscriptions, referrals, focus, badges
 ```
 
 ## Architecture
 ```
-app.py              - Flask app shell, auth, layout, billing webhook, shared pages
-student/            - Student dashboard, study tools, marketplace, settings, APIs
-outreach/           - Shared infrastructure modules such as config, DB, mail, and billing helpers
-extensions/         - Focus Guard browser extension
-docs/               - Project docs
+app.py                   - Flask app shell: auth, layout, billing webhook, public/legal pages
+student/                 - Student dashboard, study tools, gamification, and APIs (registered as routes)
+outreach/                - Shared infrastructure (config, DB + connection pool, i18n, mail, billing)
+professional/            - Standalone module used only by the background worker
+worker.py                - APScheduler cron jobs (duel settlement, scheduled email, payouts)
+extensions/focus-guard   - Focus Guard browser extension
+static/machreach_landing - Pre-built, pre-rendered React landing (see landing_build/)
+landing_build/           - Local-only landing build (esbuild + jsdom prerender; output committed)
+tests/                   - Pytest suite for the revenue-critical paths
+docs/                    - Pitch and pricing docs
 ```
+
+## Deployment
+Runs on Render (`render.yaml`): a single gunicorn web service + a worker service, backed by Postgres.
+Locally it falls back to SQLite when `DATABASE_URL` is unset.
