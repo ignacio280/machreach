@@ -2556,6 +2556,35 @@
       }
     }
 
+    /* Keep Tienda, Notas and Amigos from painting sharp dark slabs in dark mode. */
+    :root[data-theme="dark"] .mr-app-shell .shop-cd,
+    :root[data-theme="dark"] .mr-app-shell .pl-wrap,
+    :root[data-theme="dark"] .mr-app-shell .friends-cd,
+    :root[data-theme="dark"] .content .shop-cd,
+    :root[data-theme="dark"] .content .pl-wrap,
+    :root[data-theme="dark"] .content .friends-cd {
+      background: transparent !important;
+      background-color: transparent !important;
+    }
+    :root[data-theme="dark"] .mr-app-shell .shop-cd .card,
+    :root[data-theme="dark"] .mr-app-shell .shop-cd .stat-card,
+    :root[data-theme="dark"] .mr-app-shell .shop-cd [style*="background"],
+    :root[data-theme="dark"] .mr-app-shell .pl-card,
+    :root[data-theme="dark"] .mr-app-shell .pl-course,
+    :root[data-theme="dark"] .mr-app-shell .pl-help,
+    :root[data-theme="dark"] .mr-app-shell .pl-tabs,
+    :root[data-theme="dark"] .mr-app-shell .pl-empty,
+    :root[data-theme="dark"] .mr-app-shell .fr-panel,
+    :root[data-theme="dark"] .mr-app-shell .fr-group-card,
+    :root[data-theme="dark"] .mr-app-shell .fr-row,
+    :root[data-theme="dark"] .mr-app-shell .fr-empty,
+    :root[data-theme="dark"] .mr-app-shell .fr-rank-list,
+    :root[data-theme="dark"] .mr-app-shell .fr-lb-embed .lb-board {
+      background: #1D1B26 !important;
+      background-color: #1D1B26 !important;
+      color: #FFF7EA !important;
+    }
+
     @media (max-width: 1080px) {
       .mr-app-shell .pl-wrap {
         grid-template-columns: 1fr;
