@@ -2119,38 +2119,10 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        data = request.get_json(force=True) or {}
-
-        name = (data.get("name") or "").strip()
-
-        if not name:
-
-            return jsonify({"error": "name required"}), 400
-
-        code = (data.get("code") or "").strip()
-
-        term = (data.get("term") or "").strip()
-
-        gate = _semester_outcome_gate()
-        if gate["blocked"]:
-            return jsonify({
-                "error": gate["message"],
-                "requires_course_outcomes": True,
-                "semester": gate["semester"],
-                "pending_courses": gate["pending_courses"],
-            }), 409
-
-        try:
-
-            course_id = sdb.create_manual_course(_cid(), name, code, term)
-
-            return jsonify({"ok": True, "course_id": course_id})
-
-        except Exception as e:
-
-            log.exception("create_manual_course failed")
-
-            return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": "Los cursos deben importarse desde Canvas usando la extension de MachReach para confirmar que eres estudiante de una universidad real.",
+            "canvas_required": True,
+        }), 410
 
 
 
@@ -4509,7 +4481,26 @@ def register_student_routes(app, csrf, limiter):
 
   .mr-empty { padding: 20px; text-align: center; color: #94939C; font-size: 13px; background: #FBF8F0; border-radius: 14px; border: 1px dashed #E2DCCC; }
   .mr-empty .icon { font-size: 28px; display: block; margin-bottom: 8px; }
-  .mr-empty .cta { display: inline-block; margin-top: 10px; padding: 8px 14px; border-radius: 10px; background: #1A1A1F; color: #FFF8E1; font-weight: 700; font-size: 12px; }
+  .mr-empty-title { color:#1A1A1F;font-weight:900;font-size:14px;margin-top:4px; }
+  .mr-empty-copy { max-width:420px;margin:6px auto 0;color:#77756F;line-height:1.35; }
+  .mr-empty-actions { display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:12px; }
+  .mr-empty .cta { display: inline-flex;align-items:center;justify-content:center;gap:6px;margin-top: 10px; padding: 8px 14px; border-radius: 10px; background: #1A1A1F; color: #FFF8E1; font-weight: 800; font-size: 12px;border:1px solid #1A1A1F; }
+  .mr-empty .mr-empty-actions .cta { margin-top:0; }
+  .mr-empty .cta.secondary { background:#FFF8E1;color:#1A1A1F;border-color:#E2DCCC;box-shadow:none; }
+
+  .mr-progress-panel { margin-bottom:20px;padding:20px;border:1px solid #E2DCCC;border-radius:20px;background:#FFFFFF;display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:center;box-shadow:0 14px 34px rgba(20,18,30,.06); }
+  .mr-progress-kicker { font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#8B3A18;margin-bottom:6px; }
+  .mr-progress-title { margin:0;font-family:"Bricolage Grotesque",sans-serif;font-size:30px;line-height:1.02;color:#1A1A1F;letter-spacing:0; }
+  .mr-progress-copy { color:#5C5C66;font-size:13px;line-height:1.45;margin:8px 0 0;max-width:520px; }
+  .mr-progress-actions { display:flex;gap:10px;flex-wrap:wrap;margin-top:14px; }
+  .mr-progress-btn { display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 14px;border-radius:12px;border:1px solid #1A1A1F;background:#1A1A1F;color:#FFF8E1;font-weight:900;font-size:13px;box-shadow:0 3px 0 rgba(26,26,31,.32); }
+  .mr-progress-btn.secondary { background:#FBF8F0;color:#1A1A1F;border-color:#E2DCCC;box-shadow:none; }
+  .mr-progress-mini-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:10px; }
+  .mr-progress-mini { min-height:112px;border:1px solid #E2DCCC;border-radius:16px;background:#FBF8F0;padding:14px;display:flex;flex-direction:column;justify-content:space-between; }
+  .mr-progress-mini .n { font-family:"Bricolage Grotesque",sans-serif;font-size:34px;font-weight:700;color:#FF7A3D;line-height:1; }
+  .mr-progress-mini .l { font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#77756F; }
+  @media (max-width: 900px) { .mr-progress-panel { grid-template-columns:1fr; } .mr-progress-mini-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media (max-width: 560px) { .mr-progress-mini-grid { grid-template-columns:1fr; } }
 
   /* ── COURSES TILES ── */
   .mr-courses-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -4586,7 +4577,6 @@ def register_student_routes(app, csrf, limiter):
   .mr-srn { font-family: "Bricolage Grotesque", sans-serif; font-size: 22px; font-weight: 600; line-height: 1; color: #FF7A3D; }
   .mr-srl { font-size: 10px; color: #94939C; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-top: 4px; }
 
-  :root[data-theme="dark"] .mr-home .mr-mission,
   :root[data-theme="dark"] .mr-home .mr-quest,
   :root[data-theme="dark"] .mr-home .mr-stat-card,
   :root[data-theme="dark"] .mr-home .mr-card,
@@ -4594,9 +4584,15 @@ def register_student_routes(app, csrf, limiter):
   :root[data-theme="dark"] .mr-home .mr-course-tile,
   :root[data-theme="dark"] .mr-home .mr-exam,
   :root[data-theme="dark"] .mr-home .mr-empty,
-  :root[data-theme="dark"] .mr-home .mr-league-card,
-  :root[data-theme="dark"] .mr-home .mr-friend-act {
-    border-color: #FF7A3D !important;
+  :root[data-theme="dark"] .mr-home .mr-friend-act,
+  :root[data-theme="dark"] .mr-home .mr-progress-panel,
+  :root[data-theme="dark"] .mr-home .mr-progress-mini {
+    border-color: rgba(255,122,61,.30) !important;
+    box-shadow:0 1px 0 rgba(255,255,255,.03),0 14px 34px rgba(0,0,0,.22) !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-mission,
+  :root[data-theme="dark"] .mr-home .mr-league-card {
+    border-color:#FF7A3D !important;
   }
   :root[data-theme="dark"] .mr-home .mr-stat-card.xp-stat {
     border: 2px solid #FF7A3D !important;
@@ -4634,6 +4630,27 @@ def register_student_routes(app, csrf, limiter):
     background: #0F1018;
     color: #FF7A3D;
     border: 1px solid rgba(255,122,61,.62);
+  }
+  :root[data-theme="dark"] .mr-home .mr-progress-panel {
+    background:#1D202A !important;
+    color:#F7F0E4 !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-progress-title,
+  :root[data-theme="dark"] .mr-home .mr-empty-title {
+    color:#FFF8E1 !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-progress-copy,
+  :root[data-theme="dark"] .mr-home .mr-empty-copy {
+    color:#BDB5AA !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-progress-mini {
+    background:#17161A !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-progress-btn.secondary,
+  :root[data-theme="dark"] .mr-home .mr-empty .cta.secondary {
+    background:#17161A !important;
+    color:#FFF8E1 !important;
+    border-color:rgba(255,122,61,.36) !important;
   }
   :root[data-theme="dark"] .mr-app-shell .content .mr-home .mr-streak-card,
   :root[data-theme="dark"] .content .mr-home .mr-streak-card {
@@ -4792,7 +4809,28 @@ def register_student_routes(app, csrf, limiter):
 
         _xp_to_next = max(0, level_ceil - total_xp)
 
-        _mr_stats_html = (
+        _low_activity_home = (int(_total_sessions or 0) <= 0 and int(_total_mins or 0) <= 0 and int(streak_days or 0) <= 0 and int(_mr_xp_today or 0) <= 0)
+        if _low_activity_home:
+            _mr_stats_html = (
+                '<section class="mr-progress-panel mr-pop-2">'
+                '  <div>'
+                '    <div class="mr-progress-kicker">Tu progreso de hoy</div>'
+                '    <h2 class="mr-progress-title serif">Haz tu primera sesion y el tablero empieza a moverse.</h2>'
+                '    <p class="mr-progress-copy">Conecta Canvas con la extension para verificar tu universidad y traer tus cursos reales; luego completa un bloque de enfoque para activar tiempo, racha y XP.</p>'
+                '    <div class="mr-progress-actions">'
+                '      <a class="mr-progress-btn" href="/student/focus">&#9201; Empezar enfoque</a>'
+                '      <a class="mr-progress-btn secondary" href="/student/canvas">Conectar Canvas</a>'
+                '    </div>'
+                '  </div>'
+                '  <div class="mr-progress-mini-grid" aria-label="Resumen inicial">'
+                '    <div class="mr-progress-mini"><div class="n">0h</div><div class="l">Estudio hoy</div></div>'
+                '    <div class="mr-progress-mini"><div class="n">0</div><div class="l">Racha</div></div>'
+                f'   <div class="mr-progress-mini"><div class="n">{_xp_to_next}</div><div class="l">XP para subir</div></div>'
+                '  </div>'
+                '</section>'
+            )
+        else:
+            _mr_stats_html = (
             '<div class="mr-stats-grid">'
             '  <div class="mr-stat-card mr-pop-2">'
             '    <div class="mr-stat-label">Total estudiado</div>'
@@ -4898,6 +4936,16 @@ def register_student_routes(app, csrf, limiter):
                 '</div>'
             )
 
+        if not _mr_course_tiles:
+            _courses_tiles_html = (
+                '<div class="mr-empty" style="grid-column:1/-1;">'
+                '  <span class="icon">MR</span>'
+                '  <div class="mr-empty-title">No tienes cursos todavia.</div>'
+                '  <div class="mr-empty-copy">Conecta Canvas con la extension de MachReach para confirmar tu universidad e importar tus cursos reales.</div>'
+                '  <div class="mr-empty-actions"><a class="cta" href="/student/canvas">Conectar Canvas</a></div>'
+                '</div>'
+            )
+
         _mr_courses_card = (
             '<section class="mr-card mr-pop-3">'
             '  <div class="mr-card-h">'
@@ -4971,6 +5019,16 @@ def register_student_routes(app, csrf, limiter):
                 '<div class="mr-empty">'
                 '  <span class="icon">📝</span>'
                 '  Sin pruebas próximas.'
+                '</div>'
+            )
+
+        if not exams:
+            _exam_rows_html = (
+                '<div class="mr-empty">'
+                '  <span class="icon">EV</span>'
+                '  <div class="mr-empty-title">Sin pruebas proximas.</div>'
+                '  <div class="mr-empty-copy">Cuando tus cursos reales lleguen desde Canvas, agrega sus evaluaciones desde Mis cursos para ver prioridad y calendario.</div>'
+                '  <div class="mr-empty-actions"><a class="cta secondary" href="/student/courses">Ver mis cursos</a></div>'
                 '</div>'
             )
 
@@ -5321,7 +5379,7 @@ def register_student_routes(app, csrf, limiter):
                 <button onclick="event.stopPropagation();deleteCourse({_course_id},'{_esc((c.get("name") or "")[:30])}')" class="ccard-menu" title="Eliminar curso">&#8942;</button>
               </div>
               <h2 class="ccard-name">{_esc(c.get("name") or "Curso")}</h2>
-              <div class="ccard-prof">Canvas / manual · {_sessions} sesiones registradas</div>
+              <div class="ccard-prof">Canvas / extensiÃ³n · {_sessions} sesiones registradas</div>
               <div class="ccard-stats">
                 <div class="ccs"><div class="ccs-n">{_minutes//60}h {_minutes%60}m</div><div class="ccs-l">Estudiado</div></div>
                 <div class="ccs"><div class="ccs-n">{len(_exams)}</div><div class="ccs-l">Evaluaciones</div></div>
@@ -5352,7 +5410,7 @@ def register_student_routes(app, csrf, limiter):
             <div class="course-empty">
               <div class="deck-add-icon">+</div>
               <div class="deck-add-l">Aún no hay cursos</div>
-              <div class="deck-add-s">Conecta Canvas o agrega uno manualmente.</div>
+              <div class="deck-add-s">Conecta Canvas con la extensiÃ³n para importar tus cursos.</div>
             </div>
             """
 

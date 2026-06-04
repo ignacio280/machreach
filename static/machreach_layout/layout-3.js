@@ -356,9 +356,9 @@
 
       // ── Courses page ──
       "My Courses": "Mis Cursos", "Canvas Integration": "Integración con Canvas",
-      "Course Sync": "Sincronización de Cursos", "New Course": "Nuevo Curso",
-      "Create Course": "Crear Curso", "Create a course": "Crear un curso",
-      "Create course manually": "Crear curso manualmente",
+      "Course Sync": "Sincronizacion de Cursos", "New Course": "Importar desde Canvas",
+      "Create Course": "Importar desde Canvas", "Create a course": "Importar desde Canvas",
+      "Create course manually": "Importar desde Canvas",
       "Send to Canvas": "Enviar a Canvas",
       "Sync Now": "Sincronizar Ahora", "View Materials": "Ver Materiales",
       "Course name": "Nombre del curso", "Code": "Código", "Term": "Periodo",

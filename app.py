@@ -3375,7 +3375,7 @@ def about_page():
       <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">What you can do</h2>
       <ul style="padding-left:20px;">
         <li><strong>Focus sessions</strong> — distraction-free study timers, with an optional browser extension that blocks distracting sites while a session is active.</li>
-        <li><strong>Courses &amp; Canvas sync</strong> — connect Canvas to import your courses, or add them manually.</li>
+        <li><strong>Courses &amp; Canvas sync</strong> — connect Canvas with the MachReach extension to import your real university courses.</li>
         <li><strong>Flashcards &amp; quizzes</strong> — generate study sets and practice questions from your own material.</li>
         <li><strong>Grades &amp; analytics</strong> — track marks on the Chilean 1.0–7.0 scale and see what you need to pass.</li>
         <li><strong>XP, streaks &amp; leaderboards</strong> — stay motivated with friends and live rankings by country, university, and major.</li>

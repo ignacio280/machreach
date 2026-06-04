@@ -785,7 +785,7 @@ SPANISH_TO_EN_VISIBLE.update({
     "Pruebas y Evaluaciones": "Exams and Evaluations",
     "Aún no hay cursos": "No courses yet",
     "Aun no hay cursos": "No courses yet",
-    "Conecta Canvas o agrega uno manualmente.": "Connect Canvas or add one manually.",
+    "Conecta Canvas con la extension para importar tus cursos.": "Connect Canvas with the extension to import your courses.",
     "Selecciona un curso...": "Select a course...",
     "No tienes pruebas guardadas todavía.": "You do not have saved exams yet.",
     "No tienes pruebas guardadas todavia.": "You do not have saved exams yet.",

@@ -703,7 +703,7 @@
             border-color:#FF7A3D !important;
             box-shadow:0 2px 0 rgba(255,122,61,.52) !important;
           }
-          /* Inicio final pass: every landing-style black outline becomes MachReach orange in dark mode. */
+          /* Inicio: regular cards use a quieter orange line; hero surfaces keep the punch. */
           :root[data-theme="dark"] .mr-app-shell .mr-home .mr-mission,
           :root[data-theme="dark"] .mr-app-shell .mr-home .mr-quest,
           :root[data-theme="dark"] .mr-app-shell .mr-home .mr-stat-card,
@@ -726,6 +726,13 @@
           :root[data-theme="dark"] .content .mr-home .mr-league-card,
           :root[data-theme="dark"] .content .mr-home .mr-sess,
           :root[data-theme="dark"] .content .mr-home .mr-friend-act {
+            border-color:rgba(255,122,61,.30) !important;
+            box-shadow:0 1px 0 rgba(255,255,255,.03), 0 14px 34px rgba(0,0,0,.22) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .mr-home .mr-mission,
+          :root[data-theme="dark"] .mr-app-shell .mr-home .mr-league-card,
+          :root[data-theme="dark"] .content .mr-home .mr-mission,
+          :root[data-theme="dark"] .content .mr-home .mr-league-card {
             border-color:#FF7A3D !important;
             box-shadow:0 4px 0 #FF7A3D, 0 18px 46px rgba(0,0,0,.30) !important;
           }
