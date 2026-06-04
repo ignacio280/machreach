@@ -129,7 +129,7 @@ function CanvasCallout() {
 }
 
 /* -------- LEADERBOARDS SHOWCASE — with podium -------- */
-function LeaderboardShowcase() {
+function LeaderboardShowcaseLegacy() {
   const [scope, setScope] = React.useState("uni");
   const data = {
     pais:    [{ n: "Catalina",  u: "UC",   xp: 28400, c: "#fb923c" }, { n: "Joaquín",  u: "PUCV", xp: 24100, c: "#a78bfa" }, { n: "tú", u: "UDP", xp: 22850, c: "var(--brand)", you: true }, { n: "Renata", u: "USS",  xp: 20180, c: "#22d3ee" }, { n: "Diego",    u: "UAI",  xp: 18910, c: "#34d399" }],
@@ -242,14 +242,6 @@ function LeaderboardShowcase() {
                         position: "relative",
                       }}>
                         {rank}
-                        {rank === 1 && (
-                          <div style={{
-                            position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)",
-                            color: "var(--gold)",
-                          }}>
-                            <IconStar size={22}/>
-                          </div>
-                        )}
                       </div>
                     </div>
                   );
@@ -288,6 +280,411 @@ function LeaderboardShowcase() {
         </div>
       </div>
       <style>{`@media (max-width: 880px) { .lb-wrap { grid-template-columns: 1fr !important; } }`}</style>
+    </section>
+  );
+}
+
+function LeaderboardShowcase() {
+  const [scope, setScope] = React.useState("uni");
+  const [previewScope, setPreviewScope] = React.useState(null);
+  const [selected, setSelected] = React.useState(null);
+  const [pulseIndex, setPulseIndex] = React.useState(0);
+  const data = {
+    pais: [
+      { n: "Catalina", u: "UC", xp: 28400, c: "#fb923c", delta: 320, streak: 14 },
+      { n: "Joaquín", u: "PUCV", xp: 24100, c: "#a78bfa", delta: 210, streak: 9 },
+      { n: "tú", u: "UDP", xp: 22850, c: "var(--brand)", you: true, delta: 180, streak: 11 },
+      { n: "Renata", u: "USS", xp: 20180, c: "#22d3ee", delta: 145, streak: 6 },
+      { n: "Diego", u: "UAI", xp: 18910, c: "#34d399", delta: 120, streak: 5 },
+    ],
+    uni: [
+      { n: "Sofia_Db", u: "UDP", xp: 24100, c: "#fb923c", delta: 260, streak: 12 },
+      { n: "tú", u: "UDP", xp: 22850, c: "var(--brand)", you: true, delta: 220, streak: 11 },
+      { n: "Antonia", u: "UDP", xp: 19200, c: "#a78bfa", delta: 170, streak: 7 },
+      { n: "Tomás", u: "UDP", xp: 17640, c: "#22d3ee", delta: 130, streak: 6 },
+      { n: "Sofía", u: "UDP", xp: 14720, c: "#34d399", delta: 95, streak: 4 },
+    ],
+    carrera: [
+      { n: "Magdalena", u: "Ing.", xp: 18900, c: "#fb923c", delta: 190, streak: 8 },
+      { n: "tú", u: "Ing.", xp: 16200, c: "var(--brand)", you: true, delta: 160, streak: 11 },
+      { n: "Pablo", u: "Ing.", xp: 14820, c: "#a78bfa", delta: 120, streak: 5 },
+      { n: "Camila", u: "Ing.", xp: 12410, c: "#22d3ee", delta: 100, streak: 4 },
+      { n: "Benja", u: "Ing.", xp: 10940, c: "#34d399", delta: 80, streak: 3 },
+    ],
+  };
+  const themes = {
+    carrera: {
+      primary: "#8B5CF6",
+      accent: "#22D3EE",
+      title: "Ingeniería",
+      headline: "tu carrera.",
+      micro: "Rivales del mismo ramo",
+      stats: ["12 carreras", "+160 XP hoy", "racha 11"],
+    },
+    uni: {
+      primary: "#FF7A3D",
+      accent: "#9BEE43",
+      title: "UDP",
+      headline: "tu universidad.",
+      micro: "La UDP está prendida",
+      stats: ["42 cursos", "+220 XP hoy", "top 3 cerca"],
+    },
+    pais: {
+      primary: "#14B8D6",
+      accent: "#FF7A3D",
+      title: "Chile",
+      headline: "todo Chile.",
+      micro: "Ranking nacional en vivo",
+      stats: ["12 Ues", "+180 XP hoy", "#3 actual"],
+    },
+  };
+  const displayScope = previewScope || scope;
+  const rows = data[displayScope];
+  const theme = themes[displayScope];
+  const selectedRow = rows.find(r => r.n === selected) || rows.find(r => r.you) || rows[0];
+  const selectedRank = rows.findIndex(r => r.n === selectedRow.n) + 1;
+  const yourRank = rows.findIndex(r => r.you) + 1;
+  const podium = rows.slice(0, 3);
+  const podiumOrder = [podium[1], podium[0], podium[2]];
+  const podiumHeights = [80, 110, 64];
+  const podiumRanks = [2, 1, 3];
+  const podiumMedals = [
+    "linear-gradient(180deg, color-mix(in oklab, var(--lb-primary) 24%, white), var(--silver))",
+    "linear-gradient(180deg, var(--lb-accent), var(--lb-primary))",
+    "linear-gradient(180deg, color-mix(in oklab, var(--lb-primary) 38%, var(--bronze)), var(--bronze))",
+  ];
+
+  React.useEffect(() => {
+    const id = setInterval(() => setPulseIndex(i => (i + 1) % data[scope].length), 2200);
+    return () => clearInterval(id);
+  }, [scope]);
+
+  React.useEffect(() => {
+    setSelected(null);
+    setPulseIndex(0);
+  }, [scope]);
+
+  const activateScope = (k) => {
+    setScope(k);
+    setPreviewScope(null);
+  };
+
+  return (
+    <section id="leaderboard" className="lb-showcase" style={{
+      "--lb-primary": theme.primary,
+      "--lb-accent": theme.accent,
+      background: "linear-gradient(135deg, color-mix(in oklab, var(--lb-primary) 10%, var(--bg-2)) 0%, var(--bg-2) 42%, color-mix(in oklab, var(--lb-accent) 10%, var(--bg-2)) 100%)",
+      borderTop: "2px solid var(--line)",
+      borderBottom: "2px solid var(--line)",
+      transition: "background .28s ease",
+    }}>
+      <div className="container">
+        <div className="section-head">
+          <span className="eyebrow"><span className="dot"/> Compite sano</span>
+          <h2>Rankings semanales que<br/>te sacan a estudiar.</h2>
+          <p>Tres niveles: tu carrera, tu universidad, tu país. Se cierran cada lunes con premios en monedas.</p>
+        </div>
+        <div className="lb-wrap" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, alignItems: "center" }}>
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+              {[
+                { k: "carrera", l: "Por carrera" },
+                { k: "uni", l: "Por universidad" },
+                { k: "pais", l: "Por país" },
+              ].map(t => (
+                <button
+                  key={t.k}
+                  className="lb-scope-btn"
+                  onClick={() => activateScope(t.k)}
+                  onMouseEnter={() => setPreviewScope(t.k)}
+                  onMouseLeave={() => setPreviewScope(null)}
+                  onFocus={() => setPreviewScope(t.k)}
+                  onBlur={() => setPreviewScope(null)}
+                  style={{
+                    padding: "10px 18px",
+                    borderRadius: 12,
+                    border: "2px solid var(--ink)",
+                    background: displayScope === t.k ? "var(--lb-primary)" : "var(--surface)",
+                    color: displayScope === t.k ? "white" : "var(--ink)",
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 800,
+                    fontSize: 14,
+                    boxShadow: scope === t.k ? "0 4px 0 0 var(--ink)" : displayScope === t.k ? "0 3px 0 0 var(--ink)" : "0 2px 0 0 var(--ink)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.l}
+                </button>
+              ))}
+            </div>
+            <h3 style={{ fontSize: 28, marginBottom: 10 }}>Tres ligas, un objetivo: <span style={{ color: "var(--lb-primary)" }}>{theme.headline}</span></h3>
+            <p style={{ color: "var(--ink-2)", fontSize: 16, marginBottom: 16 }}>
+              Cada semana arranca un nuevo ranking. Acumula XP estudiando con Focus y sube por rangos reales como Iniciados, Aprendices, Estudiosos e Investigadores.
+            </p>
+            <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { t: "Top 3 semanal: 500 monedas + badge exclusivo", c: "var(--gold)" },
+                { t: "Top 10 mensual: 2.000 monedas + cosmético dorado", c: "var(--silver)" },
+                { t: "Investigadores: status visible y premios especiales", c: "var(--lb-primary)" },
+              ].map((r, i) => (
+                <li key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 15 }}>
+                  <span style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    background: r.c,
+                    border: "2px solid var(--ink)",
+                    color: "white",
+                    display: "grid",
+                    placeItems: "center",
+                  }}><IconCheck size={14} strokeWidth={3}/></span>
+                  {r.t}
+                </li>
+              ))}
+            </ul>
+            <div className="lb-insight" style={{
+              marginTop: 20,
+              padding: 16,
+              border: "2px solid var(--ink)",
+              borderRadius: 18,
+              background: "linear-gradient(135deg, var(--surface), color-mix(in oklab, var(--lb-primary) 11%, var(--surface)))",
+              boxShadow: "0 4px 0 0 var(--ink)",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 800 }}>{theme.micro}</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, marginTop: 3 }}>{selectedRow.n} <span style={{ color: "var(--lb-primary)" }}>#{selectedRank}</span></div>
+                </div>
+                <div style={{ minWidth: 88, textAlign: "right", fontFamily: "var(--font-display)", color: "var(--lb-primary)", fontWeight: 800, fontSize: 18 }}>+{selectedRow.delta} XP</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                {theme.stats.map(s => (
+                  <span key={s} style={{
+                    border: "1.5px solid color-mix(in oklab, var(--lb-primary) 50%, var(--ink))",
+                    background: "color-mix(in oklab, var(--lb-primary) 10%, var(--surface))",
+                    color: "var(--ink)",
+                    borderRadius: 999,
+                    padding: "5px 10px",
+                    fontSize: 11,
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: 800,
+                    letterSpacing: ".04em",
+                  }}>{s}</span>
+                ))}
+              </div>
+              <div style={{ marginTop: 12, height: 8, borderRadius: 999, border: "1.5px solid var(--ink)", background: "var(--surface)", overflow: "hidden" }}>
+                <div className="lb-meter" style={{
+                  width: `${Math.min(94, 34 + selectedRow.delta / 4)}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, var(--lb-primary), var(--lb-accent))",
+                }}/>
+              </div>
+            </div>
+          </div>
+
+          <div key={displayScope} className="card lb-arena" style={{
+            padding: 0,
+            overflow: "hidden",
+            background: "var(--surface)",
+            boxShadow: "0 6px 0 0 var(--ink), 0 22px 50px color-mix(in oklab, var(--lb-primary) 20%, transparent)",
+          }}>
+            <div style={{
+              padding: "16px 20px",
+              background: "linear-gradient(135deg, color-mix(in oklab, var(--lb-primary) 16%, var(--surface)), color-mix(in oklab, var(--lb-accent) 10%, var(--surface)))",
+              borderBottom: "2px solid var(--line)",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18 }}>Investigadores · {theme.title}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".06em", marginTop: 2 }}>SEMANA 26 · CIERRA LUN 09:00</div>
+                </div>
+                <span className="tag lb-live-pill" style={{ borderColor: "var(--lb-primary)", color: "var(--lb-primary)", background: "color-mix(in oklab, var(--lb-primary) 12%, var(--surface))" }}>
+                  <span className="lb-live-dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--lb-primary)" }}/> live
+                </span>
+              </div>
+            </div>
+
+            <div className="lb-stage" style={{
+              padding: "24px 20px 12px",
+              background: "linear-gradient(180deg, color-mix(in oklab, var(--lb-primary) 7%, var(--bg-2)), var(--bg-2))",
+              backgroundImage: "linear-gradient(180deg, color-mix(in oklab, var(--lb-primary) 7%, var(--bg-2)), var(--bg-2)), linear-gradient(135deg, color-mix(in oklab, var(--lb-primary) 16%, transparent) 0 1px, transparent 1px 18px)",
+              borderBottom: "2px dashed var(--line)",
+            }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "end", gap: 8 }}>
+                {podiumOrder.map((p, idx) => {
+                  if (!p) return <div key={idx}/>;
+                  const rank = podiumRanks[idx];
+                  const isSelected = selectedRow.n === p.n;
+                  const isPulsing = rows[pulseIndex] && rows[pulseIndex].n === p.n;
+                  return (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      key={p.n + displayScope + idx}
+                      className={`lb-podium-cell ${isSelected ? "is-selected" : ""} ${isPulsing ? "is-pulsing" : ""}`}
+                      onClick={() => setSelected(p.n)}
+                      onMouseEnter={() => setSelected(p.n)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelected(p.n); }}
+                      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, animationDelay: `${idx * 90}ms` }}
+                    >
+                      <Avatar name={p.n} color={p.c} size={rank === 1 ? 50 : 40} you={p.you}/>
+                      <div style={{ fontWeight: 800, fontSize: 12, fontFamily: "var(--font-display)" }}>{p.n}</div>
+                      <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)", letterSpacing: ".05em" }}>{p.xp.toLocaleString("es-CL")} XP</div>
+                      <div className="lb-podium-bar" style={{
+                        width: "100%",
+                        height: podiumHeights[idx],
+                        background: podiumMedals[idx],
+                        border: "2px solid var(--ink)",
+                        borderRadius: "10px 10px 0 0",
+                        boxShadow: isSelected ? "0 0 0 4px color-mix(in oklab, var(--lb-primary) 22%, transparent), 0 -3px 0 0 color-mix(in oklab, black 12%, transparent) inset" : "0 -3px 0 0 color-mix(in oklab, black 12%, transparent) inset",
+                        display: "grid",
+                        placeItems: "center",
+                        fontFamily: "var(--font-display)",
+                        fontWeight: 800,
+                        color: "white",
+                        fontSize: 28,
+                        position: "relative",
+                      }}>
+                        {rank}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+              {rows.slice(3).map((r, i) => {
+                const isSelected = selectedRow.n === r.n;
+                const isPulsing = rows[pulseIndex] && rows[pulseIndex].n === r.n;
+                return (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    key={r.n + displayScope}
+                    className={`lb-row-item ${isSelected ? "is-selected" : ""} ${isPulsing ? "is-pulsing" : ""}`}
+                    onClick={() => setSelected(r.n)}
+                    onMouseEnter={() => setSelected(r.n)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelected(r.n); }}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "28px 36px 1fr auto",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "8px 10px",
+                      borderRadius: 12,
+                      background: isSelected ? "color-mix(in oklab, var(--lb-primary) 14%, var(--surface))" : r.you ? "var(--brand-soft)" : "transparent",
+                      border: isSelected ? "2px solid var(--lb-primary)" : r.you ? "2px solid var(--brand)" : "2px solid transparent",
+                      animationDelay: `${i * 80 + 220}ms`,
+                    }}
+                  >
+                    <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, color: "var(--ink-3)", textAlign: "center" }}>{i + 4}</div>
+                    <Avatar name={r.n} color={r.c} size={32} you={r.you}/>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{r.n}</div>
+                      <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".06em" }}>{r.u}</div>
+                    </div>
+                    <div style={{ textAlign: "right", fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14 }}>
+                      {r.xp.toLocaleString("es-CL")} <span style={{ fontSize: 9, color: "var(--ink-3)" }}>XP</span>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="lb-you-callout" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, padding: "8px 10px", background: "linear-gradient(90deg, var(--ink), color-mix(in oklab, var(--lb-primary) 35%, var(--ink)))", color: "white", borderRadius: 10 }}>
+                <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", letterSpacing: ".08em" }}>TU POSICIÓN ACTUAL</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14, color: "var(--lb-accent)" }}>#{yourRank}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <style>{`
+        .lb-scope-btn,
+        .lb-row-item,
+        .lb-podium-cell,
+        .lb-arena,
+        .lb-insight {
+          transition: transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease, color .18s ease;
+        }
+        .lb-scope-btn:hover,
+        .lb-scope-btn:focus-visible {
+          transform: translate(-1px, -2px);
+          outline: none;
+        }
+        .lb-arena:hover,
+        .lb-insight:hover {
+          transform: translateY(-3px);
+        }
+        .lb-live-dot {
+          animation: lbLivePulse 1.2s ease-in-out infinite;
+        }
+        .lb-live-pill {
+          box-shadow: 0 0 0 0 color-mix(in oklab, var(--lb-primary) 30%, transparent);
+          animation: lbTagPulse 2.4s ease infinite;
+        }
+        .lb-podium-cell {
+          cursor: pointer;
+          text-align: center;
+          animation: lbPodiumIn .48s cubic-bezier(.2,.8,.2,1) both;
+        }
+        .lb-podium-cell:hover,
+        .lb-podium-cell.is-selected {
+          transform: translateY(-5px);
+        }
+        .lb-podium-cell.is-pulsing .lb-podium-bar,
+        .lb-row-item.is-pulsing {
+          box-shadow: 0 0 0 4px color-mix(in oklab, var(--lb-accent) 24%, transparent), 0 10px 24px color-mix(in oklab, var(--lb-primary) 18%, transparent);
+        }
+        .lb-podium-bar {
+          transform-origin: bottom;
+          animation: lbBarBuild .5s cubic-bezier(.2,.8,.2,1) both;
+        }
+        .lb-row-item {
+          cursor: pointer;
+          width: 100%;
+          text-align: left;
+          animation: lbRowIn .42s cubic-bezier(.2,.8,.2,1) both;
+        }
+        .lb-row-item:hover,
+        .lb-row-item.is-selected {
+          transform: translateX(5px);
+        }
+        .lb-meter {
+          transform-origin: left center;
+          animation: lbMeterSweep .46s ease both;
+          transition: width .22s ease;
+        }
+        .lb-you-callout {
+          animation: lbRowIn .48s cubic-bezier(.2,.8,.2,1) both;
+        }
+        @keyframes lbPodiumIn {
+          from { opacity: 0; transform: translateY(18px) scale(.96); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes lbRowIn {
+          from { opacity: 0; transform: translateX(18px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes lbBarBuild {
+          from { transform: scaleY(.25); filter: saturate(.7); }
+          to { transform: scaleY(1); filter: saturate(1); }
+        }
+        @keyframes lbMeterSweep {
+          from { transform: scaleX(.2); }
+          to { transform: scaleX(1); }
+        }
+        @keyframes lbLivePulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.55); opacity: .62; }
+        }
+        @keyframes lbTagPulse {
+          0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lb-primary) 22%, transparent); }
+          50% { box-shadow: 0 0 0 8px transparent; }
+        }
+        @media (max-width: 880px) {
+          .lb-wrap { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </section>
   );
 }
@@ -345,7 +742,7 @@ function QuizDemo() {
           </div>
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             {/* Quiz top bar */}
-            <div style={{
+            <div className="quiz-top-bar" style={{
               padding: "14px 20px",
               background: "var(--ink)", color: "white",
               display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "center", gap: 14,
@@ -360,7 +757,7 @@ function QuizDemo() {
                 <div style={{ flex: 1, height: 8, background: "color-mix(in oklab, white 14%, transparent)", borderRadius: 4, overflow: "hidden" }}>
                   <div style={{ width: ((i + 1) / questions.length) * 100 + "%", height: "100%", background: "var(--accent)", transition: "width .3s ease" }}/>
                 </div>
-                <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "color-mix(in oklab, white 70%, transparent)" }}>{i + 1}/{questions.length}</span>
+                <span className="quiz-counter" style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "color-mix(in oklab, white 70%, transparent)" }}>{i + 1}/{questions.length}</span>
               </div>
             </div>
 
@@ -455,7 +852,7 @@ function StatsStrip() {
         <div className="stats-grid" style={{
           display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0,
           background: "var(--surface)", border: "2px solid var(--ink)", borderRadius: 24,
-          boxShadow: "0 6px 0 0 var(--ink)", overflow: "hidden",
+          boxShadow: "0 6px 0 0 var(--ink)", overflow: "visible", marginBottom: 10,
         }}>
           {stats.map((s, i) => (
             <div key={i} style={{
@@ -536,9 +933,178 @@ function FAQ() {
   );
 }
 
+function LandingMotion() {
+  React.useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("motion-ready");
+
+    const progress = document.getElementById("landing-progress-bar");
+    const updateProgress = () => {
+      if (!progress) return;
+      const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      const pct = Math.min(1, Math.max(0, window.scrollY / max));
+      progress.style.transform = `scaleX(${pct})`;
+      root.style.setProperty("--landing-scroll-pct", `${(pct * 100).toFixed(2)}%`);
+    };
+
+    const revealVariants = [
+      "motion-slab",
+      "motion-pivot",
+      "motion-stamp",
+      "motion-wipe",
+      "motion-ladder",
+      "motion-stack",
+    ];
+    const revealSelectors = [
+      ".hero-grid > *",
+      "section .section-head",
+      ".stats-grid > *",
+      ".feat-grid > *",
+      ".how-grid > *",
+      ".canvas-cta",
+      ".lb-wrap > *",
+      ".quiz-wrap > *",
+      ".price-grid > *",
+      ".faq-list > *",
+      ".foot-grid > *",
+      "footer .container > div:last-child",
+    ].join(",");
+    const revealTargets = Array.from(document.querySelectorAll(revealSelectors));
+    revealTargets.forEach((el, i) => {
+      const variant = revealVariants[i % revealVariants.length];
+      el.classList.add("motion-reveal", variant);
+      el.style.setProperty("--motion-order", i);
+      el.style.setProperty("--reveal-delay", `${(i % 6) * 70}ms`);
+    });
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.16, rootMargin: "0px 0px -8% 0px" });
+    revealTargets.forEach(el => observer.observe(el));
+    const markVisible = () => {
+      revealTargets.forEach((el) => {
+        if (el.classList.contains("is-visible")) return;
+        const rect = el.getBoundingClientRect();
+        if (rect.top < window.innerHeight * 0.94 && rect.bottom > -window.innerHeight * 0.12) {
+          el.classList.add("is-visible");
+        }
+      });
+    };
+
+    const hotSelectors = [
+      ".card",
+      ".card-soft",
+      ".btn",
+      ".feat-grid > div",
+      ".stats-grid > div",
+      ".price-grid > div",
+      ".canvas-cta",
+      ".lb-arena",
+      ".lb-insight",
+    ].join(",");
+    const hotTargets = Array.from(document.querySelectorAll(hotSelectors));
+    const onMove = (event) => {
+      const el = event.currentTarget;
+      const rect = el.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / Math.max(1, rect.width);
+      const y = (event.clientY - rect.top) / Math.max(1, rect.height);
+      el.style.setProperty("--motion-x", x.toFixed(3));
+      el.style.setProperty("--motion-y", y.toFixed(3));
+      el.style.setProperty("--motion-tilt-x", ((x - 0.5) * 5).toFixed(3));
+      el.style.setProperty("--motion-tilt-y", ((y - 0.5) * 5).toFixed(3));
+    };
+    const onLeave = (event) => {
+      const el = event.currentTarget;
+      el.style.setProperty("--motion-x", "0.5");
+      el.style.setProperty("--motion-y", "0.5");
+      el.style.setProperty("--motion-tilt-x", "0");
+      el.style.setProperty("--motion-tilt-y", "0");
+    };
+    hotTargets.forEach((el) => {
+      el.classList.add("motion-hotspot");
+      el.style.setProperty("--motion-x", "0.5");
+      el.style.setProperty("--motion-y", "0.5");
+      el.style.setProperty("--motion-tilt-x", "0");
+      el.style.setProperty("--motion-tilt-y", "0");
+      el.addEventListener("mousemove", onMove);
+      el.addEventListener("mouseleave", onLeave);
+    });
+
+    const onPointer = (event) => {
+      const x = Math.min(1, Math.max(0, event.clientX / Math.max(1, window.innerWidth)));
+      const y = Math.min(1, Math.max(0, event.clientY / Math.max(1, window.innerHeight)));
+      root.style.setProperty("--landing-mx", x.toFixed(3));
+      root.style.setProperty("--landing-my", y.toFixed(3));
+      root.style.setProperty("--landing-dx", `${((x - 0.5) * 18).toFixed(2)}px`);
+      root.style.setProperty("--landing-dy", `${((y - 0.5) * 18).toFixed(2)}px`);
+    };
+
+    const sections = Array.from(document.querySelectorAll("section"));
+    const sectionObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        entry.target.classList.toggle("section-live", entry.isIntersecting);
+      });
+    }, { threshold: 0.12, rootMargin: "-8% 0px -14% 0px" });
+    sections.forEach((section, i) => {
+      section.style.setProperty("--section-order", i);
+      sectionObserver.observe(section);
+    });
+    const markLiveSections = () => {
+      const vh = Math.max(1, window.innerHeight);
+      sections.forEach((section) => {
+        const rect = section.getBoundingClientRect();
+        const live = rect.top < vh * 0.82 && rect.bottom > vh * 0.18;
+        section.classList.toggle("section-live", live);
+      });
+    };
+
+    updateProgress();
+    requestAnimationFrame(markVisible);
+    requestAnimationFrame(markLiveSections);
+    setTimeout(markVisible, 320);
+    setTimeout(markLiveSections, 360);
+    window.addEventListener("scroll", updateProgress, { passive: true });
+    window.addEventListener("scroll", markVisible, { passive: true });
+    window.addEventListener("scroll", markLiveSections, { passive: true });
+    window.addEventListener("resize", updateProgress);
+    window.addEventListener("resize", markVisible);
+    window.addEventListener("resize", markLiveSections);
+    window.addEventListener("pointermove", onPointer, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", updateProgress);
+      window.removeEventListener("scroll", markVisible);
+      window.removeEventListener("scroll", markLiveSections);
+      window.removeEventListener("resize", updateProgress);
+      window.removeEventListener("resize", markVisible);
+      window.removeEventListener("resize", markLiveSections);
+      window.removeEventListener("pointermove", onPointer);
+      hotTargets.forEach((el) => {
+        el.removeEventListener("mousemove", onMove);
+        el.removeEventListener("mouseleave", onLeave);
+      });
+      observer.disconnect();
+      sectionObserver.disconnect();
+    };
+  }, []);
+
+  return (
+    <>
+      <div id="landing-progress" aria-hidden="true"><span id="landing-progress-bar"/></div>
+      <div className="landing-edge-pattern" aria-hidden="true"/>
+    </>
+  );
+}
+
 window.HowItWorks = HowItWorks;
 window.CanvasCallout = CanvasCallout;
 window.LeaderboardShowcase = LeaderboardShowcase;
 window.QuizDemo = QuizDemo;
 window.StatsStrip = StatsStrip;
 window.FAQ = FAQ;
+window.LandingMotion = LandingMotion;

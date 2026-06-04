@@ -1432,7 +1432,9 @@ def index():
 
     lang = session.get("lang", "es")
     from student.landing_design import render_landing_page
-    return make_response(render_landing_page(lang))
+    resp = make_response(render_landing_page(lang))
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
 
 
 def _auth_story_panel(kind: str, lang: str) -> str:

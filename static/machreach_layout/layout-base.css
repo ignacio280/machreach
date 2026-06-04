@@ -1590,12 +1590,14 @@
     .mr-app-shell .content,
     .mr-app-shell .content-wide {
       view-transition-name: mr-page;
+      overflow: visible;
     }
     .mr-app-shell .content > *,
     .mr-app-shell .content-wide > * {
       animation: mrPageStageIn .58s cubic-bezier(.18,.72,.18,1) both;
       animation-delay: calc(min(var(--mr-stage, 1), 8) * 58ms);
       transform-origin: 50% 12px;
+      overflow: visible;
     }
     .mr-app-shell .content > *:nth-child(1),
     .mr-app-shell .content-wide > *:nth-child(1) { --mr-stage: 1; }
@@ -1620,7 +1622,7 @@
     .mr-app-shell .content .fr-row,
     .mr-app-shell .content .shop-cd .card {
       position: relative;
-      overflow: hidden;
+      overflow: visible;
       animation: mrFrameBuild .62s cubic-bezier(.18,.72,.18,1) both;
       animation-delay: calc(90ms + min(var(--mr-stage, 1), 8) * 42ms);
     }
@@ -1654,24 +1656,56 @@
       animation: mrControlBuild .48s cubic-bezier(.2,.7,.2,1) both;
       animation-delay: calc(160ms + min(var(--mr-stage, 1), 8) * 38ms);
     }
-    .mr-app-shell .content svg circle,
-    .mr-app-shell .content svg path,
-    .mr-app-shell .content svg line,
-    .mr-app-shell .content svg polyline {
+    .mr-app-shell .content svg:not(.ft-ring) circle,
+    .mr-app-shell .content svg:not(.ft-ring) path,
+    .mr-app-shell .content svg:not(.ft-ring) line,
+    .mr-app-shell .content svg:not(.ft-ring) polyline {
       stroke-dasharray: 720;
       stroke-dashoffset: 720;
       animation: mrStrokeBuild .9s cubic-bezier(.18,.72,.18,1) backwards;
       animation-delay: 180ms;
     }
+    .mr-app-shell .content .ft-ring circle,
+    .mr-app-shell .content .ft-ring path,
+    .mr-app-shell .content .ft-ring line,
+    .mr-app-shell .content .ft-ring polyline {
+      animation: none !important;
+    }
+    .mr-app-shell .content .ft-ring circle:first-child {
+      stroke-dasharray: none !important;
+      stroke-dashoffset: 0 !important;
+    }
+    .mr-app-shell .content #ft-ring-progress {
+      stroke-dasharray: 578 !important;
+      stroke-dashoffset: var(--ft-ring-offset, 0) !important;
+      transition: stroke-dashoffset .38s linear;
+    }
+    .mr-app-shell .content .fc-today,
+    .mr-app-shell .content .fc-card-flip,
+    .mr-app-shell .content .fc-decks-card,
+    .mr-app-shell .content .deck,
+    .mr-app-shell .content .qcard,
+    .mr-app-shell .content .qz-mode,
+    .mr-app-shell .content .course-empty,
+    .mr-app-shell .content .dropzone,
+    .mr-app-shell .content .quiz-grid,
+    .mr-app-shell .content .quiz-grid > div,
+    .mr-app-shell .content .focus-page-head,
+    .mr-app-shell .content .pl-card,
+    .mr-app-shell .content .pl-course,
+    .mr-app-shell .content .fr-panel,
+    .mr-app-shell .content .fr-row {
+      overflow: visible !important;
+    }
     @keyframes mrPageStageIn {
       0% { opacity: 0; transform: translateY(18px) scale(.985); clip-path: inset(0 0 100% 0 round 18px); filter: saturate(.8); }
       55% { opacity: 1; clip-path: inset(0 0 0 0 round 18px); }
-      100% { opacity: 1; transform: translateY(0) scale(1); clip-path: inset(0 0 0 0 round 0); filter: saturate(1); }
+      100% { opacity: 1; transform: translateY(0) scale(1); clip-path: inset(-72px -72px -72px -72px round 0); filter: saturate(1); }
     }
     @keyframes mrFrameBuild {
       0% { opacity: 0; transform: translateY(16px) scale(.975); clip-path: inset(50% 0 50% 0 round 18px); }
       42% { opacity: 1; clip-path: inset(0 0 0 0 round 18px); }
-      100% { opacity: 1; transform: translateY(0) scale(1); clip-path: inset(0 0 0 0 round 18px); }
+      100% { opacity: 1; transform: translateY(0) scale(1); clip-path: inset(-72px -72px -72px -72px round 18px); }
     }
     @keyframes mrFrameSweep {
       0% { transform: translateX(-115%); opacity: 0; }
@@ -3219,4 +3253,135 @@
       .auth-resend-form {
         grid-template-columns: 1fr;
       }
+    }
+
+    /* Inicio streak: make the small racha stat feel alive and readable in light mode. */
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .mr-stat-card.streak-stat,
+    :root:not([data-theme="dark"]) .content .mr-home .mr-stat-card.streak-stat {
+      display: block;
+      min-height: 138px;
+      text-decoration: none;
+      background:
+        linear-gradient(135deg, #FFFFFF 0%, #FFF1C7 44%, #FFE1CC 100%) !important;
+      color: #201B20 !important;
+      border: 2px solid #201B20 !important;
+      box-shadow: 0 4px 0 #201B20, 0 18px 34px rgba(255,122,61,.16) !important;
+      isolation: isolate;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .mr-stat-card.streak-stat::before,
+    :root:not([data-theme="dark"]) .content .mr-home .mr-stat-card.streak-stat::before {
+      content: "";
+      position: absolute;
+      inset: 10px;
+      border: 1px dashed rgba(255,122,61,.42);
+      border-radius: 14px;
+      opacity: 0;
+      transform: scale(.97);
+      transition: opacity .18s ease, transform .18s ease;
+      pointer-events: none;
+      z-index: -1;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .mr-stat-card.streak-stat:hover::before,
+    :root:not([data-theme="dark"]) .content .mr-home .mr-stat-card.streak-stat:hover::before {
+      opacity: 1;
+      transform: scale(1);
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .streak-stat .mr-stat-label,
+    :root:not([data-theme="dark"]) .content .mr-home .streak-stat .mr-stat-label {
+      color: #8B3A18 !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .streak-stat .mr-stat-value,
+    :root:not([data-theme="dark"]) .content .mr-home .streak-stat .mr-stat-value {
+      color: #201B20 !important;
+      font-size: clamp(38px, 4vw, 52px);
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .streak-stat .mr-stat-sub,
+    :root:not([data-theme="dark"]) .content .mr-home .streak-stat .mr-stat-sub,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .streak-stat .mr-stat-sub .up,
+    :root:not([data-theme="dark"]) .content .mr-home .streak-stat .mr-stat-sub .up {
+      color: #A33E12 !important;
+      font-weight: 900;
+    }
+    .mr-app-shell .mr-home .mr-stat-card.streak-stat .mr-stat-action,
+    .content .mr-home .mr-stat-card.streak-stat .mr-stat-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: #201B20;
+      color: #FFF8E1;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      position: relative;
+      z-index: 2;
+    }
+    .mr-app-shell .mr-home .mr-streak-lead,
+    .content .mr-home .mr-streak-lead {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: relative;
+      z-index: 1;
+    }
+    .mr-app-shell .mr-home .mr-streak-copy,
+    .content .mr-home .mr-streak-copy {
+      flex: 1;
+      min-width: 0;
+      color: #5C5C66;
+      font-size: 13px;
+      line-height: 1.25;
+    }
+    .mr-app-shell .mr-home .mr-streak-copy strong,
+    .content .mr-home .mr-streak-copy strong {
+      display: block;
+      color: #201B20;
+      font-weight: 900;
+    }
+    .mr-app-shell .mr-home .mr-streak-copy span,
+    .content .mr-home .mr-streak-copy span {
+      display: block;
+      color: #77756F;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-top: 2px;
+    }
+    .mr-app-shell .mr-home .mr-streak-meter,
+    .content .mr-home .mr-streak-meter {
+      height: 10px;
+      width: 100%;
+      margin-top: 10px;
+      border-radius: 999px;
+      background: #EDE7DA;
+      border: 1px solid rgba(32,27,32,.14);
+      overflow: hidden;
+    }
+    .mr-app-shell .mr-home .mr-streak-meter i,
+    .content .mr-home .mr-streak-meter i {
+      display: block;
+      width: max(8%, var(--streak-pct, 0%));
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #FF7A3D, #FFB84D, #2E9266);
+      transition: width .45s cubic-bezier(.18,.72,.18,1);
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .mr-streak-card,
+    :root:not([data-theme="dark"]) .content .mr-home .mr-streak-card {
+      background:
+        radial-gradient(circle at 88% 12%, rgba(255,122,61,.20), transparent 34%),
+        linear-gradient(135deg, #FFFFFF 0%, #FFF7ED 68%, #FFE1CC 100%) !important;
+      border: 2px solid #201B20 !important;
+      box-shadow: 0 4px 0 #201B20, 0 18px 34px rgba(255,122,61,.14) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .mr-streak-num,
+    :root:not([data-theme="dark"]) .content .mr-home .mr-streak-num {
+      background: #201B20 !important;
+      color: #FF9B64 !important;
+      border: 2px solid #201B20 !important;
+      box-shadow: 0 5px 0 #FF7A3D !important;
     }

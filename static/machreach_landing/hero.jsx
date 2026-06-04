@@ -1,9 +1,9 @@
 /* ======== Hero — leaderboard-led, animated, polished ======== */
 
 const heroStyles = {
-  wrap: { position: "relative", paddingTop: 64, paddingBottom: 96, overflow: "hidden" },
-  blob1: { position: "absolute", top: -120, right: -120, width: 460, height: 460, background: "var(--brand-soft)", borderRadius: "50%", filter: "blur(8px)", zIndex: 0 },
-  blob2: { position: "absolute", bottom: -200, left: -100, width: 360, height: 360, background: "var(--secondary-soft)", borderRadius: "50%", filter: "blur(8px)", zIndex: 0 },
+  wrap: { position: "relative", paddingTop: 88, paddingBottom: 118, overflow: "visible" },
+  blob1: { position: "absolute", top: -240, right: -360, width: 380, height: 380, background: "var(--brand-soft)", borderRadius: "50%", filter: "blur(30px)", opacity: .22, zIndex: 0, pointerEvents: "none" },
+  blob2: { position: "absolute", bottom: -250, left: -170, width: 320, height: 320, background: "var(--secondary-soft)", borderRadius: "50%", filter: "blur(24px)", opacity: .32, zIndex: 0, pointerEvents: "none" },
   grid: { position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "1.05fr 1fr", gap: 56, alignItems: "center" },
   h1: { fontFamily: "var(--font-display)", fontSize: "clamp(44px, 6vw, 76px)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 0.98, marginTop: 22 },
   h1Highlight: { background: "var(--brand)", color: "white", padding: "0 .12em", borderRadius: 12, display: "inline-block", transform: "rotate(-1.5deg)", boxShadow: "0 4px 0 0 var(--ink)", border: "2px solid var(--ink)", margin: "0 .04em" },
@@ -111,7 +111,7 @@ function HeroLeaderboard() {
           <div>
             <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, display: "flex", alignItems: "center", gap: 6 }}>
               Investigadores
-              <span style={{
+              <span className="hero-season-pill" style={{
                 fontFamily: "var(--font-mono)", fontSize: 10,
                 padding: "2px 6px", borderRadius: 5,
                 background: "var(--ink)", color: "white", letterSpacing: ".06em",

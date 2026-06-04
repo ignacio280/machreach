@@ -174,8 +174,421 @@ footer { padding: 64px 0 40px; border-top: 2px solid var(--line); margin-top: 64
 @keyframes count-up { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .fade-up { animation: count-up .5s ease both; }
 
+/* ============ landing motion layer ============ */
+:root {
+  --landing-mx: .5;
+  --landing-my: .5;
+  --landing-dx: 0px;
+  --landing-dy: 0px;
+  --landing-scroll-pct: 0%;
+}
+#landing-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  z-index: 1000;
+  pointer-events: none;
+  background: color-mix(in oklab, var(--surface) 52%, transparent);
+}
+#landing-progress-bar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--brand), var(--accent), var(--secondary));
+  box-shadow: 0 0 18px color-mix(in oklab, var(--brand) 40%, transparent);
+}
+.landing-edge-pattern {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .13;
+  background-image:
+    linear-gradient(90deg, color-mix(in oklab, var(--ink) 10%, transparent) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in oklab, var(--ink) 9%, transparent) 1px, transparent 1px),
+    repeating-linear-gradient(135deg, transparent 0 30px, color-mix(in oklab, var(--brand) 20%, transparent) 30px 32px);
+  background-size: 48px 48px, 48px 48px, 180px 180px;
+  mask-image: linear-gradient(to bottom, black 0%, black 70%, transparent 100%);
+  animation: motion-grid-drift 24s linear infinite;
+  transform: translate3d(var(--landing-dx), var(--landing-dy), 0);
+  transition: transform .28s ease;
+  will-change: transform, background-position;
+}
+.nav,
+section,
+footer {
+  position: relative;
+  z-index: 1;
+}
+section {
+  overflow: visible !important;
+}
+section::before {
+  content: "";
+  position: absolute;
+  left: clamp(18px, 4.5vw, 72px);
+  top: clamp(16px, 3vw, 42px);
+  width: min(180px, 34vw);
+  height: 52px;
+  pointer-events: none;
+  border-top: 2px solid color-mix(in oklab, var(--brand) 62%, transparent);
+  border-left: 2px solid color-mix(in oklab, var(--accent) 54%, transparent);
+  border-radius: 14px 0 0 0;
+  opacity: 0;
+  transform: translateX(-16px) scaleX(.22);
+  transform-origin: left top;
+}
+section.section-live::before {
+  animation: motion-corner-draw 1.05s cubic-bezier(.18,.82,.16,1) both;
+  animation-delay: calc(min(var(--section-order, 1), 7) * 36ms);
+}
+section::after {
+  content: "";
+  position: absolute;
+  left: clamp(24px, 6vw, 90px);
+  right: clamp(24px, 6vw, 90px);
+  bottom: 0;
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--brand) 62%, transparent), color-mix(in oklab, var(--accent) 42%, transparent), transparent);
+  transform: scaleX(.42);
+  opacity: .36;
+  animation: motion-section-rail 5.6s ease-in-out infinite;
+}
+.motion-ready .motion-reveal {
+  opacity: 0;
+  transform: translateY(28px) scale(.982);
+  filter: saturate(.86);
+  clip-path: inset(12% 0 18% 0 round 18px);
+  will-change: transform, opacity, clip-path, filter;
+}
+.motion-ready .motion-reveal.motion-slab {
+  transform: translateX(-34px) skewX(-4deg);
+  clip-path: inset(0 100% 0 0 round 18px);
+}
+.motion-ready .motion-reveal.motion-pivot {
+  transform: perspective(900px) rotateX(11deg) translateY(28px);
+  transform-origin: 50% 0;
+  clip-path: inset(0 0 36% 0 round 18px);
+}
+.motion-ready .motion-reveal.motion-stamp {
+  transform: translateY(18px) scale(.9) rotate(-1.4deg);
+  clip-path: inset(15% 10% 15% 10% round 20px);
+}
+.motion-ready .motion-reveal.motion-wipe {
+  transform: translateX(28px);
+  clip-path: inset(0 0 0 100% round 18px);
+}
+.motion-ready .motion-reveal.motion-ladder {
+  transform: translateY(42px);
+  clip-path: polygon(0 20%, 100% 0, 100% 82%, 0 100%);
+}
+.motion-ready .motion-reveal.motion-stack {
+  transform: translateY(22px) rotate(.8deg) scale(.96);
+  clip-path: inset(0 0 0 0 round 22px);
+  box-shadow: 8px 8px 0 color-mix(in oklab, var(--brand) 12%, transparent);
+}
+.motion-ready .motion-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0) rotate(0) skewX(0) scale(1);
+  filter: saturate(1);
+  clip-path: inset(-48px -48px -48px -48px round 0);
+  overflow: visible;
+  transition:
+    opacity .72s cubic-bezier(.2,.8,.2,1),
+    transform .72s cubic-bezier(.2,.8,.2,1),
+    clip-path .86s cubic-bezier(.18,.82,.16,1),
+    filter .72s cubic-bezier(.2,.8,.2,1),
+    box-shadow .72s cubic-bezier(.2,.8,.2,1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.motion-ready .motion-reveal.motion-stack.is-visible {
+  box-shadow: none;
+}
+.motion-ready .hero-grid > .motion-reveal.is-visible,
+.motion-ready .price-grid > .motion-reveal.is-visible,
+.motion-ready .lb-wrap > .motion-reveal.is-visible {
+  clip-path: none;
+  overflow: visible;
+}
+.motion-hotspot {
+  --motion-x: .5;
+  --motion-y: .5;
+  --motion-tilt-x: 0;
+  --motion-tilt-y: 0;
+  isolation: isolate;
+}
+.motion-hotspot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  background:
+    linear-gradient(
+      115deg,
+      transparent 0%,
+      transparent calc((var(--motion-x) * 100%) - 24%),
+      color-mix(in oklab, var(--brand) 20%, transparent) calc(var(--motion-x) * 100%),
+      transparent calc((var(--motion-x) * 100%) + 24%),
+      transparent 100%
+    );
+  transition: opacity .2s ease;
+}
+.motion-hotspot:hover::after {
+  opacity: 0;
+}
+.motion-hotspot > * {
+  position: relative;
+  z-index: 1;
+}
+.btn {
+  position: relative;
+  overflow: hidden;
+}
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: -20% -35%;
+  transform: translateX(-110%) rotate(10deg);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, white 50%, transparent), transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .6s cubic-bezier(.2,.8,.2,1), opacity .2s ease;
+}
+.btn:hover::after {
+  transform: translateX(110%) rotate(10deg);
+  opacity: .8;
+}
+.nav-links a {
+  position: relative;
+}
+.nav-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--brand);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform .24s ease;
+}
+.nav-links a:hover::after {
+  transform: scaleX(1);
+}
+.logo-mark {
+  transition: transform .24s cubic-bezier(.2,.8,.2,1), filter .24s ease;
+}
+.logo:hover .logo-mark {
+  transform: rotate(-8deg) scale(1.08);
+  filter: drop-shadow(0 8px 12px color-mix(in oklab, var(--brand) 30%, transparent));
+}
+.eyebrow .dot,
+.tag span:first-child {
+  animation: motion-dot-breathe 1.9s ease-in-out infinite;
+}
+.feat-grid > div svg,
+.how-grid svg,
+.price-grid svg,
+.quiz-wrap svg,
+.canvas-cta svg {
+  transition: transform .24s cubic-bezier(.2,.8,.2,1);
+}
+.feat-grid > div:hover svg,
+.how-grid .card:hover svg,
+.price-grid > div:hover svg,
+.quiz-wrap .card:hover svg,
+.canvas-cta:hover svg {
+  transform: rotate(-7deg) scale(1.08);
+}
+.stats-grid > div,
+.price-grid > div,
+.feat-grid > div {
+  transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.stats-grid > div:hover {
+  background: color-mix(in oklab, var(--brand) 8%, var(--surface));
+}
+.price-grid > div:hover,
+.feat-grid > div:hover {
+  filter: saturate(1.04);
+}
+.card:hover,
+.card-soft:hover {
+  box-shadow: 0 7px 0 0 var(--ink), 0 18px 34px rgba(15, 17, 27, .12);
+}
+
+[data-theme="dark"] .canvas-cta {
+  background: linear-gradient(135deg, #101019 0%, #171523 58%, #261812 100%) !important;
+  color: #FFF8E8 !important;
+  border-color: var(--brand) !important;
+  box-shadow: 0 8px 0 0 var(--brand) !important;
+}
+[data-theme="dark"] .canvas-cta .eyebrow {
+  background: rgba(255, 122, 61, .14) !important;
+  border-color: var(--brand) !important;
+  color: #FFF8E8 !important;
+}
+[data-theme="dark"] .canvas-cta h2,
+[data-theme="dark"] .canvas-cta p,
+[data-theme="dark"] .canvas-cta span {
+  color: #FFF8E8 !important;
+}
+[data-theme="dark"] .canvas-cta p,
+[data-theme="dark"] .canvas-cta span {
+  opacity: .92;
+}
+[data-theme="dark"] .canvas-cta > div:last-child > div {
+  background: rgba(8, 9, 15, .72) !important;
+  border-color: rgba(255, 122, 61, .42) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04), 0 18px 46px rgba(0, 0, 0, .32);
+}
+[data-theme="dark"] .canvas-cta > div:last-child > div > div:first-child {
+  border-bottom-color: rgba(255, 122, 61, .28) !important;
+}
+[data-theme="dark"] .lb-you-callout {
+  background: linear-gradient(90deg, #0E0E16, color-mix(in oklab, var(--lb-primary) 32%, #15111A)) !important;
+  color: #FFF8E8 !important;
+  border: 1.5px solid rgba(255, 122, 61, .62);
+  box-shadow: 0 2px 0 rgba(255, 122, 61, .35);
+}
+[data-theme="dark"] .lb-you-callout span:first-child {
+  color: rgba(255, 248, 232, .86) !important;
+}
+[data-theme="dark"] .lb-you-callout span:last-child {
+  color: var(--lb-accent) !important;
+  text-shadow: 0 0 12px color-mix(in oklab, var(--lb-accent) 35%, transparent);
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .card-soft,
+[data-theme="dark"] .feat-grid > div,
+[data-theme="dark"] .stats-grid > div,
+[data-theme="dark"] .price-grid > div,
+[data-theme="dark"] .quiz-wrap .card,
+[data-theme="dark"] .lb-arena,
+[data-theme="dark"] .lb-insight,
+[data-theme="dark"] .lb-row-item,
+[data-theme="dark"] .lb-podium-bar,
+[data-theme="dark"] .canvas-cta,
+[data-theme="dark"] .terminal-sim,
+[data-theme="dark"] .auth-panel,
+[data-theme="dark"] .auth-side,
+[data-theme="dark"] .auth-form input,
+[data-theme="dark"] .lang-switch,
+[data-theme="dark"] .theme-toggle {
+  border-color: var(--brand) !important;
+}
+
+[data-theme="dark"] [style*="var(--ink)"] {
+  border-color: var(--brand) !important;
+}
+
+[data-theme="dark"] [style*="box-shadow"][style*="var(--ink)"],
+[data-theme="dark"] .how-arrow {
+  box-shadow: 0 4px 0 0 var(--brand) !important;
+}
+
+[data-theme="dark"] .card:hover,
+[data-theme="dark"] .card-soft:hover {
+  box-shadow: 0 7px 0 0 var(--brand), 0 18px 34px rgba(0, 0, 0, .32);
+}
+
+[data-theme="dark"] [style*="background: var(--ink)"][style*="color: white"],
+[data-theme="dark"] .price-cta-standard,
+[data-theme="dark"] .mini-coins-balance,
+[data-theme="dark"] .quiz-top-bar {
+  background: #0E1018 !important;
+  color: #FFF8E8 !important;
+  border-color: var(--brand) !important;
+}
+
+[data-theme="dark"] .price-cta-standard {
+  box-shadow: 0 4px 0 0 var(--brand) !important;
+}
+
+[data-theme="dark"] .final-cta-primary {
+  background: #0E1018 !important;
+  color: #FFF8E8 !important;
+  border-color: #FFF8E8 !important;
+  box-shadow: 0 4px 0 0 rgba(0, 0, 0, .46) !important;
+}
+
+[data-theme="dark"] .quiz-top-bar {
+  border-bottom: 2px solid var(--brand) !important;
+}
+
+[data-theme="dark"] .quiz-top-bar .quiz-counter,
+[data-theme="dark"] .mini-coins-balance span,
+[data-theme="dark"] .mini-coins-balance svg {
+  color: #FFF8E8 !important;
+}
+
+[data-theme="dark"] .hero-season-pill {
+  background: var(--brand) !important;
+  color: #0E1018 !important;
+  border: 1px solid var(--brand) !important;
+}
+
+@media (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .motion-hotspot:hover {
+    transform: perspective(900px)
+      rotateX(calc(var(--motion-tilt-y) * -1deg))
+      rotateY(calc(var(--motion-tilt-x) * 1deg))
+      translateY(-3px);
+  }
+  .btn.motion-hotspot:hover {
+    transform: translate(-1px, -1px) scale(1.015);
+  }
+}
+
+@keyframes motion-grid-drift {
+  from { background-position: 0 0, 0 0, 0 0; }
+  to { background-position: 48px 48px, -48px 48px, 180px 180px; }
+}
+@keyframes motion-section-rail {
+  0%, 100% { transform: translateX(-8%) scaleX(.38); opacity: .18; }
+  50% { transform: translateX(8%) scaleX(.78); opacity: .42; }
+}
+@keyframes motion-corner-draw {
+  0% { opacity: 0; transform: translateX(-16px) scaleX(.22); }
+  34% { opacity: .72; }
+  100% { opacity: .52; transform: translateX(0) scaleX(1); }
+}
+@keyframes motion-dot-breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 0%, transparent); }
+  50% { transform: scale(1.35); box-shadow: 0 0 0 7px color-mix(in oklab, var(--brand) 18%, transparent); }
+}
+
 /* responsive */
 @media (max-width: 760px) {
   section { padding: 64px 0; }
   .nav-links { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .001ms !important;
+  }
+  .motion-ready .motion-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    clip-path: none;
+    box-shadow: none;
+  }
 }

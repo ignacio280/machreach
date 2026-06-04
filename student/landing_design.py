@@ -109,8 +109,15 @@ _SPLASH = r"""
   (function(){
     var sp = document.getElementById('mr-splash');
     if(!sp) return;
+    function scrollHash(){
+      try{
+        if(!location.hash) return;
+        var target = document.querySelector(location.hash);
+        if(target) setTimeout(function(){ target.scrollIntoView({block:'start'}); }, 60);
+      }catch(e){}
+    }
     // Only the first landing view of a session gets the intro.
-    try{ if(sessionStorage.getItem('mr_splash_seen')){ sp.parentNode && sp.parentNode.removeChild(sp); return; } }catch(e){}
+    try{ if(sessionStorage.getItem('mr_splash_seen')){ sp.parentNode && sp.parentNode.removeChild(sp); scrollHash(); return; } }catch(e){}
     try{ sessionStorage.setItem('mr_splash_seen','1'); }catch(e){}
     var lockup = sp.querySelector('.mr-lockup');
     var icon = sp.querySelector('.mr-icon');
@@ -122,6 +129,7 @@ _SPLASH = r"""
       if(removed) return; removed = true;
       document.documentElement.style.overflow = '';
       if(sp && sp.parentNode) sp.parentNode.removeChild(sp);
+      scrollHash();
     }
     function reveal(){
       // FLIP: fly the lockup so its icon lands exactly on the nav logo mark.

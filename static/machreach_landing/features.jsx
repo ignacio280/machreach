@@ -226,7 +226,7 @@ function MiniCoins() {
   ];
   return (
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{
+      <div className="mini-coins-balance" style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
         background: "var(--ink)", color: "white",
         padding: "6px 10px", borderRadius: 8,

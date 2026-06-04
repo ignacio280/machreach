@@ -19,6 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const LANDING = join(__dirname, "..", "static", "machreach_landing");
 const SRC_HTML = join(LANDING, "MachReach Landing.html");
 const PREFIX = "/static/machreach_landing/";
+const BUNDLE_VERSION = "landing-motion-4";
 
 const read = (f) => readFileSync(join(LANDING, f), "utf-8");
 const html = readFileSync(SRC_HTML, "utf-8");
@@ -90,6 +91,8 @@ try {
   prerendered = w.document.getElementById("root").innerHTML;
 } catch (e) {
   console.warn("Prerender failed, shipping empty #root (client will render):", e.message);
+} finally {
+  w.close();
 }
 console.log(`prerender: ${prerendered.length} chars captured`);
 
@@ -105,7 +108,7 @@ if (scriptsStart === -1 || scriptsEnd === -1) throw new Error("Could not locate 
 const prodScripts =
 `<script src="${PREFIX}vendor/react.production.min.js"></script>
   <script src="${PREFIX}vendor/react-dom.production.min.js"></script>
-  <script src="${PREFIX}bundle.min.js" defer></script>`;
+  <script src="${PREFIX}bundle.min.js?v=${BUNDLE_VERSION}" defer></script>`;
 prod = prod.slice(0, scriptsStart) + prodScripts + prod.slice(scriptsEnd);
 // Inject pre-rendered markup into #root
 prod = prod.replace('<div id="root"></div>', `<div id="root">${prerendered}</div>`);

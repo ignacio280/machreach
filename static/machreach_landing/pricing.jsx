@@ -86,7 +86,7 @@ function Pricing() {
           </div>
         </div>
 
-        <div className="price-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+        <div className="price-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, padding: "26px 0 12px", overflow: "visible" }}>
           {tiers.map(t => {
             const price = period === "month" ? t.m : (t.y / 12);
             return (
@@ -100,6 +100,7 @@ function Pricing() {
                 boxShadow: t.primary ? "0 8px 0 0 var(--ink)" : "0 4px 0 0 var(--ink)",
                 transform: t.primary ? "translateY(-8px)" : "none",
                 display: "flex", flexDirection: "column",
+                overflow: "visible",
               }}>
                 {t.primary && (
                   <div style={{
@@ -145,14 +146,14 @@ function Pricing() {
                     </li>
                   ))}
                 </ul>
-        {t.locked ? <button className="btn btn-lg" disabled style={{
+        {t.locked ? <button className="btn btn-lg price-cta price-cta-locked" disabled style={{
                   background: "var(--surface-2)",
                   color: "var(--ink-3)",
                   borderColor: "var(--line)",
                   width: "100%",
                   boxShadow: "none",
                   cursor: "not-allowed",
-                }}>{t.cta}</button> : <a href="/register" className="btn btn-lg" style={{
+                }}>{t.cta}</button> : <a href="/register" className={`btn btn-lg price-cta ${t.primary ? "price-cta-plus" : "price-cta-standard"}`} style={{
                   background: t.primary ? "white" : "var(--ink)",
                   color: t.primary ? "var(--brand)" : "white",
                   borderColor: t.primary ? "white" : "var(--ink)",
@@ -207,7 +208,7 @@ function FinalCTA() {
             Activa la extensión de MachReach y empieza a ordenar tus cursos hoy mismo. Tu yo del lunes te lo va a agradecer.
           </p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-          <a className="btn btn-lg" href="/register" style={{
+          <a className="btn btn-lg final-cta-primary" href="/register" style={{
               background: "var(--ink)", color: "white", borderColor: "var(--ink)",
               boxShadow: "0 4px 0 0 color-mix(in oklab, black 50%, transparent)",
             }}>

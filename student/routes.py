@@ -318,9 +318,10 @@ _GPA_PLANILLA_HTML_ES = r"""
   .pl-card .lbl { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; font-weight:700; }
   .pl-card .val { font-size:28px; font-weight:800; margin-top:4px; font-variant-numeric: tabular-nums; }
   .pl-tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:0; }
-  .pl-tab { padding:10px 16px; background:transparent; border:none; cursor:pointer; color:var(--text-muted); font-size:14px; font-weight:600; border-bottom:3px solid transparent; transition:all .12s; border-radius:6px 6px 0 0; }
+  .pl-tab { min-width:82px; min-height:42px; padding:10px 16px; background:transparent; border:none; cursor:pointer; color:var(--text-muted); font-size:14px; font-weight:600; border-bottom:3px solid transparent; transition:all .12s; border-radius:6px 6px 0 0; text-align:center; }
   .pl-tab:hover { color:var(--text); background:var(--border-light); }
-  .pl-tab.active { color:var(--primary); border-bottom-color:var(--primary); background:transparent; }
+  .pl-tab.active { color:#1A1A1F !important; border-bottom-color:var(--primary); background:var(--primary); }
+  :root[data-theme="dark"] .pl-tab.active { color:#111015 !important; }
   .pl-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; }
   @media (max-width: 820px) { .pl-grid { grid-template-columns: 1fr; } }
   .pl-course { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
@@ -360,6 +361,23 @@ _GPA_PLANILLA_HTML_ES = r"""
   .pl-help { font-size:12px; color:var(--text-muted); margin-top:18px; padding:12px 14px; background:var(--card); border-radius:8px; border-left:3px solid var(--primary); }
   .pl-help b { color:var(--text); }
   .pl-empty { padding:40px; text-align:center; color:var(--text-muted); background:var(--card); border-radius:12px; border:1px dashed var(--border); }
+  .pl-wrap.pl-stable .pl-card,
+  .pl-wrap.pl-stable .pl-course,
+  .pl-wrap.pl-stable .pl-empty,
+  .pl-wrap.pl-stable .pl-evals,
+  .pl-wrap.pl-stable .pl-evals tr,
+  .pl-wrap.pl-stable input,
+  .pl-wrap.pl-stable button,
+  .pl-wrap.pl-stable select,
+  .pl-wrap.pl-stable textarea,
+  .pl-wrap.pl-stable .pl-tab {
+    animation:none !important;
+  }
+  .pl-wrap.pl-stable .pl-card::after,
+  .pl-wrap.pl-stable .pl-course::after {
+    animation:none !important;
+    opacity:0 !important;
+  }
 </style>
 
 <div class="pl-wrap">
@@ -425,10 +443,38 @@ _GPA_PLANILLA_HTML_ES = r"""
     };
   }
 
+  function cleanSemLabel(label){
+    return (label == null ? '' : String(label)).trim().replace(/^Sem\s+/i, '').trim();
+  }
+
+  function romanLabel(index){
+    return SEM_LABELS[index] || String((index || 0) + 1);
+  }
+
+  function normalizeSemLabel(label, index){
+    return cleanSemLabel(label) || romanLabel(index);
+  }
+
+  function normalizeData(){
+    if (!data || !Array.isArray(data.sems) || !data.sems.length) data = defaultData();
+    data.sems.forEach(function(sem, i){
+      if (!sem) {
+        data.sems[i] = { label: romanLabel(i), active: false, courses: [] };
+        return;
+      }
+      sem.label = normalizeSemLabel(sem.label, i);
+      if (!Array.isArray(sem.courses)) sem.courses = [];
+    });
+    if (typeof data.current !== 'number' || data.current < 0 || data.current >= data.sems.length) {
+      data.current = 0;
+    }
+  }
+
   var data;
   try { data = JSON.parse(localStorage.getItem(KEY)) || defaultData(); }
   catch(e){ data = defaultData(); }
   if (!data || !data.sems) data = defaultData();
+  normalizeData();
 
   function save(){ try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e){} }
 
@@ -438,13 +484,15 @@ _GPA_PLANILLA_HTML_ES = r"""
   // untouched. Each (semester_label, course_name) lands in the matching
   // slot — or appended to the last semester if the label isn't a tab yet.
   function findSemesterByLabel(label){
-    if (!label) return -1;
+    var target = cleanSemLabel(label);
+    if (!target) return -1;
     for (var i = 0; i < data.sems.length; i++){
-      if ((data.sems[i].label || '') === label) return i;
+      if (cleanSemLabel(data.sems[i].label) === target) return i;
     }
     return -1;
   }
   function ensureSemesterSlot(label){
+    label = normalizeSemLabel(label, data.sems.length);
     var idx = findSemesterByLabel(label);
     if (idx >= 0) return idx;
     data.sems.push({ label: label, active: false, courses: [] });
@@ -581,10 +629,13 @@ _GPA_PLANILLA_HTML_ES = r"""
   function renderTabs(){
     var t = document.getElementById('pl-tabs');
     var tabs = data.sems.map(function(s, i){
+      var label = normalizeSemLabel(s && s.label, i);
+      if (s) s.label = label;
       var hasAny = s.courses.some(function(c){ return courseStats(c).hasAny; });
       var dot = hasAny ? ' •' : '';
+      var activeStyle = i === data.current ? ' style="color:#1A1A1F !important;"' : '';
       return '<button class="pl-tab' + (i === data.current ? ' active' : '') +
-             '" onclick="plSwitchSem(' + i + ')">Sem ' + s.label + dot + '</button>';
+             '"' + activeStyle + ' onclick="plSwitchSem(' + i + ')">Sem ' + escapeHtml(label) + dot + '</button>';
     }).join('');
     var addBtn = '<button class="pl-tab" style="opacity:.85;" onclick="plAddSemester()" title="Agregar otro semestre">+ Semestre</button>';
     t.innerHTML = tabs + addBtn;
@@ -654,12 +705,21 @@ _GPA_PLANILLA_HTML_ES = r"""
     document.getElementById('pl-car-cred').textContent = cs.credits || 0;
   }
 
+  function markPlanillaStable(){
+    var wrap = document.querySelector('.pl-wrap');
+    if (!wrap || wrap.classList.contains('pl-stable')) return;
+    setTimeout(function(){
+      try { wrap.classList.add('pl-stable'); } catch(e){}
+    }, 720);
+  }
+
   function rerender(){
     // Preserve focus + cursor across full re-render so typing in any input
     // (especially course name on the GPA page) doesn't get interrupted.
     var act = document.activeElement;
     var snap = null;
     if (act && (act.tagName === 'INPUT' || act.tagName === 'TEXTAREA') && act.closest('.pl-wrap')) {
+      try { act.closest('.pl-wrap').classList.add('pl-stable'); } catch(e){}
       var path = [];
       var el = act;
       while (el && el !== document.body) {
@@ -676,6 +736,7 @@ _GPA_PLANILLA_HTML_ES = r"""
       };
     }
     renderTabs(); renderBody(); save();
+    markPlanillaStable();
     if (snap) {
       try {
         var restored = document.querySelector(snap.sel);
@@ -1479,6 +1540,252 @@ def register_student_routes(app, csrf, limiter):
         .wa-risk-btn {{ white-space:nowrap; text-decoration:none; color:#fff; background:#1A1A1F; border-radius:999px; padding:9px 12px; font-size:12px; font-weight:900; }}
         @media (max-width:1000px) {{ .wa-grid {{ grid-template-columns:1fr; }} .wa-stats {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} }}
         @media (max-width:580px) {{ .wa-stats {{ grid-template-columns:1fr; }} .wa-week-nav {{ width:100%; justify-content:space-between; }} #wa-week-label {{ min-width:0; }} }}
+        .wa-page {{
+          --warm-bg:#F4F1EA;
+          --warm-card:#FFFFFF;
+          --warm-line:#201B20;
+          --warm-ink:#201B20;
+          --warm-muted:#77756F;
+          --warm-orange:#FF7A3D;
+          --warm-green:#2E9266;
+          font-family:'Nunito',sans-serif;
+          color:var(--warm-ink);
+        }}
+        .wa-head {{
+          position:relative;
+          align-items:center;
+          padding:clamp(22px,3vw,34px);
+          border:2px solid var(--warm-line);
+          border-radius:24px;
+          background:
+            linear-gradient(135deg,#FFE7D8 0%,#FFF8EE 56%,#E9F7DE 100%);
+          box-shadow:0 5px 0 var(--warm-line),0 22px 48px rgba(32,27,32,.10);
+          overflow:hidden;
+        }}
+        .wa-head::before {{
+          content:"";
+          position:absolute;
+          inset:14px;
+          border:1px dashed rgba(32,27,32,.18);
+          border-radius:18px;
+          pointer-events:none;
+        }}
+        .wa-head > * {{
+          position:relative;
+          z-index:1;
+        }}
+        .wa-eye {{
+          display:inline-flex;
+          width:fit-content;
+          padding:7px 12px;
+          border:2px solid var(--warm-orange);
+          border-radius:999px;
+          background:#FFF8EE;
+          color:#8B3A18;
+          box-shadow:0 2px 0 rgba(32,27,32,.18);
+        }}
+        .wa-head h1 {{
+          max-width:780px;
+          letter-spacing:0!important;
+        }}
+        .wa-week-nav {{
+          border:2px solid var(--warm-line);
+          box-shadow:0 4px 0 var(--warm-line),0 14px 34px rgba(32,27,32,.08);
+        }}
+        .wa-week-nav button {{
+          border:2px solid var(--warm-line);
+          box-shadow:0 2px 0 var(--warm-line);
+          transition:transform .14s ease,box-shadow .14s ease,background .14s ease;
+        }}
+        .wa-week-nav button:not(:disabled):hover {{
+          background:var(--warm-orange);
+          transform:translateY(-1px);
+          box-shadow:0 3px 0 var(--warm-line);
+        }}
+        .wa-stat,.wa-card {{
+          border:2px solid var(--warm-line);
+          border-radius:20px;
+          background:var(--warm-card);
+          box-shadow:0 4px 0 var(--warm-line),0 18px 38px rgba(32,27,32,.08);
+          transition:transform .16s ease,box-shadow .16s ease;
+        }}
+        .wa-stat:hover,.wa-card:hover {{
+          transform:translate(-1px,-2px);
+          box-shadow:0 6px 0 var(--warm-line),0 24px 48px rgba(32,27,32,.12);
+        }}
+        .wa-stat strong {{
+          letter-spacing:0!important;
+        }}
+        .wa-stat:nth-child(1) {{ background:linear-gradient(135deg,#FFFFFF,#FFF1C7); }}
+        .wa-stat:nth-child(2) {{ background:linear-gradient(135deg,#FFFFFF,#FFE7D8); }}
+        .wa-stat:nth-child(3) {{ background:linear-gradient(135deg,#FFFFFF,#E9F7DE); }}
+        .wa-stat:nth-child(4) {{ background:linear-gradient(135deg,#FFFFFF,#F4ECFF); }}
+        .wa-card h2 {{
+          letter-spacing:0!important;
+        }}
+        .wa-line-svg {{
+          filter:drop-shadow(0 10px 18px rgba(255,122,61,.12));
+        }}
+        .wa-line {{
+          stroke:#FF7A3D;
+          stroke-width:5;
+        }}
+        .wa-dot {{
+          fill:#FFF8EE;
+          stroke:#201B20;
+          stroke-width:3;
+        }}
+        .wa-course-btn,.wa-risk-card,.wa-empty {{
+          border:2px solid #E2DCCC;
+          background:#FFFDF8;
+          color:#201B20;
+        }}
+        .wa-course-btn:hover,.wa-course-btn.active {{
+          border-color:#201B20;
+          box-shadow:0 4px 0 #201B20,0 14px 32px rgba(255,122,61,.14);
+        }}
+        .wa-detail-day strong {{
+          color:#201B20;
+          font-size:12px;
+          font-weight:900;
+        }}
+        :root[data-theme="dark"] .content .wa-page,
+        :root[data-theme="dark"] .mr-app-shell .wa-page {{
+          --warm-bg:#0A0A10;
+          --warm-card:#1D1B26;
+          --warm-line:#FF7A3D;
+          --warm-ink:#FFF8E1;
+          --warm-muted:#BDB5AA;
+          color:#FFF8E1!important;
+        }}
+        :root[data-theme="dark"] .content .wa-head,
+        :root[data-theme="dark"] .mr-app-shell .wa-head {{
+          background:
+            radial-gradient(circle at 90% 12%,rgba(255,122,61,.18),transparent 32%),
+            linear-gradient(135deg,#12101A 0%,#1D1B26 64%,#2A1B16 100%)!important;
+          border-color:#FF7A3D!important;
+          box-shadow:0 5px 0 #FF7A3D,0 24px 58px rgba(0,0,0,.36)!important;
+        }}
+        :root[data-theme="dark"] .content .wa-head::before,
+        :root[data-theme="dark"] .mr-app-shell .wa-head::before {{
+          border-color:rgba(255,122,61,.30);
+        }}
+        :root[data-theme="dark"] .content .wa-eye,
+        :root[data-theme="dark"] .mr-app-shell .wa-eye {{
+          background:rgba(255,122,61,.12);
+          color:#FFB07A!important;
+          border-color:#FF7A3D;
+          box-shadow:0 2px 0 rgba(255,122,61,.55);
+        }}
+        :root[data-theme="dark"] .content .wa-head h1,
+        :root[data-theme="dark"] .content .wa-head p,
+        :root[data-theme="dark"] .content .wa-card h2,
+        :root[data-theme="dark"] .content .wa-stat strong,
+        :root[data-theme="dark"] .content .wa-course-top,
+        :root[data-theme="dark"] .content .wa-risk-card strong,
+        :root[data-theme="dark"] .content .wa-detail-day strong,
+        :root[data-theme="dark"] .mr-app-shell .wa-head h1,
+        :root[data-theme="dark"] .mr-app-shell .wa-head p,
+        :root[data-theme="dark"] .mr-app-shell .wa-card h2,
+        :root[data-theme="dark"] .mr-app-shell .wa-stat strong,
+        :root[data-theme="dark"] .mr-app-shell .wa-course-top,
+        :root[data-theme="dark"] .mr-app-shell .wa-risk-card strong,
+        :root[data-theme="dark"] .mr-app-shell .wa-detail-day strong {{
+          color:#FFF8E1!important;
+        }}
+        :root[data-theme="dark"] .content .wa-stat,
+        :root[data-theme="dark"] .content .wa-card,
+        :root[data-theme="dark"] .content .wa-week-nav,
+        :root[data-theme="dark"] .mr-app-shell .wa-stat,
+        :root[data-theme="dark"] .mr-app-shell .wa-card,
+        :root[data-theme="dark"] .mr-app-shell .wa-week-nav {{
+          background:#1D1B26!important;
+          border-color:#FF7A3D!important;
+          color:#FFF8E1!important;
+          box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32)!important;
+        }}
+        :root[data-theme="dark"] .content .wa-stat:nth-child(n),
+        :root[data-theme="dark"] .mr-app-shell .wa-stat:nth-child(n) {{
+          background:
+            radial-gradient(circle at 86% 14%,rgba(255,122,61,.12),transparent 36%),
+            linear-gradient(135deg,#1D1B26,#171520)!important;
+        }}
+        :root[data-theme="dark"] .content .wa-card p,
+        :root[data-theme="dark"] .content .wa-stat span,
+        :root[data-theme="dark"] .content .wa-course-top span,
+        :root[data-theme="dark"] .content .wa-risk-card p,
+        :root[data-theme="dark"] .content .wa-risk-card span,
+        :root[data-theme="dark"] .content .wa-detail-day span,
+        :root[data-theme="dark"] .content .wa-label,
+        :root[data-theme="dark"] .mr-app-shell .wa-card p,
+        :root[data-theme="dark"] .mr-app-shell .wa-stat span,
+        :root[data-theme="dark"] .mr-app-shell .wa-course-top span,
+        :root[data-theme="dark"] .mr-app-shell .wa-risk-card p,
+        :root[data-theme="dark"] .mr-app-shell .wa-risk-card span,
+        :root[data-theme="dark"] .mr-app-shell .wa-detail-day span,
+        :root[data-theme="dark"] .mr-app-shell .wa-label {{
+          color:#BDB5AA!important;
+          fill:#BDB5AA!important;
+        }}
+        :root[data-theme="dark"] .content .wa-week-nav button,
+        :root[data-theme="dark"] .mr-app-shell .wa-week-nav button {{
+          background:#0A0A10!important;
+          border-color:#FF7A3D!important;
+          color:#FFF8E1!important;
+          box-shadow:0 2px 0 #FF7A3D!important;
+        }}
+        :root[data-theme="dark"] .content .wa-week-nav button:not(:disabled):hover,
+        :root[data-theme="dark"] .mr-app-shell .wa-week-nav button:not(:disabled):hover {{
+          background:#FF7A3D!important;
+          color:#12101A!important;
+        }}
+        :root[data-theme="dark"] .content #wa-week-label,
+        :root[data-theme="dark"] .mr-app-shell #wa-week-label {{
+          color:#FFF8E1!important;
+        }}
+        :root[data-theme="dark"] .content .wa-axis,
+        :root[data-theme="dark"] .mr-app-shell .wa-axis {{
+          stroke:rgba(255,122,61,.20)!important;
+        }}
+        :root[data-theme="dark"] .content .wa-line,
+        :root[data-theme="dark"] .mr-app-shell .wa-line {{
+          stroke:#FF7A3D!important;
+        }}
+        :root[data-theme="dark"] .content .wa-dot,
+        :root[data-theme="dark"] .mr-app-shell .wa-dot {{
+          fill:#0A0A10!important;
+          stroke:#FF7A3D!important;
+        }}
+        :root[data-theme="dark"] .content .wa-value,
+        :root[data-theme="dark"] .mr-app-shell .wa-value {{
+          fill:#FFF8E1!important;
+        }}
+        :root[data-theme="dark"] .content .wa-course-btn,
+        :root[data-theme="dark"] .content .wa-risk-card,
+        :root[data-theme="dark"] .content .wa-empty,
+        :root[data-theme="dark"] .mr-app-shell .wa-course-btn,
+        :root[data-theme="dark"] .mr-app-shell .wa-risk-card,
+        :root[data-theme="dark"] .mr-app-shell .wa-empty {{
+          background:#14131C!important;
+          border-color:rgba(255,122,61,.52)!important;
+          color:#FFF8E1!important;
+        }}
+        :root[data-theme="dark"] .content .wa-course-btn.active,
+        :root[data-theme="dark"] .content .wa-course-btn:hover,
+        :root[data-theme="dark"] .mr-app-shell .wa-course-btn.active,
+        :root[data-theme="dark"] .mr-app-shell .wa-course-btn:hover {{
+          border-color:#FF7A3D!important;
+          box-shadow:0 4px 0 #FF7A3D,0 16px 34px rgba(0,0,0,.28)!important;
+        }}
+        :root[data-theme="dark"] .content .wa-course-track,
+        :root[data-theme="dark"] .mr-app-shell .wa-course-track {{
+          background:#0A0A10!important;
+        }}
+        :root[data-theme="dark"] .content .wa-risk-btn,
+        :root[data-theme="dark"] .mr-app-shell .wa-risk-btn {{
+          background:#FF7A3D!important;
+          color:#12101A!important;
+        }}
         </style>
         <div class="wa-page">
           <div class="wa-head">
@@ -4166,14 +4473,14 @@ def register_student_routes(app, csrf, limiter):
   .mr-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
   @media (max-width: 900px) { .mr-stats-grid { grid-template-columns: repeat(2, 1fr); } }
   .mr-stat-card { background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 18px; padding: 18px; position: relative; overflow: hidden; }
-  .mr-stat-card.tilted { background: linear-gradient(135deg, #5B4694, #7A65BA); color: #fff; border: none; }
+  .mr-stat-card.tilted { background: linear-gradient(135deg, #5B4694, #7A65BA); color: #fff; border: 1px solid transparent; }
   .mr-stat-card.tilted .mr-stat-label { color: rgba(255,255,255,0.8); }
   .mr-stat-card.tilted .mr-stat-sub { color: rgba(255,255,255,0.85); }
   .mr-stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94939C; }
   .mr-stat-value { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 36px; letter-spacing: -0.03em; line-height: 1; margin-top: 8px; color: inherit; }
   .mr-stat-sub { font-size: 12px; color: #5C5C66; margin-top: 8px; }
   .mr-stat-sub .up { color: #2E9266; font-weight: 700; }
-  .mr-stat-deco { position: absolute; right: -10px; bottom: -10px; font-size: 64px; opacity: 0.12; pointer-events: none; }
+  .mr-stat-deco { position: absolute; right: 12px; bottom: 8px; font-size: 58px; opacity: 0.12; pointer-events: none; transform: rotate(-8deg); }
 
   /* ── GENERIC CARD ── */
   .mr-card { background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 18px; padding: 22px; margin-bottom: 20px; }
@@ -4257,9 +4564,16 @@ def register_student_routes(app, csrf, limiter):
   .mr-lmrow .lm-xp { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12px; opacity: 0.95; }
 
   /* streak */
-  .mr-streak-num { font-family: "Bricolage Grotesque", sans-serif; font-size: 42px; font-weight: 600; color: #FF7A3D; line-height: 1; letter-spacing: -0.03em; }
-  .mr-heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
-  .mr-heat-cell { aspect-ratio: 1; border-radius: 5px; background: #EDE7DA; }
+  .mr-streak-card { position: relative; overflow: hidden; background: linear-gradient(135deg, #FFFFFF 0%, #FFF7ED 72%, #FFE1CC 100%); transition: transform .2s ease, box-shadow .2s ease; }
+  .mr-streak-card::before { content: ""; position: absolute; width: 150px; height: 150px; right: -58px; top: -48px; border-radius: 50%; background: radial-gradient(circle, rgba(255,122,61,.32), transparent 68%); pointer-events: none; }
+  .mr-streak-card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255,255,255,.35) 48%, transparent 58%, transparent 100%); transform: translateX(-120%); pointer-events: none; }
+  .mr-streak-card:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(255,122,61,.16); }
+  .mr-streak-card:hover::after { animation: mrStreakSweep .9s ease; }
+  .mr-streak-card .mr-card-h, .mr-streak-card .mr-heat-grid, .mr-streak-card .mr-week-labels, .mr-streak-card .mr-streak-row { position: relative; z-index: 1; }
+  .mr-streak-num { font-family: "Bricolage Grotesque", sans-serif; font-size: 42px; font-weight: 600; color: #FF7A3D; line-height: 1; letter-spacing: -0.03em; display: inline-grid; place-items: center; min-width: 74px; height: 74px; border-radius: 22px; background: #1A1A1F; box-shadow: 0 5px 0 #FF7A3D; }
+  .mr-heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 14px; }
+  .mr-heat-cell { aspect-ratio: 1; border-radius: 6px; background: #EDE7DA; transition: transform .14s ease, box-shadow .14s ease; }
+  .mr-heat-cell:hover { transform: translateY(-2px) scale(1.06); box-shadow: 0 6px 14px rgba(255,122,61,.22); }
   .mr-heat-cell.l1 { background: #F8E2C9; }
   .mr-heat-cell.l2 { background: #F4B886; }
   .mr-heat-cell.l3 { background: #FF7A3D; }
@@ -4271,6 +4585,47 @@ def register_student_routes(app, csrf, limiter):
   .mr-streak-row > div { flex: 1; }
   .mr-srn { font-family: "Bricolage Grotesque", sans-serif; font-size: 22px; font-weight: 600; line-height: 1; color: #FF7A3D; }
   .mr-srl { font-size: 10px; color: #94939C; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-top: 4px; }
+
+  :root[data-theme="dark"] .mr-home .mr-mission,
+  :root[data-theme="dark"] .mr-home .mr-quest,
+  :root[data-theme="dark"] .mr-home .mr-stat-card,
+  :root[data-theme="dark"] .mr-home .mr-card,
+  :root[data-theme="dark"] .mr-home .mr-sess,
+  :root[data-theme="dark"] .mr-home .mr-course-tile,
+  :root[data-theme="dark"] .mr-home .mr-exam,
+  :root[data-theme="dark"] .mr-home .mr-empty,
+  :root[data-theme="dark"] .mr-home .mr-league-card,
+  :root[data-theme="dark"] .mr-home .mr-friend-act {
+    border-color: #FF7A3D !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-stat-card.tilted {
+    border: 2px solid #FF7A3D !important;
+    background: linear-gradient(135deg, #38285F, #4F3A83) !important;
+    box-shadow: 0 4px 0 rgba(255,122,61,.9), 0 16px 36px rgba(0,0,0,.26) !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-streak-card {
+    background: linear-gradient(135deg, #191926 0%, #201A1A 74%, #301B11 100%) !important;
+    border: 2px solid #FF7A3D !important;
+    box-shadow: 0 4px 0 rgba(255,122,61,.9), 0 16px 36px rgba(0,0,0,.28) !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-streak-card::after {
+    background: linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255,122,61,.16) 48%, transparent 58%, transparent 100%);
+  }
+  :root[data-theme="dark"] .mr-home .mr-streak-row {
+    border-top-color: rgba(255,122,61,.42) !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-streak-num {
+    background: #0F1018;
+    color: #FF7A3D;
+    border: 1px solid rgba(255,122,61,.62);
+  }
+  :root[data-theme="dark"] .mr-app-shell .content .mr-home .mr-streak-card,
+  :root[data-theme="dark"] .content .mr-home .mr-streak-card {
+    border-color: #FF7A3D !important;
+    box-shadow: 0 4px 0 #FF7A3D, 0 22px 52px rgba(0,0,0,.34) !important;
+  }
+
+  @keyframes mrStreakSweep { to { transform: translateX(120%); } }
 
   /* friends */
   .mr-friends-list { display: flex; flex-direction: column; gap: 10px; }
@@ -4435,17 +4790,17 @@ def register_student_routes(app, csrf, limiter):
             f'   <div class="mr-stat-sub">{_bdw_label} en últimos 35d</div>'
             '    <div class="mr-stat-deco">⚡</div>'
             '  </div>'
-            '  <div class="mr-stat-card mr-pop-3">'
+            '  <a class="mr-stat-card streak-stat mr-pop-3" href="/student/analytics" aria-label="Ver detalle de racha">'
             '    <div class="mr-stat-label">Racha 🔥</div>'
             f'   <div class="mr-stat-value">{streak_days}</div>'
             f'   <div class="mr-stat-sub"><span class="up">{streak_days} día' + ("s" if streak_days != 1 else "") + ' seguidos</span></div>'
+            '    <div class="mr-stat-action">Detalle &rarr;</div>'
             '    <div class="mr-stat-deco">🔥</div>'
-            '  </div>'
+            '  </a>'
             '  <div class="mr-stat-card tilted mr-pop-3">'
             '    <div class="mr-stat-label">XP de hoy</div>'
             f'   <div class="mr-stat-value">{_mr_xp_today}</div>'
             f'   <div class="mr-stat-sub">↑ subes a siguiente nivel en {_xp_to_next} XP</div>'
-            '    <div class="mr-stat-deco" style="opacity:.2;color:#fff;">★</div>'
             '  </div>'
             '</div>'
         )
@@ -4683,14 +5038,14 @@ def register_student_routes(app, csrf, limiter):
             _attendance_pct = int(round(100 * _active_days / 35))
 
         _mr_streak_card = (
-            '<section class="mr-card mr-pop-2">'
+            '<section class="mr-card mr-streak-card mr-pop-2">'
             + '  <div class="mr-card-h">'
             + ('    <div class="mr-card-title">&#128293; Your streak</div>' if _is_en else '    <div class="mr-card-title">&#128293; Tu racha</div>')
             + ('    <a class="mr-card-link" href="/student/analytics">Details &rarr;</a>' if _is_en else '    <a class="mr-card-link" href="/student/analytics">Detalle &rarr;</a>')
             + '  </div>'
-            + '  <div style="display:flex; align-items:baseline; gap:10px;">'
+            + f'  <div class="mr-streak-lead" style="--streak-pct:{_attendance_pct}%;">'
             + f'   <div class="mr-streak-num">{streak_days}</div>'
-            + f'   <div style="font-size:13px; color:#5C5C66;">{"days in a row" if _is_en else "d\u00edas seguidos"}<br/><span style="color:#94939C;font-size:11px;">{"last 35 days" if _is_en else "\u00faltimos 35 d\u00edas"}</span></div>'
+            + f'   <div class="mr-streak-copy"><strong>{"days in a row" if _is_en else "d\u00edas seguidos"}</strong><span>{"last 35 days" if _is_en else "\u00faltimos 35 d\u00edas"}</span><div class="mr-streak-meter"><i></i></div></div>'
             + '  </div>'
             + f' <div class="mr-heat-grid">{_heat_html}</div>'
             + '  <div class="mr-week-labels">'
@@ -5583,6 +5938,10 @@ def register_student_routes(app, csrf, limiter):
             "longBreakUnlocked": "🎉 Long break unlocked! Claim or lose everything" if _focus_is_en else "🎉 ¡Descanso largo desbloqueado! Reclama o pierdes todo",
             "claimWindowHelp": "You have 30 min to claim. Otherwise, everything accumulated is lost." if _focus_is_en else "Tienes 30 min para reclamar. Si no, todo lo acumulado se pierde.",
             "claimNow": "🎁 Claim now" if _focus_is_en else "🎁 Reclamar ahora",
+            "startButton": "Start" if _focus_is_en else "Empezar",
+            "pauseButton": "Pause" if _focus_is_en else "Pausar",
+            "resumeButton": "Resume" if _focus_is_en else "Seguir",
+            "paused": "Paused" if _focus_is_en else "Pausado",
             "pendingRewards": "Pending rewards" if _focus_is_en else "Recompensas pendientes",
             "claimRestartHelp": "Claiming finishes your session and restarts the timer." if _focus_is_en else "Reclamar termina tu sesión y reinicia el temporizador.",
             "claimRestart": "🎁 Claim and restart" if _focus_is_en else "🎁 Reclamar y reiniciar",
@@ -5598,10 +5957,11 @@ def register_student_routes(app, csrf, limiter):
             "claimSessionExpired": "Your session expired. Reload the page and claim again — your time is saved." if _focus_is_en else "Tu sesión expiró. Recarga la página y reclama de nuevo — tu tiempo está guardado.",
             "focusDoneTitle": "Focus session completed" if _focus_is_en else "Sesión de focus completada",
             "xpGranted": "Good work — XP granted!" if _focus_is_en else "¡Buen trabajo — XP otorgado!",
-            "longBreakUnlockedSave": "Long break unlocked. Claim to save." if _focus_is_en else "Descanso largo desbloqueado. Reclama para guardar.",
-            "activeBreak": "Active break before the next session." if _focus_is_en else "Descanso activo antes de la siguiente sesion.",
+            "longBreakUnlockedSave": "Claim to save." if _focus_is_en else "Reclama para guardar.",
+            "activeBreak": "Active break" if _focus_is_en else "Descanso activo",
             "sessionInProgressSuffix": " in progress." if _focus_is_en else " en progreso.",
             "sessionsReadySuffix": " sessions ready to claim." if _focus_is_en else " sesiones listas para reclamar.",
+            "xpBurstSub": "Session saved" if _focus_is_en else "Sesion guardada",
             "startCycle": "Start a session to activate the cycle." if _focus_is_en else "Empieza una sesion para activar el ciclo.",
             "examNudgeTitle": "Next exam" if _focus_is_en else "Proxima prueba",
             "examNudgeToday": "today" if _focus_is_en else "hoy",
@@ -5621,7 +5981,7 @@ def register_student_routes(app, csrf, limiter):
         return _s_render("Focus Mode", f"""
 
         <style>
-        .focus-page-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px;padding:28px clamp(22px,3vw,34px);border-radius:22px;background:linear-gradient(135deg,#FFFDF8 0%,#FFF3E8 58%,#FFE4D4 100%);border:2px solid #1A1A1F;box-shadow:0 4px 0 #1A1A1F;overflow:hidden; }}
+        .focus-page-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px;padding:28px clamp(22px,3vw,34px);border-radius:22px;background:linear-gradient(135deg,#FFFDF8 0%,#FFF3E8 58%,#FFE4D4 100%);border:2px solid #1A1A1F;box-shadow:0 4px 0 #1A1A1F;overflow:visible; }}
         .focus-eye {{ font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
         .focus-title {{ margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F;background:transparent !important;box-shadow:none !important;text-shadow:none !important; }}
         .focus-page-head .focus-side,.focus-page-head .focus-title,.focus-page-head p,.focus-page-head b {{ background:transparent !important;box-shadow:none !important;border:0 !important; }}
@@ -5642,24 +6002,45 @@ def register_student_routes(app, csrf, limiter):
         .ft-tabs {{ display:none; }}
         .ft-tab {{ background:#EDE7DA;border:0;padding:8px 14px;border-radius:999px;font-weight:700;font-size:12px;color:#5C5C66;cursor:pointer; }}
         .ft-tab.active {{ background:#1A1A1F;color:#FFF8E1; }}
-        .ft-stage {{ display:grid;place-items:center;padding:8px 0; }}
-        .ft-ring-wrap {{ position:relative;width:min(320px,80vw);height:min(320px,80vw); }}
+        .ft-stage {{ display:grid;place-items:center;padding:8px 0 2px; }}
+        .ft-ring-wrap {{ position:relative;width:min(340px,80vw);height:min(340px,80vw);isolation:isolate; }}
+        .ft-ring-wrap::before {{ content:"";position:absolute;inset:4px;border-radius:50%;background:conic-gradient(from -90deg, rgba(255,122,61,.32), transparent 28%, transparent 70%, rgba(255,122,61,.22));filter:blur(18px);opacity:0;transform:scale(.92);transition:opacity .25s ease,transform .25s ease;z-index:-1; }}
+        .ft-ring-wrap.is-running::before {{ opacity:.72;transform:scale(1);animation:ftRingBreathe 2.8s ease-in-out infinite; }}
+        .ft-ring-wrap.is-paused::before {{ opacity:.28; }}
         .ft-ring {{ width:100%;height:100%; }}
+        .ft-ring circle {{ animation:none !important; }}
+        .ft-ring circle:first-child {{ stroke-dasharray:none !important;stroke-dashoffset:0 !important; }}
+        #ft-ring-progress {{ --ft-ring-offset:0;stroke-dasharray:578 !important;stroke-dashoffset:var(--ft-ring-offset) !important;transition:stroke-dashoffset .72s cubic-bezier(.22,.8,.2,1), stroke .22s ease;filter:drop-shadow(0 0 9px rgba(255,122,61,.34)); }}
+        .ft-ring-wrap.is-break #ft-ring-progress {{ stroke:#9BE84C !important;filter:drop-shadow(0 0 9px rgba(155,232,76,.28)); }}
+        .ft-ring-wrap.is-urgent #ft-ring-progress {{ stroke:#EF4444 !important;animation:ftRingUrgent 1s ease-in-out infinite; }}
         .ft-time {{ position:absolute;inset:0;display:grid;place-items:center;text-align:center; }}
-        #timer-display {{ font-family:"Bricolage Grotesque",sans-serif !important;font-weight:500 !important;font-size:80px !important;letter-spacing:-.04em !important;line-height:1 !important;color:#1A1A1F !important; }}
-        #timer-label {{ font-size:13px !important;color:#94939C !important;margin-top:8px !important;font-weight:700; }}
-        #pomo-count {{ font-size:12px !important;color:#94939C !important;margin-top:4px !important;font-weight:700; }}
-        .ft-session-orbit {{ --session-fill:0%;--session-ball:#FF7A3D;position:relative;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:0;width:150px;padding:0 1px; }}
+        .ft-time > div {{ width:min(244px,70%);display:flex;flex-direction:column;align-items:center;justify-content:center; }}
+        #timer-display {{ font-family:"Bricolage Grotesque",sans-serif !important;font-weight:500 !important;font-size:78px !important;letter-spacing:-.035em !important;line-height:.92 !important;color:#1A1A1F !important;font-variant-numeric:tabular-nums;transition:transform .2s ease,color .2s ease,text-shadow .2s ease; }}
+        .ft-ring-wrap.is-running #timer-display {{ animation:ftTimeTick 1s steps(1,end) infinite; }}
+        .ft-ring-wrap.is-urgent #timer-display {{ color:#EF4444 !important;text-shadow:0 0 18px rgba(239,68,68,.18); }}
+        #timer-label {{ max-width:210px;font-size:13px !important;color:#94939C !important;margin-top:10px !important;font-weight:800;line-height:1.25; }}
+        #pomo-count {{ max-width:210px;font-size:12px !important;color:#94939C !important;margin-top:5px !important;font-weight:800;line-height:1.25; }}
+        .ft-session-orbit {{ --session-fill:0%;--session-ball:#FF7A3D;position:relative;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:0;width:164px;padding:0 1px; }}
         .ft-session-orbit::before,.ft-session-orbit::after {{ content:"";position:absolute;left:7px;right:7px;top:50%;height:5px;border-radius:999px;transform:translateY(-50%); }}
         .ft-session-orbit::before {{ background:#EDE7DA; }}
         .ft-session-orbit::after {{ right:auto;width:calc((100% - 14px) * var(--session-fill));background:var(--session-ball);transition:width .22s ease,background .22s ease; }}
         .ft-session-dot {{ position:relative;z-index:1;width:14px;height:14px;border-radius:999px;background:#EDE7DA;border:2px solid #E2DCCC;transition:all .2s ease;box-sizing:border-box; }}
         .ft-session-dot.done {{ background:#FF7A3D;border-color:#FF7A3D; }}
         .ft-session-dot.active {{ width:24px;height:24px;background:#FF7A3D;border-color:#FF7A3D;box-shadow:0 0 0 5px rgba(255,122,61,.16); }}
-        .ft-session-status {{ margin-top:8px;font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
+        .ft-session-status {{ max-width:220px;margin-top:8px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#FF7A3D;line-height:1.25; }}
         .ft-controls {{ display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap; }}
-        .ft-btn-main,.ft-controls #start-btn {{ background:#FF7A3D !important;color:#fff !important;border:0 !important;padding:14px 32px !important;border-radius:999px !important;font-weight:800 !important;font-size:16px !important;box-shadow:0 2px 0 rgba(20,18,30,.04),0 8px 22px rgba(20,18,30,.06) !important; }}
+        .ft-btn-main,.ft-controls #start-btn {{ position:relative;overflow:hidden;background:#FF7A3D !important;color:#fff !important;border:0 !important;min-width:148px !important;height:50px !important;padding:0 30px !important;border-radius:999px !important;font-weight:900 !important;font-size:16px !important;box-shadow:0 5px 0 rgba(20,18,30,.18),0 14px 30px rgba(255,122,61,.22) !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:9px !important;transition:transform .18s ease,box-shadow .18s ease,background .24s ease !important; }}
+        .ft-controls #start-btn::after {{ content:"";position:absolute;inset:0;background:linear-gradient(100deg, transparent 0%, transparent 38%, rgba(255,255,255,.32) 48%, transparent 58%, transparent 100%);transform:translateX(-130%); }}
+        .ft-controls #start-btn:hover {{ transform:translateY(-2px);box-shadow:0 7px 0 rgba(20,18,30,.18),0 18px 34px rgba(255,122,61,.28) !important; }}
+        .ft-controls #start-btn.is-running {{ background:#1A1A1F !important;color:#FFF8E8 !important; }}
+        .ft-controls #start-btn.is-paused::after,.ft-controls #start-btn.is-running::after {{ animation:ftBtnSwipe .52s ease; }}
+        .ft-btn-ico,.ft-btn-text {{ position:relative;z-index:1;transition:transform .22s ease,opacity .18s ease; }}
         .ft-btn-sec,.ft-controls #reset-btn,.ft-controls #pause-btn,.ft-controls #skip-btn {{ min-width:110px !important;height:44px !important;border-radius:999px !important;background:#EDE7DA !important;border:1px solid #E2DCCC !important;color:#1A1A1F !important;padding:0 16px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:7px !important;font-weight:800 !important;white-space:nowrap !important;font-size:13px !important;box-shadow:none !important; }}
+        .ft-controls #pause-btn[aria-hidden="true"],
+        .ft-controls #start-btn[style*="display: none"],
+        .ft-controls #start-btn[style*="display:none"],
+        .ft-controls #skip-btn[style*="display: none"],
+        .ft-controls #skip-btn[style*="display:none"] {{ display:none !important; }}
         .ft-context {{ border-top:1px solid #E2DCCC;padding-top:18px; }}
         .ft-lab {{ font-size:11px;font-weight:800;color:#94939C;text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px; }}
         .ft-select,.ft-input {{ width:100%;padding:10px 12px;border-radius:12px;border:1px solid #E2DCCC;background:#FBF8F0;font-size:13px;font-weight:700;color:#1A1A1F; }}
@@ -5688,6 +6069,20 @@ def register_student_routes(app, csrf, limiter):
         :root[data-theme="dark"] .vol-slider {{ --vol-ball:#FF7A3D;--vol-track:#050505; }}
         :root[data-theme="dark"] .vol-slider::-webkit-slider-thumb {{ background:#FF7A3D;box-shadow:0 2px 0 #050505; }}
         :root[data-theme="dark"] .vol-slider::-moz-range-thumb {{ background:#FF7A3D;box-shadow:0 2px 0 #050505; }}
+        #claim-counter {{ position:relative;overflow:hidden; }}
+        #claim-counter.claim-pop {{ animation:claimCardPop .7s cubic-bezier(.2,1.5,.35,1) both; }}
+        .xp-burst {{ position:fixed;left:50%;top:50%;z-index:9999;transform:translate(-50%,-50%);pointer-events:none;text-align:center; }}
+        .xp-burst-main {{ font-family:"Bricolage Grotesque",sans-serif;font-size:clamp(54px,8vw,94px);font-weight:800;color:#FF7A3D;text-shadow:0 8px 0 #1A1A1F,0 20px 54px rgba(255,122,61,.35);animation:xpBurstRise 1.35s cubic-bezier(.18,1.35,.3,1) both; }}
+        .xp-burst-sub {{ margin-top:10px;font-size:14px;font-weight:900;color:#FFF8E8;background:#1A1A1F;border:2px solid #FF7A3D;border-radius:999px;padding:8px 14px;box-shadow:0 5px 0 #FF7A3D;animation:xpBurstSub .9s .12s both; }}
+        .xp-confetti {{ position:absolute;width:10px;height:16px;border-radius:3px;background:var(--c,#FF7A3D);left:50%;top:50%;animation:xpConfetti 1.2s cubic-bezier(.18,.8,.25,1) both; }}
+        @keyframes ftRingBreathe {{ 0%,100% {{ transform:scale(.98);opacity:.58; }} 50% {{ transform:scale(1.04);opacity:.86; }} }}
+        @keyframes ftRingUrgent {{ 0%,100% {{ filter:drop-shadow(0 0 7px rgba(239,68,68,.32)); }} 50% {{ filter:drop-shadow(0 0 18px rgba(239,68,68,.64)); }} }}
+        @keyframes ftTimeTick {{ 0%,100% {{ transform:translateY(0) scale(1); }} 50% {{ transform:translateY(-1px) scale(1.012); }} }}
+        @keyframes ftBtnSwipe {{ to {{ transform:translateX(130%); }} }}
+        @keyframes claimCardPop {{ 0% {{ transform:scale(.98); }} 45% {{ transform:scale(1.03); }} 100% {{ transform:scale(1); }} }}
+        @keyframes xpBurstRise {{ 0% {{ opacity:0;transform:translateY(16px) scale(.72) rotate(-5deg); }} 22% {{ opacity:1;transform:translateY(0) scale(1.08) rotate(2deg); }} 72% {{ opacity:1; }} 100% {{ opacity:0;transform:translateY(-22px) scale(.96) rotate(0deg); }} }}
+        @keyframes xpBurstSub {{ from {{ opacity:0;transform:translateY(12px); }} to {{ opacity:1;transform:translateY(0); }} }}
+        @keyframes xpConfetti {{ to {{ opacity:0;transform:translate(var(--tx),var(--ty)) rotate(var(--rot)); }} }}
         .block-list {{ margin-top:8px;display:flex;flex-direction:column;gap:4px; }}
         .block-item {{ display:flex;justify-content:space-between;padding:8px 10px;background:#FBF8F0;border-radius:10px;font-size:12px;font-weight:700; }}
         .muted {{ color:#94939C; }}
@@ -5965,9 +6360,9 @@ def register_student_routes(app, csrf, limiter):
 
             <div class="ft-controls">
 
-              <button onclick="startTimer()" id="start-btn" class="btn btn-primary">&#9654; {_start_btn_label}</button>
+              <button onclick="toggleTimer()" id="start-btn" class="btn btn-primary ft-toggle-btn" data-state="idle"><span class="ft-btn-ico">&#9654;</span><span class="ft-btn-text">{_start_btn_label}</span></button>
 
-              <button onclick="pauseTimer()" id="pause-btn" class="btn btn-outline" style="display:none;"><span>&#10074;&#10074;</span><span>{_pause_btn_label}</span></button>
+              <button onclick="pauseTimer()" id="pause-btn" class="btn btn-outline" style="display:none;" aria-hidden="true"><span>&#10074;&#10074;</span><span>{_pause_btn_label}</span></button>
 
               <button onclick="resetTimer()" id="reset-btn" class="btn btn-outline"><span>&#8635;</span><span>{_reset_btn_label}</span></button>
 
@@ -6761,15 +7156,20 @@ def register_student_routes(app, csrf, limiter):
 
         function saveFocusTimerState() {{
 
+          var courseEl = document.getElementById('focus-course');
+          var examEl = document.getElementById('focus-exam');
           localStorage.setItem('focus_timer_state', JSON.stringify({{
 
             currentMode: currentMode, isBreak: isBreak, pomoCount: pomoCount,
 
             totalFocusSeconds: totalFocusSeconds, phaseStartFocusSeconds: phaseStartFocusSeconds,
 
-            totalTime: totalTime,
-            course: document.getElementById('focus-course').value,
-            exam: document.getElementById('focus-exam') ? document.getElementById('focus-exam').value : ''
+            totalTime: totalTime, timeLeft: timeLeft, isRunning: isRunning,
+            sessionStarted: sessionStarted, pageDone: pageDone,
+            phaseStartOpen: __phaseOpen, phaseEndAt: phaseEndAt,
+            savedAt: Date.now(),
+            course: courseEl ? courseEl.value : '',
+            exam: examEl ? examEl.value : ''
 
           }}));
 
@@ -6779,6 +7179,55 @@ def register_student_routes(app, csrf, limiter):
 
           localStorage.removeItem('focus_timer_state');
 
+        }}
+
+        function setTimerButtonState(state) {{
+          var btn = document.getElementById('start-btn');
+          var pauseBtn = document.getElementById('pause-btn');
+          if (pauseBtn) pauseBtn.style.display = 'none';
+          if (!btn) return;
+          var ico = btn.querySelector('.ft-btn-ico');
+          var txt = btn.querySelector('.ft-btn-text');
+          btn.classList.remove('is-running','is-paused','is-idle');
+          btn.dataset.state = state || 'idle';
+          if (state === 'running') {{
+            btn.classList.add('is-running');
+            if (ico) ico.innerHTML = '&#10074;&#10074;';
+            if (txt) txt.textContent = focusText.pauseButton || 'Pausar';
+          }} else if (state === 'paused') {{
+            btn.classList.add('is-paused');
+            if (ico) ico.innerHTML = '&#9654;';
+            if (txt) txt.textContent = focusText.resumeButton || 'Seguir';
+          }} else {{
+            btn.classList.add('is-idle');
+            if (ico) ico.innerHTML = '&#9654;';
+            if (txt) txt.textContent = focusText.startButton || 'Empezar';
+          }}
+          btn.style.display = '';
+        }}
+
+        function toggleTimer() {{
+          if (__mandatoryEndAt) return;
+          if (isRunning) pauseTimer();
+          else startTimer();
+        }}
+
+        function syncLiveCountdownState() {{
+          try {{
+            if (currentMode === 'pages') {{
+              var ffPage = JSON.parse(localStorage.getItem('focus_float') || 'null');
+              if (ffPage && ffPage.mode === 'stopwatch' && ffPage.startAt) {{
+                totalFocusSeconds = Math.max(0, Math.floor((Date.now() - ffPage.startAt) / 1000));
+              }}
+              return;
+            }}
+            if (isRunning && phaseEndAt) {{
+              timeLeft = Math.max(0, Math.ceil((phaseEndAt - Date.now()) / 1000));
+              if (!isBreak && totalTime) {{
+                totalFocusSeconds = phaseStartFocusSeconds + Math.max(0, totalTime - timeLeft);
+              }}
+            }}
+          }} catch(e) {{}}
         }}
 
 
@@ -6853,11 +7302,23 @@ def register_student_routes(app, csrf, limiter):
 
           document.getElementById('timer-display').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
           var ring = document.getElementById('ft-ring-progress');
+          var ringWrap = document.querySelector('.ft-ring-wrap');
           if (ring && totalTime) {{
             var pct = Math.max(0, Math.min(1, timeLeft / totalTime));
-            ring.style.strokeDashoffset = String(578 * (1 - pct));
+            var offset = String(578 * (1 - pct));
+            ring.style.setProperty('--ft-ring-offset', offset);
+            ring.style.strokeDashoffset = offset;
+          }}
+          if (ringWrap) {{
+            ringWrap.classList.toggle('is-running', !!isRunning);
+            ringWrap.classList.toggle('is-paused', !!sessionStarted && !isRunning && timeLeft > 0);
+            ringWrap.classList.toggle('is-break', !!isBreak);
+            ringWrap.classList.toggle('is-urgent', !!isRunning && !isBreak && totalTime > 0 && timeLeft <= 60);
           }}
           updateTodaySessionCard();
+          try {{
+            if (sessionStarted || isRunning) saveFocusTimerState();
+          }} catch(e) {{}}
 
         }}
 
@@ -7167,9 +7628,7 @@ def register_student_routes(app, csrf, limiter):
 
           sessionStarted = true;
 
-          document.getElementById('start-btn').style.display = 'none';
-
-          document.getElementById('pause-btn').style.display = '';
+          setTimerButtonState('running');
 
           document.getElementById('skip-btn').style.display = currentMode === 'pomodoro' ? '' : 'none';
 
@@ -7489,7 +7948,10 @@ def register_student_routes(app, csrf, limiter):
 
         function pauseTimer() {{
 
+          syncLiveCountdownState();
+
           clearInterval(timerInterval);
+          timerInterval = null;
 
           if (window.__focusEndTimeout) {{ clearTimeout(window.__focusEndTimeout); window.__focusEndTimeout = null; }}
 
@@ -7497,19 +7959,21 @@ def register_student_routes(app, csrf, limiter):
 
           isRunning = false;
 
-          document.getElementById('start-btn').style.display = '';
+          phaseEndAt = null;
+          phaseEnded = false;
 
-          document.getElementById('pause-btn').style.display = 'none';
+          setTimerButtonState('paused');
 
-          document.getElementById('timer-label').textContent = 'Pausado';
+          document.getElementById('timer-label').textContent = focusText.paused || 'Pausado';
 
           localStorage.removeItem('focus_float');
 
-          clearFocusTimerState();
+          saveFocusTimerState();
 
           var el = document.getElementById('focus-float');
 
           if (el) el.style.display = 'none';
+          updateDisplay();
 
         }}
 
@@ -7527,6 +7991,8 @@ def register_student_routes(app, csrf, limiter):
           // Users who want to save their work should pause/finish the timer.
 
           isRunning = false;
+          phaseEndAt = null;
+          phaseEnded = false;
 
           isBreak = false;
 
@@ -7550,9 +8016,7 @@ def register_student_routes(app, csrf, limiter):
 
           if (typeof refreshClaimCounter === 'function') refreshClaimCounter();
 
-          document.getElementById('start-btn').style.display = '';
-
-          document.getElementById('pause-btn').style.display = 'none';
+          setTimerButtonState('idle');
 
           document.getElementById('skip-btn').style.display = 'none';
 
@@ -7751,9 +8215,7 @@ def register_student_routes(app, csrf, limiter):
 
             document.getElementById('timer-label').textContent = focusText.sessionCompleted;
 
-            document.getElementById('start-btn').style.display = '';
-
-            document.getElementById('pause-btn').style.display = 'none';
+            setTimerButtonState('idle');
 
             localStorage.removeItem('focus_float');
 
@@ -7838,6 +8300,40 @@ def register_student_routes(app, csrf, limiter):
           box.style.display = (t.sessions > 0 || __mandatoryEndAt) ? '' : 'none';
           updateTodaySessionCard();
 
+        }}
+
+        function showClaimCelebration(xp, minutes) {{
+          try {{
+            var box = document.getElementById('claim-counter');
+            if (box) {{
+              box.classList.remove('claim-pop');
+              void box.offsetWidth;
+              box.classList.add('claim-pop');
+            }}
+            var burst = document.createElement('div');
+            burst.className = 'xp-burst';
+            var main = document.createElement('div');
+            main.className = 'xp-burst-main';
+            main.textContent = '+' + String(xp || 0) + ' XP';
+            var sub = document.createElement('div');
+            sub.className = 'xp-burst-sub';
+            sub.textContent = (focusText.xpBurstSub || 'Sesion guardada') + ' · ' + String(minutes || 0) + ' min';
+            burst.appendChild(main);
+            burst.appendChild(sub);
+            var colors = ['#FF7A3D', '#9BE84C', '#F4B73A', '#7B61FF', '#25C2E3'];
+            for (var i = 0; i < 22; i++) {{
+              var c = document.createElement('span');
+              c.className = 'xp-confetti';
+              c.style.setProperty('--c', colors[i % colors.length]);
+              c.style.setProperty('--tx', (Math.cos(i * .82) * (90 + (i % 5) * 22)) + 'px');
+              c.style.setProperty('--ty', (Math.sin(i * .82) * (70 + (i % 4) * 20) - 18) + 'px');
+              c.style.setProperty('--rot', ((i * 37) % 220 - 110) + 'deg');
+              c.style.animationDelay = (i * 14) + 'ms';
+              burst.appendChild(c);
+            }}
+            document.body.appendChild(burst);
+            setTimeout(function() {{ burst.remove(); }}, 1550);
+          }} catch(e) {{}}
         }}
 
         function setClaimMandatoryStyling(isMandatory) {{
@@ -7987,6 +8483,8 @@ def register_student_routes(app, csrf, limiter):
 
           if (btn) {{ btn.disabled = false; }}
 
+          showClaimCelebration(xpAwarded, minutesSaved);
+
           resetTimer();
 
           var lblDone = document.getElementById('timer-label');
@@ -8070,7 +8568,7 @@ def register_student_routes(app, csrf, limiter):
 
           var skipBtn  = document.getElementById('skip-btn');
 
-          if (startBtn) startBtn.style.display = '';
+          setTimerButtonState('idle');
 
           if (pauseBtn) pauseBtn.style.display = 'none';
 
@@ -8420,7 +8918,7 @@ def register_student_routes(app, csrf, limiter):
 
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
-          if (e.code === 'Space') {{ e.preventDefault(); if (isRunning) pauseTimer(); else startTimer(); }}
+          if (e.code === 'Space') {{ e.preventDefault(); toggleTimer(); }}
 
           if (e.code === 'KeyR' && !e.ctrlKey) {{ e.preventDefault(); resetTimer(); }}
 
@@ -8530,7 +9028,51 @@ def register_student_routes(app, csrf, limiter):
 
           var ts = JSON.parse(localStorage.getItem('focus_timer_state') || 'null');
 
-          if (!ff || !ff.active || !ts) return;
+          if (!ts) return;
+
+          if (!ff || !ff.active) {{
+            currentMode = ts.currentMode || 'pomodoro';
+            document.querySelectorAll('.mode-btn').forEach(function(b) {{ b.classList.remove('active'); b.classList.add('btn-outline'); }});
+            var pausedModeBtn = document.getElementById('mode-' + currentMode);
+            if (pausedModeBtn) {{ pausedModeBtn.classList.add('active'); pausedModeBtn.classList.remove('btn-outline'); }}
+            document.getElementById('settings-pomodoro').style.display = currentMode === 'pomodoro' ? '' : 'none';
+            document.getElementById('settings-pages').style.display = currentMode === 'pages' ? '' : 'none';
+            document.getElementById('settings-custom').style.display = currentMode === 'custom' ? '' : 'none';
+            document.getElementById('pomo-count').style.display = currentMode === 'pomodoro' ? '' : 'none';
+
+            isBreak = !!ts.isBreak;
+            pomoCount = parseInt(ts.pomoCount || 0, 10) || 0;
+            totalFocusSeconds = parseInt(ts.totalFocusSeconds || 0, 10) || 0;
+            phaseStartFocusSeconds = parseInt(ts.phaseStartFocusSeconds || 0, 10) || 0;
+            totalTime = parseInt(ts.totalTime || 0, 10) || (25 * 60);
+            timeLeft = parseInt(ts.timeLeft, 10);
+            if (!isFinite(timeLeft) || timeLeft < 0) timeLeft = totalTime;
+            sessionStarted = !!ts.sessionStarted;
+            pageDone = parseInt(ts.pageDone || 0, 10) || 0;
+            __phaseOpen = !!ts.phaseStartOpen;
+            phaseEndAt = null;
+            phaseEnded = false;
+
+            if (ts.course) {{
+              document.getElementById('focus-course').value = ts.course;
+              onFocusCourseChange();
+              if (ts.exam) {{
+                var pausedExam = document.getElementById('focus-exam');
+                if (pausedExam) pausedExam.value = ts.exam;
+              }}
+            }}
+
+            updateDisplay();
+            if (sessionStarted && timeLeft > 0) {{
+              setTimerButtonState('paused');
+              var pausedLbl = document.getElementById('timer-label');
+              if (pausedLbl) pausedLbl.textContent = focusText.paused || 'Pausado';
+            }} else {{
+              setTimerButtonState('idle');
+            }}
+            refreshClaimCounter();
+            return;
+          }}
 
           // Abandonment guard: if the saved timer state is more than 12h old
           // (e.g. user closed the laptop overnight, started a stopwatch and
@@ -8584,6 +9126,7 @@ def register_student_routes(app, csrf, limiter):
           phaseStartFocusSeconds = ts.phaseStartFocusSeconds;
 
           totalTime = ts.totalTime;
+          __phaseOpen = !!ts.phaseStartOpen || !!ts.sessionStarted;
 
           sessionStarted = true;
 
