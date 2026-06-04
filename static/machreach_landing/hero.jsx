@@ -1,9 +1,9 @@
 /* ======== Hero — leaderboard-led, animated, polished ======== */
 
 const heroStyles = {
-  wrap: { position: "relative", paddingTop: 88, paddingBottom: 118, overflow: "visible" },
-  blob1: { position: "absolute", top: -240, right: -360, width: 380, height: 380, background: "var(--brand-soft)", borderRadius: "50%", filter: "blur(30px)", opacity: .22, zIndex: 0, pointerEvents: "none" },
-  blob2: { position: "absolute", bottom: -250, left: -170, width: 320, height: 320, background: "var(--secondary-soft)", borderRadius: "50%", filter: "blur(24px)", opacity: .32, zIndex: 0, pointerEvents: "none" },
+  wrap: { position: "relative", paddingTop: 88, paddingBottom: 118, overflow: "clip" },
+  blob1: { display: "none" },
+  blob2: { display: "none" },
   grid: { position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "1.05fr 1fr", gap: 56, alignItems: "center" },
   h1: { fontFamily: "var(--font-display)", fontSize: "clamp(44px, 6vw, 76px)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 0.98, marginTop: 22 },
   h1Highlight: { background: "var(--brand)", color: "white", padding: "0 .12em", borderRadius: 12, display: "inline-block", transform: "rotate(-1.5deg)", boxShadow: "0 4px 0 0 var(--ink)", border: "2px solid var(--ink)", margin: "0 .04em" },

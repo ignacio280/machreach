@@ -1880,6 +1880,7 @@
     :root:not([data-theme="dark"]) .mr-app-shell .btn-primary,
     :root:not([data-theme="dark"]) .mr-app-shell .ccard-go,
     :root:not([data-theme="dark"]) .mr-app-shell .ft-controls #start-btn,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-progress-btn:not(.secondary),
     :root:not([data-theme="dark"]) .mr-app-shell .mr-empty .cta {
       background: #FF7A3D !important;
       color: #FFFFFF !important;
@@ -1889,6 +1890,7 @@
     :root:not([data-theme="dark"]) .mr-app-shell .btn-outline,
     :root:not([data-theme="dark"]) .mr-app-shell .btn-ghost,
     :root:not([data-theme="dark"]) .mr-app-shell .cb-btn,
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-progress-btn.secondary,
     :root:not([data-theme="dark"]) .mr-app-shell .ft-controls #pause-btn,
     :root:not([data-theme="dark"]) .mr-app-shell .ft-controls #reset-btn,
     :root:not([data-theme="dark"]) .mr-app-shell .ft-controls #skip-btn {

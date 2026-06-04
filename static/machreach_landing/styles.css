@@ -64,7 +64,7 @@
 
 /* ============ reset ============ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: clip; max-width: 100%; }
 body {
   font-family: var(--font-body);
   background: var(--bg);
@@ -74,6 +74,8 @@ body {
   font-weight: 500;
   -webkit-font-smoothing: antialiased;
   text-wrap: pretty;
+  overflow-x: clip;
+  max-width: 100%;
 }
 img, svg { display: block; max-width: 100%; }
 button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
@@ -225,7 +227,14 @@ footer {
   z-index: 1;
 }
 section {
-  overflow: visible !important;
+  overflow: visible;
+}
+.hero-grid,
+.price-grid,
+.lb-wrap,
+.canvas-cta,
+.quiz-wrap {
+  max-width: 100%;
 }
 section::before {
   content: "";

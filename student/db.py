@@ -3149,8 +3149,8 @@ def is_lb_member(client_id: int, group_id: int) -> bool:
 # -- Daily Quests --------------------------------------------
 
 QUEST_POOL = [
-    {"key": "focus_25",    "label": "Enfocate 25 minutos",            "target": 25, "xp": 10, "metric": "focus_minutes"},
-    {"key": "focus_60",    "label": "Enfocate 60 minutos",            "target": 60, "xp": 25, "metric": "focus_minutes"},
+    {"key": "focus_25",    "label": "Enfócate 25 minutos",            "target": 25, "xp": 10, "metric": "focus_minutes"},
+    {"key": "focus_60",    "label": "Enfócate 60 minutos",            "target": 60, "xp": 25, "metric": "focus_minutes"},
     {"key": "session_3",   "label": "Completa 3 sesiones de estudio", "target": 3,  "xp": 20, "metric": "sessions_completed"},
     {"key": "exam_review_15", "label": "15 min repasando para una prueba", "target": 15, "xp": 8, "metric": "focus_minutes"},
 ]

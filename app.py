@@ -3263,62 +3263,183 @@ def download_focus_guard():
 # Privacy Policy & Terms of Service
 # ---------------------------------------------------------------------------
 
+def _public_info_page(title: str, eyebrow: str, intro: str, body_html: str, active_page: str):
+    return _render(title, Markup(f"""
+    <style>
+      .mr-public-info {{
+        max-width:1120px;
+        margin:0 auto 64px;
+        padding:18px clamp(4px,1vw,14px) 34px;
+        color:var(--text);
+      }}
+      .mr-public-hero {{
+        position:relative;
+        overflow:hidden;
+        border:2px solid #1A1A1F;
+        border-radius:30px;
+        padding:clamp(30px,5vw,54px);
+        background:linear-gradient(135deg,#FFFDF8 0%,#FFF2E8 58%,#EAF7DE 100%);
+        box-shadow:0 8px 0 #1A1A1F,0 28px 72px rgba(20,18,30,.12);
+        margin-bottom:22px;
+      }}
+      .mr-public-hero:before {{
+        content:"";
+        position:absolute;
+        inset:14px;
+        border:1px dashed rgba(26,26,31,.16);
+        border-radius:22px;
+        pointer-events:none;
+      }}
+      .mr-public-hero > * {{ position:relative;z-index:1; }}
+      .mr-public-kicker {{
+        display:inline-flex;
+        align-items:center;
+        min-height:30px;
+        padding:0 13px;
+        border:2px solid #FF7A3D;
+        border-radius:999px;
+        background:#FFF8EE;
+        color:#8B3A18;
+        font-size:11px;
+        font-weight:950;
+        letter-spacing:.1em;
+        text-transform:uppercase;
+        box-shadow:0 3px 0 rgba(26,26,31,.18);
+      }}
+      .mr-public-hero h1 {{
+        margin:18px 0 10px;
+        font-family:'Bricolage Grotesque',sans-serif;
+        font-size:clamp(42px,6vw,72px);
+        line-height:.95;
+        font-weight:800;
+        letter-spacing:0;
+        color:#1A1A1F;
+      }}
+      .mr-public-hero p {{
+        max-width:760px;
+        margin:0;
+        color:#48443E;
+        font-size:17px;
+        line-height:1.55;
+        font-weight:750;
+      }}
+      .mr-public-card {{
+        border:2px solid #1A1A1F;
+        border-radius:24px;
+        background:#FFFFFF;
+        box-shadow:0 6px 0 #1A1A1F,0 22px 54px rgba(20,18,30,.10);
+        padding:clamp(24px,3vw,36px);
+        line-height:1.75;
+        color:#2D2A26;
+        font-size:15px;
+      }}
+      .mr-public-card h2 {{
+        margin:28px 0 10px;
+        color:#1A1A1F;
+        font-family:'Bricolage Grotesque',sans-serif;
+        font-size:24px;
+        line-height:1.08;
+      }}
+      .mr-public-card h2:first-child {{ margin-top:0; }}
+      .mr-public-card p {{ margin:0 0 14px; }}
+      .mr-public-card ul {{ padding-left:20px;margin:0 0 16px; }}
+      .mr-public-card a {{ color:#C24F19;font-weight:850;text-decoration:none; }}
+      .mr-public-card .mr-note {{
+        background:#FFF3EA;
+        border:1px solid #FFD0B5;
+        border-radius:16px;
+        padding:14px 16px;
+        margin-bottom:22px;
+        color:#5C4033;
+      }}
+      :root[data-theme="dark"] .mr-public-hero {{
+        background:linear-gradient(135deg,#12101A 0%,#1D1B26 58%,#2A1B16 100%);
+        border-color:#FF7A3D;
+        box-shadow:0 8px 0 #FF7A3D,0 30px 76px rgba(0,0,0,.36);
+      }}
+      :root[data-theme="dark"] .mr-public-hero:before {{ border-color:rgba(255,122,61,.24); }}
+      :root[data-theme="dark"] .mr-public-kicker {{
+        background:rgba(255,122,61,.14);
+        color:#FFF8E1;
+        border-color:#FF7A3D;
+      }}
+      :root[data-theme="dark"] .mr-public-hero h1,
+      :root[data-theme="dark"] .mr-public-card h2 {{ color:#FFF8E1; }}
+      :root[data-theme="dark"] .mr-public-hero p {{ color:#D8D1C8; }}
+      :root[data-theme="dark"] .mr-public-card {{
+        background:#15141D;
+        border-color:#FF7A3D;
+        color:#EDE4DA;
+        box-shadow:0 6px 0 #FF7A3D,0 24px 58px rgba(0,0,0,.32);
+      }}
+      :root[data-theme="dark"] .mr-public-card .mr-note {{
+        background:rgba(255,122,61,.12);
+        border-color:rgba(255,122,61,.42);
+        color:#FFE1CB;
+      }}
+      @media (max-width:700px) {{
+        .mr-public-info {{ padding-top:8px; }}
+        .mr-public-hero,.mr-public-card {{ border-radius:22px; }}
+      }}
+    </style>
+    <section class="mr-public-info">
+      <div class="mr-public-hero">
+        <span class="mr-public-kicker">{eyebrow}</span>
+        <h1>{title}</h1>
+        <p>{intro}</p>
+      </div>
+      <div class="mr-public-card">{body_html}</div>
+    </section>
+    """), active_page=active_page)
+
 @app.route("/privacy")
 def privacy_page():
-    return _render("Privacy Policy", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
-      <h1 style="font-size:32px;margin-bottom:8px;">Privacy Policy</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: May 19, 2026</p>
-      <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
-        <p style="background:rgba(255,122,61,.08);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:24px;"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Information We Collect</h2>
+    return _public_info_page("Privacy Policy", "Legal", "How MachReach handles account, study, Canvas extension, and subscription data.", """
+        <p class="mr-note"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
+        <p><strong>Last updated:</strong> May 19, 2026</p>
+        <h2>1. Information We Collect</h2>
         <p><strong>Account information:</strong> your name, institutional or Canvas email address, and password hash. When you create an account through Canvas, MachReach reads the email address exposed by your Canvas profile so you can log in later with that email and the password you set.</p>
         <p><strong>Canvas LMS data:</strong> if you connect Canvas, the MachReach browser extension reads your course list from your own logged-in Canvas session and sends it to MachReach so we can show your classes and power class-level leaderboards. We only read your course list — we do not submit assignments, change grades, or publish content.</p>
         <p><strong>Study materials:</strong> files, notes, and text you choose to upload or type for features such as quizzes and flashcards.</p>
         <p><strong>Study activity:</strong> focus sessions, minutes studied per course, XP events, streaks, badges, quiz attempts, flashcard reviews, leaderboard rank, course outcomes, grades you enter, and in-app coin activity.</p>
         <p><strong>Focus Guard extension:</strong> extension settings and active-session state are used to support focus sessions. Some settings may be stored locally in your browser.</p>
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. How We Use Your Information</h2>
-        <ul style="padding-left:20px;">
+        <h2>2. How We Use Your Information</h2>
+        <ul>
           <li>To create your account, authenticate you, and let you reset your password</li>
-          <li>To sync your Canvas courses when you choose to connect Canvas</li>
+          <li>To import your Canvas course list when you choose to connect through the MachReach extension</li>
           <li>To generate and manage quizzes, flashcards, focus sessions, grade tracking, and course analytics</li>
           <li>To track XP, streaks, leaderboard rankings, badges, coins, and study-group activity</li>
           <li>To process subscriptions and service notifications such as password resets and study emails you opted into</li>
           <li>To keep the service secure, reliable, and improving over time</li>
         </ul>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Data Security</h2>
+        <h2>3. Data Security</h2>
         <p>We use HTTPS/TLS, CSRF protection, rate limiting, strict security headers, parameterized SQL, HTML escaping, secure cookies in production, hashed passwords, and access controls for sensitive account data.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Sub-processors</h2>
-        <ul style="padding-left:20px;">
+        <h2>4. Sub-processors</h2>
+        <ul>
           <li><strong>OpenAI:</strong> content you submit for AI-generated quizzes or flashcards may be sent to generate those study tools. OpenAI does not train on API data per its API data-usage policy.</li>
           <li><strong>Instructure / Canvas LMS:</strong> optional profile and course import when you connect Canvas.</li>
           <li><strong>Lemon Squeezy:</strong> payment and subscription processing.</li>
           <li><strong>Render:</strong> application hosting and database infrastructure.</li>
           <li><strong>Sentry:</strong> error reporting with sensitive fields scrubbed where possible.</li>
         </ul>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Your Rights</h2>
+        <h2>5. Your Rights</h2>
         <p>You can access, export, correct, or delete your data from Settings, disconnect Canvas at any time, opt out of optional study emails, or contact <a href="mailto:support@machreach.com">support@machreach.com</a> for data-rights requests.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. Contact</h2>
+        <h2>6. Contact</h2>
         <p>Questions or data-rights requests: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
-      </div>
-    </div>
-    """), active_page="privacy")
+    """, "privacy")
 
 
 @app.route("/terms")
 def terms_page():
-    return _render("Terms of Service", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
-      <h1 style="font-size:32px;margin-bottom:8px;">Terms of Service</h1>
-      <p style="color:var(--text-muted);margin-bottom:32px;">Last updated: May 19, 2026</p>
-      <div style="line-height:1.8;color:var(--text-secondary);font-size:15px;">
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">1. Acceptance of Terms</h2>
+    return _public_info_page("Terms of Service", "Legal", "The rules for using MachReach, subscriptions, AI study tools, rankings, and account security.", """
+        <p><strong>Last updated:</strong> May 19, 2026</p>
+        <h2>1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">2. Description of Service</h2>
-        <p>MachReach provides student study tools including Canvas LMS course sync, focus timers, study-time tracking, flashcards, practice quizzes, grade tracking, XP, streaks, leaderboards, study groups, coins, course analytics, and an optional Focus Guard browser extension.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">3. Account Responsibilities</h2>
-        <ul style="padding-left:20px;">
+        <h2>2. Description of Service</h2>
+        <p>MachReach provides student study tools including Canvas extension course import, focus timers, study-time tracking, flashcards, practice quizzes, grade tracking, XP, streaks, leaderboards, study groups, coins, course analytics, and an optional Focus Guard browser extension.</p>
+        <h2>3. Account Responsibilities</h2>
+        <ul>
           <li>You must provide accurate information when registering</li>
           <li>You are responsible for maintaining the security of your account credentials</li>
           <li>If you connect Canvas, you must use your own Canvas account and the MachReach browser extension</li>
@@ -3326,121 +3447,108 @@ def terms_page():
           <li>You must be at least 16 years old to use MachReach</li>
           <li>You must not attempt to probe, scan, or exploit vulnerabilities in the service</li>
         </ul>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">4. Academic Integrity</h2>
+        <h2>4. Academic Integrity</h2>
         <p>You are responsible for complying with your institution's academic-integrity policies. MachReach is a study aid; using it to plagiarize, cheat, or violate honor codes is prohibited.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">5. Subscriptions and Billing</h2>
+        <h2>5. Subscriptions and Billing</h2>
         <p>Paid student plans are billed through Lemon Squeezy. You can cancel at any time; access continues until the end of the billing period. Refunds are handled case by case.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">6. AI Features</h2>
+        <h2>6. AI Features</h2>
         <p>AI-generated quizzes, flashcards, or other study content are provided as suggestions and may be incomplete or incorrect. You are responsible for reviewing generated content before relying on it academically.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">7. Leaderboards and Coins</h2>
+        <h2>7. Leaderboards and Coins</h2>
         <p>Coins have no cash value, cannot be transferred between accounts, and can be redeemed only inside MachReach. We may withhold or reverse rewards for suspected abuse.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">8. Limitation of Liability</h2>
+        <h2>8. Limitation of Liability</h2>
         <p>MachReach is provided as is without warranties of any kind. We are not liable for service interruptions, data loss beyond our control, or indirect, incidental, or consequential damages.</p>
-        <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">9. Contact</h2>
+        <h2>9. Contact</h2>
         <p>Questions about these terms? Contact <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
-      </div>
-    </div>
-    """), active_page="terms")
+    """, "terms")
 
 
 @app.route("/cookies")
 def cookies_page():
-    return _render("Cookies", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
-      <h1 style="font-size:32px;margin-bottom:8px;">Cookies</h1>
-      <p style="color:var(--text-muted);margin-bottom:24px;">MachReach uses only essential cookies for login sessions, CSRF protection, language preference, and basic UI preferences. We do not use advertising cookies.</p>
-      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">If you block essential cookies, login and protected student features may stop working. Questions: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
-    </div>
-    """), active_page="cookies")
+    return _public_info_page("Cookies", "Privacy", "A short version: MachReach only uses cookies needed to keep the product working.", """
+      <p>MachReach uses only essential cookies for login sessions, CSRF protection, language preference, and basic UI preferences. We do not use advertising cookies.</p>
+      <p>If you block essential cookies, login and protected student features may stop working. Questions: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+    """, "cookies")
 
 
 @app.route("/status")
 def public_status_page():
-    return _render("Status", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
-      <h1 style="font-size:32px;margin-bottom:8px;">Status</h1>
-      <p style="color:var(--text-muted);margin-bottom:24px;">Current public status: operational.</p>
-      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">For incidents or support, contact <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
-    </div>
-    """), active_page="status")
+    return _public_info_page("Status", "System", "The current public status of MachReach services.", """
+      <p class="mr-note"><strong>Current public status:</strong> operational.</p>
+      <p>For incidents or support, contact <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+    """, "status")
 
 
 @app.route("/about")
 def about_page():
-    return _render("About MachReach", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;line-height:1.8;color:var(--text-secondary);font-size:15px;">
-      <h1 style="font-size:32px;margin-bottom:8px;color:var(--text);">About MachReach</h1>
+    return _public_info_page("About MachReach", "Built in Chile", "A study platform that pulls courses, focus, notes, quizzes, rankings, and progress into one place.", """
       <p>MachReach is a student study platform built in Santiago, Chile. We started from a simple frustration: studying tools are scattered across a dozen apps — one for notes, one for flashcards, one for timers, one for tracking grades — and none of them talk to each other. MachReach pulls the whole study workflow into a single place.</p>
 
-      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">What you can do</h2>
-      <ul style="padding-left:20px;">
+      <h2>What you can do</h2>
+      <ul>
         <li><strong>Focus sessions</strong> — distraction-free study timers, with an optional browser extension that blocks distracting sites while a session is active.</li>
-        <li><strong>Courses &amp; Canvas sync</strong> — connect Canvas with the MachReach extension to import your real university courses.</li>
+        <li><strong>Courses &amp; Canvas extension</strong> — connect Canvas with the MachReach extension to import your real university courses.</li>
         <li><strong>Flashcards &amp; quizzes</strong> — generate study sets and practice questions from your own material.</li>
         <li><strong>Grades &amp; analytics</strong> — track marks on the Chilean 1.0–7.0 scale and see what you need to pass.</li>
         <li><strong>XP, streaks &amp; leaderboards</strong> — stay motivated with friends and live rankings by country, university, and major.</li>
       </ul>
 
-      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Who it's for</h2>
+      <h2>Who it's for</h2>
       <p>University and high-school students who want one organized study system instead of a pile of disconnected apps. MachReach is built with Chilean students in mind, but the tools work anywhere.</p>
 
-      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Get in touch</h2>
+      <h2>Get in touch</h2>
       <p>Questions, feedback, or partnership ideas? Email us at <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
-    </div>
-    """), active_page="about")
+    """, "about")
 
 
 @app.route("/blog")
 def blog_page():
-    return _render("Blog", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;line-height:1.8;color:var(--text-secondary);font-size:15px;">
-      <h1 style="font-size:32px;margin-bottom:8px;color:var(--text);">Blog</h1>
+    return _public_info_page("Blog", "Updates", "Product notes and study-system ideas will live here once the public blog opens.", """
       <p>We don't run a public blog yet — for now, product updates and new features are announced directly inside MachReach when you log in, so you never miss them.</p>
 
-      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">What we'll write about here</h2>
-      <ul style="padding-left:20px;">
+      <h2>What we'll write about here</h2>
+      <ul>
         <li>Study techniques and how to get the most out of focus sessions</li>
         <li>New features and product updates</li>
         <li>How students are using MachReach to stay on top of the semester</li>
       </ul>
 
       <p style="margin-top:24px;">Want updates by email? Reach out at <a href="mailto:support@machreach.com">support@machreach.com</a> and we'll keep you posted.</p>
-    </div>
-    """), active_page="blog")
+    """, "blog")
 
 
 @app.route("/press")
 def press_page():
-    return _render("Press", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;line-height:1.8;color:var(--text-secondary);font-size:15px;">
-      <h1 style="font-size:32px;margin-bottom:8px;color:var(--text);">Press</h1>
+    return _public_info_page("Press", "Media", "Short facts for anyone writing about MachReach or exploring partnerships.", """
       <p>Writing about MachReach or interested in a partnership? Here's the essentials. For interviews, assets, or anything else, email <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
 
-      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Boilerplate</h2>
-      <p>MachReach is a student study platform built in Santiago, Chile, that brings focus sessions, course tracking, Canvas sync, flashcards, quizzes, grade analytics, and motivational features like XP, streaks, and leaderboards into a single study system.</p>
+      <h2>Boilerplate</h2>
+      <p>MachReach is a student study platform built in Santiago, Chile, that brings focus sessions, course tracking, Canvas extension import, flashcards, quizzes, grade analytics, and motivational features like XP, streaks, and leaderboards into a single study system.</p>
 
-      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Fast facts</h2>
-      <ul style="padding-left:20px;">
+      <h2>Fast facts</h2>
+      <ul>
         <li><strong>What:</strong> all-in-one study platform for students</li>
         <li><strong>Based in:</strong> Santiago, Chile</li>
-        <li><strong>Key features:</strong> focus mode, Canvas course sync, flashcards, quizzes, grade tracking, leaderboards</li>
+        <li><strong>Key features:</strong> focus mode, Canvas extension course import, flashcards, quizzes, grade tracking, leaderboards</li>
         <li><strong>Website:</strong> <a href="https://machreach.com">machreach.com</a></li>
       </ul>
 
-      <h2 style="font-size:20px;color:var(--text);margin:28px 0 12px;">Media contact</h2>
+      <h2>Media contact</h2>
       <p><a href="mailto:support@machreach.com">support@machreach.com</a></p>
-    </div>
-    """), active_page="press")
+    """, "press")
 
 
 @app.route("/roadmap")
 def roadmap_page():
-    return _render("Roadmap", Markup("""
-    <div style="max-width:800px;margin:0 auto;padding:40px 20px;">
-      <h1 style="font-size:32px;margin-bottom:8px;">Roadmap</h1>
-      <p style="line-height:1.8;color:var(--text-secondary);font-size:15px;">Next priorities: stronger Focus mode, course benchmarks, richer study groups, and smarter Plus analytics.</p>
-    </div>
-    """), active_page="roadmap")
+    return _public_info_page("Roadmap", "Next", "Where the product is heading next.", """
+      <p class="mr-note">Next priorities: stronger Focus mode, course benchmarks, richer study groups, and smarter Plus analytics.</p>
+      <h2>What that means</h2>
+      <ul>
+        <li><strong>Focus mode:</strong> richer session recovery, better reward moments, and clearer timer state.</li>
+        <li><strong>Course benchmarks:</strong> more useful comparisons once enough real outcomes exist.</li>
+        <li><strong>Study groups:</strong> tighter friend challenges, private rankings, and collaborative pressure.</li>
+        <li><strong>Plus analytics:</strong> deeper patterns without making the dashboard feel heavy.</li>
+      </ul>
+    """, "roadmap")
 
 
 # ---------------------------------------------------------------------------

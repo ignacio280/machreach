@@ -1268,7 +1268,7 @@ def register_student_routes(app, csrf, limiter):
             "<span>" + _fmt_minutes(int(_p.get("mins") or 0)) + "</span></div>"
             "<div class='an-track'><div style='width:" + str(max(4, int((int(_p.get("mins") or 0) / _max_course) * 100))) + "%'></div></div></div>"
             for _p in per_course[:7]
-        ) or "<div class='an-empty'>Todavia no hay sesiones por curso. Entra a Enfoque y registra una sesion.</div>"
+        ) or "<div class='an-empty'>Todavía no hay sesiones por curso. Entra a Enfoque y registra una sesión.</div>"
 
         _xp_history = []
         try:
@@ -1300,7 +1300,7 @@ def register_student_routes(app, csrf, limiter):
 
         _best_course = per_course[0]["name"] if per_course else "Sin curso dominante"
         _best_hour = max(range(24), key=lambda _h: hour_hist[_h]) if any(hour_hist) else None
-        _best_hour_text = (f"{_best_hour:02d}:00" if _best_hour is not None else "Sin patron todavia")
+        _best_hour_text = (f"{_best_hour:02d}:00" if _best_hour is not None else "Sin patrón todavía")
         _focus_consistency = sum(1 for _, _v in _daily_vals if _v > 0)
 
         from outreach.i18n import t_dict as _t_dict
@@ -1373,7 +1373,7 @@ def register_student_routes(app, csrf, limiter):
             <section class="an-title-card">
               <div class="an-kicker">ANALYTICS DE ESTUDIO</div>
               <h1>Tu rendimiento, sin humo.</h1>
-              <p>Minutos de enfoque, XP, cursos dominantes y consistencia real. Esto es para ver si estas estudiando de verdad o solo abriendo la app.</p>
+              <p>Minutos de enfoque, XP, cursos dominantes y consistencia real. Esto es para ver si estás estudiando de verdad o solo abriendo la app.</p>
             </section>
             <div class="an-rank-wrap">{rank_html}</div>
           </div>
@@ -1381,25 +1381,25 @@ def register_student_routes(app, csrf, limiter):
           <div class="an-stat-grid">
             <div class="an-stat"><div class="label">Tiempo total</div><div class="num">{_fmt_minutes(total_mins)}</div><div class="sub">acumulado en enfoque</div></div>
             <div class="an-stat"><div class="label">Sesiones</div><div class="num">{total_sessions}</div><div class="sub">registros guardados</div></div>
-            <div class="an-stat"><div class="label">Promedio</div><div class="num">{avg_session}m</div><div class="sub">por sesion</div></div>
-            <div class="an-stat"><div class="label">Racha 🔥</div><div class="num">{streak}</div><div class="sub">dias seguidos</div></div>
+            <div class="an-stat"><div class="label">Promedio</div><div class="num">{avg_session}m</div><div class="sub">por sesión</div></div>
+            <div class="an-stat"><div class="label">Racha 🔥</div><div class="num">{streak}</div><div class="sub">días seguidos</div></div>
           </div>
 
           <div class="an-insights">
-            <div class="an-insight"><span>Curso fuerte</span><strong>{_esc(_best_course)}</strong><p>Es donde mas tiempo estas metiendo. Si no era tu prioridad, ajusta.</p></div>
-            <div class="an-insight"><span>Hora activa</span><strong>{_best_hour_text}</strong><p>Tu patron mas repetido de estudio en los ultimos registros.</p></div>
-            <div class="an-insight"><span>Consistencia</span><strong>{_focus_consistency}/14 dias</strong><p>Dias con al menos una sesion en las ultimas dos semanas.</p></div>
+            <div class="an-insight"><span>Curso fuerte</span><strong>{_esc(_best_course)}</strong><p>Es donde más tiempo estás metiendo. Si no era tu prioridad, ajusta.</p></div>
+            <div class="an-insight"><span>Hora activa</span><strong>{_best_hour_text}</strong><p>Tu patrón más repetido de estudio en los últimos registros.</p></div>
+            <div class="an-insight"><span>Consistencia</span><strong>{_focus_consistency}/14 días</strong><p>Días con al menos una sesión en las últimas dos semanas.</p></div>
           </div>
 
           <div class="an-grid">
             <section class="an-card">
               <h2>Tendencia de enfoque</h2>
-              <p>Minutos estudiados durante los ultimos 14 dias.</p>
+              <p>Minutos estudiados durante los últimos 14 días.</p>
               <div class="an-days">{_day_bars_html}</div>
             </section>
             <section class="an-card">
               <h2>Tiempo por curso</h2>
-              <p>Donde se esta yendo tu energia.</p>
+              <p>Dónde se está yendo tu energía.</p>
               {_course_bars_html}
             </section>
           </div>
@@ -1407,12 +1407,12 @@ def register_student_routes(app, csrf, limiter):
           <div class="an-grid">
             <section class="an-card">
               <h2>Ritmo de XP</h2>
-              <p>Ultimas ganancias registradas.</p>
+              <p>Últimas ganancias registradas.</p>
               <div class="an-xp-row">{_xp_bars_html}</div>
             </section>
             <section class="an-card">
               <h2>Mapa de constancia</h2>
-              <p>Ultimos 35 dias. Mas verde significa mas minutos.</p>
+              <p>Últimos 35 días. Más verde significa más minutos.</p>
               <div class="an-heat-grid">{_heat_html}</div>
             </section>
           </div>
@@ -1485,10 +1485,10 @@ def register_student_routes(app, csrf, limiter):
         _exam_risk_html = "".join(
             "<div class='wa-risk-card " + _esc(_x["risk"]) + "'>"
             "<div><span>" + _esc(_risk_label.get(_x["risk"], "Bien")) + "</span><strong>" + _esc(_x["course"]) + "</strong>"
-            "<p>" + _esc(_x["exam"]) + " en " + str(int(_x["days"])) + " dias · " + _fmt_minutes(int(_x["mins"])) + " estudiados ultimos 21 dias</p></div>"
+            "<p>" + _esc(_x["exam"]) + " en " + str(int(_x["days"])) + " días · " + _fmt_minutes(int(_x["mins"])) + " estudiados últimos 21 días</p></div>"
             "<a href='/student/focus' class='wa-risk-btn'>Estudiar ahora</a></div>"
             for _x in _exam_cards
-        ) or "<div class='wa-empty'>Sin pruebas proximas cargadas. Cuando agregues evaluaciones, MachReach te va a marcar prioridades reales.</div>"
+        ) or "<div class='wa-empty'>Sin pruebas próximas cargadas. Cuando agregues evaluaciones, MachReach te va a marcar prioridades reales.</div>"
 
         body = f"""
         <style>
@@ -1829,7 +1829,7 @@ def register_student_routes(app, csrf, limiter):
 
           <section class="wa-card">
             <h2>Plan anti-prueba</h2>
-            <p>Prioridad basada en pruebas proximas y minutos reales estudiados para cada ramo.</p>
+            <p>Prioridad basada en pruebas próximas y minutos reales estudiados para cada ramo.</p>
             <div class="wa-risk-grid">{_exam_risk_html}</div>
           </section>
         </div>
@@ -2120,7 +2120,7 @@ def register_student_routes(app, csrf, limiter):
             return jsonify({"error": "Unauthorized"}), 401
 
         return jsonify({
-            "error": "Los cursos deben importarse desde Canvas usando la extension de MachReach para confirmar que eres estudiante de una universidad real.",
+            "error": "Los cursos deben importarse desde Canvas usando la extensión de MachReach para confirmar que eres estudiante de una universidad real.",
             "canvas_required": True,
         }), 410
 
@@ -4718,6 +4718,8 @@ def register_student_routes(app, csrf, limiter):
                     _label = _translate_visible_text(str(_label)) or str(_label)
                 except Exception:
                     _label = str(_label)
+            else:
+                _label = str(_label).replace("Enfocate", "Enfócate")
             _target = int(_q.get("target") or 1)
             _progress = int(_q.get("progress") or 0)
             _xp_reward = int(_q.get("xp_reward") or 0)
@@ -4815,8 +4817,8 @@ def register_student_routes(app, csrf, limiter):
                 '<section class="mr-progress-panel mr-pop-2">'
                 '  <div>'
                 '    <div class="mr-progress-kicker">Tu progreso de hoy</div>'
-                '    <h2 class="mr-progress-title serif">Haz tu primera sesion y el tablero empieza a moverse.</h2>'
-                '    <p class="mr-progress-copy">Conecta Canvas con la extension para verificar tu universidad y traer tus cursos reales; luego completa un bloque de enfoque para activar tiempo, racha y XP.</p>'
+                '    <h2 class="mr-progress-title serif">Haz tu primera sesión y el tablero empieza a moverse.</h2>'
+                '    <p class="mr-progress-copy">Conecta Canvas con la extensión para verificar tu universidad y traer tus cursos reales; luego completa un bloque de enfoque para activar tiempo, racha y XP.</p>'
                 '    <div class="mr-progress-actions">'
                 '      <a class="mr-progress-btn" href="/student/focus">&#9201; Empezar enfoque</a>'
                 '      <a class="mr-progress-btn secondary" href="/student/canvas">Conectar Canvas</a>'
@@ -4940,8 +4942,8 @@ def register_student_routes(app, csrf, limiter):
             _courses_tiles_html = (
                 '<div class="mr-empty" style="grid-column:1/-1;">'
                 '  <span class="icon">MR</span>'
-                '  <div class="mr-empty-title">No tienes cursos todavia.</div>'
-                '  <div class="mr-empty-copy">Conecta Canvas con la extension de MachReach para confirmar tu universidad e importar tus cursos reales.</div>'
+                '  <div class="mr-empty-title">No tienes cursos todavía.</div>'
+                '  <div class="mr-empty-copy">Conecta Canvas con la extensión de MachReach para confirmar tu universidad e importar tus cursos reales.</div>'
                 '  <div class="mr-empty-actions"><a class="cta" href="/student/canvas">Conectar Canvas</a></div>'
                 '</div>'
             )
@@ -5026,7 +5028,7 @@ def register_student_routes(app, csrf, limiter):
             _exam_rows_html = (
                 '<div class="mr-empty">'
                 '  <span class="icon">EV</span>'
-                '  <div class="mr-empty-title">Sin pruebas proximas.</div>'
+                '  <div class="mr-empty-title">Sin pruebas próximas.</div>'
                 '  <div class="mr-empty-copy">Cuando tus cursos reales lleguen desde Canvas, agrega sus evaluaciones desde Mis cursos para ver prioridad y calendario.</div>'
                 '  <div class="mr-empty-actions"><a class="cta secondary" href="/student/courses">Ver mis cursos</a></div>'
                 '</div>'
@@ -5379,7 +5381,7 @@ def register_student_routes(app, csrf, limiter):
                 <button onclick="event.stopPropagation();deleteCourse({_course_id},'{_esc((c.get("name") or "")[:30])}')" class="ccard-menu" title="Eliminar curso">&#8942;</button>
               </div>
               <h2 class="ccard-name">{_esc(c.get("name") or "Curso")}</h2>
-              <div class="ccard-prof">Canvas / extensiÃ³n · {_sessions} sesiones registradas</div>
+              <div class="ccard-prof">Canvas / extensión · {_sessions} sesiones registradas</div>
               <div class="ccard-stats">
                 <div class="ccs"><div class="ccs-n">{_minutes//60}h {_minutes%60}m</div><div class="ccs-l">Estudiado</div></div>
                 <div class="ccs"><div class="ccs-n">{len(_exams)}</div><div class="ccs-l">Evaluaciones</div></div>
@@ -5410,7 +5412,7 @@ def register_student_routes(app, csrf, limiter):
             <div class="course-empty">
               <div class="deck-add-icon">+</div>
               <div class="deck-add-l">Aún no hay cursos</div>
-              <div class="deck-add-s">Conecta Canvas con la extensiÃ³n para importar tus cursos.</div>
+              <div class="deck-add-s">Conecta Canvas con la extensión para importar tus cursos.</div>
             </div>
             """
 
@@ -5907,8 +5909,8 @@ def register_student_routes(app, csrf, limiter):
     def student_exams_page():
         if not _logged_in():
             return redirect(url_for("login"))
-        # Standalone exams hub removed: course evaluations now live in Mis cursos.
-        return redirect(url_for("student_courses_page"))
+        # Keep old bookmarks aligned with the current Exámenes tab.
+        return redirect(url_for("student_quizzes_page"))
 
 
 
@@ -5932,6 +5934,7 @@ def register_student_routes(app, csrf, limiter):
         # Build a course→exams map so the exam dropdown can be filtered in JS
         # without a round-trip each time the student picks a different course.
         _focus_is_en = session.get("lang", "es") == "en"
+        _focus_date_locale = "en-US" if _focus_is_en else "es-CL"
         # Hard-block the timer on the Focus Guard extension only when explicitly
         # enforced. Default OFF so nobody is locked out while the store version
         # that announces itself (1.0.2+) propagates. Set FOCUS_GUARD_ENFORCE=1
@@ -6036,16 +6039,16 @@ def register_student_routes(app, csrf, limiter):
             "sessionInProgressSuffix": " in progress." if _focus_is_en else " en progreso.",
             "sessionsReadySuffix": " sessions ready to claim." if _focus_is_en else " sesiones listas para reclamar.",
             "xpBurstSub": "Session saved" if _focus_is_en else "Sesion guardada",
-            "startCycle": "Start a session to activate the cycle." if _focus_is_en else "Empieza una sesion para activar el ciclo.",
+            "startCycle": "Start a session to activate the cycle." if _focus_is_en else "Empieza una sesión para activar el ciclo.",
             "examNudgeTitle": "Next exam" if _focus_is_en else "Proxima prueba",
             "examNudgeToday": "today" if _focus_is_en else "hoy",
             "examNudgeTomorrow": "tomorrow" if _focus_is_en else "manana",
-            "examNudgeDays": "in {days} days" if _focus_is_en else "en {days} dias",
+            "examNudgeDays": "in {days} days" if _focus_is_en else "en {days} días",
             "examNudgeStudy": "Recommended: {topics}" if _focus_is_en else "Recomendado: {topics}",
             "examNudgeFallback": "general review, weak topics, and one practice quiz" if _focus_is_en else "repaso general, puntos debiles y un quiz de practica",
             "examNudgeToast": "You have {exam} for {course} {when}. Study: {topics}" if _focus_is_en else "Tienes {exam} de {course} {when}. Estudia: {topics}",
             "rivalHeadline": "Beat your friend today" if _focus_is_en else "Ganale a tu amigo hoy",
-            "rivalEmpty": "No friend has studied today yet. You can set the pace." if _focus_is_en else "Ningun amigo ha estudiado hoy todavia. Marca el ritmo tu.",
+            "rivalEmpty": "No friend has studied today yet. You can set the pace." if _focus_is_en else "Ningún amigo ha estudiado hoy todavía. Marca el ritmo tú.",
             "rivalTemplate": "{name} studied {minutes} min today. Beat them." if _focus_is_en else "{name} estudio {minutes} min hoy. Ganale.",
         }
         _json_next_focus_exam = json.dumps(next_focus_exam or {}, ensure_ascii=False).replace("<", "\\u003c")
@@ -6212,7 +6215,7 @@ def register_student_routes(app, csrf, limiter):
 
         <div id="focus-rival-card" class="focus-rival-card" aria-live="polite">
           <div>
-            <div class="focus-rival-eyebrow" id="focus-rival-eyebrow">{'Daily rival' if _focus_is_en else 'Rival del dia'}</div>
+            <div class="focus-rival-eyebrow" id="focus-rival-eyebrow">{'Daily rival' if _focus_is_en else 'Rival del día'}</div>
             <div class="focus-rival-text" id="focus-rival-text">{'Loading friend pressure...' if _focus_is_en else 'Buscando presion de amigos...'}</div>
           </div>
           <div class="focus-rival-mins" id="focus-rival-mins">0m</div>
@@ -8944,7 +8947,7 @@ def register_student_routes(app, csrf, limiter):
           if (!el) return;
           try {{
             var d = new Date();
-            el.textContent = d.toLocaleDateString(undefined, {{ weekday: 'long', month: 'long', day: 'numeric' }});
+            el.textContent = d.toLocaleDateString({_focus_date_locale!r}, {{ weekday: 'long', month: 'long', day: 'numeric' }});
           }} catch(e) {{}}
         }})();
 
@@ -10991,6 +10994,16 @@ No markdown, no code fences. ONLY JSON.
                     sample_front = _sample_cards[0].get("front") or sample_front
             except Exception:
                 pass
+        if decks:
+            _review_cta = (
+                f'<a class="btn-pop-cd dark" href="/student/flashcards/{int(decks[0]["id"])}">'
+                f'&#9654; Empezar repaso &middot; {max(3, min(20, due_total or 8))} min</a>'
+            )
+        else:
+            _review_cta = (
+                '<button class="btn-pop-cd dark disabled" type="button" disabled '
+                'aria-disabled="true">&#9654; Crea un mazo para repasar</button>'
+            )
 
         return _s_render("Flashcards", f"""
 
@@ -11015,7 +11028,7 @@ No markdown, no code fences. ONLY JSON.
             </div>
           </div>
           <div class="fct-r">
-            <a class="btn-pop-cd dark" href="{('/student/flashcards/' + str(decks[0]['id'])) if decks else '#'}">▶ Empezar repaso · {max(3, min(20, due_total or 8))} min</a>
+            {_review_cta}
           </div>
         </div>
 
@@ -11149,6 +11162,7 @@ No markdown, no code fences. ONLY JSON.
         .fct-pill.new {{ background:#7B61FF; }}.fct-pill.due {{ background:#10B981; }}.fct-pill.late {{ background:#EF4444; }}
         .btn-pop-cd {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:10px 16px;border-radius:999px;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center; }}
         .btn-pop-cd.accent {{ background:#FF7A3D;color:#fff; }}.btn-pop-cd.dark {{ background:#F4F1EA;color:#1A1A1F; }}
+        .btn-pop-cd.disabled,.btn-pop-cd:disabled {{ opacity:.62;cursor:not-allowed;filter:saturate(.82);box-shadow:none; }}
         .page-actions-cd {{ display:flex;align-items:center;gap:10px;flex-wrap:wrap; }}
         .fc-preview-row {{ display:grid;grid-template-columns:1.2fr;gap:18px;margin-bottom:18px; }}
         .fc-card-flip {{ background:#fff;border:1px solid #E2DCCC;border-radius:22px;padding:30px;min-height:240px;box-shadow:0 18px 42px rgba(20,18,30,.08);display:flex;flex-direction:column; }}
@@ -11163,7 +11177,7 @@ No markdown, no code fences. ONLY JSON.
         .deck-grid {{ display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px; }}
         @media (max-width:1100px) {{ .deck-grid {{ grid-template-columns:repeat(2,1fr); }} }}
         @media (max-width:700px) {{ .deck-grid {{ grid-template-columns:1fr; }} .fc-today {{ flex-direction:column;align-items:flex-start; }} .fc-page-title {{ font-size:38px; }} }}
-        .deck {{ background:#FBF8F0;border:1px solid #E2DCCC;border-radius:14px;padding:14px;cursor:pointer;transition:all .15s ease; }}
+        .deck {{ min-width:0;background:#FBF8F0;border:1px solid #E2DCCC;border-radius:14px;padding:14px;cursor:pointer;transition:all .15s ease; }}
         .deck:hover {{ transform:translateY(-2px);box-shadow:0 14px 28px rgba(20,18,30,.08); }}
         .deck-head {{ display:flex;align-items:center;gap:6px; }}
         .deck-tag {{ font-size:11px;font-weight:900;color:#94939C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }}
@@ -11174,10 +11188,12 @@ No markdown, no code fences. ONLY JSON.
         .deck-fill {{ height:100%;border-radius:999px; }}
         .deck-due {{ font-size:11px;font-weight:800;color:#FF7A3D; }}
         .deck-due.urgent {{ color:#EF4444; }}.deck-due.muted {{ color:#94939C;font-weight:700; }}
+        .fc-decks-card,.fc-decks-card * {{ box-sizing:border-box!important; }}
         .deck.add {{ border:2px dashed #E2DCCC;background:transparent;display:grid;place-items:center;text-align:center;min-height:145px; }}
         .deck-add-icon {{ font-size:32px;color:#94939C; }}
-        .deck-add-l {{ font-weight:900;font-size:13px;color:#1A1A1F; }}
-        .deck-add-s {{ font-size:11px;color:#94939C; }}
+        .deck-add-l {{ font-weight:900;font-size:13px;color:#1A1A1F;line-height:1.15;overflow-wrap:anywhere; }}
+        .deck-add-s {{ font-size:11px;color:#94939C;line-height:1.2;overflow-wrap:anywhere; }}
+        .fc-decks-card .deck.add {{ display:grid!important;place-items:center!important;text-align:center!important;min-height:156px!important;overflow:hidden!important;max-width:100%!important; }}
 
         .edit-input {{ width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font-size:13px; }}
 
@@ -14342,6 +14358,64 @@ No markdown, no code fences. ONLY JSON.
         for src, dst in sorted(rank_translations.items(), key=lambda item: len(item[0]), reverse=True):
             rank_full_name = rank_full_name.replace(src, dst)
 
+        _ach_lang = session.get("lang", "es")
+        _BADGE_ES = {
+            "first_login": ("¡Bienvenido!", "Iniciaste sesión por primera vez"),
+            "first_quiz": ("Novato en exámenes", "Completaste tu primer quiz"),
+            "quiz_master": ("Maestro de exámenes", "Sacaste 100% en un quiz"),
+            "flashcard_fan": ("Fan de tarjetas", "Repasaste 100 tarjetas"),
+            "streak_3": ("¡En llamas!", "Racha de estudio de 3 días"),
+            "streak_7": ("¡Imparable!", "Racha de estudio de 7 días"),
+            "streak_30": ("Estudiante diamante", "Racha de estudio de 30 días"),
+            "xp_100": ("Estrella ascendente", "Ganaste 100 XP"),
+            "xp_500": ("Estrella brillante", "Ganaste 500 XP"),
+            "xp_1000": ("Superestrella", "Ganaste 1.000 XP"),
+            "focus_1h": ("Enfocado", "1 hora total de enfoque"),
+            "focus_10h": ("Enfoque profundo", "10 horas totales de enfoque"),
+            "focus_50h": ("Maestro del enfoque", "50 horas totales de enfoque"),
+            "page_100": ("Pasa páginas", "Leíste 100 páginas"),
+            "quiz_10": ("Pro de exámenes", "Completaste 10 quizzes"),
+            "flashcard_500": ("Estratega de tarjetas", "Repasaste 500 tarjetas"),
+            "flashcard_1000": ("Leyenda de tarjetas", "Repasaste 1.000 tarjetas"),
+            "quiz_25": ("Veterano de quizzes", "Completaste 25 quizzes"),
+            "quiz_50": ("Leyenda de quizzes", "Completaste 50 quizzes"),
+            "xp_2500": ("Estudiante cohete", "Ganaste 2.500 XP"),
+            "xp_5000": ("Rey del XP", "Ganaste 5.000 XP"),
+            "streak_14": ("Guerrero de dos semanas", "Racha de estudio de 14 días"),
+            "streak_60": ("Voluntad de hierro", "Racha de estudio de 60 días"),
+            "streak_100": ("Club de los 100", "Racha de estudio de 100 días"),
+            "first_course": ("Primer curso", "Importaste tu primer curso"),
+            "five_courses": ("Coleccionista de cursos", "Importaste 5 cursos"),
+            "focus_100h": ("Señor del tiempo", "100 horas totales de enfoque"),
+            "page_500": ("Ratón de biblioteca", "Leíste 500 páginas"),
+            "page_1000": ("Biblioteca andante", "Leíste 1.000 páginas"),
+            "perfect_week": ("Semana perfecta", "Ganaste XP todos los días de una semana"),
+            "early_bird": ("Madrugador", "Estudiaste antes de las 7 AM"),
+            "night_owl": ("Nocturno", "Estudiaste después de las 11 PM"),
+            "quiz_100": ("Centurión de quizzes", "Completaste 100 quizzes"),
+            "quiz_500": ("Científico de quizzes", "Completaste 500 quizzes"),
+            "quiz_perfect_5": ("Tirador preciso", "5 quizzes con puntaje perfecto"),
+            "quiz_perfect_25": ("Diana perfecta", "25 quizzes con puntaje perfecto"),
+            "deck_builder": ("Arquitecto de mazos", "Creaste 10 mazos de tarjetas"),
+            "focus_session_4h": ("Mente maratón", "Completaste una sesión de enfoque de 4 horas"),
+            "focus_500h": ("Enfoque eterno", "500 horas totales de enfoque"),
+            "focus_1000h": ("Mente infinita", "1.000 horas totales de enfoque"),
+            "deep_work_week": ("Semana de trabajo profundo", "20 horas de enfoque en una semana"),
+            "streak_180": ("Héroe de medio año", "Racha de estudio de 180 días"),
+            "streak_365": ("Año de disciplina", "Racha de estudio de 365 días"),
+            "freeze_used": ("Salvado por hielo", "Usaste un congelador de racha por primera vez"),
+        }
+
+        def _badge_view(key, info):
+            if _ach_lang == "es" and key in _BADGE_ES:
+                name, desc = _BADGE_ES[key]
+                return {"emoji": info.get("emoji", ""), "name": name, "desc": desc}
+            return {
+                "emoji": info.get("emoji", ""),
+                "name": info.get("name", ""),
+                "desc": info.get("desc", ""),
+            }
+
 
 
         badges_html = ""
@@ -14349,6 +14423,7 @@ No markdown, no code fences. ONLY JSON.
         for b in badges:
 
             earned_date = str(b.get("earned_at", ""))[:10]
+            _bv = _badge_view(b.get("badge_key", ""), b)
 
             badges_html += f"""
 
@@ -14362,11 +14437,11 @@ No markdown, no code fences. ONLY JSON.
 
                  onmouseout="this.style.transform='';this.style.boxShadow='';this.querySelector('.badge-tooltip').style.opacity='0';this.querySelector('.badge-tooltip').style.visibility='hidden'">
 
-              <div style="font-size:2.2em;margin-bottom:4px">{b.get('emoji','🏅')}</div>
+              <div style="font-size:2.2em;margin-bottom:4px">{_bv.get('emoji') or b.get('emoji','🏅')}</div>
 
-              <div style="font-weight:700;font-size:13px;color:var(--text)">{_esc(b.get('name',''))}</div>
+              <div style="font-weight:700;font-size:13px;color:var(--text)">{_esc(_bv.get('name',''))}</div>
 
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">{_esc(b.get('desc',''))}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">{_esc(_bv.get('desc',''))}</div>
 
               <div class="badge-tooltip" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
 
@@ -14376,9 +14451,9 @@ No markdown, no code fences. ONLY JSON.
 
                           pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.2)">
 
-                <div style="font-weight:700;margin-bottom:2px">{_esc(b.get('name',''))}</div>
+                <div style="font-weight:700;margin-bottom:2px">{_esc(_bv.get('name',''))}</div>
 
-                <div>{_esc(b.get('desc',''))}</div>
+                <div>{_esc(_bv.get('desc',''))}</div>
 
                 <div style="opacity:0.7;margin-top:3px">Conseguido: {earned_date}</div>
 
@@ -14395,6 +14470,7 @@ No markdown, no code fences. ONLY JSON.
         all_badges_html = ""
 
         for key, info in sdb.BADGE_DEFS.items():
+            _iv = _badge_view(key, info)
 
             earned = any(b["badge_key"] == key for b in badges)
 
@@ -14418,9 +14494,9 @@ No markdown, no code fences. ONLY JSON.
 
                  onmouseout="this.style.opacity='{opacity}';this.querySelector('.badge-tooltip').style.opacity='0';this.querySelector('.badge-tooltip').style.visibility='hidden'">
 
-              <div style="font-size:1.6em">{info['emoji']}</div>
+              <div style="font-size:1.6em">{_iv.get('emoji') or info['emoji']}</div>
 
-              <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:2px">{_esc(info['name'])}</div>
+              <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:2px">{_esc(_iv.get('name',''))}</div>
 
               <div class="badge-tooltip" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
 
@@ -14430,9 +14506,9 @@ No markdown, no code fences. ONLY JSON.
 
                           pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.2)">
 
-                <div style="font-weight:700;margin-bottom:2px">{_esc(info['name'])}</div>
+                <div style="font-weight:700;margin-bottom:2px">{_esc(_iv.get('name',''))}</div>
 
-                <div>{_esc(info['desc'])}</div>
+                <div>{_esc(_iv.get('desc',''))}</div>
 
                 <div style="color:{status_color};margin-top:3px;font-weight:600">{status_text}</div>
 
@@ -14532,6 +14608,7 @@ No markdown, no code fences. ONLY JSON.
           .achievements-cd .ach-stat-card .big {{ color:#FF7A3D!important; }}
           .achievements-cd .ach-activity-card [style*="color:#fff"], .achievements-cd [style*="color:#fff"] {{ color:#1A1A1F!important; }}
           .achievements-cd {{ --ach-ink:#201B20;--ach-card:#FFFFFF;--ach-line:#201B20;--ach-muted:#77756F;--ach-orange:#FF7A3D;max-width:none!important;margin:0 0 90px!important;display:flex;flex-direction:column;gap:18px; }}
+          .achievements-cd,.achievements-cd *,.achievements-cd *::before,.achievements-cd *::after {{ box-sizing:border-box!important; }}
           .achievements-cd > h2 {{ margin:0!important;padding:clamp(24px,3vw,38px)!important;border:2px solid var(--ach-line)!important;border-radius:24px!important;background:linear-gradient(135deg,#FFE7D8 0%,#FFF8EE 58%,#E9F7DE 100%)!important;box-shadow:0 5px 0 var(--ach-line),0 22px 48px rgba(32,27,32,.10)!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:clamp(42px,5vw,72px)!important;line-height:.92!important;font-weight:800!important;letter-spacing:0!important;color:var(--ach-ink)!important; }}
           .achievements-cd > h2::before {{ content:"XP Y LOGROS";display:flex;width:fit-content;margin:0 0 14px;padding:7px 12px;border:2px solid var(--ach-orange);border-radius:999px;background:#FFF8EE;color:#8B3A18;font-family:'Nunito',sans-serif;font-size:11px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;box-shadow:0 2px 0 rgba(32,27,32,.18); }}
           .achievements-cd .ach-rank-card {{ margin:0!important;text-align:left!important;padding:24px!important;background:#FFFFFF!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:20px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important; }}
@@ -14550,13 +14627,18 @@ No markdown, no code fences. ONLY JSON.
           .achievements-cd .ach-stat-card > div:nth-child(3) {{ color:#5C5C66!important;font-size:12px!important;font-weight:900!important;text-transform:uppercase!important;letter-spacing:.08em!important; }}
           .achievements-cd > h3 {{ margin:12px 0 -4px!important;padding:0 0 0 4px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:26px!important;line-height:1.08!important;font-weight:800!important;letter-spacing:0!important;color:var(--ach-ink)!important; }}
           .achievements-cd > h3 + div {{ margin:0!important;padding:24px!important;border-radius:18px!important;overflow:visible!important; }}
-          .achievements-cd .ach-badge-card {{ min-width:132px!important;max-width:180px!important;flex:1 1 132px!important;padding:16px 12px!important;background:#FFFDF8!important;border-color:#E6DCCB!important;box-shadow:none!important; }}
-          .achievements-cd .ach-all-badge {{ min-width:112px!important;max-width:150px!important; }}
+          .achievements-cd .ach-badge-card {{ min-width:0!important;max-width:none!important;flex:auto!important;padding:16px 12px!important;background:#FFFDF8!important;border-color:#E6DCCB!important;box-shadow:none!important;overflow:hidden!important; }}
+          .achievements-cd .ach-badge-card:hover {{ overflow:visible!important; }}
+          .achievements-cd .ach-all-badge {{ min-width:0!important;max-width:none!important;min-height:96px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important; }}
+          .achievements-cd .ach-badge-card > div:nth-child(2),
+          .achievements-cd .ach-badge-card > div:nth-child(3) {{ white-space:normal!important;overflow-wrap:anywhere!important;line-height:1.18!important; }}
+          .achievements-cd .badge-tooltip {{ display:none!important;max-width:min(280px,80vw)!important;white-space:normal!important;line-height:1.25!important;text-align:center!important; }}
+          .achievements-cd .ach-badge-card:hover .badge-tooltip {{ display:block!important; }}
           .achievements-cd .ach-history-row {{ border-bottom:1px solid #E6DCCB!important;color:var(--ach-ink)!important;padding:12px 0!important; }}
-          .achievements-cd .ach-section {{ background:var(--ach-card)!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:18px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important;padding:24px!important;overflow:visible!important; }}
+          .achievements-cd .ach-section {{ background:var(--ach-card)!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:18px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important;padding:24px!important;overflow:hidden!important; }}
           .achievements-cd .ach-section > h3 {{ margin:0 0 18px!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:26px!important;line-height:1.08!important;font-weight:800!important;color:var(--ach-ink)!important; }}
-          .achievements-cd .ach-section-body {{ display:flex!important;flex-wrap:wrap!important;gap:12px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important; }}
-          .achievements-cd .ach-section-body.compact {{ gap:10px!important; }}
+          .achievements-cd .ach-section-body {{ display:grid!important;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))!important;gap:12px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important; }}
+          .achievements-cd .ach-section-body.compact {{ grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:10px!important; }}
           .achievements-cd .ach-section-body.activity {{ display:block!important; }}
           .achievements-cd > h2,.achievements-cd .ach-rank-card,.achievements-cd > div[style*="grid-template-columns:1fr 1fr"],.achievements-cd .ach-section {{ will-change:transform,opacity; }}
           .achievements-cd > h2 {{ clip-path:none!important;animation:achHeroBuild .42s cubic-bezier(.16,.92,.22,1) both!important; }}
@@ -14697,7 +14779,7 @@ No markdown, no code fences. ONLY JSON.
           <section class="ach-section">
             <h3>Insignias desbloqueadas</h3>
             <div class="ach-section-body">
-              {badges_html if badges_html else '<p style="color:var(--text-muted)">Aun no tienes insignias. Sigue estudiando para desbloquearlas.</p>'}
+              {badges_html if badges_html else '<p style="color:var(--text-muted)">Aún no tienes insignias. Sigue estudiando para desbloquearlas.</p>'}
             </div>
           </section>
 
@@ -14719,7 +14801,7 @@ No markdown, no code fences. ONLY JSON.
           <section class="ach-section">
             <h3>Actividad reciente</h3>
             <div class="ach-section-body activity">
-              {history_html if history_html else '<p style="color:var(--text-muted)">Todavia no hay actividad XP.</p>'}
+              {history_html if history_html else '<p style="color:var(--text-muted)">Todavía no hay actividad XP.</p>'}
             </div>
           </section>
 
@@ -16682,6 +16764,9 @@ No markdown, no code fences. ONLY JSON.
     --lb-cream:#F4F1EA;
     --lb-line:#E2DCCC;
   }
+  #mr-lb-page, #mr-lb-page *, #mr-lb-page *::before, #mr-lb-page *::after {
+    box-sizing:border-box;
+  }
   #mr-lb-page, #mr-lb-page * { letter-spacing:0; }
   #mr-lb-page .lb-hero {
     border:2px solid var(--lb-ink);
@@ -16892,6 +16977,64 @@ No markdown, no code fences. ONLY JSON.
     opacity:.52 !important;
     mix-blend-mode:screen;
     filter:saturate(1.25) contrast(1.08);
+  }
+  #mr-lb-page .lb-podium {
+    grid-template-columns:minmax(0,.96fr) minmax(0,1.12fr) minmax(0,.96fr);
+    gap:16px;
+    padding-left:22px;
+    padding-right:22px;
+    max-width:100%;
+    overflow:hidden;
+  }
+  #mr-lb-page .lb-podium-card {
+    min-width:0;
+    max-width:100%;
+  }
+  #mr-lb-page .lb-row {
+    grid-template-columns:56px minmax(0,1fr) minmax(78px,110px) minmax(78px,110px);
+    max-width:100%;
+  }
+  #mr-lb-page .lb-podium-body {
+    min-width:0;
+    padding-left:14px;
+    padding-right:14px;
+  }
+  #mr-lb-page .lb-podium-name {
+    display:block;
+    width:100%;
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  #mr-lb-page .lb-podium-xp {
+    white-space:normal;
+    overflow-wrap:anywhere;
+    line-height:1.25;
+  }
+  #mr-lb-page .lb-podium-prize {
+    max-width:100%;
+    white-space:normal;
+    text-align:center;
+    line-height:1.15;
+  }
+  #mr-lb-page .lb-podium-step {
+    letter-spacing:.08em;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  #mr-lb-page .lb-who {
+    min-width:0;
+    max-width:100%;
+  }
+  #mr-lb-page .lb-who > div:last-child {
+    min-width:0;
+  }
+  #mr-lb-page .lb-who > div:last-child > div:first-child {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
   }
   @media (max-width: 860px) {
     #mr-lb-page .lb-hero h2 { font-size:48px; }
@@ -17659,7 +17802,7 @@ No markdown, no code fences. ONLY JSON.
 
             "Sin conectar": "No conectado",
 
-            "Connect your Canvas LMS to sync courses, exams, and study materials.": "Conecta tu Canvas LMS para sincronizar cursos, exámenes y material de estudio.",
+            "Use the MachReach extension to verify your student Canvas session and import your real courses.": "Usa la extensión de MachReach para verificar tu sesión estudiantil de Canvas e importar tus cursos reales.",
 
             "Manage Connection": "Administrar conexión",
 
@@ -18108,7 +18251,7 @@ No markdown, no code fences. ONLY JSON.
 
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px">
 
-              {_T("Connect your Canvas LMS to sync courses, exams, and study materials.")}
+                {_T("Use the MachReach extension to verify your student Canvas session and import your real courses.")}
 
             </p>
 
@@ -19317,7 +19460,7 @@ No markdown, no code fences. ONLY JSON.
             if tier not in _sub.PLANS:
                 return jsonify(ok=False, error="Unknown plan"), 400
             if _sub.PLANS.get(tier, {}).get("locked"):
-                return jsonify(ok=False, error="Este plan todavia esta bloqueado."), 403
+                return jsonify(ok=False, error="Este plan todavía está bloqueado."), 403
             cid = _cid()
             if tier == "free":
                 # Cancel the active LS subscription if we have its id stashed.
