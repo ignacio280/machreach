@@ -14632,10 +14632,33 @@ No markdown, no code fences. ONLY JSON.
           .achievements-cd .ach-all-badge {{ min-width:0!important;max-width:none!important;min-height:96px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important; }}
           .achievements-cd .ach-badge-card > div:nth-child(2),
           .achievements-cd .ach-badge-card > div:nth-child(3) {{ white-space:normal!important;overflow-wrap:anywhere!important;line-height:1.18!important; }}
-          .achievements-cd .badge-tooltip {{ display:none!important;max-width:min(280px,80vw)!important;white-space:normal!important;line-height:1.25!important;text-align:center!important; }}
+          .achievements-cd .badge-tooltip {{
+            display:none!important;
+            top:calc(100% + 10px)!important;
+            bottom:auto!important;
+            left:50%!important;
+            width:max-content!important;
+            min-width:190px!important;
+            max-width:min(270px,calc(100vw - 48px))!important;
+            padding:10px 12px!important;
+            border-radius:12px!important;
+            white-space:normal!important;
+            overflow-wrap:normal!important;
+            word-break:normal!important;
+            line-height:1.25!important;
+            text-align:center!important;
+            z-index:80!important;
+          }}
+          .achievements-cd .badge-tooltip > div {{ overflow-wrap:normal!important;word-break:normal!important; }}
+          .achievements-cd .badge-tooltip > div:last-child {{
+            top:auto!important;
+            bottom:100%!important;
+            border-color:transparent!important;
+            border-bottom-color:var(--text)!important;
+          }}
           .achievements-cd .ach-badge-card:hover .badge-tooltip {{ display:block!important; }}
           .achievements-cd .ach-history-row {{ border-bottom:1px solid #E6DCCB!important;color:var(--ach-ink)!important;padding:12px 0!important; }}
-          .achievements-cd .ach-section {{ background:var(--ach-card)!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:18px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important;padding:24px!important;overflow:hidden!important; }}
+          .achievements-cd .ach-section {{ background:var(--ach-card)!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:18px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important;padding:24px!important;overflow:visible!important; }}
           .achievements-cd .ach-section > h3 {{ margin:0 0 18px!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:26px!important;line-height:1.08!important;font-weight:800!important;color:var(--ach-ink)!important; }}
           .achievements-cd .ach-section-body {{ display:grid!important;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))!important;gap:12px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important; }}
           .achievements-cd .ach-section-body.compact {{ grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:10px!important; }}
