@@ -69,7 +69,7 @@
         {t:'Home', u:'/', i:'🏠', s:'Public'},
         {t:'Log in', u:'/login', i:'🔑', s:'Public'},
         {t:'Sign up', u:'/register', i:'\u2728', s:'Public'},
-      ]);
+      ];
 
       function buildCmdK() {
         if (document.getElementById('cmdk-overlay')) return;

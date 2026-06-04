@@ -405,9 +405,6 @@ _GPA_PLANILLA_HTML_ES = r"""
 
   <div id="pl-body"></div>
 
-  <div class="pl-help">
-    <b>Tips:</b> Notas en escala chilena (1.0 – 7.0; 4.0 = aprobado). Las ponderaciones (%) deben sumar 100. La <b>NMPA</b> es la nota mínima que necesitas en lo que te falta para aprobar el ramo. Todo se guarda automáticamente en tu navegador.
-  </div>
 </div>
 
 <script>
@@ -9431,7 +9428,7 @@ def register_student_routes(app, csrf, limiter):
         <style>
           .canvas-settings-grid {{
             display:grid;
-            grid-template-columns:minmax(320px,560px) minmax(420px,760px);
+            grid-template-columns:minmax(320px,760px);
             gap:28px;
             align-items:start;
           }}
@@ -9450,6 +9447,17 @@ def register_student_routes(app, csrf, limiter):
           .canvas-gate p {{ margin:0 0 10px;color:var(--text-muted);font-size:13px;line-height:1.35; }}
           .canvas-gate ul {{ margin:0 0 12px 18px;color:var(--text);font-size:13px;font-weight:700; }}
           .canvas-gate span {{ color:var(--text-muted);font-weight:600; }}
+          .canvas-ext-actions {{
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px;
+            margin:16px 0 0;
+          }}
+          .canvas-ext-actions .btn {{
+            min-height:42px;
+            align-items:center;
+            text-decoration:none;
+          }}
         </style>
 
         <h1 style="margin-bottom:20px;">&#128279; Conexión a Canvas</h1>
@@ -9465,28 +9473,16 @@ def register_student_routes(app, csrf, limiter):
           </p>
 
           <ol style="margin:0;padding-left:18px;color:var(--text);font-size:14px;line-height:1.75;">
-            <li>Instala la extensión desde la <a href="/student/focus" style="color:var(--primary);font-weight:800;">página Enfoque</a>.</li>
+            <li>Instala la extensión oficial de MachReach desde Google.</li>
             <li>Abre tu Canvas con tu sesión iniciada.</li>
             <li>Pulsa <b>&laquo;Sincronizar cursos con MachReach&raquo;</b> &mdash; el botón aparece abajo a la derecha en Canvas (o usa el icono de la extensión en el navegador).</li>
           </ol>
 
+          <div class="canvas-ext-actions">
+            <a href="https://chromewebstore.google.com/detail/djfnmpaihpkibcngaaekhnbalbaibgnk" target="_blank" rel="noopener" class="btn btn-primary">&#10133; Descargar extensión en Google</a>
+          </div>
+
           <span id="mr-ext-connect" data-token="{_ext_connect_token}" hidden></span>
-
-        </div>
-
-        <div class="card">
-
-          <div class="card-header" style="margin-bottom:14px;">
-            <h2 style="font-size:18px;margin:0;">Universidades con Canvas</h2>
-          </div>
-
-          <p style="color:var(--text-muted);font-size:13px;line-height:1.55;margin:0 0 12px;">Funciona en cualquier universidad que use Canvas. Accesos directos:</p>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;">
-            <a class="btn btn-outline btn-sm" href="https://cursos.canvas.uc.cl/" target="_blank" rel="noopener">UC</a>
-            <a class="btn btn-outline btn-sm" href="https://canvas.uandes.cl/" target="_blank" rel="noopener">U Andes</a>
-            <a class="btn btn-outline btn-sm" href="https://canvas.unab.cl/login/canvas" target="_blank" rel="noopener">UNAB</a>
-            <a class="btn btn-outline btn-sm" href="https://www.canvas.usach.cl/" target="_blank" rel="noopener">USACH</a>
-          </div>
 
         </div>
 
@@ -14627,40 +14623,44 @@ No markdown, no code fences. ONLY JSON.
           .achievements-cd .ach-stat-card > div:nth-child(3) {{ color:#5C5C66!important;font-size:12px!important;font-weight:900!important;text-transform:uppercase!important;letter-spacing:.08em!important; }}
           .achievements-cd > h3 {{ margin:12px 0 -4px!important;padding:0 0 0 4px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:26px!important;line-height:1.08!important;font-weight:800!important;letter-spacing:0!important;color:var(--ach-ink)!important; }}
           .achievements-cd > h3 + div {{ margin:0!important;padding:24px!important;border-radius:18px!important;overflow:visible!important; }}
-          .achievements-cd .ach-badge-card {{ min-width:0!important;max-width:none!important;flex:auto!important;padding:16px 12px!important;background:#FFFDF8!important;border-color:#E6DCCB!important;box-shadow:none!important;overflow:hidden!important; }}
-          .achievements-cd .ach-badge-card:hover {{ overflow:visible!important; }}
+          .achievements-cd .ach-badge-card {{ min-width:0!important;max-width:none!important;flex:auto!important;padding:16px 12px!important;background:#FFFDF8!important;border-color:#E6DCCB!important;box-shadow:none!important;overflow:visible!important;position:relative!important;z-index:1; }}
+          .achievements-cd .ach-badge-card:hover {{ overflow:visible!important;z-index:80!important; }}
           .achievements-cd .ach-all-badge {{ min-width:0!important;max-width:none!important;min-height:96px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important; }}
           .achievements-cd .ach-badge-card > div:nth-child(2),
           .achievements-cd .ach-badge-card > div:nth-child(3) {{ white-space:normal!important;overflow-wrap:anywhere!important;line-height:1.18!important; }}
           .achievements-cd .badge-tooltip {{
-            display:none!important;
-            top:calc(100% + 10px)!important;
-            bottom:auto!important;
+            display:block!important;
+            top:auto!important;
+            bottom:calc(100% + 10px)!important;
             left:50%!important;
             width:max-content!important;
             min-width:190px!important;
-            max-width:min(270px,calc(100vw - 48px))!important;
+            max-width:min(280px,calc(100vw - 48px))!important;
             padding:10px 12px!important;
+            border:2px solid var(--ach-line)!important;
             border-radius:12px!important;
             white-space:normal!important;
             overflow-wrap:normal!important;
             word-break:normal!important;
             line-height:1.25!important;
             text-align:center!important;
-            z-index:80!important;
+            z-index:2000!important;
+            opacity:0;
+            visibility:hidden;
           }}
           .achievements-cd .badge-tooltip > div {{ overflow-wrap:normal!important;word-break:normal!important; }}
           .achievements-cd .badge-tooltip > div:last-child {{
-            top:auto!important;
-            bottom:100%!important;
+            top:100%!important;
+            bottom:auto!important;
             border-color:transparent!important;
-            border-bottom-color:var(--text)!important;
+            border-top-color:var(--ach-line)!important;
           }}
-          .achievements-cd .ach-badge-card:hover .badge-tooltip {{ display:block!important; }}
+          .achievements-cd .ach-badge-card:hover .badge-tooltip,
+          .achievements-cd .ach-badge-card.is-tooltip-open .badge-tooltip {{ opacity:1!important;visibility:visible!important; }}
           .achievements-cd .ach-history-row {{ border-bottom:1px solid #E6DCCB!important;color:var(--ach-ink)!important;padding:12px 0!important; }}
           .achievements-cd .ach-section {{ background:var(--ach-card)!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:18px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important;padding:24px!important;overflow:visible!important; }}
           .achievements-cd .ach-section > h3 {{ margin:0 0 18px!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:26px!important;line-height:1.08!important;font-weight:800!important;color:var(--ach-ink)!important; }}
-          .achievements-cd .ach-section-body {{ display:grid!important;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))!important;gap:12px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important; }}
+          .achievements-cd .ach-section-body {{ display:grid!important;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))!important;gap:12px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important; }}
           .achievements-cd .ach-section-body.compact {{ grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:10px!important; }}
           .achievements-cd .ach-section-body.activity {{ display:block!important; }}
           .achievements-cd > h2,.achievements-cd .ach-rank-card,.achievements-cd > div[style*="grid-template-columns:1fr 1fr"],.achievements-cd .ach-section {{ will-change:transform,opacity; }}
@@ -18402,13 +18402,65 @@ No markdown, no code fences. ONLY JSON.
 
         <!-- Account Security (mirrors business settings — optional change) -->
 
-        <div class="card" style="margin-top:16px;">
+        <style>
+          .settings-panel {{
+            margin-top:16px!important;
+            padding:18px!important;
+            min-height:0!important;
+            overflow:hidden!important;
+            animation:none!important;
+          }}
+          .settings-panel::after {{ display:none!important; }}
+          .settings-panel .card-header {{
+            margin:0 0 16px!important;
+            padding-bottom:12px!important;
+            border-bottom:1px solid var(--border)!important;
+          }}
+          .settings-panel .card-header h2 {{
+            margin:0!important;
+            font-size:17px!important;
+            line-height:1.1!important;
+          }}
+          .settings-panel-body {{ padding:0!important; }}
+          .settings-safe-notice {{
+            display:flex;
+            align-items:center;
+            gap:12px;
+            padding:14px 18px;
+            background:var(--green-light,rgba(16,185,129,.12));
+            border:1px solid rgba(16,185,129,.20);
+            border-radius:14px;
+            margin-bottom:16px;
+          }}
+          :root[data-theme="dark"] .settings-panel {{
+            background:#17161A!important;
+            border:2px solid #FF7A3D!important;
+            color:#FFF8E1!important;
+            box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32)!important;
+          }}
+          :root[data-theme="dark"] .settings-panel .card-header {{
+            border-bottom-color:rgba(255,122,61,.24)!important;
+          }}
+          :root[data-theme="dark"] .settings-panel p,
+          :root[data-theme="dark"] .settings-panel div[style*="color:var(--text-muted)"] {{
+            color:#BDB5AA!important;
+          }}
+          :root[data-theme="dark"] .settings-safe-notice {{
+            background:rgba(34,197,94,.12)!important;
+            border-color:rgba(34,197,94,.28)!important;
+          }}
+          :root[data-theme="dark"] .settings-safe-notice div:first-child {{
+            color:#86EFAC!important;
+          }}
+        </style>
+
+        <div class="card settings-panel settings-security">
 
           <div class="card-header"><h2>&#128272; {_T("Account Security")}</h2></div>
 
-          <div style="padding:20px;">
+          <div class="settings-panel-body">
 
-            <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--green-light,rgba(16,185,129,.12));border-radius:var(--radius-sm);margin-bottom:16px;">
+            <div class="settings-safe-notice">
 
               <span style="font-size:22px;">&#9989;</span>
 
@@ -18487,9 +18539,9 @@ No markdown, no code fences. ONLY JSON.
 
 
         <!-- Retirement -->
-        <div class="card" id="retire-card" style="margin-top:16px;border-color:{('var(--green)' if _is_retired else 'var(--yellow)')};">
+        <div class="card settings-panel settings-retirement" id="retire-card" style="border-color:{('var(--green)' if _is_retired else 'var(--yellow)')};">
           <div class="card-header"><h2>{('🏖️ ' + _T('Retired')) if _is_retired else ('🎓 ' + _T('Retirement'))}</h2></div>
-          <div style="padding:20px;">
+          <div class="settings-panel-body">
             {(
               '''<p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.55;">'''
               + _T("You are currently retired from active rankings. Your name only appears on the Retirement leaderboard. You can come back at any time.")
@@ -18535,11 +18587,11 @@ No markdown, no code fences. ONLY JSON.
 
         <!-- Delete Account -->
 
-        <div class="card" style="margin-top:16px;border-color:var(--red);">
+        <div class="card settings-panel settings-danger" style="border-color:var(--red);">
 
           <div class="card-header"><h2 style="color:var(--red);">&#9888;&#65039; {_T("Danger Zone")}</h2></div>
 
-          <div style="padding:20px;">
+          <div class="settings-panel-body">
 
             <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">{_T("Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action <strong>cannot be undone</strong>.")}</p>
 

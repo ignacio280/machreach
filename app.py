@@ -1065,7 +1065,7 @@ LAYOUT = """<!DOCTYPE html>
   </script>
 
   <!-- ─── MachReach global UX enhancements ─── -->
-  <script src="/static/machreach_layout/layout-1.js"></script>
+  <script src="/static/machreach_layout/layout-1.js?v=20260604-tooltip2"></script>
 
   <!-- Cookie Consent Banner (GDPR) -->
   <div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--card);border-top:1px solid var(--border-light);box-shadow:0 -2px 16px rgba(0,0,0,.12);padding:16px 24px;font-size:13px;color:var(--text-secondary);">
