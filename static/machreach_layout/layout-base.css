@@ -3385,3 +3385,25 @@
       border: 2px solid #201B20 !important;
       box-shadow: 0 5px 0 #FF7A3D !important;
     }
+
+    /* Inicio XP stat: no white text on light mode and no inherited purple treatment. */
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .mr-stat-card.xp-stat,
+    :root:not([data-theme="dark"]) .content .mr-home .mr-stat-card.xp-stat {
+      background: linear-gradient(135deg, #FFFFFF 0%, #FFF1C7 58%, #FFE1CC 100%) !important;
+      color: #201B20 !important;
+      border: 2px solid #201B20 !important;
+      box-shadow: 0 4px 0 #201B20, 0 18px 34px rgba(255,122,61,.14) !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .xp-stat .mr-stat-label,
+    :root:not([data-theme="dark"]) .content .mr-home .xp-stat .mr-stat-label {
+      color: #8B3A18 !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .xp-stat .mr-stat-value,
+    :root:not([data-theme="dark"]) .content .mr-home .xp-stat .mr-stat-value {
+      color: #201B20 !important;
+    }
+    :root:not([data-theme="dark"]) .mr-app-shell .mr-home .xp-stat .mr-stat-sub,
+    :root:not([data-theme="dark"]) .content .mr-home .xp-stat .mr-stat-sub {
+      color: #7C3B1C !important;
+      font-weight: 800;
+    }

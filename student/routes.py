@@ -4473,9 +4473,9 @@ def register_student_routes(app, csrf, limiter):
   .mr-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
   @media (max-width: 900px) { .mr-stats-grid { grid-template-columns: repeat(2, 1fr); } }
   .mr-stat-card { background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 18px; padding: 18px; position: relative; overflow: hidden; }
-  .mr-stat-card.tilted { background: linear-gradient(135deg, #5B4694, #7A65BA); color: #fff; border: 1px solid transparent; }
-  .mr-stat-card.tilted .mr-stat-label { color: rgba(255,255,255,0.8); }
-  .mr-stat-card.tilted .mr-stat-sub { color: rgba(255,255,255,0.85); }
+  .mr-stat-card.xp-stat { background: linear-gradient(135deg, #FFFFFF 0%, #FFF1C7 58%, #FFE1CC 100%); color: #201B20; border: 2px solid #201B20; box-shadow: 0 4px 0 #201B20, 0 18px 34px rgba(255,122,61,.14); }
+  .mr-stat-card.xp-stat .mr-stat-label { color: #8B3A18; }
+  .mr-stat-card.xp-stat .mr-stat-sub { color: #7C3B1C; font-weight: 800; }
   .mr-stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94939C; }
   .mr-stat-value { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 36px; letter-spacing: -0.03em; line-height: 1; margin-top: 8px; color: inherit; }
   .mr-stat-sub { font-size: 12px; color: #5C5C66; margin-top: 8px; }
@@ -4598,15 +4598,31 @@ def register_student_routes(app, csrf, limiter):
   :root[data-theme="dark"] .mr-home .mr-friend-act {
     border-color: #FF7A3D !important;
   }
-  :root[data-theme="dark"] .mr-home .mr-stat-card.tilted {
+  :root[data-theme="dark"] .mr-home .mr-stat-card.xp-stat {
     border: 2px solid #FF7A3D !important;
-    background: linear-gradient(135deg, #38285F, #4F3A83) !important;
+    background: linear-gradient(135deg, #1D1B26 0%, #211814 68%, #15131D 100%) !important;
+    color: #FFF8E1 !important;
     box-shadow: 0 4px 0 rgba(255,122,61,.9), 0 16px 36px rgba(0,0,0,.26) !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-stat-card.xp-stat .mr-stat-label {
+    color: #FFB07A !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-stat-card.xp-stat .mr-stat-value {
+    color: #FFF8E1 !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-stat-card.xp-stat .mr-stat-sub {
+    color: #D8CABE !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-mission::before {
+    display: none !important;
   }
   :root[data-theme="dark"] .mr-home .mr-streak-card {
     background: linear-gradient(135deg, #191926 0%, #201A1A 74%, #301B11 100%) !important;
     border: 2px solid #FF7A3D !important;
     box-shadow: 0 4px 0 rgba(255,122,61,.9), 0 16px 36px rgba(0,0,0,.28) !important;
+  }
+  :root[data-theme="dark"] .mr-home .mr-streak-card::before {
+    display: none !important;
   }
   :root[data-theme="dark"] .mr-home .mr-streak-card::after {
     background: linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255,122,61,.16) 48%, transparent 58%, transparent 100%);
@@ -4797,7 +4813,7 @@ def register_student_routes(app, csrf, limiter):
             '    <div class="mr-stat-action">Detalle &rarr;</div>'
             '    <div class="mr-stat-deco">🔥</div>'
             '  </a>'
-            '  <div class="mr-stat-card tilted mr-pop-3">'
+            '  <div class="mr-stat-card xp-stat mr-pop-3">'
             '    <div class="mr-stat-label">XP de hoy</div>'
             f'   <div class="mr-stat-value">{_mr_xp_today}</div>'
             f'   <div class="mr-stat-sub">↑ subes a siguiente nivel en {_xp_to_next} XP</div>'
@@ -5436,11 +5452,11 @@ def register_student_routes(app, csrf, limiter):
         .course-detail-card {{ margin-top:16px;padding-top:14px;border-top:1px dashed #E2DCCC; }}
         .course-benchmark {{ margin-bottom:10px;padding:10px 12px;border-radius:12px;background:#FFF3E8;border:1px solid #FFD0B5;color:#7A3518;font-size:12px;font-weight:800;display:none; }}
         .course-benchmark.locked {{ background:#F7F2FF;border-color:#D9CCFF;color:#3F2A8E; }}
-        .course-outcome-actions {{ display:grid;grid-template-columns:minmax(120px,150px) minmax(120px,150px) auto 1fr;gap:12px 12px;align-items:end;margin-bottom:18px; }}
+        .course-outcome-actions {{ display:grid;grid-template-columns:minmax(120px,150px) minmax(120px,150px) auto 1fr;gap:12px 12px;align-items:start;margin-bottom:18px; }}
         .course-outcome-actions label {{ display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#94939C; }}
         .course-grade-input {{ width:120px;border:1px solid #E2DCCC;border-radius:10px;background:#FBF8F0;color:#1A1A1F;padding:9px 10px;font-weight:800; }}
-        .course-outcome-actions .btn {{ min-height:42px;align-self:end; }}
-        .course-outcome-state {{ min-height:42px;display:inline-flex;align-items:center;font-size:12px;font-weight:900;color:#5C5C66; }}
+        .course-outcome-actions .btn {{ min-height:42px;align-self:start;margin-top:17px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important; }}
+        .course-outcome-state {{ min-height:42px;display:inline-flex;align-items:center;font-size:12px;font-weight:900;color:#5C5C66;margin-top:17px; }}
         @media (max-width:720px) {{ .course-outcome-actions {{ grid-template-columns:1fr 1fr; }} .course-outcome-actions .btn,.course-outcome-state {{ grid-column:1/-1; }} .course-grade-input {{ width:100%; }} }}
         .ccard-outcome-pending,.ccard-outcome-done {{ margin:-4px 0 12px;padding:9px 11px;border-radius:12px;font-size:12px;font-weight:900;line-height:1.25; }}
         .ccard-outcome-pending {{ background:#FFF3E8;border:1px solid #FFD0B5;color:#9A3B12; }}
@@ -5458,7 +5474,7 @@ def register_student_routes(app, csrf, limiter):
         .ex-input {{ min-height:38px;display:flex;align-items:center; }}
         .ex-weight {{ display:flex;align-items:center;justify-content:flex-start;gap:7px;font-weight:900;color:var(--text);line-height:1; }}
         .ex-weight input {{ width:64px;text-align:center; }}
-        .ex-delete {{ width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;padding:0!important;border-radius:999px!important;justify-self:end;color:var(--red)!important;line-height:1!important; }}
+        .ex-delete {{ width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;border-radius:999px!important;justify-self:end;align-self:center;color:var(--red)!important;line-height:1!important;font-size:15px!important;margin:0!important;transform:none!important; }}
         @media (max-width:720px) {{ .ex-row {{ grid-template-columns:1fr; }} .ex-delete {{ justify-self:start; }} }}
         .course-empty {{ grid-column:1/-1;border:2px dashed #E2DCCC;border-radius:18px;padding:32px;text-align:center;color:#94939C; }}
         .mr-modal {{ position:fixed;inset:0;background:rgba(26,26,31,.36);display:flex;align-items:center;justify-content:center;z-index:1000;padding:18px; }}
@@ -14278,7 +14294,7 @@ No markdown, no code fences. ONLY JSON.
 
             badges_html += f"""
 
-            <div class="badge-card" style="text-align:center;padding:16px 12px;background:var(--card);border-radius:var(--radius);
+            <div class="badge-card ach-badge-card" style="text-align:center;padding:16px 12px;background:var(--card);border-radius:var(--radius);
 
                         border:1px solid var(--border);min-width:110px;flex:1;max-width:160px;
 
@@ -14334,7 +14350,7 @@ No markdown, no code fences. ONLY JSON.
 
             all_badges_html += f"""
 
-            <div style="text-align:center;padding:10px 8px;opacity:{opacity};min-width:90px;flex:1;max-width:120px;
+            <div class="badge-card ach-badge-card ach-all-badge" style="text-align:center;padding:10px 8px;opacity:{opacity};min-width:90px;flex:1;max-width:120px;
 
                         border:1px solid {border};border-radius:var(--radius-sm);background:var(--card);
 
@@ -14432,7 +14448,7 @@ No markdown, no code fences. ONLY JSON.
 
             history_html += f"""
 
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;
+            <div class="ach-history-row" style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;
 
                         border-bottom:1px solid var(--border);font-size:14px;color:var(--text);gap:12px">
 
@@ -14457,11 +14473,100 @@ No markdown, no code fences. ONLY JSON.
           .achievements-cd [style*="background:#0f172a"], .achievements-cd [style*="background:#1e293b"], .achievements-cd [style*="background:#111827"] {{ background:#FFFFFF!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important; }}
           .achievements-cd .ach-stat-card .big {{ color:#FF7A3D!important; }}
           .achievements-cd .ach-activity-card [style*="color:#fff"], .achievements-cd [style*="color:#fff"] {{ color:#1A1A1F!important; }}
+          .achievements-cd {{ --ach-ink:#201B20;--ach-card:#FFFFFF;--ach-line:#201B20;--ach-muted:#77756F;--ach-orange:#FF7A3D;max-width:none!important;margin:0 0 90px!important;display:flex;flex-direction:column;gap:18px; }}
+          .achievements-cd > h2 {{ margin:0!important;padding:clamp(24px,3vw,38px)!important;border:2px solid var(--ach-line)!important;border-radius:24px!important;background:linear-gradient(135deg,#FFE7D8 0%,#FFF8EE 58%,#E9F7DE 100%)!important;box-shadow:0 5px 0 var(--ach-line),0 22px 48px rgba(32,27,32,.10)!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:clamp(42px,5vw,72px)!important;line-height:.92!important;font-weight:800!important;letter-spacing:0!important;color:var(--ach-ink)!important; }}
+          .achievements-cd > h2::before {{ content:"XP Y LOGROS";display:flex;width:fit-content;margin:0 0 14px;padding:7px 12px;border:2px solid var(--ach-orange);border-radius:999px;background:#FFF8EE;color:#8B3A18;font-family:'Nunito',sans-serif;font-size:11px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;box-shadow:0 2px 0 rgba(32,27,32,.18); }}
+          .achievements-cd .ach-rank-card {{ margin:0!important;text-align:left!important;padding:24px!important;background:#FFFFFF!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:20px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important; }}
+          .achievements-cd .ach-rank-card > div:first-child {{ display:none!important; }}
+          .achievements-cd .ach-rank-card div {{ color:var(--ach-ink)!important;opacity:1!important; }}
+          .achievements-cd .ach-rank-card div:nth-child(2) {{ color:#8B3A18!important;font-size:11px!important;letter-spacing:.12em!important;text-transform:uppercase!important;font-weight:900!important; }}
+          .achievements-cd .ach-rank-card div:nth-child(3) {{ font-family:'Bricolage Grotesque',sans-serif!important;font-size:clamp(28px,3vw,42px)!important;line-height:1!important;font-weight:800!important;letter-spacing:0!important;margin:8px 0 4px!important; }}
+          .achievements-cd .ach-rank-card div:nth-child(4) {{ color:var(--ach-orange)!important;font-size:22px!important;font-weight:900!important; }}
+          .achievements-cd .ach-rank-card div:nth-child(5) {{ height:14px!important;max-width:none!important;margin:18px 0 10px!important;border:2px solid var(--ach-line)!important;border-radius:999px!important;background:#F1EBDD!important;overflow:hidden!important; }}
+          .achievements-cd .ach-rank-card div:nth-child(5) > div {{ height:100%!important;border-radius:999px!important;background:linear-gradient(90deg,var(--ach-orange),#FFB84D,#2E9266)!important;box-shadow:none!important; }}
+          .achievements-cd .ach-rank-card div:nth-child(6) {{ color:#5C5C66!important;font-size:13px!important;font-weight:800!important; }}
+          .achievements-cd > div[style*="grid-template-columns:1fr 1fr"] {{ display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important;margin:0!important; }}
+          .achievements-cd .ach-stat-card,.achievements-cd .ach-badge-card,.achievements-cd .ach-activity-card,.achievements-cd > h3 + div {{ background:var(--ach-card)!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:18px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important; }}
+          .achievements-cd .ach-stat-card {{ text-align:left!important;min-height:150px;padding:20px!important;position:relative;overflow:hidden; }}
+          .achievements-cd .ach-stat-card > div:nth-child(2) {{ font-family:'Bricolage Grotesque',sans-serif!important;font-size:46px!important;line-height:1!important;font-weight:800!important;color:var(--ach-orange)!important;margin:10px 0 6px!important; }}
+          .achievements-cd .ach-stat-card > div:nth-child(3) {{ color:#5C5C66!important;font-size:12px!important;font-weight:900!important;text-transform:uppercase!important;letter-spacing:.08em!important; }}
+          .achievements-cd > h3 {{ margin:12px 0 -4px!important;padding:0 0 0 4px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:26px!important;line-height:1.08!important;font-weight:800!important;letter-spacing:0!important;color:var(--ach-ink)!important; }}
+          .achievements-cd > h3 + div {{ margin:0!important;padding:24px!important;border-radius:18px!important;overflow:visible!important; }}
+          .achievements-cd .ach-badge-card {{ min-width:132px!important;max-width:180px!important;flex:1 1 132px!important;padding:16px 12px!important;background:#FFFDF8!important;border-color:#E6DCCB!important;box-shadow:none!important; }}
+          .achievements-cd .ach-all-badge {{ min-width:112px!important;max-width:150px!important; }}
+          .achievements-cd .ach-history-row {{ border-bottom:1px solid #E6DCCB!important;color:var(--ach-ink)!important;padding:12px 0!important; }}
+          .achievements-cd .ach-section {{ background:var(--ach-card)!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:18px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important;padding:24px!important;overflow:visible!important; }}
+          .achievements-cd .ach-section > h3 {{ margin:0 0 18px!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:26px!important;line-height:1.08!important;font-weight:800!important;color:var(--ach-ink)!important; }}
+          .achievements-cd .ach-section-body {{ display:flex!important;flex-wrap:wrap!important;gap:12px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important; }}
+          .achievements-cd .ach-section-body.compact {{ gap:10px!important; }}
+          .achievements-cd .ach-section-body.activity {{ display:block!important; }}
+          .achievements-cd > h2,.achievements-cd .ach-rank-card,.achievements-cd > div[style*="grid-template-columns:1fr 1fr"],.achievements-cd .ach-section {{ will-change:transform,opacity; }}
+          .achievements-cd > h2 {{ clip-path:none!important;animation:achHeroBuild .42s cubic-bezier(.16,.92,.22,1) both!important; }}
+          .achievements-cd .ach-rank-card {{ position:relative;animation:achPanelBuild .36s .06s cubic-bezier(.18,.88,.22,1) both!important; }}
+          .achievements-cd > div[style*="grid-template-columns:1fr 1fr"] {{ animation:achPanelBuild .34s .12s cubic-bezier(.18,.88,.22,1) both!important; }}
+          .achievements-cd .ach-section {{ position:relative;animation:achSectionSnap .34s cubic-bezier(.18,.88,.22,1) both!important; }}
+          .achievements-cd .ach-section:nth-of-type(1) {{ animation-delay:.17s!important; }}
+          .achievements-cd .ach-section:nth-of-type(2) {{ animation-delay:.22s!important; }}
+          .achievements-cd .ach-section:nth-of-type(3) {{ animation-delay:.27s!important; }}
+          .achievements-cd .ach-stat-card {{ transition:transform .16s ease,box-shadow .16s ease!important;animation:achStatPop .38s cubic-bezier(.16,1.25,.32,1) both!important; }}
+          .achievements-cd .ach-stat-card:nth-child(1) {{ animation-delay:.18s!important; }}
+          .achievements-cd .ach-stat-card:nth-child(2) {{ animation-delay:.24s!important; }}
+          .achievements-cd .ach-stat-card > div:nth-child(2) {{ animation:achCountPunch .42s .32s cubic-bezier(.16,1.35,.28,1) both!important; }}
+          .achievements-cd .ach-rank-card div:nth-child(5) > div {{ transform-origin:left center;animation:achProgressCharge .62s .28s cubic-bezier(.16,.9,.22,1) both,achProgressGlow 1.25s .85s ease-in-out infinite alternate!important; }}
+          .achievements-cd .ach-section::after,.achievements-cd .ach-rank-card::after {{ content:"";position:absolute;left:18px;right:18px;top:0;height:3px;border-radius:999px;background:linear-gradient(90deg,transparent,var(--ach-orange),#FFB84D,transparent);opacity:0;transform:translateX(-18%);animation:achEdgeScan .72s .18s cubic-bezier(.18,.88,.22,1) both;pointer-events:none; }}
+          .achievements-cd .ach-section > h3 {{ animation:achTitleSnap .3s cubic-bezier(.2,1,.28,1) both!important; }}
+          .achievements-cd .ach-section:nth-of-type(1) > h3 {{ animation-delay:.24s!important; }}
+          .achievements-cd .ach-section:nth-of-type(2) > h3 {{ animation-delay:.29s!important; }}
+          .achievements-cd .ach-section:nth-of-type(3) > h3 {{ animation-delay:.34s!important; }}
+          .achievements-cd .ach-badge-card {{ animation:achBadgeSnap .36s cubic-bezier(.18,1.3,.3,1) both!important;transition:transform .15s ease,box-shadow .15s ease!important; }}
+          .achievements-cd .ach-badge-card:nth-child(1) {{ animation-delay:.31s!important; }}
+          .achievements-cd .ach-badge-card:nth-child(2) {{ animation-delay:.34s!important; }}
+          .achievements-cd .ach-badge-card:nth-child(3) {{ animation-delay:.37s!important; }}
+          .achievements-cd .ach-badge-card:nth-child(4) {{ animation-delay:.40s!important; }}
+          .achievements-cd .ach-badge-card:nth-child(5) {{ animation-delay:.43s!important; }}
+          .achievements-cd .ach-badge-card:nth-child(6) {{ animation-delay:.46s!important; }}
+          .achievements-cd .ach-badge-card:nth-child(7) {{ animation-delay:.49s!important; }}
+          .achievements-cd .ach-badge-card:nth-child(8) {{ animation-delay:.52s!important; }}
+          .achievements-cd .ach-badge-card:nth-child(n+9) {{ animation-delay:.55s!important; }}
+          .achievements-cd .ach-badge-card:hover,.achievements-cd .ach-stat-card:hover {{ transform:translateY(-4px) scale(1.015)!important; }}
+          .achievements-cd .ach-history-row {{ animation:achHistorySlide .28s .36s cubic-bezier(.2,.9,.24,1) both!important; }}
+          @keyframes achHeroBuild {{ 0% {{ opacity:0;transform:translateY(14px) scale(.985);filter:blur(6px); }} 55% {{ opacity:1;filter:blur(0); }} 100% {{ opacity:1;transform:translateY(0) scale(1);filter:blur(0); }} }}
+          @keyframes achPanelBuild {{ 0% {{ opacity:0;transform:translate3d(-14px,16px,0) scale(.985); }} 72% {{ opacity:1;transform:translate3d(2px,-1px,0) scale(1.003); }} 100% {{ opacity:1;transform:translate3d(0,0,0) scale(1); }} }}
+          @keyframes achSectionSnap {{ 0% {{ opacity:0;transform:translate3d(18px,18px,0) scale(.985); }} 70% {{ opacity:1;transform:translate3d(-1px,-1px,0) scale(1.002); }} 100% {{ opacity:1;transform:translate3d(0,0,0) scale(1); }} }}
+          @keyframes achStatPop {{ 0% {{ opacity:0;transform:translateY(18px) scale(.92); }} 64% {{ opacity:1;transform:translateY(-2px) scale(1.025); }} 100% {{ opacity:1;transform:translateY(0) scale(1); }} }}
+          @keyframes achCountPunch {{ 0% {{ opacity:.3;transform:translateY(10px) scale(.72); }} 58% {{ opacity:1;transform:translateY(-1px) scale(1.14); }} 100% {{ opacity:1;transform:translateY(0) scale(1); }} }}
+          @keyframes achProgressCharge {{ from {{ transform:scaleX(0);filter:saturate(1.4) brightness(1.18); }} to {{ transform:scaleX(1);filter:saturate(1) brightness(1); }} }}
+          @keyframes achProgressGlow {{ from {{ filter:drop-shadow(0 0 0 rgba(255,122,61,0)); }} to {{ filter:drop-shadow(0 0 10px rgba(255,122,61,.45)); }} }}
+          @keyframes achEdgeScan {{ 0% {{ opacity:0;transform:translateX(-26%) scaleX(.45); }} 45% {{ opacity:.95; }} 100% {{ opacity:0;transform:translateX(26%) scaleX(1); }} }}
+          @keyframes achTitleSnap {{ from {{ opacity:0;transform:translateX(-12px); }} to {{ opacity:1;transform:translateX(0); }} }}
+          @keyframes achBadgeSnap {{ 0% {{ opacity:0;transform:translateY(12px) scale(.86) rotate(-2deg); }} 66% {{ opacity:1;transform:translateY(-2px) scale(1.035) rotate(.8deg); }} 100% {{ opacity:1;transform:translateY(0) scale(1) rotate(0); }} }}
+          @keyframes achHistorySlide {{ from {{ opacity:0;transform:translateX(-10px); }} to {{ opacity:1;transform:translateX(0); }} }}
+          @media (prefers-reduced-motion:reduce) {{ .achievements-cd *,.achievements-cd *::before,.achievements-cd *::after {{ animation:none!important;transition:none!important; }} }}
+          @media(max-width:720px) {{ .achievements-cd > div[style*="grid-template-columns:1fr 1fr"] {{ grid-template-columns:1fr!important; }} }}
+          .achievements-cd .ach-stat-card {{ display:flex!important;flex-direction:column;justify-content:center!important;align-items:flex-start!important;gap:6px!important; }}
+          .achievements-cd .ach-stat-card > div:first-child {{ display:none!important; }}
+          .achievements-cd [style*="color:var(--text-muted)"] {{ color:#6F6A63!important; }}
+          :root[data-theme="dark"] .achievements-cd {{ --ach-ink:#FFF8E1;--ach-card:#17161A;--ach-line:#FF7A3D;--ach-muted:#BDB5AA;color:#FFF8E1!important; }}
+          :root[data-theme="dark"] .achievements-cd > h2 {{ background:linear-gradient(135deg,#0F1014 0%,#17161A 62%,#211510 100%)!important;border-color:#FF7A3D!important;box-shadow:0 5px 0 #FF7A3D,0 24px 58px rgba(0,0,0,.36)!important;color:#FFF8E1!important; }}
+          :root[data-theme="dark"] .achievements-cd > h2::before {{ background:rgba(255,122,61,.12)!important;color:#FFB07A!important;border-color:#FF7A3D!important;box-shadow:0 2px 0 rgba(255,122,61,.55)!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-rank-card,:root[data-theme="dark"] .achievements-cd .ach-stat-card,:root[data-theme="dark"] .achievements-cd .ach-activity-card,:root[data-theme="dark"] .achievements-cd > h3 + div {{ background:#17161A!important;border-color:#FF7A3D!important;color:#FFF8E1!important;box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32)!important; }}
+          :root[data-theme="dark"] .achievements-cd > h3 {{ background:transparent!important;border:0!important;box-shadow:none!important;color:#FFF8E1!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-rank-card div,:root[data-theme="dark"] .achievements-cd > h3 {{ color:#FFF8E1!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-rank-card div:nth-child(2) {{ color:#FFB07A!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-rank-card div:nth-child(4),:root[data-theme="dark"] .achievements-cd .ach-stat-card > div:nth-child(2) {{ color:#FF7A3D!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-rank-card div:nth-child(5) {{ background:#0A0A10!important;border-color:#FF7A3D!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-rank-card div:nth-child(6),:root[data-theme="dark"] .achievements-cd .ach-stat-card > div:nth-child(3) {{ color:#BDB5AA!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-badge-card {{ background:#111116!important;border-color:rgba(255,122,61,.48)!important;color:#FFF8E1!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-stat-card > div:first-child {{ display:none!important; }}
+          :root[data-theme="dark"] .achievements-cd [style*="color:var(--text-muted)"] {{ color:#BDB5AA!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-history-row {{ border-bottom-color:rgba(255,122,61,.28)!important;color:#FFF8E1!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-section {{ background:#17161A!important;border-color:#FF7A3D!important;color:#FFF8E1!important;box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32)!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-section > h3 {{ color:#FFF8E1!important;background:transparent!important;border:0!important;box-shadow:none!important; }}
         </style>
 
         <div class="achievements-cd">
 
-          <h2 style="margin-bottom:20px"><span style="font-size:1.3em">🏆</span> Logros y progreso</h2>
+          <h2 style="margin-bottom:20px">Progreso XP</h2>
 
 
 
@@ -14507,7 +14612,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="font-size:2.4em;font-weight:800;color:#ea580c;margin:4px 0">{streak}</div>
 
-              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Day Streak</div>
+              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Racha activa</div>
 
             </div>
 
@@ -14521,7 +14626,7 @@ No markdown, no code fences. ONLY JSON.
 
               <div style="font-size:2.4em;font-weight:800;color:#16a34a;margin:4px 0">{len(badges)}</div>
 
-              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Badges Earned</div>
+              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Insignias ganadas</div>
 
             </div>
 
@@ -14531,37 +14636,34 @@ No markdown, no code fences. ONLY JSON.
 
           <!-- Earned Badges -->
 
-          <h3 style="color:var(--text);margin-bottom:12px">🏅 Your Badges</h3>
-
-          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:28px">
-
-            {badges_html if badges_html else '<p style="color:var(--text-muted)">No badges yet — keep studying!</p>'}
-
-          </div>
+          <section class="ach-section">
+            <h3>Insignias desbloqueadas</h3>
+            <div class="ach-section-body">
+              {badges_html if badges_html else '<p style="color:var(--text-muted)">Aun no tienes insignias. Sigue estudiando para desbloquearlas.</p>'}
+            </div>
+          </section>
 
 
 
           <!-- All Badges -->
 
-          <h3 style="color:var(--text);margin-bottom:12px">🎖 All Badges</h3>
-
-          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:28px">
-
-            {all_badges_html}
-
-          </div>
+          <section class="ach-section">
+            <h3>Todas las insignias</h3>
+            <div class="ach-section-body compact">
+              {all_badges_html}
+            </div>
+          </section>
 
 
 
           <!-- XP History -->
 
-          <h3 style="color:var(--text);margin-bottom:12px">📊 Recent Activity</h3>
-
-          <div class="ach-activity-card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px">
-
-            {history_html if history_html else '<p style="color:var(--text-muted)">No activity yet.</p>'}
-
-          </div>
+          <section class="ach-section">
+            <h3>Actividad reciente</h3>
+            <div class="ach-section-body activity">
+              {history_html if history_html else '<p style="color:var(--text-muted)">Todavia no hay actividad XP.</p>'}
+            </div>
+          </section>
 
         </div>
 

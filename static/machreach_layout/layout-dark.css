@@ -300,11 +300,13 @@
           }
           :root[data-theme="dark"] .content .mr-home .mr-mission {
             background:
-              radial-gradient(circle at 88% 14%, rgba(255,154,96,.20), transparent 30%),
               linear-gradient(135deg,#25140E 0%,#331A10 55%,#442110 100%) !important;
             border-color:#704126 !important;
             color:#FBE7D6 !important;
             box-shadow:0 22px 60px rgba(0,0,0,.28) !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-mission::before {
+            display:none !important;
           }
           :root[data-theme="dark"] .content .mr-home .mr-mission-title,
           :root[data-theme="dark"] .content .mr-home .mr-mission-eye,
@@ -335,10 +337,19 @@
             color:#F7F0E4 !important;
             box-shadow:0 1px 0 rgba(255,255,255,.03), 0 18px 46px rgba(0,0,0,.22) !important;
           }
-          :root[data-theme="dark"] .content .mr-home .mr-stat-card.tilted,
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card.xp-stat,
           :root[data-theme="dark"] .content .mr-home .mr-league-card {
-            background:linear-gradient(160deg,#4F3A82 0%,#31264F 100%) !important;
-            border-color:#5E4A92 !important;
+            background:linear-gradient(135deg,#1D1B26 0%,#211814 68%,#15131D 100%) !important;
+            border-color:#FF7A3D !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card.xp-stat .mr-stat-label {
+            color:#FFB07A !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card.xp-stat .mr-stat-value {
+            color:#FFF8E1 !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card.xp-stat .mr-stat-sub {
+            color:#D8CABE !important;
           }
           :root[data-theme="dark"] .content .mr-home .mr-card-title,
           :root[data-theme="dark"] .content .mr-home .mr-stat-value,
@@ -744,7 +755,6 @@
             min-height:138px;
             text-decoration:none;
             background:
-              radial-gradient(circle at 88% 18%, rgba(255,122,61,.20), transparent 34%),
               linear-gradient(135deg,#1D1B26 0%,#201A1A 56%,#311B10 100%) !important;
             color:#FFF8E1 !important;
             border:2px solid #FF7A3D !important;
@@ -776,7 +786,6 @@
           :root[data-theme="dark"] .mr-app-shell .mr-home .mr-streak-card,
           :root[data-theme="dark"] .content .mr-home .mr-streak-card {
             background:
-              radial-gradient(circle at 92% 10%, rgba(255,122,61,.16), transparent 34%),
               linear-gradient(135deg,#1D1B26 0%,#201A1A 62%,#311B10 100%) !important;
             border:2px solid #FF7A3D !important;
             color:#FFF8E1 !important;
@@ -803,4 +812,143 @@
             color:#FF9B64 !important;
             border:2px solid #FF7A3D !important;
             box-shadow:0 5px 0 rgba(255,122,61,.84) !important;
+          }
+
+          /* Inicio polish: no purple XP card, no soft highlight blobs in dark mode. */
+          :root[data-theme="dark"] .mr-app-shell .mr-home .mr-stat-card.xp-stat,
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card.xp-stat {
+            background:linear-gradient(135deg,#1D1B26 0%,#211814 68%,#15131D 100%) !important;
+            color:#FFF8E1 !important;
+            border:2px solid #FF7A3D !important;
+            box-shadow:0 4px 0 #FF7A3D,0 22px 52px rgba(0,0,0,.34) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .mr-home .xp-stat .mr-stat-label,
+          :root[data-theme="dark"] .content .mr-home .xp-stat .mr-stat-label {
+            color:#FFB07A !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .mr-home .xp-stat .mr-stat-value,
+          :root[data-theme="dark"] .content .mr-home .xp-stat .mr-stat-value {
+            color:#FFF8E1 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .mr-home .xp-stat .mr-stat-sub,
+          :root[data-theme="dark"] .content .mr-home .xp-stat .mr-stat-sub {
+            color:#D8CABE !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .mr-home .mr-mission::before,
+          :root[data-theme="dark"] .content .mr-home .mr-mission::before,
+          :root[data-theme="dark"] .mr-app-shell .mr-home .mr-streak-card::before,
+          :root[data-theme="dark"] .content .mr-home .mr-streak-card::before,
+          :root[data-theme="dark"] .mr-app-shell .mr-home .mr-stat-card.streak-stat::before,
+          :root[data-theme="dark"] .content .mr-home .mr-stat-card.streak-stat::before {
+            display:none !important;
+            opacity:0 !important;
+          }
+
+          /* XP tab final polish: keep it on the MachReach orange/ink system. */
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd,
+          :root[data-theme="dark"] .content .achievements-cd {
+            --ach-ink:#FFF8E1;
+            --ach-card:#17161A;
+            --ach-line:#FF7A3D;
+            color:#FFF8E1 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd > h2,
+          :root[data-theme="dark"] .content .achievements-cd > h2 {
+            background:linear-gradient(135deg,#0F1014 0%,#17161A 62%,#211510 100%) !important;
+            border:2px solid #FF7A3D !important;
+            color:#FFF8E1 !important;
+            box-shadow:0 5px 0 #FF7A3D,0 24px 58px rgba(0,0,0,.36) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-rank-card,
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-stat-card,
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-badge-card,
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-activity-card,
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd > h3,
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd > h3 + div,
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-stat-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-badge-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-activity-card,
+          :root[data-theme="dark"] .content .achievements-cd > h3,
+          :root[data-theme="dark"] .content .achievements-cd > h3 + div {
+            background:#17161A !important;
+            background-color:#17161A !important;
+            border:2px solid #FF7A3D !important;
+            color:#FFF8E1 !important;
+            box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-badge-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-badge-card {
+            background:#111116 !important;
+            background-color:#111116 !important;
+            border-color:rgba(255,122,61,.58) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-rank-card div,
+          :root[data-theme="dark"] .content .achievements-cd .ach-rank-card div,
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd h3,
+          :root[data-theme="dark"] .content .achievements-cd h3 {
+            color:#FFF8E1 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-stat-card,
+          :root[data-theme="dark"] .content .achievements-cd .ach-stat-card {
+            display:flex !important;
+            flex-direction:column !important;
+            justify-content:center !important;
+            align-items:flex-start !important;
+            gap:6px !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-stat-card > div:first-child,
+          :root[data-theme="dark"] .content .achievements-cd .ach-stat-card > div:first-child {
+            display:none !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd > h3,
+          :root[data-theme="dark"] .content .achievements-cd > h3 {
+            background:transparent !important;
+            background-color:transparent !important;
+            border:0 !important;
+            box-shadow:none !important;
+            margin:12px 0 -4px !important;
+            padding:0 0 0 4px !important;
+            color:#FFF8E1 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd > h3 + div,
+          :root[data-theme="dark"] .content .achievements-cd > h3 + div {
+            margin:0 !important;
+            padding:24px !important;
+            border:2px solid #FF7A3D !important;
+            border-radius:18px !important;
+            background:#17161A !important;
+            background-color:#17161A !important;
+            box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32) !important;
+            overflow:visible !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-section,
+          :root[data-theme="dark"] .content .achievements-cd .ach-section {
+            background:#17161A !important;
+            background-color:#17161A !important;
+            border:2px solid #FF7A3D !important;
+            border-radius:18px !important;
+            color:#FFF8E1 !important;
+            box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32) !important;
+            padding:24px !important;
+            overflow:visible !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-section > h3,
+          :root[data-theme="dark"] .content .achievements-cd .ach-section > h3 {
+            background:transparent !important;
+            background-color:transparent !important;
+            border:0 !important;
+            box-shadow:none !important;
+            margin:0 0 18px !important;
+            padding:0 !important;
+            color:#FFF8E1 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .content .achievements-cd .ach-section-body,
+          :root[data-theme="dark"] .content .achievements-cd .ach-section-body {
+            background:transparent !important;
+            background-color:transparent !important;
+            border:0 !important;
+            box-shadow:none !important;
+            margin:0 !important;
+            padding:0 !important;
           }
