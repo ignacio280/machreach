@@ -6037,9 +6037,9 @@ def register_student_routes(app, csrf, limiter):
             "sessionsReadySuffix": " sessions ready to claim." if _focus_is_en else " sesiones listas para reclamar.",
             "xpBurstSub": "Session saved" if _focus_is_en else "Sesion guardada",
             "startCycle": "Start a session to activate the cycle." if _focus_is_en else "Empieza una sesión para activar el ciclo.",
-            "examNudgeTitle": "Next exam" if _focus_is_en else "Proxima prueba",
+            "examNudgeTitle": "Next exam" if _focus_is_en else "Próxima prueba",
             "examNudgeToday": "today" if _focus_is_en else "hoy",
-            "examNudgeTomorrow": "tomorrow" if _focus_is_en else "manana",
+            "examNudgeTomorrow": "tomorrow" if _focus_is_en else "mañana",
             "examNudgeDays": "in {days} days" if _focus_is_en else "en {days} días",
             "examNudgeStudy": "Recommended: {topics}" if _focus_is_en else "Recomendado: {topics}",
             "examNudgeFallback": "general review, weak topics, and one practice quiz" if _focus_is_en else "repaso general, puntos debiles y un quiz de practica",
@@ -6055,13 +6055,14 @@ def register_student_routes(app, csrf, limiter):
         return _s_render("Focus Mode", f"""
 
         <style>
-        .focus-page-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px;padding:28px clamp(22px,3vw,34px);border-radius:22px;background:linear-gradient(135deg,#FFFDF8 0%,#FFF3E8 58%,#FFE4D4 100%);border:2px solid #1A1A1F;box-shadow:0 4px 0 #1A1A1F;overflow:visible; }}
+        .focus-page-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;padding:20px clamp(18px,2.4vw,28px);border-radius:20px;background:linear-gradient(135deg,#FFFDF8 0%,#FFF3E8 58%,#FFE4D4 100%);border:2px solid #1A1A1F;box-shadow:0 4px 0 #1A1A1F;overflow:visible; }}
+        .content:has(.focus-layout),.content-wide:has(.focus-layout),.mr-tb-main:has(.focus-layout) {{ min-height:0!important;height:auto!important;padding-bottom:0!important; }}
         .focus-eye {{ font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
-        .focus-title {{ margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F;background:transparent !important;box-shadow:none !important;text-shadow:none !important; }}
+        .focus-title {{ margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:44px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F;background:transparent !important;box-shadow:none !important;text-shadow:none !important; }}
         .focus-page-head .focus-side,.focus-page-head .focus-title,.focus-page-head p,.focus-page-head b {{ background:transparent !important;box-shadow:none !important;border:0 !important; }}
         .page-stats {{ display:flex;gap:10px;flex-wrap:wrap; }}
-        .ps {{ background:#fff;border:1px solid #E2DCCC;border-radius:14px;padding:10px 14px;min-width:95px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
-        .ps-n {{ font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:600;line-height:1;color:#1A1A1F; }}
+        .ps {{ background:#fff;border:1px solid #E2DCCC;border-radius:14px;padding:8px 12px;min-width:86px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
+        .ps-n {{ font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:600;line-height:1;color:#1A1A1F; }}
         .ps-l {{ font-size:11px;font-weight:800;color:#94939C;text-transform:uppercase;letter-spacing:.08em;margin-top:3px; }}
         :root[data-theme="dark"] .focus-title,
         :root[data-theme="dark"] .focus-page-head {{ background:linear-gradient(135deg,#191620 0%,#17141D 58%,#241711 100%) !important;border-color:#FF7A3D !important;box-shadow:0 4px 0 #FF7A3D !important; }}
@@ -6072,44 +6073,58 @@ def register_student_routes(app, csrf, limiter):
         :root[data-theme="dark"] .ps {{ background:#1A202B !important;border-color:#343C4C !important;box-shadow:none !important; }}
         .focus-grid {{ display:grid;grid-template-columns:1.4fr 1fr;gap:18px; }}
         @media (max-width:1100px) {{ .focus-grid {{ grid-template-columns:1fr; }} }}
-        .focus-timer-card {{ padding:26px;display:flex;flex-direction:column;gap:22px; }}
+        .focus-layout {{ grid-template-columns:minmax(0,1.06fr) minmax(340px,.94fr)!important;gap:14px!important;align-items:start!important;margin-bottom:-96px!important; }}
+        .focus-timer-shell {{ padding:16px 18px!important; }}
+        .focus-timer-shell .form-group {{ margin-bottom:8px!important; }}
+        .focus-timer-shell label {{ margin-bottom:5px!important; }}
+        .focus-timer-shell #settings-pomodoro > div {{ gap:8px!important;margin-bottom:6px!important; }}
+        .focus-timer-shell #settings-pomodoro p {{ display:none!important; }}
+        .focus-tools {{ display:flex;flex-direction:column;gap:12px; }}
+        .focus-tools .card {{ padding:16px!important;margin-bottom:0!important; }}
+        .focus-tools .card-header {{ margin-bottom:10px!important;padding-bottom:10px!important; }}
+        .focus-timer-card {{ padding:20px;display:flex;flex-direction:column;gap:16px; }}
         .ft-tabs {{ display:none; }}
         .ft-tab {{ background:#EDE7DA;border:0;padding:8px 14px;border-radius:999px;font-weight:700;font-size:12px;color:#5C5C66;cursor:pointer; }}
         .ft-tab.active {{ background:#1A1A1F;color:#FFF8E1; }}
-        .ft-stage {{ display:grid;place-items:center;padding:8px 0 2px; }}
-        .ft-ring-wrap {{ position:relative;width:min(340px,80vw);height:min(340px,80vw);isolation:isolate; }}
-        .ft-ring-wrap::before {{ content:"";position:absolute;inset:4px;border-radius:50%;background:conic-gradient(from -90deg, rgba(255,122,61,.32), transparent 28%, transparent 70%, rgba(255,122,61,.22));filter:blur(18px);opacity:0;transform:scale(.92);transition:opacity .25s ease,transform .25s ease;z-index:-1; }}
-        .ft-ring-wrap.is-running::before {{ opacity:.72;transform:scale(1);animation:ftRingBreathe 2.8s ease-in-out infinite; }}
-        .ft-ring-wrap.is-paused::before {{ opacity:.28; }}
+        .ft-stage {{ display:grid;place-items:center;padding:4px 0 0; }}
+        .ft-ring-wrap {{ position:relative;width:min(268px,70vw);height:min(268px,70vw);isolation:isolate; }}
+        .ft-ring-wrap::before {{ content:"";position:absolute;inset:10px;border-radius:50%;background:radial-gradient(circle at 50% 50%, rgba(255,122,61,.16), rgba(255,122,61,.06) 42%, transparent 70%);filter:blur(14px);opacity:0;transform:scale(.98);transition:opacity .25s ease,background .25s ease;z-index:-1; }}
+        .ft-ring-wrap.is-running::before {{ opacity:.42; }}
+        .ft-ring-wrap.is-paused::before {{ opacity:.22; }}
+        .ft-ring-wrap.is-break::before {{ opacity:.44;background:radial-gradient(circle at 50% 50%, rgba(46,146,102,.18), rgba(155,232,76,.08) 42%, transparent 70%); }}
         .ft-ring {{ width:100%;height:100%; }}
         .ft-ring circle {{ animation:none !important; }}
         .ft-ring circle:first-child {{ stroke-dasharray:none !important;stroke-dashoffset:0 !important; }}
-        #ft-ring-progress {{ --ft-ring-offset:0;stroke-dasharray:578 !important;stroke-dashoffset:var(--ft-ring-offset) !important;transition:stroke-dashoffset .72s cubic-bezier(.22,.8,.2,1), stroke .22s ease;filter:drop-shadow(0 0 9px rgba(255,122,61,.34)); }}
-        .ft-ring-wrap.is-break #ft-ring-progress {{ stroke:#9BE84C !important;filter:drop-shadow(0 0 9px rgba(155,232,76,.28)); }}
-        .ft-ring-wrap.is-urgent #ft-ring-progress {{ stroke:#EF4444 !important;animation:ftRingUrgent 1s ease-in-out infinite; }}
+        #ft-ring-progress {{ --ft-ring-offset:0;stroke-dasharray:578 !important;stroke-dashoffset:var(--ft-ring-offset) !important;transition:stroke-dashoffset .72s cubic-bezier(.22,.8,.2,1), stroke .22s ease, filter .22s ease;filter:drop-shadow(0 0 6px rgba(255,122,61,.22)); }}
+        .ft-ring-wrap.is-break #ft-ring-progress {{ stroke:#2E9266 !important;filter:drop-shadow(0 0 8px rgba(46,146,102,.26)); }}
         .ft-time {{ position:absolute;inset:0;display:grid;place-items:center;text-align:center; }}
-        .ft-time > div {{ width:min(244px,70%);display:flex;flex-direction:column;align-items:center;justify-content:center; }}
-        #timer-display {{ font-family:"Bricolage Grotesque",sans-serif !important;font-weight:500 !important;font-size:78px !important;letter-spacing:-.035em !important;line-height:.92 !important;color:#1A1A1F !important;font-variant-numeric:tabular-nums;transition:transform .2s ease,color .2s ease,text-shadow .2s ease; }}
-        .ft-ring-wrap.is-running #timer-display {{ animation:ftTimeTick 1s steps(1,end) infinite; }}
-        .ft-ring-wrap.is-urgent #timer-display {{ color:#EF4444 !important;text-shadow:0 0 18px rgba(239,68,68,.18); }}
-        #timer-label {{ max-width:210px;font-size:13px !important;color:#94939C !important;margin-top:10px !important;font-weight:800;line-height:1.25; }}
-        #pomo-count {{ max-width:210px;font-size:12px !important;color:#94939C !important;margin-top:5px !important;font-weight:800;line-height:1.25; }}
-        .ft-session-orbit {{ --session-fill:0%;--session-ball:#FF7A3D;position:relative;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:0;width:164px;padding:0 1px; }}
+        .ft-time > div {{ width:min(210px,72%);display:flex;flex-direction:column;align-items:center;justify-content:center; }}
+        #timer-display {{ font-family:"Bricolage Grotesque",sans-serif !important;font-weight:600 !important;font-size:62px !important;letter-spacing:0 !important;line-height:.92 !important;color:#1A1A1F !important;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;transition:color .22s ease; }}
+        .ft-ring-wrap.is-break #timer-display {{ color:#2E9266 !important; }}
+        #timer-label {{ max-width:190px;font-size:12px !important;color:#94939C !important;margin-top:8px !important;font-weight:800;line-height:1.2; }}
+        #pomo-count {{ max-width:190px;font-size:11px !important;color:#94939C !important;margin-top:4px !important;font-weight:800;line-height:1.2; }}
+        .ft-ring-wrap.is-break #timer-label,
+        .ft-ring-wrap.is-break #pomo-count {{ color:#2E9266 !important; }}
+        .ft-session-orbit {{ --session-fill:0%;--session-ball:#FF7A3D;position:relative;margin:10px auto 0;display:flex;align-items:center;justify-content:space-between;gap:0;width:150px;padding:0 1px; }}
         .ft-session-orbit::before,.ft-session-orbit::after {{ content:"";position:absolute;left:7px;right:7px;top:50%;height:5px;border-radius:999px;transform:translateY(-50%); }}
         .ft-session-orbit::before {{ background:#EDE7DA; }}
         .ft-session-orbit::after {{ right:auto;width:calc((100% - 14px) * var(--session-fill));background:var(--session-ball);transition:width .22s ease,background .22s ease; }}
         .ft-session-dot {{ position:relative;z-index:1;width:14px;height:14px;border-radius:999px;background:#EDE7DA;border:2px solid #E2DCCC;transition:all .2s ease;box-sizing:border-box; }}
         .ft-session-dot.done {{ background:#FF7A3D;border-color:#FF7A3D; }}
         .ft-session-dot.active {{ width:24px;height:24px;background:#FF7A3D;border-color:#FF7A3D;box-shadow:0 0 0 5px rgba(255,122,61,.16); }}
-        .ft-session-status {{ max-width:220px;margin-top:8px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#FF7A3D;line-height:1.25; }}
-        .ft-controls {{ display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap; }}
-        .ft-btn-main,.ft-controls #start-btn {{ position:relative;overflow:hidden;background:#FF7A3D !important;color:#fff !important;border:0 !important;min-width:148px !important;height:50px !important;padding:0 30px !important;border-radius:999px !important;font-weight:900 !important;font-size:16px !important;box-shadow:0 5px 0 rgba(20,18,30,.18),0 14px 30px rgba(255,122,61,.22) !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:9px !important;transition:transform .18s ease,box-shadow .18s ease,background .24s ease !important; }}
+        .ft-session-status {{ max-width:210px;margin-top:6px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#FF7A3D;line-height:1.2; }}
+        .ft-ring-wrap.is-break .ft-session-dot.done,
+        .ft-ring-wrap.is-break .ft-session-dot.active {{ background:#2E9266;border-color:#2E9266; }}
+        .ft-ring-wrap.is-break .ft-session-dot.active {{ box-shadow:0 0 0 5px rgba(46,146,102,.16); }}
+        .ft-ring-wrap.is-break .ft-session-status {{ color:#2E9266; }}
+        .ft-controls {{ display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap; }}
+        .ft-btn-main,.ft-controls #start-btn {{ position:relative;overflow:hidden;background:#FF7A3D !important;color:#fff !important;border:0 !important;min-width:136px !important;height:46px !important;padding:0 24px !important;border-radius:999px !important;font-weight:900 !important;font-size:15px !important;box-shadow:0 5px 0 rgba(20,18,30,.18),0 14px 30px rgba(255,122,61,.22) !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:9px !important;transition:transform .18s ease,box-shadow .18s ease,background .24s ease !important; }}
         .ft-controls #start-btn::after {{ content:"";position:absolute;inset:0;background:linear-gradient(100deg, transparent 0%, transparent 38%, rgba(255,255,255,.32) 48%, transparent 58%, transparent 100%);transform:translateX(-130%); }}
         .ft-controls #start-btn:hover {{ transform:translateY(-2px);box-shadow:0 7px 0 rgba(20,18,30,.18),0 18px 34px rgba(255,122,61,.28) !important; }}
         .ft-controls #start-btn.is-running {{ background:#1A1A1F !important;color:#FFF8E8 !important; }}
         .ft-controls #start-btn.is-paused::after,.ft-controls #start-btn.is-running::after {{ animation:ftBtnSwipe .52s ease; }}
         .ft-btn-ico,.ft-btn-text {{ position:relative;z-index:1;transition:transform .22s ease,opacity .18s ease; }}
-        .ft-btn-sec,.ft-controls #reset-btn,.ft-controls #pause-btn,.ft-controls #skip-btn {{ min-width:110px !important;height:44px !important;border-radius:999px !important;background:#EDE7DA !important;border:1px solid #E2DCCC !important;color:#1A1A1F !important;padding:0 16px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:7px !important;font-weight:800 !important;white-space:nowrap !important;font-size:13px !important;box-shadow:none !important; }}
+        .ft-btn-sec,.ft-controls #reset-btn,.ft-controls #pause-btn,.ft-controls #skip-btn {{ min-width:98px !important;height:40px !important;border-radius:999px !important;background:#EDE7DA !important;border:1px solid #E2DCCC !important;color:#1A1A1F !important;padding:0 14px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:7px !important;font-weight:800 !important;white-space:nowrap !important;font-size:12px !important;box-shadow:none !important; }}
         .ft-controls #pause-btn[aria-hidden="true"],
         .ft-controls #start-btn[style*="display: none"],
         .ft-controls #start-btn[style*="display:none"],
@@ -6127,8 +6142,8 @@ def register_student_routes(app, csrf, limiter):
         .break-row {{ display:flex;align-items:center;gap:10px;margin-top:10px;font-size:11px;color:#94939C; }}
         .break-bar {{ flex:1;height:6px;background:#EDE7DA;border-radius:999px;overflow:hidden;opacity:1; }}
         .break-bar span {{ display:block;height:100%;width:0%;background:linear-gradient(90deg,#FF7A3D,#F4B73A);border-radius:999px;transition:width .25s ease; }}
-        .amb-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px; }}
-        .amb {{ background:#FBF8F0;border:1px solid #E2DCCC;border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;transition:all .15s; }}
+        .amb-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px; }}
+        .amb {{ background:#FBF8F0;border:1px solid #E2DCCC;border-radius:12px;padding:9px 7px;text-align:center;cursor:pointer;transition:all .15s; }}
         .amb:hover {{ transform:translateY(-2px); }}
         .amb-ic {{ font-size:22px; }}
         .amb-n {{ font-size:11px;font-weight:700;margin-top:4px;color:#5C5C66; }}
@@ -6149,9 +6164,6 @@ def register_student_routes(app, csrf, limiter):
         .xp-burst-main {{ font-family:"Bricolage Grotesque",sans-serif;font-size:clamp(54px,8vw,94px);font-weight:800;color:#FF7A3D;text-shadow:0 8px 0 #1A1A1F,0 20px 54px rgba(255,122,61,.35);animation:xpBurstRise 1.35s cubic-bezier(.18,1.35,.3,1) both; }}
         .xp-burst-sub {{ margin-top:10px;font-size:14px;font-weight:900;color:#FFF8E8;background:#1A1A1F;border:2px solid #FF7A3D;border-radius:999px;padding:8px 14px;box-shadow:0 5px 0 #FF7A3D;animation:xpBurstSub .9s .12s both; }}
         .xp-confetti {{ position:absolute;width:10px;height:16px;border-radius:3px;background:var(--c,#FF7A3D);left:50%;top:50%;animation:xpConfetti 1.2s cubic-bezier(.18,.8,.25,1) both; }}
-        @keyframes ftRingBreathe {{ 0%,100% {{ transform:scale(.98);opacity:.58; }} 50% {{ transform:scale(1.04);opacity:.86; }} }}
-        @keyframes ftRingUrgent {{ 0%,100% {{ filter:drop-shadow(0 0 7px rgba(239,68,68,.32)); }} 50% {{ filter:drop-shadow(0 0 18px rgba(239,68,68,.64)); }} }}
-        @keyframes ftTimeTick {{ 0%,100% {{ transform:translateY(0) scale(1); }} 50% {{ transform:translateY(-1px) scale(1.012); }} }}
         @keyframes ftBtnSwipe {{ to {{ transform:translateX(130%); }} }}
         @keyframes claimCardPop {{ 0% {{ transform:scale(.98); }} 45% {{ transform:scale(1.03); }} 100% {{ transform:scale(1); }} }}
         @keyframes xpBurstRise {{ 0% {{ opacity:0;transform:translateY(16px) scale(.72) rotate(-5deg); }} 22% {{ opacity:1;transform:translateY(0) scale(1.08) rotate(2deg); }} 72% {{ opacity:1; }} 100% {{ opacity:0;transform:translateY(-22px) scale(.96) rotate(0deg); }} }}
@@ -6171,6 +6183,11 @@ def register_student_routes(app, csrf, limiter):
         .focus-exam-title {{ font-size:16px;font-weight:900;color:#1A1A1F;line-height:1.2; }}
         .focus-exam-topics {{ margin-top:6px;font-size:13px;color:#5C5C66;font-weight:700;line-height:1.35; }}
         .focus-exam-days {{ white-space:nowrap;font-family:'Bricolage Grotesque',sans-serif;font-size:28px;font-weight:700;color:#FF7A3D;text-align:right; }}
+        :root[data-theme="dark"] .focus-exam-nudge {{ background:#1A202B!important;border-color:#FF7A3D!important;box-shadow:0 4px 0 #FF7A3D!important; }}
+        :root[data-theme="dark"] .focus-exam-eyebrow {{ color:#FFB07A!important; }}
+        :root[data-theme="dark"] .focus-exam-title {{ color:#FFF8E1!important; }}
+        :root[data-theme="dark"] .focus-exam-topics {{ color:#D9D2C7!important; }}
+        :root[data-theme="dark"] .focus-exam-days {{ color:#FF7A3D!important; }}
         </style>
 
         <div class="focus-page-head">
@@ -6220,7 +6237,7 @@ def register_student_routes(app, csrf, limiter):
 
         <div id="focus-exam-nudge" class="focus-exam-nudge" aria-live="polite">
           <div>
-            <div class="focus-exam-eyebrow" id="focus-exam-eyebrow">{('Next exam' if _focus_is_en else 'Proxima prueba')}</div>
+            <div class="focus-exam-eyebrow" id="focus-exam-eyebrow">{('Next exam' if _focus_is_en else 'Próxima prueba')}</div>
             <div class="focus-exam-title" id="focus-exam-title"></div>
             <div class="focus-exam-topics" id="focus-exam-topics"></div>
           </div>
@@ -6514,7 +6531,7 @@ def register_student_routes(app, csrf, limiter):
 
           <!-- Right column -->
 
-          <div>
+          <div class="focus-tools">
 
             <div class="card" id="focus-ambience-card">
               <div class="card-header"><h2>&#127807; Ambiente</h2></div>
@@ -7387,7 +7404,6 @@ def register_student_routes(app, csrf, limiter):
             ringWrap.classList.toggle('is-running', !!isRunning);
             ringWrap.classList.toggle('is-paused', !!sessionStarted && !isRunning && timeLeft > 0);
             ringWrap.classList.toggle('is-break', !!isBreak);
-            ringWrap.classList.toggle('is-urgent', !!isRunning && !isBreak && totalTime > 0 && timeLeft <= 60);
           }}
           updateTodaySessionCard();
           try {{
@@ -7409,6 +7425,7 @@ def register_student_routes(app, csrf, limiter):
             var fillIndex = isBreak ? cycleCompleted : Math.max(cycleCompleted, activeIndex);
             var fillPct = Math.max(0, Math.min(100, (fillIndex / 3) * 100));
             wrap.style.setProperty('--session-fill', fillPct + '%');
+            wrap.style.setProperty('--session-ball', isBreak ? '#2E9266' : '#FF7A3D');
             var pills = wrap.querySelectorAll('.ft-session-dot');
             for (var i = 0; i < pills.length; i++) {{
               pills[i].classList.remove('done','active');
@@ -9428,9 +9445,9 @@ def register_student_routes(app, csrf, limiter):
         <style>
           .canvas-settings-grid {{
             display:grid;
-            grid-template-columns:minmax(320px,760px);
-            gap:28px;
-            align-items:start;
+            grid-template-columns:minmax(320px,1.05fr) minmax(300px,.95fr);
+            gap:18px;
+            align-items:stretch;
           }}
           @media (max-width: 900px) {{
             .canvas-settings-grid {{ grid-template-columns:1fr; }}
@@ -9458,15 +9475,110 @@ def register_student_routes(app, csrf, limiter):
             align-items:center;
             text-decoration:none;
           }}
+          h1[style*="margin-bottom:20px"] {{ display:none!important; }}
+          .canvas-hero {{
+            margin:0 0 18px;
+            padding:clamp(22px,3vw,34px);
+            border:2px solid var(--text);
+            border-radius:22px;
+            background:linear-gradient(135deg,#FFF8EE 0%,#FFE8D8 58%,#EAF7DD 100%);
+            box-shadow:0 5px 0 var(--text);
+          }}
+          .canvas-hero-eyebrow {{
+            display:inline-flex;
+            align-items:center;
+            padding:7px 12px;
+            border:2px solid var(--orange);
+            border-radius:999px;
+            color:#8B3A18;
+            font-size:11px;
+            font-weight:900;
+            letter-spacing:.1em;
+            text-transform:uppercase;
+            background:#FFFDF8;
+          }}
+          .canvas-hero h1 {{
+            margin:14px 0 8px;
+            font-family:'Bricolage Grotesque',sans-serif;
+            font-size:clamp(38px,5vw,62px);
+            line-height:.94;
+            letter-spacing:0;
+          }}
+          .canvas-hero p {{ max-width:760px;margin:0;color:var(--text-muted);font-weight:700;line-height:1.5; }}
+          .canvas-card {{
+            position:relative;
+            min-height:100%;
+            border:2px solid var(--text)!important;
+            border-radius:20px!important;
+            box-shadow:0 4px 0 var(--text),0 18px 40px rgba(20,18,30,.08)!important;
+            background:var(--card)!important;
+          }}
+          .canvas-card h2 {{
+            margin:0 0 10px;
+            font-family:'Bricolage Grotesque',sans-serif;
+            font-size:28px;
+            line-height:1;
+            letter-spacing:0;
+          }}
+          .canvas-install-card {{ padding:24px!important;background:linear-gradient(135deg,#FFFFFF 0%,#FFF7ED 100%)!important; }}
+          .canvas-check-card {{ padding:22px!important; }}
+          .canvas-flow-steps {{ display:flex;flex-direction:column;gap:12px;margin-top:18px; }}
+          .canvas-flow-step {{
+            display:grid;
+            grid-template-columns:38px 1fr;
+            gap:12px;
+            align-items:start;
+            padding:14px;
+            border:1px solid var(--border);
+            border-radius:16px;
+            background:rgba(255,122,61,.04);
+          }}
+          .canvas-step-num {{
+            width:38px;
+            height:38px;
+            display:grid;
+            place-items:center;
+            border:2px solid var(--orange);
+            border-radius:14px;
+            color:var(--orange);
+            font-family:'Bricolage Grotesque',sans-serif;
+            font-size:20px;
+            font-weight:800;
+            background:#FFF8EE;
+          }}
+          .canvas-flow-step b {{ display:block;margin-bottom:3px;color:var(--text); }}
+          .canvas-flow-step span {{ color:var(--text-muted);font-size:13px;line-height:1.35;font-weight:700; }}
+          :root[data-theme="dark"] .canvas-hero {{
+            border-color:#FF7A3D;
+            box-shadow:0 5px 0 #FF7A3D;
+            background:linear-gradient(135deg,#14141A 0%,#19161A 58%,#241711 100%);
+          }}
+          :root[data-theme="dark"] .canvas-hero-eyebrow {{ background:rgba(255,122,61,.12);color:#FFB07A; }}
+          :root[data-theme="dark"] .canvas-card {{
+            border-color:#FF7A3D!important;
+            box-shadow:0 4px 0 #FF7A3D,0 20px 50px rgba(0,0,0,.3)!important;
+            background:#17161A!important;
+          }}
+          :root[data-theme="dark"] .canvas-install-card {{ background:linear-gradient(135deg,#17161A 0%,#211510 100%)!important; }}
+          :root[data-theme="dark"] .canvas-flow-step {{ border-color:rgba(255,122,61,.34);background:rgba(255,122,61,.07); }}
+          :root[data-theme="dark"] .canvas-step-num {{ background:#0D0D12;border-color:#FF7A3D;color:#FF7A3D; }}
         </style>
 
         <h1 style="margin-bottom:20px;">&#128279; Conexión a Canvas</h1>
 
+        <section class="canvas-hero">
+          <div class="canvas-hero-eyebrow">Conexión real de estudiante</div>
+          <h1>Activa la extensión, confirma tus cursos.</h1>
+          <p>MachReach usa tu sesión real de Canvas para comprobar que eres estudiante y traer tus cursos sin pedir tokens, contraseñas ni permisos de administrador.</p>
+        </section>
+
         <div class="canvas-settings-grid">
 
-        <div class="card" style="padding:18px;">
+        <div class="card canvas-card canvas-install-card">
 
           {pending_html}
+
+          <h2>Descarga Focus Guard</h2>
 
           <p style="color:var(--text-muted);font-size:13.5px;line-height:1.55;margin:0 0 16px;">
             Conecta Canvas con la extensión <b style="color:var(--text);">MachReach Focus Guard</b> &mdash; sin tokens ni permisos de administrador. Leemos tu lista de cursos directamente desde tu propia sesión de Canvas.
@@ -9483,6 +9595,30 @@ def register_student_routes(app, csrf, limiter):
           </div>
 
           <span id="mr-ext-connect" data-token="{_ext_connect_token}" hidden></span>
+
+        </div>
+
+        <div class="card canvas-card canvas-check-card">
+
+          <h2>Cómo queda conectado</h2>
+          <p style="color:var(--text-muted);font-size:14px;line-height:1.55;margin:0;font-weight:700;">
+            Sigue estos tres pasos una vez. Si cambian tus cursos, repite la sincronización desde Canvas.
+          </p>
+
+          <div class="canvas-flow-steps">
+            <div class="canvas-flow-step">
+              <div class="canvas-step-num">1</div>
+              <div><b>Instala la extensión oficial</b><span>Usa el botón de Google y deja la extensión activa en Chrome.</span></div>
+            </div>
+            <div class="canvas-flow-step">
+              <div class="canvas-step-num">2</div>
+              <div><b>Abre Canvas con tu sesión iniciada</b><span>La verificación ocurre desde tu propia cuenta, no desde credenciales guardadas en MachReach.</span></div>
+            </div>
+            <div class="canvas-flow-step">
+              <div class="canvas-step-num">3</div>
+              <div><b>Sincroniza cursos con MachReach</b><span>El botón aparece en Canvas abajo a la derecha, o desde el icono de la extensión en el navegador.</span></div>
+            </div>
+          </div>
 
         </div>
 
@@ -14461,9 +14597,37 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        # All possible badges with tooltips
+        # All possible badges with tooltips, grouped into a scannable library.
+        badge_group_defs = [
+            ("Progreso XP", "Rangos, XP acumulado y crecimiento general"),
+            ("Racha", "Constancia diaria y calendario"),
+            ("Focus", "Sesiones profundas y tiempo estudiado"),
+            ("Quizzes", "Pruebas, precision y duelos de quiz"),
+            ("Tarjetas", "Repaso espaciado y mazos"),
+            ("Cursos", "Cursos sincronizados y avance academico"),
+            ("Social", "Duelos, perfil y rankings"),
+            ("Especiales", "Insignias raras, eventos y cosmeticos"),
+        ]
 
-        all_badges_html = ""
+        def _badge_group_for(key: str) -> str:
+            k = (key or "").lower()
+            if k.startswith("xp_") or k in {"perfect_week", "speed_demon", "marathoner"}:
+                return "Progreso XP"
+            if k.startswith("streak_") or k in {"early_bird", "night_owl", "weekend_warrior", "midnight_oil", "sunrise_session", "freeze_used"}:
+                return "Racha"
+            if k.startswith("focus_") or k in {"deep_work_week"}:
+                return "Focus"
+            if "quiz" in k:
+                return "Quizzes"
+            if "flashcard" in k or "deck" in k:
+                return "Tarjetas"
+            if "course" in k or "syllabus" in k or "page_" in k:
+                return "Cursos"
+            if "duel" in k or k in {"identity", "banner_collector", "flag_collector"}:
+                return "Social"
+            return "Especiales"
+
+        all_badges_by_group = {title: [] for title, _ in badge_group_defs}
 
         for key, info in sdb.BADGE_DEFS.items():
             _iv = _badge_view(key, info)
@@ -14478,7 +14642,7 @@ No markdown, no code fences. ONLY JSON.
 
             status_color = "#22c55e" if earned else "#94a3b8"
 
-            all_badges_html += f"""
+            all_badges_by_group.setdefault(_badge_group_for(key), []).append(f"""
 
             <div class="badge-card ach-badge-card ach-all-badge" style="text-align:center;padding:10px 8px;opacity:{opacity};min-width:90px;flex:1;max-width:120px;
 
@@ -14512,6 +14676,22 @@ No markdown, no code fences. ONLY JSON.
 
               </div>
 
+            </div>""")
+
+        all_badges_html = ""
+        for group_title, group_desc in badge_group_defs:
+            _cards = "".join(all_badges_by_group.get(group_title) or [])
+            if not _cards:
+                continue
+            all_badges_html += f"""
+            <div class="ach-badge-group">
+              <div class="ach-badge-group-head">
+                <div>{_esc(group_title)}</div>
+                <span>{_esc(group_desc)}</span>
+              </div>
+              <div class="ach-section-body compact">
+                {_cards}
+              </div>
             </div>"""
 
 
@@ -14663,6 +14843,11 @@ No markdown, no code fences. ONLY JSON.
           .achievements-cd .ach-section-body {{ display:grid!important;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))!important;gap:12px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important; }}
           .achievements-cd .ach-section-body.compact {{ grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:10px!important; }}
           .achievements-cd .ach-section-body.activity {{ display:block!important; }}
+          .achievements-cd .ach-badge-groups {{ display:flex!important;flex-direction:column!important;gap:16px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important; }}
+          .achievements-cd .ach-badge-group {{ padding:16px!important;border:1px solid #E6DCCB!important;border-radius:16px!important;background:#FFFDF8!important;box-shadow:none!important;overflow:visible!important; }}
+          .achievements-cd .ach-badge-group-head {{ display:flex!important;align-items:flex-end!important;justify-content:space-between!important;gap:12px!important;margin:0 0 12px!important; }}
+          .achievements-cd .ach-badge-group-head div {{ font-family:'Bricolage Grotesque',sans-serif!important;font-size:21px!important;font-weight:800!important;line-height:1!important;color:var(--ach-ink)!important; }}
+          .achievements-cd .ach-badge-group-head span {{ max-width:360px!important;text-align:right!important;font-size:12px!important;font-weight:800!important;color:#6F6A63!important;line-height:1.25!important; }}
           .achievements-cd > h2,.achievements-cd .ach-rank-card,.achievements-cd > div[style*="grid-template-columns:1fr 1fr"],.achievements-cd .ach-section {{ will-change:transform,opacity; }}
           .achievements-cd > h2 {{ clip-path:none!important;animation:achHeroBuild .42s cubic-bezier(.16,.92,.22,1) both!important; }}
           .achievements-cd .ach-rank-card {{ position:relative;animation:achPanelBuild .36s .06s cubic-bezier(.18,.88,.22,1) both!important; }}
@@ -14725,6 +14910,8 @@ No markdown, no code fences. ONLY JSON.
           :root[data-theme="dark"] .achievements-cd .ach-history-row {{ border-bottom-color:rgba(255,122,61,.28)!important;color:#FFF8E1!important; }}
           :root[data-theme="dark"] .achievements-cd .ach-section {{ background:#17161A!important;border-color:#FF7A3D!important;color:#FFF8E1!important;box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32)!important; }}
           :root[data-theme="dark"] .achievements-cd .ach-section > h3 {{ color:#FFF8E1!important;background:transparent!important;border:0!important;box-shadow:none!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-badge-group {{ background:#111116!important;border-color:rgba(255,122,61,.38)!important; }}
+          :root[data-theme="dark"] .achievements-cd .ach-badge-group-head span {{ color:#BDB5AA!important; }}
         </style>
 
         <div class="achievements-cd">
@@ -14812,7 +14999,7 @@ No markdown, no code fences. ONLY JSON.
 
           <section class="ach-section">
             <h3>Todas las insignias</h3>
-            <div class="ach-section-body compact">
+            <div class="ach-badge-groups">
               {all_badges_html}
             </div>
           </section>
