@@ -6079,6 +6079,38 @@ def register_student_routes(app, csrf, limiter):
         .focus-timer-shell label {{ margin-bottom:5px!important; }}
         .focus-timer-shell #settings-pomodoro > div {{ gap:8px!important;margin-bottom:6px!important; }}
         .focus-timer-shell #settings-pomodoro p {{ display:none!important; }}
+        .focus-timer-shell > .form-group,
+        .focus-timer-shell > #settings-pomodoro,
+        .focus-timer-shell > #settings-custom {{
+          max-height:190px;
+          opacity:1;
+          transform:translateY(0);
+          overflow:hidden;
+          transition:max-height .34s cubic-bezier(.2,.82,.2,1),opacity .24s ease,transform .34s cubic-bezier(.2,.82,.2,1),margin .34s ease;
+        }}
+        .focus-timer-shell.session-compact {{ padding:22px 18px 16px!important; }}
+        .focus-timer-shell.session-compact > .form-group,
+        .focus-timer-shell.session-compact > #settings-pomodoro,
+        .focus-timer-shell.session-compact > #settings-custom {{
+          max-height:0!important;
+          opacity:0!important;
+          transform:translateY(-10px)!important;
+          margin-top:0!important;
+          margin-bottom:0!important;
+          pointer-events:none!important;
+        }}
+        .focus-timer-shell.session-compact .ft-stage {{ padding:8px 0 4px; }}
+        .focus-timer-shell.session-compact .ft-ring-wrap {{ width:min(390px,78vw);height:min(390px,78vw); }}
+        .focus-timer-shell.session-compact .ft-time > div {{ width:min(286px,74%); }}
+        .focus-timer-shell.session-compact #timer-display {{ font-size:88px!important;line-height:.9!important; }}
+        .focus-timer-shell.session-compact #timer-label {{ max-width:240px;font-size:14px!important;margin-top:12px!important; }}
+        .focus-timer-shell.session-compact #pomo-count {{ max-width:240px;font-size:12px!important; }}
+        .focus-timer-shell.session-compact .ft-session-orbit {{ width:184px;margin-top:14px; }}
+        .focus-timer-shell.session-compact .ft-session-status {{ max-width:260px;margin-top:8px;font-size:11px; }}
+        @media (max-height:860px) {{
+          .focus-timer-shell.session-compact .ft-ring-wrap {{ width:min(340px,74vw);height:min(340px,74vw); }}
+          .focus-timer-shell.session-compact #timer-display {{ font-size:76px!important; }}
+        }}
         .focus-tools {{ display:flex;flex-direction:column;gap:12px; }}
         .focus-tools .card {{ padding:16px!important;margin-bottom:0!important; }}
         .focus-tools .card-header {{ margin-bottom:10px!important;padding-bottom:10px!important; }}
@@ -6086,8 +6118,8 @@ def register_student_routes(app, csrf, limiter):
         .ft-tabs {{ display:none; }}
         .ft-tab {{ background:#EDE7DA;border:0;padding:8px 14px;border-radius:999px;font-weight:700;font-size:12px;color:#5C5C66;cursor:pointer; }}
         .ft-tab.active {{ background:#1A1A1F;color:#FFF8E1; }}
-        .ft-stage {{ display:grid;place-items:center;padding:4px 0 0; }}
-        .ft-ring-wrap {{ position:relative;width:min(268px,70vw);height:min(268px,70vw);isolation:isolate; }}
+        .ft-stage {{ display:grid;place-items:center;padding:4px 0 0;transition:padding .34s cubic-bezier(.2,.82,.2,1); }}
+        .ft-ring-wrap {{ position:relative;width:min(268px,70vw);height:min(268px,70vw);isolation:isolate;transition:width .38s cubic-bezier(.2,.82,.2,1),height .38s cubic-bezier(.2,.82,.2,1); }}
         .ft-ring-wrap::before {{ content:"";position:absolute;inset:10px;border-radius:50%;background:radial-gradient(circle at 50% 50%, rgba(255,122,61,.16), rgba(255,122,61,.06) 42%, transparent 70%);filter:blur(14px);opacity:0;transform:scale(.98);transition:opacity .25s ease,background .25s ease;z-index:-1; }}
         .ft-ring-wrap.is-running::before {{ opacity:.42; }}
         .ft-ring-wrap.is-paused::before {{ opacity:.22; }}
@@ -6099,7 +6131,7 @@ def register_student_routes(app, csrf, limiter):
         .ft-ring-wrap.is-break #ft-ring-progress {{ stroke:#2E9266 !important;filter:drop-shadow(0 0 8px rgba(46,146,102,.26)); }}
         .ft-time {{ position:absolute;inset:0;display:grid;place-items:center;text-align:center; }}
         .ft-time > div {{ width:min(210px,72%);display:flex;flex-direction:column;align-items:center;justify-content:center; }}
-        #timer-display {{ font-family:"Bricolage Grotesque",sans-serif !important;font-weight:600 !important;font-size:62px !important;letter-spacing:0 !important;line-height:.92 !important;color:#1A1A1F !important;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;transition:color .22s ease; }}
+        #timer-display {{ font-family:"Bricolage Grotesque",sans-serif !important;font-weight:600 !important;font-size:62px !important;letter-spacing:0 !important;line-height:.92 !important;color:#1A1A1F !important;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;transition:color .22s ease,font-size .38s cubic-bezier(.2,.82,.2,1),line-height .38s cubic-bezier(.2,.82,.2,1); }}
         .ft-ring-wrap.is-break #timer-display {{ color:#2E9266 !important; }}
         #timer-label {{ max-width:190px;font-size:12px !important;color:#94939C !important;margin-top:8px !important;font-weight:800;line-height:1.2; }}
         #pomo-count {{ max-width:190px;font-size:11px !important;color:#94939C !important;margin-top:4px !important;font-weight:800;line-height:1.2; }}
@@ -7321,6 +7353,14 @@ def register_student_routes(app, csrf, limiter):
           }} catch(e) {{}}
         }}
 
+        function syncTimerShellLayout() {{
+          try {{
+            var shell = document.querySelector('.focus-timer-shell');
+            if (!shell) return;
+            shell.classList.toggle('session-compact', !!(isRunning || __mandatoryEndAt));
+          }} catch(e) {{}}
+        }}
+
 
 
         /* === Mode switching === */
@@ -7405,6 +7445,7 @@ def register_student_routes(app, csrf, limiter):
             ringWrap.classList.toggle('is-paused', !!sessionStarted && !isRunning && timeLeft > 0);
             ringWrap.classList.toggle('is-break', !!isBreak);
           }}
+          syncTimerShellLayout();
           updateTodaySessionCard();
           try {{
             if (sessionStarted || isRunning) saveFocusTimerState();
@@ -7718,6 +7759,8 @@ def register_student_routes(app, csrf, limiter):
           isRunning = true;
 
           sessionStarted = true;
+
+          syncTimerShellLayout();
 
           setTimerButtonState('running');
 
@@ -8094,6 +8137,8 @@ def register_student_routes(app, csrf, limiter):
           __phaseOpen = false;
 
           sessionStarted = false;
+
+          syncTimerShellLayout();
 
           pomoCount = 0;
 
