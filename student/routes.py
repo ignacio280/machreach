@@ -16864,7 +16864,7 @@ No markdown, no code fences. ONLY JSON.
   }
   #mr-lb-page .lb-podium-card {
     position:relative; z-index:1; min-height:230px; display:flex; flex-direction:column;
-    justify-content:flex-end; border-radius:22px; overflow:hidden; color:#fff;
+    justify-content:flex-end; border-radius:22px; overflow:visible; color:#fff;
     border:1px solid rgba(255,255,255,.18);
     box-shadow:0 20px 50px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.08);
     background:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.04));
@@ -16872,7 +16872,7 @@ No markdown, no code fences. ONLY JSON.
   }
   #mr-lb-page .lb-podium-card:hover { transform:translateY(-6px); }
   #mr-lb-page .lb-podium-card.place-1 {
-    min-height:310px; transform:translateY(-14px);
+    min-height:310px; transform:translateY(-14px); z-index:4;
     border-color:rgba(250,204,21,.65);
     background:
       radial-gradient(ellipse at 50% 0%, rgba(250,204,21,.22), transparent 60%),
@@ -16899,16 +16899,17 @@ No markdown, no code fences. ONLY JSON.
       linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.035));
     box-shadow:0 20px 50px rgba(251,146,60,.18), 0 14px 36px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.10);
   }
-  #mr-lb-page .lb-podium-flag { position:absolute; inset:0; opacity:.28; z-index:0; }
+  #mr-lb-page .lb-podium-flag { position:absolute; inset:0; opacity:.28; z-index:0;border-radius:inherit;clip-path:inset(0 round 22px); }
   #mr-lb-page .lb-podium-card::after {
     content:""; position:absolute; inset:0; z-index:0;
     background:linear-gradient(180deg, rgba(2,6,23,0) 0%, rgba(2,6,23,.85) 78%);
   }
   #mr-lb-page .lb-podium-body { position:relative; z-index:2; padding:22px 18px 18px; text-align:center; }
   #mr-lb-page .lb-crown {
-    position:absolute; top:-26px; left:50%; transform:translateX(-50%); z-index:3;
+    position:absolute; top:-46px; left:50%; transform:translateX(-50%); z-index:20;
     font-size:42px; filter:drop-shadow(0 8px 18px rgba(250,204,21,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.5));
     animation: lbCrownBob 2.4s ease-in-out infinite;
+    pointer-events:none;
   }
   @keyframes lbCrownBob {
     0%, 100% { transform: translate(-50%, 0) rotate(-3deg); }
@@ -17078,10 +17079,97 @@ No markdown, no code fences. ONLY JSON.
     border-color:var(--lb-ink);
     box-shadow:0 3px 0 var(--lb-ink);
   }
+  #mr-lb-page .lb-arena {
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr) auto;
+    align-items:center;
+    gap:16px;
+    margin:-4px 0 16px;
+    padding:18px 22px;
+    border:2px solid var(--lb-ink);
+    border-radius:22px;
+    background:linear-gradient(135deg,#FFFFFF 0%,#FFF6EC 62%,#EAF7DD 100%);
+    box-shadow:0 5px 0 var(--lb-ink),0 18px 44px rgba(20,18,30,.10);
+    position:relative;
+    overflow:hidden;
+    transition:background .24s ease,border-color .24s ease,box-shadow .24s ease;
+  }
+  #mr-lb-page .lb-arena::after {
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(110deg,transparent 0%,rgba(255,122,61,.14) 44%,transparent 68%);
+    transform:translateX(-55%);
+    opacity:.75;
+    pointer-events:none;
+    transition:transform .5s cubic-bezier(.2,.82,.2,1);
+  }
+  #mr-lb-page .lb-arena.is-switching::after { transform:translateX(55%); }
+  #mr-lb-page .lb-arena-icon {
+    width:58px;
+    height:58px;
+    display:grid;
+    place-items:center;
+    border:2px solid var(--lb-ink);
+    border-radius:18px;
+    background:#FF7A3D;
+    color:#1A1A1F;
+    font-size:27px;
+    box-shadow:0 4px 0 var(--lb-ink);
+    position:relative;
+    z-index:1;
+  }
+  #mr-lb-page .lb-arena-body { min-width:0;position:relative;z-index:1; }
+  #mr-lb-page .lb-arena-kicker {
+    font-size:11px;
+    font-weight:950;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:#8B3A18;
+    margin-bottom:4px;
+  }
+  #mr-lb-page .lb-arena-title {
+    margin:0;
+    font-family:'Bricolage Grotesque',sans-serif;
+    font-size:28px;
+    line-height:1;
+    font-weight:800;
+    color:#1A1A1F;
+  }
+  #mr-lb-page .lb-arena-copy {
+    margin:5px 0 0;
+    color:#5C5C66;
+    font-size:13px;
+    font-weight:800;
+    line-height:1.35;
+  }
+  #mr-lb-page .lb-arena-tag {
+    position:relative;
+    z-index:1;
+    padding:10px 14px;
+    border:2px solid var(--lb-ink);
+    border-radius:999px;
+    background:#FFFDF8;
+    color:#1A1A1F;
+    font-size:12px;
+    font-weight:950;
+    white-space:nowrap;
+    box-shadow:0 3px 0 var(--lb-ink);
+  }
+  #mr-lb-page[data-arena="university"] .lb-arena { background:linear-gradient(135deg,#FFFFFF 0%,#F2EEFF 58%,#E7F0FF 100%); }
+  #mr-lb-page[data-arena="university"] .lb-arena-icon { background:#A78BFA; }
+  #mr-lb-page[data-arena="university"] .lb-arena-kicker { color:#5B4694; }
+  #mr-lb-page[data-arena="major"] .lb-arena { background:linear-gradient(135deg,#FFFFFF 0%,#EAF7DD 58%,#FFF3D6 100%); }
+  #mr-lb-page[data-arena="major"] .lb-arena-icon { background:#9BE84C; }
+  #mr-lb-page[data-arena="major"] .lb-arena-kicker { color:#2E6B43; }
+  #mr-lb-page[data-arena="retirement"] .lb-arena { background:linear-gradient(135deg,#FFFFFF 0%,#E7F4FF 58%,#FFE6D6 100%); }
+  #mr-lb-page[data-arena="retirement"] .lb-arena-icon { background:#73C7F5; }
+  #mr-lb-page[data-arena="retirement"] .lb-arena-kicker { color:#236A91; }
   #mr-lb-page .lb-podium {
     border:2px solid var(--lb-ink);
     border-radius:30px;
-    padding:62px 32px 34px;
+    padding:82px 32px 34px;
+    overflow:visible;
     background:linear-gradient(135deg,#FFFDF8,#FFF0E4 58%,#F4F1EA);
     box-shadow:0 8px 0 var(--lb-ink),0 30px 76px rgba(20,18,30,.14);
   }
@@ -17098,12 +17186,14 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-podium-card {
     border:2px solid var(--lb-ink);
     border-radius:24px;
+    overflow:visible;
     background:#FFFFFF;
     color:var(--lb-ink);
     box-shadow:0 8px 0 rgba(26,26,31,.90),0 22px 46px rgba(20,18,30,.10);
   }
   #mr-lb-page .lb-podium-card.place-1 {
     min-height:330px;
+    z-index:4;
     background:linear-gradient(180deg,#FFF8E1 0%,#FFE0A3 72%,#F9C24B 100%);
     box-shadow:0 9px 0 rgba(146,94,0,.95),0 30px 58px rgba(250,204,21,.25);
   }
@@ -17116,8 +17206,21 @@ No markdown, no code fences. ONLY JSON.
     background:linear-gradient(180deg,#FFE7D8,#FFB199);
   }
   #mr-lb-page .lb-podium-card::after { display:none; }
-  #mr-lb-page .lb-crown { top:-30px;font-size:48px; }
+  #mr-lb-page .lb-podium.rebuild .lb-podium-card {
+    animation:lbPodiumBuild .44s cubic-bezier(.18,1.18,.28,1) both;
+  }
+  #mr-lb-page .lb-podium.rebuild .lb-podium-card:nth-child(1) { animation-delay:.03s; }
+  #mr-lb-page .lb-podium.rebuild .lb-podium-card:nth-child(2) { animation-delay:.11s; }
+  #mr-lb-page .lb-podium.rebuild .lb-podium-card:nth-child(3) { animation-delay:.17s; }
+  @keyframes lbPodiumBuild {
+    0% { opacity:0; transform:translateY(22px) scale(.92) rotate(-1.4deg); filter:blur(6px); }
+    62% { opacity:1; transform:translateY(-4px) scale(1.025) rotate(.4deg); filter:blur(0); }
+    100% { opacity:1; transform:translateY(0) scale(1) rotate(0); filter:blur(0); }
+  }
+  #mr-lb-page .lb-crown { top:-54px;font-size:52px;z-index:30; }
   #mr-lb-page .lb-podium-avatar {
+    background:linear-gradient(135deg,#FFFDF8 0%,#FFD8BE 48%,#FF8A4C 100%);
+    color:#1A1A1F;
     border:3px solid var(--lb-ink);
     box-shadow:0 0 0 5px rgba(255,255,255,.65),0 8px 22px rgba(20,18,30,.18);
   }
@@ -17151,6 +17254,8 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-avatar {
     width:44px;
     height:44px;
+    background:linear-gradient(135deg,#FFFDF8 0%,#FFD8BE 52%,#FF8A4C 100%);
+    color:#1A1A1F;
     border:2px solid var(--lb-ink);
     box-shadow:0 3px 0 rgba(26,26,31,.85);
     font-weight:950;
@@ -17200,6 +17305,20 @@ No markdown, no code fences. ONLY JSON.
     border-color:#FF7A3D;
     box-shadow:0 3px 0 #0A0A10;
   }
+  :root[data-theme="dark"] #mr-lb-page .lb-arena {
+    border-color:#FF7A3D;
+    background:linear-gradient(135deg,#17161A 0%,#211510 58%,#1A202B 100%);
+    box-shadow:0 5px 0 #FF7A3D,0 22px 54px rgba(0,0,0,.30);
+  }
+  :root[data-theme="dark"] #mr-lb-page .lb-arena-icon,
+  :root[data-theme="dark"] #mr-lb-page .lb-arena-tag {
+    border-color:#FF7A3D;
+    box-shadow:0 3px 0 #FF7A3D;
+  }
+  :root[data-theme="dark"] #mr-lb-page .lb-arena-title { color:#FFF8E1; }
+  :root[data-theme="dark"] #mr-lb-page .lb-arena-copy { color:#D9D2C7; }
+  :root[data-theme="dark"] #mr-lb-page .lb-arena-kicker { color:#FFB07A; }
+  :root[data-theme="dark"] #mr-lb-page .lb-arena-tag { background:#111116;color:#FFF8E1; }
   :root[data-theme="dark"] #mr-lb-page .lb-podium {
     border-color:#FF7A3D;
     background:linear-gradient(135deg,#12101A,#1D1B26 58%,#2A1B16);
@@ -17227,6 +17346,12 @@ No markdown, no code fences. ONLY JSON.
   }
   :root[data-theme="dark"] #mr-lb-page .lb-row:hover { background:rgba(255,122,61,.09); }
   :root[data-theme="dark"] #mr-lb-page .lb-row.me { background:linear-gradient(90deg,rgba(255,122,61,.18),rgba(255,255,255,.035)); }
+  :root[data-theme="dark"] #mr-lb-page .lb-avatar,
+  :root[data-theme="dark"] #mr-lb-page .lb-podium-avatar {
+    background:linear-gradient(135deg,#FF7A3D,#B45309);
+    color:#FFF8E1;
+    border-color:#FF7A3D;
+  }
   :root[data-theme="dark"] #mr-lb-page .lb-flag-bg,
   :root[data-theme="dark"] #mr-lb-page .lb-podium-flag {
     opacity:.52 !important;
@@ -17239,7 +17364,7 @@ No markdown, no code fences. ONLY JSON.
     padding-left:22px;
     padding-right:22px;
     max-width:100%;
-    overflow:hidden;
+    overflow:visible;
   }
   #mr-lb-page .lb-podium-card {
     min-width:0;
@@ -17295,6 +17420,8 @@ No markdown, no code fences. ONLY JSON.
     #mr-lb-page .lb-hero h2 { font-size:48px; }
     #mr-lb-page .lb-rank-strip { grid-template-columns:1fr; }
     #mr-lb-page .lb-tabs { overflow:auto; }
+    #mr-lb-page .lb-arena { grid-template-columns:auto 1fr;padding:16px; }
+    #mr-lb-page .lb-arena-tag { grid-column:1 / -1;width:max-content; }
   }
   @media (max-width: 600px) {
     #mr-lb-page .lb-hero { padding:28px 22px;border-radius:24px; }
@@ -17302,7 +17429,7 @@ No markdown, no code fences. ONLY JSON.
   }
 </style>
 
-<div id="mr-lb-page">
+<div id="mr-lb-page" data-arena="country">
   <section class="lb-hero">
     <h2>🏆 Sube en el ranking.</h2>
     <p>Tu XP se cuenta en vivo contra todos los demás estudiantes — en tu país, universidad y carrera.</p>
@@ -17318,6 +17445,16 @@ No markdown, no code fences. ONLY JSON.
     <div class="lb-tab" data-scope="university">🎓 Universidad</div>
     <div class="lb-tab" data-scope="major">📚 Carrera</div>
     <div class="lb-tab" data-scope="retirement" title="Solo egresados">🏖️ Egresados</div>
+  </div>
+
+  <div class="lb-arena" id="lbArena" aria-live="polite">
+    <div class="lb-arena-icon" id="lbArenaIcon">🏳️</div>
+    <div class="lb-arena-body">
+      <div class="lb-arena-kicker" id="lbArenaKicker">Liga por país</div>
+      <h3 class="lb-arena-title" id="lbArenaTitle">Tu ranking nacional</h3>
+      <p class="lb-arena-copy" id="lbArenaCopy">Compite contra estudiantes de tu país y defiende tu posición semanal.</p>
+    </div>
+    <div class="lb-arena-tag" id="lbArenaTag">Arena nacional</div>
   </div>
 
   <div class="lb-tabs" id="lbPeriodTabs" style="margin-top:-8px;">
@@ -17345,6 +17482,58 @@ No markdown, no code fences. ONLY JSON.
   // Currently-selected scope + period. Period starts at "all" = all-time.
   // Global scope is disabled while only Chile is active — defaults to country.
   const lbState = { scope: 'country', period: 'all' };
+  const ARENAS = {
+    country: {
+      icon:'🏳️',
+      kicker:t('Country league', 'Liga por país'),
+      title:t('Your national arena', 'Tu ranking nacional'),
+      copy:t('Climb against students across your country and defend your weekly position.', 'Compite contra estudiantes de tu país y defiende tu posición semanal.'),
+      tag:t('National arena', 'Arena nacional')
+    },
+    university: {
+      icon:'🎓',
+      kicker:t('Campus league', 'Liga universitaria'),
+      title:t('Your campus leaderboard', 'Tu arena de universidad'),
+      copy:t('Measure yourself against classmates from the same university.', 'Mide tu avance contra estudiantes de tu misma universidad.'),
+      tag:t('Campus arena', 'Arena campus')
+    },
+    major: {
+      icon:'📚',
+      kicker:t('Major league', 'Liga por carrera'),
+      title:t('Your field of study', 'Tu carrera en disputa'),
+      copy:t('Compete with students who are studying the same discipline.', 'Compite con estudiantes de tu misma disciplina.'),
+      tag:t('Career arena', 'Arena carrera')
+    },
+    retirement: {
+      icon:'🏖️',
+      kicker:t('Graduate archive', 'Ranking de egresados'),
+      title:t('The alumni hall', 'Salón de egresados'),
+      copy:t('A prestige board for students who finished and left active rankings with honor.', 'Un ranking de prestigio para quienes egresaron de los rankings activos.'),
+      tag:t('Legacy arena', 'Arena legado')
+    }
+  };
+  function updateArena() {
+    const data = ARENAS[lbState.scope] || ARENAS.country;
+    const page = document.getElementById('mr-lb-page');
+    const arena = document.getElementById('lbArena');
+    if (page) page.dataset.arena = lbState.scope;
+    if (arena) {
+      arena.classList.remove('is-switching');
+      void arena.offsetWidth;
+      arena.classList.add('is-switching');
+      setTimeout(() => arena.classList.remove('is-switching'), 520);
+    }
+    const icon = document.getElementById('lbArenaIcon');
+    const kicker = document.getElementById('lbArenaKicker');
+    const title = document.getElementById('lbArenaTitle');
+    const copy = document.getElementById('lbArenaCopy');
+    const tag = document.getElementById('lbArenaTag');
+    if (icon) icon.textContent = data.icon;
+    if (kicker) kicker.textContent = data.kicker;
+    if (title) title.textContent = data.title;
+    if (copy) copy.textContent = data.copy;
+    if (tag) tag.textContent = data.tag;
+  }
 
   // Monthly prize table (weekly = monthly // 2). Mirrors student/leaderboard_prizes.py.
   // Retirement scope has no payouts — left out intentionally.
@@ -17440,7 +17629,11 @@ No markdown, no code fences. ONLY JSON.
         const ordered = [byRank[2], byRank[1], byRank[3]].filter(Boolean);
         podium.innerHTML = ordered.map(podiumCard).join('');
         podium.style.display = 'grid';
+        podium.classList.remove('rebuild');
+        void podium.offsetWidth;
+        podium.classList.add('rebuild');
       } else {
+        podium.classList.remove('rebuild');
         podium.style.display = 'none';
       }
       const tableRows = rows.filter(r => r.rank > 3);
@@ -17484,6 +17677,7 @@ No markdown, no code fences. ONLY JSON.
     document.querySelectorAll('#lbTabs .lb-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     lbState.scope = tab.dataset.scope;
+    updateArena();
     loadBoard();
   });
   document.getElementById('lbPeriodTabs').addEventListener('click', (e) => {
@@ -17496,6 +17690,7 @@ No markdown, no code fences. ONLY JSON.
     loadBoard();
   });
 
+  updateArena();
   loadRanks();
   loadBoard();
 })();
