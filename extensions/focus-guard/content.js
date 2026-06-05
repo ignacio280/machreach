@@ -9,6 +9,7 @@
   // it lets a user start a focus timer.
   function announce() {
     try {
+      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.id) return;
       document.documentElement.setAttribute("data-machreach-focus-guard", "1");
       document.dispatchEvent(new CustomEvent("machreach-focus-guard-ready"));
     } catch (_) {}
