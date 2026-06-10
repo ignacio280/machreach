@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>MachReach — Estudiar deja de ser una lata</title>
   <meta name="description" content="MachReach es la plataforma de estudio todo-en-uno para estudiantes: sesiones de enfoque, cursos detectados por extensión, flashcards, quizzes, seguimiento de notas y rankings. Estudia más inteligente."/>
-  <link rel="canonical" href="https://machreach.com/"/>
   <meta name="theme-color" content="#1A1A1F"/>
-  <link rel="icon" type="image/svg+xml" href="/static/machreach-logo.svg?v=2"/>
+  <link rel="canonical" href="https://machreach.com/"/>
+  <link rel="icon" type="image/svg+xml" href="/static/machreach-logo.svg?v=3"/>
   <link rel="icon" href="/favicon.ico" sizes="any"/>
   <link rel="icon" type="image/png" href="/static/favicon-32.png" sizes="32x32"/>
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>
@@ -29,26 +29,3384 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="styles.css"/>
+  <style>
+/* ============ MachReach landing — design tokens ============ */
+
+:root {
+  /* type */
+  --font-display: "Bricolage Grotesque", sans-serif;
+  --font-body: "Nunito", sans-serif;
+  --font-mono: "Nunito", sans-serif;
+
+  /* base — light theme by default */
+  --bg: oklch(0.985 0.005 80);
+  --bg-2: oklch(0.96 0.01 80);
+  --surface: #ffffff;
+  --ink: oklch(0.18 0.02 270);
+  --ink-2: oklch(0.42 0.02 270);
+  --ink-3: oklch(0.62 0.02 270);
+  --line: oklch(0.88 0.01 80);
+  --line-2: oklch(0.78 0.01 80);
+
+  /* brand — coral default */
+  --brand: oklch(0.73 0.22 38);
+  --brand-ink: oklch(0.34 0.12 38);
+  --brand-soft: oklch(0.94 0.075 38);
+  --accent: oklch(0.84 0.19 130);
+  --accent-ink: oklch(0.30 0.10 130);
+  --secondary: oklch(0.74 0.17 58);
+  --secondary-soft: oklch(0.95 0.055 58);
+
+  /* semantic */
+  --gold: oklch(0.84 0.16 85);
+  --silver: oklch(0.78 0.02 250);
+  --bronze: oklch(0.68 0.12 50);
+  --good: oklch(0.72 0.16 155);
+  --bad: oklch(0.65 0.20 25);
+
+  /* layout */
+  --radius-sm: 10px;
+  --radius: 18px;
+  --radius-lg: 28px;
+  --radius-xl: 36px;
+  --shadow-sm: 0 2px 0 0 var(--ink);
+  --shadow:    0 4px 0 0 var(--ink);
+  --shadow-lg: 0 6px 0 0 var(--ink);
+
+  --container: 1200px;
+}
+
+[data-theme="dark"] {
+  --bg: oklch(0.16 0.02 270);
+  --bg-2: oklch(0.20 0.02 270);
+  --surface: oklch(0.22 0.02 270);
+  --ink: oklch(0.97 0.01 80);
+  --ink-2: oklch(0.78 0.02 270);
+  --ink-3: oklch(0.60 0.02 270);
+  --line: oklch(0.32 0.02 270);
+  --line-2: oklch(0.42 0.02 270);
+  --brand-soft: oklch(0.30 0.09 38);
+  --secondary-soft: oklch(0.30 0.06 290);
+}
+
+[data-accent="lime"]   { --brand: oklch(0.84 0.18 130); --brand-ink: oklch(0.32 0.10 130); --brand-soft: oklch(0.95 0.07 130); }
+[data-accent="violet"] { --brand: oklch(0.66 0.20 290); --brand-ink: oklch(0.30 0.12 290); --brand-soft: oklch(0.94 0.05 290); }
+[data-accent="sky"]    { --brand: oklch(0.74 0.15 240); --brand-ink: oklch(0.32 0.10 240); --brand-soft: oklch(0.95 0.05 240); }
+[data-accent="coral"]  { --brand: oklch(0.73 0.22 38);  --brand-ink: oklch(0.34 0.12 38);  --brand-soft: oklch(0.94 0.075 38); }
+
+/* ============ reset ============ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; overflow-x: clip; max-width: 100%; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.55;
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  text-wrap: pretty;
+  overflow-x: clip;
+  max-width: 100%;
+}
+img, svg { display: block; max-width: 100%; }
+button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+a { color: inherit; text-decoration: none; }
+h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+
+/* ============ utilities ============ */
+.container { width: 100%; max-width: var(--container); margin: 0 auto; padding: 0 24px; }
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  padding: 8px 14px; border-radius: 999px;
+  border: 2px solid var(--brand);
+}
+.eyebrow .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--brand); }
+
+/* button system */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  font-family: var(--font-display); font-weight: 800; font-size: 17px;
+  padding: 14px 26px;
+  border-radius: 16px;
+  border: 2px solid var(--ink);
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--brand); color: white; box-shadow: var(--shadow); }
+.btn-primary:hover { transform: translate(-1px, -1px); box-shadow: 0 5px 0 0 var(--ink); }
+.btn-primary:active { transform: translate(0, 4px); box-shadow: 0 0 0 0 var(--ink); }
+.btn-ghost { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+.btn-ghost:hover { transform: translate(-1px, -1px); box-shadow: var(--shadow); background: var(--bg-2); }
+.btn-lg { font-size: 19px; padding: 18px 32px; border-radius: 18px; }
+.btn-sm { font-size: 14px; padding: 8px 16px; border-radius: 12px; }
+
+/* card */
+.card {
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.card-soft {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+/* section */
+section { padding: 96px 0; }
+.section-head { text-align: center; max-width: 780px; margin: 0 auto 56px; }
+.section-head h2 { font-size: clamp(34px, 5vw, 56px); margin-top: 14px; }
+.section-head p { color: var(--ink-2); font-size: 19px; margin-top: 16px; }
+
+/* nav */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: blur(14px);
+  background: color-mix(in oklab, var(--bg) 80%, transparent);
+  border-bottom: 2px solid var(--line);
+}
+.nav-inner { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; }
+.nav-links { display: flex; align-items: center; gap: 28px; }
+.nav-links a { font-weight: 700; font-size: 15px; color: var(--ink-2); }
+.nav-links a:hover { color: var(--ink); }
+
+/* logo */
+.logo { display: inline-flex; align-items: center; gap: 10px; }
+.logo-mark {
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+}
+.logo-mark img { width: 100%; height: 100%; display: block; }
+.logo-text { font-family: var(--font-display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em; }
+.logo-text .dot { color: var(--brand); }
+
+/* footer */
+footer { padding: 64px 0 40px; border-top: 2px solid var(--line); margin-top: 64px; }
+
+/* small bits */
+.tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--bg-2); border: 1.5px solid var(--line);
+  color: var(--ink-2);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--brand) 50%, transparent); }
+  70%  { box-shadow: 0 0 0 12px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes count-up { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.fade-up { animation: count-up .5s ease both; }
+
+/* ============ landing motion layer ============ */
+:root {
+  --landing-mx: .5;
+  --landing-my: .5;
+  --landing-dx: 0px;
+  --landing-dy: 0px;
+  --landing-scroll-pct: 0%;
+}
+#landing-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  z-index: 1000;
+  pointer-events: none;
+  overflow: visible;
+  background: color-mix(in oklab, var(--surface) 52%, transparent);
+}
+#landing-progress-bar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--gold), var(--brand), #FF7A3D);
+  box-shadow: 0 0 18px color-mix(in oklab, var(--brand) 40%, transparent);
+}
+/* the streak flame riding the tip of the progress bar */
+#landing-progress-flame {
+  position: absolute;
+  top: -8px;
+  left: var(--landing-scroll-pct, 0%);
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  display: block;
+  filter: drop-shadow(0 0 7px color-mix(in oklab, #FF7A3D 65%, transparent));
+  animation: motion-flame-wiggle .85s ease-in-out infinite alternate;
+  transform-origin: 50% 88%;
+}
+/* ruled notebook paper, drifting slowly like a page sliding under the content */
+.landing-edge-pattern {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .11;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 31px, color-mix(in oklab, var(--ink) 22%, transparent) 31px 33px),
+    linear-gradient(90deg, transparent 0 84px, color-mix(in oklab, var(--bad) 55%, transparent) 84px 86px, transparent 86px);
+  background-size: 100% 33px, 100% 100%;
+  mask-image: linear-gradient(to bottom, black 0%, black 70%, transparent 100%);
+  animation: motion-paper-drift 36s linear infinite;
+  transform: translate3d(var(--landing-dx), var(--landing-dy), 0);
+  transition: transform .28s ease;
+  will-change: transform, background-position;
+}
+.nav,
+section,
+footer {
+  position: relative;
+  z-index: 1;
+}
+section {
+  overflow: visible;
+}
+.hero-grid,
+.price-grid,
+.lb-wrap,
+.canvas-cta,
+.quiz-wrap {
+  max-width: 100%;
+}
+
+/* dashed pencil divider drawn along the bottom of the live section */
+section::after {
+  content: "";
+  position: absolute;
+  left: clamp(24px, 6vw, 90px);
+  right: clamp(24px, 6vw, 90px);
+  bottom: 0;
+  height: 0;
+  pointer-events: none;
+  border-bottom: 2.5px dashed color-mix(in oklab, var(--ink) 30%, transparent);
+  clip-path: inset(-4px 100% -4px 0);
+  opacity: 0;
+  transition: clip-path 1.3s cubic-bezier(.22,1,.36,1) .15s, opacity .4s ease .15s;
+}
+section.section-live::after {
+  clip-path: inset(-4px 0 -4px 0);
+  opacity: .5;
+}
+/* highlighter sweep across section headings */
+.mh-hl {
+  background-image: linear-gradient(100deg,
+    color-mix(in oklab, var(--brand) 30%, transparent) 0%,
+    color-mix(in oklab, var(--brand) 38%, transparent) 100%);
+  background-repeat: no-repeat;
+  background-size: 0% 44%;
+  background-position: 0 76%;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  border-radius: 5px;
+  padding: 0 .08em;
+  margin: 0 -.08em;
+  transition: background-size .95s cubic-bezier(.22,1,.36,1) .25s;
+}
+section.section-live .mh-hl {
+  background-size: 100% 44%;
+}
+/* ── study-themed reveals ───────────────────────────────────
+   flip  — flashcard lifting off the desk (3D, from face-down)
+   deal  — dealt onto the table from the deck (right hand)
+   deal-l— dealt from the left hand
+   note  — sticky note slapped on, settling flat
+   write — a line being written left → right
+   page  — notebook page turning down from the top */
+.motion-ready .motion-reveal {
+  opacity: 0;
+  will-change: transform, opacity, clip-path, filter;
+}
+.motion-ready .motion-reveal.motion-flip {
+  transform: perspective(1200px) rotateX(-58deg) translateY(36px) scale(.96);
+  transform-origin: 50% 92%;
+  filter: brightness(1.07);
+}
+.motion-ready .motion-reveal.motion-deal {
+  transform: translate(52px, 58px) rotate(7deg) scale(.93);
+}
+.motion-ready .motion-reveal.motion-deal-l {
+  transform: translate(-52px, 58px) rotate(-7deg) scale(.93);
+}
+.motion-ready .motion-reveal.motion-note {
+  transform: scale(1.15) rotate(-2.4deg);
+  filter: drop-shadow(0 30px 26px color-mix(in oklab, var(--ink) 24%, transparent));
+}
+.motion-ready .motion-reveal.motion-write {
+  transform: translateY(14px);
+  clip-path: inset(-4% 103% -10% -3%);
+}
+.motion-ready .motion-reveal.motion-page {
+  transform: perspective(1200px) rotateX(42deg) translateY(-14px);
+  transform-origin: 50% -6%;
+}
+.motion-ready .motion-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition:
+    opacity .6s cubic-bezier(.2,.8,.2,1),
+    transform .78s cubic-bezier(.3,1.45,.45,1),
+    filter .78s cubic-bezier(.2,.8,.2,1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.motion-ready .motion-reveal.motion-write.is-visible {
+  clip-path: inset(-8% -8% -14% -6%);
+  transition:
+    opacity .35s cubic-bezier(.2,.8,.2,1),
+    transform .7s cubic-bezier(.22,1,.36,1),
+    clip-path .9s cubic-bezier(.6,.05,.3,1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.motion-hotspot {
+  --motion-x: .5;
+  --motion-y: .5;
+  --motion-tilt-x: 0;
+  --motion-tilt-y: 0;
+  isolation: isolate;
+}
+.motion-hotspot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  background:
+    linear-gradient(
+      115deg,
+      transparent 0%,
+      transparent calc((var(--motion-x) * 100%) - 24%),
+      color-mix(in oklab, var(--brand) 20%, transparent) calc(var(--motion-x) * 100%),
+      transparent calc((var(--motion-x) * 100%) + 24%),
+      transparent 100%
+    );
+  transition: opacity .2s ease;
+}
+.motion-hotspot:hover::after {
+  opacity: 0;
+}
+.motion-hotspot > * {
+  position: relative;
+  z-index: 1;
+}
+.btn {
+  position: relative;
+  overflow: hidden;
+}
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: -20% -35%;
+  transform: translateX(-110%) rotate(10deg);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, white 50%, transparent), transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .6s cubic-bezier(.2,.8,.2,1), opacity .2s ease;
+}
+.btn:hover::after {
+  transform: translateX(110%) rotate(10deg);
+  opacity: .8;
+}
+.nav-links a {
+  position: relative;
+}
+.nav-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--brand);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform .24s ease;
+}
+.nav-links a:hover::after {
+  transform: scaleX(1);
+}
+.logo-mark {
+  transition: transform .24s cubic-bezier(.2,.8,.2,1), filter .24s ease;
+}
+.logo:hover .logo-mark {
+  transform: rotate(-8deg) scale(1.08);
+  filter: drop-shadow(0 8px 12px color-mix(in oklab, var(--brand) 30%, transparent));
+}
+.eyebrow .dot,
+.tag span:first-child {
+  animation: motion-dot-breathe 1.9s ease-in-out infinite;
+}
+.feat-grid > div svg,
+.how-grid svg,
+.price-grid svg,
+.quiz-wrap svg,
+.canvas-cta svg {
+  transition: transform .24s cubic-bezier(.2,.8,.2,1);
+}
+.feat-grid > div:hover svg,
+.how-grid .card:hover svg,
+.price-grid > div:hover svg,
+.quiz-wrap .card:hover svg,
+.canvas-cta:hover svg {
+  transform: rotate(-7deg) scale(1.08);
+}
+.stats-grid > div,
+.price-grid > div,
+.feat-grid > div {
+  transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.stats-grid > div:hover {
+  background: color-mix(in oklab, var(--brand) 8%, var(--surface));
+}
+.price-grid > div:hover,
+.feat-grid > div:hover {
+  filter: saturate(1.04);
+}
+.card:hover,
+.card-soft:hover {
+  box-shadow: 0 7px 0 0 var(--ink), 0 18px 34px rgba(15, 17, 27, .12);
+}
+
+[data-theme="dark"] .canvas-cta {
+  background: linear-gradient(135deg, #101019 0%, #171523 58%, #261812 100%) !important;
+  color: #FFF8E8 !important;
+  border-color: var(--brand) !important;
+  box-shadow: 0 8px 0 0 var(--brand) !important;
+}
+[data-theme="dark"] .canvas-cta .eyebrow {
+  background: rgba(255, 122, 61, .14) !important;
+  border-color: var(--brand) !important;
+  color: #FFF8E8 !important;
+}
+[data-theme="dark"] .canvas-cta h2,
+[data-theme="dark"] .canvas-cta p,
+[data-theme="dark"] .canvas-cta span {
+  color: #FFF8E8 !important;
+}
+[data-theme="dark"] .canvas-cta p,
+[data-theme="dark"] .canvas-cta span {
+  opacity: .92;
+}
+[data-theme="dark"] .canvas-cta > div:last-child > div {
+  background: rgba(8, 9, 15, .72) !important;
+  border-color: rgba(255, 122, 61, .42) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04), 0 18px 46px rgba(0, 0, 0, .32);
+}
+[data-theme="dark"] .canvas-cta > div:last-child > div > div:first-child {
+  border-bottom-color: rgba(255, 122, 61, .28) !important;
+}
+[data-theme="dark"] .lb-you-callout {
+  background: linear-gradient(90deg, #0E0E16, color-mix(in oklab, var(--lb-primary) 32%, #15111A)) !important;
+  color: #FFF8E8 !important;
+  border: 1.5px solid rgba(255, 122, 61, .62);
+  box-shadow: 0 2px 0 rgba(255, 122, 61, .35);
+}
+[data-theme="dark"] .lb-you-callout span:first-child {
+  color: rgba(255, 248, 232, .86) !important;
+}
+[data-theme="dark"] .lb-you-callout span:last-child {
+  color: var(--lb-accent) !important;
+  text-shadow: 0 0 12px color-mix(in oklab, var(--lb-accent) 35%, transparent);
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .card-soft,
+[data-theme="dark"] .feat-grid > div,
+[data-theme="dark"] .stats-grid > div,
+[data-theme="dark"] .price-grid > div,
+[data-theme="dark"] .quiz-wrap .card,
+[data-theme="dark"] .lb-arena,
+[data-theme="dark"] .lb-insight,
+[data-theme="dark"] .lb-row-item,
+[data-theme="dark"] .lb-podium-bar,
+[data-theme="dark"] .canvas-cta,
+[data-theme="dark"] .terminal-sim,
+[data-theme="dark"] .auth-panel,
+[data-theme="dark"] .auth-side,
+[data-theme="dark"] .auth-form input,
+[data-theme="dark"] .lang-switch,
+[data-theme="dark"] .theme-toggle {
+  border-color: var(--brand) !important;
+}
+
+[data-theme="dark"] [style*="var(--ink)"] {
+  border-color: var(--brand) !important;
+}
+
+[data-theme="dark"] [style*="box-shadow"][style*="var(--ink)"],
+[data-theme="dark"] .how-arrow {
+  box-shadow: 0 4px 0 0 var(--brand) !important;
+}
+
+[data-theme="dark"] .card:hover,
+[data-theme="dark"] .card-soft:hover {
+  box-shadow: 0 7px 0 0 var(--brand), 0 18px 34px rgba(0, 0, 0, .32);
+}
+
+[data-theme="dark"] [style*="background: var(--ink)"][style*="color: white"],
+[data-theme="dark"] .price-cta-standard,
+[data-theme="dark"] .mini-coins-balance,
+[data-theme="dark"] .quiz-top-bar {
+  background: #0E1018 !important;
+  color: #FFF8E8 !important;
+  border-color: var(--brand) !important;
+}
+
+[data-theme="dark"] .price-cta-standard {
+  box-shadow: 0 4px 0 0 var(--brand) !important;
+}
+
+[data-theme="dark"] .final-cta-primary {
+  background: #0E1018 !important;
+  color: #FFF8E8 !important;
+  border-color: #FFF8E8 !important;
+  box-shadow: 0 4px 0 0 rgba(0, 0, 0, .46) !important;
+}
+
+[data-theme="dark"] .quiz-top-bar {
+  border-bottom: 2px solid var(--brand) !important;
+}
+
+[data-theme="dark"] .quiz-top-bar .quiz-counter,
+[data-theme="dark"] .mini-coins-balance span,
+[data-theme="dark"] .mini-coins-balance svg {
+  color: #FFF8E8 !important;
+}
+
+[data-theme="dark"] .hero-season-pill {
+  background: var(--brand) !important;
+  color: #0E1018 !important;
+  border: 1px solid var(--brand) !important;
+}
+
+@media (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .motion-hotspot:hover {
+    transform: perspective(900px)
+      rotateX(calc(var(--motion-tilt-y) * -1deg))
+      rotateY(calc(var(--motion-tilt-x) * 1deg))
+      translateY(-3px);
+  }
+  .btn.motion-hotspot:hover {
+    transform: translate(-1px, -1px) scale(1.015);
+  }
+}
+
+@keyframes motion-paper-drift {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 0 33px, 0 0; }
+}
+
+@keyframes motion-flame-wiggle {
+  from { transform: scale(1.08, .94) rotate(-4deg); }
+  to { transform: scale(.94, 1.1) rotate(4deg); }
+}
+@keyframes motion-dot-breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 0%, transparent); }
+  50% { transform: scale(1.35); box-shadow: 0 0 0 7px color-mix(in oklab, var(--brand) 18%, transparent); }
+}
+
+/* responsive */
+@media (max-width: 760px) {
+  section { padding: 64px 0; }
+  .nav-links { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .001ms !important;
+  }
+  .motion-ready .motion-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    clip-path: none;
+    box-shadow: none;
+  }
+  #landing-progress-flame { animation: none; }
+}
+
+  </style>
+  <style>
+    /* ============ cinematic intro ============ */
+    .mri-intro { position: fixed; inset: 0; z-index: 1000; cursor: pointer; overflow: hidden;
+      display: grid; place-items: center; background: var(--bg);
+      transition: transform .85s cubic-bezier(.7,0,.25,1); }
+    .mri-lift { transform: translateY(-101%); }
+    .mri-bg { position: absolute; inset: 0; transition: background .4s ease;
+      background: radial-gradient(circle at 50% 44%, color-mix(in oklab, var(--brand) var(--mri-glow, 6%), transparent) 0%, transparent 58%); }
+    .mri-stage { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 0 20px; }
+    .mri-skip { position: absolute; right: 28px; bottom: 24px;
+      background: var(--surface); border: 2px solid var(--ink); border-radius: 12px; padding: 10px 18px;
+      font-family: var(--font-display); font-weight: 800; font-size: 14px; color: var(--ink);
+      box-shadow: 0 3px 0 0 var(--ink); transition: transform .12s ease, box-shadow .12s ease; }
+    .mri-skip:hover { transform: translate(-1px, -1px); box-shadow: 0 4px 0 0 var(--ink); }
+    .mri-skip:active { transform: translate(0, 3px); box-shadow: 0 0 0 0 var(--ink); }
+    .mri-ember { position: absolute; bottom: -12px; border-radius: 50%; animation: mriRise linear infinite; will-change: transform, opacity; }
+    @keyframes mriRise {
+      0% { transform: translateY(0) translateX(0); opacity: 0; }
+      12% { opacity: .9; }
+      100% { transform: translateY(-105vh) translateX(26px); opacity: 0; }
+    }
+    .mri-burst-p { position: absolute; left: 0; top: 0; border-radius: 50%; animation: mriBurst .95s cubic-bezier(.16,.84,.44,1) forwards; }
+    @keyframes mriBurst {
+      0% { transform: translate(0, 0) scale(1); opacity: 1; }
+      100% { transform: translate(var(--bx), var(--by)) scale(.3); opacity: 0; }
+    }
+
+    /* ============ hero entrance choreography ============ */
+    .hero-line { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: .1em; margin-bottom: -.1em; }
+    .hero-line-in { display: inline-block; transform: translateY(0); transition: transform .9s cubic-bezier(.22,1,.36,1) var(--d, 0s); will-change: transform; }
+    body[data-intro="pending"] .hero-line-in { transform: translateY(112%); transition: none; }
+    .hero-anim { transition: opacity .8s cubic-bezier(.22,1,.36,1) var(--d, 0s), transform .8s cubic-bezier(.22,1,.36,1) var(--d, 0s); }
+    .hero-anim[data-d="1"] { --d: .42s; }
+    .hero-anim[data-d="2"] { --d: .56s; }
+    .hero-anim[data-d="3"] { --d: .72s; }
+    body[data-intro="pending"] .hero-anim { opacity: 0; transform: translateY(26px); transition: none; }
+
+
+    /* animated flame on the streak badge */
+    .hero-flame { display: inline-flex; animation: heroFlick 1.1s ease-in-out infinite alternate; transform-origin: 50% 82%; }
+    @keyframes heroFlick {
+      from { transform: scale(1.07, .94) rotate(-2.5deg); }
+      to { transform: scale(.94, 1.07) rotate(2deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .mri-ember, .mri-burst-p { display: none; }
+      body[data-intro="pending"] .hero-line-in,
+      body[data-intro="pending"] .hero-anim { opacity: 1; transform: none; }
+    }
+  </style>
 </head>
 <body>
+  <script>document.body.dataset.intro = "pending";</script>
   <div id="root"></div>
 
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="/static/machreach_landing/vendor/react.production.min.js"></script>
+  <script src="/static/machreach_landing/vendor/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.29.0/babel.min.js"></script>
 
-  <script type="text/babel" src="icons.jsx"></script>
-  <script type="text/babel" src="tweaks-panel.jsx"></script>
-  <script type="text/babel" src="hero.jsx"></script>
-  <script type="text/babel" src="features.jsx"></script>
-  <script type="text/babel" src="sections.jsx"></script>
-  <script type="text/babel" src="pricing.jsx"></script>
+  <script type="text/babel">
+/* MachReach — definitive logo mark: an open book cradling the streak flame.
+   MarkFinal({size, variant: 'flat'|'app'|'mono', ink, flick, uid})
+   FinalWordmark({size, light, swoosh})
+   Shared geometry exported as LOGO_PATHS so the build animation can construct it piece by piece. */
+
+const LOGO_COLORS = {
+  orange: "#FF7A3D", orangeDp: "#D64E16", amber: "#F2A156", core: "#FFE9C9",
+  cream: "#FFF6E4", creamDim: "#F0DFC0", ink: "#2A2433",
+  purple: "#5B4694", purpleDk: "#3A2A6E", purpleSh: "#4A3880",
+};
+
+const LOGO_PATHS = {
+  squircle: "M50 3 C19 3 3 19 3 50 C3 81 19 97 50 97 C81 97 97 81 97 50 C97 19 81 3 50 3 Z",
+  pageL: "M50 82 C41 73 29 70 16 72 L16 50 C29 48 41 51 50 58 Z",
+  pageR: "M50 82 C59 73 71 70 84 72 L84 50 C71 48 59 51 50 58 Z",
+  flameOut: "M50 14 C55 26 67 33 67 46 C67 57 59 64 50 64 C41 64 33 57 33 46 C33 33 45 26 50 14 Z",
+  flameIn: "M50 33 C53 39 60 42 60 49 C60 55 55 59 50 59 C45 59 40 55 40 49 C40 42 47 39 50 33 Z",
+  flameCore: "M50 45 C52 49 56 51 56 54 C56 57 53 59 50 59 C47 59 44 57 44 54 C44 51 48 49 50 45 Z",
+  spine: "M50 58 L50 82",
+};
+
+function lgStar(cx, cy, r) {
+  const i = r * 0.32;
+  return `M${cx} ${cy - r} C${cx + i * 0.6} ${cy - i} ${cx + i} ${cy - i * 0.6} ${cx + r} ${cy} C${cx + i} ${cy + i * 0.6} ${cx + i * 0.6} ${cy + i} ${cx} ${cy + r} C${cx - i * 0.6} ${cy + i} ${cx - i} ${cy + i * 0.6} ${cx - r} ${cy} C${cx - i} ${cy - i * 0.6} ${cx - i * 0.6} ${cy - i} ${cx} ${cy - r} Z`;
+}
+
+function MarkFinal({ size = 100, variant = "flat", ink = LOGO_COLORS.ink, flick = 0, uid = "d" }) {
+  const K = LOGO_COLORS, P = LOGO_PATHS;
+  const isApp = variant === "app", isMono = variant === "mono";
+  const pageLCol = isApp ? K.cream : isMono ? ink : K.purple;
+  const pageRCol = isApp ? K.creamDim : isMono ? ink : K.purpleSh;
+  const flame = isMono ? ink : K.orange;
+  const gid = `lfg-${uid}`;
+  const fs = 1 + flick;
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style={{ display: "block", overflow: "visible" }}>
+      {isApp && (
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0.3" y2="1">
+            <stop offset="0" stopColor={K.purpleDk} />
+            <stop offset="0.55" stopColor={K.purple} />
+            <stop offset="1" stopColor={K.orange} />
+          </linearGradient>
+          <radialGradient id={gid + "-gl"} cx="0.5" cy="0.1" r="0.9">
+            <stop offset="0" stopColor="#fff" stopOpacity="0.4" /><stop offset="0.6" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+      )}
+      {isApp && (
+        <g>
+          <path d={P.squircle} fill={`url(#${gid})`} />
+          <path d={lgStar(23, 28, 4)} fill="#fff" opacity="0.9" />
+          <path d={lgStar(79, 24, 5)} fill="#fff" opacity="0.85" />
+          <circle cx="74" cy="44" r="1.8" fill="#fff" opacity="0.6" />
+        </g>
+      )}
+      {/* flame (behind the book valley) */}
+      <g transform={`translate(50 64) scale(${2 - fs} ${fs}) translate(-50 -64)`}>
+        <path d={P.flameOut} fill={flame} />
+        {!isMono && <path d={P.flameIn} fill={K.amber} />}
+        {!isMono && <path d={P.flameCore} fill={K.core} />}
+      </g>
+      {/* open book */}
+      <path d={P.pageL} fill={pageLCol} />
+      <path d={P.pageR} fill={pageRCol} />
+      {!isMono && <path d={P.spine} stroke={isApp ? "rgba(58,42,110,.35)" : "rgba(255,246,228,.45)"} strokeWidth="1.6" />}
+      {isApp && <ellipse cx="50" cy="20" rx="54" ry="30" fill={`url(#${gid}-gl)`} />}
+    </svg>
+  );
+}
+
+function FinalWordmark({ size = 32, light = false, swoosh = true }) {
+  const K = LOGO_COLORS;
+  return (
+    <div style={{ position: "relative", display: "inline-block", paddingBottom: swoosh ? size * 0.22 : 0 }}>
+      <span style={{ fontFamily: "'Bricolage Grotesque', Georgia, serif", fontSize: size, fontWeight: 800, letterSpacing: "-0.045em", lineHeight: 1, whiteSpace: "nowrap" }}>
+        <span style={{ color: light ? K.cream : K.ink }}>Mach</span>
+        <span style={{ background: `linear-gradient(95deg, ${K.orange}, ${K.orangeDp})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Reach</span>
+      </span>
+      {swoosh && (
+        <svg viewBox="0 0 200 14" preserveAspectRatio="none" style={{ position: "absolute", left: "2%", bottom: 0, width: "96%", height: size * 0.3 }}>
+          <path d="M2 11 Q70 2 150 6 Q180 7 198 2" fill="none" stroke={K.orange} strokeWidth="3.5" strokeLinecap="round" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { LOGO_COLORS, LOGO_PATHS, MarkFinal, FinalWordmark });
+
+</script>
+  <script type="text/babel">
+/* Geometric icon set — original. Stroke-based, 24x24 grid. */
+const Icon = ({ children, size = 24, color = "currentColor", strokeWidth = 2.4, ...rest }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none"
+    stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...rest}>
+    {children}
+  </svg>
+);
+
+const IconArrow = (p) => <Icon {...p}><path d="M5 12h14M13 6l6 6-6 6"/></Icon>;
+const IconCheck = (p) => <Icon {...p}><path d="M5 12.5l4.5 4.5L19 7"/></Icon>;
+const IconClose = (p) => <Icon {...p}><path d="M6 6l12 12M18 6L6 18"/></Icon>;
+const IconBolt  = (p) => <Icon {...p}><path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z"/></Icon>;
+const IconFire  = (p) => <Icon {...p}><path d="M12 3c1 4 5 5 5 10a5 5 0 11-10 0c0-2 1-3 2-4 0 2 1 3 3 3 0-3-2-5 0-9z"/></Icon>;
+const IconTimer = (p) => <Icon {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 3h6"/></Icon>;
+const IconChart = (p) => <Icon {...p}><path d="M4 20h16M7 17V11M12 17V6M17 17v-9"/></Icon>;
+const IconBrain = (p) => <Icon {...p}><path d="M9 5a3 3 0 00-3 3v0a3 3 0 00-2 5 3 3 0 002 4 3 3 0 003 3 3 3 0 003-1V8a3 3 0 00-3-3zM15 5a3 3 0 013 3v0a3 3 0 012 5 3 3 0 01-2 4 3 3 0 01-3 3 3 3 0 01-3-1"/></Icon>;
+const IconTrophy = (p) => <Icon {...p}><path d="M7 4h10v4a5 5 0 01-10 0V4zM4 5h3M17 5h3M9 14h6M10 18h4M12 14v4"/></Icon>;
+const IconStar = (p) => <Icon {...p}><path d="M12 4l2.4 5 5.6.8-4 4 1 5.6L12 16.8 6.9 19.4l1-5.6-4-4 5.6-.8L12 4z"/></Icon>;
+const IconCoin = (p) => <Icon {...p}><circle cx="12" cy="12" r="8"/><path d="M9.5 9.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></Icon>;
+const IconBook = (p) => <Icon {...p}><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3V4zM5 17a3 3 0 013-3h11"/></Icon>;
+const IconCalendar = (p) => <Icon {...p}><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></Icon>;
+const IconSparkle = (p) => <Icon {...p}><path d="M12 4v6M12 14v6M4 12h6M14 12h6M7 7l3 3M14 14l3 3M17 7l-3 3M10 14l-3 3"/></Icon>;
+const IconCanvas = (p) => <Icon {...p}><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v9H4V6zM2 18h20M9 21h6"/></Icon>;
+const IconPeople = (p) => <Icon {...p}><circle cx="9" cy="9" r="3"/><circle cx="17" cy="11" r="2.2"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 19c0-2 2-3.5 4-3.5"/></Icon>;
+const IconMedal = (p) => <Icon {...p}><circle cx="12" cy="15" r="5"/><path d="M8 4l4 6 4-6M9 14l3 2 3-2"/></Icon>;
+const IconShield = (p) => <Icon {...p}><path d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z"/></Icon>;
+const IconChevron = (p) => <Icon {...p}><path d="M6 9l6 6 6-6"/></Icon>;
+/* The book-cradling-the-flame mark (from the animated logo build). */
+const IconLogo = ({ size = 24 }) => (
+  <MarkFinal size={size} variant="flat" uid="icl" />
+);
+
+Object.assign(window, {
+  Icon, IconArrow, IconCheck, IconClose, IconBolt, IconFire, IconTimer, IconChart,
+  IconBrain, IconTrophy, IconStar, IconCoin, IconBook, IconCalendar, IconSparkle,
+  IconCanvas, IconPeople, IconMedal, IconShield, IconChevron, IconLogo,
+});
+
+</script>
+  <script type="text/babel">
+
+// tweaks-panel.jsx
+// Reusable Tweaks shell + form-control helpers.
+//
+// Owns the host protocol (listens for __activate_edit_mode / __deactivate_edit_mode,
+// posts __edit_mode_available / __edit_mode_set_keys / __edit_mode_dismissed) so
+// individual prototypes don't re-roll it. Ships a consistent set of controls so you
+// don't hand-draw <input type="range">, segmented radios, steppers, etc.
+//
+// Usage (in an HTML file that loads React + Babel):
+//
+//   const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+//     "primaryColor": "#D97757",
+//     "fontSize": 16,
+//     "density": "regular",
+//     "dark": false
+//   }/*EDITMODE-END*/;
+//
+//   function App() {
+//     const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+//     return (
+//       <div style={{ fontSize: t.fontSize, color: t.primaryColor }}>
+//         Hello
+//         <TweaksPanel>
+//           <TweakSection label="Typography" />
+//           <TweakSlider label="Font size" value={t.fontSize} min={10} max={32} unit="px"
+//                        onChange={(v) => setTweak('fontSize', v)} />
+//           <TweakRadio  label="Density" value={t.density}
+//                        options={['compact', 'regular', 'comfy']}
+//                        onChange={(v) => setTweak('density', v)} />
+//           <TweakSection label="Theme" />
+//           <TweakColor  label="Primary" value={t.primaryColor}
+//                        onChange={(v) => setTweak('primaryColor', v)} />
+//           <TweakToggle label="Dark mode" value={t.dark}
+//                        onChange={(v) => setTweak('dark', v)} />
+//         </TweaksPanel>
+//       </div>
+//     );
+//   }
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+const __TWEAKS_STYLE = `
+  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
+    max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+    background:rgba(250,249,247,.78);color:#29261b;
+    -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+    border:.5px solid rgba(255,255,255,.6);border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 12px 40px rgba(0,0,0,.18);
+    font:11.5px/1.4 "Nunito",sans-serif;overflow:hidden}
+  .twk-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 8px 10px 14px;cursor:move;user-select:none}
+  .twk-hd b{font-size:12px;font-weight:600;letter-spacing:.01em}
+  .twk-x{appearance:none;border:0;background:transparent;color:rgba(41,38,27,.55);
+    width:22px;height:22px;border-radius:6px;cursor:default;font-size:13px;line-height:1}
+  .twk-x:hover{background:rgba(0,0,0,.06);color:#29261b}
+  .twk-body{padding:2px 14px 14px;display:flex;flex-direction:column;gap:10px;
+    overflow-y:auto;overflow-x:hidden;min-height:0;
+    scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.15) transparent}
+  .twk-body::-webkit-scrollbar{width:8px}
+  .twk-body::-webkit-scrollbar-track{background:transparent;margin:2px}
+  .twk-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px;
+    border:2px solid transparent;background-clip:content-box}
+  .twk-body::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.25);
+    border:2px solid transparent;background-clip:content-box}
+  .twk-row{display:flex;flex-direction:column;gap:5px}
+  .twk-row-h{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+  .twk-lbl{display:flex;justify-content:space-between;align-items:baseline;
+    color:rgba(41,38,27,.72)}
+  .twk-lbl>span:first-child{font-weight:500}
+  .twk-val{color:rgba(41,38,27,.5);font-variant-numeric:tabular-nums}
+
+  .twk-sect{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:rgba(41,38,27,.45);padding:10px 0 0}
+  .twk-sect:first-child{padding-top:0}
+
+  .twk-field{appearance:none;width:100%;height:26px;padding:0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;
+    background:rgba(255,255,255,.6);color:inherit;font:inherit;outline:none}
+  .twk-field:focus{border-color:rgba(0,0,0,.25);background:rgba(255,255,255,.85)}
+  select.twk-field{padding-right:22px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(0,0,0,.5)' d='M0 0h10L5 6z'/></svg>");
+    background-repeat:no-repeat;background-position:right 8px center}
+
+  .twk-slider{appearance:none;-webkit-appearance:none;width:100%;height:4px;margin:6px 0;
+    border-radius:999px;background:rgba(0,0,0,.12);outline:none}
+  .twk-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;background:#fff;
+    border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+  .twk-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#fff;border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+
+  .twk-seg{position:relative;display:flex;padding:2px;border-radius:8px;
+    background:rgba(0,0,0,.06);user-select:none}
+  .twk-seg-thumb{position:absolute;top:2px;bottom:2px;border-radius:6px;
+    background:rgba(255,255,255,.9);box-shadow:0 1px 2px rgba(0,0,0,.12);
+    transition:left .15s cubic-bezier(.3,.7,.4,1),width .15s}
+  .twk-seg.dragging .twk-seg-thumb{transition:none}
+  .twk-seg button{appearance:none;position:relative;z-index:1;flex:1;border:0;
+    background:transparent;color:inherit;font:inherit;font-weight:500;min-height:22px;
+    border-radius:6px;cursor:default;padding:4px 6px;line-height:1.2;
+    overflow-wrap:anywhere}
+
+  .twk-toggle{position:relative;width:32px;height:18px;border:0;border-radius:999px;
+    background:rgba(0,0,0,.15);transition:background .15s;cursor:default;padding:0}
+  .twk-toggle[data-on="1"]{background:#34c759}
+  .twk-toggle i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+  .twk-toggle[data-on="1"] i{transform:translateX(14px)}
+
+  .twk-num{display:flex;align-items:center;height:26px;padding:0 0 0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;background:rgba(255,255,255,.6)}
+  .twk-num-lbl{font-weight:500;color:rgba(41,38,27,.6);cursor:ew-resize;
+    user-select:none;padding-right:8px}
+  .twk-num input{flex:1;min-width:0;height:100%;border:0;background:transparent;
+    font:inherit;font-variant-numeric:tabular-nums;text-align:right;padding:0 8px 0 0;
+    outline:none;color:inherit;-moz-appearance:textfield}
+  .twk-num input::-webkit-inner-spin-button,.twk-num input::-webkit-outer-spin-button{
+    -webkit-appearance:none;margin:0}
+  .twk-num-unit{padding-right:8px;color:rgba(41,38,27,.45)}
+
+  .twk-btn{appearance:none;height:26px;padding:0 12px;border:0;border-radius:7px;
+    background:rgba(0,0,0,.78);color:#fff;font:inherit;font-weight:500;cursor:default}
+  .twk-btn:hover{background:rgba(0,0,0,.88)}
+  .twk-btn.secondary{background:rgba(0,0,0,.06);color:inherit}
+  .twk-btn.secondary:hover{background:rgba(0,0,0,.1)}
+
+  .twk-swatch{appearance:none;-webkit-appearance:none;width:56px;height:22px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:6px;padding:0;cursor:default;
+    background:transparent;flex-shrink:0}
+  .twk-swatch::-webkit-color-swatch-wrapper{padding:0}
+  .twk-swatch::-webkit-color-swatch{border:0;border-radius:5.5px}
+  .twk-swatch::-moz-color-swatch{border:0;border-radius:5.5px}
+`;
+
+// ── useTweaks ───────────────────────────────────────────────────────────────
+// Single source of truth for tweak values. setTweak persists via the host
+// (__edit_mode_set_keys → host rewrites the EDITMODE block on disk).
+function useTweaks(defaults) {
+  const [values, setValues] = React.useState(defaults);
+  // Accepts either setTweak('key', value) or setTweak({ key: value, ... }) so a
+  // useState-style call doesn't write a "[object Object]" key into the persisted
+  // JSON block.
+  const setTweak = React.useCallback((keyOrEdits, val) => {
+    const edits = typeof keyOrEdits === 'object' && keyOrEdits !== null
+      ? keyOrEdits : { [keyOrEdits]: val };
+    setValues((prev) => ({ ...prev, ...edits }));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
+  }, []);
+  return [values, setTweak];
+}
+
+// ── TweaksPanel ─────────────────────────────────────────────────────────────
+// Floating shell. Registers the protocol listener BEFORE announcing
+// availability — if the announce ran first, the host's activate could land
+// before our handler exists and the toolbar toggle would silently no-op.
+// The close button posts __edit_mode_dismissed so the host's toolbar toggle
+// flips off in lockstep; the host echoes __deactivate_edit_mode back which
+// is what actually hides the panel.
+function TweaksPanel({ title = 'Tweaks', children }) {
+  const [open, setOpen] = React.useState(false);
+  const dragRef = React.useRef(null);
+  const offsetRef = React.useRef({ x: 16, y: 16 });
+  const PAD = 16;
+
+  const clampToViewport = React.useCallback(() => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    const maxRight = Math.max(PAD, window.innerWidth - w - PAD);
+    const maxBottom = Math.max(PAD, window.innerHeight - h - PAD);
+    offsetRef.current = {
+      x: Math.min(maxRight, Math.max(PAD, offsetRef.current.x)),
+      y: Math.min(maxBottom, Math.max(PAD, offsetRef.current.y)),
+    };
+    panel.style.right = offsetRef.current.x + 'px';
+    panel.style.bottom = offsetRef.current.y + 'px';
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    clampToViewport();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', clampToViewport);
+      return () => window.removeEventListener('resize', clampToViewport);
+    }
+    const ro = new ResizeObserver(clampToViewport);
+    ro.observe(document.documentElement);
+    return () => ro.disconnect();
+  }, [open, clampToViewport]);
+
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      const t = e?.data?.type;
+      if (t === '__activate_edit_mode') setOpen(true);
+      else if (t === '__deactivate_edit_mode') setOpen(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const dismiss = () => {
+    setOpen(false);
+    window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
+  };
+
+  const onDragStart = (e) => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    const startRight = window.innerWidth - r.right;
+    const startBottom = window.innerHeight - r.bottom;
+    const move = (ev) => {
+      offsetRef.current = {
+        x: startRight - (ev.clientX - sx),
+        y: startBottom - (ev.clientY - sy),
+      };
+      clampToViewport();
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  if (!open) return null;
+  return (
+    <>
+      <style>{__TWEAKS_STYLE}</style>
+      <div ref={dragRef} className="twk-panel" data-noncommentable=""
+           style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}>
+        <div className="twk-hd" onMouseDown={onDragStart}>
+          <b>{title}</b>
+          <button className="twk-x" aria-label="Close tweaks"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={dismiss}>✕</button>
+        </div>
+        <div className="twk-body">{children}</div>
+      </div>
+    </>
+  );
+}
+
+// ── Layout helpers ──────────────────────────────────────────────────────────
+
+function TweakSection({ label, children }) {
+  return (
+    <>
+      <div className="twk-sect">{label}</div>
+      {children}
+    </>
+  );
+}
+
+function TweakRow({ label, value, children, inline = false }) {
+  return (
+    <div className={inline ? 'twk-row twk-row-h' : 'twk-row'}>
+      <div className="twk-lbl">
+        <span>{label}</span>
+        {value != null && <span className="twk-val">{value}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── Controls ────────────────────────────────────────────────────────────────
+
+function TweakSlider({ label, value, min = 0, max = 100, step = 1, unit = '', onChange }) {
+  return (
+    <TweakRow label={label} value={`${value}${unit}`}>
+      <input type="range" className="twk-slider" min={min} max={max} step={step}
+             value={value} onChange={(e) => onChange(Number(e.target.value))} />
+    </TweakRow>
+  );
+}
+
+function TweakToggle({ label, value, onChange }) {
+  return (
+    <div className="twk-row twk-row-h">
+      <div className="twk-lbl"><span>{label}</span></div>
+      <button type="button" className="twk-toggle" data-on={value ? '1' : '0'}
+              role="switch" aria-checked={!!value}
+              onClick={() => onChange(!value)}><i /></button>
+    </div>
+  );
+}
+
+function TweakRadio({ label, value, options, onChange }) {
+  const trackRef = React.useRef(null);
+  const [dragging, setDragging] = React.useState(false);
+  const opts = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
+  const idx = Math.max(0, opts.findIndex((o) => o.value === value));
+  const n = opts.length;
+
+  // The active value is read by pointer-move handlers attached for the lifetime
+  // of a drag — ref it so a stale closure doesn't fire onChange for every move.
+  const valueRef = React.useRef(value);
+  valueRef.current = value;
+
+  const segAt = (clientX) => {
+    const r = trackRef.current.getBoundingClientRect();
+    const inner = r.width - 4;
+    const i = Math.floor(((clientX - r.left - 2) / inner) * n);
+    return opts[Math.max(0, Math.min(n - 1, i))].value;
+  };
+
+  const onPointerDown = (e) => {
+    setDragging(true);
+    const v0 = segAt(e.clientX);
+    if (v0 !== valueRef.current) onChange(v0);
+    const move = (ev) => {
+      if (!trackRef.current) return;
+      const v = segAt(ev.clientX);
+      if (v !== valueRef.current) onChange(v);
+    };
+    const up = () => {
+      setDragging(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <TweakRow label={label}>
+      <div ref={trackRef} role="radiogroup" onPointerDown={onPointerDown}
+           className={dragging ? 'twk-seg dragging' : 'twk-seg'}>
+        <div className="twk-seg-thumb"
+             style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`,
+                      width: `calc((100% - 4px) / ${n})` }} />
+        {opts.map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={o.value === value}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </TweakRow>
+  );
+}
+
+function TweakSelect({ label, value, options, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <select className="twk-field" value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => {
+          const v = typeof o === 'object' ? o.value : o;
+          const l = typeof o === 'object' ? o.label : o;
+          return <option key={v} value={v}>{l}</option>;
+        })}
+      </select>
+    </TweakRow>
+  );
+}
+
+function TweakText({ label, value, placeholder, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <input className="twk-field" type="text" value={value} placeholder={placeholder}
+             onChange={(e) => onChange(e.target.value)} />
+    </TweakRow>
+  );
+}
+
+function TweakNumber({ label, value, min, max, step = 1, unit = '', onChange }) {
+  const clamp = (n) => {
+    if (min != null && n < min) return min;
+    if (max != null && n > max) return max;
+    return n;
+  };
+  const startRef = React.useRef({ x: 0, val: 0 });
+  const onScrubStart = (e) => {
+    e.preventDefault();
+    startRef.current = { x: e.clientX, val: value };
+    const decimals = (String(step).split('.')[1] || '').length;
+    const move = (ev) => {
+      const dx = ev.clientX - startRef.current.x;
+      const raw = startRef.current.val + dx * step;
+      const snapped = Math.round(raw / step) * step;
+      onChange(clamp(Number(snapped.toFixed(decimals))));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  return (
+    <div className="twk-num">
+      <span className="twk-num-lbl" onPointerDown={onScrubStart}>{label}</span>
+      <input type="number" value={value} min={min} max={max} step={step}
+             onChange={(e) => onChange(clamp(Number(e.target.value)))} />
+      {unit && <span className="twk-num-unit">{unit}</span>}
+    </div>
+  );
+}
+
+function TweakColor({ label, value, onChange }) {
+  return (
+    <div className="twk-row twk-row-h">
+      <div className="twk-lbl"><span>{label}</span></div>
+      <input type="color" className="twk-swatch" value={value}
+             onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function TweakButton({ label, onClick, secondary = false }) {
+  return (
+    <button type="button" className={secondary ? 'twk-btn secondary' : 'twk-btn'}
+            onClick={onClick}>{label}</button>
+  );
+}
+
+Object.assign(window, {
+  useTweaks, TweaksPanel, TweakSection, TweakRow,
+  TweakSlider, TweakToggle, TweakRadio, TweakSelect,
+  TweakText, TweakNumber, TweakColor, TweakButton,
+});
+
+</script>
+  <script type="text/babel">
+/* MachReach — cinematic intro overlay (theme-aware).
+   The logo builds itself: pages fly in, a spark drops, the flame ignites with an
+   ember burst, the wordmark cascades, then the curtain lifts to reveal the page.
+   Skippable: click, Esc/Enter/Space, or the "Saltar intro" button. */
+
+const iClamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const iLerp = (a, b, p) => a + (b - a) * p;
+const iRnd = (i, s = 0) => { const x = Math.sin(i * 127.1 + s * 311.7 + 13.37) * 43758.5453; return x - Math.floor(x); };
+const iOutCubic = (p) => 1 - Math.pow(1 - p, 3);
+const iOutBack = (p) => { const c = 1.70158; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); };
+
+function IntroEmbers({ n = 12, hot = false }) {
+  return (
+    <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+      {Array.from({ length: n }, (_, i) => {
+        const sz = 3 + iRnd(i, 1) * 7;
+        const dur = 4 + iRnd(i, 2) * 5;
+        return <span key={i} className="mri-ember" style={{
+          left: iRnd(i, 0) * 100 + "%", width: sz, height: sz,
+          background: [LOGO_COLORS.orange, LOGO_COLORS.amber, "#F6C293"][Math.floor(iRnd(i, 4) * 3)],
+          animationDuration: dur + "s", animationDelay: -iRnd(i, 3) * dur + "s",
+          opacity: hot ? 0.8 : 0.35,
+        }}></span>;
+      })}
+    </div>
+  );
+}
+
+function IntroBurst({ n = 20 }) {
+  return (
+    <div aria-hidden="true" style={{ position: "absolute", left: "50%", top: "52%", width: 0, height: 0, pointerEvents: "none", zIndex: 5 }}>
+      {Array.from({ length: n }, (_, i) => {
+        const ang = iRnd(i, 2) * Math.PI * 2;
+        const sp = 80 + iRnd(i, 3) * 170;
+        const sz = 5 + iRnd(i, 4) * 8;
+        return <span key={i} className="mri-burst-p" style={{
+          width: sz, height: sz,
+          background: [LOGO_COLORS.orange, LOGO_COLORS.amber, "#F6C293", LOGO_COLORS.orangeDp][Math.floor(iRnd(i, 6) * 4)],
+          "--bx": Math.cos(ang) * sp + "px", "--by": (Math.sin(ang) * sp * 0.8 + 40) + "px",
+        }}></span>;
+      })}
+    </div>
+  );
+}
+
+function IntroOverlay({ onDone, enabled = true }) {
+  const K = LOGO_COLORS, P = LOGO_PATHS;
+  const DUR = 3.45, LIFT = 0.85;
+  const [t, setT] = React.useState(0);
+  const [gone, setGone] = React.useState(!enabled);
+  const [lifting, setLifting] = React.useState(false);
+  const doneRef = React.useRef(false);
+
+  const finish = React.useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setLifting(true);
+    onDone && onDone();
+    setTimeout(() => setGone(true), LIFT * 1000 + 80);
+  }, [onDone]);
+
+  React.useEffect(() => {
+    if (!enabled) { onDone && onDone(); return; }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { finish(); return; }
+    let raf, t0 = performance.now();
+    const tick = (now) => {
+      const tt = (now - t0) / 1000;
+      setT(tt);
+      if (tt >= DUR) { finish(); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    /* safety: if rAF is throttled (hidden tab/iframe), lift the curtain anyway */
+    const safety = setTimeout(finish, (DUR + 1.2) * 1000);
+    const onKey = (e) => { if (e.key === "Escape" || e.key === "Enter" || e.key === " ") finish(); };
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(raf); clearTimeout(safety); window.removeEventListener("keydown", onKey); };
+  }, [enabled]);
+
+  if (gone) return null;
+
+  const T_PAGES = 0.35, T_SPARK = 1.0, T_HIT = 1.55, T_WORD = 1.9, T_TAG = 2.55;
+  const pl = iOutBack(iClamp((t - T_PAGES) / 0.55, 0, 1));
+  const pr = iOutBack(iClamp((t - T_PAGES - 0.14) / 0.55, 0, 1));
+  const sparkP = iClamp((t - T_SPARK) / (T_HIT - T_SPARK), 0, 1);
+  const sparkY = iLerp(-180, -36, sparkP * sparkP);
+  const showSpark = t >= T_SPARK && t < T_HIT;
+  const lit = t >= T_HIT;
+  const flameIn = iOutBack(iClamp((t - T_HIT) / 0.55, 0, 1));
+  const flash = lit ? Math.max(0, 0.45 * Math.exp(-(t - T_HIT) * 8)) : 0;
+  const fs = 1 + (lit ? Math.sin(t * 9) * 0.05 : 0);
+  const tagIn = iOutCubic(iClamp((t - T_TAG) / 0.5, 0, 1));
+
+  return (
+    <div className={"mri-intro" + (lifting ? " mri-lift" : "")} onClick={finish} role="button" aria-label="Saltar intro" data-screen-label="Intro cinemática">
+      <div className="mri-bg" style={{ "--mri-glow": lit ? "16%" : "6%" }}></div>
+      <IntroEmbers n={lit ? 14 : 5} hot={lit}></IntroEmbers>
+
+      <div className="mri-stage">
+        <div style={{ position: "relative", width: 168, height: 168, filter: lit ? "drop-shadow(0 0 26px rgba(255,122,61,.35))" : "none" }}>
+          <svg width="168" height="168" viewBox="0 0 100 100" style={{ overflow: "visible", display: "block" }}>
+            <g style={{ opacity: lit ? 1 : 0 }} transform={`translate(50 64) scale(${(2 - fs) * flameIn} ${fs * flameIn}) translate(-50 -64)`}>
+              <path d={P.flameOut} fill={K.orange}></path>
+              <path d={P.flameIn} fill={K.amber}></path>
+              <path d={P.flameCore} fill={K.core}></path>
+            </g>
+            <g transform={`translate(${(1 - pl) * -46} ${(1 - pl) * 18}) rotate(${(1 - pl) * -22} 50 70)`} opacity={iClamp(pl * 1.4, 0, 1)}>
+              <path d={P.pageL} fill={K.purple}></path>
+            </g>
+            <g transform={`translate(${(1 - pr) * 46} ${(1 - pr) * 18}) rotate(${(1 - pr) * 22} 50 70)`} opacity={iClamp(pr * 1.4, 0, 1)}>
+              <path d={P.pageR} fill={K.purpleSh}></path>
+            </g>
+            {pl > 0.9 && <path d={P.spine} stroke="rgba(255,246,228,.45)" strokeWidth="1.6" opacity={iClamp((pl - 0.9) * 10, 0, 1)}></path>}
+            {showSpark && (
+              <g>
+                <circle cx="50" cy={64 + sparkY} r="7" fill={K.core} opacity="0.9"></circle>
+                <circle cx="50" cy={64 + sparkY} r="13" fill="rgba(255,170,90,.4)"></circle>
+                <circle cx="50" cy={64 + sparkY - 12 * sparkP} r="3.5" fill={K.orange} opacity="0.6"></circle>
+              </g>
+            )}
+          </svg>
+          {lit && t < T_HIT + 1.2 && <IntroBurst></IntroBurst>}
+        </div>
+
+        <div style={{ marginTop: 18, whiteSpace: "nowrap" }} aria-label="MachReach">
+          {"MachReach".split("").map((ch, i) => {
+            const p = iOutBack(iClamp((t - T_WORD - i * 0.055) / 0.5, 0, 1));
+            return (
+              <span key={i} style={{
+                display: "inline-block", fontFamily: "var(--font-display)", fontWeight: 800,
+                fontSize: "clamp(44px, 8vw, 84px)", letterSpacing: "-0.04em", lineHeight: 1,
+                color: i < 4 ? "var(--ink)" : "var(--brand)",
+                opacity: iClamp(p, 0, 1), transform: `translateY(${(1 - p) * 46}px)`,
+              }}>{ch}</span>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 16, fontFamily: "var(--font-body)", fontWeight: 700, fontSize: "clamp(15px,2.2vw,19px)", color: "var(--ink-2)", opacity: tagIn, transform: `translateY(${(1 - tagIn) * 16}px)` }}>
+          Estudiar deja de ser una lata.
+        </div>
+      </div>
+
+      <div style={{ position: "absolute", inset: 0, background: LOGO_COLORS.core, opacity: flash, pointerEvents: "none" }}></div>
+
+      <button className="mri-skip" onClick={(e) => { e.stopPropagation(); finish(); }}>Saltar intro →</button>
+    </div>
+  );
+}
+
+Object.assign(window, { IntroOverlay });
+
+</script>
+  <script type="text/babel">
+/* ======== Hero — leaderboard-led, animated, polished ======== */
+
+const heroStyles = {
+  wrap: { position: "relative", paddingTop: 88, paddingBottom: 118, overflow: "clip" },
+  blob1: { display: "none" },
+  blob2: { display: "none" },
+  grid: { position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "1.05fr 1fr", gap: 56, alignItems: "center" },
+  h1: { fontFamily: "var(--font-display)", fontSize: "clamp(44px, 6vw, 76px)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 0.98, marginTop: 22 },
+  h1Highlight: { background: "var(--brand)", color: "white", padding: "0 .12em", borderRadius: 12, display: "inline-block", transform: "rotate(-1.5deg)", boxShadow: "0 4px 0 0 var(--ink)", border: "2px solid var(--ink)", margin: "0 .04em" },
+  sub: { color: "var(--ink-2)", fontSize: 20, marginTop: 22, maxWidth: 520, lineHeight: 1.5 },
+  ctaRow: { display: "flex", flexWrap: "wrap", gap: 14, marginTop: 32, alignItems: "center" },
+  trustRow: { display: "flex", alignItems: "center", gap: 18, marginTop: 28, color: "var(--ink-3)", fontSize: 14, fontWeight: 600 },
+  avatars: { display: "flex" },
+  avatar: (i) => ({ width: 32, height: 32, borderRadius: "50%", border: "2px solid var(--surface)", background: ["#fb923c", "#a78bfa", "#22d3ee", "#facc15", "#34d399"][i], marginLeft: i === 0 ? 0 : -10, fontWeight: 800, fontSize: 13, color: "white", display: "grid", placeItems: "center", fontFamily: "var(--font-display)" }),
+};
+
+/* avatar with personality — uses initials but adds geometric mark */
+function Avatar({ name, color, size = 36, you }) {
+  const initials = name.replace(/_/g, " ").split(" ").map(s => s[0]).join("").slice(0, 2).toUpperCase();
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size * 0.32,
+      background: color, border: "2px solid var(--ink)",
+      display: "grid", placeItems: "center",
+      fontFamily: "var(--font-display)", fontWeight: 800,
+      fontSize: size * 0.36, color: "white",
+      position: "relative",
+      boxShadow: you ? "0 0 0 3px var(--brand-soft)" : "none",
+    }}>
+      {initials}
+    </div>
+  );
+}
+
+function HeroLeaderboard() {
+  const [board, setBoard] = React.useState([
+    { name: "Sofia_Db",   uni: "UC",     xp: 12480, color: "#fb923c", delta: 0 },
+    { name: "tu_lugar",   uni: "UDP",    xp: 9120,  color: "var(--brand)", you: true, delta: 0 },
+    { name: "matiasv",    uni: "UAndes", xp: 8740,  color: "#a78bfa", delta: 0 },
+    { name: "fernandapz", uni: "USACH",  xp: 7610,  color: "#22d3ee", delta: 0 },
+    { name: "ignacio_m",  uni: "UC",     xp: 7185,  color: "#34d399", delta: 0 },
+  ]);
+  const [tick, setTick] = React.useState(0);
+  const [pulseIndex, setPulseIndex] = React.useState(-1);
+
+  React.useEffect(() => {
+    const id = setInterval(() => {
+      setBoard(prev => {
+        const next = prev.map(r => {
+          const inc = Math.floor(Math.random() * (r.you ? 24 : 18)) + 2;
+          return { ...r, xp: r.xp + inc, delta: inc };
+        });
+        next.sort((a, b) => b.xp - a.xp);
+        return next;
+      });
+      const idx = Math.floor(Math.random() * 5);
+      setPulseIndex(idx);
+      setTimeout(() => setPulseIndex(-1), 800);
+      setTick(t => t + 1);
+    }, 1800);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div style={{
+      position: "relative",
+      background: "var(--surface)",
+      border: "2px solid var(--ink)",
+      borderRadius: 28,
+      boxShadow: "0 8px 0 0 var(--ink)",
+      padding: 22,
+      transform: "rotate(1.4deg)",
+    }}>
+      {/* Floating XP badge */}
+      <div style={{
+        position: "absolute", top: -22, right: -14, zIndex: 2,
+        background: "var(--accent)", color: "var(--accent-ink)",
+        border: "2px solid var(--ink)", borderRadius: 14,
+        padding: "8px 14px", fontFamily: "var(--font-display)", fontWeight: 800,
+        boxShadow: "0 4px 0 0 var(--ink)",
+        animation: "float 2.6s ease-in-out infinite",
+        display: "flex", alignItems: "center", gap: 6,
+      }}>
+        <IconBolt size={16}/> +24 XP
+      </div>
+      {/* Floating streak */}
+      <div style={{
+        position: "absolute", bottom: -18, left: -16, zIndex: 2,
+        background: "var(--surface)",
+        border: "2px solid var(--ink)", borderRadius: 14,
+        padding: "10px 14px", fontFamily: "var(--font-display)", fontWeight: 800,
+        boxShadow: "0 4px 0 0 var(--ink)",
+        display: "flex", alignItems: "center", gap: 8,
+        animation: "float 3.2s ease-in-out infinite",
+      }}>
+        <span className="hero-flame" style={{ color: "var(--bad)" }}><IconFire size={20}/></span>
+        <span>18</span>
+        <span style={{ color: "var(--ink-3)", fontWeight: 600, fontSize: 13 }}>días seguidos</span>
+      </div>
+
+      {/* Header bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 11,
+            background: "var(--brand-soft)", border: "2px solid var(--brand)",
+            display: "grid", placeItems: "center", color: "var(--brand-ink)",
+          }}>
+            <IconTrophy size={20}/>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, display: "flex", alignItems: "center", gap: 6 }}>
+              Investigadores
+              <span className="hero-season-pill" style={{
+                fontFamily: "var(--font-mono)", fontSize: 10,
+                padding: "2px 6px", borderRadius: 5,
+                background: "var(--ink)", color: "white", letterSpacing: ".06em",
+              }}>S26</span>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".05em" }}>
+              {(2300 + tick * 7).toLocaleString("es-CL")} estudiantes · 2d 14h restantes
+            </div>
+          </div>
+        </div>
+        <span className="tag" style={{ borderColor: "var(--good)", color: "var(--good)", background: "color-mix(in oklab, var(--good) 12%, var(--surface))" }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--good)", animation: "pulse-ring 1.4s infinite" }}/>
+          live
+        </span>
+      </div>
+
+      {/* Rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {board.map((r, i) => {
+          const medal = i === 0 ? "var(--gold)" : i === 1 ? "var(--silver)" : i === 2 ? "var(--bronze)" : null;
+          return (
+            <div key={r.name} style={{
+              display: "grid",
+              gridTemplateColumns: "28px 40px 1fr auto",
+              alignItems: "center", gap: 12,
+              padding: "10px 12px",
+              borderRadius: 14,
+              background: r.you
+                ? "var(--brand-soft)"
+                : (i === 0 ? "color-mix(in oklab, var(--gold) 14%, var(--surface))" : "var(--bg-2)"),
+              border: r.you ? "2px solid var(--brand)" : "2px solid transparent",
+              transition: "transform .5s cubic-bezier(.5,1.6,.4,1), background .3s",
+              position: "relative",
+            }}>
+              <div style={{
+                fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18,
+                color: medal || "var(--ink-3)",
+                textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {medal ? (
+                  <span style={{
+                    width: 22, height: 22, borderRadius: "50%",
+                    background: medal, border: "2px solid var(--ink)",
+                    color: "white", display: "grid", placeItems: "center",
+                    fontSize: 11,
+                  }}>{i + 1}</span>
+                ) : (i + 1)}
+              </div>
+              <Avatar name={r.name} color={r.color} size={36} you={r.you}/>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                  {r.you ? "tú" : r.name}
+                  {r.you && <span style={{
+                    fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 6,
+                    background: "var(--brand)", color: "white", letterSpacing: ".06em",
+                  }}>YOU</span>}
+                  {pulseIndex === i && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 800,
+                      color: "var(--good)", fontFamily: "var(--font-mono)",
+                      animation: "count-up .4s ease",
+                    }}>+{r.delta}</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: ".06em" }}>{r.uni}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16 }}>
+                  {r.xp.toLocaleString("es-CL")}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".08em" }}>XP</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{
+        marginTop: 14, paddingTop: 12, borderTop: "2px dashed var(--line)",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-3)",
+      }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <IconCalendar size={13}/> CIERRA LUN 09:00
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--brand-ink)", fontWeight: 800 }}>
+          PREMIO TOP 3 · 500 <IconCoin size={14}/>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Hero() {
+  return (
+    <section style={heroStyles.wrap}>
+      <div style={heroStyles.blob1}/>
+      <div style={heroStyles.blob2}/>
+      <div className="container">
+        <div style={heroStyles.grid} className="hero-grid">
+          <div>
+            <span className="eyebrow hero-anim" style={{ "--d": "0s" }}><span className="dot"/> Hecho por estudiantes para estudiantes</span>
+            <h1 style={heroStyles.h1}>
+              <span className="hero-line"><span className="hero-line-in" style={{ "--d": ".06s" }}>Estudiar deja</span></span><br/>
+              <span className="hero-line"><span className="hero-line-in" style={{ "--d": ".18s" }}>de ser una</span></span><br/>
+              <span className="hero-line"><span className="hero-line-in" style={{ "--d": ".32s" }}><span style={heroStyles.h1Highlight}>lata.</span></span></span>
+            </h1>
+            <p style={heroStyles.sub} className="hero-anim" data-d="1">
+              MachReach convierte tu semestre en un juego que <em style={{ color: "var(--ink)", fontStyle: "normal", fontWeight: 700, textDecoration: "underline wavy var(--brand)", textUnderlineOffset: 4 }}>sí quieres ganar</em>.
+            </p>
+            <div style={heroStyles.ctaRow} className="hero-anim" data-d="2">
+              <a href="/register" className="btn btn-primary btn-lg">
+                <IconCanvas size={20}/> Usar la extensión
+              </a>
+              <a href="#how" className="btn btn-ghost btn-lg">
+                Ver cómo funciona <IconArrow size={18}/>
+              </a>
+            </div>
+            <div style={heroStyles.trustRow} className="hero-anim" data-d="3">
+              <div style={heroStyles.avatars}>
+                {["VR","MA","FP","IM","SG"].map((t, i) => (
+                  <div key={i} style={heroStyles.avatar(i)}>{t}</div>
+                ))}
+              </div>
+              <span>+2.300 estudiantes ganando XP esta semana</span>
+            </div>
+          </div>
+          <div className="hero-anim hero-anim-card" data-d="2">
+            <HeroLeaderboard/>
+          </div>
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 920px) {
+          .hero-grid { grid-template-columns: 1fr !important; gap: 48px !important; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+window.Hero = Hero;
+window.Avatar = Avatar;
+
+</script>
+  <script type="text/babel">
+/* ======== Features grid + product preview — polished mini UIs ======== */
+
+const featStyles = {
+  grid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 },
+  card: (active) => ({
+    position: "relative",
+    background: "var(--surface)",
+    border: "2px solid var(--ink)",
+    borderRadius: 24,
+    padding: 24,
+    boxShadow: active ? "0 8px 0 0 var(--ink)" : "0 4px 0 0 var(--ink)",
+    transform: active ? "translate(-1px, -3px)" : "translate(0,0)",
+    transition: "transform .18s ease, box-shadow .18s ease",
+    cursor: "pointer",
+    overflow: "hidden",
+    minHeight: 320,
+    display: "flex", flexDirection: "column",
+  }),
+  iconBox: (color) => ({
+    width: 48, height: 48, borderRadius: 14,
+    background: color, border: "2px solid var(--ink)",
+    display: "grid", placeItems: "center", color: "white",
+    boxShadow: "0 3px 0 0 var(--ink)", marginBottom: 16,
+  }),
+  title: { fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 22, marginBottom: 8 },
+  desc: { color: "var(--ink-2)", fontSize: 15, lineHeight: 1.5 },
+  miniWrap: {
+    marginTop: 18, background: "var(--bg-2)", border: "2px solid var(--line-2)",
+    borderRadius: 16, padding: 14, flex: 1,
+    display: "flex", alignItems: "center", justifyContent: "center", minHeight: 130,
+  },
+};
+
+/* Mini-previews — every one looks like a real app */
+
+function MiniCanvas() {
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--ink-3)", letterSpacing: ".08em" }}>MIS RAMOS · 2026-1</span>
+        <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--good)" }}>● synced</span>
+      </div>
+      {[
+        { c: "Cálculo I",        p: 78, color: "var(--brand)",     n: "P2 en 4d" },
+        { c: "Álgebra Lineal",   p: 54, color: "var(--secondary)", n: "T1 en 9d" },
+        { c: "Física II",        p: 32, color: "var(--accent)",    n: "P1 en 12d" },
+      ].map((r, i) => (
+        <div key={i} style={{
+          background: "var(--surface)", border: "1.5px solid var(--line)",
+          borderRadius: 10, padding: "8px 10px",
+          display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", gap: 8,
+        }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, border: "1.5px solid var(--ink)" }}/>
+              {r.c}
+            </div>
+            <div style={{ width: "100%", height: 4, background: "var(--bg)", borderRadius: 4, marginTop: 4, overflow: "hidden" }}>
+              <div style={{ width: r.p + "%", height: "100%", background: r.color }}/>
+            </div>
+          </div>
+          <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)" }}>{r.n}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MiniFocus() {
+  const total = 1500;
+  const [t, setT] = React.useState(1247);
+  React.useEffect(() => {
+    const id = setInterval(() => setT(x => x <= 0 ? total : x - 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const m = String(Math.floor(t / 60)).padStart(2, "0");
+  const s = String(t % 60).padStart(2, "0");
+  const pct = ((total - t) / total) * 100;
+  return (
+    <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 16 }}>
+      <div style={{ position: "relative", width: 78, height: 78 }}>
+        <svg width="78" height="78" viewBox="0 0 78 78" style={{ transform: "rotate(-90deg)" }}>
+          <circle cx="39" cy="39" r="32" fill="none" stroke="var(--bg)" strokeWidth="6"/>
+          <circle cx="39" cy="39" r="32" fill="none" stroke="var(--brand)" strokeWidth="6"
+            strokeDasharray={2 * Math.PI * 32}
+            strokeDashoffset={2 * Math.PI * 32 * (1 - pct / 100)}
+            strokeLinecap="round"/>
+          <circle cx="39" cy="39" r="32" fill="none" stroke="var(--ink)" strokeWidth="2"/>
+        </svg>
+        <div style={{
+          position: "absolute", inset: 0, display: "grid", placeItems: "center",
+          fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 14,
+        }}>{m}:{s}</div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 10, color: "var(--good)", fontFamily: "var(--font-mono)", letterSpacing: ".1em", display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--good)", animation: "pulse-ring 1.4s infinite" }}/>
+          ENFOCADO
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 800, fontFamily: "var(--font-display)", marginTop: 2 }}>Cálculo I</div>
+        <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>Prueba 2 · sesión 3</div>
+        <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+          {[1,1,1,0].map((on, i) => (
+            <div key={i} style={{
+              flex: 1, height: 4, borderRadius: 2,
+              background: on ? "var(--brand)" : "var(--bg)",
+              border: "1px solid var(--ink)",
+            }}/>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniChart() {
+  const bars = [3.2, 5.1, 2.4, 7.0, 4.3, 8.2, 6.1];
+  const labels = ["L","M","M","J","V","S","D"];
+  const max = Math.max(...bars);
+  const total = bars.reduce((a,b) => a+b, 0).toFixed(1);
+  return (
+    <div style={{ width: "100%" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <div>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18 }}>{total}h</span>
+          <span style={{ fontSize: 10, color: "var(--ink-3)", marginLeft: 6, fontFamily: "var(--font-mono)" }}>esta semana</span>
+        </div>
+        <span style={{ fontSize: 10, color: "var(--good)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>↑ +24%</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 70 }}>
+        {bars.map((v, i) => (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <div style={{ position: "relative", width: "100%", display: "flex", flexDirection: "column-reverse", height: 56 }}>
+              <div style={{
+                width: "100%", height: (v/max) * 56, borderRadius: 4,
+                background: i === 5 ? "var(--brand)" : "var(--secondary)",
+                border: "1.5px solid var(--ink)",
+              }}/>
+              {i === 5 && <div style={{
+                position: "absolute", top: -2, left: "50%", transform: "translateX(-50%)",
+                fontSize: 9, fontFamily: "var(--font-mono)", fontWeight: 800,
+                background: "var(--ink)", color: "white", padding: "1px 4px", borderRadius: 3,
+              }}>{v}h</div>}
+            </div>
+            <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--ink-3)", fontWeight: 700 }}>{labels[i]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MiniQuiz() {
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+        <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--brand-ink)", background: "var(--brand-soft)", padding: "2px 5px", borderRadius: 4, letterSpacing: ".06em" }}>CÁLCULO I</span>
+        <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)" }}>3/10</span>
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>¿Cuál es la derivada de sin(x)?</div>
+      {[
+        { t: "cos(x)", ok: true },
+        { t: "−sin(x)" },
+        { t: "tan(x)" },
+      ].map((o, i) => (
+        <div key={i} style={{
+          padding: "5px 9px", borderRadius: 8,
+          border: "1.5px solid " + (o.ok ? "var(--good)" : "var(--line-2)"),
+          background: o.ok ? "color-mix(in oklab, var(--good) 14%, var(--surface))" : "var(--surface)",
+          fontSize: 11, fontWeight: 700,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 9,
+              background: o.ok ? "var(--good)" : "var(--bg)", color: o.ok ? "white" : "var(--ink-3)",
+              padding: "1px 4px", borderRadius: 3, fontWeight: 800,
+            }}>{["A","B","C"][i]}</span>
+            {o.t}
+          </span>
+          {o.ok && <span style={{ color: "var(--good)" }}><IconCheck size={12} strokeWidth={3.5}/></span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MiniBadges() {
+  const items = [
+    { c: "var(--gold)",     l: "7d",  ic: <IconFire size={14}/>, locked: false },
+    { c: "var(--secondary)",l: "30d", ic: <IconFire size={14}/>, locked: false },
+    { c: "var(--brand)",    l: "100h",ic: <IconTimer size={14}/>, locked: false },
+    { c: "var(--ink-3)",    l: "?",   ic: <IconStar size={14}/>, locked: true },
+  ];
+  return (
+    <div style={{ width: "100%" }}>
+      <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)", letterSpacing: ".08em", marginBottom: 8 }}>LOGROS · 12 / 24</div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "space-between" }}>
+        {items.map((b, i) => (
+          <div key={i} style={{
+            flex: 1, aspectRatio: "1",
+            borderRadius: 12,
+            background: b.locked ? "var(--bg)" : b.c,
+            border: "2px solid var(--ink)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: 1,
+            color: b.locked ? "var(--ink-3)" : "white",
+            boxShadow: b.locked ? "none" : "0 3px 0 0 var(--ink)",
+            opacity: b.locked ? 0.55 : 1,
+            position: "relative",
+          }}>
+            {b.ic}
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 10 }}>{b.l}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MiniCoins() {
+  const items = [
+    { n: "Banner Neón",  cost: 200, owned: true,  c: "var(--brand)" },
+    { n: "Tema Dorado",  cost: 450, owned: true,  c: "var(--gold)" },
+    { n: "Marco Diamante", cost: 800, owned: false, c: "var(--secondary)" },
+  ];
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div className="mini-coins-balance" style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        background: "var(--ink)", color: "white",
+        padding: "6px 10px", borderRadius: 8,
+      }}>
+        <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: ".08em", color: "color-mix(in oklab, white 70%, transparent)" }}>SALDO</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14 }}>
+          <span style={{ color: "var(--gold)" }}><IconCoin size={14}/></span>
+          1.240
+        </span>
+      </div>
+      {items.map((it, i) => (
+        <div key={i} style={{
+          display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 8,
+          padding: "5px 8px", borderRadius: 8,
+          background: "var(--surface)", border: "1.5px solid var(--line)",
+        }}>
+          <div style={{
+            width: 22, height: 22, borderRadius: 5,
+            background: it.c, border: "1.5px solid var(--ink)",
+          }}/>
+          <span style={{ fontSize: 11, fontWeight: 700 }}>{it.n}</span>
+          {it.owned ? (
+            <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--good)", fontWeight: 800 }}>✓ TUYO</span>
+          ) : (
+            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-2)", fontWeight: 800, display: "flex", alignItems: "center", gap: 2 }}>
+              <span style={{ color: "var(--gold)" }}><IconCoin size={11}/></span>{it.cost}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Features() {
+  const [hover, setHover] = React.useState(null);
+  const items = [
+    { id: 0, color: "var(--brand)",     icon: <IconCanvas/>,  title: "Canvas por extensión",   desc: "La extensión de MachReach detecta tus cursos desde tu Canvas abierto para organizar tu estudio por ramo.", mini: <MiniCanvas/> },
+    { id: 1, color: "var(--secondary)", icon: <IconTimer/>,   title: "Modo Focus",             desc: "Pomodoro pegado a tu ramo y tu prueba. Cada minuto cuenta como XP real.",         mini: <MiniFocus/> },
+    { id: 2, color: "var(--accent)",    icon: <IconChart/>,   title: "Analítica de estudio",   desc: "Cuántas horas, qué día rindes más, cuánto tiempo le diste a cada examen.",        mini: <MiniChart/> },
+    { id: 3, color: "var(--brand)",     icon: <IconBrain/>,   title: "Quizzes con IA",          desc: "Genera preguntas desde tus apuntes o pruebas oficiales para practicar sin perder tiempo.", mini: <MiniQuiz/> },
+    { id: 4, color: "var(--secondary)", icon: <IconMedal/>,   title: "Badges, ligas y rachas", desc: "Sistema de logros que premia constancia, no solo talento. Sube de liga semanal.", mini: <MiniBadges/> },
+    { id: 5, color: "var(--accent)",    icon: <IconCoin/>,    title: "Economía de monedas",    desc: "Gana monedas estudiando y cámbialas por cosméticos, banners y temas exclusivos.",  mini: <MiniCoins/> },
+  ];
+  return (
+    <section id="features">
+      <div className="container">
+        <div className="section-head">
+          <span className="eyebrow"><span className="dot"/> Todo en un lugar</span>
+          <h2>Tu semestre completo,<br/>convertido en progreso.</h2>
+          <p>Seis piezas que se hablan entre sí para que estudiar sea ordenado, medible y, por fin, divertido.</p>
+        </div>
+        <div className="feat-grid" style={featStyles.grid}>
+          {items.map((it) => (
+            <div key={it.id}
+              style={featStyles.card(hover === it.id)}
+              onMouseEnter={() => setHover(it.id)}
+              onMouseLeave={() => setHover(null)}>
+              <div style={featStyles.iconBox(it.color)}>{React.cloneElement(it.icon, { size: 24 })}</div>
+              <div style={featStyles.title}>{it.title}</div>
+              <div style={featStyles.desc}>{it.desc}</div>
+              <div style={featStyles.miniWrap}>{it.mini}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 980px) { .feat-grid { grid-template-columns: 1fr 1fr !important; } }
+        @media (max-width: 640px) { .feat-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
+    </section>
+  );
+}
+
+window.Features = Features;
+
+</script>
+  <script type="text/babel">
+/* ======== Sections: How it works, Canvas callout, Leaderboard showcase, Quiz, Stats, FAQ ======== */
+
+/* -------- HOW IT WORKS -------- */
+function HowItWorks() {
+  const steps = [
+    { n: "01", t: "Activa la extensión", d: "La extensión de MachReach detecta tus cursos desde tu sesión abierta de Canvas, sin configuración técnica y sin tocar tus credenciales.", icon: <IconCanvas/> },
+    { n: "02", t: "Estudia con Focus", d: "Elige ramo, prueba y dale start. El reloj cuenta y la app te suma XP.", icon: <IconTimer/> },
+    { n: "03", t: "Sube de liga", d: "Compite cada semana con tu universidad. Premios reales en monedas.", icon: <IconTrophy/> },
+  ];
+  return (
+    <section id="how" style={{ background: "var(--bg-2)", borderTop: "2px solid var(--line)", borderBottom: "2px solid var(--line)" }}>
+      <div className="container">
+        <div className="section-head">
+          <span className="eyebrow"><span className="dot"/> Cero fricción</span>
+          <h2>De cero a estudiando<br/>en menos de un minuto.</h2>
+        </div>
+        <div className="how-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22 }}>
+          {steps.map((s, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              <div className="card" style={{ padding: 28, height: "100%" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--ink-3)", letterSpacing: ".1em" }}>{s.n}</span>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 14,
+                    background: "var(--brand-soft)", border: "2px solid var(--brand)",
+                    display: "grid", placeItems: "center", color: "var(--brand-ink)",
+                  }}>{React.cloneElement(s.icon, { size: 24 })}</div>
+                </div>
+                <h3 style={{ fontSize: 24, marginBottom: 10 }}>{s.t}</h3>
+                <p style={{ color: "var(--ink-2)", fontSize: 16 }}>{s.d}</p>
+              </div>
+              {i < 2 && (
+                <div className="how-arrow" style={{
+                  position: "absolute", top: "50%", right: -22, transform: "translateY(-50%)",
+                  width: 28, height: 28, borderRadius: "50%",
+                  background: "var(--brand)", border: "2px solid var(--ink)",
+                  display: "grid", placeItems: "center", color: "white", zIndex: 2,
+                  boxShadow: "0 3px 0 0 var(--ink)",
+                }}>
+                  <IconArrow size={14} strokeWidth={3}/>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 880px) {
+          .how-grid { grid-template-columns: 1fr !important; }
+          .how-arrow { display: none !important; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+/* -------- CANVAS CALLOUT -------- */
+function CanvasCallout() {
+  const lines = [
+    { c: "var(--accent)", t: "→ extension.machreach/canvas", d: 0 },
+    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ Canvas abierto detectado", d: 200 },
+    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ cursos leídos por la extensión", d: 400 },
+    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ok ramos listos para ordenar", d: 600 },
+    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ok herramientas listas", d: 800 },
+    { c: "var(--brand)", t: "→ listo para estudiar.", d: 1100 },
+  ];
+  const [shown, setShown] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setShown(s => (s >= lines.length ? 0 : s + 1)), 600);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <section>
+      <div className="container">
+        <div className="canvas-cta" style={{
+          display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 48,
+          alignItems: "center", background: "var(--ink)", color: "white",
+          borderRadius: 36, padding: "56px 56px",
+          border: "2px solid var(--ink)", boxShadow: "0 8px 0 0 var(--brand)",
+          position: "relative", overflow: "hidden",
+        }}>
+          <div>
+            <span className="eyebrow" style={{ background: "color-mix(in oklab, white 14%, transparent)", borderColor: "white", color: "white" }}>
+              <span className="dot" style={{ background: "var(--accent)" }}/> Conexion simple
+            </span>
+            <h2 style={{ fontSize: "clamp(34px, 4.5vw, 56px)", marginTop: 18, color: "white" }}>
+              Activa la extensión,<br/>ordena tus cursos.
+            </h2>
+            <p style={{ color: "color-mix(in oklab, white 75%, transparent)", fontSize: 18, marginTop: 16, maxWidth: 480 }}>
+              La extensión de MachReach lee tu lista de cursos desde tu propia sesión de Canvas y la envía a MachReach para organizar tu estudio por ramo. Solo detecta cursos; no toca tareas, notas ni credenciales.
+            </p>
+            <div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}>
+        <a href="/register" className="btn btn-primary btn-lg" style={{ borderColor: "white" }}>
+                <IconCanvas size={20}/> Usar la extensión
+              </a>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14, color: "color-mix(in oklab, white 70%, transparent)" }}>
+                <IconCheck size={16}/> UC, UDP, USACH, UAndes, UAI…
+              </span>
+            </div>
+          </div>
+          <div>
+            <div style={{
+              background: "color-mix(in oklab, white 6%, var(--ink))",
+              border: "2px solid color-mix(in oklab, white 18%, transparent)",
+              borderRadius: 20, padding: 20,
+              fontFamily: "var(--font-mono)", fontSize: 13, minHeight: 220,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid color-mix(in oklab, white 12%, transparent)" }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f56" }}/>
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffbd2e" }}/>
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#27c93f" }}/>
+                </div>
+                <span style={{ fontSize: 11, color: "color-mix(in oklab, white 50%, transparent)" }}>~/machreach/sync</span>
+              </div>
+              {lines.slice(0, shown).map((l, i) => (
+                <div key={i} style={{ color: l.c, lineHeight: 1.9, animation: "count-up .25s ease both" }}>{l.t}</div>
+              ))}
+              {shown < lines.length && (
+                <span style={{ color: "var(--brand)", animation: "pulse-ring 1s infinite" }}>▍</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      <style>{`@media (max-width: 900px) { .canvas-cta { grid-template-columns: 1fr !important; padding: 40px 28px !important; } }`}</style>
+    </section>
+  );
+}
+
+/* -------- LEADERBOARDS SHOWCASE — with podium -------- */
+function LeaderboardShowcaseLegacy() {
+  const [scope, setScope] = React.useState("uni");
+  const data = {
+    pais:    [{ n: "Catalina",  u: "UC",   xp: 28400, c: "#fb923c" }, { n: "Joaquín",  u: "PUCV", xp: 24100, c: "#a78bfa" }, { n: "tú", u: "UDP", xp: 22850, c: "var(--brand)", you: true }, { n: "Renata", u: "USS",  xp: 20180, c: "#22d3ee" }, { n: "Diego",    u: "UAI",  xp: 18910, c: "#34d399" }],
+    uni:     [{ n: "Sofia_Db",  u: "UDP",  xp: 24100, c: "#fb923c" }, { n: "tú",       u: "UDP",  xp: 22850, c: "var(--brand)", you: true }, { n: "Antonia",  u: "UDP", xp: 19200, c: "#a78bfa" }, { n: "Tomás",   u: "UDP",  xp: 17640, c: "#22d3ee" }, { n: "Sofía",    u: "UDP",  xp: 14720, c: "#34d399" }],
+    carrera: [{ n: "Magdalena", u: "Ing.", xp: 18900, c: "#fb923c" }, { n: "tú",       u: "Ing.", xp: 16200, c: "var(--brand)", you: true }, { n: "Pablo",    u: "Ing.", xp: 14820, c: "#a78bfa" }, { n: "Camila",  u: "Ing.", xp: 12410, c: "#22d3ee" }, { n: "Benja",    u: "Ing.", xp: 10940, c: "#34d399" }],
+  };
+
+  /* Podium uses top 3 */
+  const podium = [...data[scope]].slice(0, 3);
+  // arrange as [#2, #1, #3]
+  const podiumOrder = [podium[1], podium[0], podium[2]];
+  const podiumHeights = [80, 110, 64];
+  const podiumMedals = ["var(--silver)", "var(--gold)", "var(--bronze)"];
+  const podiumRanks = [2, 1, 3];
+
+  return (
+    <section style={{ background: "var(--bg-2)", borderTop: "2px solid var(--line)", borderBottom: "2px solid var(--line)" }}>
+      <div className="container">
+        <div className="section-head">
+          <span className="eyebrow"><span className="dot"/> Compite sano</span>
+          <h2>Rankings semanales que<br/>te sacan a estudiar.</h2>
+          <p>Tres niveles: tu carrera, tu universidad, tu país. Se cierran cada lunes con premios en monedas.</p>
+        </div>
+        <div className="lb-wrap" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, alignItems: "center" }}>
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+              {[
+                { k: "carrera", l: "Por carrera" },
+                { k: "uni",     l: "Por universidad" },
+                { k: "pais",    l: "Por país" },
+              ].map(t => (
+                <button key={t.k} onClick={() => setScope(t.k)} style={{
+                  padding: "10px 18px", borderRadius: 12, border: "2px solid var(--ink)",
+                  background: scope === t.k ? "var(--brand)" : "var(--surface)",
+                  color: scope === t.k ? "white" : "var(--ink)",
+                  fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14,
+                  boxShadow: scope === t.k ? "0 3px 0 0 var(--ink)" : "0 2px 0 0 var(--ink)",
+                  cursor: "pointer",
+                }}>{t.l}</button>
+              ))}
+            </div>
+            <h3 style={{ fontSize: 28, marginBottom: 10 }}>Tres ligas, un objetivo: <span style={{ color: "var(--brand)" }}>quedar arriba.</span></h3>
+            <p style={{ color: "var(--ink-2)", fontSize: 16, marginBottom: 16 }}>
+              Cada semana arranca un nuevo ranking. Acumula XP estudiando con Focus y sube por rangos reales como Iniciados, Aprendices, Estudiosos e Investigadores.
+            </p>
+            <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { t: "Top 3 semanal: 500 monedas + badge exclusivo", c: "var(--gold)" },
+                { t: "Top 10 mensual: 2.000 monedas + cosmético dorado", c: "var(--silver)" },
+                { t: "Investigadores: status visible y premios especiales", c: "var(--secondary)" },
+              ].map((r, i) => (
+                <li key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 15 }}>
+                  <span style={{
+                    width: 22, height: 22, borderRadius: 6,
+                    background: r.c, border: "2px solid var(--ink)",
+                    color: "white", display: "grid", placeItems: "center",
+                  }}><IconCheck size={14} strokeWidth={3}/></span>
+                  {r.t}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Right: leaderboard card */}
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{
+              padding: "16px 20px",
+              background: "linear-gradient(180deg, var(--brand-soft), transparent)",
+              borderBottom: "2px solid var(--line)",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18 }}>
+                    Investigadores · {scope === "pais" ? "Chile" : scope === "uni" ? "UDP" : "Ingeniería"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".06em", marginTop: 2 }}>
+                    SEMANA 26 · CIERRA LUN 09:00
+                  </div>
+                </div>
+                <span className="tag" style={{ borderColor: "var(--good)", color: "var(--good)", background: "color-mix(in oklab, var(--good) 12%, var(--surface))" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--good)" }}/> live
+                </span>
+              </div>
+            </div>
+
+            {/* Podium */}
+            <div style={{
+              padding: "24px 20px 12px",
+              background: "var(--bg-2)",
+              borderBottom: "2px dashed var(--line)",
+            }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "end", gap: 8 }}>
+                {podiumOrder.map((p, idx) => {
+                  if (!p) return <div key={idx}/>;
+                  const rank = podiumRanks[idx];
+                  return (
+                    <div key={p.n + scope + idx} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                      <Avatar name={p.n} color={p.c} size={rank === 1 ? 50 : 40} you={p.you}/>
+                      <div style={{ fontWeight: 800, fontSize: 12, fontFamily: "var(--font-display)" }}>{p.n}</div>
+                      <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)", letterSpacing: ".05em" }}>{p.xp.toLocaleString("es-CL")} XP</div>
+                      <div style={{
+                        width: "100%", height: podiumHeights[idx],
+                        background: podiumMedals[idx],
+                        border: "2px solid var(--ink)",
+                        borderRadius: "10px 10px 0 0",
+                        boxShadow: "0 -3px 0 0 color-mix(in oklab, black 12%, transparent) inset",
+                        display: "grid", placeItems: "center",
+                        fontFamily: "var(--font-display)", fontWeight: 800, color: "white", fontSize: 28,
+                        position: "relative",
+                      }}>
+                        {rank}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Rest of rows (4-5) */}
+            <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+              {data[scope].slice(3).map((r, i) => (
+                <div key={r.n + scope} style={{
+                  display: "grid", gridTemplateColumns: "28px 36px 1fr auto",
+                  alignItems: "center", gap: 12,
+                  padding: "8px 10px", borderRadius: 12,
+                  background: r.you ? "var(--brand-soft)" : "transparent",
+                  border: r.you ? "2px solid var(--brand)" : "2px solid transparent",
+                }}>
+                  <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, color: "var(--ink-3)", textAlign: "center" }}>{i + 4}</div>
+                  <Avatar name={r.n} color={r.c} size={32} you={r.you}/>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{r.n}</div>
+                    <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".06em" }}>{r.u}</div>
+                  </div>
+                  <div style={{ textAlign: "right", fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14 }}>
+                    {r.xp.toLocaleString("es-CL")} <span style={{ fontSize: 9, color: "var(--ink-3)" }}>XP</span>
+                  </div>
+                </div>
+              ))}
+              {/* Your row callout if not in top */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, padding: "8px 10px", background: "var(--ink)", color: "white", borderRadius: 10 }}>
+                <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", letterSpacing: ".08em" }}>TU POSICIÓN ACTUAL</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14, color: "var(--accent)" }}>#{data[scope].findIndex(r => r.you) + 1}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <style>{`@media (max-width: 880px) { .lb-wrap { grid-template-columns: 1fr !important; } }`}</style>
+    </section>
+  );
+}
+
+function LeaderboardShowcase() {
+  const [scope, setScope] = React.useState("uni");
+  const [previewScope, setPreviewScope] = React.useState(null);
+  const [selected, setSelected] = React.useState(null);
+  const [pulseIndex, setPulseIndex] = React.useState(0);
+  const data = {
+    pais: [
+      { n: "Catalina", u: "UC", xp: 28400, c: "#fb923c", delta: 320, streak: 14 },
+      { n: "Joaquín", u: "PUCV", xp: 24100, c: "#a78bfa", delta: 210, streak: 9 },
+      { n: "tú", u: "UDP", xp: 22850, c: "var(--brand)", you: true, delta: 180, streak: 11 },
+      { n: "Renata", u: "USS", xp: 20180, c: "#22d3ee", delta: 145, streak: 6 },
+      { n: "Diego", u: "UAI", xp: 18910, c: "#34d399", delta: 120, streak: 5 },
+    ],
+    uni: [
+      { n: "Sofia_Db", u: "UDP", xp: 24100, c: "#fb923c", delta: 260, streak: 12 },
+      { n: "tú", u: "UDP", xp: 22850, c: "var(--brand)", you: true, delta: 220, streak: 11 },
+      { n: "Antonia", u: "UDP", xp: 19200, c: "#a78bfa", delta: 170, streak: 7 },
+      { n: "Tomás", u: "UDP", xp: 17640, c: "#22d3ee", delta: 130, streak: 6 },
+      { n: "Sofía", u: "UDP", xp: 14720, c: "#34d399", delta: 95, streak: 4 },
+    ],
+    carrera: [
+      { n: "Magdalena", u: "Ing.", xp: 18900, c: "#fb923c", delta: 190, streak: 8 },
+      { n: "tú", u: "Ing.", xp: 16200, c: "var(--brand)", you: true, delta: 160, streak: 11 },
+      { n: "Pablo", u: "Ing.", xp: 14820, c: "#a78bfa", delta: 120, streak: 5 },
+      { n: "Camila", u: "Ing.", xp: 12410, c: "#22d3ee", delta: 100, streak: 4 },
+      { n: "Benja", u: "Ing.", xp: 10940, c: "#34d399", delta: 80, streak: 3 },
+    ],
+  };
+  const themes = {
+    carrera: {
+      primary: "#8B5CF6",
+      accent: "#22D3EE",
+      title: "Ingeniería",
+      headline: "tu carrera.",
+      micro: "Rivales del mismo ramo",
+      stats: ["12 carreras", "+160 XP hoy", "racha 11"],
+    },
+    uni: {
+      primary: "#FF7A3D",
+      accent: "#9BEE43",
+      title: "UDP",
+      headline: "tu universidad.",
+      micro: "La UDP está prendida",
+      stats: ["42 cursos", "+220 XP hoy", "top 3 cerca"],
+    },
+    pais: {
+      primary: "#14B8D6",
+      accent: "#FF7A3D",
+      title: "Chile",
+      headline: "todo Chile.",
+      micro: "Ranking nacional en vivo",
+      stats: ["12 Ues", "+180 XP hoy", "#3 actual"],
+    },
+  };
+  const displayScope = previewScope || scope;
+  const rows = data[displayScope];
+  const theme = themes[displayScope];
+  const selectedRow = rows.find(r => r.n === selected) || rows.find(r => r.you) || rows[0];
+  const selectedRank = rows.findIndex(r => r.n === selectedRow.n) + 1;
+  const yourRank = rows.findIndex(r => r.you) + 1;
+  const podium = rows.slice(0, 3);
+  const podiumOrder = [podium[1], podium[0], podium[2]];
+  const podiumHeights = [80, 110, 64];
+  const podiumRanks = [2, 1, 3];
+  const podiumMedals = [
+    "linear-gradient(180deg, color-mix(in oklab, var(--lb-primary) 24%, white), var(--silver))",
+    "linear-gradient(180deg, var(--lb-accent), var(--lb-primary))",
+    "linear-gradient(180deg, color-mix(in oklab, var(--lb-primary) 38%, var(--bronze)), var(--bronze))",
+  ];
+
+  React.useEffect(() => {
+    const id = setInterval(() => setPulseIndex(i => (i + 1) % data[scope].length), 2200);
+    return () => clearInterval(id);
+  }, [scope]);
+
+  React.useEffect(() => {
+    setSelected(null);
+    setPulseIndex(0);
+  }, [scope]);
+
+  const activateScope = (k) => {
+    setScope(k);
+    setPreviewScope(null);
+  };
+
+  return (
+    <section id="leaderboard" className="lb-showcase" style={{
+      "--lb-primary": theme.primary,
+      "--lb-accent": theme.accent,
+      background: "linear-gradient(135deg, color-mix(in oklab, var(--lb-primary) 10%, var(--bg-2)) 0%, var(--bg-2) 42%, color-mix(in oklab, var(--lb-accent) 10%, var(--bg-2)) 100%)",
+      borderTop: "2px solid var(--line)",
+      borderBottom: "2px solid var(--line)",
+      transition: "background .28s ease",
+    }}>
+      <div className="container">
+        <div className="section-head">
+          <span className="eyebrow"><span className="dot"/> Compite sano</span>
+          <h2>Rankings semanales que<br/>te sacan a estudiar.</h2>
+          <p>Tres niveles: tu carrera, tu universidad, tu país. Se cierran cada lunes con premios en monedas.</p>
+        </div>
+        <div className="lb-wrap" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, alignItems: "center" }}>
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+              {[
+                { k: "carrera", l: "Por carrera" },
+                { k: "uni", l: "Por universidad" },
+                { k: "pais", l: "Por país" },
+              ].map(t => (
+                <button
+                  key={t.k}
+                  className="lb-scope-btn"
+                  onClick={() => activateScope(t.k)}
+                  onMouseEnter={() => setPreviewScope(t.k)}
+                  onMouseLeave={() => setPreviewScope(null)}
+                  onFocus={() => setPreviewScope(t.k)}
+                  onBlur={() => setPreviewScope(null)}
+                  style={{
+                    padding: "10px 18px",
+                    borderRadius: 12,
+                    border: "2px solid var(--ink)",
+                    background: displayScope === t.k ? "var(--lb-primary)" : "var(--surface)",
+                    color: displayScope === t.k ? "white" : "var(--ink)",
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 800,
+                    fontSize: 14,
+                    boxShadow: scope === t.k ? "0 4px 0 0 var(--ink)" : displayScope === t.k ? "0 3px 0 0 var(--ink)" : "0 2px 0 0 var(--ink)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.l}
+                </button>
+              ))}
+            </div>
+            <h3 style={{ fontSize: 28, marginBottom: 10 }}>Tres ligas, un objetivo: <span style={{ color: "var(--lb-primary)" }}>{theme.headline}</span></h3>
+            <p style={{ color: "var(--ink-2)", fontSize: 16, marginBottom: 16 }}>
+              Cada semana arranca un nuevo ranking. Acumula XP estudiando con Focus y sube por rangos reales como Iniciados, Aprendices, Estudiosos e Investigadores.
+            </p>
+            <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { t: "Top 3 semanal: 500 monedas + badge exclusivo", c: "var(--gold)" },
+                { t: "Top 10 mensual: 2.000 monedas + cosmético dorado", c: "var(--silver)" },
+                { t: "Investigadores: status visible y premios especiales", c: "var(--lb-primary)" },
+              ].map((r, i) => (
+                <li key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 15 }}>
+                  <span style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    background: r.c,
+                    border: "2px solid var(--ink)",
+                    color: "white",
+                    display: "grid",
+                    placeItems: "center",
+                  }}><IconCheck size={14} strokeWidth={3}/></span>
+                  {r.t}
+                </li>
+              ))}
+            </ul>
+            <div className="lb-insight" style={{
+              marginTop: 20,
+              padding: 16,
+              border: "2px solid var(--ink)",
+              borderRadius: 18,
+              background: "linear-gradient(135deg, var(--surface), color-mix(in oklab, var(--lb-primary) 11%, var(--surface)))",
+              boxShadow: "0 4px 0 0 var(--ink)",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 800 }}>{theme.micro}</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, marginTop: 3 }}>{selectedRow.n} <span style={{ color: "var(--lb-primary)" }}>#{selectedRank}</span></div>
+                </div>
+                <div style={{ minWidth: 88, textAlign: "right", fontFamily: "var(--font-display)", color: "var(--lb-primary)", fontWeight: 800, fontSize: 18 }}>+{selectedRow.delta} XP</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                {theme.stats.map(s => (
+                  <span key={s} style={{
+                    border: "1.5px solid color-mix(in oklab, var(--lb-primary) 50%, var(--ink))",
+                    background: "color-mix(in oklab, var(--lb-primary) 10%, var(--surface))",
+                    color: "var(--ink)",
+                    borderRadius: 999,
+                    padding: "5px 10px",
+                    fontSize: 11,
+                    fontFamily: "var(--font-mono)",
+                    fontWeight: 800,
+                    letterSpacing: ".04em",
+                  }}>{s}</span>
+                ))}
+              </div>
+              <div style={{ marginTop: 12, height: 8, borderRadius: 999, border: "1.5px solid var(--ink)", background: "var(--surface)", overflow: "hidden" }}>
+                <div className="lb-meter" style={{
+                  width: `${Math.min(94, 34 + selectedRow.delta / 4)}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, var(--lb-primary), var(--lb-accent))",
+                }}/>
+              </div>
+            </div>
+          </div>
+
+          <div key={displayScope} className="card lb-arena" style={{
+            padding: 0,
+            overflow: "hidden",
+            background: "var(--surface)",
+            boxShadow: "0 6px 0 0 var(--ink), 0 22px 50px color-mix(in oklab, var(--lb-primary) 20%, transparent)",
+          }}>
+            <div style={{
+              padding: "16px 20px",
+              background: "linear-gradient(135deg, color-mix(in oklab, var(--lb-primary) 16%, var(--surface)), color-mix(in oklab, var(--lb-accent) 10%, var(--surface)))",
+              borderBottom: "2px solid var(--line)",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18 }}>Investigadores · {theme.title}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".06em", marginTop: 2 }}>SEMANA 26 · CIERRA LUN 09:00</div>
+                </div>
+                <span className="tag lb-live-pill" style={{ borderColor: "var(--lb-primary)", color: "var(--lb-primary)", background: "color-mix(in oklab, var(--lb-primary) 12%, var(--surface))" }}>
+                  <span className="lb-live-dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--lb-primary)" }}/> live
+                </span>
+              </div>
+            </div>
+
+            <div className="lb-stage" style={{
+              padding: "24px 20px 12px",
+              background: "linear-gradient(180deg, color-mix(in oklab, var(--lb-primary) 7%, var(--bg-2)), var(--bg-2))",
+              backgroundImage: "linear-gradient(180deg, color-mix(in oklab, var(--lb-primary) 7%, var(--bg-2)), var(--bg-2)), linear-gradient(135deg, color-mix(in oklab, var(--lb-primary) 16%, transparent) 0 1px, transparent 1px 18px)",
+              borderBottom: "2px dashed var(--line)",
+            }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "end", gap: 8 }}>
+                {podiumOrder.map((p, idx) => {
+                  if (!p) return <div key={idx}/>;
+                  const rank = podiumRanks[idx];
+                  const isSelected = selectedRow.n === p.n;
+                  const isPulsing = rows[pulseIndex] && rows[pulseIndex].n === p.n;
+                  return (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      key={p.n + displayScope + idx}
+                      className={`lb-podium-cell ${isSelected ? "is-selected" : ""} ${isPulsing ? "is-pulsing" : ""}`}
+                      onClick={() => setSelected(p.n)}
+                      onMouseEnter={() => setSelected(p.n)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelected(p.n); }}
+                      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, animationDelay: `${idx * 90}ms` }}
+                    >
+                      <Avatar name={p.n} color={p.c} size={rank === 1 ? 50 : 40} you={p.you}/>
+                      <div style={{ fontWeight: 800, fontSize: 12, fontFamily: "var(--font-display)" }}>{p.n}</div>
+                      <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)", letterSpacing: ".05em" }}>{p.xp.toLocaleString("es-CL")} XP</div>
+                      <div className="lb-podium-bar" style={{
+                        width: "100%",
+                        height: podiumHeights[idx],
+                        background: podiumMedals[idx],
+                        border: "2px solid var(--ink)",
+                        borderRadius: "10px 10px 0 0",
+                        boxShadow: isSelected ? "0 0 0 4px color-mix(in oklab, var(--lb-primary) 22%, transparent), 0 -3px 0 0 color-mix(in oklab, black 12%, transparent) inset" : "0 -3px 0 0 color-mix(in oklab, black 12%, transparent) inset",
+                        display: "grid",
+                        placeItems: "center",
+                        fontFamily: "var(--font-display)",
+                        fontWeight: 800,
+                        color: "white",
+                        fontSize: 28,
+                        position: "relative",
+                      }}>
+                        {rank}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+              {rows.slice(3).map((r, i) => {
+                const isSelected = selectedRow.n === r.n;
+                const isPulsing = rows[pulseIndex] && rows[pulseIndex].n === r.n;
+                return (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    key={r.n + displayScope}
+                    className={`lb-row-item ${isSelected ? "is-selected" : ""} ${isPulsing ? "is-pulsing" : ""}`}
+                    onClick={() => setSelected(r.n)}
+                    onMouseEnter={() => setSelected(r.n)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelected(r.n); }}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "28px 36px 1fr auto",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "8px 10px",
+                      borderRadius: 12,
+                      background: isSelected ? "color-mix(in oklab, var(--lb-primary) 14%, var(--surface))" : r.you ? "var(--brand-soft)" : "transparent",
+                      border: isSelected ? "2px solid var(--lb-primary)" : r.you ? "2px solid var(--brand)" : "2px solid transparent",
+                      animationDelay: `${i * 80 + 220}ms`,
+                    }}
+                  >
+                    <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, color: "var(--ink-3)", textAlign: "center" }}>{i + 4}</div>
+                    <Avatar name={r.n} color={r.c} size={32} you={r.you}/>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{r.n}</div>
+                      <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".06em" }}>{r.u}</div>
+                    </div>
+                    <div style={{ textAlign: "right", fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14 }}>
+                      {r.xp.toLocaleString("es-CL")} <span style={{ fontSize: 9, color: "var(--ink-3)" }}>XP</span>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="lb-you-callout" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, padding: "8px 10px", background: "linear-gradient(90deg, var(--ink), color-mix(in oklab, var(--lb-primary) 35%, var(--ink)))", color: "white", borderRadius: 10 }}>
+                <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", letterSpacing: ".08em" }}>TU POSICIÓN ACTUAL</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14, color: "var(--lb-accent)" }}>#{yourRank}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <style>{`
+        .lb-scope-btn,
+        .lb-row-item,
+        .lb-podium-cell,
+        .lb-arena,
+        .lb-insight {
+          transition: transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease, color .18s ease;
+        }
+        .lb-scope-btn:hover,
+        .lb-scope-btn:focus-visible {
+          transform: translate(-1px, -2px);
+          outline: none;
+        }
+        .lb-arena:hover,
+        .lb-insight:hover {
+          transform: translateY(-3px);
+        }
+        .lb-live-dot {
+          animation: lbLivePulse 1.2s ease-in-out infinite;
+        }
+        .lb-live-pill {
+          box-shadow: 0 0 0 0 color-mix(in oklab, var(--lb-primary) 30%, transparent);
+          animation: lbTagPulse 2.4s ease infinite;
+        }
+        .lb-podium-cell {
+          cursor: pointer;
+          text-align: center;
+          animation: lbPodiumIn .48s cubic-bezier(.2,.8,.2,1) both;
+        }
+        .lb-podium-cell:hover,
+        .lb-podium-cell.is-selected {
+          transform: translateY(-5px);
+        }
+        .lb-podium-cell.is-pulsing .lb-podium-bar,
+        .lb-row-item.is-pulsing {
+          box-shadow: 0 0 0 4px color-mix(in oklab, var(--lb-accent) 24%, transparent), 0 10px 24px color-mix(in oklab, var(--lb-primary) 18%, transparent);
+        }
+        .lb-podium-bar {
+          transform-origin: bottom;
+          animation: lbBarBuild .5s cubic-bezier(.2,.8,.2,1) both;
+        }
+        .lb-row-item {
+          cursor: pointer;
+          width: 100%;
+          text-align: left;
+          animation: lbRowIn .42s cubic-bezier(.2,.8,.2,1) both;
+        }
+        .lb-row-item:hover,
+        .lb-row-item.is-selected {
+          transform: translateX(5px);
+        }
+        .lb-meter {
+          transform-origin: left center;
+          animation: lbMeterSweep .46s ease both;
+          transition: width .22s ease;
+        }
+        .lb-you-callout {
+          animation: lbRowIn .48s cubic-bezier(.2,.8,.2,1) both;
+        }
+        @keyframes lbPodiumIn {
+          from { opacity: 0; transform: translateY(18px) scale(.96); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes lbRowIn {
+          from { opacity: 0; transform: translateX(18px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes lbBarBuild {
+          from { transform: scaleY(.25); filter: saturate(.7); }
+          to { transform: scaleY(1); filter: saturate(1); }
+        }
+        @keyframes lbMeterSweep {
+          from { transform: scaleX(.2); }
+          to { transform: scaleX(1); }
+        }
+        @keyframes lbLivePulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.55); opacity: .62; }
+        }
+        @keyframes lbTagPulse {
+          0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lb-primary) 22%, transparent); }
+          50% { box-shadow: 0 0 0 8px transparent; }
+        }
+        @media (max-width: 880px) {
+          .lb-wrap { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+/* -------- QUIZ DEMO -------- */
+function QuizDemo() {
+  const questions = [
+    { q: "¿Cuál es el límite de sin(x)/x cuando x → 0?", opts: ["0", "1", "∞", "no existe"], correct: 1, ramo: "Cálculo I" },
+    { q: "Una matriz cuadrada es invertible si...", opts: ["su determinante es 0", "su determinante es ≠ 0", "es simétrica", "tiene filas iguales"], correct: 1, ramo: "Álgebra Lineal" },
+    { q: "La aceleración en MAS es máxima en...", opts: ["el equilibrio", "los extremos", "la mitad", "es constante"], correct: 1, ramo: "Física II" },
+  ];
+  const [i, setI] = React.useState(0);
+  const [picked, setPicked] = React.useState(null);
+  const q = questions[i];
+
+  const choose = (k) => {
+    if (picked !== null) return;
+    setPicked(k);
+  };
+  const next = () => {
+    setPicked(null);
+    setI((i + 1) % questions.length);
+  };
+
+  return (
+    <section>
+      <div className="container">
+        <div className="section-head">
+          <span className="eyebrow"><span className="dot"/> Quizzes</span>
+          <h2>Quizzes con IA, hechos<br/>por tu propia universidad.</h2>
+          <p>Practica con cuestionarios generados a partir del material real de tus cursos. Son herramientas privadas de estudio, no una red comunitaria.</p>
+        </div>
+        <div className="quiz-wrap" style={{ display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 36, alignItems: "center" }}>
+          <div>
+            <h3 style={{ fontSize: 26, marginBottom: 14 }}>Material desordenado entra. Quiz ordenado sale.</h3>
+            <p style={{ color: "var(--ink-2)", fontSize: 16, marginBottom: 22 }}>
+              Sube un PDF o tus propios apuntes. La IA genera preguntas relevantes para tu próxima prueba en segundos.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {[
+                { ic: <IconBook/>,   t: "Aprende del material real, no de internet aleatorio" },
+                { ic: <IconPeople/>, t: "Mantén tus materiales y preguntas dentro de tu cuenta" },
+                { ic: <IconCoin/>,   t: "El progreso real viene del Focus, no de farmear quizzes" },
+              ].map((r, k) => (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 12,
+                    background: "var(--secondary-soft)", border: "2px solid var(--secondary)",
+                    color: "var(--secondary)", display: "grid", placeItems: "center",
+                  }}>{React.cloneElement(r.ic, { size: 20 })}</div>
+                  <span style={{ fontWeight: 600 }}>{r.t}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            {/* Quiz top bar */}
+            <div className="quiz-top-bar" style={{
+              padding: "14px 20px",
+              background: "var(--ink)", color: "white",
+              display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "center", gap: 14,
+            }}>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
+                background: "var(--brand)", padding: "4px 10px", borderRadius: 6,
+                letterSpacing: ".06em",
+              }}>{q.ramo}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {/* progress bar */}
+                <div style={{ flex: 1, height: 8, background: "color-mix(in oklab, white 14%, transparent)", borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ width: ((i + 1) / questions.length) * 100 + "%", height: "100%", background: "var(--accent)", transition: "width .3s ease" }}/>
+                </div>
+                <span className="quiz-counter" style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "color-mix(in oklab, white 70%, transparent)" }}>{i + 1}/{questions.length}</span>
+              </div>
+            </div>
+
+            <div style={{ padding: 26 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, marginBottom: 20, lineHeight: 1.25 }}>{q.q}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {q.opts.map((o, k) => {
+                  const isPicked = picked === k;
+                  const isCorrect = k === q.correct;
+                  let bg = "var(--surface)", bd = "var(--line-2)", color = "var(--ink)", shadow = "0 2px 0 0 var(--line-2)";
+                  if (picked !== null) {
+                    if (isCorrect) { bg = "color-mix(in oklab, var(--good) 18%, var(--surface))"; bd = "var(--good)"; shadow = "0 2px 0 0 var(--good)"; }
+                    else if (isPicked) { bg = "color-mix(in oklab, var(--bad) 14%, var(--surface))"; bd = "var(--bad)"; shadow = "0 2px 0 0 var(--bad)"; }
+                  }
+                  return (
+                    <button key={k} onClick={() => choose(k)} style={{
+                      padding: "14px 18px", borderRadius: 14,
+                      border: "2px solid " + bd, background: bg, color,
+                      boxShadow: shadow,
+                      textAlign: "left", fontWeight: 700, fontSize: 16,
+                      display: "grid", gridTemplateColumns: "28px 1fr auto", alignItems: "center", gap: 12,
+                      cursor: picked === null ? "pointer" : "default",
+                      transition: "all .2s ease",
+                    }}>
+                      <span style={{
+                        fontFamily: "var(--font-mono)", fontSize: 12,
+                        width: 28, height: 28, borderRadius: 8,
+                        background: picked !== null && isCorrect ? "var(--good)" : picked !== null && isPicked ? "var(--bad)" : "var(--bg-2)",
+                        color: (picked !== null && (isCorrect || isPicked)) ? "white" : "var(--ink-2)",
+                        border: "2px solid var(--ink)",
+                        display: "grid", placeItems: "center", fontWeight: 800,
+                      }}>{["A","B","C","D"][k]}</span>
+                      <span>{o}</span>
+                      {picked !== null && isCorrect && <IconCheck size={20} color="var(--good)" strokeWidth={3}/>}
+                      {picked !== null && isPicked && !isCorrect && <IconClose size={20} color="var(--bad)" strokeWidth={3}/>}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, paddingTop: 16, borderTop: "2px dashed var(--line)" }}>
+                <span style={{ fontSize: 13, color: picked === null ? "var(--ink-3)" : picked === q.correct ? "var(--good)" : "var(--bad)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                  {picked === null ? "Elige una respuesta" : picked === q.correct ? "✓ Correcto" : "Revisa la respuesta correcta"}
+                </span>
+                <button onClick={next} className="btn btn-ghost btn-sm">
+                  Siguiente <IconArrow size={14}/>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <style>{`@media (max-width: 880px) { .quiz-wrap { grid-template-columns: 1fr !important; } }`}</style>
+    </section>
+  );
+}
+
+/* -------- STATS STRIP -------- */
+function useCountUp(target, active) {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    if (!active) return;
+    let start = null;
+    const dur = 1400;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const p = Math.min(1, (ts - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setV(Math.floor(target * eased));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [target, active]);
+  return v;
+}
+function StatsStrip() {
+  const ref = React.useRef(null);
+  const [active, setActive] = React.useState(false);
+  React.useEffect(() => {
+    const obs = new IntersectionObserver((es) => es.forEach(e => e.isIntersecting && setActive(true)), { threshold: 0.3 });
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+  const stats = [
+    { v: useCountUp(2347, active), l: "estudiantes activos esta semana", suf: "" },
+    { v: useCountUp(184,  active), l: "horas estudiadas hoy", suf: "h" },
+    { v: useCountUp(12,   active), l: "universidades conectadas", suf: "" },
+    { v: useCountUp(98,   active), l: "satisfacción de usuarios", suf: "%" },
+  ];
+  return (
+    <section ref={ref} style={{ paddingTop: 64, paddingBottom: 64 }}>
+      <div className="container">
+        <div className="stats-grid" style={{
+          display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0,
+          background: "var(--surface)", border: "2px solid var(--ink)", borderRadius: 24,
+          boxShadow: "0 6px 0 0 var(--ink)", overflow: "visible", marginBottom: 10,
+        }}>
+          {stats.map((s, i) => (
+            <div key={i} style={{
+              padding: "32px 24px", textAlign: "center",
+              borderRight: i < stats.length - 1 ? "2px solid var(--line)" : "none",
+            }}>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "clamp(36px, 4vw, 52px)", color: "var(--brand)" }}>
+                {s.v.toLocaleString("es-CL")}{s.suf}
+              </div>
+              <div style={{ color: "var(--ink-2)", fontSize: 14, fontWeight: 600, marginTop: 6 }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 880px) { .stats-grid { grid-template-columns: 1fr 1fr !important; }
+          .stats-grid > div:nth-child(2) { border-right: none !important; }
+          .stats-grid > div:nth-child(-n+2) { border-bottom: 2px solid var(--line); }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+/* -------- FAQ -------- */
+function FAQ() {
+  const [open, setOpen] = React.useState(0);
+  const faqs = [
+    { q: "¿Por qué usar MachReach si ya tengo mis apuntes?", a: "MachReach no solo guarda material: mide tu estudio por curso, te da Focus con XP, quizzes IA, flashcards, analytics y rankings en un mismo lugar." },
+    { q: "¿Mi universidad usa Canvas?", a: "La mayoría de las grandes en Chile sí: UC, UDP, UAndes, UAI, USACH, USS, PUCV. Si la tuya no, igual puedes subir cursos a mano y usar el resto de la app." },
+    { q: "¿Es seguro conectar mi cuenta Canvas?", a: "Sí. La extensión de MachReach detecta tus cursos desde tu sesión abierta de Canvas. No pedimos tu contraseña ni tocamos tus tareas, notas o contenido." },
+    { q: "¿Qué pasa con mis datos de estudio?", a: "Son tuyos. No vendemos datos a terceros. Puedes exportar todo o borrar tu cuenta en cualquier momento." },
+    { q: "¿Cómo funciona la economía de monedas?", a: "Ganas monedas estudiando con Focus. Las gastas en cosméticos, banners y temas. Pura cosa estética — no afecta tu desempeño académico." },
+    { q: "¿Puedo cancelar la suscripción cuando quiera?", a: "Sí. Sin contratos ni letra chica. La cancelas con un click y mantienes acceso hasta el fin del ciclo pagado." },
+  ];
+  return (
+    <section>
+      <div className="container" style={{ maxWidth: 820 }}>
+        <div className="section-head">
+          <span className="eyebrow"><span className="dot"/> Preguntas frecuentes</span>
+          <h2>Lo que preguntan tus<br/>compañeros antes de entrar.</h2>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {faqs.map((f, i) => (
+            <div key={i} className="card-soft" style={{
+              padding: 0, overflow: "hidden",
+              borderColor: open === i ? "var(--ink)" : "var(--line)",
+              boxShadow: open === i ? "0 4px 0 0 var(--ink)" : "none",
+              transition: "all .2s ease",
+            }}>
+              <button onClick={() => setOpen(open === i ? -1 : i)} style={{
+                width: "100%", padding: "20px 24px", textAlign: "left",
+                display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16,
+                fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18,
+              }}>
+                <span>{f.q}</span>
+                <span style={{
+                  width: 32, height: 32, flexShrink: 0,
+                  borderRadius: 10, background: open === i ? "var(--brand)" : "var(--bg-2)",
+                  border: "2px solid var(--ink)", display: "grid", placeItems: "center",
+                  color: open === i ? "white" : "var(--ink)",
+                  transform: open === i ? "rotate(180deg)" : "rotate(0)",
+                  transition: "transform .2s ease",
+                }}>
+                  <IconChevron size={16} strokeWidth={3}/>
+                </span>
+              </button>
+              {open === i && (
+                <div style={{ padding: "0 24px 22px", color: "var(--ink-2)", fontSize: 16, lineHeight: 1.6 }}>
+                  {f.a}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LandingMotion() {
+  React.useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("motion-ready");
+
+    const progress = document.getElementById("landing-progress-bar");
+    const updateProgress = () => {
+      if (!progress) return;
+      const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      const pct = Math.min(1, Math.max(0, window.scrollY / max));
+      progress.style.transform = `scaleX(${pct})`;
+      root.style.setProperty("--landing-scroll-pct", `${(pct * 100).toFixed(2)}%`);
+    };
+
+    const revealVariants = [
+      "motion-flip",
+      "motion-deal",
+      "motion-note",
+      "motion-page",
+      "motion-deal-l",
+    ];
+    const revealSelectors = [
+      ".hero-grid > *",
+      "section .section-head",
+      ".stats-grid > *",
+      ".feat-grid > *",
+      ".how-grid > *",
+      ".canvas-cta",
+      ".lb-wrap > *",
+      ".quiz-wrap > *",
+      ".price-grid > *",
+      ".faq-list > *",
+      ".foot-grid > *",
+      "footer .container > div:last-child",
+    ].join(",");
+    const revealTargets = Array.from(document.querySelectorAll(revealSelectors));
+    revealTargets.forEach((el, i) => {
+      /* section heads are "written" onto the page; everything else gets dealt/flipped/slapped like study material */
+      const variant = el.classList.contains("section-head") ? "motion-write" : revealVariants[i % revealVariants.length];
+      el.classList.add("motion-reveal", variant);
+      el.style.setProperty("--motion-order", i);
+      el.style.setProperty("--reveal-delay", `${(i % 6) * 70}ms`);
+    });
+
+    /* highlighter sweep: wrap heading text so the marker hugs each line */
+    try {
+      document.querySelectorAll("section .section-head h2").forEach((h) => {
+        if (!h.querySelector(".mh-hl")) h.innerHTML = '<span class="mh-hl">' + h.innerHTML + "</span>";
+      });
+    } catch (e) { /* non-fatal */ }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.16, rootMargin: "0px 0px -8% 0px" });
+    revealTargets.forEach(el => observer.observe(el));
+    const markVisible = () => {
+      revealTargets.forEach((el) => {
+        if (el.classList.contains("is-visible")) return;
+        const rect = el.getBoundingClientRect();
+        if (rect.top < window.innerHeight * 0.94 && rect.bottom > -window.innerHeight * 0.12) {
+          el.classList.add("is-visible");
+        }
+      });
+    };
+
+    const hotSelectors = [
+      ".card",
+      ".card-soft",
+      ".btn",
+      ".feat-grid > div",
+      ".stats-grid > div",
+      ".price-grid > div",
+      ".canvas-cta",
+      ".lb-arena",
+      ".lb-insight",
+    ].join(",");
+    const hotTargets = Array.from(document.querySelectorAll(hotSelectors));
+    const onMove = (event) => {
+      const el = event.currentTarget;
+      const rect = el.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / Math.max(1, rect.width);
+      const y = (event.clientY - rect.top) / Math.max(1, rect.height);
+      el.style.setProperty("--motion-x", x.toFixed(3));
+      el.style.setProperty("--motion-y", y.toFixed(3));
+      el.style.setProperty("--motion-tilt-x", ((x - 0.5) * 5).toFixed(3));
+      el.style.setProperty("--motion-tilt-y", ((y - 0.5) * 5).toFixed(3));
+    };
+    const onLeave = (event) => {
+      const el = event.currentTarget;
+      el.style.setProperty("--motion-x", "0.5");
+      el.style.setProperty("--motion-y", "0.5");
+      el.style.setProperty("--motion-tilt-x", "0");
+      el.style.setProperty("--motion-tilt-y", "0");
+    };
+    hotTargets.forEach((el) => {
+      el.classList.add("motion-hotspot");
+      el.style.setProperty("--motion-x", "0.5");
+      el.style.setProperty("--motion-y", "0.5");
+      el.style.setProperty("--motion-tilt-x", "0");
+      el.style.setProperty("--motion-tilt-y", "0");
+      el.addEventListener("mousemove", onMove);
+      el.addEventListener("mouseleave", onLeave);
+    });
+
+    const onPointer = (event) => {
+      const x = Math.min(1, Math.max(0, event.clientX / Math.max(1, window.innerWidth)));
+      const y = Math.min(1, Math.max(0, event.clientY / Math.max(1, window.innerHeight)));
+      root.style.setProperty("--landing-mx", x.toFixed(3));
+      root.style.setProperty("--landing-my", y.toFixed(3));
+      root.style.setProperty("--landing-dx", `${((x - 0.5) * 18).toFixed(2)}px`);
+      root.style.setProperty("--landing-dy", `${((y - 0.5) * 18).toFixed(2)}px`);
+    };
+
+    const sections = Array.from(document.querySelectorAll("section"));
+
+    const sectionObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        entry.target.classList.toggle("section-live", entry.isIntersecting);
+      });
+    }, { threshold: 0.12, rootMargin: "-8% 0px -14% 0px" });
+    sections.forEach((section, i) => {
+      section.style.setProperty("--section-order", i);
+      sectionObserver.observe(section);
+    });
+    const markLiveSections = () => {
+      const vh = Math.max(1, window.innerHeight);
+      sections.forEach((section) => {
+        const rect = section.getBoundingClientRect();
+        const live = rect.top < vh * 0.82 && rect.bottom > vh * 0.18;
+        section.classList.toggle("section-live", live);
+      });
+    };
+
+    updateProgress();
+    requestAnimationFrame(markVisible);
+    requestAnimationFrame(markLiveSections);
+    setTimeout(markVisible, 320);
+    setTimeout(markLiveSections, 360);
+    window.addEventListener("scroll", updateProgress, { passive: true });
+    window.addEventListener("scroll", markVisible, { passive: true });
+    window.addEventListener("scroll", markLiveSections, { passive: true });
+    window.addEventListener("resize", updateProgress);
+    window.addEventListener("resize", markVisible);
+    window.addEventListener("resize", markLiveSections);
+    window.addEventListener("pointermove", onPointer, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", updateProgress);
+      window.removeEventListener("scroll", markVisible);
+      window.removeEventListener("scroll", markLiveSections);
+      window.removeEventListener("resize", updateProgress);
+      window.removeEventListener("resize", markVisible);
+      window.removeEventListener("resize", markLiveSections);
+      window.removeEventListener("pointermove", onPointer);
+      hotTargets.forEach((el) => {
+        el.removeEventListener("mousemove", onMove);
+        el.removeEventListener("mouseleave", onLeave);
+      });
+      observer.disconnect();
+      sectionObserver.disconnect();
+    };
+  }, []);
+
+  return (
+    <>
+      <div id="landing-progress" aria-hidden="true">
+        <span id="landing-progress-bar"/>
+        <span id="landing-progress-flame">
+          <svg viewBox="0 0 100 125" width="22" height="22" style={{ display: "block", overflow: "visible" }}>
+            <path d="M50 0 C62 28 92 44 92 76 C92 103 73 122 50 122 C27 122 8 103 8 76 C8 44 38 28 50 0 Z" fill="#FF7A3D"/>
+            <path d="M50 45 C57 60 74 68 74 86 C74 102 63 112 50 112 C37 112 26 102 26 86 C26 68 43 60 50 45 Z" fill="#F2A156"/>
+            <path d="M50 72 C54 80 62 84 62 93 C62 102 56 107 50 107 C44 107 38 102 38 93 C38 84 46 80 50 72 Z" fill="#FFE9C9"/>
+          </svg>
+        </span>
+      </div>
+      <div className="landing-edge-pattern" aria-hidden="true"/>
+    </>
+  );
+}
+
+window.HowItWorks = HowItWorks;
+window.CanvasCallout = CanvasCallout;
+window.LeaderboardShowcase = LeaderboardShowcase;
+window.QuizDemo = QuizDemo;
+window.StatsStrip = StatsStrip;
+window.FAQ = FAQ;
+window.LandingMotion = LandingMotion;
+
+</script>
+  <script type="text/babel">
+/* ======== Pricing + final CTA + Footer ======== */
+
+function Pricing() {
+  const [period, setPeriod] = React.useState("month");
+  const [currency, setCurrency] = React.useState("CLP");
+
+  const usdToClp = 950;
+  const fmt = (usd) => {
+    if (currency === "USD") return "$" + usd.toFixed(2);
+    const clp = Math.round(usd * usdToClp / 100) * 100;
+    return "$" + clp.toLocaleString("es-CL");
+  };
+  const tiers = [
+    {
+      key: "free",
+      name: "Free",
+      tag: "Para probar",
+      m: 0, y: 0,
+      blurb: "Lo justo para empezar a estudiar con estructura.",
+      features: ["Canvas, cursos y Focus", "XP, monedas, rachas y rankings", "Planilla de notas, amigos y tienda", "1 quiz IA / dia", "1 mazo de flashcards IA / dia"],
+      cta: "Empezar gratis", primary: false,
+    },
+    {
+      key: "plus",
+      name: "PLUS",
+      tag: "Mas popular",
+      m: 4.99, y: 39.99,
+      blurb: "Para los que estudian en serio cada semana.",
+      features: ["Todo lo de Free", "Quizzes IA ilimitados", "Flashcards IA ilimitadas", "Mas ensayos y analitica avanzada", "+300 monedas mensuales", "Streak Insurance+ y cosmeticos PLUS"],
+      cta: "Subirme a PLUS", primary: true,
+    },
+    {
+      key: "ultimate",
+      name: "Ultimate",
+      tag: "Bloqueado",
+      m: 9.99, y: 79.99,
+      blurb: "Lo abriremos cuando tenga valor real.",
+      features: ["Todo lo de PLUS", "Limites maximos de IA", "Historial completo de analitica", "Mas monedas y reparaciones", "Cosmeticos Ultimate y early access"],
+      cta: "Bloqueado por ahora", primary: false, locked: true,
+    },
+  ];
+  return (
+    <section id="pricing">
+      <div className="container">
+        <div className="section-head">
+          <span className="eyebrow"><span className="dot"/> Precios</span>
+          <h2>Empieza gratis.<br/>Sube cuando lo sientas.</h2>
+          <p>Cancela cuando quieras. Sin contratos. Sin letra chica.</p>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 36, flexWrap: "wrap" }}>
+          {/* period toggle */}
+          <div style={{
+            display: "inline-flex", padding: 4, borderRadius: 14,
+            background: "var(--surface)", border: "2px solid var(--ink)",
+            boxShadow: "0 3px 0 0 var(--ink)",
+          }}>
+            {[
+              { k: "month", l: "Mensual" },
+              { k: "year", l: "Anual · −33%" },
+            ].map(p => (
+              <button key={p.k} onClick={() => setPeriod(p.k)} style={{
+                padding: "8px 18px", borderRadius: 10,
+                background: period === p.k ? "var(--brand)" : "transparent",
+                color: period === p.k ? "white" : "var(--ink-2)",
+                fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14,
+                cursor: "pointer", transition: "all .15s ease",
+              }}>{p.l}</button>
+            ))}
+          </div>
+          {/* currency toggle */}
+          <div style={{
+            display: "inline-flex", padding: 4, borderRadius: 14,
+            background: "var(--surface)", border: "2px solid var(--ink)",
+            boxShadow: "0 3px 0 0 var(--ink)",
+          }}>
+            {["CLP", "USD"].map(c => (
+              <button key={c} onClick={() => setCurrency(c)} style={{
+                padding: "8px 18px", borderRadius: 10,
+                background: currency === c ? "var(--ink)" : "transparent",
+                color: currency === c ? "white" : "var(--ink-2)",
+                fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14,
+                cursor: "pointer", transition: "all .15s ease",
+              }}>{c}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="price-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, padding: "26px 0 12px", overflow: "visible" }}>
+          {tiers.map(t => {
+            const price = period === "month" ? t.m : (t.y / 12);
+            return (
+              <div key={t.key} style={{
+                position: "relative",
+                background: t.primary ? "var(--brand)" : "var(--surface)",
+                color: t.primary ? "white" : "var(--ink)",
+                border: "2px solid var(--ink)",
+                borderRadius: 28,
+                padding: 30,
+                boxShadow: t.primary ? "0 8px 0 0 var(--ink)" : "0 4px 0 0 var(--ink)",
+                transform: t.primary ? "translateY(-8px)" : "none",
+                display: "flex", flexDirection: "column",
+                overflow: "visible",
+              }}>
+                {t.primary && (
+                  <div style={{
+                    position: "absolute", top: -16, right: 22,
+                    background: "var(--accent)", color: "var(--accent-ink)",
+                    padding: "6px 14px", borderRadius: 999,
+                    fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 11,
+                    letterSpacing: ".1em", textTransform: "uppercase",
+                    border: "2px solid var(--ink)",
+                    boxShadow: "0 3px 0 0 var(--ink)",
+                  }}>★ {t.tag}</div>
+                )}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                  <h3 style={{ fontSize: 28, color: "inherit" }}>{t.name}</h3>
+                  {!t.primary && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", letterSpacing: ".1em", textTransform: "uppercase" }}>{t.tag}</span>
+                  )}
+                </div>
+                <p style={{ color: t.primary ? "color-mix(in oklab, white 80%, transparent)" : "var(--ink-2)", fontSize: 14, marginBottom: 18 }}>{t.blurb}</p>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 48, letterSpacing: "-0.03em" }}>
+                    {fmt(price)}
+                  </span>
+                  <span style={{ fontSize: 14, color: t.primary ? "color-mix(in oklab, white 70%, transparent)" : "var(--ink-3)" }}>/mes</span>
+                </div>
+                {period === "year" && t.y > 0 && (
+                  <div style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: t.primary ? "color-mix(in oklab, white 70%, transparent)" : "var(--ink-3)", marginBottom: 18 }}>
+                    facturado anual: {fmt(t.y)}
+                  </div>
+                )}
+                {(period === "month" || t.y === 0) && <div style={{ height: 18 }}/>}
+                <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10, marginBottom: 24, flex: 1 }}>
+                  {t.features.map((f, i) => (
+                    <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14, fontWeight: 600 }}>
+                      <span style={{
+                        flexShrink: 0, width: 20, height: 20, borderRadius: 6,
+                        background: t.primary ? "white" : "var(--brand-soft)",
+                        border: "2px solid " + (t.primary ? "white" : "var(--brand)"),
+                        color: t.primary ? "var(--brand)" : "var(--brand-ink)",
+                        display: "grid", placeItems: "center", marginTop: 2,
+                      }}><IconCheck size={12} strokeWidth={3.5}/></span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+        {t.locked ? <button className="btn btn-lg price-cta price-cta-locked" disabled style={{
+                  background: "var(--surface-2)",
+                  color: "var(--ink-3)",
+                  borderColor: "var(--line)",
+                  width: "100%",
+                  boxShadow: "none",
+                  cursor: "not-allowed",
+                }}>{t.cta}</button> : <a href="/register" className={`btn btn-lg price-cta ${t.primary ? "price-cta-plus" : "price-cta-standard"}`} style={{
+                  background: t.primary ? "white" : "var(--ink)",
+                  color: t.primary ? "var(--brand)" : "white",
+                  borderColor: t.primary ? "white" : "var(--ink)",
+                  width: "100%",
+                  boxShadow: "0 4px 0 0 " + (t.primary ? "color-mix(in oklab, var(--ink) 30%, transparent)" : "color-mix(in oklab, var(--ink) 50%, var(--brand))"),
+                }}>{t.cta}</a>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 980px) { .price-grid { grid-template-columns: 1fr !important; }
+          .price-grid > div:nth-child(2) { transform: none !important; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+/* -------- FINAL CTA -------- */
+function FinalCTA() {
+  return (
+    <section id="cta" style={{ paddingTop: 32, paddingBottom: 32 }}>
+      <div className="container">
+        <div style={{
+          background: "var(--brand)",
+          color: "white",
+          border: "2px solid var(--ink)",
+          borderRadius: 36,
+          padding: "64px 48px",
+          textAlign: "center",
+          boxShadow: "0 8px 0 0 var(--ink)",
+          position: "relative",
+          overflow: "hidden",
+        }}>
+          <div style={{
+            position: "absolute", top: 24, left: 24, opacity: .35,
+          }}>
+            <IconBolt size={48} color="white" strokeWidth={3}/>
+          </div>
+          <div style={{
+            position: "absolute", bottom: 24, right: 24, opacity: .35,
+            transform: "rotate(20deg)",
+          }}>
+            <IconTrophy size={56} color="white" strokeWidth={3}/>
+          </div>
+          <h2 style={{ fontSize: "clamp(36px, 5vw, 60px)", color: "white", marginBottom: 16 }}>
+            Estudia distinto<br/>este semestre.
+          </h2>
+          <p style={{ fontSize: 18, color: "color-mix(in oklab, white 80%, transparent)", maxWidth: 540, margin: "0 auto 32px" }}>
+            Activa la extensión de MachReach y empieza a ordenar tus cursos hoy mismo. Tu yo del lunes te lo va a agradecer.
+          </p>
+          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+          <a className="btn btn-lg final-cta-primary" href="/register" style={{
+              background: "var(--ink)", color: "white", borderColor: "var(--ink)",
+              boxShadow: "0 4px 0 0 color-mix(in oklab, black 50%, transparent)",
+            }}>
+              <IconCanvas size={20}/> Usar la extensión
+            </a>
+            <a className="btn btn-lg" href="#features" style={{
+              background: "white", color: "var(--brand-ink)", borderColor: "var(--ink)",
+              boxShadow: "0 4px 0 0 var(--ink)",
+            }}>
+              Ver features <IconArrow size={18}/>
+            </a>
+          </div>
+          <div style={{ marginTop: 28, fontSize: 13, fontFamily: "var(--font-mono)", color: "color-mix(in oklab, white 70%, transparent)", letterSpacing: ".06em" }}>
+            GRATIS PARA SIEMPRE · NO PEDIMOS TARJETA · CANCELA CUANDO QUIERAS
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------- FOOTER -------- */
+function Footer() {
+  return (
+    <footer>
+      <div className="container">
+        <div style={{
+          display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 32,
+          paddingBottom: 40,
+        }} className="foot-grid">
+          <div>
+            <div className="logo">
+              <div className="logo-mark"><IconLogo size={34}/></div>
+              <span className="logo-text">Mach<span className="dot">Reach</span></span>
+            </div>
+            <p style={{ marginTop: 14, color: "var(--ink-2)", fontSize: 14, maxWidth: 320 }}>
+              Estudiar deja de ser una lata. Hecho desde Santiago, Chile, por estudiantes para estudiantes.
+            </p>
+          </div>
+          {[
+            { h: "Producto", l: ["Features", "Cómo funciona", "Precios", "Roadmap"] },
+            { h: "Empresa", l: ["Sobre", "Blog", "Contacto", "Prensa"] },
+            { h: "Legal", l: ["Términos", "Privacidad", "Cookies", "Status"] },
+          ].map((c, i) => (
+            <div key={i}>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14, marginBottom: 12 }}>{c.h}</div>
+              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                {c.l.map((x, k) => <li key={k}><a href="#" style={{ color: "var(--ink-2)", fontSize: 14 }}>{x}</a></li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div style={{
+          paddingTop: 24, borderTop: "2px solid var(--line)",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          color: "var(--ink-3)", fontSize: 13, fontFamily: "var(--font-mono)",
+          flexWrap: "wrap", gap: 12,
+        }}>
+          <span>© 2026 MACHREACH · SANTIAGO, CL</span>
+          <span>MACHREACH · SANTIAGO, CHILE</span>
+        </div>
+      </div>
+      <style>{`@media (max-width: 720px) { .foot-grid { grid-template-columns: 1fr 1fr !important; } }`}</style>
+    </footer>
+  );
+}
+
+window.Pricing = Pricing;
+window.FinalCTA = FinalCTA;
+window.Footer = Footer;
+
+</script>
 
   <script type="text/babel">
     const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
       "theme": "light",
-      "accent": "coral"
+      "accent": "coral",
+      "playIntro": true
     }/*EDITMODE-END*/;
 
     function Nav({ tweaks, setTweak }) {
@@ -56,7 +3414,7 @@
         <nav className="nav">
           <div className="container nav-inner">
             <a href="#" className="logo">
-              <div className="logo-mark"><IconLogo size={20} color="white"/></div>
+              <div className="logo-mark"><IconLogo size={34}/></div>
               <span className="logo-text">Mach<span className="dot">Reach</span></span>
             </a>
             <div className="nav-links">
@@ -78,7 +3436,7 @@
                   ? <Icon><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></Icon>
                   : <Icon><path d="M20 14a8 8 0 11-10-10 7 7 0 0010 10z"/></Icon>}
               </button>
-          <a href="/register" className="btn btn-primary btn-sm">
+              <a href="/register" className="btn btn-primary btn-sm">
                 <IconCanvas size={14}/> Usar la extensión
               </a>
             </div>
@@ -89,13 +3447,26 @@
 
     function App() {
       const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+      const [introKey, setIntroKey] = React.useState(1);
+
       React.useEffect(() => {
         document.documentElement.dataset.theme = tweaks.theme || "light";
         document.documentElement.dataset.accent = tweaks.accent || "coral";
       }, [tweaks.theme, tweaks.accent]);
 
+      const introDone = React.useCallback(() => {
+        document.body.dataset.intro = "done";
+      }, []);
+
+      const replayIntro = () => {
+        window.scrollTo({ top: 0, behavior: "auto" });
+        document.body.dataset.intro = "pending";
+        setIntroKey((k) => k + 1);
+      };
+
       return (
         <>
+          <IntroOverlay key={introKey} enabled={!!tweaks.playIntro} onDone={introDone}/>
           <Nav tweaks={tweaks} setTweak={setTweak}/>
           <LandingMotion/>
           <Hero/>
@@ -111,7 +3482,7 @@
           <Footer/>
 
           <TweaksPanel title="Tweaks">
-            <TweakSection title="Tema">
+            <TweakSection label="Tema">
               <TweakRadio
                 label="Modo"
                 value={tweaks.theme}
@@ -132,6 +3503,14 @@
                   { value: "sky",    label: "Cielo" },
                 ]}
               />
+            </TweakSection>
+            <TweakSection label="Intro">
+              <TweakToggle
+                label="Intro al cargar"
+                value={!!tweaks.playIntro}
+                onChange={(v) => setTweak("playIntro", v)}
+              />
+              <TweakButton label="↺ Reproducir intro" onClick={replayIntro}/>
             </TweakSection>
           </TweaksPanel>
         </>

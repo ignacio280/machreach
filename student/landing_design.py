@@ -159,5 +159,6 @@ _SPLASH = r"""
 def render_landing_page(lang: str = "es") -> str:
     # Always serve the committed production artifact. If it's missing, fail
     # loudly rather than silently fall back to the slow dev build.
-    html = _PROD_HTML.read_text(encoding="utf-8")
-    return html.replace("</body>", _SPLASH + "</body>", 1)
+    # The landing page has its own cinematic intro (IntroOverlay), so no
+    # external splash injection is needed.
+    return _PROD_HTML.read_text(encoding="utf-8")
