@@ -60,15 +60,20 @@ def register_academic_routes(app, csrf, limiter):
         q = (request.args.get("q") or "").strip()
         if not country:
             return jsonify({"error": "country required"}), 400
-        # Phased rollout: only Pontificia Universidad Católica de Chile is
-        # exposed in the picker. Other unis will be added one by one.
+        # Phased rollout: only an explicit allowlist of universities is exposed
+        # in the picker. Other unis are added one by one as we onboard them.
         rows = ac.search_universities(country, q, limit=25) or []
-        def _is_puc(r):
+        def _is_allowed(r):
             d = dict(r)
             name = (d.get("name") or "").lower()
             short = (d.get("short_name") or "").lower()
-            return ("pontificia universidad cat" in name and "chile" in name) or short in ("puc", "uc")
-        rows = [r for r in rows if _is_puc(r)]
+            is_puc = ("pontificia universidad cat" in name and "chile" in name) or short in ("puc", "uc")
+            is_udd = ("universidad del desarrollo" in name) or short == "udd"
+            is_uandes = ("universidad de los andes" in name and "colombia" not in name) or short == "uandes"
+            is_unab = ("universidad andres bello" in name) or ("universidad andrés bello" in name) or short == "unab"
+            is_usach = ("universidad de santiago de chile" in name) or short == "usach"
+            return is_puc or is_udd or is_uandes or is_unab or is_usach
+        rows = [r for r in rows if _is_allowed(r)]
         return jsonify({"universities": rows})
 
     @app.route("/api/academic/universities", methods=["POST"])
@@ -76,15 +81,9 @@ def register_academic_routes(app, csrf, limiter):
     def academic_create_university():
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
-        data = request.get_json(force=True) or {}
-        name = (data.get("name") or "").strip()
-        country_iso = (data.get("country_iso") or "").upper()[:2]
-        if not name or len(name) < 3:
-            return jsonify({"error": "name too short"}), 400
-        if not country_iso:
-            return jsonify({"error": "country required"}), 400
-        univ_id = ac.create_university(name=name, country_iso=country_iso, created_by=_cid())
-        return jsonify({"ok": True, "university": ac.get_university(univ_id)})
+        # User-submitted universities are disabled — students pick from the
+        # curated allowlist only.
+        return jsonify({"error": "adding universities is disabled"}), 403
 
     # ── majors ──────────────────────────────────────────────
 
@@ -112,14 +111,9 @@ def register_academic_routes(app, csrf, limiter):
     def academic_create_major():
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
-        data = request.get_json(force=True) or {}
-        name = (data.get("name") or "").strip()
-        univ_raw = data.get("university_id")
-        univ_id = int(univ_raw) if isinstance(univ_raw, int) or (str(univ_raw).isdigit()) else None
-        if not name or len(name) < 2:
-            return jsonify({"error": "name too short"}), 400
-        major_id = ac.create_major(name=name, university_id=univ_id, created_by=_cid())
-        return jsonify({"ok": True, "major": ac.get_major(major_id)})
+        # User-submitted majors are disabled — students pick from the curated
+        # per-university catalogue only.
+        return jsonify({"error": "adding majors is disabled"}), 403
 
     # ── profile ─────────────────────────────────────────────
 

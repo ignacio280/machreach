@@ -5662,27 +5662,15 @@ Material:
             const items = (r.universities || []).map(u =>
               '<div class="ss-item" data-id="' + u.id + '" data-name="' + escapeHtml(u.name) + '">' + escapeHtml(u.name) + '</div>'
             ).join('');
-            const create = q.length >= 2 ? '<div class="ss-item create" data-create="' + escapeHtml(q) + '">+ Add &quot;' + escapeHtml(q) + '&quot;</div>' : '';
-            list.innerHTML = items + create || '<div class="ss-item">Type to search...</div>';
+            list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
             list.querySelectorAll('.ss-item[data-id]').forEach(el => {
               el.addEventListener('click', () => pickUniv(parseInt(el.dataset.id), el.dataset.name));
-            });
-            list.querySelectorAll('.ss-item[data-create]').forEach(el => {
-              el.addEventListener('click', () => createUniv(el.dataset.create));
             });
           }
           function pickUniv(id, name) {
             state.university_id = id; state.university_name = name;
             document.getElementById('ss-univ-q').value = name;
             document.getElementById('ss-univ-list').innerHTML = '<div class="ss-item">&#10003; ' + escapeHtml(name) + '</div>';
-          }
-          async function createUniv(name) {
-            const r = await fetch('/api/academic/universities', {
-              method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({name: name, country_iso: state.country_iso})
-            }).then(r=>r.json());
-            if (!r.ok) { err.textContent = r.error || 'Could not create university.'; return; }
-            pickUniv(r.university.id, r.university.name);
           }
 
           let majTimer = null;
@@ -5698,13 +5686,9 @@ Material:
             const items = (r.majors || []).map(m =>
               '<div class="ss-item" data-id="' + m.id + '" data-name="' + escapeHtml(m.name) + '">' + escapeHtml(m.name) + '</div>'
             ).join('');
-            const create = q.length >= 2 ? '<div class="ss-item create" data-create="' + escapeHtml(q) + '">+ Add &quot;' + escapeHtml(q) + '&quot;</div>' : '';
-            list.innerHTML = items + create || '<div class="ss-item">Type to search...</div>';
+            list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
             list.querySelectorAll('.ss-item[data-id]').forEach(el => {
               el.addEventListener('click', () => pickMajor(parseInt(el.dataset.id), el.dataset.name));
-            });
-            list.querySelectorAll('.ss-item[data-create]').forEach(el => {
-              el.addEventListener('click', () => createMajor(el.dataset.create));
             });
           }
           function pickMajor(id, name) {
@@ -5712,20 +5696,12 @@ Material:
             document.getElementById('ss-major-q').value = name;
             document.getElementById('ss-major-list').innerHTML = '<div class="ss-item">&#10003; ' + escapeHtml(name) + '</div>';
           }
-          async function createMajor(name) {
-            const r = await fetch('/api/academic/majors', {
-              method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({name: name, university_id: state.university_id})
-            }).then(r=>r.json());
-            if (!r.ok) { err.textContent = r.error || 'Could not create major.'; return; }
-            pickMajor(r.major.id, r.major.name);
-          }
 
           back.addEventListener('click', () => { if (state.step > 0) show(state.step - 1); });
           next.addEventListener('click', async () => {
             if (state.step === 0 && !state.country_iso) { err.textContent = 'Pick your country.'; return; }
-            if (state.step === 1 && !state.university_id) { err.textContent = 'Pick or create your university.'; return; }
-            if (state.step === 2 && !state.major_id) { err.textContent = 'Pick or create your major.'; return; }
+            if (state.step === 1 && !state.university_id) { err.textContent = 'Pick your university.'; return; }
+            if (state.step === 2 && !state.major_id) { err.textContent = 'Pick your major.'; return; }
             if (state.step < 2) { show(state.step + 1); return; }
             next.disabled = true; next.textContent = 'Saving...';
             const r = await fetch('/api/academic/profile', {
@@ -20586,18 +20562,8 @@ No markdown, no code fences. ONLY JSON.
                     var unis = (j && j.universities) || [];
                     var box = $('acad-uni-results');
                     if (!unis.length) {{
-                      box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No universities found.")} <a href="#" id="acad-uni-create" style="color:var(--primary);">{_T("Add")} \\u201C' + escapeHtml(q) + '\\u201D</a></div>';
+                      box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No universities found.")}</div>';
                       box.style.display = 'block';
-                      var addLink = document.getElementById('acad-uni-create');
-                      if (addLink) addLink.addEventListener('click', function(ev){{
-                        ev.preventDefault();
-                        fetch('/api/academic/universities', {{
-                          method:'POST', headers:{{'Content-Type':'application/json'}},
-                          body: JSON.stringify({{ name: q, country_iso: acState.country }})
-                        }}).then(function(r){{ return r.json(); }}).then(function(j2){{
-                          if (j2 && j2.university) acadPickUni(j2.university);
-                        }});
-                      }});
                       return;
                     }}
                     box.innerHTML = unis.map(function(u){{
@@ -20626,19 +20592,8 @@ No markdown, no code fences. ONLY JSON.
                     return;
                   }}
                   if (!majors.length) {{
-                    box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No majors found.")} <a href="#" id="acad-major-create" style="color:var(--primary);">{_T("Add")} \\u201C' + escapeHtml(q) + '\\u201D</a></div>';
+                    box.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted);">{_T("No majors found.")}</div>';
                     box.style.display = 'block';
-                    var addLink = document.getElementById('acad-major-create');
-                    if (addLink) addLink.addEventListener('click', function(ev){{
-                      ev.preventDefault();
-                      if (!acState.universityId) {{ setStatus('{_T("Pick a university first before adding a new major.")}', true); return; }}
-                      fetch('/api/academic/majors', {{
-                        method:'POST', headers:{{'Content-Type':'application/json'}},
-                        body: JSON.stringify({{ name: q, university_id: acState.universityId }})
-                      }}).then(function(r){{ return r.json(); }}).then(function(j2){{
-                        if (j2 && j2.major) acadPickMajor(j2.major);
-                      }});
-                    }});
                     return;
                   }}
                   box.innerHTML = majors.map(function(m){{
