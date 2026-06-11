@@ -1428,8 +1428,8 @@ const heroStyles = {
   blob1: { display: "none" },
   blob2: { display: "none" },
   grid: { position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "1.05fr 1fr", gap: 56, alignItems: "center" },
-  h1: { fontFamily: "var(--font-display)", fontSize: "clamp(44px, 6vw, 76px)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 0.98, marginTop: 22 },
-  h1Highlight: { background: "var(--brand)", color: "white", padding: "0 .12em", borderRadius: 12, display: "inline-block", transform: "rotate(-1.5deg)", boxShadow: "0 4px 0 0 var(--ink)", border: "2px solid var(--ink)", margin: "0 .04em" },
+  h1: { fontFamily: "var(--font-display)", fontSize: "clamp(44px, 6vw, 76px)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.02, marginTop: 22 },
+  h1Highlight: { background: "var(--brand)", color: "white", padding: ".04em .14em .1em", lineHeight: 0.9, borderRadius: 12, display: "inline-block", transform: "rotate(-1.5deg)", boxShadow: "0 4px 0 0 var(--ink)", border: "2px solid var(--ink)", margin: ".02em .04em .05em" },
   sub: { color: "var(--ink-2)", fontSize: 20, marginTop: 22, maxWidth: 520, lineHeight: 1.5 },
   ctaRow: { display: "flex", flexWrap: "wrap", gap: 14, marginTop: 32, alignItems: "center" },
   trustRow: { display: "flex", alignItems: "center", gap: 18, marginTop: 28, color: "var(--ink-3)", fontSize: 14, fontWeight: 600 },
@@ -1458,7 +1458,7 @@ function Avatar({ name, color, size = 36, you }) {
 function HeroLeaderboard() {
   const [board, setBoard] = React.useState([
     { name: "Sofia_Db",   uni: "UC",     xp: 12480, color: "#fb923c", delta: 0 },
-    { name: "tu_lugar",   uni: "UDP",    xp: 9120,  color: "var(--brand)", you: true, delta: 0 },
+    { name: "tu_lugar",   uni: "Tu universidad", xp: 9120,  color: "var(--brand)", you: true, delta: 0 },
     { name: "matiasv",    uni: "UAndes", xp: 8740,  color: "#a78bfa", delta: 0 },
     { name: "fernandapz", uni: "USACH",  xp: 7610,  color: "#22d3ee", delta: 0 },
     { name: "ignacio_m",  uni: "UC",     xp: 7185,  color: "#34d399", delta: 0 },
@@ -1599,7 +1599,7 @@ function HeroLeaderboard() {
                     }}>+{r.delta}</span>
                   )}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: ".06em" }}>{r.uni}</div>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", textTransform: r.you ? "none" : "uppercase", letterSpacing: ".06em" }}>{r.uni}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16 }}>

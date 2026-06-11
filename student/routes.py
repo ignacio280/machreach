@@ -4299,13 +4299,6 @@ Material:
             </div>
           </section>
 
-          <section class="planner-stats">
-            <article><span>Horas disponibles</span><b id="planner-total-hours">0 h</b></article>
-            <article><span>Bloques creados</span><b id="planner-blocks-count">0</b></article>
-            <article><span>Pruebas futuras</span><b id="planner-exams-count">0</b></article>
-            <article><span>Ramo prioridad</span><b id="planner-top-course">-</b></article>
-          </section>
-
           <section class="planner-panel planner-week">
             <div class="planner-panel-head">
               <div>
@@ -4350,7 +4343,6 @@ Material:
                 <b>Fuente</b>
                 <span id="planner-drawer-source"></span>
               </div>
-              <div id="planner-drawer-excerpt" class="planner-drawer-excerpt"></div>
             </div>
           </aside>
         </section>
@@ -4387,10 +4379,6 @@ Material:
           .planner-priority-title { font-weight:950; color:var(--pl-ink); line-height:1.15; }
           .planner-priority-meta { color:#7D7A82; font-size:12px; font-weight:800; margin-top:2px; }
           .planner-priority-score { color:var(--pl-orange); font-weight:950; font-variant-numeric:tabular-nums; }
-          .planner-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
-          .planner-stats article { border:2px solid var(--pl-ink); border-radius:12px; background:#fff; box-shadow:0 3px 0 var(--pl-ink); padding:8px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:0; }
-          .planner-stats span { color:#8C8991; font-size:10px; font-weight:950; text-transform:uppercase; letter-spacing:.07em; line-height:1.2; }
-          .planner-stats b { font-family:'Bricolage Grotesque',sans-serif; font-size:20px; color:var(--pl-ink); line-height:1; white-space:nowrap; }
           .planner-day-list { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; margin-bottom:18px; }
           .planner-day-btn { width:100%; text-align:center; border:1.5px solid var(--pl-line); border-radius:14px; background:var(--pl-soft); padding:12px 8px; display:flex; flex-direction:column; gap:8px; align-items:center; cursor:pointer; color:var(--pl-ink); transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease; }
           .planner-day-btn:hover { transform:translateY(-2px); border-color:var(--pl-orange); }
@@ -4424,10 +4412,11 @@ Material:
           .planner-save-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px dashed var(--pl-line); }
           #planner-save-state { color:#8C8991; font-size:12px; font-weight:850; }
           .planner-empty { border:1.5px dashed var(--pl-line); border-radius:16px; padding:26px; text-align:center; color:#7D7A82; font-weight:850; background:var(--pl-soft); grid-column:1/-1; }
-          .planner-drawer { position:fixed; inset:0; z-index:99980; pointer-events:none; opacity:0; transition:opacity .18s ease; }
+          body.planner-drawer-lock { overflow:hidden; }
+          .planner-drawer { position:fixed; inset:0; z-index:99980; pointer-events:none; opacity:0; transition:opacity .18s ease; overflow:hidden; }
           .planner-drawer.open { pointer-events:auto; opacity:1; }
           .planner-drawer-backdrop { position:absolute; inset:0; background:rgba(10,10,12,.36); }
-          .planner-drawer-panel { position:absolute; top:0; right:0; width:min(520px,calc(100vw - 18px)); height:100%; overflow:auto; background:#FFFDF8; border-left:2px solid var(--pl-ink); box-shadow:-8px 0 0 rgba(26,26,31,.12), -24px 0 80px rgba(26,26,31,.22); padding:28px; transform:translateX(104%); transition:transform .24s cubic-bezier(.18,1,.28,1); color:var(--pl-ink); }
+          .planner-drawer-panel { position:absolute; top:0; right:0; width:min(520px,calc(100vw - 18px)); height:100dvh; max-height:100dvh; overflow-y:auto; overscroll-behavior:contain; background:#FFFDF8; border-left:2px solid var(--pl-ink); box-shadow:-8px 0 0 rgba(26,26,31,.12), -24px 0 80px rgba(26,26,31,.22); padding:28px; transform:translateX(104%); transition:transform .24s cubic-bezier(.18,1,.28,1); color:var(--pl-ink); }
           .planner-drawer.open .planner-drawer-panel { transform:translateX(0); }
           .planner-drawer-close { position:absolute; top:16px; right:16px; width:36px; height:36px; border:2px solid var(--pl-ink); border-radius:12px; background:#fff; color:var(--pl-ink); box-shadow:0 3px 0 var(--pl-ink); font-size:24px; line-height:1; cursor:pointer; }
           .planner-drawer-panel h2 { margin:8px 42px 10px 0; font-family:'Bricolage Grotesque',sans-serif; font-size:34px; line-height:.98; letter-spacing:-.03em; }
@@ -4436,12 +4425,11 @@ Material:
           .planner-drawer-steps { display:grid; gap:8px; margin:14px 0 16px; }
           .planner-step { border:1.5px solid var(--pl-line); border-radius:14px; background:#FFF8E8; padding:11px 12px; font-weight:850; color:#3E3942; }
           .planner-drawer-source { border:1.5px solid #FFD0B5; background:#FFF1E6; border-radius:14px; padding:12px; display:grid; gap:4px; color:#9A3B12; font-weight:850; }
-          .planner-drawer-excerpt { margin-top:14px; border:1.5px dashed var(--pl-line); border-radius:16px; background:#fff; color:#5C5C66; padding:14px; font-size:13px; line-height:1.55; max-height:260px; overflow:auto; white-space:pre-wrap; }
           :root[data-theme="dark"] .planner-wrap { --pl-ink:#FF7A3D; --pl-paper:#14151A; --pl-soft:#0B0B10; --pl-line:rgba(255,122,61,.42); color:#FFF8E8; }
           :root[data-theme="dark"] .planner-hero { background:linear-gradient(135deg,#17110E,#211A18 72%,#111B16); border-color:#FF7A3D; box-shadow:0 5px 0 #FF7A3D; }
-          :root[data-theme="dark"] .planner-hero h1,:root[data-theme="dark"] .planner-panel h2,:root[data-theme="dark"] .planner-day-head h2,:root[data-theme="dark"] .planner-next-action,:root[data-theme="dark"] .planner-priority-title,:root[data-theme="dark"] .planner-stats b,:root[data-theme="dark"] .planner-day-name,:root[data-theme="dark"] .planner-block-title { color:#FFF8E8; }
+          :root[data-theme="dark"] .planner-hero h1,:root[data-theme="dark"] .planner-panel h2,:root[data-theme="dark"] .planner-day-head h2,:root[data-theme="dark"] .planner-next-action,:root[data-theme="dark"] .planner-priority-title,:root[data-theme="dark"] .planner-day-name,:root[data-theme="dark"] .planner-block-title { color:#FFF8E8; }
           :root[data-theme="dark"] .planner-hero p,:root[data-theme="dark"] .planner-day-head p,:root[data-theme="dark"] .planner-block-copy,:root[data-theme="dark"] .planner-priority-meta,:root[data-theme="dark"] .planner-day-meta { color:#D9D2C3; }
-          :root[data-theme="dark"] .planner-hero-side,:root[data-theme="dark"] .planner-panel,:root[data-theme="dark"] .planner-stats article { background:#14151A; border-color:#FF7A3D; box-shadow:0 4px 0 #FF7A3D; }
+          :root[data-theme="dark"] .planner-hero-side,:root[data-theme="dark"] .planner-panel { background:#14151A; border-color:#FF7A3D; box-shadow:0 4px 0 #FF7A3D; }
           :root[data-theme="dark"] .planner-av-card,:root[data-theme="dark"] .planner-priority-item,:root[data-theme="dark"] .planner-day-btn,:root[data-theme="dark"] .planner-block { background:#0B0B10; border-color:rgba(255,122,61,.52); }
           :root[data-theme="dark"] .planner-day-btn.active { background:#17110E; border-color:#FF7A3D; }
           :root[data-theme="dark"] .planner-av-card input { background:#14151A; color:#FFF8E8; border-color:#FF7A3D; }
@@ -4449,10 +4437,10 @@ Material:
           :root[data-theme="dark"] .planner-tag { background:#17110E; color:#FFD0B5; border-color:#FF7A3D; }
           :root[data-theme="dark"] .planner-drawer-panel { background:#14151A; border-color:#FF7A3D; color:#FFF8E8; box-shadow:-8px 0 0 rgba(255,122,61,.18), -24px 0 80px rgba(0,0,0,.44); }
           :root[data-theme="dark"] .planner-drawer-panel h2,:root[data-theme="dark"] .planner-drawer-panel p { color:#FFF8E8; }
-          :root[data-theme="dark"] .planner-step,:root[data-theme="dark"] .planner-drawer-excerpt { background:#0B0B10; border-color:rgba(255,122,61,.52); color:#D9D2C3; }
+          :root[data-theme="dark"] .planner-step { background:#0B0B10; border-color:rgba(255,122,61,.52); color:#D9D2C3; }
           :root[data-theme="dark"] .planner-drawer-source { background:#17110E; border-color:#FF7A3D; color:#FFD0B5; }
           @media (max-width:1100px) { .planner-hero,.planner-grid-bottom { grid-template-columns:1fr; } .planner-availability-grid { grid-template-columns:repeat(4,1fr); } .planner-day-list { grid-template-columns:repeat(7,minmax(92px,1fr)); overflow-x:auto; padding-bottom:6px; } }
-          @media (max-width:760px) { .planner-availability-grid { grid-template-columns:repeat(2,1fr); } .planner-stats { grid-template-columns:repeat(2,1fr); } .planner-blocks { grid-template-columns:1fr; } .planner-hero { padding:20px; } .planner-day-head { flex-direction:column; } }
+          @media (max-width:760px) { .planner-availability-grid { grid-template-columns:repeat(2,1fr); } .planner-blocks { grid-template-columns:1fr; } .planner-hero { padding:20px; } .planner-day-head { flex-direction:column; } }
         </style>
 
         <script>
@@ -4473,9 +4461,21 @@ Material:
             plan: null,
             doneBlocks: initial.done_blocks || []
           };
-          function doneKeyOf(d){ return d.date + '|' + (d.exam_id || 0) + '|' + (d.unit_index == null ? -1 : d.unit_index) + '|' + (d.title || ''); }
+          function blockDoneTitle(block){
+            return [
+              block.title || '',
+              block.phase || '',
+              block.index == null ? 0 : block.index,
+              block.minutes || 0,
+              block.material_based ? ('unit:' + (block.unit_index == null ? -1 : block.unit_index)) : 'general'
+            ].join('::');
+          }
+          function doneKeyOf(d){
+            var date = d.date || d.block_date || '';
+            return date + '|' + (d.exam_id || 0) + '|' + (d.unit_index == null ? -1 : d.unit_index) + '|' + (d.title || '');
+          }
           function isBlockDone(block){
-            var key = block.date + '|' + (block.exam_id || 0) + '|' + (block.material_based ? block.unit_index : -1) + '|' + (block.title || '');
+            var key = block.date + '|' + (block.exam_id || 0) + '|' + (block.material_based ? block.unit_index : -1) + '|' + blockDoneTitle(block);
             return state.doneBlocks.some(function(d){ return doneKeyOf(d) === key; });
           }
           function doneForDate(dateStr){
@@ -4626,7 +4626,7 @@ Material:
             } else {
               title = 'Práctica: ' + baseTitle;
               phase = 'práctica del material';
-              copy = 'Genera el quiz de este bloque y respóndelo sin apuntes. Cada error te dice qué parte de "' + baseTitle + '" tienes que volver a leer.';
+              copy = 'Resuelve preguntas o ejercicios de práctica desde tus apuntes sin mirar la respuesta. Cada error marca qué parte de "' + baseTitle + '" tienes que volver a estudiar.';
             }
             return {
               course_id: exam.course_id,
@@ -4838,13 +4838,7 @@ Material:
             }).join('');
           }
           function renderStats(){
-            var totalHours = state.availability.reduce(function(sum,a){ return sum + Number(a.available_hours || 0); }, 0);
-            var blockCount = state.plan ? state.plan.days.reduce(function(sum,d){ return sum + d.blocks.length; }, 0) : 0;
             var top = getPriorities()[0];
-            document.getElementById('planner-total-hours').textContent = totalHours.toFixed(totalHours % 1 ? 1 : 0) + ' h';
-            document.getElementById('planner-blocks-count').textContent = blockCount;
-            document.getElementById('planner-exams-count').textContent = state.exams.length;
-            document.getElementById('planner-top-course').textContent = top ? (top.course_code || top.course_name).slice(0,14) : '-';
             document.getElementById('planner-next-action').textContent = top ? (top.course_name + ': ' + top.name + ' en ' + top.days + ' días') : 'Agrega una prueba para activar el plan';
           }
           function renderDays(){
@@ -4881,14 +4875,11 @@ Material:
               var done = isBlockDone(b);
               var tags = (b.tags || []).map(function(t){ return '<span class="planner-tag">' + esc(t) + '</span>'; }).join('');
               var tools = b.material_based
-                ? '<button type="button" data-tool="quiz" data-date="' + esc(b.date) + '" data-index="' + b.index + '">Quiz de este bloque</button><button type="button" data-tool="flashcards" data-date="' + esc(b.date) + '" data-index="' + b.index + '">Tarjetas de este bloque</button>'
+                ? ''
                 : '<a href="/student/focus">Estudiar</a><a href="/student/courses">Ver prueba</a>';
               tools = '<button type="button" class="planner-detail-btn" data-detail-date="' + esc(b.date) + '" data-detail-index="' + b.index + '">Ver detalle</button><button type="button" data-done-toggle data-date="' + esc(b.date) + '" data-index="' + b.index + '">' + (done ? 'Hecho' : 'Marcar hecho') + '</button>' + tools;
               return '<article class="planner-block' + (done ? ' done' : '') + '"><div class="planner-block-top"><span class="planner-time">' + b.minutes + ' min</span><span class="planner-course-chip">' + esc(b.phase) + '</span></div><div class="planner-block-title">' + esc(b.title) + '</div><div class="planner-block-copy">' + esc(b.copy) + '</div>' + (tags ? '<div class="planner-tags">' + tags + '</div>' : '') + '<div class="planner-block-actions">' + tools + '</div></article>';
             }).join('');
-            blocks.querySelectorAll('button[data-tool]').forEach(function(btn){
-              btn.addEventListener('click', function(){ runPlannerBlockTool(btn); });
-            });
             blocks.querySelectorAll('button[data-detail-date]').forEach(function(btn){
               btn.addEventListener('click', function(){ openPlannerDrawer(findBlock(btn.dataset.detailDate, btn.dataset.detailIndex)); });
             });
@@ -4916,15 +4907,16 @@ Material:
             var steps = block.steps || [];
             document.getElementById('planner-drawer-steps').innerHTML = steps.length ? steps.map(function(s){ return '<div class="planner-step">' + esc(s) + '</div>'; }).join('') : '';
             document.getElementById('planner-drawer-source').textContent = (block.source_name || 'Plan MachReach') + (block.page_hint ? ' - ' + block.page_hint : '');
-            document.getElementById('planner-drawer-excerpt').textContent = block.source_excerpt || 'Este bloque no tiene extracto literal adjunto. Sube PDFs o apuntes a la prueba para obtener referencias exactas.';
             drawer.classList.add('open');
             drawer.setAttribute('aria-hidden','false');
+            document.body.classList.add('planner-drawer-lock');
           }
           function closePlannerDrawer(){
             var drawer = document.getElementById('planner-detail-drawer');
             if (!drawer) return;
             drawer.classList.remove('open');
             drawer.setAttribute('aria-hidden','true');
+            document.body.classList.remove('planner-drawer-lock');
           }
           async function togglePlannerDone(btn){
             var block = findBlock(btn.dataset.date, btn.dataset.index);
@@ -4942,7 +4934,7 @@ Material:
                   date:block.date,
                   exam_id:block.exam_id || 0,
                   unit_index:block.material_based ? block.unit_index : -1,
-                  title:block.title || '',
+                  title:blockDoneTitle(block),
                   phase:block.phase || '',
                   minutes:block.minutes || 0,
                   done:done
@@ -4950,12 +4942,13 @@ Material:
               });
               var d = await r.json();
               if (!r.ok) throw new Error(d.error || 'No se pudo guardar.');
-              var keyObj = {date:block.date, exam_id:block.exam_id || 0, unit_index:block.material_based ? block.unit_index : -1, title:block.title || '', phase:block.phase || '', minutes:block.minutes || 0};
+              var keyObj = {date:block.date, exam_id:block.exam_id || 0, unit_index:block.material_based ? block.unit_index : -1, title:blockDoneTitle(block), phase:block.phase || '', minutes:block.minutes || 0};
               var key = doneKeyOf(keyObj);
               state.doneBlocks = state.doneBlocks.filter(function(x){ return doneKeyOf(x) !== key; });
               if (done) state.doneBlocks.push(keyObj);
-              runPlannerGenerate(false);
-              document.getElementById('planner-save-state').textContent = done ? 'Bloque marcado como hecho. Regenerando el resto de la semana.' : 'Bloque vuelto a pendiente.';
+              renderDays();
+              renderSelectedDay();
+              document.getElementById('planner-save-state').textContent = done ? 'Bloque marcado como hecho. Genera el plan si quieres reajustar la semana.' : 'Bloque vuelto a pendiente.';
             } catch(e) {
               btn.disabled = false;
               document.getElementById('planner-save-state').textContent = e.message || 'No se pudo guardar.';
@@ -7130,40 +7123,7 @@ Material:
                 _outcome_notice = '<div class="ccard-outcome-pending">Resultado pendiente: registra tu nota final para poder avanzar de semestre.</div>'
             elif _outcome:
                 _outcome_notice = f'<div class="ccard-outcome-done">Resultado guardado: {"aprobado" if _outcome.get("passed") else "no aprobado"} · nota {float(_outcome.get("final_grade") or 0):.2f}</div>'
-            if _courses_plus:
-                _brain_panel = f"""
-                <section class="course-brain" id="brain-{_course_id}">
-                  <div class="brain-top">
-                    <div>
-                      <div class="brain-kicker">PLUS · Course Brain</div>
-                      <div class="brain-title">Studio del ramo</div>
-                    </div>
-                    <span class="brain-badge">fuentes + pruebas + progreso</span>
-                  </div>
-                  <div class="brain-actions">
-                    <button type="button" class="brain-btn" onclick="runCourseAI({_course_id}, 'brain', this)">Course Brain</button>
-                    <button type="button" class="brain-btn" onclick="runCourseAI({_course_id}, 'studio', this)">Study Studio</button>
-                    <button type="button" class="brain-btn hot" onclick="runCourseAI({_course_id}, 'exam', this)">Próxima prueba</button>
-                  </div>
-                  <div class="brain-output" id="brain-output-{_course_id}">
-                    Elige una herramienta para generar un resumen, guía, mapa mental o plan de prueba desde este ramo.
-                  </div>
-                </section>
-                """
-            else:
-                _brain_panel = """
-                <section class="course-brain locked">
-                  <div class="brain-top">
-                    <div>
-                      <div class="brain-kicker">PLUS · Course Brain</div>
-                      <div class="brain-title">Studio del ramo</div>
-                    </div>
-                    <span class="brain-badge">bloqueado</span>
-                  </div>
-                  <p class="brain-lock-copy">PLUS convierte tus cursos, evaluaciones, quizzes y apuntes en una guía tipo NotebookLM orientada a tu próxima prueba.</p>
-                  <a class="brain-upgrade" href="/student/shop">Desbloquear PLUS →</a>
-                </section>
-                """
+            _brain_panel = ""
             _cls = _course_classes[_i % len(_course_classes)]
             course_cards_html += f"""
             <article class="ccard {_cls}">
@@ -7612,7 +7572,7 @@ Material:
             setTimeout(function(){{ btn.innerHTML = old || '&#128206;'; }}, 900);
           }}
           var out = document.getElementById('brain-output-' + courseId);
-          if (out && ok) out.innerHTML = ok + ' archivo(s) guardado(s) para esta prueba. Ahora Course Brain puede usarlos.';
+          if (out && ok) out.innerHTML = ok + ' archivo(s) guardado(s) para esta prueba.';
           if (fail) alert('Se guardaron ' + ok + ' archivo(s). Fallaron ' + fail + '.');
         }}
 

@@ -23,14 +23,18 @@ const BUNDLE_VERSION = "landing-motion-5";
 
 const read = (f) => readFileSync(join(LANDING, f), "utf-8");
 const html = readFileSync(SRC_HTML, "utf-8");
+const babelScripts = [...html.matchAll(/<script type="text\/babel">([\s\S]*?)<\/script>/g)];
 
 // --- 1. Gather source ------------------------------------------------------
 const jsxFiles = ["icons.jsx", "tweaks-panel.jsx", "hero.jsx",
                   "features.jsx", "sections.jsx", "pricing.jsx"];
-let src = jsxFiles.map(read).join("\n\n");
+const inlinePrereqs = babelScripts
+  .map((m) => m[1])
+  .filter((code) => code.includes("const LOGO_COLORS") || code.includes("function IntroOverlay"));
+let src = inlinePrereqs.join("\n\n") + "\n\n" + jsxFiles.map(read).join("\n\n");
 
 // Extract the inline App bootstrap (last <script type="text/babel"> ... </script>)
-const m = html.match(/<script type="text\/babel">([\s\S]*?)<\/script>\s*<\/body>/);
+const m = babelScripts[babelScripts.length - 1];
 if (!m) throw new Error("Could not find inline App bootstrap script in source HTML");
 let bootstrap = m[1];
 // Drop the browser render call; we add a guarded hydrate/render at the end.
@@ -102,7 +106,8 @@ let prod = html;
 prod = prod.replace('href="styles.css"', `href="${PREFIX}styles.css"`);
 prod = prod.replace('href="#" className="logo"', 'href="/" className="logo"');
 // Replace dev React/Babel + jsx script tags + inline bootstrap with prod scripts.
-const scriptsStart = prod.indexOf('<script src="https://unpkg.com/react@');
+let scriptsStart = prod.indexOf('<script src="https://unpkg.com/react@');
+if (scriptsStart === -1) scriptsStart = prod.indexOf('<script src="/static/machreach_landing/vendor/react.production.min.js">');
 const scriptsEnd = prod.indexOf("</script>", prod.lastIndexOf('ReactDOM.createRoot')) + "</script>".length;
 if (scriptsStart === -1 || scriptsEnd === -1) throw new Error("Could not locate script block to replace");
 const prodScripts =
