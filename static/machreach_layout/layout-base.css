@@ -2436,6 +2436,14 @@
       border: 2px solid #FF8A4C !important;
       box-shadow: 0 4px 0 #FF8A4C !important;
     }
+    :root[data-theme="dark"] .mr-app-shell .content:has(.focus-layout) .btn-primary,
+    :root[data-theme="dark"] .mr-app-shell .content:has(.focus-layout) .ft-controls #start-btn,
+    :root[data-theme="dark"] .mr-app-shell .content:has(.focus-layout) #focus-guard-card .btn-primary {
+      background: linear-gradient(135deg,var(--focus-accent,#FF8A4C),color-mix(in oklab,var(--focus-accent,#FF8A4C) 78%,#FFFFFF)) !important;
+      color: #FFFFFF !important;
+      border: 2px solid #050505 !important;
+      box-shadow: 0 4px 0 #050505, 0 14px 32px color-mix(in oklab,var(--focus-accent,#FF8A4C) 25%,transparent) !important;
+    }
     :root[data-theme="dark"] .mr-app-shell .btn-outline,
     :root[data-theme="dark"] .mr-app-shell .btn-ghost,
     :root[data-theme="dark"] .mr-app-shell .cb-btn,

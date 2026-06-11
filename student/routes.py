@@ -8036,24 +8036,169 @@ Material:
 
         <style>
         .focus-page-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;padding:20px clamp(18px,2.4vw,28px);border-radius:20px;background:linear-gradient(135deg,#FFFDF8 0%,#FFF3E8 58%,#FFE4D4 100%);border:2px solid #1A1A1F;box-shadow:0 4px 0 #1A1A1F;overflow:visible; }}
-        .content:has(.focus-layout),.content-wide:has(.focus-layout),.mr-tb-main:has(.focus-layout) {{ min-height:0!important;height:auto!important;padding-bottom:0!important; }}
+        :root {{
+          --focus-accent:#FF7A3D;
+          --focus-accent-soft:rgba(255,122,61,.14);
+          --focus-card-bg:rgba(255,253,248,.94);
+          --focus-card-border:#1A1A1F;
+          --focus-scene-bg:
+            radial-gradient(900px 360px at 12% 8%, rgba(255,122,61,.12), transparent 58%),
+            radial-gradient(780px 320px at 96% 22%, rgba(244,183,58,.10), transparent 62%),
+            linear-gradient(180deg,#FFF9EF 0%,#FFFDF8 52%,#F7F0E4 100%);
+          --focus-scene-texture:
+            repeating-linear-gradient(0deg, rgba(26,26,31,.035) 0 1px, transparent 1px 34px),
+            repeating-linear-gradient(90deg, rgba(255,122,61,.045) 0 1px, transparent 1px 42px);
+          --focus-scene-orb:radial-gradient(circle at 50% 50%, rgba(255,122,61,.16), transparent 58%);
+          --focus-scene-opacity:.45;
+        }}
+        :root[data-theme="dark"] {{
+          --focus-card-bg:rgba(26,32,43,.93);
+          --focus-card-border:#FF7A3D;
+          --focus-scene-bg:
+            radial-gradient(900px 360px at 8% 8%, rgba(255,122,61,.13), transparent 60%),
+            radial-gradient(760px 320px at 92% 16%, rgba(244,183,58,.08), transparent 64%),
+            linear-gradient(180deg,#090A10 0%,#10131D 56%,#080910 100%);
+          --focus-scene-texture:
+            repeating-linear-gradient(0deg, rgba(255,248,225,.045) 0 1px, transparent 1px 34px),
+            repeating-linear-gradient(90deg, rgba(255,122,61,.05) 0 1px, transparent 1px 42px);
+          --focus-scene-opacity:.30;
+        }}
+        :root[data-focus-ambience="rain"] {{
+          --focus-accent:#3B82F6;
+          --focus-accent-soft:rgba(59,130,246,.15);
+          --focus-scene-bg:
+            radial-gradient(760px 300px at 18% 8%, rgba(103,174,255,.22), transparent 62%),
+            radial-gradient(680px 260px at 92% 22%, rgba(71,85,105,.12), transparent 66%),
+            linear-gradient(180deg,#EEF6FF 0%,#F7FBFF 46%,#E7EEF7 100%);
+          --focus-scene-texture:
+            repeating-linear-gradient(105deg, rgba(59,130,246,.18) 0 2px, transparent 2px 18px),
+            radial-gradient(circle at 20% 24%, rgba(59,130,246,.12), transparent 22%),
+            radial-gradient(circle at 82% 74%, rgba(14,165,233,.10), transparent 24%);
+          --focus-scene-orb:radial-gradient(circle at 50% 50%, rgba(59,130,246,.18), transparent 58%);
+        }}
+        :root[data-theme="dark"][data-focus-ambience="rain"] {{
+          --focus-card-bg:rgba(15,25,40,.94);
+          --focus-scene-bg:
+            radial-gradient(800px 330px at 12% 8%, rgba(59,130,246,.18), transparent 64%),
+            radial-gradient(600px 260px at 88% 18%, rgba(14,165,233,.12), transparent 62%),
+            linear-gradient(180deg,#07111F 0%,#0B1726 56%,#060B13 100%);
+          --focus-scene-texture:
+            repeating-linear-gradient(105deg, rgba(147,197,253,.18) 0 2px, transparent 2px 18px),
+            radial-gradient(circle at 18% 28%, rgba(59,130,246,.10), transparent 24%);
+        }}
+        :root[data-focus-ambience="ocean"] {{
+          --focus-accent:#0EA5B7;
+          --focus-accent-soft:rgba(14,165,183,.15);
+          --focus-scene-bg:
+            radial-gradient(820px 320px at 8% 16%, rgba(45,212,191,.24), transparent 62%),
+            radial-gradient(700px 280px at 86% 18%, rgba(56,189,248,.16), transparent 64%),
+            linear-gradient(180deg,#E7FFFB 0%,#F8FEFF 48%,#DDF6F5 100%);
+          --focus-scene-texture:
+            repeating-radial-gradient(ellipse at 30% 120%, rgba(14,165,183,.18) 0 2px, transparent 2px 22px),
+            repeating-linear-gradient(178deg, rgba(14,165,183,.08) 0 1px, transparent 1px 36px);
+          --focus-scene-orb:radial-gradient(circle at 50% 50%, rgba(14,165,183,.20), transparent 58%);
+        }}
+        :root[data-theme="dark"][data-focus-ambience="ocean"] {{
+          --focus-card-bg:rgba(11,31,40,.94);
+          --focus-scene-bg:
+            radial-gradient(900px 360px at 9% 14%, rgba(14,165,183,.22), transparent 64%),
+            radial-gradient(700px 300px at 94% 20%, rgba(56,189,248,.12), transparent 66%),
+            linear-gradient(180deg,#03151D 0%,#08222D 54%,#041016 100%);
+        }}
+        :root[data-focus-ambience="forest"] {{
+          --focus-accent:#22A06B;
+          --focus-accent-soft:rgba(34,160,107,.16);
+          --focus-scene-bg:
+            radial-gradient(760px 300px at 12% 10%, rgba(74,222,128,.24), transparent 64%),
+            radial-gradient(760px 320px at 90% 24%, rgba(132,204,22,.13), transparent 66%),
+            linear-gradient(180deg,#EFFBF1 0%,#FBFEF7 50%,#E8F5DF 100%);
+          --focus-scene-texture:
+            radial-gradient(ellipse at 14% 22%, rgba(34,160,107,.16) 0 9%, transparent 10%),
+            radial-gradient(ellipse at 82% 18%, rgba(132,204,22,.12) 0 8%, transparent 9%),
+            repeating-linear-gradient(125deg, rgba(34,160,107,.08) 0 1px, transparent 1px 24px);
+          --focus-scene-orb:radial-gradient(circle at 50% 50%, rgba(34,160,107,.20), transparent 58%);
+        }}
+        :root[data-theme="dark"][data-focus-ambience="forest"] {{
+          --focus-card-bg:rgba(12,30,24,.94);
+          --focus-scene-bg:
+            radial-gradient(780px 320px at 8% 12%, rgba(34,160,107,.20), transparent 64%),
+            radial-gradient(700px 280px at 92% 18%, rgba(132,204,22,.11), transparent 66%),
+            linear-gradient(180deg,#06130F 0%,#0B1D16 56%,#050C09 100%);
+        }}
+        :root[data-focus-ambience="fire"] {{
+          --focus-accent:#FF7A3D;
+          --focus-accent-soft:rgba(255,122,61,.18);
+          --focus-scene-bg:
+            radial-gradient(780px 320px at 14% 10%, rgba(255,122,61,.27), transparent 62%),
+            radial-gradient(680px 280px at 88% 22%, rgba(250,204,21,.16), transparent 64%),
+            linear-gradient(180deg,#FFF1E8 0%,#FFFDF8 46%,#FFE8D4 100%);
+          --focus-scene-texture:
+            radial-gradient(circle at 18% 26%, rgba(255,122,61,.16) 0 2px, transparent 3px),
+            radial-gradient(circle at 72% 62%, rgba(250,204,21,.14) 0 2px, transparent 3px),
+            repeating-linear-gradient(20deg, rgba(255,122,61,.08) 0 1px, transparent 1px 30px);
+          --focus-scene-orb:radial-gradient(circle at 50% 50%, rgba(255,122,61,.24), transparent 58%);
+        }}
+        :root[data-theme="dark"][data-focus-ambience="fire"] {{
+          --focus-card-bg:rgba(30,24,22,.94);
+          --focus-scene-bg:
+            radial-gradient(760px 320px at 12% 12%, rgba(255,122,61,.22), transparent 64%),
+            radial-gradient(620px 260px at 90% 22%, rgba(250,204,21,.10), transparent 64%),
+            linear-gradient(180deg,#100909 0%,#1A1010 54%,#080606 100%);
+        }}
+        :root[data-focus-ambience="brown"] {{
+          --focus-accent:#A78BFA;
+          --focus-accent-soft:rgba(167,139,250,.16);
+          --focus-scene-bg:
+            radial-gradient(780px 320px at 14% 10%, rgba(167,139,250,.18), transparent 64%),
+            radial-gradient(700px 300px at 90% 24%, rgba(255,122,61,.10), transparent 66%),
+            linear-gradient(180deg,#F5F1EA 0%,#FFFDF8 48%,#ECE6DD 100%);
+          --focus-scene-texture:
+            repeating-linear-gradient(90deg, rgba(26,26,31,.08) 0 1px, transparent 1px 5px),
+            repeating-linear-gradient(0deg, rgba(26,26,31,.045) 0 1px, transparent 1px 7px);
+          --focus-scene-orb:radial-gradient(circle at 50% 50%, rgba(167,139,250,.18), transparent 58%);
+        }}
+        :root[data-theme="dark"][data-focus-ambience="brown"] {{
+          --focus-card-bg:rgba(19,19,26,.95);
+          --focus-scene-bg:
+            radial-gradient(760px 320px at 12% 12%, rgba(167,139,250,.15), transparent 64%),
+            radial-gradient(680px 280px at 92% 24%, rgba(255,122,61,.08), transparent 68%),
+            linear-gradient(180deg,#08080D 0%,#11111A 55%,#07070B 100%);
+          --focus-scene-texture:
+            repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, transparent 1px 5px),
+            repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 7px);
+        }}
+        .content:has(.focus-layout),.content-wide:has(.focus-layout),.mr-tb-main:has(.focus-layout) {{ min-height:calc(100vh - 88px)!important;height:auto!important;padding-bottom:34px!important;background:var(--focus-scene-bg)!important;position:relative;overflow:hidden;isolation:isolate; }}
+        .content:has(.focus-layout)::before,.content-wide:has(.focus-layout)::before,.mr-tb-main:has(.focus-layout)::before {{ content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--focus-scene-texture);opacity:var(--focus-scene-opacity);mix-blend-mode:multiply;animation:focusSceneDrift 18s linear infinite; }}
+        :root[data-theme="dark"] .content:has(.focus-layout)::before,:root[data-theme="dark"] .content-wide:has(.focus-layout)::before,:root[data-theme="dark"] .mr-tb-main:has(.focus-layout)::before {{ mix-blend-mode:screen;opacity:calc(var(--focus-scene-opacity) * .82); }}
+        .focus-page-head,.focus-rival-card,.focus-exam-nudge,.focus-layout {{ position:relative;z-index:1; }}
         .focus-eye {{ font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
         .focus-title {{ margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:44px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F;background:transparent !important;box-shadow:none !important;text-shadow:none !important; }}
         .focus-page-head .focus-side,.focus-page-head .focus-title,.focus-page-head p,.focus-page-head b {{ background:transparent !important;box-shadow:none !important;border:0 !important; }}
+        .focus-page-head {{ background:var(--focus-scene-bg)!important;border-color:var(--focus-card-border)!important;box-shadow:0 4px 0 var(--focus-card-border)!important;transition:background .28s ease,border-color .28s ease,box-shadow .28s ease; }}
         .page-stats {{ display:flex;gap:10px;flex-wrap:wrap; }}
         .ps {{ background:#fff;border:1px solid #E2DCCC;border-radius:14px;padding:8px 12px;min-width:86px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
         .ps-n {{ font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:600;line-height:1;color:#1A1A1F; }}
         .ps-l {{ font-size:11px;font-weight:800;color:#94939C;text-transform:uppercase;letter-spacing:.08em;margin-top:3px; }}
         :root[data-theme="dark"] .focus-title,
-        :root[data-theme="dark"] .focus-page-head {{ background:linear-gradient(135deg,#191620 0%,#17141D 58%,#241711 100%) !important;border-color:#FF7A3D !important;box-shadow:0 4px 0 #FF7A3D !important; }}
+        :root[data-theme="dark"] .focus-page-head {{ background:var(--focus-scene-bg) !important;border-color:#FF7A3D !important;box-shadow:0 4px 0 #FF7A3D !important; }}
         :root[data-theme="dark"] .focus-page-head b,
         :root[data-theme="dark"] .ps-n {{ color:#F8F3EA !important; }}
         :root[data-theme="dark"] .focus-page-head p,
         :root[data-theme="dark"] .ps-l {{ color:#B9C0CC !important; }}
         :root[data-theme="dark"] .ps {{ background:#1A202B !important;border-color:#343C4C !important;box-shadow:none !important; }}
+        .focus-layout .card,.focus-timer-shell,#focus-ambience-card,#focus-guard-card {{ background:var(--focus-card-bg)!important;border-color:var(--focus-card-border)!important;transition:background .28s ease,border-color .28s ease,box-shadow .28s ease,filter .28s ease; }}
+        .focus-layout .btn-primary,#focus-guard-card .btn-primary {{ background:linear-gradient(135deg,var(--focus-accent),color-mix(in oklab,var(--focus-accent) 78%,#FFFFFF))!important;border-color:var(--focus-card-border)!important;color:#FFFFFF!important;box-shadow:0 4px 0 var(--focus-card-border),0 12px 28px color-mix(in oklab,var(--focus-accent) 24%,transparent)!important;transition:background .28s ease,box-shadow .28s ease,transform .18s ease; }}
+        .focus-layout .btn-primary:hover,#focus-guard-card .btn-primary:hover {{ transform:translateY(-2px);box-shadow:0 6px 0 var(--focus-card-border),0 16px 34px color-mix(in oklab,var(--focus-accent) 30%,transparent)!important; }}
+        :root[data-theme="dark"] .focus-layout .btn-primary,:root[data-theme="dark"] #focus-guard-card .btn-primary {{ border-color:#050505!important;box-shadow:0 4px 0 #050505,0 14px 32px color-mix(in oklab,var(--focus-accent) 25%,transparent)!important; }}
+        .focus-layout .card {{ box-shadow:0 5px 0 color-mix(in oklab,var(--focus-accent) 30%,#1A1A1F),0 20px 48px color-mix(in oklab,var(--focus-accent) 10%,transparent)!important; }}
+        :root[data-theme="dark"] .focus-layout .card {{ box-shadow:0 5px 0 var(--focus-accent),0 22px 58px rgba(0,0,0,.32)!important; }}
+        #focus-ambience-card,.focus-timer-shell {{ position:relative;overflow:hidden;isolation:isolate; }}
+        #focus-ambience-card::before,.focus-timer-shell::before {{ content:"";position:absolute;inset:-20%;z-index:-1;pointer-events:none;background:var(--focus-scene-orb);opacity:.55;filter:blur(10px);transform:translate3d(0,0,0);animation:focusAuraFloat 8s ease-in-out infinite alternate; }}
+        #focus-ambience-card::after {{ content:"";position:absolute;right:16px;top:14px;width:92px;height:92px;border-radius:30px;background:var(--focus-scene-texture);opacity:.28;transform:rotate(8deg);pointer-events:none; }}
+        :root[data-theme="dark"] #focus-ambience-card::after {{ opacity:.20;mix-blend-mode:screen; }}
         .focus-grid {{ display:grid;grid-template-columns:1.4fr 1fr;gap:18px; }}
         @media (max-width:1100px) {{ .focus-grid {{ grid-template-columns:1fr; }} }}
-        .focus-layout {{ grid-template-columns:minmax(0,1.06fr) minmax(340px,.94fr)!important;gap:14px!important;align-items:start!important;margin-bottom:-96px!important; }}
+        .focus-layout {{ grid-template-columns:minmax(0,1.06fr) minmax(340px,.94fr)!important;gap:14px!important;align-items:start!important;margin-bottom:24px!important; }}
         .focus-timer-shell {{ padding:16px 18px!important; }}
         .focus-timer-shell .form-group {{ margin-bottom:8px!important; }}
         .focus-timer-shell label {{ margin-bottom:5px!important; }}
@@ -8107,7 +8252,7 @@ Material:
         .ft-ring {{ width:100%;height:100%; }}
         .ft-ring circle {{ animation:none !important; }}
         .ft-ring circle:first-child {{ stroke-dasharray:none !important;stroke-dashoffset:0 !important; }}
-        #ft-ring-progress {{ --ft-ring-offset:0;stroke-dasharray:578 !important;stroke-dashoffset:var(--ft-ring-offset) !important;transition:stroke-dashoffset .72s cubic-bezier(.22,.8,.2,1), stroke .22s ease, filter .22s ease;filter:drop-shadow(0 0 6px rgba(255,122,61,.22)); }}
+        #ft-ring-progress {{ --ft-ring-offset:0;stroke:var(--focus-accent)!important;stroke-dasharray:578 !important;stroke-dashoffset:var(--ft-ring-offset) !important;transition:stroke-dashoffset .72s cubic-bezier(.22,.8,.2,1), stroke .22s ease, filter .22s ease;filter:drop-shadow(0 0 8px color-mix(in oklab,var(--focus-accent) 34%,transparent)); }}
         .ft-ring-wrap.is-break #ft-ring-progress {{ stroke:#2E9266 !important;filter:drop-shadow(0 0 8px rgba(46,146,102,.26)); }}
         .ft-time {{ position:absolute;inset:0;display:grid;place-items:center;text-align:center; }}
         .ft-time > div {{ width:min(210px,72%);display:flex;flex-direction:column;align-items:center;justify-content:center; }}
@@ -8120,11 +8265,11 @@ Material:
         .ft-session-orbit {{ --session-fill:0%;--session-ball:#FF7A3D;position:relative;margin:10px auto 0;display:flex;align-items:center;justify-content:space-between;gap:0;width:150px;padding:0 1px; }}
         .ft-session-orbit::before,.ft-session-orbit::after {{ content:"";position:absolute;left:7px;right:7px;top:50%;height:5px;border-radius:999px;transform:translateY(-50%); }}
         .ft-session-orbit::before {{ background:#EDE7DA; }}
-        .ft-session-orbit::after {{ right:auto;width:calc((100% - 14px) * var(--session-fill));background:var(--session-ball);transition:width .22s ease,background .22s ease; }}
+        .ft-session-orbit::after {{ right:auto;width:calc((100% - 14px) * var(--session-fill));background:var(--session-ball,var(--focus-accent));transition:width .22s ease,background .22s ease; }}
         .ft-session-dot {{ position:relative;z-index:1;width:14px;height:14px;border-radius:999px;background:#EDE7DA;border:2px solid #E2DCCC;transition:all .2s ease;box-sizing:border-box; }}
-        .ft-session-dot.done {{ background:#FF7A3D;border-color:#FF7A3D; }}
-        .ft-session-dot.active {{ width:24px;height:24px;background:#FF7A3D;border-color:#FF7A3D;box-shadow:0 0 0 5px rgba(255,122,61,.16); }}
-        .ft-session-status {{ max-width:210px;margin-top:6px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#FF7A3D;line-height:1.2; }}
+        .ft-session-dot.done {{ background:var(--focus-accent);border-color:var(--focus-accent); }}
+        .ft-session-dot.active {{ width:24px;height:24px;background:var(--focus-accent);border-color:var(--focus-accent);box-shadow:0 0 0 5px var(--focus-accent-soft); }}
+        .ft-session-status {{ max-width:210px;margin-top:6px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--focus-accent);line-height:1.2; }}
         .ft-ring-wrap.is-break .ft-session-dot.done,
         .ft-ring-wrap.is-break .ft-session-dot.active {{ background:#2E9266;border-color:#2E9266; }}
         .ft-ring-wrap.is-break .ft-session-dot.active {{ box-shadow:0 0 0 5px rgba(46,146,102,.16); }}
@@ -8156,14 +8301,20 @@ Material:
         .break-bar span {{ display:block;height:100%;width:0%;background:linear-gradient(90deg,#FF7A3D,#F4B73A);border-radius:999px;transition:width .25s ease; }}
         .amb-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px; }}
         .amb {{ position:relative;background:#FBF8F0;border:1px solid #E2DCCC;border-radius:12px;padding:9px 7px;text-align:center;cursor:pointer;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease,background .15s ease; }}
-        .amb:hover {{ transform:translateY(-2px);border-color:#FF7A3D; }}
+        .amb:hover {{ transform:translateY(-2px);border-color:var(--focus-accent); }}
         .amb-ic {{ font-size:22px; }}
         .amb-n {{ font-size:11px;font-weight:700;margin-top:4px;color:#5C5C66; }}
-        .amb.on {{ background:linear-gradient(135deg,#FFF4EA,#FFFFFF);border-color:#FF7A3D;box-shadow:0 3px 0 #FF7A3D,0 0 0 2px rgba(255,122,61,.16);transform:translateY(-1px); }}
+        .amb.on {{ background:linear-gradient(135deg,var(--focus-accent-soft),#FFFFFF);border-color:var(--focus-accent);box-shadow:0 3px 0 var(--focus-accent),0 0 0 2px var(--focus-accent-soft);transform:translateY(-1px); }}
         .amb.on::after {{ content:'✓';position:absolute;top:6px;right:7px;width:17px;height:17px;border-radius:50%;background:#FF7A3D;color:#fff;border:1.5px solid #1A1A1F;display:grid;place-items:center;font-size:11px;font-weight:950;line-height:1; }}
         :root[data-theme="dark"] .amb {{ background:#0B0B10;border-color:rgba(255,122,61,.42); }}
         :root[data-theme="dark"] .amb-n {{ color:#D9D2C3; }}
-        :root[data-theme="dark"] .amb.on {{ background:#17110E;border-color:#FF7A3D;box-shadow:0 3px 0 #FF7A3D,0 0 0 2px rgba(255,122,61,.22); }}
+        :root[data-theme="dark"] .amb.on {{ background:color-mix(in oklab,var(--focus-accent) 16%,#0B0B10);border-color:var(--focus-accent);box-shadow:0 3px 0 var(--focus-accent),0 0 0 2px var(--focus-accent-soft); }}
+        .amb[data-ambience="rain"].on .amb-ic {{ filter:drop-shadow(0 0 10px rgba(59,130,246,.55)); }}
+        .amb[data-ambience="ocean"].on .amb-ic {{ filter:drop-shadow(0 0 10px rgba(14,165,183,.55)); }}
+        .amb[data-ambience="forest"].on .amb-ic {{ filter:drop-shadow(0 0 10px rgba(34,160,107,.50)); }}
+        .amb[data-ambience="fire"].on .amb-ic {{ filter:drop-shadow(0 0 12px rgba(255,122,61,.62)); }}
+        .amb[data-ambience="brown"].on .amb-ic {{ filter:drop-shadow(0 0 10px rgba(167,139,250,.52)); }}
+        .amb.on::after {{ background:var(--focus-accent)!important; }}
         .vol-row {{ display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px; }}
         .vol-slider {{ --vol-ball:#1A1A1F;--vol-track:#EDE7DA;flex:1;min-width:0;appearance:none;-webkit-appearance:none;height:24px;margin:0;padding:0;background:transparent !important;border:0 !important;outline:none;cursor:pointer; }}
         .vol-slider::-webkit-slider-runnable-track {{ height:10px;border-radius:999px;background:linear-gradient(90deg,var(--vol-ball) var(--amb-vol,42%),var(--vol-track) var(--amb-vol,42%)); }}
@@ -8171,15 +8322,17 @@ Material:
         .vol-slider::-moz-range-track {{ height:10px;border-radius:999px;background:var(--vol-track); }}
         .vol-slider::-moz-range-progress {{ height:10px;border-radius:999px;background:var(--vol-ball); }}
         .vol-slider::-moz-range-thumb {{ width:22px;height:22px;border-radius:50%;background:#FFFFFF;border:3px solid var(--vol-ball);box-shadow:0 2px 0 var(--vol-ball);box-sizing:border-box; }}
-        :root[data-theme="dark"] .vol-slider {{ --vol-ball:#FF7A3D;--vol-track:#050505; }}
-        :root[data-theme="dark"] .vol-slider::-webkit-slider-thumb {{ background:#FF7A3D;box-shadow:0 2px 0 #050505; }}
-        :root[data-theme="dark"] .vol-slider::-moz-range-thumb {{ background:#FF7A3D;box-shadow:0 2px 0 #050505; }}
+        :root[data-theme="dark"] .vol-slider {{ --vol-ball:var(--focus-accent);--vol-track:#050505; }}
+        :root[data-theme="dark"] .vol-slider::-webkit-slider-thumb {{ background:var(--focus-accent);box-shadow:0 2px 0 #050505; }}
+        :root[data-theme="dark"] .vol-slider::-moz-range-thumb {{ background:var(--focus-accent);box-shadow:0 2px 0 #050505; }}
         #claim-counter {{ position:relative;overflow:hidden; }}
         #claim-counter.claim-pop {{ animation:claimCardPop .7s cubic-bezier(.2,1.5,.35,1) both; }}
         .xp-burst {{ position:fixed;left:50%;top:50%;z-index:9999;transform:translate(-50%,-50%);pointer-events:none;text-align:center; }}
         .xp-burst-main {{ font-family:"Bricolage Grotesque",sans-serif;font-size:clamp(54px,8vw,94px);font-weight:800;color:#FF7A3D;text-shadow:0 8px 0 #1A1A1F,0 20px 54px rgba(255,122,61,.35);animation:xpBurstRise 1.35s cubic-bezier(.18,1.35,.3,1) both; }}
         .xp-burst-sub {{ margin-top:10px;font-size:14px;font-weight:900;color:#FFF8E8;background:#1A1A1F;border:2px solid #FF7A3D;border-radius:999px;padding:8px 14px;box-shadow:0 5px 0 #FF7A3D;animation:xpBurstSub .9s .12s both; }}
         .xp-confetti {{ position:absolute;width:10px;height:16px;border-radius:3px;background:var(--c,#FF7A3D);left:50%;top:50%;animation:xpConfetti 1.2s cubic-bezier(.18,.8,.25,1) both; }}
+        @keyframes focusSceneDrift {{ from {{ transform:translate3d(-1.5%,0,0);background-position:0 0,0 0,0 0; }} to {{ transform:translate3d(1.5%,0,0);background-position:90px 60px,-70px 90px,40px 40px; }} }}
+        @keyframes focusAuraFloat {{ from {{ transform:translate3d(-2%,1%,0) scale(.98); }} to {{ transform:translate3d(2%,-1%,0) scale(1.04); }} }}
         @keyframes ftBtnSwipe {{ to {{ transform:translateX(130%); }} }}
         @keyframes claimCardPop {{ 0% {{ transform:scale(.98); }} 45% {{ transform:scale(1.03); }} 100% {{ transform:scale(1); }} }}
         @keyframes xpBurstRise {{ 0% {{ opacity:0;transform:translateY(16px) scale(.72) rotate(-5deg); }} 22% {{ opacity:1;transform:translateY(0) scale(1.08) rotate(2deg); }} 72% {{ opacity:1; }} 100% {{ opacity:0;transform:translateY(-22px) scale(.96) rotate(0deg); }} }}
@@ -9491,7 +9644,16 @@ Material:
           }}
         }}
 
+        function applyAmbienceTheme(type) {{
+          type = type || 'off';
+          var allowed = {{ off:1, rain:1, ocean:1, forest:1, fire:1, brown:1 }};
+          if (!allowed[type]) type = 'off';
+          try {{ document.documentElement.setAttribute('data-focus-ambience', type); }} catch(e) {{}}
+        }}
+
         function markAmbienceSelected(type) {{
+          type = type || 'off';
+          applyAmbienceTheme(type);
           document.querySelectorAll('.amb').forEach(function(a) {{
             var active = a.getAttribute('data-ambience') === type;
             a.classList.toggle('on', active);
