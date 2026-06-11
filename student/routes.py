@@ -4247,11 +4247,19 @@ Material:
             done_blocks = sdb.planner_done_blocks(cid, since_date=_week_start)
         except Exception:
             done_blocks = []
+        try:
+            latest_plan_row = sdb.get_latest_plan(cid) or {}
+            saved_plan = latest_plan_row.get("plan_json") or {}
+            if not isinstance(saved_plan, dict):
+                saved_plan = {}
+        except Exception:
+            saved_plan = {}
         initial_json = json.dumps({
             "today": datetime.now().strftime("%Y-%m-%d"),
             "availability": availability,
             "courses": course_payload,
             "exams": exam_payload,
+            "saved_plan": saved_plan,
             "done_blocks": [{
                 "date": str(d.get("block_date") or "")[:10],
                 "exam_id": int(d.get("exam_id") or 0),
@@ -4458,7 +4466,7 @@ Material:
             materialLoading: {},
             selectedIndex: 0,
             weekOffset: 0,
-            plan: null,
+            plan: initial.saved_plan || null,
             doneBlocks: initial.done_blocks || []
           };
           function blockDoneTitle(block){
@@ -4520,6 +4528,13 @@ Material:
           function plannerDateForDay(dayIndex){
             if (state.weekOffset >= 0) return addDays(upcomingDateForDay(dayIndex), state.weekOffset * 7);
             return addDays(mondayOf(state.today), dayIndex + ((state.weekOffset + 1) * 7));
+          }
+          function currentWeekStart(){
+            var d0 = plannerDateForDay(0);
+            return d0 ? iso(d0) : iso(mondayOf(state.today));
+          }
+          function savedPlanIsCurrent(plan){
+            return !!(plan && Array.isArray(plan.days) && plan.days.length && plan.week_start === currentWeekStart());
           }
           function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
           function fmtDate(d){ return shortNames[(d.getDay()+6)%7] + ' ' + d.getDate() + '/' + (d.getMonth()+1); }
@@ -4986,13 +5001,33 @@ Material:
               document.getElementById('planner-save-state').textContent = e.message || 'No se pudo generar.';
             }
           }
-          function runPlannerGenerate(showState){
-            generatePlan();
+          function renderPlanner(){
             renderPriorities();
             renderStats();
             renderDays();
             renderSelectedDay();
+          }
+          async function autoSavePlannerPlan(message){
+            if (!state.plan) return;
+            var btnState = document.getElementById('planner-save-state');
+            if (btnState) btnState.textContent = message || 'Guardando plan...';
+            var headers = {'Content-Type':'application/json'};
+            var csrf = document.querySelector('meta[name="csrf-token"]');
+            if (csrf) headers['X-CSRFToken'] = csrf.content;
+            try {
+              var r = await fetch('/api/student/planner/save', {method:'POST', headers:headers, body:JSON.stringify({plan:state.plan, preferences:{availability:state.availability, autosaved:true}})});
+              var d = await r.json();
+              if (!r.ok) throw new Error(d.error || 'No se pudo guardar.');
+              if (btnState) btnState.textContent = 'Plan guardado automáticamente.';
+            } catch(e) {
+              if (btnState) btnState.textContent = e.message || 'No se pudo guardar.';
+            }
+          }
+          function runPlannerGenerate(showState, autoSave){
+            generatePlan();
+            renderPlanner();
             if (showState) document.getElementById('planner-save-state').textContent = 'Plan regenerado con tu disponibilidad actual.';
+            if (autoSave) autoSavePlannerPlan('Guardando plan regenerado...');
           }
           async function runPlannerSaveAvailability(){
             var btnState = document.getElementById('planner-save-state');
@@ -5008,7 +5043,7 @@ Material:
             } catch(e) { btnState.textContent = e.message || 'No se pudo guardar.'; }
           }
           async function runPlannerSavePlan(){
-            if (!state.plan) runPlannerGenerate(false);
+            if (!state.plan) runPlannerGenerate(false, false);
             var btnState = document.getElementById('planner-save-state');
             btnState.textContent = 'Guardando plan...';
             var headers = {'Content-Type':'application/json'};
@@ -5043,7 +5078,7 @@ Material:
                 if (r.ok && d.units) {
                   state.materialUnits[exam.id] = d.units;
                   status.textContent = 'Material dividido: ' + d.units.length + ' bloques para ' + exam.name + '.';
-                  runPlannerGenerate(false);
+                  runPlannerGenerate(false, false);
                 }
               } catch(e) {
                 status.textContent = 'No se pudo leer un material adjunto. El plan base sigue disponible.';
@@ -5061,15 +5096,21 @@ Material:
           var currentWeekBtn = document.getElementById('planner-current-week');
           var nextWeekBtn = document.getElementById('planner-next-week');
           if (saveAvailabilityBtn) saveAvailabilityBtn.addEventListener('click', runPlannerSaveAvailability);
-          if (generateBtn) generateBtn.addEventListener('click', function(){ runPlannerGenerate(true); });
+          if (generateBtn) generateBtn.addEventListener('click', function(){ runPlannerGenerate(true, true); });
           if (savePlanBtn) savePlanBtn.addEventListener('click', runPlannerSavePlan);
-          if (prevWeekBtn) prevWeekBtn.addEventListener('click', function(){ state.weekOffset -= 1; state.selectedIndex = 0; runPlannerGenerate(true); });
-          if (currentWeekBtn) currentWeekBtn.addEventListener('click', function(){ state.weekOffset = 0; state.selectedIndex = (state.today.getDay()+6)%7; runPlannerGenerate(true); });
-          if (nextWeekBtn) nextWeekBtn.addEventListener('click', function(){ state.weekOffset += 1; state.selectedIndex = 0; runPlannerGenerate(true); });
+          if (prevWeekBtn) prevWeekBtn.addEventListener('click', function(){ state.weekOffset -= 1; state.selectedIndex = 0; runPlannerGenerate(true, false); });
+          if (currentWeekBtn) currentWeekBtn.addEventListener('click', function(){ state.weekOffset = 0; state.selectedIndex = (state.today.getDay()+6)%7; if (savedPlanIsCurrent(initial.saved_plan)) { state.plan = initial.saved_plan; renderPlanner(); document.getElementById('planner-save-state').textContent = 'Plan guardado cargado.'; } else { runPlannerGenerate(true, false); } });
+          if (nextWeekBtn) nextWeekBtn.addEventListener('click', function(){ state.weekOffset += 1; state.selectedIndex = 0; runPlannerGenerate(true, false); });
           document.querySelectorAll('[data-close-drawer]').forEach(function(el){ el.addEventListener('click', closePlannerDrawer); });
           renderAvailability();
-          runPlannerGenerate(false);
-          loadPlannerMaterialUnits();
+          if (savedPlanIsCurrent(state.plan)) {
+            state.selectedIndex = (state.today.getDay()+6)%7;
+            renderPlanner();
+            document.getElementById('planner-save-state').textContent = 'Plan guardado cargado.';
+          } else {
+            runPlannerGenerate(false, false);
+            loadPlannerMaterialUnits();
+          }
         })();
         </script>
         """.replace("__INITIAL_JSON__", _esc(initial_json))
@@ -7245,8 +7286,7 @@ Material:
         .course-cards {{ display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start; }}
         @media (max-width:900px) {{ .course-cards {{ grid-template-columns:1fr; }} .page-title-cd{{font-size:38px;}} }}
         .ccard {{ background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:22px;box-shadow:0 12px 32px rgba(20,18,30,.06);position:relative;overflow:hidden; }}
-        .ccard::before {{ content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:#7B61FF; }}
-        .ccard.cs::before {{ background:#3B82F6; }}.ccard.mat::before {{ background:#EC4899; }}.ccard.fil::before {{ background:#10B981; }}.ccard.fis::before {{ background:#FF7A3D; }}
+        .ccard::before {{ display:none; }}
         .ccard-head {{ display:flex;justify-content:space-between;align-items:center; }}
         .ccard-code {{ font-size:11px;font-weight:900;color:#94939C;letter-spacing:.08em;text-transform:uppercase; }}
         .ccard-menu {{ background:transparent;border:0;cursor:pointer;color:#94939C;font-size:20px;line-height:1; }}
@@ -8139,11 +8179,15 @@ Material:
         .break-bar {{ flex:1;height:6px;background:#EDE7DA;border-radius:999px;overflow:hidden;opacity:1; }}
         .break-bar span {{ display:block;height:100%;width:0%;background:linear-gradient(90deg,#FF7A3D,#F4B73A);border-radius:999px;transition:width .25s ease; }}
         .amb-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px; }}
-        .amb {{ background:#FBF8F0;border:1px solid #E2DCCC;border-radius:12px;padding:9px 7px;text-align:center;cursor:pointer;transition:all .15s; }}
-        .amb:hover {{ transform:translateY(-2px); }}
+        .amb {{ position:relative;background:#FBF8F0;border:1px solid #E2DCCC;border-radius:12px;padding:9px 7px;text-align:center;cursor:pointer;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease,background .15s ease; }}
+        .amb:hover {{ transform:translateY(-2px);border-color:#FF7A3D; }}
         .amb-ic {{ font-size:22px; }}
         .amb-n {{ font-size:11px;font-weight:700;margin-top:4px;color:#5C5C66; }}
-        .amb.on {{ background:#ECE6FB;border-color:#5B4694; }}
+        .amb.on {{ background:linear-gradient(135deg,#FFF4EA,#FFFFFF);border-color:#FF7A3D;box-shadow:0 3px 0 #FF7A3D,0 0 0 2px rgba(255,122,61,.16);transform:translateY(-1px); }}
+        .amb.on::after {{ content:'✓';position:absolute;top:6px;right:7px;width:17px;height:17px;border-radius:50%;background:#FF7A3D;color:#fff;border:1.5px solid #1A1A1F;display:grid;place-items:center;font-size:11px;font-weight:950;line-height:1; }}
+        :root[data-theme="dark"] .amb {{ background:#0B0B10;border-color:rgba(255,122,61,.42); }}
+        :root[data-theme="dark"] .amb-n {{ color:#D9D2C3; }}
+        :root[data-theme="dark"] .amb.on {{ background:#17110E;border-color:#FF7A3D;box-shadow:0 3px 0 #FF7A3D,0 0 0 2px rgba(255,122,61,.22); }}
         .vol-row {{ display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px; }}
         .vol-slider {{ --vol-ball:#1A1A1F;--vol-track:#EDE7DA;flex:1;min-width:0;appearance:none;-webkit-appearance:none;height:24px;margin:0;padding:0;background:transparent !important;border:0 !important;outline:none;cursor:pointer; }}
         .vol-slider::-webkit-slider-runnable-track {{ height:10px;border-radius:999px;background:linear-gradient(90deg,var(--vol-ball) var(--amb-vol,42%),var(--vol-track) var(--amb-vol,42%)); }}
@@ -8532,12 +8576,12 @@ Material:
             <div class="card" id="focus-ambience-card">
               <div class="card-header"><h2>&#127807; Ambiente</h2></div>
               <div class="amb-grid">
-                <div class="amb on" onclick="setAmbience(this,'off')"><div class="amb-ic">&#128263;</div><div class="amb-n">Silencio</div></div>
-                <div class="amb" onclick="setAmbience(this,'rain')"><div class="amb-ic">&#127783;</div><div class="amb-n">Lluvia suave</div></div>
-                <div class="amb" onclick="setAmbience(this,'ocean')"><div class="amb-ic">&#127754;</div><div class="amb-n">Olas</div></div>
-                <div class="amb" onclick="setAmbience(this,'forest')"><div class="amb-ic">&#127794;</div><div class="amb-n">Bosque</div></div>
-                <div class="amb" onclick="setAmbience(this,'fire')"><div class="amb-ic">&#128293;</div><div class="amb-n">Fuego</div></div>
-                <div class="amb" onclick="setAmbience(this,'brown')"><div class="amb-ic">&#127769;</div><div class="amb-n">Ruido bajo</div></div>
+                <button type="button" class="amb on" data-ambience="off" aria-pressed="true" onclick="setAmbience(this,'off')"><div class="amb-ic">&#128263;</div><div class="amb-n">Silencio</div></button>
+                <button type="button" class="amb" data-ambience="rain" aria-pressed="false" onclick="setAmbience(this,'rain')"><div class="amb-ic">&#127783;</div><div class="amb-n">Lluvia suave</div></button>
+                <button type="button" class="amb" data-ambience="ocean" aria-pressed="false" onclick="setAmbience(this,'ocean')"><div class="amb-ic">&#127754;</div><div class="amb-n">Olas</div></button>
+                <button type="button" class="amb" data-ambience="forest" aria-pressed="false" onclick="setAmbience(this,'forest')"><div class="amb-ic">&#127794;</div><div class="amb-n">Bosque</div></button>
+                <button type="button" class="amb" data-ambience="fire" aria-pressed="false" onclick="setAmbience(this,'fire')"><div class="amb-ic">&#128293;</div><div class="amb-n">Fuego</div></button>
+                <button type="button" class="amb" data-ambience="brown" aria-pressed="false" onclick="setAmbience(this,'brown')"><div class="amb-ic">&#127769;</div><div class="amb-n">Ruido bajo</div></button>
               </div>
               <div class="vol-row"><span>&#128264;</span><input id="amb-volume" class="vol-slider" type="range" min="0" max="100" value="42" aria-label="Volumen ambiente" oninput="setAmbienceVolume(this.value)"><span>&#128266;</span></div>
               <audio id="amb-audio" loop preload="none"></audio>
@@ -9471,9 +9515,18 @@ Material:
           }}
         }}
 
+        function markAmbienceSelected(type) {{
+          document.querySelectorAll('.amb').forEach(function(a) {{
+            var active = a.getAttribute('data-ambience') === type;
+            a.classList.toggle('on', active);
+            a.setAttribute('aria-pressed', active ? 'true' : 'false');
+          }});
+        }}
+
         function setAmbience(el, type) {{
-          document.querySelectorAll('.amb').forEach(function(a) {{ a.classList.remove('on'); }});
-          if (el) el.classList.add('on');
+          type = type || 'off';
+          markAmbienceSelected(type);
+          try {{ localStorage.setItem('mr_ambience_sound', type); }} catch(e) {{}}
           try {{
             var audioMap = {{
               rain: '/static/audio/rain.mp3',
@@ -9544,6 +9597,14 @@ Material:
             if (!isFinite(saved)) saved = 42;
             setAmbienceVolume(saved);
           }} catch(e) {{ setAmbienceVolume(42); }}
+        }})();
+
+        (function initAmbienceSelection() {{
+          try {{
+            var saved = localStorage.getItem('mr_ambience_sound') || 'off';
+            if (!document.querySelector('.amb[data-ambience="' + saved + '"]')) saved = 'off';
+            markAmbienceSelected(saved);
+          }} catch(e) {{ markAmbienceSelected('off'); }}
         }})();
 
 
@@ -21353,6 +21414,7 @@ No markdown, no code fences. ONLY JSON.
           .shop-cd {{ --card:#FFFFFF; --card-bg:#FFFFFF; --bg:#F4F1EA; --text:#1A1A1F; --text-muted:#6E6A60; --border:#E2DCCC; font-family:'Nunito',sans-serif; color:#1A1A1F; }}
           .shop-cd h1 {{ font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(42px,6vw,72px);line-height:.92;letter-spacing:-.05em;font-weight:600;color:#1A1A1F; }}
           .shop-cd .card, .shop-cd .stat-card {{ background:#FFFFFF!important;border:1px solid #E2DCCC!important;border-radius:22px!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04)!important;color:#1A1A1F!important; }}
+          .shop-cd .stat-card::before {{ display:none!important; }}
           .shop-cd .card-header {{ border-bottom:1px solid #E2DCCC!important; }}
           .shop-cd .card-header h2 {{ font-family:"Nunito",sans-serif!important;font-size:16px!important;letter-spacing:0!important;font-weight:900!important;color:#1A1A1F!important; }}
           .shop-cd .btn-primary {{ background:linear-gradient(135deg,#FF7A3D,#FF9F5F)!important;color:#FFFFFF!important;border:1px solid #E65F20!important;box-shadow:0 4px 0 rgba(179,60,0,.28)!important;border-radius:999px!important; }}

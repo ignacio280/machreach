@@ -948,12 +948,11 @@ function LandingMotion() {
     };
 
     const revealVariants = [
-      "motion-slab",
-      "motion-pivot",
-      "motion-stamp",
-      "motion-wipe",
-      "motion-ladder",
-      "motion-stack",
+      "motion-flip",
+      "motion-deal",
+      "motion-note",
+      "motion-page",
+      "motion-deal-l",
     ];
     const revealSelectors = [
       ".hero-grid > *",
@@ -971,11 +970,19 @@ function LandingMotion() {
     ].join(",");
     const revealTargets = Array.from(document.querySelectorAll(revealSelectors));
     revealTargets.forEach((el, i) => {
-      const variant = revealVariants[i % revealVariants.length];
+      /* section heads are written onto the page; everything else gets dealt/flipped/slapped like study material */
+      const variant = el.classList.contains("section-head") ? "motion-write" : revealVariants[i % revealVariants.length];
       el.classList.add("motion-reveal", variant);
       el.style.setProperty("--motion-order", i);
       el.style.setProperty("--reveal-delay", `${(i % 6) * 70}ms`);
     });
+
+    /* highlighter sweep: wrap heading text so the marker hugs each line */
+    try {
+      document.querySelectorAll("section .section-head h2").forEach((h) => {
+        if (!h.querySelector(".mh-hl")) h.innerHTML = '<span class="mh-hl">' + h.innerHTML + "</span>";
+      });
+    } catch (e) { /* non-fatal */ }
 
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
@@ -1095,7 +1102,16 @@ function LandingMotion() {
 
   return (
     <>
-      <div id="landing-progress" aria-hidden="true"><span id="landing-progress-bar"/></div>
+      <div id="landing-progress" aria-hidden="true">
+        <span id="landing-progress-bar"/>
+        <span id="landing-progress-flame">
+          <svg viewBox="0 0 100 125" width="22" height="22" style={{ display: "block", overflow: "visible" }}>
+            <path d="M50 0 C62 28 92 44 92 76 C92 103 73 122 50 122 C27 122 8 103 8 76 C8 44 38 28 50 0 Z" fill="#FF7A3D"/>
+            <path d="M50 45 C57 60 74 68 74 86 C74 102 63 112 50 112 C37 112 26 102 26 86 C26 68 43 60 50 45 Z" fill="#F2A156"/>
+            <path d="M50 72 C54 80 62 84 62 93 C62 102 56 107 50 107 C44 107 38 102 38 93 C38 84 46 80 50 72 Z" fill="#FFE9C9"/>
+          </svg>
+        </span>
+      </div>
       <div className="landing-edge-pattern" aria-hidden="true"/>
     </>
   );

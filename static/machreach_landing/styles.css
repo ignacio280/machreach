@@ -189,9 +189,10 @@ footer { padding: 64px 0 40px; border-top: 2px solid var(--line); margin-top: 64
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
+  height: 5px;
   z-index: 1000;
   pointer-events: none;
+  overflow: visible;
   background: color-mix(in oklab, var(--surface) 52%, transparent);
 }
 #landing-progress-bar {
@@ -200,22 +201,33 @@ footer { padding: 64px 0 40px; border-top: 2px solid var(--line); margin-top: 64
   height: 100%;
   transform: scaleX(0);
   transform-origin: left center;
-  background: linear-gradient(90deg, var(--brand), var(--accent), var(--secondary));
+  background: linear-gradient(90deg, var(--gold), var(--brand), #FF7A3D);
   box-shadow: 0 0 18px color-mix(in oklab, var(--brand) 40%, transparent);
+}
+#landing-progress-flame {
+  position: absolute;
+  top: -8px;
+  left: var(--landing-scroll-pct, 0%);
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  display: block;
+  filter: drop-shadow(0 0 7px color-mix(in oklab, #FF7A3D 65%, transparent));
+  animation: motion-flame-wiggle .85s ease-in-out infinite alternate;
+  transform-origin: 50% 88%;
 }
 .landing-edge-pattern {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: .13;
+  opacity: .11;
   background-image:
-    linear-gradient(90deg, color-mix(in oklab, var(--ink) 10%, transparent) 1px, transparent 1px),
-    linear-gradient(0deg, color-mix(in oklab, var(--ink) 9%, transparent) 1px, transparent 1px),
-    repeating-linear-gradient(135deg, transparent 0 30px, color-mix(in oklab, var(--brand) 20%, transparent) 30px 32px);
-  background-size: 48px 48px, 48px 48px, 180px 180px;
+    repeating-linear-gradient(0deg, transparent 0 31px, color-mix(in oklab, var(--ink) 22%, transparent) 31px 33px),
+    linear-gradient(90deg, transparent 0 84px, color-mix(in oklab, var(--bad) 55%, transparent) 84px 86px, transparent 86px);
+  background-size: 100% 33px, 100% 100%;
   mask-image: linear-gradient(to bottom, black 0%, black 70%, transparent 100%);
-  animation: motion-grid-drift 24s linear infinite;
+  animation: motion-paper-drift 36s linear infinite;
   transform: translate3d(var(--landing-dx), var(--landing-dy), 0);
   transition: transform .28s ease;
   will-change: transform, background-position;
@@ -236,93 +248,84 @@ section {
 .quiz-wrap {
   max-width: 100%;
 }
-section::before {
-  content: "";
-  position: absolute;
-  left: clamp(18px, 4.5vw, 72px);
-  top: clamp(16px, 3vw, 42px);
-  width: min(180px, 34vw);
-  height: 52px;
-  pointer-events: none;
-  border-top: 2px solid color-mix(in oklab, var(--brand) 62%, transparent);
-  border-left: 2px solid color-mix(in oklab, var(--accent) 54%, transparent);
-  border-radius: 14px 0 0 0;
-  opacity: 0;
-  transform: translateX(-16px) scaleX(.22);
-  transform-origin: left top;
-}
-section.section-live::before {
-  animation: motion-corner-draw 1.05s cubic-bezier(.18,.82,.16,1) both;
-  animation-delay: calc(min(var(--section-order, 1), 7) * 36ms);
-}
 section::after {
   content: "";
   position: absolute;
   left: clamp(24px, 6vw, 90px);
   right: clamp(24px, 6vw, 90px);
   bottom: 0;
-  height: 2px;
+  height: 0;
   pointer-events: none;
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--brand) 62%, transparent), color-mix(in oklab, var(--accent) 42%, transparent), transparent);
-  transform: scaleX(.42);
-  opacity: .36;
-  animation: motion-section-rail 5.6s ease-in-out infinite;
+  border-bottom: 2.5px dashed color-mix(in oklab, var(--ink) 30%, transparent);
+  clip-path: inset(-4px 100% -4px 0);
+  opacity: 0;
+  transition: clip-path 1.3s cubic-bezier(.22,1,.36,1) .15s, opacity .4s ease .15s;
+}
+section.section-live::after {
+  clip-path: inset(-4px 0 -4px 0);
+  opacity: .5;
+}
+.mh-hl {
+  background-image: linear-gradient(100deg,
+    color-mix(in oklab, var(--brand) 30%, transparent) 0%,
+    color-mix(in oklab, var(--brand) 38%, transparent) 100%);
+  background-repeat: no-repeat;
+  background-size: 0% 44%;
+  background-position: 0 76%;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  border-radius: 5px;
+  padding: 0 .08em;
+  margin: 0 -.08em;
+  transition: background-size .95s cubic-bezier(.22,1,.36,1) .25s;
+}
+section.section-live .mh-hl {
+  background-size: 100% 44%;
 }
 .motion-ready .motion-reveal {
   opacity: 0;
-  transform: translateY(28px) scale(.982);
-  filter: saturate(.86);
-  clip-path: inset(12% 0 18% 0 round 18px);
   will-change: transform, opacity, clip-path, filter;
 }
-.motion-ready .motion-reveal.motion-slab {
-  transform: translateX(-34px) skewX(-4deg);
-  clip-path: inset(0 100% 0 0 round 18px);
+.motion-ready .motion-reveal.motion-flip {
+  transform: perspective(1200px) rotateX(-58deg) translateY(36px) scale(.96);
+  transform-origin: 50% 92%;
+  filter: brightness(1.07);
 }
-.motion-ready .motion-reveal.motion-pivot {
-  transform: perspective(900px) rotateX(11deg) translateY(28px);
-  transform-origin: 50% 0;
-  clip-path: inset(0 0 36% 0 round 18px);
+.motion-ready .motion-reveal.motion-deal {
+  transform: translate(52px, 58px) rotate(7deg) scale(.93);
 }
-.motion-ready .motion-reveal.motion-stamp {
-  transform: translateY(18px) scale(.9) rotate(-1.4deg);
-  clip-path: inset(15% 10% 15% 10% round 20px);
+.motion-ready .motion-reveal.motion-deal-l {
+  transform: translate(-52px, 58px) rotate(-7deg) scale(.93);
 }
-.motion-ready .motion-reveal.motion-wipe {
-  transform: translateX(28px);
-  clip-path: inset(0 0 0 100% round 18px);
+.motion-ready .motion-reveal.motion-note {
+  transform: scale(1.15) rotate(-2.4deg);
+  filter: drop-shadow(0 30px 26px color-mix(in oklab, var(--ink) 24%, transparent));
 }
-.motion-ready .motion-reveal.motion-ladder {
-  transform: translateY(42px);
-  clip-path: polygon(0 20%, 100% 0, 100% 82%, 0 100%);
+.motion-ready .motion-reveal.motion-write {
+  transform: translateY(14px);
+  clip-path: inset(-4% 103% -10% -3%);
 }
-.motion-ready .motion-reveal.motion-stack {
-  transform: translateY(22px) rotate(.8deg) scale(.96);
-  clip-path: inset(0 0 0 0 round 22px);
-  box-shadow: 8px 8px 0 color-mix(in oklab, var(--brand) 12%, transparent);
+.motion-ready .motion-reveal.motion-page {
+  transform: perspective(1200px) rotateX(42deg) translateY(-14px);
+  transform-origin: 50% -6%;
 }
 .motion-ready .motion-reveal.is-visible {
   opacity: 1;
-  transform: translateY(0) rotate(0) skewX(0) scale(1);
-  filter: saturate(1);
-  clip-path: inset(-48px -48px -48px -48px round 0);
-  overflow: visible;
+  transform: none;
+  filter: none;
   transition:
-    opacity .72s cubic-bezier(.2,.8,.2,1),
-    transform .72s cubic-bezier(.2,.8,.2,1),
-    clip-path .86s cubic-bezier(.18,.82,.16,1),
-    filter .72s cubic-bezier(.2,.8,.2,1),
-    box-shadow .72s cubic-bezier(.2,.8,.2,1);
+    opacity .6s cubic-bezier(.2,.8,.2,1),
+    transform .78s cubic-bezier(.3,1.45,.45,1),
+    filter .78s cubic-bezier(.2,.8,.2,1);
   transition-delay: var(--reveal-delay, 0ms);
 }
-.motion-ready .motion-reveal.motion-stack.is-visible {
-  box-shadow: none;
-}
-.motion-ready .hero-grid > .motion-reveal.is-visible,
-.motion-ready .price-grid > .motion-reveal.is-visible,
-.motion-ready .lb-wrap > .motion-reveal.is-visible {
-  clip-path: none;
-  overflow: visible;
+.motion-ready .motion-reveal.motion-write.is-visible {
+  clip-path: inset(-8% -8% -14% -6%);
+  transition:
+    opacity .35s cubic-bezier(.2,.8,.2,1),
+    transform .7s cubic-bezier(.22,1,.36,1),
+    clip-path .9s cubic-bezier(.6,.05,.3,1);
+  transition-delay: var(--reveal-delay, 0ms);
 }
 .motion-hotspot {
   --motion-x: .5;
@@ -560,18 +563,13 @@ section::after {
   }
 }
 
-@keyframes motion-grid-drift {
-  from { background-position: 0 0, 0 0, 0 0; }
-  to { background-position: 48px 48px, -48px 48px, 180px 180px; }
+@keyframes motion-paper-drift {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 0 33px, 0 0; }
 }
-@keyframes motion-section-rail {
-  0%, 100% { transform: translateX(-8%) scaleX(.38); opacity: .18; }
-  50% { transform: translateX(8%) scaleX(.78); opacity: .42; }
-}
-@keyframes motion-corner-draw {
-  0% { opacity: 0; transform: translateX(-16px) scaleX(.22); }
-  34% { opacity: .72; }
-  100% { opacity: .52; transform: translateX(0) scaleX(1); }
+@keyframes motion-flame-wiggle {
+  from { transform: scale(1.08, .94) rotate(-4deg); }
+  to { transform: scale(.94, 1.1) rotate(4deg); }
 }
 @keyframes motion-dot-breathe {
   0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 0%, transparent); }
@@ -600,4 +598,5 @@ section::after {
     clip-path: none;
     box-shadow: none;
   }
+  #landing-progress-flame { animation: none; }
 }

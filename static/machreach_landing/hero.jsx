@@ -213,15 +213,16 @@ function Hero() {
       <div className="container">
         <div style={heroStyles.grid} className="hero-grid">
           <div>
-            <span className="eyebrow"><span className="dot"/> Hecho por estudiantes para estudiantes</span>
+            <span className="eyebrow hero-anim" style={{ "--d": "0s" }}><span className="dot"/> Hecho por estudiantes para estudiantes</span>
             <h1 style={heroStyles.h1}>
-              Estudiar deja<br/>de ser una<br/>
-              <span style={heroStyles.h1Highlight}>lata.</span>
+              <span className="hero-line"><span className="hero-line-in" style={{ "--d": ".06s" }}>Estudiar deja</span></span><br/>
+              <span className="hero-line"><span className="hero-line-in" style={{ "--d": ".18s" }}>de ser una</span></span><br/>
+              <span className="hero-line"><span className="hero-line-in" style={{ "--d": ".32s" }}><span style={heroStyles.h1Highlight}>lata.</span></span></span>
             </h1>
-            <p style={heroStyles.sub}>
+            <p style={heroStyles.sub} className="hero-anim" data-d="1">
               MachReach convierte tu semestre en un juego que <em style={{ color: "var(--ink)", fontStyle: "normal", fontWeight: 700, textDecoration: "underline wavy var(--brand)", textUnderlineOffset: 4 }}>sí quieres ganar</em>.
             </p>
-            <div style={heroStyles.ctaRow}>
+            <div style={heroStyles.ctaRow} className="hero-anim" data-d="2">
               <a href="/register" className="btn btn-primary btn-lg">
                 <IconCanvas size={20}/> Usar la extensión
               </a>
@@ -229,7 +230,7 @@ function Hero() {
                 Ver cómo funciona <IconArrow size={18}/>
               </a>
             </div>
-            <div style={heroStyles.trustRow}>
+            <div style={heroStyles.trustRow} className="hero-anim" data-d="3">
               <div style={heroStyles.avatars}>
                 {["VR","MA","FP","IM","SG"].map((t, i) => (
                   <div key={i} style={heroStyles.avatar(i)}>{t}</div>
@@ -238,7 +239,7 @@ function Hero() {
               <span>+2.300 estudiantes ganando XP esta semana</span>
             </div>
           </div>
-          <div>
+          <div className="hero-anim hero-anim-card" data-d="2">
             <HeroLeaderboard/>
           </div>
         </div>

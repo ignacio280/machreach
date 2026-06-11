@@ -26,9 +26,11 @@ const IconMedal = (p) => <Icon {...p}><circle cx="12" cy="15" r="5"/><path d="M8
 const IconShield = (p) => <Icon {...p}><path d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z"/></Icon>;
 const IconChevron = (p) => <Icon {...p}><path d="M6 9l6 6 6-6"/></Icon>;
 const IconLogo = ({ size = 24 }) => (
-  <img src="/static/machreach-logo.svg?v=2" alt="MachReach"
-       width={size} height={size}
-       style={{ width: "100%", height: "100%", display: "block" }} />
+  typeof MarkFinal === "function"
+    ? <MarkFinal size={size} variant="flat" uid="landing-logo" />
+    : <img src="/static/machreach-logo.svg?v=2" alt="MachReach"
+         width={size} height={size}
+         style={{ width: "100%", height: "100%", display: "block" }} />
 );
 
 Object.assign(window, {
