@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS student_exams (
     name            TEXT NOT NULL,
     exam_date       TEXT,
     weight_pct      INTEGER DEFAULT 0,
+    grade           REAL,
     topics_json     TEXT DEFAULT '[]',
     status          TEXT DEFAULT 'upcoming',
     created_at      TIMESTAMP DEFAULT NOW()
@@ -86,6 +87,25 @@ CREATE TABLE IF NOT EXISTS student_course_files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_student_files_course ON student_course_files(course_id);
+
+CREATE TABLE IF NOT EXISTS student_course_reviews (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id       INTEGER REFERENCES student_courses(id) ON DELETE SET NULL,
+    university      TEXT DEFAULT '',
+    major           TEXT DEFAULT '',
+    course_name     TEXT NOT NULL,
+    course_code     TEXT DEFAULT '',
+    difficulty_rating INTEGER NOT NULL,
+    quality_rating    INTEGER NOT NULL,
+    review_text     TEXT DEFAULT '',
+    final_grade     REAL,
+    total_hours     INTEGER DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    UNIQUE(client_id, course_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_reviews_lookup ON student_course_reviews(university, major, course_name);
 
 CREATE TABLE IF NOT EXISTS student_schedule_settings (
     id          SERIAL PRIMARY KEY,
@@ -239,6 +259,7 @@ CREATE TABLE IF NOT EXISTS student_exams (
     name            TEXT NOT NULL,
     exam_date       TEXT,
     weight_pct      INTEGER DEFAULT 0,
+    grade           REAL,
     topics_json     TEXT DEFAULT '[]',
     status          TEXT DEFAULT 'upcoming',
     created_at      TEXT DEFAULT (datetime('now', 'localtime'))
@@ -278,6 +299,25 @@ CREATE TABLE IF NOT EXISTS student_course_files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_student_files_course ON student_course_files(course_id);
+
+CREATE TABLE IF NOT EXISTS student_course_reviews (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    course_id       INTEGER REFERENCES student_courses(id) ON DELETE SET NULL,
+    university      TEXT DEFAULT '',
+    major           TEXT DEFAULT '',
+    course_name     TEXT NOT NULL,
+    course_code     TEXT DEFAULT '',
+    difficulty_rating INTEGER NOT NULL,
+    quality_rating    INTEGER NOT NULL,
+    review_text     TEXT DEFAULT '',
+    final_grade     REAL,
+    total_hours     INTEGER DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT (datetime('now','localtime')),
+    UNIQUE(client_id, course_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_reviews_lookup ON student_course_reviews(university, major, course_name);
 
 CREATE TABLE IF NOT EXISTS student_schedule_settings (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -431,6 +471,11 @@ def init_student_db():
         init_boosts_table()
     except Exception as e:
         log.exception("init_boosts_table failed: %s", e)
+    # Planner per-block completion marks
+    try:
+        init_planner_done_table()
+    except Exception as e:
+        log.exception("init_planner_done_table failed: %s", e)
     # Quiz Duels v2 (file-upload + AI-generated, synchronous)
     try:
         init_quiz_duels_tables()
@@ -499,6 +544,7 @@ def _student_migrations():
         # course is the slot the course belongs to in the grade sheet.
         ("clients", "current_semester", "TEXT DEFAULT ''"),
         ("student_courses", "semester_label", "TEXT DEFAULT ''"),
+        ("student_exams", "grade", "REAL DEFAULT NULL"),
         ("student_quiz_duels", "stake_coins", "INTEGER NOT NULL DEFAULT 0"),
         ("student_quiz_duels", "stake_collected", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ]
@@ -540,6 +586,32 @@ def _student_migrations():
         "joined_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
         "UNIQUE(group_id, client_id))",
     )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_course_reviews ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "course_id INTEGER REFERENCES student_courses(id) ON DELETE SET NULL, "
+        "university TEXT DEFAULT '', major TEXT DEFAULT '', course_name TEXT NOT NULL, course_code TEXT DEFAULT '', "
+        "difficulty_rating INTEGER NOT NULL, quality_rating INTEGER NOT NULL, review_text TEXT DEFAULT '', "
+        "final_grade REAL, total_hours INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(client_id, course_id))",
+        "CREATE TABLE IF NOT EXISTS student_course_reviews ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "course_id INTEGER REFERENCES student_courses(id) ON DELETE SET NULL, "
+        "university TEXT DEFAULT '', major TEXT DEFAULT '', course_name TEXT NOT NULL, course_code TEXT DEFAULT '', "
+        "difficulty_rating INTEGER NOT NULL, quality_rating INTEGER NOT NULL, review_text TEXT DEFAULT '', "
+        "final_grade REAL, total_hours INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(client_id, course_id))",
+    )
+    try:
+        with get_db() as db:
+            if _USE_PG:
+                db.cursor().execute("CREATE INDEX IF NOT EXISTS idx_course_reviews_lookup ON student_course_reviews(university, major, course_name)")
+            else:
+                db.execute("CREATE INDEX IF NOT EXISTS idx_course_reviews_lookup ON student_course_reviews(university, major, course_name)")
+    except Exception:
+        pass
     _create_table_safe(
         "CREATE TABLE IF NOT EXISTS student_lb_group_invites ("
         "id SERIAL PRIMARY KEY, "
@@ -820,7 +892,7 @@ def get_courses_by_semester(client_id: int) -> dict:
         )
         erows = _fetchall(
             db,
-            "SELECT course_id, name, exam_date, weight_pct "
+            "SELECT course_id, name, exam_date, weight_pct, grade "
             "FROM student_exams WHERE client_id = %s",
             (client_id,),
         )
@@ -831,6 +903,7 @@ def get_courses_by_semester(client_id: int) -> dict:
             "name": d.get("name") or "",
             "exam_date": d.get("exam_date") or "",
             "weight_pct": int(d.get("weight_pct") or 0),
+            "grade": d.get("grade"),
         })
     out: dict = {}
     for c in crows or []:
@@ -968,22 +1041,22 @@ def get_course_exams(course_db_id: int) -> list[dict]:
 
 def upsert_exam(client_id: int, course_db_id: int, exam_id: int | None,
                 name: str, exam_date: str | None, weight_pct: int,
-                topics: list[str]) -> int:
+                topics: list[str], grade: float | None = None) -> int:
     with get_db() as db:
         topics_json = json.dumps(topics, ensure_ascii=False)
         if exam_id:
             _exec(db,
                   "UPDATE student_exams SET name = %s, exam_date = %s, weight_pct = %s, "
-                  "topics_json = %s WHERE id = %s AND client_id = %s",
-                  (name, exam_date, weight_pct, topics_json, exam_id, client_id))
+                  "topics_json = %s, grade = %s WHERE id = %s AND client_id = %s",
+                  (name, exam_date, weight_pct, topics_json, grade, exam_id, client_id))
             return exam_id
         return _insert_returning_id(
             db,
-            "INSERT INTO student_exams (client_id, course_id, name, exam_date, weight_pct, topics_json) "
-            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (client_id, course_db_id, name, exam_date, weight_pct, topics_json),
-            "INSERT INTO student_exams (client_id, course_id, name, exam_date, weight_pct, topics_json) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO student_exams (client_id, course_id, name, exam_date, weight_pct, topics_json, grade) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (client_id, course_db_id, name, exam_date, weight_pct, topics_json, grade),
+            "INSERT INTO student_exams (client_id, course_id, name, exam_date, weight_pct, topics_json, grade) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
 
 
@@ -1006,6 +1079,68 @@ def save_study_plan(client_id: int, plan: dict, preferences: dict | None = None)
             "INSERT INTO student_study_plans (client_id, plan_json, preferences_json) "
             "VALUES (?, ?, ?)",
         )
+
+
+def init_planner_done_table():
+    """Per-block completion marks for the weekly planner."""
+    _create_table_safe(
+        """CREATE TABLE IF NOT EXISTS student_planner_done (
+            id          SERIAL PRIMARY KEY,
+            client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            block_date  TEXT NOT NULL,
+            exam_id     INTEGER DEFAULT 0,
+            unit_index  INTEGER DEFAULT -1,
+            title       TEXT DEFAULT '',
+            phase       TEXT DEFAULT '',
+            minutes     INTEGER DEFAULT 0,
+            done_at     TIMESTAMP DEFAULT NOW(),
+            UNIQUE(client_id, block_date, exam_id, unit_index, title)
+        )""",
+        """CREATE TABLE IF NOT EXISTS student_planner_done (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            block_date  TEXT NOT NULL,
+            exam_id     INTEGER DEFAULT 0,
+            unit_index  INTEGER DEFAULT -1,
+            title       TEXT DEFAULT '',
+            phase       TEXT DEFAULT '',
+            minutes     INTEGER DEFAULT 0,
+            done_at     TEXT DEFAULT (datetime('now', 'localtime')),
+            UNIQUE(client_id, block_date, exam_id, unit_index, title)
+        )""",
+    )
+
+
+def planner_mark_block(client_id: int, block_date: str, exam_id: int, unit_index: int,
+                       title: str, phase: str, minutes: int, done: bool):
+    """Mark/unmark one plan block as done. Identity = (date, exam, unit, title)."""
+    exam_id = int(exam_id or 0)
+    unit_index = -1 if unit_index is None else int(unit_index)
+    title = (title or "")[:160]
+    with get_db() as db:
+        _exec(db,
+              "DELETE FROM student_planner_done WHERE client_id = %s AND block_date = %s "
+              "AND exam_id = %s AND unit_index = %s AND title = %s",
+              (client_id, block_date, exam_id, unit_index, title))
+        if done:
+            _exec(db,
+                  "INSERT INTO student_planner_done (client_id, block_date, exam_id, unit_index, title, phase, minutes) "
+                  "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                  (client_id, block_date, exam_id, unit_index, title, (phase or "")[:60], int(minutes or 0)))
+
+
+def planner_done_blocks(client_id: int, since_date: str = "") -> list[dict]:
+    with get_db() as db:
+        if since_date:
+            rows = _fetchall(db,
+                             "SELECT * FROM student_planner_done WHERE client_id = %s AND block_date >= %s "
+                             "ORDER BY block_date, id",
+                             (client_id, since_date))
+        else:
+            rows = _fetchall(db,
+                             "SELECT * FROM student_planner_done WHERE client_id = %s ORDER BY block_date, id",
+                             (client_id,))
+        return [dict(r) for r in rows]
 
 
 def get_latest_plan(client_id: int) -> dict | None:
@@ -1083,6 +1218,19 @@ def get_course_files(client_id: int, course_id: int, exam_id: int | None = None)
             db,
             "SELECT * FROM student_course_files WHERE client_id = %s AND course_id = %s ORDER BY uploaded_at DESC",
             (client_id, course_id),
+        )
+
+
+def add_course_file(client_id: int, course_id: int, original_name: str, file_type: str,
+                    extracted_text: str, exam_id: int | None = None) -> int:
+    with get_db() as db:
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_course_files (client_id, course_id, exam_id, original_name, file_type, extracted_text) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (client_id, course_id, exam_id, original_name, file_type, extracted_text),
+            "INSERT INTO student_course_files (client_id, course_id, exam_id, original_name, file_type, extracted_text) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
         )
 
 
@@ -1628,6 +1776,35 @@ def get_schedule_settings(client_id: int) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def save_schedule_settings(client_id: int, settings: list[dict]) -> None:
+    """Replace the student's weekly availability defaults.
+
+    day_of_week is 0=Monday .. 6=Sunday.
+    """
+    cleaned: list[tuple[int, float, bool]] = []
+    for item in settings or []:
+        try:
+            day = int(item.get("day_of_week"))
+        except Exception:
+            continue
+        if day < 0 or day > 6:
+            continue
+        try:
+            hours = float(item.get("available_hours") or 0)
+        except Exception:
+            hours = 0.0
+        hours = max(0.0, min(16.0, hours))
+        cleaned.append((day, hours, bool(item.get("is_free_day"))))
+    with get_db() as db:
+        for day, hours, is_free in cleaned:
+            _exec(db, "DELETE FROM student_schedule_settings WHERE client_id = %s AND day_of_week = %s",
+                  (client_id, day))
+            _exec(db,
+                  "INSERT INTO student_schedule_settings (client_id, day_of_week, available_hours, is_free_day) "
+                  "VALUES (%s, %s, %s, %s)",
+                  (client_id, day, hours, is_free))
+
+
 # ── Date overrides (per-date availability — overrides weekly defaults) ──
 
 def save_date_override(client_id: int, override_date: str, hours: float, is_free: bool, note: str = "") -> None:
@@ -1991,6 +2168,42 @@ def get_quizzes(client_id: int, course_id: int | None = None) -> list[dict]:
             "WHERE q.client_id = %s ORDER BY q.created_at DESC",
             (client_id,),
         )
+
+
+def get_quiz_stats_by_exam(client_id: int) -> dict[int, dict]:
+    """Return quiz attempt stats grouped by exam.
+
+    Missing exams are intentionally absent. The planner should only penalize
+    poor quiz performance when the student has actually attempted quizzes.
+    """
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT exam_id, COUNT(*) AS quiz_count, "
+            "COALESCE(SUM(attempts), 0) AS attempts, "
+            "COALESCE(MAX(best_score), 0) AS best_score, "
+            "COALESCE(AVG(CASE WHEN attempts > 0 THEN best_score ELSE NULL END), 0) AS avg_score "
+            "FROM student_quizzes "
+            "WHERE client_id = %s AND exam_id IS NOT NULL "
+            "GROUP BY exam_id",
+            (client_id,),
+        )
+    out: dict[int, dict] = {}
+    for r in rows or []:
+        d = dict(r)
+        try:
+            exam_id = int(d.get("exam_id") or 0)
+        except Exception:
+            continue
+        if not exam_id:
+            continue
+        out[exam_id] = {
+            "quiz_count": int(d.get("quiz_count") or 0),
+            "attempts": int(d.get("attempts") or 0),
+            "best_score": int(d.get("best_score") or 0),
+            "avg_score": float(d.get("avg_score") or 0),
+        }
+    return out
 
 
 def get_quiz(quiz_id: int, client_id: int) -> dict | None:
@@ -3597,6 +3810,80 @@ def get_active_duels(client_id: int) -> list[dict]:
             (client_id, client_id),
         ) or []
     return [dict(r) for r in rows]
+
+
+def can_review_course(client_id: int, course_id: int) -> bool:
+    return bool(get_course_outcome(client_id, course_id))
+
+
+def upsert_course_review(client_id: int, course_id: int, university: str, major: str,
+                         course_name: str, course_code: str, difficulty: int, quality: int,
+                         review_text: str, final_grade: float | None, total_hours: int) -> int:
+    difficulty = max(1, min(5, int(difficulty or 1)))
+    quality = max(1, min(5, int(quality or 1)))
+    review_text = (review_text or "").strip()[:1800]
+    with get_db() as db:
+        existing = _fetchval(
+            db,
+            "SELECT id FROM student_course_reviews WHERE client_id = %s AND course_id = %s",
+            (client_id, course_id),
+        )
+        if existing:
+            _exec(db,
+                  "UPDATE student_course_reviews SET university=%s, major=%s, course_name=%s, course_code=%s, "
+                  "difficulty_rating=%s, quality_rating=%s, review_text=%s, final_grade=%s, total_hours=%s "
+                  "WHERE id=%s AND client_id=%s",
+                  (university, major, course_name, course_code, difficulty, quality, review_text,
+                   final_grade, int(total_hours or 0), existing, client_id))
+            return int(existing)
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_course_reviews "
+            "(client_id, course_id, university, major, course_name, course_code, difficulty_rating, quality_rating, review_text, final_grade, total_hours) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (client_id, course_id, university, major, course_name, course_code, difficulty, quality, review_text, final_grade, int(total_hours or 0)),
+            "INSERT INTO student_course_reviews "
+            "(client_id, course_id, university, major, course_name, course_code, difficulty_rating, quality_rating, review_text, final_grade, total_hours) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+
+
+def search_course_reviews(query: str = "", university: str = "", major: str = "", limit: int = 80) -> list[dict]:
+    q = f"%{(query or '').strip().lower()}%"
+    u = f"%{(university or '').strip().lower()}%"
+    m = f"%{(major or '').strip().lower()}%"
+    limit = max(1, min(200, int(limit or 80)))
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT * FROM student_course_reviews "
+            "WHERE LOWER(course_name || ' ' || COALESCE(course_code,'')) LIKE %s "
+            "AND LOWER(COALESCE(university,'')) LIKE %s "
+            "AND LOWER(COALESCE(major,'')) LIKE %s "
+            "ORDER BY created_at DESC LIMIT %s",
+            (q, u, m, limit),
+        )
+    return [dict(r) for r in rows or []]
+
+
+def review_summary_for_course(course_name: str, course_code: str = "") -> dict:
+    name = f"%{(course_name or '').strip().lower()}%"
+    code = f"%{(course_code or '').strip().lower()}%" if course_code else "%"
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT COUNT(*) AS count, COALESCE(AVG(difficulty_rating), 0) AS avg_difficulty, "
+            "COALESCE(AVG(quality_rating), 0) AS avg_quality "
+            "FROM student_course_reviews "
+            "WHERE LOWER(course_name) LIKE %s AND LOWER(COALESCE(course_code,'')) LIKE %s",
+            (name, code),
+        )
+    d = dict(row or {})
+    return {
+        "count": int(d.get("count") or 0),
+        "avg_difficulty": float(d.get("avg_difficulty") or 0),
+        "avg_quality": float(d.get("avg_quality") or 0),
+    }
 
 
 def get_duel_history(client_id: int, limit: int = 50) -> list[dict]:

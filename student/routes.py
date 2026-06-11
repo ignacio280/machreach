@@ -893,6 +893,202 @@ def register_student_routes(app, csrf, limiter):
 
         return session["client_id"]
 
+    def _student_is_plus(client_id: int | None = None) -> bool:
+        try:
+            from student import subscription as _sub
+            return _sub.has_unlimited_ai(client_id if client_id is not None else _cid())
+        except Exception:
+            return False
+
+    def _json_loads_safe(raw, fallback=None):
+        if raw is None:
+            return fallback
+        if isinstance(raw, (dict, list)):
+            return raw
+        try:
+            return json.loads(raw)
+        except Exception:
+            return fallback
+
+    def _strip_html_text(value: str, limit: int = 4000) -> str:
+        txt = re.sub(r"<[^>]+>", " ", value or "")
+        txt = re.sub(r"\s+", " ", txt).strip()
+        return txt[:limit]
+
+    def _course_brain_context(client_id: int, course: dict) -> dict:
+        course_id = int(course["id"])
+        sources = []
+
+        try:
+            files = sdb.get_course_files(client_id, course_id) or []
+        except Exception:
+            files = []
+        for f in files[:8]:
+            text = (f.get("extracted_text") or "").strip()
+            if text:
+                sources.append({
+                    "type": "file",
+                    "title": f.get("original_name") or "Archivo del curso",
+                    "text": text[:5000],
+                })
+
+        try:
+            notes = sdb.get_notes(client_id, course_id) or []
+        except Exception:
+            notes = []
+        for n in notes[:8]:
+            text = _strip_html_text(n.get("content_html") or "", 2500)
+            if text:
+                sources.append({
+                    "type": "note",
+                    "title": n.get("title") or "Nota",
+                    "text": text,
+                })
+
+        try:
+            exams = sdb.get_course_exams(course_id) or []
+        except Exception:
+            exams = []
+        exam_rows = []
+        for e in exams:
+            exam_rows.append({
+                "id": e.get("id"),
+                "name": e.get("name") or "Evaluacion",
+                "date": (e.get("exam_date") or "")[:10],
+                "weight_pct": int(e.get("weight_pct") or 0),
+                "topics": _json_loads_safe(e.get("topics_json"), []) or [],
+            })
+
+        try:
+            quizzes = sdb.get_quizzes(client_id, course_id) or []
+        except Exception:
+            quizzes = []
+        quiz_rows = []
+        for q in quizzes[:5]:
+            try:
+                questions = sdb.get_quiz_questions(int(q.get("id")))[:8]
+            except Exception:
+                questions = []
+            quiz_rows.append({
+                "title": q.get("title") or "Quiz",
+                "difficulty": q.get("difficulty") or "",
+                "best_score": q.get("best_score"),
+                "question_count": q.get("question_count"),
+                "sample_questions": [
+                    {"question": x.get("question"), "topic": x.get("topic"), "correct": x.get("correct")}
+                    for x in questions
+                ],
+            })
+
+        try:
+            decks = sdb.get_flashcard_decks(client_id, course_id) or []
+        except Exception:
+            decks = []
+        deck_rows = []
+        for d in decks[:5]:
+            cards = []
+            try:
+                cards = sdb.get_flashcards(int(d.get("id")))[:8]
+            except Exception:
+                pass
+            deck_rows.append({
+                "title": d.get("title") or "Mazo",
+                "card_count": d.get("card_count"),
+                "sample_cards": [
+                    {"front": c.get("front"), "back": c.get("back")}
+                    for c in cards
+                ],
+            })
+
+        try:
+            time_rows = sdb.get_time_per_course(client_id) or []
+            stats = next((x for x in time_rows if int(x.get("course_id") or 0) == course_id), {})
+        except Exception:
+            stats = {}
+
+        return {
+            "course": {
+                "id": course_id,
+                "name": course.get("name") or "Curso",
+                "code": course.get("code") or "",
+                "difficulty": course.get("difficulty") or 3,
+                "term": course.get("term") or "",
+            },
+            "sources": sources,
+            "exams": exam_rows,
+            "quizzes": quiz_rows,
+            "flashcard_decks": deck_rows,
+            "focus_stats": {
+                "minutes": int(stats.get("minutes") or 0),
+                "sessions": int(stats.get("sessions") or 0),
+            },
+        }
+
+    def _course_brain_prompt(mode: str, ctx: dict) -> str:
+        payload = json.dumps(ctx, ensure_ascii=False, indent=2)[:42000]
+        today = datetime.now().date().isoformat()
+        base_rules = f"""Today is {today}. You are MachReach Course Brain, a source-grounded study assistant.
+Use only the course context below. If the context is thin, say exactly what source is missing instead of inventing facts.
+Write in Spanish unless the course/source text is clearly English.
+Return ONLY valid JSON. No markdown fences.
+
+COURSE CONTEXT:
+{payload}
+"""
+        if mode == "brain":
+            return base_rules + """
+Return this JSON shape:
+{
+  "title": "Course Brain",
+  "summary": "4-6 sentence grounded course overview",
+  "source_health": {"level":"strong|medium|thin", "reason":"short reason"},
+  "key_concepts": [{"name":"Concept", "why_it_matters":"...", "sources":["source title"]}],
+  "what_to_master": ["specific mastery target"],
+  "gaps": ["missing material or unclear area"],
+  "recommended_next": ["next action"]
+}
+"""
+        if mode == "exam":
+            return base_rules + """
+Pick the next upcoming exam/evaluation from the context. If there is no dated exam, build a general next-test plan.
+Return this JSON shape:
+{
+  "title": "Plan para la próxima prueba",
+  "next_exam": {"name":"...", "date":"YYYY-MM-DD or null", "days_until":0, "weight_pct":0},
+  "priority_topics": [{"topic":"...", "reason":"...", "source":"source title or exam metadata"}],
+  "seven_day_plan": [{"day":"Día 1", "work":"specific action under 16 words", "output":"what student should produce"}],
+  "quiz_targets": ["question type to practice"],
+  "focus_plan": {"sessions": 0, "minutes_each": 25, "why":"..."},
+  "risks": ["risk before exam"]
+}
+"""
+        return base_rules + """
+Create a NotebookLM-style study studio output for this course.
+Return this JSON shape:
+{
+  "title": "Study Studio",
+  "study_guide": [{"section":"...", "must_know":["..."], "self_check":"question"}],
+  "faq": [{"q":"...", "a":"grounded answer"}],
+  "mind_map": [{"node":"central or concept", "children":["related concept"]}],
+  "practice_prompts": ["prompt for active recall"],
+  "next_actions": ["specific next action"]
+}
+"""
+
+    def _run_course_brain_ai(mode: str, ctx: dict) -> dict:
+        from student.analyzer import _ai
+        prompt = _course_brain_prompt(mode, ctx)
+        resp = _ai().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.15,
+            max_tokens=3500,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        raw = re.sub(r"^```json?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        return json.loads(raw)
+
 
     def _semester_outcome_gate(client_id: int | None = None, semester_label: str | None = None) -> dict:
         cid = client_id if client_id is not None else _cid()
@@ -1824,11 +2020,6 @@ def register_student_routes(app, csrf, limiter):
             <div id="wa-detail" class="wa-detail-bars"></div>
           </section>
 
-          <section class="wa-card">
-            <h2>Plan anti-prueba</h2>
-            <p>Prioridad basada en pruebas próximas y minutos reales estudiados para cada ramo.</p>
-            <div class="wa-risk-grid">{_exam_risk_html}</div>
-          </section>
         </div>
 
         <script>
@@ -2148,6 +2339,46 @@ def register_student_routes(app, csrf, limiter):
         return jsonify(course)
 
 
+    @app.route("/api/student/courses/<int:course_id>/ai-studio", methods=["POST"])
+    def student_course_ai_studio_api(course_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        cid = _cid()
+        if not _student_is_plus(cid):
+            return jsonify({
+                "error": "Course Brain y Study Studio son herramientas PLUS.",
+                "upgrade_required": True,
+            }), 402
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != cid:
+            return jsonify({"error": "Course not found"}), 404
+        data = request.get_json(silent=True) or {}
+        mode = (data.get("mode") or "brain").strip().lower()
+        if mode not in {"brain", "studio", "exam"}:
+            return jsonify({"error": "Modo invalido."}), 400
+        try:
+            ctx = _course_brain_context(cid, dict(course))
+            result = _run_course_brain_ai(mode, ctx)
+            return jsonify({
+                "ok": True,
+                "mode": mode,
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "context_counts": {
+                    "sources": len(ctx.get("sources") or []),
+                    "exams": len(ctx.get("exams") or []),
+                    "quizzes": len(ctx.get("quizzes") or []),
+                    "flashcard_decks": len(ctx.get("flashcard_decks") or []),
+                },
+                "result": result,
+            })
+        except json.JSONDecodeError:
+            log.exception("Course Brain returned invalid JSON")
+            return jsonify({"error": "La IA devolvio una respuesta invalida. Intenta de nuevo."}), 500
+        except Exception as e:
+            log.exception("Course Brain failed for course %s", course_id)
+            return jsonify({"error": f"No se pudo generar el estudio del curso: {e}"}), 500
+
+
 
     # ── File uploads ────────────────────────────────────────
 
@@ -2182,6 +2413,74 @@ def register_student_routes(app, csrf, limiter):
         # automatically and exams are tracked manually.
 
         return jsonify({"error": "File uploads to courses are disabled"}), 410
+
+
+    @app.route("/api/student/courses/<int:course_id>/sources", methods=["POST"])
+    def student_add_course_source(course_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        cid = _cid()
+        course = sdb.get_course(course_id)
+        if not course or course["client_id"] != cid:
+            return jsonify({"error": "Course not found"}), 404
+
+        exam_id_raw = (request.form.get("exam_id") or "").strip()
+        exam_id = None
+        if exam_id_raw:
+            try:
+                exam_id = int(exam_id_raw)
+            except Exception:
+                return jsonify({"error": "Evaluacion invalida."}), 400
+            exams = sdb.get_course_exams(course_id) or []
+            if not any(int(e.get("id") or 0) == exam_id for e in exams):
+                return jsonify({"error": "La evaluacion no pertenece a este curso."}), 400
+
+        title = (request.form.get("title") or "").strip()
+        pasted = (request.form.get("source_text") or "").strip()
+        file_obj = request.files.get("file")
+        file_type = "text"
+        text = pasted
+        name = title or "Material pegado"
+
+        if file_obj and file_obj.filename:
+            fname = file_obj.filename
+            fl = fname.lower()
+            if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc") or fl.endswith(".txt")):
+                return jsonify({"error": "Solo PDF, DOCX, DOC y TXT."}), 400
+            content = file_obj.read(30 * 1024 * 1024 + 1)
+            if len(content) > 30 * 1024 * 1024:
+                return jsonify({"error": "Archivo demasiado grande (max 30MB)."}), 400
+            try:
+                if fl.endswith(".pdf"):
+                    text = extract_text_from_pdf(content)
+                    file_type = "pdf"
+                elif fl.endswith((".docx", ".doc")):
+                    text = extract_text_from_docx(content)
+                    file_type = "docx"
+                else:
+                    text = content.decode("utf-8", errors="ignore")
+                    file_type = "txt"
+            except Exception as e:
+                return jsonify({"error": f"No se pudo leer el archivo: {e}"}), 400
+            name = title or fname
+
+        text = (text or "").replace("\x00", "").strip()
+        if len(text) < 20:
+            return jsonify({"error": "Agrega al menos 20 caracteres de material legible."}), 400
+
+        try:
+            source_id = sdb.add_course_file(
+                cid,
+                course_id,
+                name[:180],
+                file_type,
+                text[:250000],
+                exam_id=exam_id,
+            )
+            return jsonify({"ok": True, "id": source_id, "name": name[:180], "char_count": len(text)})
+        except Exception as e:
+            log.exception("Could not save course source")
+            return jsonify({"error": f"No se pudo guardar la fuente: {e}"}), 500
 
 
 
@@ -2386,6 +2685,12 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Exam name is required"}), 400
 
+        grade_raw = data.get("grade")
+        try:
+            grade = float(str(grade_raw).replace(",", ".")) if grade_raw not in (None, "") else None
+        except (TypeError, ValueError):
+            grade = None
+
         exam_id = sdb.upsert_exam(
 
             _cid(), course_id, None,
@@ -2397,6 +2702,7 @@ def register_student_routes(app, csrf, limiter):
             weight_pct=int(data.get("weight_pct", 0)),
 
             topics=data.get("topics", []),
+            grade=grade,
 
         )
 
@@ -2420,6 +2726,12 @@ def register_student_routes(app, csrf, limiter):
 
             return jsonify({"error": "Exam name is required"}), 400
 
+        grade_raw = data.get("grade")
+        try:
+            grade = float(str(grade_raw).replace(",", ".")) if grade_raw not in (None, "") else None
+        except (TypeError, ValueError):
+            grade = None
+
         sdb.upsert_exam(
 
             _cid(), data.get("course_id", 0), exam_id,
@@ -2431,6 +2743,7 @@ def register_student_routes(app, csrf, limiter):
             weight_pct=int(data.get("weight_pct", 0)),
 
             topics=data.get("topics", []),
+            grade=grade,
 
         )
 
@@ -3548,6 +3861,1439 @@ def register_student_routes(app, csrf, limiter):
         )
 
 
+    @app.route("/api/student/planner/availability", methods=["POST"])
+    def student_planner_availability_api():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        if not _student_is_plus():
+            return jsonify({"error": "Plan is Plus only", "upgrade_required": True}), 402
+        data = request.get_json(silent=True) or {}
+        settings = data.get("settings") or []
+        if not isinstance(settings, list):
+            return jsonify({"error": "settings must be a list"}), 400
+        sdb.save_schedule_settings(_cid(), settings)
+        return jsonify({"ok": True, "settings": sdb.get_schedule_settings(_cid())})
+
+
+    @app.route("/api/student/planner/save", methods=["POST"])
+    def student_planner_save_api():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        if not _student_is_plus():
+            return jsonify({"error": "Plan is Plus only", "upgrade_required": True}), 402
+        data = request.get_json(silent=True) or {}
+        plan = data.get("plan") or {}
+        preferences = data.get("preferences") or {}
+        if not isinstance(plan, dict):
+            return jsonify({"error": "plan must be an object"}), 400
+        plan_id = sdb.save_study_plan(_cid(), plan, preferences if isinstance(preferences, dict) else {})
+        return jsonify({"ok": True, "plan_id": plan_id})
+
+
+    def _planner_exam_owned(client_id: int, course_id: int, exam_id: int) -> dict | None:
+        try:
+            exams = sdb.get_course_exams(int(course_id)) or []
+        except Exception:
+            return None
+        for e in exams:
+            d = dict(e)
+            if int(d.get("id") or 0) == int(exam_id) and int(d.get("client_id") or client_id) == int(client_id):
+                return d
+        return None
+
+
+    def _planner_plain_text(s: str, max_chars: int = 180000) -> str:
+        s = re.sub(r"<[^>]+>", " ", s or "")
+        s = re.sub(r"\s+", " ", s).strip()
+        return s[:max_chars]
+
+
+    def _planner_fallback_units(source_text: str, target_units: int = 8) -> list[dict]:
+        text = _planner_plain_text(source_text, max_chars=140000)
+        if not text:
+            return []
+        target_units = max(3, min(14, int(target_units or 8)))
+        chunk_size = max(1800, min(6500, len(text) // target_units + 1))
+        units = []
+        pos = 0
+        idx = 1
+        while pos < len(text) and len(units) < target_units:
+            end = min(len(text), pos + chunk_size)
+            if end < len(text):
+                cut = max(text.rfind(". ", pos, end), text.rfind("\n", pos, end))
+                if cut > pos + 800:
+                    end = cut + 1
+            excerpt = text[pos:end].strip()
+            if excerpt:
+                title_words = excerpt[:96].split()
+                title = " ".join(title_words[:8]).strip(" .,:;") or f"Bloque {idx}"
+                units.append({
+                    "title": title,
+                    "objective": "Estudiar esta seccion del material y dejar dudas marcadas.",
+                    "detail": "Lee el extracto, identifica las definiciones principales, anota dudas y cierra explicando el tema con tus propias palabras.",
+                    "steps": ["Leer el extracto completo", "Subrayar definiciones y reglas", "Escribir 3 preguntas que podrian entrar en la prueba"],
+                    "source_name": "Material adjunto",
+                    "page_hint": f"aprox. pags. {max(1, pos // 1800 + 1)}-{max(1, end // 1800 + 1)}",
+                    "source_excerpt": excerpt[:9000],
+                    "tags": ["material", f"parte {idx}"],
+                })
+                idx += 1
+            pos = end
+        return units
+
+
+    def _planner_ai_material_units(course_name: str, exam_name: str, source_text: str, target_units: int = 8) -> list[dict]:
+        text = _planner_plain_text(source_text, max_chars=120000)
+        if not text:
+            return []
+        target_units = max(3, min(12, int(target_units or 8)))
+        prompt = f"""Divide this complete study material into {target_units} elite university-level study blocks for the exam "{exam_name}" in "{course_name}".
+
+Rules:
+- Use ONLY the provided material.
+- Cover the whole material from beginning to end; do not skip sections.
+- "title" must be the REAL topic name as it appears in the material (e.g. "Teorema fundamental del cálculo", not "Bloque 3").
+- "objective" must EXPLICITLY name the concrete concepts, definitions, formulas, authors or cases the student has to master in that section, copied from the material — e.g. "Domina la definición de dolo eventual, la diferencia con culpa consciente, y los 3 requisitos del art. 1.º" — never vague instructions like "estudiar esta sección".
+- "objective" is the short card summary: one concrete sentence, max 28 words.
+- "detail" is the side-panel explanation. It must explain exactly what to study, why it matters for the exam, and which relationships/comparisons the student must understand.
+- "steps" are 3-5 short study actions for this block, including recall/practice instructions when useful.
+- "tags" are the 2-4 key concept names of the block, taken literally from the material.
+- "source_name" is the PDF/document name from the nearest [SOURCE: ...] marker.
+- "page_hint" is the nearest approximate page marker from [SOURCE: ... | approx pages X-Y]. If uncertain, say "ubicacion aproximada".
+- "source_excerpt" is a representative excerpt copied from this block (the actual text the student will study).
+- Each block must be actionable for one ~50 minute study session.
+- Keep the same language as the material.
+- Return JSON only with this shape:
+{{"units":[{{"title":"...", "objective":"...", "detail":"...", "steps":["..."], "source_name":"...", "page_hint":"...", "tags":["..."], "source_excerpt":"..."}}]}}
+
+Material:
+{text}
+"""
+        try:
+            from student.analyzer import _ai
+            resp = _ai().chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.25,
+                max_tokens=6000,
+                response_format={"type": "json_object"},
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            data = json.loads(re.sub(r"^```json?\s*|\s*```$", "", raw))
+            units = data.get("units") if isinstance(data, dict) else None
+            if not isinstance(units, list):
+                return []
+            cleaned = []
+            for i, u in enumerate(units[:target_units]):
+                if not isinstance(u, dict):
+                    continue
+                title = (u.get("title") or f"Bloque {i + 1}").strip()[:90]
+                objective = (u.get("objective") or "Estudiar este bloque del material.").strip()[:240]
+                detail = (u.get("detail") or objective).strip()[:1400]
+                excerpt = _planner_plain_text(u.get("source_excerpt") or "", max_chars=9000)
+                if not excerpt:
+                    continue
+                tags = u.get("tags") if isinstance(u.get("tags"), list) else []
+                steps = u.get("steps") if isinstance(u.get("steps"), list) else []
+                cleaned.append({
+                    "title": title,
+                    "objective": objective,
+                    "detail": detail,
+                    "steps": [str(s).strip()[:160] for s in steps[:5] if str(s).strip()],
+                    "source_name": (u.get("source_name") or "Material adjunto").strip()[:120],
+                    "page_hint": (u.get("page_hint") or "ubicacion aproximada").strip()[:80],
+                    "source_excerpt": excerpt,
+                    "tags": [str(t)[:32] for t in tags[:4] if str(t).strip()],
+                })
+            return cleaned
+        except Exception as e:
+            log.warning("planner material AI split failed: %s", e)
+            return []
+
+
+    @app.route("/api/student/planner/block-done", methods=["POST"])
+    @limiter.limit("60 per minute")
+    def student_planner_block_done_api():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        data = request.get_json(silent=True) or {}
+        block_date = str(data.get("date") or "")[:10]
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", block_date):
+            return jsonify({"error": "valid date required"}), 400
+        try:
+            sdb.planner_mark_block(
+                _cid(),
+                block_date,
+                int(data.get("exam_id") or 0),
+                data.get("unit_index"),
+                str(data.get("title") or ""),
+                str(data.get("phase") or ""),
+                int(data.get("minutes") or 0),
+                bool(data.get("done")),
+            )
+        except Exception as e:
+            log.warning("planner block-done failed: %s", e)
+            return jsonify({"error": "could not save"}), 500
+        return jsonify({"ok": True})
+
+
+    @app.route("/api/student/planner/material-blocks", methods=["POST"])
+    @limiter.limit("8 per minute")
+    def student_planner_material_blocks_api():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        if not _student_is_plus():
+            return jsonify({"error": "Plan is Plus only", "upgrade_required": True}), 402
+        data = request.get_json(silent=True) or {}
+        try:
+            course_id = int(data.get("course_id") or 0)
+            exam_id = int(data.get("exam_id") or 0)
+        except Exception:
+            return jsonify({"error": "course_id and exam_id required"}), 400
+        course = sdb.get_course(course_id)
+        if not course or int(course.get("client_id") or 0) != _cid():
+            return jsonify({"error": "course not found"}), 404
+        exam = _planner_exam_owned(_cid(), course_id, exam_id)
+        if not exam:
+            return jsonify({"error": "exam not found"}), 404
+        files = sdb.get_course_files(_cid(), course_id, exam_id=exam_id) or []
+        source_parts = []
+        file_payload = []
+        for f in files:
+            d = dict(f)
+            txt = d.get("extracted_text") or ""
+            if txt.strip():
+                name = d.get("original_name") or "Material"
+                clean_txt = _planner_plain_text(txt, max_chars=180000)
+                chunk_size = 3600
+                for start in range(0, len(clean_txt), chunk_size):
+                    chunk = clean_txt[start:start + chunk_size].strip()
+                    if not chunk:
+                        continue
+                    page_a = max(1, start // 1800 + 1)
+                    page_b = max(page_a, (start + len(chunk)) // 1800 + 1)
+                    source_parts.append(f"[SOURCE: {name} | approx pages {page_a}-{page_b}]\n{chunk}")
+                file_payload.append({"id": int(d.get("id") or 0), "name": name})
+        if not source_parts:
+            return jsonify({"ok": True, "units": [], "files": []})
+        source_text = "\n\n".join(source_parts)
+        try:
+            target_units = int(data.get("target_units") or 8)
+        except Exception:
+            target_units = 8
+        units = _planner_ai_material_units(course.get("name") or "Curso", exam.get("name") or "Prueba", source_text, target_units)
+        if not units:
+            units = _planner_fallback_units(source_text, target_units)
+        return jsonify({"ok": True, "units": units, "files": file_payload})
+
+
+    @app.route("/api/student/planner/block-tool", methods=["POST"])
+    @limiter.limit("5 per minute")
+    def student_planner_block_tool_api():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        if not _student_is_plus():
+            return jsonify({"error": "Plan is Plus only", "upgrade_required": True}), 402
+        data = request.get_json(silent=True) or {}
+        tool = (data.get("tool") or "").strip().lower()
+        if tool not in ("quiz", "flashcards"):
+            return jsonify({"error": "tool must be quiz or flashcards"}), 400
+        try:
+            course_id = int(data.get("course_id") or 0)
+            exam_id = int(data.get("exam_id") or 0)
+        except Exception:
+            return jsonify({"error": "course_id and exam_id required"}), 400
+        course = sdb.get_course(course_id)
+        if not course or int(course.get("client_id") or 0) != _cid():
+            return jsonify({"error": "course not found"}), 404
+        exam = _planner_exam_owned(_cid(), course_id, exam_id)
+        if not exam:
+            return jsonify({"error": "exam not found"}), 404
+        source_text = _planner_plain_text(data.get("source_text") or "", max_chars=30000)
+        if not source_text:
+            return jsonify({"error": "block source_text required"}), 400
+        block_title = (data.get("block_title") or "Bloque de material").strip()[:90]
+        topics = [block_title]
+        if tool == "quiz":
+            from student import subscription as _sub
+            ok, why = _sub.can_generate_quiz_today(_cid())
+            if not ok:
+                return jsonify({"error": why, "upgrade_required": True}), 402
+            count = _sub.cap_questions(_cid(), 8)
+            questions = generate_quiz(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, difficulty="medium", count=count)
+            if not questions:
+                return jsonify({"error": "No se pudo generar el quiz."}), 500
+            title = f"Quiz bloque: {block_title}"
+            quiz_id = sdb.create_quiz(_cid(), title, "medium", course_id=course_id, exam_id=exam_id)
+            sdb.add_quiz_questions(quiz_id, questions)
+            try:
+                _sub.record_generation(_cid(), "quiz_generated")
+            except Exception:
+                pass
+            return jsonify({"ok": True, "type": "quiz", "id": quiz_id, "url": f"/student/quizzes/{quiz_id}", "count": len(questions)})
+        from student import subscription as _sub
+        ok, why = _sub.can_generate_flashcards_today(_cid())
+        if not ok:
+            return jsonify({"error": why, "upgrade_required": True}), 402
+        count = _sub.cap_cards(_cid(), 10)
+        cards = generate_flashcards(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, count=count)
+        if not cards:
+            return jsonify({"error": "No se pudieron generar las tarjetas."}), 500
+        title = f"Tarjetas bloque: {block_title}"
+        deck_id = sdb.create_flashcard_deck(_cid(), title, course_id=course_id, exam_id=exam_id, source_type="planner_block")
+        sdb.add_flashcards(deck_id, cards)
+        try:
+            _sub.record_generation(_cid(), "flashcards_generated")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "type": "flashcards", "id": deck_id, "url": f"/student/flashcards/{deck_id}", "count": len(cards)})
+
+
+    @app.route("/student/planner")
+    def student_planner_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        if not _student_is_plus():
+            locked = """
+            <section class="planner-locked">
+              <div class="planner-lock-card">
+                <div class="planner-lock-kicker">PLUS</div>
+                <h1>Plan inteligente.</h1>
+                <p>El plan semanal usa ponderaciones, riesgo, material adjunto, sesiones reales y reviews de dificultad para decidir qu&eacute; estudiar. Es una herramienta Plus.</p>
+                <a href="/student/shop">Desbloquear Plan</a>
+              </div>
+            </section>
+            <style>
+              .planner-locked { min-height:58vh; display:grid; place-items:center; }
+              .planner-lock-card { max-width:720px; border:2px solid #1A1A1F; border-radius:22px; background:linear-gradient(135deg,#FFF8E8,#FFE1D0); box-shadow:0 5px 0 #1A1A1F; padding:36px; text-align:center; }
+              .planner-lock-kicker { color:#FF7A3D; font-size:12px; font-weight:950; letter-spacing:.14em; }
+              .planner-lock-card h1 { font-family:'Bricolage Grotesque',sans-serif; font-size:64px; line-height:.9; margin:8px 0 14px; color:#1A1A1F; }
+              .planner-lock-card p { color:#5C5C66; font-weight:800; line-height:1.5; }
+              .planner-lock-card a { display:inline-flex; margin-top:18px; min-height:44px; align-items:center; justify-content:center; padding:0 18px; border:2px solid #1A1A1F; border-radius:14px; background:#FF7A3D; color:#fff; font-weight:950; text-decoration:none; box-shadow:0 4px 0 #1A1A1F; }
+              :root[data-theme="dark"] .planner-lock-card { background:#14151A; border-color:#FF7A3D; box-shadow:0 5px 0 #FF7A3D; }
+              :root[data-theme="dark"] .planner-lock-card h1 { color:#FFF8E8; }
+              :root[data-theme="dark"] .planner-lock-card p { color:#D9D2C3; }
+            </style>
+            """
+            return _s_render("Plan", locked, active_page="student_planner")
+        cid = _cid()
+        courses = [dict(c) for c in (sdb.get_courses(cid) or [])]
+        exams = [dict(e) for e in (sdb.get_upcoming_exams(cid) or [])]
+        schedule_rows = [dict(r) for r in (sdb.get_schedule_settings(cid) or [])]
+        quiz_stats_by_exam = sdb.get_quiz_stats_by_exam(cid)
+        focus_minutes_by_exam = {}
+        for c in courses:
+            try:
+                for row in sdb.get_time_per_exam(cid, int(c.get("id") or 0)) or []:
+                    focus_minutes_by_exam[int(row.get("exam_id") or 0)] = int(row.get("minutes") or 0)
+            except Exception:
+                continue
+        settings_by_day = {int(r.get("day_of_week") or 0): r for r in schedule_rows}
+        default_hours = [1.5, 1.5, 1.5, 1.5, 1.5, 3, 2]
+        availability = []
+        for day in range(7):
+            row = settings_by_day.get(day) or {}
+            try:
+                hours = float(row.get("available_hours", default_hours[day]))
+            except Exception:
+                hours = default_hours[day]
+            availability.append({
+                "day_of_week": day,
+                "available_hours": hours,
+                "is_free_day": bool(row.get("is_free_day", False)),
+            })
+        course_map = {int(c.get("id")): c for c in courses if c.get("id") is not None}
+        exam_payload = []
+        for e in exams:
+            course_id = int(e.get("course_id") or 0)
+            c = course_map.get(course_id, {})
+            exam_id = int(e.get("id") or 0)
+            try:
+                files = [dict(f) for f in (sdb.get_course_files(cid, course_id, exam_id=exam_id) or [])]
+            except Exception:
+                files = []
+            material_chars = sum(len(f.get("extracted_text") or "") for f in files)
+            review_summary = sdb.review_summary_for_course(c.get("name") or e.get("course_name") or "", c.get("code") or "")
+            base_difficulty = int(c.get("difficulty") or 3)
+            review_difficulty = float(review_summary.get("avg_difficulty") or 0)
+            effective_difficulty = int(round(review_difficulty)) if review_summary.get("count") else base_difficulty
+            exam_payload.append({
+                "id": exam_id,
+                "course_id": course_id,
+                "course_name": e.get("course_name") or c.get("name") or "Curso",
+                "course_code": c.get("code") or "",
+                "difficulty": effective_difficulty,
+                "app_difficulty": base_difficulty,
+                "review_difficulty": review_difficulty,
+                "review_count": int(review_summary.get("count") or 0),
+                "name": e.get("name") or "Prueba",
+                "exam_date": str(e.get("exam_date") or "")[:10],
+                "weight_pct": int(e.get("weight_pct") or 0),
+                "file_count": len(files),
+                "material_chars": material_chars,
+                "has_material": material_chars > 0,
+                "focus_minutes": int(focus_minutes_by_exam.get(exam_id, 0) or 0),
+                "quiz_stats": quiz_stats_by_exam.get(exam_id, {"quiz_count": 0, "attempts": 0, "best_score": 0, "avg_score": 0}),
+            })
+        course_payload = [{
+            "id": int(c.get("id") or 0),
+            "name": c.get("name") or "Curso",
+            "code": c.get("code") or "",
+            "difficulty": int(c.get("difficulty") or 3),
+        } for c in courses]
+        from datetime import timedelta as _td
+        _week_start = (datetime.now() - _td(days=datetime.now().weekday())).strftime("%Y-%m-%d")
+        try:
+            done_blocks = sdb.planner_done_blocks(cid, since_date=_week_start)
+        except Exception:
+            done_blocks = []
+        initial_json = json.dumps({
+            "today": datetime.now().strftime("%Y-%m-%d"),
+            "availability": availability,
+            "courses": course_payload,
+            "exams": exam_payload,
+            "done_blocks": [{
+                "date": str(d.get("block_date") or "")[:10],
+                "exam_id": int(d.get("exam_id") or 0),
+                "unit_index": int(d.get("unit_index") if d.get("unit_index") is not None else -1),
+                "title": d.get("title") or "",
+                "phase": d.get("phase") or "",
+                "minutes": int(d.get("minutes") or 0),
+            } for d in done_blocks],
+        }, ensure_ascii=False).replace("</", "<\\/")
+        content = r"""
+        <section id="planner-app" class="planner-wrap" data-initial='__INITIAL_JSON__'>
+          <header class="planner-hero">
+            <div>
+              <div class="planner-kicker">PLANIFICACI&Oacute;N DE ESTUDIO</div>
+              <h1>Tu semana, ordenada.</h1>
+              <p>Define cu&aacute;nto puedes estudiar cada d&iacute;a. MachReach reparte tus bloques seg&uacute;n pruebas, fechas, ponderaciones y dificultad del ramo.</p>
+            </div>
+            <div class="planner-hero-side">
+              <div class="planner-live-label">Pr&oacute;xima acci&oacute;n</div>
+              <div id="planner-next-action" class="planner-next-action">Calculando...</div>
+              <a class="planner-focus-link" href="/student/focus">Empezar en Enfoque</a>
+            </div>
+          </header>
+
+          <section class="planner-grid-bottom">
+            <div class="planner-panel planner-availability">
+              <div class="planner-panel-head">
+                <div>
+                  <div class="planner-mini">Disponibilidad</div>
+                  <h2>Horas de esta semana</h2>
+                </div>
+                <button type="button" class="planner-small-btn" id="planner-save-availability">Guardar</button>
+              </div>
+              <div id="planner-availability-grid" class="planner-availability-grid"></div>
+            </div>
+
+            <div class="planner-panel planner-priority">
+              <div class="planner-panel-head">
+                <div>
+                  <div class="planner-mini">Prioridad real</div>
+                  <h2>Qu&eacute; pesa m&aacute;s ahora</h2>
+                </div>
+              </div>
+              <div id="planner-priority-list" class="planner-priority-list"></div>
+            </div>
+          </section>
+
+          <section class="planner-stats">
+            <article><span>Horas disponibles</span><b id="planner-total-hours">0 h</b></article>
+            <article><span>Bloques creados</span><b id="planner-blocks-count">0</b></article>
+            <article><span>Pruebas futuras</span><b id="planner-exams-count">0</b></article>
+            <article><span>Ramo prioridad</span><b id="planner-top-course">-</b></article>
+          </section>
+
+          <section class="planner-panel planner-week">
+            <div class="planner-panel-head">
+              <div>
+                <div class="planner-mini">Calendario</div>
+                <h2>Tu semana</h2>
+              </div>
+              <button type="button" class="planner-small-btn dark" id="planner-generate">Generar plan</button>
+              <div class="planner-week-nav">
+                <button type="button" class="planner-small-btn" id="planner-prev-week">&larr;</button>
+                <button type="button" class="planner-small-btn" id="planner-current-week">Semana actual</button>
+                <button type="button" class="planner-small-btn" id="planner-next-week">&rarr;</button>
+              </div>
+            </div>
+            <div id="planner-day-list" class="planner-day-list"></div>
+
+            <div class="planner-day-detail">
+              <div class="planner-day-head">
+                <div>
+                  <div class="planner-mini" id="planner-selected-kicker">Hoy</div>
+                  <h2 id="planner-selected-title">D&iacute;a seleccionado</h2>
+                  <p id="planner-selected-sub">Bloques sugeridos seg&uacute;n tus pruebas.</p>
+                </div>
+                <div class="planner-progress-pill"><span id="planner-day-progress">0/0 bloques</span></div>
+              </div>
+              <div id="planner-blocks" class="planner-blocks"></div>
+              <div class="planner-save-row">
+                <button type="button" class="planner-primary-btn" id="planner-save-plan">Guardar plan generado</button>
+                <span id="planner-save-state">Se recalcula cuando cambias horas.</span>
+              </div>
+            </div>
+          </section>
+          <aside id="planner-detail-drawer" class="planner-drawer" aria-hidden="true">
+            <div class="planner-drawer-backdrop" data-close-drawer></div>
+            <div class="planner-drawer-panel">
+              <button type="button" class="planner-drawer-close" data-close-drawer>&times;</button>
+              <div class="planner-mini">Detalle del bloque</div>
+              <h2 id="planner-drawer-title">Bloque</h2>
+              <div id="planner-drawer-meta" class="planner-drawer-meta"></div>
+              <p id="planner-drawer-detail"></p>
+              <div id="planner-drawer-steps" class="planner-drawer-steps"></div>
+              <div class="planner-drawer-source">
+                <b>Fuente</b>
+                <span id="planner-drawer-source"></span>
+              </div>
+              <div id="planner-drawer-excerpt" class="planner-drawer-excerpt"></div>
+            </div>
+          </aside>
+        </section>
+
+        <style>
+          .planner-wrap { --pl-orange:#FF7A3D; --pl-ink:#1A1A1F; --pl-paper:#FFFDF8; --pl-soft:#FBF8F0; --pl-line:#E2DCCC; color:var(--text,#1A1A1F); }
+          .planner-hero { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:20px; align-items:stretch; margin-bottom:16px; padding:22px 26px; border:2px solid var(--pl-ink); border-radius:20px; background:linear-gradient(135deg,#FFF8E8,#FFE4D2 72%,#EAF8D8); box-shadow:0 5px 0 var(--pl-ink); overflow:hidden; position:relative; }
+          .planner-hero::after { content:""; position:absolute; right:8%; top:-90px; width:260px; height:260px; border:2px solid rgba(255,122,61,.35); border-radius:50%; opacity:.7; pointer-events:none; }
+          .planner-kicker,.planner-mini { font-size:11px; font-weight:950; letter-spacing:.12em; text-transform:uppercase; color:var(--pl-orange); }
+          .planner-hero h1 { margin:6px 0 8px; font-family:'Bricolage Grotesque',sans-serif; font-size:clamp(34px,4.5vw,54px); line-height:.92; letter-spacing:-.045em; color:var(--pl-ink); font-weight:700; }
+          .planner-hero p { margin:0; max-width:760px; color:#5C5C66; font-size:16px; line-height:1.55; font-weight:750; }
+          .planner-hero-side { position:relative; z-index:1; background:rgba(255,253,248,.86); border:2px solid var(--pl-ink); border-radius:18px; padding:18px; display:flex; flex-direction:column; justify-content:space-between; gap:18px; box-shadow:0 4px 0 rgba(26,26,31,.85); }
+          .planner-live-label { font-size:11px; font-weight:950; text-transform:uppercase; letter-spacing:.1em; color:#94939C; }
+          .planner-next-action { font-family:'Bricolage Grotesque',sans-serif; font-size:25px; font-weight:750; line-height:1.05; color:var(--pl-ink); }
+          .planner-focus-link,.planner-primary-btn,.planner-small-btn { min-height:40px; border:2px solid var(--pl-ink); border-radius:12px; background:var(--pl-orange); color:#fff; box-shadow:0 4px 0 var(--pl-ink); display:inline-flex; align-items:center; justify-content:center; padding:0 14px; text-decoration:none; font-weight:950; cursor:pointer; }
+          .planner-small-btn { min-height:34px; font-size:12px; background:#fff; color:var(--pl-ink); box-shadow:0 3px 0 var(--pl-ink); }
+          .planner-small-btn.dark { background:var(--pl-ink); color:#FFF8E8; }
+          .planner-week-nav { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+          .planner-week { margin-bottom:16px; padding:22px; }
+          .planner-grid-bottom { display:grid; grid-template-columns:minmax(0,1.18fr) minmax(330px,.82fr); gap:16px; margin-bottom:16px; }
+          .planner-panel { border:2px solid var(--pl-ink); border-radius:18px; background:var(--pl-paper); box-shadow:0 4px 0 var(--pl-ink); padding:18px; min-width:0; }
+          .planner-panel-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:14px; }
+          .planner-panel-head.compact { margin-bottom:10px; }
+          .planner-panel h2,.planner-day-head h2 { margin:4px 0 0; font-family:'Bricolage Grotesque',sans-serif; font-size:25px; line-height:1; letter-spacing:-.025em; color:var(--pl-ink); }
+          .planner-availability-grid { display:grid; grid-template-columns:repeat(7,minmax(78px,1fr)); gap:8px; }
+          .planner-av-card { border:1.5px solid var(--pl-line); border-radius:14px; background:var(--pl-soft); padding:10px; display:grid; gap:8px; transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease; }
+          .planner-av-card:hover { transform:translateY(-2px); border-color:var(--pl-orange); box-shadow:0 3px 0 rgba(26,26,31,.22); }
+          .planner-av-day { font-weight:950; color:var(--pl-ink); font-size:12px; }
+          .planner-av-card input { width:100%; min-height:36px; border:2px solid var(--pl-ink); border-radius:10px; background:#fff; color:var(--pl-ink); font-weight:950; text-align:center; font-variant-numeric:tabular-nums; }
+          .planner-av-card small { color:#8A8790; font-weight:800; font-size:10px; }
+          .planner-priority-list { display:grid; gap:8px; }
+          .planner-priority-item { display:grid; grid-template-columns:42px 1fr auto; align-items:center; gap:10px; border:1.5px solid var(--pl-line); background:var(--pl-soft); border-radius:14px; padding:10px; }
+          .planner-rank { width:34px; height:34px; border:2px solid var(--pl-ink); border-radius:11px; background:var(--pl-orange); color:#fff; display:grid; place-items:center; font-weight:950; box-shadow:0 2px 0 var(--pl-ink); }
+          .planner-priority-title { font-weight:950; color:var(--pl-ink); line-height:1.15; }
+          .planner-priority-meta { color:#7D7A82; font-size:12px; font-weight:800; margin-top:2px; }
+          .planner-priority-score { color:var(--pl-orange); font-weight:950; font-variant-numeric:tabular-nums; }
+          .planner-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+          .planner-stats article { border:2px solid var(--pl-ink); border-radius:12px; background:#fff; box-shadow:0 3px 0 var(--pl-ink); padding:8px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:0; }
+          .planner-stats span { color:#8C8991; font-size:10px; font-weight:950; text-transform:uppercase; letter-spacing:.07em; line-height:1.2; }
+          .planner-stats b { font-family:'Bricolage Grotesque',sans-serif; font-size:20px; color:var(--pl-ink); line-height:1; white-space:nowrap; }
+          .planner-day-list { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; margin-bottom:18px; }
+          .planner-day-btn { width:100%; text-align:center; border:1.5px solid var(--pl-line); border-radius:14px; background:var(--pl-soft); padding:12px 8px; display:flex; flex-direction:column; gap:8px; align-items:center; cursor:pointer; color:var(--pl-ink); transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease; }
+          .planner-day-btn:hover { transform:translateY(-2px); border-color:var(--pl-orange); }
+          .planner-day-btn.active { border-color:var(--pl-orange); box-shadow:0 4px 0 var(--pl-orange); background:#FFF4EA; transform:translateY(-2px); }
+          .planner-day-num { width:34px; height:34px; border:2px solid var(--pl-ink); border-radius:10px; display:grid; place-items:center; font-weight:950; background:#fff; }
+          .planner-day-btn.active .planner-day-num { background:var(--pl-orange); color:#fff; }
+          .planner-day-name { font-weight:950; line-height:1.1; display:block; }
+          .planner-day-meta { color:#7D7A82; font-size:11px; font-weight:800; margin-top:3px; display:block; }
+          .planner-day-detail { border-top:2px dashed var(--pl-line); padding-top:18px; }
+          .planner-day-head { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; margin-bottom:16px; }
+          .planner-day-head p { margin:7px 0 0; color:#6E6A73; font-weight:750; }
+          .planner-progress-pill { border:2px solid var(--pl-ink); border-radius:999px; padding:8px 12px; font-weight:950; color:var(--pl-ink); background:#fff; box-shadow:0 3px 0 var(--pl-ink); white-space:nowrap; }
+          .planner-blocks { display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:14px; }
+          .planner-block { position:relative; border:1.5px solid var(--pl-line); border-radius:18px; background:linear-gradient(135deg,#fff,#FFF8E8); padding:20px; overflow:hidden; transition:transform .16s ease,border-color .16s ease; }
+          .planner-block:hover { transform:translateY(-2px); border-color:var(--pl-orange); }
+          .planner-block.done { opacity:.72; background:linear-gradient(135deg,#F1FFF6,#FFFDF8); }
+          .planner-block.done .planner-block-title { text-decoration:line-through; text-decoration-thickness:2px; }
+          .planner-block::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--pl-orange); }
+          .planner-block-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+          .planner-time { border:1px solid #FFD0B5; border-radius:999px; background:#FFF1E6; color:#9A3B12; padding:6px 10px; font-size:12px; font-weight:950; }
+          .planner-course-chip { border:1px solid var(--pl-line); border-radius:999px; background:#fff; color:#5C5C66; padding:6px 10px; font-size:11px; font-weight:950; text-transform:uppercase; letter-spacing:.06em; }
+          .planner-block-title { font-weight:950; color:var(--pl-ink); font-size:19px; line-height:1.2; margin-bottom:7px; }
+          .planner-block-copy { color:#6E6A73; font-weight:750; font-size:14.5px; line-height:1.45; }
+          .planner-block-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+          .planner-block-actions a,.planner-block-actions button { border:1.5px solid var(--pl-ink); border-radius:999px; background:#fff; color:var(--pl-ink); padding:9px 14px; text-decoration:none; font-weight:950; font-size:13px; cursor:pointer; }
+          .planner-block-actions button:disabled { opacity:.58; cursor:wait; }
+          .planner-block-actions .planner-detail-btn { background:var(--pl-ink); color:#FFF8E8; }
+          .planner-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+          .planner-tag { border:1px solid #FFD0B5; border-radius:999px; background:#FFF1E6; color:#9A3B12; padding:4px 7px; font-size:10px; font-weight:950; }
+          .planner-material-status { margin-top:8px; color:#8C8991; font-size:12px; font-weight:850; }
+          .planner-save-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px dashed var(--pl-line); }
+          #planner-save-state { color:#8C8991; font-size:12px; font-weight:850; }
+          .planner-empty { border:1.5px dashed var(--pl-line); border-radius:16px; padding:26px; text-align:center; color:#7D7A82; font-weight:850; background:var(--pl-soft); grid-column:1/-1; }
+          .planner-drawer { position:fixed; inset:0; z-index:99980; pointer-events:none; opacity:0; transition:opacity .18s ease; }
+          .planner-drawer.open { pointer-events:auto; opacity:1; }
+          .planner-drawer-backdrop { position:absolute; inset:0; background:rgba(10,10,12,.36); }
+          .planner-drawer-panel { position:absolute; top:0; right:0; width:min(520px,calc(100vw - 18px)); height:100%; overflow:auto; background:#FFFDF8; border-left:2px solid var(--pl-ink); box-shadow:-8px 0 0 rgba(26,26,31,.12), -24px 0 80px rgba(26,26,31,.22); padding:28px; transform:translateX(104%); transition:transform .24s cubic-bezier(.18,1,.28,1); color:var(--pl-ink); }
+          .planner-drawer.open .planner-drawer-panel { transform:translateX(0); }
+          .planner-drawer-close { position:absolute; top:16px; right:16px; width:36px; height:36px; border:2px solid var(--pl-ink); border-radius:12px; background:#fff; color:var(--pl-ink); box-shadow:0 3px 0 var(--pl-ink); font-size:24px; line-height:1; cursor:pointer; }
+          .planner-drawer-panel h2 { margin:8px 42px 10px 0; font-family:'Bricolage Grotesque',sans-serif; font-size:34px; line-height:.98; letter-spacing:-.03em; }
+          .planner-drawer-meta { display:flex; flex-wrap:wrap; gap:8px; color:#7D7A82; font-size:12px; font-weight:900; margin-bottom:16px; }
+          .planner-drawer-panel p { color:#4F4B55; font-weight:800; line-height:1.55; margin:0 0 16px; }
+          .planner-drawer-steps { display:grid; gap:8px; margin:14px 0 16px; }
+          .planner-step { border:1.5px solid var(--pl-line); border-radius:14px; background:#FFF8E8; padding:11px 12px; font-weight:850; color:#3E3942; }
+          .planner-drawer-source { border:1.5px solid #FFD0B5; background:#FFF1E6; border-radius:14px; padding:12px; display:grid; gap:4px; color:#9A3B12; font-weight:850; }
+          .planner-drawer-excerpt { margin-top:14px; border:1.5px dashed var(--pl-line); border-radius:16px; background:#fff; color:#5C5C66; padding:14px; font-size:13px; line-height:1.55; max-height:260px; overflow:auto; white-space:pre-wrap; }
+          :root[data-theme="dark"] .planner-wrap { --pl-ink:#FF7A3D; --pl-paper:#14151A; --pl-soft:#0B0B10; --pl-line:rgba(255,122,61,.42); color:#FFF8E8; }
+          :root[data-theme="dark"] .planner-hero { background:linear-gradient(135deg,#17110E,#211A18 72%,#111B16); border-color:#FF7A3D; box-shadow:0 5px 0 #FF7A3D; }
+          :root[data-theme="dark"] .planner-hero h1,:root[data-theme="dark"] .planner-panel h2,:root[data-theme="dark"] .planner-day-head h2,:root[data-theme="dark"] .planner-next-action,:root[data-theme="dark"] .planner-priority-title,:root[data-theme="dark"] .planner-stats b,:root[data-theme="dark"] .planner-day-name,:root[data-theme="dark"] .planner-block-title { color:#FFF8E8; }
+          :root[data-theme="dark"] .planner-hero p,:root[data-theme="dark"] .planner-day-head p,:root[data-theme="dark"] .planner-block-copy,:root[data-theme="dark"] .planner-priority-meta,:root[data-theme="dark"] .planner-day-meta { color:#D9D2C3; }
+          :root[data-theme="dark"] .planner-hero-side,:root[data-theme="dark"] .planner-panel,:root[data-theme="dark"] .planner-stats article { background:#14151A; border-color:#FF7A3D; box-shadow:0 4px 0 #FF7A3D; }
+          :root[data-theme="dark"] .planner-av-card,:root[data-theme="dark"] .planner-priority-item,:root[data-theme="dark"] .planner-day-btn,:root[data-theme="dark"] .planner-block { background:#0B0B10; border-color:rgba(255,122,61,.52); }
+          :root[data-theme="dark"] .planner-day-btn.active { background:#17110E; border-color:#FF7A3D; }
+          :root[data-theme="dark"] .planner-av-card input { background:#14151A; color:#FFF8E8; border-color:#FF7A3D; }
+          :root[data-theme="dark"] .planner-small-btn:not(.dark),:root[data-theme="dark"] .planner-day-num,:root[data-theme="dark"] .planner-progress-pill,:root[data-theme="dark"] .planner-block-actions a,:root[data-theme="dark"] .planner-block-actions button,:root[data-theme="dark"] .planner-course-chip { background:#0B0B10; color:#FFF8E8; border-color:#FF7A3D; box-shadow:0 3px 0 #FF7A3D; }
+          :root[data-theme="dark"] .planner-tag { background:#17110E; color:#FFD0B5; border-color:#FF7A3D; }
+          :root[data-theme="dark"] .planner-drawer-panel { background:#14151A; border-color:#FF7A3D; color:#FFF8E8; box-shadow:-8px 0 0 rgba(255,122,61,.18), -24px 0 80px rgba(0,0,0,.44); }
+          :root[data-theme="dark"] .planner-drawer-panel h2,:root[data-theme="dark"] .planner-drawer-panel p { color:#FFF8E8; }
+          :root[data-theme="dark"] .planner-step,:root[data-theme="dark"] .planner-drawer-excerpt { background:#0B0B10; border-color:rgba(255,122,61,.52); color:#D9D2C3; }
+          :root[data-theme="dark"] .planner-drawer-source { background:#17110E; border-color:#FF7A3D; color:#FFD0B5; }
+          @media (max-width:1100px) { .planner-hero,.planner-grid-bottom { grid-template-columns:1fr; } .planner-availability-grid { grid-template-columns:repeat(4,1fr); } .planner-day-list { grid-template-columns:repeat(7,minmax(92px,1fr)); overflow-x:auto; padding-bottom:6px; } }
+          @media (max-width:760px) { .planner-availability-grid { grid-template-columns:repeat(2,1fr); } .planner-stats { grid-template-columns:repeat(2,1fr); } .planner-blocks { grid-template-columns:1fr; } .planner-hero { padding:20px; } .planner-day-head { flex-direction:column; } }
+        </style>
+
+        <script>
+        (function(){
+          var root = document.getElementById('planner-app');
+          if (!root) return;
+          var initial = {};
+          try { initial = JSON.parse(root.getAttribute('data-initial') || '{}'); } catch(e) { initial = {}; }
+          var state = {
+            today: parseISO(initial.today) || new Date(),
+            availability: initial.availability || [],
+            courses: initial.courses || [],
+            exams: (initial.exams || []).filter(function(e){ return parseISO(e.exam_date); }),
+            materialUnits: {},
+            materialLoading: {},
+            selectedIndex: 0,
+            weekOffset: 0,
+            plan: null,
+            doneBlocks: initial.done_blocks || []
+          };
+          function doneKeyOf(d){ return d.date + '|' + (d.exam_id || 0) + '|' + (d.unit_index == null ? -1 : d.unit_index) + '|' + (d.title || ''); }
+          function isBlockDone(block){
+            var key = block.date + '|' + (block.exam_id || 0) + '|' + (block.material_based ? block.unit_index : -1) + '|' + (block.title || '');
+            return state.doneBlocks.some(function(d){ return doneKeyOf(d) === key; });
+          }
+          function doneForDate(dateStr){
+            return state.doneBlocks.filter(function(d){ return d.date === dateStr; });
+          }
+          function doneMinutesByExam(){
+            var m = {};
+            state.doneBlocks.forEach(function(d){
+              var id = Number(d.exam_id || 0);
+              if (!id) return;
+              m[id] = (m[id] || 0) + Number(d.minutes || 0);
+            });
+            return m;
+          }
+          function doneMaterialCountByExam(){
+            var m = {};
+            state.doneBlocks.forEach(function(d){
+              var id = Number(d.exam_id || 0);
+              if (!id || Number(d.unit_index == null ? -1 : d.unit_index) < 0) return;
+              m[id] = (m[id] || 0) + 1;
+            });
+            return m;
+          }
+          var dayNames = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+          var shortNames = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+          function parseISO(s){
+            if (!s) return null;
+            var p = String(s).slice(0,10).split('-').map(Number);
+            if (p.length !== 3 || !p[0] || !p[1] || !p[2]) return null;
+            return new Date(p[0], p[1]-1, p[2]);
+          }
+          function iso(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+          function addDays(d,n){ var x = new Date(d); x.setDate(x.getDate()+n); return x; }
+          function diffDays(a,b){ return Math.ceil((parseISO(iso(b)) - parseISO(iso(a))) / 86400000); }
+          function mondayOf(d){ var x = parseISO(iso(d)); var day = (x.getDay()+6)%7; x.setDate(x.getDate()-day); return x; }
+          function upcomingDateForDay(dayIndex){
+            var base = parseISO(iso(state.today));
+            var todayIndex = (base.getDay()+6)%7;
+            var add = (dayIndex - todayIndex + 7) % 7;
+            return addDays(base, add);
+          }
+          function plannerDateForDay(dayIndex){
+            if (state.weekOffset >= 0) return addDays(upcomingDateForDay(dayIndex), state.weekOffset * 7);
+            return addDays(mondayOf(state.today), dayIndex + ((state.weekOffset + 1) * 7));
+          }
+          function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+          function fmtDate(d){ return shortNames[(d.getDay()+6)%7] + ' ' + d.getDate() + '/' + (d.getMonth()+1); }
+          function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+          function normalizeAvailability(){
+            var byDay = {};
+            state.availability.forEach(function(a){ byDay[Number(a.day_of_week)] = a; });
+            state.availability = [0,1,2,3,4,5,6].map(function(day){
+              var item = byDay[day] || {};
+              return { day_of_week: day, available_hours: Number(item.available_hours == null ? 0 : item.available_hours) || 0, is_free_day: !!item.is_free_day };
+            });
+          }
+          function riskForExam(exam, dayDate){
+            var examDate = parseISO(exam.exam_date);
+            var days = Math.max(0, diffDays(dayDate, examDate));
+            var weight = Number(exam.weight_pct || 0);
+            var difficulty = Number(exam.difficulty || 3);
+            var studied = Number(exam.focus_minutes || 0);
+            var quiz = exam.quiz_stats || {};
+            var quizPenalty = 0;
+            if (Number(quiz.attempts || 0) > 0 && Number(quiz.best_score || 0) < 70) {
+              quizPenalty = Math.round((70 - Number(quiz.best_score || 0)) * 1.15);
+            }
+            var materialBoost = exam.has_material ? 8 : 0;
+            var studiedCredit = Math.min(70, studied * 0.42);
+            var score = (160 / (days + 1)) + (weight * 2.0) + (difficulty * 13) + quizPenalty + materialBoost - studiedCredit;
+            return Math.max(5, Math.round(score));
+          }
+          function riskLabel(score){
+            if (score >= 190) return 'Riesgo alto';
+            if (score >= 115) return 'Riesgo medio';
+            return 'Riesgo bajo';
+          }
+          function priorityForExam(exam, dayDate){
+            return riskForExam(exam, dayDate);
+          }
+          function examNeedMinutes(exam){
+            var examDate = parseISO(exam.exam_date);
+            var days = Math.max(0, diffDays(state.today, examDate));
+            var urgency = days <= 2 ? 90 : days <= 5 ? 55 : days <= 10 ? 25 : 0;
+            var quiz = exam.quiz_stats || {};
+            var quizPenalty = (Number(quiz.attempts || 0) > 0 && Number(quiz.best_score || 0) < 70) ? 70 : 0;
+            var studiedCredit = Math.min(130, Number(exam.focus_minutes || 0) * 0.55);
+            return clamp(75 + Number(exam.weight_pct || 0) * 7 + Number(exam.difficulty || 3) * 25 + urgency + quizPenalty - studiedCredit, 45, 560);
+          }
+          /* Study phase by exam proximity — each phase has a concrete, evidence-based tactic. */
+          function phaseForDays(days, sessionOfDay){
+            if (days <= 0) return { label:'repaso exprés', tech:'Rinde hoy: solo repasa tu hoja de errores y fórmulas clave. Nada nuevo — confía en lo que ya hiciste.' };
+            if (days === 1) return { label:'simulacro final', tech:'Simula la prueba con tiempo real y sin apuntes. Cierra revisando solo lo que fallaste.' };
+            if (days <= 3) return sessionOfDay === 0
+              ? { label:'práctica intensiva', tech:'Ejercicios tipo prueba sin mirar apuntes. Cada error va a tu hoja de errores.' }
+              : { label:'repaso de errores', tech:'Vuelve a hacer desde cero los ejercicios que fallaste antes. Si vuelves a fallar, márcalo crítico.' };
+            if (days <= 7) return sessionOfDay === 0
+              ? { label:'recuerdo activo', tech:'Cierra el cuaderno y reconstruye el tema desde memoria. Después compara contra tus apuntes.' }
+              : { label:'ejercicios guiados', tech:'Resuelve ejercicios alternando temas — mezclar tipos de problema fija más que repetir el mismo.' };
+            return { label:'primera pasada', tech:'Lee el material y resume con tus propias palabras. Marca ejercicios para repetir la próxima semana.' };
+          }
+          function quizHintFor(exam){
+            var quiz = exam.quiz_stats || {};
+            if (Number(quiz.attempts || 0) > 0 && Number(quiz.best_score || 0) < 70) {
+              return ' Tu mejor quiz va en ' + Number(quiz.best_score || 0) + '% — parte por los temas donde fallaste.';
+            }
+            if (Number(quiz.attempts || 0) === 0 && exam.has_material) {
+              return ' Aún no haces ningún quiz de esta prueba — genera uno para detectar lagunas a tiempo.';
+            }
+            return '';
+          }
+          function planBlockFor(exam, minutes, dayDate, blockIndex, sessionOfDay){
+            var examDate = parseISO(exam.exam_date);
+            var days = Math.max(0, diffDays(dayDate, examDate));
+            var ph = phaseForDays(days, sessionOfDay || 0);
+            var title = (exam.course_name || 'Curso') + ' · ' + (exam.name || 'Prueba');
+            var materialNudge = exam.has_material ? '' : ' Sube el PDF o apuntes de esta prueba en Mis cursos y el plan se rearmará con la materia literal, bloque por bloque.';
+            var copy = days <= 0
+              ? ph.tech
+              : 'Faltan ' + days + ' días (' + (exam.weight_pct || 0) + '% de la nota). ' + ph.tech + quizHintFor(exam) + materialNudge;
+            return {
+              course_id: exam.course_id,
+              course: exam.course_name || 'Curso',
+              exam: exam.name || 'Prueba',
+              minutes: minutes,
+              title: title,
+              phase: ph.label,
+              copy: copy,
+              date: iso(dayDate),
+              index: blockIndex
+            };
+          }
+          /* A material block always points at literal content from the uploaded
+             files. passNum cycles the SAME content through deeper study modes:
+             pass 0 = study it, pass 1 = active recall on it, pass 2+ = practice it. */
+          function materialBlockFor(exam, unit, minutes, dayDate, blockIndex, unitIndex, passNum){
+            var baseTitle = unit.title || 'Bloque de material';
+            var objective = unit.objective || 'Estudia este bloque del material adjunto.';
+            var title, phase, copy;
+            if (!passNum) {
+              title = baseTitle;
+              phase = 'estudiar material';
+              copy = objective;
+            } else if (passNum === 1) {
+              title = 'Repaso activo: ' + baseTitle;
+              phase = 'recuerdo activo';
+              copy = 'Sin mirar el material, reconstruye de memoria: ' + objective + ' Luego abre el extracto, compara y marca exactamente lo que te faltó.';
+            } else {
+              title = 'Práctica: ' + baseTitle;
+              phase = 'práctica del material';
+              copy = 'Genera el quiz de este bloque y respóndelo sin apuntes. Cada error te dice qué parte de "' + baseTitle + '" tienes que volver a leer.';
+            }
+            return {
+              course_id: exam.course_id,
+              exam_id: exam.id,
+              course: exam.course_name || 'Curso',
+              exam: exam.name || 'Prueba',
+              minutes: minutes,
+              title: title,
+              phase: phase,
+              copy: copy,
+              detail: unit.detail || objective,
+              steps: unit.steps || [],
+              source_name: unit.source_name || 'Material adjunto',
+              page_hint: unit.page_hint || 'ubicacion aproximada',
+              date: iso(dayDate),
+              index: blockIndex,
+              material_based: true,
+              unit_index: unitIndex,
+              source_excerpt: unit.source_excerpt || '',
+              tags: unit.tags || []
+            };
+          }
+          function generatePlan(){
+            normalizeAvailability();
+            var days = [0,1,2,3,4,5,6].map(function(i){
+              var date = plannerDateForDay(i);
+              var av = state.availability[i] || {available_hours:0};
+              return { index:i, date:iso(date), dateObj:date, hours:Number(av.available_hours || 0), blocks:[] };
+            });
+            var activeExams = state.exams.filter(function(e){ return parseISO(e.exam_date) >= parseISO(iso(state.today)); });
+            var remaining = {};
+            var materialCursor = {};
+            var doneMin = doneMinutesByExam();
+            var doneMat = doneMaterialCountByExam();
+            activeExams.forEach(function(e){
+              var units = state.materialUnits[e.id] || [];
+              var need = Math.max(examNeedMinutes(e), units.length ? units.length * 45 : 0);
+              /* work already marked done counts as covered: the rest of the
+                 week only schedules what's still pending */
+              remaining[e.id] = Math.max(0, need - (doneMin[e.id] || 0));
+              materialCursor[e.id] = doneMat[e.id] || 0;
+            });
+            function candidatePool(day, perExamMinutes, lastExamId, mustHaveRemaining, respectCap){
+              return activeExams.filter(function(e){
+                var examDate = parseISO(e.exam_date);
+                if (!examDate || examDate < day.dateObj) return false;
+                if (mustHaveRemaining && (remaining[e.id] || 0) <= 0) return false;
+                if (respectCap) {
+                  var dte = diffDays(day.dateObj, examDate);
+                  var cap = dte <= 2 ? 240 : dte <= 5 ? 190 : 150;
+                  if ((perExamMinutes[e.id] || 0) >= cap) return false;
+                }
+                return true;
+              }).sort(function(a,b){
+                var ar = Math.max(0, remaining[a.id] || 0);
+                var br = Math.max(0, remaining[b.id] || 0);
+                var sa = priorityForExam(a, day.dateObj) + Math.min(80, ar / 4) - (a.id === lastExamId ? 18 : 0);
+                var sb = priorityForExam(b, day.dateObj) + Math.min(80, br / 4) - (b.id === lastExamId ? 18 : 0);
+                return sb - sa;
+              });
+            }
+            function genericReviewBlock(course, minutes, day, index){
+              return {
+                course_id: course.id,
+                course: course.name,
+                exam: 'Estudio general',
+                minutes: minutes,
+                title: course.name + ' - repaso activo',
+                phase: 'repaso',
+                copy: 'Usa este bloque para ordenar apuntes, cerrar ejercicios pendientes y preparar material para futuras pruebas.',
+                detail: 'No hay una prueba con material suficiente para este espacio. Convierte estos minutos en trabajo concreto: resume una clase reciente, arma una lista de dudas y deja subidos los PDFs/apuntes de la proxima evaluacion para que MachReach pueda planificar con materia literal.',
+                steps: ['Elegir una clase o apunte reciente', 'Hacer un resumen de 10 lineas', 'Crear 5 preguntas de autoevaluacion', 'Subir material faltante en Mis cursos'],
+                date: day.date,
+                index: index
+              };
+            }
+            days.forEach(function(day){
+              var minutesLeft = Math.round(day.hours * 60);
+              var blockIndex = 0;
+              var lastExamId = null;
+              var perExamMinutes = {};
+              var perExamSessions = {};
+              while (minutesLeft >= 25) {
+                var candidates;
+                if (false) candidates = activeExams.filter(function(e){
+                  var examDate = parseISO(e.exam_date);
+                  if (examDate < day.dateObj) return false;
+                  if ((remaining[e.id] || 0) <= 0) return false;
+                  /* daily cap per exam: avoid grinding one subject all day —
+                     interleaving fixes more. The cap loosens near the exam. */
+                  var dte = diffDays(day.dateObj, examDate);
+                  var cap = dte <= 2 ? 180 : 110;
+                  return (perExamMinutes[e.id] || 0) < cap;
+                }).sort(function(a,b){
+                  /* soft penalty for repeating the same exam back-to-back */
+                  var sa = priorityForExam(a, day.dateObj) * (a.id === lastExamId ? 0.7 : 1);
+                  var sb = priorityForExam(b, day.dateObj) * (b.id === lastExamId ? 0.7 : 1);
+                  return sb - sa;
+                });
+                candidates = candidatePool(day, perExamMinutes, lastExamId, true, true);
+                if (!candidates.length) candidates = candidatePool(day, perExamMinutes, lastExamId, true, false);
+                if (!candidates.length) candidates = candidatePool(day, perExamMinutes, lastExamId, false, false);
+                if (!candidates.length) {
+                  if (state.courses.length) {
+                    var course = state.courses[blockIndex % state.courses.length];
+                    var gm = Math.min(minutesLeft, minutesLeft >= 70 ? 50 : minutesLeft);
+                    day.blocks.push(genericReviewBlock(course, Math.round(gm), day, blockIndex++));
+                    minutesLeft -= gm;
+                    continue;
+                  }
+                  break;
+                }
+                var chosen = candidates[0];
+                var units = state.materialUnits[chosen.id] || [];
+                var hasUnit = units.length > 0;
+                /* pomodoro-sized blocks: ~50 min focus chunks. If required
+                   work is already covered, keep using the time for reinforcement. */
+                var target = hasUnit ? 50 : (minutesLeft >= 70 ? 50 : minutesLeft);
+                var pending = Math.max(0, remaining[chosen.id] || 0);
+                var minutes = pending > 0 ? Math.min(minutesLeft, Math.max(25, pending), target) : Math.min(minutesLeft, target);
+                if (minutes < 25) break;
+                var sessionOfDay = perExamSessions[chosen.id] || 0;
+                if (hasUnit) {
+                  /* if the exam has material, EVERY block references literal
+                     content: first pass studies each unit, later passes cycle
+                     the same units through recuerdo activo and práctica */
+                  var cursor = materialCursor[chosen.id] || 0;
+                  var unitIndex = cursor % units.length;
+                  var passNum = Math.floor(cursor / units.length);
+                  day.blocks.push(materialBlockFor(chosen, units[unitIndex], Math.round(minutes), day.dateObj, blockIndex++, unitIndex, passNum));
+                  materialCursor[chosen.id] = cursor + 1;
+                } else {
+                  var block = planBlockFor(chosen, Math.round(minutes), day.dateObj, blockIndex++, sessionOfDay);
+                  block.exam_id = chosen.id;
+                  block.material_based = false;
+                  day.blocks.push(block);
+                }
+                remaining[chosen.id] = Math.max(0, remaining[chosen.id] - minutes);
+                perExamMinutes[chosen.id] = (perExamMinutes[chosen.id] || 0) + minutes;
+                perExamSessions[chosen.id] = sessionOfDay + 1;
+                lastExamId = chosen.id;
+                minutesLeft -= minutes;
+              }
+              if (!day.blocks.length && minutesLeft >= 25) {
+                /* nothing urgent scheduled: review REAL material if any exam has
+                   units, instead of inventing a generic block */
+                var reviewExam = state.exams.filter(function(e){
+                  var ed = parseISO(e.exam_date);
+                  return ed && ed >= day.dateObj && (state.materialUnits[e.id] || []).length > 0;
+                }).sort(function(a,b){ return priorityForExam(b, day.dateObj) - priorityForExam(a, day.dateObj); })[0];
+                if (reviewExam) {
+                  var rUnits = state.materialUnits[reviewExam.id];
+                  var rCursor = materialCursor[reviewExam.id] || 0;
+                  day.blocks.push(materialBlockFor(
+                    reviewExam, rUnits[rCursor % rUnits.length], Math.min(50, minutesLeft),
+                    day.dateObj, 0, rCursor % rUnits.length, Math.max(1, Math.floor(rCursor / rUnits.length))
+                  ));
+                  materialCursor[reviewExam.id] = rCursor + 1;
+                } else if (state.courses.length) {
+                  var course = state.courses[day.index % state.courses.length];
+                  day.blocks.push({
+                    course_id: course.id,
+                    course: course.name,
+                    exam: 'Estudio general',
+                    minutes: Math.min(45, minutesLeft),
+                    title: course.name + ' · repaso de la semana',
+                    phase: 'repaso',
+                    copy: 'Repasa lo visto esta semana en ' + course.name + '. Sube los PDF o apuntes de tus pruebas en Mis cursos y este bloque se convertirá en materia literal paso a paso.',
+                    date: day.date,
+                    index: 0
+                  });
+                }
+              }
+            });
+            state.plan = { generated_at: new Date().toISOString(), week_start: days[0] ? days[0].date : iso(state.today), week_offset: state.weekOffset, days: days.map(function(d){ return {date:d.date, hours:d.hours, blocks:d.blocks}; }), exams: activeExams };
+            if (state.weekOffset === 0) state.selectedIndex = (state.today.getDay()+6)%7;
+            return state.plan;
+          }
+          function getPriorities(){
+            return state.exams.map(function(e){
+              return Object.assign({}, e, { score: priorityForExam(e, state.today), days: Math.max(0, diffDays(state.today, parseISO(e.exam_date))) });
+            }).sort(function(a,b){ return b.score - a.score; });
+          }
+          function renderAvailability(){
+            var el = document.getElementById('planner-availability-grid');
+            el.innerHTML = state.availability.map(function(a, i){
+              return '<label class="planner-av-card"><span class="planner-av-day">' + dayNames[i] + '</span><input type="number" min="0" max="16" step="0.5" value="' + esc(a.available_hours) + '" data-day="' + i + '"><small>horas disponibles</small></label>';
+            }).join('');
+            el.querySelectorAll('input').forEach(function(input){
+              input.addEventListener('input', function(){
+                var day = Number(input.dataset.day);
+                state.availability[day].available_hours = Number(input.value || 0);
+                runPlannerGenerate(false);
+              });
+            });
+          }
+          function renderPriorities(){
+            var list = document.getElementById('planner-priority-list');
+            var priorities = getPriorities().slice(0,4);
+            if (!priorities.length) {
+              list.innerHTML = '<div class="planner-empty">Agrega pruebas con fecha y ponderación en Mis cursos para generar prioridades reales.</div>';
+              return;
+            }
+            list.innerHTML = priorities.map(function(e, i){
+              var quiz = e.quiz_stats || {};
+              var quizNote = Number(quiz.attempts || 0) > 0 ? ' · quiz ' + Number(quiz.best_score || 0) + '%' : '';
+              var materialNote = e.has_material ? ' · material adjunto' : '';
+              return '<div class="planner-priority-item"><div class="planner-rank">' + (i+1) + '</div><div><div class="planner-priority-title">' + esc(e.course_name) + '</div><div class="planner-priority-meta">' + esc(e.name) + ' · ' + e.days + ' días · ' + (e.weight_pct || 0) + '%' + quizNote + materialNote + '</div></div><div class="planner-priority-score" title="' + riskLabel(e.score) + '">' + e.score + '</div></div>';
+            }).join('');
+          }
+          function renderStats(){
+            var totalHours = state.availability.reduce(function(sum,a){ return sum + Number(a.available_hours || 0); }, 0);
+            var blockCount = state.plan ? state.plan.days.reduce(function(sum,d){ return sum + d.blocks.length; }, 0) : 0;
+            var top = getPriorities()[0];
+            document.getElementById('planner-total-hours').textContent = totalHours.toFixed(totalHours % 1 ? 1 : 0) + ' h';
+            document.getElementById('planner-blocks-count').textContent = blockCount;
+            document.getElementById('planner-exams-count').textContent = state.exams.length;
+            document.getElementById('planner-top-course').textContent = top ? (top.course_code || top.course_name).slice(0,14) : '-';
+            document.getElementById('planner-next-action').textContent = top ? (top.course_name + ': ' + top.name + ' en ' + top.days + ' días') : 'Agrega una prueba para activar el plan';
+          }
+          function renderDays(){
+            var list = document.getElementById('planner-day-list');
+            var days = state.plan.days;
+            list.innerHTML = days.map(function(d, i){
+              var date = parseISO(d.date);
+              var label = fmtDate(date);
+              var meta = d.hours + ' h · ' + d.blocks.length + ' bloques';
+              return '<button type="button" class="planner-day-btn ' + (i === state.selectedIndex ? 'active' : '') + '" data-day="' + i + '"><span class="planner-day-num">' + (i+1) + '</span><span><span class="planner-day-name">' + label + '</span><span class="planner-day-meta">' + meta + '</span></span></button>';
+            }).join('');
+            list.querySelectorAll('.planner-day-btn').forEach(function(btn){
+              btn.addEventListener('click', function(){
+                state.selectedIndex = Number(btn.dataset.day || 0);
+                renderDays();
+                renderSelectedDay();
+              });
+            });
+          }
+          function renderSelectedDay(){
+            var day = state.plan.days[state.selectedIndex];
+            var date = parseISO(day.date);
+            document.getElementById('planner-selected-kicker').textContent = (state.weekOffset === 0 && state.selectedIndex === ((state.today.getDay()+6)%7)) ? 'Hoy' : 'Día ' + (state.selectedIndex + 1);
+            document.getElementById('planner-selected-title').textContent = fmtDate(date);
+            document.getElementById('planner-selected-sub').textContent = day.hours + ' horas disponibles · ruta ajustada por prioridad.';
+            var doneCount = day.blocks.filter(function(b){ return isBlockDone(b); }).length;
+            document.getElementById('planner-day-progress').textContent = doneCount + '/' + day.blocks.length + ' bloques';
+            var blocks = document.getElementById('planner-blocks');
+            if (!day.blocks.length) {
+              blocks.innerHTML = '<div class="planner-empty">Sin horas disponibles este dia. Sube la disponibilidad si quieres que MachReach agregue bloques.</div>';
+              return;
+            }
+            blocks.innerHTML = day.blocks.map(function(b){
+              var done = isBlockDone(b);
+              var tags = (b.tags || []).map(function(t){ return '<span class="planner-tag">' + esc(t) + '</span>'; }).join('');
+              var tools = b.material_based
+                ? '<button type="button" data-tool="quiz" data-date="' + esc(b.date) + '" data-index="' + b.index + '">Quiz de este bloque</button><button type="button" data-tool="flashcards" data-date="' + esc(b.date) + '" data-index="' + b.index + '">Tarjetas de este bloque</button>'
+                : '<a href="/student/focus">Estudiar</a><a href="/student/courses">Ver prueba</a>';
+              tools = '<button type="button" class="planner-detail-btn" data-detail-date="' + esc(b.date) + '" data-detail-index="' + b.index + '">Ver detalle</button><button type="button" data-done-toggle data-date="' + esc(b.date) + '" data-index="' + b.index + '">' + (done ? 'Hecho' : 'Marcar hecho') + '</button>' + tools;
+              return '<article class="planner-block' + (done ? ' done' : '') + '"><div class="planner-block-top"><span class="planner-time">' + b.minutes + ' min</span><span class="planner-course-chip">' + esc(b.phase) + '</span></div><div class="planner-block-title">' + esc(b.title) + '</div><div class="planner-block-copy">' + esc(b.copy) + '</div>' + (tags ? '<div class="planner-tags">' + tags + '</div>' : '') + '<div class="planner-block-actions">' + tools + '</div></article>';
+            }).join('');
+            blocks.querySelectorAll('button[data-tool]').forEach(function(btn){
+              btn.addEventListener('click', function(){ runPlannerBlockTool(btn); });
+            });
+            blocks.querySelectorAll('button[data-detail-date]').forEach(function(btn){
+              btn.addEventListener('click', function(){ openPlannerDrawer(findBlock(btn.dataset.detailDate, btn.dataset.detailIndex)); });
+            });
+            blocks.querySelectorAll('button[data-done-toggle]').forEach(function(btn){
+              btn.addEventListener('click', function(){ togglePlannerDone(btn); });
+            });
+          }
+          function findBlock(date, index){
+            if (!state.plan) return null;
+            for (var i=0; i<state.plan.days.length; i++) {
+              var d = state.plan.days[i];
+              if (d.date !== date) continue;
+              for (var j=0; j<d.blocks.length; j++) {
+                if (Number(d.blocks[j].index) === Number(index)) return d.blocks[j];
+              }
+            }
+            return null;
+          }
+          function openPlannerDrawer(block){
+            if (!block) return;
+            var drawer = document.getElementById('planner-detail-drawer');
+            document.getElementById('planner-drawer-title').textContent = block.title || 'Bloque';
+            document.getElementById('planner-drawer-meta').innerHTML = '<span>' + esc(block.course || '') + '</span><span>' + esc(block.exam || '') + '</span><span>' + esc(block.minutes || 0) + ' min</span>';
+            document.getElementById('planner-drawer-detail').textContent = block.detail || block.copy || '';
+            var steps = block.steps || [];
+            document.getElementById('planner-drawer-steps').innerHTML = steps.length ? steps.map(function(s){ return '<div class="planner-step">' + esc(s) + '</div>'; }).join('') : '';
+            document.getElementById('planner-drawer-source').textContent = (block.source_name || 'Plan MachReach') + (block.page_hint ? ' - ' + block.page_hint : '');
+            document.getElementById('planner-drawer-excerpt').textContent = block.source_excerpt || 'Este bloque no tiene extracto literal adjunto. Sube PDFs o apuntes a la prueba para obtener referencias exactas.';
+            drawer.classList.add('open');
+            drawer.setAttribute('aria-hidden','false');
+          }
+          function closePlannerDrawer(){
+            var drawer = document.getElementById('planner-detail-drawer');
+            if (!drawer) return;
+            drawer.classList.remove('open');
+            drawer.setAttribute('aria-hidden','true');
+          }
+          async function togglePlannerDone(btn){
+            var block = findBlock(btn.dataset.date, btn.dataset.index);
+            if (!block) return;
+            var done = !isBlockDone(block);
+            btn.disabled = true;
+            var headers = {'Content-Type':'application/json'};
+            var csrf = document.querySelector('meta[name="csrf-token"]');
+            if (csrf) headers['X-CSRFToken'] = csrf.content;
+            try {
+              var r = await fetch('/api/student/planner/block-done', {
+                method:'POST',
+                headers:headers,
+                body:JSON.stringify({
+                  date:block.date,
+                  exam_id:block.exam_id || 0,
+                  unit_index:block.material_based ? block.unit_index : -1,
+                  title:block.title || '',
+                  phase:block.phase || '',
+                  minutes:block.minutes || 0,
+                  done:done
+                })
+              });
+              var d = await r.json();
+              if (!r.ok) throw new Error(d.error || 'No se pudo guardar.');
+              var keyObj = {date:block.date, exam_id:block.exam_id || 0, unit_index:block.material_based ? block.unit_index : -1, title:block.title || '', phase:block.phase || '', minutes:block.minutes || 0};
+              var key = doneKeyOf(keyObj);
+              state.doneBlocks = state.doneBlocks.filter(function(x){ return doneKeyOf(x) !== key; });
+              if (done) state.doneBlocks.push(keyObj);
+              runPlannerGenerate(false);
+              document.getElementById('planner-save-state').textContent = done ? 'Bloque marcado como hecho. Regenerando el resto de la semana.' : 'Bloque vuelto a pendiente.';
+            } catch(e) {
+              btn.disabled = false;
+              document.getElementById('planner-save-state').textContent = e.message || 'No se pudo guardar.';
+            }
+          }
+          async function runPlannerBlockTool(btn){
+            var block = findBlock(btn.dataset.date, btn.dataset.index);
+            if (!block || !block.material_based) return;
+            var original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Generando...';
+            var headers = {'Content-Type':'application/json'};
+            var csrf = document.querySelector('meta[name="csrf-token"]');
+            if (csrf) headers['X-CSRFToken'] = csrf.content;
+            try {
+              var r = await fetch('/api/student/planner/block-tool', {
+                method:'POST',
+                headers:headers,
+                body:JSON.stringify({
+                  tool: btn.dataset.tool,
+                  course_id: block.course_id,
+                  exam_id: block.exam_id,
+                  block_title: block.title,
+                  source_text: block.source_excerpt || ''
+                })
+              });
+              var d = await r.json();
+              if (!r.ok) throw new Error(d.error || 'No se pudo generar.');
+              btn.textContent = d.type === 'quiz' ? 'Abrir quiz' : 'Abrir tarjetas';
+              btn.onclick = function(){ window.location = d.url; };
+              btn.disabled = false;
+            } catch(e) {
+              btn.disabled = false;
+              btn.textContent = original;
+              document.getElementById('planner-save-state').textContent = e.message || 'No se pudo generar.';
+            }
+          }
+          function runPlannerGenerate(showState){
+            generatePlan();
+            renderPriorities();
+            renderStats();
+            renderDays();
+            renderSelectedDay();
+            if (showState) document.getElementById('planner-save-state').textContent = 'Plan regenerado con tu disponibilidad actual.';
+          }
+          async function runPlannerSaveAvailability(){
+            var btnState = document.getElementById('planner-save-state');
+            btnState.textContent = 'Guardando disponibilidad...';
+            var headers = {'Content-Type':'application/json'};
+            var csrf = document.querySelector('meta[name="csrf-token"]');
+            if (csrf) headers['X-CSRFToken'] = csrf.content;
+            try {
+              var r = await fetch('/api/student/planner/availability', {method:'POST', headers:headers, body:JSON.stringify({settings:state.availability})});
+              var d = await r.json();
+              if (!r.ok) throw new Error(d.error || 'No se pudo guardar.');
+              btnState.textContent = 'Disponibilidad guardada.';
+            } catch(e) { btnState.textContent = e.message || 'No se pudo guardar.'; }
+          }
+          async function runPlannerSavePlan(){
+            if (!state.plan) runPlannerGenerate(false);
+            var btnState = document.getElementById('planner-save-state');
+            btnState.textContent = 'Guardando plan...';
+            var headers = {'Content-Type':'application/json'};
+            var csrf = document.querySelector('meta[name="csrf-token"]');
+            if (csrf) headers['X-CSRFToken'] = csrf.content;
+            try {
+              var r = await fetch('/api/student/planner/save', {method:'POST', headers:headers, body:JSON.stringify({plan:state.plan, preferences:{availability:state.availability}})});
+              var d = await r.json();
+              if (!r.ok) throw new Error(d.error || 'No se pudo guardar.');
+              btnState.textContent = 'Plan guardado #' + d.plan_id + '.';
+            } catch(e) { btnState.textContent = e.message || 'No se pudo guardar.'; }
+          }
+          async function loadPlannerMaterialUnits(){
+            var materialExams = state.exams.filter(function(e){ return e.has_material && !state.materialUnits[e.id] && !state.materialLoading[e.id]; });
+            if (!materialExams.length) return;
+            var status = document.getElementById('planner-save-state');
+            status.textContent = 'Leyendo material adjunto para dividirlo en bloques...';
+            var headers = {'Content-Type':'application/json'};
+            var csrf = document.querySelector('meta[name="csrf-token"]');
+            if (csrf) headers['X-CSRFToken'] = csrf.content;
+            for (var i=0; i<materialExams.length; i++) {
+              var exam = materialExams[i];
+              state.materialLoading[exam.id] = true;
+              try {
+                var target = Math.max(4, Math.min(12, Math.ceil(Number(exam.material_chars || 0) / 6500)));
+                var r = await fetch('/api/student/planner/material-blocks', {
+                  method:'POST',
+                  headers:headers,
+                  body:JSON.stringify({course_id: exam.course_id, exam_id: exam.id, target_units: target})
+                });
+                var d = await r.json();
+                if (r.ok && d.units) {
+                  state.materialUnits[exam.id] = d.units;
+                  status.textContent = 'Material dividido: ' + d.units.length + ' bloques para ' + exam.name + '.';
+                  runPlannerGenerate(false);
+                }
+              } catch(e) {
+                status.textContent = 'No se pudo leer un material adjunto. El plan base sigue disponible.';
+              }
+            }
+          }
+          window.plannerGenerate = runPlannerGenerate;
+          window.plannerSaveAvailability = runPlannerSaveAvailability;
+          window.plannerSavePlan = runPlannerSavePlan;
+          normalizeAvailability();
+          var saveAvailabilityBtn = document.getElementById('planner-save-availability');
+          var generateBtn = document.getElementById('planner-generate');
+          var savePlanBtn = document.getElementById('planner-save-plan');
+          var prevWeekBtn = document.getElementById('planner-prev-week');
+          var currentWeekBtn = document.getElementById('planner-current-week');
+          var nextWeekBtn = document.getElementById('planner-next-week');
+          if (saveAvailabilityBtn) saveAvailabilityBtn.addEventListener('click', runPlannerSaveAvailability);
+          if (generateBtn) generateBtn.addEventListener('click', function(){ runPlannerGenerate(true); });
+          if (savePlanBtn) savePlanBtn.addEventListener('click', runPlannerSavePlan);
+          if (prevWeekBtn) prevWeekBtn.addEventListener('click', function(){ state.weekOffset -= 1; state.selectedIndex = 0; runPlannerGenerate(true); });
+          if (currentWeekBtn) currentWeekBtn.addEventListener('click', function(){ state.weekOffset = 0; state.selectedIndex = (state.today.getDay()+6)%7; runPlannerGenerate(true); });
+          if (nextWeekBtn) nextWeekBtn.addEventListener('click', function(){ state.weekOffset += 1; state.selectedIndex = 0; runPlannerGenerate(true); });
+          document.querySelectorAll('[data-close-drawer]').forEach(function(el){ el.addEventListener('click', closePlannerDrawer); });
+          renderAvailability();
+          runPlannerGenerate(false);
+          loadPlannerMaterialUnits();
+        })();
+        </script>
+        """.replace("__INITIAL_JSON__", _esc(initial_json))
+        return _s_render("Plan", content, active_page="student_planner")
+
+
+    @app.route("/api/student/reviews", methods=["GET"])
+    def student_reviews_api():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        is_plus = _student_is_plus()
+        rows = sdb.search_course_reviews(
+            query=request.args.get("q", ""),
+            university=request.args.get("university", ""),
+            major=request.args.get("major", ""),
+        )
+        out = []
+        for r in rows:
+            d = dict(r)
+            item = {
+                "id": int(d.get("id") or 0),
+                "course_name": d.get("course_name") or "",
+                "course_code": d.get("course_code") or "",
+                "university": d.get("university") or "",
+                "major": d.get("major") or "",
+                "difficulty_rating": int(d.get("difficulty_rating") or 0),
+                "quality_rating": int(d.get("quality_rating") or 0),
+                "review_text": d.get("review_text") or "",
+                "created_at": str(d.get("created_at") or "")[:10],
+                "anonymous": True,
+            }
+            if is_plus:
+                item["final_grade"] = d.get("final_grade")
+                item["total_hours"] = int(d.get("total_hours") or 0)
+            out.append(item)
+        return jsonify({"reviews": out, "is_plus": is_plus})
+
+
+    @app.route("/api/student/reviews", methods=["POST"])
+    def student_reviews_post_api():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        data = request.get_json(silent=True) or {}
+        try:
+            course_id = int(data.get("course_id") or 0)
+        except Exception:
+            course_id = 0
+        course = sdb.get_course(course_id)
+        if not course or int(course.get("client_id") or 0) != _cid():
+            return jsonify({"error": "course not found"}), 404
+        outcome = sdb.get_course_outcome(_cid(), course_id)
+        if not outcome:
+            return jsonify({"error": "Guarda tu resultado final antes de subir una review."}), 409
+        try:
+            difficulty = int(data.get("difficulty_rating") or 0)
+            quality = int(data.get("quality_rating") or 0)
+        except Exception:
+            return jsonify({"error": "ratings required"}), 400
+        if difficulty < 1 or quality < 1:
+            return jsonify({"error": "ratings required"}), 400
+        try:
+            from outreach.db import get_client
+            client = get_client(_cid()) or {}
+            prefs = client.get("mail_preferences") or {}
+            if isinstance(prefs, str):
+                prefs = json.loads(prefs or "{}")
+        except Exception:
+            prefs = {}
+        total_hours = int(round((outcome.get("total_focus_minutes") or 0) / 60))
+        review_id = sdb.upsert_course_review(
+            _cid(),
+            course_id,
+            (prefs.get("university") or prefs.get("student_university") or "").strip(),
+            (prefs.get("field_of_study") or prefs.get("major") or "").strip(),
+            course.get("name") or "Curso",
+            course.get("code") or "",
+            difficulty,
+            quality,
+            data.get("review_text") or "",
+            outcome.get("final_grade"),
+            total_hours,
+        )
+        return jsonify({"ok": True, "id": review_id})
+
+
+    @app.route("/student/reviews")
+    def student_reviews_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        cid = _cid()
+        is_plus = _student_is_plus()
+        courses = []
+        time_by_course = {int(r.get("course_id") or 0): int(r.get("minutes") or 0) for r in (sdb.get_time_per_course(cid) or [])}
+        for c in sdb.get_courses(cid) or []:
+            d = dict(c)
+            outcome = sdb.get_course_outcome(cid, int(d.get("id") or 0))
+            if outcome:
+                courses.append({
+                    "id": int(d.get("id") or 0),
+                    "name": d.get("name") or "Curso",
+                    "code": d.get("code") or "",
+                    "final_grade": outcome.get("final_grade"),
+                    "hours": int(round(time_by_course.get(int(d.get("id") or 0), 0) / 60)),
+                })
+        initial = json.dumps({"courses": courses, "is_plus": is_plus}, ensure_ascii=False).replace("</", "<\\/")
+        content = r"""
+        <section id="reviews-app" class="reviews-wrap" data-initial='__INITIAL_REVIEWS__'>
+          <header class="reviews-hero">
+            <div>
+              <div class="reviews-kicker">REVIEWS ANONIMAS</div>
+              <h1>Busca ramos antes de tomarlos.</h1>
+              <p>Explora dificultad y calidad por universidad/carrera. Las reviews son anonimas; nota final y horas estudiadas solo aparecen para usuarios Plus.</p>
+            </div>
+            <button id="review-open-submit" class="reviews-primary" type="button">Subir review</button>
+          </header>
+          <section class="reviews-filters">
+            <input id="review-q" placeholder="Buscar ramo, codigo o profesor">
+            <input id="review-u" placeholder="Universidad">
+            <input id="review-m" placeholder="Carrera">
+            <button id="review-search" type="button">Buscar</button>
+          </section>
+          <section id="reviews-results" class="reviews-results"></section>
+          <dialog id="review-dialog" class="review-dialog">
+            <form method="dialog">
+              <div class="review-dialog-head">
+                <div>
+                  <div class="reviews-kicker">PUBLICAR ANONIMO</div>
+                  <h2>Review de ramo completado</h2>
+                </div>
+                <button value="cancel" type="submit">×</button>
+              </div>
+            </form>
+            <div class="review-form">
+              <label>Ramo completado<select id="review-course"></select></label>
+              <label>Dificultad<select id="review-difficulty"><option value="5">5 - Muy dificil</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1 - Facil</option></select></label>
+              <label>Calidad<select id="review-quality"><option value="5">5 - Excelente</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1 - Mala</option></select></label>
+              <label class="full">Comentario<textarea id="review-text" rows="4" maxlength="1800" placeholder="Que deberia saber alguien antes de tomar este ramo?"></textarea></label>
+              <button id="review-submit" class="reviews-primary" type="button">Publicar anonimamente</button>
+              <span id="review-state"></span>
+            </div>
+          </dialog>
+        </section>
+        <style>
+          .reviews-wrap { display:grid; gap:18px; }
+          .reviews-hero { display:flex; justify-content:space-between; align-items:end; gap:18px; border:2px solid #1A1A1F; border-radius:22px; background:linear-gradient(135deg,#FFF8E8,#FFE2D2); box-shadow:0 5px 0 #1A1A1F; padding:30px; }
+          .reviews-kicker { color:#FF7A3D; font-size:11px; font-weight:950; letter-spacing:.13em; text-transform:uppercase; }
+          .reviews-hero h1 { margin:8px 0 10px; font-family:'Bricolage Grotesque',sans-serif; font-size:clamp(42px,5vw,68px); line-height:.9; color:#1A1A1F; }
+          .reviews-hero p { margin:0; max-width:760px; color:#5C5C66; font-weight:800; line-height:1.5; }
+          .reviews-primary,.reviews-filters button { min-height:42px; border:2px solid #1A1A1F; border-radius:13px; background:#FF7A3D; color:#fff; box-shadow:0 4px 0 #1A1A1F; padding:0 16px; font-weight:950; cursor:pointer; white-space:nowrap; }
+          .reviews-filters { display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:10px; border:2px solid #1A1A1F; border-radius:18px; background:#FFFDF8; padding:14px; box-shadow:0 4px 0 #1A1A1F; }
+          .reviews-filters input,.review-form input,.review-form select,.review-form textarea { min-height:40px; border:2px solid #1A1A1F; border-radius:12px; background:#fff; color:#1A1A1F; padding:8px 10px; font:inherit; font-weight:800; }
+          .reviews-results { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+          .review-card { border:2px solid #1A1A1F; border-radius:18px; background:#FFFDF8; box-shadow:0 4px 0 #1A1A1F; padding:16px; display:grid; gap:10px; }
+          .review-card h3 { margin:0; font-family:'Bricolage Grotesque',sans-serif; font-size:24px; line-height:1; color:#1A1A1F; }
+          .review-meta { color:#7D7A82; font-size:12px; font-weight:900; }
+          .review-ratings { display:flex; gap:8px; flex-wrap:wrap; }
+          .review-pill { border:1px solid #FFD0B5; border-radius:999px; background:#FFF1E6; color:#9A3B12; padding:6px 9px; font-size:12px; font-weight:950; }
+          .review-card p { margin:0; color:#5C5C66; font-weight:750; line-height:1.45; }
+          .review-plus-data { border-top:1px dashed #E2DCCC; padding-top:8px; color:#1A1A1F; font-weight:950; }
+          .review-dialog { border:2px solid #1A1A1F; border-radius:20px; padding:0; width:min(680px,calc(100% - 24px)); box-shadow:0 18px 80px rgba(0,0,0,.24); background:#FFFDF8; color:#1A1A1F; }
+          .review-dialog::backdrop { background:rgba(10,10,12,.55); }
+          .review-dialog-head { display:flex; justify-content:space-between; padding:18px; border-bottom:1px solid #E2DCCC; }
+          .review-dialog-head h2 { margin:4px 0 0; font-family:'Bricolage Grotesque',sans-serif; font-size:30px; }
+          .review-dialog-head button { border:0; background:transparent; font-size:26px; cursor:pointer; }
+          .review-form { padding:18px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+          .review-form label { display:grid; gap:6px; font-size:11px; font-weight:950; text-transform:uppercase; color:#7D7A82; }
+          .review-form .full { grid-column:1/-1; }
+          #review-state { align-self:center; color:#7D7A82; font-weight:850; }
+          :root[data-theme="dark"] .reviews-hero,:root[data-theme="dark"] .reviews-filters,:root[data-theme="dark"] .review-card,:root[data-theme="dark"] .review-dialog { background:#14151A; border-color:#FF7A3D; box-shadow:0 4px 0 #FF7A3D; }
+          :root[data-theme="dark"] .reviews-hero h1,:root[data-theme="dark"] .review-card h3,:root[data-theme="dark"] .review-plus-data,:root[data-theme="dark"] .review-dialog { color:#FFF8E8; }
+          :root[data-theme="dark"] .reviews-hero p,:root[data-theme="dark"] .review-card p { color:#D9D2C3; }
+          :root[data-theme="dark"] .reviews-filters input,:root[data-theme="dark"] .review-form select,:root[data-theme="dark"] .review-form textarea { background:#0B0B10; color:#FFF8E8; border-color:#FF7A3D; }
+          @media (max-width:950px){ .reviews-results,.reviews-filters,.review-form { grid-template-columns:1fr; } .reviews-hero { flex-direction:column; align-items:flex-start; } }
+        </style>
+        <script>
+        (function(){
+          var root = document.getElementById('reviews-app');
+          var initial = JSON.parse(root.getAttribute('data-initial') || '{}');
+          var courses = initial.courses || [];
+          var isPlus = !!initial.is_plus;
+          function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+          function stars(n){ n=Number(n||0); return '★★★★★'.slice(0,n) + '☆☆☆☆☆'.slice(0,5-n); }
+          function renderReviews(rows){
+            var box=document.getElementById('reviews-results');
+            if(!rows.length){ box.innerHTML='<div class="review-card"><h3>Sin reviews todavía</h3><p>Prueba otra búsqueda o sube la primera review cuando termines un ramo.</p></div>'; return; }
+            box.innerHTML=rows.map(function(r){
+              var plus = isPlus ? '<div class="review-plus-data">Nota: '+esc(r.final_grade || '—')+' · Horas: '+esc(r.total_hours || 0)+'h</div>' : '<div class="review-plus-data">Nota y horas: solo Plus</div>';
+              return '<article class="review-card"><div class="review-meta">Anónimo · '+esc(r.university||'U no especificada')+' · '+esc(r.major||'Carrera no especificada')+'</div><h3>'+esc(r.course_name)+'</h3><div class="review-meta">'+esc(r.course_code||'')+'</div><div class="review-ratings"><span class="review-pill">Dificultad '+stars(r.difficulty_rating)+'</span><span class="review-pill">Calidad '+stars(r.quality_rating)+'</span></div><p>'+esc(r.review_text||'Sin comentario.')+'</p>'+plus+'</article>';
+            }).join('');
+          }
+          async function loadReviews(){
+            var params = new URLSearchParams({q:document.getElementById('review-q').value||'', university:document.getElementById('review-u').value||'', major:document.getElementById('review-m').value||''});
+            var d = await fetch('/api/student/reviews?'+params.toString()).then(r=>r.json());
+            renderReviews(d.reviews || []);
+          }
+          function initSubmit(){
+            var sel=document.getElementById('review-course');
+            sel.innerHTML = courses.length ? courses.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+' '+esc(c.code||'')+'</option>';}).join('') : '<option value="">Guarda un resultado primero</option>';
+            document.getElementById('review-open-submit').addEventListener('click', function(){ document.getElementById('review-dialog').showModal(); });
+            document.getElementById('review-submit').addEventListener('click', async function(){
+              var st=document.getElementById('review-state'); st.textContent='Publicando...';
+              var headers={'Content-Type':'application/json'}; var csrf=document.querySelector('meta[name="csrf-token"]'); if(csrf) headers['X-CSRFToken']=csrf.content;
+              try{
+                var r=await fetch('/api/student/reviews',{method:'POST',headers:headers,body:JSON.stringify({course_id:sel.value,difficulty_rating:document.getElementById('review-difficulty').value,quality_rating:document.getElementById('review-quality').value,review_text:document.getElementById('review-text').value})});
+                var d=await r.json(); if(!r.ok) throw new Error(d.error||'No se pudo publicar.');
+                st.textContent='Review publicada.'; await loadReviews();
+              }catch(e){ st.textContent=e.message||'No se pudo publicar.'; }
+            });
+          }
+          document.getElementById('review-search').addEventListener('click', loadReviews);
+          initSubmit(); loadReviews();
+        })();
+        </script>
+        """.replace("__INITIAL_REVIEWS__", _esc(initial))
+        return _s_render("Reviews", content, active_page="student_reviews")
+
+
     @app.route("/student/invite")
     def student_invite_page():
         """Referral page: share your code, earn a free week of Plus per friend."""
@@ -3998,6 +5744,7 @@ def register_student_routes(app, csrf, limiter):
             pass
 
         plan_row = sdb.get_latest_plan(cid)
+        _dash_is_plus = _student_is_plus(cid)
 
 
 
@@ -4898,11 +6645,23 @@ def register_student_routes(app, csrf, limiter):
                 '</div>'
             )
 
+        if _dash_is_plus and not today_plan:
+            _today_rows_html = (
+                '<div class="mr-empty">'
+                '  <span class="icon">MR</span>'
+                '  <div class="mr-empty-title">Tu plan de hoy vive en Plan.</div>'
+                '  <div class="mr-empty-copy">Genera o actualiza tu semana para que MachReach priorice tus pruebas, pesos y disponibilidad.</div>'
+                '  <div class="mr-empty-actions"><a class="cta" href="/student/planner">Ir a ver el plan</a></div>'
+                '</div>'
+            )
+
+        _plan_link_href = "/student/planner" if _dash_is_plus else "/student/focus"
+        _plan_link_text = "Ir a ver el plan" if _dash_is_plus else "Ir a enfoque"
         _mr_today_card = (
             '<section class="mr-card mr-pop-2">'
             '  <div class="mr-card-h">'
             '    <div class="mr-card-title">🎯 Plan de hoy</div>'
-            '    <a class="mr-card-link" href="/student/focus">Ir a enfoque →</a>'
+            f'    <a class="mr-card-link" href="{_plan_link_href}">{_plan_link_text} &rarr;</a>'
             '  </div>'
             f' <div class="mr-sched-list">{_today_rows_html}</div>'
             '</section>'
@@ -5270,6 +7029,7 @@ def register_student_routes(app, csrf, limiter):
         # Courses are populated by the MachReach extension (Canvas sync). The
         # list just reflects whatever has been imported.
         courses = sdb.get_courses(_cid())
+        _courses_plus = _student_is_plus()
 
         rows = ""
 
@@ -5370,6 +7130,40 @@ def register_student_routes(app, csrf, limiter):
                 _outcome_notice = '<div class="ccard-outcome-pending">Resultado pendiente: registra tu nota final para poder avanzar de semestre.</div>'
             elif _outcome:
                 _outcome_notice = f'<div class="ccard-outcome-done">Resultado guardado: {"aprobado" if _outcome.get("passed") else "no aprobado"} · nota {float(_outcome.get("final_grade") or 0):.2f}</div>'
+            if _courses_plus:
+                _brain_panel = f"""
+                <section class="course-brain" id="brain-{_course_id}">
+                  <div class="brain-top">
+                    <div>
+                      <div class="brain-kicker">PLUS · Course Brain</div>
+                      <div class="brain-title">Studio del ramo</div>
+                    </div>
+                    <span class="brain-badge">fuentes + pruebas + progreso</span>
+                  </div>
+                  <div class="brain-actions">
+                    <button type="button" class="brain-btn" onclick="runCourseAI({_course_id}, 'brain', this)">Course Brain</button>
+                    <button type="button" class="brain-btn" onclick="runCourseAI({_course_id}, 'studio', this)">Study Studio</button>
+                    <button type="button" class="brain-btn hot" onclick="runCourseAI({_course_id}, 'exam', this)">Próxima prueba</button>
+                  </div>
+                  <div class="brain-output" id="brain-output-{_course_id}">
+                    Elige una herramienta para generar un resumen, guía, mapa mental o plan de prueba desde este ramo.
+                  </div>
+                </section>
+                """
+            else:
+                _brain_panel = """
+                <section class="course-brain locked">
+                  <div class="brain-top">
+                    <div>
+                      <div class="brain-kicker">PLUS · Course Brain</div>
+                      <div class="brain-title">Studio del ramo</div>
+                    </div>
+                    <span class="brain-badge">bloqueado</span>
+                  </div>
+                  <p class="brain-lock-copy">PLUS convierte tus cursos, evaluaciones, quizzes y apuntes en una guía tipo NotebookLM orientada a tu próxima prueba.</p>
+                  <a class="brain-upgrade" href="/student/shop">Desbloquear PLUS →</a>
+                </section>
+                """
             _cls = _course_classes[_i % len(_course_classes)]
             course_cards_html += f"""
             <article class="ccard {_cls}">
@@ -5400,6 +7194,7 @@ def register_student_routes(app, csrf, limiter):
                   <button class="btn btn-outline btn-sm" onclick="saveCourseOutcome({_course_id}, this)" type="button">Guardar resultado</button>
                   <span class="course-outcome-state" id="outcome-state-{_course_id}"></span>
                 </div>
+                {_brain_panel}
                 <div id="exams-panel-{_course_id}" class="course-exams-panel">Cargando evaluaciones...</div>
               </div>
             </article>
@@ -5527,12 +7322,46 @@ def register_student_routes(app, csrf, limiter):
         .course-exams-head {{ display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px; }}
         .course-exams-title {{ display:inline-flex;align-items:center;gap:8px;color:var(--text);font-size:18px;font-weight:900;line-height:1.1; }}
         .course-exams-actions {{ display:flex;gap:8px;flex-wrap:wrap;align-items:center; }}
-        .ex-row {{ display:grid;grid-template-columns:minmax(160px,2fr) minmax(140px,1fr) 86px 38px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border); }}
+        .ex-row {{ display:grid;grid-template-columns:minmax(160px,2fr) minmax(140px,1fr) 86px 74px 38px 38px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border); }}
         .ex-input {{ min-height:38px;display:flex;align-items:center; }}
         .ex-weight {{ display:flex;align-items:center;justify-content:flex-start;gap:7px;font-weight:900;color:var(--text);line-height:1; }}
         .ex-weight input {{ width:64px;text-align:center; }}
-        .ex-delete {{ width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;border-radius:999px!important;justify-self:end;align-self:center;color:var(--red)!important;line-height:1!important;font-size:15px!important;margin:0!important;transform:none!important; }}
+        .ex-delete,.ex-attach {{ width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;border-radius:999px!important;justify-self:end;align-self:center;line-height:1!important;font-size:15px!important;margin:0!important;transform:none!important; }}
+        .ex-delete {{ color:var(--red)!important; }}
+        .ex-attach {{ color:#1A1A1F!important;border:1px solid #E2DCCC!important;background:#FBF8F0!important;position:relative; }}
+        .ex-attach::before {{ content:"Adjuntar material a esta prueba";position:absolute;right:calc(100% + 9px);top:50%;transform:translateY(-50%) translateX(4px);opacity:0;pointer-events:none;background:#1A1A1F;color:#FFF8E8;border:1px solid #1A1A1F;border-radius:10px;padding:7px 9px;font-size:11px;font-weight:900;line-height:1.2;white-space:nowrap;box-shadow:0 8px 24px rgba(20,18,30,.18);transition:opacity .16s ease,transform .16s ease;z-index:5; }}
+        .ex-attach:hover::before,.ex-attach:focus-visible::before {{ opacity:1;transform:translateY(-50%) translateX(0); }}
+        .ex-attach.has-files::after {{ content:attr(data-count);position:absolute;right:-5px;top:-6px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:#FF7A3D;color:#fff;font-size:9px;font-weight:900;display:grid;place-items:center;border:1px solid #fff; }}
+        :root[data-theme="dark"] .ex-attach {{ color:#FFF8E8!important;border-color:#FF7A3D!important;background:#0B0B10!important; }}
+        :root[data-theme="dark"] .ex-attach::before {{ background:#FFF8E8;color:#1A1A1F;border-color:#FF7A3D; }}
         @media (max-width:720px) {{ .ex-row {{ grid-template-columns:1fr; }} .ex-delete {{ justify-self:start; }} }}
+        .course-brain {{ margin:14px 0 16px;padding:14px;border:1px solid #FF7A3D;border-radius:16px;background:linear-gradient(135deg,#FFF7EC,#F8FBF4);box-shadow:0 4px 0 rgba(26,26,31,.12); }}
+        .course-brain.locked {{ border-color:#E2DCCC;background:#FBF8F0;box-shadow:none; }}
+        .brain-top {{ display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px; }}
+        .brain-kicker {{ font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
+        .brain-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;color:#1A1A1F;letter-spacing:-.02em; }}
+        .brain-badge {{ font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:1px solid #FFD0B5;color:#A14216;background:#fff;padding:5px 8px;border-radius:999px;white-space:nowrap; }}
+        .brain-actions {{ display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px; }}
+        .brain-btn,.brain-upgrade {{ min-height:34px;border:1px solid #1A1A1F;border-radius:999px;background:#fff;color:#1A1A1F;padding:0 12px;font-size:12px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 3px 0 #1A1A1F; }}
+        .brain-btn.hot {{ background:#FF7A3D;color:#fff;border-color:#1A1A1F; }}
+        .brain-btn:disabled {{ opacity:.58;cursor:wait;transform:none; }}
+        .brain-output {{ border:1px dashed #E2DCCC;border-radius:14px;background:rgba(255,255,255,.72);padding:12px;color:#5C5C66;font-size:12px;line-height:1.5;max-height:420px;overflow:auto; }}
+        .brain-output.ready {{ border-style:solid;border-color:#FFD0B5;background:#fff; }}
+        .brain-section {{ margin:0 0 12px; }}
+        .brain-section:last-child {{ margin-bottom:0; }}
+        .brain-section h4 {{ margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#FF7A3D;font-weight:900; }}
+        .brain-section ul {{ margin:0;padding-left:18px;display:grid;gap:5px; }}
+        .brain-section li {{ color:#1A1A1F; }}
+        .brain-pill-row {{ display:flex;flex-wrap:wrap;gap:6px; }}
+        .brain-pill {{ border:1px solid #E2DCCC;border-radius:999px;padding:5px 8px;background:#FBF8F0;color:#1A1A1F;font-weight:800;font-size:11px; }}
+        .brain-lock-copy {{ margin:0 0 12px;color:#5C5C66;font-size:13px;line-height:1.45; }}
+        :root[data-theme="dark"] .course-brain {{ background:#14151A;border-color:#FF7A3D;box-shadow:0 4px 0 rgba(255,122,61,.75); }}
+        :root[data-theme="dark"] .course-brain.locked {{ background:#14151A;border-color:#FF7A3D; }}
+        :root[data-theme="dark"] .brain-title,:root[data-theme="dark"] .brain-section li,:root[data-theme="dark"] .brain-pill {{ color:#FFF8E8; }}
+        :root[data-theme="dark"] .brain-badge {{ background:#0B0B10;border-color:#FF7A3D;color:#FFD0B5; }}
+        :root[data-theme="dark"] .brain-btn,:root[data-theme="dark"] .brain-upgrade {{ background:#0B0B10;color:#FFF8E8;border-color:#FF7A3D;box-shadow:0 3px 0 #FF7A3D; }}
+        :root[data-theme="dark"] .brain-output {{ background:#0B0B10;border-color:#FF7A3D;color:#D9D2C3; }}
+        :root[data-theme="dark"] .brain-pill {{ background:#17110E;border-color:#FF7A3D; }}
         .course-empty {{ grid-column:1/-1;border:2px dashed #E2DCCC;border-radius:18px;padding:32px;text-align:center;color:#94939C; }}
         .mr-modal {{ position:fixed;inset:0;background:rgba(26,26,31,.36);display:flex;align-items:center;justify-content:center;z-index:1000;padding:18px; }}
         .mr-modal-card {{ width:min(420px,100%);background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:20px;box-shadow:0 24px 80px rgba(20,18,30,.18); }}
@@ -5602,7 +7431,7 @@ def register_student_routes(app, csrf, limiter):
             if (d && d.my_outcome) {{
               if (finalInput && d.my_outcome.final_grade) finalInput.value = Number(d.my_outcome.final_grade).toFixed(2);
               if (passingInput && d.my_outcome.passing_grade) passingInput.value = Number(d.my_outcome.passing_grade).toFixed(2);
-              if (state) state.textContent = d.my_outcome.passed ? 'Guardado: aprobado' : 'Guardado: no aprobado';
+              if (state) state.innerHTML = (d.my_outcome.passed ? 'Guardado: aprobado' : 'Guardado: no aprobado') + ' · <a href="/student/reviews" style="color:var(--primary);font-weight:900;">Subir review</a>';
             }}
             if (d && d.has_data) {{
               if (d.plus_required) {{
@@ -5642,7 +7471,7 @@ def register_student_routes(app, csrf, limiter):
             if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo guardar.');
             await loadCourseBenchmark(courseId);
             var state = document.getElementById('outcome-state-' + courseId);
-            if (state) state.textContent = d.passed ? 'Guardado: aprobado' : 'Guardado: no aprobado';
+            if (state) state.innerHTML = (d.passed ? 'Guardado: aprobado' : 'Guardado: no aprobado') + ' · <a href="/student/reviews" style="color:var(--primary);font-weight:900;">Subir review</a>';
             alert(d.passed ? 'Resultado guardado: aprobado.' : 'Resultado guardado: no aprobado.');
           }} catch(e) {{
             alert(e.message || 'No se pudo guardar el resultado.');
@@ -5675,6 +7504,118 @@ def register_student_routes(app, csrf, limiter):
 
         }}
 
+        function brainList(items, mapper) {{
+          if (!items || !items.length) return '';
+          return '<ul>' + items.map(function(x){{ return '<li>' + _esc(mapper ? mapper(x) : x) + '</li>'; }}).join('') + '</ul>';
+        }}
+
+        function brainSection(title, html) {{
+          if (!html) return '';
+          return '<div class="brain-section"><h4>' + _esc(title) + '</h4>' + html + '</div>';
+        }}
+
+        function renderBrainResult(mode, data, counts) {{
+          data = data || {{}};
+          var html = '';
+          if (data.summary) html += brainSection('Resumen', '<p style="margin:0;color:inherit;">' + _esc(data.summary) + '</p>');
+          if (data.source_health) html += brainSection('Salud de fuentes', '<p style="margin:0;color:inherit;"><b>' + _esc(data.source_health.level || '') + '</b> · ' + _esc(data.source_health.reason || '') + '</p>');
+          if (data.key_concepts) html += brainSection('Conceptos clave', brainList(data.key_concepts, function(x){{ return (x.name || 'Concepto') + ': ' + (x.why_it_matters || ''); }}));
+          if (data.what_to_master) html += brainSection('Qué dominar', brainList(data.what_to_master));
+          if (data.gaps) html += brainSection('Faltantes', brainList(data.gaps));
+          if (data.recommended_next) html += brainSection('Siguiente', brainList(data.recommended_next));
+          if (data.study_guide) html += brainSection('Guía de estudio', brainList(data.study_guide, function(x){{ return (x.section || 'Sección') + ': ' + ((x.must_know || []).join(', ')) + (x.self_check ? ' · Check: ' + x.self_check : ''); }}));
+          if (data.faq) html += brainSection('FAQ', brainList(data.faq, function(x){{ return (x.q || 'Pregunta') + ' — ' + (x.a || ''); }}));
+          if (data.mind_map) html += brainSection('Mapa mental', '<div class="brain-pill-row">' + data.mind_map.map(function(x){{ return '<span class="brain-pill">' + _esc(x.node || x) + (x.children && x.children.length ? ' → ' + _esc(x.children.slice(0,3).join(', ')) : '') + '</span>'; }}).join('') + '</div>');
+          if (data.practice_prompts) html += brainSection('Práctica activa', brainList(data.practice_prompts));
+          if (data.next_actions) html += brainSection('Acciones', brainList(data.next_actions));
+          if (data.next_exam) html += brainSection('Próxima prueba', '<p style="margin:0;color:inherit;"><b>' + _esc(data.next_exam.name || 'Evaluación') + '</b> · ' + _esc(data.next_exam.date || 'sin fecha') + (data.next_exam.days_until != null ? ' · ' + _esc(data.next_exam.days_until) + ' días' : '') + '</p>');
+          if (data.priority_topics) html += brainSection('Prioridades', brainList(data.priority_topics, function(x){{ return (x.topic || 'Tema') + ': ' + (x.reason || ''); }}));
+          if (data.seven_day_plan) html += brainSection('Plan 7 días', brainList(data.seven_day_plan, function(x){{ return (x.day || '') + ': ' + (x.work || '') + (x.output ? ' → ' + x.output : ''); }}));
+          if (data.quiz_targets) html += brainSection('Quiz targets', brainList(data.quiz_targets));
+          if (data.focus_plan) html += brainSection('Focus recomendado', '<p style="margin:0;color:inherit;">' + _esc(data.focus_plan.sessions || 0) + ' sesiones de ' + _esc(data.focus_plan.minutes_each || 25) + ' min · ' + _esc(data.focus_plan.why || '') + '</p>');
+          if (data.risks) html += brainSection('Riesgos', brainList(data.risks));
+          var meta = counts ? '<div style="font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#94939C;margin-bottom:8px;">Contexto: ' + (counts.sources||0) + ' fuentes · ' + (counts.exams||0) + ' evaluaciones · ' + (counts.quizzes||0) + ' quizzes · ' + (counts.flashcard_decks||0) + ' mazos</div>' : '';
+          return meta + (html || '<div>No hay suficiente contexto todavía. Adjunta material con el botón 📎 de cada evaluación y vuelve a generar.</div>');
+        }}
+
+        async function runCourseAI(courseId, mode, btn) {{
+          var out = document.getElementById('brain-output-' + courseId);
+          if (!out) return;
+          var old = btn ? btn.textContent : '';
+          if (btn) {{ btn.disabled = true; btn.textContent = 'Generando...'; }}
+          out.classList.remove('ready');
+          out.innerHTML = 'Leyendo el curso y armando el Studio...';
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var headers = {{'Content-Type':'application/json'}};
+          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+          try {{
+            var r = await fetch('/api/student/courses/' + courseId + '/ai-studio', {{
+              method:'POST',
+              headers:headers,
+              body:JSON.stringify({{mode:mode}})
+            }});
+            var d = await _safeJson(r);
+            if (!r.ok || !d.ok) {{
+              if (d && d.upgrade_required) {{
+                out.innerHTML = '<b>PLUS requerido.</b> <a href="/student/shop" style="color:#FF7A3D;font-weight:900;">Desbloquear PLUS →</a>';
+                return;
+              }}
+              throw new Error((d && d.error) || 'No se pudo generar.');
+            }}
+            out.classList.add('ready');
+            out.innerHTML = renderBrainResult(mode, d.result || {{}}, d.context_counts || {{}});
+          }} catch(e) {{
+            out.innerHTML = '<span style="color:var(--red);font-weight:900;">' + _esc(e.message || 'No se pudo generar.') + '</span>';
+          }} finally {{
+            if (btn) {{ btn.disabled = false; btn.textContent = old; }}
+          }}
+        }}
+
+        function pickExamFiles(courseId, examId, btn) {{
+          if (!examId || examId === 'new') {{
+            alert('Guarda la evaluación antes de adjuntar archivos.');
+            return;
+          }}
+          var input = document.getElementById('exam-file-' + examId);
+          if (input) input.click();
+        }}
+
+        async function uploadExamFiles(courseId, examId, input) {{
+          if (!input || !input.files || !input.files.length) return;
+          var btn = document.getElementById('exam-attach-' + examId);
+          var old = btn ? btn.innerHTML : '';
+          if (btn) {{ btn.disabled = true; btn.innerHTML = '&#9203;'; }}
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var headers = {{}};
+          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+          var ok = 0, fail = 0;
+          for (var i = 0; i < input.files.length; i++) {{
+            var fd = new FormData();
+            fd.append('exam_id', examId);
+            fd.append('file', input.files[i]);
+            try {{
+              var r = await fetch('/api/student/courses/' + courseId + '/sources', {{method:'POST', headers:headers, body:fd}});
+              var d = await _safeJson(r);
+              if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No se pudo guardar.');
+              ok++;
+            }} catch(e) {{
+              fail++;
+            }}
+          }}
+          input.value = '';
+          if (btn) {{
+            btn.disabled = false;
+            btn.innerHTML = ok ? '&#10003;' : old;
+            btn.classList.add('has-files');
+            var current = parseInt(btn.getAttribute('data-count') || '0') || 0;
+            btn.setAttribute('data-count', String(current + ok));
+            setTimeout(function(){{ btn.innerHTML = old || '&#128206;'; }}, 900);
+          }}
+          var out = document.getElementById('brain-output-' + courseId);
+          if (out && ok) out.innerHTML = ok + ' archivo(s) guardado(s) para esta prueba. Ahora Course Brain puede usarlos.';
+          if (fail) alert('Se guardaron ' + ok + ' archivo(s). Fallaron ' + fail + '.');
+        }}
+
         function renderExamsPanel(courseId, exams) {{
 
           var panel = document.getElementById('exams-panel-' + courseId);
@@ -5687,7 +7628,7 @@ def register_student_routes(app, csrf, limiter):
 
             var e = exams[i];
 
-            rowsHtml += examRowHtml(e.id, e.name||'', e.exam_date||'', e.weight_pct||0);
+            rowsHtml += examRowHtml(courseId, e.id, e.name||'', e.exam_date||'', e.weight_pct||0, e.grade||'');
 
           }}
 
@@ -5715,12 +7656,35 @@ def register_student_routes(app, csrf, limiter):
 
           var countEl = document.getElementById('exam-count-' + courseId);
           if (countEl) countEl.textContent = exams.length;
+          updateCourseFinalFromExams(courseId);
 
         }}
 
-        function examRowHtml(examId, name, date, weight) {{
+        function updateCourseFinalFromExams(courseId) {{
+          var list = document.getElementById('exams-list-' + courseId);
+          var finalInput = document.getElementById('final-grade-' + courseId);
+          if (!list || !finalInput) return;
+          var rows = list.querySelectorAll('.ex-row');
+          var sum = 0, weightDone = 0;
+          rows.forEach(function(row) {{
+            var wEl = row.querySelector('[data-field="weight_pct"]');
+            var gEl = row.querySelector('[data-field="grade"]');
+            var w = wEl ? parseFloat(String(wEl.value || '').replace(',', '.')) : NaN;
+            var g = gEl ? parseFloat(String(gEl.value || '').replace(',', '.')) : NaN;
+            if (isFinite(w) && isFinite(g) && w > 0 && g > 0) {{
+              sum += (w / 100) * g;
+              weightDone += w;
+            }}
+          }});
+          if (weightDone >= 99.5) finalInput.value = sum.toFixed(2);
+          else if (weightDone > 0) finalInput.value = (sum * 100 / weightDone).toFixed(2);
+        }}
+
+        function examRowHtml(courseId, examId, name, date, weight, grade) {{
 
           var idAttr = examId ? examId : 'new';
+          var attachDisabled = examId ? '' : ' disabled';
+          var attachTitle = examId ? 'Adjuntar material a esta prueba' : 'Guarda la evaluación antes de adjuntar';
 
           return '<div class="ex-row" data-exam-id="' + idAttr + '">'
 
@@ -5728,7 +7692,13 @@ def register_student_routes(app, csrf, limiter):
 
             + '<input type="date" class="ex-input" data-field="exam_date" value="' + _esc(date) + '">'
 
-            + '<span class="ex-weight"><input type="number" class="ex-input" data-field="weight_pct" value="' + (weight||0) + '" min="0" max="100">%</span>'
+            + '<span class="ex-weight"><input type="number" class="ex-input" data-field="weight_pct" value="' + (weight||0) + '" min="0" max="100" oninput="updateCourseFinalFromExams(' + courseId + ')">%</span>'
+
+            + '<input type="number" class="ex-input" data-field="grade" value="' + _esc(grade||'') + '" min="1" max="7" step="0.01" placeholder="Nota" oninput="updateCourseFinalFromExams(' + courseId + ')">'
+
+            + '<button type="button" id="exam-attach-' + idAttr + '" class="btn btn-ghost btn-sm ex-attach" onclick="pickExamFiles(' + courseId + ',\\'' + idAttr + '\\', this)" title="' + attachTitle + '" aria-label="' + attachTitle + '"' + attachDisabled + '>&#128206;</button>'
+
+            + '<input id="exam-file-' + idAttr + '" type="file" accept=".pdf,.doc,.docx,.txt" multiple hidden onchange="uploadExamFiles(' + courseId + ',\\'' + idAttr + '\\', this)">'
 
             + '<button class="btn btn-ghost btn-sm ex-delete" onclick="deleteExamInline(this)" title="Eliminar">&#128465;</button>'
 
@@ -5752,13 +7722,16 @@ def register_student_routes(app, csrf, limiter):
 
           var div = document.createElement('div');
 
-          div.innerHTML = examRowHtml('', '', '', 0);
+          div.innerHTML = examRowHtml(courseId, '', '', '', 0, '');
 
           var node = div.firstChild;
 
           node.dataset.courseId = courseId;
 
           list.appendChild(node);
+          node.querySelectorAll('[data-field="weight_pct"],[data-field="grade"]').forEach(function(inp) {{
+            inp.addEventListener('input', function(){{ updateCourseFinalFromExams(courseId); }});
+          }});
 
         }}
 
@@ -5795,6 +7768,8 @@ def register_student_routes(app, csrf, limiter):
             var exam_date = row.querySelector('[data-field=\"exam_date\"]').value || '';
 
             var weight_pct = parseInt(row.querySelector('[data-field=\"weight_pct\"]').value) || 0;
+            var gradeRaw = (row.querySelector('[data-field=\"grade\"]') && row.querySelector('[data-field=\"grade\"]').value) || '';
+            var grade = gradeRaw === '' ? null : parseFloat(String(gradeRaw).replace(',', '.'));
 
             if (!name) {{ continue; }}  // skip empty rows quietly
 
@@ -5812,7 +7787,7 @@ def register_student_routes(app, csrf, limiter):
 
                 method: method, headers: headers,
 
-                body: JSON.stringify({{ name: name, exam_date: exam_date, weight_pct: weight_pct, topics: [], course_id: parseInt(courseId)||0 }})
+                body: JSON.stringify({{ name: name, exam_date: exam_date, weight_pct: weight_pct, grade: grade, topics: [], course_id: parseInt(courseId)||0 }})
 
               }});
 
@@ -5920,6 +7895,41 @@ def register_student_routes(app, csrf, limiter):
         if not _logged_in():
 
             return redirect(url_for("login"))
+
+        # Focus needs the desktop extension + a stable timer tab; phones are
+        # not supported yet, so show a friendly notice instead of the timer.
+        _ua = (request.headers.get("User-Agent") or "").lower()
+        if any(tok in _ua for tok in ("mobi", "iphone", "ipod")) or ("android" in _ua and "mobile" in _ua):
+            mobile_notice = """
+            <section class="focus-mobile-locked">
+              <div class="focus-mobile-card">
+                <div class="focus-mobile-icon">&#128187;</div>
+                <h1>Enfoque es solo para computador, por ahora.</h1>
+                <p>Las sesiones de Enfoque usan la extensi&oacute;n de navegador y un temporizador que el navegador del celular pausa en segundo plano, as&iacute; que por ahora solo se puede usar desde un computador.</p>
+                <p class="focus-mobile-sub">Mientras tanto, desde el celular puedes revisar tu plan, hacer quizzes y repasar tarjetas.</p>
+                <div class="focus-mobile-actions">
+                  <a href="/student/planner">Ver mi plan</a>
+                  <a href="/student/quizzes">Hacer un quiz</a>
+                </div>
+              </div>
+            </section>
+            <style>
+              .focus-mobile-locked { min-height:58vh; display:grid; place-items:center; padding:18px; }
+              .focus-mobile-card { max-width:560px; border:2px solid #1A1A1F; border-radius:22px; background:linear-gradient(135deg,#FFF8E8,#FFE1D0); box-shadow:0 5px 0 #1A1A1F; padding:30px 24px; text-align:center; }
+              .focus-mobile-icon { font-size:44px; margin-bottom:10px; }
+              .focus-mobile-card h1 { font-family:'Bricolage Grotesque',sans-serif; font-size:30px; line-height:1.02; margin:0 0 14px; color:#1A1A1F; }
+              .focus-mobile-card p { color:#5C5C66; font-weight:800; line-height:1.5; margin:0 0 10px; }
+              .focus-mobile-sub { font-size:14px; }
+              .focus-mobile-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
+              .focus-mobile-actions a { display:inline-flex; min-height:44px; align-items:center; justify-content:center; padding:0 18px; border:2px solid #1A1A1F; border-radius:14px; background:#FF7A3D; color:#fff; font-weight:950; text-decoration:none; box-shadow:0 4px 0 #1A1A1F; }
+              .focus-mobile-actions a:last-child { background:#fff; color:#1A1A1F; }
+              :root[data-theme="dark"] .focus-mobile-card { background:#14151A; border-color:#FF7A3D; box-shadow:0 5px 0 #FF7A3D; }
+              :root[data-theme="dark"] .focus-mobile-card h1 { color:#FFF8E8; }
+              :root[data-theme="dark"] .focus-mobile-card p { color:#D9D2C3; }
+              :root[data-theme="dark"] .focus-mobile-actions a:last-child { background:#0B0B10; color:#FFF8E8; border-color:#FF7A3D; }
+            </style>
+            """
+            return _s_render("Enfoque", mobile_notice, active_page="student_focus")
 
         courses = sdb.get_courses(_cid())
 

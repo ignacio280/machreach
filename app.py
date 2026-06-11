@@ -402,9 +402,14 @@ def _set_security_headers(response):
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
         "form-action 'self' https://*.lemonsqueezy.com; "
-        "object-src 'none'; "
-        "upgrade-insecure-requests"
+        "object-src 'none'"
     )
+    # upgrade-insecure-requests only makes sense behind TLS (production).
+    # Over plain HTTP on the LAN (e.g. testing from a phone via
+    # http://192.168.x.x:5000) it would upgrade every asset to https://,
+    # which the dev server doesn't speak — blank page.
+    if _IS_PRODUCTION:
+        _CSP += "; upgrade-insecure-requests"
     response.headers["Content-Security-Policy"] = _CSP
     # HSTS with preload in production
     if _IS_PRODUCTION:
@@ -521,7 +526,7 @@ LAYOUT = """<!DOCTYPE html>
       else window.alert(text);
     };
   </script>
-  <link rel="stylesheet" href="/static/machreach_layout/layout-base.css"/>
+  <link rel="stylesheet" href="/static/machreach_layout/layout-base.css?v=2"/>
 </head>
 <body>
   <div id="topbar-progress"><div class="bar"></div></div>
@@ -575,6 +580,33 @@ LAYOUT = """<!DOCTYPE html>
       document.addEventListener('keydown', function(e){
         if (e.key === 'Escape') document.querySelectorAll('.nav-dropdown.open').forEach(function(d){ d.classList.remove('open'); });
       });
+      // Topbar tools dropdown: position the menu as fixed so the nav's
+      // overflow-x:auto can never clip it (in any theme).
+      document.addEventListener('DOMContentLoaded', function(){
+        document.querySelectorAll('.mr-tb-tools').forEach(function(wrap){
+          var btn = wrap.querySelector('.mr-tb-tools-btn');
+          var menu = wrap.querySelector('.mr-tb-tools-menu');
+          if (!btn || !menu) return;
+          function place(){
+            if (window.matchMedia('(max-width: 860px)').matches) {
+              // burger menu: the dropdown is an inline section, no fixed coords
+              menu.style.position = '';
+              menu.style.left = '';
+              menu.style.top = '';
+              return;
+            }
+            var r = btn.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+            menu.style.top = (r.bottom + 8) + 'px';
+          }
+          wrap.addEventListener('mouseenter', place);
+          btn.addEventListener('focus', place);
+          btn.addEventListener('click', function(){ place(); wrap.classList.toggle('open'); });
+          window.addEventListener('resize', function(){ if (wrap.matches(':hover') || wrap.classList.contains('open')) place(); });
+          document.addEventListener('click', function(e){ if (!wrap.contains(e.target)) wrap.classList.remove('open'); });
+        });
+      });
     })();
   </script>
   {% if logged_in and account_type|default('student') == 'student' %}
@@ -587,9 +619,16 @@ LAYOUT = """<!DOCTYPE html>
       <nav class="mr-tb-nav" id="mrTopNav">
         <a class="mr-tb-link {% if active_page == 'student_dashboard' %}active{% endif %}" href="/student">{{ student_ui.home }}</a>
         <a class="mr-tb-link {% if active_page == 'student_focus' %}active{% endif %}" href="/student/focus">{{ student_ui.focus }}</a>
+        <a class="mr-tb-link {% if active_page == 'student_planner' %}active{% endif %}" href="/student/planner">{{ student_ui.planner }}</a>
         <a class="mr-tb-link {% if active_page == 'student_courses' %}active{% endif %}" href="/student/courses">{{ student_ui.courses }}</a>
-        <a class="mr-tb-link {% if active_page == 'student_quizzes' %}active{% endif %}" href="/student/quizzes">{{ student_ui.quizzes }}</a>
-        <a class="mr-tb-link {% if active_page == 'student_flashcards' %}active{% endif %}" href="/student/flashcards">{{ student_ui.flashcards }}</a>
+        <div class="mr-tb-tools {% if active_page in ['student_quizzes','student_flashcards'] %}active{% endif %}">
+          <button class="mr-tb-link mr-tb-tools-btn" type="button">{{ student_ui.tools }}</button>
+          <div class="mr-tb-tools-menu">
+            <a href="/student/quizzes">{{ student_ui.quizzes }}</a>
+            <a href="/student/flashcards">{{ student_ui.flashcards }}</a>
+          </div>
+        </div>
+        <a class="mr-tb-link {% if active_page == 'student_reviews' %}active{% endif %}" href="/student/reviews">{{ student_ui.reviews }}</a>
         <a class="mr-tb-link {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard">{{ student_ui.leaderboard }}</a>
         <a class="mr-tb-link {% if active_page == 'student_friends' %}active{% endif %}" href="/student/friends">{{ student_ui.friends }}</a>
         <a class="mr-tb-link {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop">{{ student_ui.shop }}</a>
@@ -641,6 +680,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Panel</a>
         {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Cursos</a>
+        <a href="/student/planner" {% if active_page == 'student_planner' %}class="active"{% endif %}>&#128197; Plan</a>
         <div class="nav-dropdown">
           <a href="javascript:void(0)" {% if active_page in ['student_flashcards','student_quizzes'] %}class="active"{% endif %}>&#128218; Herramientas de Estudio &#9662;</a>
           <div class="nav-dropdown-menu">
@@ -664,6 +704,7 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student" {% if active_page == 'student_dashboard' %}class="active"{% endif %}>&#127891; Dashboard</a>
         {% if is_admin %}<a href="/admin" {% if active_page == 'admin' %}class="active"{% endif %} style="color:var(--yellow);">&#128227; Admin</a>{% endif %}
         <a href="/student/courses" {% if active_page == 'student_courses' %}class="active"{% endif %}>&#128218; Courses</a>
+        <a href="/student/planner" {% if active_page == 'student_planner' %}class="active"{% endif %}>&#128197; Plan</a>
         <div class="nav-dropdown">
           <a href="javascript:void(0)" {% if active_page in ['student_flashcards','student_quizzes'] %}class="active"{% endif %}>&#128218; Study Tools &#9662;</a>
           <div class="nav-dropdown-menu">

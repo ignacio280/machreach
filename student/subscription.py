@@ -67,6 +67,7 @@ PLANS = {
         "features": [
             "Quizzes IA ilimitados",
             "Flashcards IA ilimitadas",
+            "Course Brain y Study Studio por ramo",
             "Mas preguntas/tarjetas por generacion",
             "Mas revisiones de ensayos",
             "Analitica avanzada por curso y semana",

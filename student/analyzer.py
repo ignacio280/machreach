@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 from datetime import date
 
@@ -22,6 +23,55 @@ from outreach.config import OPENAI_API_KEY
 log = logging.getLogger(__name__)
 
 _client: OpenAI | None = None
+
+
+_LETTER_REF_RE = re.compile(
+    r"\b((?:option|opci[oó]n|alternativa|letra|respuesta)\s+)([abcdABCD])\b"
+)
+
+
+def _remap_letters_in_text(text: str, mapping: dict[str, str]) -> str:
+    """Rewrite references like 'opción B' in an explanation after reshuffling."""
+    if not text:
+        return text
+
+    def repl(m: re.Match) -> str:
+        old = m.group(2)
+        new = mapping.get(old.lower(), old.lower())
+        return m.group(1) + (new.upper() if old.isupper() else new)
+
+    return _LETTER_REF_RE.sub(repl, text)
+
+
+def _balance_quiz_answer_letters(questions: list[dict]) -> list[dict]:
+    """Shuffle choices so correct answers do not cluster on one letter.
+
+    Also remaps any 'option X' references inside the explanation so it keeps
+    pointing at the right letter after the shuffle.
+    """
+    letters = ["a", "b", "c", "d"]
+    target_cycle = letters[:]
+    random.shuffle(target_cycle)
+    out = []
+    for idx, q in enumerate(questions or []):
+        correct = (q.get("correct") or "").strip().lower()
+        if correct not in letters:
+            out.append(q)
+            continue
+        target = target_cycle[idx % len(target_cycle)]
+        other_old = [k for k in letters if k != correct]
+        other_new = [k for k in letters if k != target]
+        random.shuffle(other_old)
+        mapping = {correct: target}
+        for old, new in zip(other_old, other_new):
+            mapping[old] = new
+        nq = dict(q)
+        for old, new in mapping.items():
+            nq[f"option_{new}"] = q.get(f"option_{old}", "")
+        nq["correct"] = target
+        nq["explanation"] = _remap_letters_in_text(q.get("explanation", ""), mapping)
+        out.append(nq)
+    return out
 
 
 def _ai() -> OpenAI:
@@ -614,8 +664,9 @@ STRICT RULES:
 - Every question and answer must be directly based on the content above
 
 Generate exactly {count} flashcards. Each flashcard should:
-- Have a clear, specific question on the front
-- Have a concise but complete answer on the back
+- Be high-difficulty: require explanation, comparison, edge cases, cause/effect, or application. Avoid trivial definition-only cards unless the concept is absolutely foundational.
+- Have a clear, specific question on the front that would challenge a serious university student
+- Have a concise but complete answer on the back, including the reasoning needed to avoid common traps
 - Cover different aspects of the material
 - Progress from basic concepts to more advanced ones
 - For math equations, use LaTeX notation: inline with $...$ and display with $$...$$
@@ -691,11 +742,19 @@ STRICT RULES:
 - Create questions ONLY from the source material provided above
 - Do NOT add information from outside the provided material
 - Every question, option, and explanation must be directly based on the content above
+- Make the quiz difficult, exam-quality, and conceptually demanding even when the requested difficulty says medium.
+- Avoid obvious answers. Distractors must be plausible and based on common confusions from the material.
+- Vary the correct answer letter naturally. Do not favor option B.
 
 Generate exactly {count} multiple-choice questions. Each question must have:
 - A short "topic" tag (2-5 words) naming the concept tested (e.g. "Photosynthesis", "Big-O notation", "French Revolution causes")
 - Exactly 4 options (a, b, c, d) where only ONE is correct
-- A brief explanation of why the correct answer is right
+- An explanation that genuinely TEACHES (2-4 sentences). It must:
+  (1) state the underlying concept, definition, rule or principle from the material that decides the question;
+  (2) show how that principle leads to the answer;
+  (3) when useful, explain why the most tempting distractor is wrong (what confusion it plays on).
+  NEVER write circular explanations that just restate the option text (BAD: "Es correcta porque la felicidad es un estado de plenitud" when the option already says that). The student should learn something new from reading it.
+- IMPORTANT: in the explanation NEVER mention option letters (A, B, C or D) — options get reshuffled later. Refer to the answer by its content, e.g. "Es correcta porque la fotosíntesis ...", never "La opción B es correcta".
 - Varied concepts across the batch
 - For math equations, use LaTeX notation: inline with $...$ and display with $$...$$
 - Keep the same language as the source material
@@ -709,8 +768,8 @@ Return ONLY a valid JSON array — no markdown fences, no commentary:
     "option_b": "Second option",
     "option_c": "Third option",
     "option_d": "Fourth option",
-    "correct": "b",
-    "explanation": "Option B is correct because ..."
+    "correct": "c",
+    "explanation": "Según el material, [principio o definición que decide la pregunta]. Por eso [cómo ese principio lleva a la respuesta]. El error común es pensar que [por qué el distractor más tentador confunde], pero [aclaración]."
   }}
 ]"""
 
@@ -824,7 +883,7 @@ def generate_quiz(
                     if key not in seen:
                         seen.add(key)
                         all_qs.append(q)
-            return all_qs[:count]
+            return _balance_quiz_answer_letters(all_qs[:count])
 
     context = f"\n\nSTUDENT'S UPLOADED MATERIAL:\n{source_text}" if source_text else ""
     topics_str = ", ".join(topics) if topics else "all key concepts from the material"
@@ -897,7 +956,7 @@ def generate_quiz(
         except Exception as e:
             log.warning("Quiz top-up failed for %s: %s", course_name, e)
 
-    return all_questions[:count]
+    return _balance_quiz_answer_letters(all_questions[:count])
 
 
 
@@ -972,5 +1031,3 @@ def _split_into_chunks(txt: str, max_chars: int = 18000, hard_cap_chunks: int = 
 
 
 # ── Panic Mode / Cram Plan ──────────────────────────────────
-
-

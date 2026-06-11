@@ -1033,6 +1033,55 @@
     }
     .mr-tb-link:hover { color: #fff; background: rgba(255,255,255,0.07); }
     .mr-tb-link.active { color: #fff; background: rgba(255,255,255,0.10); }
+    .mr-tb-tools { position: relative; display: inline-flex; flex-shrink: 0; }
+    .mr-tb-tools::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 10px; }
+    .mr-tb-tools-btn { border: 0; background: transparent; font: inherit; cursor: pointer; }
+    .mr-tb-tools.active .mr-tb-tools-btn { color: #fff; background: rgba(255,255,255,0.10); }
+    .mr-tb-tools-menu {
+      position: absolute;
+      left: 0;
+      top: calc(100% + 8px);
+      min-width: 168px;
+      padding: 8px;
+      border-radius: 14px;
+      background: #14151A;
+      border: 1px solid rgba(255,122,61,.55);
+      box-shadow: 0 16px 44px rgba(0,0,0,.32), 0 3px 0 #FF7A3D;
+      opacity: 0;
+      transform: translateY(-6px);
+      pointer-events: none;
+      transition: opacity .16s ease, transform .16s ease;
+      z-index: 80;
+    }
+    .mr-tb-tools:hover .mr-tb-tools-menu,
+    .mr-tb-tools:focus-within .mr-tb-tools-menu,
+    .mr-tb-tools.open .mr-tb-tools-menu { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .mr-tb-tools-menu a {
+      display: block;
+      padding: 10px 11px;
+      border-radius: 10px;
+      color: #FFF8E8;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .mr-tb-tools-menu a:hover { background: rgba(255,122,61,.16); color: #fff; }
+    /* theme-aware dropdown: cream card in light mode, dark chip in dark mode */
+    :root:not([data-theme="dark"]) .mr-tb-tools-menu {
+      background: #FFFDF8;
+      border: 2px solid #201B20;
+      box-shadow: 0 3px 0 #201B20, 0 16px 44px rgba(15,23,42,.16);
+    }
+    :root:not([data-theme="dark"]) .mr-tb-tools-menu a { color: #201B20; }
+    :root:not([data-theme="dark"]) .mr-tb-tools-menu a:hover { background: rgba(255,122,61,.16); color: #1A1A1F; }
+    :root[data-theme="dark"] .mr-tb-tools-menu {
+      background: #1D1B26;
+      border: 2px solid #FF8A4C;
+      box-shadow: 0 3px 0 #FF8A4C, 0 16px 44px rgba(0,0,0,.42);
+    }
+    :root[data-theme="dark"] .mr-tb-tools-menu a { color: #FFF7EA; }
+    :root[data-theme="dark"] .mr-tb-tools-menu a:hover { background: rgba(255,138,76,.2); color: #fff; }
     .mr-tb-settings-gear { font-size: 17px; }
     .mr-tb-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .mr-tb-icon {
@@ -3408,4 +3457,120 @@
     :root:not([data-theme="dark"]) .content .mr-home .xp-stat .mr-stat-sub {
       color: #7C3B1C !important;
       font-weight: 800;
+    }
+
+    /* ══════════ global mobile usability ══════════ */
+    @media (max-width: 760px) {
+      html, body { overflow-x: clip; max-width: 100%; }
+      img, svg, video, canvas { max-width: 100%; height: auto; }
+      /* wide tables (grades, rankings) scroll instead of breaking the page */
+      .content table, .mr-app-shell table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      /* 16px inputs prevent iOS Safari from zooming in on focus */
+      input[type="text"], input[type="number"], input[type="email"],
+      input[type="password"], input[type="search"], select, textarea { font-size: 16px; }
+      .mr-app-shell .content { padding-left: 14px !important; padding-right: 14px !important; }
+      pre, code { white-space: pre-wrap; word-break: break-word; }
+      /* comfortable tap targets in nav menus */
+      .mr-tb-tools-menu a { padding: 13px 14px; font-size: 15px; }
+      /* generic multi-column grids used across pages collapse to one column */
+      .content [style*="grid-template-columns"][style*="1fr 1fr 1fr"],
+      .content [style*="grid-template-columns"][style*="repeat(3"],
+      .content [style*="grid-template-columns"][style*="repeat(4"] { grid-template-columns: 1fr 1fr !important; }
+    }
+    @media (max-width: 520px) {
+      .content [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+      .mr-app-shell .page-header h1, .content .page-header h1 { font-size: clamp(26px, 8vw, 36px) !important; }
+    }
+
+    /* ══════════ mobile burger menu fixes ══════════ */
+    @media (max-width: 860px) {
+      /* theme rules set overflow-y:hidden with higher specificity, which cuts
+         the open burger menu — force the vertical menu to scroll instead */
+      .mr-tb-nav,
+      :root:not([data-theme="dark"]) .mr-tb-nav,
+      :root[data-theme="dark"] .mr-tb-nav {
+        overflow: visible !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 64px);
+        flex-wrap: nowrap;
+      }
+      /* the tools dropdown becomes an inline section of the vertical menu */
+      .mr-tb-tools { width: 100%; flex-direction: column; align-items: stretch; }
+      .mr-tb-tools::after { display: none; }
+      .mr-tb-tools-btn { width: 100%; justify-content: flex-start; text-align: left; }
+      .mr-tb-tools-menu,
+      :root:not([data-theme="dark"]) .mr-tb-tools-menu,
+      :root[data-theme="dark"] .mr-tb-tools-menu {
+        position: static !important;
+        display: none;
+        opacity: 1 !important;
+        transform: none !important;
+        pointer-events: auto !important;
+        min-width: 0;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 2px 0 6px 16px;
+        transition: none;
+      }
+      .mr-tb-tools.open .mr-tb-tools-menu,
+      .mr-tb-tools:focus-within .mr-tb-tools-menu { display: block; }
+    }
+
+    /* ══════════ compact mobile topbar (burger must always be visible) ══════════ */
+    @media (max-width: 860px) {
+      .mr-topbar,
+      :root:not([data-theme="dark"]) .mr-topbar,
+      :root[data-theme="dark"] .mr-topbar {
+        gap: 8px !important;
+        padding: 8px 10px !important;
+        min-height: 56px !important;
+        height: auto !important;
+      }
+      .mr-tb-brand { gap: 7px !important; min-width: 0 !important; flex-shrink: 1 !important; overflow: hidden; }
+      .mr-tb-logo,
+      :root:not([data-theme="dark"]) .mr-tb-logo,
+      :root[data-theme="dark"] .mr-tb-logo { width: 30px !important; height: 30px !important; padding: 2px !important; }
+      .mr-tb-name,
+      :root:not([data-theme="dark"]) .mr-tb-name,
+      :root[data-theme="dark"] .mr-tb-name { font-size: 16px !important; white-space: nowrap; }
+      .mr-tb-right,
+      :root:not([data-theme="dark"]) .mr-tb-right,
+      :root[data-theme="dark"] .mr-tb-right { gap: 5px !important; flex-shrink: 0 !important; margin-left: auto; }
+      .mr-tb-icon,
+      .mr-tb-burger,
+      :root:not([data-theme="dark"]) .mr-tb-icon,
+      :root:not([data-theme="dark"]) .mr-tb-burger,
+      :root[data-theme="dark"] .mr-tb-icon,
+      :root[data-theme="dark"] .mr-tb-burger {
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+        padding: 0 !important;
+        font-size: 14px !important;
+        border-radius: 10px !important;
+        display: grid !important;
+        place-items: center !important;
+      }
+      .mr-tb-user,
+      :root:not([data-theme="dark"]) .mr-tb-user,
+      :root[data-theme="dark"] .mr-tb-user { padding: 0 !important; margin-left: 0 !important; }
+      .mr-tb-av,
+      :root:not([data-theme="dark"]) .mr-tb-av,
+      :root[data-theme="dark"] .mr-tb-av { width: 32px !important; height: 32px !important; border-radius: 9px !important; font-size: 11px !important; }
+    }
+    @media (max-width: 560px) {
+      /* language + logout move out of the bar on small phones (logout stays
+         available from the profile/settings pages) */
+      .mr-tb-right a[href^="/set-language/"],
+      .mr-tb-right a[href="/logout"],
+      :root:not([data-theme="dark"]) .mr-tb-right a[href^="/set-language/"],
+      :root:not([data-theme="dark"]) .mr-tb-right a[href="/logout"],
+      :root[data-theme="dark"] .mr-tb-right a[href^="/set-language/"],
+      :root[data-theme="dark"] .mr-tb-right a[href="/logout"] { display: none !important; }
+    }
+    @media (max-width: 400px) {
+      .mr-tb-name,
+      :root:not([data-theme="dark"]) .mr-tb-name,
+      :root[data-theme="dark"] .mr-tb-name { display: none !important; }
     }
