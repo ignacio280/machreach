@@ -2398,7 +2398,18 @@ Return this JSON shape:
 
             return jsonify({"error": "Not found"}), 404
 
-        files = sdb.get_course_files(_cid(), course_id)
+        exam_id_raw = (request.args.get("exam_id") or "").strip()
+        exam_id = None
+        if exam_id_raw:
+            try:
+                exam_id = int(exam_id_raw)
+            except Exception:
+                return jsonify({"error": "Invalid exam"}), 400
+            exams = sdb.get_course_exams(course_id) or []
+            if not any(int(e.get("id") or 0) == exam_id and int(e.get("client_id") or _cid()) == _cid() for e in exams):
+                return jsonify({"error": "Invalid exam"}), 400
+
+        files = sdb.get_course_files(_cid(), course_id, exam_id=exam_id)
 
         return jsonify({"files": [dict(f) for f in files]})
 
@@ -2521,7 +2532,16 @@ Return this JSON shape:
         if not _logged_in():
 
             return jsonify({"error": "Unauthorized"}), 401
-
+        from student.db import get_db, _fetchone
+        with get_db() as db:
+            f = _fetchone(
+                db,
+                "SELECT id FROM student_course_files WHERE id = %s AND client_id = %s",
+                (file_id, _cid()),
+                "SELECT id FROM student_course_files WHERE id = ? AND client_id = ?",
+            )
+        if not f:
+            return jsonify({"error": "Not found"}), 404
         sdb.delete_course_file(file_id, _cid())
 
         return jsonify({"ok": True})
@@ -3907,6 +3927,60 @@ Return this JSON shape:
         s = re.sub(r"\s+", " ", s).strip()
         return s[:max_chars]
 
+    def _planner_specific_source_hint(source_text: str, excerpt: str, fallback_name: str = "Material adjunto",
+                                      fallback_hint: str = "") -> tuple[str, str]:
+        """Best-effort source locator from planner chunk markers and the exact excerpt.
+
+        The extractor only stores text, not true PDF coordinates. This gives the
+        student the closest file/page band we can infer and avoids vague labels.
+        """
+        text = source_text or ""
+        excerpt = _planner_plain_text(excerpt or "", max_chars=1200)
+        fallback_name = (fallback_name or "Material adjunto").strip()
+        fallback_hint = (fallback_hint or "").strip()
+        markers = []
+        marker_re = re.compile(r"\[SOURCE:\s*(.*?)\s*\|\s*approx pages\s*([0-9]+)\s*-\s*([0-9]+)\]", re.I)
+        for m in marker_re.finditer(text):
+            markers.append({
+                "start": m.end(),
+                "marker_start": m.start(),
+                "name": (m.group(1) or fallback_name).strip(),
+                "a": int(m.group(2) or 1),
+                "b": int(m.group(3) or m.group(2) or 1),
+            })
+        for i, marker in enumerate(markers):
+            marker["end"] = markers[i + 1]["marker_start"] if i + 1 < len(markers) else len(text)
+
+        pos = -1
+        if excerpt:
+            needle = re.sub(r"\s+", " ", excerpt[:360]).strip()
+            compact_text = re.sub(r"\s+", " ", text)
+            pos = compact_text.find(needle)
+            if pos < 0:
+                words = [w for w in re.split(r"\s+", needle) if len(w) > 4][:14]
+                if words:
+                    pattern = r".{0,80}".join(re.escape(w) for w in words[:8])
+                    found = re.search(pattern, compact_text, re.I)
+                    if found:
+                        pos = found.start()
+
+        if markers:
+            chosen = None
+            if pos >= 0:
+                # Compact positions are close enough for picking a chunk.
+                for marker in markers:
+                    if marker["marker_start"] <= pos <= marker["end"]:
+                        chosen = marker
+                        break
+            if chosen is None:
+                chosen = markers[0]
+            page_hint = f"pags. {chosen['a']}-{chosen['b']} (seccion del extracto incluido abajo)"
+            return chosen["name"], page_hint
+
+        if fallback_hint and not re.search(r"ubicaci[oó]n aproximada", fallback_hint, re.I):
+            return fallback_name, fallback_hint
+        return fallback_name, "extracto exacto incluido abajo"
+
 
     def _planner_fallback_units(source_text: str, target_units: int = 8) -> list[dict]:
         text = _planner_plain_text(source_text, max_chars=140000)
@@ -3925,6 +3999,7 @@ Return this JSON shape:
                     end = cut + 1
             excerpt = text[pos:end].strip()
             if excerpt:
+                source_name, page_hint = _planner_specific_source_hint(source_text, excerpt)
                 title_words = excerpt[:96].split()
                 title = " ".join(title_words[:8]).strip(" .,:;") or f"Bloque {idx}"
                 units.append({
@@ -3932,8 +4007,8 @@ Return this JSON shape:
                     "objective": "Estudiar esta seccion del material y dejar dudas marcadas.",
                     "detail": "Lee el extracto, identifica las definiciones principales, anota dudas y cierra explicando el tema con tus propias palabras.",
                     "steps": ["Leer el extracto completo", "Subrayar definiciones y reglas", "Escribir 3 preguntas que podrian entrar en la prueba"],
-                    "source_name": "Material adjunto",
-                    "page_hint": f"aprox. pags. {max(1, pos // 1800 + 1)}-{max(1, end // 1800 + 1)}",
+                    "source_name": source_name,
+                    "page_hint": page_hint,
                     "source_excerpt": excerpt[:9000],
                     "tags": ["material", f"parte {idx}"],
                 })
@@ -3959,7 +4034,7 @@ Rules:
 - "steps" are 3-5 short study actions for this block, including recall/practice instructions when useful.
 - "tags" are the 2-4 key concept names of the block, taken literally from the material.
 - "source_name" is the PDF/document name from the nearest [SOURCE: ...] marker.
-- "page_hint" is the nearest approximate page marker from [SOURCE: ... | approx pages X-Y]. If uncertain, say "ubicacion aproximada".
+- "page_hint" must use the nearest marker exactly as "pags. X-Y". Never answer "ubicacion aproximada"; if pages are uncertain, write "extracto exacto incluido abajo".
 - "source_excerpt" is a representative excerpt copied from this block (the actual text the student will study).
 - Each block must be actionable for one ~50 minute study session.
 - Keep the same language as the material.
@@ -3995,13 +4070,18 @@ Material:
                     continue
                 tags = u.get("tags") if isinstance(u.get("tags"), list) else []
                 steps = u.get("steps") if isinstance(u.get("steps"), list) else []
+                source_name = (u.get("source_name") or "Material adjunto").strip()[:120]
+                page_hint = (u.get("page_hint") or "").strip()[:120]
+                if re.search(r"ubicaci[oó]n aproximada", page_hint, re.I):
+                    page_hint = ""
+                better_source, better_hint = _planner_specific_source_hint(source_text, excerpt, source_name, page_hint)
                 cleaned.append({
                     "title": title,
                     "objective": objective,
                     "detail": detail,
                     "steps": [str(s).strip()[:160] for s in steps[:5] if str(s).strip()],
-                    "source_name": (u.get("source_name") or "Material adjunto").strip()[:120],
-                    "page_hint": (u.get("page_hint") or "ubicacion aproximada").strip()[:80],
+                    "source_name": better_source[:120],
+                    "page_hint": better_hint[:140],
                     "source_excerpt": excerpt,
                     "tags": [str(t)[:32] for t in tags[:4] if str(t).strip()],
                 })
@@ -4340,16 +4420,24 @@ Material:
           </section>
           <aside id="planner-detail-drawer" class="planner-drawer" aria-hidden="true">
             <div class="planner-drawer-backdrop" data-close-drawer></div>
-            <div class="planner-drawer-panel">
-              <button type="button" class="planner-drawer-close" data-close-drawer>&times;</button>
-              <div class="planner-mini">Detalle del bloque</div>
-              <h2 id="planner-drawer-title">Bloque</h2>
-              <div id="planner-drawer-meta" class="planner-drawer-meta"></div>
-              <p id="planner-drawer-detail"></p>
-              <div id="planner-drawer-steps" class="planner-drawer-steps"></div>
-              <div class="planner-drawer-source">
-                <b>Fuente</b>
-                <span id="planner-drawer-source"></span>
+            <div class="planner-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="planner-drawer-title">
+              <div class="planner-drawer-head">
+                <button type="button" class="planner-drawer-close" data-close-drawer aria-label="Cerrar detalle">&times;</button>
+                <div class="planner-mini">Detalle del bloque</div>
+                <h2 id="planner-drawer-title">Bloque</h2>
+                <div id="planner-drawer-meta" class="planner-drawer-meta"></div>
+              </div>
+              <div class="planner-drawer-scroll">
+                <p id="planner-drawer-detail"></p>
+                <div id="planner-drawer-steps" class="planner-drawer-steps"></div>
+                <div class="planner-drawer-source">
+                  <b>Fuente</b>
+                  <span id="planner-drawer-source"></span>
+                </div>
+                <div id="planner-drawer-excerpt-wrap" class="planner-drawer-excerpt-wrap" hidden>
+                  <b>Extracto exacto del material</b>
+                  <div id="planner-drawer-excerpt" class="planner-drawer-excerpt"></div>
+                </div>
               </div>
             </div>
           </aside>
@@ -4400,8 +4488,9 @@ Material:
           .planner-day-head p { margin:7px 0 0; color:#6E6A73; font-weight:750; }
           .planner-progress-pill { border:2px solid var(--pl-ink); border-radius:999px; padding:8px 12px; font-weight:950; color:var(--pl-ink); background:#fff; box-shadow:0 3px 0 var(--pl-ink); white-space:nowrap; }
           .planner-blocks { display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:14px; }
-          .planner-block { position:relative; border:1.5px solid var(--pl-line); border-radius:18px; background:linear-gradient(135deg,#fff,#FFF8E8); padding:20px; overflow:hidden; transition:transform .16s ease,border-color .16s ease; }
+          .planner-block { position:relative; border:1.5px solid var(--pl-line); border-radius:18px; background:linear-gradient(135deg,#fff,#FFF8E8); padding:20px; overflow:hidden; cursor:pointer; transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease; }
           .planner-block:hover { transform:translateY(-2px); border-color:var(--pl-orange); }
+          .planner-block:focus-visible { outline:none; border-color:var(--pl-orange); box-shadow:0 0 0 4px rgba(255,122,61,.18),0 4px 0 var(--pl-orange); }
           .planner-block.done { opacity:.72; background:linear-gradient(135deg,#F1FFF6,#FFFDF8); }
           .planner-block.done .planner-block-title { text-decoration:line-through; text-decoration-thickness:2px; }
           .planner-block::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--pl-orange); }
@@ -4413,7 +4502,6 @@ Material:
           .planner-block-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
           .planner-block-actions a,.planner-block-actions button { border:1.5px solid var(--pl-ink); border-radius:999px; background:#fff; color:var(--pl-ink); padding:9px 14px; text-decoration:none; font-weight:950; font-size:13px; cursor:pointer; }
           .planner-block-actions button:disabled { opacity:.58; cursor:wait; }
-          .planner-block-actions .planner-detail-btn { background:var(--pl-ink); color:#FFF8E8; }
           .planner-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
           .planner-tag { border:1px solid #FFD0B5; border-radius:999px; background:#FFF1E6; color:#9A3B12; padding:4px 7px; font-size:10px; font-weight:950; }
           .planner-material-status { margin-top:8px; color:#8C8991; font-size:12px; font-weight:850; }
@@ -4421,19 +4509,27 @@ Material:
           #planner-save-state { color:#8C8991; font-size:12px; font-weight:850; }
           .planner-empty { border:1.5px dashed var(--pl-line); border-radius:16px; padding:26px; text-align:center; color:#7D7A82; font-weight:850; background:var(--pl-soft); grid-column:1/-1; }
           body.planner-drawer-lock { overflow:hidden; }
-          .planner-drawer { position:fixed; inset:0; z-index:99980; pointer-events:none; opacity:0; transition:opacity .18s ease; overflow:hidden; }
+          .planner-drawer { --pl-orange:#FF7A3D; --pl-ink:#1A1A1F; --pl-paper:#FFFDF8; --pl-soft:#FBF8F0; --pl-line:#E2DCCC; position:fixed; inset:0; z-index:99980; pointer-events:none; opacity:0; transition:opacity .18s ease; overflow:hidden; }
           .planner-drawer.open { pointer-events:auto; opacity:1; }
-          .planner-drawer-backdrop { position:absolute; inset:0; background:rgba(10,10,12,.36); }
-          .planner-drawer-panel { position:absolute; top:0; right:0; width:min(520px,calc(100vw - 18px)); height:100dvh; max-height:100dvh; overflow-y:auto; overscroll-behavior:contain; background:#FFFDF8; border-left:2px solid var(--pl-ink); box-shadow:-8px 0 0 rgba(26,26,31,.12), -24px 0 80px rgba(26,26,31,.22); padding:28px; transform:translateX(104%); transition:transform .24s cubic-bezier(.18,1,.28,1); color:var(--pl-ink); }
+          .planner-drawer-backdrop { position:fixed; inset:0; background:rgba(10,10,12,.36); }
+          .planner-drawer-panel { position:fixed; top:0; right:0; bottom:0; width:min(560px,calc(100vw - 18px)); height:100dvh; max-height:100dvh; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; overscroll-behavior:contain; background:#FFFDF8; border-left:2px solid var(--pl-ink); box-shadow:-8px 0 0 rgba(26,26,31,.12), -24px 0 80px rgba(26,26,31,.22); padding:0; transform:translateX(104%); transition:transform .24s cubic-bezier(.18,1,.28,1); color:var(--pl-ink); }
           .planner-drawer.open .planner-drawer-panel { transform:translateX(0); }
+          .planner-drawer-head { position:relative; z-index:2; padding:28px 72px 16px 28px; border-bottom:1.5px dashed var(--pl-line); background:linear-gradient(135deg,#FFFDF8,#FFF4EA); box-shadow:0 12px 34px rgba(26,26,31,.08); }
+          .planner-drawer-scroll { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:20px 28px 28px; scroll-behavior:smooth; }
+          .planner-drawer-scroll::-webkit-scrollbar { width:10px; }
+          .planner-drawer-scroll::-webkit-scrollbar-thumb { background:var(--pl-orange); border:3px solid #FFFDF8; border-radius:999px; }
           .planner-drawer-close { position:absolute; top:16px; right:16px; width:36px; height:36px; border:2px solid var(--pl-ink); border-radius:12px; background:#fff; color:var(--pl-ink); box-shadow:0 3px 0 var(--pl-ink); font-size:24px; line-height:1; cursor:pointer; }
-          .planner-drawer-panel h2 { margin:8px 42px 10px 0; font-family:'Bricolage Grotesque',sans-serif; font-size:34px; line-height:.98; letter-spacing:-.03em; }
+          .planner-drawer-panel h2 { margin:8px 0 10px; font-family:'Bricolage Grotesque',sans-serif; font-size:34px; line-height:.98; letter-spacing:-.03em; }
           .planner-drawer-meta { display:flex; flex-wrap:wrap; gap:8px; color:#7D7A82; font-size:12px; font-weight:900; margin-bottom:16px; }
           .planner-drawer-panel p { color:#4F4B55; font-weight:800; line-height:1.55; margin:0 0 16px; }
           .planner-drawer-steps { display:grid; gap:8px; margin:14px 0 16px; }
           .planner-step { border:1.5px solid var(--pl-line); border-radius:14px; background:#FFF8E8; padding:11px 12px; font-weight:850; color:#3E3942; }
           .planner-drawer-source { border:1.5px solid #FFD0B5; background:#FFF1E6; border-radius:14px; padding:12px; display:grid; gap:4px; color:#9A3B12; font-weight:850; }
+          .planner-drawer-excerpt-wrap { border:1.5px dashed var(--pl-line); background:#FFFDF8; border-radius:14px; padding:12px; display:grid; gap:8px; color:#4F4B55; font-weight:850; }
+          .planner-drawer-excerpt-wrap[hidden] { display:none; }
+          .planner-drawer-excerpt { max-height:260px; overflow:auto; white-space:pre-wrap; font-family:'Nunito',sans-serif; font-size:13px; line-height:1.55; color:#4F4B55; padding-right:6px; }
           :root[data-theme="dark"] .planner-wrap { --pl-ink:#FF7A3D; --pl-paper:#14151A; --pl-soft:#0B0B10; --pl-line:rgba(255,122,61,.42); color:#FFF8E8; }
+          :root[data-theme="dark"] .planner-drawer { --pl-ink:#FF7A3D; --pl-paper:#14151A; --pl-soft:#0B0B10; --pl-line:rgba(255,122,61,.42); }
           :root[data-theme="dark"] .planner-hero { background:linear-gradient(135deg,#17110E,#211A18 72%,#111B16); border-color:#FF7A3D; box-shadow:0 5px 0 #FF7A3D; }
           :root[data-theme="dark"] .planner-hero h1,:root[data-theme="dark"] .planner-panel h2,:root[data-theme="dark"] .planner-day-head h2,:root[data-theme="dark"] .planner-next-action,:root[data-theme="dark"] .planner-priority-title,:root[data-theme="dark"] .planner-day-name,:root[data-theme="dark"] .planner-block-title { color:#FFF8E8; }
           :root[data-theme="dark"] .planner-hero p,:root[data-theme="dark"] .planner-day-head p,:root[data-theme="dark"] .planner-block-copy,:root[data-theme="dark"] .planner-priority-meta,:root[data-theme="dark"] .planner-day-meta { color:#D9D2C3; }
@@ -4444,9 +4540,13 @@ Material:
           :root[data-theme="dark"] .planner-small-btn:not(.dark),:root[data-theme="dark"] .planner-day-num,:root[data-theme="dark"] .planner-progress-pill,:root[data-theme="dark"] .planner-block-actions a,:root[data-theme="dark"] .planner-block-actions button,:root[data-theme="dark"] .planner-course-chip { background:#0B0B10; color:#FFF8E8; border-color:#FF7A3D; box-shadow:0 3px 0 #FF7A3D; }
           :root[data-theme="dark"] .planner-tag { background:#17110E; color:#FFD0B5; border-color:#FF7A3D; }
           :root[data-theme="dark"] .planner-drawer-panel { background:#14151A; border-color:#FF7A3D; color:#FFF8E8; box-shadow:-8px 0 0 rgba(255,122,61,.18), -24px 0 80px rgba(0,0,0,.44); }
+          :root[data-theme="dark"] .planner-drawer-head { background:linear-gradient(135deg,#14151A,#17110E); border-color:rgba(255,122,61,.46); box-shadow:0 12px 34px rgba(0,0,0,.32); }
+          :root[data-theme="dark"] .planner-drawer-scroll::-webkit-scrollbar-thumb { background:#FF7A3D; border-color:#14151A; }
           :root[data-theme="dark"] .planner-drawer-panel h2,:root[data-theme="dark"] .planner-drawer-panel p { color:#FFF8E8; }
           :root[data-theme="dark"] .planner-step { background:#0B0B10; border-color:rgba(255,122,61,.52); color:#D9D2C3; }
           :root[data-theme="dark"] .planner-drawer-source { background:#17110E; border-color:#FF7A3D; color:#FFD0B5; }
+          :root[data-theme="dark"] .planner-drawer-excerpt-wrap { background:#0B0B10; border-color:rgba(255,122,61,.52); color:#D9D2C3; }
+          :root[data-theme="dark"] .planner-drawer-excerpt { color:#D9D2C3; }
           @media (max-width:1100px) { .planner-hero,.planner-grid-bottom { grid-template-columns:1fr; } .planner-availability-grid { grid-template-columns:repeat(4,1fr); } .planner-day-list { grid-template-columns:repeat(7,minmax(92px,1fr)); overflow-x:auto; padding-bottom:6px; } }
           @media (max-width:760px) { .planner-availability-grid { grid-template-columns:repeat(2,1fr); } .planner-blocks { grid-template-columns:1fr; } .planner-hero { padding:20px; } .planner-day-head { flex-direction:column; } }
         </style>
@@ -4455,6 +4555,10 @@ Material:
         (function(){
           var root = document.getElementById('planner-app');
           if (!root) return;
+          var drawerPortal = document.getElementById('planner-detail-drawer');
+          if (drawerPortal && drawerPortal.parentElement !== document.body) {
+            document.body.appendChild(drawerPortal);
+          }
           var initial = {};
           try { initial = JSON.parse(root.getAttribute('data-initial') || '{}'); } catch(e) { initial = {}; }
           var state = {
@@ -4655,7 +4759,7 @@ Material:
               detail: unit.detail || objective,
               steps: unit.steps || [],
               source_name: unit.source_name || 'Material adjunto',
-              page_hint: unit.page_hint || 'ubicacion aproximada',
+              page_hint: unit.page_hint || 'extracto exacto incluido abajo',
               date: iso(dayDate),
               index: blockIndex,
               material_based: true,
@@ -4892,11 +4996,20 @@ Material:
               var tools = b.material_based
                 ? ''
                 : '<a href="/student/focus">Estudiar</a><a href="/student/courses">Ver prueba</a>';
-              tools = '<button type="button" class="planner-detail-btn" data-detail-date="' + esc(b.date) + '" data-detail-index="' + b.index + '">Ver detalle</button><button type="button" data-done-toggle data-date="' + esc(b.date) + '" data-index="' + b.index + '">' + (done ? 'Hecho' : 'Marcar hecho') + '</button>' + tools;
-              return '<article class="planner-block' + (done ? ' done' : '') + '"><div class="planner-block-top"><span class="planner-time">' + b.minutes + ' min</span><span class="planner-course-chip">' + esc(b.phase) + '</span></div><div class="planner-block-title">' + esc(b.title) + '</div><div class="planner-block-copy">' + esc(b.copy) + '</div>' + (tags ? '<div class="planner-tags">' + tags + '</div>' : '') + '<div class="planner-block-actions">' + tools + '</div></article>';
+              tools = '<button type="button" data-done-toggle data-date="' + esc(b.date) + '" data-index="' + b.index + '">' + (done ? 'Hecho' : 'Marcar hecho') + '</button>' + tools;
+              return '<article class="planner-block' + (done ? ' done' : '') + '" role="button" tabindex="0" data-block-date="' + esc(b.date) + '" data-block-index="' + b.index + '" aria-label="Abrir detalle de ' + esc(b.title) + '"><div class="planner-block-top"><span class="planner-time">' + b.minutes + ' min</span><span class="planner-course-chip">' + esc(b.phase) + '</span></div><div class="planner-block-title">' + esc(b.title) + '</div><div class="planner-block-copy">' + esc(b.copy) + '</div>' + (tags ? '<div class="planner-tags">' + tags + '</div>' : '') + '<div class="planner-block-actions">' + tools + '</div></article>';
             }).join('');
-            blocks.querySelectorAll('button[data-detail-date]').forEach(function(btn){
-              btn.addEventListener('click', function(){ openPlannerDrawer(findBlock(btn.dataset.detailDate, btn.dataset.detailIndex)); });
+            blocks.querySelectorAll('.planner-block[data-block-date]').forEach(function(card){
+              card.addEventListener('click', function(e){
+                if (e.target.closest('button,a,input,select,textarea,label')) return;
+                openPlannerDrawer(findBlock(card.dataset.blockDate, card.dataset.blockIndex));
+              });
+              card.addEventListener('keydown', function(e){
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                if (e.target.closest('button,a,input,select,textarea,label')) return;
+                e.preventDefault();
+                openPlannerDrawer(findBlock(card.dataset.blockDate, card.dataset.blockIndex));
+              });
             });
             blocks.querySelectorAll('button[data-done-toggle]').forEach(function(btn){
               btn.addEventListener('click', function(){ togglePlannerDone(btn); });
@@ -4913,18 +5026,50 @@ Material:
             }
             return null;
           }
+          function plannerVagueSourceHint(hint){
+            return !hint || /ubicaci[oó]n aproximada/i.test(String(hint));
+          }
+          function plannerSourceLabel(block){
+            var name = (block.source_name || 'Plan MachReach').trim();
+            var hint = (block.page_hint || '').trim();
+            if (plannerVagueSourceHint(hint)) {
+              hint = block.source_excerpt ? 'extracto exacto incluido abajo' : 'sin pagina detectada';
+            }
+            return name + (hint ? ' - ' + hint : '');
+          }
+          function plannerExcerptText(block){
+            var raw = String(block.source_excerpt || '').replace(/\s+/g, ' ').trim();
+            if (!raw) return '';
+            return raw.length > 1800 ? raw.slice(0, 1800).trim() + '...' : raw;
+          }
           function openPlannerDrawer(block){
             if (!block) return;
             var drawer = document.getElementById('planner-detail-drawer');
+            var panel = drawer ? drawer.querySelector('.planner-drawer-panel') : null;
+            var scrollBody = drawer ? drawer.querySelector('.planner-drawer-scroll') : null;
             document.getElementById('planner-drawer-title').textContent = block.title || 'Bloque';
             document.getElementById('planner-drawer-meta').innerHTML = '<span>' + esc(block.course || '') + '</span><span>' + esc(block.exam || '') + '</span><span>' + esc(block.minutes || 0) + ' min</span>';
             document.getElementById('planner-drawer-detail').textContent = block.detail || block.copy || '';
             var steps = block.steps || [];
             document.getElementById('planner-drawer-steps').innerHTML = steps.length ? steps.map(function(s){ return '<div class="planner-step">' + esc(s) + '</div>'; }).join('') : '';
-            document.getElementById('planner-drawer-source').textContent = (block.source_name || 'Plan MachReach') + (block.page_hint ? ' - ' + block.page_hint : '');
+            document.getElementById('planner-drawer-source').textContent = plannerSourceLabel(block);
+            var excerptWrap = document.getElementById('planner-drawer-excerpt-wrap');
+            var excerptEl = document.getElementById('planner-drawer-excerpt');
+            var excerpt = plannerExcerptText(block);
+            if (excerptWrap && excerptEl) {
+              excerptEl.textContent = excerpt;
+              excerptWrap.hidden = !excerpt;
+              excerptEl.scrollTop = 0;
+            }
+            if (panel) panel.scrollTop = 0;
+            if (scrollBody) scrollBody.scrollTop = 0;
             drawer.classList.add('open');
             drawer.setAttribute('aria-hidden','false');
             document.body.classList.add('planner-drawer-lock');
+            window.requestAnimationFrame(function(){
+              if (panel) panel.scrollTop = 0;
+              if (scrollBody) scrollBody.scrollTop = 0;
+            });
           }
           function closePlannerDrawer(){
             var drawer = document.getElementById('planner-detail-drawer');
@@ -5102,6 +5247,7 @@ Material:
           if (currentWeekBtn) currentWeekBtn.addEventListener('click', function(){ state.weekOffset = 0; state.selectedIndex = (state.today.getDay()+6)%7; if (savedPlanIsCurrent(initial.saved_plan)) { state.plan = initial.saved_plan; renderPlanner(); document.getElementById('planner-save-state').textContent = 'Plan guardado cargado.'; } else { runPlannerGenerate(true, false); } });
           if (nextWeekBtn) nextWeekBtn.addEventListener('click', function(){ state.weekOffset += 1; state.selectedIndex = 0; runPlannerGenerate(true, false); });
           document.querySelectorAll('[data-close-drawer]').forEach(function(el){ el.addEventListener('click', closePlannerDrawer); });
+          document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closePlannerDrawer(); });
           renderAvailability();
           if (savedPlanIsCurrent(state.plan)) {
             state.selectedIndex = (state.today.getDay()+6)%7;
@@ -7298,19 +7444,36 @@ Material:
         .course-exams-head {{ display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px; }}
         .course-exams-title {{ display:inline-flex;align-items:center;gap:8px;color:var(--text);font-size:18px;font-weight:900;line-height:1.1; }}
         .course-exams-actions {{ display:flex;gap:8px;flex-wrap:wrap;align-items:center; }}
-        .ex-row {{ display:grid;grid-template-columns:minmax(160px,2fr) minmax(140px,1fr) 86px 74px 38px 38px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border); }}
+        .ex-row {{ display:grid;grid-template-columns:minmax(160px,2fr) minmax(140px,1fr) 86px 74px 38px 38px 38px;gap:10px;align-items:start;padding:9px 0;border-bottom:1px solid var(--border); }}
         .ex-input {{ min-height:38px;display:flex;align-items:center; }}
         .ex-weight {{ display:flex;align-items:center;justify-content:flex-start;gap:7px;font-weight:900;color:var(--text);line-height:1; }}
         .ex-weight input {{ width:64px;text-align:center; }}
-        .ex-delete,.ex-attach {{ width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;border-radius:999px!important;justify-self:end;align-self:center;line-height:1!important;font-size:15px!important;margin:0!important;transform:none!important; }}
+        .ex-delete,.ex-attach,.ex-files {{ width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;border-radius:999px!important;justify-self:end;align-self:start;line-height:1!important;font-size:15px!important;margin:2px 0 0!important;transform:translateY(-1px)!important; }}
         .ex-delete {{ color:var(--red)!important; }}
-        .ex-attach {{ color:#1A1A1F!important;border:1px solid #E2DCCC!important;background:#FBF8F0!important;position:relative; }}
-        .ex-attach::before {{ content:"Adjuntar material a esta prueba";position:absolute;right:calc(100% + 9px);top:50%;transform:translateY(-50%) translateX(4px);opacity:0;pointer-events:none;background:#1A1A1F;color:#FFF8E8;border:1px solid #1A1A1F;border-radius:10px;padding:7px 9px;font-size:11px;font-weight:900;line-height:1.2;white-space:nowrap;box-shadow:0 8px 24px rgba(20,18,30,.18);transition:opacity .16s ease,transform .16s ease;z-index:5; }}
-        .ex-attach:hover::before,.ex-attach:focus-visible::before {{ opacity:1;transform:translateY(-50%) translateX(0); }}
-        .ex-attach.has-files::after {{ content:attr(data-count);position:absolute;right:-5px;top:-6px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:#FF7A3D;color:#fff;font-size:9px;font-weight:900;display:grid;place-items:center;border:1px solid #fff; }}
-        :root[data-theme="dark"] .ex-attach {{ color:#FFF8E8!important;border-color:#FF7A3D!important;background:#0B0B10!important; }}
-        :root[data-theme="dark"] .ex-attach::before {{ background:#FFF8E8;color:#1A1A1F;border-color:#FF7A3D; }}
-        @media (max-width:720px) {{ .ex-row {{ grid-template-columns:1fr; }} .ex-delete {{ justify-self:start; }} }}
+        .ex-attach,.ex-files {{ color:#1A1A1F!important;border:1px solid #E2DCCC!important;background:#FBF8F0!important;position:relative; }}
+        .ex-files {{ font-size:14px!important; }}
+        .ex-attach::before,.ex-files::before {{ content:attr(data-tip);position:absolute;right:calc(100% + 9px);top:50%;transform:translateY(-50%) translateX(4px);opacity:0;pointer-events:none;background:#1A1A1F;color:#FFF8E8;border:1px solid #1A1A1F;border-radius:10px;padding:7px 9px;font-size:11px;font-weight:900;line-height:1.2;white-space:nowrap;box-shadow:0 8px 24px rgba(20,18,30,.18);transition:opacity .16s ease,transform .16s ease;z-index:5; }}
+        .ex-attach:hover::before,.ex-attach:focus-visible::before,.ex-files:hover::before,.ex-files:focus-visible::before {{ opacity:1;transform:translateY(-50%) translateX(0); }}
+        .ex-attach.has-files::after,.ex-files.has-files::after {{ content:attr(data-count);position:absolute;right:-5px;top:-6px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:#FF7A3D;color:#fff;font-size:9px;font-weight:900;display:grid;place-items:center;border:1px solid #fff; }}
+        .ex-file-panel {{ grid-column:1/-1;margin:0 0 4px;padding:11px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.58);box-shadow:0 3px 0 rgba(26,26,31,.08); }}
+        .ex-file-panel[hidden] {{ display:none!important; }}
+        .ex-file-top {{ display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;font-size:12px;font-weight:900;color:var(--text); }}
+        .ex-file-list,.ex-upload-list {{ display:grid;gap:8px; }}
+        .ex-file-empty {{ padding:10px;border:1px dashed var(--border);border-radius:12px;color:var(--text-muted);font-size:12px;font-weight:800;text-align:center; }}
+        .ex-file-row,.ex-upload-item {{ display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border:1px solid var(--border);border-radius:12px;background:var(--card);padding:8px 9px; }}
+        .ex-file-name,.ex-upload-name {{ color:var(--text);font-size:12px;font-weight:900;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }}
+        .ex-file-meta,.ex-upload-meta {{ color:var(--text-muted);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-top:2px; }}
+        .ex-file-delete {{ width:28px!important;height:28px!important;min-width:28px!important;min-height:28px!important;border-radius:999px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0!important;color:var(--red)!important; }}
+        .ex-upload-track {{ grid-column:1/-1;height:7px;border-radius:999px;background:#E9E1D4;overflow:hidden; }}
+        .ex-upload-fill {{ height:100%;width:0%;border-radius:999px;background:#FF7A3D;transition:width .16s ease; }}
+        .ex-upload-item.done .ex-upload-fill {{ background:#27C77A; }}
+        .ex-upload-item.error .ex-upload-fill {{ background:var(--red); }}
+        :root[data-theme="dark"] .ex-attach,:root[data-theme="dark"] .ex-files {{ color:#FFF8E8!important;border-color:#FF7A3D!important;background:#0B0B10!important; }}
+        :root[data-theme="dark"] .ex-attach::before,:root[data-theme="dark"] .ex-files::before {{ background:#FFF8E8;color:#1A1A1F;border-color:#FF7A3D; }}
+        :root[data-theme="dark"] .ex-file-panel {{ background:#101016;border-color:#FF7A3D;box-shadow:0 3px 0 rgba(255,122,61,.45); }}
+        :root[data-theme="dark"] .ex-file-row,:root[data-theme="dark"] .ex-upload-item {{ background:#0B0B10;border-color:#2B2C35; }}
+        :root[data-theme="dark"] .ex-upload-track {{ background:#24212A; }}
+        @media (max-width:720px) {{ .ex-row {{ grid-template-columns:1fr; }} .ex-delete,.ex-attach,.ex-files {{ justify-self:start; }} }}
         .course-brain {{ margin:14px 0 16px;padding:14px;border:1px solid #FF7A3D;border-radius:16px;background:linear-gradient(135deg,#FFF7EC,#F8FBF4);box-shadow:0 4px 0 rgba(26,26,31,.12); }}
         .course-brain.locked {{ border-color:#E2DCCC;background:#FBF8F0;box-shadow:none; }}
         .brain-top {{ display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px; }}
@@ -7592,6 +7755,301 @@ Material:
           if (fail) alert('Se guardaron ' + ok + ' archivo(s). Fallaron ' + fail + '.');
         }}
 
+        function examRowFileKey(row) {{
+          if (!row) return 'new';
+          if (!row.dataset.fileKey) row.dataset.fileKey = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+          return row.dataset.fileKey;
+        }}
+
+        function examIsSaved(row) {{
+          var id = row && row.dataset ? row.dataset.examId : '';
+          return !!(id && id !== 'new' && /^\\d+$/.test(String(id)));
+        }}
+
+        function examHeaders(json) {{
+          var csrfToken = document.querySelector('meta[name="csrf-token"]');
+          var headers = json ? {{'Content-Type':'application/json'}} : {{}};
+          if (csrfToken) headers['X-CSRFToken'] = csrfToken.content;
+          return headers;
+        }}
+
+        function examPayloadFromRow(courseId, row, requireName) {{
+          var nameEl = row ? row.querySelector('[data-field="name"]') : null;
+          var dateEl = row ? row.querySelector('[data-field="exam_date"]') : null;
+          var weightEl = row ? row.querySelector('[data-field="weight_pct"]') : null;
+          var gradeEl = row ? row.querySelector('[data-field="grade"]') : null;
+          var name = (nameEl && nameEl.value || '').trim();
+          if (!name) {{
+            if (requireName) {{
+              if (nameEl) nameEl.focus();
+              throw new Error('Ponle nombre a la prueba antes de adjuntar archivos.');
+            }}
+            return null;
+          }}
+          var gradeRaw = (gradeEl && gradeEl.value) || '';
+          var grade = gradeRaw === '' ? null : parseFloat(String(gradeRaw).replace(',', '.'));
+          return {{
+            name: name,
+            exam_date: (dateEl && dateEl.value) || '',
+            weight_pct: parseInt((weightEl && weightEl.value) || '0') || 0,
+            grade: isFinite(grade) ? grade : null,
+            topics: [],
+            course_id: parseInt(courseId) || 0
+          }};
+        }}
+
+        function updateExamRowSavedState(courseId, row, examId) {{
+          if (!row || !examId) return;
+          var key = String(examId);
+          row.dataset.examId = key;
+          row.dataset.fileKey = key;
+          var attach = row.querySelector('.ex-attach');
+          var filesBtn = row.querySelector('.ex-files');
+          var input = row.querySelector('input[type="file"]');
+          var panel = row.querySelector('.ex-file-panel');
+          if (attach) {{
+            attach.id = 'exam-attach-' + key;
+            attach.setAttribute('onclick', "pickExamFiles(" + courseId + ",'" + key + "', this)");
+            attach.setAttribute('data-tip', 'Adjuntar material a esta prueba');
+            attach.title = 'Adjuntar material a esta prueba';
+            attach.setAttribute('aria-label', 'Adjuntar material a esta prueba');
+          }}
+          if (filesBtn) {{
+            filesBtn.id = 'exam-files-' + key;
+            filesBtn.setAttribute('onclick', "toggleExamFiles(" + courseId + ",'" + key + "', this)");
+          }}
+          if (input) {{
+            input.id = 'exam-file-' + key;
+            input.setAttribute('onchange', "uploadExamFiles(" + courseId + ",'" + key + "', this)");
+          }}
+          if (panel) panel.id = 'exam-files-panel-' + key;
+        }}
+
+        async function ensureExamSaved(courseId, row) {{
+          if (!row) throw new Error('No se encontro la prueba.');
+          var payload = examPayloadFromRow(courseId, row, true);
+          var saved = examIsSaved(row);
+          var url = saved ? '/api/student/exams/' + row.dataset.examId : '/api/student/courses/' + courseId + '/exams';
+          var method = saved ? 'PUT' : 'POST';
+          var r = await fetch(url, {{
+            method: method,
+            headers: examHeaders(true),
+            body: JSON.stringify(payload)
+          }});
+          var d = await _safeJson(r);
+          if (!r.ok || (d && d.error)) throw new Error((d && d.error) || 'No se pudo guardar la prueba.');
+          var examId = saved ? row.dataset.examId : (d && d.id);
+          if (!examId) throw new Error('No se pudo preparar la prueba para adjuntar archivos.');
+          updateExamRowSavedState(courseId, row, examId);
+          return String(examId);
+        }}
+
+        function fileSizeLabel(n) {{
+          n = parseInt(n || 0) || 0;
+          if (!n) return '';
+          if (n > 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+          if (n > 1024) return Math.round(n / 1024) + ' KB';
+          return n + ' B';
+        }}
+
+        function getExamFilePanel(row) {{
+          var key = examRowFileKey(row);
+          var panel = row.querySelector('.ex-file-panel');
+          if (!panel) {{
+            panel = document.createElement('div');
+            panel.className = 'ex-file-panel';
+            panel.id = 'exam-files-panel-' + key;
+            row.appendChild(panel);
+          }}
+          return panel;
+        }}
+
+        function setExamFileCount(row, count) {{
+          row.querySelectorAll('.ex-attach,.ex-files').forEach(function(btn) {{
+            if (count > 0) {{
+              btn.classList.add('has-files');
+              btn.setAttribute('data-count', String(count));
+            }} else {{
+              btn.classList.remove('has-files');
+              btn.removeAttribute('data-count');
+            }}
+          }});
+        }}
+
+        function renderExamFilesPanel(courseId, row, files) {{
+          var panel = getExamFilePanel(row);
+          files = files || [];
+          var html = '<div class="ex-file-top"><span>Archivos de esta prueba</span><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest(\\'.ex-file-panel\\').hidden=true">Cerrar</button></div>';
+          if (!files.length) {{
+            html += '<div class="ex-file-empty">Todavia no hay archivos adjuntos para esta prueba.</div>';
+          }} else {{
+            html += '<div class="ex-file-list">';
+            files.forEach(function(f) {{
+              var meta = ((f.file_type || 'archivo') + (f.uploaded_at ? ' - ' + String(f.uploaded_at).slice(0, 10) : '')).toUpperCase();
+              html += '<div class="ex-file-row" data-file-id="' + f.id + '">'
+                + '<div><div class="ex-file-name">' + _esc(f.original_name || f.name || 'Archivo') + '</div><div class="ex-file-meta">' + _esc(meta) + '</div></div>'
+                + '<button type="button" class="btn btn-ghost btn-sm ex-file-delete" onclick="deleteExamFile(' + courseId + ',' + f.id + ', this)" title="Eliminar archivo" aria-label="Eliminar archivo">&#128465;</button>'
+                + '</div>';
+            }});
+            html += '</div>';
+          }}
+          panel.innerHTML = html;
+          panel.hidden = false;
+          setExamFileCount(row, files.length);
+        }}
+
+        function renderExamUploadPanel(row, files) {{
+          var panel = getExamFilePanel(row);
+          var key = examRowFileKey(row);
+          var html = '<div class="ex-file-top"><span>Subiendo archivos</span><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest(\\'.ex-file-panel\\').hidden=true">Ocultar</button></div><div class="ex-upload-list">';
+          Array.prototype.forEach.call(files || [], function(file, i) {{
+            var id = 'exam-upload-' + key + '-' + i;
+            html += '<div class="ex-upload-item" id="' + id + '">'
+              + '<div><div class="ex-upload-name">' + _esc(file.name) + '</div><div class="ex-upload-meta">Esperando - ' + _esc(fileSizeLabel(file.size)) + '</div></div>'
+              + '<b class="ex-upload-percent">0%</b>'
+              + '<div class="ex-upload-track"><div class="ex-upload-fill"></div></div>'
+              + '</div>';
+          }});
+          html += '</div>';
+          panel.innerHTML = html;
+          panel.hidden = false;
+        }}
+
+        async function loadExamFiles(courseId, row, show) {{
+          if (!examIsSaved(row)) {{
+            renderExamFilesPanel(courseId, row, []);
+            return [];
+          }}
+          var examId = row.dataset.examId;
+          var r = await fetch('/api/student/courses/' + courseId + '/files?exam_id=' + encodeURIComponent(examId));
+          var d = await _safeJson(r);
+          if (!r.ok) throw new Error((d && d.error) || 'No se pudieron cargar los archivos.');
+          var files = (d && d.files) || [];
+          if (show) renderExamFilesPanel(courseId, row, files);
+          else setExamFileCount(row, files.length);
+          return files;
+        }}
+
+        async function toggleExamFiles(courseId, examKey, btn) {{
+          var row = btn ? btn.closest('.ex-row') : document.querySelector('[data-file-key="' + examKey + '"]');
+          if (!row) return;
+          var panel = getExamFilePanel(row);
+          if (!panel.hidden && panel.innerHTML.trim()) {{ panel.hidden = true; return; }}
+          try {{
+            await loadExamFiles(courseId, row, true);
+          }} catch(e) {{
+            alert(e.message || 'No se pudieron cargar los archivos.');
+          }}
+        }}
+
+        function uploadExamFileXHR(courseId, examId, file, item) {{
+          return new Promise(function(resolve) {{
+            var fill = item ? item.querySelector('.ex-upload-fill') : null;
+            var meta = item ? item.querySelector('.ex-upload-meta') : null;
+            var pct = item ? item.querySelector('.ex-upload-percent') : null;
+            var fd = new FormData();
+            fd.append('exam_id', examId);
+            fd.append('file', file);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/student/courses/' + courseId + '/sources');
+            var csrfToken = document.querySelector('meta[name="csrf-token"]');
+            if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken.content);
+            xhr.upload.onprogress = function(evt) {{
+              if (!evt.lengthComputable) return;
+              var p = Math.max(4, Math.min(98, Math.round((evt.loaded / evt.total) * 100)));
+              if (fill) fill.style.width = p + '%';
+              if (pct) pct.textContent = p + '%';
+              if (meta) meta.textContent = 'Subiendo - ' + fileSizeLabel(file.size);
+            }};
+            xhr.onload = function() {{
+              var d = null;
+              try {{ d = JSON.parse(xhr.responseText || '{{}}'); }} catch(e) {{ d = {{}}; }}
+              if (xhr.status >= 200 && xhr.status < 300 && d && d.ok) {{
+                if (fill) fill.style.width = '100%';
+                if (pct) pct.textContent = 'Listo';
+                if (meta) meta.textContent = 'Agregado correctamente';
+                if (item) item.classList.add('done');
+                resolve({{ok:true, id:d.id}});
+              }} else {{
+                if (fill) fill.style.width = '100%';
+                if (pct) pct.textContent = 'Error';
+                if (meta) meta.textContent = (d && d.error) || 'No se pudo guardar';
+                if (item) item.classList.add('error');
+                resolve({{ok:false}});
+              }}
+            }};
+            xhr.onerror = function() {{
+              if (fill) fill.style.width = '100%';
+              if (pct) pct.textContent = 'Error';
+              if (meta) meta.textContent = 'Error de red';
+              if (item) item.classList.add('error');
+              resolve({{ok:false}});
+            }};
+            xhr.send(fd);
+          }});
+        }}
+
+        async function pickExamFiles(courseId, examKey, btn) {{
+          var row = btn ? btn.closest('.ex-row') : document.querySelector('[data-file-key="' + examKey + '"]');
+          if (!row) return;
+          var old = btn ? btn.innerHTML : '';
+          try {{
+            if (btn) {{ btn.disabled = true; btn.innerHTML = '&#9203;'; }}
+            await ensureExamSaved(courseId, row);
+            var input = row.querySelector('input[type="file"]');
+            if (input) input.click();
+          }} catch(e) {{
+            alert(e.message || 'No se pudo preparar la prueba.');
+          }} finally {{
+            if (btn) {{ btn.disabled = false; btn.innerHTML = old || '&#128206;'; }}
+          }}
+        }}
+
+        async function uploadExamFiles(courseId, examKey, input) {{
+          if (!input || !input.files || !input.files.length) return;
+          var row = input.closest('.ex-row');
+          if (!row) return;
+          var files = Array.prototype.slice.call(input.files);
+          var btn = row.querySelector('.ex-attach');
+          var old = btn ? btn.innerHTML : '';
+          var ok = 0, fail = 0;
+          try {{
+            if (btn) {{ btn.disabled = true; btn.innerHTML = '&#9203;'; }}
+            var examId = await ensureExamSaved(courseId, row);
+            renderExamUploadPanel(row, files);
+            for (var i = 0; i < files.length; i++) {{
+              var item = document.getElementById('exam-upload-' + examRowFileKey(row) + '-' + i);
+              var result = await uploadExamFileXHR(courseId, examId, files[i], item);
+              if (result && result.ok) ok++;
+              else fail++;
+            }}
+            input.value = '';
+            setTimeout(function(){{ loadExamFiles(courseId, row, true).catch(function(){{}}); }}, 450);
+          }} catch(e) {{
+            alert(e.message || 'No se pudieron guardar los archivos.');
+          }} finally {{
+            if (btn) {{
+              btn.disabled = false;
+              btn.innerHTML = ok ? '&#10003;' : (old || '&#128206;');
+              setTimeout(function(){{ btn.innerHTML = old || '&#128206;'; }}, 900);
+            }}
+          }}
+          if (fail) alert('Se guardaron ' + ok + ' archivo(s). Fallaron ' + fail + '.');
+        }}
+
+        async function deleteExamFile(courseId, fileId, btn) {{
+          if (!confirm('Eliminar este archivo?')) return;
+          var row = btn ? btn.closest('.ex-row') : null;
+          try {{
+            var r = await fetch('/api/student/files/' + fileId, {{method:'DELETE', headers:examHeaders(false)}});
+            var d = await _safeJson(r);
+            if (!r.ok || (d && d.error)) throw new Error((d && d.error) || 'No se pudo eliminar el archivo.');
+            if (row) await loadExamFiles(courseId, row, true);
+          }} catch(e) {{
+            alert(e.message || 'No se pudo eliminar el archivo.');
+          }}
+        }}
+
         function renderExamsPanel(courseId, exams) {{
 
           var panel = document.getElementById('exams-panel-' + courseId);
@@ -7662,7 +8120,13 @@ Material:
           var attachDisabled = examId ? '' : ' disabled';
           var attachTitle = examId ? 'Adjuntar material a esta prueba' : 'Guarda la evaluación antes de adjuntar';
 
-          return '<div class="ex-row" data-exam-id="' + idAttr + '">'
+          var saved = !!examId;
+          idAttr = saved ? String(examId) : 'new';
+          var fileKey = saved ? String(examId) : ('tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
+          attachDisabled = '';
+          attachTitle = saved ? 'Adjuntar material a esta prueba' : 'Adjuntar material: se guarda automaticamente primero';
+
+          return '<div class="ex-row" data-exam-id="' + idAttr + '" data-file-key="' + fileKey + '">'
 
             + '<input type="text" class="ex-input" data-field="name" value="' + _esc(name) + '" placeholder="Nombre evaluación">'
 
@@ -7672,11 +8136,15 @@ Material:
 
             + '<input type="number" class="ex-input" data-field="grade" value="' + _esc(grade||'') + '" min="1" max="7" step="0.01" placeholder="Nota" oninput="updateCourseFinalFromExams(' + courseId + ')">'
 
-            + '<button type="button" id="exam-attach-' + idAttr + '" class="btn btn-ghost btn-sm ex-attach" onclick="pickExamFiles(' + courseId + ',\\'' + idAttr + '\\', this)" title="' + attachTitle + '" aria-label="' + attachTitle + '"' + attachDisabled + '>&#128206;</button>'
+            + '<button type="button" id="exam-attach-' + fileKey + '" class="btn btn-ghost btn-sm ex-attach" onclick="pickExamFiles(' + courseId + ',\\'' + fileKey + '\\', this)" title="' + attachTitle + '" aria-label="' + attachTitle + '" data-tip="' + attachTitle + '">&#128206;</button>'
 
-            + '<input id="exam-file-' + idAttr + '" type="file" accept=".pdf,.doc,.docx,.txt" multiple hidden onchange="uploadExamFiles(' + courseId + ',\\'' + idAttr + '\\', this)">'
+            + '<input id="exam-file-' + fileKey + '" type="file" accept=".pdf,.doc,.docx,.txt" multiple hidden onchange="uploadExamFiles(' + courseId + ',\\'' + fileKey + '\\', this)">'
+
+            + '<button type="button" id="exam-files-' + fileKey + '" class="btn btn-ghost btn-sm ex-files" onclick="toggleExamFiles(' + courseId + ',\\'' + fileKey + '\\', this)" title="Ver archivos subidos" aria-label="Ver archivos subidos" data-tip="Ver archivos subidos">&#128193;</button>'
 
             + '<button class="btn btn-ghost btn-sm ex-delete" onclick="deleteExamInline(this)" title="Eliminar">&#128465;</button>'
+
+            + '<div id="exam-files-panel-' + fileKey + '" class="ex-file-panel" hidden></div>'
 
             + '</div>';
 
@@ -7771,7 +8239,7 @@ Material:
 
                 var d = await r.json();
 
-                if (d && d.id) {{ row.dataset.examId = d.id; }}
+                if (d && d.id) {{ updateExamRowSavedState(courseId, row, d.id); }}
 
                 ok++;
 
