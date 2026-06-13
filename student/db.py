@@ -77,6 +77,21 @@ CREATE TABLE IF NOT EXISTS student_study_progress (
     UNIQUE(client_id, plan_date)
 );
 
+CREATE TABLE IF NOT EXISTS student_focus_phases (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    phase_id        TEXT NOT NULL,
+    mode            TEXT DEFAULT 'pomodoro',
+    expected_minutes INTEGER DEFAULT 0,
+    course_id       INTEGER REFERENCES student_courses(id) ON DELETE SET NULL,
+    exam_id         INTEGER REFERENCES student_exams(id) ON DELETE SET NULL,
+    started_at      TIMESTAMP DEFAULT NOW(),
+    claimed_at      TIMESTAMP,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    UNIQUE(client_id, phase_id)
+);
+CREATE INDEX IF NOT EXISTS idx_focus_phases_client ON student_focus_phases(client_id, phase_id);
+
 CREATE TABLE IF NOT EXISTS student_course_files (
     id              SERIAL PRIMARY KEY,
     client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -288,6 +303,21 @@ CREATE TABLE IF NOT EXISTS student_study_progress (
     created_at      TEXT DEFAULT (datetime('now', 'localtime')),
     UNIQUE(client_id, plan_date)
 );
+
+CREATE TABLE IF NOT EXISTS student_focus_phases (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    phase_id        TEXT NOT NULL,
+    mode            TEXT DEFAULT 'pomodoro',
+    expected_minutes INTEGER DEFAULT 0,
+    course_id       INTEGER REFERENCES student_courses(id) ON DELETE SET NULL,
+    exam_id         INTEGER REFERENCES student_exams(id) ON DELETE SET NULL,
+    started_at      TEXT DEFAULT (datetime('now', 'localtime')),
+    claimed_at      TEXT,
+    created_at      TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(client_id, phase_id)
+);
+CREATE INDEX IF NOT EXISTS idx_focus_phases_client ON student_focus_phases(client_id, phase_id);
 
 CREATE TABLE IF NOT EXISTS student_course_files (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -563,6 +593,36 @@ def _student_migrations():
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
         except Exception:
             pass  # column already exists
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_focus_phases ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "phase_id TEXT NOT NULL, "
+        "mode TEXT DEFAULT 'pomodoro', "
+        "expected_minutes INTEGER DEFAULT 0, "
+        "course_id INTEGER REFERENCES student_courses(id) ON DELETE SET NULL, "
+        "exam_id INTEGER REFERENCES student_exams(id) ON DELETE SET NULL, "
+        "started_at TIMESTAMP DEFAULT NOW(), "
+        "claimed_at TIMESTAMP, "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(client_id, phase_id))",
+        "CREATE TABLE IF NOT EXISTS student_focus_phases ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "phase_id TEXT NOT NULL, "
+        "mode TEXT DEFAULT 'pomodoro', "
+        "expected_minutes INTEGER DEFAULT 0, "
+        "course_id INTEGER REFERENCES student_courses(id) ON DELETE SET NULL, "
+        "exam_id INTEGER REFERENCES student_exams(id) ON DELETE SET NULL, "
+        "started_at TEXT DEFAULT (datetime('now','localtime')), "
+        "claimed_at TEXT, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(client_id, phase_id))",
+    )
+    _create_table_safe(
+        "CREATE INDEX IF NOT EXISTS idx_focus_phases_client ON student_focus_phases(client_id, phase_id)",
+        "CREATE INDEX IF NOT EXISTS idx_focus_phases_client ON student_focus_phases(client_id, phase_id)",
+    )
     # Personal leaderboard groups
     _create_table_safe(
         "CREATE TABLE IF NOT EXISTS student_lb_groups ("
@@ -1442,6 +1502,179 @@ def delete_course(course_id: int, client_id: int):
 # or stale localStorage state crediting absurd amounts of "study time".
 FOCUS_MAX_MINUTES_PER_SESSION = 480   # 8h cap on a single save
 FOCUS_MAX_MINUTES_PER_DAY     = 16 * 60  # 16h cap on a single calendar day
+FOCUS_PHASE_CLAIM_GRACE_SECONDS = 20
+FOCUS_PHASE_MAX_AGE_SECONDS = 12 * 60 * 60
+
+
+def _parse_focus_dt(value) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    if not value:
+        return None
+    raw = str(value).strip().replace("Z", "")
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(raw[:26], fmt)
+        except Exception:
+            pass
+    try:
+        return datetime.fromisoformat(raw).replace(tzinfo=None)
+    except Exception:
+        return None
+
+
+def _validate_focus_course_exam(db, client_id: int, course_id, exam_id):
+    try:
+        course_id = int(course_id or 0) or None
+    except (TypeError, ValueError):
+        course_id = None
+    try:
+        exam_id = int(exam_id or 0) or None
+    except (TypeError, ValueError):
+        exam_id = None
+
+    if course_id:
+        owns = _fetchval(
+            db,
+            "SELECT 1 FROM student_courses WHERE id = %s AND client_id = %s",
+            (course_id, client_id),
+        )
+        if not owns:
+            course_id = None
+
+    if exam_id:
+        if course_id:
+            owns = _fetchval(
+                db,
+                "SELECT 1 FROM student_exams WHERE id = %s AND client_id = %s AND course_id = %s",
+                (exam_id, client_id, course_id),
+            )
+        else:
+            owns = _fetchval(
+                db,
+                "SELECT 1 FROM student_exams WHERE id = %s AND client_id = %s",
+                (exam_id, client_id),
+            )
+        if not owns:
+            exam_id = None
+
+    return course_id, exam_id
+
+
+def start_focus_phase(client_id: int, phase_id: str, mode: str = "pomodoro",
+                      expected_minutes: int = 0, course_id: int | None = None,
+                      exam_id: int | None = None) -> dict | None:
+    """Register a work phase before the browser timer starts.
+
+    Claim endpoints later require this row and enough elapsed wall-clock time.
+    That prevents forged `localStorage.focus_pending_phases` entries from
+    becoming XP or coins.
+    """
+    phase_id = (phase_id or "").strip()[:80]
+    if not phase_id:
+        return None
+    mode = (mode or "pomodoro").strip()[:40] or "pomodoro"
+    try:
+        expected_minutes = int(expected_minutes or 0)
+    except (TypeError, ValueError):
+        expected_minutes = 0
+    expected_minutes = max(0, min(FOCUS_MAX_MINUTES_PER_SESSION, expected_minutes))
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+
+    with get_db() as db:
+        course_id, exam_id = _validate_focus_course_exam(db, client_id, course_id, exam_id)
+        existing = _fetchone(
+            db,
+            "SELECT * FROM student_focus_phases WHERE client_id = %s AND phase_id = %s",
+            (client_id, phase_id),
+        )
+        if existing:
+            return existing
+        try:
+            _exec(
+                db,
+                "INSERT INTO student_focus_phases "
+                "(client_id, phase_id, mode, expected_minutes, course_id, exam_id, started_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (client_id, phase_id, mode, expected_minutes, course_id, exam_id, now),
+            )
+        except Exception:
+            pass
+        return _fetchone(
+            db,
+            "SELECT * FROM student_focus_phases WHERE client_id = %s AND phase_id = %s",
+            (client_id, phase_id),
+        )
+
+
+def validate_focus_phase_claim(client_id: int, phase_id: str, minutes: int,
+                               course_id: int | None = None,
+                               exam_id: int | None = None) -> tuple[bool, str, dict | None]:
+    phase_id = (phase_id or "").strip()[:80]
+    if not phase_id:
+        return False, "missing-phase-id", None
+    try:
+        minutes = int(minutes or 0)
+    except (TypeError, ValueError):
+        minutes = 0
+    minutes = max(0, min(FOCUS_MAX_MINUTES_PER_SESSION, minutes))
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT * FROM student_focus_phases WHERE client_id = %s AND phase_id = %s",
+            (client_id, phase_id),
+        )
+        if not row:
+            return False, "unverified-phase", None
+        if row.get("claimed_at"):
+            return False, "duplicate-phase", row
+
+        registered_course = row.get("course_id")
+        registered_exam = row.get("exam_id")
+        try:
+            requested_course = int(course_id or 0) or None
+        except (TypeError, ValueError):
+            requested_course = None
+        try:
+            requested_exam = int(exam_id or 0) or None
+        except (TypeError, ValueError):
+            requested_exam = None
+        if registered_course and requested_course and int(registered_course) != requested_course:
+            return False, "course-mismatch", row
+        if registered_exam and requested_exam and int(registered_exam) != requested_exam:
+            return False, "exam-mismatch", row
+
+        try:
+            expected = int(row.get("expected_minutes") or 0)
+        except (TypeError, ValueError):
+            expected = 0
+        if expected > 0 and minutes > expected + 1:
+            return False, "minutes-exceed-phase", row
+
+        started_at = _parse_focus_dt(row.get("started_at"))
+        if not started_at:
+            return False, "invalid-phase-start", row
+        elapsed = (datetime.now() - started_at).total_seconds()
+        if elapsed > FOCUS_PHASE_MAX_AGE_SECONDS:
+            return False, "phase-expired", row
+        required_minutes = expected if expected > 0 else minutes
+        required_seconds = max(0, (required_minutes * 60) - FOCUS_PHASE_CLAIM_GRACE_SECONDS)
+        if minutes > 0 and elapsed < required_seconds:
+            return False, "phase-too-early", row
+        return True, "ok", row
+
+
+def mark_focus_phase_claimed(client_id: int, phase_id: str) -> None:
+    phase_id = (phase_id or "").strip()[:80]
+    if not phase_id:
+        return
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE student_focus_phases SET claimed_at = %s "
+            "WHERE client_id = %s AND phase_id = %s AND claimed_at IS NULL",
+            (datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"), client_id, phase_id),
+        )
 
 def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
                        course_name: str = "", course_id: int | None = None,

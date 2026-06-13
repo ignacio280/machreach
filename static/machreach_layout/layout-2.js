@@ -191,6 +191,48 @@
       } catch(e){ return false; }
     }
 
+    var phaseRegistering = {};
+    function registerFloatingPhaseStart(d, done){
+      if (!d || d.isBreak || !d.workMinutes || !d.phaseId) { done(true); return; }
+      if (d.serverRegistered) { done(true); return; }
+      if (phaseRegistering[d.phaseId]) return;
+      phaseRegistering[d.phaseId] = true;
+      fetch('/api/student/focus/phase/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          phase_id: d.phaseId,
+          mode: d.originalMode || 'pomodoro',
+          expected_minutes: d.workMinutes || 0,
+          course_id: d.courseId || null,
+          exam_id: d.examId || null
+        })
+      }).then(function(resp){
+        return resp.json().catch(function(){ return null; }).then(function(data){
+          var ok = resp.ok && data && data.ok;
+          if (ok) d.serverRegistered = true;
+          done(!!ok);
+        });
+      }).catch(function(){
+        done(false);
+      }).finally(function(){
+        delete phaseRegistering[d.phaseId];
+      });
+    }
+
+    function advanceToPhase(np){
+      if (!np) return;
+      if (np.endAt && np.endAt > Date.now()){
+        writeState(np);
+      } else {
+        var dur = (np.workMinutes && np.workMinutes>0) ? np.workMinutes*60*1000 : 5*60*1000;
+        np.endAt = Date.now() + dur;
+        writeState(np);
+      }
+      startKeepalive();
+    }
+
     function creditPhase(d){
       // d: a focus_float phase object that just ended.
       // New model: phases are NOT saved automatically. They accumulate in
@@ -298,15 +340,17 @@
             // The original endAt was relative to the previous phase's endAt; preserve duration.
             // We don't know the duration directly — recompute from workMinutes (work) or label (best-effort 5min default for break is wrong).
             // Safer: nextPhase.endAt was already absolute; if it's already in the past, just skip ahead.
-            if (np.endAt && np.endAt > Date.now()){
-              writeState(np);
-            } else {
-              // Compute a sensible new endAt: workMinutes for work phases, fall back to 5min.
-              var dur = (np.workMinutes && np.workMinutes>0) ? np.workMinutes*60*1000 : 5*60*1000;
-              np.endAt = Date.now() + dur;
-              writeState(np);
-            }
-            startKeepalive();
+            registerFloatingPhaseStart(np, function(ok){
+              if (!ok) {
+                d.active = false;
+                writeState(d);
+                widget.style.display = 'none';
+                stopKeepalive();
+                showNotif('No se pudo verificar la sesiÃ³n', 'Vuelve a Modo Enfoque para continuar.');
+                return;
+              }
+              advanceToPhase(np);
+            });
           } else {
             d.active = false;
             writeState(d);

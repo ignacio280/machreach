@@ -2932,6 +2932,61 @@ Return this JSON shape:
 
 
 
+    def _clean_focus_phase_id(raw) -> str:
+        return re.sub(r"[^A-Za-z0-9_.:-]", "", str(raw or ""))[:80]
+
+
+    @app.route("/api/student/focus/phase/start", methods=["POST"])
+    def student_focus_phase_start():
+        """Register a focus phase before the browser timer starts."""
+
+        if not _logged_in():
+            return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+        data = request.get_json(force=True) or {}
+        phase_id = _clean_focus_phase_id(data.get("phase_id") or data.get("phaseId"))
+        mode = (data.get("mode") or "pomodoro").strip()[:40] or "pomodoro"
+        try:
+            expected_minutes = int(data.get("expected_minutes") or data.get("minutes") or 0)
+        except (TypeError, ValueError):
+            expected_minutes = 0
+        try:
+            course_id = int(data.get("course_id") or data.get("courseId") or 0) or None
+        except (TypeError, ValueError):
+            course_id = None
+        try:
+            exam_id = int(data.get("exam_id") or data.get("examId") or 0) or None
+        except (TypeError, ValueError):
+            exam_id = None
+
+        if not phase_id:
+            return jsonify({"ok": False, "error": "Missing phase id"}), 400
+        if expected_minutes < 0:
+            expected_minutes = 0
+        if expected_minutes > 480:
+            expected_minutes = 480
+        if not course_id:
+            return jsonify({"ok": False, "error": "Pick a course before starting the timer."}), 400
+
+        row = sdb.start_focus_phase(
+            _cid(),
+            phase_id=phase_id,
+            mode=mode,
+            expected_minutes=expected_minutes,
+            course_id=course_id,
+            exam_id=exam_id,
+        )
+        if not row:
+            return jsonify({"ok": False, "error": "Could not verify focus phase"}), 400
+
+        return jsonify({
+            "ok": True,
+            "phase_id": phase_id,
+            "expected_minutes": int(row.get("expected_minutes") or expected_minutes or 0),
+            "started_at": str(row.get("started_at") or ""),
+        })
+
+
     @app.route("/api/student/focus/save", methods=["POST"])
     def student_save_focus():
 
@@ -3023,6 +3078,29 @@ Return this JSON shape:
             except Exception:
                 pass
 
+        if minutes > 0:
+            if not phase_id:
+                return jsonify({"ok": False, "error": "Unverified focus phase", "reason": "missing-phase-id"}), 400
+            phase_ok, phase_reason, _phase_row = sdb.validate_focus_phase_claim(
+                cid,
+                phase_id,
+                minutes,
+                course_id=course_id,
+                exam_id=exam_id,
+            )
+            if not phase_ok:
+                local_date = (request.args.get("local_date") or "").strip() or None
+                if phase_reason == "duplicate-phase":
+                    return jsonify({
+                        "ok": True,
+                        "saved": False,
+                        "reason": "duplicate-phase",
+                        "stats": sdb.get_focus_stats_today(cid, local_date=local_date),
+                        "minutes_saved": 0,
+                        "xp_awarded": 0,
+                    })
+                return jsonify({"ok": False, "error": "Unverified focus phase", "reason": phase_reason}), 400
+
         # save_focus_session itself will further clamp by per-day total and
         # may return 0 if the day is already maxed out.
         saved_id = sdb.save_focus_session(
@@ -3100,6 +3178,12 @@ Return this JSON shape:
                 # 0-XP micro phases still need a marker so phase-id dedupe
                 # works on retries/refreshes. This does not affect total XP.
                 sdb.award_xp(cid, "focus_session", 0, detail)
+
+            if phase_id:
+                try:
+                    sdb.mark_focus_phase_claimed(cid, phase_id)
+                except Exception:
+                    pass
 
 
         # Auto-award focus badges
@@ -3208,6 +3292,11 @@ Return this JSON shape:
         if not _logged_in():
 
             return jsonify({"error": "Unauthorized"}), 401
+
+        return jsonify({
+            "ok": False,
+            "error": "Focus claim adjustments are disabled. Claim registered phases instead.",
+        }), 410
 
         data = request.get_json(force=True) or {}
 
@@ -3373,6 +3462,11 @@ Return this JSON shape:
                 results.append({"index": idx, "ok": True, "saved": False, "reason": "missing-course"})
                 continue
 
+            if not phase_id:
+                skipped_count += 1
+                results.append({"index": idx, "ok": True, "saved": False, "reason": "missing-phase-id"})
+                continue
+
             if phase_id:
                 try:
                     with sdb.get_db() as db:
@@ -3390,6 +3484,25 @@ Return this JSON shape:
                         continue
                 except Exception:
                     pass
+
+            phase_ok, phase_reason, _phase_row = sdb.validate_focus_phase_claim(
+                cid,
+                phase_id,
+                minutes,
+                course_id=course_id,
+                exam_id=exam_id,
+            )
+            if not phase_ok:
+                if phase_reason == "duplicate-phase":
+                    duplicate_count += 1
+                    saved_count += 1
+                    minutes_saved += minutes
+                    xp_awarded += (minutes * 5) // 10
+                    results.append({"index": idx, "ok": True, "saved": False, "reason": "duplicate-phase"})
+                else:
+                    skipped_count += 1
+                    results.append({"index": idx, "ok": True, "saved": False, "reason": phase_reason})
+                continue
 
             try:
                 saved_id = sdb.save_focus_session(
@@ -3432,6 +3545,11 @@ Return this JSON shape:
                     sdb.award_xp(cid, "focus_session", 0, detail)
                 if phase_coins > 0:
                     sdb.add_coins(cid, phase_coins, f"focus_session {actual_minutes}min")
+
+                try:
+                    sdb.mark_focus_phase_claimed(cid, phase_id)
+                except Exception:
+                    pass
 
                 saved_count += 1
                 minutes_saved += actual_minutes
@@ -10169,6 +10287,7 @@ Material:
         var pageDone = 0;
 
         var phaseStartFocusSeconds = 0;
+        var currentPhaseId = null;
 
         // True between phase-start and phase-end (kept across pauses). Lets us
         // tell "fresh phase start" from "resume after pause" so we don't reset
@@ -10282,6 +10401,7 @@ Material:
             totalTime: totalTime, timeLeft: timeLeft, isRunning: isRunning,
             sessionStarted: sessionStarted, pageDone: pageDone,
             phaseStartOpen: __phaseOpen, phaseEndAt: phaseEndAt,
+            phaseId: currentPhaseId,
             savedAt: Date.now(),
             course: courseEl ? courseEl.value : '',
             exam: examEl ? examEl.value : ''
@@ -11010,6 +11130,37 @@ Material:
           document.getElementById('fg-close-btn').addEventListener('click', function(){{ ov.remove(); }});
         }}
 
+        function newFocusPhaseId() {{
+          return 'p_' + Date.now() + '_' + Math.floor(Math.random() * 1e9);
+        }}
+
+        async function registerFocusPhase(phaseId, mode, expectedMinutes, courseId, examId) {{
+          if (!phaseId || !courseId) return false;
+          try {{
+            var resp = await fetch('/api/student/focus/phase/start', {{
+              method: 'POST',
+              headers: {{ 'Content-Type': 'application/json' }},
+              body: JSON.stringify({{
+                phase_id: phaseId,
+                mode: mode || currentMode || 'pomodoro',
+                expected_minutes: expectedMinutes || 0,
+                course_id: courseId || null,
+                exam_id: examId || null
+              }})
+            }});
+            var data = null;
+            try {{ data = await resp.json(); }} catch(_) {{}}
+            if (!resp.ok || !data || !data.ok) {{
+              if (window.showToast) window.showToast((data && data.error) || 'No se pudo verificar esta sesi&oacute;n.', 'error');
+              return false;
+            }}
+            return true;
+          }} catch(e) {{
+            if (window.showToast) window.showToast('No se pudo verificar esta sesi&oacute;n. Revisa tu conexi&oacute;n.', 'error');
+            return false;
+          }}
+        }}
+
         var focusGuardMonitorBusy = false;
         setInterval(function() {{
           if (!isRunning || __mandatoryEndAt || focusGuardMonitorBusy) return;
@@ -11022,7 +11173,7 @@ Material:
           }});
         }}, 7000);
 
-        function startTimer(isRestore, guardConfirmed) {{
+        async function startTimer(isRestore, guardConfirmed) {{
 
           if (isRunning) return;
 
@@ -11054,6 +11205,38 @@ Material:
               else showFocusGuardRequired();
             }});
             return;
+          }}
+
+          var phaseCourseSel = document.getElementById('focus-course');
+          var phaseExamSel = document.getElementById('focus-exam');
+          var phaseCourseId = phaseCourseSel ? (parseInt(phaseCourseSel.value, 10) || null) : null;
+          var phaseExamId = phaseExamSel ? (parseInt(phaseExamSel.value, 10) || null) : null;
+
+          if (!isBreak) {{
+            if (isRestore && !currentPhaseId) {{
+              try {{
+                var restoreFloat = JSON.parse(localStorage.getItem('focus_float') || 'null');
+                if (restoreFloat && restoreFloat.phaseId) currentPhaseId = restoreFloat.phaseId;
+              }} catch(e) {{}}
+            }}
+            var hadRegisteredPhaseId = !!currentPhaseId;
+            if (!currentPhaseId) currentPhaseId = newFocusPhaseId();
+            if (!isRestore && (!__phaseOpen || !hadRegisteredPhaseId)) {{
+              var expectedPhaseMinutes = currentMode === 'pages' ? 0 : Math.max(0, Math.round((timeLeft || totalTime || 0) / 60));
+              var phaseRegistered = await registerFocusPhase(
+                currentPhaseId,
+                currentMode || 'pomodoro',
+                expectedPhaseMinutes,
+                phaseCourseId,
+                phaseExamId
+              );
+              if (!phaseRegistered) {{
+                currentPhaseId = null;
+                return;
+              }}
+            }}
+          }} else {{
+            currentPhaseId = null;
           }}
 
           // Prime the alarm INSIDE the user-gesture handler so audio can play
@@ -11111,7 +11294,8 @@ Material:
 
               originalMode:'pages', course: _pgCourseName,
               courseId: _pgcSel ? (parseInt(_pgcSel.value, 10) || null) : null,
-              examId: _pgeSel ? (parseInt(_pgeSel.value, 10) || null) : null
+              examId: _pgeSel ? (parseInt(_pgeSel.value, 10) || null) : null,
+              phaseId: currentPhaseId
 
             }}));
 
@@ -11162,7 +11346,7 @@ Material:
 
             // Unique id so we never double-credit a phase across page/global controllers.
 
-            var phaseId = 'p_' + Date.now() + '_' + Math.floor(Math.random()*1e9);
+            var phaseId = isBreak ? null : currentPhaseId;
 
             var nextPhase = null;
 
@@ -11179,6 +11363,8 @@ Material:
                   : parseInt(document.getElementById('pomo-break').value);
 
                 var followingWorkMins = parseInt(document.getElementById('pomo-work').value);
+                var breakPhaseId = newFocusPhaseId();
+                var followingWorkPhaseId = newFocusPhaseId();
 
                 nextPhase = {{
 
@@ -11188,9 +11374,9 @@ Material:
 
                   label: (nextPomoCount % 4 === 0) ? focusText.longBreak : focusText.break,
 
-                  originalMode:'pomodoro', isBreak:true, course:courseName, workMinutes:0,
+                  originalMode:'pomodoro', isBreak:true, course:courseName, courseId:focusCourseId, examId:focusExamId, workMinutes:0,
 
-                  phaseId: 'p_' + (Date.now()+1) + '_' + Math.floor(Math.random()*1e9),
+                  phaseId: breakPhaseId,
 
                   nextPhase: {{
 
@@ -11200,9 +11386,9 @@ Material:
 
                     label: '🔥 Enfoque',
 
-                    originalMode:'pomodoro', isBreak:false, course:courseName, workMinutes: followingWorkMins,
+                    originalMode:'pomodoro', isBreak:false, course:courseName, courseId:focusCourseId, examId:focusExamId, workMinutes: followingWorkMins,
 
-                    phaseId: 'p_' + (Date.now()+2) + '_' + Math.floor(Math.random()*1e9),
+                    phaseId: followingWorkPhaseId,
 
                     nextPhase: null
 
@@ -11213,6 +11399,7 @@ Material:
               }} else {{
 
                 var workMins = parseInt(document.getElementById('pomo-work').value);
+                var nextWorkPhaseId = newFocusPhaseId();
 
                 nextPhase = {{
 
@@ -11222,9 +11409,9 @@ Material:
 
                   label: '🔥 Focus',
 
-                  originalMode:'pomodoro', isBreak:false, course:courseName, workMinutes: workMins,
+                  originalMode:'pomodoro', isBreak:false, course:courseName, courseId:focusCourseId, examId:focusExamId, workMinutes: workMins,
 
-                  phaseId: 'p_' + (Date.now()+1) + '_' + Math.floor(Math.random()*1e9),
+                  phaseId: nextWorkPhaseId,
 
                   nextPhase: null
 
@@ -11445,6 +11632,7 @@ Material:
           phaseStartFocusSeconds = 0;
 
           __phaseOpen = false;
+          currentPhaseId = null;
 
           sessionStarted = false;
 
@@ -11553,6 +11741,7 @@ Material:
               if (phaseMinutes > 480) phaseMinutes = 480;
 
               __phaseOpen = false;
+              currentPhaseId = null;
 
               var courseSelW = document.getElementById('focus-course');
 
@@ -12193,12 +12382,14 @@ Material:
           var course = courseName; // legacy name used in payload below
 
           // Dedupe by phaseId so the global widget controller doesn't also credit the same phase.
+          var phaseIdForSave = currentPhaseId || null;
 
           try {{
 
             var ff = JSON.parse(localStorage.getItem('focus_float')||'null');
 
             if (ff && ff.phaseId) {{
+              phaseIdForSave = ff.phaseId;
 
               var saved = JSON.parse(localStorage.getItem('focus_saved_phases')||'[]');
 
@@ -12236,18 +12427,13 @@ Material:
 
               }}
 
-              saved.push(ff.phaseId);
-
-              if (saved.length > 200) saved = saved.slice(-200);
-
-              localStorage.setItem('focus_saved_phases', JSON.stringify(saved));
-
             }}
 
           }} catch(e) {{}}
 
           var payload = {{ mode: currentMode, minutes: minutes, pages: pages,
-                          course_name: course, course_id: courseId, exam_id: examId }};
+                          course_name: course, course_id: courseId, exam_id: examId,
+                          phase_id: phaseIdForSave }};
 
           // Pass the BROWSER's local date so the response stats reflect the
           // student's calendar day (the server might be on UTC and disagree
@@ -12275,6 +12461,15 @@ Material:
             if (resp.ok) {{
 
               var result = await resp.json();
+
+              if (result && result.saved && phaseIdForSave) {{
+                try {{
+                  var savedAfter = JSON.parse(localStorage.getItem('focus_saved_phases')||'[]');
+                  if (savedAfter.indexOf(phaseIdForSave) === -1) savedAfter.push(phaseIdForSave);
+                  if (savedAfter.length > 200) savedAfter = savedAfter.slice(-200);
+                  localStorage.setItem('focus_saved_phases', JSON.stringify(savedAfter));
+                }} catch(e) {{}}
+              }}
 
               if (result.stats) {{
 
@@ -12496,6 +12691,7 @@ Material:
             sessionStarted = !!ts.sessionStarted;
             pageDone = parseInt(ts.pageDone || 0, 10) || 0;
             __phaseOpen = !!ts.phaseStartOpen;
+            currentPhaseId = ts.phaseId || null;
             phaseEndAt = null;
             phaseEnded = false;
 
@@ -12573,6 +12769,7 @@ Material:
 
           totalTime = ts.totalTime;
           __phaseOpen = !!ts.phaseStartOpen || !!ts.sessionStarted;
+          currentPhaseId = ts.phaseId || (ff && ff.phaseId) || null;
 
           sessionStarted = true;
 
