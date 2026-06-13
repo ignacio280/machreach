@@ -447,7 +447,7 @@ LAYOUT = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>MachReach — {{title}}</title>
-  <link rel="icon" type="image/svg+xml" href="/static/machreach-logo.svg?v=2">
+  <link rel="icon" type="image/svg+xml" href="/static/machreach-logo-flat.svg?v=1">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
   {% if posthog_key %}<script>
@@ -613,7 +613,7 @@ LAYOUT = """<!DOCTYPE html>
   <div class="mr-app-shell app top-shell">
     <header class="mr-topbar">
       <a href="/student" class="mr-tb-brand">
-        <span class="mr-tb-logo"><img src="/static/machreach-logo.svg?v=2" alt="MachReach" /></span>
+        <span class="mr-tb-logo"><img src="/static/machreach-logo-flat.svg?v=1" alt="MachReach" /></span>
         <span class="mr-tb-name">Mach<span>Reach</span></span>
       </a>
       <nav class="mr-tb-nav" id="mrTopNav">
@@ -669,7 +669,7 @@ LAYOUT = """<!DOCTYPE html>
   {% else %}
   <div class="nav">
     <a href="/" class="brand">
-      <div class="brand-icon"><img src="/static/machreach-logo.svg?v=2" alt="MachReach" /></div>
+      <div class="brand-icon"><img src="/static/machreach-logo-flat.svg?v=1" alt="MachReach" /></div>
       MachReach
     </a>
     <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open');this.innerHTML=this.innerHTML==='&#9776;'?'&#10005;':'&#9776;'" aria-label="Menu">&#9776;</button>

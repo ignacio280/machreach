@@ -28,7 +28,7 @@ const IconChevron = (p) => <Icon {...p}><path d="M6 9l6 6 6-6"/></Icon>;
 const IconLogo = ({ size = 24 }) => (
   typeof MarkFinal === "function"
     ? <MarkFinal size={size} variant="flat" uid="landing-logo" />
-    : <img src="/static/machreach-logo.svg?v=2" alt="MachReach"
+    : <img src="/static/machreach-logo-flat.svg?v=1" alt="MachReach"
          width={size} height={size}
          style={{ width: "100%", height: "100%", display: "block" }} />
 );

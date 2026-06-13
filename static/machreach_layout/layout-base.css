@@ -3588,6 +3588,38 @@
       :root[data-theme="dark"] .mr-tb-name { display: none !important; }
     }
 
+    /* Keep the app-corner mark identical to the landing logo: no app-icon frame. */
+    .mr-tb-logo,
+    :root:not([data-theme="dark"]) .mr-tb-logo,
+    :root[data-theme="dark"] .mr-tb-logo {
+      width: 36px !important;
+      height: 36px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      display: grid !important;
+      place-items: center !important;
+      overflow: visible !important;
+    }
+    .mr-tb-logo img,
+    :root:not([data-theme="dark"]) .mr-tb-logo img,
+    :root[data-theme="dark"] .mr-tb-logo img {
+      width: 100% !important;
+      height: 100% !important;
+      display: block !important;
+    }
+    @media (max-width: 720px) {
+      .mr-tb-logo,
+      :root:not([data-theme="dark"]) .mr-tb-logo,
+      :root[data-theme="dark"] .mr-tb-logo {
+        width: 34px !important;
+        height: 34px !important;
+        padding: 0 !important;
+      }
+    }
+
     /* ══════════ global polish ══════════ */
 
     /* Brand-colored text selection */
