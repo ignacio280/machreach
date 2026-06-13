@@ -1105,6 +1105,9 @@ SPANISH_TO_EN_VISIBLE.update({
     "SEMESTRE": "SEMESTER",
     "EVALUACIONES": "EVALUATIONS",
     "Canvas conectado": "Canvas connected",
+    "Canvas sin conectar": "Canvas not connected",
+    "Conecta Canvas con la extensión para importar tus cursos automáticamente": "Connect Canvas with the extension to import your courses automatically",
+    "Conectar Canvas": "Connect Canvas",
     "Cursos sincronizados automáticamente": "Courses sync automatically",
     "Cursos sincronizados automaticamente": "Courses sync automatically",
     "los ramos nuevos caen en el semestre activo": "new courses land in the active semester",
@@ -1116,6 +1119,11 @@ SPANISH_TO_EN_VISIBLE.update({
     "PRECISIÓN GLOBAL": "GLOBAL ACCURACY",
     "PRECISION GLOBAL": "GLOBAL ACCURACY",
     "QUIZZES RESUELTOS": "QUIZZES COMPLETED",
+    "precisión global": "global accuracy",
+    "quizzes resueltos": "quizzes completed",
+    "Genera quizzes con IA desde tu material": "Generate AI quizzes from your material",
+    "Elige un curso...": "Select a course...",
+    "La semana recién comienza": "The week is just getting started",
     "Generate quiz con IA": "Generate quiz with AI",
     "Generar quiz con IA": "Generate quiz with AI",
     "con IA": "with AI",
@@ -1191,6 +1199,30 @@ SPANISH_TO_EN_VISIBLE.update({
     "Todo lo de Plus más herramientas de correo.": "Everything in Plus plus email tools.",
     "Todo lo de Plus mas herramientas de correo.": "Everything in Plus plus email tools.",
     "Quizzes y tarjetas IA ilimitados": "Unlimited AI quizzes and flashcards",
+    "Quizzes IA ilimitados": "Unlimited AI quizzes",
+    "Flashcards IA ilimitadas": "Unlimited AI flashcards",
+    "Course Brain y Study Studio por ramo": "Course Brain and Study Studio per course",
+    "Más preguntas/tarjetas por generación": "More questions/cards per generation",
+    "Más revisiones de ensayos": "More essay reviews",
+    "Analítica avanzada por curso y semana": "Advanced analytics per course and week",
+    "monedas extra al mes": "extra coins per month",
+    "Streak Insurance+: 1 reparación de racha al mes": "Streak Insurance+: 1 streak repair per month",
+    "Más capacidad de congeladores": "More freeze storage",
+    "Banners, flags e insignias exclusivas PLUS": "Exclusive PLUS banners, flags, and badges",
+    "Todo lo de Plus": "Everything in Plus",
+    "Límites máximos de IA": "Maximum AI limits",
+    "Historial completo de analítica": "Full analytics history",
+    "Más monedas, reparaciones y cosméticos Ultimate": "More coins, repairs, and Ultimate cosmetics",
+    "Early access a herramientas nuevas": "Early access to new tools",
+    "Empieza con Focus, Canvas, cursos y herramientas IA limitadas.": "Start with Focus, Canvas, courses, and limited AI tools.",
+    "Para estudiantes que usan MachReach todas las semanas.": "For students who use MachReach every week.",
+    "Bloqueado por ahora. Lo abriremos cuando tenga valor real.": "Locked for now. We will open it when it adds real value.",
+    "Bloqueado por ahora": "Locked for now",
+    "Canvas, cursos, Focus, XP, monedas y rachas": "Canvas, courses, Focus, XP, coins, and streaks",
+    "Planilla de notas, ranking, amigos y tienda": "Grade sheet, leaderboard, friends, and shop",
+    "1 congelador de racha guardado": "1 streak freeze stored",
+    "1 quiz IA / día (hasta 30 preguntas)": "1 AI quiz / day (up to 30 questions)",
+    "1 mazo de tarjetas IA / día (hasta 30 tarjetas)": "1 AI flashcard deck / day (up to 30 cards)",
     "Flashcards / questions ilimitadas por generación": "Unlimited flashcards / questions per generation",
     "Flashcards / questions ilimitadas por generacion": "Unlimited flashcards / questions per generation",
     "Organización de correo": "Email organization",
@@ -1216,7 +1248,6 @@ SPANISH_TO_EN_VISIBLE.update({
     "Se usan automáticamente si te saltas un day. Plus incluye Streak Insurance+: 1 congelador extra al mes y capacidad para guardar hasta 5.": "They are used automatically if you miss a day. Plus includes Streak Insurance+: 1 extra freeze per month and storage up to 5.",
     "Se usan automáticamente si te saltas un día. Plus incluye Streak Insurance+: 1 congelador extra al mes y capacidad para guardar hasta 5.": "They are used automatically if you miss a day. Plus includes Streak Insurance+: 1 extra freeze per month and storage up to 5.",
     "Se usan automaticamente si te saltas un dia. Plus incluye Streak Insurance+: 1 congelador extra al mes y capacidad para guardar hasta 5.": "They are used automatically if you miss a day. Plus includes Streak Insurance+: 1 extra freeze per month and storage up to 5.",
-    "Se usan autom?ticamente si te saltas un d?a. Plus incluye Streak Insurance+: 1 congelador extra al mes y capacidad para guardar hasta 5.": "They are used automatically if you miss a day. Plus includes Streak Insurance+: 1 extra freeze per month and storage up to 5.",
     "Pack de 3": "Pack of 3",
     "ahorra": "save",
     "Banners de perfil": "Profile banners",
@@ -1247,6 +1278,20 @@ SPANISH_TO_EN_VISIBLE.update({
     "Se usa para clasificarte en los rankings de pais, universidad y carrera. Puedes cambiarlo cuando quieras.": "Used to rank you in country, university, and major leaderboards. You can change it anytime.",
     "Guardar perfil académico": "Save academic profile",
     "Guardar perfil academico": "Save academic profile",
+
+    # ── Dashboard onboarding / mission card / cookie banner ─────
+    "Primeros pasos": "First steps",
+    "de 4 completado": "of 4 completed",
+    "Sincroniza tus cursos de Canvas con la extensión": "Sync your Canvas courses with the extension",
+    "Inicia tu primera sesión de enfoque": "Start your first focus session",
+    "Genera tu primer quiz o set de flashcards": "Generate your first quiz or flashcard deck",
+    "Invita a un amigo y gana una semana de Plus gratis": "Invite a friend and earn a free week of Plus",
+    "Tu progreso de hoy": "Your progress today",
+    "Haz tu primera sesión y el tablero empieza a moverse.": "Do your first session and the board starts moving.",
+    "Usamos cookies esenciales para mantener tu sesión y recordar tus preferencias. Sin cookies de tracking ni publicidad.": "We use essential cookies to keep your session and remember your preferences. No tracking or advertising cookies.",
+    "Conecta Canvas con la extensión para verificar tu universidad y traer tus cursos reales; luego completa un bloque de enfoque para activar tiempo, racha y XP.": "Connect Canvas with the extension to verify your university and import your real courses; then complete a focus block to activate time, streak, and XP.",
+    "Conecta Canvas con la extensión de MachReach para confirmar tu universidad e importar tus cursos reales.": "Connect Canvas with the MachReach extension to confirm your university and import your real courses.",
+    "Cuando tus cursos reales lleguen desde Canvas, agrega sus evaluaciones desde Mis cursos para ver prioridad y calendario.": "When your real courses arrive from Canvas, add their evaluations from My courses to see priority and calendar.",
 })
 
 
@@ -1268,8 +1313,15 @@ def _translate_visible_text(value: str) -> str | None:
     if replacement:
         return replacement
 
+    # Fallback: substitute dictionary phrases inside longer text. Only long,
+    # multi-word phrases are safe here — substituting single words ("cursos",
+    # "sesión", "hoy") into an otherwise untranslated Spanish sentence produces
+    # Spanglish ("Sincroniza tus courses de Canvas"). Short entries still apply
+    # via the whole-node exact match above.
     translated = value
     for source, target in sorted(SPANISH_TO_EN_VISIBLE.items(), key=lambda item: len(item[0]), reverse=True):
+        if len(source) < 12 or " " not in source:
+            continue
         if source.isalpha():
             translated = re.sub(rf"(?<!\w){re.escape(source)}(?!\w)", target, translated)
         elif source in translated:

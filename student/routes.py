@@ -750,7 +750,19 @@ _GPA_PLANILLA_HTML_ES = r"""
   // ── Public actions (window-scoped so inline handlers work) ─────────
   window.plSwitchSem = function(i){ data.current = i; rerender(); };
   window.plSetCourse = function(s, c, key, val){ data.sems[s].courses[c][key] = val; rerender(); };
-  window.plSetEval = function(s, c, e, key, val){ data.sems[s].courses[c].evals[e][key] = val; rerender(); };
+  window.plSetEval = function(s, c, e, key, val){
+    // Clamp to valid ranges: grades use the Chilean 1.0-7.0 scale, weights 0-100%.
+    if (key === 'grade' || key === 'pct') {
+      var n = parseFloat(String(val).replace(',', '.'));
+      if (isFinite(n)) {
+        var min = key === 'grade' ? 1.0 : 0;
+        var max = key === 'grade' ? 7.0 : 100;
+        if (n < min) val = String(min);
+        else if (n > max) val = String(max);
+      }
+    }
+    data.sems[s].courses[c].evals[e][key] = val; rerender();
+  };
   window.plAddEval = function(s, c){
     data.sems[s].courses[c].evals.push({ id: uid(), name: '', pct: '', grade: '' });
     rerender();
@@ -2182,6 +2194,10 @@ Return this JSON shape:
         "/forgot-password",
         "/reset-password",
         "/api/csrf",
+        # Read-only popup poll fired by the shared layout on every student
+        # page (including /student/setup itself) — harmless pre-setup and
+        # otherwise produces a confusing 403 in the network log.
+        "/api/student/period/results",
     )
 
     @app.before_request
@@ -2710,6 +2726,8 @@ Return this JSON shape:
             grade = float(str(grade_raw).replace(",", ".")) if grade_raw not in (None, "") else None
         except (TypeError, ValueError):
             grade = None
+        if grade is not None:
+            grade = min(7.0, max(1.0, grade))
 
         exam_id = sdb.upsert_exam(
 
@@ -2719,7 +2737,7 @@ Return this JSON shape:
 
             exam_date=data.get("exam_date") or None,
 
-            weight_pct=int(data.get("weight_pct", 0)),
+            weight_pct=min(100, max(0, int(data.get("weight_pct", 0)))),
 
             topics=data.get("topics", []),
             grade=grade,
@@ -2751,6 +2769,8 @@ Return this JSON shape:
             grade = float(str(grade_raw).replace(",", ".")) if grade_raw not in (None, "") else None
         except (TypeError, ValueError):
             grade = None
+        if grade is not None:
+            grade = min(7.0, max(1.0, grade))
 
         sdb.upsert_exam(
 
@@ -2760,7 +2780,7 @@ Return this JSON shape:
 
             exam_date=data.get("exam_date") or None,
 
-            weight_pct=int(data.get("weight_pct", 0)),
+            weight_pct=min(100, max(0, int(data.get("weight_pct", 0)))),
 
             topics=data.get("topics", []),
             grade=grade,
@@ -4508,6 +4528,12 @@ Material:
           .planner-save-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px dashed var(--pl-line); }
           #planner-save-state { color:#8C8991; font-size:12px; font-weight:850; }
           .planner-empty { border:1.5px dashed var(--pl-line); border-radius:16px; padding:26px; text-align:center; color:#7D7A82; font-weight:850; background:var(--pl-soft); grid-column:1/-1; }
+          .planner-loading-card { position:relative; overflow:hidden; border:1.5px solid var(--pl-line); border-radius:18px; padding:28px; background:linear-gradient(135deg,#FFF8E8,#FFFDF8); grid-column:1/-1; color:#1A1A1F; box-shadow:0 3px 0 rgba(26,26,31,.12); }
+          .planner-loading-card b { display:block; font-family:'Bricolage Grotesque',sans-serif; font-size:25px; line-height:1; margin-bottom:8px; color:var(--pl-ink); }
+          .planner-loading-card span { display:block; color:#6E6A73; font-weight:850; line-height:1.45; }
+          .planner-loading-track { height:10px; border:1.5px solid var(--pl-ink); border-radius:999px; background:#fff; overflow:hidden; margin-top:18px; }
+          .planner-loading-fill { width:36%; height:100%; border-radius:999px; background:var(--pl-orange); animation:plannerBuildPlan 1.05s cubic-bezier(.45,0,.25,1) infinite alternate; }
+          @keyframes plannerBuildPlan { from { transform:translateX(-68%); } to { transform:translateX(210%); } }
           body.planner-drawer-lock { overflow:hidden; }
           .planner-drawer { --pl-orange:#FF7A3D; --pl-ink:#1A1A1F; --pl-paper:#FFFDF8; --pl-soft:#FBF8F0; --pl-line:#E2DCCC; position:fixed; inset:0; z-index:99980; pointer-events:none; opacity:0; transition:opacity .18s ease; overflow:hidden; }
           .planner-drawer.open { pointer-events:auto; opacity:1; }
@@ -4547,6 +4573,9 @@ Material:
           :root[data-theme="dark"] .planner-drawer-source { background:#17110E; border-color:#FF7A3D; color:#FFD0B5; }
           :root[data-theme="dark"] .planner-drawer-excerpt-wrap { background:#0B0B10; border-color:rgba(255,122,61,.52); color:#D9D2C3; }
           :root[data-theme="dark"] .planner-drawer-excerpt { color:#D9D2C3; }
+          :root[data-theme="dark"] .planner-loading-card { background:linear-gradient(135deg,#17110E,#0B0B10); border-color:#FF7A3D; color:#FFF8E8; box-shadow:0 3px 0 rgba(255,122,61,.45); }
+          :root[data-theme="dark"] .planner-loading-card span { color:#D9D2C3; }
+          :root[data-theme="dark"] .planner-loading-track { background:#0B0B10; border-color:#FF7A3D; }
           @media (max-width:1100px) { .planner-hero,.planner-grid-bottom { grid-template-columns:1fr; } .planner-availability-grid { grid-template-columns:repeat(4,1fr); } .planner-day-list { grid-template-columns:repeat(7,minmax(92px,1fr)); overflow-x:auto; padding-bottom:6px; } }
           @media (max-width:760px) { .planner-availability-grid { grid-template-columns:repeat(2,1fr); } .planner-blocks { grid-template-columns:1fr; } .planner-hero { padding:20px; } .planner-day-head { flex-direction:column; } }
         </style>
@@ -4571,7 +4600,9 @@ Material:
             selectedIndex: 0,
             weekOffset: 0,
             plan: initial.saved_plan || null,
-            doneBlocks: initial.done_blocks || []
+            doneBlocks: initial.done_blocks || [],
+            isGenerating: false,
+            generationMessage: ''
           };
           function blockDoneTitle(block){
             return [
@@ -4640,6 +4671,7 @@ Material:
           function savedPlanIsCurrent(plan){
             return !!(plan && Array.isArray(plan.days) && plan.days.length && plan.week_start === currentWeekStart());
           }
+          if (!savedPlanIsCurrent(state.plan)) state.plan = null;
           function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
           function fmtDate(d){ return shortNames[(d.getDay()+6)%7] + ' ' + d.getDate() + '/' + (d.getMonth()+1); }
           function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
@@ -4938,7 +4970,7 @@ Material:
               input.addEventListener('input', function(){
                 var day = Number(input.dataset.day);
                 state.availability[day].available_hours = Number(input.value || 0);
-                runPlannerGenerate(false);
+                invalidatePlannerPlan('Disponibilidad cambiada. Genera el plan para construir bloques nuevos.');
               });
             });
           }
@@ -4962,7 +4994,11 @@ Material:
           }
           function renderDays(){
             var list = document.getElementById('planner-day-list');
-            var days = state.plan.days;
+            var days = state.plan && Array.isArray(state.plan.days) ? state.plan.days : [0,1,2,3,4,5,6].map(function(i){
+              var date = plannerDateForDay(i);
+              var av = state.availability[i] || {available_hours:0};
+              return { index:i, date:iso(date), hours:Number(av.available_hours || 0), blocks:[] };
+            });
             list.innerHTML = days.map(function(d, i){
               var date = parseISO(d.date);
               var label = fmtDate(date);
@@ -4996,6 +5032,84 @@ Material:
               var tools = b.material_based
                 ? ''
                 : '<a href="/student/focus">Estudiar</a><a href="/student/courses">Ver prueba</a>';
+              tools = '<button type="button" data-done-toggle data-date="' + esc(b.date) + '" data-index="' + b.index + '">' + (done ? 'Hecho' : 'Marcar hecho') + '</button>' + tools;
+              return '<article class="planner-block' + (done ? ' done' : '') + '" role="button" tabindex="0" data-block-date="' + esc(b.date) + '" data-block-index="' + b.index + '" aria-label="Abrir detalle de ' + esc(b.title) + '"><div class="planner-block-top"><span class="planner-time">' + b.minutes + ' min</span><span class="planner-course-chip">' + esc(b.phase) + '</span></div><div class="planner-block-title">' + esc(b.title) + '</div><div class="planner-block-copy">' + esc(b.copy) + '</div>' + (tags ? '<div class="planner-tags">' + tags + '</div>' : '') + '<div class="planner-block-actions">' + tools + '</div></article>';
+            }).join('');
+            blocks.querySelectorAll('.planner-block[data-block-date]').forEach(function(card){
+              card.addEventListener('click', function(e){
+                if (e.target.closest('button,a,input,select,textarea,label')) return;
+                openPlannerDrawer(findBlock(card.dataset.blockDate, card.dataset.blockIndex));
+              });
+              card.addEventListener('keydown', function(e){
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                if (e.target.closest('button,a,input,select,textarea,label')) return;
+                e.preventDefault();
+                openPlannerDrawer(findBlock(card.dataset.blockDate, card.dataset.blockIndex));
+              });
+            });
+            blocks.querySelectorAll('button[data-done-toggle]').forEach(function(btn){
+              btn.addEventListener('click', function(){ togglePlannerDone(btn); });
+            });
+          }
+          function plannerDisplayDays(){
+            if (state.plan && Array.isArray(state.plan.days) && state.plan.days.length) return state.plan.days;
+            return [0,1,2,3,4,5,6].map(function(i){
+              var date = plannerDateForDay(i);
+              var av = state.availability[i] || {available_hours:0};
+              return {index:i, date:iso(date), hours:Number(av.available_hours || 0), blocks:[]};
+            });
+          }
+          function renderDays(){
+            var list = document.getElementById('planner-day-list');
+            var days = plannerDisplayDays();
+            list.innerHTML = days.map(function(d, i){
+              var date = parseISO(d.date);
+              var label = fmtDate(date);
+              var meta = state.plan ? (d.hours + ' h - ' + d.blocks.length + ' bloques') : (d.hours + ' h - sin plan');
+              return '<button type="button" class="planner-day-btn ' + (i === state.selectedIndex ? 'active' : '') + '" data-day="' + i + '"><span class="planner-day-num">' + (i+1) + '</span><span><span class="planner-day-name">' + label + '</span><span class="planner-day-meta">' + meta + '</span></span></button>';
+            }).join('');
+            list.querySelectorAll('.planner-day-btn').forEach(function(btn){
+              btn.addEventListener('click', function(){
+                state.selectedIndex = Number(btn.dataset.day || 0);
+                renderDays();
+                renderSelectedDay();
+              });
+            });
+          }
+          function renderSelectedDay(){
+            var blocks = document.getElementById('planner-blocks');
+            var days = plannerDisplayDays();
+            var day = days[state.selectedIndex] || days[0];
+            var date = parseISO(day.date);
+            if (state.isGenerating) {
+              document.getElementById('planner-selected-kicker').textContent = 'Generando';
+              document.getElementById('planner-selected-title').textContent = 'Tu plan se esta construyendo';
+              document.getElementById('planner-selected-sub').textContent = state.generationMessage || 'MachReach esta leyendo tus pruebas, ponderaciones y material adjunto.';
+              document.getElementById('planner-day-progress').textContent = '0/0 bloques';
+              blocks.innerHTML = '<div class="planner-loading-card"><b>Generando tu plan...</b><span>Estamos ordenando la semana completa. Si hay PDFs adjuntos, primero se dividen en bloques de estudio reales.</span><div class="planner-loading-track"><div class="planner-loading-fill"></div></div></div>';
+              return;
+            }
+            if (!state.plan || !Array.isArray(state.plan.days) || !state.plan.days.length) {
+              document.getElementById('planner-selected-kicker').textContent = 'Sin plan';
+              document.getElementById('planner-selected-title').textContent = fmtDate(date);
+              document.getElementById('planner-selected-sub').textContent = 'Aprieta Generar plan para crear la semana. Hasta entonces no se muestran bloques.';
+              document.getElementById('planner-day-progress').textContent = '0/0 bloques';
+              blocks.innerHTML = '<div class="planner-empty">Todavia no hay un plan generado para esta semana.</div>';
+              return;
+            }
+            document.getElementById('planner-selected-kicker').textContent = (state.weekOffset === 0 && state.selectedIndex === ((state.today.getDay()+6)%7)) ? 'Hoy' : 'Dia ' + (state.selectedIndex + 1);
+            document.getElementById('planner-selected-title').textContent = fmtDate(date);
+            document.getElementById('planner-selected-sub').textContent = day.hours + ' horas disponibles - ruta ajustada por prioridad.';
+            var doneCount = day.blocks.filter(function(b){ return isBlockDone(b); }).length;
+            document.getElementById('planner-day-progress').textContent = doneCount + '/' + day.blocks.length + ' bloques';
+            if (!day.blocks.length) {
+              blocks.innerHTML = '<div class="planner-empty">Este dia no tiene bloques en el plan generado.</div>';
+              return;
+            }
+            blocks.innerHTML = day.blocks.map(function(b){
+              var done = isBlockDone(b);
+              var tags = (b.tags || []).map(function(t){ return '<span class="planner-tag">' + esc(t) + '</span>'; }).join('');
+              var tools = b.material_based ? '' : '<a href="/student/focus">Estudiar</a><a href="/student/courses">Ver prueba</a>';
               tools = '<button type="button" data-done-toggle data-date="' + esc(b.date) + '" data-index="' + b.index + '">' + (done ? 'Hecho' : 'Marcar hecho') + '</button>' + tools;
               return '<article class="planner-block' + (done ? ' done' : '') + '" role="button" tabindex="0" data-block-date="' + esc(b.date) + '" data-block-index="' + b.index + '" aria-label="Abrir detalle de ' + esc(b.title) + '"><div class="planner-block-top"><span class="planner-time">' + b.minutes + ' min</span><span class="planner-course-chip">' + esc(b.phase) + '</span></div><div class="planner-block-title">' + esc(b.title) + '</div><div class="planner-block-copy">' + esc(b.copy) + '</div>' + (tags ? '<div class="planner-tags">' + tags + '</div>' : '') + '<div class="planner-block-actions">' + tools + '</div></article>';
             }).join('');
@@ -5152,6 +5266,25 @@ Material:
             renderDays();
             renderSelectedDay();
           }
+          function setPlannerBusy(isBusy, message){
+            state.isGenerating = !!isBusy;
+            state.generationMessage = message || '';
+            var generateBtn = document.getElementById('planner-generate');
+            var savePlanBtn = document.getElementById('planner-save-plan');
+            var btnState = document.getElementById('planner-save-state');
+            if (generateBtn) {
+              generateBtn.disabled = !!isBusy;
+              generateBtn.textContent = isBusy ? 'Generando...' : 'Generar plan';
+            }
+            if (savePlanBtn) savePlanBtn.disabled = !!isBusy || !state.plan;
+            if (btnState && message) btnState.textContent = message;
+          }
+          function invalidatePlannerPlan(message){
+            if (state.isGenerating) return;
+            state.plan = null;
+            setPlannerBusy(false, message || 'Genera el plan para ver bloques.');
+            renderPlanner();
+          }
           async function autoSavePlannerPlan(message){
             if (!state.plan) return;
             var btnState = document.getElementById('planner-save-state');
@@ -5168,11 +5301,27 @@ Material:
               if (btnState) btnState.textContent = e.message || 'No se pudo guardar.';
             }
           }
-          function runPlannerGenerate(showState, autoSave){
-            generatePlan();
+          async function runPlannerGenerate(showState, autoSave){
+            if (state.isGenerating) return;
+            state.plan = null;
+            setPlannerBusy(true, 'Generando tu plan completo...');
             renderPlanner();
-            if (showState) document.getElementById('planner-save-state').textContent = 'Plan regenerado con tu disponibilidad actual.';
-            if (autoSave) autoSavePlannerPlan('Guardando plan regenerado...');
+            try {
+              await loadPlannerMaterialUnits();
+              generatePlan();
+              setPlannerBusy(false, '');
+              renderPlanner();
+              if (autoSave !== false) {
+                await autoSavePlannerPlan('Guardando plan generado...');
+              } else if (showState) {
+                document.getElementById('planner-save-state').textContent = 'Plan generado. Guardalo si quieres conservarlo.';
+              }
+              setPlannerBusy(false, '');
+            } catch(e) {
+              state.plan = null;
+              setPlannerBusy(false, e.message || 'No se pudo generar el plan.');
+              renderPlanner();
+            }
           }
           async function runPlannerSaveAvailability(){
             var btnState = document.getElementById('planner-save-state');
@@ -5188,8 +5337,11 @@ Material:
             } catch(e) { btnState.textContent = e.message || 'No se pudo guardar.'; }
           }
           async function runPlannerSavePlan(){
-            if (!state.plan) runPlannerGenerate(false, false);
             var btnState = document.getElementById('planner-save-state');
+            if (!state.plan) {
+              btnState.textContent = 'Primero genera un plan. No hay bloques para guardar.';
+              return;
+            }
             btnState.textContent = 'Guardando plan...';
             var headers = {'Content-Type':'application/json'};
             var csrf = document.querySelector('meta[name="csrf-token"]');
@@ -5205,7 +5357,9 @@ Material:
             var materialExams = state.exams.filter(function(e){ return e.has_material && !state.materialUnits[e.id] && !state.materialLoading[e.id]; });
             if (!materialExams.length) return;
             var status = document.getElementById('planner-save-state');
-            status.textContent = 'Leyendo material adjunto para dividirlo en bloques...';
+            if (status) status.textContent = 'Leyendo material adjunto para dividirlo en bloques...';
+            state.generationMessage = 'Leyendo PDFs y apuntes adjuntos antes de crear bloques.';
+            renderPlanner();
             var headers = {'Content-Type':'application/json'};
             var csrf = document.querySelector('meta[name="csrf-token"]');
             if (csrf) headers['X-CSRFToken'] = csrf.content;
@@ -5213,6 +5367,8 @@ Material:
               var exam = materialExams[i];
               state.materialLoading[exam.id] = true;
               try {
+                state.generationMessage = 'Analizando material de ' + (exam.name || 'una prueba') + '...';
+                renderPlanner();
                 var target = Math.max(4, Math.min(12, Math.ceil(Number(exam.material_chars || 0) / 6500)));
                 var r = await fetch('/api/student/planner/material-blocks', {
                   method:'POST',
@@ -5222,11 +5378,10 @@ Material:
                 var d = await r.json();
                 if (r.ok && d.units) {
                   state.materialUnits[exam.id] = d.units;
-                  status.textContent = 'Material dividido: ' + d.units.length + ' bloques para ' + exam.name + '.';
-                  runPlannerGenerate(false, false);
+                  if (status) status.textContent = 'Material dividido: ' + d.units.length + ' bloques para ' + exam.name + '.';
                 }
               } catch(e) {
-                status.textContent = 'No se pudo leer un material adjunto. El plan base sigue disponible.';
+                if (status) status.textContent = 'No se pudo leer un material adjunto. El plan base sigue disponible.';
               }
             }
           }
@@ -5243,19 +5398,31 @@ Material:
           if (saveAvailabilityBtn) saveAvailabilityBtn.addEventListener('click', runPlannerSaveAvailability);
           if (generateBtn) generateBtn.addEventListener('click', function(){ runPlannerGenerate(true, true); });
           if (savePlanBtn) savePlanBtn.addEventListener('click', runPlannerSavePlan);
-          if (prevWeekBtn) prevWeekBtn.addEventListener('click', function(){ state.weekOffset -= 1; state.selectedIndex = 0; runPlannerGenerate(true, false); });
-          if (currentWeekBtn) currentWeekBtn.addEventListener('click', function(){ state.weekOffset = 0; state.selectedIndex = (state.today.getDay()+6)%7; if (savedPlanIsCurrent(initial.saved_plan)) { state.plan = initial.saved_plan; renderPlanner(); document.getElementById('planner-save-state').textContent = 'Plan guardado cargado.'; } else { runPlannerGenerate(true, false); } });
-          if (nextWeekBtn) nextWeekBtn.addEventListener('click', function(){ state.weekOffset += 1; state.selectedIndex = 0; runPlannerGenerate(true, false); });
+          if (prevWeekBtn) prevWeekBtn.addEventListener('click', function(){ state.weekOffset -= 1; state.selectedIndex = 0; invalidatePlannerPlan('Semana cambiada. Genera un plan para ver bloques de esa semana.'); });
+          if (currentWeekBtn) currentWeekBtn.addEventListener('click', function(){
+            state.weekOffset = 0;
+            state.selectedIndex = (state.today.getDay()+6)%7;
+            if (savedPlanIsCurrent(initial.saved_plan)) {
+              state.plan = initial.saved_plan;
+              setPlannerBusy(false, 'Plan guardado cargado.');
+              renderPlanner();
+            } else {
+              invalidatePlannerPlan('No hay plan guardado para esta semana. Genera uno nuevo.');
+            }
+          });
+          if (nextWeekBtn) nextWeekBtn.addEventListener('click', function(){ state.weekOffset += 1; state.selectedIndex = 0; invalidatePlannerPlan('Semana cambiada. Genera un plan para ver bloques de esa semana.'); });
           document.querySelectorAll('[data-close-drawer]').forEach(function(el){ el.addEventListener('click', closePlannerDrawer); });
           document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closePlannerDrawer(); });
           renderAvailability();
           if (savedPlanIsCurrent(state.plan)) {
             state.selectedIndex = (state.today.getDay()+6)%7;
+            setPlannerBusy(false, 'Plan guardado cargado.');
             renderPlanner();
             document.getElementById('planner-save-state').textContent = 'Plan guardado cargado.';
           } else {
-            runPlannerGenerate(false, false);
-            loadPlannerMaterialUnits();
+            state.plan = null;
+            setPlannerBusy(false, 'No hay plan guardado para esta semana. Genera uno nuevo.');
+            renderPlanner();
           }
         })();
         </script>
@@ -5366,14 +5533,14 @@ Material:
         <section id="reviews-app" class="reviews-wrap" data-initial='__INITIAL_REVIEWS__'>
           <header class="reviews-hero">
             <div>
-              <div class="reviews-kicker">REVIEWS ANONIMAS</div>
+              <div class="reviews-kicker">REVIEWS ANÓNIMAS</div>
               <h1>Busca ramos antes de tomarlos.</h1>
               <p>Explora dificultad y calidad por universidad/carrera. Las reviews son anonimas; nota final y horas estudiadas solo aparecen para usuarios Plus.</p>
             </div>
             <button id="review-open-submit" class="reviews-primary" type="button">Subir review</button>
           </header>
           <section class="reviews-filters">
-            <input id="review-q" placeholder="Buscar ramo, codigo o profesor">
+            <input id="review-q" placeholder="Buscar ramo, código o profesor">
             <input id="review-u" placeholder="Universidad">
             <input id="review-m" placeholder="Carrera">
             <button id="review-search" type="button">Buscar</button>
@@ -5728,24 +5895,24 @@ Material:
         <div class="ss-wrap">
           <div class="ss-card">
             <span class="ss-pill" id="ss-progress">Step 1 of 3</span>
-            <h1 class="ss-h1">Bienvenido a MachReach Student</h1>
+            <h1 class="ss-h1">Welcome to MachReach Student</h1>
             <p class="ss-sub">We need three quick things so we can rank you on the right leaderboards and tailor your study plan. This is required.</p>
 
             <div class="ss-step active" id="ss-step-0">
-              <div class="ss-label">Tu país</div>
+              <div class="ss-label">Your country</div>
               <select class="ss-select" id="ss-country">
                 <option value="">- Pick your country -</option>
               </select>
             </div>
 
             <div class="ss-step" id="ss-step-1">
-              <div class="ss-label">Tu universidad</div>
+              <div class="ss-label">Your university</div>
               <input class="ss-input" id="ss-univ-q" type="text" placeholder="Search universities..." autocomplete="off">
               <div class="ss-list" id="ss-univ-list"></div>
             </div>
 
             <div class="ss-step" id="ss-step-2">
-              <div class="ss-label">Tu carrera</div>
+              <div class="ss-label">Your major</div>
               <input class="ss-input" id="ss-major-q" type="text" placeholder="Search majors..." autocomplete="off">
               <div class="ss-list" id="ss-major-list"></div>
             </div>
@@ -5808,7 +5975,7 @@ Material:
             const items = (r.universities || []).map(u =>
               '<div class="ss-item" data-id="' + u.id + '" data-name="' + escapeHtml(u.name) + '">' + escapeHtml(u.name) + '</div>'
             ).join('');
-            list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
+            list.innerHTML = items || '<div class="ss-item">We are not at your university yet &mdash; for now: PUC, UDD, UAndes, UNAB and USACH. More coming soon.</div>';
             list.querySelectorAll('.ss-item[data-id]').forEach(el => {
               el.addEventListener('click', () => pickUniv(parseInt(el.dataset.id), el.dataset.name));
             });
@@ -5867,6 +6034,37 @@ Material:
         })();
         </script>
         """
+        # The wizard is authored in English; render it fully in Spanish for
+        # ES sessions so the card never mixes languages.
+        if session.get("lang", "es") != "en":
+            for _en, _es in (
+                ("Welcome to MachReach Student", "Bienvenido a MachReach Student"),
+                ("We need three quick things so we can rank you on the right leaderboards and tailor your study plan. This is required.",
+                 "Necesitamos tres datos rápidos para ubicarte en los rankings correctos y personalizar tu plan de estudio. Es obligatorio."),
+                ("Your country", "Tu país"),
+                ("Your university", "Tu universidad"),
+                ("Your major", "Tu carrera"),
+                ("- Pick your country -", "- Elige tu país -"),
+                ("Search universities...", "Busca tu universidad..."),
+                ("Search majors...", "Busca tu carrera..."),
+                ("Step 1 of 3", "Paso 1 de 3"),
+                ("'Step ' + (i + 1) + ' of 3'", "'Paso ' + (i + 1) + ' de 3'"),
+                (">Back<", ">Volver<"),
+                (">Next<", ">Siguiente<"),
+                ("? 'Finish' : 'Next'", "? 'Finalizar' : 'Siguiente'"),
+                ("next.textContent = 'Saving...'", "next.textContent = 'Guardando...'"),
+                ("next.textContent = 'Finish'", "next.textContent = 'Finalizar'"),
+                ("We are not at your university yet &mdash; for now: PUC, UDD, UAndes, UNAB and USACH. More coming soon.",
+                 "Aún no estamos en tu universidad &mdash; por ahora: PUC, UDD, UAndes, UNAB y USACH. Pronto sumaremos más."),
+                ("No matches. Try a different search.", "Sin resultados. Prueba otra búsqueda."),
+                ("Pick a country first.", "Primero elige un país."),
+                ("Could not load countries.", "No pudimos cargar los países."),
+                ("Pick your country.", "Elige tu país."),
+                ("Pick your university.", "Elige tu universidad."),
+                ("Pick your major.", "Elige tu carrera."),
+                ("'Save failed.'", "'No se pudo guardar.'"),
+            ):
+                body = body.replace(_en, _es)
         return _s_render("Set up your account", body, active_page="student_setup")
 
 
@@ -6169,10 +6367,13 @@ Material:
             _mr_board = _mr_lb_rows[_start:_end]
             _mr_board_offset = _start
 
-        # Heatmap: focus minutes per day for the last 35 days
+        # Heatmap: focus minutes per day for the last 5 calendar weeks.
+        # The window starts on a Monday so each cell lines up with the
+        # Mon-Sun column labels under the grid; days after today in the
+        # current week render as blank placeholders.
         from datetime import date as _date_cls, timedelta as _td_cls
         _mr_today = _date_cls.today()
-        _mr_heat_start = _mr_today - _td_cls(days=34)
+        _mr_heat_start = _mr_today - _td_cls(days=_mr_today.weekday()) - _td_cls(weeks=4)
         _mr_heat = {}
         try:
             with sdb.get_db() as _hdb:
@@ -6273,6 +6474,10 @@ Material:
 
   .mr-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; max-width: 1400px; margin: 0 auto; padding: 6px 0 80px; }
   @media (max-width: 1100px) { .mr-layout { grid-template-columns: 1fr; } }
+  /* Grid items default to min-width:auto, which lets long content blow the
+     column wider than the viewport on small screens — allow shrinking. */
+  .mr-layout > *, .mr-left > *, .mr-right > * { min-width: 0; }
+  .mr-mission-title { overflow-wrap: anywhere; }
 
   /* ── HERO MISSION ── */
   .mr-mission {
@@ -6293,7 +6498,7 @@ Material:
   }
   .mr-mission-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; position: relative; z-index: 1; }
   .mr-mission-eye { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.7; margin-bottom: 6px; }
-  .mr-mission-title { font-weight: 600; font-size: 38px; line-height: 1.05; margin: 0; color: #3A1A06; }
+  .mr-mission-title { font-weight: 600; font-size: clamp(26px, 4.6vw, 38px); line-height: 1.08; margin: 0; color: #3A1A06; }
   .mr-mission-title em { font-style: italic; color: #B33C00; }
   .mr-mission-cta {
     display: inline-flex; align-items: center; gap: 8px;
@@ -6470,6 +6675,7 @@ Material:
   .mr-heat-cell.l3 { background: #FF7A3D; }
   .mr-heat-cell.l4 { background: #C8501F; }
   .mr-heat-cell.today { outline: 2px solid #1A1A1F; outline-offset: 1px; }
+  .mr-heat-cell.future { background: transparent; border: 1px dashed var(--border, #E5DECF); pointer-events: none; }
   .mr-week-labels { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 6px; }
   .mr-week-labels span { font-size: 9px; color: #94939C; text-align: center; font-weight: 700; }
   .mr-streak-row { display: flex; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #E2DCCC; }
@@ -6804,7 +7010,7 @@ Material:
         if _dash_is_plus and not today_plan:
             _today_rows_html = (
                 '<div class="mr-empty">'
-                '  <span class="icon">MR</span>'
+                '  <span class="icon">&#128197;</span>'
                 '  <div class="mr-empty-title">Tu plan de hoy vive en Plan.</div>'
                 '  <div class="mr-empty-copy">Genera o actualiza tu semana para que MachReach priorice tus pruebas, pesos y disponibilidad.</div>'
                 '  <div class="mr-empty-actions"><a class="cta" href="/student/planner">Ir a ver el plan</a></div>'
@@ -6853,7 +7059,7 @@ Material:
         if not _mr_course_tiles:
             _courses_tiles_html = (
                 '<div class="mr-empty" style="grid-column:1/-1;">'
-                '  <span class="icon">MR</span>'
+                '  <span class="icon">&#128218;</span>'
                 '  <div class="mr-empty-title">No tienes cursos todavía.</div>'
                 '  <div class="mr-empty-copy">Conecta Canvas con la extensión de MachReach para confirmar tu universidad e importar tus cursos reales.</div>'
                 '  <div class="mr-empty-actions"><a class="cta" href="/student/canvas">Conectar Canvas</a></div>'
@@ -6939,7 +7145,7 @@ Material:
         if not exams:
             _exam_rows_html = (
                 '<div class="mr-empty">'
-                '  <span class="icon">EV</span>'
+                '  <span class="icon">&#128203;</span>'
                 '  <div class="mr-empty-title">Sin pruebas próximas.</div>'
                 '  <div class="mr-empty-copy">Cuando tus cursos reales lleguen desde Canvas, agrega sus evaluaciones desde Mis cursos para ver prioridad y calendario.</div>'
                 '  <div class="mr-empty-actions"><a class="cta secondary" href="/student/courses">Ver mis cursos</a></div>'
@@ -6977,15 +7183,26 @@ Material:
             )
         _league_label = _esc(level_name)
         _my_rank_disp = f"#{_mr_my_rank}" if _mr_my_rank > 0 else "—"
-        _empty_board = "<div style='opacity:.7;font-size:12px;text-align:center;padding:8px;'>Be the first to earn XP</div>" if _is_en else "<div style='opacity:.7;font-size:12px;text-align:center;padding:8px;'>S? el primero en sumar XP</div>"
+        _empty_board = "<div style='opacity:.7;font-size:12px;text-align:center;padding:8px;'>Be the first to earn XP</div>" if _is_en else "<div style='opacity:.7;font-size:12px;text-align:center;padding:8px;'>Sé el primero en sumar XP</div>"
+        # With an empty board, "#— de 0" reads broken — show a friendlier line.
+        if _mr_lb_rows:
+            _league_rank_row = (
+                '  <div class="mr-league-rank">'
+                + f'   <span class="mr-league-rank-num">{_my_rank_disp}</span>'
+                + f'   <span class="mr-league-rank-of">{"of" if _is_en else "de"} {len(_mr_lb_rows)}</span>'
+                + '  </div>'
+            )
+        else:
+            _league_rank_row = (
+                '<div class="mr-league-rank"><span class="mr-league-rank-of" style="font-size:13px;opacity:.92;">'
+                + ("The week is just getting started" if _is_en else "La semana recién comienza")
+                + '</span></div>'
+            )
         _mr_league_card = (
             '<section class="mr-league-card mr-pop-1">'
             + ('  <div class="mr-league-eye">WEEKLY LEAGUE</div>' if _is_en else '  <div class="mr-league-eye">Liga semanal</div>')
             + f' <div class="mr-league-name serif">&#127942; {_league_label}</div>'
-            + '  <div class="mr-league-rank">'
-            + f'   <span class="mr-league-rank-num">{_my_rank_disp}</span>'
-            + f'   <span class="mr-league-rank-of">{"of" if _is_en else "de"} {len(_mr_lb_rows)}</span>'
-            + '  </div>'
+            + _league_rank_row
             + '  <div class="mr-league-promo">'
             + f'   <span>{_xp_to_next} XP {"to rank up" if _is_en else "para subir"}</span>'
             + f'   <span style="font-weight:800;">{xp_pct}%</span>'
@@ -6998,6 +7215,12 @@ Material:
         _heat_html = ""
         _hd = _mr_heat_start
         for _i in range(35):
+            if _hd > _mr_today:
+                # Remaining days of the current week — keep the grid aligned
+                # with the weekday labels without implying missed days.
+                _heat_html += '<div class="mr-heat-cell future"></div>'
+                _hd += _td_cls(days=1)
+                continue
             _m = _mr_heat.get(_hd, 0)
             if _m <= 0:
                 _lvl = ""
@@ -7022,8 +7245,9 @@ Material:
 
         _attendance_pct = 0
         _active_days = sum(1 for _v in _mr_heat.values() if _v > 0)
-        if _mr_heat:
-            _attendance_pct = int(round(100 * _active_days / 35))
+        _days_in_window = (_mr_today - _mr_heat_start).days + 1
+        if _mr_heat and _days_in_window > 0:
+            _attendance_pct = int(round(100 * _active_days / _days_in_window))
 
         _mr_streak_card = (
             '<section class="mr-card mr-streak-card mr-pop-2">'
@@ -7033,7 +7257,7 @@ Material:
             + '  </div>'
             + f'  <div class="mr-streak-lead" style="--streak-pct:{_attendance_pct}%;">'
             + f'   <div class="mr-streak-num">{streak_days}</div>'
-            + f'   <div class="mr-streak-copy"><strong>{"days in a row" if _is_en else "d\u00edas seguidos"}</strong><span>{"last 35 days" if _is_en else "\u00faltimos 35 d\u00edas"}</span><div class="mr-streak-meter"><i></i></div></div>'
+            + f'   <div class="mr-streak-copy"><strong>{"days in a row" if _is_en else "d\u00edas seguidos"}</strong><span>{"last 5 weeks" if _is_en else "\u00faltimas 5 semanas"}</span><div class="mr-streak-meter"><i></i></div></div>'
             + '  </div>'
             + f' <div class="mr-heat-grid">{_heat_html}</div>'
             + '  <div class="mr-week-labels">'
@@ -7331,6 +7555,29 @@ Material:
             </div>
             """
 
+        # The banner must reflect the real sync state: an account with no
+        # imported courses has not connected Canvas yet.
+        if courses:
+            _canvas_banner = """
+        <div class="canvas-banner">
+          <div class="cb-icon">⌬</div>
+          <div class="cb-body">
+            <div class="cb-title">Canvas conectado</div>
+            <div class="cb-meta">Cursos sincronizados automáticamente · los ramos nuevos caen en el semestre activo</div>
+          </div>
+          <a class="cb-btn" href="/student/canvas">Configurar</a>
+        </div>"""
+        else:
+            _canvas_banner = """
+        <div class="canvas-banner">
+          <div class="cb-icon">⌬</div>
+          <div class="cb-body">
+            <div class="cb-title">Canvas sin conectar</div>
+            <div class="cb-meta">Conecta Canvas con la extensión para importar tus cursos automáticamente</div>
+          </div>
+          <a class="cb-btn" href="/student/canvas">Conectar Canvas</a>
+        </div>"""
+
         return _s_render("Mis Cursos", f"""
 
         <div class="page-head-cd">
@@ -7345,14 +7592,7 @@ Material:
             </select>
           </div>
         </div>
-        <div class="canvas-banner">
-          <div class="cb-icon">⌬</div>
-          <div class="cb-body">
-            <div class="cb-title">Canvas conectado</div>
-            <div class="cb-meta">Cursos sincronizados automáticamente · los ramos nuevos caen en el semestre activo</div>
-          </div>
-          <a class="cb-btn" href="/student/canvas">Configurar</a>
-        </div>
+        {_canvas_banner}
         <div class="course-cards">{course_cards_html}</div>
         <div style="display:none">
 
@@ -7788,10 +8028,12 @@ Material:
           }}
           var gradeRaw = (gradeEl && gradeEl.value) || '';
           var grade = gradeRaw === '' ? null : parseFloat(String(gradeRaw).replace(',', '.'));
+          if (isFinite(grade)) grade = Math.min(7, Math.max(1, grade));
+          var weightPct = parseInt((weightEl && weightEl.value) || '0') || 0;
           return {{
             name: name,
             exam_date: (dateEl && dateEl.value) || '',
-            weight_pct: parseInt((weightEl && weightEl.value) || '0') || 0,
+            weight_pct: Math.min(100, Math.max(0, weightPct)),
             grade: isFinite(grade) ? grade : null,
             topics: [],
             course_id: parseInt(courseId) || 0
@@ -8105,6 +8347,8 @@ Material:
             var gEl = row.querySelector('[data-field="grade"]');
             var w = wEl ? parseFloat(String(wEl.value || '').replace(',', '.')) : NaN;
             var g = gEl ? parseFloat(String(gEl.value || '').replace(',', '.')) : NaN;
+            if (isFinite(w)) w = Math.min(100, Math.max(0, w));
+            if (isFinite(g)) g = Math.min(7, Math.max(1, g));
             if (isFinite(w) && isFinite(g) && w > 0 && g > 0) {{
               sum += (w / 100) * g;
               weightDone += w;
@@ -8212,8 +8456,10 @@ Material:
             var exam_date = row.querySelector('[data-field=\"exam_date\"]').value || '';
 
             var weight_pct = parseInt(row.querySelector('[data-field=\"weight_pct\"]').value) || 0;
+            weight_pct = Math.min(100, Math.max(0, weight_pct));
             var gradeRaw = (row.querySelector('[data-field=\"grade\"]') && row.querySelector('[data-field=\"grade\"]').value) || '';
             var grade = gradeRaw === '' ? null : parseFloat(String(gradeRaw).replace(',', '.'));
+            if (isFinite(grade)) grade = Math.min(7, Math.max(1, grade));
 
             if (!name) {{ continue; }}  // skip empty rows quietly
 
@@ -10117,7 +10363,267 @@ Material:
           var allowed = {{ off:1, rain:1, ocean:1, forest:1, fire:1, brown:1 }};
           if (!allowed[type]) type = 'off';
           try {{ document.documentElement.setAttribute('data-focus-ambience', type); }} catch(e) {{}}
+          try {{ setAmbienceFx(type); }} catch(e) {{}}
         }}
+
+        /* === Ambience scenes: live canvas overlay ======================
+           Beyond the CSS color wash, each ambience renders an animated
+           scene over the page — falling rain with splash ripples, rolling
+           waves with foam bubbles, drifting leaves (fireflies in dark
+           mode), rising embers over a flickering glow, floating dust for
+           brown noise. Honors prefers-reduced-motion; pauses when the tab
+           is hidden. ===================================================== */
+        var __fx = {{ canvas:null, ctx:null, type:'off', drops:[], splashes:[], parts:[], raf:0, w:0, h:0, dpr:1, t:0, last:0 }};
+
+        function fxDark() {{ return document.documentElement.getAttribute('data-theme') === 'dark'; }}
+        function fxReduced() {{
+          try {{ return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }} catch(e) {{ return false; }}
+        }}
+        function fxRand(a, b) {{ return a + Math.random() * (b - a); }}
+
+        function fxEnsureCanvas() {{
+          if (__fx.canvas) return;
+          var c = document.createElement('canvas');
+          c.id = 'amb-fx-canvas';
+          c.setAttribute('aria-hidden', 'true');
+          c.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:3;';
+          document.body.appendChild(c);
+          __fx.canvas = c;
+          __fx.ctx = c.getContext('2d');
+          fxResize();
+          window.addEventListener('resize', fxResize);
+        }}
+
+        function fxResize() {{
+          if (!__fx.canvas) return;
+          __fx.dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+          __fx.w = window.innerWidth; __fx.h = window.innerHeight;
+          __fx.canvas.width = Math.round(__fx.w * __fx.dpr);
+          __fx.canvas.height = Math.round(__fx.h * __fx.dpr);
+          __fx.ctx.setTransform(__fx.dpr, 0, 0, __fx.dpr, 0, 0);
+          if (__fx.type !== 'off') fxSpawn(__fx.type);
+        }}
+
+        function fxLeaf(initial) {{
+          var palettes = [[34,160,107],[132,204,22],[214,158,46],[101,163,77]];
+          return {{
+            x: fxRand(0, __fx.w),
+            y: initial ? fxRand(-__fx.h, __fx.h) : fxRand(-70, -10),
+            size: fxRand(4.5, 9.5), fall: fxRand(.45, 1.25),
+            ph: fxRand(0, 6.28), swayAmp: fxRand(.5, 1.6), swaySp: fxRand(.6, 1.4),
+            rot: fxRand(0, 6.28), rotSp: fxRand(-.035, .035),
+            rgb: palettes[Math.floor(Math.random() * palettes.length)],
+            a: fxRand(.3, .62)
+          }};
+        }}
+
+        function fxEmber(initial) {{
+          return {{
+            x: fxRand(0, __fx.w),
+            y: initial ? fxRand(__fx.h * .25, __fx.h) : __fx.h + fxRand(4, 40),
+            r: fxRand(1.1, 3),
+            rise: fxRand(.7, 2.3),
+            ph: fxRand(0, 6.28),
+            a: fxRand(.35, .8)
+          }};
+        }}
+
+        function fxSpawn(type) {{
+          var area = __fx.w * __fx.h, i, n;
+          __fx.drops = []; __fx.splashes = []; __fx.parts = [];
+          if (type === 'rain') {{
+            n = Math.round(area / 7500);
+            for (i = 0; i < n; i++) __fx.drops.push({{ x: fxRand(-40, __fx.w), y: fxRand(-__fx.h, __fx.h), len: fxRand(11, 24), sp: fxRand(10, 17), w: fxRand(.8, 1.7), a: fxRand(.18, .46) }});
+          }} else if (type === 'ocean') {{
+            n = Math.round(area / 36000);
+            for (i = 0; i < n; i++) __fx.parts.push({{ x: fxRand(0, __fx.w), y: fxRand(__fx.h * .45, __fx.h), r: fxRand(1.2, 3.2), sp: fxRand(.16, .5), ph: fxRand(0, 6.28), a: fxRand(.16, .38) }});
+          }} else if (type === 'forest') {{
+            n = Math.max(14, Math.round(area / 44000));
+            for (i = 0; i < n; i++) __fx.parts.push(fxLeaf(true));
+            if (fxDark()) for (i = 0; i < 9; i++) __fx.parts.push({{ fly: 1, x: fxRand(0, __fx.w), y: fxRand(__fx.h * .1, __fx.h * .85), ph: fxRand(0, 6.28), dx: fxRand(-.35, .35), dy: fxRand(-.22, .22) }});
+          }} else if (type === 'fire') {{
+            n = Math.round(area / 15000);
+            for (i = 0; i < n; i++) __fx.parts.push(fxEmber(true));
+          }} else if (type === 'brown') {{
+            n = Math.round(area / 28000);
+            for (i = 0; i < n; i++) __fx.parts.push({{ x: fxRand(0, __fx.w), y: fxRand(0, __fx.h), r: fxRand(1, 2.6), ph: fxRand(0, 6.28), dx: fxRand(-.12, .12), dy: fxRand(-.08, .08), a: fxRand(.12, .3) }});
+          }}
+        }}
+
+        function fxTick(ts) {{
+          __fx.raf = 0;
+          if (__fx.type === 'off') return;
+          var dt = __fx.last ? Math.min((ts - __fx.last) / 16.7, 3) : 1;
+          __fx.last = ts;
+          __fx.t += dt * 0.016;
+          var ctx = __fx.ctx, w = __fx.w, h = __fx.h, t = __fx.t, dark = fxDark(), i, p, x;
+          ctx.clearRect(0, 0, w, h);
+
+          if (__fx.type === 'rain') {{
+            var wind = 2.1, rainRGB = dark ? '165,200,255' : '88,134,200';
+            ctx.lineCap = 'round';
+            for (i = 0; i < __fx.drops.length; i++) {{
+              p = __fx.drops[i];
+              p.y += p.sp * dt; p.x += wind * dt * (p.sp / 14);
+              if (p.y - p.len > h) {{
+                if (Math.random() < .3) __fx.splashes.push({{ x: p.x, y: h - fxRand(2, 30), r: 0, max: fxRand(5, 11), a: .38 }});
+                p.y = fxRand(-90, -10); p.x = fxRand(-40, w);
+              }}
+              if (p.x > w + 40) p.x = -30;
+              ctx.strokeStyle = 'rgba(' + rainRGB + ',' + p.a + ')';
+              ctx.lineWidth = p.w;
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(p.x - wind * (p.len / 14), p.y - p.len);
+              ctx.stroke();
+            }}
+            for (i = __fx.splashes.length - 1; i >= 0; i--) {{
+              var s = __fx.splashes[i];
+              s.r += (s.max / 9) * dt; s.a -= .03 * dt;
+              if (s.a <= 0 || s.r >= s.max) {{ __fx.splashes.splice(i, 1); continue; }}
+              ctx.strokeStyle = 'rgba(' + rainRGB + ',' + (s.a * .8).toFixed(3) + ')';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.ellipse(s.x, s.y, s.r, s.r * .34, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }}
+
+          }} else if (__fx.type === 'ocean') {{
+            var waveRGB = dark ? '56,189,248' : '14,165,183';
+            var bands = [
+              {{ amp: 7,  len: w / 2.6, sp: .45,  base: h - 64, a: dark ? .10 : .07 }},
+              {{ amp: 10, len: w / 3.4, sp: .9,   base: h - 44, a: dark ? .15 : .11 }},
+              {{ amp: 14, len: w / 4.6, sp: -.6,  base: h - 22, a: dark ? .20 : .14 }}
+            ];
+            for (i = 0; i < bands.length; i++) {{
+              var bb = bands[i];
+              ctx.fillStyle = 'rgba(' + waveRGB + ',' + bb.a + ')';
+              ctx.beginPath();
+              ctx.moveTo(0, h);
+              for (x = 0; x <= w + 10; x += 10) ctx.lineTo(x, bb.base + Math.sin((x / bb.len) * 6.283 + t * bb.sp * 4) * bb.amp);
+              ctx.lineTo(w, h);
+              ctx.closePath();
+              ctx.fill();
+            }}
+            for (i = 0; i < __fx.parts.length; i++) {{
+              p = __fx.parts[i];
+              p.y -= p.sp * dt;
+              if (p.y < h * .4) {{ p.y = h + fxRand(2, 26); p.x = fxRand(0, w); }}
+              var bx = p.x + Math.sin(t * 1.4 + p.ph) * 6;
+              ctx.fillStyle = 'rgba(' + waveRGB + ',' + p.a + ')';
+              ctx.beginPath();
+              ctx.arc(bx, p.y, p.r, 0, Math.PI * 2);
+              ctx.fill();
+            }}
+
+          }} else if (__fx.type === 'forest') {{
+            for (i = 0; i < __fx.parts.length; i++) {{
+              p = __fx.parts[i];
+              if (p.fly) {{
+                p.x += (p.dx + Math.sin(t * .9 + p.ph) * .25) * dt;
+                p.y += (p.dy + Math.cos(t * .7 + p.ph) * .2) * dt;
+                if (p.x < -10) p.x = w + 10; if (p.x > w + 10) p.x = -10;
+                if (p.y < 0) p.y = h * .8; if (p.y > h) p.y = h * .15;
+                var glow = .2 + .5 * Math.abs(Math.sin(t * 1.8 + p.ph));
+                ctx.save();
+                ctx.shadowColor = 'rgba(252,211,77,.9)';
+                ctx.shadowBlur = 9;
+                ctx.fillStyle = 'rgba(252,221,120,' + glow.toFixed(3) + ')';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                continue;
+              }}
+              p.y += p.fall * dt;
+              p.x += Math.sin(t * p.swaySp + p.ph) * p.swayAmp * dt;
+              p.rot += p.rotSp * dt;
+              if (p.y > h + 16) {{ __fx.parts[i] = fxLeaf(false); continue; }}
+              ctx.save();
+              ctx.translate(p.x, p.y);
+              ctx.rotate(p.rot + Math.sin(t * p.swaySp + p.ph) * .5);
+              ctx.fillStyle = 'rgba(' + p.rgb[0] + ',' + p.rgb[1] + ',' + p.rgb[2] + ',' + p.a + ')';
+              ctx.beginPath();
+              ctx.ellipse(0, 0, p.size, p.size * .42, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }}
+
+          }} else if (__fx.type === 'fire') {{
+            var flick = .10 + (dark ? .06 : .02) + Math.sin(t * 9.3) * .018 + Math.sin(t * 23.7) * .012;
+            var glow = ctx.createLinearGradient(0, h - 150, 0, h);
+            glow.addColorStop(0, 'rgba(255,122,61,0)');
+            glow.addColorStop(1, 'rgba(255,122,61,' + Math.max(flick, .04).toFixed(3) + ')');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, h - 150, w, 150);
+            for (i = 0; i < __fx.parts.length; i++) {{
+              p = __fx.parts[i];
+              p.y -= p.rise * dt;
+              p.x += Math.sin(t * 2.1 + p.ph) * .4 * dt;
+              var lifeFrac = Math.max(0, Math.min(1, p.y / h));
+              if (p.y < h * .12 || lifeFrac <= 0) {{ __fx.parts[i] = fxEmber(false); continue; }}
+              var ea = p.a * lifeFrac;
+              ctx.fillStyle = 'rgba(255,122,61,' + (ea * .35).toFixed(3) + ')';
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.r * 2.4, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = (i % 3 === 0 ? 'rgba(250,204,21,' : 'rgba(255,150,84,') + ea.toFixed(3) + ')';
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+              ctx.fill();
+            }}
+
+          }} else if (__fx.type === 'brown') {{
+            var dustRGB = dark ? '196,181,253' : '139,116,222';
+            for (i = 0; i < __fx.parts.length; i++) {{
+              p = __fx.parts[i];
+              p.x += (p.dx + Math.sin(t * .6 + p.ph) * .14) * dt;
+              p.y += (p.dy + Math.cos(t * .5 + p.ph) * .1) * dt;
+              if (p.x < -8) p.x = w + 8; if (p.x > w + 8) p.x = -8;
+              if (p.y < -8) p.y = h + 8; if (p.y > h + 8) p.y = -8;
+              var pulse = p.a * (.55 + .45 * Math.sin(t * 1.1 + p.ph));
+              ctx.fillStyle = 'rgba(' + dustRGB + ',' + Math.max(pulse, 0).toFixed(3) + ')';
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+              ctx.fill();
+            }}
+          }}
+
+          __fx.raf = requestAnimationFrame(fxTick);
+        }}
+
+        function setAmbienceFx(type) {{
+          __fx.type = (type && type !== 'off' && !fxReduced()) ? type : 'off';
+          if (__fx.type === 'off') {{
+            if (__fx.raf) cancelAnimationFrame(__fx.raf);
+            __fx.raf = 0; __fx.last = 0;
+            if (__fx.ctx) __fx.ctx.clearRect(0, 0, __fx.w, __fx.h);
+            if (__fx.canvas) __fx.canvas.style.display = 'none';
+            return;
+          }}
+          fxEnsureCanvas();
+          __fx.canvas.style.display = '';
+          fxSpawn(__fx.type);
+          __fx.last = 0;
+          if (!__fx.raf) __fx.raf = requestAnimationFrame(fxTick);
+        }}
+
+        document.addEventListener('visibilitychange', function() {{
+          if (document.hidden) {{
+            if (__fx.raf) cancelAnimationFrame(__fx.raf);
+            __fx.raf = 0; __fx.last = 0;
+          }} else if (__fx.type !== 'off' && !__fx.raf) {{
+            __fx.raf = requestAnimationFrame(fxTick);
+          }}
+        }});
+
+        // Respawn the scene when the light/dark theme flips so theme-bound
+        // particles (e.g. forest fireflies) follow the toggle.
+        try {{
+          new MutationObserver(function() {{
+            if (__fx.type !== 'off') fxSpawn(__fx.type);
+          }}).observe(document.documentElement, {{ attributes: true, attributeFilter: ['data-theme'] }});
+        }} catch(e) {{}}
 
         function markAmbienceSelected(type) {{
           type = type || 'off';
@@ -10383,17 +10889,10 @@ Material:
           // the 30-min countdown for the display.
           if (__mandatoryEndAt) return;
 
-          // Require a live Focus Guard response before any timer phase can start.
-          if (!guardConfirmed) {{
-            requireFocusGuardFresh(function(ok) {{
-              if (ok) startTimer(isRestore, true);
-              else showFocusGuardRequired();
-            }});
-            return;
-          }}
-
           // Block the timer entirely if no course is picked. Mandatory
-          // since "general study" was removed.
+          // since "general study" was removed. Checked BEFORE the Focus Guard
+          // gate so the user fixes the form before being asked to install
+          // the extension.
           if (!isRestore) {{
             var __courseSel = document.getElementById('focus-course');
             var __warn = document.getElementById('focus-course-warn');
@@ -10403,6 +10902,15 @@ Material:
               return;
             }}
             if (__warn) __warn.style.display = 'none';
+          }}
+
+          // Require a live Focus Guard response before any timer phase can start.
+          if (!guardConfirmed) {{
+            requireFocusGuardFresh(function(ok) {{
+              if (ok) startTimer(isRestore, true);
+              else showFocusGuardRequired();
+            }});
+            return;
           }}
 
           // Prime the alarm INSIDE the user-gesture handler so audio can play
@@ -14815,7 +15323,7 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        course_options = '<option value="">Select a course...</option>'
+        course_options = '<option value="">Elige un curso...</option>'
 
         for c in courses:
 
@@ -14877,6 +15385,14 @@ No markdown, no code fences. ONLY JSON.
 
         existing_quiz_ids = [int(q["id"]) for q in quizzes if q.get("id") is not None]
 
+        # Real stats for the eyebrow — never show a made-up number.
+        _attempted = [q for q in quizzes if (q.get("attempts") or 0) > 0]
+        if _attempted:
+            _avg_acc = round(sum((q.get("best_score") or 0) for q in _attempted) / len(_attempted))
+            _quiz_eyebrow = f"{_avg_acc}% precisión global · {len(_attempted)} quizzes resueltos"
+        else:
+            _quiz_eyebrow = "Genera quizzes con IA desde tu material"
+
         return _s_render("Quizzes", f"""
 
         <div class="quiz-cd">
@@ -14884,7 +15400,7 @@ No markdown, no code fences. ONLY JSON.
 
           <div>
 
-            <div class="page-eyebrow">87% precisión global · quizzes resueltos</div>
+            <div class="page-eyebrow">{_quiz_eyebrow}</div>
             <h1 style="margin:0;">Quizzes</h1>
 
             <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Elige de dónde vienen tus preguntas &mdash; una prueba oficial o tus propios apuntes.</p>
@@ -17310,7 +17826,7 @@ No markdown, no code fences. ONLY JSON.
             ("Tarjetas", "Repaso espaciado y mazos"),
             ("Cursos", "Cursos sincronizados y avance academico"),
             ("Social", "Duelos, perfil y rankings"),
-            ("Especiales", "Insignias raras, eventos y cosmeticos"),
+            ("Especiales", "Insignias raras, eventos y cosméticos"),
         ]
 
         def _badge_group_for(key: str) -> str:

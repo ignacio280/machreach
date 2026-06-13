@@ -1464,7 +1464,7 @@
       margin: 0 auto;
     }
     .mr-app-shell .content-wide { max-width: 1560px; }
-    @media (max-width: 860px) {
+    @media (max-width: 1100px) {
       .mr-tb-nav {
         position: fixed;
         top: 60px;
@@ -2009,7 +2009,7 @@
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       }
     }
-    @media (max-width: 1380px) and (min-width: 861px) {
+    @media (max-width: 1380px) and (min-width: 1101px) {
       :root:not([data-theme="dark"]) .mr-tb-nav,
       :root[data-theme="dark"] .mr-tb-nav {
         gap: 5px;
@@ -2017,7 +2017,12 @@
         overflow-x: auto;
         overflow-y: hidden;
         align-content: center;
+        /* When links overflow, show a thin scrollbar as the cue — invisible
+           when everything fits. */
+        scrollbar-width: thin;
       }
+      .mr-tb-nav::-webkit-scrollbar { display: block; height: 4px; }
+      .mr-tb-nav::-webkit-scrollbar-thumb { background: rgba(128,120,110,.45); border-radius: 2px; }
       :root:not([data-theme="dark"]) .mr-tb-link,
       :root[data-theme="dark"] .mr-tb-link {
         padding: 8px 9px;
@@ -2036,7 +2041,7 @@
         padding-right: 7px;
       }
     }
-    @media (max-width: 860px) {
+    @media (max-width: 1100px) {
       :root:not([data-theme="dark"]) .mr-topbar,
       :root[data-theme="dark"] .mr-topbar {
         min-height: 64px;
@@ -2535,7 +2540,7 @@
     .mr-tb-user {
       padding: 4px 10px 4px 4px;
     }
-    @media (max-width: 1380px) and (min-width: 861px) {
+    @media (max-width: 1380px) and (min-width: 1101px) {
       .mr-tb-nav {
         gap: 5px;
         flex-wrap: nowrap;
@@ -2557,7 +2562,7 @@
         padding-right: 7px;
       }
     }
-    @media (max-width: 860px) {
+    @media (max-width: 1100px) {
       .mr-topbar {
         min-height: 64px;
         padding: 10px 14px;
@@ -2614,7 +2619,7 @@
     :root[data-theme="dark"] .mr-tb-av {
       border-radius: 12px !important;
     }
-    @media (max-width: 1380px) and (min-width: 861px) {
+    @media (max-width: 1380px) and (min-width: 1101px) {
       :root[data-theme="dark"] .mr-tb-nav {
         gap: 5px !important;
         flex-wrap: nowrap !important;
@@ -2636,7 +2641,7 @@
         padding-right: 7px !important;
       }
     }
-    @media (max-width: 860px) {
+    @media (max-width: 1100px) {
       :root[data-theme="dark"] .mr-topbar {
         min-height: 64px !important;
         padding: 10px 14px !important;
@@ -3491,7 +3496,7 @@
     }
 
     /* ══════════ mobile burger menu fixes ══════════ */
-    @media (max-width: 860px) {
+    @media (max-width: 1100px) {
       /* theme rules set overflow-y:hidden with higher specificity, which cuts
          the open burger menu — force the vertical menu to scroll instead */
       .mr-tb-nav,
@@ -3526,7 +3531,7 @@
     }
 
     /* ══════════ compact mobile topbar (burger must always be visible) ══════════ */
-    @media (max-width: 860px) {
+    @media (max-width: 1100px) {
       .mr-topbar,
       :root:not([data-theme="dark"]) .mr-topbar,
       :root[data-theme="dark"] .mr-topbar {
@@ -3581,4 +3586,45 @@
       .mr-tb-name,
       :root:not([data-theme="dark"]) .mr-tb-name,
       :root[data-theme="dark"] .mr-tb-name { display: none !important; }
+    }
+
+    /* ══════════ global polish ══════════ */
+
+    /* Brand-colored text selection */
+    ::selection { background: rgba(255, 122, 61, .28); }
+    :root[data-theme="dark"] ::selection { background: rgba(255, 138, 76, .38); }
+
+    /* Slim, theme-aware scrollbars */
+    * { scrollbar-width: thin; scrollbar-color: rgba(140, 130, 120, .45) transparent; }
+    :root[data-theme="dark"] * { scrollbar-color: rgba(120, 125, 140, .5) transparent; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(140, 130, 120, .4); border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
+    ::-webkit-scrollbar-thumb:hover { background-color: rgba(140, 130, 120, .65); }
+    :root[data-theme="dark"] ::-webkit-scrollbar-thumb { background-color: rgba(120, 125, 140, .45); }
+
+    /* Visible keyboard focus everywhere — mouse clicks stay clean */
+    :focus { outline: none; }
+    :focus-visible {
+      outline: 3px solid rgba(255, 122, 61, .75) !important;
+      outline-offset: 2px !important;
+      border-radius: 6px;
+    }
+    :root[data-theme="dark"] :focus-visible { outline-color: rgba(255, 158, 100, .85) !important; }
+
+    /* Gentle page entrance */
+    @keyframes mrPageIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .mr-app-shell .content > *, .mr-app-shell .content-wide > * { animation: mrPageIn .32s ease both; }
+
+    /* Smooth in-page anchor jumps */
+    html { scroll-behavior: smooth; }
+
+    /* Honor reduced motion globally */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+      }
     }

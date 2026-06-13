@@ -1327,6 +1327,11 @@ LAYOUT = """<!DOCTYPE html>
       if (T[txt]) return T[txt];
       var out = txt;
       Object.keys(T).sort(function(a,b){ return b.length - a.length; }).forEach(function(k){
+        // Only substitute long multi-word phrases mid-text. Short/single-word
+        // entries still apply via the exact whole-text match above —
+        // substituting bare words into untranslated sentences produced
+        // Spanglish like "Sincroniza tus courses de Canvas".
+        if (k.length < 12 || k.indexOf(' ') === -1) return;
         if (/^[A-Za-zÁÉÍÓÚáéíóúÑñ]+$/.test(k)) {
           out = out.replace(new RegExp("(^|[^A-Za-zÁÉÍÓÚáéíóúÑñ])" + k + "(?=$|[^A-Za-zÁÉÍÓÚáéíóúÑñ])", "g"), function(m, lead){
             return lead + T[k];
