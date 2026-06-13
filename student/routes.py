@@ -7590,21 +7590,12 @@ Material:
             </div>
             """
 
-        # The banner must reflect the real sync state: "connected" only when at
-        # least one course actually came from Canvas (manual courses use a
-        # negative canvas_course_id), so manual-only students aren't told they
-        # connected something they didn't.
+        # Canvas state keys off real Canvas courses (manual courses use a
+        # negative canvas_course_id). Once connected, the banner is hidden
+        # entirely — it only exists to prompt students who haven't connected.
         _has_canvas = any(int(c.get("canvas_course_id") or 0) > 0 for c in courses)
         if _has_canvas:
-            _canvas_banner = """
-        <div class="canvas-banner">
-          <div class="cb-icon">⌬</div>
-          <div class="cb-body">
-            <div class="cb-title">Canvas conectado</div>
-            <div class="cb-meta">Cursos sincronizados automáticamente · los ramos nuevos caen en el semestre activo</div>
-          </div>
-          <a class="cb-btn" href="/student/canvas">Configurar</a>
-        </div>"""
+            _canvas_banner = ""
         else:
             _canvas_banner = """
         <div class="canvas-banner">
@@ -7624,7 +7615,6 @@ Material:
             <h1 class="page-title-cd">Mis cursos</h1>
           </div>
           <div class="page-actions-cd">
-            <button class="mc-add-btn" type="button" onclick="toggleManualCourse()">+ Agregar curso</button>
             <select id="cur-sem-select" onchange="setCurrentSemester(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-weight:600;">
               <option value="" {'selected' if not current_sem else ''}>—</option>
               {sem_options}
@@ -7632,7 +7622,7 @@ Material:
           </div>
         </div>
         {_canvas_banner}
-        <div id="manual-course-panel" class="manual-course-panel" style="{'' if not courses else 'display:none;'}">
+        <div id="manual-course-panel" class="manual-course-panel">
           <div class="mcp-head">
             <div class="mcp-title">Agregar un curso</div>
             <div class="mcp-sub">¿Tu universidad no usa Canvas? Agrégalo a mano: escribe el código y el nombre. Te sugerimos cursos que otros de tu universidad ya agregaron.</div>
@@ -7809,8 +7799,6 @@ Material:
         .ex-input:focus {{ border-color:var(--primary);outline:none; }}
 
         /* ── Manual course add + autofill ───────────────────────── */
-        .mc-add-btn {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:9px 16px;border-radius:999px;font-weight:800;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:transform .14s ease,box-shadow .14s ease; }}
-        .mc-add-btn:hover {{ transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,18,30,.18); }}
         .manual-course-panel {{ position:relative;background:var(--card,#fff);border:1px solid #E2DCCC;border-radius:18px;padding:18px 20px;margin-bottom:18px;box-shadow:0 12px 32px rgba(20,18,30,.06); }}
         .mcp-head {{ margin-bottom:14px; }}
         .mcp-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.015em;color:var(--text,#1A1A1F); }}
@@ -7832,7 +7820,6 @@ Material:
         .mc-sug-uses {{ margin-left:auto;font-size:10px;font-weight:800;color:var(--text-muted,#A7A29B);white-space:nowrap; }}
         .mc-sug-hint {{ padding:9px 14px;font-size:11px;font-weight:800;color:var(--text-muted,#A7A29B);background:rgba(20,18,30,.02); }}
         @media (max-width:720px) {{ .mcp-form {{ grid-template-columns:1fr; }} .mcp-save {{ width:100%; }} }}
-        :root[data-theme="dark"] .mc-add-btn {{ background:#FF7A3D;color:#0B0B10; }}
         :root[data-theme="dark"] .manual-course-panel {{ background:#1A202B;border-color:#343C4C;box-shadow:0 12px 32px rgba(0,0,0,.3); }}
         :root[data-theme="dark"] .mcp-field input {{ background:#0F141D;border-color:#343C4C;color:#F8F3EA; }}
         :root[data-theme="dark"] .mc-suggest {{ background:#0F141D;border-color:#343C4C; }}
@@ -7846,17 +7833,10 @@ Material:
         function _esc(s) {{ return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }}
 
         /* ── Manual course add + per-university autofill ── */
+        /* The "Agregar un curso" panel is always visible on this page, so a
+           student can add a course at any time (not just when the list is
+           empty). */
         var _mcTimer = null;
-        function toggleManualCourse() {{
-          var p = document.getElementById('manual-course-panel');
-          if (!p) return;
-          if (p.style.display === 'none' || !p.style.display) {{
-            p.style.display = '';
-            var c = document.getElementById('mc-code'); if (c) c.focus();
-          }} else {{
-            p.style.display = 'none';
-          }}
-        }}
         function mcAutofill() {{
           clearTimeout(_mcTimer);
           var code = (document.getElementById('mc-code') || {{}}).value || '';
