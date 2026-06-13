@@ -2253,6 +2253,10 @@ Return this JSON shape:
         if not isinstance(courses, list):
             return jsonify({"error": "courses must be a list"}), 400
 
+        # University the courses belong to — used to feed the shared autofill
+        # catalog so students who DON'T use Canvas still get suggestions.
+        univ_id = sdb._client_university_id(client_id)
+
         saved = 0
         for c in courses[:200]:
             if not isinstance(c, dict):
@@ -2270,6 +2274,10 @@ Return this JSON shape:
             try:
                 sdb.upsert_course(client_id, cid_canvas, str(name), str(code), str(term))
                 saved += 1
+                try:
+                    sdb.record_course_to_catalog(univ_id, str(code), str(name))
+                except Exception:
+                    pass
             except Exception:
                 continue
 
@@ -2316,17 +2324,44 @@ Return this JSON shape:
 
 
     @app.route("/api/student/courses/manual", methods=["POST"])
-
     def student_create_manual_course():
-
         if not _logged_in():
-
             return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+        code = (data.get("code") or "").strip()
+        if not name:
+            return jsonify({"error": "El nombre del curso es obligatorio."}), 400
+        if len(name) > 160 or len(code) > 40:
+            return jsonify({"error": "Nombre o código demasiado largo."}), 400
+        cid = _cid()
+        try:
+            course_id = sdb.add_manual_course(cid, code, name)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception:
+            return jsonify({"error": "No se pudo crear el curso."}), 500
+        # Feed the student's university catalog so the next student there gets
+        # this course as an autofill suggestion. Scoped to their university only.
+        try:
+            sdb.record_course_to_catalog(sdb._client_university_id(cid), code, name)
+        except Exception:
+            pass
+        return jsonify({"ok": True, "id": course_id})
 
-        return jsonify({
-            "error": "Los cursos deben importarse desde Canvas usando la extensión de MachReach para confirmar que eres estudiante de una universidad real.",
-            "canvas_required": True,
-        }), 410
+    @app.route("/api/student/courses/catalog", methods=["GET"])
+    def student_course_catalog():
+        """Autofill suggestions scoped to the logged-in student's university."""
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        cid = _cid()
+        q = (request.args.get("q") or "").strip()
+        try:
+            univ_id = sdb._client_university_id(cid)
+            results = sdb.search_course_catalog(univ_id, q, limit=8)
+        except Exception:
+            results = []
+        return jsonify({"courses": results})
 
 
 
@@ -5975,7 +6010,7 @@ Material:
             const items = (r.universities || []).map(u =>
               '<div class="ss-item" data-id="' + u.id + '" data-name="' + escapeHtml(u.name) + '">' + escapeHtml(u.name) + '</div>'
             ).join('');
-            list.innerHTML = items || '<div class="ss-item">We are not at your university yet &mdash; for now: PUC, UDD, UAndes, UNAB and USACH. More coming soon.</div>';
+            list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
             list.querySelectorAll('.ss-item[data-id]').forEach(el => {
               el.addEventListener('click', () => pickUniv(parseInt(el.dataset.id), el.dataset.name));
             });
@@ -6054,8 +6089,6 @@ Material:
                 ("? 'Finish' : 'Next'", "? 'Finalizar' : 'Siguiente'"),
                 ("next.textContent = 'Saving...'", "next.textContent = 'Guardando...'"),
                 ("next.textContent = 'Finish'", "next.textContent = 'Finalizar'"),
-                ("We are not at your university yet &mdash; for now: PUC, UDD, UAndes, UNAB and USACH. More coming soon.",
-                 "Aún no estamos en tu universidad &mdash; por ahora: PUC, UDD, UAndes, UNAB y USACH. Pronto sumaremos más."),
                 ("No matches. Try a different search.", "Sin resultados. Prueba otra búsqueda."),
                 ("Pick a country first.", "Primero elige un país."),
                 ("Could not load countries.", "No pudimos cargar los países."),
@@ -7512,6 +7545,8 @@ Material:
                 _outcome_notice = f'<div class="ccard-outcome-done">Resultado guardado: {"aprobado" if _outcome.get("passed") else "no aprobado"} · nota {float(_outcome.get("final_grade") or 0):.2f}</div>'
             _brain_panel = ""
             _cls = _course_classes[_i % len(_course_classes)]
+            _is_manual = int(c.get("canvas_course_id") or 0) < 0
+            _origin = "Agregado a mano" if _is_manual else "Canvas / extensión"
             course_cards_html += f"""
             <article class="ccard {_cls}">
               <div class="ccard-head">
@@ -7519,7 +7554,7 @@ Material:
                 <button onclick="event.stopPropagation();deleteCourse({_course_id},'{_esc((c.get("name") or "")[:30])}')" class="ccard-menu" title="Eliminar curso">&#8942;</button>
               </div>
               <h2 class="ccard-name">{_esc(c.get("name") or "Curso")}</h2>
-              <div class="ccard-prof">Canvas / extensión · {_sessions} sesiones registradas</div>
+              <div class="ccard-prof">{_origin} · {_sessions} sesiones registradas</div>
               <div class="ccard-stats">
                 <div class="ccs"><div class="ccs-n">{_minutes//60}h {_minutes%60}m</div><div class="ccs-l">Estudiado</div></div>
                 <div class="ccs"><div class="ccs-n">{len(_exams)}</div><div class="ccs-l">Evaluaciones</div></div>
@@ -7549,15 +7584,18 @@ Material:
         if not course_cards_html:
             course_cards_html = """
             <div class="course-empty">
-              <div class="deck-add-icon">+</div>
-              <div class="deck-add-l">Aún no hay cursos</div>
-              <div class="deck-add-s">Conecta Canvas con la extensión para importar tus cursos.</div>
+              <div class="deck-add-icon">&#128218;</div>
+              <div class="deck-add-l">Aún no tienes cursos</div>
+              <div class="deck-add-s">Agrégalos a mano arriba (código + nombre), o conéctalos automáticamente con Canvas.</div>
             </div>
             """
 
-        # The banner must reflect the real sync state: an account with no
-        # imported courses has not connected Canvas yet.
-        if courses:
+        # The banner must reflect the real sync state: "connected" only when at
+        # least one course actually came from Canvas (manual courses use a
+        # negative canvas_course_id), so manual-only students aren't told they
+        # connected something they didn't.
+        _has_canvas = any(int(c.get("canvas_course_id") or 0) > 0 for c in courses)
+        if _has_canvas:
             _canvas_banner = """
         <div class="canvas-banner">
           <div class="cb-icon">⌬</div>
@@ -7586,6 +7624,7 @@ Material:
             <h1 class="page-title-cd">Mis cursos</h1>
           </div>
           <div class="page-actions-cd">
+            <button class="mc-add-btn" type="button" onclick="toggleManualCourse()">+ Agregar curso</button>
             <select id="cur-sem-select" onchange="setCurrentSemester(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-weight:600;">
               <option value="" {'selected' if not current_sem else ''}>—</option>
               {sem_options}
@@ -7593,6 +7632,25 @@ Material:
           </div>
         </div>
         {_canvas_banner}
+        <div id="manual-course-panel" class="manual-course-panel" style="{'' if not courses else 'display:none;'}">
+          <div class="mcp-head">
+            <div class="mcp-title">Agregar un curso</div>
+            <div class="mcp-sub">¿Tu universidad no usa Canvas? Agrégalo a mano: escribe el código y el nombre. Te sugerimos cursos que otros de tu universidad ya agregaron.</div>
+          </div>
+          <div class="mcp-form">
+            <div class="mcp-field mcp-code">
+              <label>Código</label>
+              <input id="mc-code" type="text" autocomplete="off" spellcheck="false" placeholder="Ej: MAT1610" oninput="mcAutofill(this.value)" onfocus="mcAutofill(this.value)">
+            </div>
+            <div class="mcp-field mcp-name">
+              <label>Nombre del curso</label>
+              <input id="mc-name" type="text" autocomplete="off" spellcheck="false" placeholder="Ej: Cálculo I" oninput="mcAutofill(this.value)" onfocus="mcAutofill(this.value)">
+            </div>
+            <button class="btn btn-primary mcp-save" type="button" onclick="saveManualCourse(this)">Agregar curso</button>
+          </div>
+          <div id="mc-suggest" class="mc-suggest" hidden></div>
+          <div id="mc-err" class="mcp-err"></div>
+        </div>
         <div class="course-cards">{course_cards_html}</div>
         <div style="display:none">
 
@@ -7750,11 +7808,116 @@ Material:
 
         .ex-input:focus {{ border-color:var(--primary);outline:none; }}
 
+        /* ── Manual course add + autofill ───────────────────────── */
+        .mc-add-btn {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:9px 16px;border-radius:999px;font-weight:800;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:transform .14s ease,box-shadow .14s ease; }}
+        .mc-add-btn:hover {{ transform:translateY(-1px);box-shadow:0 6px 16px rgba(20,18,30,.18); }}
+        .manual-course-panel {{ position:relative;background:var(--card,#fff);border:1px solid #E2DCCC;border-radius:18px;padding:18px 20px;margin-bottom:18px;box-shadow:0 12px 32px rgba(20,18,30,.06); }}
+        .mcp-head {{ margin-bottom:14px; }}
+        .mcp-title {{ font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.015em;color:var(--text,#1A1A1F); }}
+        .mcp-sub {{ font-size:12.5px;color:var(--text-muted,#94939C);margin-top:3px;max-width:62ch;line-height:1.45; }}
+        .mcp-form {{ display:grid;grid-template-columns:170px 1fr auto;gap:12px;align-items:end; }}
+        .mcp-field {{ display:flex;flex-direction:column;gap:5px;min-width:0; }}
+        .mcp-field label {{ font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted,#94939C); }}
+        .mcp-field input {{ width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid #E2DCCC;border-radius:11px;background:var(--bg,#FBF8F0);color:var(--text,#1A1A1F);font-size:14px;font-weight:600;transition:border-color .14s ease,box-shadow .14s ease; }}
+        .mcp-field input:focus {{ outline:none;border-color:var(--primary,#FF7A3D);box-shadow:0 0 0 4px rgba(255,122,61,.16); }}
+        .mcp-save {{ white-space:nowrap;min-height:44px; }}
+        .mcp-err {{ color:#E0533F;font-size:12px;font-weight:800;margin-top:8px;min-height:14px; }}
+        .mc-suggest {{ margin-top:10px;border:1px solid #E2DCCC;border-radius:12px;overflow:hidden;background:var(--card,#fff);box-shadow:0 10px 28px rgba(20,18,30,.10); }}
+        .mc-suggest[hidden] {{ display:none; }}
+        .mc-sug-item {{ display:flex;align-items:baseline;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid #F0EBDF;transition:background .12s ease; }}
+        .mc-sug-item:last-child {{ border-bottom:0; }}
+        .mc-sug-item:hover, .mc-sug-item.active {{ background:rgba(255,122,61,.10); }}
+        .mc-sug-code {{ font-weight:900;font-size:12px;letter-spacing:.04em;color:var(--primary,#E9662E);min-width:74px;text-transform:uppercase; }}
+        .mc-sug-name {{ font-weight:700;font-size:13.5px;color:var(--text,#1A1A1F);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }}
+        .mc-sug-uses {{ margin-left:auto;font-size:10px;font-weight:800;color:var(--text-muted,#A7A29B);white-space:nowrap; }}
+        .mc-sug-hint {{ padding:9px 14px;font-size:11px;font-weight:800;color:var(--text-muted,#A7A29B);background:rgba(20,18,30,.02); }}
+        @media (max-width:720px) {{ .mcp-form {{ grid-template-columns:1fr; }} .mcp-save {{ width:100%; }} }}
+        :root[data-theme="dark"] .mc-add-btn {{ background:#FF7A3D;color:#0B0B10; }}
+        :root[data-theme="dark"] .manual-course-panel {{ background:#1A202B;border-color:#343C4C;box-shadow:0 12px 32px rgba(0,0,0,.3); }}
+        :root[data-theme="dark"] .mcp-field input {{ background:#0F141D;border-color:#343C4C;color:#F8F3EA; }}
+        :root[data-theme="dark"] .mc-suggest {{ background:#0F141D;border-color:#343C4C; }}
+        :root[data-theme="dark"] .mc-sug-item {{ border-bottom-color:#222A36; }}
+        :root[data-theme="dark"] .mc-sug-name {{ color:#F8F3EA; }}
+
         </style>
 
         <script>
 
         function _esc(s) {{ return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){{ return ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]; }}); }}
+
+        /* ── Manual course add + per-university autofill ── */
+        var _mcTimer = null;
+        function toggleManualCourse() {{
+          var p = document.getElementById('manual-course-panel');
+          if (!p) return;
+          if (p.style.display === 'none' || !p.style.display) {{
+            p.style.display = '';
+            var c = document.getElementById('mc-code'); if (c) c.focus();
+          }} else {{
+            p.style.display = 'none';
+          }}
+        }}
+        function mcAutofill() {{
+          clearTimeout(_mcTimer);
+          var code = (document.getElementById('mc-code') || {{}}).value || '';
+          var name = (document.getElementById('mc-name') || {{}}).value || '';
+          var q = (name.trim() || code.trim());
+          _mcTimer = setTimeout(function(){{ mcFetchSuggest(q); }}, 160);
+        }}
+        function mcFetchSuggest(q) {{
+          var box = document.getElementById('mc-suggest');
+          if (!box) return;
+          fetch('/api/student/courses/catalog?q=' + encodeURIComponent(q))
+            .then(function(r){{ return _safeJson(r); }})
+            .then(function(d){{
+              var items = (d && d.courses) || [];
+              if (!items.length) {{ box.hidden = true; box.innerHTML = ''; return; }}
+              var html = '<div class="mc-sug-hint">&#127891; Cursos de tu universidad</div>';
+              items.forEach(function(it){{
+                var code = _esc(it.code || ''); var nm = _esc(it.name || '');
+                var uses = (it.uses > 1) ? (it.uses + '\\u00d7') : '';
+                html += '<div class="mc-sug-item" onclick="mcPick(this)" data-code="' + code + '" data-name="' + nm + '">'
+                  + '<span class="mc-sug-code">' + (code || '&mdash;') + '</span>'
+                  + '<span class="mc-sug-name">' + nm + '</span>'
+                  + (uses ? ('<span class="mc-sug-uses">' + uses + '</span>') : '')
+                  + '</div>';
+              }});
+              box.innerHTML = html; box.hidden = false;
+            }})
+            .catch(function(){{ box.hidden = true; }});
+        }}
+        function mcPick(el) {{
+          var c = document.getElementById('mc-code'); var n = document.getElementById('mc-name');
+          if (c) c.value = el.getAttribute('data-code') || '';
+          if (n) n.value = el.getAttribute('data-name') || '';
+          var box = document.getElementById('mc-suggest'); if (box) box.hidden = true;
+          if (n) n.focus();
+        }}
+        async function saveManualCourse(btn) {{
+          var c = document.getElementById('mc-code'); var n = document.getElementById('mc-name');
+          var err = document.getElementById('mc-err');
+          var code = ((c && c.value) || '').trim(); var name = ((n && n.value) || '').trim();
+          if (err) err.textContent = '';
+          if (!name) {{ if (err) err.textContent = 'Escribe el nombre del curso.'; if (n) n.focus(); return; }}
+          btn.disabled = true; var old = btn.textContent; btn.textContent = 'Agregando\\u2026';
+          try {{
+            var r = await fetch('/api/student/courses/manual', {{
+              method: 'POST', headers: {{'Content-Type':'application/json'}},
+              body: JSON.stringify({{ code: code, name: name }})
+            }});
+            var d = await _safeJson(r);
+            if (!r.ok) throw new Error((d && d.error) || 'No se pudo agregar el curso.');
+            mrReload();
+          }} catch(e) {{
+            if (err) err.textContent = e.message || 'No se pudo agregar el curso.';
+            btn.disabled = false; btn.textContent = old;
+          }}
+        }}
+        document.addEventListener('click', function(e){{
+          var panel = document.getElementById('manual-course-panel');
+          var box = document.getElementById('mc-suggest');
+          if (panel && box && !panel.contains(e.target)) box.hidden = true;
+        }});
 
         async function setCurrentSemester(label) {{
           if (label === '') return;  // ignore the placeholder

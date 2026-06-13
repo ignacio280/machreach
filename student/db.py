@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 from datetime import datetime
 
 from outreach.db import (
@@ -476,6 +477,11 @@ def init_student_db():
         init_planner_done_table()
     except Exception as e:
         log.exception("init_planner_done_table failed: %s", e)
+    # Crowd-sourced per-university course catalog (autofill)
+    try:
+        init_course_catalog_table()
+    except Exception as e:
+        log.exception("init_course_catalog_table failed: %s", e)
     # Quiz Duels v2 (file-upload + AI-generated, synchronous)
     try:
         init_quiz_duels_tables()
@@ -831,6 +837,185 @@ def upsert_course(client_id: int, canvas_course_id: int, name: str,
             "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label) "
             "VALUES (?, ?, ?, ?, ?, ?)",
         )
+
+
+def _catalog_norm(s: str) -> str:
+    """Lowercase, strip accents, collapse whitespace — for catalog matching."""
+    s = unicodedata.normalize("NFKD", (s or "")).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", s.lower().strip())
+
+
+def _client_university_id(client_id: int) -> int | None:
+    """The university the student picked during academic setup, or None."""
+    try:
+        with get_db() as db:
+            r = _fetchone(db, "SELECT university_id FROM clients WHERE id = %s", (client_id,))
+        uid = (dict(r).get("university_id") if r else None)
+        return int(uid) if uid else None
+    except Exception:
+        return None
+
+
+def add_manual_course(client_id: int, code: str, name: str) -> int:
+    """Create a student-entered course (no Canvas). Manual courses use a
+    negative synthetic canvas_course_id so they never collide with real Canvas
+    ids and can be told apart later (canvas_course_id < 0 == manual)."""
+    name = (name or "").strip()
+    code = (code or "").strip()
+    if not name:
+        raise ValueError("Course name is required")
+    name_norm = _catalog_norm(name)
+    with get_db() as db:
+        # De-dupe against the student's existing courses (same name).
+        existing = _fetchall(
+            db,
+            "SELECT id, name FROM student_courses WHERE client_id = %s",
+            (client_id,),
+        ) or []
+        for r in existing:
+            if _catalog_norm(dict(r).get("name", "")) == name_norm:
+                return int(dict(r)["id"])
+        # Pick a unique negative id below the current minimum for this client.
+        min_id = _fetchval(
+            db,
+            "SELECT MIN(canvas_course_id) FROM student_courses WHERE client_id = %s",
+            (client_id,),
+        )
+        manual_id = (min(int(min_id), 0) if min_id is not None else 0) - 1
+        cli = _fetchone(db, "SELECT current_semester FROM clients WHERE id = %s", (client_id,))
+        sem = (dict(cli).get("current_semester") if cli else "") or ""
+        return _insert_returning_id(
+            db,
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label) "
+            "VALUES (%s, %s, %s, %s, '', %s) RETURNING id",
+            (client_id, manual_id, name, code, sem),
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label) "
+            "VALUES (?, ?, ?, ?, '', ?)",
+        )
+
+
+def init_course_catalog_table() -> None:
+    """Crowd-sourced per-university course catalog that powers autofill.
+    Every course a student adds — manually OR via Canvas — is recorded here
+    against their university, so the next student at the SAME university gets
+    code/name suggestions. Strictly scoped per university id."""
+    _create_table_safe(
+        """CREATE TABLE IF NOT EXISTS student_course_catalog (
+            id            SERIAL PRIMARY KEY,
+            university_id INTEGER NOT NULL,
+            code          TEXT DEFAULT '',
+            code_norm     TEXT DEFAULT '',
+            name          TEXT NOT NULL,
+            name_norm     TEXT NOT NULL,
+            uses          INTEGER DEFAULT 1,
+            created_at    TIMESTAMP DEFAULT NOW(),
+            UNIQUE(university_id, code_norm, name_norm)
+        )""",
+        """CREATE TABLE IF NOT EXISTS student_course_catalog (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            university_id INTEGER NOT NULL,
+            code          TEXT DEFAULT '',
+            code_norm     TEXT DEFAULT '',
+            name          TEXT NOT NULL,
+            name_norm     TEXT NOT NULL,
+            uses          INTEGER DEFAULT 1,
+            created_at    TEXT DEFAULT (datetime('now','localtime')),
+            UNIQUE(university_id, code_norm, name_norm)
+        )""",
+    )
+    for idx, col in (
+        ("idx_course_catalog_univ_name", "university_id, name_norm"),
+        ("idx_course_catalog_univ_code", "university_id, code_norm"),
+    ):
+        try:
+            with get_db() as db:
+                stmt = f"CREATE INDEX IF NOT EXISTS {idx} ON student_course_catalog({col})"
+                db.cursor().execute(stmt) if _USE_PG else db.execute(stmt)
+        except Exception:
+            pass
+
+
+def record_course_to_catalog(university_id: int | None, code: str, name: str) -> None:
+    """Add (or bump) a course in a university's autofill catalog. No-op without
+    a university or a name. Safe to call on every course add."""
+    if not university_id:
+        return
+    name = (name or "").strip()
+    code = (code or "").strip()
+    if not name:
+        return
+    name_norm = _catalog_norm(name)
+    code_norm = _catalog_norm(code)
+    try:
+        with get_db() as db:
+            if _USE_PG:
+                _exec(
+                    db,
+                    "INSERT INTO student_course_catalog "
+                    "(university_id, code, code_norm, name, name_norm) "
+                    "VALUES (%s, %s, %s, %s, %s) "
+                    "ON CONFLICT (university_id, code_norm, name_norm) "
+                    "DO UPDATE SET uses = student_course_catalog.uses + 1",
+                    (university_id, code, code_norm, name, name_norm),
+                )
+            else:
+                try:
+                    db.execute(
+                        "INSERT INTO student_course_catalog "
+                        "(university_id, code, code_norm, name, name_norm) "
+                        "VALUES (?, ?, ?, ?, ?) "
+                        "ON CONFLICT(university_id, code_norm, name_norm) "
+                        "DO UPDATE SET uses = uses + 1",
+                        (university_id, code, code_norm, name, name_norm),
+                    )
+                except Exception:
+                    # Older SQLite without UPSERT — emulate.
+                    row = _fetchone(
+                        db,
+                        "SELECT id FROM student_course_catalog "
+                        "WHERE university_id = ? AND code_norm = ? AND name_norm = ?",
+                        (university_id, code_norm, name_norm),
+                    )
+                    if row:
+                        db.execute(
+                            "UPDATE student_course_catalog SET uses = uses + 1 WHERE id = ?",
+                            (dict(row)["id"],),
+                        )
+                    else:
+                        db.execute(
+                            "INSERT INTO student_course_catalog "
+                            "(university_id, code, code_norm, name, name_norm) "
+                            "VALUES (?, ?, ?, ?, ?)",
+                            (university_id, code, code_norm, name, name_norm),
+                        )
+    except Exception as e:
+        log.debug("record_course_to_catalog failed: %s", e)
+
+
+def search_course_catalog(university_id: int | None, query: str, limit: int = 8) -> list[dict]:
+    """Autofill suggestions for ONE university. Never leaks other schools'
+    courses — university_id is always part of the WHERE clause."""
+    if not university_id:
+        return []
+    qn = _catalog_norm(query)
+    with get_db() as db:
+        if not qn:
+            rows = _fetchall(
+                db,
+                "SELECT code, name, uses FROM student_course_catalog "
+                "WHERE university_id = %s ORDER BY uses DESC, name ASC LIMIT %s",
+                (university_id, limit),
+            ) or []
+        else:
+            like = f"%{qn}%"
+            rows = _fetchall(
+                db,
+                "SELECT code, name, uses FROM student_course_catalog "
+                "WHERE university_id = %s AND (name_norm LIKE %s OR code_norm LIKE %s) "
+                "ORDER BY uses DESC, LENGTH(name) ASC, name ASC LIMIT %s",
+                (university_id, like, like, limit),
+            ) or []
+    return [dict(r) for r in rows]
 
 
 def get_current_semester(client_id: int) -> str:

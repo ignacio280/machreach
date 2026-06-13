@@ -60,20 +60,9 @@ def register_academic_routes(app, csrf, limiter):
         q = (request.args.get("q") or "").strip()
         if not country:
             return jsonify({"error": "country required"}), 400
-        # Phased rollout: only an explicit allowlist of universities is exposed
-        # in the picker. Other unis are added one by one as we onboard them.
+        # Every seeded university for the country is now selectable — MachReach
+        # is open to all students, not just a phased-rollout allowlist.
         rows = ac.search_universities(country, q, limit=25) or []
-        def _is_allowed(r):
-            d = dict(r)
-            name = (d.get("name") or "").lower()
-            short = (d.get("short_name") or "").lower()
-            is_puc = ("pontificia universidad cat" in name and "chile" in name) or short in ("puc", "uc")
-            is_udd = ("universidad del desarrollo" in name) or short == "udd"
-            is_uandes = ("universidad de los andes" in name and "colombia" not in name) or short == "uandes"
-            is_unab = ("universidad andres bello" in name) or ("universidad andrés bello" in name) or short == "unab"
-            is_usach = ("universidad de santiago de chile" in name) or short == "usach"
-            return is_puc or is_udd or is_uandes or is_unab or is_usach
-        rows = [r for r in rows if _is_allowed(r)]
         return jsonify({"universities": rows})
 
     @app.route("/api/academic/universities", methods=["POST"])
