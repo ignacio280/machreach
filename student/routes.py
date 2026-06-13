@@ -8965,15 +8965,15 @@ Material:
             "nextSession": "🔥 Starting the next session..." if _focus_is_en else "🔥 Empezando la siguiente sesión...",
             "sessionCompleted": "✓ Session completed!" if _focus_is_en else "✓ ¡Sesión completada!",
             "longBreakUnlocked": "🎉 Long break unlocked! Claim or lose everything" if _focus_is_en else "🎉 ¡Descanso largo desbloqueado! Reclama o pierdes todo",
-            "claimWindowHelp": "You have 30 min to claim. Otherwise, everything accumulated is lost." if _focus_is_en else "Tienes 30 min para reclamar. Si no, todo lo acumulado se pierde.",
+            "claimWindowHelp": "Claim within 30 min to start your long break — otherwise you lose your XP." if _focus_is_en else "Reclama en 30 min para iniciar tu descanso largo — si no, pierdes tu XP.",
             "claimNow": "🎁 Claim now" if _focus_is_en else "🎁 Reclamar ahora",
             "startButton": "Start" if _focus_is_en else "Empezar",
             "pauseButton": "Pause" if _focus_is_en else "Pausar",
             "resumeButton": "Resume" if _focus_is_en else "Seguir",
             "paused": "Paused" if _focus_is_en else "Pausado",
             "pendingRewards": "Pending rewards" if _focus_is_en else "Recompensas pendientes",
-            "claimRestartHelp": "Claiming finishes your session and restarts the timer." if _focus_is_en else "Reclamar termina tu sesión y reinicia el temporizador.",
-            "claimRestart": "🎁 Claim and restart" if _focus_is_en else "🎁 Reclamar y reiniciar",
+            "claimRestartHelp": "Claim your XP whenever you like — the timer keeps running." if _focus_is_en else "Reclama tu XP cuando quieras — el temporizador sigue corriendo.",
+            "claimRestart": "🎁 Claim XP" if _focus_is_en else "🎁 Reclamar XP",
             "claiming": "Claiming..." if _focus_is_en else "Reclamando...",
             "retryClaim": "Retry claim" if _focus_is_en else "Reintentar reclamo",
             "longBreakClaimRewards": "🎉 Long break! Claim your rewards" if _focus_is_en else "🎉 ¡Descanso largo! Reclama tus recompensas",
@@ -9645,13 +9645,13 @@ Material:
 
               <button id="claim-btn" onclick="claimNow()" class="btn btn-primary" style="width:100%;font-weight:700;">
 
-                &#127873; Reclamar y reiniciar
+                &#127873; Reclamar XP
 
               </button>
 
               <p id="claim-help" style="font-size:11px;color:var(--text-muted);text-align:center;margin:8px 0 0;">
 
-                Reclamar termina tu sesi&oacute;n y reinicia el temporizador.
+                Reclama tu XP cuando quieras &mdash; el temporizador sigue corriendo.
 
               </p>
 
@@ -11868,10 +11868,11 @@ Material:
 
         // ── Pending-phase claim system ─────────────────────────────────
         // Completed work phases accumulate in localStorage as
-        // `focus_pending_phases`. Nothing is saved server-side until the
-        // user clicks "Reclamar y reiniciar". Anti-cheat: after every 4th
-        // work phase a mandatory 30-min claim window opens; if it expires
-        // without a click, every pending phase is forfeited.
+        // `focus_pending_phases`. The user can claim them at ANY time without
+        // interrupting the running timer (claiming never pauses or resets it).
+        // Anti-cheat: after every 4th work phase a mandatory 30-min claim
+        // window opens — the long break only starts once the user claims, and
+        // if the window expires without a claim every pending phase is forfeited.
 
         function getPendingPhases() {{
 
@@ -12013,15 +12014,19 @@ Material:
 
         async function claimNow() {{
 
+          // Is this the mandatory long-break gate, or a voluntary mid-session
+          // claim? Captured before we touch any state. Claiming NEVER resets or
+          // pauses the timer — the only special case is the long-break gate,
+          // where claiming starts the long break.
+          var wasMandatory = !!__mandatoryEndAt;
+
           var phases = getPendingPhases();
 
           if (!phases.length) {{
 
-            // Mandatory window with no phases (edge case) — just exit it.
-
-            exitMandatoryClaimMode();
-
-            resetTimer();
+            // Nothing to claim. If this was the long-break gate, release it and
+            // begin the long break; otherwise leave the running timer alone.
+            if (wasMandatory) {{ exitMandatoryClaimMode(); startLongBreakAfterClaim(); }}
 
             return;
 
@@ -12114,18 +12119,39 @@ Material:
             return;
           }}
 
-          exitMandatoryClaimMode();
-
           if (btn) {{ btn.disabled = false; }}
 
           showClaimCelebration(xpAwarded, minutesSaved);
 
-          resetTimer();
+          if (wasMandatory) {{
+            // Long-break gate cleared → start the configured long break.
+            exitMandatoryClaimMode();
+            startLongBreakAfterClaim();
+          }}
+          // Voluntary claim: the running timer is left completely untouched —
+          // no reset, no pause. The floating XP burst is the only feedback.
 
-          var lblDone = document.getElementById('timer-label');
+        }}
 
-          if (lblDone) lblDone.textContent = focusText.claimedPrefix + xpAwarded + ' XP · ' + minutesSaved + focusText.minutesSavedSuffix;
-
+        function startLongBreakAfterClaim() {{
+          // The long break begins only once the user has claimed (or had
+          // nothing to claim). It runs for the configured long-break length;
+          // claiming never resets the pomodoro cycle.
+          var longInput = document.getElementById('pomo-long');
+          var longMins = longInput ? (parseInt(longInput.value, 10) || 15) : 15;
+          if (longMins < 1) longMins = 1;
+          isBreak = true;
+          __phaseOpen = false;
+          currentPhaseId = null;
+          timeLeft = longMins * 60;
+          totalTime = timeLeft;
+          updateDisplay();
+          refreshClaimCounter();
+          // Mirrors the short-break auto-advance: startTimer respects the
+          // pre-set timeLeft for breaks and chains into the next work phase.
+          startTimer();
+          var lbl = document.getElementById('timer-label');
+          if (lbl) lbl.textContent = focusText.longBreak;
         }}
 
         function enterMandatoryClaimMode() {{

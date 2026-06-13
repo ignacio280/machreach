@@ -1120,6 +1120,8 @@ SPANISH_TO_EN_VISIBLE.update({
     "Agregado a mano": "Added manually",
     "Código": "Code",
     "sesiones registradas": "sessions logged",
+    "Reclamar XP": "Claim XP",
+    "Reclama tu XP cuando quieras — el temporizador sigue corriendo.": "Claim your XP whenever you like — the timer keeps running.",
     "Escribe el nombre del curso.": "Enter the course name.",
     "No se pudo agregar el curso.": "Couldn't add the course.",
     "Cursos sincronizados automáticamente": "Courses sync automatically",
