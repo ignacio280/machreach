@@ -8964,7 +8964,7 @@ Material:
             "ofFour": " of 4" if _focus_is_en else " de 4",
             "nextSession": "🔥 Starting the next session..." if _focus_is_en else "🔥 Empezando la siguiente sesión...",
             "sessionCompleted": "✓ Session completed!" if _focus_is_en else "✓ ¡Sesión completada!",
-            "longBreakUnlocked": "🎉 Long break unlocked! Claim or lose everything" if _focus_is_en else "🎉 ¡Descanso largo desbloqueado! Reclama o pierdes todo",
+            "longBreakUnlocked": "🚨 Claim now or lose your XP" if _focus_is_en else "🚨 Reclama ahora o pierdes tu XP",
             "claimWindowHelp": "Claim within 30 min to start your long break — otherwise you lose your XP." if _focus_is_en else "Reclama en 30 min para iniciar tu descanso largo — si no, pierdes tu XP.",
             "claimNow": "🎁 Claim now" if _focus_is_en else "🎁 Reclamar ahora",
             "startButton": "Start" if _focus_is_en else "Empezar",
@@ -8976,7 +8976,7 @@ Material:
             "claimRestart": "🎁 Claim XP" if _focus_is_en else "🎁 Reclamar XP",
             "claiming": "Claiming..." if _focus_is_en else "Reclamando...",
             "retryClaim": "Retry claim" if _focus_is_en else "Reintentar reclamo",
-            "longBreakClaimRewards": "🎉 Long break! Claim your rewards" if _focus_is_en else "🎉 ¡Descanso largo! Reclama tus recompensas",
+            "longBreakClaimRewards": "🚨 Claim your XP now — or you lose it" if _focus_is_en else "🚨 Reclama tu XP ahora — o lo pierdes",
             "claimThirty": "⏳ 30 min to claim — otherwise you lose everything" if _focus_is_en else "⏳ 30 min para reclamar — si no, pierdes todo",
             "sessionLost": "⌛ Session lost — you did not claim in time" if _focus_is_en else "⌛ Sesión perdida — no reclamaste a tiempo",
             "claimedPrefix": "✓ Claimed: +" if _focus_is_en else "✓ Reclamado: +",
@@ -9249,6 +9249,47 @@ Material:
         .ft-ring-wrap.is-break .ft-session-dot.active {{ background:#2E9266;border-color:#2E9266; }}
         .ft-ring-wrap.is-break .ft-session-dot.active {{ box-shadow:0 0 0 5px rgba(46,146,102,.16); }}
         .ft-ring-wrap.is-break .ft-session-status {{ color:#2E9266; }}
+
+        /* ===== Emergency: mandatory XP-claim deadline =====
+           This is the 30-min "claim or lose your XP" window, NOT the long break.
+           It must read as an ALARM and look identical on every ambiente, so the
+           ambience scene/accent is fully overridden here with a fixed red. */
+        :root.mr-focus-emergency {{
+          --focus-accent:#E5484D !important;
+          --focus-accent-soft:rgba(229,72,77,.20) !important;
+          --focus-scene-bg:
+            radial-gradient(760px 320px at 18% 6%, rgba(229,72,77,.32), transparent 60%),
+            radial-gradient(700px 280px at 86% 22%, rgba(229,72,77,.20), transparent 64%),
+            linear-gradient(180deg,#2A0C0C 0%,#1B0707 56%,#240A0A 100%) !important;
+          --focus-scene-orb:radial-gradient(circle at 50% 50%, rgba(229,72,77,.34), transparent 58%) !important;
+          --focus-scene-texture:none !important;
+          --focus-card-bg:rgba(40,14,14,.94) !important;
+          --focus-card-border:#E5484D !important;
+        }}
+        :root.mr-focus-emergency .content:has(.focus-layout),
+        :root.mr-focus-emergency .content-wide:has(.focus-layout),
+        :root.mr-focus-emergency .mr-tb-main:has(.focus-layout) {{ animation:focusEmergencyBg 1.5s ease-in-out infinite; }}
+        :root.mr-focus-emergency #ft-ring-progress {{ stroke:#E5484D !important;stroke-dashoffset:0 !important;filter:drop-shadow(0 0 12px rgba(229,72,77,.7)) !important;animation:focusEmergencyRing 1s ease-in-out infinite !important; }}
+        :root.mr-focus-emergency .ft-ring-wrap::before {{ opacity:.7 !important;background:radial-gradient(circle at 50% 50%, rgba(229,72,77,.45), rgba(229,72,77,.12) 45%, transparent 72%) !important;animation:focusEmergencyGlow 1s ease-in-out infinite !important; }}
+        :root.mr-focus-emergency #timer-display {{ color:#FF5A5F !important;animation:focusEmergencyPulse 1s ease-in-out infinite !important;text-shadow:0 0 22px rgba(229,72,77,.5) !important; }}
+        :root.mr-focus-emergency #timer-label {{ color:#FF6A6F !important;font-weight:900 !important;text-transform:uppercase !important;letter-spacing:.06em !important; }}
+        :root.mr-focus-emergency #pomo-count {{ color:#FF8A8E !important;font-weight:900 !important; }}
+        :root.mr-focus-emergency #claim-counter {{ border-color:#E5484D !important;background:rgba(229,72,77,.14) !important;box-shadow:0 0 0 3px rgba(229,72,77,.20),0 0 30px rgba(229,72,77,.30) !important;animation:focusEmergencyGlow 1.2s ease-in-out infinite !important; }}
+        :root.mr-focus-emergency #claim-btn {{ background:#E5484D !important;color:#fff !important;box-shadow:0 5px 0 rgba(80,10,10,.4),0 0 24px rgba(229,72,77,.45) !important;animation:focusEmergencyPulse 1.1s ease-in-out infinite !important; }}
+        /* Hide the ambience particle scene so the alarm looks identical on every ambiente. */
+        :root.mr-focus-emergency #amb-fx-canvas {{ display:none !important; }}
+        @keyframes focusEmergencyBg {{ 0%,100%{{filter:none;}} 50%{{filter:brightness(1.12) saturate(1.15);}} }}
+        @keyframes focusEmergencyPulse {{ 0%,100%{{opacity:1;}} 50%{{opacity:.5;}} }}
+        @keyframes focusEmergencyGlow {{ 0%,100%{{opacity:.4;transform:scale(.985);}} 50%{{opacity:.85;transform:scale(1.03);}} }}
+        @keyframes focusEmergencyRing {{ 0%,100%{{opacity:.7;}} 50%{{opacity:1;}} }}
+        @media (prefers-reduced-motion: reduce) {{
+          :root.mr-focus-emergency .content:has(.focus-layout),
+          :root.mr-focus-emergency #ft-ring-progress,
+          :root.mr-focus-emergency .ft-ring-wrap::before,
+          :root.mr-focus-emergency #timer-display,
+          :root.mr-focus-emergency #claim-counter,
+          :root.mr-focus-emergency #claim-btn {{ animation:none !important; }}
+        }}
         .ft-controls {{ display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap; }}
         .ft-btn-main,.ft-controls #start-btn {{ position:relative;overflow:hidden;background:#FF7A3D !important;color:#fff !important;border:0 !important;min-width:136px !important;height:46px !important;padding:0 24px !important;border-radius:999px !important;font-weight:900 !important;font-size:15px !important;box-shadow:0 5px 0 rgba(20,18,30,.18),0 14px 30px rgba(255,122,61,.22) !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:9px !important;transition:transform .18s ease,box-shadow .18s ease,background .24s ease !important; }}
         .ft-controls #start-btn::after {{ content:"";position:absolute;inset:0;background:linear-gradient(100deg, transparent 0%, transparent 38%, rgba(255,255,255,.32) 48%, transparent 58%, transparent 100%);transform:translateX(-130%); }}
@@ -12175,6 +12216,9 @@ Material:
 
           try {{ localStorage.setItem('focus_mandatory_until', String(__mandatoryEndAt)); }} catch(e) {{}}
 
+          // Emergency look — unmistakably NOT the long break, identical on every ambiente.
+          try {{ document.documentElement.classList.add('mr-focus-emergency'); }} catch(e) {{}}
+
           var startBtn = document.getElementById('start-btn');
 
           var pauseBtn = document.getElementById('pause-btn');
@@ -12220,6 +12264,8 @@ Material:
           __mandatoryEndAt = null;
 
           try {{ localStorage.removeItem('focus_mandatory_until'); }} catch(e) {{}}
+
+          try {{ document.documentElement.classList.remove('mr-focus-emergency'); }} catch(e) {{}}
 
           setClaimMandatoryStyling(false);
 
@@ -12314,6 +12360,8 @@ Material:
                 // Replay enterMandatoryClaimMode UI without resetting the deadline.
 
                 isRunning = false;
+
+                try {{ document.documentElement.classList.add('mr-focus-emergency'); }} catch(e) {{}}
 
                 var startBtn = document.getElementById('start-btn');
 
