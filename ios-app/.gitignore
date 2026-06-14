@@ -1,0 +1,12 @@
+# Node
+node_modules/
+
+# Capacitor / iOS build output (the native `ios/` project itself IS committed
+# once generated with `npx cap add ios`, but its build artifacts are not).
+ios/App/Pods/
+ios/App/App/public/
+ios/App/build/
+ios/DerivedData/
+ios/App/output/
+*.xcuserstate
+.DS_Store

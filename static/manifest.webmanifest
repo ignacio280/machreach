@@ -1,0 +1,21 @@
+{
+  "name": "MachReach",
+  "short_name": "MachReach",
+  "description": "Tu plataforma de estudio: enfoque, cursos, quizzes, ranking y más.",
+  "lang": "es",
+  "dir": "ltr",
+  "id": "/?source=pwa",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#0B0B10",
+  "theme_color": "#FF7A3D",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

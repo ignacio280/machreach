@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>MachReach</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { height: 100%; margin: 0; background: #0b0b10; color: #f8f3ea;
+      font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
+    .wrap { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+    .logo { width: 92px; height: 92px; border-radius: 24px; background: #0b0b10; border: 2px solid #ff7a3d;
+      display: grid; place-items: center; font-weight: 800; font-size: 50px; color: #ff7a3d; }
+    .spin { width: 26px; height: 26px; border: 3px solid rgba(255,122,61,.25); border-top-color: #ff7a3d;
+      border-radius: 50%; animation: s 0.8s linear infinite; }
+    @keyframes s { to { transform: rotate(360deg); } }
+    p { color: #b9b3aa; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <!--
+    This is the bundled fallback screen. In normal operation Capacitor loads the
+    live MachReach site configured in capacitor.config.json (server.url). This
+    screen shows briefly on launch and if the device is offline.
+  -->
+  <div class="wrap">
+    <div class="logo">M</div>
+    <div class="spin"></div>
+    <p>Cargando MachReach…</p>
+  </div>
+</body>
+</html>

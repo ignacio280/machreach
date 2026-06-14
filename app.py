@@ -444,12 +444,68 @@ LAYOUT = """<!DOCTYPE html>
 <html lang="{{lang}}" data-theme="">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>MachReach — {{title}}</title>
   <link rel="icon" type="image/svg+xml" href="/static/machreach-logo-flat.svg?v=1">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <!-- PWA / installable iPhone-app support -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#F8F4EA" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0B0B10" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MachReach">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+      });
+    }
+  </script>
+  <style>
+    /* ====== Installed-app (standalone PWA) native feel ======
+       Only applies when launched from the home screen, never in a browser. */
+    .pwa-standalone, .pwa-standalone body { overscroll-behavior-y: none; }
+    .pwa-standalone body { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+    .pwa-standalone * { -webkit-touch-callout: none; }
+    .pwa-standalone input, .pwa-standalone textarea, .pwa-standalone select,
+    .pwa-standalone [contenteditable] { -webkit-user-select: text; user-select: text; }
+    /* iOS zooms when a focused field is <16px — pin to 16px to stop the jump. */
+    .pwa-standalone input, .pwa-standalone textarea, .pwa-standalone select { font-size: 16px; }
+    /* Top bar clears the notch / status bar. */
+    .pwa-standalone .mr-topbar { padding-top: calc(12px + env(safe-area-inset-top)) !important; }
+    /* Page content clears the fixed bottom tab bar. */
+    .pwa-standalone .mr-tb-main .content,
+    .pwa-standalone .mr-tb-main .content-wide { padding-bottom: calc(82px + env(safe-area-inset-bottom)) !important; }
+
+    /* Native-style bottom tab bar (hidden unless installed). */
+    .mr-tabbar { display: none; }
+    .pwa-standalone .mr-tabbar {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 850;
+      padding: 7px 6px calc(7px + env(safe-area-inset-bottom));
+      background: color-mix(in srgb, var(--bg, #F8F4EA) 86%, transparent);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      backdrop-filter: blur(20px) saturate(150%);
+      border-top: 1px solid var(--border-light, #E6DCCB);
+      box-shadow: 0 -6px 24px rgba(20,18,30,.06);
+    }
+    .mr-tab {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+      text-decoration: none; color: var(--text-muted, #94939C);
+      font-size: 10px; font-weight: 800; letter-spacing: .01em;
+      padding: 5px 2px; border-radius: 13px; min-width: 0;
+      transition: color .15s ease, transform .12s ease;
+    }
+    .mr-tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mr-tab svg { width: 24px; height: 24px; display: block; }
+    .mr-tab.active { color: var(--primary, #FF7A3D); }
+    .mr-tab.active svg { filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--primary, #FF7A3D) 45%, transparent)); }
+    .mr-tab:active { transform: scale(.9); }
+  </style>
   {% if posthog_key %}<script>
   {% raw %}!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);{% endraw %}
   posthog.init('{{ posthog_key }}', { api_host: '{{ posthog_host }}', person_profiles: 'identified_only', capture_pageview: true, capture_pageleave: true });
@@ -472,6 +528,16 @@ LAYOUT = """<!DOCTYPE html>
         if (theme) document.documentElement.setAttribute('data-theme', theme);
         else document.documentElement.removeAttribute('data-theme');
         document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+      } catch(e) {}
+    })();
+    // Tag the document when running as an INSTALLED app (home-screen / standalone)
+    // so we can give it a native app feel (bottom tab bar, safe areas, no
+    // page-style bounce/selection) without changing the website in a browser.
+    (function(){
+      try {
+        var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+                         window.navigator.standalone === true;
+        if (standalone) document.documentElement.classList.add('pwa-standalone');
       } catch(e) {}
     })();
     // Auto-inject CSRF token into all fetch requests
@@ -665,6 +731,30 @@ LAYOUT = """<!DOCTYPE html>
         <link rel="stylesheet" href="/static/machreach_layout/layout-dark.css"/>
       </div>
     </main>
+    {% if active_page != 'student_setup' %}
+    <nav class="mr-tabbar" aria-label="Primary">
+      <a class="mr-tab {% if active_page == 'student_dashboard' %}active{% endif %}" href="/student">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+        <span>{% if lang == 'en' %}Home{% else %}Inicio{% endif %}</span>
+      </a>
+      <a class="mr-tab {% if active_page == 'student_focus' %}active{% endif %}" href="/student/focus">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 13V9.5"/><path d="M9.5 2.5h5"/></svg>
+        <span>{% if lang == 'en' %}Focus{% else %}Enfoque{% endif %}</span>
+      </a>
+      <a class="mr-tab {% if active_page == 'student_courses' %}active{% endif %}" href="/student/courses">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M9 3v16"/></svg>
+        <span>{% if lang == 'en' %}Courses{% else %}Cursos{% endif %}</span>
+      </a>
+      <a class="mr-tab {% if active_page == 'student_leaderboard' %}active{% endif %}" href="/student/leaderboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V4h12v5a6 6 0 0 1-12 0z"/><path d="M6 5H3.5v1.5A3.5 3.5 0 0 0 7 10"/><path d="M18 5h2.5v1.5A3.5 3.5 0 0 1 17 10"/><path d="M9.5 21h5"/><path d="M12 15v6"/></svg>
+        <span>Ranking</span>
+      </a>
+      <a class="mr-tab {% if active_page in ['student_profile','student_achievements','student_settings'] %}active{% endif %}" href="/student/profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+        <span>{% if lang == 'en' %}Profile{% else %}Perfil{% endif %}</span>
+      </a>
+    </nav>
+    {% endif %}
   </div>
   {% else %}
   <div class="nav">
@@ -3604,6 +3694,24 @@ def roadmap_page():
 @app.route("/favicon.ico")
 def favicon():
     return app.send_static_file("favicon.ico")
+
+
+@app.route("/sw.js")
+def service_worker():
+    # Served from the root path so the service worker controls the whole app
+    # ("/" scope), not just /static/.
+    resp = make_response(app.send_static_file("sw.js"))
+    resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
+@app.route("/manifest.webmanifest")
+def web_manifest():
+    resp = make_response(app.send_static_file("manifest.webmanifest"))
+    resp.headers["Content-Type"] = "application/manifest+json; charset=utf-8"
+    return resp
 
 
 @app.route("/robots.txt")
