@@ -1503,7 +1503,6 @@ def delete_course(course_id: int, client_id: int):
 FOCUS_MAX_MINUTES_PER_SESSION = 480   # 8h cap on a single save
 FOCUS_MAX_MINUTES_PER_DAY     = 16 * 60  # 16h cap on a single calendar day
 FOCUS_PHASE_CLAIM_GRACE_SECONDS = 20
-FOCUS_PHASE_MAX_AGE_SECONDS = 12 * 60 * 60
 
 
 def _parse_focus_dt(value) -> datetime | None:
@@ -1655,8 +1654,12 @@ def validate_focus_phase_claim(client_id: int, phase_id: str, minutes: int,
         if not started_at:
             return False, "invalid-phase-start", row
         elapsed = (datetime.now() - started_at).total_seconds()
-        if elapsed > FOCUS_PHASE_MAX_AGE_SECONDS:
-            return False, "phase-expired", row
+        # NOTE: no wall-clock max-age here. Pending phases stay claimable no
+        # matter how long they sit (e.g. paused overnight and claimed in the
+        # morning). XP is only ever forfeited client-side when the 30-min
+        # long-break claim window expires. Forged claims are still blocked by
+        # the registration requirement + the "can't claim more than was
+        # registered / than time actually elapsed" checks below.
         required_minutes = expected if expected > 0 else minutes
         required_seconds = max(0, (required_minutes * 60) - FOCUS_PHASE_CLAIM_GRACE_SECONDS)
         if minutes > 0 and elapsed < required_seconds:

@@ -21011,6 +21011,22 @@ No markdown, no code fences. ONLY JSON.
     #mr-lb-page .lb-tabs { overflow:auto; }
     #mr-lb-page .lb-arena { grid-template-columns:auto 1fr;padding:16px; }
     #mr-lb-page .lb-arena-tag { grid-column:1 / -1;width:max-content; }
+    /* Podium: stack to one full-width column so it doesn't render as a narrow
+       card with empty space (especially with only 1-2 students). */
+    #mr-lb-page .lb-podium { grid-template-columns:1fr; gap:12px; padding:34px 16px 20px; align-items:stretch; }
+    #mr-lb-page .lb-podium-card,
+    #mr-lb-page .lb-podium-card.place-1,
+    #mr-lb-page .lb-podium-card.place-2,
+    #mr-lb-page .lb-podium-card.place-3 { min-height:auto; transform:none; animation:none; }
+    #mr-lb-page .lb-podium-card:hover,
+    #mr-lb-page .lb-podium-card.place-1:hover { transform:none; }
+    /* Keep 1 → 2 → 3 reading order when stacked (JS lays them out 2,1,3). */
+    #mr-lb-page .lb-podium-card.place-1 { order:1; }
+    #mr-lb-page .lb-podium-card.place-2 { order:2; }
+    #mr-lb-page .lb-podium-card.place-3 { order:3; }
+    /* The stepped "pedestal" only makes sense side-by-side — flatten to a label. */
+    #mr-lb-page .lb-podium-step { height:auto !important; padding:9px 12px; letter-spacing:.12em; }
+    #mr-lb-page .lb-crown { top:-20px; font-size:34px; }
   }
   @media (max-width: 600px) {
     #mr-lb-page .lb-hero { padding:28px 22px;border-radius:24px; }

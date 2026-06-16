@@ -2,7 +2,7 @@
   "appId": "com.machreach.app",
   "appName": "MachReach",
   "webDir": "www",
-  "backgroundColor": "#0b0b10",
+  "backgroundColor": "#f8f4ea",
   "server": {
     "url": "https://machreach.com",
     "cleartext": false,
@@ -10,7 +10,7 @@
   },
   "ios": {
     "contentInset": "always",
-    "backgroundColor": "#0b0b10",
+    "backgroundColor": "#f8f4ea",
     "limitsNavigationsToAppBoundDomains": false
   }
 }

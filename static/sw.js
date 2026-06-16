@@ -10,7 +10,7 @@
  *
  * Bump VERSION to invalidate the static cache on deploy.
  */
-const VERSION = 'mr-v2';
+const VERSION = 'mr-v3';
 const STATIC_CACHE = 'mr-static-' + VERSION;
 const OFFLINE_URL = '/static/offline.html';
 

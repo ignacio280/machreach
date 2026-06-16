@@ -505,6 +505,35 @@ LAYOUT = """<!DOCTYPE html>
     .mr-tab.active { color: var(--primary, #FF7A3D); }
     .mr-tab.active svg { filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--primary, #FF7A3D) 45%, transparent)); }
     .mr-tab:active { transform: scale(.9); }
+    button.mr-tab { background: none; border: 0; font: inherit; cursor: pointer; }
+
+    /* In the installed app the bottom tabs ARE the navigation — remove the
+       browser-style top pill nav + hamburger entirely so it stops feeling like
+       a web page. The top bar becomes a simple centered title bar. */
+    .pwa-standalone .mr-tb-nav,
+    .pwa-standalone .mr-tb-right { display: none !important; }
+    .pwa-standalone .mr-topbar { justify-content: center !important; }
+
+    /* "Más" sheet — native bottom sheet for everything not in the tab bar. */
+    .mr-more { position: fixed; inset: 0; z-index: 4000; display: none; }
+    .mr-more.open { display: block; }
+    .mr-more-backdrop { position: absolute; inset: 0; background: rgba(10,10,16,.45); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); animation: mrMoreFade .2s ease; }
+    .mr-more-panel { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card, #fff); border-radius: 24px 24px 0 0; padding: 6px 14px calc(18px + env(safe-area-inset-bottom)); max-height: 88vh; overflow-y: auto; box-shadow: 0 -12px 44px rgba(20,18,30,.28); animation: mrMoreUp .26s cubic-bezier(.2,.85,.2,1); }
+    .mr-more-grab { width: 38px; height: 5px; border-radius: 999px; background: var(--border-light, #D9D2C3); margin: 9px auto 12px; }
+    .mr-more-id { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 18px; background: var(--bg, #F6F2E9); text-decoration: none; color: var(--text, #1A1A1F); margin-bottom: 8px; }
+    .mr-more-av { width: 44px; height: 44px; border-radius: 14px; background: var(--primary, #FF7A3D); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 19px; font-family: "Bricolage Grotesque", sans-serif; }
+    .mr-more-id-txt { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+    .mr-more-id-txt strong { font-size: 15.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mr-more-id-txt small { color: var(--text-muted, #94939C); font-size: 12.5px; }
+    .mr-more-list { display: grid; gap: 1px; }
+    .mr-more-list a, .mr-more-act { display: flex; align-items: center; gap: 13px; padding: 13px 14px; border-radius: 14px; text-decoration: none; color: var(--text, #1A1A1F); font-weight: 700; font-size: 15px; background: none; border: 0; width: 100%; text-align: left; font-family: inherit; cursor: pointer; }
+    .mr-more-list a:active, .mr-more-act:active { background: var(--bg, #F0EBDF); }
+    .mr-more-ic { width: 26px; text-align: center; font-size: 19px; flex-shrink: 0; }
+    .mr-more-chev { margin-left: auto; color: var(--text-muted, #B8B2A8); font-size: 20px; font-weight: 400; }
+    .mr-more-actions { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-light, #EADFCE); display: grid; gap: 1px; }
+    .mr-more-logout { color: #E0533F !important; }
+    @keyframes mrMoreUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes mrMoreFade { from { opacity: 0; } to { opacity: 1; } }
   </style>
   {% if posthog_key %}<script>
   {% raw %}!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);{% endraw %}
@@ -749,11 +778,52 @@ LAYOUT = """<!DOCTYPE html>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V4h12v5a6 6 0 0 1-12 0z"/><path d="M6 5H3.5v1.5A3.5 3.5 0 0 0 7 10"/><path d="M18 5h2.5v1.5A3.5 3.5 0 0 1 17 10"/><path d="M9.5 21h5"/><path d="M12 15v6"/></svg>
         <span>Ranking</span>
       </a>
-      <a class="mr-tab {% if active_page in ['student_profile','student_achievements','student_settings'] %}active{% endif %}" href="/student/profile">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
-        <span>{% if lang == 'en' %}Profile{% else %}Perfil{% endif %}</span>
-      </a>
+      <button class="mr-tab {% if active_page in ['student_planner','student_quizzes','student_flashcards','student_reviews','student_friends','student_shop','student_gpa','student_achievements','student_profile','student_settings','admin'] %}active{% endif %}" type="button" onclick="mrToggleMore()" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        <span>{% if lang == 'en' %}More{% else %}Más{% endif %}</span>
+      </button>
     </nav>
+    <div class="mr-more" id="mrMore">
+      <div class="mr-more-backdrop" onclick="mrToggleMore(false)"></div>
+      <div class="mr-more-panel" role="dialog" aria-label="{% if lang == 'en' %}More{% else %}Más{% endif %}">
+        <div class="mr-more-grab"></div>
+        <a class="mr-more-id" href="/student/profile">
+          <span class="mr-more-av">{{ (client_name[:1] or 'M')|upper }}</span>
+          <span class="mr-more-id-txt">
+            <strong>{{ (client_name or student_ui.student_fallback) }}</strong>
+            <small>{% if lang == 'en' %}View profile{% else %}Ver perfil{% endif %}</small>
+          </span>
+          <span class="mr-more-chev">&rsaquo;</span>
+        </a>
+        <nav class="mr-more-list">
+          <a href="/student/planner"><span class="mr-more-ic">&#128197;</span>{{ student_ui.planner }}<span class="mr-more-chev">&rsaquo;</span></a>
+          <a href="/student/quizzes"><span class="mr-more-ic">&#128221;</span>{{ student_ui.quizzes }}<span class="mr-more-chev">&rsaquo;</span></a>
+          <a href="/student/flashcards"><span class="mr-more-ic">&#127183;</span>{{ student_ui.flashcards }}<span class="mr-more-chev">&rsaquo;</span></a>
+          <a href="/student/reviews"><span class="mr-more-ic">&#11088;</span>{{ student_ui.reviews }}<span class="mr-more-chev">&rsaquo;</span></a>
+          <a href="/student/friends"><span class="mr-more-ic">&#128101;</span>{{ student_ui.friends }}<span class="mr-more-chev">&rsaquo;</span></a>
+          <a href="/student/shop"><span class="mr-more-ic">&#128722;</span>{{ student_ui.shop }}<span class="mr-more-chev">&rsaquo;</span></a>
+          <a href="/student/gpa"><span class="mr-more-ic">&#128202;</span>{{ student_ui.grades }}<span class="mr-more-chev">&rsaquo;</span></a>
+          <a href="/student/achievements"><span class="mr-more-ic">&#127942;</span>{{ student_ui.xp }}<span class="mr-more-chev">&rsaquo;</span></a>
+          {% if is_admin %}<a href="/admin"><span class="mr-more-ic">&#128227;</span>{{ student_ui.admin }}<span class="mr-more-chev">&rsaquo;</span></a>{% endif %}
+        </nav>
+        <div class="mr-more-actions">
+          <button type="button" class="mr-more-act" onclick="if(typeof toggleDarkMode==='function')toggleDarkMode()"><span class="mr-more-ic">&#127769;</span>{{ student_ui.toggle_theme }}</button>
+          <a class="mr-more-act" href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}"><span class="mr-more-ic">&#127760;</span>{% if lang == 'en' %}Español{% else %}English{% endif %}</a>
+          <a class="mr-more-act" href="/student/settings"><span class="mr-more-ic">&#9881;</span>{{ student_ui.settings }}</a>
+          <a class="mr-more-act mr-more-logout" href="/logout"><span class="mr-more-ic">&#9211;</span>{{ nav.logout }}</a>
+        </div>
+      </div>
+    </div>
+    <script>
+      function mrToggleMore(open){
+        var m = document.getElementById('mrMore');
+        if (!m) return;
+        var willOpen = (open === undefined) ? !m.classList.contains('open') : !!open;
+        m.classList.toggle('open', willOpen);
+        document.body.style.overflow = willOpen ? 'hidden' : '';
+      }
+      document.addEventListener('keydown', function(e){ if (e.key === 'Escape') mrToggleMore(false); });
+    </script>
     {% endif %}
   </div>
   {% else %}
@@ -3531,21 +3601,24 @@ def _public_info_page(title: str, eyebrow: str, intro: str, body_html: str, acti
 @app.route("/privacy")
 def privacy_page():
     return _public_info_page("Privacy Policy", "Legal", "How MachReach handles account, study, Canvas extension, and subscription data.", """
-        <p class="mr-note"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
-        <p><strong>Last updated:</strong> May 19, 2026</p>
+        <p class="mr-note"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, friends, duels, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
+        <p><strong>Last updated:</strong> June 15, 2026</p>
         <h2>1. Information We Collect</h2>
-        <p><strong>Account information:</strong> your name, institutional or Canvas email address, and password hash. When you create an account through Canvas, MachReach reads the email address exposed by your Canvas profile so you can log in later with that email and the password you set.</p>
+        <p><strong>Account information:</strong> your name, institutional or Canvas email address, your university, and your password hash. When you create an account through Canvas, MachReach reads the email address exposed by your Canvas profile so you can log in later with that email and the password you set.</p>
         <p><strong>Canvas LMS data:</strong> if you connect Canvas, the MachReach browser extension reads your course list from your own logged-in Canvas session and sends it to MachReach so we can show your classes and power class-level leaderboards. We only read your course list — we do not submit assignments, change grades, or publish content.</p>
+        <p><strong>Courses you add manually:</strong> if your university doesn't use Canvas, or you simply prefer to, you can add courses by typing a course code and name. To help other students at <em>your own university</em> fill these in faster, course codes and names you add may be saved to a shared, university-scoped autofill catalog. This catalog stores only the course code and course name together with the university — it is never linked to your identity, your grades, or your study activity, and it is only ever shown to other students at the same university.</p>
         <p><strong>Study materials:</strong> files, notes, and text you choose to upload or type for features such as quizzes and flashcards.</p>
         <p><strong>Study activity:</strong> focus sessions, minutes studied per course, XP events, streaks, badges, quiz attempts, flashcard reviews, leaderboard rank, course outcomes, grades you enter, and in-app coin activity.</p>
+        <p><strong>Social activity:</strong> friend connections, study groups (private leaderboards you create with chosen friends), quiz duels you play, and referral activity if you invite friends. We store who you are friends with, duel results, and how many people joined with your referral link.</p>
         <p><strong>Focus Guard extension:</strong> extension settings and active-session state are used to support focus sessions. Some settings may be stored locally in your browser.</p>
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
         <h2>2. How We Use Your Information</h2>
         <ul>
           <li>To create your account, authenticate you, and let you reset your password</li>
-          <li>To import your Canvas course list when you choose to connect through the MachReach extension</li>
+          <li>To import your Canvas course list when you choose to connect through the MachReach extension, or to save courses you add manually</li>
+          <li>To power university-scoped course autofill so students at the same university can add courses faster</li>
           <li>To generate and manage quizzes, flashcards, focus sessions, grade tracking, and course analytics</li>
-          <li>To track XP, streaks, leaderboard rankings, badges, coins, and study-group activity</li>
+          <li>To track XP, streaks, leaderboard rankings, badges, coins, friends, study groups, quiz duels, and referrals</li>
           <li>To process subscriptions and service notifications such as password resets and study emails you opted into</li>
           <li>To keep the service secure, reliable, and improving over time</li>
         </ul>
@@ -3569,16 +3642,17 @@ def privacy_page():
 @app.route("/terms")
 def terms_page():
     return _public_info_page("Terms of Service", "Legal", "The rules for using MachReach, subscriptions, AI study tools, rankings, and account security.", """
-        <p><strong>Last updated:</strong> May 19, 2026</p>
+        <p><strong>Last updated:</strong> June 15, 2026</p>
         <h2>1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
         <h2>2. Description of Service</h2>
-        <p>MachReach provides student study tools including Canvas extension course import, focus timers, study-time tracking, flashcards, practice quizzes, grade tracking, XP, streaks, leaderboards, study groups, coins, course analytics, and an optional Focus Guard browser extension.</p>
+        <p>MachReach provides student study tools including Canvas extension course import, manually added courses, focus timers, study-time tracking, AI-generated flashcards and practice quizzes, grade tracking, XP, streaks, leaderboards, friends, quiz duels, study groups, coins and an in-app shop, course analytics, a referral program, and an optional Focus Guard browser extension. Some features require a paid Plus or Ultimate plan.</p>
         <h2>3. Account Responsibilities</h2>
         <ul>
-          <li>You must provide accurate information when registering</li>
+          <li>You must provide accurate information when registering, including your university</li>
           <li>You are responsible for maintaining the security of your account credentials</li>
           <li>If you connect Canvas, you must use your own Canvas account and the MachReach browser extension</li>
+          <li>When you add courses manually, you agree they may be saved to a shared autofill catalog scoped to your university (course codes and names only)</li>
           <li>You must not share your account with others</li>
           <li>You must be at least 16 years old to use MachReach</li>
           <li>You must not attempt to probe, scan, or exploit vulnerabilities in the service</li>
@@ -3586,11 +3660,11 @@ def terms_page():
         <h2>4. Academic Integrity</h2>
         <p>You are responsible for complying with your institution's academic-integrity policies. MachReach is a study aid; using it to plagiarize, cheat, or violate honor codes is prohibited.</p>
         <h2>5. Subscriptions and Billing</h2>
-        <p>Paid student plans are billed through Lemon Squeezy. You can cancel at any time; access continues until the end of the billing period. Refunds are handled case by case.</p>
+        <p>Paid student plans (Plus and Ultimate) are billed through Lemon Squeezy. You can cancel at any time; access continues until the end of the billing period. Refunds are handled case by case.</p>
         <h2>6. AI Features</h2>
         <p>AI-generated quizzes, flashcards, or other study content are provided as suggestions and may be incomplete or incorrect. You are responsible for reviewing generated content before relying on it academically.</p>
-        <h2>7. Leaderboards and Coins</h2>
-        <p>Coins have no cash value, cannot be transferred between accounts, and can be redeemed only inside MachReach. We may withhold or reverse rewards for suspected abuse.</p>
+        <h2>7. Leaderboards, Coins, Duels and Referrals</h2>
+        <p>XP, coins, streaks, badges, leaderboard ranks, and duel results are part of the game layer and have no cash value, cannot be transferred or sold between accounts, and can be redeemed only inside MachReach. Quiz duels are study and social tools, not a way to earn real money. Referral rewards (such as free Plus time) are granted for genuine sign-ups only. We may withhold, reverse, or reset rewards, ranks, or referral credit for suspected cheating or abuse.</p>
         <h2>8. Limitation of Liability</h2>
         <p>MachReach is provided as is without warranties of any kind. We are not liable for service interruptions, data loss beyond our control, or indirect, incidental, or consequential damages.</p>
         <h2>9. Contact</h2>
