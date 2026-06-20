@@ -3143,8 +3143,8 @@ Return this JSON shape:
 
 
         # Focus is the primary reward source: 5 XP + 1 coin per 10 minutes.
-        # Daily missions can add small XP bonuses, but quizzes, flashcards and
-        # duels remain study/social tools, not faucets.
+        # Daily missions can add small XP bonuses, but quizzes and flashcards
+        # remain study tools, not faucets.
         # Breaks aren't counted — `minutes` arrives study-only because the
         # frontend reports phaseWorkMinutes=0 for break phases.
         _focus_xp_awarded = 0
@@ -17983,7 +17983,10 @@ No markdown, no code fences. ONLY JSON.
 
         streak = sdb.get_streak_days(cid)
 
-        badges = sdb.get_badges(cid)
+        badges = [
+            b for b in sdb.get_badges(cid)
+            if not str(b.get("badge_key", "")).startswith("duel_")
+        ]
 
         history = sdb.get_xp_history(cid)
 
@@ -18236,10 +18239,10 @@ No markdown, no code fences. ONLY JSON.
             ("Progreso XP", "Rangos, XP acumulado y crecimiento general"),
             ("Racha", "Constancia diaria y calendario"),
             ("Focus", "Sesiones profundas y tiempo estudiado"),
-            ("Quizzes", "Pruebas, precision y duelos de quiz"),
+            ("Quizzes", "Pruebas, precision y practica"),
             ("Tarjetas", "Repaso espaciado y mazos"),
             ("Cursos", "Cursos sincronizados y avance academico"),
-            ("Social", "Duelos, perfil y rankings"),
+            ("Social", "Amigos, perfil y rankings"),
             ("Especiales", "Insignias raras, eventos y cosméticos"),
         ]
 
@@ -18257,13 +18260,15 @@ No markdown, no code fences. ONLY JSON.
                 return "Tarjetas"
             if "course" in k or "syllabus" in k or "page_" in k:
                 return "Cursos"
-            if "duel" in k or k in {"identity", "banner_collector", "flag_collector"}:
+            if k in {"identity", "banner_collector", "flag_collector"}:
                 return "Social"
             return "Especiales"
 
         all_badges_by_group = {title: [] for title, _ in badge_group_defs}
 
         for key, info in sdb.BADGE_DEFS.items():
+            if str(key).startswith("duel_"):
+                continue
             _iv = _badge_view(key, info)
 
             earned = any(b["badge_key"] == key for b in badges)
@@ -18732,7 +18737,7 @@ No markdown, no code fences. ONLY JSON.
 
     # ================================================================
 
-    #  FRIENDS / DUELS / DAILY QUESTS
+    #  FRIENDS / DAILY QUESTS
 
     # ================================================================
 
@@ -18813,12 +18818,20 @@ No markdown, no code fences. ONLY JSON.
             return redirect(url_for("login"))
 
         cid = _cid()
+        from outreach.config import BASE_URL
+        from student import subscription as ssub
+        ref_code = sdb.get_or_create_referral_code(cid)
+        ref_joined = sdb.referral_count(cid)
+        ref_link_base = (BASE_URL or request.url_root or "").rstrip("/")
+        ref_link = f"{ref_link_base}/register?ref={ref_code}"
+        ref_plus_until = ssub.plus_grant_until(cid)
+        ref_plus_date = str(ref_plus_until)[:10] if ref_plus_until else ""
 
         _lang = session.get("lang", "es")
         _fr = {
             "kicker": "SOCIAL STUDY" if _lang == "en" else "ESTUDIO SOCIAL",
-            "title": "Friends<br/>and duels." if _lang == "en" else "Amigos<br/>y duelos.",
-            "subtitle": "Find classmates, challenge friends, and turn focus time into pressure that actually helps." if _lang == "en" else "Encuentra compañeros, desafía amigos y convierte el tiempo de estudio en presión que de verdad ayuda.",
+            "title": "Friends." if _lang == "en" else "Amigos.",
+            "subtitle": "Find classmates, add them, and keep each other moving. See your friends ranking in the Ranking tab." if _lang == "en" else "Encuentra compa&ntilde;eros, agr&eacute;galos y mant&eacute;nganse avanzando. Tu ranking de amigos est&aacute; en la pesta&ntilde;a Ranking.",
             "your_id": "Your ID" if _lang == "en" else "Tu ID",
             "search_ph": "Search by name, email, or #ID" if _lang == "en" else "Buscar por nombre, correo o #ID",
             "search": "Search" if _lang == "en" else "Buscar",
@@ -18826,18 +18839,7 @@ No markdown, no code fences. ONLY JSON.
             "pending": "Pending" if _lang == "en" else "Pendientes",
             "friends": "Your friends" if _lang == "en" else "Tus amigos",
             "squad": "Squad" if _lang == "en" else "Equipo",
-            "quiz_duels": "Quiz duels" if _lang == "en" else "Duelos de quiz",
-            "live": "Live" if _lang == "en" else "En vivo",
-            "marathons": "Study marathons" if _lang == "en" else "Maratones de estudio",
-            "days7": "7 days" if _lang == "en" else "7 días",
-            "active_duels": "Active duels" if _lang == "en" else "Duelos activos",
-            "now": "Now" if _lang == "en" else "Ahora",
-            "history": "Duel history" if _lang == "en" else "Historial de duelos",
-            "archive": "Archive" if _lang == "en" else "Archivo",
             "loading": "Loading..." if _lang == "en" else "Cargando...",
-            "no_pending": "No pending invitations." if _lang == "en" else "Sin invitaciones pendientes.",
-            "no_active": "No active duels." if _lang == "en" else "Sin duelos activos.",
-            "no_history": "No completed duels yet." if _lang == "en" else "Aún no hay duelos completados.",
             "no_matches": "No matches." if _lang == "en" else "Sin resultados.",
             "no_name": "(no name)" if _lang == "en" else "(sin nombre)",
             "add_friend": "Add friend" if _lang == "en" else "Agregar amigo",
@@ -18847,61 +18849,18 @@ No markdown, no code fences. ONLY JSON.
             "self": "Self" if _lang == "en" else "Eres tú",
             "remove_friend": "Remove this friend?" if _lang == "en" else "¿Eliminar este amigo?",
             "user": "User" if _lang == "en" else "Usuario",
-            "challenge": "Challenge" if _lang == "en" else "Desafiar",
             "remove": "Remove" if _lang == "en" else "Eliminar",
             "accept": "Accept" if _lang == "en" else "Aceptar",
             "decline": "Decline" if _lang == "en" else "Rechazar",
-            "cancel": "Cancel" if _lang == "en" else "Cancelar",
-            "send_invite": "Send invite" if _lang == "en" else "Enviar invitación",
-            "pick_format": "Pick a duel format" if _lang == "en" else "Elige un formato de duelo",
-            "quiz_duel": "Quiz Duel" if _lang == "en" else "Duelo de quiz",
             "online": "online" if _lang == "en" else "en línea",
             "online_now": "Online now" if _lang == "en" else "En línea ahora",
             "offline": "offline" if _lang == "en" else "desconectado",
-            "offline_unavailable": "offline — unavailable" if _lang == "en" else "desconectado — no disponible",
-            "quiz_duel_desc": "Upload a study file. AI builds 10 questions. Both must be online — first to finish at the highest score wins. Tab-switch = instant loss." if _lang == "en" else "Sube un archivo de estudio. La IA crea 10 preguntas. Ambos deben estar en línea: gana quien termine primero con mejor puntaje. Cambiar de pestaña = derrota instantánea.",
-            "quiz_duel_reward": "Winner takes the coin pot. No XP." if _lang == "en" else "El ganador se lleva el pozo de monedas. Sin XP.",
-            "marathon_title": "Study Marathon (7 days)" if _lang == "en" else "Maratón de estudio (7 días)",
-            "marathon_desc": "Most focus minutes over the next 7 days wins. Asynchronous — they don't need to be online; they just need to accept on their friends tab to start the clock." if _lang == "en" else "Gana quien acumule más minutos de enfoque en los próximos 7 días. Es asincrónico: no necesitan estar en línea, solo aceptar en su pestaña de amigos para iniciar el reloj.",
-            "marathon_reward": "Status-only challenge. No XP or coins." if _lang == "en" else "Desafio solo por estado. Sin XP ni monedas.",
-            "stake_ph": "Coins each player bets" if _lang == "en" else "Monedas que apuesta cada jugador",
-            "stake_each": "coins each" if _lang == "en" else "monedas cada uno",
-            "upload_quiz_file": "Upload a PDF, DOCX or TXT (max 8 MB). The AI will generate 10 multiple-choice questions." if _lang == "en" else "Sube un PDF, DOCX o TXT (máx. 8 MB). La IA generará 10 preguntas de selección múltiple.",
-            "topic_ph": "Topic (optional, e.g. Cell Biology Ch. 4)" if _lang == "en" else "Tema (opcional, ej. Biología celular cap. 4)",
-            "send_marathon_confirm": "Send a 7-day Study Marathon invite to " if _lang == "en" else "¿Enviar una invitación de maratón de estudio de 7 días a ",
-            "send_marathon_suffix": "? They have to accept it on their friends tab before the clock starts." if _lang == "en" else "? Debe aceptarla en su pestaña de amigos antes de que empiece el reloj.",
-            "marathon_sent": "Marathon invite sent! It will start once they accept on their friends tab." if _lang == "en" else "¡Invitación de maratón enviada! Empezará cuando la acepte en su pestaña de amigos.",
-            "offline_quiz": "That friend is offline. Quiz duels need both players online — try a Study Marathon instead." if _lang == "en" else "Ese amigo está desconectado. Los duelos de quiz necesitan a ambos jugadores en línea; prueba una maratón de estudio.",
-            "pick_file": "Pick a file." if _lang == "en" else "Elige un archivo.",
-            "generating_quiz": "Generating quiz..." if _lang == "en" else "Generando quiz...",
             "failed": "Failed." if _lang == "en" else "Falló.",
             "network_error": "Network error." if _lang == "en" else "Error de red.",
             "no_friends": "No friends yet. Search above to add someone." if _lang == "en" else "Aún no tienes amigos. Busca arriba para agregar a alguien.",
-            "challenged_marathon": "challenged you to a 7-day Study Marathon." if _lang == "en" else "te desafió a una maratón de estudio de 7 días.",
-            "marathon_invite_meta": "Most focus minutes over the next 7 days wins. Clock starts when you accept." if _lang == "en" else "Gana quien acumule más minutos de enfoque en los próximos 7 días. El reloj empieza cuando aceptas.",
-            "waiting_on": "Waiting on" if _lang == "en" else "Esperando a",
-            "accept_marathon": "to accept your marathon invite." if _lang == "en" else "para que acepte tu invitación de maratón.",
-            "clock_not_started": "Clock hasn't started. They need to accept on their friends tab." if _lang == "en" else "El reloj aún no empieza. Debe aceptar en su pestaña de amigos.",
-            "ends": "ends" if _lang == "en" else "termina",
             "you": "You" if _lang == "en" else "Tú",
-            "them": "Them" if _lang == "en" else "Rival",
-            "tie": "TIE" if _lang == "en" else "EMPATE",
-            "win": "WIN" if _lang == "en" else "VICTORIA",
-            "loss": "LOSS" if _lang == "en" else "DERROTA",
-            "challenged_you": "challenged you" if _lang == "en" else "te desafió",
-            "no_topic": "No topic" if _lang == "en" else "Sin tema",
-            "accept_play": "Accept & play" if _lang == "en" else "Aceptar y jugar",
-            "waiting_status": "waiting on opponent" if _lang == "en" else "esperando al rival",
-            "ready_status": "ready" if _lang == "en" else "listo",
-            "progress_status": "in progress" if _lang == "en" else "en progreso",
-            "open": "Open" if _lang == "en" else "Abrir",
-            "no_quiz_duels": "No active quiz duels. Challenge a friend to start one." if _lang == "en" else "No hay duelos de quiz activos. Desafía a un amigo para empezar uno.",
             "could_not_accept": "Could not accept." if _lang == "en" else "No se pudo aceptar.",
-            "decline_quiz_confirm": "Decline this quiz duel?" if _lang == "en" else "¿Rechazar este duelo de quiz?",
             "could_not_decline": "Could not decline." if _lang == "en" else "No se pudo rechazar.",
-            "decline_marathon_confirm": "Decline this marathon invite?" if _lang == "en" else "¿Rechazar esta invitación de maratón?",
-            "cancel_marathon_confirm": "Cancel your marathon invite?" if _lang == "en" else "¿Cancelar tu invitación de maratón?",
-            "could_not_cancel": "Could not cancel." if _lang == "en" else "No se pudo cancelar.",
             "friend_ranking": "Friends ranking" if _lang == "en" else "Ranking de amigos",
             "friend_ranking_sub": "Same energy as the main ranking, but only you and your friends." if _lang == "en" else "La misma energía del ranking principal, pero solo tú y tus amigos.",
             "study_groups": "Study groups" if _lang == "en" else "Grupos de estudio",
@@ -18930,9 +18889,20 @@ No markdown, no code fences. ONLY JSON.
             "remove_member_confirm": "Remove this member from the study group?" if _lang == "en" else "¿Quitar a este miembro del grupo de estudio?",
             "group_deleted": "Study group deleted." if _lang == "en" else "Grupo de estudio borrado.",
             "member_removed": "Member removed." if _lang == "en" else "Miembro quitado.",
+            "invite_title": "Invite friends, get Plus" if _lang == "en" else "Invita amigos, gana Plus",
+            "invite_sub": "Every real friend who joins with your link gives you 7 days of Plus. This stays here permanently so you can keep sharing." if _lang == "en" else "Cada amigo real que se une con tu enlace te da 7 d&iacute;as de Plus. Este bloque queda aqu&iacute; siempre para que puedas seguir compartiendo.",
+            "invite_link_label": "Your invite link" if _lang == "en" else "Tu enlace de invitaci&oacute;n",
+            "invite_math": "1 friend = 7 Plus days" if _lang == "en" else "1 amigo = 7 d&iacute;as Plus",
+            "joined_count": "friends referred" if _lang == "en" else "amigos referidos",
+            "weeks_earned": "free weeks earned" if _lang == "en" else "semanas gratis",
+            "plus_until": "Plus active until" if _lang == "en" else "Plus activo hasta",
+            "no_plus_grant": "No active referral grant yet" if _lang == "en" else "A&uacute;n no hay Plus referido activo",
+            "copy_link": "Copy link" if _lang == "en" else "Copiar enlace",
+            "copied": "Copied" if _lang == "en" else "Copiado",
+            "open_invite_page": "Open invite page" if _lang == "en" else "Ver p&aacute;gina de invitaciones",
         }
 
-        return _s_render("Friends and Duels" if _lang == "en" else "Amigos y Duelos", f"""
+        return _s_render("Friends" if _lang == "en" else "Amigos", f"""
 
         <style>{sdb.FLAG_ANIM_CSS}</style>
         <style>
@@ -18945,6 +18915,7 @@ No markdown, no code fences. ONLY JSON.
           .fr-id {{ display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:10px 14px;font-weight:900;box-shadow:0 1px 0 rgba(20,18,30,.04),0 10px 28px rgba(20,18,30,.06); }}
           .fr-id span {{ color:var(--orange);font-family:'Bricolage Grotesque',sans-serif;font-size:22px;line-height:1; }}
           .fr-grid {{ display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:18px;align-items:start; }}
+          .fr-grid.fr-grid-single {{ grid-template-columns:1fr; }}
           @media(max-width:980px) {{ .fr-grid {{ grid-template-columns:1fr; }} }}
           .fr-panel {{ background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 1px 0 rgba(20,18,30,.04),0 18px 46px rgba(20,18,30,.07);padding:24px;margin-bottom:18px;overflow:hidden; }}
           .fr-panel.alt {{ background:linear-gradient(180deg,#FFFFFF 0%,#FFF8EE 100%); }}
@@ -18971,10 +18942,7 @@ No markdown, no code fences. ONLY JSON.
           .fr-dot {{ display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#94a3b8; }}
           .fr-dot.on {{ background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.14); }}
           .fr-note {{ color:var(--muted);font-size:13px;line-height:1.5; }}
-          .fr-duel-stat {{ display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:850;color:var(--muted); }}
-          .fr-modal-card {{ background:#fff;border:1px solid var(--line);border-radius:26px;max-width:560px;width:92%;padding:26px;box-shadow:0 28px 90px rgba(20,18,30,.22); }}
-          .fr-chal-card {{ text-align:left;padding:18px;border:1px solid var(--line);border-radius:18px;background:#FFFDF8;cursor:pointer;color:var(--ink); }}
-          .fr-chal-card:hover {{ border-color:var(--orange);box-shadow:0 12px 28px rgba(255,122,61,.13);transform:translateY(-1px); }}
+          .fr-grid-single main {{ min-width:0; }}
           .fr-rank-wrap {{ display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:18px;margin-bottom:18px;align-items:start; }}
           @media(max-width:980px) {{ .fr-rank-wrap {{ grid-template-columns:1fr; }} }}
           .fr-rank-podium {{ display:grid;grid-template-columns:1fr 1.14fr 1fr;gap:12px;align-items:end;margin:14px 0 16px; }}
@@ -19081,7 +19049,7 @@ No markdown, no code fences. ONLY JSON.
           .fr-panel h3 {{ font-size:26px;line-height:1.05; }}
           .fr-count {{ display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:0 10px;border:2px solid #FF7A3D;border-radius:999px;background:#FFF3EA;color:#1A1A1F;letter-spacing:.06em; }}
           .fr-list {{ gap:12px; }}
-          .fr-row,.fr-group-card,.fr-chal-card {{ border:2px solid #E2DCCC;background:#FFFDF8;border-radius:18px;padding:14px;box-shadow:0 1px 0 rgba(20,18,30,.04); }}
+          .fr-row,.fr-group-card {{ border:2px solid #E2DCCC;background:#FFFDF8;border-radius:18px;padding:14px;box-shadow:0 1px 0 rgba(20,18,30,.04); }}
           .fr-row:hover,.fr-group-card:hover {{ border-color:#FF9B64;background:#FFFFFF; }}
           .fr-avatar {{ width:48px;height:48px;border-radius:16px;border:2px solid #1A1A1F;box-shadow:0 3px 0 rgba(26,26,31,.85),inset 0 1px 0 rgba(255,255,255,.38); }}
           .fr-empty {{ border:2px dashed rgba(26,26,31,.18);background:#FFFDF8;border-radius:18px;padding:28px; }}
@@ -19099,6 +19067,20 @@ No markdown, no code fences. ONLY JSON.
           .fr-rank-list {{ border:2px solid #1A1A1F;border-radius:20px;box-shadow:0 4px 0 rgba(26,26,31,.85); }}
           .fr-rank-row {{ min-height:68px;border-top:2px solid #E2DCCC;background:#FFFDF8; }}
           .fr-rank-row.me {{ background:linear-gradient(90deg,#FFE1CB,#FFFDF8);border-left:5px solid #FF7A3D; }}
+          .fr-referral {{ display:grid;grid-template-columns:minmax(0,1.1fr) minmax(320px,.9fr);gap:22px;align-items:stretch;position:relative;margin-bottom:24px;background:linear-gradient(135deg,#FFFFFF 0%,#FFF7EE 58%,#FFE3CC 100%);color:#1A1A1F;box-shadow:0 7px 0 #1A1A1F,0 24px 58px rgba(255,122,61,.14); }}
+          .fr-referral .fr-panel-top {{ border-bottom-color:rgba(26,26,31,.16);margin-bottom:12px; }}
+          .fr-referral h3 {{ color:#1A1A1F; }}
+          .fr-referral .fr-note {{ color:#48443E; }}
+          .fr-referral-badge {{ display:inline-flex;align-items:center;gap:8px;min-height:30px;padding:0 12px;border:2px solid #FF7A3D;border-radius:999px;background:#FFF3EA;color:#FF7A3D;font-size:11px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;box-shadow:0 3px 0 rgba(26,26,31,.92); }}
+          .fr-referral-copy {{ display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin-top:18px; }}
+          .fr-referral-link {{ min-width:0;height:48px;border:2px solid #1A1A1F;border-radius:16px;background:#FFFDF8;color:#1A1A1F;padding:0 14px;font-weight:850;box-sizing:border-box;outline:none;box-shadow:0 3px 0 rgba(26,26,31,.86); }}
+          .fr-referral-link:focus {{ border-color:#FFB36B;box-shadow:0 0 0 3px rgba(255,179,107,.18); }}
+          .fr-referral-side {{ display:grid;grid-template-columns:1fr;gap:12px; }}
+          .fr-referral-stat {{ border:2px solid #E2DCCC;border-radius:18px;background:#FFFDF8;padding:14px;box-shadow:0 2px 0 rgba(26,26,31,.08); }}
+          .fr-referral-num {{ font-family:'Bricolage Grotesque',sans-serif;font-size:34px;line-height:1;font-weight:700;color:#FF7A3D; }}
+          .fr-referral-label {{ margin-top:5px;color:#6E6A60;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em; }}
+          .fr-referral-status {{ font-weight:950;margin-top:6px;color:#1A1A1F; }}
+          .fr-referral .fr-btn.ghost {{ background:#FFFDF8;color:#1A1A1F;border-color:#1A1A1F;box-shadow:0 3px 0 rgba(26,26,31,.86); }}
 
           :root[data-theme="dark"] .friends-cd {{ --ink:#FFF8E1;--muted:#BDB5AA;--line:rgba(255,122,61,.50);--paper:#1D1B26;--cream:#15131C;color:#FFF8E1; }}
           :root[data-theme="dark"] .friends-cd .fr-hero {{ border-color:#FF7A3D;background:linear-gradient(135deg,#12101A 0%,#1D1B26 58%,#2A1B16 100%);box-shadow:0 8px 0 #FF7A3D,0 28px 70px rgba(0,0,0,.34); }}
@@ -19110,7 +19092,7 @@ No markdown, no code fences. ONLY JSON.
           :root[data-theme="dark"] .friends-cd .fr-id span {{ color:#141019; }}
           :root[data-theme="dark"] .friends-cd .fr-search-inner,:root[data-theme="dark"] .friends-cd .fr-panel,:root[data-theme="dark"] .friends-cd .fr-panel.alt {{ background:rgba(29,27,38,.92);border-color:#FF7A3D;box-shadow:0 0 0 1px rgba(255,255,255,.04) inset,0 8px 0 #FF7A3D,0 24px 62px rgba(0,0,0,.28); }}
           :root[data-theme="dark"] .friends-cd .fr-panel-top {{ border-bottom-color:rgba(255,122,61,.34); }}
-          :root[data-theme="dark"] .friends-cd .fr-input,:root[data-theme="dark"] .friends-cd .fr-row,:root[data-theme="dark"] .friends-cd .fr-empty,:root[data-theme="dark"] .friends-cd .fr-check,:root[data-theme="dark"] .friends-cd .fr-group-card,:root[data-theme="dark"] .friends-cd .fr-chal-card,:root[data-theme="dark"] .friends-cd .fr-group-add select {{ background:rgba(255,255,255,.035);color:#FFF8E1;border-color:rgba(255,138,76,.46);box-shadow:inset 0 0 0 1px rgba(255,255,255,.035); }}
+          :root[data-theme="dark"] .friends-cd .fr-input,:root[data-theme="dark"] .friends-cd .fr-row,:root[data-theme="dark"] .friends-cd .fr-empty,:root[data-theme="dark"] .friends-cd .fr-check,:root[data-theme="dark"] .friends-cd .fr-group-card,:root[data-theme="dark"] .friends-cd .fr-group-add select {{ background:rgba(255,255,255,.035);color:#FFF8E1;border-color:rgba(255,138,76,.46);box-shadow:inset 0 0 0 1px rgba(255,255,255,.035); }}
           :root[data-theme="dark"] .friends-cd .fr-row:hover,:root[data-theme="dark"] .friends-cd .fr-group-card:hover {{ background:rgba(255,122,61,.08);border-color:#FF7A3D; }}
           :root[data-theme="dark"] .friends-cd .fr-btn {{ background:#FF7A3D;color:#141019;border-color:#FF7A3D;box-shadow:0 4px 0 #0A0A10; }}
           :root[data-theme="dark"] .friends-cd .fr-btn.ghost {{ background:#1D1B26;color:#FFF8E1;border-color:#FF7A3D; }}
@@ -19127,7 +19109,33 @@ No markdown, no code fences. ONLY JSON.
           :root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-row,:root[data-theme="dark"] .friends-cd .fr-rank-row {{ background:rgba(255,255,255,.035);border-color:rgba(255,138,76,.28);color:#FFF8E1; }}
           :root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-row.me,:root[data-theme="dark"] .friends-cd .fr-rank-row.me {{ background:linear-gradient(90deg,rgba(255,122,61,.18),rgba(255,255,255,.035));border-left-color:#FF7A3D; }}
           :root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-flag-bg,:root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-podium-flag {{ opacity:.52 !important;mix-blend-mode:screen;filter:saturate(1.25) contrast(1.08); }}
+          :root[data-theme="dark"] .friends-cd .fr-referral {{ background:linear-gradient(135deg,#0F0D16 0%,#1D1B26 58%,#3A1E12 140%);color:#FFF8E1; }}
+          :root[data-theme="dark"] .friends-cd .fr-referral h3,:root[data-theme="dark"] .friends-cd .fr-referral .fr-referral-status {{ color:#FFF8E1; }}
+          :root[data-theme="dark"] .friends-cd .fr-referral .fr-referral-label {{ color:rgba(255,248,225,.76); }}
+          :root[data-theme="dark"] .friends-cd .fr-referral .fr-referral-link,:root[data-theme="dark"] .friends-cd .fr-referral .fr-referral-stat {{ background:rgba(255,255,255,.045);border-color:rgba(255,138,76,.46); }}
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-panel.fr-referral,
+          :root:not([data-theme="dark"]) .friends-cd .fr-panel.fr-referral {{ background:linear-gradient(135deg,#FFFFFF 0%,#FFF7EE 58%,#FFE3CC 100%) !important;color:#1A1A1F !important;border:2px solid #1A1A1F !important;border-radius:24px !important;box-shadow:0 7px 0 #1A1A1F,0 24px 58px rgba(255,122,61,.14) !important; }}
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-referral h3,
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-referral .fr-referral-status,
+          :root:not([data-theme="dark"]) .friends-cd .fr-referral h3,
+          :root:not([data-theme="dark"]) .friends-cd .fr-referral .fr-referral-status {{ color:#1A1A1F !important; }}
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-referral .fr-referral-label,
+          :root:not([data-theme="dark"]) .friends-cd .fr-referral .fr-referral-label {{ color:#6E6A60 !important; }}
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-referral .fr-note,
+          :root:not([data-theme="dark"]) .friends-cd .fr-referral .fr-note {{ color:#48443E !important; }}
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-referral .fr-referral-stat,
+          :root:not([data-theme="dark"]) .friends-cd .fr-referral .fr-referral-stat {{ background:#FFFDF8 !important;border-color:#E2DCCC !important;color:#1A1A1F !important;box-shadow:0 2px 0 rgba(26,26,31,.08) !important; }}
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-referral .fr-referral-num,
+          :root:not([data-theme="dark"]) .friends-cd .fr-referral .fr-referral-num {{ color:#FF7A3D !important; }}
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-referral .fr-referral-badge,
+          :root:not([data-theme="dark"]) .friends-cd .fr-referral .fr-referral-badge {{ background:#FFF3EA !important;color:#FF7A3D !important;border-color:#FF7A3D !important;box-shadow:0 3px 0 rgba(26,26,31,.92) !important; }}
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-referral .fr-referral-link,
+          :root:not([data-theme="dark"]) .friends-cd .fr-referral .fr-referral-link {{ background:#FFFDF8 !important;color:#1A1A1F !important;border-color:#1A1A1F !important;box-shadow:0 3px 0 rgba(26,26,31,.85) !important; }}
+          :root:not([data-theme="dark"]) .mr-app-shell .friends-cd .fr-referral .fr-btn.ghost,
+          :root:not([data-theme="dark"]) .friends-cd .fr-referral .fr-btn.ghost {{ background:#FFFDF8 !important;color:#1A1A1F !important;border-color:#1A1A1F !important;box-shadow:0 3px 0 rgba(26,26,31,.86) !important; }}
           @media(max-width:980px) {{ .fr-search-row,.fr-rank-wrap,.fr-grid {{ grid-template-columns:1fr; }} .fr-title {{ font-size:52px; }} }}
+          @media(max-width:860px) {{ .fr-referral {{ grid-template-columns:1fr; }} }}
+          @media(max-width:720px) {{ .fr-referral-copy {{ grid-template-columns:1fr; }} }}
           @media(max-width:640px) {{ .friends-cd {{ padding-inline:0; }} .fr-hero {{ padding:28px 22px;border-radius:24px; }} .fr-title {{ font-size:42px; }} .fr-id {{ width:100%;justify-content:space-between; }} .fr-search-row {{ display:flex; }} .fr-btn {{ width:100%; }} .fr-row {{ align-items:flex-start;flex-direction:column; }} .fr-actions {{ width:100%;justify-content:flex-start; }} }}
         </style>
 
@@ -19152,31 +19160,40 @@ No markdown, no code fences. ONLY JSON.
             </div>
           </section>
 
-          <section class="fr-rank-wrap">
-            <div class="fr-panel">
-              <div class="fr-panel-top"><div><h3>{_fr["friend_ranking"]}</h3><div class="fr-note">{_fr["friend_ranking_sub"]}</div></div><span class="fr-count">XP</span></div>
-              <div id="mr-lb-page" class="fr-lb-embed">
-                <div class="lb-tabs" id="fr-lb-tabs"></div>
-                <div class="lb-podium" id="fr-rank-podium" style="display:none;"></div>
-                <div id="fr-rank-list" class="lb-board">
-                  <div class="lb-skeleton"><div class="lb-sk-row"></div><div class="lb-sk-row"></div><div class="lb-sk-row"></div></div>
+          <section id="fr-referral-card" class="fr-panel fr-referral">
+            <div>
+              <div class="fr-panel-top">
+                <div>
+                  <div class="fr-referral-badge">{_fr["invite_math"]}</div>
+                  <h3 style="margin-top:12px;">{_fr["invite_title"]}</h3>
                 </div>
               </div>
-            </div>
-            <div class="fr-panel alt">
-              <div class="fr-panel-top"><div><h3>{_fr["study_groups"]}</h3><div class="fr-note">{_fr["study_groups_sub"]}</div></div></div>
-              <div class="fr-group-form">
-                <input id="fr-group-name" class="fr-input" placeholder="{_fr["group_name_ph"]}" style="border-radius:14px;width:100%;">
-                <div class="fr-note">{_fr["pick_friends"]}</div>
-                <div id="fr-group-friends" class="fr-check-grid"><div class="fr-empty">{_fr["loading"]}</div></div>
-                <button class="fr-btn orange" onclick="createStudyGroup()">{_fr["create_group"]}</button>
+              <div class="fr-note">{_fr["invite_sub"]}</div>
+              <label class="fr-referral-label" for="fr-ref-link" style="display:block;margin-top:18px;">{_fr["invite_link_label"]}</label>
+              <div class="fr-referral-copy">
+                <input id="fr-ref-link" class="fr-referral-link" readonly value="{_esc(ref_link)}">
+                <button id="fr-ref-copy" class="fr-btn orange" type="button">{_fr["copy_link"]}</button>
               </div>
-              <div id="fr-group-invites" class="fr-list" style="margin-top:16px"></div>
-              <div id="fr-groups" class="fr-list" style="margin-top:16px"><div class="fr-empty">{_fr["loading"]}</div></div>
+              <a class="fr-btn ghost" href="/student/invite" style="margin-top:12px;text-decoration:none;width:max-content;">{_fr["open_invite_page"]}</a>
+            </div>
+            <div class="fr-referral-side">
+              <div class="fr-referral-stat">
+                <div class="fr-referral-num">{ref_joined}</div>
+                <div class="fr-referral-label">{_fr["joined_count"]}</div>
+              </div>
+              <div class="fr-referral-stat">
+                <div class="fr-referral-num">{ref_joined}</div>
+                <div class="fr-referral-label">{_fr["weeks_earned"]}</div>
+              </div>
+              <div class="fr-referral-stat">
+                <div class="fr-referral-label" style="margin-top:0;">{_fr["plus_until"]}</div>
+                <div class="fr-referral-status">{_esc(ref_plus_date) if ref_plus_date else _fr["no_plus_grant"]}</div>
+              </div>
             </div>
           </section>
 
-          <div class="fr-grid">
+
+          <div class="fr-grid fr-grid-single">
             <main>
               <section id="fr-incoming-wrap" class="fr-panel alt" style="display:none">
                 <div class="fr-panel-top"><h3>{_fr["requests"]}</h3><span class="fr-count">{_fr["pending"]}</span></div>
@@ -19187,44 +19204,47 @@ No markdown, no code fences. ONLY JSON.
                 <div class="fr-panel-top"><h3>{_fr["friends"]}</h3><span class="fr-count">{_fr["squad"]}</span></div>
                 <div id="fr-friends" class="fr-list"><div class="fr-empty">{_fr["loading"]}</div></div>
               </section>
-
-              <section class="fr-panel">
-                <div class="fr-panel-top"><h3>{_fr["quiz_duels"]}</h3><span class="fr-count">{_fr["live"]}</span></div>
-                <div id="fr-quiz-duels" class="fr-list"><div class="fr-empty">{_fr["loading"]}</div></div>
-              </section>
             </main>
-
-            <aside>
-              <section class="fr-panel alt">
-                <div class="fr-panel-top"><h3>{_fr["marathons"]}</h3><span class="fr-count">{_fr["days7"]}</span></div>
-                <div id="fr-marathon-pending" class="fr-list"><div class="fr-empty">{_fr["no_pending"]}</div></div>
-              </section>
-
-              <section class="fr-panel">
-                <div class="fr-panel-top"><h3>{_fr["active_duels"]}</h3><span class="fr-count">{_fr["now"]}</span></div>
-                <div id="fr-active-duels" class="fr-list"><div class="fr-empty">{_fr["no_active"]}</div></div>
-              </section>
-
-              <section class="fr-panel">
-                <div class="fr-panel-top"><h3>{_fr["history"]}</h3><span class="fr-count">{_fr["archive"]}</span></div>
-                <div id="fr-history" class="fr-list"><div class="fr-empty">{_fr["no_history"]}</div></div>
-              </section>
-            </aside>
           </div>
 
         </div>
 
         <script>
 
-        const ME_CID = {cid};
         const FR = {json.dumps(_fr, ensure_ascii=False)};
+        const REF_LINK = {json.dumps(ref_link)};
         let __frFriends = [];
 
         function esc(s) {{ return (s||'').replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]); }}
         function initials(name) {{
-          const parts = String(name || 'MR').trim().split(/\s+/).filter(Boolean);
+          const parts = String(name || 'MR').trim().split(/\\s+/).filter(Boolean);
           return esc(((parts[0] || 'M')[0] || 'M') + ((parts[1] || parts[0] || 'R')[0] || 'R')).toUpperCase();
         }}
+        (function initReferralCopy() {{
+          const btn = document.getElementById('fr-ref-copy');
+          const input = document.getElementById('fr-ref-link');
+          if (!btn || !input) return;
+          btn.addEventListener('click', async function() {{
+            const original = btn.textContent;
+            try {{
+              if (navigator.clipboard && navigator.clipboard.writeText) {{
+                await navigator.clipboard.writeText(REF_LINK);
+              }} else {{
+                input.focus();
+                input.select();
+                document.execCommand('copy');
+              }}
+              btn.textContent = FR.copied;
+              setTimeout(() => {{ btn.textContent = original; }}, 1400);
+            }} catch (e) {{
+              input.focus();
+              input.select();
+              document.execCommand('copy');
+              btn.textContent = FR.copied;
+              setTimeout(() => {{ btn.textContent = original; }}, 1400);
+            }}
+          }});
+        }})();
 
         async function frSearch() {{
 
@@ -19274,394 +19294,6 @@ No markdown, no code fences. ONLY JSON.
 
         }}
 
-        function renderGroupFriendPicker(friends) {{
-          const box = document.getElementById('fr-group-friends');
-          if (!box) return;
-          if (!friends || !friends.length) {{
-            box.innerHTML = `<div class="fr-empty">${{FR.no_group_friends}}</div>`;
-            return;
-          }}
-          box.innerHTML = friends.map(u => `
-            <label class="fr-check">
-              <input type="checkbox" value="${{u.id}}">
-              <span>${{esc(u.name || (FR.user + ' #' + u.id))}}</span>
-            </label>
-          `).join('');
-        }}
-
-        function renderGroupAddControl(g) {{
-          if (!g || !g.is_owner) return '';
-          const memberIds = new Set((g.members || []).map(m => Number(m.client_id)));
-          const pendingIds = new Set((g.pending_invitee_ids || []).map(Number));
-          const candidates = (__frFriends || []).filter(u => !memberIds.has(Number(u.id)) && !pendingIds.has(Number(u.id)));
-          if (!candidates.length) {{
-            return `<div class="fr-note" style="margin-top:10px">${{FR.no_more_friends}}</div>`;
-          }}
-          return `
-            <form class="fr-group-add" onsubmit="inviteGroupMember(event, ${{g.id}})">
-              <select name="member_id" aria-label="${{FR.add_member}}">
-                <option value="">${{FR.add_member_ph}}</option>
-                ${{candidates.map(u => `<option value="${{u.id}}">${{esc(u.name || (FR.user + ' #' + u.id))}}</option>`).join('')}}
-              </select>
-              <button class="fr-btn small orange" type="submit">${{FR.add_member}}</button>
-            </form>`;
-        }}
-
-        function renderFriendRanking(rows) {{
-          const podium = document.getElementById('fr-rank-podium');
-          const list = document.getElementById('fr-rank-list');
-          if (!podium || !list) return;
-          if (!rows || rows.length <= 1) {{
-            podium.innerHTML = '';
-            list.innerHTML = `<div class="fr-empty">${{FR.friends_empty_rank}}</div>`;
-            return;
-          }}
-          const medal = r => r === 1 ? '🥇' : (r === 2 ? '🥈' : '🥉');
-          const top = rows.filter(r => r.rank <= 3);
-          const byRank = {{}};
-          top.forEach(r => byRank[r.rank] = r);
-          podium.innerHTML = [byRank[2], byRank[1], byRank[3]].filter(Boolean).map(r => `
-            <a class="fr-podium-card p${{r.rank}} ${{r.is_you ? 'me' : ''}}" href="/student/profile/${{r.client_id}}" style="text-decoration:none;color:inherit;">
-              <div class="fr-podium-medal">${{medal(r.rank)}}</div>
-              <div class="fr-avatar" style="margin-bottom:10px;">${{initials(r.name)}}</div>
-              <div class="fr-podium-name">${{esc(r.name)}}</div>
-              <div class="fr-podium-xp">${{Number(r.total_xp || 0).toLocaleString()}} ${{FR.xp}}</div>
-            </a>
-          `).join('');
-          list.innerHTML = rows.map(r => `
-            <a class="fr-rank-row ${{r.is_you ? 'me' : ''}}" href="/student/profile/${{r.client_id}}" style="text-decoration:none;color:inherit;">
-              <div class="fr-rank-pos">#${{r.rank}}</div>
-              <div class="fr-person"><div class="fr-avatar">${{initials(r.name)}}</div><div><div class="fr-name">${{esc(r.name)}}${{r.is_you ? ' · ' + FR.you : ''}}</div><div class="fr-meta">#${{r.client_id}}</div></div></div>
-              <div class="fr-rank-xp">${{Number(r.total_xp || 0).toLocaleString()}} ${{FR.xp}}</div>
-            </a>
-          `).join('');
-        }}
-
-        function renderStudyGroups(groups, invites) {{
-          const box = document.getElementById('fr-groups');
-          const inviteBox = document.getElementById('fr-group-invites');
-          if (inviteBox) {{
-            inviteBox.innerHTML = (invites && invites.length) ? `
-              <div class="fr-note" style="font-weight:900;color:var(--orange);margin-bottom:8px">${{FR.group_invites}}</div>
-              ${{invites.map(inv => `
-                <div class="fr-group-card">
-                  <div><div class="fr-name">${{esc(inv.group_name)}}</div><div class="fr-meta">${{FR.invited_by}} ${{esc(inv.inviter_name)}}</div></div>
-                  <div class="fr-actions">
-                    <button class="fr-btn small orange" onclick="respondStudyGroup(${{inv.id}}, true)">${{FR.accept}}</button>
-                    <button class="fr-btn small ghost" onclick="respondStudyGroup(${{inv.id}}, false)">${{FR.decline}}</button>
-                  </div>
-                </div>
-              `).join('')}}`
-            : '';
-          }}
-          if (!box) return;
-          if (!groups || !groups.length) {{
-            box.innerHTML = `<div class="fr-empty">${{FR.no_groups}}</div>`;
-            return;
-          }}
-          box.innerHTML = groups.map(g => `
-            <div class="fr-group-card">
-              <div style="min-width:0;flex:1">
-                <div class="fr-name">${{esc(g.name)}}</div>
-                <div class="fr-meta">${{g.member_count || 1}} ${{FR.members}}${{g.is_owner ? ' · ' + FR.owner : ''}}</div>
-                ${{g.is_owner && g.members && g.members.length ? `<div class="fr-list" style="margin-top:10px;gap:6px">${{g.members.map(m => `
-                  <div class="fr-row" style="padding:8px 10px;border-radius:12px">
-                    <div class="fr-person"><div class="fr-avatar" style="width:30px;height:30px;border-radius:10px;font-size:11px">${{initials(m.name)}}</div><div><div class="fr-name" style="font-size:12px">${{esc(m.name)}}</div><div class="fr-meta">#${{m.client_id}}${{m.is_owner ? ' · ' + FR.owner : ''}}</div></div></div>
-                    ${{!m.is_owner ? `<button class="fr-btn small ghost" type="button" onclick="removeGroupMember(${{g.id}}, ${{m.client_id}})">${{FR.remove_member}}</button>` : ''}}
-                  </div>
-                `).join('')}}</div>` : ''}}
-                ${{renderGroupAddControl(g)}}
-              </div>
-              <div class="fr-actions">
-                ${{g.is_owner ? `<button class="fr-btn small ghost" type="button" style="color:#ef4444;border-color:rgba(239,68,68,.35)" onclick="deleteStudyGroup(${{g.id}})">${{FR.delete_group}}</button>` : ''}}
-              </div>
-            </div>
-          `).join('');
-        }}
-
-        async function loadFriendCompetition() {{
-          try {{
-            const r = await fetch('/api/student/friends/competition').then(r => r.json());
-            renderFriendRanking(r.ranking || []);
-            renderStudyGroups(r.groups || [], r.invites || []);
-          }} catch (e) {{}}
-        }}
-
-        const frMedal = (rank) => rank === 1 ? '🏅' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
-        let frBoardKey = 'friends';
-        function frT(en, es) {{ return document.documentElement.lang === 'es' ? es : en; }}
-        function leagueName(name) {{
-          const map = {{
-            'Initiate':'Iniciado',
-            'Scholar':'Académico',
-            'Researcher':'Investigador',
-            'Academic':'Erudito',
-            'Mastermind':'Mente maestra',
-            'Grand Scholar':'Gran estudioso',
-            'Legend':'Leyenda'
-          }};
-          return document.documentElement.lang === 'es' ? (map[name] || name) : name;
-        }}
-        function frPodiumCard(r) {{
-          const xp = Number(r.xp ?? r.total_xp ?? 0);
-          const flagBg = r.flag_css ? `<div class="lb-podium-flag ${{r.flag_anim_class||''}}" style="background:${{r.flag_css}};"></div>` : '';
-          const crown = r.rank === 1 ? '<div class="lb-crown">👑</div>' : '';
-          const title = r.rank === 1 ? frT('Champion', 'Campeón') : (r.rank === 2 ? frT('Runner-up', 'Segundo lugar') : frT('Third place', 'Tercer lugar'));
-          const translatedLeague = leagueName(r.league_name || '');
-          return `
-            <a class="lb-podium-card place-${{r.rank}} ${{r.is_you?'me':''}}" href="/student/profile/${{r.client_id}}" style="text-decoration:none;">
-              ${{flagBg}}
-              ${{crown}}
-              <div class="lb-podium-body">
-                <div class="lb-podium-medal">${{frMedal(r.rank)}}</div>
-                <div class="lb-podium-avatar">${{initials(r.name)}}</div>
-                <div class="lb-podium-name">${{r.badge_left_emoji?`<span title="${{esc(r.badge_left_name||'')}}" style="margin-right:5px;">${{r.badge_left_emoji}}</span>`:''}}${{esc(r.name)}}${{r.badge_right_emoji?`<span title="${{esc(r.badge_right_name||'')}}" style="margin-left:5px;">${{r.badge_right_emoji}}</span>`:''}}</div>
-                <div class="lb-podium-xp">${{xp.toLocaleString()}} XP &middot; <span style="color:${{r.league_color || '#FF7A3D'}};font-weight:900;">${{esc(translatedLeague)}}</span></div>
-                <div class="lb-podium-prize">${{frT('Private group glory', 'Gloria privada')}}</div>
-              </div>
-              <div class="lb-podium-step">#${{r.rank}} ${{title}}</div>
-            </a>`;
-        }}
-        function renderFriendBoardTabs(boards, activeKey) {{
-          const box = document.getElementById('fr-lb-tabs');
-          if (!box) return;
-          const items = boards && boards.length ? boards : [{{key:'friends', label:FR.friend_ranking}}];
-          box.innerHTML = items.map(b => `
-            <div class="lb-tab ${{b.key === activeKey ? 'active' : ''}}" data-board="${{esc(b.key)}}">${{esc(b.label)}}</div>
-          `).join('');
-        }}
-        renderFriendRanking = function(rows) {{
-          const podium = document.getElementById('fr-rank-podium');
-          const board = document.getElementById('fr-rank-list');
-          if (!podium || !board) return;
-          if (!rows || !rows.length) {{
-            podium.style.display = 'none';
-            podium.innerHTML = '';
-            board.innerHTML = `<div class="lb-empty">${{FR.friends_empty_rank}}</div>`;
-            return;
-          }}
-          const top = rows.filter(r => Number(r.rank) <= 3);
-          if (top.length) {{
-            const byRank = {{}};
-            top.forEach(r => {{ byRank[r.rank] = r; }});
-            podium.innerHTML = [byRank[2], byRank[1], byRank[3]].filter(Boolean).map(frPodiumCard).join('');
-            podium.style.display = 'grid';
-          }} else {{
-            podium.style.display = 'none';
-            podium.innerHTML = '';
-          }}
-          const tableRows = rows.filter(r => Number(r.rank) > 3);
-          if (!tableRows.length) {{
-            board.innerHTML = `<div class="lb-empty">${{frT('The rest of the ranking starts at #4. No other friends ranked yet.', 'El resto del ranking empieza en el #4. Todavía no hay más amigos rankeados.')}}</div>`;
-            return;
-          }}
-          board.innerHTML = tableRows.map(r => {{
-            const xp = Number(r.xp ?? r.total_xp ?? 0);
-            const flagBg = r.flag_css ? `<div class="lb-flag-bg ${{r.flag_anim_class||''}}" style="background:${{r.flag_css}};"></div>` : '';
-            const translatedLeague = leagueName(r.league_name || '');
-            return `
-              <a class="lb-row ${{r.is_you?'me':''}}" href="/student/profile/${{r.client_id}}" style="color:inherit;text-decoration:none;cursor:pointer;">
-                ${{flagBg}}
-                <div class="lb-medal-cell"><div class="${{r.rank<=3?'lb-medal':'lb-pos'}}">${{r.rank<=3 ? frMedal(r.rank) : '#'+r.rank}}</div></div>
-                <div class="lb-who">
-                  <div class="lb-avatar">${{initials(r.name)}}</div>
-                  <div>
-                    <div>${{r.badge_left_emoji?`<span title="${{esc(r.badge_left_name||'')}}" style="margin-right:4px;">${{r.badge_left_emoji}}</span>`:''}}${{esc(r.name)}}${{r.badge_right_emoji?`<span title="${{esc(r.badge_right_name||'')}}" style="margin-left:4px;">${{r.badge_right_emoji}}</span>`:''}}${{r.is_you?' <span style="color:#FF7A3D;font-size:12px;font-weight:900;">('+FR.you+')</span>':''}}</div>
-                    <div class="lb-pill-col"><span class="lb-pill" style="background:${{r.league_color || '#FF7A3D'}}22;color:${{r.league_color || '#FF7A3D'}};">${{esc(translatedLeague)}}</span></div>
-                  </div>
-                </div>
-                <div class="lb-xp">${{xp.toLocaleString()}} XP</div>
-                <div class="lb-pill-col"><span class="lb-pill" style="background:${{r.league_color || '#FF7A3D'}}22;color:${{r.league_color || '#FF7A3D'}};">${{esc(translatedLeague)}}</span></div>
-              </a>`;
-          }}).join('');
-        }};
-        function switchFriendBoard(key) {{
-          frBoardKey = key || 'friends';
-          loadFriendCompetition(frBoardKey);
-        }}
-        loadFriendCompetition = async function(boardKey) {{
-          if (boardKey) frBoardKey = boardKey;
-          try {{
-            const r = await fetch('/api/student/friends/competition?board=' + encodeURIComponent(frBoardKey)).then(r => r.json());
-            frBoardKey = r.active_key || frBoardKey || 'friends';
-            renderFriendBoardTabs(r.boards || [], frBoardKey);
-            renderFriendRanking(r.ranking || []);
-            renderStudyGroups(r.groups || [], r.invites || []);
-          }} catch (e) {{}}
-        }};
-        document.addEventListener('click', (e) => {{
-          const tab = e.target.closest('#fr-lb-tabs .lb-tab');
-          if (!tab) return;
-          switchFriendBoard(tab.dataset.board || 'friends');
-        }});
-
-        async function createStudyGroup() {{
-          const name = (document.getElementById('fr-group-name').value || '').trim() || FR.group_name;
-          const ids = Array.from(document.querySelectorAll('#fr-group-friends input:checked')).map(i => parseInt(i.value, 10)).filter(Boolean);
-          try {{
-            const r = await fetch('/api/student/friends/groups', {{
-              method:'POST',
-              headers:{{'Content-Type':'application/json'}},
-              body: JSON.stringify({{name, friend_ids: ids}})
-            }}).then(r => r.json());
-            if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
-            document.getElementById('fr-group-name').value = '';
-            document.querySelectorAll('#fr-group-friends input:checked').forEach(i => i.checked = false);
-            await loadFriendCompetition();
-            alert(FR.group_created);
-          }} catch(e) {{
-            alert(FR.group_failed);
-          }}
-        }}
-
-        async function respondStudyGroup(inviteId, accept) {{
-          const r = await fetch('/api/student/friends/groups/invites/' + inviteId, {{
-            method:'POST',
-            headers:{{'Content-Type':'application/json'}},
-            body: JSON.stringify({{accept: !!accept}})
-          }}).then(r => r.json());
-          if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
-          await loadFriendCompetition();
-        }}
-
-        async function deleteStudyGroup(groupId) {{
-          if (!confirm(FR.delete_group_confirm)) return;
-          const r = await fetch('/api/student/friends/groups/' + groupId, {{ method:'DELETE' }}).then(r => r.json());
-          if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
-          frBoardKey = 'friends';
-          await loadFriendCompetition('friends');
-          alert(FR.group_deleted);
-        }}
-
-        async function removeGroupMember(groupId, memberId) {{
-          if (!confirm(FR.remove_member_confirm)) return;
-          const r = await fetch('/api/student/friends/groups/' + groupId + '/members/' + memberId, {{ method:'DELETE' }}).then(r => r.json());
-          if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
-          await loadFriendCompetition(frBoardKey);
-          alert(FR.member_removed);
-        }}
-
-        async function inviteGroupMember(ev, groupId) {{
-          ev.preventDefault();
-          const form = ev.currentTarget;
-          const select = form.querySelector('select[name="member_id"]');
-          const memberId = parseInt((select && select.value) || '0', 10);
-          if (!memberId) return;
-          const btn = form.querySelector('button[type="submit"]');
-          if (btn) btn.disabled = true;
-          try {{
-            const r = await fetch('/api/student/friends/groups/' + groupId + '/members', {{
-              method:'POST',
-              headers:{{'Content-Type':'application/json'}},
-              body: JSON.stringify({{member_id: memberId}})
-            }}).then(r => r.json());
-            if (!r.ok) {{ alert(r.error || FR.group_failed); return; }}
-            await loadFriendCompetition(frBoardKey);
-            alert(FR.member_invited);
-          }} catch(e) {{
-            alert(FR.group_failed);
-          }} finally {{
-            if (btn) btn.disabled = false;
-          }}
-        }}
-
-        async function frChallenge(uid, uname, isOnline) {{
-
-          openChallengeModal(uid, uname || (FR.user + ' #' + uid), isOnline);
-
-        }}
-
-        // ── Challenge modal (Quiz Duel vs Study Marathon) ──────────
-        function openChallengeModal(uid, uname, isOnline) {{
-          window.__chalOnline = !!isOnline;
-          let m = document.getElementById('chal-modal');
-          if (!m) {{
-            m = document.createElement('div');
-            m.id = 'chal-modal';
-            m.style.cssText = 'position:fixed;inset:0;background:rgba(20,18,30,.42);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(8px);';
-            document.body.appendChild(m);
-          }}
-          m.innerHTML = `
-            <div class="fr-modal-card">
-              <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:14px">
-                <div>
-                  <h2 class="serif" style="margin:0;font-size:30px;letter-spacing:-.04em">${{FR.challenge}} ${{esc(uname)}}</h2>
-                  <div class="fr-note" style="margin-top:2px">${{FR.pick_format}}</div>
-                </div>
-                <button onclick="closeChallengeModal()" class="fr-btn small ghost" style="width:34px;padding:0">×</button>
-              </div>
-
-              <div id="chal-pick" style="display:flex;flex-direction:column;gap:10px">
-                <button class="fr-chal-card" onclick="pickQuiz()" ${{window.__chalOnline ? '' : 'disabled style="opacity:.55;cursor:not-allowed"'}}>
-                  <div style="font-size:16px;font-weight:700">🥊 ${{FR.quiz_duel}} ${{window.__chalOnline ? '<span style=&quot;font-size:11px;color:#22c55e;font-weight:600;margin-left:6px&quot;>● ' + FR.online + '</span>' : '<span style=&quot;font-size:11px;color:#94a3b8;font-weight:600;margin-left:6px&quot;>● ' + FR.offline_unavailable + '</span>'}}</div>
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${{FR.quiz_duel_desc}}</div>
-                  <div style="font-size:11px;color:#22c55e;margin-top:6px">${{FR.quiz_duel_reward}}</div>
-                </button>
-                <button class="fr-chal-card" onclick="pickMarathon()">
-                  <div style="font-size:16px;font-weight:700">📅 ${{FR.marathon_title}}</div>
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${{FR.marathon_desc}}</div>
-                  <div style="font-size:11px;color:#22c55e;margin-top:6px">${{FR.marathon_reward}}</div>
-                </button>
-              </div>
-
-              <div id="chal-quiz" style="display:none">
-                <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">${{FR.upload_quiz_file}}</div>
-                <input id="chal-topic" class="fr-input" type="text" placeholder="${{FR.topic_ph}}" style="width:100%;margin-bottom:10px;border-radius:14px">
-                <input id="chal-stake" class="fr-input" type="number" min="0" max="5000" value="25" placeholder="${{FR.stake_ph}}" style="width:100%;margin-bottom:10px;border-radius:14px">
-                <input id="chal-file" type="file" accept=".pdf,.docx,.txt,.md" style="width:100%;margin-bottom:14px">
-                <div id="chal-err" style="color:#ef4444;font-size:12px;margin-bottom:8px"></div>
-                <div style="display:flex;gap:8px;justify-content:flex-end">
-                  <button class="fr-btn small ghost" onclick="closeChallengeModal()">${{FR.cancel}}</button>
-                  <button class="fr-btn small orange" id="chal-go" onclick="sendQuizDuel(${{uid}})">${{FR.send_invite}}</button>
-                </div>
-              </div>
-            </div>`;
-          window.__chalUid = uid;
-          window.__chalName = uname;
-        }}
-        function closeChallengeModal() {{
-          const m = document.getElementById('chal-modal');
-          if (m) m.remove();
-        }}
-        function pickMarathon() {{
-          if (!confirm(FR.send_marathon_confirm + window.__chalName + FR.send_marathon_suffix)) return;
-          fetch('/api/student/duels/start', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{opponent_id: window.__chalUid}})}})
-            .then(r=>r.json()).then(r => {{
-              if (r.error) {{ alert(r.error); return; }}
-              closeChallengeModal();
-              alert(FR.marathon_sent);
-              loadAll();
-            }});
-        }}
-        function pickQuiz() {{
-          if (!window.__chalOnline) {{ alert(FR.offline_quiz); return; }}
-          document.getElementById('chal-pick').style.display = 'none';
-          document.getElementById('chal-quiz').style.display = 'block';
-        }}
-        async function sendQuizDuel(uid) {{
-          const fileEl = document.getElementById('chal-file');
-          const topic = document.getElementById('chal-topic').value.trim();
-          const errEl = document.getElementById('chal-err');
-          errEl.textContent = '';
-          if (!fileEl.files || !fileEl.files[0]) {{ errEl.textContent = FR.pick_file; return; }}
-          const fd = new FormData();
-          fd.append('opponent_id', uid);
-          fd.append('topic', topic);
-          fd.append('stake_coins', Math.max(0, Math.min(5000, parseInt(document.getElementById('chal-stake').value || '0', 10) || 0)));
-          fd.append('file', fileEl.files[0]);
-          const btn = document.getElementById('chal-go');
-          btn.disabled = true; btn.textContent = FR.generating_quiz;
-          try {{
-            const r = await fetch('/api/student/duels/quiz/create', {{method:'POST', body: fd}}).then(r=>r.json());
-            if (!r.ok) {{ errEl.textContent = r.error || FR.failed; btn.disabled = false; btn.textContent = FR.send_invite; return; }}
-            closeChallengeModal();
-            // Take the challenger straight into the play page (it auto-starts when opponent accepts)
-            mrGo('/student/duels/quiz/' + r.duel_id + '/play');
-          }} catch(e) {{
-            errEl.textContent = FR.network_error;
-            btn.disabled = false; btn.textContent = FR.send_invite;
-          }}
-        }}
 
         let __loadingAll = false;
         async function loadAll() {{
@@ -19700,9 +19332,7 @@ No markdown, no code fences. ONLY JSON.
             const seen = new Set();
             const uniq = f.friends.filter(u => {{ if (seen.has(u.id)) return false; seen.add(u.id); return true; }});
             __frFriends = uniq;
-            renderGroupFriendPicker(uniq);
-            const parts = await Promise.all(uniq.map(async u => {{
-              const h2h = await fetch('/api/student/duels/h2h?friend_id=' + u.id).then(r=>r.json());
+            const parts = uniq.map(u => {{
               const onlineDot = u.online
                 ? `<span class="fr-dot on" title="${{FR.online_now}}"></span>`
                 : `<span class="fr-dot" title="${{FR.offline}}"></span>`;
@@ -19715,170 +19345,25 @@ No markdown, no code fences. ONLY JSON.
 
                   <div class="fr-name">${{onlineDot}}${{esc(u.name)}} <span class="fr-meta">#${{u.id}}</span>${{onlineLabel}}</div>
 
-                  <div class="fr-meta"><span class="fr-duel-stat">${{h2h.wins}}W</span> <span class="fr-duel-stat">${{h2h.losses}}L</span> <span class="fr-duel-stat">${{h2h.ties}}T</span></div>
-
                 </div></div>
 
                 <div class="fr-actions">
-
-                  <button class="fr-btn small orange" data-uid="${{u.id}}" data-uname="${{esc(u.name||'')}}" data-online="${{u.online ? '1' : '0'}}" onclick="frChallenge(this.dataset.uid, this.dataset.uname, this.dataset.online === '1')">${{FR.challenge}}</button>
 
                   <button class="fr-btn small ghost" onclick="frRemove(${{u.id}})">${{FR.remove}}</button>
 
                 </div>
 
               </div>`;
-            }}));
+            }});
             fl.innerHTML = parts.join('');
 
           }} else {{
             fl.innerHTML = `<div class="fr-empty">${{FR.no_friends}}</div>`;
             __frFriends = [];
-            renderGroupFriendPicker([]);
           }}
 
-          await loadFriendCompetition();
-
-          // ── Marathon invites (pending) ────────────────────────
-          try {{
-            const mp = await fetch('/api/student/duels/marathon/pending').then(r=>r.json());
-            const mbox = document.getElementById('fr-marathon-pending');
-            const inc = (mp.incoming || []).map(d => `
-              <div class="fr-row">
-                <div>
-                  <b>${{esc(d.challenger_name)}}</b> ${{FR.challenged_marathon}}
-                  <div class="fr-meta">${{FR.marathon_invite_meta}}</div>
-                </div>
-                <div class="fr-actions">
-                  <button class="fr-btn small orange" onclick="mAccept(${{d.id}})">${{FR.accept}}</button>
-                  <button class="fr-btn small ghost" onclick="mDecline(${{d.id}})">${{FR.decline}}</button>
-                </div>
-              </div>`).join('');
-            const out = (mp.outgoing || []).map(d => `
-              <div class="fr-row">
-                <div>
-                  ${{FR.waiting_on}} <b>${{esc(d.opponent_name)}}</b> ${{FR.accept_marathon}}
-                  <div class="fr-meta">${{FR.clock_not_started}}</div>
-                </div>
-                <button class="fr-btn small ghost" onclick="mCancel(${{d.id}})">${{FR.cancel}}</button>
-              </div>`).join('');
-            mbox.innerHTML = (inc + out) || `<div class="fr-empty">${{FR.no_pending}}</div>`;
-          }} catch(e) {{}}
-
-          const d = await fetch('/api/student/duels/list').then(r=>r.json());
-
-          const ad = document.getElementById('fr-active-duels');
-
-          if (d.active && d.active.length) {{
-
-            ad.innerHTML = d.active.map(x => {{
-
-              const meIsChall = x.challenger_id === ME_CID;
-
-              const myMin = meIsChall ? x.challenger_minutes : x.opponent_minutes;
-
-              const themMin = meIsChall ? x.opponent_minutes : x.challenger_minutes;
-
-              const themName = meIsChall ? x.opponent_name : x.challenger_name;
-
-              return `<div class="fr-row">
-
-                <div><div class="fr-name">vs ${{esc(themName)}}</div><div class="fr-meta">${{FR.ends}} ${{esc(String(x.ends_at).slice(0,16))}}</div></div>
-
-                <div class="fr-actions"><span class="fr-duel-stat">${{FR.you}}: ${{myMin}} min</span><span class="fr-duel-stat">${{FR.them}}: ${{themMin}} min</span></div>
-
-              </div>`;
-
-            }}).join('');
-
-          }} else {{ ad.innerHTML = `<div class="fr-empty">${{FR.no_active}}</div>`; }}
-
-          const hist = document.getElementById('fr-history');
-
-          if (d.history && d.history.length) {{
-
-            hist.innerHTML = d.history.map(x => {{
-
-              const meIsChall = x.challenger_id === ME_CID;
-
-              const themName = meIsChall ? x.opponent_name : x.challenger_name;
-
-              const won = x.winner_id === ME_CID;
-
-              const tie = !x.winner_id;
-
-              const tag = tie ? `<span style="color:#94a3b8">${{FR.tie}}</span>` : (won ? `<span style="color:#22c55e">${{FR.win}}</span>` : `<span style="color:#ef4444">${{FR.loss}}</span>`);
-
-              return `<div class="fr-row">
-
-                <div class="fr-name">vs ${{esc(themName)}}</div><div>${{tag}}</div></div>`;
-
-            }}).join('');
-
-          }} else {{ hist.innerHTML = `<div class="fr-empty">${{FR.no_history}}</div>`; }}
-
-          // Quiz duels (v2 — file-upload + AI)
-          try {{
-            const qd = await fetch('/api/student/duels/quiz/pending').then(r=>r.json());
-            const qbox = document.getElementById('fr-quiz-duels');
-            const incoming = (qd.pending||[]).map(x =>
-              `<div class="fr-row">
-                <div>
-                  <div class="fr-name">${{esc(x.challenger_name)}} ${{FR.challenged_you}}</div>
-                  <div class="fr-meta">${{esc(x.topic||FR.no_topic)}} · ${{esc(x.file_name||'')}} · ${{parseInt(x.stake_coins||0,10)}} ${{FR.stake_each}}</div>
-                </div>
-                <div class="fr-actions">
-                  <button class="fr-btn small orange" onclick="qdAccept(${{x.id}})">${{FR.accept_play}}</button>
-                  <button class="fr-btn small ghost" onclick="qdDecline(${{x.id}})">${{FR.decline}}</button>
-                </div>
-              </div>`).join('');
-            const playable = (qd.playable||[]).map(x => {{
-              const meIsChall = x.challenger_id === ME_CID;
-              const themName = meIsChall ? x.opponent_name : x.challenger_name;
-              const labelStatus = x.status === 'pending' ? FR.waiting_status : (x.status === 'ready' ? FR.ready_status : FR.progress_status);
-              return `<div class="fr-row">
-                <div>
-                  <div class="fr-name">vs ${{esc(themName)}}</div>
-                  <div class="fr-meta">${{esc(x.topic||'')}} · ${{labelStatus}} · ${{parseInt(x.stake_coins||0,10)}} ${{FR.stake_each}}</div>
-                </div>
-                <a class="fr-btn small orange" href="/student/duels/quiz/${{x.id}}/play">${{FR.open}}</a>
-              </div>`;
-            }}).join('');
-            const inner = (incoming + playable);
-            qbox.innerHTML = inner || `<div class="fr-empty">${{FR.no_quiz_duels}}</div>`;
-          }} catch(e) {{}}
 
           }} finally {{ __loadingAll = false; }}
-        }}
-
-        async function qdAccept(id) {{
-          const r = await fetch('/api/student/duels/quiz/' + id + '/accept', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || FR.could_not_accept); return; }}
-          mrGo('/student/duels/quiz/' + id + '/play');
-        }}
-        async function qdDecline(id) {{
-          if (!confirm(FR.decline_quiz_confirm)) return;
-          const r = await fetch('/api/student/duels/quiz/' + id + '/decline', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || FR.could_not_decline); return; }}
-          loadAll();
-        }}
-
-        async function mAccept(id) {{
-          const r = await fetch('/api/student/duels/marathon/' + id + '/accept', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || FR.could_not_accept); return; }}
-          loadAll();
-        }}
-        async function mDecline(id) {{
-          if (!confirm(FR.decline_marathon_confirm)) return;
-          const r = await fetch('/api/student/duels/marathon/' + id + '/decline', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || FR.could_not_decline); return; }}
-          loadAll();
-        }}
-        async function mCancel(id) {{
-          if (!confirm(FR.cancel_marathon_confirm)) return;
-          const r = await fetch('/api/student/duels/marathon/' + id + '/decline', {{method:'POST'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || FR.could_not_cancel); return; }}
-          loadAll();
         }}
 
         // Presence heartbeat — keeps the user marked online while the friends tab is open
@@ -19886,8 +19371,6 @@ No markdown, no code fences. ONLY JSON.
         setInterval(() => {{ fetch('/api/student/presence/heartbeat', {{method:'POST'}}).catch(()=>{{}}); }}, 30000);
 
         loadAll();
-        // Auto-refresh quiz-duel pending so users see invites quickly
-        setInterval(loadAll, 8000);
 
         </script>
 
@@ -19926,197 +19409,12 @@ No markdown, no code fences. ONLY JSON.
         return jsonify(**sdb.list_friends(cid))
 
 
-    @app.route("/api/student/friends/competition")
-    def student_friends_competition_api():
-        if not _logged_in():
-            return jsonify(error="Login required"), 401
-        cid = _cid()
-        groups = []
-        for g in (sdb.get_my_lb_groups(cid) or []):
-            is_owner = bool(g.get("is_owner"))
-            members = []
-            if is_owner:
-                members = [
-                    {
-                        "client_id": int(m.get("client_id") or 0),
-                        "name": m.get("name") or "Student",
-                        "is_owner": bool(m.get("is_owner")),
-                    }
-                    for m in (sdb.get_lb_group_members(int(g.get("id") or 0)) or [])
-                ]
-            pending_invitee_ids = []
-            if is_owner:
-                try:
-                    pending_invitee_ids = sdb.get_pending_lb_group_invitee_ids(int(g.get("id") or 0)) or []
-                except Exception:
-                    pending_invitee_ids = []
-            groups.append({
-                "id": g.get("id"),
-                "name": g.get("name") or "Study group",
-                "member_count": int(g.get("member_count") or 1),
-                "is_owner": is_owner,
-                "members": members,
-                "pending_invitee_ids": pending_invitee_ids,
-            })
-        invites = [
-            {
-                "id": inv.get("id"),
-                "group_id": inv.get("group_id"),
-                "group_name": inv.get("group_name") or "Study group",
-                "inviter_name": inv.get("inviter_name") or "Student",
-            }
-            for inv in (sdb.list_lb_group_invites(cid) or [])
-        ]
-
-        def _decorate_lb_rows(raw_rows):
-            from student import academic as ac
-            out = []
-            for i, row in enumerate(raw_rows or [], start=1):
-                client_id = int(row.get("client_id") or 0)
-                xp = int(row.get("total_xp") or row.get("xp") or 0)
-                lg = ac.league_for_xp(xp)
-                out.append({
-                    "rank": i,
-                    "client_id": client_id,
-                    "name": row.get("name") or row.get("display_name") or "Student",
-                    "xp": xp,
-                    "total_xp": xp,
-                    "league_key": lg.get("key"),
-                    "league_name": lg.get("name"),
-                    "league_color": lg.get("color"),
-                    "is_you": client_id == cid,
-                })
-            ids = [int(r["client_id"]) for r in out if r.get("client_id")]
-            try:
-                flags = sdb.get_flags_for_clients(ids)
-                for row in out:
-                    f = flags.get(int(row["client_id"]))
-                    if f:
-                        row["flag_css"] = f.get("css", "")
-                        row["flag_anim_class"] = f.get("anim_class", "")
-                        row["flag_name"] = f.get("name", "")
-            except Exception:
-                pass
-            try:
-                badges = sdb.get_equipped_badges_for_clients(ids)
-                for row in out:
-                    b = badges.get(int(row["client_id"]))
-                    if not b:
-                        continue
-                    left = b.get("left") or {}
-                    right = b.get("right") or {}
-                    if left:
-                        row["badge_left_emoji"] = left.get("emoji", "")
-                        row["badge_left_name"] = left.get("name", "")
-                    if right:
-                        row["badge_right_emoji"] = right.get("emoji", "")
-                        row["badge_right_name"] = right.get("name", "")
-            except Exception:
-                pass
-            return out
-
-        boards = [{"key": "friends", "label": "Friends" if session.get("lang", "es") == "en" else "Amigos", "kind": "friends"}]
-        for g in groups:
-            boards.append({"key": f"group:{int(g['id'])}", "label": g["name"], "kind": "group", "group_id": int(g["id"])})
-
-        active_key = (request.args.get("board") or "friends").strip() or "friends"
-        raw_rows = sdb.get_friend_leaderboard(cid) or []
-        if active_key.startswith("group:"):
-            try:
-                group_id = int(active_key.split(":", 1)[1])
-            except Exception:
-                group_id = 0
-            allowed = {int(g["id"]) for g in groups}
-            if group_id in allowed and sdb.is_lb_member(cid, group_id):
-                raw_rows = sdb.get_lb_group_leaderboard(group_id) or []
-            else:
-                active_key = "friends"
-        elif active_key != "friends":
-            active_key = "friends"
-
-        rows = _decorate_lb_rows(raw_rows)
-        return jsonify(ranking=rows, boards=boards, active_key=active_key, groups=groups, invites=invites)
-
-
-    @app.route("/api/student/friends/groups", methods=["POST"])
-    def student_friends_create_group_api():
-        if not _logged_in():
-            return jsonify(error="Login required"), 401
-        cid = _cid()
-        data = request.get_json(silent=True) or {}
-        name = (data.get("name") or "").strip()
-        friend_ids = data.get("friend_ids") or []
-        if not name or len(name) > 60:
-            return jsonify(ok=False, error="Group name required"), 400
-        existing = sdb.get_my_lb_groups(cid)
-        if len(existing) >= 10:
-            return jsonify(ok=False, error="Maximum 10 groups reached"), 400
-        result = sdb.create_lb_group(cid, name)
-        invited = sdb.invite_friends_to_lb_group(cid, int(result["id"]), friend_ids)
-        return jsonify(ok=True, group_id=result["id"], invite_code=result["invite_code"], invited=invited)
-
-
-    @app.route("/api/student/friends/groups/invites/<int:invite_id>", methods=["POST"])
-    def student_friends_group_invite_response_api(invite_id):
-        if not _logged_in():
-            return jsonify(error="Login required"), 401
-        data = request.get_json(silent=True) or {}
-        inv = sdb.respond_lb_group_invite(_cid(), invite_id, bool(data.get("accept")))
-        if not inv:
-            return jsonify(ok=False, error="Invite not found"), 404
-        return jsonify(ok=True)
-
-
-    @app.route("/api/student/friends/groups/<int:group_id>", methods=["DELETE"])
-    @csrf.exempt
-    def student_friends_delete_group_api(group_id):
-        if not _logged_in():
-            return jsonify(error="Login required"), 401
-        group = sdb.get_lb_group(group_id)
-        if not group or int(group.get("owner_id") or 0) != _cid():
-            return jsonify(ok=False, error="Group not found"), 404
-        sdb.delete_lb_group(group_id, _cid())
-        return jsonify(ok=True)
-
-
-    @app.route("/api/student/friends/groups/<int:group_id>/members/<int:member_id>", methods=["DELETE"])
-    @csrf.exempt
-    def student_friends_remove_group_member_api(group_id, member_id):
-        if not _logged_in():
-            return jsonify(error="Login required"), 401
-        ok = sdb.remove_lb_group_member(group_id, _cid(), member_id)
-        if not ok:
-            return jsonify(ok=False, error="Could not remove member"), 403
-        return jsonify(ok=True)
-
-
-    @app.route("/api/student/friends/groups/<int:group_id>/members", methods=["POST"])
-    @csrf.exempt
-    def student_friends_invite_group_member_api(group_id):
-        if not _logged_in():
-            return jsonify(error="Login required"), 401
-        data = request.get_json(silent=True) or {}
-        try:
-            member_id = int(data.get("member_id") or 0)
-        except Exception:
-            member_id = 0
-        if member_id <= 0:
-            return jsonify(ok=False, error="Member required"), 400
-        group = sdb.get_lb_group(group_id)
-        if not group or int(group.get("owner_id") or 0) != _cid():
-            return jsonify(ok=False, error="Group not found"), 404
-        invited = sdb.invite_friends_to_lb_group(_cid(), group_id, [member_id])
-        if not invited:
-            return jsonify(ok=False, error="Could not invite member"), 400
-        return jsonify(ok=True, invited=invited)
-
-
     @app.route("/api/student/presence/heartbeat", methods=["POST"])
     def student_presence_heartbeat_api():
         """Friend tab pings this every few seconds while open so others can
         see them as online. The before_request hook also touches presence on
         any authenticated request (throttled), so this is just an extra signal
-        for users idling on the friends/duels page."""
+        for users idling on the friends page."""
         if not _logged_in():
             return jsonify(ok=False), 401
         sdb.touch_presence(_cid())
@@ -20173,150 +19471,6 @@ No markdown, no code fences. ONLY JSON.
         sdb.remove_friend(cid, fid)
 
         return jsonify(ok=True)
-
-
-
-    @app.route("/api/student/duels/start", methods=["POST"])
-    def student_duels_start_api():
-        if not _logged_in():
-            return jsonify(error="Login required"), 401
-        cid = _cid()
-        data = request.get_json(silent=True) or {}
-        try:
-            opp = int(data.get("opponent_id"))
-        except Exception:
-            return jsonify(error="Invalid opponent_id"), 400
-        if opp == cid:
-            return jsonify(error="Cannot duel yourself"), 400
-        # Must be friends
-        f = sdb.list_friends(cid)
-        if not any(x["id"] == opp for x in f["friends"]):
-            return jsonify(error="You must be friends to start a duel"), 400
-        # Cap active duels with same opponent
-        active = sdb.get_active_duels(cid)
-        if any((d["challenger_id"] == opp or d["opponent_id"] == opp) for d in active):
-            return jsonify(error="You already have an active duel with this user"), 400
-        # Cap pending invites with same opponent (in either direction)
-        pending = sdb.list_pending_marathons_for(cid)
-        all_pending = (pending.get("incoming") or []) + (pending.get("outgoing") or [])
-        if any((d["challenger_id"] == opp or d["opponent_id"] == opp) for d in all_pending):
-            return jsonify(error="There's already a pending marathon invite with this user"), 400
-        did = sdb.start_duel(cid, opp)
-        return jsonify(ok=True, duel_id=did, status="pending")
-
-
-    @app.route("/api/student/duels/marathon/pending")
-    def student_duels_marathon_pending_api():
-        if not _logged_in():
-            return jsonify(error="Login required"), 401
-        out = sdb.list_pending_marathons_for(_cid())
-        # Stringify timestamps for JSON consumers
-        for k in ("incoming", "outgoing"):
-            for d in out.get(k, []):
-                d["started_at"] = str(d.get("started_at") or "")
-                d["ends_at"] = str(d.get("ends_at") or "")
-        return jsonify(**out)
-
-
-    @app.route("/api/student/duels/marathon/<int:duel_id>/accept", methods=["POST"])
-    def student_duels_marathon_accept_api(duel_id):
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        return jsonify(sdb.accept_marathon_duel(duel_id, _cid()))
-
-
-    @app.route("/api/student/duels/marathon/<int:duel_id>/decline", methods=["POST"])
-    def student_duels_marathon_decline_api(duel_id):
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        return jsonify(sdb.decline_marathon_duel(duel_id, _cid()))
-
-
-
-    @app.route("/api/student/duels/list")
-
-    def student_duels_list_api():
-
-        if not _logged_in():
-
-            return jsonify(error="Login required"), 401
-
-        cid = _cid()
-
-        # Settle any past-due duels first
-
-        try:
-
-            sdb.settle_due_duels()
-
-        except Exception:
-
-            pass
-
-        active = sdb.get_active_duels(cid)
-
-        history = sdb.get_duel_history(cid, limit=20)
-
-        # Live update minutes for active duels
-
-        out_active = []
-
-        for d in active:
-
-            c_min = sdb._focus_minutes_between(d["challenger_id"], d["started_at"], d["ends_at"])
-
-            o_min = sdb._focus_minutes_between(d["opponent_id"],   d["started_at"], d["ends_at"])
-
-            d2 = dict(d)
-
-            d2["challenger_minutes"] = c_min
-
-            d2["opponent_minutes"]   = o_min
-
-            d2["started_at"] = str(d2.get("started_at", ""))
-
-            d2["ends_at"]    = str(d2.get("ends_at", ""))
-
-            out_active.append(d2)
-
-        out_history = []
-
-        for d in history:
-
-            d2 = dict(d)
-
-            d2["started_at"] = str(d2.get("started_at", ""))
-
-            d2["ends_at"]    = str(d2.get("ends_at", ""))
-
-            d2["settled_at"] = str(d2.get("settled_at", ""))
-
-            out_history.append(d2)
-
-        return jsonify(active=out_active, history=out_history)
-
-
-
-    @app.route("/api/student/duels/h2h")
-
-    def student_duels_h2h_api():
-
-        if not _logged_in():
-
-            return jsonify(error="Login required"), 401
-
-        cid = _cid()
-
-        try:
-
-            fid = int(request.args.get("friend_id"))
-
-        except Exception:
-
-            return jsonify(error="Invalid friend_id"), 400
-
-        return jsonify(**sdb.get_head_to_head(cid, fid))
-
 
 
     # ================================================================
@@ -20377,6 +19531,13 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-board {
     background: var(--card); border:1px solid var(--border); border-radius:18px; overflow:hidden;
   }
+  #mr-lb-page .lb-invite-btn {
+    display:inline-block; padding:12px 26px; border-radius:999px;
+    background: linear-gradient(135deg, #FF7A3D, #FF9B64); color:#fff;
+    font-weight:800; text-decoration:none; letter-spacing:.01em;
+    box-shadow:0 8px 22px rgba(255,122,61,.35); transition:transform .15s, box-shadow .15s;
+  }
+  #mr-lb-page .lb-invite-btn:hover { transform:translateY(-2px); box-shadow:0 12px 28px rgba(255,122,61,.45); }
   #mr-lb-page .lb-row {
     display:grid; grid-template-columns: 56px 1fr 110px 110px;
     align-items:center; padding: 14px 20px; border-top:1px solid var(--border);
@@ -21049,6 +20210,7 @@ No markdown, no code fences. ONLY JSON.
     <div class="lb-tab active" data-scope="country">🏳️ País</div>
     <div class="lb-tab" data-scope="university">🎓 Universidad</div>
     <div class="lb-tab" data-scope="major">📚 Carrera</div>
+    <div class="lb-tab" data-scope="friends" title="Solo amigos">🤝 Amigos</div>
     <div class="lb-tab" data-scope="retirement" title="Solo egresados">🏖️ Egresados</div>
   </div>
 
@@ -21108,6 +20270,13 @@ No markdown, no code fences. ONLY JSON.
       title:t('Your field of study', 'Tu carrera en disputa'),
       copy:t('Compete with students who are studying the same discipline.', 'Compite con estudiantes de tu misma disciplina.'),
       tag:t('Career arena', 'Arena carrera')
+    },
+    friends: {
+      icon:'🤝',
+      kicker:t('Friends league', 'Liga de amigos'),
+      title:t('Your friends ranking', 'Tu ranking de amigos'),
+      copy:t('The same energy as the main ranking, but just you and your friends.', 'La misma energía del ranking principal, pero solo tú y tus amigos.'),
+      tag:t('Friends arena', 'Arena amigos')
     },
     retirement: {
       icon:'🏖️',
@@ -21240,6 +20409,15 @@ No markdown, no code fences. ONLY JSON.
       } else {
         podium.classList.remove('rebuild');
         podium.style.display = 'none';
+      }
+      // Friends board with nobody but you yet → prompt to invite friends.
+      if (lbState.scope === 'friends' && rows.length <= 1) {
+        board.innerHTML = `<div class="lb-empty" style="text-align:center;">
+          <div style="font-size:34px;margin-bottom:6px;">🤝</div>
+          <p style="margin:0 0 14px;">${t("You're the only one on your friends board so far.", 'Por ahora estás solo en tu ranking de amigos.')}</p>
+          <a href="/student/invite" class="lb-invite-btn">${t('Invite some friends!', '¡Invita a tus amigos!')}</a>
+        </div>`;
+        return;
       }
       const tableRows = rows.filter(r => r.rank > 3);
       if (!tableRows.length) {
@@ -21487,243 +20665,6 @@ No markdown, no code fences. ONLY JSON.
 </script>
 """
         return _s_render(title, content, active_page="student_leaderboard")
-
-
-
-    @app.route("/student/leaderboard/group/<int:group_id>")
-
-    def student_lb_group_page(group_id):
-
-        """View a personal leaderboard group."""
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        cid = _cid()
-
-        group = sdb.get_lb_group(group_id)
-
-        if not group or not sdb.is_lb_member(cid, group_id):
-
-            return redirect(url_for("student_leaderboard_page"))
-
-        members = sdb.get_lb_group_leaderboard(group_id)
-
-        rows_html = ""
-
-        top_xp = max((r["total_xp"] for r in members), default=0)
-
-        for i, r in enumerate(members, 1):
-
-            is_me = (r["client_id"] == cid)
-
-            bg = "background:rgba(99,102,241,0.08);" if is_me else ""
-
-            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"#{i}")
-
-            name_display = _esc(r["name"] or "Student")
-
-            xp_val = int(r.get("total_xp") or 0)
-
-            bar_pct = int(100 * xp_val / top_xp) if top_xp > 0 else 0
-
-            rows_html += f"""
-
-            <tr style="{bg}">
-
-              <td style="padding:12px 16px;font-size:18px;font-weight:700;text-align:center;width:60px">{medal}</td>
-
-              <td style="padding:12px 16px"><div style="font-weight:600;color:var(--text)">{name_display}{"  ← you" if is_me else ""}</div></td>
-
-              <td style="padding:12px 16px;min-width:160px"><div style="background:var(--bg);border-radius:8px;height:10px;overflow:hidden"><div style="width:{bar_pct}%;height:100%;background:linear-gradient(90deg,#8b5cf6,#22c55e)"></div></div></td>
-
-              <td style="padding:12px 16px;text-align:right;font-weight:700;color:#22c55e;font-size:16px">+{xp_val} XP</td>
-
-            </tr>"""
-
-        if not rows_html:
-
-            rows_html = '<tr><td colspan="4" style="padding:32px;text-align:center;color:var(--text-muted)">No members yet!</td></tr>'
-
-        is_owner = group["owner_id"] == cid
-
-        # Format group creation date for the "since" label
-
-        created_str = ""
-
-        try:
-
-            _ca = group.get("created_at")
-
-            if _ca:
-
-                created_str = _ca.strftime("%b %d, %Y") if hasattr(_ca, "strftime") else str(_ca)[:10]
-
-        except Exception:
-
-            created_str = ""
-
-        return _s_render(f"Group: {_esc(group['name'])}", f"""
-
-        <div style="max-width:800px;margin:0 auto">
-
-          <a href="/student/leaderboard" style="color:var(--text-muted);font-size:13px;text-decoration:none">&larr; Back to Leaderboard</a>
-
-          <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 20px;flex-wrap:wrap;gap:12px">
-
-            <div>
-
-              <h2 style="margin:0">{_esc(group['name'])}</h2>
-
-              <p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">
-
-                Invite code: <code style="background:var(--bg);padding:2px 8px;border-radius:4px">{_esc(group['invite_code'])}</code>
-
-                <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('{_esc(group['invite_code'])}').then(function(){{alert('Copied!')}})" style="font-size:11px;padding:2px 8px">Copy</button>
-
-              </p>
-
-            </div>
-
-          </div>
-
-          <div style="background:linear-gradient(135deg,rgba(139,92,246,.12),rgba(34,197,94,.08));border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;font-size:13px;color:var(--text-muted)">
-
-            &#128161; <b style="color:var(--text)">Fair-play group.</b> Everyone starts at 0 XP the moment they join. This scoreboard only counts XP earned <i>inside</i> the group &mdash; separate from the global ranking. {('Created ' + created_str) if created_str else ''}
-
-          </div>
-
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
-
-            <table style="width:100%;border-collapse:collapse">
-
-              <thead><tr style="border-bottom:2px solid var(--border)">
-
-                <th style="padding:12px 16px;text-align:center;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Place</th>
-
-                <th style="padding:12px 16px;text-align:left;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Student</th>
-
-                <th style="padding:12px 16px;text-align:left;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">Progress</th>
-
-                <th style="padding:12px 16px;text-align:right;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px">XP&nbsp;Gained</th>
-
-              </tr></thead>
-
-              <tbody>{rows_html}</tbody>
-
-            </table>
-
-          </div>
-
-        </div>
-
-        """, active_page="student_leaderboard")
-
-
-
-    # ── Personal Leaderboard API ────────────────────────────
-
-
-
-    @app.route("/api/student/leaderboard/groups", methods=["POST"])
-
-    def student_create_lb_group():
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        data = request.get_json(force=True)
-
-        name = (data.get("name") or "").strip()
-
-        if not name or len(name) > 60:
-
-            return jsonify({"error": "Group name required (max 60 chars)"}), 400
-
-        # Limit to 10 groups per user
-
-        existing = sdb.get_my_lb_groups(_cid())
-
-        if len(existing) >= 10:
-
-            return jsonify({"error": "Maximum 10 groups reached"}), 400
-
-        result = sdb.create_lb_group(_cid(), name)
-
-        return jsonify({"ok": True, "group_id": result["id"], "invite_code": result["invite_code"]})
-
-
-
-    @app.route("/api/student/leaderboard/join", methods=["POST"])
-
-    def student_join_lb_group():
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        data = request.get_json(force=True)
-
-        code = (data.get("invite_code") or "").strip()
-
-        if not code:
-
-            return jsonify({"error": "Invite code required"}), 400
-
-        group = sdb.join_lb_group(_cid(), code)
-
-        if not group:
-
-            return jsonify({"error": "Invalid invite code"}), 404
-
-        return jsonify({"ok": True, "group_id": group["id"]})
-
-
-
-    @app.route("/api/student/leaderboard/leave", methods=["POST"])
-
-    def student_leave_lb_group():
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        data = request.get_json(force=True)
-
-        group_id = data.get("group_id")
-
-        if not group_id:
-
-            return jsonify({"error": "group_id required"}), 400
-
-        # Can't leave if owner
-
-        group = sdb.get_lb_group(group_id)
-
-        if group and group["owner_id"] == _cid():
-
-            return jsonify({"error": "Owners can't leave. Delete the group instead."}), 400
-
-        sdb.leave_lb_group(_cid(), group_id)
-
-        return jsonify({"ok": True})
-
-
-
-    @app.route("/api/student/leaderboard/groups/<int:group_id>", methods=["DELETE"])
-
-    def student_delete_lb_group(group_id):
-
-        if not _logged_in():
-
-            return jsonify({"error": "Unauthorized"}), 401
-
-        sdb.delete_lb_group(group_id, _cid())
-
-        return jsonify({"ok": True})
-
 
 
     # ── Retirement (opt out of active rankings) ──────────────
@@ -23584,561 +22525,6 @@ No markdown, no code fences. ONLY JSON.
             return jsonify(ok=True, checkout_url=url)
         except Exception as e:
             return jsonify(ok=False, error=str(e)), 500
-
-
-    # ================================================================
-    #  Quiz Duels v2 — file-upload + AI-generated, synchronous play
-    # ================================================================
-
-    def _qd_can_view(d, cid):
-        return d and cid in (d.get("challenger_id"), d.get("opponent_id"))
-
-    @app.route("/api/student/duels/quiz/create", methods=["POST"])
-    def student_duels_quiz_create_api():
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        cid = _cid()
-        try:
-            opp = int(request.form.get("opponent_id") or 0)
-        except Exception:
-            return jsonify(ok=False, error="Invalid opponent_id"), 400
-        topic = (request.form.get("topic") or "").strip()[:200]
-        try:
-            stake_coins = max(0, min(5000, int(request.form.get("stake_coins") or 0)))
-        except Exception:
-            stake_coins = 0
-        if opp == cid or opp <= 0:
-            return jsonify(ok=False, error="Pick a friend to challenge."), 400
-        # Must be friends
-        f = sdb.list_friends(cid)
-        if not any(x["id"] == opp for x in f["friends"]):
-            return jsonify(ok=False, error="You must be friends to start a duel."), 400
-        # Quiz duels are real-time — opponent must be online RIGHT NOW.
-        if not sdb.is_user_online(opp):
-            return jsonify(ok=False, error="That friend is offline. Quiz duels need both players online — try a Study Marathon instead, or wait until they come back."), 400
-        # Avoid duplicate pending invite to same opponent
-        existing = sdb.list_active_quiz_duels_for(cid)
-        if any(
-            x for x in existing
-            if x["status"] in ("pending", "ready", "playing")
-            and ((x["challenger_id"] == cid and x["opponent_id"] == opp)
-                 or (x["opponent_id"] == cid and x["challenger_id"] == opp))
-        ):
-            return jsonify(ok=False, error="You already have an open quiz duel with this user."), 400
-
-        # Free-tier quota: up to 3 quiz duels per day. Sending one also burns
-        # the day's AI-quiz slot (handled inside subscription.can_send_quiz_duel_today).
-        try:
-            from student import subscription as _sub
-            allowed, reason = _sub.can_send_quiz_duel_today(cid)
-            if not allowed:
-                return jsonify(ok=False, error=reason or "Daily quiz-duel limit reached."), 402
-        except Exception:
-            pass
-
-        # File upload (PDF / DOCX / TXT). Hard-cap at 8 MB.
-        f_in = request.files.get("file")
-        if not f_in or not f_in.filename:
-            return jsonify(ok=False, error="Upload a study file (PDF, DOCX, or TXT)."), 400
-        raw = f_in.read(8 * 1024 * 1024 + 1)
-        if len(raw) > 8 * 1024 * 1024:
-            return jsonify(ok=False, error="File too large (max 8 MB)."), 400
-        fname = (f_in.filename or "")[:200]
-        lname = fname.lower()
-        try:
-            if lname.endswith(".pdf"):
-                text = extract_text_from_pdf(raw)
-            elif lname.endswith(".docx"):
-                text = extract_text_from_docx(raw)
-            elif lname.endswith(".txt") or lname.endswith(".md"):
-                text = raw.decode("utf-8", errors="ignore")
-            else:
-                return jsonify(ok=False, error="Unsupported file type. Use PDF, DOCX, or TXT."), 400
-        except Exception as e:
-            log.exception("Quiz-duel file extraction failed: %s", e)
-            return jsonify(ok=False, error="Could not read that file."), 400
-        text = (text or "").strip()
-        if len(text) < 200:
-            return jsonify(ok=False, error="The file has too little readable text to build a quiz."), 400
-
-        try:
-            qs = generate_quiz(
-                course_name=topic or "Duel",
-                topics=[topic] if topic else None,
-                source_text=text,
-                difficulty="medium",
-                count=sdb.QUIZ_DUEL_QUESTION_COUNT,
-            ) or []
-        except Exception as e:
-            log.exception("Quiz-duel AI generation failed: %s", e)
-            return jsonify(ok=False, error="Quiz generation failed. Try again."), 500
-        # Trim to exact count and ensure each Q has the expected shape
-        clean = []
-        for q in qs[: sdb.QUIZ_DUEL_QUESTION_COUNT]:
-            if not isinstance(q, dict):
-                continue
-            if (q.get("correct") or "").strip().lower() not in ("a", "b", "c", "d"):
-                continue
-            if not all(q.get("option_" + k) for k in ("a", "b", "c", "d")):
-                continue
-            if not q.get("question"):
-                continue
-            clean.append({
-                "question":    str(q["question"])[:600],
-                "option_a":    str(q["option_a"])[:300],
-                "option_b":    str(q["option_b"])[:300],
-                "option_c":    str(q["option_c"])[:300],
-                "option_d":    str(q["option_d"])[:300],
-                "correct":     q["correct"].strip().lower(),
-                "explanation": str(q.get("explanation") or "")[:500],
-                "topic":       str(q.get("topic") or "")[:80],
-            })
-        if len(clean) < 4:
-            return jsonify(ok=False, error="Could not generate enough quality questions from this file."), 500
-
-        try:
-            did = sdb.create_quiz_duel(cid, opp, clean, topic=topic, file_name=fname, stake_coins=stake_coins)
-        except ValueError as e:
-            return jsonify(ok=False, error=str(e)), 400
-        try:
-            from student import subscription as _sub
-            _sub.record_generation(cid, "quiz_duel_sent")
-        except Exception:
-            pass
-        return jsonify(ok=True, duel_id=did, count=len(clean))
-
-
-    @app.route("/api/student/duels/quiz/<int:duel_id>/accept", methods=["POST"])
-    def student_duels_quiz_accept_api(duel_id):
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        return jsonify(sdb.accept_quiz_duel(duel_id, _cid()))
-
-
-    @app.route("/api/student/duels/quiz/<int:duel_id>/decline", methods=["POST"])
-    def student_duels_quiz_decline_api(duel_id):
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        return jsonify(sdb.decline_quiz_duel(duel_id, _cid()))
-
-
-    @app.route("/api/student/duels/quiz/<int:duel_id>/submit", methods=["POST"])
-    def student_duels_quiz_submit_api(duel_id):
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        data = request.get_json(silent=True) or {}
-        try:
-            qi = int(data.get("question_idx"))
-            tm = int(data.get("time_ms") or 0)
-        except Exception:
-            return jsonify(ok=False, error="Bad payload."), 400
-        ans = (data.get("answer") or "").strip().lower()[:1]
-        return jsonify(sdb.submit_duel_answer(duel_id, _cid(), qi, ans, tm))
-
-
-    @app.route("/api/student/duels/quiz/<int:duel_id>/forfeit", methods=["POST"])
-    def student_duels_quiz_forfeit_api(duel_id):
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        data = request.get_json(silent=True) or {}
-        reason = (data.get("reason") or "")[:80]
-        return jsonify(sdb.forfeit_quiz_duel(duel_id, _cid(), reason=reason))
-
-
-    @app.route("/api/student/duels/quiz/<int:duel_id>/state")
-    def student_duels_quiz_state_api(duel_id):
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        cid = _cid()
-        d = sdb.get_quiz_duel(duel_id, viewer_id=cid)
-        if not d:
-            return jsonify(ok=False, error="Not found."), 404
-        if not _qd_can_view(d, cid):
-            return jsonify(ok=False, error="Not your duel."), 403
-        # Auto-expire ready/pending matches whose play TTL ran out without both
-        # players finishing — counts as a tie.
-        if d["status"] in ("ready", "playing"):
-            try:
-                exp = d.get("expires_at")
-                exp_dt = exp if isinstance(exp, datetime) else datetime.fromisoformat(str(exp).replace(" ", "T")[:19])
-                if datetime.now() > exp_dt and not (d.get("challenger_done") and d.get("opponent_done")):
-                    # Mark whichever side is incomplete as not done -> just settle
-                    # by current scores using settle_quiz_duel_if_done after
-                    # forcing both done flags.
-                    sdb._exec  # noqa: F401 (ensures attr exists)
-                    from student import db as _sdb
-                    with _sdb.get_db() as _db:
-                        _sdb._exec(
-                            _db,
-                            "UPDATE student_quiz_duels SET challenger_done = %s, opponent_done = %s WHERE id = %s",
-                            (True, True, duel_id) if _sdb._USE_PG else (1, 1, duel_id),
-                        )
-                    sdb.settle_quiz_duel_if_done(duel_id)
-                    d = sdb.get_quiz_duel(duel_id, viewer_id=cid)
-            except Exception:
-                pass
-        # Trim sensitive fields
-        out = {
-            "id": d["id"],
-            "status": d["status"],
-            "topic": d.get("topic", ""),
-            "file_name": d.get("file_name", ""),
-            "challenger_id": d["challenger_id"],
-            "opponent_id": d["opponent_id"],
-            "challenger_name": d.get("challenger_name", ""),
-            "opponent_name": d.get("opponent_name", ""),
-            "challenger_score": d.get("challenger_score", 0),
-            "opponent_score": d.get("opponent_score", 0),
-            "challenger_time_ms": d.get("challenger_time_ms", 0),
-            "opponent_time_ms": d.get("opponent_time_ms", 0),
-            "stake_coins": int(d.get("stake_coins") or 0),
-            "challenger_done": bool(d.get("challenger_done")),
-            "opponent_done": bool(d.get("opponent_done")),
-            "winner_id": d.get("winner_id"),
-            "forfeit_by": d.get("forfeit_by"),
-            "expires_at": str(d.get("expires_at") or ""),
-            "questions": d.get("questions", []),  # already redacted if in-progress
-            "me": cid,
-        }
-        return jsonify(out)
-
-
-    @app.route("/api/student/duels/quiz/pending")
-    def student_duels_quiz_pending_api():
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        cid = _cid()
-        pend = sdb.list_pending_quiz_duels_for(cid)
-        active = sdb.list_active_quiz_duels_for(cid)
-        # Active that the user can resume (status ready/playing where they're
-        # still in the match)
-        playable = [
-            x for x in active
-            if x["status"] in ("ready", "playing")
-            and (cid == x["challenger_id"] or cid == x["opponent_id"])
-        ]
-        return jsonify(
-            pending=[{
-                "id": x["id"],
-                "challenger_id": x["challenger_id"],
-                "challenger_name": x.get("challenger_name", ""),
-                "topic": x.get("topic", ""),
-                "file_name": x.get("file_name", ""),
-                "stake_coins": int(x.get("stake_coins") or 0),
-                "expires_at": str(x.get("expires_at") or ""),
-            } for x in pend],
-            playable=[{
-                "id": x["id"],
-                "status": x["status"],
-                "challenger_id": x["challenger_id"],
-                "opponent_id": x["opponent_id"],
-                "challenger_name": x.get("challenger_name", ""),
-                "opponent_name": x.get("opponent_name", ""),
-                "topic": x.get("topic", ""),
-                "stake_coins": int(x.get("stake_coins") or 0),
-            } for x in playable],
-        )
-
-
-    @app.route("/student/duels/quiz/<int:duel_id>/play")
-    def student_duels_quiz_play_page(duel_id):
-        if not _logged_in():
-            return redirect(url_for("login"))
-        cid = _cid()
-        d = sdb.get_quiz_duel(duel_id, viewer_id=cid)
-        if not d or cid not in (d["challenger_id"], d["opponent_id"]):
-            return _s_render("Quiz Duel", "<div class='card' style='padding:40px;text-align:center'>Duel not found.</div>", active_page="student_friends")
-        if d["status"] in ("settled", "tied", "forfeit", "declined", "expired"):
-            return redirect(url_for("student_duels_quiz_result_page", duel_id=duel_id))
-        # Auto-accept on first visit by the opponent (so play page can immediately render)
-        if d["status"] == "pending" and cid == d["opponent_id"]:
-            accepted = sdb.accept_quiz_duel(duel_id, cid)
-            if not accepted.get("ok"):
-                return _s_render("Quiz Duel", f"<div class='card' style='padding:40px;text-align:center'>{accepted.get('error') or 'Could not accept duel.'}</div>", active_page="student_friends")
-
-        return _s_render("Quiz Duel", f"""
-        <style>
-          .qd {{ max-width: 760px; margin: 0 auto; }}
-          .qd-h {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }}
-          .qd-bar {{ display:flex; gap:6px; margin-bottom:18px; }}
-          .qd-step {{ flex:1; height:6px; border-radius:3px; background:var(--border); }}
-          .qd-step.done {{ background: linear-gradient(90deg,#22c55e,#16a34a); }}
-          .qd-step.cur {{ background: linear-gradient(90deg,#6366f1,#8b5cf6); }}
-          .qd-q {{ background: var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; }}
-          .qd-q h2 {{ margin:0 0 18px; font-size:18px; }}
-          .qd-opt {{ display:block; width:100%; text-align:left; padding:14px 16px; margin:8px 0; background:var(--bg); border:1px solid var(--border); border-radius:10px; cursor:pointer; font-size:14px; color:var(--text); transition:all .12s; }}
-          .qd-opt:hover {{ border-color:var(--primary); background: rgba(99,102,241,.06); }}
-          .qd-opt.picked {{ border-color:var(--primary); background: rgba(99,102,241,.12); }}
-          .qd-opt.correct {{ border-color:#22c55e; background:rgba(34,197,94,.16); color:#dcfce7; }}
-          .qd-opt.wrong {{ border-color:#ef4444; background:rgba(239,68,68,.16); color:#fee2e2; }}
-          .qd-opt[disabled] {{ cursor:default; opacity:.95; }}
-          .qd-feedback {{ margin-top:12px; padding:10px 12px; border-radius:10px; font-size:13px; line-height:1.4; }}
-          .qd-feedback.ok {{ background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.45); color:#86efac; }}
-          .qd-feedback.bad {{ background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.45); color:#fca5a5; }}
-          .qd-meta {{ display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); margin-bottom:12px; }}
-          .qd-overlay {{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:10000; }}
-          .qd-overlay .box {{ background:var(--card); padding:32px; border-radius:14px; max-width:420px; text-align:center; }}
-          .qd-warn {{ background:rgba(239,68,68,.1); border:1px solid #ef4444; color:#ef4444; padding:8px 12px; border-radius:8px; font-size:12px; margin-bottom:14px; }}
-        </style>
-
-        <div class="qd">
-          <div class="qd-h">
-            <div>
-              <h1 style="margin:0;font-size:22px">⚔️ Quiz Duel</h1>
-              <div style="font-size:12px;color:var(--text-muted)">vs <b id="qd-opp-name">…</b> · {d.get('topic','') or 'No topic'}</div>
-            </div>
-            <div style="text-align:right;font-size:12px;color:var(--text-muted)">
-              <div>Time: <b id="qd-time">0.0s</b></div>
-              <div>Score: <b id="qd-score">0</b> · Theirs: <b id="qd-their-score">0</b></div>
-            </div>
-          </div>
-
-          <div class="qd-warn">⚠️ Anti-cheat: leaving this tab will instantly forfeit the duel.</div>
-
-          <div class="qd-bar" id="qd-bar"></div>
-
-          <div id="qd-stage">
-            <div class="qd-q" style="text-align:center;color:var(--text-muted)">Loading questions…</div>
-          </div>
-        </div>
-
-        <script>
-        (function() {{
-          const DUEL_ID = {duel_id};
-          let questions = [];
-          let idx = 0;
-          let qStart = 0;
-          let myScore = 0;
-          let myDone = false;
-          let busy = false;
-          let forfeited = false;
-
-          function fmtTime(ms) {{ return (ms/1000).toFixed(1) + 's'; }}
-
-          async function poll() {{
-            try {{
-              const r = await fetch('/api/student/duels/quiz/' + DUEL_ID + '/state').then(r=>r.json());
-              if (!r || r.error) return;
-              const meIsChal = r.me === r.challenger_id;
-              document.getElementById('qd-opp-name').textContent =
-                meIsChal ? r.opponent_name : r.challenger_name;
-              const polledMyScore = meIsChal ? r.challenger_score : r.opponent_score;
-              const theirScore = meIsChal ? r.opponent_score : r.challenger_score;
-              myScore = Math.max(myScore, Number(polledMyScore || 0));
-              document.getElementById('qd-score').textContent = myScore;
-              document.getElementById('qd-their-score').textContent = theirScore;
-              if (questions.length === 0 && r.questions && r.questions.length) {{
-                questions = r.questions;
-                renderBar();
-                renderQ();
-              }}
-              if (r.status === 'settled' || r.status === 'tied' || r.status === 'forfeit') {{
-                mrGo('/student/duels/quiz/' + DUEL_ID + '/result');
-              }}
-            }} catch(e) {{}}
-          }}
-
-          function renderBar() {{
-            const bar = document.getElementById('qd-bar');
-            bar.innerHTML = questions.map((_, i) =>
-              `<div class="qd-step ${{i < idx ? 'done' : (i === idx ? 'cur' : '')}}"></div>`
-            ).join('');
-          }}
-
-          function renderQ() {{
-            const stage = document.getElementById('qd-stage');
-            if (idx >= questions.length) {{
-              myDone = true;
-              stage.innerHTML = '<div class="qd-q" style="text-align:center"><h2>✅ You finished!</h2><p style="color:var(--text-muted)">Waiting for your opponent to finish…</p></div>';
-              return;
-            }}
-            const q = questions[idx];
-            qStart = Date.now();
-            stage.innerHTML = `
-              <div class="qd-meta">
-                <span>Question ${{idx+1}} / ${{questions.length}}</span>
-                <span>${{q.topic || ''}}</span>
-              </div>
-              <div class="qd-q">
-                <h2>${{escapeHtml(q.question)}}</h2>
-                <button class="qd-opt" data-k="a">A) ${{escapeHtml(q.option_a)}}</button>
-                <button class="qd-opt" data-k="b">B) ${{escapeHtml(q.option_b)}}</button>
-                <button class="qd-opt" data-k="c">C) ${{escapeHtml(q.option_c)}}</button>
-                <button class="qd-opt" data-k="d">D) ${{escapeHtml(q.option_d)}}</button>
-                <div id="qd-feedback"></div>
-              </div>`;
-            stage.querySelectorAll('.qd-opt').forEach(b => {{
-              b.addEventListener('click', () => answer(b.dataset.k));
-            }});
-          }}
-
-          async function answer(k) {{
-            if (busy) return;
-            busy = true;
-            const elapsed = Date.now() - qStart;
-            const buttons = Array.from(document.querySelectorAll('.qd-opt'));
-            buttons.forEach(b => b.disabled = true);
-            const picked = buttons.find(b => b.dataset.k === k);
-            if (picked) picked.classList.add('picked');
-            const feedback = document.getElementById('qd-feedback');
-            let shouldAdvance = false;
-            try {{
-              const r = await fetch('/api/student/duels/quiz/' + DUEL_ID + '/submit', {{
-                method:'POST', headers:{{'Content-Type':'application/json'}},
-                body: JSON.stringify({{question_idx: idx, answer: k, time_ms: elapsed}}),
-              }}).then(r=>r.json());
-              if (r && r.ok) {{
-                shouldAdvance = true;
-                const correct = String(r.correct || '').toLowerCase();
-                const correctBtn = buttons.find(b => b.dataset.k === correct);
-                if (correctBtn) correctBtn.classList.add('correct');
-                if (r.is_correct) {{
-                  myScore++;
-                  document.getElementById('qd-score').textContent = myScore;
-                  if (feedback) feedback.innerHTML = '<div class="qd-feedback ok"><b>Correcto.</b>' + (r.explanation ? ' ' + escapeHtml(r.explanation) : '') + '</div>';
-                }} else {{
-                  if (picked) picked.classList.add('wrong');
-                  const label = correct ? correct.toUpperCase() : '?';
-                  if (feedback) feedback.innerHTML = '<div class="qd-feedback bad"><b>Incorrecto.</b> Respuesta correcta: ' + label + (r.correct_text ? ') ' + escapeHtml(r.correct_text) : '') + (r.explanation ? '<br>' + escapeHtml(r.explanation) : '') + '</div>';
-                }}
-                await sleep(r.is_correct ? 650 : 1100);
-              }} else {{
-                if (feedback) feedback.innerHTML = '<div class="qd-feedback bad">' + escapeHtml((r && r.error) || 'No se pudo guardar la respuesta.') + '</div>';
-                await sleep(900);
-              }}
-            }} catch(e) {{
-              if (feedback) feedback.innerHTML = '<div class="qd-feedback bad">No se pudo guardar la respuesta. Inténtalo de nuevo.</div>';
-              buttons.forEach(b => b.disabled = false);
-              if (picked) picked.classList.remove('picked');
-              busy = false;
-              return;
-            }}
-            if (!shouldAdvance) {{
-              buttons.forEach(b => b.disabled = false);
-              if (picked) picked.classList.remove('picked');
-              busy = false;
-              return;
-            }}
-            idx++;
-            renderBar();
-            renderQ();
-            busy = false;
-          }}
-
-          function sleep(ms) {{ return new Promise(resolve => setTimeout(resolve, ms)); }}
-
-          function escapeHtml(s) {{
-            return String(s||'').replace(/[&<>'\\"]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','\\'':'&#39;','\\"':'&quot;'}}[c]));
-          }}
-
-          // Anti-cheat: leaving the tab = instant loss
-          document.addEventListener('visibilitychange', () => {{
-            if (document.hidden && !myDone && !forfeited) {{
-              forfeited = true;
-              navigator.sendBeacon(
-                '/api/student/duels/quiz/' + DUEL_ID + '/forfeit',
-                new Blob([JSON.stringify({{reason:'tab_hidden'}})], {{type:'application/json'}})
-              );
-              // Also try a normal POST as a backup
-              try {{
-                fetch('/api/student/duels/quiz/' + DUEL_ID + '/forfeit', {{
-                  method:'POST', keepalive:true,
-                  headers:{{'Content-Type':'application/json'}},
-                  body: JSON.stringify({{reason:'tab_hidden'}}),
-                }});
-              }} catch(e) {{}}
-            }}
-          }});
-
-          // Live elapsed-time counter
-          const startedAt = Date.now();
-          setInterval(() => {{
-            document.getElementById('qd-time').textContent = ((Date.now()-startedAt)/1000).toFixed(1) + 's';
-          }}, 100);
-
-          // Poll opponent state every 1s
-          poll();
-          setInterval(poll, 1000);
-        }})();
-        </script>
-        """, active_page="student_duels")
-
-
-    @app.route("/student/duels/quiz/<int:duel_id>/result")
-    def student_duels_quiz_result_page(duel_id):
-        if not _logged_in():
-            return redirect(url_for("login"))
-        cid = _cid()
-        d = sdb.get_quiz_duel(duel_id, viewer_id=cid)
-        if not d or cid not in (d["challenger_id"], d["opponent_id"]):
-            return _s_render("Quiz Duel", "<div class='card' style='padding:40px;text-align:center'>Duel not found.</div>", active_page="student_friends")
-        meIsChal = (cid == d["challenger_id"])
-        my_score = d["challenger_score"] if meIsChal else d["opponent_score"]
-        their_score = d["opponent_score"] if meIsChal else d["challenger_score"]
-        their_name = d["opponent_name"] if meIsChal else d["challenger_name"]
-        won = (d.get("winner_id") == cid)
-        lost = (d.get("winner_id") and d.get("winner_id") != cid)
-        tied = not d.get("winner_id") and d["status"] in ("tied", "settled")
-        stake = int(d.get("stake_coins") or 0)
-        forfeit_msg = ""
-        if d["status"] == "forfeit":
-            if d.get("forfeit_by") == cid:
-                forfeit_msg = "<div class='qd-tag' style='background:rgba(239,68,68,.15);color:#ef4444'>You forfeited (left the tab).</div>"
-            else:
-                forfeit_msg = "<div class='qd-tag' style='background:rgba(34,197,94,.15);color:#22c55e'>Opponent forfeited.</div>"
-        if won:
-            head = "<div style='font-size:48px'>🏆</div><h1 style='margin:8px 0'>You won!</h1>"
-            payout = f"<div style='color:#22c55e;margin-top:6px'>You won the pot: +{stake * 2} coins</div>" if stake else "<div style='color:var(--text-muted);margin-top:6px'>No coin stake.</div>"
-        elif lost:
-            head = "<div style='font-size:48px'>💔</div><h1 style='margin:8px 0'>You lost</h1>"
-            payout = f"<div style='color:#ef4444;margin-top:6px'>You lost your {stake} coin stake.</div>" if stake else "<div style='color:var(--text-muted);margin-top:6px'>No reward this time.</div>"
-        elif tied:
-            head = "<div style='font-size:48px'>🤝</div><h1 style='margin:8px 0'>It's a tie</h1>"
-            payout = f"<div style='color:#f59e0b;margin-top:6px'>{stake} coins refunded each.</div>" if stake else "<div style='color:var(--text-muted);margin-top:6px'>No coin stake.</div>"
-        else:
-            head = "<h1>Duel ended</h1>"
-            payout = ""
-        # Per-question review (questions now include correct + explanation)
-        review_rows = []
-        for i, q in enumerate(d.get("questions", [])):
-            review_rows.append(
-                f"<div style='padding:10px 0;border-bottom:1px solid var(--border)'>"
-                f"<div style='font-size:13px;font-weight:600'>Q{i+1}. {(q.get('question') or '')[:200]}</div>"
-                f"<div style='font-size:12px;color:#22c55e;margin-top:4px'>Correct: {q.get('correct','').upper()}) {q.get('option_'+(q.get('correct') or 'a'),'')}</div>"
-                f"</div>"
-            )
-        review_html = "".join(review_rows) or "<div style='color:var(--text-muted);font-size:13px'>No questions to review.</div>"
-
-        return _s_render("Quiz Duel — Result", f"""
-        <style>
-          .qd-r {{ max-width: 720px; margin:0 auto; text-align:center; }}
-          .qd-r .scorebox {{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; margin:18px 0; }}
-          .qd-r .vs {{ display:flex; justify-content:space-around; align-items:center; margin:14px 0; }}
-          .qd-r .side .num {{ font-size:48px; font-weight:800; }}
-          .qd-r .side .name {{ font-size:13px; color:var(--text-muted); margin-top:4px; }}
-          .qd-tag {{ display:inline-block; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; margin:8px 0; }}
-        </style>
-        <div class="qd-r">
-          {head}
-          {forfeit_msg}
-          {payout}
-          <div class="scorebox">
-            <div class="vs">
-              <div class="side"><div class="num">{my_score}</div><div class="name">You</div></div>
-              <div style="font-size:24px;color:var(--text-muted)">vs</div>
-              <div class="side"><div class="num">{their_score}</div><div class="name">{their_name}</div></div>
-            </div>
-            <div style='font-size:12px;color:var(--text-muted)'>Topic: {d.get('topic','') or '—'} · File: {d.get('file_name','') or '—'}</div>
-          </div>
-          <div style="text-align:left;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:18px">
-            <h3 style="margin:0 0 8px;font-size:15px">Answer key</h3>
-            {review_html}
-          </div>
-          <div style="margin-top:18px">
-            <a class="btn btn-primary" href="/student/friends">Back to friends</a>
-          </div>
-        </div>
-        """, active_page="student_friends")
 
 
     log.info("Student routes registered.")

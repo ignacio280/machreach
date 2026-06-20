@@ -890,6 +890,20 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
             return []
         extra = " AND c.major_id = %s "
         params.append(me["major_id"])
+    elif scope == "friends":
+        # Private board: the viewer + their accepted friends, ranked by XP in
+        # the selected period. Always includes the viewer, so a friendless user
+        # still appears (alone) — the UI shows an "invite friends" prompt then.
+        from . import db as _sdb
+        try:
+            fl = _sdb.list_friends(client_id) or {}
+            fids = [int(x.get("id")) for x in (fl.get("friends") or []) if x.get("id")]
+        except Exception:
+            fids = []
+        ids = list(dict.fromkeys([int(client_id), *fids]))
+        placeholders = ", ".join(["%s"] * len(ids))
+        extra = " AND c.id IN (" + placeholders + ") "
+        params.extend(ids)
     elif scope == "retirement":
         retired_only = True
     # global => no extra filter

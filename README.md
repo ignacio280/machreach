@@ -7,9 +7,9 @@ An all-in-one study platform for students.
 ## What It Does
 - **Focus sessions** — distraction-free study timers, plus an optional Focus Guard browser extension that blocks distracting sites during a session
 - **Canvas LMS import** — connect Canvas to sync your courses (also the bot-resistant signup gate)
-- **AI flashcards & quizzes** — generated from your own course materials, with quiz duels
+- **AI flashcards & quizzes** — generated from your own course materials
 - **Grade tracking** — Chilean 1.0–7.0 scale, with "minimum grade to pass" math
-- **Gamification** — XP, streaks, leaderboards, badges, coins, daily quests, and friend/focus duels
+- **Gamification** — XP, streaks, leaderboards, badges, coins, daily quests, and friends
 - **Referrals** — invite a friend, earn a free week of Plus (stacks)
 - **Plus subscription** — unlimited AI generation and perks, billed via Lemon Squeezy
 
@@ -32,7 +32,7 @@ app.py                   - Flask app shell: auth, layout, billing webhook, publi
 student/                 - Student dashboard, study tools, gamification, and APIs (registered as routes)
 outreach/                - Shared infrastructure (config, DB + connection pool, i18n, mail, billing)
 professional/            - Standalone module used only by the background worker
-worker.py                - APScheduler cron jobs (duel settlement, scheduled email, payouts)
+worker.py                - APScheduler cron jobs (scheduled email, payouts, background maintenance)
 extensions/focus-guard   - Focus Guard browser extension
 static/machreach_landing - Pre-built, pre-rendered React landing (see landing_build/)
 landing_build/           - Local-only landing build (esbuild + jsdom prerender; output committed)

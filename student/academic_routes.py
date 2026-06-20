@@ -281,7 +281,7 @@ def register_academic_routes(app, csrf, limiter):
             return jsonify({"error": "unauthorized"}), 401
         scope = (request.args.get("scope") or "global").lower()
         period = (request.args.get("period") or "all").lower()
-        if scope not in {"global", "country", "university", "major", "retirement"}:
+        if scope not in {"global", "country", "university", "major", "friends", "retirement"}:
             return jsonify({"error": "bad scope"}), 400
         if period not in {"all", "week", "month"}:
             period = "all"

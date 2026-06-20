@@ -1446,7 +1446,7 @@ LAYOUT = """<!DOCTYPE html>
       "Plan actual": "Current plan",
       "Mejorar a Plus": "Upgrade to Plus",
       "Mejorar a Ultimate": "Upgrade to Ultimate",
-      "Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes, tarjetas y duelos.": "Spend coins on streak 🔥 freezes, profile banners, and temporary boosts. Earn coins by completing focus sessions, quizzes, flashcards, and duels.",
+      "Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes y tarjetas.": "Spend coins on streak 🔥 freezes, profile banners, and temporary boosts. Earn coins by completing focus sessions, quizzes, and flashcards.",
 
       "Comprar": "Buy",
       "Vender": "Sell",
@@ -2791,7 +2791,7 @@ def admin_product_analytics():
         ("/student/quiz", "Quizzes", "Usuarios usando quizzes de práctica"),
         ("/student/flashcards", "Tarjetas", "Usuarios usando flashcards"),
         ("/student/leaderboard", "Ranking", "Usuarios mirando la competencia"),
-        ("/student/friends", "Amigos y duelos", "Usuarios usando funciones sociales"),
+        ("/student/friends", "Amigos", "Usuarios usando funciones sociales"),
         ("/student/shop", "Tienda", "Usuarios revisando planes, coins y cosméticos"),
         ("/student/canvas", "Conexión Canvas", "Usuarios intentando sincronizar Canvas"),
         ("/student/grades", "Planilla de notas", "Usuarios usando cálculo de notas"),
@@ -3601,7 +3601,7 @@ def _public_info_page(title: str, eyebrow: str, intro: str, body_html: str, acti
 @app.route("/privacy")
 def privacy_page():
     return _public_info_page("Privacy Policy", "Legal", "How MachReach handles account, study, Canvas extension, and subscription data.", """
-        <p class="mr-note"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, friends, duels, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
+        <p class="mr-note"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, friends, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
         <p><strong>Last updated:</strong> June 15, 2026</p>
         <h2>1. Information We Collect</h2>
         <p><strong>Account information:</strong> your name, institutional or Canvas email address, your university, and your password hash. When you create an account through Canvas, MachReach reads the email address exposed by your Canvas profile so you can log in later with that email and the password you set.</p>
@@ -3609,7 +3609,7 @@ def privacy_page():
         <p><strong>Courses you add manually:</strong> if your university doesn't use Canvas, or you simply prefer to, you can add courses by typing a course code and name. To help other students at <em>your own university</em> fill these in faster, course codes and names you add may be saved to a shared, university-scoped autofill catalog. This catalog stores only the course code and course name together with the university — it is never linked to your identity, your grades, or your study activity, and it is only ever shown to other students at the same university.</p>
         <p><strong>Study materials:</strong> files, notes, and text you choose to upload or type for features such as quizzes and flashcards.</p>
         <p><strong>Study activity:</strong> focus sessions, minutes studied per course, XP events, streaks, badges, quiz attempts, flashcard reviews, leaderboard rank, course outcomes, grades you enter, and in-app coin activity.</p>
-        <p><strong>Social activity:</strong> friend connections, study groups (private leaderboards you create with chosen friends), quiz duels you play, and referral activity if you invite friends. We store who you are friends with, duel results, and how many people joined with your referral link.</p>
+        <p><strong>Social activity:</strong> friend connections and referral activity if you invite friends. We store who you are friends with and how many people joined with your referral link.</p>
         <p><strong>Focus Guard extension:</strong> extension settings and active-session state are used to support focus sessions. Some settings may be stored locally in your browser.</p>
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
         <h2>2. How We Use Your Information</h2>
@@ -3618,7 +3618,7 @@ def privacy_page():
           <li>To import your Canvas course list when you choose to connect through the MachReach extension, or to save courses you add manually</li>
           <li>To power university-scoped course autofill so students at the same university can add courses faster</li>
           <li>To generate and manage quizzes, flashcards, focus sessions, grade tracking, and course analytics</li>
-          <li>To track XP, streaks, leaderboard rankings, badges, coins, friends, study groups, quiz duels, and referrals</li>
+          <li>To track XP, streaks, leaderboard rankings, badges, coins, friends, and referrals</li>
           <li>To process subscriptions and service notifications such as password resets and study emails you opted into</li>
           <li>To keep the service secure, reliable, and improving over time</li>
         </ul>
@@ -3646,7 +3646,7 @@ def terms_page():
         <h2>1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
         <h2>2. Description of Service</h2>
-        <p>MachReach provides student study tools including Canvas extension course import, manually added courses, focus timers, study-time tracking, AI-generated flashcards and practice quizzes, grade tracking, XP, streaks, leaderboards, friends, quiz duels, study groups, coins and an in-app shop, course analytics, a referral program, and an optional Focus Guard browser extension. Some features require a paid Plus or Ultimate plan.</p>
+        <p>MachReach provides student study tools including Canvas extension course import, manually added courses, focus timers, study-time tracking, AI-generated flashcards and practice quizzes, grade tracking, XP, streaks, leaderboards, friends, coins and an in-app shop, course analytics, a referral program, and an optional Focus Guard browser extension. Some features require a paid Plus or Ultimate plan.</p>
         <h2>3. Account Responsibilities</h2>
         <ul>
           <li>You must provide accurate information when registering, including your university</li>
@@ -3663,8 +3663,8 @@ def terms_page():
         <p>Paid student plans (Plus and Ultimate) are billed through Lemon Squeezy. You can cancel at any time; access continues until the end of the billing period. Refunds are handled case by case.</p>
         <h2>6. AI Features</h2>
         <p>AI-generated quizzes, flashcards, or other study content are provided as suggestions and may be incomplete or incorrect. You are responsible for reviewing generated content before relying on it academically.</p>
-        <h2>7. Leaderboards, Coins, Duels and Referrals</h2>
-        <p>XP, coins, streaks, badges, leaderboard ranks, and duel results are part of the game layer and have no cash value, cannot be transferred or sold between accounts, and can be redeemed only inside MachReach. Quiz duels are study and social tools, not a way to earn real money. Referral rewards (such as free Plus time) are granted for genuine sign-ups only. We may withhold, reverse, or reset rewards, ranks, or referral credit for suspected cheating or abuse.</p>
+        <h2>7. Leaderboards, Coins and Referrals</h2>
+        <p>XP, coins, streaks, badges, and leaderboard ranks are part of the game layer and have no cash value, cannot be transferred or sold between accounts, and can be redeemed only inside MachReach. Referral rewards (such as free Plus time) are granted for genuine sign-ups only. We may withhold, reverse, or reset rewards, ranks, or referral credit for suspected cheating or abuse.</p>
         <h2>8. Limitation of Liability</h2>
         <p>MachReach is provided as is without warranties of any kind. We are not liable for service interruptions, data loss beyond our control, or indirect, incidental, or consequential damages.</p>
         <h2>9. Contact</h2>
@@ -3750,12 +3750,12 @@ def press_page():
 @app.route("/roadmap")
 def roadmap_page():
     return _public_info_page("Roadmap", "Next", "Where the product is heading next.", """
-      <p class="mr-note">Next priorities: stronger Focus mode, course benchmarks, richer study groups, and smarter Plus analytics.</p>
+      <p class="mr-note">Next priorities: stronger Focus mode, course benchmarks, richer friend rankings, and smarter Plus analytics.</p>
       <h2>What that means</h2>
       <ul>
         <li><strong>Focus mode:</strong> richer session recovery, better reward moments, and clearer timer state.</li>
         <li><strong>Course benchmarks:</strong> more useful comparisons once enough real outcomes exist.</li>
-        <li><strong>Study groups:</strong> tighter friend challenges, private rankings, and collaborative pressure.</li>
+        <li><strong>Friend rankings:</strong> tighter friend circles, private comparisons, and collaborative pressure.</li>
         <li><strong>Plus analytics:</strong> deeper patterns without making the dashboard feel heavy.</li>
       </ul>
     """, "roadmap")

@@ -518,16 +518,6 @@ def send_streak_risk_pushes():
         print(f"[STREAK_RISK] error (non-fatal): {e}")
 
 
-def settle_student_duels():
-    try:
-        from student import db as sdb
-        n = sdb.settle_due_duels()
-        if n:
-            print(f"[DUELS] settled {n} duel(s)")
-    except Exception as e:
-        print(f"[DUELS] error (non-fatal): {e}")
-
-
 # ── Monthly leaderboard winners email ────────────────────────────────────
 LEADERBOARD_WINNERS_RECIPIENT = "ignaciomachuca2005@gmail.com"
 
@@ -648,7 +638,6 @@ if __name__ == "__main__":
     scheduler.add_job(sync_mail_hub, "interval", minutes=3, id="sync_mail_hub")
     scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
     scheduler.add_job(send_streak_risk_pushes, "cron", hour=20, minute=0, id="streak_risk_push")
-    scheduler.add_job(settle_student_duels, "cron", hour="*", minute=15, id="settle_duels")
     # First of every month at 01:00 UTC: email previous month's leaderboard winners.
     scheduler.add_job(send_monthly_leaderboard_email, "cron", day=1, hour=1, minute=0,
                       id="monthly_leaderboard_email")

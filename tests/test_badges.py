@@ -1,7 +1,6 @@
 """Badge wiring: pruned badges are gone, and the evaluators award the right
-threshold / event / duel badges."""
+threshold / event badges."""
 from student import db as sdb
-from outreach.db import get_db, _exec
 
 
 def _has(cid, key):
@@ -37,16 +36,3 @@ def test_evaluate_event_badge_four_hour_session(make_user):
     cid = make_user()
     earned = sdb.evaluate_event_badges(cid, session_minutes=240)
     assert _has(cid, "focus_session_4h"), f"earned={earned}"
-
-
-def test_duel_first_win_badge(make_user):
-    winner = make_user()
-    loser = make_user()
-    with get_db() as db:
-        _exec(db,
-              "INSERT INTO student_duels (challenger_id, opponent_id, ends_at, status, winner_id) "
-              "VALUES (%s, %s, %s, 'settled', %s)",
-              (winner, loser, "2026-01-01 00:00:00", winner))
-    sdb._award_duel_badges(winner, loser)
-    assert _has(winner, "duel_first")
-    assert not _has(winner, "duel_25")   # only one win

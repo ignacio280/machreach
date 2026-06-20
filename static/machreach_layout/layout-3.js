@@ -564,7 +564,7 @@
     };
 
     // EXACT-match only. We used to fall back to a partial-word regex which
-    // produced "Activo duels", "Todos-time", "Estudiar marathon invites",
+    // produced mixed-language labels like "Todos-time",
     // "Academic Perfil" etc. — bare entries like "Active": "Activo" would
     // grab one word and leave the rest English. Now if a phrase isn't in
     // T verbatim it stays English (and we translate it at the source).

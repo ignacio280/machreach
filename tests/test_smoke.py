@@ -2,6 +2,9 @@
 CSRF / canonical-host fixes behave as intended."""
 import pytest
 
+from outreach.db import _exec, get_db
+from student import db as sdb
+
 
 @pytest.mark.parametrize("path", [
     "/", "/login", "/register", "/about", "/blog", "/press",
@@ -28,6 +31,27 @@ def test_register_shows_referral_banner_with_ref(client):
 def test_register_has_no_ref_field_without_code(client):
     body = client.get("/register").get_data(as_text=True)
     assert 'name="ref"' not in body
+
+
+def test_friends_tab_keeps_referral_invite_card(client, make_user):
+    cid = make_user("Referral Owner")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 1 WHERE id = %s", (cid,))
+    with client.session_transaction() as sess:
+        sess["client_id"] = cid
+        sess["client_name"] = "Referral Owner"
+        sess["account_type"] = "student"
+        sess["lang"] = "es"
+
+    r = client.get("/student/friends")
+    body = r.get_data(as_text=True)
+    code = sdb.get_or_create_referral_code(cid)
+
+    assert r.status_code == 200
+    assert 'id="fr-referral-card"' in body
+    assert f"/register?ref={code}" in body
+    assert "Invita amigos, gana Plus" in body
+    assert "/student/invite" in body
 
 
 def test_www_redirects_to_apex(client):
