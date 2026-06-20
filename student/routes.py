@@ -20520,12 +20520,23 @@ No markdown, no code fences. ONLY JSON.
     position: absolute; left: 22px; top: -36px; z-index: 2;
   }
   #mr-prof .pf-id-body { padding-top: 42px; }
-  #mr-prof .pf-name { font-size:22px; font-weight:800; margin:0 0 4px; letter-spacing:-.02em; color:#fff; }
+  /* The identity band is always dark (#0B1220), so force light text on it
+     regardless of the app's light/dark theme (light mode forces headings dark). */
+  #mr-prof .pf-name { font-size:22px; font-weight:800; margin:0 0 4px; letter-spacing:-.02em; color:#fff !important; }
   #mr-prof .pf-rankline {
     font-family: "Nunito", sans-serif;
-    font-size:13px; color: var(--text-muted); letter-spacing:.02em;
+    font-size:13px; color: rgba(255,255,255,.72) !important; letter-spacing:.02em;
   }
-  #mr-prof .pf-rankline b { color:#fff; font-weight:700; }
+  #mr-prof .pf-rankline b { color:#fff !important; font-weight:700; }
+  #mr-prof .pf-edit-btn {
+    position:absolute; top:14px; right:18px; z-index:3;
+    display:inline-flex; align-items:center; gap:6px;
+    padding:8px 14px; border-radius:999px;
+    background:#FF7A3D; color:#fff; font-size:13px; font-weight:700;
+    text-decoration:none; border:1px solid #E65F20;
+    box-shadow:0 4px 0 rgba(179,60,0,.28);
+  }
+  #mr-prof .pf-edit-btn:hover { filter:brightness(1.05); }
   #mr-prof .pf-hero {
     background: linear-gradient(135deg, rgba(124,156,255,.12), rgba(192,132,252,.08));
     border: 1px solid var(--border); border-radius: 18px; padding: 22px 26px;
@@ -20604,6 +20615,8 @@ No markdown, no code fences. ONLY JSON.
       ? '#' + leaderPos.rank + ' / ' + (leaderPos.total||'?') + ' (' + (leaderPos.scope==='retirement' ? 'Retired' : 'Global') + ')'
       : 'Unranked';
     var bio = p.bio ? '<p style="margin:14px 0 0;color:var(--text-muted);font-size:14px;line-height:1.6;">' + escapeHtml(p.bio) + '</p>' : '';
+    var _profEs = document.documentElement.lang !== 'en';
+    var editBtn = IS_SELF ? '<a class="pf-edit-btn" href="/student/profile/edit">✏️ ' + (_profEs ? 'Editar perfil' : 'Edit profile') + '</a>' : '';
     var html = '';
     var bnr = p.banner || {};
     var bannerStyle = bnr.css ? ('background:' + bnr.css + ';') : '';
@@ -20611,6 +20624,7 @@ No markdown, no code fences. ONLY JSON.
     // Twitter-style banner with avatar overlapping the identity strip below.
     html += '<div class="pf-banner ' + bannerCls + '" style="' + bannerStyle + '"></div>';
     html += '<div class="pf-identity">';
+    html +=   editBtn;
     html +=   '<div class="pf-avatar">' + initials(p.name) + '</div>';
     html +=   '<div class="pf-id-body">';
     html +=     '<h1 class="pf-name">' + escapeHtml(p.name) + retiredTag + '</h1>';
@@ -20664,7 +20678,8 @@ No markdown, no code fences. ONLY JSON.
 })();
 </script>
 """
-        return _s_render(title, content, active_page="student_leaderboard")
+        active = "student_profile" if is_self else "student_leaderboard"
+        return _s_render(title, content, active_page=active)
 
 
     # ── Retirement (opt out of active rankings) ──────────────
@@ -21662,17 +21677,13 @@ No markdown, no code fences. ONLY JSON.
                 continue
             owned = key in flag_state["unlocked_flags"]
             xp_ok = total_xp >= cfg["xp_required"]
-            selected = (key == flag_state["selected_flag"])
             plus_only = bool(cfg.get("plus_only"))
             plus_locked = plus_only and not is_plus
             plus_pill = ' <span style="background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;vertical-align:middle;">PLUS</span>' if plus_only else ''
             if owned:
-                if selected:
-                    tag = '<span style="color:#7c3aed;font-weight:700;">Equipado</span>'
-                    btn = '<button class="btn btn-sm btn-outline" disabled>En uso</button>'
-                else:
-                    tag = '<span style="color:#10b981;font-weight:700;">Comprado</span>'
-                    btn = f'<button class="btn btn-sm btn-primary" onclick="equipFlag(\'{key}\')">Equipar</button>'
+                # Equipping happens on the profile, not the store.
+                tag = '<span style="color:#10b981;font-weight:700;">Comprado</span>'
+                btn = ''
             elif plus_locked:
                 tag = '<span style="color:#a855f7;">Requiere suscripción PLUS</span>'
                 btn = '<button class="btn btn-sm btn-outline" disabled>Solo PLUS</button>'
@@ -21919,11 +21930,6 @@ No markdown, no code fences. ONLY JSON.
           alert('Desbloqueado: ' + r.banner_name + ' + ' + r.flag_name);
           mrReload();
         }}
-        async function equipFlag(key) {{
-          const r = await fetch('/api/student/wallet/set-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key: key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'No se pudo equipar.'); return; }}
-          mrReload();
-        }}
         async function changeTier(tier) {{
           const labels = {{free:'Gratis', plus:'Plus', ultimate:'Ultimate'}};
           if (!confirm('¿Cambiar al plan ' + (labels[tier]||tier) + '?')) return;
@@ -21956,6 +21962,14 @@ No markdown, no code fences. ONLY JSON.
 
     @app.route("/student/profile")
     def student_profile_page():
+        # Your own profile now lands on the public view (what other students see),
+        # which renders an "Edit profile" button when viewing yourself.
+        if not _logged_in():
+            return redirect(url_for("login"))
+        return student_public_profile_page(_cid())
+
+    @app.route("/student/profile/edit")
+    def student_profile_edit_page():
         if not _logged_in():
             return redirect(url_for("login"))
         cid = _cid()
@@ -22094,14 +22108,18 @@ No markdown, no code fences. ONLY JSON.
         progress_pct = 0
         if ceil > floor:
             progress_pct = max(0, min(100, int((total_xp - floor) * 100 / (ceil - floor))))
-        return _s_render("My Profile", f"""
+        _back_label = "← Volver al perfil" if session.get("lang", "es") != "en" else "← Back to profile"
+        return _s_render("Edit profile", f"""
         <style>{sdb.BANNER_ANIM_CSS}
 {sdb.FLAG_ANIM_CSS}
           .student-profile-wrap {{ max-width:900px;margin:-16px auto 0; }}
           @media (max-width: 768px) {{ .student-profile-wrap {{ margin-top:-8px; }} }}
           .student-profile-wrap .stat-card::before {{ display:none!important; }}
+          .profile-edit-back {{ display:inline-flex;align-items:center;gap:6px;margin-bottom:14px;color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:700; }}
+          .profile-edit-back:hover {{ color:var(--text); }}
         </style>
         <div class="student-profile-wrap">
+          <a href="/student/profile" class="profile-edit-back">{_back_label}</a>
           <div style="margin-bottom:22px;">
             <div id="profile-banner" class="bnr-anim-host {equipped_banner_anim}" style="height:140px;background:{banner_css};border:1px solid var(--border);border-bottom:none;border-radius:14px 14px 0 0;"></div>
             <div style="background:#0B1220;border:1px solid var(--border);border-top:none;border-radius:0 0 14px 14px;padding:14px 22px 18px;position:relative;">
