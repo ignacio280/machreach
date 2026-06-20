@@ -21780,80 +21780,17 @@ No markdown, no code fences. ONLY JSON.
                     '</div>'
                 )
             subscriptions_html = "".join(sub_cards)
-            junaeb_email = "support@machreach.com"
-            junaeb_subject = "Junaeb%20%E2%80%94%20Solicitud%20de%20descuento%20PLUS"
-            junaeb_body = (
-                "Hola%20equipo%20Machreach%2C%0A%0A"
-                "Adjunto%20fotos%20de%20mi%20Tarjeta%20Junaeb%20%28frente%20y%20reverso%29%20"
-                "para%20solicitar%20el%20descuento%20PLUS.%0A%0A"
-                "Mi%20correo%20de%20la%20cuenta%3A%20%5Bcompletar%5D%0A"
-                "Mi%20universidad%3A%20%5Bcompletar%5D%0A%0AGracias!"
-            )
-            junaeb_mailto = f"mailto:{junaeb_email}?subject={junaeb_subject}&body={junaeb_body}"
-            junaeb_card = (
-                '<div style="margin-top:14px;background:linear-gradient(135deg,#ecfdf5,#d1fae5);'
-                'border:1px solid #10b981;border-radius:14px;padding:16px 18px;color:#064e3b;">'
-                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
-                '<span style="font-size:22px;">\U0001f4b3</span>'
-                '<div style="font-weight:800;font-size:15px;">¿Tienes Tarjeta Junaeb?</div>'
-                '</div>'
-                '<div style="font-size:13px;line-height:1.5;margin-bottom:10px;">'
-                'Si tienes Junaeb activa, te damos un descuento especial en PLUS. '
-                'Mándanos una foto del <b>frente</b> y <b>reverso</b> de tu tarjeta a '
-                f'<a href="mailto:{junaeb_email}" style="color:#047857;font-weight:700;">{junaeb_email}</a> '
-                'y te respondemos manualmente con un código de descuento (24–48h).'
-                '</div>'
-                f'<a href="{junaeb_mailto}" class="btn btn-sm btn-primary" '
-                'style="background:#10b981;border:none;display:inline-block;">'
-                '\U00002709️ Enviar correo a soporte</a>'
-                '</div>'
-            )
             subscription_section = (
                 '<div class="card">'
                 '<div class="card-header"><h2>\U0001F48E Suscripción</h2></div>'
                 '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">'
                 + subscriptions_html +
                 '</div>'
-                + junaeb_card +
                 '</div>'
             )
         except Exception as _sub_err:
             log.exception("Shop subscription section failed: %s", _sub_err)
             subscription_section = ""
-
-        # Build identity bundle cards (25% off banner+flag bundles)
-        bundle_cards = []
-        cur_flag_state = sdb.get_flag_state(cid)
-        for bkey, bcfg in sdb.BUNDLES.items():
-            if bcfg.get("plus_only") and not is_plus:
-                continue
-            bnr = sdb.BANNERS.get(bcfg.get("banner") or "") or {}
-            flg = sdb.FLAGS.get(bcfg.get("flag") or "") or {}
-            full = int(bnr.get("price_coins") or 0) + int(flg.get("price_coins") or 0)
-            price = sdb.bundle_price(bkey)
-            already_b = (bcfg.get("banner") in (wallet["unlocked_banners"] or []))
-            already_f = (bcfg.get("flag") in (cur_flag_state["unlocked_flags"] or []))
-            both = already_b and already_f
-            if both:
-                cta = '<button class="btn btn-sm btn-outline" disabled>Comprado</button>'
-            elif wallet["coins"] < price:
-                cta = f'<button class="btn btn-sm btn-outline" disabled>Comprar ({price} \U0001FA99)</button>'
-            else:
-                cta = f'<button class="btn btn-sm btn-primary" onclick="buyBundle(\'{bkey}\')">Comprar ({price} \U0001FA99)</button>'
-            anim_b = (bnr.get("anim_class") or "") if bnr.get("animated") else ""
-            bundle_cards.append(
-                f'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
-                f'  <div class="bnr-anim-host {anim_b}" style="height:70px;background:{bnr.get("css","")};"></div>'
-                f'  <div style="height:8px;background:{flg.get("css","")};opacity:.85;"></div>'
-                f'  <div style="padding:14px;">'
-                f'    <div style="font-weight:700;font-size:15px;">{bcfg["name"]} <span style="background:#22c55e;color:#03250f;font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;vertical-align:middle;">−25%</span></div>'
-                f'    <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">{bcfg.get("desc","")}</div>'
-                f'    <div style="font-size:12px;color:var(--text-muted);"><s>{full} \U0001FA99</s></div>'
-                f'    <div style="margin-top:10px;">{cta}</div>'
-                f'  </div>'
-                f'</div>'
-            )
-        bundles_html = "".join(bundle_cards) or '<div style="color:var(--text-muted);font-size:13px;">No hay packs disponibles ahora.</div>'
 
         # ── Coin packs (real-money microtransactions) ─────────────────
         coin_pack_cards = []
@@ -21938,14 +21875,6 @@ No markdown, no code fences. ONLY JSON.
           <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Lúcete en el ranking. Tu bandera fluye detrás de tu fila, desvaneciéndose de izquierda a derecha \u2014 visible para todos los estudiantes.</p>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
             {flags_html}
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header"><h2>🎁 Packs de identidad &nbsp; <span style="font-size:13px;font-weight:600;color:#22c55e;">25% de descuento</span></h2></div>
-          <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">Packs que desbloquean banner + bandera juntos por menos que comprándolos por separado.</p>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
-            {bundles_html}
           </div>
         </div>
 
@@ -22160,35 +22089,6 @@ No markdown, no code fences. ONLY JSON.
         ring_grid = _cos_grid("timer_ring", sdb.TIMER_RINGS, cos_state["timer_ring"],
             lambda k, cfg: f'<div style="height:60px;display:flex;align-items:center;justify-content:center;"><div style="width:42px;height:42px;border-radius:50%;background:{cfg["css"]};display:flex;align-items:center;justify-content:center;"><div style="width:30px;height:30px;border-radius:50%;background:var(--card);"></div></div></div>')
 
-        # ── Identity bundles (25% off) ──
-        bundle_cards = []
-        for bkey, bcfg in sdb.BUNDLES.items():
-            if bcfg.get("plus_only") and not getattr(sdb, "_is_plus_user", lambda _x: False)(cid):
-                continue
-            bnr = sdb.BANNERS.get(bcfg.get("banner") or "") or {}
-            flg = sdb.FLAGS.get(bcfg.get("flag") or "") or {}
-            full = int(bnr.get("price_coins") or 0) + int(flg.get("price_coins") or 0)
-            price = sdb.bundle_price(bkey)
-            already_b = (bcfg.get("banner") in (wallet["unlocked_banners"] or []))
-            already_f = (bcfg.get("flag") in (sdb.get_flag_state(cid)["unlocked_flags"] or []))
-            both = already_b and already_f
-            cta = ('<button disabled style="background:#374151;color:#9ca3af;border:0;border-radius:8px;padding:6px 12px;font-size:12px;cursor:not-allowed;">Comprado</button>'
-                   if both else
-                   f'<button onclick="buyBundle(\'{bkey}\')" style="background:linear-gradient(90deg,#7c3aed,#3b82f6);color:#fff;border:0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;">Buy {price} 🪙</button>')
-            bundle_cards.append(
-                f'<div style="border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card);">'
-                f'  <div style="height:48px;background:{bnr.get("css","")};"></div>'
-                f'  <div style="height:6px;background:{flg.get("css","")};opacity:.85;"></div>'
-                f'  <div style="padding:10px 12px;">'
-                f'    <div style="font-weight:700;font-size:14px;">{bcfg["name"]}</div>'
-                f'    <div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px;">{bcfg.get("desc","")}</div>'
-                f'    <div style="font-size:11px;color:var(--text-muted);"><s>{full} 🪙</s> &nbsp; <b style="color:#22c55e;">−25%</b></div>'
-                f'    <div style="display:flex;justify-content:flex-end;margin-top:6px;">{cta}</div>'
-                f'  </div>'
-                f'</div>'
-            )
-        bundles_grid = "".join(bundle_cards) or '<div style="color:var(--text-muted);font-size:13px;">No bundles available right now.</div>'
-
         name = (c.get("name") or "Student").replace("<", "&lt;")
         email = (c.get("email") or "").replace("<", "&lt;")
         progress_pct = 0
@@ -22199,6 +22099,7 @@ No markdown, no code fences. ONLY JSON.
 {sdb.FLAG_ANIM_CSS}
           .student-profile-wrap {{ max-width:900px;margin:-16px auto 0; }}
           @media (max-width: 768px) {{ .student-profile-wrap {{ margin-top:-8px; }} }}
+          .student-profile-wrap .stat-card::before {{ display:none!important; }}
         </style>
         <div class="student-profile-wrap">
           <div style="margin-bottom:22px;">
@@ -22240,12 +22141,6 @@ No markdown, no code fences. ONLY JSON.
               <button id="badge-side-right" onclick="setBadgeSide('right')" class="badge-side-btn active" style="border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;">Right slot ▶</button>
             </div>
             <div class="profile-cosm-grid" data-cosm="badges">{badges_grid}</div>
-          </div>
-
-          <div class="card">
-            <div class="card-header"><h2>🎁 Identity bundles &nbsp; <span style="font-size:12px;font-weight:600;color:#22c55e;">25% de descuento</span></h2></div>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Bundles unlock a matching banner + flag at a discount vs buying separately.</p>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">{bundles_grid}</div>
           </div>
         </div>
 
