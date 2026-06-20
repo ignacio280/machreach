@@ -512,6 +512,14 @@ def init_student_db():
         init_course_catalog_table()
     except Exception as e:
         log.exception("init_course_catalog_table failed: %s", e)
+    # Sweep every previously-added course into the catalog so autofill reflects
+    # the whole user base per university, not just recently-added courses.
+    try:
+        _n = backfill_course_catalog()
+        if _n:
+            log.info("course catalog backfill added %s entr%s", _n, "y" if _n == 1 else "ies")
+    except Exception as e:
+        log.exception("backfill_course_catalog failed: %s", e)
     # Removed market feature: new installs should not create or expose its tables.
     # Academic identity layer (countries, universities, majors, leagues).
     # Imported lazily so a bad seed file can't take down the whole app.
@@ -995,6 +1003,72 @@ def search_course_catalog(university_id: int | None, query: str, limit: int = 8)
                 (university_id, like, like, limit),
             ) or []
     return [dict(r) for r in rows]
+
+
+def backfill_course_catalog() -> int:
+    """One-time, self-healing fill of the autofill catalog from EVERY course
+    any student has ever added (manual or Canvas), grouped per university.
+
+    The catalog is populated going forward on each course add, but courses
+    added before that wiring existed were never recorded — so autofill only
+    knew recent ones. This sweeps all existing student_courses (joined to each
+    owner's university) into the catalog. Idempotent: it loads the catalog's
+    existing keys once and only inserts the (university, code, name) combos
+    that are missing, so re-running on every startup is cheap and never
+    double-counts. `uses` is seeded with how many students added that course,
+    so popularity ordering reflects the whole user base.
+    """
+    with get_db() as db:
+        courses = _fetchall(
+            db,
+            "SELECT c.university_id AS university_id, sc.code AS code, sc.name AS name "
+            "FROM student_courses sc JOIN clients c ON c.id = sc.client_id "
+            "WHERE c.university_id IS NOT NULL",
+        ) or []
+        existing = _fetchall(
+            db,
+            "SELECT university_id, code_norm, name_norm FROM student_course_catalog",
+        ) or []
+
+    have = {
+        (int(d["university_id"]), d.get("code_norm") or "", d.get("name_norm") or "")
+        for d in (dict(r) for r in existing)
+    }
+    agg: dict[tuple, dict] = {}
+    for row in courses:
+        d = dict(row)
+        uni = d.get("university_id")
+        name = (d.get("name") or "").strip()
+        if not uni or not name:
+            continue
+        code = (d.get("code") or "").strip()
+        key = (int(uni), _catalog_norm(code), _catalog_norm(name))
+        if key in have:
+            continue  # already in the catalog — leave its uses untouched
+        entry = agg.get(key)
+        if entry is None:
+            agg[key] = {"university_id": int(uni), "code": code, "name": name, "uses": 1}
+        else:
+            entry["uses"] += 1
+
+    if not agg:
+        return 0
+    inserted = 0
+    with get_db() as db:
+        for (uni, code_norm, name_norm), v in agg.items():
+            try:
+                _exec(
+                    db,
+                    "INSERT INTO student_course_catalog "
+                    "(university_id, code, code_norm, name, name_norm, uses) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (v["university_id"], v["code"], code_norm, v["name"], name_norm, v["uses"]),
+                )
+                inserted += 1
+            except Exception:
+                # Unique-constraint race (another writer added it): safe to skip.
+                pass
+    return inserted
 
 
 def get_current_semester(client_id: int) -> str:
