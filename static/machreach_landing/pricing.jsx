@@ -205,14 +205,14 @@ function FinalCTA() {
             Estudia distinto<br/>este semestre.
           </h2>
           <p style={{ fontSize: 18, color: "color-mix(in oklab, white 80%, transparent)", maxWidth: 540, margin: "0 auto 32px" }}>
-            Activa la extensión de MachReach y empieza a ordenar tus cursos hoy mismo. Tu yo del lunes te lo va a agradecer.
+            Conecta tus ramos y empieza a ordenar tu estudio hoy mismo. Tu yo del lunes te lo va a agradecer.
           </p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
           <a className="btn btn-lg final-cta-primary" href="/register" style={{
               background: "var(--ink)", color: "white", borderColor: "var(--ink)",
               boxShadow: "0 4px 0 0 color-mix(in oklab, black 50%, transparent)",
             }}>
-              <IconCanvas size={20}/> Usar la extensión
+              <IconBolt size={20}/> Empieza gratis
             </a>
             <a className="btn btn-lg" href="#features" style={{
               background: "white", color: "var(--brand-ink)", borderColor: "var(--ink)",

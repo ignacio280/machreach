@@ -3,7 +3,7 @@
 /* -------- HOW IT WORKS -------- */
 function HowItWorks() {
   const steps = [
-    { n: "01", t: "Activa la extensión", d: "La extensión de MachReach detecta tus cursos desde tu sesión abierta de Canvas, sin configuración técnica y sin tocar tus credenciales.", icon: <IconCanvas/> },
+    { n: "01", t: "Conecta tus ramos", d: "Trae tus ramos con la extensión de MachReach o agrégalos a mano en segundos. Sin configuración técnica y sin tocar tus credenciales.", icon: <IconBook/> },
     { n: "02", t: "Estudia con Focus", d: "Elige ramo, prueba y dale start. El reloj cuenta y la app te suma XP.", icon: <IconTimer/> },
     { n: "03", t: "Sube de liga", d: "Compite cada semana con tu universidad. Premios reales en monedas.", icon: <IconTrophy/> },
   ];
@@ -54,76 +54,128 @@ function HowItWorks() {
   );
 }
 
-/* -------- CANVAS CALLOUT -------- */
+/* -------- STUDY PLAN CALLOUT (scroll-driven planner build) -------- */
 function CanvasCallout() {
-  const lines = [
-    { c: "var(--accent)", t: "→ extension.machreach/canvas", d: 0 },
-    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ Canvas abierto detectado", d: 200 },
-    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ✓ cursos leídos por la extensión", d: 400 },
-    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ok ramos listos para ordenar", d: 600 },
-    { c: "color-mix(in oklab, white 50%, transparent)", t: "  ok herramientas listas", d: 800 },
-    { c: "var(--brand)", t: "→ listo para estudiar.", d: 1100 },
+  // Weekly planner: subject blocks drop into a 7-day grid as the user scrolls,
+  // then a "Tu plan está listo" badge appears. Recreated from MachReach Animación.
+  const DAYS = ["L", "M", "M", "J", "V", "S", "D"];
+  const PURPLE = "#5B4694", GREEN = "#1E9E72", BLUE = "#3B6FE0", ORANGE = "#F0922E", PINK = "#EC4899";
+  // col 1-7, row 1-3, rowSpan, label, color — listed in drop order.
+  const blocks = [
+    { col: 1, row: 1, span: 2, t: "Cálculo II", c: PURPLE },
+    { col: 3, row: 1, span: 1, t: "Inglés",     c: BLUE   },
+    { col: 5, row: 1, span: 1, t: "Física",     c: PINK   },
+    { col: 2, row: 2, span: 1, t: "Química",    c: GREEN  },
+    { col: 4, row: 2, span: 2, t: "Cálculo II", c: PURPLE },
+    { col: 3, row: 3, span: 1, t: "Historia",   c: ORANGE },
+    { col: 6, row: 3, span: 1, t: "Química",    c: GREEN  },
+    { col: 7, row: 1, span: 2, t: "Repaso",     c: ORANGE },
   ];
-  const [shown, setShown] = React.useState(0);
+
+  const wrapRef = React.useRef(null);
+  const [p, setP] = React.useState(0); // 0..1 scrub progress through the section
+  // The planner is pinned (sticky) while the user scrolls through a tall wrapper,
+  // so the plan BUILDS as you scroll down and UN-BUILDS as you scroll up — the
+  // animation is scrubbed by scroll position. A rAF loop (IntersectionObserver-
+  // gated for perf) maps scroll distance through the wrapper to progress; on short
+  // layouts (mobile, where pinning is disabled) it falls back to a pass-through reveal.
   React.useEffect(() => {
-    const id = setInterval(() => setShown(s => (s >= lines.length ? 0 : s + 1)), 600);
-    return () => clearInterval(id);
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    let raf = 0, active = false, last = -1;
+    const measure = () => {
+      raf = 0;
+      const r = wrap.getBoundingClientRect();
+      const vh = window.innerHeight || 800;
+      const travel = wrap.offsetHeight - vh;
+      let prog;
+      if (travel > vh * 0.4) prog = (-r.top) / travel;             // pinned scrub
+      else if (r.height) prog = (vh * 0.85 - r.top) / (vh * 0.55);  // mobile pass-through
+      else prog = 0;
+      prog = Math.max(0, Math.min(1, prog));
+      const q = Math.round(prog * 100) / 100;
+      if (q !== last) { last = q; setP(q); }
+      if (active) raf = requestAnimationFrame(measure);
+    };
+    const io = new IntersectionObserver((ents) => {
+      const vis = ents[0].isIntersecting;
+      if (vis && !active) { active = true; if (!raf) raf = requestAnimationFrame(measure); }
+      else if (!vis && active) { active = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } measure(); }
+    }, { threshold: 0 });
+    io.observe(wrap);
+    return () => { active = false; io.disconnect(); if (raf) cancelAnimationFrame(raf); };
   }, []);
+  // Each block fades/slides in over its own slice of the scroll; badge at the end.
+  const each = 0.8 / blocks.length;
+  const blockProg = (i) => Math.max(0, Math.min(1, (p - i * each) / (each * 1.7)));
+  const ready = p > 0.9;
+
   return (
-    <section>
-      <div className="container">
-        <div className="canvas-cta" style={{
-          display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 48,
-          alignItems: "center", background: "var(--ink)", color: "white",
-          borderRadius: 36, padding: "56px 56px",
-          border: "2px solid var(--ink)", boxShadow: "0 8px 0 0 var(--brand)",
-          position: "relative", overflow: "hidden",
-        }}>
-          <div>
-            <span className="eyebrow" style={{ background: "color-mix(in oklab, white 14%, transparent)", borderColor: "white", color: "white" }}>
-              <span className="dot" style={{ background: "var(--accent)" }}/> Conexion simple
-            </span>
-            <h2 style={{ fontSize: "clamp(34px, 4.5vw, 56px)", marginTop: 18, color: "white" }}>
-              Activa la extensión,<br/>ordena tus cursos.
-            </h2>
-            <p style={{ color: "color-mix(in oklab, white 75%, transparent)", fontSize: 18, marginTop: 16, maxWidth: 480 }}>
-              La extensión de MachReach lee tu lista de cursos desde tu propia sesión de Canvas y la envía a MachReach para organizar tu estudio por ramo. Solo detecta cursos; no toca tareas, notas ni credenciales.
-            </p>
-            <div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}>
-        <a href="/register" className="btn btn-primary btn-lg" style={{ borderColor: "white" }}>
-                <IconCanvas size={20}/> Usar la extensión
-              </a>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14, color: "color-mix(in oklab, white 70%, transparent)" }}>
-                <IconCheck size={16}/> UC, UDP, USACH, UAndes, UAI…
-              </span>
-            </div>
-          </div>
-          <div>
-            <div style={{
-              background: "color-mix(in oklab, white 6%, var(--ink))",
-              border: "2px solid color-mix(in oklab, white 18%, transparent)",
-              borderRadius: 20, padding: 20,
-              fontFamily: "var(--font-mono)", fontSize: 13, minHeight: 220,
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid color-mix(in oklab, white 12%, transparent)" }}>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f56" }}/>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffbd2e" }}/>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#27c93f" }}/>
-                </div>
-                <span style={{ fontSize: 11, color: "color-mix(in oklab, white 50%, transparent)" }}>~/machreach/sync</span>
-              </div>
-              {lines.slice(0, shown).map((l, i) => (
-                <div key={i} style={{ color: l.c, lineHeight: 1.9, animation: "count-up .25s ease both" }}>{l.t}</div>
+    <section ref={wrapRef} className="plan-pin-wrap" style={{ position: "relative" }}>
+      <div className="plan-pin">
+      <div className="container" style={{ width: "100%" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", position: "relative" }}>
+          {/* "Tu plan está listo" badge — pops in once the plan is built */}
+          <div style={{
+            position: "absolute", top: -20, left: "50%", zIndex: 3,
+            transform: `translateX(-50%) translateY(${ready ? 0 : 10}px) scale(${ready ? 1 : 0.82})`,
+            opacity: ready ? 1 : 0,
+            transition: "opacity .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1)",
+            background: GREEN, color: "white", fontWeight: 800, fontSize: 15,
+            padding: "11px 22px", borderRadius: 999, whiteSpace: "nowrap",
+            boxShadow: "0 12px 28px rgba(30,158,114,.4)",
+          }}>✓ Tu plan está listo</div>
+
+          {/* Weekly planner card — blocks drop in as you scroll */}
+          <div style={{
+            background: "#FFFFFF", borderRadius: 24, padding: "22px 24px 20px",
+            border: "1px solid #ECE6D8", boxShadow: "0 24px 60px rgba(20,18,30,.12)",
+          }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 9, marginBottom: 11 }}>
+              {DAYS.map((d, i) => (
+                <div key={i} style={{ textAlign: "center", fontSize: 12, fontWeight: 800, color: "#9A948A", letterSpacing: ".08em" }}>{d}</div>
               ))}
-              {shown < lines.length && (
-                <span style={{ color: "var(--brand)", animation: "pulse-ring 1s infinite" }}>▍</span>
-              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridTemplateRows: "repeat(3, 64px)", gap: 9 }}>
+              {Array.from({ length: 21 }).map((_, i) => (
+                <div key={"c" + i} style={{ border: "1.5px dashed #E4DECF", borderRadius: 12 }}/>
+              ))}
+              {blocks.map((b, i) => {
+                const bp = blockProg(i);
+                return (
+                  <div key={"b" + i} style={{
+                    gridColumn: b.col, gridRow: b.row + " / span " + b.span,
+                    background: b.c, color: "white", borderRadius: 12, padding: "10px 13px",
+                    fontWeight: 800, fontSize: 13, lineHeight: 1.2,
+                    display: "flex", alignItems: "flex-start",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    boxShadow: "0 8px 18px rgba(0,0,0,.14)",
+                    opacity: bp,
+                    transform: "translateY(" + ((1 - bp) * -16) + "px) scale(" + (0.9 + bp * 0.1) + ")",
+                  }}>{b.t}</div>
+                );
+              })}
             </div>
           </div>
+
+          {/* Caption — fades in when the plan is ready */}
+          <p style={{
+            textAlign: "center", marginTop: 26, fontSize: "clamp(18px,2.4vw,24px)",
+            fontWeight: 700, color: "var(--ink-2)",
+            opacity: ready ? 1 : 0, transform: `translateY(${ready ? 0 : 8}px)`,
+            transition: "opacity .45s ease .05s, transform .45s ease .05s",
+          }}>Te arma el plan de estudios perfecto.</p>
         </div>
       </div>
-      <style>{`@media (max-width: 900px) { .canvas-cta { grid-template-columns: 1fr !important; padding: 40px 28px !important; } }`}</style>
+      </div>
+      <style>{`
+        .plan-pin-wrap { height: 180vh; }
+        .plan-pin { position: sticky; top: 0; height: 100vh; display: flex; align-items: center; }
+        @media (max-width: 900px) {
+          .plan-pin-wrap { height: auto; }
+          .plan-pin { position: static; height: auto; display: block; padding: 64px 0; }
+        }
+      `}</style>
     </section>
   );
 }
