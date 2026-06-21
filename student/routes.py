@@ -20492,7 +20492,9 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return redirect(url_for("login"))
         is_self = (user_id == _cid())
-        title = "Your Profile" if is_self else "Student Profile"
+        _es_pf = session.get("lang", "es") != "en"
+        title = ("Tu perfil" if is_self else "Perfil de estudiante") if _es_pf else ("Your Profile" if is_self else "Student Profile")
+        _loading = "Cargando perfil…" if _es_pf else "Loading profile…"
         content = """
 <style>""" + sdb.BANNER_ANIM_CSS + """
   #mr-prof { --pf-card:#10172A; --pf-border:rgba(148,163,184,.12); }
@@ -20593,7 +20595,7 @@ No markdown, no code fences. ONLY JSON.
     #mr-prof .pf-name { font-size:22px; }
   }
 </style>
-<div id="mr-prof"><div class="pf-loading">Loading profile…</div></div>
+<div id="mr-prof"><div class="pf-loading">""" + _loading + """</div></div>
 <script>
 (function(){
   var USER_ID = """ + str(int(user_id)) + """;
@@ -20601,19 +20603,20 @@ No markdown, no code fences. ONLY JSON.
   function escapeHtml(s){return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function initials(name){return (name||'?').split(/\\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();}
   function fmtMin(m){ m = m||0; if (m < 60) return m + 'm'; var h = Math.floor(m/60), r = m%60; return r ? (h+'h '+r+'m') : (h+'h'); }
+  function t(en, es){ return document.documentElement.lang !== 'en' ? es : en; }
   fetch('/api/academic/user/' + USER_ID).then(r => r.json()).then(p => {
     var box = document.getElementById('mr-prof');
-    if (!p || p.error) { box.innerHTML = '<div class="pf-error">Profile not found.</div>'; return; }
+    if (!p || p.error) { box.innerHTML = '<div class="pf-error">' + t('Profile not found.','Perfil no encontrado.') + '</div>'; return; }
     var country = p.country ? ((p.country.flag_emoji || '') + ' ' + escapeHtml(p.country.name || '')) : '';
-    var uniName = p.university ? escapeHtml(p.university.name || '') : '<span style="color:var(--text-muted);">No university set</span>';
-    var majorName = p.major ? escapeHtml(p.major.name || '') : '<span style="color:var(--text-muted);">No major set</span>';
-    var retiredTag = p.is_retired ? '<span class="pf-retired-tag">🏖️ Retired</span>' : '';
+    var uniName = p.university ? escapeHtml(p.university.name || '') : '<span style="color:var(--text-muted);">' + t('No university set','Sin universidad') + '</span>';
+    var majorName = p.major ? escapeHtml(p.major.name || '') : '<span style="color:var(--text-muted);">' + t('No major set','Sin carrera') + '</span>';
+    var retiredTag = p.is_retired ? '<span class="pf-retired-tag">🏖️ ' + t('Retired','Retirado') + '</span>' : '';
     var rankColor = (p.rank && p.rank.color) || '#6366F1';
-    var rankName = (p.rank && p.rank.full_name) || 'Unranked';
+    var rankName = (p.rank && p.rank.full_name) || t('Unranked','Sin rango');
     var leaderPos = p.leaderboard_position;
     var posLine = (leaderPos && leaderPos.rank)
-      ? '#' + leaderPos.rank + ' / ' + (leaderPos.total||'?') + ' (' + (leaderPos.scope==='retirement' ? 'Retired' : 'Global') + ')'
-      : 'Unranked';
+      ? '#' + leaderPos.rank + ' / ' + (leaderPos.total||'?') + ' (' + (leaderPos.scope==='retirement' ? t('Retired','Retirado') : 'Global') + ')'
+      : t('Unranked','Sin clasificar');
     var bio = p.bio ? '<p style="margin:14px 0 0;color:var(--text-muted);font-size:14px;line-height:1.6;">' + escapeHtml(p.bio) + '</p>' : '';
     var _profEs = document.documentElement.lang !== 'en';
     var editBtn = IS_SELF ? '<a class="pf-edit-btn" href="/student/profile/edit">✏️ ' + (_profEs ? 'Editar perfil' : 'Edit profile') + '</a>' : '';
@@ -20628,8 +20631,8 @@ No markdown, no code fences. ONLY JSON.
     html +=   '<div class="pf-avatar">' + initials(p.name) + '</div>';
     html +=   '<div class="pf-id-body">';
     html +=     '<h1 class="pf-name">' + escapeHtml(p.name) + retiredTag + '</h1>';
-    var rankNum = (leaderPos && leaderPos.rank) ? ('#' + leaderPos.rank) : 'Unranked';
-    html +=     '<div class="pf-rankline">Rank <b>' + rankNum + '</b> &middot; <b>' + (p.xp||0).toLocaleString() + '</b> XP</div>';
+    var rankNum = (leaderPos && leaderPos.rank) ? ('#' + leaderPos.rank) : t('Unranked','Sin rango');
+    html +=     '<div class="pf-rankline">' + t('Rank','Rango') + ' <b>' + rankNum + '</b> &middot; <b>' + (p.xp||0).toLocaleString() + '</b> XP</div>';
     html += '</div>';
     html += '</div>';
 
@@ -20649,22 +20652,22 @@ No markdown, no code fences. ONLY JSON.
     html +=   '</div>';
     html += '</div>';
     html += '<div class="pf-grid">';
-    html +=   '<div class="pf-stat"><div class="label">XP total</div><div class="value">' + (p.xp||0).toLocaleString() + '</div></div>';
-    html +=   '<div class="pf-stat"><div class="label">Total hours studied</div><div class="value">' + ((p.total_hours||0).toFixed(1)) + 'h</div></div>';
-    html +=   '<div class="pf-stat"><div class="label">Focus sessions</div><div class="value">' + (p.sessions||0).toLocaleString() + '</div></div>';
-    html +=   '<div class="pf-stat"><div class="label">Leaderboard</div><div class="value">' + posLine + '</div></div>';
-    html +=   '<div class="pf-stat"><div class="label">Badges</div><div class="value">' + (p.badge_count||0) + '</div></div>';
-    html +=   '<div class="pf-stat"><div class="label">Status</div><div class="value">' + (p.is_retired ? '🏖️ Retired' : '⚡ Active') + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">' + t('XP total','XP total') + '</div><div class="value">' + (p.xp||0).toLocaleString() + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">' + t('Total hours studied','Horas estudiadas') + '</div><div class="value">' + ((p.total_hours||0).toFixed(1)) + 'h</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">' + t('Focus sessions','Sesiones de enfoque') + '</div><div class="value">' + (p.sessions||0).toLocaleString() + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">' + t('Leaderboard','Clasificación') + '</div><div class="value">' + posLine + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">' + t('Badges','Insignias') + '</div><div class="value">' + (p.badge_count||0) + '</div></div>';
+    html +=   '<div class="pf-stat"><div class="label">' + t('Status','Estado') + '</div><div class="value">' + (p.is_retired ? '🏖️ ' + t('Retired','Retirado') : '⚡ ' + t('Active','Activo')) + '</div></div>';
     html += '</div>';
-    html += '<div class="pf-section"><h3>🏆 Badges</h3>';
+    html += '<div class="pf-section"><h3>🏆 ' + t('Badges','Insignias') + '</h3>';
     if (!p.badges || !p.badges.length) {
-      html += '<div class="pf-empty">No badges earned yet.</div>';
+      html += '<div class="pf-empty">' + t('No badges earned yet.','Aún no hay insignias.') + '</div>';
     } else {
       html += '<div class="pf-badges">';
       p.badges.forEach(b => {
-        var name = escapeHtml(b.name || b.key || 'Badge');
-        var desc = escapeHtml(b.desc || 'Earned badge.');
-        var earned = b.earned_at ? ('<div style="margin-top:4px;color:#94a3b8;font-size:11px;">Earned ' + escapeHtml(String(b.earned_at).slice(0,10)) + '</div>') : '';
+        var name = escapeHtml(b.name || b.key || t('Badge','Insignia'));
+        var desc = escapeHtml(b.desc || t('Earned badge.','Insignia obtenida.'));
+        var earned = b.earned_at ? ('<div style="margin-top:4px;color:#94a3b8;font-size:11px;">' + t('Earned','Obtenida') + ' ' + escapeHtml(String(b.earned_at).slice(0,10)) + '</div>') : '';
         html += '<span class="pf-badge">' + (b.icon||'🎖️') + ' ' + name +
                 '<span class="pf-tip"><b>' + name + '</b>' + desc + earned + '</span></span>';
       });
@@ -20673,7 +20676,7 @@ No markdown, no code fences. ONLY JSON.
     html += '</div>';
     box.innerHTML = html;
   }).catch(e => {
-    document.getElementById('mr-prof').innerHTML = '<div class="pf-error">Failed to load profile.</div>';
+    document.getElementById('mr-prof').innerHTML = '<div class="pf-error">' + t('Failed to load profile.','No se pudo cargar el perfil.') + '</div>';
   });
 })();
 </script>
