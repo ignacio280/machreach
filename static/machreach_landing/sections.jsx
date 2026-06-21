@@ -115,16 +115,11 @@ function CanvasCallout() {
       <div className="plan-pin">
       <div className="container" style={{ width: "100%" }}>
         <div style={{ maxWidth: 960, margin: "0 auto", position: "relative" }}>
-          {/* "Tu plan está listo" badge — pops in once the plan is built */}
-          <div style={{
-            position: "absolute", top: -20, left: "50%", zIndex: 3,
-            transform: `translateX(-50%) translateY(${ready ? 0 : 10}px) scale(${ready ? 1 : 0.82})`,
-            opacity: ready ? 1 : 0,
-            transition: "opacity .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1)",
-            background: GREEN, color: "white", fontWeight: 800, fontSize: 15,
-            padding: "11px 22px", borderRadius: 999, whiteSpace: "nowrap",
-            boxShadow: "0 12px 28px rgba(30,158,114,.4)",
-          }}>✓ Tu plan está listo</div>
+          {/* Heading on top — static, shown first (NOT part of the scroll animation) */}
+          <p style={{
+            textAlign: "center", margin: "0 0 24px", fontSize: "clamp(22px,3vw,32px)",
+            fontWeight: 800, color: "var(--ink)", letterSpacing: "-.02em",
+          }}>Te arma el plan de estudios perfecto.</p>
 
           {/* Weekly planner card — blocks drop in as you scroll */}
           <div style={{
@@ -158,13 +153,17 @@ function CanvasCallout() {
             </div>
           </div>
 
-          {/* Caption — fades in when the plan is ready */}
-          <p style={{
-            textAlign: "center", marginTop: 26, fontSize: "clamp(18px,2.4vw,24px)",
-            fontWeight: 700, color: "var(--ink-2)",
-            opacity: ready ? 1 : 0, transform: `translateY(${ready ? 0 : 8}px)`,
-            transition: "opacity .45s ease .05s, transform .45s ease .05s",
-          }}>Te arma el plan de estudios perfecto.</p>
+          {/* "Tu plan está listo" badge below — pops in once the plan is built */}
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 24 }}>
+            <div style={{
+              transform: `translateY(${ready ? 0 : 10}px) scale(${ready ? 1 : 0.82})`,
+              opacity: ready ? 1 : 0,
+              transition: "opacity .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1)",
+              background: GREEN, color: "white", fontWeight: 800, fontSize: 15,
+              padding: "11px 22px", borderRadius: 999, whiteSpace: "nowrap",
+              boxShadow: "0 12px 28px rgba(30,158,114,.4)",
+            }}>✓ Tu plan está listo</div>
+          </div>
         </div>
       </div>
       </div>
