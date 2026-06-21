@@ -67,3 +67,50 @@ def test_multiple_referrals_stack_weeks(make_user):
         ssub.grant_plus_days(owner, 7)
     assert sdb.referral_count(owner) == 3
     assert ssub.get_tier(owner) == "plus"
+
+
+def test_signup_route_rewards_inviter_after_verify(make_user, client, monkeypatch):
+    """End-to-end wiring: a friend who registers with the code and then verifies
+    their email grants the inviter a free week of Plus. The reward must fire at
+    verification (genuine sign-up), not at registration. Regression guard for the
+    bug where the signup route captured ?ref= but never redeemed it."""
+    import app as appmod
+    from outreach.db import get_client_by_email, get_db, _fetchone
+
+    # Exercise the route logic without the CSRF token the real form injects.
+    monkeypatch.setitem(appmod.app.config, "WTF_CSRF_ENABLED", False)
+
+    owner = make_user()
+    code = sdb.get_or_create_referral_code(owner)
+    assert ssub.get_tier(owner) == "free"
+
+    # Pretend the verification email sent so the account isn't rolled back.
+    monkeypatch.setattr(appmod, "_send_system_email", lambda *a, **k: True)
+
+    email = f"friend_{owner}@example.com"
+    resp = client.post("/register", data={
+        "name": "Friend", "email": email,
+        "password": "secret123", "password2": "secret123", "ref": code,
+    })
+    assert resp.status_code in (301, 302)
+
+    newbie = get_client_by_email(email)
+    assert newbie and not newbie.get("email_verified")
+
+    # Reward must NOT be granted before the email is verified.
+    assert sdb.referral_count(owner) == 0
+    assert ssub.get_tier(owner) == "free"
+
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT token FROM email_verification_tokens "
+            "WHERE client_id = %s ORDER BY id DESC LIMIT 1",
+            (newbie["id"],),
+        )
+    assert row and row.get("token")
+    client.get(f"/verify-email/{row['token']}")
+
+    # Now the inviter gets their free week.
+    assert sdb.referral_count(owner) == 1
+    assert ssub.get_tier(owner) == "plus"

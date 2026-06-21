@@ -1734,6 +1734,24 @@ def register():
         client_id = create_client(name, email, _hash_pw(password), business, account_type)
         _log_security("REGISTER_OK", client_id=client_id, email=email)
 
+        # Referral: stash the inviter's code on this new account so they're
+        # rewarded once it verifies its email (genuine sign-up only). The code was
+        # captured on the /register GET into a hidden field + session.
+        _ref = (request.form.get("ref") or session.get("referral_ref") or "").strip().upper()[:16]
+        if _ref:
+            try:
+                import json as _json
+                from outreach.db import get_mail_preferences, update_mail_preferences
+                _praw = get_mail_preferences(client_id) or ""
+                _pdict = _json.loads(_praw) if _praw else {}
+                if not isinstance(_pdict, dict):
+                    _pdict = {}
+                _pdict["pending_ref"] = _ref
+                update_mail_preferences(client_id, _json.dumps(_pdict))
+            except Exception as _re:
+                print(f"[REFERRAL] Failed to stash ref for {email}: {_re}", flush=True)
+            session.pop("referral_ref", None)
+
         # Send verification email
         email_sent = False
         try:
@@ -1901,6 +1919,24 @@ def verify_email(token):
         flash(("error", "Invalid or expired verification link. Please request a new one."))
         return redirect(url_for("login"))
     mark_email_verified(rec["client_id"])
+    # Referral reward: now that this sign-up is genuine (email verified), grant the
+    # inviter a free week of Plus. redeem_referral is idempotent (UNIQUE referred_id)
+    # and we clear the stashed code, so the reward can't fire twice.
+    try:
+        import json as _json
+        from outreach.db import get_mail_preferences, update_mail_preferences
+        from student import db as _sdb
+        from student import subscription as _ssub
+        _praw = get_mail_preferences(rec["client_id"]) or ""
+        _pdict = _json.loads(_praw) if _praw else {}
+        _ref = _pdict.pop("pending_ref", None) if isinstance(_pdict, dict) else None
+        if _ref:
+            update_mail_preferences(rec["client_id"], _json.dumps(_pdict))
+            _owner = _sdb.redeem_referral(_ref, rec["client_id"])
+            if _owner:
+                _ssub.grant_plus_days(_owner, 7)
+    except Exception as _re:
+        print(f"[REFERRAL] Reward grant failed for client {rec['client_id']}: {_re}", flush=True)
     client = get_client(rec["client_id"])
     flash(("success", f"Email verified! Welcome, {_esc(client['name']) if client else ''}. You can now log in."))
     return redirect(url_for("login"))
