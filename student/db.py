@@ -4489,11 +4489,11 @@ def _streak_freeze_cap(client_id: int) -> int:
 # Real-money packs that credit virtual coins. Prices are in USD; the actual
 # payment processor (Lemon Squeezy one-time orders) is wired in routes.py.
 COIN_PACKS = {
-    "small":  {"name": "Pocket Pack",    "coins": 250,   "bonus": 0,    "price_usd": 0.99,  "tag": ""},
-    "medium": {"name": "Stash Pack",     "coins": 800,   "bonus": 50,   "price_usd": 2.99,  "tag": "+6%"},
-    "large":  {"name": "Vault Pack",     "coins": 2000,  "bonus": 300,  "price_usd": 6.99,  "tag": "+15%"},
-    "mega":   {"name": "Treasury Pack",  "coins": 5500,  "bonus": 1000, "price_usd": 14.99, "tag": "+18% \u2022 BEST VALUE"},
-    "ultra":  {"name": "Whale Pack",     "coins": 15000, "bonus": 4000, "price_usd": 34.99, "tag": "+27%"},
+    "small":  {"name": "Pocket Pack",    "coins": 250,   "bonus": 0,    "price_clp": 990,   "tag": ""},
+    "medium": {"name": "Stash Pack",     "coins": 800,   "bonus": 50,   "price_clp": 2990,  "tag": "+6%"},
+    "large":  {"name": "Vault Pack",     "coins": 2000,  "bonus": 300,  "price_clp": 6990,  "tag": "+15%"},
+    "mega":   {"name": "Treasury Pack",  "coins": 5500,  "bonus": 1000, "price_clp": 14990, "tag": "+18% \u2022 BEST VALUE"},
+    "ultra":  {"name": "Whale Pack",     "coins": 15000, "bonus": 4000, "price_clp": 34990, "tag": "+27%"},
 }
 
 # Timed boosts. Each entry: (label, multiplier, hours, price_coins)

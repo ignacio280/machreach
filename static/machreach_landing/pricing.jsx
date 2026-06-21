@@ -1,21 +1,15 @@
 /* ======== Pricing + final CTA + Footer ======== */
 
 function Pricing() {
-  const [period, setPeriod] = React.useState("month");
-  const [currency, setCurrency] = React.useState("CLP");
-
-  const usdToClp = 950;
-  const fmt = (usd) => {
-    if (currency === "USD") return "$" + usd.toFixed(2);
-    const clp = Math.round(usd * usdToClp / 100) * 100;
-    return "$" + clp.toLocaleString("es-CL");
-  };
+  // CLP-only, monthly pricing. Prices are IVA-included (Lemon Squeezy is set to
+  // tax-inclusive so the listed price is the final price the customer pays).
+  const fmt = (clp) => "$" + clp.toLocaleString("es-CL");
   const tiers = [
     {
       key: "free",
       name: "Free",
       tag: "Para probar",
-      m: 0, y: 0,
+      clp: 0,
       blurb: "Lo justo para empezar a estudiar con estructura.",
       features: ["Canvas, cursos y Focus", "XP, monedas, rachas y rankings", "Planilla de notas, amigos y tienda", "1 quiz IA / dia", "1 mazo de flashcards IA / dia"],
       cta: "Empezar gratis", primary: false,
@@ -24,7 +18,7 @@ function Pricing() {
       key: "plus",
       name: "PLUS",
       tag: "Mas popular",
-      m: 4.99, y: 39.99,
+      clp: 4990,
       blurb: "Para los que estudian en serio cada semana.",
       features: ["Todo lo de Free", "Quizzes IA ilimitados", "Flashcards IA ilimitadas", "Mas ensayos y analitica avanzada", "+300 monedas mensuales", "Streak Insurance+ y cosmeticos PLUS"],
       cta: "Subirme a PLUS", primary: true,
@@ -33,7 +27,7 @@ function Pricing() {
       key: "ultimate",
       name: "Ultimate",
       tag: "Bloqueado",
-      m: 9.99, y: 79.99,
+      clp: 8990,
       blurb: "Lo abriremos cuando tenga valor real.",
       features: ["Todo lo de PLUS", "Limites maximos de IA", "Historial completo de analitica", "Mas monedas y reparaciones", "Cosmeticos Ultimate y early access"],
       cta: "Bloqueado por ahora", primary: false, locked: true,
@@ -48,47 +42,8 @@ function Pricing() {
           <p>Cancela cuando quieras. Sin contratos. Sin letra chica.</p>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 36, flexWrap: "wrap" }}>
-          {/* period toggle */}
-          <div style={{
-            display: "inline-flex", padding: 4, borderRadius: 14,
-            background: "var(--surface)", border: "2px solid var(--ink)",
-            boxShadow: "0 3px 0 0 var(--ink)",
-          }}>
-            {[
-              { k: "month", l: "Mensual" },
-              { k: "year", l: "Anual · −33%" },
-            ].map(p => (
-              <button key={p.k} onClick={() => setPeriod(p.k)} style={{
-                padding: "8px 18px", borderRadius: 10,
-                background: period === p.k ? "var(--brand)" : "transparent",
-                color: period === p.k ? "white" : "var(--ink-2)",
-                fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14,
-                cursor: "pointer", transition: "all .15s ease",
-              }}>{p.l}</button>
-            ))}
-          </div>
-          {/* currency toggle */}
-          <div style={{
-            display: "inline-flex", padding: 4, borderRadius: 14,
-            background: "var(--surface)", border: "2px solid var(--ink)",
-            boxShadow: "0 3px 0 0 var(--ink)",
-          }}>
-            {["CLP", "USD"].map(c => (
-              <button key={c} onClick={() => setCurrency(c)} style={{
-                padding: "8px 18px", borderRadius: 10,
-                background: currency === c ? "var(--ink)" : "transparent",
-                color: currency === c ? "white" : "var(--ink-2)",
-                fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14,
-                cursor: "pointer", transition: "all .15s ease",
-              }}>{c}</button>
-            ))}
-          </div>
-        </div>
-
         <div className="price-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, padding: "26px 0 12px", overflow: "visible" }}>
           {tiers.map(t => {
-            const price = period === "month" ? t.m : (t.y / 12);
             return (
               <div key={t.key} style={{
                 position: "relative",
@@ -122,16 +77,11 @@ function Pricing() {
                 <p style={{ color: t.primary ? "color-mix(in oklab, white 80%, transparent)" : "var(--ink-2)", fontSize: 14, marginBottom: 18 }}>{t.blurb}</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4 }}>
                   <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 48, letterSpacing: "-0.03em" }}>
-                    {fmt(price)}
+                    {t.clp ? fmt(t.clp) : "Gratis"}
                   </span>
-                  <span style={{ fontSize: 14, color: t.primary ? "color-mix(in oklab, white 70%, transparent)" : "var(--ink-3)" }}>/mes</span>
+                  {t.clp > 0 && <span style={{ fontSize: 14, color: t.primary ? "color-mix(in oklab, white 70%, transparent)" : "var(--ink-3)" }}>/mes</span>}
                 </div>
-                {period === "year" && t.y > 0 && (
-                  <div style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: t.primary ? "color-mix(in oklab, white 70%, transparent)" : "var(--ink-3)", marginBottom: 18 }}>
-                    facturado anual: {fmt(t.y)}
-                  </div>
-                )}
-                {(period === "month" || t.y === 0) && <div style={{ height: 18 }}/>}
+                <div style={{ height: 18 }}/>
                 <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10, marginBottom: 24, flex: 1 }}>
                   {t.features.map((f, i) => (
                     <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14, fontWeight: 600 }}>

@@ -43,8 +43,8 @@ PLANS = {
     "free": {
         "key": "free",
         "name": "Gratis",
-        "price_usd_month": 0.00,
-        "price_usd_year": 0.00,
+        "price_clp_month": 0,
+        "price_clp_year": 0,
         "blurb": "Empieza con Focus, Canvas, cursos y herramientas IA limitadas.",
         "features": [
             "Canvas, cursos, Focus, XP, monedas y rachas",
@@ -57,8 +57,8 @@ PLANS = {
     "plus": {
         "key": "plus",
         "name": "Plus",
-        "price_usd_month": 4.99,
-        "price_usd_year": 39.99,
+        "price_clp_month": 4990,
+        "price_clp_year": 59880,
         "blurb": "Para estudiantes que usan MachReach todas las semanas.",
         "features": [
             "Quizzes IA ilimitados",
@@ -79,8 +79,8 @@ PLANS = {
     "ultimate": {
         "key": "ultimate",
         "name": "Ultimate",
-        "price_usd_month": 9.99,
-        "price_usd_year": 79.99,
+        "price_clp_month": 8990,
+        "price_clp_year": 107880,
         "blurb": "Bloqueado por ahora. Lo abriremos cuando tenga valor real.",
         "features": [
             "Todo lo de Plus",

@@ -7075,10 +7075,10 @@ Material:
                 '  <div>'
                 '    <div class="mr-progress-kicker">Tu progreso de hoy</div>'
                 '    <h2 class="mr-progress-title serif">Haz tu primera sesión y el tablero empieza a moverse.</h2>'
-                '    <p class="mr-progress-copy">Conecta Canvas con la extensión para verificar tu universidad y traer tus cursos reales; luego completa un bloque de enfoque para activar tiempo, racha y XP.</p>'
+                '    <p class="mr-progress-copy">Agrega tus cursos y completa un bloque de enfoque para activar tiempo, racha y XP.</p>'
                 '    <div class="mr-progress-actions">'
                 '      <a class="mr-progress-btn" href="/student/focus">&#9201; Empezar enfoque</a>'
-                '      <a class="mr-progress-btn secondary" href="/student/canvas">Conectar Canvas</a>'
+                '      <a class="mr-progress-btn secondary" href="/student/courses">Agregar cursos</a>'
                 '    </div>'
                 '  </div>'
                 '  <div class="mr-progress-mini-grid" aria-label="Resumen inicial">'
@@ -7203,7 +7203,7 @@ Material:
                 '<div class="mr-empty" style="grid-column:1/-1;">'
                 '  <span class="icon">📚</span>'
                 '  No tienes cursos todavía.'
-                '  <br/><a class="cta" href="/student/canvas">🔗 Conectar Canvas</a>'
+                '  <br/><a class="cta" href="/student/courses">📚 Agregar cursos</a>'
                 '</div>'
             )
 
@@ -7212,8 +7212,8 @@ Material:
                 '<div class="mr-empty" style="grid-column:1/-1;">'
                 '  <span class="icon">&#128218;</span>'
                 '  <div class="mr-empty-title">No tienes cursos todavía.</div>'
-                '  <div class="mr-empty-copy">Conecta Canvas con la extensión de MachReach para confirmar tu universidad e importar tus cursos reales.</div>'
-                '  <div class="mr-empty-actions"><a class="cta" href="/student/canvas">Conectar Canvas</a></div>'
+                '  <div class="mr-empty-copy">Agrega tus cursos a mano o con la extensión de MachReach para empezar a organizar tu estudio.</div>'
+                '  <div class="mr-empty-actions"><a class="cta" href="/student/courses">Agregar cursos</a></div>'
                 '</div>'
             )
 
@@ -7465,7 +7465,7 @@ Material:
         _ob_ai = sdb.has_generated_ai(cid)
         _ob_invite = sdb.referral_count(cid) > 0
         _ob_items = [
-            (bool(courses), "Sincroniza tus cursos de Canvas con la extensión", "/student/canvas"),
+            (bool(courses), "Agrega tus cursos", "/student/courses"),
             (_ob_focus, "Inicia tu primera sesión de enfoque", "/student/focus"),
             (_ob_ai, "Genera tu primer quiz o set de flashcards", "/student/quizzes"),
             (_ob_invite, "Invita a un amigo y gana una semana de Plus gratis", "/student/invite"),
@@ -7604,7 +7604,7 @@ Material:
 
               <div style="font-size:36px;margin-bottom:10px;">&#128218;</div>
 
-              Aún no hay cursos. <a href="/student/canvas-settings" style="color:var(--primary);">Conecta Canvas</a> y tus cursos aparecerán aquí automáticamente.
+              Aún no hay cursos. <a href="/student/courses" style="color:var(--primary);">Agrega tus cursos</a> para empezar.
 
             </td></tr>"""
 
@@ -7711,18 +7711,19 @@ Material:
         # Canvas state keys off real Canvas courses (manual courses use a
         # negative canvas_course_id). Once connected, the banner is hidden
         # entirely — it only exists to prompt students who haven't connected.
-        _has_canvas = any(int(c.get("canvas_course_id") or 0) > 0 for c in courses)
-        if _has_canvas:
+        # Prompt to add courses only while the student has none — manual courses
+        # count too, so we no longer nag about Canvas specifically.
+        if courses:
             _canvas_banner = ""
         else:
             _canvas_banner = """
         <div class="canvas-banner">
-          <div class="cb-icon">⌬</div>
+          <div class="cb-icon">📚</div>
           <div class="cb-body">
-            <div class="cb-title">Canvas sin conectar</div>
-            <div class="cb-meta">Conecta Canvas con la extensión para importar tus cursos automáticamente</div>
+            <div class="cb-title">Aún no tienes cursos</div>
+            <div class="cb-meta">Agrégalos a mano o con la extensión de MachReach para organizar tu estudio</div>
           </div>
-          <a class="cb-btn" href="/student/canvas">Conectar Canvas</a>
+          <a class="cb-btn" href="/student/courses">Agregar cursos</a>
         </div>"""
 
         return _s_render("Mis Cursos", f"""
@@ -21770,8 +21771,12 @@ No markdown, no code fences. ONLY JSON.
                     f'<li style="margin:6px 0;font-size:13px;color:#334155;">{_esc(str(f))}</li>'
                     for f in cfg.get("features", [])
                 )
-                price = cfg.get("price_usd_month", 0)
-                price_html = "Gratis" if not price else f"${price:.2f}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mes</span>"
+                price = cfg.get("price_clp_month", 0)
+                if not price:
+                    price_html = "Gratis"
+                else:
+                    _clp = f"{int(price):,}".replace(",", ".")
+                    price_html = f"${_clp}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mes</span>"
                 label_name = cfg.get("name", key.title())
                 locked = bool(cfg.get("locked"))
                 if is_current:
@@ -21810,6 +21815,7 @@ No markdown, no code fences. ONLY JSON.
         coin_pack_cards = []
         for pkey, pcfg in sdb.COIN_PACKS.items():
             total = int(pcfg["coins"]) + int(pcfg.get("bonus") or 0)
+            _pack_clp = f"{int(pcfg.get('price_clp') or 0):,}".replace(",", ".")
             bonus_html = (f'<div style="font-size:11px;color:#22c55e;font-weight:700;margin-top:4px;">+{pcfg["bonus"]} bonus \U0001FA99</div>'
                           if pcfg.get("bonus") else '')
             tag_html = (f'<div style="position:absolute;top:8px;right:8px;background:linear-gradient(90deg,#f59e0b,#ec4899);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;letter-spacing:.04em;">{pcfg["tag"]}</div>'
@@ -21821,7 +21827,7 @@ No markdown, no code fences. ONLY JSON.
                 f'  <div style="font-size:13px;color:var(--text-muted);margin-top:6px;">{pcfg["name"]}</div>'
                 f'  <div style="font-size:24px;font-weight:800;margin-top:6px;">{total:,} monedas</div>'
                 f'  {bonus_html}'
-                f'  <div style="font-size:18px;font-weight:700;margin-top:10px;">${pcfg["price_usd"]:.2f}</div>'
+                f'  <div style="font-size:18px;font-weight:700;margin-top:10px;">${_pack_clp}</div>'
                 f'  <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px;" onclick="buyCoinPack(\'{pkey}\')">Comprar</button>'
                 f'</div>'
             )

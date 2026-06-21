@@ -1292,6 +1292,13 @@ SPANISH_TO_EN_VISIBLE.update({
     "Usamos cookies esenciales para mantener tu sesión y recordar tus preferencias. Sin cookies de tracking ni publicidad.": "We use essential cookies to keep your session and remember your preferences. No tracking or advertising cookies.",
     "Conecta Canvas con la extensión para verificar tu universidad y traer tus cursos reales; luego completa un bloque de enfoque para activar tiempo, racha y XP.": "Connect Canvas with the extension to verify your university and import your real courses; then complete a focus block to activate time, streak, and XP.",
     "Conecta Canvas con la extensión de MachReach para confirmar tu universidad e importar tus cursos reales.": "Connect Canvas with the MachReach extension to confirm your university and import your real courses.",
+    "Agregar cursos": "Add courses",
+    "Agrega tus cursos": "Add your courses",
+    "Agrega tus cursos para empezar.": "Add your courses to get started.",
+    "Agrega tus cursos y completa un bloque de enfoque para activar tiempo, racha y XP.": "Add your courses and complete a focus block to start tracking time, streak and XP.",
+    "Agrega tus cursos a mano o con la extensión de MachReach para empezar a organizar tu estudio.": "Add your courses manually or with the MachReach extension to start organizing your studying.",
+    "Aún no tienes cursos": "You don't have any courses yet",
+    "Agrégalos a mano o con la extensión de MachReach para organizar tu estudio": "Add them manually or with the MachReach extension to organize your studying",
     "Cuando tus cursos reales lleguen desde Canvas, agrega sus evaluaciones desde Mis cursos para ver prioridad y calendario.": "When your real courses arrive from Canvas, add their evaluations from My courses to see priority and calendar.",
 })
 
