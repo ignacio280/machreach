@@ -275,7 +275,6 @@ function Features() {
     <section id="features">
       <div className="container">
         <div className="section-head">
-          <span className="eyebrow"><span className="dot"/> Todo en un lugar</span>
           <h2>Tu semestre completo,<br/>convertido en progreso.</h2>
           <p>Seis piezas que se hablan entre sí para que estudiar sea ordenado, medible y, por fin, divertido.</p>
         </div>

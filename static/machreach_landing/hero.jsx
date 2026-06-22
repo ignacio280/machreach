@@ -213,7 +213,7 @@ function Hero() {
       <div className="container">
         <div style={heroStyles.grid} className="hero-grid">
           <div>
-            <span className="eyebrow hero-anim" style={{ "--d": "0s" }}><span className="dot"/> Hecho por estudiantes para estudiantes</span>
+            <p className="hero-kicker hero-anim" style={{ "--d": "0s" }}>Universidad, foco y progreso en una sola rutina.</p>
             <h1 style={heroStyles.h1}>
               <span className="hero-line"><span className="hero-line-in" style={{ "--d": ".06s" }}>Estudiar deja</span></span><br/>
               <span className="hero-line"><span className="hero-line-in" style={{ "--d": ".18s" }}>de ser una</span></span><br/>

@@ -37,7 +37,6 @@ function Pricing() {
     <section id="pricing">
       <div className="container">
         <div className="section-head">
-          <span className="eyebrow"><span className="dot"/> Precios</span>
           <h2>Empieza gratis.<br/>Sube cuando lo sientas.</h2>
           <p>Cancela cuando quieras. Sin contratos. Sin letra chica.</p>
         </div>

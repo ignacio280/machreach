@@ -47,8 +47,8 @@ src += "\n\n" + bootstrap + `
   var el = document.getElementById("root");
   if (!el) return;
   var element = React.createElement(App);
-  if (el.firstElementChild) { ReactDOM.hydrateRoot(el, element); }
-  else { ReactDOM.createRoot(el).render(element); }
+  if (el.firstElementChild) { el.innerHTML = ""; }
+  ReactDOM.createRoot(el).render(element);
 })();`;
 
 // --- 2. Transpile + minify -------------------------------------------------
