@@ -116,13 +116,6 @@ init_student_db()
 register_student_routes(app, csrf, limiter)
 register_academic_routes(app, csrf, limiter)
 
-# ── MachReach JR module (schools v2 — normalized, role-scoped API) ──
-from outreach.jr_db import jr_init_db
-from outreach.jr_api import jr_bp, jr_invite_bp
-jr_init_db()
-app.register_blueprint(jr_bp)          # /jr/api/* — session-scoped JSON API
-app.register_blueprint(jr_invite_bp)   # /jr/invite/* — public invite-accept pages
-
 
 # ---------------------------------------------------------------------------
 # System email helper — sends transactional emails from support@machreach.com
@@ -130,10 +123,38 @@ app.register_blueprint(jr_invite_bp)   # /jr/invite/* — public invite-accept p
 
 def _send_system_email(to: str, subject: str, body: str) -> bool:
     """Send a transactional email (verification, reset, invite) from the system account.
-    Returns True on success. Implementation lives in outreach/mailer.py so non-web
-    modules (e.g. the JR invite flow) can reuse it without importing this app."""
-    from outreach.mailer import send_system_email
-    return send_system_email(to, subject, body)
+    Returns True on success."""
+    from outreach.config import SMTP_HOST, SMTP_PORT
+    from outreach.config import SYSTEM_FROM_EMAIL, SYSTEM_FROM_NAME, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    print(f"[SYSTEM EMAIL] Attempting to send to {to} via {SMTP_HOST}:{SMTP_PORT} as {SYSTEM_SMTP_USER}", flush=True)
+    if not SYSTEM_SMTP_USER or not SYSTEM_SMTP_PASSWORD:
+        print(f"[SYSTEM EMAIL] SMTP credentials not set — SYSTEM_SMTP_USER={'set' if SYSTEM_SMTP_USER else 'EMPTY'}, SYSTEM_SMTP_PASSWORD={'set' if SYSTEM_SMTP_PASSWORD else 'EMPTY'}", flush=True)
+        return False
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{SYSTEM_FROM_NAME} <{SYSTEM_FROM_EMAIL}>" if SYSTEM_FROM_EMAIL else SYSTEM_SMTP_USER
+    msg["To"] = to
+    msg.attach(MIMEText(body, "plain"))
+    try:
+        if SMTP_PORT == 587:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
+                srv.starttls()
+                srv.login(SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD)
+                srv.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
+                srv.login(SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD)
+                srv.send_message(msg)
+        print(f"[SYSTEM EMAIL] Successfully sent to {to}", flush=True)
+        return True
+    except Exception as e:
+        import traceback
+        print(f"[SYSTEM EMAIL] Send FAILED ({to}): {type(e).__name__}: {e}", flush=True)
+        traceback.print_exc()
+        return False
 
 
 # ---------------------------------------------------------------------------
