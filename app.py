@@ -116,6 +116,13 @@ init_student_db()
 register_student_routes(app, csrf, limiter)
 register_academic_routes(app, csrf, limiter)
 
+# ── MachReach JR module (schools v2 — normalized, role-scoped API) ──
+from outreach.jr_db import jr_init_db
+from outreach.jr_api import jr_bp, jr_invite_bp
+jr_init_db()
+app.register_blueprint(jr_bp)          # /jr/api/* — session-scoped JSON API
+app.register_blueprint(jr_invite_bp)   # /jr/invite/* — public invite-accept pages
+
 
 # ---------------------------------------------------------------------------
 # System email helper — sends transactional emails from support@machreach.com
@@ -123,38 +130,10 @@ register_academic_routes(app, csrf, limiter)
 
 def _send_system_email(to: str, subject: str, body: str) -> bool:
     """Send a transactional email (verification, reset, invite) from the system account.
-    Returns True on success."""
-    from outreach.config import SMTP_HOST, SMTP_PORT
-    from outreach.config import SYSTEM_FROM_EMAIL, SYSTEM_FROM_NAME, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-    print(f"[SYSTEM EMAIL] Attempting to send to {to} via {SMTP_HOST}:{SMTP_PORT} as {SYSTEM_SMTP_USER}", flush=True)
-    if not SYSTEM_SMTP_USER or not SYSTEM_SMTP_PASSWORD:
-        print(f"[SYSTEM EMAIL] SMTP credentials not set — SYSTEM_SMTP_USER={'set' if SYSTEM_SMTP_USER else 'EMPTY'}, SYSTEM_SMTP_PASSWORD={'set' if SYSTEM_SMTP_PASSWORD else 'EMPTY'}", flush=True)
-        return False
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"{SYSTEM_FROM_NAME} <{SYSTEM_FROM_EMAIL}>" if SYSTEM_FROM_EMAIL else SYSTEM_SMTP_USER
-    msg["To"] = to
-    msg.attach(MIMEText(body, "plain"))
-    try:
-        if SMTP_PORT == 587:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
-                srv.starttls()
-                srv.login(SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD)
-                srv.send_message(msg)
-        else:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as srv:
-                srv.login(SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD)
-                srv.send_message(msg)
-        print(f"[SYSTEM EMAIL] Successfully sent to {to}", flush=True)
-        return True
-    except Exception as e:
-        import traceback
-        print(f"[SYSTEM EMAIL] Send FAILED ({to}): {type(e).__name__}: {e}", flush=True)
-        traceback.print_exc()
-        return False
+    Returns True on success. Implementation lives in outreach/mailer.py so non-web
+    modules (e.g. the JR invite flow) can reuse it without importing this app."""
+    from outreach.mailer import send_system_email
+    return send_system_email(to, subject, body)
 
 
 # ---------------------------------------------------------------------------
@@ -2201,6 +2180,51 @@ def change_password():
 # Routes — Delete Account
 # ---------------------------------------------------------------------------
 
+def _collect_ls_sub_ids(db, client_id: int) -> list:
+    """Return the Lemon Squeezy subscription id(s) stored for this client.
+
+    Two storage spots, both read BEFORE the rows are deleted so we can cancel
+    recurring billing afterwards:
+      - business/outreach subs -> subscriptions.stripe_subscription_id
+      - student PLUS/Ultimate   -> clients.mail_preferences JSON .subscription.ls_sub_id
+    """
+    import json as _json
+    from outreach.db import _fetchone
+    ids = []
+    try:
+        srow = _fetchone(db, "SELECT stripe_subscription_id FROM subscriptions WHERE client_id = %s", (client_id,))
+        sid = ((srow or {}).get("stripe_subscription_id") or "").strip()
+        if sid:
+            ids.append(sid)
+    except Exception:
+        pass
+    try:
+        crow = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (client_id,))
+        prefs = _json.loads(((crow or {}).get("mail_preferences")) or "{}")
+        sid2 = ((prefs.get("subscription") or {}).get("ls_sub_id") or "").strip()
+        if sid2:
+            ids.append(sid2)
+    except Exception:
+        pass
+    return ids
+
+
+def _cancel_ls_subs(ids, client_id: int) -> None:
+    """Cancel recurring billing at Lemon Squeezy. Never raises; no-op if unconfigured.
+
+    Called after the DB connection is released, since cancel_subscription makes a
+    network call (up to 15s) and we don't want to hold the connection open for it.
+    """
+    if not ids:
+        return
+    try:
+        from outreach import lemonsqueezy as ls
+        for sid in set(ids):
+            ls.cancel_subscription(sid)
+    except Exception:
+        _log.exception("[delete-account] LS subscription cancel failed for client %s", client_id)
+
+
 @app.route("/settings/delete-account", methods=["POST"])
 def delete_account():
     if not _logged_in():
@@ -2213,6 +2237,9 @@ def delete_account():
     client_id = session["client_id"]
     from outreach.db import get_db, _exec
     with get_db() as db:
+        # Grab any Lemon Squeezy subscription id before we delete the rows holding it,
+        # otherwise the provider keeps charging the card every month (the account is gone).
+        _ls_ids = _collect_ls_sub_ids(db, client_id)
         # Student data (flashcards & quiz_questions cascade-delete via their parent tables)
         for tbl in ["student_quizzes",
                      "student_flashcard_decks", "student_notes",
@@ -2254,6 +2281,8 @@ def delete_account():
             except Exception:
                 pass
         _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
+    # Connection released — now cancel recurring billing at the provider.
+    _cancel_ls_subs(_ls_ids, client_id)
     session.clear()
     flash(("success", t("settings.account_deleted")))
     return redirect(url_for("index"))
@@ -2287,6 +2316,8 @@ def _admin_delete_client_account(client_id: int) -> dict:
 
     deleted_steps = []
     with get_db() as db:
+        # Cancel recurring billing before wiping the rows that hold the subscription id.
+        _ls_ids = _collect_ls_sub_ids(db, client_id)
         for column in ("owner_id", "member_client_id"):
             try:
                 _exec(db, f"DELETE FROM team_members WHERE {column} = %s", (client_id,))
@@ -2359,6 +2390,7 @@ def _admin_delete_client_account(client_id: int) -> dict:
 
         _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
 
+    _cancel_ls_subs(_ls_ids, client_id)
     return {"ok": True, "email": target.get("email"), "steps": deleted_steps}
 
 
