@@ -20955,6 +20955,8 @@ No markdown, no code fences. ONLY JSON.
 
             "Confirm Password": "Confirmar contraseña",
 
+            "Minimum 10 characters.": "Minimo 10 caracteres.",
+
             "Minimum 6 characters.": "Mínimo 6 caracteres.",
 
             "Update Password": "Actualizar contraseña",
@@ -21565,7 +21567,7 @@ No markdown, no code fences. ONLY JSON.
 
                       <label style="font-size:12px;font-weight:600;color:var(--text);">{_T("New Password")}</label>
 
-                      <input name="new_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
+                      <input name="new_password" type="password" required minlength="10" class="edit-input" autocomplete="new-password">
 
                     </div>
 
@@ -21573,13 +21575,13 @@ No markdown, no code fences. ONLY JSON.
 
                       <label style="font-size:12px;font-weight:600;color:var(--text);">{_T("Confirm Password")}</label>
 
-                      <input name="confirm_password" type="password" required minlength="6" class="edit-input" autocomplete="new-password">
+                      <input name="confirm_password" type="password" required minlength="10" class="edit-input" autocomplete="new-password">
 
                     </div>
 
                   </div>
 
-                  <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;">{_T("Minimum 6 characters.")}</p>
+                  <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;">{_T("Minimum 10 characters.")}</p>
 
                   <button class="btn btn-outline btn-sm" type="submit">{_T("Update Password")}</button>
 

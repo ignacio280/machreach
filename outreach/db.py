@@ -6,9 +6,11 @@ Falls back to SQLite via DATABASE_PATH when DATABASE_URL is empty (local dev).
 from __future__ import annotations
 
 from contextlib import contextmanager
+import hashlib
+import hmac
 
 from cryptography.fernet import Fernet, InvalidToken
-from outreach.config import DATABASE_URL, ENCRYPTION_KEY
+from outreach.config import DATABASE_URL, ENCRYPTION_KEY, SECRET_KEY
 
 # ---------------------------------------------------------------------------
 # Detect engine: postgres vs sqlite fallback
@@ -199,6 +201,7 @@ CREATE TABLE IF NOT EXISTS clients (
     account_type TEXT DEFAULT 'business',
     is_admin    INTEGER DEFAULT 0,
     email_verified INTEGER DEFAULT 0,
+    session_version INTEGER DEFAULT 0,
     created_at  TIMESTAMP DEFAULT NOW()
 );
 
@@ -425,6 +428,7 @@ CREATE TABLE IF NOT EXISTS clients (
     account_type TEXT DEFAULT 'business',
     is_admin    INTEGER DEFAULT 0,
     email_verified INTEGER DEFAULT 0,
+    session_version INTEGER DEFAULT 0,
     created_at  TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
@@ -659,6 +663,7 @@ def _run_migrations():
         ("clients", "physical_address", "TEXT DEFAULT ''"),
         ("clients", "email_verified", "INTEGER DEFAULT 0"),
         ("clients", "account_type", "TEXT DEFAULT 'business'"),
+        ("clients", "session_version", "INTEGER DEFAULT 0"),
         ("team_members", "campaign_id", "INTEGER REFERENCES campaigns(id)"),
     ]
     # Each migration runs in its own connection so a failed ALTER TABLE
@@ -669,6 +674,11 @@ def _run_migrations():
                 _exec(db, f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
         except Exception:
             pass  # column already exists
+    try:
+        with get_db() as db:
+            _exec(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_email_lower ON clients (LOWER(email))")
+    except Exception:
+        pass  # Older data may contain case-only duplicates; leave startup healthy.
 
 
 # ---------------------------------------------------------------------------
@@ -706,18 +716,38 @@ def _date_diff_days(col):
 # Clients
 # ---------------------------------------------------------------------------
 
+_TOKEN_HASH_PREFIX = "hmac_sha256:"
+
+
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def _clean_auth_token(token: str) -> str:
+    return (token or "").strip()
+
+
+def _hash_auth_token(token: str) -> str:
+    digest = hmac.new(
+        SECRET_KEY.encode(),
+        _clean_auth_token(token).encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return _TOKEN_HASH_PREFIX + digest
+
+
 def create_client(name: str, email: str, password_hash: str, business: str = "", account_type: str = "business") -> int:
     with get_db() as db:
         return _insert_returning_id(
             db,
             "INSERT INTO clients (name, email, password, business, account_type) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (name, email, password_hash, business, account_type),
+            (name, _normalize_email(email), password_hash, business, account_type),
         )
 
 
 def get_client_by_email(email: str) -> dict | None:
     with get_db() as db:
-        return _fetchone(db, "SELECT * FROM clients WHERE email = %s", (email,))
+        return _fetchone(db, "SELECT * FROM clients WHERE LOWER(email) = %s", (_normalize_email(email),))
 
 
 def get_client(client_id: int) -> dict | None:
@@ -736,10 +766,14 @@ def update_client(client_id: int, name: str, business: str, physical_address: st
               (name, business, physical_address, client_id))
 
 
-def update_client_password(client_id: int, password_hash: str):
+def update_client_password(client_id: int, password_hash: str, bump_session_version: bool = True):
     with get_db() as db:
-        _exec(db, "UPDATE clients SET password = %s WHERE id = %s",
-              (password_hash, client_id))
+        if bump_session_version:
+            _exec(db, "UPDATE clients SET password = %s, session_version = COALESCE(session_version, 0) + 1 WHERE id = %s",
+                  (password_hash, client_id))
+        else:
+            _exec(db, "UPDATE clients SET password = %s WHERE id = %s",
+                  (password_hash, client_id))
 
 
 def update_mail_preferences(client_id: int, preferences: str):
@@ -767,20 +801,28 @@ def create_reset_token(client_id: int, token: str, expires_at: str):
     with get_db() as db:
         _exec(db,
               "INSERT INTO password_reset_tokens (client_id, token, expires_at) VALUES (%s, %s, %s)",
-              (client_id, token, expires_at))
+              (client_id, _hash_auth_token(token), expires_at))
 
 
 def get_valid_reset_token(token: str) -> dict | None:
     with get_db() as db:
         now = _now_expr()
-        return _fetchone(db,
+        hashed = _hash_auth_token(token)
+        rec = _fetchone(db,
             f"SELECT * FROM password_reset_tokens WHERE token = %s AND used = 0 AND expires_at > {now}",
-            (token,))
+            (hashed,))
+        if rec:
+            return rec
+        return _fetchone(db,
+            f"SELECT * FROM password_reset_tokens WHERE token = %s AND token NOT LIKE %s AND used = 0 AND expires_at > {now}",
+            (_clean_auth_token(token), _TOKEN_HASH_PREFIX + "%"))
 
 
 def mark_reset_token_used(token: str):
     with get_db() as db:
-        _exec(db, "UPDATE password_reset_tokens SET used = 1 WHERE token = %s", (token,))
+        _exec(db,
+              "UPDATE password_reset_tokens SET used = 1 WHERE token = %s OR (token = %s AND token NOT LIKE %s)",
+              (_hash_auth_token(token), _clean_auth_token(token), _TOKEN_HASH_PREFIX + "%"))
 
 
 # ---------------------------------------------------------------------------
@@ -791,15 +833,21 @@ def create_verification_token(client_id: int, token: str, expires_at: str):
     with get_db() as db:
         _exec(db,
               "INSERT INTO email_verification_tokens (client_id, token, expires_at) VALUES (%s, %s, %s)",
-              (client_id, token, expires_at))
+              (client_id, _hash_auth_token(token), expires_at))
 
 
 def get_valid_verification_token(token: str) -> dict | None:
     with get_db() as db:
         now = _now_expr()
-        return _fetchone(db,
+        hashed = _hash_auth_token(token)
+        rec = _fetchone(db,
             f"SELECT * FROM email_verification_tokens WHERE token = %s AND used = 0 AND expires_at > {now}",
-            (token,))
+            (hashed,))
+        if rec:
+            return rec
+        return _fetchone(db,
+            f"SELECT * FROM email_verification_tokens WHERE token = %s AND token NOT LIKE %s AND used = 0 AND expires_at > {now}",
+            (_clean_auth_token(token), _TOKEN_HASH_PREFIX + "%"))
 
 
 def mark_email_verified(client_id: int):

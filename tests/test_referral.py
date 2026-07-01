@@ -75,7 +75,8 @@ def test_signup_route_rewards_inviter_after_verify(make_user, client, monkeypatc
     verification (genuine sign-up), not at registration. Regression guard for the
     bug where the signup route captured ?ref= but never redeemed it."""
     import app as appmod
-    from outreach.db import get_client_by_email, get_db, _fetchone
+    import re
+    from outreach.db import get_client_by_email
 
     # Exercise the route logic without the CSRF token the real form injects.
     monkeypatch.setitem(appmod.app.config, "WTF_CSRF_ENABLED", False)
@@ -84,13 +85,19 @@ def test_signup_route_rewards_inviter_after_verify(make_user, client, monkeypatc
     code = sdb.get_or_create_referral_code(owner)
     assert ssub.get_tier(owner) == "free"
 
+    sent = []
+
+    def _capture_email(_to, _subject, body):
+        sent.append(body)
+        return True
+
     # Pretend the verification email sent so the account isn't rolled back.
-    monkeypatch.setattr(appmod, "_send_system_email", lambda *a, **k: True)
+    monkeypatch.setattr(appmod, "_send_system_email", _capture_email)
 
     email = f"friend_{owner}@example.com"
     resp = client.post("/register", data={
         "name": "Friend", "email": email,
-        "password": "secret123", "password2": "secret123", "ref": code,
+        "password": "secret12345", "password2": "secret12345", "ref": code,
     })
     assert resp.status_code in (301, 302)
 
@@ -101,15 +108,9 @@ def test_signup_route_rewards_inviter_after_verify(make_user, client, monkeypatc
     assert sdb.referral_count(owner) == 0
     assert ssub.get_tier(owner) == "free"
 
-    with get_db() as db:
-        row = _fetchone(
-            db,
-            "SELECT token FROM email_verification_tokens "
-            "WHERE client_id = %s ORDER BY id DESC LIMIT 1",
-            (newbie["id"],),
-        )
-    assert row and row.get("token")
-    client.get(f"/verify-email/{row['token']}")
+    match = re.search(r"/verify-email/([A-Za-z0-9_-]+)", sent[-1])
+    assert match
+    client.get(f"/verify-email/{match.group(1)}")
 
     # Now the inviter gets their free week.
     assert sdb.referral_count(owner) == 1

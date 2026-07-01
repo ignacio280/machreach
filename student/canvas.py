@@ -29,23 +29,27 @@ _TIMEOUT = 20  # seconds
 # captures it and includes it when importing courses. It only authorizes
 # course import for one client_id and carries no other privilege.
 _EXT_CONNECT_SALT = "canvas-ext-connect"
+_EXT_CONNECT_MAX_AGE_SECONDS = 15 * 60
 
 
 def _ext_serializer():
-    from itsdangerous import URLSafeSerializer
+    from itsdangerous import URLSafeTimedSerializer
     from outreach.config import SECRET_KEY
-    return URLSafeSerializer(SECRET_KEY, salt=_EXT_CONNECT_SALT)
+    return URLSafeTimedSerializer(SECRET_KEY, salt=_EXT_CONNECT_SALT)
 
 
 def make_connect_token(client_id: int) -> str:
-    """Stable signed token identifying a student to the browser extension."""
+    """Short-lived signed token identifying a student to the browser extension."""
     return _ext_serializer().dumps(int(client_id))
 
 
 def verify_connect_token(token: str) -> int | None:
     """Return the client_id encoded in a connect token, or None if invalid."""
     try:
-        return int(_ext_serializer().loads((token or "").strip()))
+        return int(_ext_serializer().loads(
+            (token or "").strip(),
+            max_age=_EXT_CONNECT_MAX_AGE_SECONDS,
+        ))
     except Exception:
         return None
 

@@ -41,6 +41,7 @@ def test_friends_tab_keeps_referral_invite_card(client, make_user):
         sess["client_id"] = cid
         sess["client_name"] = "Referral Owner"
         sess["account_type"] = "student"
+        sess["session_version"] = 0
         sess["lang"] = "es"
 
     r = client.get("/student/friends")

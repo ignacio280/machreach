@@ -62,6 +62,7 @@ if _IS_PRODUCTION:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours max session
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB upload limit
+PASSWORD_MIN_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "10"))
 
 # ── Security: CSRF protection ──
 from flask_wtf.csrf import CSRFProtect
@@ -91,7 +92,7 @@ limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["200 per minute"],
-    storage_uri="memory://",
+    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
 )
 
 # ── Startup diagnostic — log DB path so we can debug persistence ──
@@ -174,10 +175,27 @@ def health_check():
         return jsonify({"status": "error", "db": str(e)}), 503
 
 
+def _debug_admin_gate():
+    """Gate operational diagnostics behind an explicit flag and admin session."""
+    enabled = os.getenv("ENABLE_DEBUG_ENDPOINTS", "").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        return jsonify({"error": "not_found"}), 404
+    if not _is_admin():
+        return jsonify({"error": "unauthorized"}), 403
+    if ADMIN_ACTION_SECRET:
+        supplied = request.headers.get("X-Admin-Action-Secret", "")
+        if supplied != ADMIN_ACTION_SECRET:
+            return jsonify({"error": "unauthorized"}), 403
+    return None
+
+
 @app.route("/api/debug/smtp-test")
-@limiter.exempt
+@limiter.limit("3 per minute")
 def debug_smtp_test():
     """Diagnose SMTP — test connection without sending."""
+    gate = _debug_admin_gate()
+    if gate:
+        return gate
     from outreach.config import SMTP_HOST, SMTP_PORT, SYSTEM_FROM_EMAIL, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD
     info = {
         "SMTP_HOST": SMTP_HOST,
@@ -207,9 +225,12 @@ def debug_smtp_test():
 
 
 @app.route("/api/debug/smtp-send-test")
-@limiter.exempt
+@limiter.limit("3 per minute")
 def debug_smtp_send_test():
     """Actually send a test email to support@machreach.com to verify delivery."""
+    gate = _debug_admin_gate()
+    if gate:
+        return gate
     result = _send_system_email(
         "support@machreach.com",
         "MachReach SMTP Test",
@@ -223,25 +244,23 @@ def debug_smtp_send_test():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/admin/check-db", methods=["POST"])
-@limiter.exempt
+@limiter.limit("3 per minute")
 def admin_check_db():
-    from outreach.config import SECRET_KEY
-    auth = request.headers.get("X-Admin-Key", "")
-    if auth != SECRET_KEY:
-        return jsonify({"error": "unauthorized"}), 403
+    gate = _debug_admin_gate()
+    if gate:
+        return gate
 
-    from outreach.db import get_db, _fetchall, _USE_PG, _db_fingerprint
+    from outreach.db import get_db, _fetchval, _USE_PG, _db_fingerprint
     from outreach.config import DATABASE_URL
 
     with get_db() as db:
-        clients = _fetchall(db, "SELECT id, name, email FROM clients")
+        client_count = _fetchval(db, "SELECT COUNT(*) FROM clients")
 
     return jsonify({
         "using_pg": _USE_PG,
         "db_fingerprint": _db_fingerprint(),
         "db_url_prefix": (DATABASE_URL[:40] + "...") if DATABASE_URL else "NOT SET",
-        "client_count": len(clients),
-        "clients": [{"id": c["id"], "name": c["name"], "email": c["email"]} for c in clients],
+        "client_count": int(client_count or 0),
     })
 
 
@@ -270,7 +289,7 @@ def _verify_pw(pw: str, stored_hash: str) -> bool:
 def _maybe_upgrade_hash(client_id: int, pw: str, stored_hash: str):
     """If the stored hash is legacy SHA256, upgrade it to bcrypt."""
     if not (stored_hash.startswith("$2b$") or stored_hash.startswith("$2a$")):
-        update_client_password(client_id, _hash_pw(pw))
+        update_client_password(client_id, _hash_pw(pw), bump_session_version=False)
 
 
 _sec_log = logging.getLogger("machreach.security")
@@ -340,11 +359,20 @@ _PRESENCE_TOUCH_THROTTLE = 25  # don't UPDATE more often than every 25s per user
 @app.before_request
 def _validate_session():
     if "client_id" in session:
-        from outreach.db import get_db, _fetchval
+        from outreach.db import get_db, _fetchone
         with get_db() as db:
-            row = _fetchval(db, "SELECT 1 FROM clients WHERE id = %s",
+            row = _fetchone(db, "SELECT session_version FROM clients WHERE id = %s",
                             (session["client_id"],))
             if row is None:
+                session.clear()
+                return
+            try:
+                expected_version = int(row.get("session_version") or 0)
+                actual_version = int(session.get("session_version"))
+            except (TypeError, ValueError):
+                session.clear()
+                return
+            if actual_version != expected_version:
                 session.clear()
                 return
         # Throttled presence touch — keeps friends' online indicators fresh
@@ -1721,8 +1749,8 @@ def register():
         if not name or not email or not password:
             flash(("error", t("auth.all_required")))
             return redirect(url_for("register"))
-        if len(password) < 6:
-            flash(("error", "Password must be at least 6 characters." if session.get("lang") == "en" else "La contraseña debe tener al menos 6 caracteres."))
+        if len(password) < PASSWORD_MIN_LENGTH:
+            flash(("error", f"Password must be at least {PASSWORD_MIN_LENGTH} characters." if session.get("lang") == "en" else f"La contrasena debe tener al menos {PASSWORD_MIN_LENGTH} caracteres."))
             return redirect(url_for("register"))
         if password2 and password2 != password:
             flash(("error", "Passwords do not match." if session.get("lang") == "en" else "Las contraseñas no coinciden."))
@@ -1808,7 +1836,7 @@ def register():
     _name_label = "Full name" if _is_en else "Nombre"
     _name_ph = "Your name" if _is_en else "Tu nombre"
     _password_label = "Password" if _is_en else "Contrase&ntilde;a"
-    _password_ph = "At least 6 characters" if _is_en else "M&iacute;nimo 6 caracteres"
+    _password_ph = f"At least {PASSWORD_MIN_LENGTH} characters" if _is_en else f"M&iacute;nimo {PASSWORD_MIN_LENGTH} caracteres"
     _confirm_label = "Confirm password" if _is_en else "Confirmar contrase&ntilde;a"
     _confirm_ph = "Repeat your password" if _is_en else "Repite tu contrase&ntilde;a"
     _account_note = (
@@ -1835,8 +1863,8 @@ def register():
             {_ref_hidden}
             <div class="auth-field"><label>{_name_label}</label><input name="name" type="text" required autocomplete="name" placeholder="{_name_ph}"></div>
             <div class="auth-field"><label>{"Email" if _is_en else "Correo"}</label><input name="email" type="email" required autocomplete="username" placeholder="tu@correo.com"></div>
-            <div class="auth-field"><label>{_password_label}</label><input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="{_password_ph}"></div>
-            <div class="auth-field"><label>{_confirm_label}</label><input name="password2" type="password" required minlength="6" autocomplete="new-password" placeholder="{_confirm_ph}"></div>
+            <div class="auth-field"><label>{_password_label}</label><input name="password" type="password" required minlength="{PASSWORD_MIN_LENGTH}" autocomplete="new-password" placeholder="{_password_ph}"></div>
+            <div class="auth-field"><label>{_confirm_label}</label><input name="password2" type="password" required minlength="{PASSWORD_MIN_LENGTH}" autocomplete="new-password" placeholder="{_confirm_ph}"></div>
             <button class="btn btn-primary auth-submit" type="submit">{t("auth.create_account")}</button>
             <p class="auth-note">{_account_note}</p>
           </form>
@@ -1869,6 +1897,7 @@ def login():
         session["client_id"] = client["id"]
         session["client_name"] = client["name"]
         session["account_type"] = client.get("account_type") or "student"
+        session["session_version"] = int(client.get("session_version") or 0)
         # Check for pending team invite
         if pending_token:
             return redirect(url_for("team_accept_invite", token=pending_token))
@@ -2143,7 +2172,7 @@ def reset_password(token):
         if pw1 != pw2:
             flash(("error", t("auth.passwords_no_match")))
             return redirect(f"/reset-password/{token}")
-        if len(pw1) < 6:
+        if len(pw1) < PASSWORD_MIN_LENGTH:
             flash(("error", t("auth.all_required")))
             return redirect(f"/reset-password/{token}")
         update_client_password(reset["client_id"], _hash_pw(pw1))
@@ -2159,8 +2188,8 @@ def reset_password(token):
       <div class="auth-card">
         <h1>{t("auth.reset_btn")}</h1>
         <form method="post">
-          <div class="form-group"><label>{t("auth.new_password")}</label><input name="password" type="password" placeholder="At least 6 characters" required minlength="6"></div>
-          <div class="form-group"><label>{t("auth.confirm_password")}</label><input name="password2" type="password" required minlength="6"></div>
+          <div class="form-group"><label>{t("auth.new_password")}</label><input name="password" type="password" placeholder="At least {PASSWORD_MIN_LENGTH} characters" required minlength="{PASSWORD_MIN_LENGTH}"></div>
+          <div class="form-group"><label>{t("auth.confirm_password")}</label><input name="password2" type="password" required minlength="{PASSWORD_MIN_LENGTH}"></div>
           <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.reset_btn")}</button>
         </form>
       </div>
@@ -2188,10 +2217,11 @@ def change_password():
     if new_pw != confirm:
         flash(("error", t("auth.passwords_no_match")))
         return redirect(url_for(redir))
-    if len(new_pw) < 6:
+    if len(new_pw) < PASSWORD_MIN_LENGTH:
         flash(("error", t("auth.all_required")))
         return redirect(url_for(redir))
     update_client_password(session["client_id"], _hash_pw(new_pw))
+    session["session_version"] = int(client.get("session_version") or 0) + 1
     _log_security("PASSWORD_CHANGE_OK", client_id=session["client_id"])
     flash(("success", t("settings.password_updated")))
     return redirect(url_for(redir))

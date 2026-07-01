@@ -1,5 +1,6 @@
 from student import db as sdb
-from student.canvas import make_connect_token
+from student import canvas as canvas_mod
+from student.canvas import make_connect_token, verify_connect_token
 
 
 def test_canvas_extension_status_rejects_invalid_token(client):
@@ -36,3 +37,12 @@ def test_canvas_extension_status_only_counts_canvas_courses(client, make_user):
         json={"token": token},
     )
     assert canvas_response.get_json() == {"ok": True, "synced": True}
+
+
+def test_canvas_extension_token_expires(monkeypatch, make_user):
+    client_id = make_user("Expired Canvas Token Student")
+    token = make_connect_token(client_id)
+
+    monkeypatch.setattr(canvas_mod, "_EXT_CONNECT_MAX_AGE_SECONDS", -1)
+
+    assert verify_connect_token(token) is None

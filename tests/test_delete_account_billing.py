@@ -37,6 +37,7 @@ def _login(client, cid):
         sess["client_id"] = cid
         sess["account_type"] = "student"
         sess["email"] = "x@example.com"
+        sess["session_version"] = 0
 
 
 def test_delete_account_cancels_ls_subscription(client, make_user, flask_app, monkeypatch):
