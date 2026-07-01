@@ -36,7 +36,6 @@ FREE_DAILY_QUIZZES        = 1
 FREE_QUIZ_MAX_QUESTIONS   = 30
 FREE_DAILY_FLASHCARD_SETS = 1
 FREE_FLASHCARD_MAX_CARDS  = 30
-PLUS_MONTHLY_BONUS_COINS  = 300
 PLUS_MONTHLY_STREAK_FREEZES = 1
 
 PLANS = {
@@ -51,7 +50,7 @@ PLANS = {
             "Planilla de notas, ranking, amigos y tienda",
             f"{FREE_DAILY_QUIZZES} quiz IA / día (hasta {FREE_QUIZ_MAX_QUESTIONS} preguntas)",
             f"{FREE_DAILY_FLASHCARD_SETS} mazo de tarjetas IA / día (hasta {FREE_FLASHCARD_MAX_CARDS} tarjetas)",
-            "1 congelador de racha guardado",
+            "Hasta 3 congeladores de racha guardados",
         ],
     },
     "plus": {
@@ -65,14 +64,11 @@ PLANS = {
             "Flashcards IA ilimitadas",
             "Más preguntas/tarjetas por generación",
             "Plan de estudio inteligente semanal",
-            "Course Brain y Study Studio por ramo",
             "Explicaciones y análisis de debilidades en quizzes",
             "Analítica avanzada por curso y semana",
             "Benchmarks de ramos: nota y horas promedio",
-            "Revisión de ensayos con IA",
-            f"{PLUS_MONTHLY_BONUS_COINS} monedas extra al mes",
             "Streak Insurance+: 1 reparación de racha al mes",
-            "Más capacidad de congeladores",
+            "Más capacidad de congeladores: hasta 5 guardados",
             "Banners, flags e insignias exclusivas PLUS",
         ],
     },
@@ -133,20 +129,6 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
         return False
     changed = False
     month_key = _current_bonus_month()
-    if prefs.get("plus_benefit_month") != month_key:
-        try:
-            from outreach.db import _exec
-            from student import db as sdb
-            sdb._ensure_wallet(db, client_id)
-            _exec(
-                db,
-                "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
-                (PLUS_MONTHLY_BONUS_COINS, client_id),
-            )
-            prefs["plus_benefit_month"] = month_key
-            changed = True
-        except Exception as e:
-            log.warning("Plus monthly coin grant failed for %s: %s", client_id, e)
     if prefs.get("plus_streak_insurance_month") != month_key:
         try:
             from outreach.db import _exec, _fetchval

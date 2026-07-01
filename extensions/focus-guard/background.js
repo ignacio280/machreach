@@ -69,7 +69,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // We do the cross-origin POST here (content scripts are blocked by CORS), using
 // the signed connect token captured from a logged-in MachReach page.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (!msg || msg.type !== "mrImportCourses") return;
+  if (!msg || !["mrImportCourses", "mrCanvasSyncStatus"].includes(msg.type)) return;
   (async () => {
     try {
       const { mrConnectToken, mrOrigin } = await chrome.storage.local.get(["mrConnectToken", "mrOrigin"]);
@@ -77,13 +77,33 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({ ok: false, noToken: true });
         return;
       }
+
+      if (msg.type === "mrCanvasSyncStatus") {
+        const statusResponse = await fetch(mrOrigin + "/api/student/canvas/extension-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: mrConnectToken })
+        });
+        const statusBody = await statusResponse.json().catch(() => ({}));
+        sendResponse({
+          ok: statusResponse.ok && !!statusBody.ok,
+          synced: !!statusBody.synced,
+          status: statusResponse.status
+        });
+        return;
+      }
+
       const r = await fetch(mrOrigin + "/api/student/canvas/extension-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: mrConnectToken, courses: msg.courses || [] })
       });
       const body = await r.json().catch(() => ({}));
-      sendResponse({ ok: r.ok && !!body.ok, saved: body.saved || 0, status: r.status });
+      const ok = r.ok && !!body.ok;
+      if (ok) {
+        await chrome.storage.local.set({ mrCanvasSyncCompletedAt: Date.now() });
+      }
+      sendResponse({ ok, saved: body.saved || 0, status: r.status });
     } catch (e) {
       sendResponse({ ok: false, error: String(e) });
     }

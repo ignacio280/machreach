@@ -101,6 +101,7 @@ if (syncBtn) {
       });
       const body = await resp.json().catch(() => ({}));
       if (resp.ok && body.ok) {
+        await chrome.storage.local.set({ mrCanvasSyncCompletedAt: Date.now() });
         setMsg("✓ Listo: " + (body.saved || 0) + " cursos sincronizados con MachReach.", "ok");
       } else if (resp.status === 401) {
         setMsg("Tu enlace con MachReach expiró. Abre la página Enfoque otra vez y reintenta.", "err");

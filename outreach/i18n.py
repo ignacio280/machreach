@@ -305,8 +305,8 @@ TRANSLATIONS = {
     "student_ui.toggle_theme": {"en": "Toggle theme", "es": "Cambiar modo"},
 
     # Student analytics
-    "student_analytics.title": {"en": "Analytics", "es": "Analytics"},
-    "student_analytics.kicker": {"en": "WEEKLY ANALYTICS", "es": "ANALYTICS SEMANALES"},
+    "student_analytics.title": {"en": "Analytics", "es": "Analíticas"},
+    "student_analytics.kicker": {"en": "WEEKLY ANALYTICS", "es": "ANALÍTICAS SEMANALES"},
     "student_analytics.hero": {"en": "Your study week.", "es": "Tu semana de estudio."},
     "student_analytics.subtitle": {"en": "Review how much you studied each day, switch weeks, compare courses, and click any course to see the daily breakdown.", "es": "Revisa cuánto estudiaste cada día, cambia de semana, compara cursos y haz clic en cualquier curso para ver su detalle diario."},
     "student_analytics.current_week": {"en": "Current week", "es": "Semana actual"},
@@ -414,7 +414,7 @@ SPANISH_TO_EN_VISIBLE = {
     "Curso": "Course",
 
     # Analytics
-    "ANALYTICS SEMANALES": "WEEKLY ANALYTICS",
+    "ANALÍTICAS SEMANALES": "WEEKLY ANALYTICS",
     "Tu semana de estudio.": "Your study week.",
     "Revisa cuánto estudiaste cada día, cambia de semana, compara cursos y haz clic en cualquier curso para ver su detalle diario.": "Review how much you studied each day, switch weeks, compare courses, and click any course to see the daily breakdown.",
     "Revisa cuanto estudiaste cada dia, cambia de semana, compara cursos y haz click en cualquier curso para ver su detalle diario.": "Review how much you studied each day, switch weeks, compare courses, and click any course to see the daily breakdown.",

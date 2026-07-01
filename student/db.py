@@ -4758,7 +4758,7 @@ def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dic
         owned = int(row.get("streak_freezes") or 0)
         cap = _streak_freeze_cap(client_id)
         if owned + qty > cap:
-            return {"ok": False, "error": f"Max {cap} freezes at a time."}
+            return {"ok": False, "error": f"Puedes guardar máximo {cap} congeladores de racha a la vez."}
         if coins < cost:
             return {"ok": False, "error": "Not enough coins."}
         _exec(

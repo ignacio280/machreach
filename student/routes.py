@@ -1123,6 +1123,10 @@ Return this JSON shape:
     @app.route("/student/analytics")
 
     def student_analytics_page():
+        if not _logged_in():
+            return redirect(url_for("login"))
+        if not _student_is_plus():
+            return redirect("/student/shop")
         return _student_analytics_page_legacy()
 
     def _student_analytics_page_legacy():
@@ -1716,7 +1720,8 @@ Return this JSON shape:
         .wa-card h2 {{ margin:0; font-family:'Bricolage Grotesque',sans-serif; font-size:24px; color:var(--warm-ink); font-weight:650; }}
         .wa-card p {{ margin:6px 0 18px; color:var(--warm-muted); font-size:14px; }}
         .wa-line-wrap {{ width:100%; min-height:300px; }}
-        .wa-line-svg {{ width:100%; height:300px; overflow:visible; }}
+        .wa-line-svg {{ display:block; width:100%; height:300px; overflow:visible; }}
+        .wa-line-canvas {{ display:block; width:100%; height:300px; }}
         .wa-axis {{ stroke:#EEE6D6; stroke-width:1; }}
         .wa-line {{ fill:none; stroke:var(--warm-orange); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }}
         .wa-dot {{ fill:#FFF8EE; stroke:var(--warm-orange); stroke-width:4; }}
@@ -1836,9 +1841,9 @@ Return this JSON shape:
           stroke-width:5;
         }}
         .wa-dot {{
-          fill:#FFF8EE;
-          stroke:#201B20;
-          stroke-width:3;
+          fill:var(--warm-card);
+          stroke:#FF7A3D;
+          stroke-width:4;
         }}
         .wa-course-btn,.wa-risk-card,.wa-empty {{
           border:2px solid #E2DCCC;
@@ -2047,7 +2052,7 @@ Return this JSON shape:
           }};
           var selectedCourse = null;
           var weekOffset = 0;
-          var dayNames = {json.dumps(["Lun","Mar","Mie","Jue","Vie","Sab","Dom"] if session.get("lang", "es") == "es" else ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"])};
+          var dayNames = {json.dumps(["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"] if session.get("lang", "es") == "es" else ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], ensure_ascii=False)};
           function pad(n) {{ return String(n).padStart(2,'0'); }}
           function key(d) {{ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }}
           function minsText(m) {{ m = Math.round(m || 0); return m >= 60 ? (Math.floor(m/60) + 'h ' + (m%60) + 'm') : (m + 'm'); }}
@@ -2058,27 +2063,88 @@ Return this JSON shape:
             d.setDate(d.getDate() + diff + weekOffset * 7);
             return d;
           }}
+          var lastDays = null;
+          var lastTotals = null;
           function renderLine(days, totals) {{
+            lastDays = days;
+            lastTotals = totals;
             var max = Math.max(30, ...totals);
-            var w = 700, h = 250, padX = 42, padY = 28;
+            var host = document.getElementById('wa-line');
+            var w = Math.max(360, Math.round(host.getBoundingClientRect().width || host.clientWidth || 700));
+            var h = 300, padX = 42, padY = 38;
+            var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            var chart = {{
+              orange: '#FF7A3D',
+              dotFill: isDark ? '#1D1B26' : '#FFFFFF',
+              grid: isDark ? 'rgba(255,122,61,.24)' : '#EEE6D6',
+              label: isDark ? '#BDB5AA' : '#77756F',
+              value: isDark ? '#FFF8E1' : '#1A1A1F'
+            }};
             var pts = totals.map(function(v,i){{
               var x = padX + i * ((w - padX*2) / 6);
               var y = h - padY - (v / max) * (h - padY*2);
               return {{x:x,y:y,v:v,i:i}};
             }});
-            var path = pts.map(function(p,i){{ return (i?'L':'M') + p.x + ' ' + p.y; }}).join(' ');
-            var grid = [0,.25,.5,.75,1].map(function(t){{
+            var allZero = totals.every(function(v){{ return (parseInt(v, 10) || 0) === 0; }});
+            host.innerHTML = '<canvas class="wa-line-canvas" aria-hidden="true"></canvas>';
+            var canvas = host.querySelector('canvas');
+            var dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+            canvas.width = Math.round(w * dpr);
+            canvas.height = Math.round(h * dpr);
+            canvas.style.width = '100%';
+            canvas.style.height = h + 'px';
+            var ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, w, h);
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            [0,.25,.5,.75,1].forEach(function(t){{
               var y = h - padY - t * (h - padY*2);
-              return '<line class="wa-axis" x1="'+padX+'" x2="'+(w-padX)+'" y1="'+y+'" y2="'+y+'"></line>';
-            }}).join('');
-            var circles = pts.map(function(p){{
-              var value = minsText(p.v);
-              return '<g class="wa-point" tabindex="0"><title>'+value+'</title><circle class="wa-hit" cx="'+p.x+'" cy="'+p.y+'" r="20"></circle><circle class="wa-dot" cx="'+p.x+'" cy="'+p.y+'" r="7"></circle><text class="wa-value" x="'+p.x+'" y="'+(p.y-13)+'" text-anchor="middle">'+value+'</text></g>';
-            }}).join('');
-            var labels = pts.map(function(p){{
-              return '<text class="wa-label" x="'+p.x+'" y="'+(h-4)+'" text-anchor="middle">'+dayNames[p.i]+'</text>';
-            }}).join('');
-            document.getElementById('wa-line').innerHTML = '<svg class="wa-line-svg" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'+grid+'<path class="wa-line" d="'+path+'"></path>'+circles+labels+'</svg>';
+              ctx.beginPath();
+              ctx.moveTo(padX, y);
+              ctx.lineTo(w - padX, y);
+              ctx.strokeStyle = chart.grid;
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }});
+
+            ctx.beginPath();
+            pts.forEach(function(p,i){{
+              if (i === 0) ctx.moveTo(p.x, p.y);
+              else ctx.lineTo(p.x, p.y);
+            }});
+            ctx.strokeStyle = chart.orange;
+            ctx.lineWidth = 5;
+            ctx.stroke();
+
+            pts.forEach(function(p){{
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, allZero ? 5.5 : 7, 0, Math.PI * 2);
+              if (allZero) {{
+                ctx.fillStyle = chart.orange;
+                ctx.fill();
+              }} else {{
+                ctx.fillStyle = chart.dotFill;
+                ctx.strokeStyle = chart.orange;
+                ctx.lineWidth = 4;
+                ctx.fill();
+                ctx.stroke();
+              }}
+              if (!allZero && p.v > 0) {{
+                ctx.fillStyle = chart.value;
+                ctx.font = '900 12px Nunito, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(minsText(p.v), p.x, p.y - 13);
+              }}
+            }});
+
+            ctx.fillStyle = chart.label;
+            ctx.font = '800 12px Nunito, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'alphabetic';
+            pts.forEach(function(p){{ ctx.fillText(dayNames[p.i], p.x, h - 8); }});
           }}
           function render() {{
             var start = monday(new Date());
@@ -2135,12 +2201,13 @@ Return this JSON shape:
           }}
           document.getElementById('wa-prev').addEventListener('click', function(){{ weekOffset--; render(); }});
           document.getElementById('wa-next').addEventListener('click', function(){{ if (weekOffset < 0) weekOffset++; render(); }});
+          window.addEventListener('resize', function(){{ if (lastDays && lastTotals) window.requestAnimationFrame(function(){{ renderLine(lastDays, lastTotals); }}); }});
           render();
         }})();
         </script>
         """
 
-        return _s_render("Analytics", body, active_page="student_analytics")
+        return _s_render(_an.get("title", "Analytics"), body, active_page="student_analytics")
 
 
 
@@ -2288,6 +2355,27 @@ Return this JSON shape:
                 pass
 
         return jsonify({"ok": True, "saved": saved})
+
+    @app.route("/api/student/canvas/extension-status", methods=["POST"])
+    @csrf.exempt
+    @limiter.limit("60 per hour")
+    def student_canvas_extension_status():
+        """Tell the extension whether this student already imported Canvas courses."""
+        data = request.get_json(force=True, silent=True) or {}
+        client_id = verify_connect_token(data.get("token") or "")
+        if not client_id:
+            return jsonify({"error": "invalid_token"}), 401
+
+        synced = False
+        try:
+            synced = any(
+                int(course.get("canvas_course_id") or 0) > 0
+                for course in sdb.get_courses(client_id)
+            )
+        except (TypeError, ValueError):
+            synced = False
+
+        return jsonify({"ok": True, "synced": synced})
 
 
 
@@ -6250,6 +6338,10 @@ Material:
 
         plan_row = sdb.get_latest_plan(cid)
         _dash_is_plus = _student_is_plus(cid)
+        _dash_is_en = (_lang == "en")
+        _analytics_href = "/student/analytics" if _dash_is_plus else "/student/shop"
+        _analytics_link_text = ("Details" if _dash_is_en else "Detalle") if _dash_is_plus else ("Plus only" if _dash_is_en else "Solo Plus")
+        _analytics_aria = ("View streak analytics" if _dash_is_en else "Ver analíticas de racha") if _dash_is_plus else ("Upgrade to Plus for analytics" if _dash_is_en else "Mejorar a Plus para ver analíticas")
 
 
 
@@ -7103,13 +7195,13 @@ Material:
             f'   <div class="mr-stat-sub">{_bdw_label} en últimos 35d</div>'
             '    <div class="mr-stat-deco">⚡</div>'
             '  </div>'
-            '  <a class="mr-stat-card streak-stat mr-pop-3" href="/student/analytics" aria-label="Ver detalle de racha">'
-            '    <div class="mr-stat-label">Racha 🔥</div>'
+            f'  <a class="mr-stat-card streak-stat mr-pop-3" href="{_analytics_href}" aria-label="{_esc(_analytics_aria)}">'
+            + f'    <div class="mr-stat-label">{"Your streak" if _dash_is_en else "Tu racha"} 🔥</div>'
             f'   <div class="mr-stat-value">{streak_days}</div>'
             f'   <div class="mr-stat-sub"><span class="up">{streak_days} día' + ("s" if streak_days != 1 else "") + ' seguidos</span></div>'
-            '    <div class="mr-stat-action">Detalle &rarr;</div>'
-            '    <div class="mr-stat-deco">🔥</div>'
-            '  </a>'
+            + f'    <div class="mr-stat-action">{_analytics_link_text} &rarr;</div>'
+            + '    <div class="mr-stat-deco">🔥</div>'
+            + '  </a>'
             '  <div class="mr-stat-card xp-stat mr-pop-3">'
             '    <div class="mr-stat-label">XP de hoy</div>'
             f'   <div class="mr-stat-value">{_mr_xp_today}</div>'
@@ -7404,7 +7496,7 @@ Material:
             '<section class="mr-card mr-streak-card mr-pop-2">'
             + '  <div class="mr-card-h">'
             + ('    <div class="mr-card-title">&#128293; Your streak</div>' if _is_en else '    <div class="mr-card-title">&#128293; Tu racha</div>')
-            + ('    <a class="mr-card-link" href="/student/analytics">Details &rarr;</a>' if _is_en else '    <a class="mr-card-link" href="/student/analytics">Detalle &rarr;</a>')
+            + f'    <a class="mr-card-link" href="{_analytics_href}">{_esc(_analytics_link_text)} &rarr;</a>'
             + '  </div>'
             + f'  <div class="mr-streak-lead" style="--streak-pct:{_attendance_pct}%;">'
             + f'   <div class="mr-streak-num">{streak_days}</div>'
@@ -21858,7 +21950,7 @@ No markdown, no code fences. ONLY JSON.
         {subscription_section}
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;">
           <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \U0001FA99</div><div class="label">Monedas</div></div>
-          <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes} \u2744\ufe0f</div><div class="label">Congeladores de racha 🔥</div></div>
+          <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes}/{freeze_cap} \u2744\ufe0f</div><div class="label">Congeladores guardados (máx. {freeze_cap})</div></div>
           <div class="stat-card stat-purple" style="min-width:170px;"><div class="num">{total_xp}</div><div class="label">XP total</div></div>
         </div>
 
@@ -21872,7 +21964,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div class="card">
           <div class="card-header"><h2>\u2744\ufe0f Congeladores de racha 🔥</h2></div>
-          <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Plus incluye Streak Insurance+: 1 congelador extra al mes y capacidad para guardar hasta 5.</p>
+          <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Capacidad de tu plan: <b>{freezes}/{freeze_cap}</b> congeladores guardados. Gratis puede guardar hasta {sdb.FREE_STREAK_FREEZE_CAP}; Plus/Ultimate hasta {sdb.PAID_STREAK_FREEZE_CAP}.</p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;">
             <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} \U0001FA99 cada uno</div>
             <button class="btn btn-primary btn-sm" id="buy-freeze-btn" onclick="buyFreeze()" {freeze_btn_disabled}>Comprar 1</button>
