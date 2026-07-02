@@ -19691,14 +19691,11 @@ No markdown, no code fences. ONLY JSON.
     box-shadow:0 30px 80px rgba(2,6,23,.42), inset 0 1px 0 rgba(255,255,255,.06);
   }
   #mr-lb-page .lb-podium::before {
-    content:""; position:absolute; inset:-50% -20% auto; height:80%;
-    background:linear-gradient(115deg, transparent 15%, rgba(255,255,255,.12) 45%, transparent 75%);
-    transform:rotate(-4deg); opacity:.55; pointer-events:none;
-    animation: lbPodiumShine 9s ease-in-out infinite;
-  }
-  @keyframes lbPodiumShine {
-    0%, 100% { transform: translateX(-8%) rotate(-4deg); opacity:.4; }
-    50%      { transform: translateX(8%)  rotate(-4deg); opacity:.65; }
+    content:""; position:absolute; inset:0; border-radius:inherit;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(255,122,61,.18), transparent 46%),
+      radial-gradient(circle at 8% 100%, rgba(124,156,255,.12), transparent 40%);
+    transform:none; opacity:.32; pointer-events:none; animation:none;
   }
   #mr-lb-page .lb-podium::after {
     content:""; position:absolute; left:6%; right:6%; bottom:18px; height:2px;
@@ -20017,10 +20014,12 @@ No markdown, no code fences. ONLY JSON.
     box-shadow:0 8px 0 var(--lb-ink),0 30px 76px rgba(20,18,30,.14);
   }
   #mr-lb-page .lb-podium::before {
-    opacity:.38;
+    opacity:.28;
     background:
-      linear-gradient(115deg,transparent 0%,rgba(255,122,61,.13) 42%,transparent 72%),
-      radial-gradient(circle at 50% 0%,rgba(255,179,107,.34),transparent 46%);
+      radial-gradient(circle at 50% 0%,rgba(255,179,107,.30),transparent 46%),
+      radial-gradient(circle at 8% 100%,rgba(255,122,61,.12),transparent 40%);
+    transform:none;
+    animation:none;
   }
   #mr-lb-page .lb-podium::after {
     height:3px;
@@ -20168,10 +20167,12 @@ No markdown, no code fences. ONLY JSON.
     box-shadow:0 8px 0 #FF7A3D,0 34px 78px rgba(0,0,0,.38);
   }
   :root[data-theme="dark"] #mr-lb-page .lb-podium::before {
-    opacity:.34;
+    opacity:.26;
     background:
-      linear-gradient(115deg,transparent 0%,rgba(255,122,61,.18) 42%,transparent 72%),
-      radial-gradient(circle at 50% 0%,rgba(255,179,107,.24),transparent 46%);
+      radial-gradient(circle at 50% 0%,rgba(255,179,107,.22),transparent 46%),
+      radial-gradient(circle at 8% 100%,rgba(255,122,61,.10),transparent 40%);
+    transform:none;
+    animation:none;
   }
   :root[data-theme="dark"] #mr-lb-page .lb-podium-card {
     background:rgba(255,255,255,.055);
