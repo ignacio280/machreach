@@ -65,7 +65,7 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB upload limit
 PASSWORD_MIN_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "10"))
 
 # ── Security: CSRF protection ──
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFError, CSRFProtect, generate_csrf
 # Don't expire CSRF tokens faster than the session. The Flask-WTF default of
 # 1 hour caused "The CSRF tokens do not match" when a page was left open and
 # submitted later (very common on mobile). The token is still bound to the
@@ -73,6 +73,38 @@ from flask_wtf.csrf import CSRFProtect
 # removed. It now lasts the session lifetime (24h cookie).
 app.config["WTF_CSRF_TIME_LIMIT"] = None
 csrf = CSRFProtect(app)
+
+
+@app.errorhandler(CSRFError)
+def _handle_csrf_error(err):
+    """Recover gracefully from stale auth forms instead of showing raw 400s."""
+    if request.path.startswith("/api/") or request.is_json:
+        return jsonify({"error": "Session expired. Refresh and try again."}), 400
+    reason = getattr(err, "description", "") or ""
+    recoverable_register = (
+        request.path == "/register"
+        and (
+            "session token is missing" in reason
+            or "tokens do not match" in reason
+            or "token has expired" in reason
+        )
+    )
+    if not recoverable_register:
+        return f"Bad Request: {reason}", 400
+    try:
+        _log_security("CSRF_REJECT", path=request.path, reason=reason)
+    except Exception:
+        pass
+    msg = (
+        "Your session expired. Please try again."
+        if session.get("lang") == "en"
+        else "Tu sesion expiro. Intentalo de nuevo."
+    )
+    flash(("error", msg))
+    ref = (request.form.get("ref") or "").strip().upper()[:16]
+    if ref:
+        session["referral_ref"] = ref
+    return redirect(url_for("register"))
 
 
 @app.before_request
@@ -398,6 +430,10 @@ def _validate_session():
 def _esc(text: str) -> str:
     """HTML-escape user content to prevent XSS."""
     return html_module.escape(str(text)) if text else ""
+
+
+def _csrf_hidden_input() -> str:
+    return f'<input type="hidden" name="csrf_token" value="{_esc(generate_csrf())}">'
 
 
 @app.after_request
@@ -1833,6 +1869,7 @@ def register():
     ) if _ref_code else ""
     _is_en = session.get("lang") == "en"
     _story = _auth_story_panel("register", session.get("lang", "es"))
+    _csrf_field = _csrf_hidden_input()
     _name_label = "Full name" if _is_en else "Nombre"
     _name_ph = "Your name" if _is_en else "Tu nombre"
     _password_label = "Password" if _is_en else "Contrase&ntilde;a"
@@ -1860,6 +1897,7 @@ def register():
           </div>
           {_ref_banner}
           <form class="auth-form" method="post" action="/register" autocomplete="off">
+            {_csrf_field}
             {_ref_hidden}
             <div class="auth-field"><label>{_name_label}</label><input name="name" type="text" required autocomplete="name" placeholder="{_name_ph}"></div>
             <div class="auth-field"><label>{"Email" if _is_en else "Correo"}</label><input name="email" type="email" required autocomplete="username" placeholder="tu@correo.com"></div>

@@ -1,5 +1,7 @@
 """Smoke tests: key routes respond without server errors, and the recent
 CSRF / canonical-host fixes behave as intended."""
+import re
+
 import pytest
 
 from outreach.db import _exec, get_db
@@ -65,3 +67,29 @@ def test_csrf_blocks_post_without_token(client):
     # A CSRF-protected POST with no token must be rejected.
     r = client.post("/login", data={"email": "a@b.com", "password": "x"})
     assert r.status_code == 400
+
+
+def test_register_form_has_server_rendered_csrf_field(client):
+    body = client.get("/register").get_data(as_text=True)
+    assert '<input type="hidden" name="csrf_token"' in body
+
+
+def test_stale_register_csrf_redirects_instead_of_raw_bad_request(client):
+    body = client.get("/register").get_data(as_text=True)
+    token = re.search(r'<meta name="csrf-token" content="([^"]+)"', body).group(1)
+    with client.session_transaction() as sess:
+        sess.pop("csrf_token", None)
+
+    r = client.post(
+        "/register",
+        data={
+            "name": "CSRF User",
+            "email": "csrf-user@example.com",
+            "password": "secret123",
+            "password2": "secret123",
+            "csrf_token": token,
+        },
+    )
+
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith("/register")

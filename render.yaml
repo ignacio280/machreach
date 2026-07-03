@@ -1,6 +1,6 @@
 databases:
   - name: machreach-db
-    plan: free
+    plan: basic-256mb
     databaseName: machreach
     user: machreach
 
