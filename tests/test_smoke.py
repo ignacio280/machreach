@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from outreach.db import _exec, get_db
+from outreach.db import _exec, _fetchone, get_db
 from student import db as sdb
 
 
@@ -93,3 +93,39 @@ def test_stale_register_csrf_redirects_instead_of_raw_bad_request(client):
 
     assert r.status_code == 302
     assert r.headers["Location"].endswith("/register")
+
+
+def test_student_can_delete_uploaded_course_file(client, flask_app, make_user, monkeypatch):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    cid = make_user("Course File Owner")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 1 WHERE id = %s", (cid,))
+    course_id = sdb.create_manual_course(cid, "Math", "MATH101")
+    file_id = sdb.add_course_file(
+        cid,
+        course_id,
+        "prueba.pdf",
+        "pdf",
+        "contenido de prueba",
+    )
+
+    with client.session_transaction() as sess:
+        sess["client_id"] = cid
+        sess["client_name"] = "Course File Owner"
+        sess["account_type"] = "student"
+        sess["session_version"] = 0
+
+    preview = client.get(f"/api/student/files/{file_id}")
+    assert preview.status_code == 200
+    assert preview.get_json()["name"] == "prueba.pdf"
+
+    r = client.delete(f"/api/student/files/{file_id}")
+
+    assert r.status_code == 200
+    assert r.get_json()["ok"] is True
+    with get_db() as db:
+        assert _fetchone(
+            db,
+            "SELECT id FROM student_course_files WHERE id = %s",
+            (file_id,),
+        ) is None

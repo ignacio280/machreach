@@ -2651,10 +2651,7 @@ Return this JSON shape:
         with get_db() as db:
 
             f = _fetchone(db, "SELECT id, original_name, file_type, extracted_text, uploaded_at FROM student_course_files WHERE id = %s AND client_id = %s",
-
-                          (file_id, cid),
-
-                          "SELECT id, original_name, file_type, extracted_text, uploaded_at FROM student_course_files WHERE id = ? AND client_id = ?")
+                          (file_id, cid))
 
         if not f:
 
@@ -2671,17 +2668,17 @@ Return this JSON shape:
         if not _logged_in():
 
             return jsonify({"error": "Unauthorized"}), 401
+        cid = _cid()
         from student.db import get_db, _fetchone
         with get_db() as db:
             f = _fetchone(
                 db,
                 "SELECT id FROM student_course_files WHERE id = %s AND client_id = %s",
-                (file_id, _cid()),
-                "SELECT id FROM student_course_files WHERE id = ? AND client_id = ?",
+                (file_id, cid),
             )
         if not f:
             return jsonify({"error": "Not found"}), 404
-        sdb.delete_course_file(file_id, _cid())
+        sdb.delete_course_file(file_id, cid)
 
         return jsonify({"ok": True})
 
