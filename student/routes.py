@@ -7701,9 +7701,13 @@ Material:
 
         current_sem = sdb.get_current_semester(_cid())
         sem_options = ""
+        sem_menu_items = ""
         for _lbl in ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"]:
             sel = " selected" if _lbl == current_sem else ""
             sem_options += f'<option value="{_lbl}"{sel}>{_lbl}</option>'
+            _active = " active" if _lbl == current_sem else ""
+            _aria_selected = "true" if _lbl == current_sem else "false"
+            sem_menu_items += f'<button type="button" class="semester-option{_active}" role="option" aria-selected="{_aria_selected}" onclick="chooseSemester(\'{_lbl}\')">{_lbl}</button>'
 
         try:
             _time_by_course = {int(x.get("course_id") or 0): x for x in (sdb.get_time_per_course(_cid()) or [])}
@@ -7758,7 +7762,7 @@ Material:
             <article class="ccard {_cls}">
               <div class="ccard-head">
                 <div class="ccard-code">{_esc(c.get("code") or f"CURSO {_i+1}")}</div>
-                <button onclick="event.stopPropagation();deleteCourse({_course_id},'{_esc((c.get("name") or "")[:30])}')" class="ccard-menu" title="Eliminar curso">&#8942;</button>
+                <button onclick="event.stopPropagation();deleteCourse({_course_id},'{_esc((c.get("name") or "")[:30])}')" class="ccard-delete" title="Eliminar curso" aria-label="Eliminar curso">&times;</button>
               </div>
               <h2 class="ccard-name">{_esc(c.get("name") or "Curso")}</h2>
               <div class="ccard-prof">{_origin} · {_sessions} sesiones registradas</div>
@@ -7823,10 +7827,14 @@ Material:
             <h1 class="page-title-cd">Mis cursos</h1>
           </div>
           <div class="page-actions-cd">
-            <select id="cur-sem-select" onchange="setCurrentSemester(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-weight:600;">
-              <option value="" {'selected' if not current_sem else ''}>—</option>
-              {sem_options}
-            </select>
+            <div class="semester-picker" id="semester-picker">
+              <button id="cur-sem-select" class="semester-select" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleSemesterMenu(event)">
+                <span>{current_sem or "—"}</span><span class="semester-caret">⌄</span>
+              </button>
+              <div class="semester-menu" id="semester-menu" role="listbox" hidden>
+                {sem_menu_items}
+              </div>
+            </div>
           </div>
         </div>
         {_canvas_banner}
@@ -7858,7 +7866,7 @@ Material:
 
             <span>Semestre actual:</span>
 
-            <select id="cur-sem-select" onchange="setCurrentSemester(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-weight:600;">
+            <select id="cur-sem-select-legacy" class="semester-select" onchange="setCurrentSemester(this.value)">
 
               <option value="" {'selected' if not current_sem else ''}>—</option>
 
@@ -7890,10 +7898,19 @@ Material:
         </div>
 
         <style>
-        .page-head-cd {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px; }}
+        .page-head-cd {{ display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px;overflow:visible!important;position:relative;z-index:5; }}
         .page-eyebrow-cd {{ font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#7B61FF; }}
         .page-title-cd {{ margin:4px 0 0;font-family:'Bricolage Grotesque',sans-serif;font-size:48px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
         .page-actions-cd {{ display:flex;align-items:center;gap:10px;flex-wrap:wrap; }}
+        .semester-picker {{ position:relative;display:inline-flex;z-index:80; }}
+        .semester-select {{ min-width:72px;height:40px;box-sizing:border-box;padding:0 10px 0 14px;border:2px solid #201B20;border-radius:12px;background:#fff;color:#201B20;font-size:14px;font-weight:900;line-height:1;cursor:pointer;color-scheme:light;display:inline-flex;align-items:center;justify-content:space-between;gap:12px; }}
+        .semester-caret {{ font-size:14px;line-height:1; }}
+        .semester-menu {{ position:absolute;right:0;top:calc(100% + 7px);z-index:90;min-width:86px;max-height:272px;overflow:auto;padding:6px;border:2px solid #201B20;border-radius:12px;background:#fff;box-shadow:0 8px 0 #201B20,0 18px 32px rgba(32,27,32,.14); }}
+        .semester-menu.semester-menu-floating {{ position:fixed;right:auto;top:auto;z-index:10000; }}
+        .semester-menu[hidden] {{ display:none!important; }}
+        .semester-option {{ width:100%;height:30px;border:0;border-radius:8px;background:transparent;color:#201B20;font-size:13px;font-weight:900;text-align:left;padding:0 10px;cursor:pointer; }}
+        .semester-option:hover,.semester-option:focus-visible,.semester-option.active {{ background:#FFE7D8;color:#8B3A18;outline:none; }}
+        .semester-select option {{ background:#fff;color:#201B20;font-weight:800; }}
         .btn-pop-cd {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:10px 16px;border-radius:999px;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center; }}
         .canvas-banner {{ background:linear-gradient(135deg,#F0ECFF,#FBF8F0);border:1px solid #E2DCCC;border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:16px;margin-bottom:18px;box-shadow:0 8px 24px rgba(20,18,30,.05); }}
         .cb-icon {{ width:44px;height:44px;border-radius:12px;background:#7B61FF;color:#fff;display:grid;place-items:center;font-size:22px;font-weight:900; }}
@@ -7901,20 +7918,21 @@ Material:
         .cb-title {{ font-weight:900;font-size:14px;color:#1A1A1F; }}
         .cb-meta {{ font-size:12px;color:#94939C;margin-top:2px; }}
         .cb-btn {{ background:#fff;border:1px solid #E2DCCC;padding:8px 14px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;color:#1A1A1F;text-decoration:none; }}
-        .course-cards {{ display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start; }}
+        .course-cards {{ display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr))!important;gap:clamp(16px,2vw,28px)!important;align-items:start; }}
         @media (max-width:900px) {{ .course-cards {{ grid-template-columns:1fr; }} .page-title-cd{{font-size:38px;}} }}
-        .ccard {{ background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:22px;box-shadow:0 12px 32px rgba(20,18,30,.06);position:relative;overflow:hidden; }}
+        .ccard {{ background:#fff;border:1px solid #E2DCCC;border-radius:18px;padding:22px;box-sizing:border-box;min-width:0;width:100%;min-height:320px;display:flex;flex-direction:column;box-shadow:0 12px 32px rgba(20,18,30,.06);position:relative;overflow:hidden; }}
         .ccard::before {{ display:none; }}
-        .ccard-head {{ display:flex;justify-content:space-between;align-items:center; }}
+        .ccard-head {{ display:flex;justify-content:space-between;align-items:center;gap:12px; }}
         .ccard-code {{ font-size:11px;font-weight:900;color:#94939C;letter-spacing:.08em;text-transform:uppercase; }}
-        .ccard-menu {{ background:transparent;border:0;cursor:pointer;color:#94939C;font-size:20px;line-height:1; }}
+        .ccard-delete {{ width:30px;height:30px;min-width:30px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:0;border-radius:999px;cursor:pointer;color:#5C5C66;font-size:23px;font-weight:900;line-height:1; }}
+        .ccard-delete:hover,.ccard-delete:focus-visible {{ background:#FFE7D8;color:#C2410C;outline:none; }}
         .ccard-name {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:22px;margin:6px 0 4px;line-height:1.15;letter-spacing:-.015em;color:#1A1A1F; }}
         .ccard-prof {{ font-size:12px;color:#94939C;margin-bottom:16px; }}
         .ccard-stats {{ display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px; }}
         .ccs {{ background:#FBF8F0;border-radius:12px;padding:10px 8px;text-align:center;min-width:0; }}
         .ccs-n {{ font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:18px;letter-spacing:-.02em;color:#1A1A1F;white-space:nowrap; }}
         .ccs-l {{ font-size:10px;color:#94939C;margin-top:2px; }}
-        .ccard-foot {{ display:flex;justify-content:space-between;align-items:center;gap:12px; }}
+        .ccard-foot {{ display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:auto; }}
         .ccard-next {{ font-size:12px;font-weight:700;color:#5C5C66; }}
         .ccard-next.urgent {{ color:#FF7A3D;font-weight:900; }}
         .ccard-go {{ background:#1A1A1F;color:#FFF8E1;border:0;padding:8px 14px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap; }}
@@ -7935,6 +7953,16 @@ Material:
         :root[data-theme="dark"] .course-benchmark.locked {{ background:#221D33;border-color:#5D4A9D;color:#E8DDFF; }}
         :root[data-theme="dark"] .course-grade-input {{ background:#151A23;border-color:#343C4C;color:#F8F3EA; }}
         :root[data-theme="dark"] .course-outcome-state {{ color:#D7DCE6; }}
+        :root[data-theme="dark"] .content .page-head-cd .semester-select {{ background:#15131D!important;color:#FFF7EA!important;border-color:#FF8A4C!important;box-shadow:0 2px 0 rgba(255,138,76,.55)!important;color-scheme:dark; }}
+        :root[data-theme="dark"] .content .page-head-cd .semester-menu {{ background:#15131D!important;border-color:#FF8A4C!important;box-shadow:0 8px 0 #FF8A4C,0 18px 32px rgba(0,0,0,.34)!important; }}
+        :root[data-theme="dark"] .content .page-head-cd .semester-option {{ color:#FFF7EA!important;background:transparent!important;box-shadow:none!important; }}
+        :root[data-theme="dark"] .content .page-head-cd .semester-option:hover,:root[data-theme="dark"] .content .page-head-cd .semester-option:focus-visible,:root[data-theme="dark"] .content .page-head-cd .semester-option.active {{ background:#3A241D!important;color:#FFD0B5!important; }}
+        :root[data-theme="dark"] .semester-menu.semester-menu-floating {{ background:#15131D!important;border-color:#FF8A4C!important;box-shadow:0 8px 0 #FF8A4C,0 18px 32px rgba(0,0,0,.34)!important; }}
+        :root[data-theme="dark"] .semester-menu.semester-menu-floating .semester-option {{ color:#FFF7EA!important;background:transparent!important;box-shadow:none!important; }}
+        :root[data-theme="dark"] .semester-menu.semester-menu-floating .semester-option:hover,:root[data-theme="dark"] .semester-menu.semester-menu-floating .semester-option:focus-visible,:root[data-theme="dark"] .semester-menu.semester-menu-floating .semester-option.active {{ background:#3A241D!important;color:#FFD0B5!important; }}
+        :root[data-theme="dark"] .semester-select option {{ background:#15131D;color:#FFF7EA; }}
+        :root[data-theme="dark"] .ccard-delete {{ color:#FFF7EA; }}
+        :root[data-theme="dark"] .ccard-delete:hover,:root[data-theme="dark"] .ccard-delete:focus-visible {{ background:#3A241D;color:#FFB38A; }}
         :root[data-theme="dark"] .ccard-outcome-pending {{ background:#2A221A;border-color:#7C4A25;color:#FFD9C2; }}
         :root[data-theme="dark"] .ccard-outcome-done {{ background:#10251D;border-color:#246B4D;color:#BDF5D8; }}
         .course-exams-head {{ display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px; }}
@@ -8105,7 +8133,48 @@ Material:
           var panel = document.getElementById('manual-course-panel');
           var box = document.getElementById('mc-suggest');
           if (panel && box && !panel.contains(e.target)) box.hidden = true;
+          var picker = document.getElementById('semester-picker');
+          if (picker && !picker.contains(e.target)) window.closeSemesterMenu();
         }});
+
+        window.closeSemesterMenu = function closeSemesterMenu() {{
+          var menu = document.getElementById('semester-menu');
+          var btn = document.getElementById('cur-sem-select');
+          if (menu) menu.hidden = true;
+          if (btn) btn.setAttribute('aria-expanded', 'false');
+        }};
+        window.positionSemesterMenu = function positionSemesterMenu() {{
+          var menu = document.getElementById('semester-menu');
+          var btn = document.getElementById('cur-sem-select');
+          if (!menu || !btn) return;
+          if (menu.parentElement !== document.body) document.body.appendChild(menu);
+          menu.classList.add('semester-menu-floating');
+          var rect = btn.getBoundingClientRect();
+          var width = Math.max(86, Math.round(rect.width));
+          var left = Math.min(Math.max(8, Math.round(rect.right - width)), Math.max(8, window.innerWidth - width - 8));
+          menu.style.left = left + 'px';
+          menu.style.top = Math.round(rect.bottom + 7) + 'px';
+          menu.style.width = width + 'px';
+        }};
+        window.toggleSemesterMenu = function toggleSemesterMenu(event) {{
+          if (event) event.stopPropagation();
+          var menu = document.getElementById('semester-menu');
+          var btn = document.getElementById('cur-sem-select');
+          if (!menu || !btn) return;
+          var willOpen = menu.hidden;
+          if (willOpen) window.positionSemesterMenu();
+          menu.hidden = !willOpen;
+          btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        }};
+        window.chooseSemester = async function chooseSemester(label) {{
+          window.closeSemesterMenu();
+          await setCurrentSemester(label);
+        }};
+        document.addEventListener('keydown', function(e) {{
+          if (e.key === 'Escape') window.closeSemesterMenu();
+        }});
+        window.addEventListener('resize', window.closeSemesterMenu);
+        window.addEventListener('scroll', window.closeSemesterMenu, true);
 
         async function setCurrentSemester(label) {{
           if (label === '') return;  // ignore the placeholder

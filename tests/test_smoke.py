@@ -129,3 +129,29 @@ def test_student_can_delete_uploaded_course_file(client, flask_app, make_user, m
             "SELECT id FROM student_course_files WHERE id = %s",
             (file_id,),
         ) is None
+
+
+def test_courses_page_uses_clear_delete_and_stable_theme_controls(client, make_user):
+    cid = make_user("Course Theme Owner")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 1 WHERE id = %s", (cid,))
+    sdb.create_manual_course(cid, "Ruta Novata UC 2024", "CUR-RUT-NOV-1_2024")
+
+    with client.session_transaction() as sess:
+        sess["client_id"] = cid
+        sess["client_name"] = "Course Theme Owner"
+        sess["account_type"] = "student"
+        sess["session_version"] = 0
+
+    body = client.get("/student/courses").get_data(as_text=True)
+
+    assert 'class="ccard-delete"' in body
+    assert 'aria-label="Eliminar curso"' in body
+    assert ">&times;</button>" in body
+    assert 'class="ccard-menu"' not in body
+    assert "grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr))!important" in body
+    assert "min-height:320px" in body
+    assert 'class="semester-picker"' in body
+    assert 'class="semester-select"' in body
+    assert 'class="semester-menu"' in body
+    assert ':root[data-theme="dark"] .content .page-head-cd .semester-option' in body
