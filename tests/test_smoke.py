@@ -151,7 +151,11 @@ def test_courses_page_uses_clear_delete_and_stable_theme_controls(client, make_u
     assert 'class="ccard-menu"' not in body
     assert "grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr))!important" in body
     assert "min-height:320px" in body
+    assert ':root[data-theme="dark"] .mr-app-shell .content > .page-head-cd' in body
+    assert "background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;padding:0!important" in body
+    assert "font-size:clamp(42px,5vw,76px)!important" in body
+    assert "background:#FFE7D8!important;border:2px solid #FF7A3D!important" in body
     assert 'class="semester-picker"' in body
     assert 'class="semester-select"' in body
     assert 'class="semester-menu"' in body
-    assert ':root[data-theme="dark"] .content .page-head-cd .semester-option' in body
+    assert ':root[data-theme="dark"] .mr-app-shell .content .page-head-cd .semester-option' in body
