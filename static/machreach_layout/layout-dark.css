@@ -972,3 +972,183 @@
             margin:0 !important;
             padding:0 !important;
           }
+
+          /* Dark mode layout parity: recolor surfaces, but keep light-mode geometry. */
+          :root[data-theme="dark"] .mr-app-shell .btn,
+          :root[data-theme="dark"] .mr-app-shell button,
+          :root[data-theme="dark"] .mr-app-shell input[type="submit"],
+          :root[data-theme="dark"] .mr-app-shell .ccard-go,
+          :root[data-theme="dark"] .mr-app-shell .cb-btn,
+          :root[data-theme="dark"] .mr-app-shell .mr-mission-cta,
+          :root[data-theme="dark"] .mr-app-shell .ft-controls #start-btn,
+          :root[data-theme="dark"] .content .btn,
+          :root[data-theme="dark"] .content button,
+          :root[data-theme="dark"] .content input[type="submit"],
+          :root[data-theme="dark"] .content .ccard-go,
+          :root[data-theme="dark"] .content .cb-btn,
+          :root[data-theme="dark"] .content .mr-mission-cta,
+          :root[data-theme="dark"] .content .ft-controls #start-btn {
+            border-radius:14px !important;
+            font-weight:900 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell a.mr-tb-icon,
+          :root[data-theme="dark"] .mr-app-shell a.mr-tb-icon.mr-tb-settings-gear,
+          :root[data-theme="dark"] .content a.mr-tb-icon,
+          :root[data-theme="dark"] .content a.mr-tb-icon.mr-tb-settings-gear {
+            border-radius:12px !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell a.mr-tab,
+          :root[data-theme="dark"] .mr-app-shell a.mr-tab span {
+            font-weight:800 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell button.mr-tab,
+          :root[data-theme="dark"] .mr-app-shell button.mr-tab span,
+          :root[data-theme="dark"] .mr-app-shell button.mr-more-act,
+          :root[data-theme="dark"] .mr-app-shell .mr-more-act span {
+            font-weight:900 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .mr-more-list .mr-more-ic {
+            font-weight:700 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .mr-more-actions .mr-more-ic {
+            font-weight:900 !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .mr-more-actions a.mr-more-act,
+          :root[data-theme="dark"] .mr-app-shell .mr-more-actions a.mr-more-act .mr-more-ic {
+            font-weight:700 !important;
+          }
+          :root[data-theme="dark"] .content .focus-eye {
+            display:inline-flex !important;
+            align-items:center !important;
+            width:fit-content !important;
+            border:2px solid #FF7A3D !important;
+            border-radius:999px !important;
+            padding:7px 12px !important;
+            font-size:11px !important;
+            font-weight:900 !important;
+            letter-spacing:.08em !important;
+            box-shadow:none !important;
+          }
+          :root[data-theme="dark"] .content .focus-title,
+          :root[data-theme="dark"] .content .fc-page-title {
+            font-size:clamp(42px, 5vw, 76px) !important;
+            line-height:.94 !important;
+          }
+          :root[data-theme="dark"] .content .page-stats {
+            gap:14px !important;
+          }
+          :root[data-theme="dark"] .content .ps,
+          :root[data-theme="dark"] .content .amb {
+            border-width:2px !important;
+            box-sizing:border-box !important;
+          }
+          :root[data-theme="dark"] .content > .fc-page-head,
+          :root[data-theme="dark"] .content .fc-page-head {
+            background:transparent !important;
+            border:0 !important;
+            border-radius:0 !important;
+            box-shadow:none !important;
+            padding:0 !important;
+            overflow:visible !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .deck-grid,
+          :root[data-theme="dark"] .mr-app-shell .quiz-grid,
+          :root[data-theme="dark"] .content .deck-grid,
+          :root[data-theme="dark"] .content .quiz-grid {
+            grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)) !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .quiz-grid > div:not(.qcard),
+          :root[data-theme="dark"] .content .quiz-grid > div:not(.qcard) {
+            grid-column:1 / -1 !important;
+            min-height:310px !important;
+            display:grid !important;
+            place-items:center !important;
+            align-content:center !important;
+            padding:46px 28px !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .course-empty,
+          :root[data-theme="dark"] .mr-app-shell .deck.add,
+          :root[data-theme="dark"] .content .course-empty,
+          :root[data-theme="dark"] .content .deck.add {
+            min-height:210px !important;
+            border-style:dashed !important;
+            box-shadow:none !important;
+          }
+          :root[data-theme="dark"] .content .fc-decks-card .deck.add {
+            min-height:156px !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell .ccs,
+          :root[data-theme="dark"] .content .ccs {
+            border:2px solid #3B3544 !important;
+            border-radius:14px !important;
+            box-sizing:border-box !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell table,
+          :root[data-theme="dark"] .content table {
+            border:2px solid #FF7A3D !important;
+            border-radius:14px !important;
+            overflow:hidden !important;
+            box-shadow:0 3px 0 #FF7A3D !important;
+          }
+          :root[data-theme="dark"] .mr-app-shell table.pl-evals,
+          :root[data-theme="dark"] .content table.pl-evals {
+            border:0 !important;
+            border-radius:14px !important;
+            box-shadow:none !important;
+          }
+          :root[data-theme="dark"] .content #mr-lb-page .lb-hero,
+          :root[data-theme="dark"] .content #mr-lb-page .lb-board {
+            border-radius:18px !important;
+          }
+          :root[data-theme="dark"] .content .friends-cd .fr-panel.fr-referral {
+            border-radius:24px !important;
+          }
+          :root[data-theme="dark"] .content .friends-cd .fr-empty {
+            border-radius:14px !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-progress-mini {
+            min-height:112px !important;
+            border:1px solid rgba(255,122,61,.30) !important;
+            box-sizing:border-box !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-progress-btn {
+            border-width:2px !important;
+            box-sizing:border-box !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-mission {
+            border-radius:22px !important;
+          }
+          :root[data-theme="dark"] .content .mr-home .mr-course-tile,
+          :root[data-theme="dark"] .content .mr-home .mr-exam,
+          :root[data-theme="dark"] .content .mr-home .mr-sess {
+            border-width:2px !important;
+            box-sizing:border-box !important;
+          }
+          :root[data-theme="dark"] .content .shop-cd [style*="background:#0f172a"] {
+            border:1px solid #34313A !important;
+            box-sizing:border-box !important;
+          }
+          @media (max-width:1100px) {
+            :root[data-theme="dark"] .mr-app-shell .mr-tb-brand {
+              gap:7px !important;
+              min-width:0 !important;
+              flex-shrink:1 !important;
+              overflow:hidden !important;
+            }
+            :root[data-theme="dark"] .mr-app-shell button.mr-tb-icon {
+              border-radius:14px !important;
+            }
+            :root[data-theme="dark"] .mr-app-shell a.mr-tb-icon,
+            :root[data-theme="dark"] .mr-app-shell a.mr-tb-icon.mr-tb-settings-gear {
+              border-radius:10px !important;
+            }
+          }
+          @media (max-width:640px) {
+            :root[data-theme="dark"] .mr-app-shell .content .page-head-cd .page-title-cd,
+            :root[data-theme="dark"] .content .page-head-cd .page-title-cd,
+            :root[data-theme="dark"] .content .page-title-cd,
+            :root[data-theme="dark"] .content .focus-title,
+            :root[data-theme="dark"] .content .fc-page-title {
+              font-size:40px !important;
+            }
+          }
