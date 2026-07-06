@@ -7830,9 +7830,8 @@ Material:
             <div class="semester-current-field">
               <div class="semester-current-label">Semestre actual</div>
               <div class="semester-current-row">
-                <div class="semester-current-note" id="semester-current-note">Lo que elijas aqu&iacute; se usar&aacute; como tu semestre actual.</div>
                 <div class="semester-picker" id="semester-picker">
-                  <button id="cur-sem-select" class="semester-select" type="button" aria-haspopup="listbox" aria-expanded="false" aria-describedby="semester-current-note" onclick="toggleSemesterMenu(event)">
+                  <button id="cur-sem-select" class="semester-select" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleSemesterMenu(event)">
                     <span>{current_sem or "—"}</span><span class="semester-caret">⌄</span>
                   </button>
                   <div class="semester-menu" id="semester-menu" role="listbox" hidden>
@@ -7847,7 +7846,6 @@ Material:
         <div id="manual-course-panel" class="manual-course-panel">
           <div class="mcp-head">
             <div class="mcp-title">Agregar un curso</div>
-            <div class="mcp-sub">¿Tu universidad no usa Canvas? Agrégalo a mano: escribe el código y el nombre. Te sugerimos cursos que otros de tu universidad ya agregaron.</div>
           </div>
           <div class="mcp-form">
             <div class="mcp-field mcp-code">
@@ -7911,7 +7909,6 @@ Material:
         .semester-current-field {{ display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:min(360px,100%); }}
         .semester-current-label {{ color:#8B3A18;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;line-height:1; }}
         .semester-current-row {{ display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0; }}
-        .semester-current-note {{ max-width:260px;color:#5C5C66;font-size:12px;font-weight:800;line-height:1.18;text-align:right; }}
         .semester-picker {{ position:relative;display:inline-flex;z-index:80; }}
         .semester-select {{ min-width:72px;height:40px;box-sizing:border-box;padding:0 10px 0 14px;border:2px solid #201B20;border-radius:12px;background:#fff;color:#201B20;font-size:14px;font-weight:900;line-height:1;cursor:pointer;color-scheme:light;display:inline-flex;align-items:center;justify-content:space-between;gap:12px; }}
         .semester-caret {{ font-size:14px;line-height:1; }}
@@ -7968,7 +7965,6 @@ Material:
         :root[data-theme="dark"] .mr-app-shell .content .page-head-cd .page-title-cd {{ margin:4px 0 0!important;font-size:clamp(42px,5vw,76px)!important;line-height:.94!important;font-weight:800!important;letter-spacing:0!important;color:#FFF7EA!important;text-shadow:none!important; }}
         :root[data-theme="dark"] .mr-app-shell .content .page-head-cd .page-eyebrow-cd {{ display:inline-flex!important;align-items:center!important;width:fit-content!important;color:#8B3A18!important;background:#FFE7D8!important;border:2px solid #FF7A3D!important;border-radius:999px!important;padding:7px 12px!important;font-size:11px!important;font-weight:900!important;letter-spacing:.08em!important;text-shadow:none!important;box-shadow:none!important; }}
         :root[data-theme="dark"] .mr-app-shell .content .page-head-cd .semester-current-label {{ color:#FFB38A!important;text-shadow:none!important; }}
-        :root[data-theme="dark"] .mr-app-shell .content .page-head-cd .semester-current-note {{ color:#D9D2C3!important;text-shadow:none!important; }}
         :root[data-theme="dark"] .mr-app-shell .content .page-head-cd .semester-select {{ background:#fff!important;color:#201B20!important;border-color:#201B20!important;box-shadow:none!important;color-scheme:light; }}
         :root[data-theme="dark"] .mr-app-shell .content .page-head-cd .semester-menu {{ background:#fff!important;border-color:#201B20!important;box-shadow:0 8px 0 #201B20,0 18px 32px rgba(32,27,32,.14)!important; }}
         :root[data-theme="dark"] .mr-app-shell .content .page-head-cd .semester-option {{ color:#201B20!important;background:transparent!important;box-shadow:none!important; }}
