@@ -2379,7 +2379,6 @@ Return this JSON shape:
 
 
 
-    import threading
 
     # ── Courses ─────────────────────────────────────────────
 
@@ -13985,6 +13984,16 @@ Material:
         return _quiz_job_status(client_id)
 
 
+    def _queue_quiz_job(client_id: int, data: dict) -> dict:
+        from outreach.db import enqueue_async_job
+        return enqueue_async_job(
+            "student_quiz_generation",
+            str(client_id),
+            input_payload=data,
+            progress="Queued for quiz generation.",
+        )
+
+
     @app.route("/api/student/quizzes/generate", methods=["POST"])
     @limiter.limit("5 per minute")
 
@@ -14188,77 +14197,11 @@ Material:
             return jsonify({"error": _why, "upgrade_required": True}), 402
 
         existing = _quiz_job_status(client_id)
-        if existing.get("status") == "running":
+        if existing.get("status") in ("queued", "running"):
             return jsonify({"queued": True, "quiz_status": existing})
 
         data = request.get_json(force=True) if request.is_json else {}
-        queued_status = _set_quiz_job_status(client_id, "running", "Generating your quiz...")
-
-        def _do_quiz():
-            try:
-                course_id = data.get("course_id")
-                ad_hoc_source = (data.get("source_text") or "").strip()
-                ad_hoc_title = (data.get("title") or "").strip()
-                topics = data.get("topics", [])
-                exam_id = data.get("exam_id")
-                difficulty = data.get("difficulty", "medium")
-                if difficulty not in ("easy", "medium", "hard"):
-                    difficulty = "medium"
-                try:
-                    count = int(data.get("count", 10))
-                except (TypeError, ValueError):
-                    count = 10
-                count = _sub.cap_questions(client_id, max(1, min(count, 100)))
-
-                if ad_hoc_source:
-                    course_name = ad_hoc_title or "Custom Material"
-                    questions = generate_quiz(course_name=course_name, topics=topics or None, source_text=ad_hoc_source, difficulty=difficulty, count=count)
-                    if not questions:
-                        raise ValueError("Failed to generate quiz. Try again.")
-                    title = ad_hoc_title or f"Quiz: {course_name} ({difficulty})"
-                    quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id or None, exam_id=exam_id)
-                    sdb.add_quiz_questions(quiz_id, questions)
-                else:
-                    if not course_id:
-                        raise ValueError("course_id required")
-                    course = sdb.get_course(course_id)
-                    if not course or course["client_id"] != client_id:
-                        raise ValueError("Course not found")
-                    source_text = ""
-                    for f in sdb.get_course_files(client_id, course_id, exam_id=exam_id):
-                        if f.get("extracted_text"):
-                            source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text']}\n\n"
-                    for n in sdb.get_notes(client_id, course_id):
-                        if n.get("content_html"):
-                            source_text += n["content_html"] + "\n\n"
-                    if not source_text.strip():
-                        raise ValueError("No files uploaded for this course/exam. Please upload your study material first.")
-                    questions = generate_quiz(course_name=course["name"], topics=topics or None, source_text=source_text, difficulty=difficulty, count=count)
-                    if not questions:
-                        raise ValueError("Failed to generate quiz. Try again.")
-                    title = data.get("title", f"Quiz: {course['name']} ({difficulty})")
-                    quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id, exam_id=exam_id)
-                    sdb.add_quiz_questions(quiz_id, questions)
-
-                try:
-                    _sub.record_generation(client_id, "quiz_generated")
-                except Exception:
-                    pass
-
-                _set_quiz_job_status(
-                    client_id,
-                    "done",
-                    "Quiz generated!",
-                    quiz_id=quiz_id,
-                    question_count=len(questions),
-                    requested=count,
-                    short=len(questions) < count,
-                )
-            except Exception as e:
-                log.error("Quiz generation failed for client %s: %s", client_id, e)
-                _set_quiz_job_status(client_id, "error", str(e), error=str(e))
-
-        threading.Thread(target=_do_quiz, daemon=True).start()
+        queued_status = _queue_quiz_job(client_id, data)
 
         return jsonify({"queued": True, "quiz_status": queued_status})
 

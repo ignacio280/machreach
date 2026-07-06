@@ -17,7 +17,7 @@ if SENTRY_DSN:
     import sentry_sdk
     sentry_sdk.init(dsn=SENTRY_DSN, environment="worker")
 
-from outreach.db import get_emails_to_send, init_db, record_sent
+from outreach.db import claim_async_jobs, get_emails_to_send, init_db, record_sent, set_async_job_status
 from outreach.reply_checker import check_replies, check_bounces
 from outreach.sender import pick_variant, send_email
 
@@ -200,6 +200,266 @@ def send_batch():
 
     total_sent = sum(sent_today.values())
     print(f"Batch complete. {total_sent} sent today across all clients.")
+
+
+def _set_quiz_job_status(client_id: int, status: str, progress: str = "", **payload):
+    error = str(payload.pop("error", "") or "")
+    set_async_job_status(
+        "student_quiz_generation",
+        str(client_id),
+        status,
+        progress=progress,
+        payload=payload,
+        error=error,
+    )
+
+
+def _process_student_quiz_job(job: dict):
+    client_id = int(job["job_key"])
+    data = job.get("input") or {}
+    _set_quiz_job_status(client_id, "running", "Generating your quiz...")
+    try:
+        from student import db as sdb
+        from student import subscription as _sub
+        from student.analyzer import generate_quiz
+
+        ok, why = _sub.can_generate_quiz_today(client_id)
+        if not ok:
+            raise ValueError(why)
+
+        course_id = data.get("course_id")
+        ad_hoc_source = (data.get("source_text") or "").strip()
+        ad_hoc_title = (data.get("title") or "").strip()
+        topics = data.get("topics", [])
+        exam_id = data.get("exam_id")
+        difficulty = data.get("difficulty", "medium")
+        if difficulty not in ("easy", "medium", "hard"):
+            difficulty = "medium"
+        try:
+            count = int(data.get("count", 10))
+        except (TypeError, ValueError):
+            count = 10
+        count = _sub.cap_questions(client_id, max(1, min(count, 100)))
+
+        if ad_hoc_source:
+            course_name = ad_hoc_title or "Custom Material"
+            questions = generate_quiz(
+                course_name=course_name,
+                topics=topics or None,
+                source_text=ad_hoc_source,
+                difficulty=difficulty,
+                count=count,
+            )
+            if not questions:
+                raise ValueError("Failed to generate quiz. Try again.")
+            title = ad_hoc_title or f"Quiz: {course_name} ({difficulty})"
+            quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id or None, exam_id=exam_id)
+            sdb.add_quiz_questions(quiz_id, questions)
+        else:
+            if not course_id:
+                raise ValueError("course_id required")
+            course = sdb.get_course(course_id)
+            if not course or course["client_id"] != client_id:
+                raise ValueError("Course not found")
+            source_text = ""
+            for f in sdb.get_course_files(client_id, course_id, exam_id=exam_id):
+                if f.get("extracted_text"):
+                    source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text']}\n\n"
+            for n in sdb.get_notes(client_id, course_id):
+                if n.get("content_html"):
+                    source_text += n["content_html"] + "\n\n"
+            if not source_text.strip():
+                raise ValueError("No files uploaded for this course/exam. Please upload your study material first.")
+            questions = generate_quiz(
+                course_name=course["name"],
+                topics=topics or None,
+                source_text=source_text,
+                difficulty=difficulty,
+                count=count,
+            )
+            if not questions:
+                raise ValueError("Failed to generate quiz. Try again.")
+            title = data.get("title", f"Quiz: {course['name']} ({difficulty})")
+            quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id, exam_id=exam_id)
+            sdb.add_quiz_questions(quiz_id, questions)
+
+        try:
+            _sub.record_generation(client_id, "quiz_generated")
+        except Exception:
+            pass
+
+        _set_quiz_job_status(
+            client_id,
+            "done",
+            "Quiz generated!",
+            quiz_id=quiz_id,
+            question_count=len(questions),
+            requested=count,
+            short=len(questions) < count,
+        )
+        print(f"[ASYNC JOBS] Generated quiz {quiz_id} for client {client_id}")
+    except Exception as exc:
+        print(f"[ASYNC JOBS] Quiz generation failed for client {client_id}: {exc}")
+        _set_quiz_job_status(client_id, "error", str(exc), error=str(exc))
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass
+
+
+def _set_campaign_job_status(campaign_id: int, status: str, sent: int = 0, total: int = 0, progress: str = "", error: str = ""):
+    set_async_job_status(
+        "campaign_send",
+        str(campaign_id),
+        status,
+        progress=progress,
+        payload={"sent": int(sent or 0), "total": int(total or 0)},
+        error=error,
+    )
+
+
+def _process_campaign_send_job(job: dict):
+    campaign_id = int((job.get("input") or {}).get("campaign_id") or job["job_key"])
+    sent_count = 0
+    total_count = 0
+    _set_campaign_job_status(campaign_id, "running", sent=0, total=0, progress="Sending campaign...")
+    try:
+        from outreach.db import (
+            _exec,
+            _fetchone,
+            _now_expr,
+            check_limit,
+            delete_sent_email,
+            get_client,
+            get_db,
+            get_default_email_account,
+            increment_usage,
+        )
+
+        with get_db() as db:
+            rows = _exec(db, f"""
+                SELECT c.id as contact_id, c.name, c.email, c.company, c.role,
+                       c.language, c.campaign_id,
+                       es.id as sequence_id, es.subject_a, es.subject_b,
+                       es.body_a, es.body_b, es.step
+                FROM contacts c
+                JOIN campaigns camp ON c.campaign_id = camp.id
+                JOIN email_sequences es ON es.campaign_id = camp.id AND es.step = 1
+                WHERE camp.id = %s AND camp.status = 'active'
+                  AND c.status = 'pending'
+                  AND c.id NOT IN (SELECT contact_id FROM sent_emails)
+                  AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= {_now_expr()})
+                LIMIT 30
+            """, (campaign_id,)).fetchall()
+            batch = [dict(r) for r in rows]
+            camp_row = _fetchone(db, "SELECT client_id FROM campaigns WHERE id = %s", (campaign_id,))
+            client_id = camp_row["client_id"] if camp_row else None
+
+        acct_smtp = {}
+        physical_address = ""
+        if client_id:
+            acct = get_default_email_account(client_id)
+            if acct:
+                acct_smtp = {
+                    "smtp_host": acct["smtp_host"],
+                    "smtp_port": acct["smtp_port"],
+                    "smtp_user": acct["email"],
+                    "smtp_password": acct["password"],
+                    "from_name": acct.get("label", "") or "",
+                }
+            client = get_client(client_id)
+            if client:
+                physical_address = client.get("physical_address", "")
+
+        total_count = len(batch)
+        _set_campaign_job_status(campaign_id, "running", sent=sent_count, total=total_count, progress="Sending campaign...")
+
+        for item in batch:
+            with get_db() as db:
+                st = _fetchone(db, "SELECT status FROM campaigns WHERE id = %s", (campaign_id,))
+                if not st or st["status"] != "active":
+                    break
+
+            if client_id:
+                allowed, used, limit = check_limit(client_id, "emails_sent")
+                if not allowed:
+                    print(f"[ASYNC JOBS] Campaign {campaign_id} hit monthly limit ({used}/{limit})")
+                    break
+
+            variant = pick_variant()
+            if variant == "b" and item.get("subject_b"):
+                subject = item["subject_b"]
+                body = item.get("body_b") or item["body_a"]
+            else:
+                variant = "a"
+                subject = item["subject_a"]
+                body = item["body_a"]
+
+            contact = {"name": item["name"], "company": item["company"], "role": item["role"]}
+            subject = personalize_subject(subject, contact, SENDER_NAME)
+            body = personalize_email(body, contact, SENDER_NAME)
+
+            lang = item.get("language", "en")
+            if lang and lang.lower() not in ("en", "english"):
+                try:
+                    subject, body = translate_email(subject, body, lang)
+                except Exception:
+                    pass
+
+            sent_id = record_sent(
+                contact_id=item["contact_id"],
+                sequence_id=item["sequence_id"],
+                variant=variant,
+                subject=subject,
+                body=body,
+            )
+            success = send_email(
+                to_email=item["email"],
+                subject=subject,
+                body_text=body,
+                contact_id=item["contact_id"],
+                tracking_id=sent_id,
+                physical_address=physical_address,
+                **acct_smtp,
+            )
+
+            if success:
+                sent_count += 1
+                _set_campaign_job_status(campaign_id, "running", sent=sent_count, total=total_count, progress="Sending campaign...")
+                if client_id:
+                    try:
+                        increment_usage(client_id, "emails_sent")
+                    except Exception:
+                        pass
+            else:
+                delete_sent_email(sent_id, item["contact_id"])
+
+            time.sleep(DELAY_BETWEEN_EMAILS_SEC)
+
+        _set_campaign_job_status(campaign_id, "done", sent=sent_count, total=total_count, progress="Campaign send complete.")
+        print(f"[ASYNC JOBS] Campaign {campaign_id} complete ({sent_count}/{total_count})")
+    except Exception as exc:
+        print(f"[ASYNC JOBS] Campaign send failed for campaign {campaign_id}: {exc}")
+        _set_campaign_job_status(campaign_id, "error", sent=sent_count, total=total_count, progress=str(exc), error=str(exc))
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass
+
+
+def process_async_jobs():
+    """Claim and run queued one-off jobs from the database."""
+    processed = 0
+    for job in claim_async_jobs("student_quiz_generation", limit=2, progress="Generating your quiz..."):
+        processed += 1
+        _process_student_quiz_job(job)
+    for job in claim_async_jobs("campaign_send", limit=1, progress="Sending campaign..."):
+        processed += 1
+        _process_campaign_send_job(job)
+    if processed:
+        print(f"[ASYNC JOBS] Processed {processed} job(s).")
 
 
 def process_snoozes():
@@ -632,6 +892,7 @@ if __name__ == "__main__":
     print("Daily limits are per-plan (free=50, growth=200, pro=500, unlimited=∞)")
 
     scheduler = BlockingScheduler()
+    scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
     scheduler.add_job(send_batch, "interval", minutes=1, id="send_batch")
     scheduler.add_job(process_snoozes, "interval", minutes=1, id="process_snoozes")
     scheduler.add_job(send_scheduled, "interval", minutes=1, id="send_scheduled")
@@ -654,6 +915,7 @@ if __name__ == "__main__":
     scheduler.add_job(_apply_recurring_income_all, "cron", hour=2, minute=0, id="apply_recurring_income")
 
     # Run once immediately
+    process_async_jobs()
     send_batch()
     process_snoozes()
     send_scheduled()

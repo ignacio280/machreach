@@ -1,4 +1,4 @@
-from outreach.db import _exec, get_async_job_status, get_db, set_async_job_status
+from outreach.db import _exec, claim_async_jobs, enqueue_async_job, get_async_job_status, get_db, set_async_job_status
 
 
 def test_async_job_status_defaults_to_idle():
@@ -53,3 +53,33 @@ def test_async_job_status_marks_stale_running_jobs_retryable():
         "progress": "Background job was interrupted. Please try again.",
         "error": "Background job interrupted before it finished.",
     }
+
+
+def test_enqueue_async_job_hides_input_from_status_and_claims_once():
+    queued = enqueue_async_job(
+        "test_queue",
+        "quiz-input",
+        input_payload={"source_text": "private notes", "count": 5},
+        progress="Queued",
+        visible_payload={"public": True},
+    )
+
+    assert queued == {
+        "status": "queued",
+        "progress": "Queued",
+        "public": True,
+    }
+
+    assert "source_text" not in get_async_job_status("test_queue", "quiz-input")
+
+    claimed = claim_async_jobs("test_queue", limit=1, progress="Running")
+    assert claimed == [{
+        "job_type": "test_queue",
+        "job_key": "quiz-input",
+        "input": {"source_text": "private notes", "count": 5},
+    }]
+    assert claim_async_jobs("test_queue", limit=1, progress="Running") == []
+
+    status = get_async_job_status("test_queue", "quiz-input")
+    assert status["status"] == "running"
+    assert status["progress"] == "Running"

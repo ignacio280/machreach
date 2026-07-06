@@ -8,7 +8,6 @@ import hashlib
 import html as html_module
 import logging
 import os
-import threading
 
 import json
 from datetime import datetime
@@ -3306,141 +3305,20 @@ def _campaign_send_status(campaign_id):
     return get_async_job_status("campaign_send", str(campaign_id), {"status": "idle", "sent": 0, "total": 0})
 
 
-def _set_campaign_send_status(campaign_id, status, sent=0, total=0, error=""):
-    from outreach.db import set_async_job_status
-    set_async_job_status(
-        "campaign_send",
-        str(campaign_id),
-        status,
-        payload={"sent": int(sent or 0), "total": int(total or 0)},
-        error=error,
-    )
-
-
 def _trigger_campaign_send(campaign_id):
-    """Kick off a background thread to send pending emails for this campaign immediately."""
+    """Queue pending campaign emails for the background worker."""
     job = _campaign_send_status(campaign_id)
-    if job and job.get("status") == "sending":
+    if job and job.get("status") in ("queued", "running", "sending"):
         return  # already running
 
-    _set_campaign_send_status(campaign_id, "sending", sent=0, total=0)
-
-    def _bg_send():
-        import time as _time
-        from outreach.db import get_db, record_sent, delete_sent_email, check_limit, increment_usage, get_default_email_account, _exec, _fetchone, _now_expr
-        from outreach.ai import personalize_email, personalize_subject, translate_email
-        from outreach.config import DELAY_BETWEEN_EMAILS_SEC, SENDER_NAME
-        from outreach.sender import pick_variant, send_email
-
-        sent_count = 0
-        total_count = 0
-        try:
-            with get_db() as db:
-                rows = _exec(db, f"""
-                    SELECT c.id as contact_id, c.name, c.email, c.company, c.role,
-                           c.language, c.campaign_id,
-                           es.id as sequence_id, es.subject_a, es.subject_b,
-                           es.body_a, es.body_b, es.step
-                    FROM contacts c
-                    JOIN campaigns camp ON c.campaign_id = camp.id
-                    JOIN email_sequences es ON es.campaign_id = camp.id AND es.step = 1
-                    WHERE camp.id = %s AND camp.status = 'active'
-                      AND c.status = 'pending'
-                      AND c.id NOT IN (SELECT contact_id FROM sent_emails)
-                      AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= {_now_expr()})
-                    LIMIT 30
-                """, (campaign_id,)).fetchall()
-                batch = [dict(r) for r in rows]
-
-                # Get client_id
-                camp_row = _fetchone(db, "SELECT client_id FROM campaigns WHERE id = %s", (campaign_id,))
-                client_id = camp_row["client_id"] if camp_row else None
-
-            # Resolve SMTP credentials and physical address from user's account
-            acct_smtp = {}
-            _physical_address = ""
-            if client_id:
-                acct = get_default_email_account(client_id)
-                if acct:
-                    acct_smtp = {
-                        "smtp_host": acct["smtp_host"],
-                        "smtp_port": acct["smtp_port"],
-                        "smtp_user": acct["email"],
-                        "smtp_password": acct["password"],
-                        "from_name": acct.get("label", "") or "",
-                    }
-                _client = get_client(client_id)
-                if _client:
-                    _physical_address = _client.get("physical_address", "")
-
-            total_count = len(batch)
-            _set_campaign_send_status(campaign_id, "sending", sent=sent_count, total=total_count)
-
-            for item in batch:
-                # Check campaign still active
-                with get_db() as db:
-                    st = _fetchone(db, "SELECT status FROM campaigns WHERE id = %s", (campaign_id,))
-                    if not st or st["status"] != "active":
-                        break
-
-                # Check limits
-                if client_id:
-                    allowed, used, limit = check_limit(client_id, "emails_sent")
-                    if not allowed:
-                        break
-
-                variant = pick_variant()
-                if variant == "b" and item.get("subject_b"):
-                    subject = item["subject_b"]
-                    body = item.get("body_b") or item["body_a"]
-                else:
-                    variant = "a"
-                    subject = item["subject_a"]
-                    body = item["body_a"]
-
-                contact = {"name": item["name"], "company": item["company"], "role": item["role"]}
-                subject = personalize_subject(subject, contact, SENDER_NAME)
-                body = personalize_email(body, contact, SENDER_NAME)
-
-                lang = item.get("language", "en")
-                if lang and lang.lower() not in ("en", "english"):
-                    try:
-                        subject, body = translate_email(subject, body, lang)
-                    except Exception:
-                        pass
-
-                sent_id = record_sent(
-                    contact_id=item["contact_id"], sequence_id=item["sequence_id"],
-                    variant=variant, subject=subject, body=body,
-                )
-                success = send_email(
-                    to_email=item["email"], subject=subject, body_text=body,
-                    contact_id=item["contact_id"], tracking_id=sent_id,
-                    physical_address=_physical_address,
-                    **acct_smtp,
-                )
-
-                if success:
-                    sent_count += 1
-                    _set_campaign_send_status(campaign_id, "sending", sent=sent_count, total=total_count)
-                    if client_id:
-                        try:
-                            increment_usage(client_id, "emails_sent")
-                        except Exception:
-                            pass
-                else:
-                    delete_sent_email(sent_id, item["contact_id"])
-
-                _time.sleep(DELAY_BETWEEN_EMAILS_SEC)
-
-        except Exception as e:
-            print(f"[CAMPAIGN SEND] Error for campaign {campaign_id}: {e}")
-            _set_campaign_send_status(campaign_id, "error", sent=sent_count, total=total_count, error=str(e))
-            return
-
-        _set_campaign_send_status(campaign_id, "done", sent=sent_count, total=total_count)
-
-    threading.Thread(target=_bg_send, daemon=True).start()
+    from outreach.db import enqueue_async_job
+    enqueue_async_job(
+        "campaign_send",
+        str(campaign_id),
+        input_payload={"campaign_id": int(campaign_id)},
+        progress="Queued to send campaign.",
+        visible_payload={"sent": 0, "total": 0},
+    )
 
 
 # ---------------------------------------------------------------------------

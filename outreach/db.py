@@ -694,6 +694,7 @@ def init_async_jobs_table():
                 job_key      TEXT NOT NULL,
                 status       TEXT NOT NULL DEFAULT 'idle',
                 progress     TEXT DEFAULT '',
+                input_json   TEXT DEFAULT '{{}}',
                 payload_json TEXT DEFAULT '{{}}',
                 error        TEXT DEFAULT '',
                 created_at   TIMESTAMP DEFAULT {created_at},
@@ -708,6 +709,7 @@ def init_async_jobs_table():
                 job_key      TEXT NOT NULL,
                 status       TEXT NOT NULL DEFAULT 'idle',
                 progress     TEXT DEFAULT '',
+                input_json   TEXT DEFAULT '{{}}',
                 payload_json TEXT DEFAULT '{{}}',
                 error        TEXT DEFAULT '',
                 created_at   TEXT DEFAULT ({created_at}),
@@ -718,6 +720,11 @@ def init_async_jobs_table():
     with get_db() as db:
         _exec(db, sql)
         _exec(db, "CREATE INDEX IF NOT EXISTS idx_async_jobs_updated ON async_jobs(updated_at)")
+    try:
+        with get_db() as db:
+            _exec(db, "ALTER TABLE async_jobs ADD COLUMN input_json TEXT DEFAULT '{}'")
+    except Exception:
+        pass
 
 
 def set_async_job_status(job_type: str, job_key: str, status: str, progress: str = "", payload=None, error: str = ""):
@@ -751,6 +758,108 @@ def set_async_job_status(job_type: str, job_key: str, status: str, progress: str
                     error = excluded.error,
                     updated_at = {now}
             """, (job_type, str(job_key), status, progress, payload_json, error or ""))
+
+
+def _decode_json_dict(value) -> dict:
+    try:
+        decoded = json.loads(value or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
+def enqueue_async_job(job_type: str, job_key: str, input_payload=None, progress: str = "Queued", visible_payload=None) -> dict:
+    """Queue work for the background worker without exposing input_payload in status responses."""
+    current = get_async_job_status(job_type, job_key)
+    if current.get("status") in ("queued", "running", "sending"):
+        return current
+
+    input_json = json.dumps(input_payload or {}, separators=(",", ":"))
+    payload_json = json.dumps(visible_payload or {}, separators=(",", ":"))
+    now = _now_expr()
+    with get_db() as db:
+        if _USE_PG:
+            _exec(db, f"""
+                INSERT INTO async_jobs (
+                    job_type, job_key, status, progress, input_json, payload_json, error, created_at, updated_at
+                )
+                VALUES (%s, %s, 'queued', %s, %s, %s, '', {now}, {now})
+                ON CONFLICT (job_type, job_key) DO UPDATE SET
+                    status = 'queued',
+                    progress = EXCLUDED.progress,
+                    input_json = EXCLUDED.input_json,
+                    payload_json = EXCLUDED.payload_json,
+                    error = '',
+                    updated_at = {now}
+            """, (job_type, str(job_key), progress, input_json, payload_json))
+        else:
+            _exec(db, f"""
+                INSERT INTO async_jobs (
+                    job_type, job_key, status, progress, input_json, payload_json, error, created_at, updated_at
+                )
+                VALUES (%s, %s, 'queued', %s, %s, %s, '', {now}, {now})
+                ON CONFLICT(job_type, job_key) DO UPDATE SET
+                    status = 'queued',
+                    progress = excluded.progress,
+                    input_json = excluded.input_json,
+                    payload_json = excluded.payload_json,
+                    error = '',
+                    updated_at = {now}
+            """, (job_type, str(job_key), progress, input_json, payload_json))
+    return get_async_job_status(job_type, job_key)
+
+
+def claim_async_jobs(job_type: str, limit: int = 1, progress: str = "Running") -> list[dict]:
+    """Atomically claim queued jobs for a worker process."""
+    now = _now_expr()
+    limit = max(1, int(limit or 1))
+    claimed = []
+    with get_db() as db:
+        if _USE_PG:
+            rows = _exec(db, f"""
+                WITH next_jobs AS (
+                    SELECT job_type, job_key
+                    FROM async_jobs
+                    WHERE job_type = %s AND status = 'queued'
+                    ORDER BY updated_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT %s
+                )
+                UPDATE async_jobs AS j
+                SET status = 'running',
+                    progress = %s,
+                    error = '',
+                    updated_at = {now}
+                FROM next_jobs
+                WHERE j.job_type = next_jobs.job_type
+                  AND j.job_key = next_jobs.job_key
+                RETURNING j.job_type, j.job_key, j.input_json
+            """, (job_type, limit, progress)).fetchall()
+            claimed = [dict(row) for row in rows]
+        else:
+            rows = _fetchall(db, """
+                SELECT job_type, job_key, input_json
+                FROM async_jobs
+                WHERE job_type = %s AND status = 'queued'
+                ORDER BY updated_at ASC
+                LIMIT %s
+            """, (job_type, limit))
+            for row in rows:
+                cur = _exec(db, f"""
+                    UPDATE async_jobs
+                    SET status = 'running',
+                        progress = %s,
+                        error = '',
+                        updated_at = {now}
+                    WHERE job_type = %s AND job_key = %s AND status = 'queued'
+                """, (progress, row["job_type"], row["job_key"]))
+                if cur.rowcount:
+                    claimed.append(dict(row))
+
+    for job in claimed:
+        job["input"] = _decode_json_dict(job.get("input_json"))
+        job.pop("input_json", None)
+    return claimed
 
 
 def _async_job_is_stale(updated_at, stale_after_seconds: int) -> bool:
@@ -787,14 +896,9 @@ def get_async_job_status(job_type: str, job_key: str, default=None, stale_after_
     if row.get("progress"):
         status["progress"] = row["progress"]
 
-    try:
-        payload = json.loads(row.get("payload_json") or "{}")
-    except (TypeError, ValueError):
-        payload = {}
-    if isinstance(payload, dict):
-        status.update(payload)
+    status.update(_decode_json_dict(row.get("payload_json")))
 
-    if status["status"] == "running" and _async_job_is_stale(row.get("updated_at"), stale_after_seconds):
+    if status["status"] in ("queued", "running", "sending") and _async_job_is_stale(row.get("updated_at"), stale_after_seconds):
         status["status"] = "error"
         status["progress"] = "Background job was interrupted. Please try again."
         status["error"] = "Background job interrupted before it finished."
