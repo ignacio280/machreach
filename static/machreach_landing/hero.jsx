@@ -118,7 +118,7 @@ function HeroLeaderboard() {
               }}>S26</span>
             </div>
             <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", letterSpacing: ".05em" }}>
-              {(2300 + tick * 7).toLocaleString("es-CL")} estudiantes · 2d 14h restantes
+              Temporada activa - 2d 14h restantes
             </div>
           </div>
         </div>
@@ -236,7 +236,7 @@ function Hero() {
                   <div key={i} style={heroStyles.avatar(i)}>{t}</div>
                 ))}
               </div>
-              <span>+2.300 estudiantes ganando XP esta semana</span>
+              <span>Beta abierta para estudiantes en Chile</span>
             </div>
           </div>
           <div className="hero-anim hero-anim-card" data-d="2">

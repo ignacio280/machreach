@@ -204,7 +204,8 @@ def health_check():
             _fetchval(db, "SELECT 1")
         return jsonify({"status": "ok", "db": "connected"}), 200
     except Exception as e:
-        return jsonify({"status": "error", "db": str(e)}), 503
+        _log.exception("[health] database probe failed: %s", e)
+        return jsonify({"status": "error", "db": "unavailable"}), 503
 
 
 def _debug_admin_gate():
@@ -296,16 +297,6 @@ def admin_check_db():
     })
 
 
-# ---------------------------------------------------------------------------
-# ONE-TIME: Account reset — delete all accounts and notify users
-# Remove this endpoint after use!
-# ---------------------------------------------------------------------------
-
-@app.route("/api/admin/reset-all-accounts", methods=["POST"])
-@limiter.exempt
-def admin_reset_all_accounts():
-    """One-time admin action: notify all users and delete all accounts."""
-    return jsonify({"error": "This one-time destructive endpoint has been removed."}), 410
 def _hash_pw(pw: str) -> str:
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt(12)).decode()
 

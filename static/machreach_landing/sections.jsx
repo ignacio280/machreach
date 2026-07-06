@@ -898,10 +898,10 @@ function StatsStrip() {
     return () => obs.disconnect();
   }, []);
   const stats = [
-    { v: useCountUp(2347, active), l: "estudiantes activos esta semana", suf: "" },
-    { v: useCountUp(184,  active), l: "horas estudiadas hoy", suf: "h" },
-    { v: useCountUp(12,   active), l: "universidades conectadas", suf: "" },
-    { v: useCountUp(98,   active), l: "satisfacción de usuarios", suf: "%" },
+    { v: "Beta", l: "abierta para estudiantes", suf: "" },
+    { v: "Canvas", l: "sin pedir tu contrasena", suf: "" },
+    { v: "IA", l: "quizzes y flashcards privados", suf: "" },
+    { v: "Privado", l: "datos de estudio tuyos", suf: "" },
   ];
   return (
     <section ref={ref} style={{ paddingTop: 64, paddingBottom: 64 }}>

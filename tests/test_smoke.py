@@ -1,5 +1,6 @@
 """Smoke tests: key routes respond without server errors, and the recent
 CSRF / canonical-host fixes behave as intended."""
+from contextlib import contextmanager
 import re
 
 import pytest
@@ -22,6 +23,30 @@ def test_health_reports_db_connected(client):
     r = client.get("/health")
     assert r.status_code == 200
     assert r.get_json().get("db") == "connected"
+
+
+def test_health_hides_database_exception_details(client, monkeypatch):
+    import outreach.db as odb
+
+    @contextmanager
+    def broken_db():
+        raise RuntimeError("postgres://secret-user:secret-pass@private-host/db")
+        yield
+
+    monkeypatch.setattr(odb, "get_db", broken_db)
+    r = client.get("/health")
+
+    assert r.status_code == 503
+    assert r.get_json() == {"status": "error", "db": "unavailable"}
+    assert "secret-pass" not in r.get_data(as_text=True)
+
+
+def test_removed_reset_all_accounts_endpoint_is_not_registered(client, flask_app, monkeypatch):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+
+    r = client.post("/api/admin/reset-all-accounts")
+
+    assert r.status_code == 404
 
 
 def test_register_shows_referral_banner_with_ref(client):
