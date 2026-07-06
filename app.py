@@ -3588,9 +3588,15 @@ def lemonsqueezy_webhook():
         pack_key = str(custom.get("pack_key") or "")
         if not pack_key:
             return "ok", 200
+        order_id = str(data.get("id") or "").strip()
+        if not order_id:
+            _log.warning("[LS] coin-pack order missing order id for client %s pack=%s", cid, pack_key)
+            return "ok", 200
         try:
             from student import db as sdb
-            sdb.credit_coin_pack(cid, pack_key)
+            res = sdb.credit_coin_pack(cid, pack_key, order_id=order_id)
+            if res.get("duplicate"):
+                _log.info("[LS] duplicate coin-pack order ignored: %s", order_id)
         except Exception as e:
             _log.exception("[LS] coin-pack credit failed: %s", e)
         return "ok", 200

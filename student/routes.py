@@ -22598,11 +22598,17 @@ No markdown, no code fences. ONLY JSON.
                         prefs = _json.loads((row or {}).get("mail_preferences") or "{}")
                     except Exception:
                         prefs = {}
-                    sub_id = ((prefs.get("subscription") or {}).get("ls_sub_id")) or ""
+                    sub = prefs.get("subscription") or {}
+                    sub_id = (sub.get("ls_sub_id") or "").strip()
+                    local_paid_tier = str(sub.get("tier") or "free").lower()
                     if sub_id:
-                        ls.cancel_subscription(sub_id)
-                except Exception:
-                    pass
+                        if not ls.cancel_subscription(sub_id):
+                            return jsonify(ok=False, error="No pudimos cancelar tu suscripcion. Intentalo de nuevo o contacta soporte."), 502
+                    elif local_paid_tier in ("plus", "ultimate"):
+                        return jsonify(ok=False, error="No encontramos la suscripcion de pago para cancelarla. Contacta soporte."), 409
+                except Exception as e:
+                    log.exception("Student subscription cancellation failed for client %s: %s", cid, e)
+                    return jsonify(ok=False, error="No pudimos cancelar tu suscripcion. Intentalo de nuevo o contacta soporte."), 502
                 _sub.set_tier(cid, "free")
                 return jsonify(ok=True, tier="free")
             # Upgrade -> hosted checkout

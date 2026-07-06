@@ -497,6 +497,11 @@ def init_student_db():
         init_wallet_table()
     except Exception as e:
         log.exception("init_wallet_table failed: %s", e)
+    # Real-money coin purchases; keeps Lemon Squeezy retries idempotent.
+    try:
+        init_coin_pack_orders_table()
+    except Exception as e:
+        log.exception("init_coin_pack_orders_table failed: %s", e)
     # Timed boosts (2x XP, 2x coins)
     try:
         init_boosts_table()
@@ -4629,6 +4634,34 @@ def init_wallet_table() -> None:
     )
 
 
+def init_coin_pack_orders_table() -> None:
+    """Create the idempotency ledger for real-money coin purchases."""
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_coin_pack_orders ("
+        "id SERIAL PRIMARY KEY, "
+        "provider TEXT NOT NULL DEFAULT 'lemonsqueezy', "
+        "order_id TEXT NOT NULL, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "pack_key TEXT NOT NULL, "
+        "coins_credited INTEGER NOT NULL DEFAULT 0, "
+        "created_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(provider, order_id))",
+        "CREATE TABLE IF NOT EXISTS student_coin_pack_orders ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "provider TEXT NOT NULL DEFAULT 'lemonsqueezy', "
+        "order_id TEXT NOT NULL, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "pack_key TEXT NOT NULL, "
+        "coins_credited INTEGER NOT NULL DEFAULT 0, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(provider, order_id))",
+    )
+    _create_table_safe(
+        "CREATE INDEX IF NOT EXISTS idx_coin_pack_orders_client ON student_coin_pack_orders(client_id)",
+        "CREATE INDEX IF NOT EXISTS idx_coin_pack_orders_client ON student_coin_pack_orders(client_id)",
+    )
+
+
 def _ensure_wallet(db, client_id: int) -> None:
     row = _fetchone(db, "SELECT client_id FROM student_wallet WHERE client_id = %s", (client_id,))
     if not row:
@@ -4727,19 +4760,46 @@ def add_coins(client_id: int, amount: int, _reason: str = "") -> int:
         return _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
 
 
-def credit_coin_pack(client_id: int, pack_key: str) -> dict:
+def credit_coin_pack(client_id: int, pack_key: str, order_id: str | None = None) -> dict:
     """Credit coins for a real-money pack purchase. Bypasses 2x-coin boost
-    (real-money purchases shouldn't double-stack with timed boosts)."""
+    (real-money purchases shouldn't double-stack with timed boosts).
+
+    When `order_id` is supplied, the LS order is first written to a unique
+    ledger row inside the same DB transaction. Duplicate webhook retries then
+    no-op instead of crediting coins again.
+    """
     cfg = COIN_PACKS.get(pack_key)
     if not cfg:
         return {"ok": False, "error": "Unknown coin pack."}
     total = int(cfg["coins"]) + int(cfg.get("bonus") or 0)
+    order_id = str(order_id or "").strip()
     with get_db() as db:
         _ensure_wallet(db, client_id)
+        if order_id:
+            if _USE_PG:
+                cur = _exec(
+                    db,
+                    "INSERT INTO student_coin_pack_orders "
+                    "(provider, order_id, client_id, pack_key, coins_credited) "
+                    "VALUES (%s, %s, %s, %s, %s) "
+                    "ON CONFLICT (provider, order_id) DO NOTHING",
+                    ("lemonsqueezy", order_id, client_id, pack_key, total),
+                )
+            else:
+                cur = _exec(
+                    db,
+                    "INSERT OR IGNORE INTO student_coin_pack_orders "
+                    "(provider, order_id, client_id, pack_key, coins_credited) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    ("lemonsqueezy", order_id, client_id, pack_key, total),
+                )
+            if getattr(cur, "rowcount", 0) == 0:
+                new_balance = _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
+                return {"ok": True, "credited": 0, "coins": new_balance, "pack": pack_key, "duplicate": True}
         _exec(db, "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
               (total, client_id))
         new_balance = _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
-    return {"ok": True, "credited": total, "coins": new_balance, "pack": pack_key}
+    return {"ok": True, "credited": total, "coins": new_balance, "pack": pack_key, "duplicate": False}
 
 
 def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dict:
