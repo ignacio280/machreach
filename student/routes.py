@@ -13966,7 +13966,23 @@ Material:
 
 
 
-    _quiz_gen_status: dict[int, dict] = {}
+    def _quiz_job_status(client_id: int) -> dict:
+        from outreach.db import get_async_job_status
+        return get_async_job_status("student_quiz_generation", str(client_id), {"status": "idle"})
+
+
+    def _set_quiz_job_status(client_id: int, status: str, progress: str = "", **payload) -> dict:
+        from outreach.db import set_async_job_status
+        error = str(payload.pop("error", "") or "")
+        set_async_job_status(
+            "student_quiz_generation",
+            str(client_id),
+            status,
+            progress=progress,
+            payload=payload,
+            error=error,
+        )
+        return _quiz_job_status(client_id)
 
 
     @app.route("/api/student/quizzes/generate", methods=["POST"])
@@ -14171,12 +14187,12 @@ Material:
         if not _ok:
             return jsonify({"error": _why, "upgrade_required": True}), 402
 
-        existing = _quiz_gen_status.get(client_id, {})
+        existing = _quiz_job_status(client_id)
         if existing.get("status") == "running":
             return jsonify({"queued": True, "quiz_status": existing})
 
         data = request.get_json(force=True) if request.is_json else {}
-        _quiz_gen_status[client_id] = {"status": "running", "progress": "Generating your quiz..."}
+        queued_status = _set_quiz_job_status(client_id, "running", "Generating your quiz...")
 
         def _do_quiz():
             try:
@@ -14229,21 +14245,22 @@ Material:
                 except Exception:
                     pass
 
-                _quiz_gen_status[client_id] = {
-                    "status": "done",
-                    "progress": "Quiz generated!",
-                    "quiz_id": quiz_id,
-                    "question_count": len(questions),
-                    "requested": count,
-                    "short": len(questions) < count,
-                }
+                _set_quiz_job_status(
+                    client_id,
+                    "done",
+                    "Quiz generated!",
+                    quiz_id=quiz_id,
+                    question_count=len(questions),
+                    requested=count,
+                    short=len(questions) < count,
+                )
             except Exception as e:
                 log.error("Quiz generation failed for client %s: %s", client_id, e)
-                _quiz_gen_status[client_id] = {"status": "error", "progress": str(e), "error": str(e)}
+                _set_quiz_job_status(client_id, "error", str(e), error=str(e))
 
         threading.Thread(target=_do_quiz, daemon=True).start()
 
-        return jsonify({"queued": True, "quiz_status": _quiz_gen_status[client_id]})
+        return jsonify({"queued": True, "quiz_status": queued_status})
 
 
     @app.route("/api/student/quizzes/generate/status", methods=["GET"])
@@ -14254,7 +14271,7 @@ Material:
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        return jsonify(_quiz_gen_status.get(_cid(), {"status": "idle"}))
+        return jsonify(_quiz_job_status(_cid()))
 
 
     @app.route("/api/student/quizzes", methods=["GET"])

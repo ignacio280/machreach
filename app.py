@@ -6,7 +6,9 @@ from __future__ import annotations
 import bcrypt
 import hashlib
 import html as html_module
+import logging
 import os
+import threading
 
 import json
 from datetime import datetime
@@ -120,21 +122,23 @@ def _canonical_host_redirect():
 # ── Security: Rate limiting ──
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+_ratelimit_storage_uri = (os.getenv("RATELIMIT_STORAGE_URI") or "memory://").strip() or "memory://"
 limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["200 per minute"],
-    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
+    storage_uri=_ratelimit_storage_uri,
 )
 
 # ── Startup diagnostic — log DB path so we can debug persistence ──
-import logging
 from outreach.config import DATABASE_PATH
 logging.basicConfig(level=logging.INFO)
 _log = logging.getLogger("machreach")
 _log.info(f"DATABASE_PATH = {DATABASE_PATH}")
 _log.info(f"DATABASE_PATH exists = {DATABASE_PATH.exists()}")
 _log.info(f"/data dir exists = {os.path.isdir('/data')}")
+if _IS_PRODUCTION and _ratelimit_storage_uri == "memory://":
+    _log.warning("RATELIMIT_STORAGE_URI is memory:// in production; use Redis/Valkey for shared rate limits.")
 if os.path.isdir('/data'):
     _log.info(f"/data contents = {os.listdir('/data')}")
 
@@ -3297,13 +3301,29 @@ def settings():
 # Routes — Campaign CRUD
 # ---------------------------------------------------------------------------
 
+def _campaign_send_status(campaign_id):
+    from outreach.db import get_async_job_status
+    return get_async_job_status("campaign_send", str(campaign_id), {"status": "idle", "sent": 0, "total": 0})
+
+
+def _set_campaign_send_status(campaign_id, status, sent=0, total=0, error=""):
+    from outreach.db import set_async_job_status
+    set_async_job_status(
+        "campaign_send",
+        str(campaign_id),
+        status,
+        payload={"sent": int(sent or 0), "total": int(total or 0)},
+        error=error,
+    )
+
+
 def _trigger_campaign_send(campaign_id):
     """Kick off a background thread to send pending emails for this campaign immediately."""
-    job = _campaign_sends.get(campaign_id)
+    job = _campaign_send_status(campaign_id)
     if job and job.get("status") == "sending":
         return  # already running
 
-    _campaign_sends[campaign_id] = {"status": "sending", "sent": 0, "total": 0}
+    _set_campaign_send_status(campaign_id, "sending", sent=0, total=0)
 
     def _bg_send():
         import time as _time
@@ -3312,6 +3332,8 @@ def _trigger_campaign_send(campaign_id):
         from outreach.config import DELAY_BETWEEN_EMAILS_SEC, SENDER_NAME
         from outreach.sender import pick_variant, send_email
 
+        sent_count = 0
+        total_count = 0
         try:
             with get_db() as db:
                 rows = _exec(db, f"""
@@ -3351,7 +3373,8 @@ def _trigger_campaign_send(campaign_id):
                 if _client:
                     _physical_address = _client.get("physical_address", "")
 
-            _campaign_sends[campaign_id]["total"] = len(batch)
+            total_count = len(batch)
+            _set_campaign_send_status(campaign_id, "sending", sent=sent_count, total=total_count)
 
             for item in batch:
                 # Check campaign still active
@@ -3398,7 +3421,8 @@ def _trigger_campaign_send(campaign_id):
                 )
 
                 if success:
-                    _campaign_sends[campaign_id]["sent"] += 1
+                    sent_count += 1
+                    _set_campaign_send_status(campaign_id, "sending", sent=sent_count, total=total_count)
                     if client_id:
                         try:
                             increment_usage(client_id, "emails_sent")
@@ -3411,8 +3435,10 @@ def _trigger_campaign_send(campaign_id):
 
         except Exception as e:
             print(f"[CAMPAIGN SEND] Error for campaign {campaign_id}: {e}")
-        finally:
-            _campaign_sends[campaign_id]["status"] = "done"
+            _set_campaign_send_status(campaign_id, "error", sent=sent_count, total=total_count, error=str(e))
+            return
+
+        _set_campaign_send_status(campaign_id, "done", sent=sent_count, total=total_count)
 
     threading.Thread(target=_bg_send, daemon=True).start()
 
@@ -3433,10 +3459,6 @@ def _trigger_campaign_send(campaign_id):
 # API — Mail Hub
 # ---------------------------------------------------------------------------
 
-# In-memory sync job tracker
-import threading
-_sync_jobs: dict[int, dict] = {}  # client_id -> {status, new_emails, error}
-_campaign_sends: dict[int, dict] = {}  # campaign_id -> {status, sent, total}
 
 # ---------------------------------------------------------------------------
 # API — Mail Hub: AI draft & send reply

@@ -6,8 +6,10 @@ Falls back to SQLite via DATABASE_PATH when DATABASE_URL is empty (local dev).
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import datetime
 import hashlib
 import hmac
+import json
 
 from cryptography.fernet import Fernet, InvalidToken
 from outreach.config import DATABASE_URL, ENCRYPTION_KEY, SECRET_KEY
@@ -654,6 +656,7 @@ def init_db():
 
     # Run migrations for columns that may not exist yet
     _run_migrations()
+    init_async_jobs_table()
     print("Database initialized.")
 
 
@@ -679,6 +682,127 @@ def _run_migrations():
             _exec(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_email_lower ON clients (LOWER(email))")
     except Exception:
         pass  # Older data may contain case-only duplicates; leave startup healthy.
+
+
+def init_async_jobs_table():
+    """Create the shared background-job status table."""
+    created_at = _now_expr()
+    if _USE_PG:
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS async_jobs (
+                job_type     TEXT NOT NULL,
+                job_key      TEXT NOT NULL,
+                status       TEXT NOT NULL DEFAULT 'idle',
+                progress     TEXT DEFAULT '',
+                payload_json TEXT DEFAULT '{{}}',
+                error        TEXT DEFAULT '',
+                created_at   TIMESTAMP DEFAULT {created_at},
+                updated_at   TIMESTAMP DEFAULT {created_at},
+                PRIMARY KEY (job_type, job_key)
+            )
+        """
+    else:
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS async_jobs (
+                job_type     TEXT NOT NULL,
+                job_key      TEXT NOT NULL,
+                status       TEXT NOT NULL DEFAULT 'idle',
+                progress     TEXT DEFAULT '',
+                payload_json TEXT DEFAULT '{{}}',
+                error        TEXT DEFAULT '',
+                created_at   TEXT DEFAULT ({created_at}),
+                updated_at   TEXT DEFAULT ({created_at}),
+                PRIMARY KEY (job_type, job_key)
+            )
+        """
+    with get_db() as db:
+        _exec(db, sql)
+        _exec(db, "CREATE INDEX IF NOT EXISTS idx_async_jobs_updated ON async_jobs(updated_at)")
+
+
+def set_async_job_status(job_type: str, job_key: str, status: str, progress: str = "", payload=None, error: str = ""):
+    """Persist a background job's latest visible status."""
+    payload_json = json.dumps(payload or {}, separators=(",", ":"))
+    now = _now_expr()
+    with get_db() as db:
+        if _USE_PG:
+            _exec(db, f"""
+                INSERT INTO async_jobs (
+                    job_type, job_key, status, progress, payload_json, error, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, {now}, {now})
+                ON CONFLICT (job_type, job_key) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    progress = EXCLUDED.progress,
+                    payload_json = EXCLUDED.payload_json,
+                    error = EXCLUDED.error,
+                    updated_at = {now}
+            """, (job_type, str(job_key), status, progress, payload_json, error or ""))
+        else:
+            _exec(db, f"""
+                INSERT INTO async_jobs (
+                    job_type, job_key, status, progress, payload_json, error, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, {now}, {now})
+                ON CONFLICT(job_type, job_key) DO UPDATE SET
+                    status = excluded.status,
+                    progress = excluded.progress,
+                    payload_json = excluded.payload_json,
+                    error = excluded.error,
+                    updated_at = {now}
+            """, (job_type, str(job_key), status, progress, payload_json, error or ""))
+
+
+def _async_job_is_stale(updated_at, stale_after_seconds: int) -> bool:
+    if not updated_at or stale_after_seconds <= 0:
+        return False
+    try:
+        if isinstance(updated_at, datetime):
+            now = datetime.now(updated_at.tzinfo) if updated_at.tzinfo else datetime.now()
+            return (now - updated_at).total_seconds() > stale_after_seconds
+        ts = str(updated_at).strip().replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(ts)
+        except ValueError:
+            parsed = datetime.strptime(ts.split(".")[0], "%Y-%m-%d %H:%M:%S")
+        now = datetime.now(parsed.tzinfo) if parsed.tzinfo else datetime.now()
+        return (now - parsed).total_seconds() > stale_after_seconds
+    except Exception:
+        return False
+
+
+def get_async_job_status(job_type: str, job_key: str, default=None, stale_after_seconds: int = 3600) -> dict:
+    """Return a background job's latest status, merged with its JSON payload."""
+    fallback = dict(default or {"status": "idle"})
+    with get_db() as db:
+        row = _fetchone(db, """
+            SELECT status, progress, payload_json, error, updated_at
+            FROM async_jobs
+            WHERE job_type = %s AND job_key = %s
+        """, (job_type, str(job_key)))
+    if not row:
+        return fallback
+
+    status = {"status": row.get("status") or fallback.get("status", "idle")}
+    if row.get("progress"):
+        status["progress"] = row["progress"]
+
+    try:
+        payload = json.loads(row.get("payload_json") or "{}")
+    except (TypeError, ValueError):
+        payload = {}
+    if isinstance(payload, dict):
+        status.update(payload)
+
+    if status["status"] == "running" and _async_job_is_stale(row.get("updated_at"), stale_after_seconds):
+        status["status"] = "error"
+        status["progress"] = "Background job was interrupted. Please try again."
+        status["error"] = "Background job interrupted before it finished."
+        return status
+
+    if row.get("error"):
+        status["error"] = row["error"]
+    return status
 
 
 # ---------------------------------------------------------------------------
