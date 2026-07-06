@@ -697,6 +697,8 @@ def init_async_jobs_table():
                 input_json   TEXT DEFAULT '{{}}',
                 payload_json TEXT DEFAULT '{{}}',
                 error        TEXT DEFAULT '',
+                attempts     INTEGER DEFAULT 0,
+                max_attempts INTEGER DEFAULT 3,
                 created_at   TIMESTAMP DEFAULT {created_at},
                 updated_at   TIMESTAMP DEFAULT {created_at},
                 PRIMARY KEY (job_type, job_key)
@@ -712,6 +714,8 @@ def init_async_jobs_table():
                 input_json   TEXT DEFAULT '{{}}',
                 payload_json TEXT DEFAULT '{{}}',
                 error        TEXT DEFAULT '',
+                attempts     INTEGER DEFAULT 0,
+                max_attempts INTEGER DEFAULT 3,
                 created_at   TEXT DEFAULT ({created_at}),
                 updated_at   TEXT DEFAULT ({created_at}),
                 PRIMARY KEY (job_type, job_key)
@@ -725,6 +729,15 @@ def init_async_jobs_table():
             _exec(db, "ALTER TABLE async_jobs ADD COLUMN input_json TEXT DEFAULT '{}'")
     except Exception:
         pass
+    for column, spec in [
+        ("attempts", "INTEGER DEFAULT 0"),
+        ("max_attempts", "INTEGER DEFAULT 3"),
+    ]:
+        try:
+            with get_db() as db:
+                _exec(db, f"ALTER TABLE async_jobs ADD COLUMN {column} {spec}")
+        except Exception:
+            pass
 
 
 def set_async_job_status(job_type: str, job_key: str, status: str, progress: str = "", payload=None, error: str = ""):
@@ -768,7 +781,7 @@ def _decode_json_dict(value) -> dict:
     return decoded if isinstance(decoded, dict) else {}
 
 
-def enqueue_async_job(job_type: str, job_key: str, input_payload=None, progress: str = "Queued", visible_payload=None) -> dict:
+def enqueue_async_job(job_type: str, job_key: str, input_payload=None, progress: str = "Queued", visible_payload=None, max_attempts: int = 3) -> dict:
     """Queue work for the background worker without exposing input_payload in status responses."""
     current = get_async_job_status(job_type, job_key)
     if current.get("status") in ("queued", "running", "sending"):
@@ -776,36 +789,43 @@ def enqueue_async_job(job_type: str, job_key: str, input_payload=None, progress:
 
     input_json = json.dumps(input_payload or {}, separators=(",", ":"))
     payload_json = json.dumps(visible_payload or {}, separators=(",", ":"))
+    max_attempts = max(1, int(max_attempts or 1))
     now = _now_expr()
     with get_db() as db:
         if _USE_PG:
             _exec(db, f"""
                 INSERT INTO async_jobs (
-                    job_type, job_key, status, progress, input_json, payload_json, error, created_at, updated_at
+                    job_type, job_key, status, progress, input_json, payload_json, error,
+                    attempts, max_attempts, created_at, updated_at
                 )
-                VALUES (%s, %s, 'queued', %s, %s, %s, '', {now}, {now})
+                VALUES (%s, %s, 'queued', %s, %s, %s, '', 0, %s, {now}, {now})
                 ON CONFLICT (job_type, job_key) DO UPDATE SET
                     status = 'queued',
                     progress = EXCLUDED.progress,
                     input_json = EXCLUDED.input_json,
                     payload_json = EXCLUDED.payload_json,
                     error = '',
+                    attempts = 0,
+                    max_attempts = EXCLUDED.max_attempts,
                     updated_at = {now}
-            """, (job_type, str(job_key), progress, input_json, payload_json))
+            """, (job_type, str(job_key), progress, input_json, payload_json, max_attempts))
         else:
             _exec(db, f"""
                 INSERT INTO async_jobs (
-                    job_type, job_key, status, progress, input_json, payload_json, error, created_at, updated_at
+                    job_type, job_key, status, progress, input_json, payload_json, error,
+                    attempts, max_attempts, created_at, updated_at
                 )
-                VALUES (%s, %s, 'queued', %s, %s, %s, '', {now}, {now})
+                VALUES (%s, %s, 'queued', %s, %s, %s, '', 0, %s, {now}, {now})
                 ON CONFLICT(job_type, job_key) DO UPDATE SET
                     status = 'queued',
                     progress = excluded.progress,
                     input_json = excluded.input_json,
                     payload_json = excluded.payload_json,
                     error = '',
+                    attempts = 0,
+                    max_attempts = excluded.max_attempts,
                     updated_at = {now}
-            """, (job_type, str(job_key), progress, input_json, payload_json))
+            """, (job_type, str(job_key), progress, input_json, payload_json, max_attempts))
     return get_async_job_status(job_type, job_key)
 
 
@@ -829,16 +849,17 @@ def claim_async_jobs(job_type: str, limit: int = 1, progress: str = "Running") -
                 SET status = 'running',
                     progress = %s,
                     error = '',
+                    attempts = COALESCE(j.attempts, 0) + 1,
                     updated_at = {now}
                 FROM next_jobs
                 WHERE j.job_type = next_jobs.job_type
                   AND j.job_key = next_jobs.job_key
-                RETURNING j.job_type, j.job_key, j.input_json
+                RETURNING j.job_type, j.job_key, j.input_json, j.attempts, j.max_attempts
             """, (job_type, limit, progress)).fetchall()
             claimed = [dict(row) for row in rows]
         else:
             rows = _fetchall(db, """
-                SELECT job_type, job_key, input_json
+                SELECT job_type, job_key, input_json, COALESCE(attempts, 0) AS attempts, COALESCE(max_attempts, 3) AS max_attempts
                 FROM async_jobs
                 WHERE job_type = %s AND status = 'queued'
                 ORDER BY updated_at ASC
@@ -850,16 +871,100 @@ def claim_async_jobs(job_type: str, limit: int = 1, progress: str = "Running") -
                     SET status = 'running',
                         progress = %s,
                         error = '',
+                        attempts = COALESCE(attempts, 0) + 1,
                         updated_at = {now}
                     WHERE job_type = %s AND job_key = %s AND status = 'queued'
                 """, (progress, row["job_type"], row["job_key"]))
                 if cur.rowcount:
-                    claimed.append(dict(row))
+                    claimed_job = dict(row)
+                    claimed_job["attempts"] = int(claimed_job.get("attempts") or 0) + 1
+                    claimed.append(claimed_job)
 
     for job in claimed:
         job["input"] = _decode_json_dict(job.get("input_json"))
         job.pop("input_json", None)
     return claimed
+
+
+def fail_async_job(job_type: str, job_key: str, error: str, progress: str = "", payload=None, retry: bool = True) -> dict:
+    """Record a job failure, requeueing it if retryable attempts remain."""
+    payload_json = json.dumps(payload or {}, separators=(",", ":"))
+    now = _now_expr()
+    with get_db() as db:
+        row = _fetchone(db, """
+            SELECT COALESCE(attempts, 0) AS attempts, COALESCE(max_attempts, 3) AS max_attempts
+            FROM async_jobs
+            WHERE job_type = %s AND job_key = %s
+        """, (job_type, str(job_key))) or {"attempts": 0, "max_attempts": 3}
+        attempts = int(row.get("attempts") or 0)
+        max_attempts = max(1, int(row.get("max_attempts") or 3))
+        should_retry = bool(retry and attempts < max_attempts)
+        status = "queued" if should_retry else "error"
+        message = progress or str(error or "Job failed.")
+        if should_retry:
+            message = f"{message} Retrying attempt {attempts + 1} of {max_attempts}."
+        _exec(db, f"""
+            UPDATE async_jobs
+            SET status = %s,
+                progress = %s,
+                payload_json = %s,
+                error = %s,
+                updated_at = {now}
+            WHERE job_type = %s AND job_key = %s
+        """, (status, message, payload_json, str(error or ""), job_type, str(job_key)))
+    return get_async_job_status(job_type, job_key)
+
+
+def retry_async_job(job_type: str, job_key: str) -> bool:
+    """Manually requeue a failed job from the admin console."""
+    now = _now_expr()
+    with get_db() as db:
+        cur = _exec(db, f"""
+            UPDATE async_jobs
+            SET status = 'queued',
+                progress = 'Manually queued for retry.',
+                error = '',
+                attempts = 0,
+                updated_at = {now}
+            WHERE job_type = %s
+              AND job_key = %s
+              AND status = 'error'
+        """, (job_type, str(job_key)))
+        return bool(cur.rowcount)
+
+
+def list_async_jobs(limit: int = 80, job_type: str | None = None) -> list[dict]:
+    """List recent async jobs for admin/debug views."""
+    limit = max(1, min(int(limit or 80), 200))
+    where = "WHERE job_type = %s" if job_type else "WHERE job_type <> 'worker_heartbeat'"
+    params = (job_type, limit) if job_type else (limit,)
+    with get_db() as db:
+        rows = _fetchall(db, f"""
+            SELECT job_type, job_key, status, progress, error,
+                   COALESCE(attempts, 0) AS attempts,
+                   COALESCE(max_attempts, 3) AS max_attempts,
+                   payload_json,
+                   created_at,
+                   updated_at
+            FROM async_jobs
+            {where}
+            ORDER BY updated_at DESC
+            LIMIT %s
+        """, params)
+    for row in rows:
+        row["payload"] = _decode_json_dict(row.get("payload_json"))
+        row.pop("payload_json", None)
+    return rows
+
+
+def record_worker_heartbeat(worker_name: str = "machreach-worker") -> None:
+    set_async_job_status(
+        "worker_heartbeat",
+        worker_name,
+        "running",
+        progress="Worker heartbeat",
+        payload={"worker": worker_name},
+    )
 
 
 def _async_job_is_stale(updated_at, stale_after_seconds: int) -> bool:

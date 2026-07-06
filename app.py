@@ -2572,6 +2572,7 @@ def admin_dashboard():
     </div>
     <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
       <a class="btn btn-primary btn-sm" href="/admin/analytics">&#128202; Analytics de producto</a>
+      <a class="btn btn-outline btn-sm" href="/admin/jobs">&#9881; Jobs & worker</a>
       <a class="btn btn-outline btn-sm" href="/admin/leaderboard-winners-test">&#127942; Preview monthly leaderboard winners email</a>
     </div>
     {'<div class="alert alert-red" style="margin-bottom:16px;">' + _esc(error_msg) + '</div>' if error_msg else ''}
@@ -2757,6 +2758,194 @@ def _admin_rows(sql_pg: str, sql_lite: str | None = None, params=()) -> list[dic
             return _fetchall(db, sql_pg if _USE_PG else (sql_lite or sql_pg), params) or []
     except Exception:
         return []
+
+
+@app.route("/admin/jobs", methods=["GET", "POST"])
+def admin_jobs():
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+
+    from outreach.db import list_async_jobs, retry_async_job
+
+    error_msg = ""
+    if request.method == "POST":
+        action = request.form.get("action", "").strip()
+        if action == "retry_job":
+            job_type = request.form.get("job_type", "").strip()
+            job_key = request.form.get("job_key", "").strip()
+            if job_type not in {"student_quiz_generation", "campaign_send"} or not job_key:
+                error_msg = "Invalid job retry request."
+            elif not _admin_secret_ok():
+                error_msg = "Admin action secret is incorrect."
+            elif retry_async_job(job_type, job_key):
+                _log_admin_action("retry_job", target=f"{job_type}:{job_key}")
+                flash(("success", f"Queued retry for {job_type}:{job_key}"))
+                return redirect(url_for("admin_jobs"))
+            else:
+                error_msg = "Could not retry that job. It may no longer be failed."
+
+    jobs = list_async_jobs(limit=80)
+    heartbeats = list_async_jobs(limit=5, job_type="worker_heartbeat")
+    worker = heartbeats[0] if heartbeats else None
+    worker_status = "unknown"
+    worker_updated = ""
+    if worker:
+        worker_status = str(worker.get("status") or "unknown")
+        worker_updated = str(worker.get("updated_at") or "")
+
+    counts = {k: 0 for k in ("queued", "running", "error", "done")}
+    for job in jobs:
+        status = str(job.get("status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+
+    recent_users = _admin_rows(
+        """
+        SELECT id, name, email, COALESCE(account_type, 'student') AS account_type, created_at::text AS created_at
+        FROM clients
+        ORDER BY created_at DESC
+        LIMIT 12
+        """,
+        """
+        SELECT id, name, email, COALESCE(account_type, 'student') AS account_type, created_at
+        FROM clients
+        ORDER BY created_at DESC
+        LIMIT 12
+        """,
+    )
+    coin_orders = _admin_rows(
+        """
+        SELECT o.order_id, o.client_id, c.email, o.pack_key, o.coins_credited, o.created_at::text AS created_at
+        FROM student_coin_pack_orders o
+        LEFT JOIN clients c ON c.id = o.client_id
+        ORDER BY o.created_at DESC
+        LIMIT 12
+        """,
+        """
+        SELECT o.order_id, o.client_id, c.email, o.pack_key, o.coins_credited, o.created_at
+        FROM student_coin_pack_orders o
+        LEFT JOIN clients c ON c.id = o.client_id
+        ORDER BY o.created_at DESC
+        LIMIT 12
+        """,
+    )
+
+    job_labels = {
+        "student_quiz_generation": "Quiz generation",
+        "campaign_send": "Campaign send",
+    }
+    status_colors = {
+        "queued": "#7C3AED",
+        "running": "#2563EB",
+        "sending": "#2563EB",
+        "done": "#059669",
+        "error": "#DC2626",
+    }
+
+    def _pill(status: str) -> str:
+        color = status_colors.get(status, "#6B7280")
+        return f"<span class='job-pill' style='background:{color};'>{_esc(status)}</span>"
+
+    def _retry_form(job: dict) -> str:
+        if job.get("status") != "error" or job.get("job_type") not in {"student_quiz_generation", "campaign_send"}:
+            return ""
+        secret = (
+            "<input name='admin_secret' type='password' autocomplete='off' placeholder='Admin secret' "
+            "style='font-size:11px;padding:6px 8px;max-width:140px;'>"
+            if ADMIN_ACTION_SECRET else ""
+        )
+        return f"""
+        <form method="POST" style="margin:0;display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
+          <input type="hidden" name="action" value="retry_job">
+          <input type="hidden" name="job_type" value="{_esc(str(job.get('job_type') or ''))}">
+          <input type="hidden" name="job_key" value="{_esc(str(job.get('job_key') or ''))}">
+          {secret}
+          <button class="btn btn-outline btn-sm" type="submit">Retry</button>
+        </form>
+        """
+
+    def _jobs_table(rows: list[dict], empty: str) -> str:
+        if not rows:
+            return f"<div class='admin-empty'>{_esc(empty)}</div>"
+        body = []
+        for job in rows:
+            payload = job.get("payload") or {}
+            payload_text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+            body.append(f"""
+            <tr>
+              <td>{_esc(job_labels.get(str(job.get('job_type') or ''), str(job.get('job_type') or '')))}</td>
+              <td><code>{_esc(str(job.get('job_key') or ''))}</code></td>
+              <td>{_pill(str(job.get('status') or 'unknown'))}</td>
+              <td>{_esc(str(job.get('attempts') or 0))}/{_esc(str(job.get('max_attempts') or 3))}</td>
+              <td>{_esc(str(job.get('progress') or ''))}<br><small>{_esc(str(job.get('error') or ''))}</small></td>
+              <td><code>{_esc(payload_text[:220])}</code></td>
+              <td>{_esc(str(job.get('updated_at') or ''))}</td>
+              <td>{_retry_form(job)}</td>
+            </tr>
+            """)
+        return """
+        <table class="jobs-table">
+          <thead><tr><th>Type</th><th>Key</th><th>Status</th><th>Attempts</th><th>Message</th><th>Payload</th><th>Updated</th><th>Action</th></tr></thead>
+          <tbody>
+        """ + "".join(body) + "</tbody></table>"
+
+    def _simple_table(headers: list[str], rows: list[dict], keys: list[str], empty: str) -> str:
+        if not rows:
+            return f"<div class='admin-empty'>{_esc(empty)}</div>"
+        head = "".join(f"<th>{_esc(h)}</th>" for h in headers)
+        body = "".join(
+            "<tr>" + "".join(f"<td>{_esc(str(row.get(key, '')))}</td>" for key in keys) + "</tr>"
+            for row in rows
+        )
+        return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+    failed_quiz = [j for j in jobs if j.get("job_type") == "student_quiz_generation" and j.get("status") == "error"]
+    failed_campaign = [j for j in jobs if j.get("job_type") == "campaign_send" and j.get("status") == "error"]
+    active_jobs = [j for j in jobs if j.get("status") in ("queued", "running", "sending")]
+
+    cards = "".join(
+        f"<div class='admin-metric'><div class='k'>{label}</div><div class='v'>{value}</div></div>"
+        for label, value in [
+            ("Worker", worker_status),
+            ("Queued", counts.get("queued", 0)),
+            ("Running", counts.get("running", 0) + counts.get("sending", 0)),
+            ("Failed", counts.get("error", 0)),
+            ("Done", counts.get("done", 0)),
+        ]
+    )
+
+    body = f"""
+    <style>
+      .admin-jobs {{ display:grid; gap:18px; }}
+      .admin-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }}
+      .admin-metric {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:16px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
+      .admin-metric .k {{ color:#77756F; font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
+      .admin-metric .v {{ font-family:'Bricolage Grotesque',sans-serif; font-size:26px; font-weight:650; margin-top:8px; color:#1A1A1F; }}
+      .admin-panel {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:18px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); overflow:auto; }}
+      .admin-panel h2 {{ margin:0 0 12px; font-family:'Bricolage Grotesque',sans-serif; font-size:24px; }}
+      .admin-note {{ color:#77756F; background:#FBF8F0; border:1px solid #E2DCCC; border-radius:14px; padding:12px 14px; margin:0; line-height:1.45; }}
+      .admin-empty {{ color:#94939C; background:#FBF8F0; border:1px dashed #D8D0BE; border-radius:14px; padding:16px; }}
+      .job-pill {{ display:inline-flex; color:#fff; border-radius:999px; padding:4px 8px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }}
+      .jobs-table small {{ color:#77756F; }}
+      .jobs-table code {{ font-size:11px; white-space:normal; }}
+    </style>
+    <div class="admin-jobs">
+      <div class="breadcrumb"><a href="/admin">Admin</a> / Jobs</div>
+      <div class="page-header"><h1>&#9881; Jobs & worker</h1><p class="subtitle">Background quiz generation, campaign sends, retries, worker heartbeat, signups and payment fulfillment.</p></div>
+      {'<div class="alert alert-red">' + _esc(error_msg) + '</div>' if error_msg else ''}
+      <div class="admin-grid">{cards}</div>
+      <div class="admin-panel">
+        <h2>Worker heartbeat</h2>
+        <div class="admin-note">Last heartbeat: <b>{_esc(worker_updated or 'never')}</b>. If this stops updating after deploy, check the Render <code>machreach-worker</code> service logs/env vars.</div>
+      </div>
+      <div class="admin-panel"><h2>Active jobs</h2>{_jobs_table(active_jobs, "No active queued or running jobs.")}</div>
+      <div class="admin-panel"><h2>Failed quiz generations</h2>{_jobs_table(failed_quiz, "No failed quiz generations.")}</div>
+      <div class="admin-panel"><h2>Failed campaign sends</h2>{_jobs_table(failed_campaign, "No failed campaign sends.")}</div>
+      <div class="admin-panel"><h2>Recent job activity</h2>{_jobs_table(jobs[:30], "No background jobs recorded yet.")}</div>
+      <div class="admin-panel"><h2>Recent signups</h2>{_simple_table(["ID","Name","Email","Type","Created"], recent_users, ["id","name","email","account_type","created_at"], "No signups yet.")}</div>
+      <div class="admin-panel"><h2>Recent coin-pack orders</h2>{_simple_table(["Order","Client","Email","Pack","Coins","Created"], coin_orders, ["order_id","client_id","email","pack_key","coins_credited","created_at"], "No coin-pack orders recorded yet.")}</div>
+    </div>
+    """
+    return _render("Admin jobs", body, active_page="admin", wide=True)
 
 
 def _current_process_rss_mb() -> float | None:

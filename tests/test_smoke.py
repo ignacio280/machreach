@@ -49,6 +49,24 @@ def test_removed_reset_all_accounts_endpoint_is_not_registered(client, flask_app
     assert r.status_code == 404
 
 
+def test_admin_jobs_page_renders_for_admin(client, make_user):
+    cid = make_user("Admin Jobs Owner", "admin-jobs@example.com")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET is_admin = 1 WHERE id = %s", (cid,))
+    with client.session_transaction() as sess:
+        sess["client_id"] = cid
+        sess["client_name"] = "Admin Jobs Owner"
+        sess["account_type"] = "student"
+        sess["session_version"] = 0
+
+    r = client.get("/admin/jobs")
+
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert "Jobs & worker" in body
+    assert "Worker heartbeat" in body
+
+
 def test_register_shows_referral_banner_with_ref(client):
     r = client.get("/register?ref=ABC1234")
     body = r.get_data(as_text=True)

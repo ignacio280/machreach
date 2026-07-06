@@ -17,7 +17,15 @@ if SENTRY_DSN:
     import sentry_sdk
     sentry_sdk.init(dsn=SENTRY_DSN, environment="worker")
 
-from outreach.db import claim_async_jobs, get_emails_to_send, init_db, record_sent, set_async_job_status
+from outreach.db import (
+    claim_async_jobs,
+    fail_async_job,
+    get_emails_to_send,
+    init_db,
+    record_sent,
+    record_worker_heartbeat,
+    set_async_job_status,
+)
 from outreach.reply_checker import check_replies, check_bounces
 from outreach.sender import pick_variant, send_email
 
@@ -251,7 +259,7 @@ def _process_student_quiz_job(job: dict):
                 count=count,
             )
             if not questions:
-                raise ValueError("Failed to generate quiz. Try again.")
+                raise RuntimeError("Failed to generate quiz. Try again.")
             title = ad_hoc_title or f"Quiz: {course_name} ({difficulty})"
             quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id or None, exam_id=exam_id)
             sdb.add_quiz_questions(quiz_id, questions)
@@ -278,7 +286,7 @@ def _process_student_quiz_job(job: dict):
                 count=count,
             )
             if not questions:
-                raise ValueError("Failed to generate quiz. Try again.")
+                raise RuntimeError("Failed to generate quiz. Try again.")
             title = data.get("title", f"Quiz: {course['name']} ({difficulty})")
             quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id, exam_id=exam_id)
             sdb.add_quiz_questions(quiz_id, questions)
@@ -300,7 +308,13 @@ def _process_student_quiz_job(job: dict):
         print(f"[ASYNC JOBS] Generated quiz {quiz_id} for client {client_id}")
     except Exception as exc:
         print(f"[ASYNC JOBS] Quiz generation failed for client {client_id}: {exc}")
-        _set_quiz_job_status(client_id, "error", str(exc), error=str(exc))
+        fail_async_job(
+            "student_quiz_generation",
+            str(client_id),
+            str(exc),
+            progress=str(exc),
+            retry=not isinstance(exc, ValueError),
+        )
         try:
             import sentry_sdk
             sentry_sdk.capture_exception(exc)
@@ -441,7 +455,14 @@ def _process_campaign_send_job(job: dict):
         print(f"[ASYNC JOBS] Campaign {campaign_id} complete ({sent_count}/{total_count})")
     except Exception as exc:
         print(f"[ASYNC JOBS] Campaign send failed for campaign {campaign_id}: {exc}")
-        _set_campaign_job_status(campaign_id, "error", sent=sent_count, total=total_count, progress=str(exc), error=str(exc))
+        fail_async_job(
+            "campaign_send",
+            str(campaign_id),
+            str(exc),
+            progress=str(exc),
+            payload={"sent": sent_count, "total": total_count},
+            retry=True,
+        )
         try:
             import sentry_sdk
             sentry_sdk.capture_exception(exc)
@@ -451,6 +472,7 @@ def _process_campaign_send_job(job: dict):
 
 def process_async_jobs():
     """Claim and run queued one-off jobs from the database."""
+    record_worker_heartbeat()
     processed = 0
     for job in claim_async_jobs("student_quiz_generation", limit=2, progress="Generating your quiz..."):
         processed += 1
@@ -460,6 +482,10 @@ def process_async_jobs():
         _process_campaign_send_job(job)
     if processed:
         print(f"[ASYNC JOBS] Processed {processed} job(s).")
+
+
+def heartbeat():
+    record_worker_heartbeat()
 
 
 def process_snoozes():
@@ -893,6 +919,7 @@ if __name__ == "__main__":
 
     scheduler = BlockingScheduler()
     scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
+    scheduler.add_job(heartbeat, "interval", minutes=1, id="worker_heartbeat")
     scheduler.add_job(send_batch, "interval", minutes=1, id="send_batch")
     scheduler.add_job(process_snoozes, "interval", minutes=1, id="process_snoozes")
     scheduler.add_job(send_scheduled, "interval", minutes=1, id="send_scheduled")
@@ -915,6 +942,7 @@ if __name__ == "__main__":
     scheduler.add_job(_apply_recurring_income_all, "cron", hour=2, minute=0, id="apply_recurring_income")
 
     # Run once immediately
+    heartbeat()
     process_async_jobs()
     send_batch()
     process_snoozes()
