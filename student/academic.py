@@ -847,7 +847,8 @@ def _xp_select(where_extra: str = "", params: Iterable = (), period: str = "all"
     base = (
         "SELECT c.id AS client_id, c.name AS display_name, "
         "       c.country_iso, c.university_id, c.major_id, "
-        "       COALESCE(SUM(x.xp), 0) AS total_xp "
+        "       COALESCE(SUM(x.xp), 0) AS period_xp, "
+        "       (SELECT COALESCE(SUM(xl.xp), 0) FROM student_xp xl WHERE xl.client_id = c.id) AS lifetime_xp "
         "FROM clients c "
         "LEFT JOIN student_xp x ON x.client_id = c.id " + join_extra +
         "WHERE c.account_type = 'student' " + retired_clause
@@ -860,7 +861,7 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
     """
     scope ∈ {"global", "country", "university", "major", "retirement"}.
     period ∈ {"all", "week", "month"} (default "all").
-    Returned rows are sorted by total_xp desc and include rank + is_you flag.
+    Returned rows are sorted by the selected period's XP and include rank + is_you flag.
     """
     if period not in {"all", "week", "month"}:
         period = "all"
@@ -909,7 +910,7 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
     # global => no extra filter
 
     q, p = _xp_select(extra, params, period=period, retired_only=retired_only)
-    q += " ORDER BY total_xp DESC, c.id ASC LIMIT %s "
+    q += " ORDER BY period_xp DESC, c.id ASC LIMIT %s "
     p = p + (limit,)
     q = _sqlite_port(q)
 
@@ -918,13 +919,15 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
 
     out: list[dict] = []
     for idx, r in enumerate(rows, start=1):
-        xp = int(r.get("total_xp") or 0)
-        lg = league_for_xp(xp)
+        xp = int(r.get("period_xp") or 0)
+        lifetime_xp = int(r.get("lifetime_xp") or xp)
+        lg = league_for_xp(lifetime_xp)
         out.append({
             "rank": idx,
             "client_id": r["client_id"],
             "name": r.get("display_name") or "Student",
             "xp": xp,
+            "lifetime_xp": lifetime_xp,
             "league_key": lg["key"],
             "league_name": lg["name"],
             "league_color": lg["color"],

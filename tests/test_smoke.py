@@ -202,3 +202,23 @@ def test_courses_page_uses_clear_delete_and_stable_theme_controls(client, make_u
     assert 'class="semester-select"' in body
     assert 'class="semester-menu"' in body
     assert ':root[data-theme="dark"] .mr-app-shell .content .page-head-cd .semester-option' in body
+
+
+def test_leaderboard_page_uses_readable_prizes_and_rank_translations(client, make_user):
+    cid = make_user("Leaderboard Style Owner")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 1, country_iso = %s WHERE id = %s", ("CL", cid))
+
+    with client.session_transaction() as sess:
+        sess["client_id"] = cid
+        sess["client_name"] = "Leaderboard Style Owner"
+        sess["account_type"] = "student"
+        sess["session_version"] = 0
+
+    body = client.get("/student/leaderboard").get_data(as_text=True)
+
+    assert "#mr-lb-page .lb-prize" in body
+    assert "color:#7A3E00" in body
+    assert "'Scholar':'Estudioso'" in body
+    assert "'Researcher':'Investigador'" in body
+    assert "'Academic':'Académico'" in body

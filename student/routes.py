@@ -20140,6 +20140,25 @@ No markdown, no code fences. ONLY JSON.
   #mr-lb-page .lb-who > div:last-child > div:first-child { font-weight:950; }
   #mr-lb-page .lb-flag-bg { opacity:.34; }
   #mr-lb-page .lb-podium-flag { opacity:.20; }
+  #mr-lb-page .lb-prize {
+    background:linear-gradient(135deg,#FFF4C2,#FFE6A3);
+    color:#7A3E00;
+    border:1px solid #D97706;
+    box-shadow:0 2px 0 rgba(122,62,0,.18);
+    font-weight:950;
+  }
+  #mr-lb-page .lb-podium-prize {
+    background:linear-gradient(135deg,#FFF4C2,#FFE0A3);
+    color:#7A3E00;
+    border:1px solid #D97706;
+    box-shadow:0 3px 0 rgba(122,62,0,.18),0 12px 26px rgba(217,119,6,.16);
+  }
+  #mr-lb-page .lb-podium-prize.empty {
+    background:#FFFDF8;
+    color:#4B4238;
+    border:1px solid #C9BCA7;
+    box-shadow:0 2px 0 rgba(26,26,31,.12);
+  }
 
   :root[data-theme="dark"] #mr-lb-page {
     --lb-ink:#FF7A3D;
@@ -20218,6 +20237,24 @@ No markdown, no code fences. ONLY JSON.
   :root[data-theme="dark"] #mr-lb-page .lb-podium-card.place-1 { background:linear-gradient(180deg,rgba(255,179,107,.30),rgba(255,122,61,.08)); }
   :root[data-theme="dark"] #mr-lb-page .lb-podium-card.place-2 { background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.04)); }
   :root[data-theme="dark"] #mr-lb-page .lb-podium-card.place-3 { background:linear-gradient(180deg,rgba(255,122,61,.20),rgba(255,255,255,.04)); }
+  :root[data-theme="dark"] #mr-lb-page .lb-prize {
+    background:linear-gradient(135deg,rgba(250,204,21,.18),rgba(234,179,8,.10));
+    color:#FCD34D;
+    border-color:rgba(250,204,21,.35);
+    box-shadow:none;
+  }
+  :root[data-theme="dark"] #mr-lb-page .lb-podium-prize {
+    background:linear-gradient(135deg,rgba(250,204,21,.28),rgba(245,158,11,.18));
+    color:#FDE68A;
+    border-color:rgba(250,204,21,.55);
+    box-shadow:0 0 26px rgba(250,204,21,.18),0 4px 14px rgba(0,0,0,.20);
+  }
+  :root[data-theme="dark"] #mr-lb-page .lb-podium-prize.empty {
+    background:rgba(255,255,255,.06);
+    color:rgba(255,255,255,.72);
+    border-color:rgba(255,255,255,.16);
+    box-shadow:none;
+  }
   :root[data-theme="dark"] #mr-lb-page .lb-row {
     background:rgba(255,255,255,.035);
     border-color:rgba(255,138,76,.28);
@@ -20458,11 +20495,15 @@ No markdown, no code fences. ONLY JSON.
       'Initiate':'Iniciado',
       'Apprentice':'Aprendiz',
       'Adept':'Competente',
-      'Scholar':'Académico',
+      'Scholar':'Estudioso',
+      'Researcher':'Investigador',
+      'Academic':'Académico',
       'Specialist':'Especialista',
       'Erudite':'Erudito',
+      'Mastermind':'Mente maestra',
       'Master':'Maestro',
       'Grandmaster':'Gran maestro',
+      'Grand Scholar':'Gran estudioso',
       'Legend':'Leyenda'
     };
     return document.documentElement.lang === 'es' ? (map[name] || name) : name;

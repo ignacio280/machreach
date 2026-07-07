@@ -297,7 +297,7 @@ def register_academic_routes(app, csrf, limiter):
         if period not in {"all", "week", "month"}:
             period = "all"
         summary = ac.ranks_summary(cid, period=period)
-        xp = summary.get("global", {}).get("xp", 0) if summary.get("global") else 0
+        xp = sdb.get_total_xp(cid) or 0
         return jsonify({"ranks": summary, "period": period, "league": ac.league_for_xp(int(xp))})
 
     # ── analytics ───────────────────────────────────────────
