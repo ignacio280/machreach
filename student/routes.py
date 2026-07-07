@@ -4105,8 +4105,16 @@ Return this JSON shape:
         # End-of-week / end-of-month leaderboard results popup. Shows once
         # per period to every authenticated student.
         period_popup_html = _PERIOD_POPUP_HTML if _logged_in() else ""
+        extension_connect_html = ""
+        if _logged_in():
+            extension_connect_html = (
+                f'<span id="mr-ext-connect" data-token="{_esc(make_connect_token(_cid()))}" hidden></span>'
+            )
         lang = session.get("lang", "es")
-        rendered_content = translate_student_html_fragment(period_popup_html + content_html, lang)
+        rendered_content = translate_student_html_fragment(
+            extension_connect_html + period_popup_html + content_html,
+            lang,
+        )
 
         return render_layout(
 
@@ -9120,9 +9128,6 @@ Material:
         _pomo_count_label = "Session 1 of 4" if _focus_is_en else "Sesi&oacute;n 1 de 4"
         _fg_inactive_label = "Inactive" if _focus_is_en else "Inactivo"
         _fg_active_label = "Active — sites blocked" if _focus_is_en else "Activo — sitios bloqueados"
-        # Signed token the Focus Guard extension captures to import Canvas courses
-        # from the student's own browser session (see student/canvas.py).
-        _ext_connect_token = make_connect_token(_cid())
         _focus_js_i18n = {
             "breakTime": "☕ Break time!" if _focus_is_en else "☕ ¡Hora de descanso!",
             "focusTime": "🔥 Focus!" if _focus_is_en else "🔥 ¡Enfoque!",
@@ -10023,8 +10028,6 @@ Material:
                 </div>
 
 
-
-                <span id="mr-ext-connect" data-token="{_ext_connect_token}" hidden></span>
 
               </div>
 
@@ -13232,10 +13235,6 @@ Material:
             """
         canvas_form_disabled = "disabled" if gate["blocked"] else ""
         canvas_form_hint = "Completa los resultados pendientes para habilitar Canvas." if gate["blocked"] else ""
-        _ext_connect_token = make_connect_token(_cid())
-
-
-
         return _s_render("Canvas Settings", f"""
 
         <style>
@@ -13389,8 +13388,6 @@ Material:
           <div class="canvas-ext-actions">
             <a href="https://chromewebstore.google.com/detail/djfnmpaihpkibcngaaekhnbalbaibgnk" target="_blank" rel="noopener" class="btn btn-primary">&#10133; Descargar extensión en Google</a>
           </div>
-
-          <span id="mr-ext-connect" data-token="{_ext_connect_token}" hidden></span>
 
         </div>
 
