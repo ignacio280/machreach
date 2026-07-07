@@ -116,7 +116,8 @@ def _canonical_host_redirect():
     """
     raw = request.host or ""
     if raw.lower().startswith("www."):
-        return redirect(request.url.replace("://" + raw, "://" + raw[4:], 1), code=301)
+        code = 301 if request.method in ("GET", "HEAD", "OPTIONS") else 308
+        return redirect(request.url.replace("://" + raw, "://" + raw[4:], 1), code=code)
 
 # ── Security: Rate limiting ──
 from flask_limiter import Limiter

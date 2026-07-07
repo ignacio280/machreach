@@ -52,6 +52,10 @@ function setMsg(text, kind) {
   el.textContent = text;
 }
 
+function canonicalMachReachOrigin(origin) {
+  return origin === "https://www.machreach.com" ? "https://machreach.com" : origin;
+}
+
 const syncBtn = document.getElementById("sync-canvas");
 if (syncBtn) {
   syncBtn.addEventListener("click", async () => {
@@ -59,7 +63,8 @@ if (syncBtn) {
     setMsg("Buscando tus cursos en esta pestaña…", "");
     try {
       const { mrConnectToken, mrOrigin } = await chrome.storage.local.get(["mrConnectToken", "mrOrigin"]);
-      if (!mrConnectToken || !mrOrigin) {
+      const targetOrigin = canonicalMachReachOrigin(mrOrigin);
+      if (!mrConnectToken || !targetOrigin) {
         setMsg("Abre MachReach con tu sesión iniciada (página Enfoque) y vuelve a intentar.", "err");
         syncBtn.disabled = false;
         return;
@@ -94,7 +99,7 @@ if (syncBtn) {
       }
 
       setMsg("Enviando " + out.courses.length + " cursos a MachReach…", "");
-      const resp = await fetch(mrOrigin + "/api/student/canvas/extension-import", {
+      const resp = await fetch(targetOrigin + "/api/student/canvas/extension-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: mrConnectToken, courses: out.courses })

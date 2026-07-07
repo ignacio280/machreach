@@ -34,6 +34,10 @@ function hostMatches(url, list) {
   }
 }
 
+function canonicalMachReachOrigin(origin) {
+  return origin === "https://www.machreach.com" ? "https://machreach.com" : origin;
+}
+
 async function isFocusActive() {
   const { focusActive, focusExpiresAt } = await chrome.storage.local.get(["focusActive", "focusExpiresAt"]);
   if (!focusActive) return false;
@@ -73,13 +77,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     try {
       const { mrConnectToken, mrOrigin } = await chrome.storage.local.get(["mrConnectToken", "mrOrigin"]);
-      if (!mrConnectToken || !mrOrigin) {
+      const targetOrigin = canonicalMachReachOrigin(mrOrigin);
+      if (!mrConnectToken || !targetOrigin) {
         sendResponse({ ok: false, noToken: true });
         return;
       }
 
       if (msg.type === "mrCanvasSyncStatus") {
-        const statusResponse = await fetch(mrOrigin + "/api/student/canvas/extension-status", {
+        const statusResponse = await fetch(targetOrigin + "/api/student/canvas/extension-status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token: mrConnectToken })
@@ -93,7 +98,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return;
       }
 
-      const r = await fetch(mrOrigin + "/api/student/canvas/extension-import", {
+      const r = await fetch(targetOrigin + "/api/student/canvas/extension-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: mrConnectToken, courses: msg.courses || [] })
