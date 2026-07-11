@@ -7,6 +7,7 @@ from outreach.db import (
     get_db,
     list_async_jobs,
     record_worker_heartbeat,
+    recover_stale_async_jobs,
     retry_async_job,
     set_async_job_status,
 )
@@ -128,3 +129,19 @@ def test_worker_heartbeat_is_listed_separately():
     assert heartbeats[0]["job_type"] == "worker_heartbeat"
     assert heartbeats[0]["job_key"] == "test-worker"
     assert heartbeats[0]["status"] == "running"
+
+
+def test_interrupted_job_is_requeued_with_its_attempt_budget_preserved():
+    enqueue_async_job("recoverable", "job-1", input_payload={"value": 1})
+    first = claim_async_jobs("recoverable", limit=1)
+    assert first[0]["attempts"] == 1
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE async_jobs SET updated_at = %s WHERE job_type = %s AND job_key = %s",
+            ("2000-01-01 00:00:00", "recoverable", "job-1"),
+        )
+
+    assert recover_stale_async_jobs(stale_after_seconds=60) >= 1
+    second = claim_async_jobs("recoverable", limit=1)
+    assert second[0]["attempts"] == 2

@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from outreach.db import _exec, _fetchone, get_db
+from outreach.db import SCHEMA_VERSION, _exec, _fetchone, get_db
 from student import db as sdb
 
 
@@ -39,6 +39,26 @@ def test_health_hides_database_exception_details(client, monkeypatch):
     assert r.status_code == 503
     assert r.get_json() == {"status": "error", "db": "unavailable"}
     assert "secret-pass" not in r.get_data(as_text=True)
+
+
+def test_health_rejects_an_outdated_schema(client):
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE schema_metadata SET version = %s WHERE component = %s",
+            (SCHEMA_VERSION - 1, "core"),
+        )
+    try:
+        r = client.get("/health")
+        assert r.status_code == 503
+        assert r.get_json() == {"status": "error", "db": "unavailable"}
+    finally:
+        with get_db() as db:
+            _exec(
+                db,
+                "UPDATE schema_metadata SET version = %s WHERE component = %s",
+                (SCHEMA_VERSION, "core"),
+            )
 
 
 def test_removed_reset_all_accounts_endpoint_is_not_registered(client, flask_app, monkeypatch):
@@ -115,6 +135,61 @@ def test_csrf_blocks_post_without_token(client):
 def test_register_form_has_server_rendered_csrf_field(client):
     body = client.get("/register").get_data(as_text=True)
     assert '<input type="hidden" name="csrf_token"' in body
+
+
+def test_auth_labels_are_associated_with_inputs(client):
+    register = client.get("/register").get_data(as_text=True)
+    login = client.get("/login").get_data(as_text=True)
+
+    assert '<label for="register-name">' in register
+    assert 'id="register-name"' in register
+    assert '<label for="login-email">' in login
+    assert 'id="login-email"' in login
+    assert '<label for="login-password">' in login
+
+
+def test_logout_requires_post(client, flask_app, make_user, monkeypatch):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    client_id = make_user("Logout User", "logout@example.test")
+    with client.session_transaction() as session:
+        session["client_id"] = client_id
+
+    assert client.get("/logout").status_code == 405
+    assert client.post("/logout").status_code == 302
+    with client.session_transaction() as session:
+        assert "client_id" not in session
+
+
+def test_onboarding_uses_keyboard_options_and_live_errors(client, make_user):
+    client_id = make_user("Setup User", "setup-accessibility@example.test")
+    with client.session_transaction() as session:
+        session["client_id"] = client_id
+        session["client_name"] = "Setup User"
+        session["account_type"] = "student"
+        session["session_version"] = 0
+
+    body = client.get("/student/setup").get_data(as_text=True)
+
+    assert '<label class="ss-label" for="ss-country">' in body
+    assert 'id="ss-univ-list" role="listbox" aria-live="polite"' in body
+    assert 'role="option" class="ss-item"' in body
+    assert 'id="ss-err" role="alert" aria-live="assertive"' in body
+
+
+def test_posthog_loads_only_after_analytics_consent(client, monkeypatch):
+    monkeypatch.setenv("POSTHOG_KEY", "phc_test_key")
+    monkeypatch.setenv("POSTHOG_HOST", "https://eu.i.posthog.com")
+
+    declined = client.get("/login")
+    assert "posthog.init('phc_test_key'" not in declined.get_data(as_text=True)
+    assert "Solo esenciales" in declined.get_data(as_text=True)
+
+    client.set_cookie("analytics_consent", "1")
+    allowed = client.get("/login")
+    assert "posthog.init('phc_test_key'" in allowed.get_data(as_text=True)
+    csp = allowed.headers["Content-Security-Policy"]
+    assert "https://eu.i.posthog.com" in csp
+    assert "https://eu-assets.i.posthog.com" in csp
 
 
 def test_stale_register_csrf_redirects_instead_of_raw_bad_request(client):

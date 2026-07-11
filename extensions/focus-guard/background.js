@@ -108,7 +108,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (ok) {
         await chrome.storage.local.set({ mrCanvasSyncCompletedAt: Date.now() });
       }
-      sendResponse({ ok, saved: body.saved || 0, status: r.status });
+      sendResponse({
+        ok,
+        saved: body.saved || 0,
+        archived: body.archived || 0,
+        syncedAt: body.synced_at || "",
+        status: r.status
+      });
     } catch (e) {
       sendResponse({ ok: false, error: String(e) });
     }

@@ -22,7 +22,7 @@ import re
 
 import secrets
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 
@@ -2324,8 +2324,8 @@ Return this JSON shape:
         # catalog so students who DON'T use Canvas still get suggestions.
         univ_id = sdb._client_university_id(client_id)
 
-        saved = 0
-        for c in courses[:200]:
+        normalized_courses = []
+        for c in courses[:1000]:
             if not isinstance(c, dict):
                 continue
             try:
@@ -2338,15 +2338,25 @@ Return this JSON shape:
             t = c.get("term") or {}
             if isinstance(t, dict):
                 term = t.get("name", "") or ""
+            normalized_courses.append({
+                "canvas_course_id": cid_canvas,
+                "name": str(name),
+                "code": str(code),
+                "term": str(term),
+            })
+
+        try:
+            result = sdb.reconcile_canvas_courses(client_id, normalized_courses)
+        except Exception:
+            log.exception("Canvas course reconciliation failed")
+            return jsonify({"error": "sync_failed"}), 503
+
+        saved = result["saved"]
+        for course in normalized_courses:
             try:
-                sdb.upsert_course(client_id, cid_canvas, str(name), str(code), str(term))
-                saved += 1
-                try:
-                    sdb.record_course_to_catalog(univ_id, str(code), str(name))
-                except Exception:
-                    pass
+                sdb.record_course_to_catalog(univ_id, course["code"], course["name"])
             except Exception:
-                continue
+                log.warning("Could not update course catalog during Canvas sync", exc_info=True)
 
         if saved > 0:
             try:
@@ -2354,7 +2364,13 @@ Return this JSON shape:
             except Exception:
                 pass
 
-        return jsonify({"ok": True, "saved": saved})
+        from datetime import datetime, timezone
+        return jsonify({
+            "ok": True,
+            "saved": saved,
+            "archived": result["archived"],
+            "synced_at": datetime.now(timezone.utc).isoformat(),
+        })
 
     @app.route("/api/student/canvas/extension-status", methods=["POST"])
     @csrf.exempt
@@ -2367,15 +2383,21 @@ Return this JSON shape:
             return jsonify({"error": "invalid_token"}), 401
 
         synced = False
+        last_synced = ""
         try:
-            synced = any(
-                int(course.get("canvas_course_id") or 0) > 0
-                for course in sdb.get_courses(client_id)
+            canvas_courses = [
+                course for course in sdb.get_courses(client_id)
+                if int(course.get("canvas_course_id") or 0) > 0
+            ]
+            synced = bool(canvas_courses)
+            last_synced = max(
+                (str(course.get("last_synced") or "") for course in canvas_courses),
+                default="",
             )
         except (TypeError, ValueError):
             synced = False
 
-        return jsonify({"ok": True, "synced": synced})
+        return jsonify({"ok": True, "synced": synced, "last_synced": last_synced})
 
 
 
@@ -2500,7 +2522,7 @@ Return this JSON shape:
             return jsonify({
                 "ok": True,
                 "mode": mode,
-                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "context_counts": {
                     "sources": len(ctx.get("sources") or []),
                     "exams": len(ctx.get("exams") or []),
@@ -2594,16 +2616,16 @@ Return this JSON shape:
         if file_obj and file_obj.filename:
             fname = file_obj.filename
             fl = fname.lower()
-            if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc") or fl.endswith(".txt")):
-                return jsonify({"error": "Solo PDF, DOCX, DOC y TXT."}), 400
-            content = file_obj.read(30 * 1024 * 1024 + 1)
-            if len(content) > 30 * 1024 * 1024:
-                return jsonify({"error": "Archivo demasiado grande (max 30MB)."}), 400
+            if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".txt")):
+                return jsonify({"error": "Solo PDF, DOCX y TXT."}), 400
+            content = file_obj.read(10 * 1024 * 1024 + 1)
+            if len(content) > 10 * 1024 * 1024:
+                return jsonify({"error": "Archivo demasiado grande (max 10MB)."}), 400
             try:
                 if fl.endswith(".pdf"):
                     text = extract_text_from_pdf(content)
                     file_type = "pdf"
-                elif fl.endswith((".docx", ".doc")):
+                elif fl.endswith(".docx"):
                     text = extract_text_from_docx(content)
                     file_type = "docx"
                 else:
@@ -3162,67 +3184,71 @@ Return this JSON shape:
             except Exception:
                 pass
 
+        atomic_claim = None
         if minutes > 0:
             if not phase_id:
                 return jsonify({"ok": False, "error": "Unverified focus phase", "reason": "missing-phase-id"}), 400
-            phase_ok, phase_reason, _phase_row = sdb.validate_focus_phase_claim(
+            atomic_claim = sdb.claim_focus_phase_rewards(
                 cid,
                 phase_id,
-                minutes,
+                minutes=minutes,
+                pages=pages,
+                mode=mode,
+                course_name=course_name,
                 course_id=course_id,
                 exam_id=exam_id,
             )
-            if not phase_ok:
-                local_date = (request.args.get("local_date") or "").strip() or None
-                if phase_reason == "duplicate-phase":
+            if not atomic_claim.get("saved"):
+                reason = atomic_claim.get("reason") or "server-error"
+                if atomic_claim.get("ok"):
+                    local_date = (request.args.get("local_date") or "").strip() or None
                     return jsonify({
                         "ok": True,
                         "saved": False,
-                        "reason": "duplicate-phase",
+                        "reason": reason,
                         "stats": sdb.get_focus_stats_today(cid, local_date=local_date),
                         "minutes_saved": 0,
                         "xp_awarded": 0,
                     })
-                return jsonify({"ok": False, "error": "Unverified focus phase", "reason": phase_reason}), 400
+                return jsonify({"ok": False, "error": "Unverified focus phase", "reason": reason}), 400
 
         # save_focus_session itself will further clamp by per-day total and
         # may return 0 if the day is already maxed out.
-        saved_id = sdb.save_focus_session(
-            cid, mode=mode, minutes=minutes, pages=pages,
-            course_name=course_name, course_id=course_id, exam_id=exam_id,
-        )
-        if not saved_id:
-            return jsonify({"ok": True, "saved": False, "reason": "daily-cap-or-empty"})
+        if atomic_claim:
+            saved_id = atomic_claim["session_id"]
+            minutes_saved = int(atomic_claim.get("minutes_saved") or 0)
+            pages_saved = int(atomic_claim.get("pages_saved") or 0)
+        else:
+            saved_id = sdb.save_focus_session(
+                cid, mode=mode, minutes=minutes, pages=pages,
+                course_name=course_name, course_id=course_id, exam_id=exam_id,
+            )
+            if not saved_id:
+                return jsonify({"ok": True, "saved": False, "reason": "daily-cap-or-empty"})
 
-        saved_row = sdb.get_focus_session_entry(saved_id, cid) or {}
-        try:
-            minutes_saved = int(saved_row.get("focus_minutes") or minutes or 0)
-        except (TypeError, ValueError):
-            minutes_saved = minutes
-        try:
-            pages_saved = int(saved_row.get("pages_read") or pages or 0)
-        except (TypeError, ValueError):
-            pages_saved = pages
+            saved_row = sdb.get_focus_session_entry(saved_id, cid) or {}
+            try:
+                minutes_saved = int(saved_row.get("focus_minutes") or minutes or 0)
+            except (TypeError, ValueError):
+                minutes_saved = minutes
+            try:
+                pages_saved = int(saved_row.get("pages_read") or pages or 0)
+            except (TypeError, ValueError):
+                pages_saved = pages
 
 
 
         # Daily-quest progress (focus minutes + sessions + pages)
 
-        try:
-
-            if minutes_saved > 0:
-
-                sdb.progress_quests_by_metric(cid, "focus_minutes", minutes_saved)
-
-                sdb.progress_quests_by_metric(cid, "sessions_completed", 1)
-
-            if pages_saved > 0:
-
-                sdb.progress_quests_by_metric(cid, "pages_read", pages_saved)
-
-        except Exception:
-
-            pass
+        if not atomic_claim:
+            try:
+                if minutes_saved > 0:
+                    sdb.progress_quests_by_metric(cid, "focus_minutes", minutes_saved)
+                    sdb.progress_quests_by_metric(cid, "sessions_completed", 1)
+                if pages_saved > 0:
+                    sdb.progress_quests_by_metric(cid, "pages_read", pages_saved)
+            except Exception:
+                pass
 
 
 
@@ -3231,10 +3257,10 @@ Return this JSON shape:
         # remain study tools, not faucets.
         # Breaks aren't counted — `minutes` arrives study-only because the
         # frontend reports phaseWorkMinutes=0 for break phases.
-        _focus_xp_awarded = 0
-        _focus_coins_awarded = 0
+        _focus_xp_awarded = int((atomic_claim or {}).get("xp_awarded") or 0)
+        _focus_coins_awarded = int((atomic_claim or {}).get("coins_awarded") or 0)
 
-        if minutes_saved > 0:
+        if minutes_saved > 0 and not atomic_claim:
 
             xp = (minutes_saved * 5) // 10  # 25 min -> 12 XP, 50 min -> 25 XP
             coins = minutes_saved // 10
@@ -3569,28 +3595,10 @@ Return this JSON shape:
                 except Exception:
                     pass
 
-            phase_ok, phase_reason, _phase_row = sdb.validate_focus_phase_claim(
-                cid,
-                phase_id,
-                minutes,
-                course_id=course_id,
-                exam_id=exam_id,
-            )
-            if not phase_ok:
-                if phase_reason == "duplicate-phase":
-                    duplicate_count += 1
-                    saved_count += 1
-                    minutes_saved += minutes
-                    xp_awarded += (minutes * 5) // 10
-                    results.append({"index": idx, "ok": True, "saved": False, "reason": "duplicate-phase"})
-                else:
-                    skipped_count += 1
-                    results.append({"index": idx, "ok": True, "saved": False, "reason": phase_reason})
-                continue
-
             try:
-                saved_id = sdb.save_focus_session(
+                claim = sdb.claim_focus_phase_rewards(
                     cid,
+                    phase_id,
                     mode=mode,
                     minutes=minutes,
                     pages=0,
@@ -3598,42 +3606,25 @@ Return this JSON shape:
                     course_id=course_id,
                     exam_id=exam_id,
                 )
-                if not saved_id:
+                if not claim.get("saved"):
+                    reason = claim.get("reason") or "server-error"
+                    if reason == "duplicate-phase":
+                        duplicate_count += 1
+                        saved_count += 1
+                        minutes_saved += minutes
+                        xp_awarded += (minutes * 5) // 10
+                        results.append({"index": idx, "ok": True, "saved": False, "reason": reason})
+                        continue
                     skipped_count += 1
-                    results.append({"index": idx, "ok": True, "saved": False, "reason": "daily-cap-or-empty"})
+                    results.append({"index": idx, "ok": bool(claim.get("ok")), "saved": False, "reason": reason})
                     continue
 
-                saved_row = sdb.get_focus_session_entry(saved_id, cid) or {}
-                actual_minutes = int(saved_row.get("focus_minutes") or minutes or 0)
-                actual_pages = int(saved_row.get("pages_read") or 0)
+                saved_id = claim["session_id"]
+                actual_minutes = int(claim.get("minutes_saved") or 0)
+                actual_pages = int(claim.get("pages_saved") or 0)
 
-                try:
-                    if actual_minutes > 0:
-                        sdb.progress_quests_by_metric(cid, "focus_minutes", actual_minutes)
-                        sdb.progress_quests_by_metric(cid, "sessions_completed", 1)
-                    if actual_pages > 0:
-                        sdb.progress_quests_by_metric(cid, "pages_read", actual_pages)
-                except Exception:
-                    pass
-
-                phase_xp = (actual_minutes * 5) // 10
-                phase_coins = actual_minutes // 10
-                detail = f"{mode.title()} {actual_minutes}min"
-                if course_name:
-                    detail += f" — {course_name}"
-                if phase_id:
-                    detail += f" · phase:{phase_id}"
-                if phase_xp > 0:
-                    sdb.award_xp(cid, "focus_session", phase_xp, detail)
-                elif phase_id:
-                    sdb.award_xp(cid, "focus_session", 0, detail)
-                if phase_coins > 0:
-                    sdb.add_coins(cid, phase_coins, f"focus_session {actual_minutes}min")
-
-                try:
-                    sdb.mark_focus_phase_claimed(cid, phase_id)
-                except Exception:
-                    pass
+                phase_xp = int(claim.get("xp_awarded") or 0)
+                phase_coins = int(claim.get("coins_awarded") or 0)
 
                 saved_count += 1
                 minutes_saved += actual_minutes
@@ -6129,7 +6120,7 @@ Material:
           .ss-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted, #6b7280); font-weight: 700; margin-bottom: 6px; }
           .ss-input, .ss-select { width: 100%; padding: 12px 14px; border: 1px solid var(--border, #e5e7eb); border-radius: 10px; background: var(--bg, #fff); color: var(--text, #111827); font-size: 14px; box-sizing: border-box; }
           .ss-list { max-height: 240px; overflow-y: auto; border: 1px solid var(--border, #e5e7eb); border-radius: 10px; margin-top: 8px; background: var(--bg, #fff); }
-          .ss-item { padding: 10px 14px; border-bottom: 1px solid var(--border, #e5e7eb); cursor: pointer; font-size: 14px; }
+          .ss-item { display:block; width:100%; padding: 10px 14px; border:0; border-bottom: 1px solid var(--border, #e5e7eb); cursor: pointer; font:inherit; text-align:left; color:inherit; background:transparent; font-size: 14px; }
           .ss-item:last-child { border-bottom: none; }
           .ss-item:hover { background: rgba(99,102,241,.08); }
           .ss-item.create { color: var(--primary, #6366f1); font-weight: 600; }
@@ -6144,25 +6135,25 @@ Material:
             <p class="ss-sub">We need three quick things so we can rank you on the right leaderboards and tailor your study plan. This is required.</p>
 
             <div class="ss-step active" id="ss-step-0">
-              <div class="ss-label">Your country</div>
+              <label class="ss-label" for="ss-country">Your country</label>
               <select class="ss-select" id="ss-country">
                 <option value="">- Pick your country -</option>
               </select>
             </div>
 
             <div class="ss-step" id="ss-step-1">
-              <div class="ss-label">Your university</div>
+              <label class="ss-label" for="ss-univ-q">Your university</label>
               <input class="ss-input" id="ss-univ-q" type="text" placeholder="Search universities..." autocomplete="off">
-              <div class="ss-list" id="ss-univ-list"></div>
+              <div class="ss-list" id="ss-univ-list" role="listbox" aria-live="polite"></div>
             </div>
 
             <div class="ss-step" id="ss-step-2">
-              <div class="ss-label">Your major</div>
+              <label class="ss-label" for="ss-major-q">Your major</label>
               <input class="ss-input" id="ss-major-q" type="text" placeholder="Search majors..." autocomplete="off">
-              <div class="ss-list" id="ss-major-list"></div>
+              <div class="ss-list" id="ss-major-list" role="listbox" aria-live="polite"></div>
             </div>
 
-            <div class="ss-err" id="ss-err"></div>
+            <div class="ss-err" id="ss-err" role="alert" aria-live="assertive"></div>
             <div class="ss-actions">
               <button class="btn btn-outline" id="ss-back" disabled>Back</button>
               <button class="btn btn-primary" id="ss-next">Next</button>
@@ -6192,9 +6183,14 @@ Material:
           }
 
           async function loadCountries() {
+            next.disabled = true;
+            err.textContent = 'Loading countries...';
             try {
-              const r = await fetch('/api/academic/countries').then(r=>r.json());
+              const response = await fetch('/api/academic/countries');
+              const r = await response.json();
+              if (!response.ok) throw new Error(r.error || 'Could not load countries.');
               const sel = document.getElementById('ss-country');
+              sel.innerHTML = '<option value="">- Pick your country -</option>';
               (r.countries || []).forEach(c => {
                 const o = document.createElement('option');
                 const iso = c.iso_code || c.iso || '';
@@ -6204,7 +6200,12 @@ Material:
                 sel.appendChild(o);
               });
               sel.addEventListener('change', () => { state.country_iso = sel.value; });
-            } catch(e) { err.textContent = 'Could not load countries.'; }
+              err.textContent = '';
+              next.disabled = false;
+            } catch(e) {
+              err.innerHTML = 'Could not load countries. <button type="button" id="ss-retry-countries" class="btn btn-outline">Retry</button>';
+              document.getElementById('ss-retry-countries').addEventListener('click', loadCountries);
+            }
           }
 
           let univTimer = null;
@@ -6216,14 +6217,22 @@ Material:
           async function searchUniv(q) {
             const list = document.getElementById('ss-univ-list');
             if (!state.country_iso) { list.innerHTML = '<div class="ss-item">Pick a country first.</div>'; return; }
-            const r = await fetch('/api/academic/universities?country=' + state.country_iso + '&q=' + encodeURIComponent(q)).then(r=>r.json());
-            const items = (r.universities || []).map(u =>
-              '<div class="ss-item" data-id="' + u.id + '" data-name="' + escapeHtml(u.name) + '">' + escapeHtml(u.name) + '</div>'
-            ).join('');
-            list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
-            list.querySelectorAll('.ss-item[data-id]').forEach(el => {
-              el.addEventListener('click', () => pickUniv(parseInt(el.dataset.id), el.dataset.name));
-            });
+            list.innerHTML = '<div class="ss-item">Loading...</div>';
+            try {
+              const response = await fetch('/api/academic/universities?country=' + state.country_iso + '&q=' + encodeURIComponent(q));
+              const r = await response.json();
+              if (!response.ok) throw new Error(r.error || 'Search failed.');
+              const items = (r.universities || []).map(u =>
+                '<button type="button" role="option" class="ss-item" data-id="' + u.id + '" data-name="' + escapeHtml(u.name) + '">' + escapeHtml(u.name) + '</button>'
+              ).join('');
+              list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
+              list.querySelectorAll('.ss-item[data-id]').forEach(el => {
+                el.addEventListener('click', () => pickUniv(parseInt(el.dataset.id), el.dataset.name));
+              });
+            } catch(e) {
+              list.innerHTML = '<button type="button" class="ss-item" id="ss-retry-univ">Search failed. Retry.</button>';
+              document.getElementById('ss-retry-univ').addEventListener('click', () => searchUniv(q));
+            }
           }
           function pickUniv(id, name) {
             state.university_id = id; state.university_name = name;
@@ -6240,14 +6249,22 @@ Material:
           async function searchMajor(q) {
             const list = document.getElementById('ss-major-list');
             const url = '/api/academic/majors?q=' + encodeURIComponent(q) + (state.university_id ? '&university_id=' + state.university_id : '');
-            const r = await fetch(url).then(r=>r.json());
-            const items = (r.majors || []).map(m =>
-              '<div class="ss-item" data-id="' + m.id + '" data-name="' + escapeHtml(m.name) + '">' + escapeHtml(m.name) + '</div>'
-            ).join('');
-            list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
-            list.querySelectorAll('.ss-item[data-id]').forEach(el => {
-              el.addEventListener('click', () => pickMajor(parseInt(el.dataset.id), el.dataset.name));
-            });
+            list.innerHTML = '<div class="ss-item">Loading...</div>';
+            try {
+              const response = await fetch(url);
+              const r = await response.json();
+              if (!response.ok) throw new Error(r.error || 'Search failed.');
+              const items = (r.majors || []).map(m =>
+                '<button type="button" role="option" class="ss-item" data-id="' + m.id + '" data-name="' + escapeHtml(m.name) + '">' + escapeHtml(m.name) + '</button>'
+              ).join('');
+              list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
+              list.querySelectorAll('.ss-item[data-id]').forEach(el => {
+                el.addEventListener('click', () => pickMajor(parseInt(el.dataset.id), el.dataset.name));
+              });
+            } catch(e) {
+              list.innerHTML = '<button type="button" class="ss-item" id="ss-retry-major">Search failed. Retry.</button>';
+              document.getElementById('ss-retry-major').addEventListener('click', () => searchMajor(q));
+            }
           }
           function pickMajor(id, name) {
             state.major_id = id; state.major_name = name;
@@ -6262,16 +6279,23 @@ Material:
             if (state.step === 2 && !state.major_id) { err.textContent = 'Pick your major.'; return; }
             if (state.step < 2) { show(state.step + 1); return; }
             next.disabled = true; next.textContent = 'Saving...';
-            const r = await fetch('/api/academic/profile', {
-              method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({
-                country_iso: state.country_iso,
-                university_id: state.university_id,
-                major_id: state.major_id,
-              }),
-            }).then(r=>r.json());
-            if (!r.ok) { err.textContent = r.error || 'Save failed.'; next.disabled = false; next.textContent = 'Finish'; return; }
-            mrGo('/student');
+            try {
+              const response = await fetch('/api/academic/profile', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({
+                  country_iso: state.country_iso,
+                  university_id: state.university_id,
+                  major_id: state.major_id,
+                }),
+              });
+              const r = await response.json();
+              if (!response.ok || !r.ok) throw new Error(r.error || 'Save failed.');
+              mrGo('/student');
+            } catch(e) {
+              err.textContent = e.message || 'Save failed. Check your connection and retry.';
+              next.disabled = false;
+              next.textContent = 'Finish';
+            }
           });
 
           loadCountries();
@@ -8821,7 +8845,7 @@ Material:
 
             + '<button type="button" id="exam-attach-' + fileKey + '" class="btn btn-ghost btn-sm ex-attach" onclick="pickExamFiles(' + courseId + ',\\'' + fileKey + '\\', this)" title="' + attachTitle + '" aria-label="' + attachTitle + '" data-tip="' + attachTitle + '">&#128206;</button>'
 
-            + '<input id="exam-file-' + fileKey + '" type="file" accept=".pdf,.doc,.docx,.txt" multiple hidden onchange="uploadExamFiles(' + courseId + ',\\'' + fileKey + '\\', this)">'
+            + '<input id="exam-file-' + fileKey + '" type="file" accept=".pdf,.docx,.txt" multiple hidden onchange="uploadExamFiles(' + courseId + ',\\'' + fileKey + '\\', this)">'
 
             + '<button type="button" id="exam-files-' + fileKey + '" class="btn btn-ghost btn-sm ex-files" onclick="toggleExamFiles(' + courseId + ',\\'' + fileKey + '\\', this)" title="Ver archivos subidos" aria-label="Ver archivos subidos" data-tip="Ver archivos subidos">&#128193;</button>'
 
@@ -13630,6 +13654,24 @@ Material:
 
         data = request.get_json(force=True)
 
+        source_text = (data.get("source_text") or "").strip()
+        if len(source_text) > 250000:
+            return jsonify({"error": "Source material is too large (max 250,000 characters)"}), 413
+        if source_text:
+            data["source_text"] = source_text
+
+        from outreach.db import enqueue_async_job, get_async_job_status
+        existing = get_async_job_status("student_flashcard_generation", str(_cid()))
+        if existing.get("status") in ("queued", "running"):
+            return jsonify({"queued": True, "flashcard_status": existing}), 202
+        queued_status = enqueue_async_job(
+            "student_flashcard_generation",
+            str(_cid()),
+            input_payload=data,
+            progress="Queued for flashcard generation.",
+        )
+        return jsonify({"queued": True, "flashcard_status": queued_status}), 202
+
         course_id = data.get("course_id")
 
         ad_hoc_source = (data.get("source_text") or "").strip()
@@ -13762,6 +13804,14 @@ Material:
         return jsonify({"deck_id": deck_id, "card_count": len(cards)})
 
 
+    @app.route("/api/student/flashcards/generate/status", methods=["GET"])
+    def student_generate_flashcards_status():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        from outreach.db import get_async_job_status
+        return jsonify(get_async_job_status("student_flashcard_generation", str(_cid())))
+
+
 
     @app.route("/api/student/flashcards/decks", methods=["GET"])
 
@@ -13807,7 +13857,8 @@ Material:
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        sdb.delete_flashcard_deck(deck_id, _cid())
+        if not sdb.delete_flashcard_deck(deck_id, _cid()):
+            return jsonify({"error": "Not found"}), 404
 
         return jsonify({"ok": True})
 
@@ -13833,10 +13884,13 @@ Material:
 
             correct = quality >= 3
 
-        sdb.update_flashcard_progress(data["card_id"], correct, quality=quality)
+        cid = _cid()
+        if not sdb.update_flashcard_progress(
+            data["card_id"], cid, correct, quality=quality
+        ):
+            return jsonify({"error": "Not found"}), 404
 
         # Flashcards are practice only. Focus is the only XP/coin source.
-        cid = _cid()
 
         # Check flashcard badges
 
@@ -14001,6 +14055,11 @@ Material:
         if not _logged_in():
 
             return jsonify({"error": "Unauthorized"}), 401
+
+        return jsonify({
+            "error": "Synchronous quiz generation has been retired.",
+            "replacement": "/api/student/quizzes/generate-async",
+        }), 410
 
         from student import subscription as _sub
         _ok, _why = _sub.can_generate_quiz_today(_cid())
@@ -14266,14 +14325,36 @@ Material:
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        data = request.get_json(force=True)
+        cid = _cid()
+        if not sdb.get_quiz(quiz_id, cid):
+            return jsonify({"error": "Not found"}), 404
 
-        score = int(data.get("score", 0))
+        data = request.get_json(force=True) or {}
+        submitted = data.get("answers") or []
+        if not isinstance(submitted, list) or not submitted:
+            return jsonify({"error": "Answers are required"}), 400
 
-        sdb.update_quiz_score(quiz_id, score)
+        questions = sdb.get_quiz_questions(quiz_id)
+        if not questions:
+            return jsonify({"error": "Quiz has no questions"}), 409
+        expected = {int(q["id"]): str(q.get("correct") or "").lower() for q in questions}
+        selected_by_id = {}
+        for answer in submitted:
+            try:
+                question_id = int((answer or {}).get("q_id"))
+            except (TypeError, ValueError):
+                continue
+            if question_id in expected and question_id not in selected_by_id:
+                selected_by_id[question_id] = str((answer or {}).get("selected") or "").lower()
+        correct_count = sum(
+            1 for question_id, correct in expected.items()
+            if selected_by_id.get(question_id) == correct
+        )
+        score = round(correct_count / len(expected) * 100)
+
+        sdb.update_quiz_score(quiz_id, cid, score)
 
         # Quizzes are practice only. Focus is the only XP/coin source.
-        cid = _cid()
 
         if score == 100:
 
@@ -14312,7 +14393,8 @@ Material:
         except Exception:
             pass
 
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "score": score, "correct": correct_count,
+                        "total": len(expected)})
 
 
 
@@ -14323,7 +14405,8 @@ Material:
 
             return jsonify({"error": "Unauthorized"}), 401
 
-        sdb.delete_quiz(quiz_id, _cid())
+        if not sdb.delete_quiz(quiz_id, _cid()):
+            return jsonify({"error": "Not found"}), 404
 
         return jsonify({"ok": True})
 
@@ -14485,7 +14568,7 @@ Material:
 
             import json as _json
 
-            from outreach.ai import _ai
+            from student.analyzer import _ai
 
             wrong_items = [i for i in items if not i["is_correct"]]
 
@@ -14748,15 +14831,15 @@ No markdown, no code fences. ONLY JSON.
 
         fl = fname.lower()
 
-        if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".doc") or fl.endswith(".txt")):
+        if not (fl.endswith(".pdf") or fl.endswith(".docx") or fl.endswith(".txt")):
 
             return jsonify({"error": "Only PDF, DOCX, and TXT files are supported"}), 400
 
-        content = f.read(50 * 1024 * 1024 + 1)
+        content = f.read(10 * 1024 * 1024 + 1)
 
-        if len(content) > 50 * 1024 * 1024:
+        if len(content) > 10 * 1024 * 1024:
 
-            return jsonify({"error": "File too large (max 50MB)"}), 400
+            return jsonify({"error": "File too large (max 10MB)"}), 400
 
         text = ""
 
@@ -14766,7 +14849,7 @@ No markdown, no code fences. ONLY JSON.
 
                 text = extract_text_from_pdf(content)
 
-            elif fl.endswith((".docx", ".doc")):
+            elif fl.endswith(".docx"):
 
                 text = extract_text_from_docx(content)
 
@@ -14851,17 +14934,19 @@ No markdown, no code fences. ONLY JSON.
             _due_text = f"⚠ {due} atrasadas" if due >= 3 else (f"⏰ {due} cartas hoy" if due > 0 else "Sin pendientes")
 
             decks_html += f"""
-            <div class="deck {_cls}" onclick="window.location='/student/flashcards/{d['id']}'">
+            <article class="deck {_cls}">
               <div class="deck-head">
                 <span class="dot" style="background:{_color};"></span>
                 <span class="deck-tag">{_esc(d.get('course_name','Sin curso'))}</span>
-                <button onclick="event.stopPropagation();deleteDeck({d['id']})" class="deck-delete" title="Eliminar">&#128465;</button>
+                <button onclick="deleteDeck({d['id']})" class="deck-delete" title="Eliminar" aria-label="Eliminar mazo">&#128465;</button>
               </div>
+              <a href="/student/flashcards/{d['id']}" style="display:block;color:inherit;text-decoration:none;">
               <div class="deck-name">{_esc(d.get('title','Untitled'))}</div>
               <div class="deck-meta">{card_count} cartas · {mastered} dominadas</div>
               <div class="deck-bar"><div class="deck-fill" style="width:{pct}%;background:{_color};"></div></div>
               <div class="deck-due{_due_cls}">{_due_text}</div>
-            </div>"""
+              </a>
+            </article>"""
 
         if not decks_html:
 
@@ -14961,7 +15046,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">or click to browse &middot; we'll generate flashcards directly from the file (no course needed)</div>
 
-            <input type="file" id="fc-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="fcHandleFile(this.files[0])">
+            <input type="file" id="fc-file" accept=".pdf,.docx,.txt" style="display:none" onchange="fcHandleFile(this.files[0])">
 
             <div id="fc-file-info" style="margin-top:8px;font-size:13px;color:var(--primary);"></div>
 
@@ -15181,6 +15266,18 @@ No markdown, no code fences. ONLY JSON.
 
         }}
 
+        async function pollFlashcardGeneration() {{
+          for (var attempt = 0; attempt < 120; attempt++) {{
+            await new Promise(function(resolve) {{ setTimeout(resolve, 1500); }});
+            var sr = await fetch('/api/student/flashcards/generate/status', {{ credentials: 'same-origin' }});
+            var status = await _safeJson(sr);
+            if (!sr.ok) throw new Error(status.error || 'No se pudo revisar el estado.');
+            if (status.status === 'done') return status;
+            if (status.status === 'error') throw new Error(status.error || status.progress || 'No se pudo generar.');
+          }}
+          throw new Error('La generaciÃ³n tardÃ³ demasiado. Intenta de nuevo.');
+        }}
+
         async function genFlashcards() {{
 
           var courseId = document.getElementById('fc-course').value;
@@ -15223,7 +15320,19 @@ No markdown, no code fences. ONLY JSON.
 
             var d = await _safeJson(r);
 
-            if (r.ok) {{
+            if (r.ok && d.queued) {{
+
+              btn.innerHTML = '&#9203; Creating flashcards...';
+
+              d = await pollFlashcardGeneration();
+
+              alert('Generated ' + d.card_count + ' flashcards!');
+
+              mrGo('/student/flashcards/' + d.deck_id);
+
+              return;
+
+            }} else if (r.ok) {{
 
               alert('Generated ' + d.card_count + ' flashcards!');
 
@@ -15883,17 +15992,17 @@ No markdown, no code fences. ONLY JSON.
 
             quizzes_html += f"""
 
-            <article class="qcard {'warn' if q.get('difficulty') == 'hard' else ''}" onclick="window.location='/student/quizzes/{q['id']}'">
+            <article class="qcard {'warn' if q.get('difficulty') == 'hard' else ''}">
 
               <div style="display:flex;justify-content:space-between;align-items:center;">
 
-                <div>
+                <a href="/student/quizzes/{q['id']}" style="display:block;color:inherit;text-decoration:none;">
 
                   <h3 style="margin:0;font-size:22px;">{_esc(q.get('title','Untitled'))}</h3>
 
                   <span style="font-size:13px;color:var(--text-muted);">{_esc(q.get('course_name',''))} &middot; {q.get('question_count',0)} preguntas</span>
 
-                </div>
+                </a>
 
                 <div style="display:flex;gap:10px;align-items:center;">
 
@@ -15903,9 +16012,9 @@ No markdown, no code fences. ONLY JSON.
 
                   <span style="font-size:12px;color:var(--text-muted);">{q.get('attempts',0)} intentos</span>
 
-                  <button onclick="event.stopPropagation();window.location='/student/exam-sim/{q['id']}'" class="btn btn-ghost btn-sm" style="color:var(--primary);font-size:12px;" title="Exam Simulator">&#9889;</button>
+                  <a href="/student/exam-sim/{q['id']}" class="btn btn-ghost btn-sm" style="color:var(--primary);font-size:12px;" title="Exam Simulator" aria-label="Abrir simulador de examen">&#9889;</a>
 
-                  <button onclick="event.stopPropagation();deleteQuiz({q['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;">&#128465;</button>
+                  <button onclick="deleteQuiz({q['id']})" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;" aria-label="Eliminar quiz">&#128465;</button>
 
                 </div>
 
@@ -15997,7 +16106,7 @@ No markdown, no code fences. ONLY JSON.
 
             <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="qz-drop-s">o haz clic para buscar</div>
 
-            <input type="file" id="qz-file" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="qzHandleFile(this.files[0])">
+            <input type="file" id="qz-file" accept=".pdf,.docx,.txt" style="display:none" onchange="qzHandleFile(this.files[0])">
 
             <div id="qz-file-info" style="margin-top:8px;font-size:13px;color:var(--primary);"></div>
 
@@ -16177,7 +16286,7 @@ No markdown, no code fences. ONLY JSON.
 
             s.innerHTML = 'Recuerda: las pruebas de selección múltiple se transcriben mejor.';
 
-            document.getElementById('qz-file').accept = '.pdf,.docx,.doc';
+            document.getElementById('qz-file').accept = '.pdf,.docx';
 
           }} else {{
 
@@ -16185,7 +16294,7 @@ No markdown, no code fences. ONLY JSON.
 
             s.innerHTML = "Generaremos preguntas desde ese material.";
 
-            document.getElementById('qz-file').accept = '.pdf,.docx,.doc,.txt';
+            document.getElementById('qz-file').accept = '.pdf,.docx,.txt';
 
           }}
 
@@ -17132,7 +17241,9 @@ No markdown, no code fences. ONLY JSON.
 
             method: 'POST', headers: {{'Content-Type':'application/json'}},
 
-            body: JSON.stringify({{ score: pct }})
+            body: JSON.stringify({{ answers: answerLog.map(function(a) {{
+              return {{ q_id: a.q_id, selected: a.selected }};
+            }}) }})
 
           }}).catch(function(){{}});
 
@@ -18053,7 +18164,9 @@ No markdown, no code fences. ONLY JSON.
 
             method: 'POST', headers: {{'Content-Type':'application/json'}},
 
-            body: JSON.stringify({{ score: pct }})
+            body: JSON.stringify({{ answers: answers.map(function(a) {{
+              return {{ q_id: questions[a.q].id, selected: a.selected }};
+            }}) }})
 
           }}).catch(function(){{}});
 
@@ -21040,6 +21153,12 @@ No markdown, no code fences. ONLY JSON.
 
             "Danger Zone": "Zona de peligro",
 
+            "Data & Privacy": "Datos y privacidad",
+
+            "Download a portable JSON copy of your account, courses, study activity, quizzes, flashcards, rewards, wallet, friends, and subscription data.": "Descarga una copia JSON portable de tu cuenta, cursos, actividad de estudio, quizzes, flashcards, recompensas, billetera, amigos y suscripción.",
+
+            "Download My Data": "Descargar mis datos",
+
             "Permanently delete your account and all associated data (courses, exams, notes, flashcards, quizzes, chat history, XP, badges). This action <strong>cannot be undone</strong>.": "Elimina permanentemente tu cuenta y todos los datos asociados (cursos, exámenes, notas, flashcards, quizzes, historial de chat, XP, insignias). Esta acción <strong>no se puede deshacer</strong>.",
 
             "Delete My Account": "Eliminar mi cuenta",
@@ -21727,6 +21846,16 @@ No markdown, no code fences. ONLY JSON.
         </script>
 
 
+        <!-- Data export -->
+        <div class="card settings-panel settings-data">
+          <div class="card-header"><h2>&#128229; {_T("Data & Privacy")}</h2></div>
+          <div class="settings-panel-body">
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.55;">{_T("Download a portable JSON copy of your account, courses, study activity, quizzes, flashcards, rewards, wallet, friends, and subscription data.")}</p>
+            <a href="/api/export-my-data" download="machreach-my-data.json" class="btn btn-outline btn-sm">{_T("Download My Data")}</a>
+          </div>
+        </div>
+
+
         <!-- Delete Account -->
 
         <div class="card settings-panel settings-danger" style="border-color:var(--red);">
@@ -22071,52 +22200,74 @@ No markdown, no code fences. ONLY JSON.
 
         </div>
         <script>
+        const shopBusy = new Set();
+        async function shopRequest(operation, url, payload) {{
+          if (shopBusy.has(operation)) throw new Error('Esta acción ya está en curso.');
+          shopBusy.add(operation);
+          try {{
+            const response = await fetch(url, {{
+              method:'POST',
+              headers:{{'Content-Type':'application/json'}},
+              body: JSON.stringify(payload || {{}})
+            }});
+            const text = await response.text();
+            let data = {{}};
+            try {{ data = text ? JSON.parse(text) : {{}}; }} catch (_) {{}}
+            if (!response.ok || data.ok === false) {{
+              throw new Error(data.error || 'El servidor no pudo completar la acción.');
+            }}
+            return data;
+          }} catch (error) {{
+            if (error instanceof TypeError) throw new Error('Error de conexión. Revisa tu red e intenta de nuevo.');
+            throw error;
+          }} finally {{
+            shopBusy.delete(operation);
+          }}
+        }}
         async function buyFreeze() {{
-          const r = await fetch('/api/student/wallet/buy-freeze', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
-          mrReload();
+          try {{ await shopRequest('freeze','/api/student/wallet/buy-freeze'); mrReload(); }}
+          catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
         }}
         async function buyCoinPack(packKey) {{
           if (!confirm('¿Comprar este paquete de monedas? Serás redirigido al checkout.')) return;
-          const r = await fetch('/api/student/wallet/buy-coin-pack', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{pack_key: packKey}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'No se pudo iniciar el checkout.'); return; }}
-          if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
-          mrReload();
+          try {{
+            const r = await shopRequest('coins:'+packKey,'/api/student/wallet/buy-coin-pack',{{pack_key:packKey}});
+            if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
+            mrReload();
+          }} catch(e) {{ alert(e.message || 'No se pudo iniciar el checkout.'); }}
         }}
         async function buyFreezeBundle() {{
-          const r = await fetch('/api/student/wallet/buy-freeze-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
-          mrReload();
+          try {{ await shopRequest('freeze-bundle','/api/student/wallet/buy-freeze-bundle'); mrReload(); }}
+          catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
         }}
         async function buyBoost(key) {{
-          const r = await fetch('/api/student/wallet/buy-boost', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{boost_key:key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
-          mrReload();
+          try {{ await shopRequest('boost:'+key,'/api/student/wallet/buy-boost',{{boost_key:key}}); mrReload(); }}
+          catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
         }}
         async function buyBanner(key) {{
-          const r = await fetch('/api/student/wallet/buy-banner', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{banner_key: key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
-          mrReload();
+          try {{ await shopRequest('banner:'+key,'/api/student/wallet/buy-banner',{{banner_key:key}}); mrReload(); }}
+          catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
         }}
         async function buyFlag(key) {{
-          const r = await fetch('/api/student/wallet/buy-flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{flag_key: key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
-          mrReload();
+          try {{ await shopRequest('flag:'+key,'/api/student/wallet/buy-flag',{{flag_key:key}}); mrReload(); }}
+          catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
         }}
         async function buyBundle(key) {{
           if (!confirm('¿Comprar este pack? Las monedas se descontarán altiro.')) return;
-          const r = await fetch('/api/student/wallet/buy-bundle', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{bundle_key: key}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'No se pudo comprar.'); return; }}
-          alert('Desbloqueado: ' + r.banner_name + ' + ' + r.flag_name);
-          mrReload();
+          try {{
+            const r = await shopRequest('bundle:'+key,'/api/student/wallet/buy-bundle',{{bundle_key:key}});
+            alert('Desbloqueado: ' + r.banner_name + ' + ' + r.flag_name);
+            mrReload();
+          }} catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
         }}
         async function changeTier(tier) {{
           const labels = {{free:'Gratis', plus:'Plus', ultimate:'Ultimate'}};
           if (!confirm('¿Cambiar al plan ' + (labels[tier]||tier) + '?')) return;
-          const r = await fetch('/api/student/subscription/change', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{tier:tier}})}}).then(r=>r.json());
-          if (!r.ok) {{ alert(r.error || 'No se pudo cambiar el plan.'); return; }}
-          if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
-          mrReload();
+          try {{
+            const r = await shopRequest('tier','/api/student/subscription/change',{{tier:tier}});
+            if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
+            mrReload();
+          }} catch(e) {{ alert(e.message || 'No se pudo cambiar el plan.'); }}
         }}
         // Live countdown for active boost chips
         (function() {{

@@ -9,7 +9,11 @@ import tempfile
 import pytest
 
 # ── Configure an isolated env before importing the app ──────────────────────
-os.environ.pop("DATABASE_URL", None)   # force the SQLite engine
+_TEST_DATABASE_URL = os.environ.get("MACHREACH_TEST_DATABASE_URL", "").strip()
+if _TEST_DATABASE_URL:
+    os.environ["DATABASE_URL"] = _TEST_DATABASE_URL
+else:
+    os.environ.pop("DATABASE_URL", None)   # force the SQLite engine locally
 os.environ.pop("RENDER", None)         # not production: cookies work over http, no ProxyFix
 _TMPDIR = tempfile.mkdtemp(prefix="machreach_test_")
 os.environ["DATABASE_PATH"] = os.path.join(_TMPDIR, "test.db")

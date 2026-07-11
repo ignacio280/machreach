@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+import zipfile
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -20,6 +21,10 @@ from requests import HTTPError
 log = logging.getLogger(__name__)
 
 _TIMEOUT = 20  # seconds
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+MAX_PDF_PAGES = 200
+MAX_EXTRACTED_CHARS = 250_000
+MAX_DOCX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
 
 # ── Browser-extension "connect" token ──────────────────────────────────────
 # The Focus Guard extension can read a student's Canvas course list from their
@@ -59,13 +64,25 @@ def verify_connect_token(token: str) -> int | None:
 def extract_text_from_pdf(content: bytes) -> str:
     """Best-effort PDF → plain text with explicit page markers so downstream AI
     knows the exact page count and which page each passage belongs to."""
+    if len(content) > MAX_DOCUMENT_BYTES:
+        raise ValueError("PDF is too large (max 10 MB)")
+
+    total_pages = None
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(content), strict=True)
+        total_pages = len(reader.pages)
+        if total_pages > MAX_PDF_PAGES:
+            raise ValueError(f"PDF has too many pages (max {MAX_PDF_PAGES})")
+    except ImportError:
+        pass
+
     # First, try pdfminer page-by-page so we can insert real page markers.
     try:
         from pdfminer.high_level import extract_text_to_fp
         from pdfminer.layout import LAParams
-        from pypdf import PdfReader  # used only for accurate page count
-        reader = PdfReader(io.BytesIO(content))
-        total_pages = len(reader.pages)
+        if total_pages is None:
+            raise ValueError("PDF page count could not be validated")
         pages_text = []
         for i in range(total_pages):
             buf = io.StringIO()
@@ -78,7 +95,7 @@ def extract_text_from_pdf(content: bytes) -> str:
             f"--- PAGE {i+1} of {total_pages} ---\n{txt}" for i, txt in enumerate(pages_text)
         )
         header = f"[PDF DOCUMENT — TOTAL PAGES: {total_pages}]\n\n"
-        return (header + body).strip()
+        return (header + body).strip()[:MAX_EXTRACTED_CHARS]
     except ImportError:
         pass
     except Exception as e:
@@ -87,7 +104,7 @@ def extract_text_from_pdf(content: bytes) -> str:
     try:
         from pdfminer.high_level import extract_text as _pdfminer_extract
         text = _pdfminer_extract(io.BytesIO(content))
-        return (text or "").strip()
+        return (text or "").strip()[:MAX_EXTRACTED_CHARS]
     except ImportError:
         log.warning("pdfminer.six not installed — skipping PDF extraction")
         return ""
@@ -98,10 +115,21 @@ def extract_text_from_pdf(content: bytes) -> str:
 
 def extract_text_from_docx(content: bytes) -> str:
     """Best-effort DOCX → plain text (uses python-docx if available)."""
+    if len(content) > MAX_DOCUMENT_BYTES:
+        raise ValueError("DOCX is too large (max 10 MB)")
+    if not zipfile.is_zipfile(io.BytesIO(content)):
+        raise ValueError("Invalid DOCX document")
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        entries = archive.infolist()
+        if len(entries) > 2000:
+            raise ValueError("DOCX contains too many archive entries")
+        uncompressed = sum(max(0, entry.file_size) for entry in entries)
+        if uncompressed > MAX_DOCX_UNCOMPRESSED_BYTES:
+            raise ValueError("DOCX expands beyond the safe processing limit")
     try:
         from docx import Document
         doc = Document(io.BytesIO(content))
-        return "\n".join(p.text for p in doc.paragraphs).strip()
+        return "\n".join(p.text for p in doc.paragraphs).strip()[:MAX_EXTRACTED_CHARS]
     except ImportError:
         log.warning("python-docx not installed — skipping DOCX extraction")
         return ""

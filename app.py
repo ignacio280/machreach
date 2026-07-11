@@ -1,5 +1,5 @@
 """
-Flask web dashboard — client-facing campaign management.
+Flask web application for MachReach Uni.
 """
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ import logging
 import os
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
-from flask import Flask, flash, jsonify, make_response, redirect, render_template_string, request, session, url_for
+from flask import Flask, flash, g, jsonify, make_response, redirect, render_template_string, request, session, url_for
 from markupsafe import Markup
 
 from outreach.config import ADMIN_ACTION_SECRET, ADMIN_EMAILS, SECRET_KEY
@@ -38,7 +38,6 @@ from outreach.db import (
     create_verification_token,
     get_client,
     get_client_by_email,
-    get_export_data,
     get_valid_reset_token,
     get_valid_verification_token,
     init_db,
@@ -54,7 +53,10 @@ app.secret_key = SECRET_KEY
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # HTTPS-only cookies in production (Render always runs behind TLS)
-_IS_PRODUCTION = bool(os.getenv("RENDER", "")) or os.getenv("FLASK_ENV") == "production"
+_IS_PRODUCTION = bool(os.getenv("RENDER", "")) or any(
+    (os.getenv(name) or "").strip().lower() == "production"
+    for name in ("FLASK_ENV", "APP_ENV", "ENVIRONMENT")
+)
 app.config["SESSION_COOKIE_SECURE"] = _IS_PRODUCTION
 app.config["SESSION_COOKIE_NAME"] = "machreach_sess"
 # Trust Render/Heroku-style proxy headers so secure-cookie detection works
@@ -62,7 +64,7 @@ if _IS_PRODUCTION:
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours max session
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB upload limit
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # bounded document/file upload limit
 PASSWORD_MIN_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "10"))
 
 # ── Security: CSRF protection ──
@@ -142,14 +144,21 @@ if _IS_PRODUCTION and _ratelimit_storage_uri == "memory://":
 if os.path.isdir('/data'):
     _log.info(f"/data contents = {os.listdir('/data')}")
 
-# Ensure DB is initialized (for gunicorn and direct run)
-init_db()
+# Local development remains zero-setup. Production migrations run once in the
+# deploy phase (migrate.py) rather than racing in every Gunicorn process.
+_RUN_STARTUP_MIGRATIONS = (
+    not _IS_PRODUCTION
+    or (os.getenv("MACHREACH_RUN_STARTUP_MIGRATIONS") or "").strip() == "1"
+)
+if _RUN_STARTUP_MIGRATIONS:
+    init_db()
 
 # ── MachReach Student module ──
 from student.db import init_student_db
 from student.routes import register_student_routes
 from student.academic_routes import register_academic_routes
-init_student_db()
+if _RUN_STARTUP_MIGRATIONS:
+    init_student_db()
 register_student_routes(app, csrf, limiter)
 register_academic_routes(app, csrf, limiter)
 
@@ -201,12 +210,13 @@ def _send_system_email(to: str, subject: str, body: str) -> bool:
 @app.route("/health")
 @limiter.exempt
 def health_check():
-    """Lightweight health probe for Render / load balancers."""
+    """Readiness probe: database connectivity and critical schema state."""
     try:
-        from outreach.db import get_db, _fetchval
+        from outreach.db import check_schema_readiness, get_db, _fetchval
         with get_db() as db:
             _fetchval(db, "SELECT 1")
-        return jsonify({"status": "ok", "db": "connected"}), 200
+        schema = check_schema_readiness()
+        return jsonify({"status": "ok", "db": "connected", "schema": schema}), 200
     except Exception as e:
         _log.exception("[health] database probe failed: %s", e)
         return jsonify({"status": "error", "db": "unavailable"}), 503
@@ -369,16 +379,6 @@ def _admin_secret_ok() -> bool:
     return request.form.get("admin_secret", "") == ADMIN_ACTION_SECRET
 
 
-def _effective_client_id() -> int:
-    """Return the client_id to use for data access.
-    If the user is a full-access team member, returns the owner's client_id
-    so they see the owner's campaigns, contacts, and inbox."""
-    cid = session["client_id"]
-    from outreach.db import get_team_owner
-    owner = get_team_owner(cid)
-    return owner if owner else cid
-
-
 _PRESENCE_LAST_TOUCH = {}  # cid -> last unix-second we wrote a heartbeat
 _PRESENCE_TOUCH_THROTTLE = 25  # don't UPDATE more often than every 25s per user
 
@@ -449,14 +449,28 @@ def _set_security_headers(response):
     # Content Security Policy — restricts where scripts/styles/images/frames can load from.
     # 'unsafe-inline' is required because MachReach renders heavy inline HTML/CSS/JS
     # via Jinja/f-strings. Everything else is locked down.
+    posthog_host = ""
+    posthog_assets = ""
+    configured_posthog_host = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com").rstrip("/")
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(configured_posthog_host)
+        if parsed.scheme == "https" and parsed.netloc:
+            posthog_host = f"https://{parsed.netloc}"
+            asset_netloc = parsed.netloc.replace(".i.posthog.com", "-assets.i.posthog.com")
+            posthog_assets = f"https://{asset_netloc}"
+    except ValueError:
+        pass
+    analytics_script_source = f" {posthog_assets}" if posthog_assets else ""
+    analytics_connect_source = f" {posthog_host}" if posthog_host else ""
     _CSP = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+        f"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net{analytics_script_source}; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
         "img-src 'self' data: blob: https:; "
         "media-src 'self' https:; "
-        "connect-src 'self' https://api.openai.com https://*.instructure.com https://cdn.jsdelivr.net; "
+        f"connect-src 'self' https://api.openai.com https://*.instructure.com https://cdn.jsdelivr.net{analytics_connect_source}; "
         "frame-src 'self' https://open.spotify.com https://www.youtube.com https://www.youtube-nocookie.com; "
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
@@ -491,8 +505,9 @@ def _inject_analytics_context():
 
     Dormant until POSTHOG_KEY is set, so this is a no-op until configured.
     """
+    analytics_allowed = request.cookies.get("analytics_consent") == "1"
     return {
-        "posthog_key": os.getenv("POSTHOG_KEY", ""),
+        "posthog_key": os.getenv("POSTHOG_KEY", "") if analytics_allowed else "",
         "posthog_host": os.getenv("POSTHOG_HOST", "https://us.i.posthog.com"),
         "analytics_uid": session.get("client_id") or "",
         "analytics_account_type": session.get("account_type") or "",
@@ -520,7 +535,44 @@ LAYOUT = """<!DOCTYPE html>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+        function pwaNotice(message, actionLabel, action) {
+          var notice = document.createElement('div');
+          notice.setAttribute('role', 'status');
+          notice.style.cssText = 'position:fixed;right:16px;bottom:86px;z-index:10000;background:#1A1A1F;color:#fff;padding:12px 14px;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.25);font:700 13px Nunito,sans-serif;max-width:300px';
+          notice.textContent = message + ' ';
+          if (actionLabel) {
+            var button = document.createElement('button');
+            button.type = 'button'; button.textContent = actionLabel;
+            button.style.cssText = 'margin-left:8px;border:0;border-radius:999px;padding:7px 10px;background:#FF7A3D;color:#111;font-weight:900;cursor:pointer';
+            button.addEventListener('click', action);
+            notice.appendChild(button);
+          }
+          document.body.appendChild(notice);
+        }
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (refreshing) return;
+          refreshing = true;
+          window.location.reload();
+        });
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function (registration) {
+          function offerUpdate(worker) {
+            if (!worker) return;
+            pwaNotice('A MachReach update is ready.', 'Update', function () { worker.postMessage({type:'SKIP_WAITING'}); });
+          }
+          if (registration.waiting) offerUpdate(registration.waiting);
+          registration.addEventListener('updatefound', function () {
+            var worker = registration.installing;
+            if (!worker) return;
+            worker.addEventListener('statechange', function () {
+              if (worker.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(worker);
+            });
+          });
+        }).catch(function (error) {
+          console.error('MachReach service worker registration failed', error);
+          pwaNotice('Offline support could not start. Refresh to retry.');
+          if (window.Sentry && window.Sentry.captureException) window.Sentry.captureException(error);
+        });
       });
     }
   </script>
@@ -791,9 +843,9 @@ LAYOUT = """<!DOCTYPE html>
         {% if is_admin %}<a class="mr-tb-link {% if active_page == 'admin' %}active{% endif %}" href="/admin">{{ student_ui.admin }}</a>{% endif %}
       </nav>
       <div class="mr-tb-right">
-        <button id="theme-toggle" class="mr-tb-icon" type="button" onclick="toggleDarkMode()" title="{{ student_ui.toggle_theme }}">&#127769;</button>
+        <button id="theme-toggle" class="mr-tb-icon" type="button" onclick="toggleDarkMode()" title="{{ student_ui.toggle_theme }}" aria-label="{{ student_ui.toggle_theme }}">&#127769;</button>
         <a class="mr-tb-icon" href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
-        <a class="mr-tb-icon" href="/logout" title="{{nav.logout}}">&#10162;</a>
+        <form method="post" action="/logout" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="mr-tb-icon" type="submit" title="{{nav.logout}}" aria-label="{{nav.logout}}" style="border:0;background:transparent">&#10162;</button></form>
         <a class="mr-tb-icon mr-tb-settings-gear {% if active_page == 'student_settings' %}active{% endif %}" href="/student/settings" title="{{ student_ui.settings }}" aria-label="{{ student_ui.settings }}">&#9881;</a>
         <a class="mr-tb-user" href="/student/profile" title="{{client_name}}">
           <span class="mr-tb-av">{{ (client_name[:1] or 'M')|upper }}</span>
@@ -837,14 +889,14 @@ LAYOUT = """<!DOCTYPE html>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V4h12v5a6 6 0 0 1-12 0z"/><path d="M6 5H3.5v1.5A3.5 3.5 0 0 0 7 10"/><path d="M18 5h2.5v1.5A3.5 3.5 0 0 1 17 10"/><path d="M9.5 21h5"/><path d="M12 15v6"/></svg>
         <span>Ranking</span>
       </a>
-      <button class="mr-tab {% if active_page in ['student_planner','student_quizzes','student_flashcards','student_reviews','student_friends','student_shop','student_gpa','student_achievements','student_profile','student_settings','admin'] %}active{% endif %}" type="button" onclick="mrToggleMore()" aria-haspopup="dialog">
+      <button id="mrMoreTrigger" class="mr-tab {% if active_page in ['student_planner','student_quizzes','student_flashcards','student_reviews','student_friends','student_shop','student_gpa','student_achievements','student_profile','student_settings','admin'] %}active{% endif %}" type="button" onclick="mrToggleMore()" aria-haspopup="dialog" aria-controls="mrMore" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
         <span>{% if lang == 'en' %}More{% else %}Más{% endif %}</span>
       </button>
     </nav>
-    <div class="mr-more" id="mrMore">
+    <div class="mr-more" id="mrMore" aria-hidden="true">
       <div class="mr-more-backdrop" onclick="mrToggleMore(false)"></div>
-      <div class="mr-more-panel" role="dialog" aria-label="{% if lang == 'en' %}More{% else %}Más{% endif %}">
+      <div class="mr-more-panel" role="dialog" aria-modal="true" tabindex="-1" aria-label="{% if lang == 'en' %}More{% else %}Más{% endif %}">
         <div class="mr-more-grab"></div>
         <a class="mr-more-id" href="/student/profile">
           <span class="mr-more-av">{{ (client_name[:1] or 'M')|upper }}</span>
@@ -869,19 +921,42 @@ LAYOUT = """<!DOCTYPE html>
           <button type="button" class="mr-more-act" onclick="if(typeof toggleDarkMode==='function')toggleDarkMode()"><span class="mr-more-ic">&#127769;</span>{{ student_ui.toggle_theme }}</button>
           <a class="mr-more-act" href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}"><span class="mr-more-ic">&#127760;</span>{% if lang == 'en' %}Español{% else %}English{% endif %}</a>
           <a class="mr-more-act" href="/student/settings"><span class="mr-more-ic">&#9881;</span>{{ student_ui.settings }}</a>
-          <a class="mr-more-act mr-more-logout" href="/logout"><span class="mr-more-ic">&#9211;</span>{{ nav.logout }}</a>
+          <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="mr-more-act mr-more-logout"><span class="mr-more-ic">&#9211;</span>{{ nav.logout }}</button></form>
         </div>
       </div>
     </div>
     <script>
+      var mrMoreLastFocus = null;
       function mrToggleMore(open){
         var m = document.getElementById('mrMore');
         if (!m) return;
         var willOpen = (open === undefined) ? !m.classList.contains('open') : !!open;
+        var trigger = document.getElementById('mrMoreTrigger');
+        var panel = m.querySelector('.mr-more-panel');
         m.classList.toggle('open', willOpen);
+        m.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
+        if (trigger) trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
         document.body.style.overflow = willOpen ? 'hidden' : '';
+        document.querySelectorAll('.mr-topbar,.mr-tb-main').forEach(function(el){ el.inert = willOpen; });
+        if (willOpen) {
+          mrMoreLastFocus = document.activeElement;
+          window.setTimeout(function(){ if (panel) panel.focus(); }, 0);
+        } else if (mrMoreLastFocus && typeof mrMoreLastFocus.focus === 'function') {
+          mrMoreLastFocus.focus();
+          mrMoreLastFocus = null;
+        }
       }
-      document.addEventListener('keydown', function(e){ if (e.key === 'Escape') mrToggleMore(false); });
+      document.addEventListener('keydown', function(e){
+        var m = document.getElementById('mrMore');
+        if (!m || !m.classList.contains('open')) return;
+        if (e.key === 'Escape') { e.preventDefault(); mrToggleMore(false); return; }
+        if (e.key !== 'Tab') return;
+        var focusable = Array.prototype.slice.call(m.querySelectorAll('a[href],button:not([disabled]),[tabindex]:not([tabindex="-1"])'));
+        if (!focusable.length) { e.preventDefault(); return; }
+        var first = focusable[0], last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      });
     </script>
     {% endif %}
   </div>
@@ -946,15 +1021,15 @@ LAYOUT = """<!DOCTYPE html>
         {% endif %}
         <a href="/student/settings" {% if active_page == 'student_settings' %}class="active"{% endif %}>&#9881;</a>
         {% endif %}
-        <button id="theme-toggle" class="nav-theme-toggle" type="button" onclick="toggleDarkMode()" title="{{ student_ui.toggle_theme }}">&#127769;</button>
+        <button id="theme-toggle" class="nav-theme-toggle" type="button" onclick="toggleDarkMode()" title="{{ student_ui.toggle_theme }}" aria-label="{{ student_ui.toggle_theme }}">&#127769;</button>
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
         <div class="nav-divider"></div>
         <a href="/student/profile" class="nav-user" style="text-decoration:none;cursor:pointer;color:#94A3B8;" title="My profile">{{client_name}}</a>
-        <a href="/logout" style="color:#EF4444;">{{nav.logout}}</a>
+        <form method="post" action="/logout" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-ghost btn-sm" style="color:#EF4444;">{{nav.logout}}</button></form>
       {% else %}
         <a href="/login">{{nav.login}}</a>
         <a href="/register" class="btn btn-primary btn-sm" style="color:#fff;">{{nav.get_started}}</a>
-        <button id="theme-toggle" class="nav-theme-toggle" type="button" onclick="toggleDarkMode()" title="{{nav.toggle_theme|default('Cambiar modo')}}">&#127769;</button>
+        <button id="theme-toggle" class="nav-theme-toggle" type="button" onclick="toggleDarkMode()" title="{{nav.toggle_theme|default('Cambiar modo')}}" aria-label="{{nav.toggle_theme|default('Cambiar modo')}}">&#127769;</button>
         <a href="/set-language/{% if lang == 'en' %}es{% else %}en{% endif %}" class="btn btn-ghost btn-sm" style="font-size:12px;padding:4px 8px;color:#94A3B8;font-weight:700;" title="Switch language">{% if lang == 'en' %}ES{% else %}EN{% endif %}</a>
       {% endif %}
     </div>
@@ -1330,8 +1405,9 @@ LAYOUT = """<!DOCTYPE html>
   <!-- Cookie Consent Banner (GDPR) -->
   <div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--card);border-top:1px solid var(--border-light);box-shadow:0 -2px 16px rgba(0,0,0,.12);padding:16px 24px;font-size:13px;color:var(--text-secondary);">
     <div style="max-width:960px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <p style="flex:1;margin:0;min-width:200px;">Usamos cookies esenciales para mantener tu sesión y recordar tus preferencias. Sin cookies de tracking ni publicidad. <a href="/privacy" style="color:var(--primary);text-decoration:underline;">Privacy Policy</a></p>
-      <button onclick="acceptCookies()" class="btn btn-primary btn-sm">Aceptar</button>
+      <p style="flex:1;margin:0;min-width:200px;">Usamos cookies esenciales para tu sesión. Con tu permiso, PostHog también puede medir uso del producto; nunca usamos cookies publicitarias. <a href="/privacy" style="color:var(--primary);text-decoration:underline;">Privacy Policy</a></p>
+      <button onclick="setCookieConsent(false)" class="btn btn-outline btn-sm">Solo esenciales</button>
+      <button onclick="setCookieConsent(true)" class="btn btn-primary btn-sm">Permitir analítica</button>
     </div>
   </div>
   <script>
@@ -1341,10 +1417,12 @@ LAYOUT = """<!DOCTYPE html>
       if(el) el.style.display='block';
     }
   })();
-  function acceptCookies(){
+  function setCookieConsent(allowAnalytics){
     document.cookie='cookie_consent=1;path=/;max-age=31536000;SameSite=Lax';
+    document.cookie='analytics_consent='+(allowAnalytics?'1':'0')+';path=/;max-age=31536000;SameSite=Lax';
     var el=document.getElementById('cookie-consent');
     if(el) el.style.display='none';
+    if(allowAnalytics) window.location.reload();
   }
   </script>
 
@@ -1691,9 +1769,7 @@ def _render(title: str, content: str, active_page: str = "", wide: bool = False,
 @app.route("/")
 def index():
     if _logged_in():
-        if session.get("account_type") == "student":
-            return redirect(url_for("student_dashboard_page"))
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("student_dashboard_page"))
 
     lang = session.get("lang", "es")
     from student.landing_design import render_landing_page
@@ -1894,10 +1970,10 @@ def register():
           <form class="auth-form" method="post" action="/register" autocomplete="off">
             {_csrf_field}
             {_ref_hidden}
-            <div class="auth-field"><label>{_name_label}</label><input name="name" type="text" required autocomplete="name" placeholder="{_name_ph}"></div>
-            <div class="auth-field"><label>{"Email" if _is_en else "Correo"}</label><input name="email" type="email" required autocomplete="username" placeholder="tu@correo.com"></div>
-            <div class="auth-field"><label>{_password_label}</label><input name="password" type="password" required minlength="{PASSWORD_MIN_LENGTH}" autocomplete="new-password" placeholder="{_password_ph}"></div>
-            <div class="auth-field"><label>{_confirm_label}</label><input name="password2" type="password" required minlength="{PASSWORD_MIN_LENGTH}" autocomplete="new-password" placeholder="{_confirm_ph}"></div>
+            <div class="auth-field"><label for="register-name">{_name_label}</label><input id="register-name" name="name" type="text" required autocomplete="name" placeholder="{_name_ph}"></div>
+            <div class="auth-field"><label for="register-email">{"Email" if _is_en else "Correo"}</label><input id="register-email" name="email" type="email" required autocomplete="username" placeholder="tu@correo.com"></div>
+            <div class="auth-field"><label for="register-password">{_password_label}</label><input id="register-password" name="password" type="password" required minlength="{PASSWORD_MIN_LENGTH}" autocomplete="new-password" placeholder="{_password_ph}"></div>
+            <div class="auth-field"><label for="register-password2">{_confirm_label}</label><input id="register-password2" name="password2" type="password" required minlength="{PASSWORD_MIN_LENGTH}" autocomplete="new-password" placeholder="{_confirm_ph}"></div>
             <button class="btn btn-primary auth-submit" type="submit">{t("auth.create_account")}</button>
             <p class="auth-note">{_account_note}</p>
           </form>
@@ -1924,21 +2000,17 @@ def login():
             return redirect(url_for("verify_email_pending", email=email))
         _maybe_upgrade_hash(client["id"], password, client["password"])
         _log_security("LOGIN_OK", client_id=client["id"], email=email)
-        # Preserve team invite token across session clear
-        pending_token = session.get("team_invite_token")
         session.clear()
         session["client_id"] = client["id"]
         session["client_name"] = client["name"]
-        session["account_type"] = client.get("account_type") or "student"
+        session["account_type"] = "student"
         session["session_version"] = int(client.get("session_version") or 0)
-        # Check for pending team invite
-        if pending_token:
-            return redirect(url_for("team_accept_invite", token=pending_token))
         return redirect(url_for("student_dashboard_page"))
     _is_en = session.get("lang") == "en"
     _story = _auth_story_panel("login", session.get("lang", "es"))
     _resend_summary = "Didn't get verification email?" if _is_en else "&iquest;No recibiste el correo de verificaci&oacute;n?"
     _resend_button = "Resend" if _is_en else "Reenviar"
+    _csrf_field = _csrf_hidden_input()
     return render_layout(title="Login", logged_in=False, messages=list(session.pop("_flashes", []) if "_flashes" in session else []), active_page="login", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"), content=Markup(f"""
     <div class="auth-wrapper">
       <section class="auth-shell">
@@ -1949,15 +2021,18 @@ def login():
             <p class="subtitle">{t("auth.sign_in_desc")}</p>
           </div>
           <form class="auth-form" method="post" action="/login">
-            <div class="auth-field"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="you@school.edu" autocomplete="username" required></div>
-            <div class="auth-field"><label>{t("auth.password")}</label><input name="password" type="password" autocomplete="current-password" required></div>
+            {_csrf_field}
+            <div class="auth-field"><label for="login-email">{t("auth.email")}</label><input id="login-email" name="email" type="email" placeholder="you@school.edu" autocomplete="username" required></div>
+            <div class="auth-field"><label for="login-password">{t("auth.password")}</label><input id="login-password" name="password" type="password" autocomplete="current-password" required></div>
             <button class="btn btn-primary auth-submit" type="submit">{t("auth.sign_in")}</button>
           </form>
           <div class="auth-link-row"><a href="/forgot-password">{t("auth.forgot_password")}</a></div>
           <details class="auth-details">
             <summary>{_resend_summary}</summary>
             <form class="auth-resend-form" method="post" action="/resend-verification">
-              <input name="email" type="email" placeholder="your@email.com" required>
+              {_csrf_field}
+              <label class="sr-only" for="resend-email">{t("auth.email")}</label>
+              <input id="resend-email" name="email" type="email" placeholder="your@email.com" required>
               <button class="btn btn-outline btn-sm" type="submit">{_resend_button}</button>
             </form>
           </details>
@@ -1968,7 +2043,7 @@ def login():
     """))
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
     return redirect(url_for("index"))
@@ -2267,21 +2342,12 @@ def change_password():
 def _collect_ls_sub_ids(db, client_id: int) -> list:
     """Return the Lemon Squeezy subscription id(s) stored for this client.
 
-    Two storage spots, both read BEFORE the rows are deleted so we can cancel
-    recurring billing afterwards:
-      - business/outreach subs -> subscriptions.stripe_subscription_id
-      - student PLUS/Ultimate   -> clients.mail_preferences JSON .subscription.ls_sub_id
+    The student PLUS/Ultimate subscription ID is read before local rows are
+    deleted so recurring billing can be cancelled first.
     """
     import json as _json
     from outreach.db import _fetchone
     ids = []
-    try:
-        srow = _fetchone(db, "SELECT stripe_subscription_id FROM subscriptions WHERE client_id = %s", (client_id,))
-        sid = ((srow or {}).get("stripe_subscription_id") or "").strip()
-        if sid:
-            ids.append(sid)
-    except Exception:
-        pass
     try:
         crow = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (client_id,))
         prefs = _json.loads(((crow or {}).get("mail_preferences")) or "{}")
@@ -2293,20 +2359,23 @@ def _collect_ls_sub_ids(db, client_id: int) -> list:
     return ids
 
 
-def _cancel_ls_subs(ids, client_id: int) -> None:
-    """Cancel recurring billing at Lemon Squeezy. Never raises; no-op if unconfigured.
+def _cancel_ls_subs(ids, client_id: int) -> bool:
+    """Cancel recurring billing at Lemon Squeezy before local data is removed.
 
     Called after the DB connection is released, since cancel_subscription makes a
     network call (up to 15s) and we don't want to hold the connection open for it.
     """
     if not ids:
-        return
+        return True
     try:
         from outreach import lemonsqueezy as ls
         for sid in set(ids):
-            ls.cancel_subscription(sid)
+            if not ls.cancel_subscription(sid):
+                return False
+        return True
     except Exception:
         _log.exception("[delete-account] LS subscription cancel failed for client %s", client_id)
+        return False
 
 
 @app.route("/settings/delete-account", methods=["POST"])
@@ -2321,9 +2390,13 @@ def delete_account():
     client_id = session["client_id"]
     from outreach.db import get_db, _exec
     with get_db() as db:
-        # Grab any Lemon Squeezy subscription id before we delete the rows holding it,
-        # otherwise the provider keeps charging the card every month (the account is gone).
         _ls_ids = _collect_ls_sub_ids(db, client_id)
+    if not _cancel_ls_subs(_ls_ids, client_id):
+        _log_security("ACCOUNT_DELETE_BILLING_CANCEL_FAILED", client_id=client_id)
+        flash(("error", "We could not cancel your active subscription. Your account was kept intact; please try again or contact support."))
+        return redirect(url_for(redir))
+
+    with get_db() as db:
         # Student data (flashcards & quiz_questions cascade-delete via their parent tables)
         for tbl in ["student_quizzes",
                      "student_flashcard_decks", "student_notes",
@@ -2336,37 +2409,12 @@ def delete_account():
                 _exec(db, f"DELETE FROM {tbl} WHERE client_id = %s", (client_id,))
             except Exception:
                 pass
-        # Business data
-        for tbl2 in ["password_reset_tokens", "email_verification_tokens",
-                      "email_accounts", "subscriptions", "usage_tracking"]:
+        for tbl2 in ["password_reset_tokens", "email_verification_tokens"]:
             try:
                 _exec(db, f"DELETE FROM {tbl2} WHERE client_id = %s", (client_id,))
             except Exception:
                 pass
-        try:
-            _exec(db, "DELETE FROM team_members WHERE owner_id = %s OR member_client_id = %s", (client_id, client_id))
-        except Exception:
-            pass
-        # Delete campaigns and related data
-        try:
-            camp_ids = [r["id"] for r in _exec(db, "SELECT id FROM campaigns WHERE client_id = %s", (client_id,)).fetchall()]
-            for cid in camp_ids:
-                contact_ids = [r["id"] for r in _exec(db, "SELECT id FROM contacts WHERE campaign_id = %s", (cid,)).fetchall()]
-                for ct_id in contact_ids:
-                    _exec(db, "DELETE FROM sent_emails WHERE contact_id = %s", (ct_id,))
-                _exec(db, "DELETE FROM email_sequences WHERE campaign_id = %s", (cid,))
-                _exec(db, "DELETE FROM contacts WHERE campaign_id = %s", (cid,))
-            _exec(db, "DELETE FROM campaigns WHERE client_id = %s", (client_id,))
-        except Exception:
-            pass
-        for tbl3 in ["contacts_book", "mail_inbox", "scheduled_emails"]:
-            try:
-                _exec(db, f"DELETE FROM {tbl3} WHERE client_id = %s", (client_id,))
-            except Exception:
-                pass
         _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
-    # Connection released — now cancel recurring billing at the provider.
-    _cancel_ls_subs(_ls_ids, client_id)
     session.clear()
     flash(("success", t("settings.account_deleted")))
     return redirect(url_for("index"))
@@ -2400,35 +2448,14 @@ def _admin_delete_client_account(client_id: int) -> dict:
 
     deleted_steps = []
     with get_db() as db:
-        # Cancel recurring billing before wiping the rows that hold the subscription id.
         _ls_ids = _collect_ls_sub_ids(db, client_id)
-        for column in ("owner_id", "member_client_id"):
-            try:
-                _exec(db, f"DELETE FROM team_members WHERE {column} = %s", (client_id,))
-            except Exception:
-                pass
+    if not _cancel_ls_subs(_ls_ids, client_id):
+        return {"ok": False, "error": "Billing cancellation failed; the account was kept intact."}
 
-        campaigns = _fetchall(db, "SELECT id FROM campaigns WHERE client_id = %s", (client_id,))
-        for campaign in campaigns:
-            campaign_id = campaign["id"]
-            contacts = _fetchall(db, "SELECT id FROM contacts WHERE campaign_id = %s", (campaign_id,))
-            for contact in contacts:
-                _exec(db, "DELETE FROM sent_emails WHERE contact_id = %s", (contact["id"],))
-            _exec(db, "DELETE FROM email_sequences WHERE campaign_id = %s", (campaign_id,))
-            _exec(db, "DELETE FROM contacts WHERE campaign_id = %s", (campaign_id,))
-        _exec(db, "DELETE FROM campaigns WHERE client_id = %s", (client_id,))
-        deleted_steps.append("campaign data")
-
+    with get_db() as db:
         for table, column in [
             ("email_verification_tokens", "client_id"),
             ("password_reset_tokens", "client_id"),
-            ("contacts_book", "client_id"),
-            ("mail_inbox", "client_id"),
-            ("scheduled_emails", "client_id"),
-            ("email_accounts", "client_id"),
-            ("usage_tracking", "client_id"),
-            ("subscriptions", "client_id"),
-            ("email_suppressions", "client_id"),
         ]:
             try:
                 _exec(db, f"DELETE FROM {table} WHERE {column} = %s", (client_id,))
@@ -2458,7 +2485,7 @@ def _admin_delete_client_account(client_id: int) -> dict:
             by_table: dict[str, list[str]] = {}
             for row in rows:
                 table = row["table_name"]
-                if table == "clients":
+                if table in {"clients", "retired_billing_cancellations"}:
                     continue
                 by_table.setdefault(table, []).append(row["column_name"])
             for _ in range(3):
@@ -2474,7 +2501,6 @@ def _admin_delete_client_account(client_id: int) -> dict:
 
         _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
 
-    _cancel_ls_subs(_ls_ids, client_id)
     return {"ok": True, "email": target.get("email"), "steps": deleted_steps}
 
 
@@ -2774,7 +2800,7 @@ def admin_jobs():
         if action == "retry_job":
             job_type = request.form.get("job_type", "").strip()
             job_key = request.form.get("job_key", "").strip()
-            if job_type not in {"student_quiz_generation", "campaign_send"} or not job_key:
+            if job_type not in {"student_quiz_generation", "student_flashcard_generation"} or not job_key:
                 error_msg = "Invalid job retry request."
             elif not _admin_secret_ok():
                 error_msg = "Admin action secret is incorrect."
@@ -2832,7 +2858,7 @@ def admin_jobs():
 
     job_labels = {
         "student_quiz_generation": "Quiz generation",
-        "campaign_send": "Campaign send",
+        "student_flashcard_generation": "Flashcard generation",
     }
     status_colors = {
         "queued": "#7C3AED",
@@ -2847,7 +2873,7 @@ def admin_jobs():
         return f"<span class='job-pill' style='background:{color};'>{_esc(status)}</span>"
 
     def _retry_form(job: dict) -> str:
-        if job.get("status") != "error" or job.get("job_type") not in {"student_quiz_generation", "campaign_send"}:
+        if job.get("status") != "error" or job.get("job_type") not in {"student_quiz_generation", "student_flashcard_generation"}:
             return ""
         secret = (
             "<input name='admin_secret' type='password' autocomplete='off' placeholder='Admin secret' "
@@ -2900,7 +2926,7 @@ def admin_jobs():
         return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
     failed_quiz = [j for j in jobs if j.get("job_type") == "student_quiz_generation" and j.get("status") == "error"]
-    failed_campaign = [j for j in jobs if j.get("job_type") == "campaign_send" and j.get("status") == "error"]
+    failed_flashcards = [j for j in jobs if j.get("job_type") == "student_flashcard_generation" and j.get("status") == "error"]
     active_jobs = [j for j in jobs if j.get("status") in ("queued", "running", "sending")]
 
     cards = "".join(
@@ -2931,7 +2957,7 @@ def admin_jobs():
     </style>
     <div class="admin-jobs">
       <div class="breadcrumb"><a href="/admin">Admin</a> / Jobs</div>
-      <div class="page-header"><h1>&#9881; Jobs & worker</h1><p class="subtitle">Background quiz generation, campaign sends, retries, worker heartbeat, signups and payment fulfillment.</p></div>
+      <div class="page-header"><h1>&#9881; Jobs & worker</h1><p class="subtitle">Background quiz and flashcard generation, retries, worker heartbeat, signups and payment fulfillment.</p></div>
       {'<div class="alert alert-red">' + _esc(error_msg) + '</div>' if error_msg else ''}
       <div class="admin-grid">{cards}</div>
       <div class="admin-panel">
@@ -2940,7 +2966,7 @@ def admin_jobs():
       </div>
       <div class="admin-panel"><h2>Active jobs</h2>{_jobs_table(active_jobs, "No active queued or running jobs.")}</div>
       <div class="admin-panel"><h2>Failed quiz generations</h2>{_jobs_table(failed_quiz, "No failed quiz generations.")}</div>
-      <div class="admin-panel"><h2>Failed campaign sends</h2>{_jobs_table(failed_campaign, "No failed campaign sends.")}</div>
+      <div class="admin-panel"><h2>Failed flashcard generations</h2>{_jobs_table(failed_flashcards, "No failed flashcard generations.")}</div>
       <div class="admin-panel"><h2>Recent job activity</h2>{_jobs_table(jobs[:30], "No background jobs recorded yet.")}</div>
       <div class="admin-panel"><h2>Recent signups</h2>{_simple_table(["ID","Name","Email","Type","Created"], recent_users, ["id","name","email","account_type","created_at"], "No signups yet.")}</div>
       <div class="admin-panel"><h2>Recent coin-pack orders</h2>{_simple_table(["Order","Client","Email","Pack","Coins","Created"], coin_orders, ["order_id","client_id","email","pack_key","coins_credited","created_at"], "No coin-pack orders recorded yet.")}</div>
@@ -3490,27 +3516,6 @@ def settings():
 # Routes — Campaign CRUD
 # ---------------------------------------------------------------------------
 
-def _campaign_send_status(campaign_id):
-    from outreach.db import get_async_job_status
-    return get_async_job_status("campaign_send", str(campaign_id), {"status": "idle", "sent": 0, "total": 0})
-
-
-def _trigger_campaign_send(campaign_id):
-    """Queue pending campaign emails for the background worker."""
-    job = _campaign_send_status(campaign_id)
-    if job and job.get("status") in ("queued", "running", "sending"):
-        return  # already running
-
-    from outreach.db import enqueue_async_job
-    enqueue_async_job(
-        "campaign_send",
-        str(campaign_id),
-        input_payload={"campaign_id": int(campaign_id)},
-        progress="Queued to send campaign.",
-        visible_payload={"sent": 0, "total": 0},
-    )
-
-
 # ---------------------------------------------------------------------------
 # Routes — Smart Send Times
 # ---------------------------------------------------------------------------
@@ -3524,13 +3529,9 @@ def _trigger_campaign_send(campaign_id):
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# API — Mail Hub
+# Retired product API surface intentionally removed.
 # ---------------------------------------------------------------------------
 
-
-# ---------------------------------------------------------------------------
-# API — Mail Hub: AI draft & send reply
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Routes — Contacts Book
@@ -3539,6 +3540,25 @@ def _trigger_campaign_send(campaign_id):
 # ---------------------------------------------------------------------------
 # Routes — Billing (Lemon Squeezy hosted checkout)
 # ---------------------------------------------------------------------------
+
+def _finish_claimed_ls_event(error: str = "") -> None:
+    event_key = getattr(g, "ls_event_key", "")
+    if not event_key or getattr(g, "ls_event_finished", False):
+        return
+    from outreach.db import finish_webhook_event
+    finish_webhook_event("lemonsqueezy", event_key, error=error)
+    g.ls_event_finished = True
+
+
+@app.teardown_request
+def _release_failed_ls_event(exc):
+    if exc is None or not getattr(g, "ls_event_key", "") or getattr(g, "ls_event_finished", False):
+        return
+    try:
+        _finish_claimed_ls_event(type(exc).__name__)
+    except Exception:
+        _log.exception("[LS] failed to release webhook event claim")
+
 
 @app.route("/billing")
 def billing_page():
@@ -3563,10 +3583,9 @@ def billing_downgrade():
 @app.route("/webhooks/lemonsqueezy", methods=["POST"])
 @csrf.exempt
 def lemonsqueezy_webhook():
-    """Single webhook for outreach subs, student PLUS subs, and coin packs.
+    """Handle only MachReach Uni subscriptions and coin packs.
 
     Routing is done via `meta.custom_data.purpose`:
-      - "outreach_sub"  -> outreach subscription event (plan = growth/pro/unlimited)
       - "student_sub"   -> student PLUS/Ultimate subscription event (tier)
       - "coin_pack"     -> one-time coin-pack purchase (pack_key)
     """
@@ -3591,6 +3610,15 @@ def lemonsqueezy_webhook():
     attrs = (data.get("attributes") or {})
 
     purpose = str(custom.get("purpose") or "")
+    if purpose == "outreach_sub":
+        # Removal tombstone: acknowledge old provider retries without restoring
+        # entitlements. Pre-deploy migration archives every old subscription ID
+        # for cancellation by the Uni worker.
+        _log.info("[LS] acknowledged retired product event=%s", event_name)
+        return "retired", 200
+    if purpose not in {"student_sub", "coin_pack"}:
+        _log.warning("[LS] rejected unsupported product purpose=%r event=%s", purpose, event_name)
+        return "Unsupported product", 400
     try:
         cid = int(custom.get("client_id") or 0)
     except (TypeError, ValueError):
@@ -3598,32 +3626,20 @@ def lemonsqueezy_webhook():
 
     if not cid:
         _log.warning("[LS] webhook missing client_id in custom_data: %s", event_name)
-        return "ok", 200  # ack so LS doesn't retry forever
+        return "Missing client_id", 400
+
+    import hashlib as _hashlib
+    from outreach.db import claim_webhook_event
+    event_key = _hashlib.sha256(raw).hexdigest()
+    event_claim = claim_webhook_event("lemonsqueezy", event_key, event_name)
+    if not event_claim["claimed"]:
+        if event_claim["status"] == "succeeded":
+            return "ok", 200
+        return "Event already processing", 409
+    g.ls_event_key = event_key
+    g.ls_event_finished = False
 
     _log.info("[LS] webhook %s purpose=%s client=%s", event_name, purpose, cid)
-
-    # ── Outreach SaaS subscription ─────────────────────────────────
-    if purpose == "outreach_sub":
-        from outreach.db import update_subscription, get_subscription_by_stripe_sub
-        sub_id = str(data.get("id") or "")
-        plan = str(custom.get("plan") or "")
-        if event_name == "subscription_created" and plan in ("growth", "pro", "unlimited"):
-            update_subscription(cid, plan=plan, stripe_subscription_id=sub_id, status="active")
-        elif event_name == "subscription_updated":
-            status = (attrs.get("status") or "").lower()
-            mapped = {"active": "active", "on_trial": "active", "paused": "past_due",
-                      "past_due": "past_due", "unpaid": "past_due",
-                      "cancelled": "canceled", "expired": "canceled"}.get(status, "active")
-            update_subscription(cid, status=mapped)
-        elif event_name in ("subscription_cancelled", "subscription_expired"):
-            rec = get_subscription_by_stripe_sub(sub_id)
-            target_cid = (rec or {}).get("client_id") or cid
-            update_subscription(target_cid, plan="free", stripe_subscription_id="", status="active")
-        elif event_name == "subscription_payment_success":
-            update_subscription(cid, status="active")
-        elif event_name == "subscription_payment_failed":
-            update_subscription(cid, status="past_due")
-        return "ok", 200
 
     # ── Student PLUS / Ultimate subscription ───────────────────────
     if purpose == "student_sub":
@@ -3635,43 +3651,47 @@ def lemonsqueezy_webhook():
         if tier not in ("plus", "ultimate"):
             tier = "plus"
         if not ssub:
-            return "ok", 200
+            _finish_claimed_ls_event("student-handler-unavailable")
+            return "Student subscription handler unavailable", 503
         sub_id = str(data.get("id") or "")
         if event_name == "subscription_created":
-            ssub.set_tier(cid, tier)
-            # Stash the LS subscription id so we can cancel it later.
-            try:
-                from outreach.db import get_db, _fetchone, _exec
-                import json as _json
-                with get_db() as db:
-                    row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (cid,))
-                    prefs = {}
-                    try:
-                        prefs = _json.loads((row or {}).get("mail_preferences") or "{}")
-                    except Exception:
-                        prefs = {}
-                    sub = prefs.get("subscription") or {}
-                    sub["ls_sub_id"] = sub_id
-                    prefs["subscription"] = sub
-                    _exec(db, "UPDATE clients SET mail_preferences = %s WHERE id = %s", (_json.dumps(prefs), cid))
-            except Exception:
-                _log.exception("[LS] could not persist ls_sub_id for student %s", cid)
+            ssub.set_subscription_state(
+                cid,
+                tier=tier,
+                status=(attrs.get("status") or "active"),
+                ls_sub_id=sub_id,
+            )
+        elif event_name == "subscription_updated":
+            ssub.set_subscription_state(
+                cid,
+                status=(attrs.get("status") or "active"),
+                ls_sub_id=sub_id or None,
+            )
         elif event_name in ("subscription_cancelled", "subscription_expired"):
-            ssub.set_tier(cid, "free")
-        # payment_success / payment_failed don't change the tier (LS already
-        # toggles subscription status which we mirror on the next update).
+            ssub.set_subscription_state(cid, tier="free", status="canceled",
+                                        ls_sub_id=sub_id or None)
+        elif event_name == "subscription_payment_failed":
+            ssub.set_subscription_state(cid, status="past_due",
+                                        ls_sub_id=sub_id or None)
+        elif event_name == "subscription_payment_success":
+            ssub.set_subscription_state(cid, tier=tier, status="active",
+                                        ls_sub_id=sub_id or None)
+        _finish_claimed_ls_event()
         return "ok", 200
 
     # ── One-time coin-pack purchase ────────────────────────────────
     if purpose == "coin_pack":
         if event_name != "order_created":
+            _finish_claimed_ls_event()
             return "ok", 200  # we only credit on the initial order
         pack_key = str(custom.get("pack_key") or "")
         if not pack_key:
+            _finish_claimed_ls_event()
             return "ok", 200
         order_id = str(data.get("id") or "").strip()
         if not order_id:
             _log.warning("[LS] coin-pack order missing order id for client %s pack=%s", cid, pack_key)
+            _finish_claimed_ls_event()
             return "ok", 200
         try:
             from student import db as sdb
@@ -3680,10 +3700,12 @@ def lemonsqueezy_webhook():
                 _log.info("[LS] duplicate coin-pack order ignored: %s", order_id)
         except Exception as e:
             _log.exception("[LS] coin-pack credit failed: %s", e)
+            _finish_claimed_ls_event("coin-credit-failed")
+            return "Coin credit failed", 503
+        _finish_claimed_ls_event()
         return "ok", 200
 
-    _log.info("[LS] webhook unknown purpose=%r event=%s", purpose, event_name)
-    return "ok", 200
+    return "Unsupported product", 400
 # ---------------------------------------------------------------------------
 # Focus Guard (browser extension) download
 # ---------------------------------------------------------------------------
@@ -3875,6 +3897,7 @@ def privacy_page():
           <li><strong>Lemon Squeezy:</strong> payment and subscription processing.</li>
           <li><strong>Render:</strong> application hosting and database infrastructure.</li>
           <li><strong>Sentry:</strong> error reporting with sensitive fields scrubbed where possible.</li>
+          <li><strong>PostHog:</strong> optional product analytics, loaded only after you choose “Allow analytics” in the cookie banner. You can withdraw consent by clearing or changing your browser cookies.</li>
         </ul>
         <h2>5. Your Rights</h2>
         <p>You can access, export, correct, or delete your data from Settings, disconnect Canvas at any time, opt out of optional study emails, or contact <a href="mailto:support@machreach.com">support@machreach.com</a> for data-rights requests.</p>
@@ -3918,16 +3941,18 @@ def terms_page():
 
 @app.route("/cookies")
 def cookies_page():
-    return _public_info_page("Cookies", "Privacy", "A short version: MachReach only uses cookies needed to keep the product working.", """
-      <p>MachReach uses only essential cookies for login sessions, CSRF protection, language preference, and basic UI preferences. We do not use advertising cookies.</p>
-      <p>If you block essential cookies, login and protected student features may stop working. Questions: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+    return _public_info_page("Cookies", "Privacy", "Essential product cookies plus optional, consent-based analytics.", """
+      <p>MachReach uses essential cookies for login sessions, CSRF protection, language preference, and basic UI preferences. If you block these, login and protected student features may stop working.</p>
+      <p>PostHog product analytics is optional and is not loaded until you explicitly allow analytics in the cookie banner. We do not use advertising cookies or sell analytics data.</p>
+      <p><button type="button" class="btn btn-outline" onclick="document.cookie='analytics_consent=0;path=/;max-age=31536000;SameSite=Lax';window.location.reload();">Disable analytics</button></p>
+      <p>Questions: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     """, "cookies")
 
 
 @app.route("/status")
 def public_status_page():
     return _public_info_page("Status", "System", "The current public status of MachReach services.", """
-      <p class="mr-note"><strong>Current public status:</strong> operational.</p>
+      <p class="mr-note"><strong>Status notice:</strong> this page is informational and is not a live uptime monitor.</p>
       <p>For incidents or support, contact <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     """, "status")
 
@@ -4084,32 +4109,22 @@ def api_export_my_data():
     if not _logged_in():
         return jsonify({"error": "unauthorized"}), 401
     cid = session["client_id"]
-    from outreach.db import (
-        get_client, get_campaigns, get_contacts, get_email_accounts, get_subscription, get_usage,
-    )
+    from outreach.db import get_client
+    from student.db import export_student_data
     client = get_client(cid)
     if not client:
         return jsonify({"error": "not found"}), 404
 
-    profile = {k: client[k] for k in ("id", "name", "email", "business", "physical_address", "created_at") if k in client}
-    campaigns = [dict(c) for c in get_campaigns(cid)]
-    contacts_all = []
-    for camp in campaigns:
-        contacts_all.extend([dict(c) for c in get_contacts(cid, campaign_id=camp["id"])])
-    sent = get_export_data(cid)
-    accounts = [{"id": a["id"], "email": a["email"], "smtp_host": a["smtp_host"]} for a in (get_email_accounts(cid) or [])]
-    sub = get_subscription(cid)
-    usage = get_usage(cid)
+    profile = {
+        k: client[k]
+        for k in ("id", "name", "email", "created_at")
+        if k in client
+    }
 
     payload = {
-        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "exported_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "profile": profile,
-        "subscription": dict(sub) if sub else None,
-        "usage": dict(usage) if usage else None,
-        "email_accounts": accounts,
-        "campaigns": campaigns,
-        "contacts": contacts_all,
-        "sent_emails": sent,
+        "student": export_student_data(cid),
     }
 
     resp = make_response(json.dumps(payload, indent=2, default=str))

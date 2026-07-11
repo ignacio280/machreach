@@ -20,11 +20,16 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 from outreach.db import get_db
 
 log = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """Return naive UTC for compatibility with existing stored timestamps."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 # Legacy flag kept for back-compat with any references elsewhere; tier limits
 # now always enforce regardless of value.
@@ -115,7 +120,7 @@ def _save_prefs(db, client_id: int, prefs: dict) -> None:
 
 
 def _current_bonus_month() -> str:
-    return datetime.utcnow().strftime("%Y-%m")
+    return _utcnow().strftime("%Y-%m")
 
 
 def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
@@ -175,10 +180,11 @@ def _effective_tier(prefs: dict) -> str:
     sub = (prefs.get("subscription") or {})
     paid = sub.get("tier") or "free"
     paid = paid if paid in PLANS else "free"
-    if paid in ("plus", "ultimate"):
+    status = str(sub.get("status") or "active").lower()
+    if paid in ("plus", "ultimate") and status in {"active", "on_trial", "trialing"}:
         return paid
     pu = _parse_iso(prefs.get("plus_until"))
-    if pu and pu > datetime.utcnow():
+    if pu and pu > _utcnow():
         return "plus"
     return "free"
 
@@ -204,7 +210,7 @@ def grant_plus_days(client_id: int, days: int) -> str | None:
     try:
         with get_db() as db:
             prefs = _load_prefs(db, client_id)
-            now = datetime.utcnow()
+            now = _utcnow()
             cur = _parse_iso(prefs.get("plus_until"))
             base = cur if (cur and cur > now) else now
             prefs["plus_until"] = (base + timedelta(days=int(days))).isoformat()
@@ -222,7 +228,7 @@ def plus_grant_until(client_id: int) -> str | None:
         with get_db() as db:
             prefs = _load_prefs(db, client_id)
         pu = _parse_iso(prefs.get("plus_until"))
-        return prefs.get("plus_until") if (pu and pu > datetime.utcnow()) else None
+        return prefs.get("plus_until") if (pu and pu > _utcnow()) else None
     except Exception:
         return None
 
@@ -232,13 +238,41 @@ def set_tier(client_id: int, tier: str) -> dict:
         return {"ok": False, "error": "Unknown plan."}
     with get_db() as db:
         prefs = _load_prefs(db, client_id)
-        prefs["subscription"] = {
+        subscription = prefs.get("subscription") or {}
+        subscription.update({
             "tier": tier,
-            "since": datetime.utcnow().isoformat(),
-        }
+            "status": "active" if tier in ("plus", "ultimate") else "inactive",
+            "since": _utcnow().isoformat(),
+        })
+        prefs["subscription"] = subscription
         _grant_paid_benefits(db, client_id, prefs, tier)
         _save_prefs(db, client_id, prefs)
     return {"ok": True, "tier": tier}
+
+
+def set_subscription_state(client_id: int, *, tier: str | None = None,
+                           status: str | None = None,
+                           ls_sub_id: str | None = None) -> dict:
+    """Persist provider lifecycle state without discarding reconciliation IDs."""
+    if tier is not None and tier not in PLANS:
+        return {"ok": False, "error": "Unknown plan."}
+    with get_db() as db:
+        prefs = _load_prefs(db, client_id)
+        subscription = prefs.get("subscription") or {}
+        if tier is not None:
+            subscription["tier"] = tier
+            if tier in ("plus", "ultimate") and not subscription.get("since"):
+                subscription["since"] = _utcnow().isoformat()
+        if status is not None:
+            subscription["status"] = str(status).lower()
+        if ls_sub_id is not None:
+            subscription["ls_sub_id"] = str(ls_sub_id)
+        subscription["updated_at"] = _utcnow().isoformat()
+        prefs["subscription"] = subscription
+        effective = _effective_tier(prefs)
+        _grant_paid_benefits(db, client_id, prefs, effective)
+        _save_prefs(db, client_id, prefs)
+    return {"ok": True, "tier": effective, "status": subscription.get("status")}
 
 
 # ── Capability checks (the API surface that quotes the tier) ────────────

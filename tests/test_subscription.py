@@ -1,5 +1,5 @@
 """Money path: subscription tiers, promotional Plus grants, and free limits."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from student import subscription as ssub
 from outreach.db import get_db
@@ -40,7 +40,8 @@ def test_grant_plus_days_stacks(make_user):
     second = datetime.fromisoformat(ssub.plus_grant_until(cid))
     # Two weeks granted -> roughly 14 days out, and strictly later than one week.
     assert second > first
-    assert (second - datetime.utcnow()).days >= 13
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    assert (second - now).days >= 13
 
 
 def test_expired_grant_reverts_to_free(make_user):
@@ -50,7 +51,8 @@ def test_expired_grant_reverts_to_free(make_user):
     # Force the grant into the past.
     with get_db() as db:
         prefs = ssub._load_prefs(db, cid)
-        prefs["plus_until"] = (datetime.utcnow() - timedelta(days=1)).isoformat()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        prefs["plus_until"] = (now - timedelta(days=1)).isoformat()
         ssub._save_prefs(db, cid, prefs)
     assert ssub.get_tier(cid) == "free"
     assert ssub.plus_grant_until(cid) is None
@@ -61,7 +63,8 @@ def test_paid_subscription_beats_expired_promo(make_user):
     ssub.set_tier(cid, "plus")           # real paid subscription
     with get_db() as db:                  # expired promo grant present too
         prefs = ssub._load_prefs(db, cid)
-        prefs["plus_until"] = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        prefs["plus_until"] = (now - timedelta(days=30)).isoformat()
         ssub._save_prefs(db, cid, prefs)
     assert ssub.get_tier(cid) == "plus"   # paid wins, expired promo irrelevant
 

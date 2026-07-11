@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            landing_build/package-lock.json
+            ios-app/package-lock.json
+      - name: Install locked Python dependencies
+        run: |
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install pytest==9.0.2 pytest-cov==7.1.0 pip-audit==2.10.1 ruff==0.15.21 mypy==2.2.0
+      - name: Compile, lint, and type-check stable modules
+        run: |
+          python -m compileall -q app.py migrate.py outreach student worker.py
+          ruff check migrate.py outreach/lemonsqueezy.py student/subscription.py
+          python -m mypy --ignore-missing-imports --follow-imports=skip student/subscription.py outreach/lemonsqueezy.py
+      - name: Test with coverage floor
+        run: >-
+          python -m pytest
+          --cov=app --cov=outreach --cov=student --cov=worker
+          --cov-report=term-missing:skip-covered
+          --cov-fail-under=30
+          -q
+      - name: Audit Python dependencies
+        run: python -m pip_audit -r requirements.lock
+      - name: Verify landing build
+        working-directory: landing_build
+        run: |
+          npm ci
+          npm audit --audit-level=moderate
+          node build.mjs
+          git diff --exit-code -- ../static/machreach_landing
+      - name: Verify iOS dependency lock
+        working-directory: ios-app
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=moderate
+      - name: Validate Focus Guard JavaScript and manifest
+        run: |
+          node --check extensions/focus-guard/background.js
+          node --check extensions/focus-guard/canvas.js
+          node --check extensions/focus-guard/content.js
+          node --check extensions/focus-guard/popup.js
+          node -e "JSON.parse(require('fs').readFileSync('extensions/focus-guard/manifest.json','utf8'))"
+
+  postgres-critical-paths:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: machreach_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d machreach_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      MACHREACH_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/machreach_test
+      SECRET_KEY: postgres-test-secret
+      ENCRYPTION_KEY: postgres-test-encryption-key
+      LEMON_SQUEEZY_WEBHOOK_SECRET: test-webhook-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install pytest==9.0.2
+      - name: Run security, money, and concurrency paths on Postgres
+        run: >-
+          python -m pytest -q
+          tests/test_student_tenant_security.py
+          tests/test_wallet_atomicity.py
+          tests/test_focus.py
+          tests/test_billing_webhook.py
+          tests/test_delete_account_billing.py
+          tests/test_canvas_reconciliation.py
+          tests/test_removed_outreach_surface.py

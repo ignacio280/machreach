@@ -21,15 +21,26 @@ chrome.storage.local.get(["focusActive", "focusExpiresAt"], (d) => {
 function fetchCanvasCourses() {
   return (async () => {
     try {
-      const url = location.origin +
+      let url = location.origin +
         "/api/v1/courses?per_page=100&enrollment_state=active&include[]=term";
-      const r = await fetch(url, { credentials: "include", headers: { Accept: "application/json" } });
-      if (!r.ok) return { ok: false, status: r.status };
-      const text = await r.text();
-      // Canvas guards some JSON responses with a `while(1);` prefix.
-      const data = JSON.parse(text.replace(/^while\(1\);/, ""));
-      if (!Array.isArray(data)) return { ok: false, notCanvas: true };
-      const courses = data
+      const allCourses = [];
+      let pageCount = 0;
+      while (url && pageCount < 20) {
+        const r = await fetch(url, { credentials: "include", headers: { Accept: "application/json" } });
+        if (!r.ok) return { ok: false, status: r.status, partial: allCourses.length > 0 };
+        const text = await r.text();
+        // Canvas guards some JSON responses with a `while(1);` prefix.
+        const data = JSON.parse(text.replace(/^while\(1\);/, ""));
+        if (!Array.isArray(data)) return { ok: false, notCanvas: true };
+        allCourses.push(...data);
+        const link = r.headers.get("Link") || "";
+        const next = link.split(",").map((part) => part.trim()).find((part) => /rel="next"/.test(part));
+        const match = next && next.match(/<([^>]+)>/);
+        url = match ? match[1] : "";
+        pageCount += 1;
+      }
+      if (url) return { ok: false, error: "Canvas pagination limit exceeded", partial: true };
+      const courses = allCourses
         .filter((c) => c && c.id && !c.access_restricted_by_date)
         .map((c) => ({
           id: c.id,
@@ -92,12 +103,6 @@ if (syncBtn) {
         return;
       }
 
-      if (!out.courses.length) {
-        setMsg("No encontré cursos activos en tu Canvas.", "err");
-        syncBtn.disabled = false;
-        return;
-      }
-
       setMsg("Enviando " + out.courses.length + " cursos a MachReach…", "");
       const resp = await fetch(targetOrigin + "/api/student/canvas/extension-import", {
         method: "POST",
@@ -107,7 +112,7 @@ if (syncBtn) {
       const body = await resp.json().catch(() => ({}));
       if (resp.ok && body.ok) {
         await chrome.storage.local.set({ mrCanvasSyncCompletedAt: Date.now() });
-        setMsg("✓ Listo: " + (body.saved || 0) + " cursos sincronizados con MachReach.", "ok");
+        setMsg("✓ Listo: " + (body.saved || 0) + " activos, " + (body.archived || 0) + " archivados.", "ok");
       } else if (resp.status === 401) {
         setMsg("Tu enlace con MachReach expiró. Abre la página Enfoque otra vez y reintenta.", "err");
       } else {

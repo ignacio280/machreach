@@ -3,8 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "description": "Local-only build tooling for the MachReach landing (esbuild bundle + jsdom prerender). Output is committed; not needed at deploy time.",
-  "dependencies": {
-    "esbuild": "^0.24.0",
+  "devDependencies": {
+    "esbuild": "^0.25.0",
     "jsdom": "^25.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

@@ -1,6 +1,6 @@
 """
-PostgreSQL database — campaigns, contacts, emails, tracking.
-Migrated from SQLite.  Uses DATABASE_URL env var (Render Postgres format).
+Core MachReach Uni persistence and cross-engine database helpers.
+Uses DATABASE_URL env var (Render Postgres format).
 Falls back to SQLite via DATABASE_PATH when DATABASE_URL is empty (local dev).
 """
 from __future__ import annotations
@@ -13,6 +13,8 @@ import json
 
 from cryptography.fernet import Fernet, InvalidToken
 from outreach.config import DATABASE_URL, ENCRYPTION_KEY, SECRET_KEY
+
+SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------------------
 # Detect engine: postgres vs sqlite fallback
@@ -72,11 +74,21 @@ def encrypt_password(plaintext: str) -> str:
     return _get_fernet().encrypt(plaintext.encode()).decode()
 
 
+class CredentialDecryptionError(RuntimeError):
+    """Encrypted credentials cannot be read with this deployment's key."""
+
+
 def decrypt_password(ciphertext: str) -> str:
+    # Historical local installs may still contain plaintext credentials. Fernet
+    # tokens have a stable prefix; only those should ever be silently decrypted.
+    if not str(ciphertext or "").startswith("gAAAA"):
+        return ciphertext
     try:
         return _get_fernet().decrypt(ciphertext.encode()).decode()
-    except (InvalidToken, Exception):
-        return ciphertext
+    except InvalidToken as exc:
+        raise CredentialDecryptionError(
+            "Stored credential cannot be decrypted; verify the shared ENCRYPTION_KEY"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -140,9 +152,21 @@ def _exec(db, sql, params=()):
     """Execute helper — converts %s back to ? for SQLite if needed."""
     if not _USE_PG:
         sql = sql.replace("%s", "?")
+        params = tuple(
+            value.isoformat(sep=" ") if isinstance(value, datetime) else value
+            for value in params
+        )
     cur = db.cursor()
     cur.execute(sql, params)
     return cur
+
+
+def _is_duplicate_column_error(exc: Exception) -> bool:
+    """Return True only for the expected idempotent ALTER TABLE failure."""
+    return (
+        exc.__class__.__name__ == "DuplicateColumn"
+        or "duplicate column name" in str(exc).lower()
+    )
 
 
 def _fetchone(db, sql, params=()):
@@ -225,196 +249,44 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at  TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS campaigns (
-    id          SERIAL PRIMARY KEY,
-    client_id   INTEGER NOT NULL REFERENCES clients(id),
-    name        TEXT NOT NULL,
-    business_type TEXT DEFAULT '',
-    target_audience TEXT DEFAULT '',
-    tone        TEXT DEFAULT 'professional',
-    status      TEXT DEFAULT 'draft',
-    scheduled_start TIMESTAMP,
-    created_at  TIMESTAMP DEFAULT NOW()
-);
 
-CREATE INDEX IF NOT EXISTS idx_campaigns_client ON campaigns(client_id);
 
-CREATE TABLE IF NOT EXISTS contacts (
-    id          SERIAL PRIMARY KEY,
-    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-    name        TEXT DEFAULT '',
-    email       TEXT NOT NULL,
-    company     TEXT DEFAULT '',
-    role        TEXT DEFAULT '',
-    language    TEXT DEFAULT 'en',
-    custom_data TEXT DEFAULT '{}',
-    status      TEXT DEFAULT 'pending',
-    created_at  TIMESTAMP DEFAULT NOW()
-);
 
-CREATE TABLE IF NOT EXISTS email_sequences (
-    id          SERIAL PRIMARY KEY,
-    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-    step        INTEGER NOT NULL DEFAULT 1,
-    subject_a   TEXT NOT NULL,
-    subject_b   TEXT DEFAULT '',
-    body_a      TEXT NOT NULL,
-    body_b      TEXT DEFAULT '',
-    delay_days  INTEGER DEFAULT 0
-);
 
-CREATE TABLE IF NOT EXISTS sent_emails (
-    id          SERIAL PRIMARY KEY,
-    contact_id  INTEGER NOT NULL REFERENCES contacts(id),
-    sequence_id INTEGER NOT NULL REFERENCES email_sequences(id),
-    variant     TEXT DEFAULT 'a',
-    subject     TEXT NOT NULL,
-    body        TEXT NOT NULL,
-    status      TEXT DEFAULT 'sent',
-    sent_at     TIMESTAMP DEFAULT NOW(),
-    opened_at   TIMESTAMP,
-    replied_at  TIMESTAMP,
-    reply_body  TEXT DEFAULT '',
-    reply_sentiment TEXT DEFAULT ''
-);
 
-CREATE INDEX IF NOT EXISTS idx_contacts_campaign ON contacts(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_sent_contact ON sent_emails(contact_id);
-CREATE INDEX IF NOT EXISTS idx_sent_sequence ON sent_emails(sequence_id);
 
-CREATE TABLE IF NOT EXISTS mail_inbox (
-    id           SERIAL PRIMARY KEY,
-    client_id    INTEGER NOT NULL REFERENCES clients(id),
-    message_id   TEXT NOT NULL,
-    from_name    TEXT DEFAULT '',
-    from_email   TEXT NOT NULL,
-    to_email     TEXT DEFAULT '',
-    subject      TEXT DEFAULT '',
-    body_preview TEXT DEFAULT '',
-    received_at  TEXT DEFAULT '',
-    priority     TEXT DEFAULT 'normal',
-    category     TEXT DEFAULT 'uncategorized',
-    is_read      INTEGER DEFAULT 0,
-    is_starred   INTEGER DEFAULT 0,
-    is_archived  INTEGER DEFAULT 0,
-    snooze_until TEXT,
-    snooze_note  TEXT DEFAULT '',
-    ai_summary   TEXT DEFAULT '',
-    account_id   INTEGER,
-    fetched_at   TIMESTAMP DEFAULT NOW(),
-    UNIQUE(client_id, message_id)
-);
 
-CREATE INDEX IF NOT EXISTS idx_mail_inbox_client ON mail_inbox(client_id);
-CREATE INDEX IF NOT EXISTS idx_mail_inbox_priority ON mail_inbox(client_id, priority);
-CREATE INDEX IF NOT EXISTS idx_mail_inbox_category ON mail_inbox(client_id, category);
 
-CREATE TABLE IF NOT EXISTS email_accounts (
-    id           SERIAL PRIMARY KEY,
-    client_id    INTEGER NOT NULL REFERENCES clients(id),
-    label        TEXT NOT NULL DEFAULT '',
-    email        TEXT NOT NULL,
-    imap_host    TEXT NOT NULL DEFAULT 'imap.gmail.com',
-    imap_port    INTEGER NOT NULL DEFAULT 993,
-    smtp_host    TEXT NOT NULL DEFAULT 'smtp.gmail.com',
-    smtp_port    INTEGER NOT NULL DEFAULT 465,
-    password     TEXT NOT NULL DEFAULT '',
-    is_default   INTEGER DEFAULT 0,
-    created_at   TIMESTAMP DEFAULT NOW(),
-    UNIQUE(client_id, email)
-);
 
-CREATE INDEX IF NOT EXISTS idx_email_accounts_client ON email_accounts(client_id);
 
-CREATE TABLE IF NOT EXISTS contacts_book (
-    id              SERIAL PRIMARY KEY,
-    client_id       INTEGER NOT NULL REFERENCES clients(id),
-    email           TEXT NOT NULL,
-    name            TEXT DEFAULT '',
-    company         TEXT DEFAULT '',
-    role            TEXT DEFAULT '',
-    relationship    TEXT DEFAULT '',
-    notes           TEXT DEFAULT '',
-    personality     TEXT DEFAULT '',
-    tags            TEXT DEFAULT '',
-    language        TEXT DEFAULT '',
-    last_contacted  TEXT DEFAULT '',
-    created_at      TIMESTAMP DEFAULT NOW(),
-    UNIQUE(client_id, email)
-);
 
-CREATE INDEX IF NOT EXISTS idx_contacts_book_client ON contacts_book(client_id);
-CREATE INDEX IF NOT EXISTS idx_contacts_book_email ON contacts_book(client_id, email);
 
-CREATE TABLE IF NOT EXISTS scheduled_emails (
-    id              SERIAL PRIMARY KEY,
-    client_id       INTEGER NOT NULL REFERENCES clients(id),
-    to_email        TEXT NOT NULL,
-    to_name         TEXT DEFAULT '',
-    subject         TEXT NOT NULL,
-    body            TEXT NOT NULL,
-    scheduled_at    TEXT NOT NULL,
-    status          TEXT DEFAULT 'pending',
-    sent_at         TIMESTAMP,
-    reply_to_mail_id INTEGER,
-    account_id      INTEGER,
-    created_at      TIMESTAMP DEFAULT NOW()
-);
 
-CREATE INDEX IF NOT EXISTS idx_scheduled_client ON scheduled_emails(client_id);
-CREATE INDEX IF NOT EXISTS idx_scheduled_status ON scheduled_emails(status, scheduled_at);
 
-CREATE TABLE IF NOT EXISTS subscriptions (
-    id              SERIAL PRIMARY KEY,
-    client_id       INTEGER NOT NULL UNIQUE REFERENCES clients(id),
-    plan            TEXT NOT NULL DEFAULT 'free',
-    stripe_customer_id   TEXT DEFAULT '',
-    stripe_subscription_id TEXT DEFAULT '',
-    status          TEXT DEFAULT 'active',
-    current_period_start TEXT DEFAULT '',
-    current_period_end   TEXT DEFAULT '',
-    created_at      TIMESTAMP DEFAULT NOW(),
+
+
+
+
+
+
+
+CREATE TABLE IF NOT EXISTS schema_metadata (
+    component       TEXT PRIMARY KEY,
+    version         INTEGER NOT NULL,
     updated_at      TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS usage_tracking (
-    id              SERIAL PRIMARY KEY,
-    client_id       INTEGER NOT NULL REFERENCES clients(id),
-    month           TEXT NOT NULL,
-    emails_sent     INTEGER DEFAULT 0,
-    mail_hub_syncs  INTEGER DEFAULT 0,
-    ai_classifications INTEGER DEFAULT 0,
-    UNIQUE(client_id, month)
-);
-
-CREATE INDEX IF NOT EXISTS idx_usage_client_month ON usage_tracking(client_id, month);
-
-CREATE TABLE IF NOT EXISTS team_members (
-    id              SERIAL PRIMARY KEY,
-    owner_id        INTEGER NOT NULL REFERENCES clients(id),
-    member_email    TEXT NOT NULL,
-    member_client_id INTEGER REFERENCES clients(id),
-    role            TEXT NOT NULL DEFAULT 'member',
-    status          TEXT NOT NULL DEFAULT 'pending',
-    invite_token    TEXT,
-    campaign_id     INTEGER REFERENCES campaigns(id),
-    invited_at      TIMESTAMP DEFAULT NOW(),
-    accepted_at     TIMESTAMP,
-    UNIQUE(owner_id, member_email)
-);
-
-CREATE TABLE IF NOT EXISTS email_suppressions (
-    id              SERIAL PRIMARY KEY,
-    client_id       INTEGER NOT NULL REFERENCES clients(id),
-    email           TEXT NOT NULL,
-    reason          TEXT DEFAULT 'unsubscribed',
-    source          TEXT DEFAULT '',
+CREATE TABLE IF NOT EXISTS webhook_events (
+    provider        TEXT NOT NULL,
+    event_key       TEXT NOT NULL,
+    event_name      TEXT DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'processing',
+    attempts        INTEGER NOT NULL DEFAULT 1,
+    last_error      TEXT DEFAULT '',
     created_at      TIMESTAMP DEFAULT NOW(),
-    UNIQUE(client_id, email)
+    updated_at      TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY(provider, event_key)
 );
-
-CREATE INDEX IF NOT EXISTS idx_suppressions_client ON email_suppressions(client_id);
-CREATE INDEX IF NOT EXISTS idx_suppressions_email ON email_suppressions(client_id, email);
 """
 
 _SQLITE_SCHEMA = """
@@ -452,196 +324,44 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at  TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
-CREATE TABLE IF NOT EXISTS campaigns (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id   INTEGER NOT NULL REFERENCES clients(id),
-    name        TEXT NOT NULL,
-    business_type TEXT DEFAULT '',
-    target_audience TEXT DEFAULT '',
-    tone        TEXT DEFAULT 'professional',
-    status      TEXT DEFAULT 'draft',
-    scheduled_start TEXT,
-    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
-);
 
-CREATE INDEX IF NOT EXISTS idx_campaigns_client ON campaigns(client_id);
 
-CREATE TABLE IF NOT EXISTS contacts (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-    name        TEXT DEFAULT '',
-    email       TEXT NOT NULL,
-    company     TEXT DEFAULT '',
-    role        TEXT DEFAULT '',
-    language    TEXT DEFAULT 'en',
-    custom_data TEXT DEFAULT '{}',
-    status      TEXT DEFAULT 'pending',
-    created_at  TEXT DEFAULT (datetime('now', 'localtime'))
-);
 
-CREATE TABLE IF NOT EXISTS email_sequences (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-    step        INTEGER NOT NULL DEFAULT 1,
-    subject_a   TEXT NOT NULL,
-    subject_b   TEXT DEFAULT '',
-    body_a      TEXT NOT NULL,
-    body_b      TEXT DEFAULT '',
-    delay_days  INTEGER DEFAULT 0
-);
 
-CREATE TABLE IF NOT EXISTS sent_emails (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    contact_id  INTEGER NOT NULL REFERENCES contacts(id),
-    sequence_id INTEGER NOT NULL REFERENCES email_sequences(id),
-    variant     TEXT DEFAULT 'a',
-    subject     TEXT NOT NULL,
-    body        TEXT NOT NULL,
-    status      TEXT DEFAULT 'sent',
-    sent_at     TEXT DEFAULT (datetime('now', 'localtime')),
-    opened_at   TEXT,
-    replied_at  TEXT,
-    reply_body  TEXT DEFAULT '',
-    reply_sentiment TEXT DEFAULT ''
-);
 
-CREATE INDEX IF NOT EXISTS idx_contacts_campaign ON contacts(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_sent_contact ON sent_emails(contact_id);
-CREATE INDEX IF NOT EXISTS idx_sent_sequence ON sent_emails(sequence_id);
 
-CREATE TABLE IF NOT EXISTS mail_inbox (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id    INTEGER NOT NULL REFERENCES clients(id),
-    message_id   TEXT NOT NULL,
-    from_name    TEXT DEFAULT '',
-    from_email   TEXT NOT NULL,
-    to_email     TEXT DEFAULT '',
-    subject      TEXT DEFAULT '',
-    body_preview TEXT DEFAULT '',
-    received_at  TEXT DEFAULT '',
-    priority     TEXT DEFAULT 'normal',
-    category     TEXT DEFAULT 'uncategorized',
-    is_read      INTEGER DEFAULT 0,
-    is_starred   INTEGER DEFAULT 0,
-    is_archived  INTEGER DEFAULT 0,
-    snooze_until TEXT,
-    snooze_note  TEXT DEFAULT '',
-    ai_summary   TEXT DEFAULT '',
-    account_id   INTEGER,
-    fetched_at   TEXT DEFAULT (datetime('now', 'localtime')),
-    UNIQUE(client_id, message_id)
-);
 
-CREATE INDEX IF NOT EXISTS idx_mail_inbox_client ON mail_inbox(client_id);
-CREATE INDEX IF NOT EXISTS idx_mail_inbox_priority ON mail_inbox(client_id, priority);
-CREATE INDEX IF NOT EXISTS idx_mail_inbox_category ON mail_inbox(client_id, category);
 
-CREATE TABLE IF NOT EXISTS email_accounts (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id    INTEGER NOT NULL REFERENCES clients(id),
-    label        TEXT NOT NULL DEFAULT '',
-    email        TEXT NOT NULL,
-    imap_host    TEXT NOT NULL DEFAULT 'imap.gmail.com',
-    imap_port    INTEGER NOT NULL DEFAULT 993,
-    smtp_host    TEXT NOT NULL DEFAULT 'smtp.gmail.com',
-    smtp_port    INTEGER NOT NULL DEFAULT 465,
-    password     TEXT NOT NULL DEFAULT '',
-    is_default   INTEGER DEFAULT 0,
-    created_at   TEXT DEFAULT (datetime('now', 'localtime')),
-    UNIQUE(client_id, email)
-);
 
-CREATE INDEX IF NOT EXISTS idx_email_accounts_client ON email_accounts(client_id);
 
-CREATE TABLE IF NOT EXISTS contacts_book (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id       INTEGER NOT NULL REFERENCES clients(id),
-    email           TEXT NOT NULL,
-    name            TEXT DEFAULT '',
-    company         TEXT DEFAULT '',
-    role            TEXT DEFAULT '',
-    relationship    TEXT DEFAULT '',
-    notes           TEXT DEFAULT '',
-    personality     TEXT DEFAULT '',
-    tags            TEXT DEFAULT '',
-    language        TEXT DEFAULT '',
-    last_contacted  TEXT DEFAULT '',
-    created_at      TEXT DEFAULT (datetime('now', 'localtime')),
-    UNIQUE(client_id, email)
-);
 
-CREATE INDEX IF NOT EXISTS idx_contacts_book_client ON contacts_book(client_id);
-CREATE INDEX IF NOT EXISTS idx_contacts_book_email ON contacts_book(client_id, email);
 
-CREATE TABLE IF NOT EXISTS scheduled_emails (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id       INTEGER NOT NULL REFERENCES clients(id),
-    to_email        TEXT NOT NULL,
-    to_name         TEXT DEFAULT '',
-    subject         TEXT NOT NULL,
-    body            TEXT NOT NULL,
-    scheduled_at    TEXT NOT NULL,
-    status          TEXT DEFAULT 'pending',
-    sent_at         TEXT,
-    reply_to_mail_id INTEGER,
-    account_id      INTEGER,
-    created_at      TEXT DEFAULT (datetime('now', 'localtime'))
-);
 
-CREATE INDEX IF NOT EXISTS idx_scheduled_client ON scheduled_emails(client_id);
-CREATE INDEX IF NOT EXISTS idx_scheduled_status ON scheduled_emails(status, scheduled_at);
 
-CREATE TABLE IF NOT EXISTS subscriptions (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id       INTEGER NOT NULL UNIQUE REFERENCES clients(id),
-    plan            TEXT NOT NULL DEFAULT 'free',
-    stripe_customer_id   TEXT DEFAULT '',
-    stripe_subscription_id TEXT DEFAULT '',
-    status          TEXT DEFAULT 'active',
-    current_period_start TEXT DEFAULT '',
-    current_period_end   TEXT DEFAULT '',
-    created_at      TEXT DEFAULT (datetime('now', 'localtime')),
+
+
+
+
+
+
+
+CREATE TABLE IF NOT EXISTS schema_metadata (
+    component       TEXT PRIMARY KEY,
+    version         INTEGER NOT NULL,
     updated_at      TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
-CREATE TABLE IF NOT EXISTS usage_tracking (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id       INTEGER NOT NULL REFERENCES clients(id),
-    month           TEXT NOT NULL,
-    emails_sent     INTEGER DEFAULT 0,
-    mail_hub_syncs  INTEGER DEFAULT 0,
-    ai_classifications INTEGER DEFAULT 0,
-    UNIQUE(client_id, month)
-);
-
-CREATE INDEX IF NOT EXISTS idx_usage_client_month ON usage_tracking(client_id, month);
-
-CREATE TABLE IF NOT EXISTS team_members (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner_id        INTEGER NOT NULL REFERENCES clients(id),
-    member_email    TEXT NOT NULL,
-    member_client_id INTEGER REFERENCES clients(id),
-    role            TEXT NOT NULL DEFAULT 'member',
-    status          TEXT NOT NULL DEFAULT 'pending',
-    invite_token    TEXT,
-    campaign_id     INTEGER REFERENCES campaigns(id),
-    invited_at      TEXT DEFAULT (datetime('now', 'localtime')),
-    accepted_at     TEXT,
-    UNIQUE(owner_id, member_email)
-);
-
-CREATE TABLE IF NOT EXISTS email_suppressions (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id       INTEGER NOT NULL REFERENCES clients(id),
-    email           TEXT NOT NULL,
-    reason          TEXT DEFAULT 'unsubscribed',
-    source          TEXT DEFAULT '',
+CREATE TABLE IF NOT EXISTS webhook_events (
+    provider        TEXT NOT NULL,
+    event_key       TEXT NOT NULL,
+    event_name      TEXT DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'processing',
+    attempts        INTEGER NOT NULL DEFAULT 1,
+    last_error      TEXT DEFAULT '',
     created_at      TEXT DEFAULT (datetime('now', 'localtime')),
-    UNIQUE(client_id, email)
+    updated_at      TEXT DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY(provider, event_key)
 );
-
-CREATE INDEX IF NOT EXISTS idx_suppressions_client ON email_suppressions(client_id);
-CREATE INDEX IF NOT EXISTS idx_suppressions_email ON email_suppressions(client_id, email);
 """
 
 
@@ -657,7 +377,195 @@ def init_db():
     # Run migrations for columns that may not exist yet
     _run_migrations()
     init_async_jobs_table()
+    _archive_and_drop_retired_product_tables()
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE clients SET account_type = 'student' "
+            "WHERE account_type IS NULL OR account_type <> 'student'",
+        )
+    _record_schema_version("core", SCHEMA_VERSION)
     print("Database initialized.")
+
+
+_RETIRED_PRODUCT_TABLES = (
+    "sent_emails",
+    "email_sequences",
+    "contacts",
+    "campaigns",
+    "scheduled_emails",
+    "mail_inbox",
+    "contacts_book",
+    "email_accounts",
+    "team_members",
+    "email_suppressions",
+    "email_daily_usage",
+    "usage_tracking",
+    "subscriptions",
+)
+
+
+def _archive_and_drop_retired_product_tables() -> None:
+    """Retain only billing-cancellation IDs, then remove the retired product.
+
+    Provider subscription IDs must survive long enough for the Uni worker to
+    cancel them. No campaign, contact, mailbox, quota, or plan data remains
+    after this migration.
+    """
+    with get_db() as db:
+        _exec(
+            db,
+            "CREATE TABLE IF NOT EXISTS retired_billing_cancellations ("
+            "subscription_id TEXT PRIMARY KEY, client_id INTEGER, "
+            "status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, "
+            "last_error TEXT DEFAULT '', updated_at TEXT)",
+        )
+        try:
+            _exec(
+                db,
+                "INSERT INTO retired_billing_cancellations "
+                "(subscription_id, client_id, status, attempts, last_error) "
+                "SELECT stripe_subscription_id, client_id, 'pending', 0, '' "
+                "FROM subscriptions "
+                "WHERE COALESCE(stripe_subscription_id, '') <> '' "
+                "ON CONFLICT(subscription_id) DO NOTHING",
+            )
+        except Exception as exc:
+            # Fresh databases and already-cleaned deployments have no legacy
+            # subscription table. Any other failure must stop the migration.
+            if "no such table" not in str(exc).lower() and "does not exist" not in str(exc).lower():
+                raise
+        for table in _RETIRED_PRODUCT_TABLES:
+            _exec(db, f"DROP TABLE IF EXISTS {table}" + (" CASCADE" if _USE_PG else ""))
+
+
+def list_retired_billing_cancellations(limit: int = 25) -> list[dict]:
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT subscription_id, client_id, status, attempts "
+            "FROM retired_billing_cancellations "
+            "WHERE status IN ('pending', 'failed') AND attempts < 10 "
+            "ORDER BY attempts, subscription_id LIMIT %s",
+            (max(1, min(int(limit or 25), 100)),),
+        )
+
+
+def finish_retired_billing_cancellation(subscription_id: str, *, error: str = "") -> None:
+    status = "failed" if error else "cancelled"
+    with get_db() as db:
+        _exec(
+            db,
+            f"UPDATE retired_billing_cancellations SET status = %s, "
+            f"attempts = attempts + 1, last_error = %s, updated_at = {_now_expr()} "
+            "WHERE subscription_id = %s",
+            (status, str(error or "")[:500], subscription_id),
+        )
+
+
+def _record_schema_version(component: str, version: int) -> None:
+    now = _now_expr()
+    with get_db() as db:
+        if _USE_PG:
+            _exec(db, f"""
+                INSERT INTO schema_metadata (component, version, updated_at)
+                VALUES (%s, %s, {now})
+                ON CONFLICT(component) DO UPDATE SET
+                    version = EXCLUDED.version,
+                    updated_at = {now}
+            """, (component, version))
+        else:
+            _exec(db, f"""
+                INSERT INTO schema_metadata (component, version, updated_at)
+                VALUES (%s, %s, {now})
+                ON CONFLICT(component) DO UPDATE SET
+                    version = excluded.version,
+                    updated_at = {now}
+            """, (component, version))
+
+
+def check_schema_readiness() -> dict:
+    """Raise when the deployed schema is incomplete or behind this code."""
+    from student.db import STUDENT_SCHEMA_VERSION
+
+    with get_db() as db:
+        versions = {
+            "core": SCHEMA_VERSION,
+            "student": STUDENT_SCHEMA_VERSION,
+        }
+        for component, expected in versions.items():
+            version = _fetchval(
+                db,
+                "SELECT version FROM schema_metadata WHERE component = %s",
+                (component,),
+            )
+            if int(version or 0) != expected:
+                raise RuntimeError("database schema version is not current")
+        # Verify columns used by authentication, billing events, async student
+        # jobs, and student data rather than merely checking connectivity.
+        _exec(db, "SELECT session_version, account_type FROM clients LIMIT 0")
+        _exec(db, "SELECT status, attempts FROM async_jobs LIMIT 0")
+        _exec(db, "SELECT provider, event_key, status FROM webhook_events LIMIT 0")
+        _exec(db, "SELECT subscription_id, status FROM retired_billing_cancellations LIMIT 0")
+        _exec(db, "SELECT client_id, name FROM student_courses LIMIT 0")
+        _exec(db, "SELECT client_id, coins FROM student_wallet LIMIT 0")
+    return {"versions": versions}
+
+
+def claim_webhook_event(provider: str, event_key: str, event_name: str = "") -> dict:
+    """Claim one provider event; failed events remain retryable."""
+    now = _now_expr()
+    with get_db() as db:
+        if _USE_PG:
+            inserted = _fetchone(
+                db,
+                f"INSERT INTO webhook_events "
+                f"(provider, event_key, event_name, status, created_at, updated_at) "
+                f"VALUES (%s, %s, %s, 'processing', {now}, {now}) "
+                "ON CONFLICT(provider, event_key) DO NOTHING RETURNING status",
+                (provider, event_key, event_name),
+            )
+            if inserted:
+                return {"claimed": True, "status": "processing"}
+        else:
+            db.execute("BEGIN IMMEDIATE")
+        existing = _fetchone(
+            db,
+            "SELECT status, attempts FROM webhook_events WHERE provider = %s AND event_key = %s"
+            + (" FOR UPDATE" if _USE_PG else ""),
+            (provider, event_key),
+        )
+        if existing and existing["status"] != "failed":
+            return {"claimed": False, "status": existing["status"]}
+        if existing:
+            _exec(
+                db,
+                f"UPDATE webhook_events SET status = 'processing', attempts = attempts + 1, "
+                f"event_name = %s, last_error = '', updated_at = {now} "
+                "WHERE provider = %s AND event_key = %s",
+                (event_name, provider, event_key),
+            )
+        elif not _USE_PG:
+            _exec(
+                db,
+                f"INSERT INTO webhook_events "
+                f"(provider, event_key, event_name, status, created_at, updated_at) "
+                f"VALUES (%s, %s, %s, 'processing', {now}, {now})",
+                (provider, event_key, event_name),
+            )
+        return {"claimed": True, "status": "processing"}
+
+
+def finish_webhook_event(provider: str, event_key: str, *, error: str = "") -> None:
+    now = _now_expr()
+    status = "failed" if error else "succeeded"
+    with get_db() as db:
+        _exec(
+            db,
+            f"UPDATE webhook_events SET status = %s, last_error = %s, updated_at = {now} "
+            "WHERE provider = %s AND event_key = %s",
+            (status, str(error or "")[:500], provider, event_key),
+        )
 
 
 def _run_migrations():
@@ -665,9 +573,8 @@ def _run_migrations():
     migrations = [
         ("clients", "physical_address", "TEXT DEFAULT ''"),
         ("clients", "email_verified", "INTEGER DEFAULT 0"),
-        ("clients", "account_type", "TEXT DEFAULT 'business'"),
+        ("clients", "account_type", "TEXT DEFAULT 'student'"),
         ("clients", "session_version", "INTEGER DEFAULT 0"),
-        ("team_members", "campaign_id", "INTEGER REFERENCES campaigns(id)"),
     ]
     # Each migration runs in its own connection so a failed ALTER TABLE
     # (column already exists) doesn't poison the PG transaction for the rest.
@@ -675,8 +582,9 @@ def _run_migrations():
         try:
             with get_db() as db:
                 _exec(db, f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
-        except Exception:
-            pass  # column already exists
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
     try:
         with get_db() as db:
             _exec(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_email_lower ON clients (LOWER(email))")
@@ -727,8 +635,9 @@ def init_async_jobs_table():
     try:
         with get_db() as db:
             _exec(db, "ALTER TABLE async_jobs ADD COLUMN input_json TEXT DEFAULT '{}'")
-    except Exception:
-        pass
+    except Exception as exc:
+        if not _is_duplicate_column_error(exc):
+            raise
     for column, spec in [
         ("attempts", "INTEGER DEFAULT 0"),
         ("max_attempts", "INTEGER DEFAULT 3"),
@@ -736,8 +645,9 @@ def init_async_jobs_table():
         try:
             with get_db() as db:
                 _exec(db, f"ALTER TABLE async_jobs ADD COLUMN {column} {spec}")
-        except Exception:
-            pass
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
 
 
 def set_async_job_status(job_type: str, job_key: str, status: str, progress: str = "", payload=None, error: str = ""):
@@ -884,6 +794,39 @@ def claim_async_jobs(job_type: str, limit: int = 1, progress: str = "Running") -
         job["input"] = _decode_json_dict(job.get("input_json"))
         job.pop("input_json", None)
     return claimed
+
+
+def recover_stale_async_jobs(stale_after_seconds: int = 3600) -> int:
+    """Requeue interrupted jobs until their retry budget is exhausted."""
+    stale_after_seconds = max(60, int(stale_after_seconds or 3600))
+    now = _now_expr()
+    if _USE_PG:
+        stale_sql = f"updated_at < NOW() - INTERVAL '{stale_after_seconds} seconds'"
+    else:
+        stale_sql = f"updated_at < datetime('now', '-{stale_after_seconds} seconds')"
+    with get_db() as db:
+        exhausted = _exec(db, f"""
+            UPDATE async_jobs
+            SET status = 'error',
+                progress = 'Background job was interrupted and exhausted its retry budget.',
+                error = 'Interrupted worker job',
+                updated_at = {now}
+            WHERE status IN ('running', 'sending')
+              AND COALESCE(attempts, 0) >= COALESCE(max_attempts, 3)
+              AND {stale_sql}
+        """).rowcount
+        requeued = _exec(db, f"""
+            UPDATE async_jobs
+            SET status = 'queued',
+                progress = 'Recovered after a worker interruption.',
+                error = '',
+                updated_at = {now}
+            WHERE status IN ('running', 'sending')
+              AND COALESCE(attempts, 0) < COALESCE(max_attempts, 3)
+              AND {stale_sql}
+              AND job_type <> 'worker_heartbeat'
+        """).rowcount
+    return int(exhausted or 0) + int(requeued or 0)
 
 
 def fail_async_job(job_type: str, job_key: str, error: str, progress: str = "", payload=None, retry: bool = True) -> dict:
@@ -1069,12 +1012,17 @@ def _hash_auth_token(token: str) -> str:
     return _TOKEN_HASH_PREFIX + digest
 
 
-def create_client(name: str, email: str, password_hash: str, business: str = "", account_type: str = "business") -> int:
+def create_client(name: str, email: str, password_hash: str, business: str = "", account_type: str = "student") -> int:
+    """Create a MachReach Uni student account.
+
+    ``account_type`` remains in the signature for migration compatibility with
+    older callers, but legacy product account types are no longer accepted.
+    """
     with get_db() as db:
         return _insert_returning_id(
             db,
             "INSERT INTO clients (name, email, password, business, account_type) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (name, _normalize_email(email), password_hash, business, account_type),
+            (name, _normalize_email(email), password_hash, "", "student"),
         )
 
 
@@ -1187,661 +1135,3 @@ def mark_email_verified(client_id: int):
     with get_db() as db:
         _exec(db, "UPDATE clients SET email_verified = 1 WHERE id = %s", (client_id,))
         _exec(db, "UPDATE email_verification_tokens SET used = 1 WHERE client_id = %s", (client_id,))
-
-
-# ---------------------------------------------------------------------------
-# Email Accounts (multi-mailbox)
-# ---------------------------------------------------------------------------
-
-def get_email_accounts(client_id: int) -> list[dict]:
-    with get_db() as db:
-        rows = _fetchall(db,
-            "SELECT * FROM email_accounts WHERE client_id = %s ORDER BY is_default DESC, created_at ASC",
-            (client_id,))
-        for d in rows:
-            d["password"] = decrypt_password(d["password"])
-        return rows
-
-
-def get_email_account(account_id: int, client_id: int) -> dict | None:
-    with get_db() as db:
-        d = _fetchone(db,
-            "SELECT * FROM email_accounts WHERE id = %s AND client_id = %s",
-            (account_id, client_id))
-        if d:
-            d["password"] = decrypt_password(d["password"])
-        return d
-
-
-def get_default_email_account(client_id: int) -> dict | None:
-    with get_db() as db:
-        d = _fetchone(db,
-            "SELECT * FROM email_accounts WHERE client_id = %s ORDER BY is_default DESC, id ASC LIMIT 1",
-            (client_id,))
-        if d:
-            d["password"] = decrypt_password(d["password"])
-        return d
-
-
-
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# Campaigns
-# ---------------------------------------------------------------------------
-
-
-
-
-
-def get_campaigns(client_id: int) -> list[dict]:
-    with get_db() as db:
-        return _fetchall(db,
-            "SELECT * FROM campaigns WHERE client_id = %s ORDER BY created_at DESC",
-            (client_id,))
-
-
-
-
-
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# Contacts
-# ---------------------------------------------------------------------------
-
-def add_contacts(campaign_id: int, contacts: list[dict]) -> int:
-    with get_db() as db:
-        count = 0
-        for c in contacts:
-            try:
-                _exec(db,
-                    "INSERT INTO contacts (campaign_id, name, email, company, role, language) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",
-                    (campaign_id, c.get("name", ""), c["email"],
-                     c.get("company", ""), c.get("role", ""),
-                     c.get("language", "en")))
-                count += 1
-            except Exception:
-                if _USE_PG:
-                    db.rollback()  # PG requires rollback after error in tx
-                pass
-        return count
-
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# Sequences
-# ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# Sent emails & tracking
-# ---------------------------------------------------------------------------
-
-def record_sent(contact_id: int, sequence_id: int, variant: str,
-                subject: str, body: str) -> int:
-    with get_db() as db:
-        sent_id = _insert_returning_id(
-            db,
-            "INSERT INTO sent_emails (contact_id, sequence_id, variant, subject, body) "
-            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (contact_id, sequence_id, variant, subject, body),
-        )
-        _exec(db, "UPDATE contacts SET status = 'sent' WHERE id = %s", (contact_id,))
-        return sent_id
-
-
-def delete_sent_email(sent_id: int, contact_id: int):
-    with get_db() as db:
-        _exec(db, "DELETE FROM sent_emails WHERE id = %s", (sent_id,))
-        other = _fetchval(db, "SELECT COUNT(*) FROM sent_emails WHERE contact_id = %s", (contact_id,))
-        if other == 0:
-            _exec(db, "UPDATE contacts SET status = 'pending' WHERE id = %s", (contact_id,))
-
-
-
-
-def record_reply(contact_email: str, reply_body: str = "", reply_sentiment: str = "") -> bool:
-    with get_db() as db:
-        row = _fetchone(db,
-            "SELECT c.id as contact_id, se.id as sent_id "
-            "FROM contacts c "
-            "JOIN sent_emails se ON se.contact_id = c.id "
-            "WHERE LOWER(c.email) = LOWER(%s) AND c.status != 'replied' "
-            "ORDER BY se.sent_at DESC LIMIT 1",
-            (contact_email,))
-        if not row:
-            return False
-        now = _now_expr()
-        _exec(db, "UPDATE contacts SET status = 'replied' WHERE id = %s",
-              (row["contact_id"],))
-        _exec(db,
-            f"UPDATE sent_emails SET status = 'replied', replied_at = {now}, "
-            "reply_body = %s, reply_sentiment = %s WHERE id = %s",
-            (reply_body, reply_sentiment, row["sent_id"]))
-        return True
-
-
-def get_all_sent_recipient_emails() -> set[str]:
-    with get_db() as db:
-        rows = _fetchall(db,
-            "SELECT DISTINCT LOWER(c.email) as email FROM contacts c "
-            "JOIN sent_emails se ON se.contact_id = c.id "
-            "WHERE c.status != 'replied'")
-        return {r["email"] for r in rows}
-
-
-# ---------------------------------------------------------------------------
-# Stats
-# ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# Emails to send (worker)
-# ---------------------------------------------------------------------------
-
-def get_emails_to_send(limit: int = 50) -> list[dict]:
-    with get_db() as db:
-        results = []
-        now = _now_expr()
-
-        rows = _fetchall(db, f"""
-            SELECT c.id as contact_id, c.name, c.email, c.company, c.role,
-                   c.language,
-                   c.campaign_id, camp.tone, camp.business_type, camp.target_audience,
-                   es.id as sequence_id, es.subject_a, es.subject_b, es.body_a, es.body_b, es.step
-            FROM contacts c
-            JOIN campaigns camp ON c.campaign_id = camp.id
-            JOIN email_sequences es ON es.campaign_id = camp.id AND es.step = 1
-            WHERE camp.status = 'active'
-              AND c.status = 'pending'
-              AND c.id NOT IN (SELECT contact_id FROM sent_emails)
-              AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= {now})
-            LIMIT %s
-        """, (limit,))
-        results.extend(rows)
-
-        remaining = limit - len(results)
-        if remaining <= 0:
-            return results
-
-        diff = _date_diff_days("se.sent_at")
-        followup_rows = _fetchall(db, f"""
-            SELECT c.id as contact_id, c.name, c.email, c.company, c.role,
-                   c.language,
-                   c.campaign_id, camp.tone, camp.business_type, camp.target_audience,
-                   next_seq.id as sequence_id, next_seq.subject_a, next_seq.subject_b,
-                   next_seq.body_a, next_seq.body_b, next_seq.step
-            FROM contacts c
-            JOIN campaigns camp ON c.campaign_id = camp.id
-            JOIN sent_emails se ON se.contact_id = c.id
-            JOIN email_sequences last_seq ON se.sequence_id = last_seq.id
-            JOIN email_sequences next_seq ON next_seq.campaign_id = camp.id
-                                          AND next_seq.step = last_seq.step + 1
-            WHERE camp.status = 'active'
-              AND c.status NOT IN ('replied', 'bounced', 'unsubscribed')
-              AND se.status NOT IN ('replied', 'bounced')
-              AND (camp.scheduled_start IS NULL OR camp.scheduled_start <= {now})
-              AND {diff} >= next_seq.delay_days
-              AND NOT EXISTS (
-                  SELECT 1 FROM sent_emails se2
-                  WHERE se2.contact_id = c.id AND se2.sequence_id = next_seq.id
-              )
-              AND NOT EXISTS (
-                  SELECT 1 FROM sent_emails se3
-                  JOIN email_sequences es3 ON se3.sequence_id = es3.id
-                  WHERE se3.contact_id = c.id AND es3.step > last_seq.step
-              )
-            LIMIT %s
-        """, (remaining,))
-        results.extend(followup_rows)
-        return results
-
-
-# ---------------------------------------------------------------------------
-# Inbox / threads
-# ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# Calendar
-# ---------------------------------------------------------------------------
-
-
-
-# ---------------------------------------------------------------------------
-# A/B global stats
-# ---------------------------------------------------------------------------
-
-
-
-# ---------------------------------------------------------------------------
-# Export
-# ---------------------------------------------------------------------------
-
-def get_export_data(client_id: int, campaign_id: int | None = None) -> list[dict]:
-    with get_db() as db:
-        query = """
-            SELECT camp.name as campaign_name,
-                   c.name as contact_name, c.email as contact_email,
-                   c.company, c.role, c.status as contact_status,
-                   se.subject, se.variant, se.status as email_status,
-                   se.sent_at, se.opened_at, se.replied_at,
-                   se.reply_body, se.reply_sentiment,
-                   es.step
-            FROM sent_emails se
-            JOIN contacts c ON se.contact_id = c.id
-            JOIN campaigns camp ON c.campaign_id = camp.id
-            JOIN email_sequences es ON se.sequence_id = es.id
-            WHERE camp.client_id = %s
-        """
-        params = [client_id]
-        if campaign_id:
-            query += " AND camp.id = %s"
-            params.append(campaign_id)
-        query += " ORDER BY camp.name, se.sent_at DESC"
-        return _fetchall(db, query, params)
-
-
-# ---------------------------------------------------------------------------
-# Mail Hub
-# ---------------------------------------------------------------------------
-
-def upsert_mail(client_id: int, message_id: str, from_name: str, from_email: str,
-                to_email: str, subject: str, body_preview: str, received_at: str,
-                priority: str = "normal", category: str = "uncategorized",
-                ai_summary: str = "", account_id: int | None = None,
-                is_read: int = 0) -> bool:
-    with get_db() as db:
-        try:
-            if _USE_PG:
-                _exec(db, """
-                    INSERT INTO mail_inbox
-                        (client_id, message_id, from_name, from_email, to_email,
-                         subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (client_id, message_id) DO NOTHING
-                """, (client_id, message_id, from_name, from_email, to_email,
-                      subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read))
-                return db.cursor().rowcount != 0 if hasattr(db, 'cursor') else True
-            else:
-                _exec(db, """
-                    INSERT INTO mail_inbox
-                        (client_id, message_id, from_name, from_email, to_email,
-                         subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (client_id, message_id, from_name, from_email, to_email,
-                      subject, body_preview, received_at, priority, category, ai_summary, account_id, is_read))
-                return True
-        except Exception:
-            if _USE_PG:
-                db.rollback()
-            return False
-
-
-def get_mail_inbox(client_id: int, filter_by: str = "all",
-                   category: str | None = None, account_id: int | None = None,
-                   sender: str | None = None,
-                   limit: int = 100) -> list[dict]:
-    with get_db() as db:
-        now = _now_expr()
-        conditions = ["m.client_id = %s", "m.is_archived = 0"]
-        params: list = [client_id]
-
-        conditions.append(f"(m.snooze_until IS NULL OR {_ts_cast('m.snooze_until')} <= {now})")
-
-        if filter_by == "all":
-            conditions.append("m.is_read = 0")
-        elif filter_by == "unread":
-            conditions.append("m.is_read = 0")
-        elif filter_by == "read":
-            conditions.append("m.is_read = 1")
-        elif filter_by == "starred":
-            conditions.append("m.is_starred = 1")
-        elif filter_by == "urgent":
-            conditions.append("m.priority IN ('urgent', 'important')")
-        elif filter_by == "snoozed":
-            conditions = ["m.client_id = %s",
-                          f"m.snooze_until IS NOT NULL AND {_ts_cast('m.snooze_until')} > {now}"]
-            params = [client_id]
-
-        if category and category != "all":
-            conditions.append("m.category = %s")
-            params.append(category)
-
-        if account_id is not None:
-            conditions.append("m.account_id = %s")
-            params.append(account_id)
-
-        if sender:
-            conditions.append("LOWER(m.from_email) = %s")
-            params.append(sender.lower())
-
-        where = " AND ".join(conditions)
-        return _fetchall(db, f"""
-            SELECT * FROM mail_inbox m
-            WHERE {where}
-            ORDER BY
-                CASE m.priority
-                    WHEN 'urgent' THEN 1
-                    WHEN 'important' THEN 2
-                    ELSE 3
-                END,
-                CASE WHEN m.category = 'personal' THEN 0 ELSE 1 END,
-                CASE m.priority
-                    WHEN 'normal' THEN 1
-                    WHEN 'low' THEN 2
-                    ELSE 0
-                END,
-                m.received_at DESC
-            LIMIT %s
-        """, params + [limit])
-
-
-
-
-
-
-
-
-def get_mail_item(mail_id: int, client_id: int) -> dict | None:
-    with get_db() as db:
-        return _fetchone(db, "SELECT * FROM mail_inbox WHERE id = %s AND client_id = %s",
-                         (mail_id, client_id))
-
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# Contacts Book (CRM)
-# ---------------------------------------------------------------------------
-
-
-
-def get_contacts(client_id: int, search: str = "", tag: str = "",
-                 relationship: str = "") -> list[dict]:
-    with get_db() as db:
-        sql = "SELECT * FROM contacts_book WHERE client_id = %s"
-        params: list = [client_id]
-        if search:
-            sql += " AND (name LIKE %s OR email LIKE %s OR company LIKE %s)"
-            s = f"%{search}%"
-            params.extend([s, s, s])
-        if tag:
-            sql += " AND (',' || tags || ',') LIKE %s"
-            params.append(f"%,{tag},%")
-        if relationship:
-            sql += " AND relationship = %s"
-            params.append(relationship)
-        sql += " ORDER BY last_contacted DESC, name ASC"
-        return _fetchall(db, sql, params)
-
-
-
-
-
-
-
-
-
-
-# ---------------------------------------------------------------------------
-# Email Suppressions (Global unsubscribe / CAN-SPAM)
-# ---------------------------------------------------------------------------
-
-
-
-def is_suppressed(client_id: int, email: str) -> bool:
-    """Check if an email is on the global suppression list."""
-    with get_db() as db:
-        row = _fetchone(db,
-            "SELECT 1 FROM email_suppressions WHERE client_id = %s AND email = %s",
-            (client_id, email.lower().strip()))
-        return row is not None
-
-
-
-
-
-
-
-
-
-
-
-
-def get_contact_email_history(client_id: int, email: str, limit: int = 20) -> list[dict]:
-    with get_db() as db:
-        return _fetchall(db, """
-            SELECT id, subject, body_preview, received_at, priority, category, ai_summary
-            FROM mail_inbox WHERE client_id = %s AND from_email = %s
-            ORDER BY received_at DESC LIMIT %s
-        """, (client_id, email, limit))
-
-
-
-
-# ---------------------------------------------------------------------------
-# Team Members
-# ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-def get_team_owner(client_id: int) -> int | None:
-    with get_db() as db:
-        row = _fetchone(db,
-            "SELECT owner_id FROM team_members WHERE member_client_id = %s AND status = 'active' AND campaign_id IS NULL",
-            (client_id,))
-        return row["owner_id"] if row else None
-
-
-
-
-# ---------------------------------------------------------------------------
-# Scheduled emails
-# ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-def get_due_scheduled_emails() -> list[dict]:
-    with get_db() as db:
-        if _USE_PG:
-            # scheduled_at stores UTC text like '2026-04-11 06:30:00'
-            # Use pure TEXT comparison — ISO dates sort lexicographically.
-            # This avoids all ::timestamp / AT TIME ZONE cast issues.
-            return _fetchall(db, """
-                SELECT * FROM scheduled_emails
-                WHERE status = 'pending'
-                  AND scheduled_at <= TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
-                ORDER BY scheduled_at ASC
-            """)
-        else:
-            return _fetchall(db, """
-                SELECT * FROM scheduled_emails
-                WHERE status = 'pending' AND scheduled_at <= datetime('now')
-                ORDER BY scheduled_at ASC
-            """)
-
-
-def mark_scheduled_sent(email_id: int) -> bool:
-    with get_db() as db:
-        now = _now_expr()
-        _exec(db, f"UPDATE scheduled_emails SET status = 'sent', sent_at = {now} WHERE id = %s",
-              (email_id,))
-        return True
-
-
-def mark_scheduled_failed(email_id: int) -> bool:
-    with get_db() as db:
-        _exec(db, "UPDATE scheduled_emails SET status = 'failed' WHERE id = %s", (email_id,))
-        return True
-
-
-# ---------------------------------------------------------------------------
-# Snooze processing
-# ---------------------------------------------------------------------------
-
-def process_snoozed_emails() -> int:
-    with get_db() as db:
-        now = _now_expr()
-        cur = _exec(db, f"""
-            UPDATE mail_inbox SET priority = 'important'
-            WHERE snooze_until IS NOT NULL
-              AND {_ts_cast('snooze_until')} <= {now}
-              AND priority NOT IN ('urgent', 'important')
-        """)
-        return cur.rowcount
-
-
-# ---------------------------------------------------------------------------
-# Billing & Usage
-# ---------------------------------------------------------------------------
-
-def get_subscription(client_id: int) -> dict:
-    with get_db() as db:
-        row = _fetchone(db, "SELECT * FROM subscriptions WHERE client_id = %s", (client_id,))
-        if row:
-            return row
-        _exec(db, "INSERT INTO subscriptions (client_id, plan) VALUES (%s, 'free')", (client_id,))
-        db.commit()
-        row = _fetchone(db, "SELECT * FROM subscriptions WHERE client_id = %s", (client_id,))
-        return row
-
-
-def update_subscription(client_id: int, **fields) -> bool:
-    allowed = {"plan", "stripe_customer_id", "stripe_subscription_id", "status",
-               "current_period_start", "current_period_end"}
-    updates = {k: v for k, v in fields.items() if k in allowed}
-    if not updates:
-        return False
-    now = _now_expr()
-    set_parts = []
-    vals = []
-    for k, v in updates.items():
-        set_parts.append(f"{k} = %s")
-        vals.append(v)
-    set_parts.append(f"updated_at = {now}")
-    vals.append(client_id)
-    with get_db() as db:
-        _exec(db, f"UPDATE subscriptions SET {', '.join(set_parts)} WHERE client_id = %s", vals)
-        return True
-
-
-
-
-def get_subscription_by_stripe_sub(stripe_sub_id: str) -> dict | None:
-    with get_db() as db:
-        return _fetchone(db, "SELECT * FROM subscriptions WHERE stripe_subscription_id = %s",
-                         (stripe_sub_id,))
-
-
-def _current_month() -> str:
-    from datetime import date
-    return date.today().strftime("%Y-%m")
-
-
-def get_usage(client_id: int) -> dict:
-    month = _current_month()
-    with get_db() as db:
-        row = _fetchone(db, "SELECT * FROM usage_tracking WHERE client_id = %s AND month = %s",
-                        (client_id, month))
-        if row:
-            return row
-        _exec(db, "INSERT INTO usage_tracking (client_id, month) VALUES (%s, %s)",
-              (client_id, month))
-        db.commit()
-        row = _fetchone(db, "SELECT * FROM usage_tracking WHERE client_id = %s AND month = %s",
-                        (client_id, month))
-        return row
-
-
-def increment_usage(client_id: int, field: str, amount: int = 1) -> int:
-    allowed = {"emails_sent", "mail_hub_syncs", "ai_classifications"}
-    if field not in allowed:
-        return 0
-    month = _current_month()
-    with get_db() as db:
-        if _USE_PG:
-            _exec(db, f"""
-                INSERT INTO usage_tracking (client_id, month, {field})
-                VALUES (%s, %s, %s)
-                ON CONFLICT(client_id, month) DO UPDATE SET {field} = usage_tracking.{field} + %s
-            """, (client_id, month, amount, amount))
-        else:
-            _exec(db, f"""
-                INSERT INTO usage_tracking (client_id, month, {field})
-                VALUES (%s, %s, %s)
-                ON CONFLICT(client_id, month) DO UPDATE SET {field} = {field} + %s
-            """, (client_id, month, amount, amount))
-        db.commit()
-        val = _fetchval(db, f"SELECT {field} FROM usage_tracking WHERE client_id = %s AND month = %s",
-                        (client_id, month))
-        return val or 0
-
-
-def check_limit(client_id: int, field: str) -> tuple[bool, int, int]:
-    from outreach.config import PLAN_LIMITS
-    sub = get_subscription(client_id)
-    plan = sub.get("plan", "free")
-    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
-    usage = get_usage(client_id)
-
-    limit_map = {"emails_sent": "emails_per_month", "mail_hub_syncs": "mail_hub_syncs"}
-    limit_key = limit_map.get(field, field)
-    max_val = limits.get(limit_key, 0)
-    used = usage.get(field, 0)
-
-    if max_val == -1:
-        return True, used, -1
-    return used < max_val, used, max_val
-
-
-if __name__ == "__main__":
-    init_db()

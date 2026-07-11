@@ -38,10 +38,20 @@
 <body>
   <div class="card">
     <div class="logo">M</div>
-    <h1>Sin conexión</h1>
-    <p>No pudimos cargar MachReach. Revisa tu conexión a internet y vuelve a intentarlo — tu progreso está a salvo.</p>
-    <button onclick="location.reload()">Reintentar</button>
-    <div class="hint">MachReach se reconecta solo cuando vuelvas a tener señal.</div>
+    <h1 id="offline-title">Sin conexión</h1>
+    <p id="offline-copy">No pudimos cargar MachReach. Revisa tu conexión a internet y vuelve a intentarlo — tu progreso está a salvo.</p>
+    <button id="offline-retry" onclick="location.reload()">Reintentar</button>
+    <div class="hint" id="offline-hint">MachReach se reconecta solo cuando vuelvas a tener señal.</div>
   </div>
+  <script>
+    if ((navigator.language || '').toLowerCase().startsWith('en')) {
+      document.documentElement.lang = 'en';
+      document.title = 'MachReach — Offline';
+      document.getElementById('offline-title').textContent = 'You are offline';
+      document.getElementById('offline-copy').textContent = 'MachReach could not load. Check your internet connection and try again — your progress is safe.';
+      document.getElementById('offline-retry').textContent = 'Retry';
+      document.getElementById('offline-hint').textContent = 'MachReach reconnects automatically when your signal returns.';
+    }
+  </script>
 </body>
 </html>

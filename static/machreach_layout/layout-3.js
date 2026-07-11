@@ -88,7 +88,6 @@
       "Canvas LMS": "Canvas LMS", "Conectado": "Conectado",
       "Sin conectar": "No conectado", "Manage Connection": "Administrar Conexión",
       "Conectar Canvas": "Conectar Canvas",
-      "Email Accounts": "Cuentas de Correo", "Manage in Mail Hub": "Administrar en Correo",
       "Daily Study Email": "Email Diario de Estudio",
       "Get a morning email with your study plan, upcoming exams, and weak topics to review.":
         "Recibe un email matutino con tu plan de estudio, próximos exámenes y temas a repasar.",
@@ -263,21 +262,6 @@
       "Generated notes": "Apuntes generados",
       "AI Study Notes": "Apuntes de Estudio IA",
 
-      // Mail Hub / Inbox common
-      "Inbox": "Bandeja", "Sent": "Enviados", "Outbox": "Salida",
-      "Trash": "Papelera", "Spam": "Spam", "Drafts": "Borradores",
-      "Reply": "Responder", "Reply All": "Responder a Todos", "Forward": "Reenviar",
-      "Compose": "Redactar", "New Email": "Nuevo Correo",
-      "From": "De", "To": "Para", "Cc": "Cc", "Bcc": "Cco", "Subject": "Asunto",
-      "Body": "Cuerpo", "Attachments": "Adjuntos",
-      "Mail Hub": "Centro de Correo",
-
-      // Contacts
-      "Contacts": "Contactos", "Add Contact": "Agregar Contacto",
-      "First Name": "Nombre", "Last Name": "Apellido",
-      "Company": "Empresa", "Phone": "Teléfono", "Notes": "Notas",
-
-      "Templates": "Plantillas", "Sequence": "Secuencia",
       "Open Rate": "Tasa de Apertura", "Reply Rate": "Tasa de Respuesta",
       "Sent at": "Enviado a las", "Scheduled": "Programado",
       "Send Now": "Enviar Ahora", "Schedule": "Programar",

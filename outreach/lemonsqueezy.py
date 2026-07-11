@@ -1,8 +1,8 @@
 """Lemon Squeezy integration: hosted checkout + webhook verification.
 
 Why a single module?
-- All three paid surfaces (outreach SaaS subs, student PLUS sub, one-time
-  coin packs) use the same checkout-creation API and the same webhook.
+- Student PLUS subscriptions and one-time coin packs use the same
+  checkout-creation API and webhook.
 - Routing of webhook events back to the correct user / purpose is done
   via the `custom_data` we attach to every checkout.
 

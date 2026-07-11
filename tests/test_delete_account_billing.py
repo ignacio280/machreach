@@ -10,6 +10,7 @@ import json
 import os
 
 from outreach import lemonsqueezy as ls
+from outreach.db import get_client
 
 SECRET = os.environ["LEMON_SQUEEZY_WEBHOOK_SECRET"].encode()
 
@@ -82,3 +83,19 @@ def test_delete_without_confirmation_keeps_account_and_billing(client, make_user
 
     assert r.status_code in (302, 303)         # bounced back with an error flash
     assert calls == []                         # no deletion -> no cancellation
+
+
+def test_delete_account_keeps_local_account_when_provider_cancellation_fails(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    cid = make_user()
+    _provision_student_sub(client, cid, "sub_RETRY_1")
+    monkeypatch.setattr(ls, "cancel_subscription", lambda sid: False)
+
+    _login(client, cid)
+    response = client.post("/settings/delete-account", data={"confirm": "DELETE"})
+
+    assert response.status_code in (302, 303)
+    assert response.headers["Location"].endswith("/settings")
+    assert get_client(cid) is not None

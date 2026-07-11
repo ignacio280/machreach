@@ -16,11 +16,14 @@ from outreach.db import (
     _fetchone,
     _fetchval,
     _insert_returning_id,
+    _is_duplicate_column_error,
+    _record_schema_version,
     _USE_PG,
     get_db,
 )
 
 log = logging.getLogger(__name__)
+STUDENT_SCHEMA_VERSION = 1
 
 
 # ── Schema (appended to MachReach's init_db) ────────────────
@@ -35,6 +38,7 @@ CREATE TABLE IF NOT EXISTS student_courses (
     term            TEXT DEFAULT '',
     analysis_json   TEXT DEFAULT '{}',
     last_synced     TIMESTAMP,
+    canvas_active   BOOLEAN NOT NULL DEFAULT TRUE,
     created_at      TIMESTAMP DEFAULT NOW(),
     UNIQUE(client_id, canvas_course_id)
 );
@@ -262,6 +266,7 @@ CREATE TABLE IF NOT EXISTS student_courses (
     term            TEXT DEFAULT '',
     analysis_json   TEXT DEFAULT '{}',
     last_synced     TEXT,
+    canvas_active   INTEGER NOT NULL DEFAULT 1,
     created_at      TEXT DEFAULT (datetime('now', 'localtime')),
     UNIQUE(client_id, canvas_course_id)
 );
@@ -512,6 +517,13 @@ def init_student_db():
         init_planner_done_table()
     except Exception as e:
         log.exception("init_planner_done_table failed: %s", e)
+    # Academic columns must exist before the course-catalog backfill reads
+    # clients.university_id on a fresh install.
+    try:
+        from student.academic import init_academic_db
+        init_academic_db()
+    except Exception as e:
+        log.exception("init_academic_db failed: %s", e)
     # Crowd-sourced per-university course catalog (autofill)
     try:
         init_course_catalog_table()
@@ -526,32 +538,31 @@ def init_student_db():
     except Exception as e:
         log.exception("backfill_course_catalog failed: %s", e)
     # Removed market feature: new installs should not create or expose its tables.
-    # Academic identity layer (countries, universities, majors, leagues).
-    # Imported lazily so a bad seed file can't take down the whole app.
-    try:
-        from student.academic import init_academic_db
-        init_academic_db()
-    except Exception as e:
-        log.exception("init_academic_db failed: %s", e)
     # Weekly/monthly leaderboard prize tables.
     try:
         from student.leaderboard_prizes import init_prize_tables
         init_prize_tables()
     except Exception as e:
         log.exception("init_prize_tables failed: %s", e)
+    # Never advertise a current student schema after a partial initializer.
+    with get_db() as db:
+        _exec(db, "SELECT client_id, semester_label, canvas_active FROM student_courses LIMIT 0")
+        _exec(db, "SELECT client_id, exam_id FROM student_course_files LIMIT 0")
+        _exec(db, "SELECT client_id, coins FROM student_wallet LIMIT 0")
+        _exec(db, "SELECT id, university_id FROM clients LIMIT 0")
+        _exec(db, "SELECT client_id, phase_id FROM student_focus_phases LIMIT 0")
+        _exec(db, "SELECT client_id, course_name FROM student_course_reviews LIMIT 0")
+    _record_schema_version("student", STUDENT_SCHEMA_VERSION)
     log.info("Student tables initialized.")
 
 
 def _create_table_safe(pg_sql: str, sqlite_sql: str):
     """Create a table if it doesn't exist (safe for migrations)."""
-    try:
-        with get_db() as db:
-            if _USE_PG:
-                db.cursor().execute(pg_sql)
-            else:
-                db.execute(sqlite_sql)
-    except Exception:
-        pass
+    with get_db() as db:
+        if _USE_PG:
+            db.cursor().execute(pg_sql)
+        else:
+            db.execute(sqlite_sql)
 
 
 def _student_migrations():
@@ -588,6 +599,7 @@ def _student_migrations():
         # course is the slot the course belongs to in the grade sheet.
         ("clients", "current_semester", "TEXT DEFAULT ''"),
         ("student_courses", "semester_label", "TEXT DEFAULT ''"),
+        ("student_courses", "canvas_active", "BOOLEAN DEFAULT TRUE"),
         ("student_exams", "grade", "REAL DEFAULT NULL"),
     ]
     for table, col, col_type in migrations:
@@ -597,8 +609,9 @@ def _student_migrations():
                     db.cursor().execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
                 else:
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
-        except Exception:
-            pass  # column already exists
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
     _create_table_safe(
         "CREATE TABLE IF NOT EXISTS student_focus_phases ("
         "id SERIAL PRIMARY KEY, "
@@ -647,14 +660,11 @@ def _student_migrations():
         "final_grade REAL, total_hours INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT (datetime('now','localtime')), "
         "UNIQUE(client_id, course_id))",
     )
-    try:
-        with get_db() as db:
-            if _USE_PG:
-                db.cursor().execute("CREATE INDEX IF NOT EXISTS idx_course_reviews_lookup ON student_course_reviews(university, major, course_name)")
-            else:
-                db.execute("CREATE INDEX IF NOT EXISTS idx_course_reviews_lookup ON student_course_reviews(university, major, course_name)")
-    except Exception:
-        pass
+    with get_db() as db:
+        if _USE_PG:
+            db.cursor().execute("CREATE INDEX IF NOT EXISTS idx_course_reviews_lookup ON student_course_reviews(university, major, course_name)")
+        else:
+            db.execute("CREATE INDEX IF NOT EXISTS idx_course_reviews_lookup ON student_course_reviews(university, major, course_name)")
     # Streak freezes — 1 free auto-freeze per ISO week
     _create_table_safe(
         "CREATE TABLE IF NOT EXISTS student_streak_freezes ("
@@ -790,8 +800,9 @@ def _student_migrations():
                     db.cursor().execute(f"ALTER TABLE student_course_outcomes ADD COLUMN {col} {col_type}")
                 else:
                     db.execute(f"ALTER TABLE student_course_outcomes ADD COLUMN {col} {col_type}")
-        except Exception:
-            pass
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
 
 
 # ── Courses ─────────────────────────────────────────────────
@@ -810,7 +821,8 @@ def upsert_course(client_id: int, canvas_course_id: int, name: str,
         )
         if existing:
             _exec(db,
-                  "UPDATE student_courses SET name = %s, code = %s, term = %s WHERE id = %s",
+                  "UPDATE student_courses SET name = %s, code = %s, term = %s, "
+                  "canvas_active = TRUE, last_synced = " + ("NOW()" if _USE_PG else "datetime('now','localtime')") + " WHERE id = %s",
                   (name, code, term, existing["id"]))
             return existing["id"]
         # New course → take semester from the client's current_semester so
@@ -823,11 +835,11 @@ def upsert_course(client_id: int, canvas_course_id: int, name: str,
         sem = (dict(cli).get("current_semester") if cli else "") or ""
         return _insert_returning_id(
             db,
-            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label) "
-            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label, last_synced) "
+            "VALUES (%s, %s, %s, %s, %s, %s, " + ("NOW()" if _USE_PG else "datetime('now','localtime')") + ") RETURNING id",
             (client_id, canvas_course_id, name, code, term, sem),
-            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label, last_synced) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))",
         )
 
 
@@ -1130,7 +1142,8 @@ def get_courses_by_semester(client_id: int) -> dict:
         crows = _fetchall(
             db,
             "SELECT id, name, code, COALESCE(semester_label,'') AS semester_label "
-            "FROM student_courses WHERE client_id = %s ORDER BY id ASC",
+            "FROM student_courses WHERE client_id = %s "
+            "AND COALESCE(canvas_active, TRUE) ORDER BY id ASC",
             (client_id,),
         )
         erows = _fetchall(
@@ -1206,10 +1219,14 @@ def update_course_analysis(course_db_id: int, analysis: dict):
               (json.dumps(analysis, ensure_ascii=False), course_db_id))
 
 
-def get_courses(client_id: int) -> list[dict]:
+def get_courses(client_id: int, include_archived: bool = False) -> list[dict]:
+    active_filter = "" if include_archived else " AND COALESCE(canvas_active, TRUE)"
     with get_db() as db:
         return _fetchall(
-            db, "SELECT * FROM student_courses WHERE client_id = %s ORDER BY name",
+            db,
+            "SELECT * FROM student_courses WHERE client_id = %s"
+            + active_filter
+            + " ORDER BY name",
             (client_id,),
         )
 
@@ -1677,6 +1694,246 @@ def mark_focus_phase_claimed(client_id: int, phase_id: str) -> None:
             (datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"), client_id, phase_id),
         )
 
+
+def reconcile_canvas_courses(client_id: int, courses: list[dict]) -> dict:
+    """Upsert one complete Canvas snapshot and archive missing Canvas courses."""
+    normalized = []
+    seen = set()
+    for course in courses:
+        canvas_id = int(course["canvas_course_id"])
+        if canvas_id <= 0 or canvas_id in seen:
+            continue
+        seen.add(canvas_id)
+        normalized.append({
+            "canvas_course_id": canvas_id,
+            "name": str(course.get("name") or f"Course {canvas_id}")[:240],
+            "code": str(course.get("code") or "")[:120],
+            "term": str(course.get("term") or "")[:160],
+        })
+
+    now = "NOW()" if _USE_PG else "datetime('now','localtime')"
+    with get_db() as db:
+        if not _USE_PG:
+            db.execute("BEGIN IMMEDIATE")
+        client = _fetchone(
+            db,
+            "SELECT id, current_semester FROM clients WHERE id = %s"
+            + (" FOR UPDATE" if _USE_PG else ""),
+            (client_id,),
+        )
+        if not client:
+            raise ValueError("Client not found")
+        semester = client.get("current_semester") or ""
+        for course in normalized:
+            if _USE_PG:
+                _exec(db, f"""
+                    INSERT INTO student_courses
+                        (client_id, canvas_course_id, name, code, term, semester_label, canvas_active, last_synced)
+                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, {now})
+                    ON CONFLICT(client_id, canvas_course_id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        code = EXCLUDED.code,
+                        term = EXCLUDED.term,
+                        canvas_active = TRUE,
+                        last_synced = {now}
+                """, (
+                    client_id, course["canvas_course_id"], course["name"],
+                    course["code"], course["term"], semester,
+                ))
+            else:
+                _exec(db, f"""
+                    INSERT INTO student_courses
+                        (client_id, canvas_course_id, name, code, term, semester_label, canvas_active, last_synced)
+                    VALUES (%s, %s, %s, %s, %s, %s, 1, {now})
+                    ON CONFLICT(client_id, canvas_course_id) DO UPDATE SET
+                        name = excluded.name,
+                        code = excluded.code,
+                        term = excluded.term,
+                        canvas_active = 1,
+                        last_synced = {now}
+                """, (
+                    client_id, course["canvas_course_id"], course["name"],
+                    course["code"], course["term"], semester,
+                ))
+
+        if seen:
+            placeholders = ",".join(["%s"] * len(seen))
+            archived = _exec(
+                db,
+                "UPDATE student_courses SET canvas_active = FALSE "
+                f"WHERE client_id = %s AND canvas_course_id > 0 AND canvas_active = TRUE "
+                f"AND canvas_course_id NOT IN ({placeholders})",
+                (client_id, *sorted(seen)),
+            ).rowcount
+        else:
+            archived = _exec(
+                db,
+                "UPDATE student_courses SET canvas_active = FALSE "
+                "WHERE client_id = %s AND canvas_course_id > 0 AND canvas_active = TRUE",
+                (client_id,),
+            ).rowcount
+    return {"saved": len(normalized), "archived": int(archived or 0)}
+
+
+def claim_focus_phase_rewards(client_id: int, phase_id: str, minutes: int,
+                              mode: str = "pomodoro", course_name: str = "",
+                              course_id: int | None = None,
+                              exam_id: int | None = None,
+                              pages: int = 0) -> dict:
+    """Atomically claim one verified phase and persist its core rewards.
+
+    The phase row, study-progress row, XP marker, and wallet credit commit in one
+    transaction. A per-client lock serializes different phases too, preserving
+    the daily cap under concurrent requests.
+    """
+    phase_id = (phase_id or "").strip()[:80]
+    if not phase_id:
+        return {"ok": False, "saved": False, "reason": "missing-phase-id"}
+    try:
+        minutes = max(0, min(FOCUS_MAX_MINUTES_PER_SESSION, int(minutes or 0)))
+        pages = max(0, int(pages or 0))
+    except (TypeError, ValueError):
+        return {"ok": False, "saved": False, "reason": "invalid-phase"}
+
+    with get_db() as db:
+        # PostgreSQL row locks and SQLite's immediate write transaction both
+        # serialize all reward claims for one account.
+        if _USE_PG:
+            _exec(db, "SELECT id FROM clients WHERE id = %s FOR UPDATE", (client_id,))
+        else:
+            db.execute("BEGIN IMMEDIATE")
+
+        row = _fetchone(
+            db,
+            "SELECT * FROM student_focus_phases WHERE client_id = %s AND phase_id = %s",
+            (client_id, phase_id),
+        )
+        if not row:
+            return {"ok": False, "saved": False, "reason": "unverified-phase"}
+        if row.get("claimed_at"):
+            return {"ok": True, "saved": False, "reason": "duplicate-phase"}
+
+        registered_course = row.get("course_id")
+        registered_exam = row.get("exam_id")
+        try:
+            requested_course = int(course_id or 0) or None
+        except (TypeError, ValueError):
+            requested_course = None
+        try:
+            requested_exam = int(exam_id or 0) or None
+        except (TypeError, ValueError):
+            requested_exam = None
+        if registered_course and requested_course and int(registered_course) != requested_course:
+            return {"ok": False, "saved": False, "reason": "course-mismatch"}
+        if registered_exam and requested_exam and int(registered_exam) != requested_exam:
+            return {"ok": False, "saved": False, "reason": "exam-mismatch"}
+
+        expected = int(row.get("expected_minutes") or 0)
+        if expected > 0 and minutes > expected + 1:
+            return {"ok": False, "saved": False, "reason": "minutes-exceed-phase"}
+        started_at = _parse_focus_dt(row.get("started_at"))
+        if not started_at:
+            return {"ok": False, "saved": False, "reason": "invalid-phase-start"}
+        required_minutes = expected if expected > 0 else minutes
+        elapsed = (datetime.now() - started_at).total_seconds()
+        if minutes > 0 and elapsed < max(
+            0, required_minutes * 60 - FOCUS_PHASE_CLAIM_GRACE_SECONDS
+        ):
+            return {"ok": False, "saved": False, "reason": "phase-too-early"}
+
+        course_id, exam_id = _validate_focus_course_exam(
+            db, client_id, requested_course or registered_course,
+            requested_exam or registered_exam,
+        )
+        today = datetime.now().strftime("%Y-%m-%d")
+        already_today = int(_fetchval(
+            db,
+            "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress "
+            "WHERE client_id = %s AND plan_date LIKE %s",
+            (client_id, f"{today}%"),
+        ) or 0)
+        minutes = min(minutes, max(0, FOCUS_MAX_MINUTES_PER_DAY - already_today))
+        if minutes <= 0 and pages <= 0:
+            return {"ok": True, "saved": False, "reason": "daily-cap-or-empty"}
+
+        claimed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        claimed = _exec(
+            db,
+            "UPDATE student_focus_phases SET claimed_at = %s "
+            "WHERE client_id = %s AND phase_id = %s AND claimed_at IS NULL",
+            (claimed_at, client_id, phase_id),
+        )
+        if not claimed.rowcount:
+            return {"ok": True, "saved": False, "reason": "duplicate-phase"}
+
+        session_id = _insert_returning_id(
+            db,
+            "INSERT INTO student_study_progress "
+            "(client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
+            "VALUES (%s, %s, 1, %s, %s, %s, %s, %s) RETURNING id",
+            (
+                client_id,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
+                f"{mode}: {course_name}" if course_name else mode,
+                minutes,
+                pages,
+                course_id,
+                exam_id,
+            ),
+            "INSERT INTO student_study_progress "
+            "(client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
+            "VALUES (?, ?, 1, ?, ?, ?, ?, ?)",
+        )
+
+        detail = f"{(mode or 'pomodoro').title()} {minutes}min"
+        if course_name:
+            detail += f" — {course_name}"
+        detail += f" · phase:{phase_id}"
+
+        base_xp = (minutes * 5) // 10
+        xp_multiplier = float(_fetchval(
+            db,
+            "SELECT COALESCE(MAX(multiplier),1.0) FROM student_boosts "
+            "WHERE client_id = %s AND kind = 'xp' AND expires_at > %s",
+            (client_id, datetime.now()),
+        ) or 1.0)
+        xp_awarded = int(round(base_xp * max(1.0, xp_multiplier)))
+        _exec(
+            db,
+            "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s)",
+            (client_id, "focus_session", xp_awarded, detail),
+        )
+
+        base_coins = minutes // 10
+        coin_multiplier = float(_fetchval(
+            db,
+            "SELECT COALESCE(MAX(multiplier),1.0) FROM student_boosts "
+            "WHERE client_id = %s AND kind = 'coin' AND expires_at > %s",
+            (client_id, datetime.now()),
+        ) or 1.0)
+        coins_awarded = int(round(base_coins * max(1.0, coin_multiplier)))
+        _ensure_wallet(db, client_id)
+        if coins_awarded:
+            _exec(
+                db,
+                "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
+                (coins_awarded, client_id),
+            )
+
+        _progress_focus_quests_in_transaction(db, client_id, minutes, pages)
+
+        return {
+            "ok": True,
+            "saved": True,
+            "reason": "ok",
+            "session_id": session_id,
+            "minutes_saved": minutes,
+            "pages_saved": pages,
+            "xp_awarded": xp_awarded,
+            "coins_awarded": coins_awarded,
+        }
+
+
 def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
                        course_name: str = "", course_id: int | None = None,
                        exam_id: int | None = None) -> int:
@@ -1996,6 +2253,98 @@ def get_course_outcome(client_id: int, course_id: int) -> dict | None:
     d["total_focus_minutes"] = int(d.get("total_focus_minutes") or 0)
     d["total_focus_hours"] = round(d["total_focus_minutes"] / 60, 1)
     return d
+
+
+def search_course_reviews(query: str = "", university: str = "",
+                          major: str = "", limit: int = 100) -> list[dict]:
+    """Search anonymous course reviews using optional case-insensitive filters."""
+    clauses = []
+    params = []
+    query = (query or "").strip()[:120]
+    university = (university or "").strip()[:120]
+    major = (major or "").strip()[:120]
+    if query:
+        like = f"%{query.lower()}%"
+        clauses.append(
+            "(LOWER(course_name) LIKE %s OR LOWER(course_code) LIKE %s "
+            "OR LOWER(review_text) LIKE %s)"
+        )
+        params.extend([like, like, like])
+    if university:
+        clauses.append("LOWER(university) LIKE %s")
+        params.append(f"%{university.lower()}%")
+    if major:
+        clauses.append("LOWER(major) LIKE %s")
+        params.append(f"%{major.lower()}%")
+    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    limit = max(1, min(int(limit or 100), 100))
+    with get_db() as db:
+        return _fetchall(
+            db,
+            "SELECT id, university, major, course_name, course_code, "
+            "difficulty_rating, quality_rating, review_text, final_grade, "
+            "total_hours, created_at FROM student_course_reviews"
+            + where
+            + " ORDER BY created_at DESC, id DESC LIMIT %s",
+            tuple(params + [limit]),
+        )
+
+
+def upsert_course_review(client_id: int, course_id: int, university: str,
+                         major: str, course_name: str, course_code: str,
+                         difficulty_rating: int, quality_rating: int,
+                         review_text: str, final_grade, total_hours: int) -> int:
+    """Create or replace one student's anonymous review for a completed course."""
+    difficulty_rating = max(1, min(5, int(difficulty_rating)))
+    quality_rating = max(1, min(5, int(quality_rating)))
+    values = (
+        client_id,
+        course_id,
+        (university or "").strip()[:160],
+        (major or "").strip()[:160],
+        (course_name or "Curso").strip()[:200],
+        (course_code or "").strip()[:80],
+        difficulty_rating,
+        quality_rating,
+        (review_text or "").strip()[:2000],
+        final_grade,
+        max(0, int(total_hours or 0)),
+    )
+    columns = (
+        "client_id, course_id, university, major, course_name, course_code, "
+        "difficulty_rating, quality_rating, review_text, final_grade, total_hours"
+    )
+    update = (
+        "university=EXCLUDED.university, major=EXCLUDED.major, "
+        "course_name=EXCLUDED.course_name, course_code=EXCLUDED.course_code, "
+        "difficulty_rating=EXCLUDED.difficulty_rating, "
+        "quality_rating=EXCLUDED.quality_rating, review_text=EXCLUDED.review_text, "
+        "final_grade=EXCLUDED.final_grade, total_hours=EXCLUDED.total_hours"
+    )
+    with get_db() as db:
+        if _USE_PG:
+            row = _fetchone(
+                db,
+                f"INSERT INTO student_course_reviews ({columns}) "
+                f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                f"ON CONFLICT (client_id, course_id) DO UPDATE SET {update} "
+                "RETURNING id",
+                values,
+            )
+            return int(row["id"])
+        sqlite_update = update.replace("EXCLUDED.", "excluded.")
+        _exec(
+            db,
+            f"INSERT INTO student_course_reviews ({columns}) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            f"ON CONFLICT(client_id, course_id) DO UPDATE SET {sqlite_update}",
+            values,
+        )
+        return int(_fetchval(
+            db,
+            "SELECT id FROM student_course_reviews WHERE client_id = %s AND course_id = %s",
+            (client_id, course_id),
+        ))
 
 
 def record_course_outcome(client_id: int, course_id: int, final_grade: float, passing_grade: float = 3.95) -> dict:
@@ -2365,6 +2714,97 @@ def get_all_student_client_ids() -> list[int]:
         return [r["client_id"] for r in rows]
 
 
+def export_student_data(client_id: int) -> dict:
+    """Return every student-owned data category in a portable JSON shape."""
+    direct_tables = {
+        "courses": "student_courses",
+        "exams": "student_exams",
+        "study_plans": "student_study_plans",
+        "study_progress": "student_study_progress",
+        "focus_phases": "student_focus_phases",
+        "course_files": "student_course_files",
+        "course_reviews": "student_course_reviews",
+        "schedule_settings": "student_schedule_settings",
+        "date_overrides": "student_date_overrides",
+        "assignment_progress": "student_assignment_progress",
+        "notes": "student_notes",
+        "xp": "student_xp",
+        "badges": "student_badges",
+        "email_preferences": "student_email_prefs",
+        "streak_freezes": "student_streak_freezes",
+        "daily_quests": "student_daily_quests",
+        "daily_quest_bundles": "student_daily_quest_bundles",
+        "referral_codes": "student_referral_codes",
+        "course_outcomes": "student_course_outcomes",
+        "planner_done": "student_planner_done",
+        "boosts": "student_boosts",
+        "coin_pack_orders": "student_coin_pack_orders",
+        "leaderboard_prizes": "student_lb_prize",
+        "leaderboard_periods_seen": "student_lb_period_seen",
+    }
+    data: dict = {}
+    with get_db() as db:
+        data["academic_profile"] = dict(_fetchone(
+            db,
+            "SELECT c.country_iso, c.university_id, u.name AS university_name, "
+            "c.major_id, m.name AS major_name, c.current_semester, "
+            "c.academic_setup_complete, c.profile_bio "
+            "FROM clients c "
+            "LEFT JOIN universities u ON u.id = c.university_id "
+            "LEFT JOIN majors m ON m.id = c.major_id "
+            "WHERE c.id = %s",
+            (client_id,),
+        ) or {})
+        for key, table in direct_tables.items():
+            try:
+                data[key] = [dict(row) for row in _fetchall(
+                    db, f"SELECT * FROM {table} WHERE client_id = %s ORDER BY 1", (client_id,)
+                )]
+            except Exception:
+                data[key] = []
+
+        decks = [dict(row) for row in _fetchall(
+            db,
+            "SELECT * FROM student_flashcard_decks WHERE client_id = %s ORDER BY id",
+            (client_id,),
+        )]
+        for deck in decks:
+            deck["cards"] = [dict(row) for row in _fetchall(
+                db,
+                "SELECT * FROM student_flashcards WHERE deck_id = %s ORDER BY id",
+                (deck["id"],),
+            )]
+        data["flashcard_decks"] = decks
+
+        quizzes = [dict(row) for row in _fetchall(
+            db,
+            "SELECT * FROM student_quizzes WHERE client_id = %s ORDER BY id",
+            (client_id,),
+        )]
+        for quiz in quizzes:
+            quiz["questions"] = [dict(row) for row in _fetchall(
+                db,
+                "SELECT * FROM student_quiz_questions WHERE quiz_id = %s ORDER BY sort_order, id",
+                (quiz["id"],),
+            )]
+        data["quizzes"] = quizzes
+
+        data["friends"] = [dict(row) for row in _fetchall(
+            db,
+            "SELECT * FROM student_friends WHERE client_id = %s OR friend_client_id = %s ORDER BY id",
+            (client_id, client_id),
+        )]
+        data["referrals"] = [dict(row) for row in _fetchall(
+            db,
+            "SELECT * FROM student_referrals WHERE referrer_id = %s OR referred_id = %s ORDER BY id",
+            (client_id, client_id),
+        )]
+        data["wallet"] = dict(_fetchone(
+            db, "SELECT * FROM student_wallet WHERE client_id = %s", (client_id,)
+        ) or {"coins": 0, "streak_freezes": 0})
+    return data
+
+
 # ── Cleanup ─────────────────────────────────────────────────
 
 
@@ -2447,7 +2887,8 @@ def count_due_flashcards(deck_id: int) -> int:
         ) or 0
 
 
-def update_flashcard_progress(card_id: int, correct: bool, quality: int = None):
+def update_flashcard_progress(card_id: int, client_id: int, correct: bool,
+                              quality: int = None) -> bool:
     """Update flashcard with SM-2 spaced repetition algorithm.
     quality: 0-5 (0=complete blackout, 5=perfect recall)
     If quality is None, use old binary mode (correct=True→4, False→1).
@@ -2457,10 +2898,19 @@ def update_flashcard_progress(card_id: int, correct: bool, quality: int = None):
 
     with get_db() as db:
         # Fetch current SRS state
-        row = _fetchone(db, "SELECT easiness_factor, interval_days, repetitions FROM student_flashcards WHERE id = %s", (card_id,))
-        ef = float(row.get("easiness_factor") or 2.5) if row else 2.5
-        interval = int(row.get("interval_days") or 0) if row else 0
-        reps = int(row.get("repetitions") or 0) if row else 0
+        row = _fetchone(
+            db,
+            "SELECT f.easiness_factor, f.interval_days, f.repetitions, f.deck_id "
+            "FROM student_flashcards f "
+            "JOIN student_flashcard_decks d ON d.id = f.deck_id "
+            "WHERE f.id = %s AND d.client_id = %s",
+            (card_id, client_id),
+        )
+        if not row:
+            return False
+        ef = float(row.get("easiness_factor") or 2.5)
+        interval = int(row.get("interval_days") or 0)
+        reps = int(row.get("repetitions") or 0)
 
         # SM-2 algorithm
         ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
@@ -2488,21 +2938,30 @@ def update_flashcard_progress(card_id: int, correct: bool, quality: int = None):
                   "UPDATE student_flashcards SET times_seen = times_seen + 1, "
                   "times_correct = times_correct + 1, "
                   "easiness_factor = %s, interval_days = %s, repetitions = %s, next_review = %s "
-                  "WHERE id = %s",
-                  (round(ef, 2), interval, reps, next_review, card_id))
+                  "WHERE id = %s AND deck_id = %s",
+                  (round(ef, 2), interval, reps, next_review, card_id, row["deck_id"]))
         else:
             _exec(db,
                   "UPDATE student_flashcards SET times_seen = times_seen + 1, "
                   "easiness_factor = %s, interval_days = %s, repetitions = %s, next_review = %s "
-                  "WHERE id = %s",
-                  (round(ef, 2), interval, reps, next_review, card_id))
+                  "WHERE id = %s AND deck_id = %s",
+                  (round(ef, 2), interval, reps, next_review, card_id, row["deck_id"]))
+        return True
 
 
-def delete_flashcard_deck(deck_id: int, client_id: int):
+def delete_flashcard_deck(deck_id: int, client_id: int) -> bool:
     with get_db() as db:
+        owned = _fetchone(
+            db,
+            "SELECT id FROM student_flashcard_decks WHERE id = %s AND client_id = %s",
+            (deck_id, client_id),
+        )
+        if not owned:
+            return False
         _exec(db, "DELETE FROM student_flashcards WHERE deck_id = %s", (deck_id,))
         _exec(db, "DELETE FROM student_flashcard_decks WHERE id = %s AND client_id = %s",
               (deck_id, client_id))
+        return True
 
 
 def update_flashcard(card_id: int, deck_id: int, front: str, back: str):
@@ -2644,20 +3103,31 @@ def get_quiz_questions(quiz_id: int) -> list[dict]:
         )
 
 
-def update_quiz_score(quiz_id: int, score: int):
+def update_quiz_score(quiz_id: int, client_id: int, score: int) -> bool:
     with get_db() as db:
-        _exec(db,
-              "UPDATE student_quizzes SET attempts = attempts + 1, "
-              "best_score = CASE WHEN %s > best_score THEN %s ELSE best_score END "
-              "WHERE id = %s",
-              (score, score, quiz_id))
+        cur = _exec(
+            db,
+            "UPDATE student_quizzes SET attempts = attempts + 1, "
+            "best_score = CASE WHEN %s > best_score THEN %s ELSE best_score END "
+            "WHERE id = %s AND client_id = %s",
+            (score, score, quiz_id, client_id),
+        )
+        return bool(cur.rowcount)
 
 
-def delete_quiz(quiz_id: int, client_id: int):
+def delete_quiz(quiz_id: int, client_id: int) -> bool:
     with get_db() as db:
+        owned = _fetchone(
+            db,
+            "SELECT id FROM student_quizzes WHERE id = %s AND client_id = %s",
+            (quiz_id, client_id),
+        )
+        if not owned:
+            return False
         _exec(db, "DELETE FROM student_quiz_questions WHERE quiz_id = %s", (quiz_id,))
         _exec(db, "DELETE FROM student_quizzes WHERE id = %s AND client_id = %s",
               (quiz_id, client_id))
+        return True
 
 
 # ── Notes ───────────────────────────────────────────────────
@@ -3530,6 +4000,140 @@ QUEST_POOL = [
 
 QUEST_BUNDLE_BONUS_XP = 15
 _QUEST_XP_BY_KEY = {q["key"]: int(q.get("xp") or 0) for q in QUEST_POOL}
+
+
+def _progress_focus_quests_in_transaction(db, client_id: int, minutes: int, pages: int) -> None:
+    """Apply focus-session quest progress using the caller's transaction.
+
+    Focus claims are idempotent at the phase row. Keeping the related quest
+    writes here prevents a committed phase claim from losing quest credit if
+    the request process stops before route-level follow-up work can run.
+    """
+    import random
+    from datetime import date as _date
+
+    today = _date.today()
+    quest_date = today if _USE_PG else today.isoformat()
+    rows = _fetchall(
+        db,
+        "SELECT * FROM student_daily_quests "
+        "WHERE client_id = %s AND quest_date = %s ORDER BY id",
+        (client_id, quest_date),
+    )
+    if not rows:
+        picks = random.Random(f"{client_id}-{today.isoformat()}").sample(QUEST_POOL, 3)
+        for quest in picks:
+            _exec(
+                db,
+                "INSERT INTO student_daily_quests "
+                "(client_id, quest_date, quest_key, target, progress, xp_reward) "
+                "VALUES (%s, %s, %s, %s, 0, %s)",
+                (
+                    client_id,
+                    quest_date,
+                    quest["key"],
+                    quest["target"],
+                    quest["xp"],
+                ),
+            )
+        rows = _fetchall(
+            db,
+            "SELECT * FROM student_daily_quests "
+            "WHERE client_id = %s AND quest_date = %s ORDER BY id",
+            (client_id, quest_date),
+        )
+
+    increments = {
+        "focus_minutes": max(0, int(minutes or 0)),
+        "sessions_completed": 1 if int(minutes or 0) > 0 else 0,
+        "pages_read": max(0, int(pages or 0)),
+    }
+    newly_completed = False
+    now = "NOW()" if _USE_PG else "datetime('now','localtime')"
+    for row in rows:
+        metric = next(
+            (quest["metric"] for quest in QUEST_POOL if quest["key"] == row["quest_key"]),
+            "",
+        )
+        amount = increments.get(metric, 0)
+        if amount <= 0 or row.get("completed_at"):
+            continue
+        target = int(row["target"])
+        progress = min(target, int(row.get("progress") or 0) + amount)
+        if progress >= target:
+            _exec(
+                db,
+                f"UPDATE student_daily_quests SET progress = %s, completed_at = {now} "
+                "WHERE id = %s AND completed_at IS NULL",
+                (progress, row["id"]),
+            )
+            reward = int(
+                row.get("xp_reward")
+                or _QUEST_XP_BY_KEY.get(row["quest_key"], 0)
+                or 0
+            )
+            if reward:
+                _exec(
+                    db,
+                    "INSERT INTO student_xp (client_id, action, xp, detail) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (
+                        client_id,
+                        "daily_quest",
+                        reward,
+                        f"Quest completed: {row['quest_key']}",
+                    ),
+                )
+            newly_completed = True
+        else:
+            _exec(
+                db,
+                "UPDATE student_daily_quests SET progress = %s WHERE id = %s",
+                (progress, row["id"]),
+            )
+
+    if not newly_completed:
+        return
+    done_count = int(
+        _fetchval(
+            db,
+            "SELECT COUNT(*) FROM student_daily_quests "
+            "WHERE client_id = %s AND quest_date = %s AND completed_at IS NOT NULL",
+            (client_id, quest_date),
+        )
+        or 0
+    )
+    total = int(
+        _fetchval(
+            db,
+            "SELECT COUNT(*) FROM student_daily_quests "
+            "WHERE client_id = %s AND quest_date = %s",
+            (client_id, quest_date),
+        )
+        or 0
+    )
+    if total < 3 or done_count < total:
+        return
+    inserted = _exec(
+        db,
+        "INSERT INTO student_daily_quest_bundles (client_id, quest_date) "
+        "SELECT %s, %s WHERE NOT EXISTS ("
+        "SELECT 1 FROM student_daily_quest_bundles "
+        "WHERE client_id = %s AND quest_date = %s)",
+        (client_id, quest_date, client_id, quest_date),
+    )
+    if inserted.rowcount and QUEST_BUNDLE_BONUS_XP > 0:
+        _exec(
+            db,
+            "INSERT INTO student_xp (client_id, action, xp, detail) "
+            "VALUES (%s, %s, %s, %s)",
+            (
+                client_id,
+                "daily_quest_bundle",
+                QUEST_BUNDLE_BONUS_XP,
+                "Completed all daily missions",
+            ),
+        )
 
 
 def _sync_daily_quest_rewards(client_id: int, quest_date) -> None:
@@ -4673,6 +5277,19 @@ def _ensure_wallet(db, client_id: int) -> None:
         )
 
 
+def _lock_wallet(db, client_id: int) -> dict:
+    """Return a wallet row while serializing purchases for this account."""
+    if not _USE_PG:
+        db.execute("BEGIN IMMEDIATE")
+    _ensure_wallet(db, client_id)
+    suffix = " FOR UPDATE" if _USE_PG else ""
+    return _fetchone(
+        db,
+        "SELECT * FROM student_wallet WHERE client_id = %s" + suffix,
+        (client_id,),
+    )
+
+
 def _grant_weekly_free_freeze(db, client_id: int) -> None:
     """Once every 7 days, grant the user 1 free streak freeze (capped at 3 owned).
     Tracked via clients.mail_preferences JSON key `last_free_freeze_grant`.
@@ -4688,7 +5305,7 @@ def _grant_weekly_free_freeze(db, client_id: int) -> None:
         except Exception:
             prefs = {}
         last = prefs.get("last_free_freeze_grant")
-        now = datetime.utcnow()
+        now = datetime.now()
         due = True
         if last:
             try:
@@ -4811,22 +5428,21 @@ def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dic
         cost = STREAK_FREEZE_BUNDLE_PRICE
     else:
         cost = STREAK_FREEZE_PRICE * qty
+    cap = _streak_freeze_cap(client_id)
     with get_db() as db:
         _ensure_wallet(db, client_id)
-        row = _fetchone(db, "SELECT coins, streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,))
-        coins = int(row.get("coins") or 0)
-        owned = int(row.get("streak_freezes") or 0)
-        cap = _streak_freeze_cap(client_id)
-        if owned + qty > cap:
-            return {"ok": False, "error": f"Puedes guardar máximo {cap} congeladores de racha a la vez."}
-        if coins < cost:
-            return {"ok": False, "error": "Not enough coins."}
-        _exec(
+        changed = _exec(
             db,
-            "UPDATE student_wallet SET coins = coins - %s, streak_freezes = streak_freezes + %s WHERE client_id = %s",
-            (cost, qty, client_id),
+            "UPDATE student_wallet SET coins = coins - %s, "
+            "streak_freezes = streak_freezes + %s "
+            "WHERE client_id = %s AND coins >= %s AND streak_freezes + %s <= %s",
+            (cost, qty, client_id, cost, qty, cap),
         )
         new = _fetchone(db, "SELECT coins, streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,))
+        if not changed.rowcount:
+            if int(new.get("streak_freezes") or 0) + qty > cap:
+                return {"ok": False, "error": f"Puedes guardar máximo {cap} congeladores de racha a la vez."}
+            return {"ok": False, "error": "Not enough coins."}
     return {"ok": True, "coins": int(new.get("coins") or 0), "streak_freezes": int(new.get("streak_freezes") or 0)}
 
 
@@ -4846,26 +5462,36 @@ def buy_banner(client_id: int, banner_key: str) -> dict:
         return {"ok": False, "error": "Unknown banner."}
     if cfg.get("plus_only") and not _is_plus_user(client_id):
         return {"ok": False, "error": "Plus subscription required."}
-    total_xp = get_total_xp(client_id)
-    if total_xp < cfg["xp_required"]:
-        return {"ok": False, "error": f"Need {cfg['xp_required']} XP to unlock this banner."}
-    wallet = get_wallet(client_id)
-    if banner_key in wallet["unlocked_banners"]:
-        return {"ok": False, "error": "Already owned."}
-    if wallet["coins"] < cfg["price_coins"]:
-        return {"ok": False, "error": "Not enough coins."}
-    new_unlocked = wallet["unlocked_banners"] + [banner_key]
     with get_db() as db:
-        _ensure_wallet(db, client_id)
+        row = _lock_wallet(db, client_id)
+        total_xp = int(_fetchval(
+            db,
+            "SELECT COALESCE(SUM(xp), 0) FROM student_xp WHERE client_id = %s",
+            (client_id,),
+        ) or 0)
+        if total_xp < cfg["xp_required"]:
+            return {"ok": False, "error": f"Need {cfg['xp_required']} XP to unlock this banner."}
+        try:
+            unlocked = _json.loads(row.get("unlocked_banners") or '["default"]')
+        except Exception:
+            unlocked = ["default"]
+        if banner_key in unlocked:
+            return {"ok": False, "error": "Already owned."}
+        coins = int(row.get("coins") or 0)
+        if coins < cfg["price_coins"]:
+            return {"ok": False, "error": "Not enough coins."}
+        new_unlocked = list(unlocked) + [banner_key]
         _exec(
             db,
-            "UPDATE student_wallet SET coins = coins - %s, unlocked_banners = %s WHERE client_id = %s",
-            (cfg["price_coins"], _json.dumps(new_unlocked), client_id),
+            "UPDATE student_wallet SET coins = coins - %s, unlocked_banners = %s "
+            "WHERE client_id = %s AND coins >= %s",
+            (cfg["price_coins"], _json.dumps(new_unlocked), client_id,
+             cfg["price_coins"]),
         )
     # "Banner Collector": 5+ banners unlocked (excludes the free default).
     if len([b for b in new_unlocked if b != "default"]) >= 5:
         earn_badge(client_id, "banner_collector")
-    return {"ok": True, "coins": wallet["coins"] - cfg["price_coins"], "unlocked_banners": new_unlocked}
+    return {"ok": True, "coins": coins - cfg["price_coins"], "unlocked_banners": new_unlocked}
 
 
 def set_selected_banner(client_id: int, banner_key: str) -> dict:
@@ -4960,27 +5586,39 @@ def buy_flag(client_id: int, flag_key: str) -> dict:
         return {"ok": False, "error": "Already owned."}
     if cfg.get("plus_only") and not _is_plus_user(client_id):
         return {"ok": False, "error": "Plus subscription required."}
-    total_xp = get_total_xp(client_id)
-    if total_xp < cfg["xp_required"]:
-        return {"ok": False, "error": f"Need {cfg['xp_required']} XP to unlock this flag."}
-    state = get_flag_state(client_id)
-    if flag_key in state["unlocked_flags"]:
-        return {"ok": False, "error": "Already owned."}
-    wallet = get_wallet(client_id)
-    if wallet["coins"] < cfg["price_coins"]:
-        return {"ok": False, "error": "Not enough coins."}
-    new_unlocked = list(state["unlocked_flags"]) + [flag_key]
     with get_db() as db:
-        _ensure_wallet(db, client_id)
-        _exec(db, "UPDATE student_wallet SET coins = coins - %s WHERE client_id = %s",
-              (cfg["price_coins"], client_id))
+        wallet = _lock_wallet(db, client_id)
+        total_xp = int(_fetchval(
+            db,
+            "SELECT COALESCE(SUM(xp), 0) FROM student_xp WHERE client_id = %s",
+            (client_id,),
+        ) or 0)
+        if total_xp < cfg["xp_required"]:
+            return {"ok": False, "error": f"Need {cfg['xp_required']} XP to unlock this flag."}
         prefs = _load_flag_prefs(db, client_id)
+        unlocked = prefs.get("unlocked_flags") or ["none"]
+        if not isinstance(unlocked, list):
+            unlocked = ["none"]
+        if flag_key in unlocked:
+            return {"ok": False, "error": "Already owned."}
+        coins = int(wallet.get("coins") or 0)
+        if coins < cfg["price_coins"]:
+            return {"ok": False, "error": "Not enough coins."}
+        new_unlocked = list(unlocked) + [flag_key]
+        changed = _exec(
+            db,
+            "UPDATE student_wallet SET coins = coins - %s "
+            "WHERE client_id = %s AND coins >= %s",
+            (cfg["price_coins"], client_id, cfg["price_coins"]),
+        )
+        if not changed.rowcount:
+            return {"ok": False, "error": "Not enough coins."}
         prefs["unlocked_flags"] = new_unlocked
         _save_flag_prefs(db, client_id, prefs)
     # "Flag Collector": 5+ flags unlocked (excludes the free "none").
     if len([f for f in new_unlocked if f != "none"]) >= 5:
         earn_badge(client_id, "flag_collector")
-    return {"ok": True, "coins": wallet["coins"] - cfg["price_coins"], "unlocked_flags": new_unlocked}
+    return {"ok": True, "coins": coins - cfg["price_coins"], "unlocked_flags": new_unlocked}
 
 
 def set_selected_flag(client_id: int, flag_key: str) -> dict:
@@ -5140,29 +5778,40 @@ def buy_bundle(client_id: int, bundle_key: str) -> dict:
     if bnr_key not in BANNERS or flg_key not in FLAGS:
         return {"ok": False, "error": "Bundle misconfigured."}
     price = bundle_price(bundle_key)
-    wallet = get_wallet(client_id)
-    if wallet["coins"] < price:
-        return {"ok": False, "error": f"Need {price} coins (have {wallet['coins']})."}
-    flag_state = get_flag_state(client_id)
-    new_banners = list(wallet["unlocked_banners"])
-    if bnr_key not in new_banners:
-        new_banners.append(bnr_key)
-    new_flags = list(flag_state["unlocked_flags"])
-    if flg_key not in new_flags:
-        new_flags.append(flg_key)
     with get_db() as db:
-        _ensure_wallet(db, client_id)
-        _exec(
-            db,
-            "UPDATE student_wallet SET coins = coins - %s, unlocked_banners = %s WHERE client_id = %s",
-            (price, _json.dumps(new_banners), client_id),
-        )
+        wallet = _lock_wallet(db, client_id)
+        try:
+            current_banners = _json.loads(wallet.get("unlocked_banners") or '["default"]')
+        except Exception:
+            current_banners = ["default"]
         prefs = _load_flag_prefs(db, client_id)
+        current_flags = prefs.get("unlocked_flags") or ["none"]
+        if not isinstance(current_flags, list):
+            current_flags = ["none"]
+        if bnr_key in current_banners and flg_key in current_flags:
+            return {"ok": False, "error": "Already owned."}
+        coins = int(wallet.get("coins") or 0)
+        if coins < price:
+            return {"ok": False, "error": f"Need {price} coins (have {coins})."}
+        new_banners = list(current_banners)
+        if bnr_key not in new_banners:
+            new_banners.append(bnr_key)
+        new_flags = list(current_flags)
+        if flg_key not in new_flags:
+            new_flags.append(flg_key)
+        changed = _exec(
+            db,
+            "UPDATE student_wallet SET coins = coins - %s, unlocked_banners = %s "
+            "WHERE client_id = %s AND coins >= %s",
+            (price, _json.dumps(new_banners), client_id, price),
+        )
+        if not changed.rowcount:
+            return {"ok": False, "error": "Not enough coins."}
         prefs["unlocked_flags"] = new_flags
         _save_flag_prefs(db, client_id, prefs)
     return {
         "ok": True, "bundle": bundle_key, "spent": price,
-        "coins": wallet["coins"] - price,
+        "coins": coins - price,
         "banner": bnr_key, "flag": flg_key,
         "banner_name": BANNERS[bnr_key].get("name", bnr_key),
         "flag_name": FLAGS[flg_key].get("name", flg_key),

@@ -8,7 +8,8 @@ services:
   - type: web
     name: machreach-web
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --require-hashes -r requirements.lock
+    preDeployCommand: python migrate.py
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 --max-requests 5000 --max-requests-jitter 500
     healthCheckPath: /health
     envVars:
@@ -44,12 +45,6 @@ services:
         sync: false
       - key: LEMON_SQUEEZY_WEBHOOK_SECRET
         sync: false
-      - key: LS_VARIANT_GROWTH
-        sync: false
-      - key: LS_VARIANT_PRO
-        sync: false
-      - key: LS_VARIANT_UNLIMITED
-        sync: false
       - key: LS_VARIANT_STUDENT_PLUS
         sync: false
       - key: LS_VARIANT_STUDENT_ULTIMATE
@@ -70,11 +65,14 @@ services:
         sync: false
       - key: POSTHOG_HOST
         sync: false
+      - key: LEADERBOARD_WINNERS_RECIPIENT
+        sync: false
 
   - type: worker
     name: machreach-worker
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --require-hashes -r requirements.lock
+    preDeployCommand: python migrate.py
     startCommand: python worker.py
     envVars:
       - key: PYTHON_VERSION
@@ -91,7 +89,10 @@ services:
           type: web
           envVarKey: SECRET_KEY
       - key: ENCRYPTION_KEY
-        sync: false
+        fromService:
+          name: machreach-web
+          type: web
+          envVarKey: ENCRYPTION_KEY
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -106,3 +107,8 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
+      - key: LEADERBOARD_WINNERS_RECIPIENT
+        fromService:
+          name: machreach-web
+          type: web
+          envVarKey: LEADERBOARD_WINNERS_RECIPIENT

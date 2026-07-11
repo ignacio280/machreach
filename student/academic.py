@@ -578,15 +578,20 @@ def search_majors(query: str, university_id: Optional[int] = None, limit: int = 
     q_literal = normalize_name(query)
 
     seen_ids: set[int] = set()
+    seen_names: set[str] = set()
     rows: list[dict] = []
 
-    # ── Helper: append rows, preserving order, de-duping on id
+    # ── Helper: append rows, preserving order, de-duping on both id and
+    # normalized display name. University-scoped rows are appended first.
     def _append(hits: list[dict]) -> None:
         for r in hits:
             rid = r["id"]
-            if rid in seen_ids:
+            name_key = normalize_major(r.get("name") or "") or normalize_name(r.get("name") or "")
+            if rid in seen_ids or (name_key and name_key in seen_names):
                 continue
             seen_ids.add(rid)
+            if name_key:
+                seen_names.add(name_key)
             rows.append(r)
 
     with get_db() as db:

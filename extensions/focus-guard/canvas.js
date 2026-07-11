@@ -149,23 +149,36 @@
     setBusy(true);
     setMessage("Leyendo tus cursos...");
     try {
-      const response = await fetch(
-        location.origin + "/api/v1/courses?per_page=100&enrollment_state=active&include[]=term",
-        { credentials: "same-origin", headers: { Accept: "application/json" } }
-      );
-      if (!response.ok) {
-        setMessage(
-          response.status === 401 || response.status === 403
-            ? "Inicia sesión en Canvas y vuelve a intentarlo."
-            : "No pude leer tus cursos desde Canvas.",
-          "error"
+      let nextUrl = location.origin + "/api/v1/courses?per_page=100&enrollment_state=active&include[]=term";
+      const allCourses = [];
+      let pageCount = 0;
+      while (nextUrl && pageCount < 20) {
+        const response = await fetch(
+          nextUrl,
+          { credentials: "same-origin", headers: { Accept: "application/json" } }
         );
-        setBusy(false);
-        return;
+        if (!response.ok) {
+          setMessage(
+            response.status === 401 || response.status === 403
+              ? "Inicia sesión en Canvas y vuelve a intentarlo."
+              : "No pude leer todos tus cursos desde Canvas.",
+            "error"
+          );
+          setBusy(false);
+          return;
+        }
+        const data = JSON.parse((await response.text()).replace(/^while\(1\);/, ""));
+        if (!Array.isArray(data)) throw new Error("Canvas returned an invalid course page");
+        allCourses.push(...data);
+        const link = response.headers.get("Link") || "";
+        const next = link.split(",").map((part) => part.trim()).find((part) => /rel="next"/.test(part));
+        const match = next && next.match(/<([^>]+)>/);
+        nextUrl = match ? match[1] : "";
+        pageCount += 1;
       }
+      if (nextUrl) throw new Error("Canvas pagination limit exceeded");
 
-      const data = JSON.parse((await response.text()).replace(/^while\(1\);/, ""));
-      const courses = (Array.isArray(data) ? data : [])
+      const courses = allCourses
         .filter((course) => course && course.id && !course.access_restricted_by_date)
         .map((course) => ({
           id: course.id,
@@ -174,16 +187,10 @@
           term: course.term ? { name: course.term.name } : null
         }));
 
-      if (!courses.length) {
-        setMessage("No encontré cursos activos en tu Canvas.", "error");
-        setBusy(false);
-        return;
-      }
-
       setMessage("Enviando " + courses.length + " cursos a MachReach...");
       const result = await sendMessage({ type: "mrImportCourses", courses });
       if (result.ok) {
-        setMessage("Listo: " + (result.saved || 0) + " cursos sincronizados.", "success");
+        setMessage("Listo: " + (result.saved || 0) + " activos, " + (result.archived || 0) + " archivados.", "success");
         window.setTimeout(removeWidget, 1400);
       } else if (result.noToken) {
         setMessage("Abre MachReach con tu sesión iniciada y reintenta.", "error");
@@ -343,8 +350,6 @@
   }
 
   async function initialize() {
-    const status = await sendMessage({ type: "mrCanvasSyncStatus" });
-    if (status.ok && status.synced) return;
     if (document.body) {
       mountWidget();
     } else {

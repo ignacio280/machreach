@@ -37,12 +37,15 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 DATABASE_PATH = Path(os.getenv("DATABASE_PATH", BASE_DIR / "data" / "outreach.db"))
 
 # App
+_IS_PRODUCTION = bool(os.getenv("RENDER", "")) or any(
+    (os.getenv(name, "") or "").strip().lower() in {"prod", "production"}
+    for name in ("FLASK_ENV", "APP_ENV", "ENVIRONMENT")
+)
 _secret = os.getenv("SECRET_KEY", "")
-if not _secret and os.getenv("RENDER", ""):
+if _IS_PRODUCTION and _secret in {"", "dev-secret-change-me", "change-me-to-a-random-string"}:
     raise RuntimeError("SECRET_KEY must be set in production")
 SECRET_KEY = _secret or "dev-secret-change-me"
 BASE_URL = os.getenv("BASE_URL", "http://localhost:5000")
-SENDER_NAME = os.getenv("SENDER_NAME", "Ignacio")
 ADMIN_EMAILS = {
     e.strip().lower()
     for e in os.getenv(
@@ -69,12 +72,15 @@ SYSTEM_SMTP_PASSWORD = os.getenv("SYSTEM_SMTP_PASSWORD", "") or os.getenv("SMTP_
 
 # Encryption key for email account passwords at rest (Fernet, 32-byte base64)
 _enc_key = os.getenv("ENCRYPTION_KEY", "")
-if not _enc_key and os.getenv("RENDER", ""):
+if _IS_PRODUCTION and _enc_key in {
+    "",
+    "change-me-to-a-different-stable-random-string",
+    "RGV2LWVuY3J5cHRpb24ta2V5LW5vdC1mb3ItcHJvZA==",
+}:
     raise RuntimeError("ENCRYPTION_KEY must be set in production for stable encrypted credentials")
 ENCRYPTION_KEY = _enc_key or "RGV2LWVuY3J5cHRpb24ta2V5LW5vdC1mb3ItcHJvZA=="
 
 # Sending limits
-DELAY_BETWEEN_EMAILS_SEC = int(os.getenv("DELAY_BETWEEN_EMAILS_SEC", "5"))  # seconds between sends
 FOLLOWUP_DELAY_DAYS = [3, 7, 14]  # Days after initial email for follow-ups
 
 # Apollo.io (prospect finder — free tier: 10k credits/month)
@@ -88,10 +94,6 @@ APOLLO_API_KEY = os.getenv("APOLLO_API_KEY", "")
 LEMON_SQUEEZY_API_KEY        = os.getenv("LEMON_SQUEEZY_API_KEY", "")
 LEMON_SQUEEZY_STORE_ID       = os.getenv("LEMON_SQUEEZY_STORE_ID", "")
 LEMON_SQUEEZY_WEBHOOK_SECRET = os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "")
-# Outreach SaaS subscription variant IDs.
-LS_VARIANT_GROWTH    = os.getenv("LS_VARIANT_GROWTH", "")
-LS_VARIANT_PRO       = os.getenv("LS_VARIANT_PRO", "")
-LS_VARIANT_UNLIMITED = os.getenv("LS_VARIANT_UNLIMITED", "")
 # Student PLUS / Ultimate subscription variant IDs.
 LS_VARIANT_STUDENT_PLUS     = os.getenv("LS_VARIANT_STUDENT_PLUS", "")
 LS_VARIANT_STUDENT_ULTIMATE = os.getenv("LS_VARIANT_STUDENT_ULTIMATE", "")
@@ -104,11 +106,4 @@ LS_VARIANT_COIN_ULTRA  = os.getenv("LS_VARIANT_COIN_ULTRA", "")
 
 # Sentry (error tracking — set SENTRY_DSN in production)
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
-
-# Plan limits
-PLAN_LIMITS = {
-    "free":      {"emails_per_month": 200,   "emails_per_day": 50,  "campaigns": 2,  "mail_hub_syncs": 10,  "ai_classify": False, "mailboxes": 1,  "price": 0},
-    "growth":    {"emails_per_month": 2000,  "emails_per_day": 200, "campaigns": -1, "mail_hub_syncs": -1,  "ai_classify": True,  "mailboxes": 3,  "price": 800},
-    "pro":       {"emails_per_month": 10000, "emails_per_day": 500, "campaigns": -1, "mail_hub_syncs": -1,  "ai_classify": True,  "mailboxes": 5,  "price": 2000},
-    "unlimited": {"emails_per_month": -1,    "emails_per_day": -1,  "campaigns": -1, "mail_hub_syncs": -1,  "ai_classify": True,  "mailboxes": -1, "price": 4000},
-}
+LEADERBOARD_WINNERS_RECIPIENT = os.getenv("LEADERBOARD_WINNERS_RECIPIENT", "")

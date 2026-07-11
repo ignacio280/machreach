@@ -30,9 +30,8 @@ python -m pytest       # covers the money paths: subscriptions, referrals, focus
 ```
 app.py                   - Flask app shell: auth, layout, billing webhook, public/legal pages
 student/                 - Student dashboard, study tools, gamification, and APIs (registered as routes)
-outreach/                - Shared infrastructure (config, DB + connection pool, i18n, mail, billing)
-professional/            - Standalone module used only by the background worker
-worker.py                - APScheduler cron jobs (scheduled email, payouts, background maintenance)
+outreach/                - Internal legacy-named package containing shared config, DB, i18n, and billing infrastructure (no Outreach product routes)
+worker.py                - Student AI jobs, plan maintenance, streak reminders, and leaderboard reporting
 extensions/focus-guard   - Focus Guard browser extension
 static/machreach_landing - Pre-built, pre-rendered React landing (see landing_build/)
 landing_build/           - Local-only landing build (esbuild + jsdom prerender; output committed)
@@ -42,4 +41,6 @@ docs/                    - Pitch and pricing docs
 
 ## Deployment
 Runs on Render (`render.yaml`): a single gunicorn web service + a worker service, backed by Postgres.
+
+Production release, backup/restore, incident, rollback, retention, and alert procedures are documented in [docs/operations.md](docs/operations.md).
 Locally it falls back to SQLite when `DATABASE_URL` is unset.

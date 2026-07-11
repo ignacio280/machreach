@@ -23,21 +23,24 @@ def test_canvas_extension_status_only_counts_canvas_courses(client, make_user):
         json={"token": token},
     )
     assert empty_response.status_code == 200
-    assert empty_response.get_json() == {"ok": True, "synced": False}
+    assert empty_response.get_json() == {"ok": True, "synced": False, "last_synced": ""}
 
     sdb.add_manual_course(client_id, "MAN101", "Manual Course")
     manual_response = client.post(
         "/api/student/canvas/extension-status",
         json={"token": token},
     )
-    assert manual_response.get_json() == {"ok": True, "synced": False}
+    assert manual_response.get_json() == {"ok": True, "synced": False, "last_synced": ""}
 
     sdb.upsert_course(client_id, 12345, "Canvas Course", "CAN101", "2026-1")
     canvas_response = client.post(
         "/api/student/canvas/extension-status",
         json={"token": token},
     )
-    assert canvas_response.get_json() == {"ok": True, "synced": True}
+    canvas_status = canvas_response.get_json()
+    assert canvas_status["ok"] is True
+    assert canvas_status["synced"] is True
+    assert canvas_status["last_synced"]
 
 
 def test_canvas_extension_import_survives_www_redirect(client, make_user):
@@ -76,7 +79,11 @@ def test_canvas_extension_import_survives_www_redirect(client, make_user):
     )
 
     assert response.status_code == 200
-    assert response.get_json() == {"ok": True, "saved": 1}
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["saved"] == 1
+    assert payload["archived"] == 0
+    assert payload["synced_at"]
     assert any(
         int(course["canvas_course_id"]) == 98765
         for course in sdb.get_courses(client_id)
