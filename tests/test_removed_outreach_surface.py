@@ -8,6 +8,14 @@ from outreach import lemonsqueezy as ls
 import worker
 
 
+def _find_spec(name: str):
+    """Return no spec when either the module or its parent was removed."""
+    try:
+        return importlib.util.find_spec(name)
+    except ModuleNotFoundError:
+        return None
+
+
 def test_worker_has_no_legacy_campaign_or_mail_jobs():
     source = Path(worker.__file__).read_text(encoding="utf-8")
 
@@ -47,11 +55,11 @@ def test_fresh_schema_has_no_legacy_product_tables():
 
 
 def test_removed_product_modules_are_not_importable():
-    assert importlib.util.find_spec("outreach.mail_hub") is None
-    assert importlib.util.find_spec("outreach.reply_checker") is None
-    assert importlib.util.find_spec("outreach.sender") is None
-    assert importlib.util.find_spec("outreach.ai") is None
-    assert importlib.util.find_spec("professional.routes") is None
+    assert _find_spec("outreach.mail_hub") is None
+    assert _find_spec("outreach.reply_checker") is None
+    assert _find_spec("outreach.sender") is None
+    assert _find_spec("outreach.ai") is None
+    assert _find_spec("professional.routes") is None
 
 
 def test_migration_archives_subscription_ids_before_dropping_legacy_tables():

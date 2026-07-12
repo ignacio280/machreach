@@ -420,7 +420,19 @@ def _archive_and_drop_retired_product_tables() -> None:
             "status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, "
             "last_error TEXT DEFAULT '', updated_at TEXT)",
         )
-        try:
+        if _USE_PG:
+            legacy_subscriptions = _fetchone(
+                db,
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_name = 'subscriptions'",
+            )
+        else:
+            legacy_subscriptions = _fetchone(
+                db,
+                "SELECT name AS table_name FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'subscriptions'",
+            )
+        if legacy_subscriptions:
             _exec(
                 db,
                 "INSERT INTO retired_billing_cancellations "
@@ -430,11 +442,6 @@ def _archive_and_drop_retired_product_tables() -> None:
                 "WHERE COALESCE(stripe_subscription_id, '') <> '' "
                 "ON CONFLICT(subscription_id) DO NOTHING",
             )
-        except Exception as exc:
-            # Fresh databases and already-cleaned deployments have no legacy
-            # subscription table. Any other failure must stop the migration.
-            if "no such table" not in str(exc).lower() and "does not exist" not in str(exc).lower():
-                raise
         for table in _RETIRED_PRODUCT_TABLES:
             _exec(db, f"DROP TABLE IF EXISTS {table}" + (" CASCADE" if _USE_PG else ""))
 
