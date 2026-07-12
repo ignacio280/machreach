@@ -2388,7 +2388,7 @@ def delete_account():
         flash(("error", "Please type DELETE to confirm."))
         return redirect(url_for(redir))
     client_id = session["client_id"]
-    from outreach.db import get_db, _exec
+    from outreach.db import get_db, _exec, _fetchall, _USE_PG
     with get_db() as db:
         _ls_ids = _collect_ls_sub_ids(db, client_id)
     if not _cancel_ls_subs(_ls_ids, client_id):
@@ -2397,6 +2397,18 @@ def delete_account():
         return redirect(url_for(redir))
 
     with get_db() as db:
+        if _USE_PG:
+            table_rows = _fetchall(
+                db,
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = 'public'",
+            )
+        else:
+            table_rows = _fetchall(
+                db,
+                "SELECT name AS table_name FROM sqlite_master WHERE type = 'table'",
+            )
+        existing_tables = {row["table_name"] for row in table_rows}
         # Student data (flashcards & quiz_questions cascade-delete via their parent tables)
         for tbl in ["student_quizzes",
                      "student_flashcard_decks", "student_notes",
@@ -2405,15 +2417,11 @@ def delete_account():
                      "student_schedule_settings",
                      "student_xp", "student_badges", "student_email_prefs",
                      "student_canvas_tokens", "student_courses"]:
-            try:
+            if tbl in existing_tables:
                 _exec(db, f"DELETE FROM {tbl} WHERE client_id = %s", (client_id,))
-            except Exception:
-                pass
         for tbl2 in ["password_reset_tokens", "email_verification_tokens"]:
-            try:
+            if tbl2 in existing_tables:
                 _exec(db, f"DELETE FROM {tbl2} WHERE client_id = %s", (client_id,))
-            except Exception:
-                pass
         _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
     session.clear()
     flash(("success", t("settings.account_deleted")))
