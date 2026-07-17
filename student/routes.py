@@ -22771,14 +22771,14 @@ No markdown, no code fences. ONLY JSON.
             if sub_id and local_paid_tier in paid_tiers:
                 if tier == local_paid_tier and provider_status in {"active", "on_trial", "trialing"}:
                     return jsonify(ok=True, tier=tier, unchanged=True)
-                if not variant:
-                    return jsonify(ok=False, error="Plan not configured for checkout."), 503
                 if provider_status in delinquent_statuses:
                     return jsonify(
                         ok=False,
                         error="Tu suscripcion tiene un pago pendiente. Actualiza el medio de pago o contacta soporte.",
                     ), 409
                 if provider_status in renewable_statuses:
+                    if not variant:
+                        return jsonify(ok=False, error="Plan not configured for checkout."), 503
                     if not ls.update_subscription_variant(sub_id, variant):
                         return jsonify(
                             ok=False,
