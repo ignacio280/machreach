@@ -47,6 +47,10 @@ src += "\n\n" + bootstrap + `
   var el = document.getElementById("root");
   if (!el) return;
   var element = React.createElement(App);
+  if (window.__MACHREACH_CAPTURE_APP__) {
+    window.__MACHREACH_APP__ = App;
+    return;
+  }
   if (el.firstElementChild) { el.innerHTML = ""; }
   ReactDOM.createRoot(el).render(element);
 })();`;
@@ -65,7 +69,10 @@ console.log(`bundle.min.js written (${out.code.length} bytes)`);
 
 // --- 3. Pre-render via jsdom ----------------------------------------------
 const reactUMD = readFileSync(join(LANDING, "vendor", "react.production.min.js"), "utf-8");
-const reactDomUMD = readFileSync(join(LANDING, "vendor", "react-dom.production.min.js"), "utf-8");
+const reactDomServerUMD = readFileSync(
+  join(__dirname, "node_modules", "react-dom", "umd", "react-dom-server-legacy.browser.production.min.js"),
+  "utf-8",
+);
 
 const dom = new JSDOM(
   '<!doctype html><html><head></head><body><div id="root"></div></body></html>',
@@ -98,11 +105,16 @@ function inject(code) {
 }
 let prerendered = "";
 try {
+  w.__MACHREACH_CAPTURE_APP__ = true;
   inject(reactUMD);
-  inject(reactDomUMD);
+  inject(reactDomServerUMD);
   inject(out.code);
-  await new Promise((r) => setTimeout(r, 250)); // let React flush + effects run
-  prerendered = w.document.getElementById("root").innerHTML;
+  if (typeof w.__MACHREACH_APP__ !== "function") {
+    throw new Error("Landing App was not exposed for prerendering");
+  }
+  prerendered = w.ReactDOMServer.renderToString(
+    w.React.createElement(w.__MACHREACH_APP__),
+  );
 } catch (e) {
   console.warn("Prerender failed, shipping empty #root (client will render):", e.message);
 } finally {
