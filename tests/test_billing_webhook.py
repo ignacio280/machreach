@@ -78,6 +78,20 @@ def test_payment_failure_revokes_access_and_success_restores_it(client, make_use
     assert ssub.get_tier(cid) == "plus"
 
 
+def test_payment_recovered_restores_access(client, make_user):
+    cid = make_user()
+    _post(client, _student_event("subscription_created", cid, "plus"))
+
+    failed = _student_event("subscription_payment_failed", cid, "plus")
+    failed["data"]["attributes"]["status"] = "past_due"
+    assert _post(client, failed).status_code == 200
+    assert ssub.get_tier(cid) == "free"
+
+    recovered = _student_event("subscription_payment_recovered", cid, "plus")
+    assert _post(client, recovered).status_code == 200
+    assert ssub.get_tier(cid) == "plus"
+
+
 def test_bad_signature_rejected(client, make_user):
     cid = make_user()
     r = _post(client, _student_event("subscription_created", cid, "plus"), sign=False)

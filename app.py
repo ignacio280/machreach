@@ -3681,7 +3681,10 @@ def lemonsqueezy_webhook():
         elif event_name == "subscription_payment_failed":
             ssub.set_subscription_state(cid, status="past_due",
                                         ls_sub_id=sub_id or None)
-        elif event_name == "subscription_payment_success":
+        elif event_name in (
+            "subscription_payment_success",
+            "subscription_payment_recovered",
+        ):
             ssub.set_subscription_state(cid, tier=tier, status="active",
                                         ls_sub_id=sub_id or None)
         _finish_claimed_ls_event()
