@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import contextmanager
 from datetime import datetime, date, timedelta, timezone
 
 from machreach_core.db import get_db
@@ -122,6 +123,37 @@ def _current_bonus_month() -> str:
     return _utcnow().strftime("%Y-%m")
 
 
+@contextmanager
+def _optional_db_work(db, savepoint_name: str, client_id: int):
+    """Isolate non-critical benefits without poisoning a Postgres transaction."""
+    from machreach_core.db import _exec
+
+    safe_name = "machreach_" + "".join(
+        char for char in savepoint_name.lower() if char.isalnum() or char == "_"
+    )
+    _exec(db, f"SAVEPOINT {safe_name}")
+    try:
+        yield
+    except Exception as e:
+        try:
+            _exec(db, f"ROLLBACK TO SAVEPOINT {safe_name}")
+            _exec(db, f"RELEASE SAVEPOINT {safe_name}")
+        except Exception:
+            log.exception(
+                "Could not recover optional paid benefit transaction for %s",
+                client_id,
+            )
+            raise
+        log.warning(
+            "Optional paid benefit %s failed for %s: %s",
+            savepoint_name,
+            client_id,
+            e,
+        )
+    else:
+        _exec(db, f"RELEASE SAVEPOINT {safe_name}")
+
+
 def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
     """Grant recurring paid-plan benefits once per UTC month.
 
@@ -134,7 +166,7 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
     changed = False
     month_key = _current_bonus_month()
     if prefs.get("plus_streak_insurance_month") != month_key:
-        try:
+        with _optional_db_work(db, "streak_insurance", client_id):
             from machreach_core.db import _exec, _fetchval
             from student import db as sdb
             sdb._ensure_wallet(db, client_id)
@@ -147,9 +179,8 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
                 )
             prefs["plus_streak_insurance_month"] = month_key
             changed = True
-        except Exception as e:
-            log.warning("Plus monthly streak-insurance grant failed for %s: %s", client_id, e)
-    try:
+
+    with _optional_db_work(db, "member_badge", client_id):
         from machreach_core.db import _exec, _fetchone
         has_badge = _fetchone(
             db,
@@ -158,8 +189,6 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
         )
         if not has_badge:
             _exec(db, "INSERT INTO student_badges (client_id, badge_key) VALUES (%s, %s)", (client_id, "plus_member"))
-    except Exception:
-        pass
     return changed
 
 

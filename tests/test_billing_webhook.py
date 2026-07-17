@@ -197,6 +197,28 @@ def test_subscription_state_read_falls_back_safely_when_database_is_unavailable(
     assert ssub.get_subscription_state(999) == {}
 
 
+def test_paid_subscription_state_survives_optional_benefit_database_error(
+    make_user, monkeypatch
+):
+    cid = make_user()
+
+    def fail_wallet_setup(db, _client_id):
+        _exec(db, "SELECT missing_paid_benefit_column FROM clients LIMIT 1")
+
+    monkeypatch.setattr(sdb, "_ensure_wallet", fail_wallet_setup)
+
+    result = ssub.set_subscription_state(
+        cid,
+        tier="plus",
+        status="active",
+        ls_sub_id="provider-sub",
+    )
+
+    assert result["ok"] is True
+    assert ssub.get_subscription_state(cid)["ls_sub_id"] == "provider-sub"
+    assert ssub.get_tier(cid) == "plus"
+
+
 def test_subscription_change_rejects_unknown_plan(
     client, make_user, flask_app, monkeypatch
 ):
