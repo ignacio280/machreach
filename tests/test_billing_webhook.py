@@ -56,6 +56,36 @@ def test_subscription_created_grants_plus(client, make_user):
     assert ssub.get_tier(cid) == "plus"
 
 
+def test_sandbox_webhook_is_limited_to_configured_qa_client(
+    client, make_user, monkeypatch
+):
+    qa_id = make_user("Sandbox QA")
+    other_id = make_user("Not Sandbox QA")
+    sandbox_secret = "sandbox-signing-secret"
+    monkeypatch.setattr(ls, "LEMON_SQUEEZY_TEST_WEBHOOK_SECRET", sandbox_secret)
+    monkeypatch.setattr(cfg, "LEMON_SQUEEZY_SANDBOX_CLIENT_ID", str(qa_id))
+
+    def post_sandbox(cid):
+        payload = _student_event("subscription_created", cid, "plus")
+        payload["meta"]["test_mode"] = True
+        payload["data"]["id"] = f"sandbox-sub-{cid}"
+        raw = json.dumps(payload).encode()
+        signature = hmac.new(
+            sandbox_secret.encode(), raw, hashlib.sha256
+        ).hexdigest()
+        return client.post(
+            URL,
+            data=raw,
+            content_type="application/json",
+            headers={"X-Signature": signature},
+        )
+
+    assert post_sandbox(qa_id).status_code == 200
+    assert ssub.get_tier(qa_id) == "plus"
+    assert post_sandbox(other_id).status_code == 403
+    assert ssub.get_tier(other_id) == "free"
+
+
 def test_subscription_cancelled_reverts_to_free(client, make_user):
     cid = make_user()
     ssub.set_tier(cid, "plus")

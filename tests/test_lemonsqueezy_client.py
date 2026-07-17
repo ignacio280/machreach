@@ -97,6 +97,17 @@ def test_verify_webhook_and_cancel_subscription(monkeypatch):
     assert lemonsqueezy.cancel_subscription("sub-2") is False
 
 
+def test_verify_webhook_identifies_separate_sandbox_secret(monkeypatch):
+    raw = b'{"meta":{"test_mode":true}}'
+    secret = "sandbox-webhook-secret"
+    signature = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_WEBHOOK_SECRET", "live-secret")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_TEST_WEBHOOK_SECRET", secret)
+
+    assert lemonsqueezy.webhook_signature_mode(raw, signature) == "test"
+    assert lemonsqueezy.verify_webhook(raw, signature) is True
+
+
 def test_verify_webhook_rejects_missing_configuration_header_and_compare_error(monkeypatch):
     monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_WEBHOOK_SECRET", "")
     assert lemonsqueezy.verify_webhook(b"{}", "signature") is False

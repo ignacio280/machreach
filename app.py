@@ -3642,7 +3642,8 @@ def lemonsqueezy_webhook():
 
     raw = request.get_data() or b""
     sig = request.headers.get("X-Signature", "") or request.headers.get("x-signature", "")
-    if not ls.verify_webhook(raw, sig):
+    signature_mode = ls.webhook_signature_mode(raw, sig)
+    if not signature_mode:
         _log.warning("[LS] webhook rejected: bad signature")
         return "Invalid signature", 401
 
@@ -3683,6 +3684,18 @@ def lemonsqueezy_webhook():
     if not cid:
         _log.warning("[LS] webhook missing client_id in custom_data: %s", event_name)
         return "Missing client_id", 400
+
+    payload_test_mode = bool(meta.get("test_mode") or attrs.get("test_mode"))
+    if signature_mode == "test":
+        from machreach_core import config as _cfg
+
+        try:
+            sandbox_client_id = int(_cfg.LEMON_SQUEEZY_SANDBOX_CLIENT_ID or 0)
+        except (TypeError, ValueError):
+            sandbox_client_id = 0
+        if not payload_test_mode or not sandbox_client_id or cid != sandbox_client_id:
+            _log.warning("[LS] rejected sandbox webhook for non-sandbox client=%s", cid)
+            return "Sandbox webhook not allowed", 403
 
     import hashlib as _hashlib
     from machreach_core.db import claim_webhook_event

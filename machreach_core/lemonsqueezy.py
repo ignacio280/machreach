@@ -10,6 +10,7 @@ Env vars required (see machreach_core/config.py):
 - LEMON_SQUEEZY_API_KEY
 - LEMON_SQUEEZY_STORE_ID
 - LEMON_SQUEEZY_WEBHOOK_SECRET
+- LEMON_SQUEEZY_TEST_WEBHOOK_SECRET (optional, for a restricted sandbox account)
 - LS_VARIANT_*  (one per priced product)
 
 Public API:
@@ -32,6 +33,7 @@ import requests
 from .config import (
     LEMON_SQUEEZY_API_KEY,
     LEMON_SQUEEZY_STORE_ID,
+    LEMON_SQUEEZY_TEST_WEBHOOK_SECRET,
     LEMON_SQUEEZY_WEBHOOK_SECRET,
 )
 
@@ -117,23 +119,32 @@ def create_checkout(
     return url
 
 
-def verify_webhook(raw_body: bytes, signature_header: str) -> bool:
-    """Verify the X-Signature header against our webhook secret (HMAC-SHA256)."""
-    if not LEMON_SQUEEZY_WEBHOOK_SECRET:
+def webhook_signature_mode(raw_body: bytes, signature_header: str) -> str | None:
+    """Return ``live`` or ``test`` for an authenticated provider signature."""
+    secrets = (
+        ("live", LEMON_SQUEEZY_WEBHOOK_SECRET),
+        ("test", LEMON_SQUEEZY_TEST_WEBHOOK_SECRET),
+    )
+    if not any(secret for _mode, secret in secrets):
         log.warning("[LS] webhook received but LEMON_SQUEEZY_WEBHOOK_SECRET is not set")
-        return False
+        return None
     if not signature_header:
-        return False
-    expected = hmac.new(
-        LEMON_SQUEEZY_WEBHOOK_SECRET.encode("utf-8"),
-        raw_body,
-        hashlib.sha256,
-    ).hexdigest()
-    # `signature_header` is the raw hex digest.
-    try:
-        return hmac.compare_digest(expected, signature_header)
-    except Exception:
-        return False
+        return None
+    for mode, secret in secrets:
+        if not secret:
+            continue
+        expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+        try:
+            if hmac.compare_digest(expected, signature_header):
+                return mode
+        except Exception:
+            return None
+    return None
+
+
+def verify_webhook(raw_body: bytes, signature_header: str) -> bool:
+    """Verify the X-Signature header against an allowed webhook secret."""
+    return webhook_signature_mode(raw_body, signature_header) is not None
 
 
 def cancel_subscription(subscription_id: str) -> bool:
