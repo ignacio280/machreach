@@ -94,6 +94,17 @@ def test_subscription_cancelled_reverts_to_free(client, make_user):
     assert ssub.get_tier(cid) == "free"
 
 
+def test_provider_plan_change_reconciles_tier_from_product(client, make_user):
+    cid = make_user()
+    _post(client, _student_event("subscription_created", cid, "plus"))
+    changed = _student_event("subscription_plan_changed", cid, "plus")
+    changed["data"]["attributes"]["product_name"] = "Test Student Ultimate"
+    changed["data"]["attributes"]["variant_id"] = 999999
+
+    assert _post(client, changed).status_code == 200
+    assert ssub.get_tier(cid) == "ultimate"
+
+
 def test_payment_failure_revokes_access_and_success_restores_it(client, make_user):
     cid = make_user()
     _post(client, _student_event("subscription_created", cid, "plus"))

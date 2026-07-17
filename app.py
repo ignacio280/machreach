@@ -3638,6 +3638,7 @@ def lemonsqueezy_webhook():
       - "coin_pack"     -> one-time coin-pack purchase (pack_key)
     """
     import json as _json
+    from machreach_core import config as _cfg
     from machreach_core import lemonsqueezy as ls
 
     raw = request.get_data() or b""
@@ -3687,8 +3688,6 @@ def lemonsqueezy_webhook():
 
     payload_test_mode = bool(meta.get("test_mode") or attrs.get("test_mode"))
     if signature_mode == "test":
-        from machreach_core import config as _cfg
-
         try:
             sandbox_client_id = int(_cfg.LEMON_SQUEEZY_SANDBOX_CLIENT_ID or 0)
         except (TypeError, ValueError):
@@ -3719,6 +3718,16 @@ def lemonsqueezy_webhook():
         tier = str(custom.get("tier") or "plus").lower()
         if tier not in ("plus", "ultimate"):
             tier = "plus"
+        variant_id = str(attrs.get("variant_id") or "")
+        product_name = str(attrs.get("product_name") or "").strip().lower()
+        if variant_id and variant_id == str(_cfg.LS_VARIANT_STUDENT_ULTIMATE):
+            tier = "ultimate"
+        elif variant_id and variant_id == str(_cfg.LS_VARIANT_STUDENT_PLUS):
+            tier = "plus"
+        elif "ultimate" in product_name:
+            tier = "ultimate"
+        elif "plus" in product_name:
+            tier = "plus"
         if not ssub:
             _finish_claimed_ls_event("student-handler-unavailable")
             return "Student subscription handler unavailable", 503
@@ -3734,9 +3743,10 @@ def lemonsqueezy_webhook():
                 status=(attrs.get("status") or "active"),
                 ls_sub_id=sub_id,
             )
-        elif event_name == "subscription_updated":
+        elif event_name in ("subscription_updated", "subscription_plan_changed"):
             ssub.set_subscription_state(
                 cid,
+                tier=tier,
                 status=(attrs.get("status") or "active"),
                 ls_sub_id=sub_id or None,
             )
