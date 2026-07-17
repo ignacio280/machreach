@@ -1,8 +1,47 @@
 """Configuration safety checks."""
 import os
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
+from contextlib import closing
+
+from machreach_core import config as cfg
+
+
+def test_compatible_local_database_is_migrated_without_a_named_fallback(tmp_path):
+    source = tmp_path / "previous-install.db"
+    target = tmp_path / "machreach.db"
+    with closing(sqlite3.connect(source)) as db:
+        db.execute("CREATE TABLE clients (id INTEGER PRIMARY KEY)")
+        db.execute("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY)")
+        db.commit()
+
+    cfg._migrate_compatible_local_database(target)
+
+    assert target.exists()
+    assert not source.exists()
+
+
+def test_local_database_migration_includes_committed_wal_changes(tmp_path):
+    source = tmp_path / "previous-install.db"
+    target = tmp_path / "machreach.db"
+    source_db = sqlite3.connect(source)
+    try:
+        source_db.execute("PRAGMA journal_mode=WAL")
+        source_db.execute("PRAGMA wal_autocheckpoint=0")
+        source_db.execute("CREATE TABLE clients (id INTEGER PRIMARY KEY, name TEXT)")
+        source_db.execute("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY)")
+        source_db.execute("INSERT INTO clients (id, name) VALUES (1, 'Preserved User')")
+        source_db.commit()
+
+        cfg._migrate_compatible_local_database(target)
+
+        with closing(sqlite3.connect(target)) as migrated_db:
+            row = migrated_db.execute("SELECT name FROM clients WHERE id = 1").fetchone()
+        assert row == ("Preserved User",)
+    finally:
+        source_db.close()
 
 
 def test_default_database_filename_is_machreach():

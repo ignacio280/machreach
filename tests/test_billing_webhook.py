@@ -187,17 +187,71 @@ def test_missing_client_id_is_rejected_for_provider_review(client):
     assert r.status_code == 400
 
 
-def test_removed_legacy_product_webhook_is_acknowledged_without_processing(client, make_user):
+def test_removed_product_webhook_is_rejected_like_every_unknown_product(client, make_user):
     payload = {
         "meta": {
             "event_name": "subscription_created",
             "custom_data": {
-                "purpose": "outreach_sub",
+                "purpose": "removed_product",
                 "client_id": str(make_user()),
                 "plan": "growth",
             },
         },
         "data": {"id": "removed-product-subscription", "attributes": {}},
+    }
+
+    response = _post(client, payload)
+
+    assert response.status_code == 400
+    assert response.get_data(as_text=True) == "Unsupported product"
+
+
+def test_archived_subscription_retry_is_acknowledged_without_named_product_compatibility(
+    client, make_user
+):
+    subscription_id = "archived-provider-subscription"
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO retired_billing_cancellations "
+            "(subscription_id, status, attempts) VALUES (%s, 'cancelled', 1)",
+            (subscription_id,),
+        )
+    payload = {
+        "meta": {
+            "event_name": "subscription_cancelled",
+            "custom_data": {
+                "purpose": "removed_product",
+                "client_id": str(make_user()),
+            },
+        },
+        "data": {"id": subscription_id, "attributes": {"status": "cancelled"}},
+    }
+
+    response = _post(client, payload)
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == "retired"
+
+
+def test_archived_subscription_payment_retry_uses_invoice_subscription_id(client):
+    subscription_id = "archived-payment-subscription"
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO retired_billing_cancellations "
+            "(subscription_id, status, attempts) VALUES (%s, 'cancelled', 1)",
+            (subscription_id,),
+        )
+    payload = {
+        "meta": {
+            "event_name": "subscription_payment_failed",
+            "custom_data": {"purpose": "removed_product"},
+        },
+        "data": {
+            "id": "invoice-id-is-not-the-subscription-id",
+            "attributes": {"subscription_id": subscription_id},
+        },
     }
 
     response = _post(client, payload)

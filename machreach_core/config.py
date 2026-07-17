@@ -4,6 +4,8 @@ Configuration — loads environment, defines constants.
 from __future__ import annotations
 
 import os
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -11,6 +13,55 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _is_compatible_local_database(path: Path) -> bool:
+    try:
+        uri = f"file:{path.resolve().as_posix()}?mode=ro"
+        with closing(sqlite3.connect(uri, uri=True)) as db:
+            tables = {
+                str(row[0])
+                for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            }
+    except (OSError, sqlite3.DatabaseError):
+        return False
+    return "clients" in tables and bool(
+        tables & {"schema_metadata", "student_courses", "subscriptions"}
+    )
+
+
+def _migrate_compatible_local_database(target: Path) -> None:
+    """Back up one unambiguous compatible local database to the current filename."""
+    if target.exists() or not target.parent.exists():
+        return
+    candidates = [
+        path
+        for path in target.parent.glob("*.db")
+        if path != target and _is_compatible_local_database(path)
+    ]
+    if len(candidates) != 1:
+        return
+    source = candidates[0]
+    temporary_target = target.with_name(f".{target.name}.migrating")
+    try:
+        temporary_target.unlink(missing_ok=True)
+        source_uri = f"file:{source.resolve().as_posix()}?mode=ro"
+        with closing(sqlite3.connect(source_uri, uri=True)) as source_db:
+            with closing(sqlite3.connect(temporary_target)) as target_db:
+                source_db.backup(target_db)
+                integrity = target_db.execute("PRAGMA integrity_check").fetchone()
+                if integrity != ("ok",):
+                    raise sqlite3.DatabaseError("local database backup failed integrity check")
+        temporary_target.replace(target)
+    except (OSError, sqlite3.DatabaseError):
+        temporary_target.unlink(missing_ok=True)
+        return
+    for source_file in (source, Path(f"{source}-wal"), Path(f"{source}-shm")):
+        try:
+            source_file.unlink(missing_ok=True)
+        except OSError:
+            pass
+
 
 # OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -39,14 +90,7 @@ if _configured_database_path:
     DATABASE_PATH = Path(_configured_database_path)
 else:
     DATABASE_PATH = BASE_DIR / "data" / "machreach.db"
-    # One-time local-development migration. Production uses DATABASE_URL, but
-    # existing checkouts must not appear empty after the package rename.
-    _legacy_database_path = BASE_DIR / "data" / "outreach.db"
-    if not DATABASE_PATH.exists() and _legacy_database_path.exists():
-        try:
-            _legacy_database_path.replace(DATABASE_PATH)
-        except OSError:
-            DATABASE_PATH = _legacy_database_path
+    _migrate_compatible_local_database(DATABASE_PATH)
 
 # App
 _IS_PRODUCTION = bool(os.getenv("RENDER", "")) or any(

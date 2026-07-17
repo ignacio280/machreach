@@ -3618,15 +3618,23 @@ def lemonsqueezy_webhook():
     custom = (meta.get("custom_data") or {})
     data = body.get("data") or {}
     attrs = (data.get("attributes") or {})
+    payment_events = {
+        "subscription_payment_failed",
+        "subscription_payment_success",
+        "subscription_payment_recovered",
+    }
+    provider_subscription_id = str(
+        (attrs.get("subscription_id") if event_name in payment_events else data.get("id"))
+        or ""
+    )
 
     purpose = str(custom.get("purpose") or "")
-    if purpose == "outreach_sub":
-        # Removal tombstone: acknowledge old provider retries without restoring
-        # entitlements. Pre-deploy migration archives every old subscription ID
-        # for cancellation by the Uni worker.
-        _log.info("[LS] acknowledged retired product event=%s", event_name)
-        return "retired", 200
     if purpose not in {"student_sub", "coin_pack"}:
+        from machreach_core.db import is_retired_billing_subscription
+
+        if is_retired_billing_subscription(provider_subscription_id):
+            _log.info("[LS] acknowledged archived subscription event=%s", event_name)
+            return "retired", 200
         _log.warning("[LS] rejected unsupported product purpose=%r event=%s", purpose, event_name)
         return "Unsupported product", 400
     try:
@@ -3663,20 +3671,11 @@ def lemonsqueezy_webhook():
         if not ssub:
             _finish_claimed_ls_event("student-handler-unavailable")
             return "Student subscription handler unavailable", 503
-        payment_events = {
-            "subscription_payment_failed",
-            "subscription_payment_success",
-            "subscription_payment_recovered",
-        }
         # Payment webhooks carry a subscription-invoice as `data`. Its `id`
         # is therefore an invoice id and cannot be used for subscription API
         # operations such as cancellation. Lemon includes the real provider
         # subscription id in the invoice attributes instead.
-        sub_id = str(
-            (attrs.get("subscription_id") if event_name in payment_events
-             else data.get("id"))
-            or ""
-        )
+        sub_id = provider_subscription_id
         if event_name == "subscription_created":
             ssub.set_subscription_state(
                 cid,

@@ -458,6 +458,21 @@ def list_retired_billing_cancellations(limit: int = 25) -> list[dict]:
         )
 
 
+def is_retired_billing_subscription(subscription_id: str) -> bool:
+    """Return whether a provider subscription was archived during product retirement."""
+    normalized_id = str(subscription_id or "").strip()
+    if not normalized_id:
+        return False
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT 1 AS found FROM retired_billing_cancellations "
+            "WHERE subscription_id = %s",
+            (normalized_id,),
+        )
+    return row is not None
+
+
 def finish_retired_billing_cancellation(subscription_id: str, *, error: str = "") -> None:
     status = "failed" if error else "cancelled"
     with get_db() as db:
