@@ -1,6 +1,6 @@
 import pytest
 
-import outreach.db as odb
+import machreach_core.db as odb
 
 
 def test_encrypted_credentials_fail_explicitly_with_wrong_key(monkeypatch):

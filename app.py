@@ -15,11 +15,11 @@ from datetime import datetime, timezone
 from flask import Flask, flash, g, jsonify, make_response, redirect, render_template_string, request, session, url_for
 from markupsafe import Markup
 
-from outreach.config import ADMIN_ACTION_SECRET, ADMIN_EMAILS, SECRET_KEY
-from outreach.i18n import t, t_dict
+from machreach_core.config import ADMIN_ACTION_SECRET, ADMIN_EMAILS, SECRET_KEY
+from machreach_core.i18n import t, t_dict
 
 # ── Sentry error tracking (production only — set SENTRY_DSN env var) ──
-from outreach.config import SENTRY_DSN
+from machreach_core.config import SENTRY_DSN
 if SENTRY_DSN:
     import sentry_sdk
     sentry_sdk.init(
@@ -30,9 +30,11 @@ if SENTRY_DSN:
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0")),
         profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0")),
         environment="production" if os.getenv("RENDER", "") else "development",
+        release=(os.getenv("RENDER_GIT_COMMIT") or "").strip() or None,
+        send_default_pii=False,
     )
 
-from outreach.db import (
+from machreach_core.db import (
     create_client,
     create_reset_token,
     create_verification_token,
@@ -133,7 +135,7 @@ limiter = Limiter(
 )
 
 # ── Startup diagnostic — log DB path so we can debug persistence ──
-from outreach.config import DATABASE_PATH
+from machreach_core.config import DATABASE_PATH
 logging.basicConfig(level=logging.INFO)
 _log = logging.getLogger("machreach")
 _log.info(f"DATABASE_PATH = {DATABASE_PATH}")
@@ -170,8 +172,8 @@ register_academic_routes(app, csrf, limiter)
 def _send_system_email(to: str, subject: str, body: str) -> bool:
     """Send a transactional email (verification, reset, invite) from the system account.
     Returns True on success."""
-    from outreach.config import SMTP_HOST, SMTP_PORT
-    from outreach.config import SYSTEM_FROM_EMAIL, SYSTEM_FROM_NAME, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD
+    from machreach_core.config import SMTP_HOST, SMTP_PORT
+    from machreach_core.config import SYSTEM_FROM_EMAIL, SYSTEM_FROM_NAME, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
@@ -212,7 +214,7 @@ def _send_system_email(to: str, subject: str, body: str) -> bool:
 def health_check():
     """Readiness probe: database connectivity and critical schema state."""
     try:
-        from outreach.db import check_schema_readiness, get_db, _fetchval
+        from machreach_core.db import check_schema_readiness, get_db, _fetchval
         with get_db() as db:
             _fetchval(db, "SELECT 1")
         schema = check_schema_readiness()
@@ -243,7 +245,7 @@ def debug_smtp_test():
     gate = _debug_admin_gate()
     if gate:
         return gate
-    from outreach.config import SMTP_HOST, SMTP_PORT, SYSTEM_FROM_EMAIL, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD
+    from machreach_core.config import SMTP_HOST, SMTP_PORT, SYSTEM_FROM_EMAIL, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASSWORD
     info = {
         "SMTP_HOST": SMTP_HOST,
         "SMTP_PORT": SMTP_PORT,
@@ -297,8 +299,8 @@ def admin_check_db():
     if gate:
         return gate
 
-    from outreach.db import get_db, _fetchval, _USE_PG, _db_fingerprint
-    from outreach.config import DATABASE_URL
+    from machreach_core.db import get_db, _fetchval, _USE_PG, _db_fingerprint
+    from machreach_core.config import DATABASE_URL
 
     with get_db() as db:
         client_count = _fetchval(db, "SELECT COUNT(*) FROM clients")
@@ -386,7 +388,7 @@ _PRESENCE_TOUCH_THROTTLE = 25  # don't UPDATE more often than every 25s per user
 @app.before_request
 def _validate_session():
     if "client_id" in session:
-        from outreach.db import get_db, _fetchone
+        from machreach_core.db import get_db, _fetchone
         with get_db() as db:
             row = _fetchone(db, "SELECT session_version FROM clients WHERE id = %s",
                             (session["client_id"],))
@@ -447,8 +449,8 @@ def _set_security_headers(response):
     response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     response.headers["X-Download-Options"] = "noopen"
     # Content Security Policy — restricts where scripts/styles/images/frames can load from.
-    # 'unsafe-inline' is required because MachReach renders heavy inline HTML/CSS/JS
-    # via Jinja/f-strings. Everything else is locked down.
+    # 'unsafe-inline' is still required while legacy inline handlers/styles are
+    # migrated to static assets. Dynamic evaluation is not used or permitted.
     posthog_host = ""
     posthog_assets = ""
     configured_posthog_host = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com").rstrip("/")
@@ -465,7 +467,7 @@ def _set_security_headers(response):
     analytics_connect_source = f" {posthog_host}" if posthog_host else ""
     _CSP = (
         "default-src 'self'; "
-        f"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net{analytics_script_source}; "
+        f"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net{analytics_script_source}; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
         "img-src 'self' data: blob: https:; "
@@ -1876,7 +1878,7 @@ def register():
         if _ref:
             try:
                 import json as _json
-                from outreach.db import get_mail_preferences, update_mail_preferences
+                from machreach_core.db import get_mail_preferences, update_mail_preferences
                 _praw = get_mail_preferences(client_id) or ""
                 _pdict = _json.loads(_praw) if _praw else {}
                 if not isinstance(_pdict, dict):
@@ -1892,7 +1894,7 @@ def register():
         try:
             import secrets as _secrets
             from datetime import timedelta
-            from outreach.config import BASE_URL as _base_url
+            from machreach_core.config import BASE_URL as _base_url
             token = _secrets.token_urlsafe(32)
             expires = (datetime.now() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
             create_verification_token(client_id, token, expires)
@@ -1915,7 +1917,7 @@ def register():
         else:
             # Verification email failed — delete the account so it's not half-created
             try:
-                from outreach.db import get_db, _exec
+                from machreach_core.db import get_db, _exec
                 with get_db() as db:
                     _exec(db, "DELETE FROM email_verification_tokens WHERE client_id = %s", (client_id,))
                     _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
@@ -2061,7 +2063,7 @@ def verify_email(token):
     # and we clear the stashed code, so the reward can't fire twice.
     try:
         import json as _json
-        from outreach.db import get_mail_preferences, update_mail_preferences
+        from machreach_core.db import get_mail_preferences, update_mail_preferences
         from student import db as _sdb
         from student import subscription as _ssub
         _praw = get_mail_preferences(rec["client_id"]) or ""
@@ -2086,7 +2088,7 @@ def resend_verification():
     client = get_client_by_email(email)
     if client and not client.get("email_verified"):
         import secrets as _secrets
-        from outreach.config import BASE_URL as _base_url
+        from machreach_core.config import BASE_URL as _base_url
         token = _secrets.token_urlsafe(32)
         expires = (datetime.now() + __import__("datetime").timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         create_verification_token(client["id"], token, expires)
@@ -2239,7 +2241,7 @@ def forgot_password():
             token = secrets.token_urlsafe(32)
             expires = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
             create_reset_token(client["id"], token, expires)
-            from outreach.config import BASE_URL
+            from machreach_core.config import BASE_URL
             reset_link = f"{BASE_URL}/reset-password/{token}"
             body = f"Click here to reset your MachReach password:\n\n{reset_link}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email."
             try:
@@ -2346,7 +2348,7 @@ def _collect_ls_sub_ids(db, client_id: int) -> list:
     deleted so recurring billing can be cancelled first.
     """
     import json as _json
-    from outreach.db import _fetchone
+    from machreach_core.db import _fetchone
     ids = []
     try:
         crow = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (client_id,))
@@ -2368,7 +2370,7 @@ def _cancel_ls_subs(ids, client_id: int) -> bool:
     if not ids:
         return True
     try:
-        from outreach import lemonsqueezy as ls
+        from machreach_core import lemonsqueezy as ls
         for sid in set(ids):
             if not ls.cancel_subscription(sid):
                 return False
@@ -2388,7 +2390,7 @@ def delete_account():
         flash(("error", "Please type DELETE to confirm."))
         return redirect(url_for(redir))
     client_id = session["client_id"]
-    from outreach.db import get_db, _exec, _fetchall, _USE_PG
+    from machreach_core.db import get_db, _exec, _fetchall, _USE_PG
     with get_db() as db:
         _ls_ids = _collect_ls_sub_ids(db, client_id)
     if not _cancel_ls_subs(_ls_ids, client_id):
@@ -2444,7 +2446,7 @@ def dashboard():
 
 def _admin_delete_client_account(client_id: int) -> dict:
     """Best-effort full account removal for the admin panel."""
-    from outreach.db import get_db, _exec, _fetchall, _USE_PG
+    from machreach_core.db import get_db, _exec, _fetchall, _USE_PG
 
     target = get_client(client_id)
     if not target:
@@ -2519,7 +2521,7 @@ def admin_dashboard():
     if not _is_admin():
         return redirect(url_for("dashboard"))
 
-    from outreach.db import get_all_client_emails
+    from machreach_core.db import get_all_client_emails
 
     users = get_all_client_emails()
     error_msg = ""
@@ -2656,7 +2658,7 @@ def _ensure_product_analytics_table():
     if _ANALYTICS_TABLE_READY:
         return
     try:
-        from outreach.db import get_db, _USE_PG, _exec
+        from machreach_core.db import get_db, _USE_PG, _exec
         with get_db() as db:
             if _USE_PG:
                 _exec(db, """
@@ -2692,7 +2694,7 @@ def _ensure_product_analytics_table():
 def _record_product_event(event_type: str, metadata: dict | None = None):
     try:
         _ensure_product_analytics_table()
-        from outreach.db import get_db, _exec
+        from machreach_core.db import get_db, _exec
         cid = session.get("client_id")
         with get_db() as db:
             _exec(
@@ -2779,7 +2781,7 @@ def _machreach_product_analytics_hook():
 
 def _admin_metric(sql_pg: str, sql_lite: str | None = None, params=()) -> int:
     try:
-        from outreach.db import get_db, _USE_PG, _fetchval
+        from machreach_core.db import get_db, _USE_PG, _fetchval
         with get_db() as db:
             return int(_fetchval(db, sql_pg if _USE_PG else (sql_lite or sql_pg), params) or 0)
     except Exception:
@@ -2788,7 +2790,7 @@ def _admin_metric(sql_pg: str, sql_lite: str | None = None, params=()) -> int:
 
 def _admin_rows(sql_pg: str, sql_lite: str | None = None, params=()) -> list[dict]:
     try:
-        from outreach.db import get_db, _USE_PG, _fetchall
+        from machreach_core.db import get_db, _USE_PG, _fetchall
         with get_db() as db:
             return _fetchall(db, sql_pg if _USE_PG else (sql_lite or sql_pg), params) or []
     except Exception:
@@ -2800,7 +2802,7 @@ def admin_jobs():
     if not _is_admin():
         return redirect(url_for("dashboard"))
 
-    from outreach.db import list_async_jobs, retry_async_job
+    from machreach_core.db import list_async_jobs, retry_async_job
 
     error_msg = ""
     if request.method == "POST":
@@ -3553,7 +3555,7 @@ def _finish_claimed_ls_event(error: str = "") -> None:
     event_key = getattr(g, "ls_event_key", "")
     if not event_key or getattr(g, "ls_event_finished", False):
         return
-    from outreach.db import finish_webhook_event
+    from machreach_core.db import finish_webhook_event
     finish_webhook_event("lemonsqueezy", event_key, error=error)
     g.ls_event_finished = True
 
@@ -3598,7 +3600,7 @@ def lemonsqueezy_webhook():
       - "coin_pack"     -> one-time coin-pack purchase (pack_key)
     """
     import json as _json
-    from outreach import lemonsqueezy as ls
+    from machreach_core import lemonsqueezy as ls
 
     raw = request.get_data() or b""
     sig = request.headers.get("X-Signature", "") or request.headers.get("x-signature", "")
@@ -3637,7 +3639,7 @@ def lemonsqueezy_webhook():
         return "Missing client_id", 400
 
     import hashlib as _hashlib
-    from outreach.db import claim_webhook_event
+    from machreach_core.db import claim_webhook_event
     event_key = _hashlib.sha256(raw).hexdigest()
     event_claim = claim_webhook_event("lemonsqueezy", event_key, event_name)
     if not event_claim["claimed"]:
@@ -4133,7 +4135,7 @@ def api_export_my_data():
     if not _logged_in():
         return jsonify({"error": "unauthorized"}), 401
     cid = session["client_id"]
-    from outreach.db import get_client
+    from machreach_core.db import get_client
     from student.db import export_student_data
     client = get_client(cid)
     if not client:

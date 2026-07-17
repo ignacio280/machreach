@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 
 from student import subscription as ssub
-from outreach.db import get_db
+from machreach_core.db import get_db
 
 
 def test_default_tier_is_free(make_user):

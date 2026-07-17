@@ -9,7 +9,7 @@ from student import db as sdb
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
-from outreach.db import get_db, _exec, _fetchall
+from machreach_core.db import get_db, _exec, _fetchall
 
 
 def test_rapid_focus_sessions_do_not_collide(make_user):

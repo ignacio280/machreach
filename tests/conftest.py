@@ -25,7 +25,7 @@ os.environ["LEMON_SQUEEZY_WEBHOOK_SECRET"] = "test-webhook-secret"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import app as appmod                                   # noqa: E402
-from outreach.db import create_client, get_db, _exec   # noqa: E402
+from machreach_core.db import create_client, get_db, _exec   # noqa: E402
 
 WEBHOOK_SECRET = os.environ["LEMON_SQUEEZY_WEBHOOK_SECRET"]
 

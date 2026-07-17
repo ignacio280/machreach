@@ -1,4 +1,4 @@
-from outreach.db import (
+from machreach_core.db import (
     _exec,
     claim_async_jobs,
     enqueue_async_job,

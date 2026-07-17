@@ -6,7 +6,7 @@ Why a single module?
 - Routing of webhook events back to the correct user / purpose is done
   via the `custom_data` we attach to every checkout.
 
-Env vars required (see outreach/config.py):
+Env vars required (see machreach_core/config.py):
 - LEMON_SQUEEZY_API_KEY
 - LEMON_SQUEEZY_STORE_ID
 - LEMON_SQUEEZY_WEBHOOK_SECRET

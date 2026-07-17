@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from outreach.db import (
+from machreach_core.db import (
     _fetchone,
     create_client,
     create_reset_token,

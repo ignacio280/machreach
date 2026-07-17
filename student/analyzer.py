@@ -18,7 +18,7 @@ from datetime import date
 
 from openai import OpenAI
 
-from outreach.config import OPENAI_API_KEY
+from machreach_core.config import OPENAI_API_KEY
 
 log = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 """Slow AI generation must leave web request threads immediately."""
 
-from outreach.db import _exec, get_async_job_status, get_db
+from machreach_core.db import _exec, get_async_job_status, get_db
 
 
 def _login_student(client, client_id):

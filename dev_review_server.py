@@ -1,6 +1,6 @@
 """Throwaway launcher for UI review (safe sandbox).
 
-Runs the app against an ISOLATED temp SQLite DB (never touches data/outreach.db),
+Runs the app against an ISOLATED temp SQLite DB (never touches data/machreach.db),
 with SMTP / OpenAI / Postgres disabled so nothing real can be sent or billed.
 Seeds one verified test account:  review@test.local / reviewpass123
 
@@ -15,7 +15,7 @@ os.chdir(ROOT)
 
 _db = Path(tempfile.gettempdir()) / "machreach_review.db"
 
-# Must be set BEFORE outreach.config loads .env (load_dotenv never overrides
+# Must be set BEFORE machreach_core.config loads .env (load_dotenv never overrides
 # existing env vars).
 os.environ["DATABASE_URL"] = ""                 # force SQLite fallback
 os.environ["DATABASE_PATH"] = str(_db)          # isolated throwaway DB
@@ -30,7 +30,7 @@ import app as appmod  # noqa: E402  (env must be set first)
 appmod.init_db()
 
 import bcrypt  # noqa: E402
-from outreach.db import get_db, _exec, _fetchone  # noqa: E402
+from machreach_core.db import get_db, _exec, _fetchone  # noqa: E402
 
 with get_db() as db:
     if not _fetchone(db, "SELECT id FROM clients WHERE email = %s", ("review@test.local",)):

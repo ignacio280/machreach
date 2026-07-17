@@ -22,7 +22,7 @@ import json
 import logging
 from datetime import datetime, date, timedelta, timezone
 
-from outreach.db import get_db
+from machreach_core.db import get_db
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ PLAN_ORDER = ["free", "plus", "ultimate"]
 # ── Read / write tier ───────────────────────────────────────────────────
 
 def _load_prefs(db, client_id: int) -> dict:
-    from outreach.db import _fetchone
+    from machreach_core.db import _fetchone
     row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (client_id,))
     raw = (row or {}).get("mail_preferences") or ""
     if not raw:
@@ -111,7 +111,7 @@ def _load_prefs(db, client_id: int) -> dict:
 
 
 def _save_prefs(db, client_id: int, prefs: dict) -> None:
-    from outreach.db import _exec
+    from machreach_core.db import _exec
     _exec(
         db,
         "UPDATE clients SET mail_preferences = %s WHERE id = %s",
@@ -136,7 +136,7 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
     month_key = _current_bonus_month()
     if prefs.get("plus_streak_insurance_month") != month_key:
         try:
-            from outreach.db import _exec, _fetchval
+            from machreach_core.db import _exec, _fetchval
             from student import db as sdb
             sdb._ensure_wallet(db, client_id)
             cur = int(_fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,)) or 0)
@@ -151,7 +151,7 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
         except Exception as e:
             log.warning("Plus monthly streak-insurance grant failed for %s: %s", client_id, e)
     try:
-        from outreach.db import _exec, _fetchone
+        from machreach_core.db import _exec, _fetchone
         has_badge = _fetchone(
             db,
             "SELECT 1 FROM student_badges WHERE client_id = %s AND badge_key = %s",
@@ -333,7 +333,7 @@ def record_generation(client_id: int, kind: str) -> None:
     Recorded with xp=0 so it doesn't affect XP totals.
     """
     try:
-        from outreach.db import _exec
+        from machreach_core.db import _exec
         with get_db() as db:
             _exec(
                 db,
@@ -347,7 +347,7 @@ def record_generation(client_id: int, kind: str) -> None:
 
 def _count_today(client_id: int, kind: str) -> int:
     try:
-        from outreach.db import _fetchval, _USE_PG
+        from machreach_core.db import _fetchval, _USE_PG
         with get_db() as db:
             if _USE_PG:
                 return int(_fetchval(

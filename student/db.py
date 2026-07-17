@@ -10,7 +10,7 @@ import re
 import unicodedata
 from datetime import datetime
 
-from outreach.db import (
+from machreach_core.db import (
     _exec,
     _fetchall,
     _fetchone,
@@ -3552,7 +3552,7 @@ def get_study_rank(xp: int) -> dict:
             break
     floor, full, tier, div, color = STUDY_RANKS[idx]
     try:
-        from outreach.i18n import translate_rank_name
+        from machreach_core.i18n import translate_rank_name
 
         full = translate_rank_name(full)
         tier = translate_rank_name(tier)
@@ -3582,13 +3582,13 @@ def get_level(xp: int) -> tuple[str, int, int]:
             floor = LEVEL_THRESHOLDS[i][0]
             ceil = LEVEL_THRESHOLDS[i + 1][0] if i + 1 < len(LEVEL_THRESHOLDS) else floor + 1000
             try:
-                from outreach.i18n import translate_rank_name
+                from machreach_core.i18n import translate_rank_name
 
                 return translate_rank_name(LEVEL_THRESHOLDS[i][1]), floor, ceil
             except Exception:
                 return LEVEL_THRESHOLDS[i][1], floor, ceil
     try:
-        from outreach.i18n import translate_rank_name
+        from machreach_core.i18n import translate_rank_name
 
         return translate_rank_name("Iniciado"), 0, 100
     except Exception:
@@ -3667,7 +3667,7 @@ def evaluate_badges(client_id: int, stats: dict | None = None) -> list[str]:
     # Account-age loyalty badges.
     try:
         from datetime import datetime
-        from outreach.db import get_client
+        from machreach_core.db import get_client
         c = get_client(client_id) or {}
         created = c.get("created_at")
         if created:

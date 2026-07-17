@@ -34,7 +34,19 @@ IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "") or SMTP_PASSWORD
 
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL", "")
-DATABASE_PATH = Path(os.getenv("DATABASE_PATH", BASE_DIR / "data" / "outreach.db"))
+_configured_database_path = (os.getenv("DATABASE_PATH") or "").strip()
+if _configured_database_path:
+    DATABASE_PATH = Path(_configured_database_path)
+else:
+    DATABASE_PATH = BASE_DIR / "data" / "machreach.db"
+    # One-time local-development migration. Production uses DATABASE_URL, but
+    # existing checkouts must not appear empty after the package rename.
+    _legacy_database_path = BASE_DIR / "data" / "outreach.db"
+    if not DATABASE_PATH.exists() and _legacy_database_path.exists():
+        try:
+            _legacy_database_path.replace(DATABASE_PATH)
+        except OSError:
+            DATABASE_PATH = _legacy_database_path
 
 # App
 _IS_PRODUCTION = bool(os.getenv("RENDER", "")) or any(

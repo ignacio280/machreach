@@ -1,10 +1,10 @@
-"""The retired Outreach product must not reappear in the Uni runtime."""
+"""The retired campaign product must not reappear in the Uni runtime."""
 
 import importlib.util
 from pathlib import Path
 
-from outreach import db as odb
-from outreach import lemonsqueezy as ls
+from machreach_core import db as odb
+from machreach_core import lemonsqueezy as ls
 import worker
 
 
@@ -55,10 +55,10 @@ def test_fresh_schema_has_no_legacy_product_tables():
 
 
 def test_removed_product_modules_are_not_importable():
-    assert _find_spec("outreach.mail_hub") is None
-    assert _find_spec("outreach.reply_checker") is None
-    assert _find_spec("outreach.sender") is None
-    assert _find_spec("outreach.ai") is None
+    assert _find_spec("machreach_core.mail_hub") is None
+    assert _find_spec("machreach_core.reply_checker") is None
+    assert _find_spec("machreach_core.sender") is None
+    assert _find_spec("machreach_core.ai") is None
     assert _find_spec("professional.routes") is None
 
 

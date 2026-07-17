@@ -1,6 +1,6 @@
 """Portable account export must include the student product's owned data."""
 
-from outreach.db import get_db, _exec, _fetchone
+from machreach_core.db import get_db, _exec, _fetchone
 from student import db as sdb
 
 

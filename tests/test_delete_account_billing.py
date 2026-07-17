@@ -9,8 +9,8 @@ import hmac
 import json
 import os
 
-from outreach import lemonsqueezy as ls
-from outreach.db import get_client
+from machreach_core import lemonsqueezy as ls
+from machreach_core.db import get_client
 
 SECRET = os.environ["LEMON_SQUEEZY_WEBHOOK_SECRET"].encode()
 

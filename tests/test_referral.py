@@ -76,7 +76,7 @@ def test_signup_route_rewards_inviter_after_verify(make_user, client, monkeypatc
     bug where the signup route captured ?ref= but never redeemed it."""
     import app as appmod
     import re
-    from outreach.db import get_client_by_email
+    from machreach_core.db import get_client_by_email
 
     # Exercise the route logic without the CSRF token the real form injects.
     monkeypatch.setitem(appmod.app.config, "WTF_CSRF_ENABLED", False)

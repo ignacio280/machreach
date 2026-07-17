@@ -28,7 +28,7 @@ import unicodedata
 from typing import Iterable, Optional
 
 # Reuse the parent DB helpers — Postgres/SQLite agnostic.
-from outreach.db import (
+from machreach_core.db import (
     get_db, _exec, _fetchone, _fetchall, _fetchval,
     _insert_returning_id, _USE_PG,
 )
@@ -730,7 +730,7 @@ def save_academic_profile(
     try:
         import json as _json
         from student.timezones import tz_for_country
-        from outreach.db import get_mail_preferences, update_mail_preferences
+        from machreach_core.db import get_mail_preferences, update_mail_preferences
         tz = tz_for_country(country_iso)
         if tz:
             raw = get_mail_preferences(client_id) or ""
@@ -826,7 +826,7 @@ def _period_sql(period: str) -> str:
 
 def _sqlite_port(q: str) -> str:
     """If we're on SQLite, translate Postgres date_trunc/interval math to sqlite syntax."""
-    from outreach.db import _USE_PG  # local import to avoid cycles
+    from machreach_core.db import _USE_PG  # local import to avoid cycles
     if _USE_PG:
         return q
     # Week: weekday() in SQLite is 0=Sunday..6=Saturday, but we want Monday-start.

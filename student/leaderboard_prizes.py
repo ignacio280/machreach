@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 import logging
 
-from outreach.db import get_db, _USE_PG
+from machreach_core.db import get_db, _USE_PG
 
 log = logging.getLogger(__name__)
 
@@ -177,7 +177,7 @@ def _is_due(kind: str, today: date | None = None) -> bool:
         return False
     key = _period_key(kind, today)
     with get_db() as db:
-        from outreach.db import _fetchval
+        from machreach_core.db import _fetchval
         existing = _fetchval(
             db,
             "SELECT id FROM student_lb_payout_run WHERE period_kind = %s AND period_key = %s",
@@ -188,7 +188,7 @@ def _is_due(kind: str, today: date | None = None) -> bool:
 
 def _mark_run(kind: str, period_key: str) -> None:
     with get_db() as db:
-        from outreach.db import _exec
+        from machreach_core.db import _exec
         _exec(
             db,
             "INSERT INTO student_lb_payout_run (period_kind, period_key) "
@@ -249,7 +249,7 @@ def _top5_per_bucket(scope: str, period_kind: str, period_key: str) -> list[dict
         )
         params: tuple = (start_iso, end_iso)
         with get_db() as db:
-            from outreach.db import _fetchall
+            from machreach_core.db import _fetchall
             rows = _fetchall(db, q, params)
         return [
             {
@@ -282,7 +282,7 @@ def _top5_per_bucket(scope: str, period_kind: str, period_key: str) -> list[dict
         f") ranked WHERE rn <= 5 ORDER BY bucket, rn"
     )
     with get_db() as db:
-        from outreach.db import _fetchall
+        from machreach_core.db import _fetchall
         rows = _fetchall(db, q, (start_iso, end_iso))
     return [
         {
@@ -302,7 +302,7 @@ def _award_winners(period_kind: str, period_key: str) -> dict:
     """Insert prize records and credit coins. Returns a summary dict
     keyed by scope used by the email body."""
     from . import db as sdb
-    from outreach.db import _exec
+    from machreach_core.db import _exec
 
     summary: dict[str, list[dict]] = {"global": [], "country": [],
                                        "university": [], "major": []}
@@ -336,7 +336,7 @@ def _email_winners(period_kind: str, period_key: str, summary: dict) -> None:
         log.warning("Could not import _send_system_email; skipping winner emails")
         return
 
-    from outreach.db import _fetchone
+    from machreach_core.db import _fetchone
     label = "weekly" if period_kind == "week" else "monthly"
     scope_pretty = {
         "global": "Global",
@@ -480,7 +480,7 @@ def _user_rank_in_scope(client_id: int, scope: str, period_kind: str,
     Returns None if the user is not eligible for this scope (e.g. no
     country set) or had 0 XP in the period."""
     start_iso, end_iso = _period_window(period_kind, period_key)
-    from outreach.db import _fetchone, _fetchall
+    from machreach_core.db import _fetchone, _fetchall
 
     # Find the user's bucket value (country/uni/major) so we can scope the
     # ranking query appropriately.
@@ -555,7 +555,7 @@ def get_pending_period_results(client_id: int) -> list[dict]:
     yet acknowledged. Each entry contains ranks across all scopes plus
     any prize amounts they won in that period."""
     init_prize_tables()
-    from outreach.db import _fetchall
+    from machreach_core.db import _fetchall
 
     # Grab all completed payout runs the user hasn't seen.
     with get_db() as db:
@@ -604,7 +604,7 @@ def get_pending_period_results(client_id: int) -> list[dict]:
 
 
 def mark_period_seen(client_id: int, period_kind: str, period_key: str) -> None:
-    from outreach.db import _exec
+    from machreach_core.db import _exec
     with get_db() as db:
         _exec(
             db,

@@ -5,6 +5,31 @@ import subprocess
 import sys
 
 
+def test_default_database_filename_is_machreach():
+    repo = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo)
+    # Keep an explicit empty value so load_dotenv() cannot rehydrate a local
+    # developer override from the ignored .env file in the repository root.
+    env["DATABASE_PATH"] = ""
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from machreach_core.config import DATABASE_PATH; print(DATABASE_PATH.name)",
+        ],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+
+    assert result.stdout.strip() == "machreach.db"
+
+
 def test_encryption_key_is_required_in_render():
     repo = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
@@ -14,7 +39,7 @@ def test_encryption_key_is_required_in_render():
     env["ENCRYPTION_KEY"] = ""
 
     result = subprocess.run(
-        [sys.executable, "-c", "import outreach.config"],
+        [sys.executable, "-c", "import machreach_core.config"],
         cwd=repo,
         env=env,
         capture_output=True,
@@ -36,7 +61,7 @@ def test_known_fallback_secrets_are_rejected_in_non_render_production():
     env["ENCRYPTION_KEY"] = ""
 
     result = subprocess.run(
-        [sys.executable, "-c", "import outreach.config"],
+        [sys.executable, "-c", "import machreach_core.config"],
         cwd=repo,
         env=env,
         capture_output=True,

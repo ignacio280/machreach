@@ -1,4 +1,4 @@
-from outreach.db import get_db, _exec
+from machreach_core.db import get_db, _exec
 from student import academic as ac
 from student import db as sdb
 

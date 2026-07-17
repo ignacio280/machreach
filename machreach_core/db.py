@@ -12,7 +12,7 @@ import hmac
 import json
 
 from cryptography.fernet import Fernet, InvalidToken
-from outreach.config import DATABASE_URL, ENCRYPTION_KEY, SECRET_KEY
+from machreach_core.config import DATABASE_URL, ENCRYPTION_KEY, SECRET_KEY
 
 SCHEMA_VERSION = 2
 
@@ -58,7 +58,7 @@ if _USE_PG:
         return _POOL
 else:
     import sqlite3
-    from outreach.config import DATABASE_PATH
+    from machreach_core.config import DATABASE_PATH
 
 # ---------------------------------------------------------------------------
 # Fernet encryption for email account passwords at rest

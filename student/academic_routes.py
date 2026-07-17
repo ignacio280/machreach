@@ -116,7 +116,7 @@ def register_academic_routes(app, csrf, limiter):
         major = ac.get_major(int(prof["major_id"])) if prof.get("major_id") else None
         prior_xp = 0
         try:
-            from outreach.db import get_db, _fetchval
+            from machreach_core.db import get_db, _fetchval
             with get_db() as db:
                 prior_xp = int(_fetchval(
                     db,
@@ -186,7 +186,7 @@ def register_academic_routes(app, csrf, limiter):
         """
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
-        from outreach.db import get_db, _fetchone
+        from machreach_core.db import get_db, _fetchone
         with get_db() as db:
             row = _fetchone(
                 db,
@@ -312,7 +312,7 @@ def register_academic_routes(app, csrf, limiter):
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
         cid = _cid()
-        from outreach.db import get_db, _fetchall, _fetchval
+        from machreach_core.db import get_db, _fetchall, _fetchval
         from datetime import datetime, timedelta
         from collections import defaultdict
 

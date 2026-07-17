@@ -1,7 +1,7 @@
 from student import db as sdb
 from student import canvas as canvas_mod
 from student.canvas import make_connect_token, verify_connect_token
-from outreach.db import get_db, _exec
+from machreach_core.db import get_db, _exec
 
 
 def test_canvas_extension_status_rejects_invalid_token(client):

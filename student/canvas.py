@@ -39,7 +39,7 @@ _EXT_CONNECT_MAX_AGE_SECONDS = 15 * 60
 
 def _ext_serializer():
     from itsdangerous import URLSafeTimedSerializer
-    from outreach.config import SECRET_KEY
+    from machreach_core.config import SECRET_KEY
     return URLSafeTimedSerializer(SECRET_KEY, salt=_EXT_CONNECT_SALT)
 
 

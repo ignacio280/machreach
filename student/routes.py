@@ -1165,7 +1165,7 @@ Return this JSON shape:
 
         try:
 
-            from outreach.db import get_db, _fetchall
+            from machreach_core.db import get_db, _fetchall
 
             with get_db() as db:
 
@@ -1432,7 +1432,7 @@ Return this JSON shape:
         _daily_map = {}
         _heat_map = {}
         try:
-            from outreach.db import get_db, _fetchall
+            from machreach_core.db import get_db, _fetchall
             with get_db() as db:
                 _daily_rows = _fetchall(
                     db,
@@ -1512,7 +1512,7 @@ Return this JSON shape:
         _best_hour_text = (f"{_best_hour:02d}:00" if _best_hour is not None else "Sin patrón todavía")
         _focus_consistency = sum(1 for _, _v in _daily_vals if _v > 0)
 
-        from outreach.i18n import t_dict as _t_dict
+        from machreach_core.i18n import t_dict as _t_dict
         _an = _t_dict("student_analytics")
         _an_json = {k: json.dumps(v, ensure_ascii=False) for k, v in _an.items()}
 
@@ -1636,7 +1636,7 @@ Return this JSON shape:
         _focus_rows = []
         _focus_since = (datetime.now().date() - timedelta(days=7 * 26)).isoformat()
         try:
-            from outreach.db import get_db, _fetchall
+            from machreach_core.db import get_db, _fetchall
             with get_db() as db:
                 _raw_focus_rows = _fetchall(
                     db,
@@ -3850,7 +3850,7 @@ Return this JSON shape:
         if week_offset > 0:
             week_offset = 0
 
-        from outreach.db import get_db, _fetchone
+        from machreach_core.db import get_db, _fetchone
         with get_db() as db:
             erow = _fetchone(
                 db,
@@ -4072,9 +4072,9 @@ Return this JSON shape:
 
         from app import ADMIN_EMAILS, render_layout
 
-        from outreach.db import get_client
+        from machreach_core.db import get_client
 
-        from outreach.i18n import SPANISH_TO_EN_VISIBLE, t, t_dict, translate_student_html_fragment
+        from machreach_core.i18n import SPANISH_TO_EN_VISIBLE, t, t_dict, translate_student_html_fragment
 
         flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
 
@@ -5721,7 +5721,7 @@ Material:
         if difficulty < 1 or quality < 1:
             return jsonify({"error": "ratings required"}), 400
         try:
-            from outreach.db import get_client
+            from machreach_core.db import get_client
             client = get_client(_cid()) or {}
             prefs = client.get("mail_preferences") or {}
             if isinstance(prefs, str):
@@ -5882,7 +5882,7 @@ Material:
         """Referral page: share your code, earn a free week of Plus per friend."""
         if not _logged_in():
             return redirect(url_for("login"))
-        from outreach.config import BASE_URL
+        from machreach_core.config import BASE_URL
         from student import subscription as ssub
         cid = _cid()
         code = sdb.get_or_create_referral_code(cid)
@@ -7091,7 +7091,7 @@ Material:
             _label = next((p["label"] for p in sdb.QUEST_POOL if p["key"] == _q.get("quest_key")), _q.get("quest_key", "Mission" if _is_en else "Misión"))
             if _is_en:
                 try:
-                    from outreach.i18n import _translate_visible_text
+                    from machreach_core.i18n import _translate_visible_text
                     _label = _translate_visible_text(str(_label)) or str(_label)
                 except Exception:
                     _label = str(_label)
@@ -13660,7 +13660,7 @@ Material:
         if source_text:
             data["source_text"] = source_text
 
-        from outreach.db import enqueue_async_job, get_async_job_status
+        from machreach_core.db import enqueue_async_job, get_async_job_status
         existing = get_async_job_status("student_flashcard_generation", str(_cid()))
         if existing.get("status") in ("queued", "running"):
             return jsonify({"queued": True, "flashcard_status": existing}), 202
@@ -13808,7 +13808,7 @@ Material:
     def student_generate_flashcards_status():
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
-        from outreach.db import get_async_job_status
+        from machreach_core.db import get_async_job_status
         return jsonify(get_async_job_status("student_flashcard_generation", str(_cid())))
 
 
@@ -13894,7 +13894,7 @@ Material:
 
         # Check flashcard badges
 
-        from outreach.db import _fetchval, get_db
+        from machreach_core.db import _fetchval, get_db
 
         with get_db() as db:
 
@@ -14017,12 +14017,12 @@ Material:
 
 
     def _quiz_job_status(client_id: int) -> dict:
-        from outreach.db import get_async_job_status
+        from machreach_core.db import get_async_job_status
         return get_async_job_status("student_quiz_generation", str(client_id), {"status": "idle"})
 
 
     def _set_quiz_job_status(client_id: int, status: str, progress: str = "", **payload) -> dict:
-        from outreach.db import set_async_job_status
+        from machreach_core.db import set_async_job_status
         error = str(payload.pop("error", "") or "")
         set_async_job_status(
             "student_quiz_generation",
@@ -14036,7 +14036,7 @@ Material:
 
 
     def _queue_quiz_job(client_id: int, data: dict) -> dict:
-        from outreach.db import enqueue_async_job
+        from machreach_core.db import enqueue_async_job
         return enqueue_async_job(
             "student_quiz_generation",
             str(client_id),
@@ -14370,7 +14370,7 @@ Material:
 
         # Check quiz_10 badge
 
-        from outreach.db import _fetchval, get_db
+        from machreach_core.db import _fetchval, get_db
 
         with get_db() as db:
 
@@ -18604,7 +18604,7 @@ No markdown, no code fences. ONLY JSON.
                 try:
                     from zoneinfo import ZoneInfo
                     from student.timezones import tz_for_country
-                    from outreach.db import _fetchone as _fo
+                    from machreach_core.db import _fetchone as _fo
                     user_tz_name = "America/Santiago"
                     try:
                         with get_db() as _db:
@@ -19059,7 +19059,7 @@ No markdown, no code fences. ONLY JSON.
             return redirect(url_for("login"))
 
         cid = _cid()
-        from outreach.config import BASE_URL
+        from machreach_core.config import BASE_URL
         from student import subscription as ssub
         ref_code = sdb.get_or_create_referral_code(cid)
         ref_joined = sdb.referral_count(cid)
@@ -20974,7 +20974,7 @@ No markdown, no code fences. ONLY JSON.
     def student_retire():
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
-        from outreach.db import get_db, _exec
+        from machreach_core.db import get_db, _exec
         try:
             with get_db() as db:
                 _exec(
@@ -20991,7 +20991,7 @@ No markdown, no code fences. ONLY JSON.
     def student_unretire():
         if not _logged_in():
             return jsonify({"error": "Unauthorized"}), 401
-        from outreach.db import get_db, _exec
+        from machreach_core.db import get_db, _exec
         try:
             with get_db() as db:
                 _exec(
@@ -21019,7 +21019,7 @@ No markdown, no code fences. ONLY JSON.
 
         # Handle profile update
 
-        from outreach.db import get_client, update_client
+        from machreach_core.db import get_client, update_client
 
 
         client = get_client(cid)
@@ -22304,7 +22304,7 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return redirect(url_for("login"))
         cid = _cid()
-        from outreach.db import get_client
+        from machreach_core.db import get_client
         c = get_client(cid) or {}
         wallet = sdb.get_wallet(cid)
         total_xp = sdb.get_total_xp(cid)
@@ -22630,8 +22630,8 @@ No markdown, no code fences. ONLY JSON.
         pack_key = str(data.get("pack_key") or "")
         if pack_key not in sdb.COIN_PACKS:
             return jsonify(ok=False, error="Unknown coin pack"), 400
-        from outreach import lemonsqueezy as ls
-        from outreach import config as _cfg
+        from machreach_core import lemonsqueezy as ls
+        from machreach_core import config as _cfg
         variant_map = {
             "small":  _cfg.LS_VARIANT_COIN_SMALL,
             "medium": _cfg.LS_VARIANT_COIN_MEDIUM,
@@ -22738,8 +22738,8 @@ No markdown, no code fences. ONLY JSON.
             if tier == "free":
                 # Cancel the active LS subscription if we have its id stashed.
                 try:
-                    from outreach.db import get_db, _fetchone
-                    from outreach import lemonsqueezy as ls
+                    from machreach_core.db import get_db, _fetchone
+                    from machreach_core import lemonsqueezy as ls
                     import json as _json
                     with get_db() as db:
                         row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (cid,))
@@ -22762,8 +22762,8 @@ No markdown, no code fences. ONLY JSON.
                 _sub.set_tier(cid, "free")
                 return jsonify(ok=True, tier="free")
             # Upgrade -> hosted checkout
-            from outreach import lemonsqueezy as ls
-            from outreach import config as _cfg
+            from machreach_core import lemonsqueezy as ls
+            from machreach_core import config as _cfg
             variant = _cfg.LS_VARIANT_STUDENT_PLUS if tier == "plus" else _cfg.LS_VARIANT_STUDENT_ULTIMATE
             if not variant:
                 return jsonify(ok=False, error="Plan not configured for checkout."), 503

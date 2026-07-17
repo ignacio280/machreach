@@ -118,7 +118,10 @@ services:
           type: web
           envVarKey: LEMON_SQUEEZY_STORE_ID
       - key: SENTRY_DSN
-        sync: false
+        fromService:
+          name: machreach-web
+          type: web
+          envVarKey: SENTRY_DSN
       - key: LEADERBOARD_WINNERS_RECIPIENT
         fromService:
           name: machreach-web

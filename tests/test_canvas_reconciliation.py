@@ -1,6 +1,6 @@
 """Canvas imports are complete snapshots, not append-only partial updates."""
 
-from outreach.db import _exec, _fetchall, get_db
+from machreach_core.db import _exec, _fetchall, get_db
 from student import db as sdb
 from student.canvas import make_connect_token
 

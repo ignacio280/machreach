@@ -8,12 +8,17 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 
 # ── Sentry error tracking (production only) ──
-from outreach.config import SENTRY_DSN
+from machreach_core.config import SENTRY_DSN
 if SENTRY_DSN:
     import sentry_sdk
-    sentry_sdk.init(dsn=SENTRY_DSN, environment="worker")
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment="worker",
+        release=(os.getenv("RENDER_GIT_COMMIT") or "").strip() or None,
+        send_default_pii=False,
+    )
 
-from outreach.db import (
+from machreach_core.db import (
     check_schema_readiness,
     claim_async_jobs,
     fail_async_job,
@@ -285,8 +290,8 @@ def heartbeat():
 
 def cancel_retired_product_subscriptions():
     """Drain provider cancellations archived by the removal migration."""
-    from outreach import lemonsqueezy as ls
-    from outreach.db import (
+    from machreach_core import lemonsqueezy as ls
+    from machreach_core.db import (
         finish_retired_billing_cancellation,
         list_retired_billing_cancellations,
     )
@@ -310,7 +315,7 @@ def cancel_retired_product_subscriptions():
 def recover_worker_state():
     """Recover interrupted student background jobs."""
     try:
-        from outreach.db import recover_stale_async_jobs
+        from machreach_core.db import recover_stale_async_jobs
         recovered = recover_stale_async_jobs()
         if recovered:
             print(f"[RECOVERY] jobs={recovered}")
@@ -399,7 +404,7 @@ def send_streak_risk_pushes():
         from student import db as sdb
         import smtplib
         from email.mime.text import MIMEText
-        from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, BASE_URL
+        from machreach_core.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, BASE_URL
         if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
             print("[STREAK_RISK] SMTP not configured, skipping.")
             return
@@ -439,7 +444,7 @@ def send_streak_risk_pushes():
 
 
 # ── Monthly leaderboard winners email ────────────────────────────────────
-from outreach.config import LEADERBOARD_WINNERS_RECIPIENT
+from machreach_core.config import LEADERBOARD_WINNERS_RECIPIENT
 
 
 def send_monthly_leaderboard_email(year: int | None = None, month: int | None = None):
@@ -456,7 +461,7 @@ def send_monthly_leaderboard_email(year: int | None = None, month: int | None = 
         from datetime import date
         import smtplib
         from email.mime.text import MIMEText
-        from outreach.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+        from machreach_core.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
 
         if not LEADERBOARD_WINNERS_RECIPIENT:
             print("[MONTHLY_WINNERS] recipient not configured, skipping")

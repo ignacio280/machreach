@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from outreach.db import SCHEMA_VERSION, _exec, _fetchone, get_db
+from machreach_core.db import SCHEMA_VERSION, _exec, _fetchone, get_db
 from student import db as sdb
 
 
@@ -26,7 +26,7 @@ def test_health_reports_db_connected(client):
 
 
 def test_health_hides_database_exception_details(client, monkeypatch):
-    import outreach.db as odb
+    import machreach_core.db as odb
 
     @contextmanager
     def broken_db():
@@ -190,6 +190,7 @@ def test_posthog_loads_only_after_analytics_consent(client, monkeypatch):
     csp = allowed.headers["Content-Security-Policy"]
     assert "https://eu.i.posthog.com" in csp
     assert "https://eu-assets.i.posthog.com" in csp
+    assert "'unsafe-eval'" not in csp
 
 
 def test_stale_register_csrf_redirects_instead_of_raw_bad_request(client):

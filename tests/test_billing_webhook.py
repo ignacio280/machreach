@@ -7,9 +7,9 @@ import os
 
 from student import subscription as ssub
 from student import db as sdb
-from outreach import lemonsqueezy as ls
-from outreach import config as cfg
-from outreach.db import claim_webhook_event, get_db, _exec, _fetchone
+from machreach_core import lemonsqueezy as ls
+from machreach_core import config as cfg
+from machreach_core.db import claim_webhook_event, get_db, _exec, _fetchone
 
 SECRET = os.environ["LEMON_SQUEEZY_WEBHOOK_SECRET"].encode()
 URL = "/webhooks/lemonsqueezy"

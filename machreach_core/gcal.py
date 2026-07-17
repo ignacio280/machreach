@@ -22,7 +22,7 @@ from typing import Optional
 
 import requests
 
-from outreach.db import _USE_PG, get_db, encrypt_password, decrypt_password, _exec, _fetchone
+from machreach_core.db import _USE_PG, get_db, encrypt_password, decrypt_password, _exec, _fetchone
 
 log = logging.getLogger("machreach.gcal")
 

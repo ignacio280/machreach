@@ -1,6 +1,6 @@
 """Run database migrations as a deployment phase, never in request workers."""
 
-from outreach.db import _USE_PG, _exec, check_schema_readiness, get_db, init_db
+from machreach_core.db import _USE_PG, _exec, check_schema_readiness, get_db, init_db
 from student.db import init_student_db
 
 

@@ -1,7 +1,7 @@
 """Tenant-isolation regressions for student-owned study content."""
 
 from student import db as sdb
-from outreach.db import get_db, _exec
+from machreach_core.db import get_db, _exec
 
 
 def _login(client, client_id, name="Tenant User"):

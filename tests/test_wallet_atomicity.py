@@ -2,7 +2,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 
-from outreach.db import get_db, _exec
+from machreach_core.db import get_db, _exec
 from student import db as sdb
 
 

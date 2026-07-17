@@ -1,6 +1,6 @@
 """
 Internationalization — EN/ES translations for MachReach.
-Usage:  from outreach.i18n import t
+Usage:  from machreach_core.i18n import t
         t("nav.dashboard")  # returns translated string based on session lang
 """
 from __future__ import annotations
