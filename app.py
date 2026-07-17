@@ -3661,7 +3661,20 @@ def lemonsqueezy_webhook():
         if not ssub:
             _finish_claimed_ls_event("student-handler-unavailable")
             return "Student subscription handler unavailable", 503
-        sub_id = str(data.get("id") or "")
+        payment_events = {
+            "subscription_payment_failed",
+            "subscription_payment_success",
+            "subscription_payment_recovered",
+        }
+        # Payment webhooks carry a subscription-invoice as `data`. Its `id`
+        # is therefore an invoice id and cannot be used for subscription API
+        # operations such as cancellation. Lemon includes the real provider
+        # subscription id in the invoice attributes instead.
+        sub_id = str(
+            (attrs.get("subscription_id") if event_name in payment_events
+             else data.get("id"))
+            or ""
+        )
         if event_name == "subscription_created":
             ssub.set_subscription_state(
                 cid,

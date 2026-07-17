@@ -93,6 +93,39 @@ def test_payment_recovered_restores_access(client, make_user):
     assert ssub.get_tier(cid) == "plus"
 
 
+def test_payment_invoice_event_preserves_provider_subscription_id(
+    client, make_user, flask_app, monkeypatch
+):
+    """Invoice webhooks must not replace the cancellable subscription id."""
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    cid = make_user()
+    _complete_setup(cid)
+
+    created = _student_event("subscription_created", cid, "plus")
+    created["data"]["id"] = "2350235"
+    assert _post(client, created).status_code == 200
+
+    paid_invoice = _student_event("subscription_payment_success", cid, "plus")
+    paid_invoice["data"] = {
+        "type": "subscription-invoices",
+        "id": "7926265",
+        "attributes": {
+            "status": "paid",
+            "subscription_id": 2350235,
+        },
+    }
+    assert _post(client, paid_invoice).status_code == 200
+
+    calls = []
+    monkeypatch.setattr(ls, "cancel_subscription", lambda sid: calls.append(sid) or True)
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "free"})
+
+    assert response.status_code == 200
+    assert calls == ["2350235"]
+
+
 def test_subscription_checkout_forwards_test_mode(client, make_user, flask_app, monkeypatch):
     monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
     monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "variant_plus")
