@@ -2407,9 +2407,19 @@ def _cancel_ls_subs(ids, client_id: int) -> bool:
     if not ids:
         return True
     try:
+        from machreach_core import config as _cfg
         from machreach_core import lemonsqueezy as ls
+        test_mode = (
+            _cfg.LEMON_SQUEEZY_TEST_MODE
+            and str(client_id) == str(_cfg.LEMON_SQUEEZY_SANDBOX_CLIENT_ID)
+        )
         for sid in set(ids):
-            if not ls.cancel_subscription(sid):
+            cancelled = (
+                ls.cancel_subscription(sid, test_mode=True)
+                if test_mode
+                else ls.cancel_subscription(sid)
+            )
+            if not cancelled:
                 return False
         return True
     except Exception:
@@ -3735,7 +3745,12 @@ def lemonsqueezy_webhook():
         # subscription id in the invoice attributes instead.
         sub_id = provider_subscription_id
         if removed_legacy_tier:
-            if sub_id and not ls.cancel_subscription(sub_id):
+            cancelled = (
+                ls.cancel_subscription(sub_id, test_mode=True)
+                if signature_mode == "test" and sub_id
+                else ls.cancel_subscription(sub_id) if sub_id else True
+            )
+            if sub_id and not cancelled:
                 _finish_claimed_ls_event("retired-tier-cancel-failed")
                 return "Retired subscription cancellation failed", 503
             ssub.set_subscription_state(
@@ -3776,7 +3791,12 @@ def lemonsqueezy_webhook():
                 total > 0 and refunded_amount >= total
             )
             if fully_refunded:
-                if not sub_id or not ls.cancel_subscription(sub_id):
+                cancelled = (
+                    ls.cancel_subscription(sub_id, test_mode=True)
+                    if signature_mode == "test" and sub_id
+                    else ls.cancel_subscription(sub_id) if sub_id else False
+                )
+                if not cancelled:
                     _finish_claimed_ls_event("subscription-refund-cancel-failed")
                     return "Subscription refund cancellation failed", 503
                 ssub.set_subscription_state(

@@ -33,6 +33,8 @@ import requests
 from .config import (
     LEMON_SQUEEZY_API_KEY,
     LEMON_SQUEEZY_STORE_ID,
+    LEMON_SQUEEZY_TEST_API_KEY,
+    LEMON_SQUEEZY_TEST_STORE_ID,
     LEMON_SQUEEZY_TEST_WEBHOOK_SECRET,
     LEMON_SQUEEZY_WEBHOOK_SECRET,
 )
@@ -46,11 +48,14 @@ _HEADERS_JSON = {
 }
 
 
-def _auth_headers() -> dict:
-    return {**_HEADERS_JSON, "Authorization": f"Bearer {LEMON_SQUEEZY_API_KEY}"}
+def _auth_headers(*, test_mode: bool = False) -> dict:
+    api_key = LEMON_SQUEEZY_TEST_API_KEY if test_mode else LEMON_SQUEEZY_API_KEY
+    return {**_HEADERS_JSON, "Authorization": f"Bearer {api_key}"}
 
 
-def is_configured() -> bool:
+def is_configured(*, test_mode: bool = False) -> bool:
+    if test_mode:
+        return bool(LEMON_SQUEEZY_TEST_API_KEY and LEMON_SQUEEZY_TEST_STORE_ID)
     return bool(LEMON_SQUEEZY_API_KEY and LEMON_SQUEEZY_STORE_ID)
 
 
@@ -69,7 +74,7 @@ def create_checkout(
     `custom_data` is echoed back on every webhook event for this checkout —
     we always include at least {client_id, purpose, ...}.
     """
-    if not is_configured():
+    if not is_configured(test_mode=test_mode):
         raise RuntimeError("Lemon Squeezy is not configured (missing API key or store id).")
     if not variant_id:
         raise RuntimeError("Lemon Squeezy: missing variant id for this product.")
@@ -97,7 +102,7 @@ def create_checkout(
                 **({"product_options": product_options} if product_options else {}),
             },
             "relationships": {
-                "store":   {"data": {"type": "stores",   "id": str(LEMON_SQUEEZY_STORE_ID)}},
+                "store":   {"data": {"type": "stores",   "id": str(LEMON_SQUEEZY_TEST_STORE_ID if test_mode else LEMON_SQUEEZY_STORE_ID)}},
                 "variant": {"data": {"type": "variants", "id": str(variant_id)}},
             },
         }
@@ -105,7 +110,7 @@ def create_checkout(
 
     resp = requests.post(
         f"{LS_API}/checkouts",
-        headers=_auth_headers(),
+        headers=_auth_headers(test_mode=test_mode),
         data=json.dumps(payload),
         timeout=15,
     )
@@ -147,15 +152,15 @@ def verify_webhook(raw_body: bytes, signature_header: str) -> bool:
     return webhook_signature_mode(raw_body, signature_header) is not None
 
 
-def cancel_subscription(subscription_id: str) -> bool:
+def cancel_subscription(subscription_id: str, *, test_mode: bool = False) -> bool:
     """Cancel a subscription via the Lemon Squeezy REST API.
     Returns True on success, False otherwise (errors are logged, not raised)."""
-    if not subscription_id or not is_configured():
+    if not subscription_id or not is_configured(test_mode=test_mode):
         return False
     try:
         resp = requests.delete(
             f"{LS_API}/subscriptions/{subscription_id}",
-            headers=_auth_headers(),
+            headers=_auth_headers(test_mode=test_mode),
             timeout=15,
         )
         if resp.status_code >= 300:
@@ -168,13 +173,15 @@ def cancel_subscription(subscription_id: str) -> bool:
         return False
 
 
-def update_subscription_variant(subscription_id: str, variant_id: str) -> bool:
+def update_subscription_variant(
+    subscription_id: str, variant_id: str, *, test_mode: bool = False
+) -> bool:
     """Move an existing subscription to another configured variant.
 
     ``cancelled=False`` also resumes a subscription that was scheduled to end,
     avoiding a second checkout and duplicate subscription.
     """
-    if not subscription_id or not variant_id or not is_configured():
+    if not subscription_id or not variant_id or not is_configured(test_mode=test_mode):
         return False
     normalized_variant_id: int | str = (
         int(str(variant_id)) if str(variant_id).isdigit() else str(variant_id)
@@ -192,7 +199,7 @@ def update_subscription_variant(subscription_id: str, variant_id: str) -> bool:
     try:
         resp = requests.patch(
             f"{LS_API}/subscriptions/{subscription_id}",
-            headers=_auth_headers(),
+            headers=_auth_headers(test_mode=test_mode),
             json=payload,
             timeout=20,
         )

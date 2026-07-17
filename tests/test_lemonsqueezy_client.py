@@ -21,6 +21,8 @@ def test_create_checkout_sends_customer_product_and_test_mode(monkeypatch):
     request = {}
     monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_API_KEY", "ls-key")
     monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_STORE_ID", "store-1")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_TEST_API_KEY", "ls-test-key")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_TEST_STORE_ID", "test-store-1")
 
     def fake_post(url, **kwargs):
         request.update(url=url, **kwargs)
@@ -40,8 +42,23 @@ def test_create_checkout_sends_customer_product_and_test_mode(monkeypatch):
 
     assert url == "https://checkout.test/1"
     assert payload["data"]["attributes"]["test_mode"] is True
+    assert request["headers"]["Authorization"] == "Bearer ls-test-key"
+    assert payload["data"]["relationships"]["store"]["data"]["id"] == "test-store-1"
     assert payload["data"]["relationships"]["variant"]["data"]["id"] == "variant-2"
     assert payload["data"]["attributes"]["checkout_data"]["custom"]["client_id"] == 7
+
+
+def test_test_mode_requires_separate_sandbox_credentials(monkeypatch):
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_API_KEY", "ls-live-key")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_STORE_ID", "live-store")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_TEST_API_KEY", "")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_TEST_STORE_ID", "")
+
+    try:
+        lemonsqueezy.create_checkout("test-variant", custom_data={}, test_mode=True)
+        raise AssertionError("missing sandbox credentials were not rejected")
+    except RuntimeError as exc:
+        assert "not configured" in str(exc)
 
 
 def test_create_checkout_rejects_provider_error_and_missing_url(monkeypatch):

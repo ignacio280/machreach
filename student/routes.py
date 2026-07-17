@@ -22638,6 +22638,14 @@ No markdown, no code fences. ONLY JSON.
             "mega":   _cfg.LS_VARIANT_COIN_MEGA,
             "ultra":  _cfg.LS_VARIANT_COIN_ULTRA,
         }
+        if _cfg.LEMON_SQUEEZY_TEST_MODE:
+            variant_map = {
+                "small":  _cfg.LS_TEST_VARIANT_COIN_SMALL,
+                "medium": _cfg.LS_TEST_VARIANT_COIN_MEDIUM,
+                "large":  _cfg.LS_TEST_VARIANT_COIN_LARGE,
+                "mega":   _cfg.LS_TEST_VARIANT_COIN_MEGA,
+                "ultra":  _cfg.LS_TEST_VARIANT_COIN_ULTRA,
+            }
         variant = variant_map.get(pack_key, "")
         if not variant:
             return jsonify(ok=False, error="Coin pack not configured for checkout."), 503
@@ -22741,12 +22749,18 @@ No markdown, no code fences. ONLY JSON.
             sub_id = str(sub.get("ls_sub_id") or "").strip()
             local_paid_tier = str(sub.get("tier") or "free").lower()
             provider_status = str(sub.get("status") or "").lower()
+            from machreach_core import config as _cfg
             if tier == "free":
                 # Cancel the active LS subscription if we have its id stashed.
                 try:
                     from machreach_core import lemonsqueezy as ls
                     if sub_id:
-                        if not ls.cancel_subscription(sub_id):
+                        cancelled = (
+                            ls.cancel_subscription(sub_id, test_mode=True)
+                            if _cfg.LEMON_SQUEEZY_TEST_MODE
+                            else ls.cancel_subscription(sub_id)
+                        )
+                        if not cancelled:
                             return jsonify(ok=False, error="No pudimos cancelar tu suscripcion. Intentalo de nuevo o contacta soporte."), 502
                     elif local_paid_tier == "plus":
                         return jsonify(ok=False, error="No encontramos la suscripcion de pago para cancelarla. Contacta soporte."), 409
@@ -22757,8 +22771,11 @@ No markdown, no code fences. ONLY JSON.
                 return jsonify(ok=True, tier="free")
             # Upgrade -> hosted checkout
             from machreach_core import lemonsqueezy as ls
-            from machreach_core import config as _cfg
-            variant = _cfg.LS_VARIANT_STUDENT_PLUS
+            variant = (
+                _cfg.LS_TEST_VARIANT_STUDENT_PLUS
+                if _cfg.LEMON_SQUEEZY_TEST_MODE
+                else _cfg.LS_VARIANT_STUDENT_PLUS
+            )
             paid_tiers = {"plus"}
             renewable_statuses = {"active", "on_trial", "trialing", "paused", "cancelled"}
             delinquent_statuses = {"past_due", "unpaid"}
@@ -22779,7 +22796,12 @@ No markdown, no code fences. ONLY JSON.
                 if provider_status in renewable_statuses:
                     if not variant:
                         return jsonify(ok=False, error="Plan not configured for checkout."), 503
-                    if not ls.update_subscription_variant(sub_id, variant):
+                    updated = (
+                        ls.update_subscription_variant(sub_id, variant, test_mode=True)
+                        if _cfg.LEMON_SQUEEZY_TEST_MODE
+                        else ls.update_subscription_variant(sub_id, variant)
+                    )
+                    if not updated:
                         return jsonify(
                             ok=False,
                             error="No pudimos cambiar tu plan. Intentalo de nuevo o contacta soporte.",

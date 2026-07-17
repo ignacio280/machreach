@@ -43,6 +43,10 @@ services:
         sync: false
       - key: LEMON_SQUEEZY_STORE_ID
         sync: false
+      - key: LEMON_SQUEEZY_TEST_API_KEY
+        sync: false
+      - key: LEMON_SQUEEZY_TEST_STORE_ID
+        sync: false
       - key: LEMON_SQUEEZY_WEBHOOK_SECRET
         sync: false
       - key: LEMON_SQUEEZY_TEST_WEBHOOK_SECRET
@@ -53,6 +57,8 @@ services:
         value: "false"
       - key: LS_VARIANT_STUDENT_PLUS
         sync: false
+      - key: LS_TEST_VARIANT_STUDENT_PLUS
+        sync: false
       - key: LS_VARIANT_COIN_SMALL
         sync: false
       - key: LS_VARIANT_COIN_MEDIUM
@@ -62,6 +68,16 @@ services:
       - key: LS_VARIANT_COIN_MEGA
         sync: false
       - key: LS_VARIANT_COIN_ULTRA
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_SMALL
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_MEDIUM
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_LARGE
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_MEGA
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_ULTRA
         sync: false
       - key: SENTRY_DSN
         sync: false

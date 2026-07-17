@@ -273,7 +273,7 @@ def test_payment_invoice_event_preserves_provider_subscription_id(
 
 def test_subscription_checkout_forwards_test_mode(client, make_user, flask_app, monkeypatch):
     monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
-    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "variant_plus")
+    monkeypatch.setattr(cfg, "LS_TEST_VARIANT_STUDENT_PLUS", "variant_plus")
     monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", True)
     captured = {}
 
@@ -523,7 +523,7 @@ def test_unknown_paid_subscription_state_blocks_duplicate_checkout(
 
 def test_coin_checkout_forwards_test_mode(client, make_user, flask_app, monkeypatch):
     monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
-    monkeypatch.setattr(cfg, "LS_VARIANT_COIN_SMALL", "variant_small")
+    monkeypatch.setattr(cfg, "LS_TEST_VARIANT_COIN_SMALL", "variant_small")
     monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", True)
     captured = {}
 
