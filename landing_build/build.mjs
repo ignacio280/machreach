@@ -81,6 +81,16 @@ class _Observer { observe() {} unobserve() {} disconnect() {} takeRecords() { re
 w.IntersectionObserver = w.IntersectionObserver || _Observer;
 w.ResizeObserver = w.ResizeObserver || _Observer;
 
+// Components use Math.random() for decorative animation values. Seed the
+// prerender so committed HTML is reproducible across local and CI builds.
+let prerenderSeed = 0x4d524348;
+w.Math.random = function () {
+  prerenderSeed = (prerenderSeed + 0x6d2b79f5) | 0;
+  let value = Math.imul(prerenderSeed ^ (prerenderSeed >>> 15), 1 | prerenderSeed);
+  value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+  return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+};
+
 function inject(code) {
   const s = w.document.createElement("script");
   s.textContent = code;
