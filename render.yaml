@@ -107,6 +107,16 @@ services:
         sync: false
       - key: BASE_URL
         sync: false
+      - key: LEMON_SQUEEZY_API_KEY
+        fromService:
+          name: machreach-web
+          type: web
+          envVarKey: LEMON_SQUEEZY_API_KEY
+      - key: LEMON_SQUEEZY_STORE_ID
+        fromService:
+          name: machreach-web
+          type: web
+          envVarKey: LEMON_SQUEEZY_STORE_ID
       - key: SENTRY_DSN
         sync: false
       - key: LEADERBOARD_WINNERS_RECIPIENT
