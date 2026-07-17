@@ -8,6 +8,7 @@ import os
 from student import subscription as ssub
 from student import db as sdb
 from outreach import lemonsqueezy as ls
+from outreach import config as cfg
 from outreach.db import claim_webhook_event, get_db, _exec, _fetchone
 
 SECRET = os.environ["LEMON_SQUEEZY_WEBHOOK_SECRET"].encode()
@@ -90,6 +91,52 @@ def test_payment_recovered_restores_access(client, make_user):
     recovered = _student_event("subscription_payment_recovered", cid, "plus")
     assert _post(client, recovered).status_code == 200
     assert ssub.get_tier(cid) == "plus"
+
+
+def test_subscription_checkout_forwards_test_mode(client, make_user, flask_app, monkeypatch):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "variant_plus")
+    monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", True)
+    captured = {}
+
+    def fake_checkout(variant, **kwargs):
+        captured.update(variant=variant, **kwargs)
+        return "https://example.test/checkout"
+
+    monkeypatch.setattr(ls, "create_checkout", fake_checkout)
+    cid = make_user()
+    _complete_setup(cid)
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "plus"})
+
+    assert response.status_code == 200
+    assert response.get_json()["checkout_url"] == "https://example.test/checkout"
+    assert captured["variant"] == "variant_plus"
+    assert captured["test_mode"] is True
+
+
+def test_coin_checkout_forwards_test_mode(client, make_user, flask_app, monkeypatch):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_COIN_SMALL", "variant_small")
+    monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", True)
+    captured = {}
+
+    def fake_checkout(variant, **kwargs):
+        captured.update(variant=variant, **kwargs)
+        return "https://example.test/coin-checkout"
+
+    monkeypatch.setattr(ls, "create_checkout", fake_checkout)
+    cid = make_user()
+    _complete_setup(cid)
+    _login_student(client, cid)
+
+    response = client.post("/api/student/wallet/buy-coin-pack", json={"pack_key": "small"})
+
+    assert response.status_code == 200
+    assert response.get_json()["checkout_url"] == "https://example.test/coin-checkout"
+    assert captured["variant"] == "variant_small"
+    assert captured["test_mode"] is True
 
 
 def test_bad_signature_rejected(client, make_user):

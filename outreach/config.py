@@ -94,6 +94,9 @@ APOLLO_API_KEY = os.getenv("APOLLO_API_KEY", "")
 LEMON_SQUEEZY_API_KEY        = os.getenv("LEMON_SQUEEZY_API_KEY", "")
 LEMON_SQUEEZY_STORE_ID       = os.getenv("LEMON_SQUEEZY_STORE_ID", "")
 LEMON_SQUEEZY_WEBHOOK_SECRET = os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "")
+LEMON_SQUEEZY_TEST_MODE      = os.getenv("LEMON_SQUEEZY_TEST_MODE", "").strip().lower() in {
+    "1", "true", "yes", "on",
+}
 # Student PLUS / Ultimate subscription variant IDs.
 LS_VARIANT_STUDENT_PLUS     = os.getenv("LS_VARIANT_STUDENT_PLUS", "")
 LS_VARIANT_STUDENT_ULTIMATE = os.getenv("LS_VARIANT_STUDENT_ULTIMATE", "")

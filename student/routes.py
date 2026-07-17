@@ -22649,6 +22649,7 @@ No markdown, no code fences. ONLY JSON.
                 custom_data={"purpose": "coin_pack", "pack_key": pack_key, "client_id": str(cid)},
                 email=session.get("email") or None,
                 redirect_url=request.url_root.rstrip("/") + "/student/shop?bought=1",
+                test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE,
             )
         except Exception as e:
             return jsonify(ok=False, error=str(e)), 500
@@ -22771,6 +22772,7 @@ No markdown, no code fences. ONLY JSON.
                 custom_data={"purpose": "student_sub", "tier": tier, "client_id": str(cid)},
                 email=session.get("email") or None,
                 redirect_url=request.url_root.rstrip("/") + "/student/shop?upgraded=1",
+                test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE,
             )
             return jsonify(ok=True, checkout_url=url)
         except Exception as e:

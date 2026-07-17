@@ -45,6 +45,8 @@ services:
         sync: false
       - key: LEMON_SQUEEZY_WEBHOOK_SECRET
         sync: false
+      - key: LEMON_SQUEEZY_TEST_MODE
+        value: "false"
       - key: LS_VARIANT_STUDENT_PLUS
         sync: false
       - key: LS_VARIANT_STUDENT_ULTIMATE
