@@ -549,7 +549,12 @@ def check_schema_readiness() -> dict:
         _exec(db, "SELECT event_type, created_at FROM operational_events LIMIT 0")
         _exec(db, "SELECT subscription_id, status FROM retired_billing_cancellations LIMIT 0")
         _exec(db, "SELECT client_id, name FROM student_courses LIMIT 0")
-        _exec(db, "SELECT client_id, coins FROM student_wallet LIMIT 0")
+        _exec(db, "SELECT client_id, coins, coin_debt FROM student_wallet LIMIT 0")
+        _exec(
+            db,
+            "SELECT coins_credited, coins_reversed, refunded_amount, provider_total "
+            "FROM student_coin_pack_orders LIMIT 0",
+        )
     return {"versions": versions}
 
 

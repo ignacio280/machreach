@@ -2807,7 +2807,7 @@ Return this JSON shape:
             return jsonify({"error": "Not found"}), 404
         try:
             from student import subscription as _sub
-            is_plus = _sub.get_tier(_cid()) in ("plus", "ultimate")
+            is_plus = _sub.get_tier(_cid()) == "plus"
         except Exception:
             is_plus = False
         benchmark = sdb.get_course_success_benchmark(course_id) or {"has_data": False}
@@ -22054,11 +22054,10 @@ No markdown, no code fences. ONLY JSON.
             from student import subscription as _sub
             current_tier = _sub.get_tier(cid)
             plans = _sub.PLANS
-            tier_order = ["free", "plus", "ultimate"]
+            tier_order = ["free", "plus"]
             tier_colors = {
                 "free":     ("#64748b", "#f1f5f9"),
                 "plus":     ("#7c3aed", "#ede9fe"),
-                "ultimate": ("#d97706", "#fef3c7"),
             }
             sub_cards = []
             for key in tier_order:
@@ -22172,7 +22171,7 @@ No markdown, no code fences. ONLY JSON.
 
         <div class="card">
           <div class="card-header"><h2>\u2744\ufe0f Congeladores de racha 🔥</h2></div>
-          <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Capacidad de tu plan: <b>{freezes}/{freeze_cap}</b> congeladores guardados. Gratis puede guardar hasta {sdb.FREE_STREAK_FREEZE_CAP}; Plus/Ultimate hasta {sdb.PAID_STREAK_FREEZE_CAP}.</p>
+          <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Capacidad de tu plan: <b>{freezes}/{freeze_cap}</b> congeladores guardados. Gratis puede guardar hasta {sdb.FREE_STREAK_FREEZE_CAP}; Plus hasta {sdb.PAID_STREAK_FREEZE_CAP}.</p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;">
             <div style="font-size:18px;font-weight:700;">{sdb.STREAK_FREEZE_PRICE} \U0001FA99 cada uno</div>
             <button class="btn btn-primary btn-sm" id="buy-freeze-btn" onclick="buyFreeze()" {freeze_btn_disabled}>Comprar 1</button>
@@ -22261,7 +22260,7 @@ No markdown, no code fences. ONLY JSON.
           }} catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
         }}
         async function changeTier(tier) {{
-          const labels = {{free:'Gratis', plus:'Plus', ultimate:'Ultimate'}};
+          const labels = {{free:'Gratis', plus:'Plus'}};
           if (!confirm('¿Cambiar al plan ' + (labels[tier]||tier) + '?')) return;
           try {{
             const r = await shopRequest('tier','/api/student/subscription/change',{{tier:tier}});
@@ -22731,6 +22730,8 @@ No markdown, no code fences. ONLY JSON.
         tier = str(data.get("tier") or "").strip().lower()
         try:
             from student import subscription as _sub
+            if tier == "ultimate":
+                return jsonify(ok=False, error="Plan no disponible"), 400
             if tier not in _sub.PLANS:
                 return jsonify(ok=False, error="Unknown plan"), 400
             if _sub.PLANS.get(tier, {}).get("locked"):
@@ -22747,7 +22748,7 @@ No markdown, no code fences. ONLY JSON.
                     if sub_id:
                         if not ls.cancel_subscription(sub_id):
                             return jsonify(ok=False, error="No pudimos cancelar tu suscripcion. Intentalo de nuevo o contacta soporte."), 502
-                    elif local_paid_tier in ("plus", "ultimate"):
+                    elif local_paid_tier == "plus":
                         return jsonify(ok=False, error="No encontramos la suscripcion de pago para cancelarla. Contacta soporte."), 409
                 except Exception as e:
                     log.exception("Student subscription cancellation failed for client %s: %s", cid, e)
@@ -22757,8 +22758,8 @@ No markdown, no code fences. ONLY JSON.
             # Upgrade -> hosted checkout
             from machreach_core import lemonsqueezy as ls
             from machreach_core import config as _cfg
-            variant = _cfg.LS_VARIANT_STUDENT_PLUS if tier == "plus" else _cfg.LS_VARIANT_STUDENT_ULTIMATE
-            paid_tiers = {"plus", "ultimate"}
+            variant = _cfg.LS_VARIANT_STUDENT_PLUS
+            paid_tiers = {"plus"}
             renewable_statuses = {"active", "on_trial", "trialing", "paused", "cancelled"}
             delinquent_statuses = {"past_due", "unpaid"}
             terminal_statuses = {"expired", "inactive"}

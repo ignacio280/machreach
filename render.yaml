@@ -53,8 +53,6 @@ services:
         value: "false"
       - key: LS_VARIANT_STUDENT_PLUS
         sync: false
-      - key: LS_VARIANT_STUDENT_ULTIMATE
-        sync: false
       - key: LS_VARIANT_COIN_SMALL
         sync: false
       - key: LS_VARIANT_COIN_MEDIUM

@@ -9,10 +9,13 @@ specific.
 
 ## Product facts counsel should verify
 
-- MachReach is a student SaaS with free, Plus, and Ultimate tiers.
+- MachReach is a student SaaS with Free and Plus tiers.
 - Lemon Squeezy is the payment processor/merchant flow; MachReach receives billing
   identifiers and subscription state, not card numbers.
-- Users can cancel in product; paid access continues through the paid period.
+- Users can cancel in product; paid access continues through the paid period unless
+  the related payment is fully refunded, which ends paid access when confirmed.
+- Coin-pack refunds reverse coins proportionally. Spent refunded coins create a
+  non-negative adjustment that future coin earnings settle before becoming spendable.
 - Account deletion first attempts to cancel active billing, then removes account
   data. It refuses deletion if provider cancellation fails.
 - Users may provide identity, university, courses, grades, study activity, files,

@@ -82,3 +82,21 @@ def test_parallel_bundle_purchases_charge_once(make_user):
     assert wallet["coins"] == 0
     assert wallet["unlocked_banners"].count("ocean") == 1
     assert state["unlocked_flags"].count("void_blue") == 1
+
+
+def test_parallel_coin_rewards_repay_refund_debt_once(make_user):
+    client_id = make_user("Atomic Refund Debt")
+    sdb.get_wallet(client_id)
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE student_wallet SET coins = 0, coin_debt = 200 WHERE client_id = %s",
+            (client_id,),
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(lambda _: sdb.add_coins(client_id, 150, "parallel reward"), range(2)))
+
+    wallet = sdb.get_wallet(client_id)
+    assert wallet["coin_debt"] == 0
+    assert wallet["coins"] == 100

@@ -2,6 +2,7 @@
 
 from machreach_core.db import _USE_PG, _exec, check_schema_readiness, get_db, init_db
 from student.db import init_student_db
+from student.subscription import normalize_legacy_subscription_tiers
 
 
 _MIGRATION_LOCK_ID = 4_624_686_952_405_553_101
@@ -17,6 +18,7 @@ def migrate() -> None:
         try:
             init_db()
             init_student_db()
+            normalize_legacy_subscription_tiers()
             check_schema_readiness()
         finally:
             if _USE_PG:

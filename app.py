@@ -1622,7 +1622,6 @@ LAYOUT = """<!DOCTYPE html>
       "ACTIVO": "ACTIVE",
       "Plan actual": "Current plan",
       "Mejorar a Plus": "Upgrade to Plus",
-      "Mejorar a Ultimate": "Upgrade to Ultimate",
       "Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes y tarjetas.": "Spend coins on streak 🔥 freezes, profile banners, and temporary boosts. Earn coins by completing focus sessions, quizzes, and flashcards.",
 
       "Comprar": "Buy",
@@ -2382,7 +2381,7 @@ def change_password():
 def _collect_ls_sub_ids(db, client_id: int) -> list:
     """Return the Lemon Squeezy subscription id(s) stored for this client.
 
-    The student PLUS/Ultimate subscription ID is read before local rows are
+    The student Plus subscription ID is read before local rows are
     deleted so recurring billing can be cancelled first.
     """
     import json as _json
@@ -3395,7 +3394,7 @@ def admin_product_analytics():
     </style>
     <div class="admin-analytics">
       <div class="breadcrumb"><a href="/admin">Admin</a> / Analytics</div>
-      <div class="page-header"><h1>&#128202; Analytics de producto</h1><p class="subtitle">Tráfico, uso de IA, estudio real y señales para decidir qué merece ser Plus o Ultimate.</p></div>
+      <div class="page-header"><h1>&#128202; Analytics de producto</h1><p class="subtitle">Tráfico, uso de IA, estudio real y señales para mejorar Free y Plus.</p></div>
       <div class="admin-grid">{card_html}</div>
       {charts_html}
       <div class="admin-panel">
@@ -3634,7 +3633,7 @@ def lemonsqueezy_webhook():
     """Handle only MachReach Uni subscriptions and coin packs.
 
     Routing is done via `meta.custom_data.purpose`:
-      - "student_sub"   -> student PLUS/Ultimate subscription event (tier)
+      - "student_sub"   -> student Plus subscription event
       - "coin_pack"     -> one-time coin-pack purchase (pack_key)
     """
     import json as _json
@@ -3662,6 +3661,7 @@ def lemonsqueezy_webhook():
         "subscription_payment_failed",
         "subscription_payment_success",
         "subscription_payment_recovered",
+        "subscription_payment_refunded",
     }
     provider_subscription_id = str(
         (attrs.get("subscription_id") if event_name in payment_events else data.get("id"))
@@ -3709,25 +3709,23 @@ def lemonsqueezy_webhook():
 
     _log.info("[LS] webhook %s purpose=%s client=%s", event_name, purpose, cid)
 
-    # ── Student PLUS / Ultimate subscription ───────────────────────
+    # ── Student Plus subscription ──────────────────────────────────
     if purpose == "student_sub":
         try:
             from student import subscription as ssub
         except Exception:
             ssub = None
-        tier = str(custom.get("tier") or "plus").lower()
-        if tier not in ("plus", "ultimate"):
-            tier = "plus"
+        requested_tier = str(custom.get("tier") or "plus").strip().lower()
         variant_id = str(attrs.get("variant_id") or "")
         product_name = str(attrs.get("product_name") or "").strip().lower()
-        if variant_id and variant_id == str(_cfg.LS_VARIANT_STUDENT_ULTIMATE):
-            tier = "ultimate"
-        elif variant_id and variant_id == str(_cfg.LS_VARIANT_STUDENT_PLUS):
-            tier = "plus"
-        elif "ultimate" in product_name:
-            tier = "ultimate"
-        elif "plus" in product_name:
-            tier = "plus"
+        provider_is_plus = (
+            (variant_id and variant_id == str(_cfg.LS_VARIANT_STUDENT_PLUS))
+            or "plus" in product_name
+        )
+        removed_legacy_tier = not provider_is_plus and (
+            requested_tier == "ultimate" or "ultimate" in product_name
+        )
+        tier = "plus"
         if not ssub:
             _finish_claimed_ls_event("student-handler-unavailable")
             return "Student subscription handler unavailable", 503
@@ -3736,6 +3734,15 @@ def lemonsqueezy_webhook():
         # operations such as cancellation. Lemon includes the real provider
         # subscription id in the invoice attributes instead.
         sub_id = provider_subscription_id
+        if removed_legacy_tier:
+            if sub_id and not ls.cancel_subscription(sub_id):
+                _finish_claimed_ls_event("retired-tier-cancel-failed")
+                return "Retired subscription cancellation failed", 503
+            ssub.set_subscription_state(
+                cid, tier="free", status="retired", ls_sub_id=sub_id or None
+            )
+            _finish_claimed_ls_event()
+            return "ok", 200
         if event_name == "subscription_created":
             ssub.set_subscription_state(
                 cid,
@@ -3762,16 +3769,29 @@ def lemonsqueezy_webhook():
         ):
             ssub.set_subscription_state(cid, tier=tier, status="active",
                                         ls_sub_id=sub_id or None)
+        elif event_name == "subscription_payment_refunded":
+            refunded_amount = int(attrs.get("refunded_amount") or 0)
+            total = int(attrs.get("total") or 0)
+            fully_refunded = attrs.get("refunded") is True or (
+                total > 0 and refunded_amount >= total
+            )
+            if fully_refunded:
+                if not sub_id or not ls.cancel_subscription(sub_id):
+                    _finish_claimed_ls_event("subscription-refund-cancel-failed")
+                    return "Subscription refund cancellation failed", 503
+                ssub.set_subscription_state(
+                    cid, tier="free", status="refunded", ls_sub_id=sub_id or None
+                )
         _finish_claimed_ls_event()
         return "ok", 200
 
     # ── One-time coin-pack purchase ────────────────────────────────
     if purpose == "coin_pack":
-        if event_name != "order_created":
+        if event_name not in {"order_created", "order_refunded"}:
             _finish_claimed_ls_event()
-            return "ok", 200  # we only credit on the initial order
+            return "ok", 200
         pack_key = str(custom.get("pack_key") or "")
-        if not pack_key:
+        if event_name == "order_created" and not pack_key:
             _finish_claimed_ls_event()
             return "ok", 200
         order_id = str(data.get("id") or "").strip()
@@ -3781,13 +3801,24 @@ def lemonsqueezy_webhook():
             return "ok", 200
         try:
             from student import db as sdb
-            res = sdb.credit_coin_pack(cid, pack_key, order_id=order_id)
+            if event_name == "order_refunded":
+                res = sdb.refund_coin_pack(
+                    cid,
+                    order_id,
+                    refunded_amount=int(attrs.get("refunded_amount") or 0),
+                    provider_total=int(attrs.get("total") or 0),
+                    fully_refunded=attrs.get("refunded") is True,
+                )
+                if not res.get("ok"):
+                    raise RuntimeError(res.get("error") or "refund reconciliation failed")
+            else:
+                res = sdb.credit_coin_pack(cid, pack_key, order_id=order_id)
             if res.get("duplicate"):
                 _log.info("[LS] duplicate coin-pack order ignored: %s", order_id)
         except Exception as e:
-            _log.exception("[LS] coin-pack credit failed: %s", e)
-            _finish_claimed_ls_event("coin-credit-failed")
-            return "Coin credit failed", 503
+            _log.exception("[LS] coin-pack reconciliation failed: %s", e)
+            _finish_claimed_ls_event("coin-reconciliation-failed")
+            return "Coin reconciliation failed", 503
         _finish_claimed_ls_event()
         return "ok", 200
 
@@ -4010,7 +4041,7 @@ def terms_page():
         <h2>1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
         <h2>2. Description of Service</h2>
-        <p>MachReach provides student study tools including Canvas extension course import, manually added courses, focus timers, study-time tracking, AI-generated flashcards and practice quizzes, grade tracking, XP, streaks, leaderboards, friends, coins and an in-app shop, course analytics, a referral program, and an optional Focus Guard browser extension. Some features require a paid Plus or Ultimate plan.</p>
+        <p>MachReach provides student study tools including Canvas extension course import, manually added courses, focus timers, study-time tracking, AI-generated flashcards and practice quizzes, grade tracking, XP, streaks, leaderboards, friends, coins and an in-app shop, course analytics, a referral program, and an optional Focus Guard browser extension. Some features require a paid Plus plan.</p>
         <h2>3. Account Responsibilities</h2>
         <ul>
           <li>You must provide accurate information when registering, including your university</li>
@@ -4024,13 +4055,14 @@ def terms_page():
         <h2>4. Academic Integrity</h2>
         <p>You are responsible for complying with your institution's academic-integrity policies. MachReach is a study aid; using it to plagiarize, cheat, or violate honor codes is prohibited.</p>
         <h2>5. Subscriptions, Renewals and Billing</h2>
-        <p>Plus and Ultimate are recurring subscriptions processed through Lemon Squeezy. Checkout shows the price, currency, billing interval, taxes, and payment terms before purchase. Unless checkout states otherwise, subscriptions auto-renew for the same interval until cancelled.</p>
+        <p>Plus is a recurring subscription processed through Lemon Squeezy. Checkout shows the price, currency, billing interval, taxes, and payment terms before purchase. Unless checkout states otherwise, subscriptions auto-renew for the same interval until cancelled.</p>
         <p>You may cancel from MachReach plan controls or by contacting support. Cancellation stops future renewal; access ordinarily continues through the already-paid period and then returns to the free tier. If payment fails, paid access may be restricted while Lemon Squeezy retries or updates the subscription, and restored after successful payment recovery.</p>
         <p>Deleting an account with an active subscription first triggers provider cancellation. If cancellation cannot be confirmed, MachReach keeps the account intact so the request can be retried without orphaning a recurring charge.</p>
         <h2>6. Coin Packs</h2>
         <p>Coin packs are one-time digital purchases. Coins have no cash value and cannot be transferred, resold, or redeemed for money. Provider event identifiers are recorded to prevent a duplicate or replayed webhook from crediting an order twice.</p>
         <h2>7. Refunds and Right of Withdrawal</h2>
         <p>Refund requests can be sent to <a href="mailto:support@machreach.com">support@machreach.com</a> with the purchase email and order identifier. Nothing in these Terms excludes a refund, cancellation, warranty, or right of withdrawal that cannot lawfully be waived. Chilean consumers retain applicable rights under Law 19.496 and electronic-commerce rules.</p>
+        <p>A full refund of a Plus subscription payment ends paid access when the refund is confirmed by Lemon Squeezy. A partial subscription refund does not change access unless support tells you otherwise as part of the agreed resolution. A refunded coin pack is reversed in proportion to the cumulative refund. If those coins were already spent, future coin earnings first settle the resulting coin balance adjustment; your spendable coin balance will not become negative.</p>
         <h2>8. AI Features</h2>
         <p>AI-generated quizzes, flashcards, or other study content are provided as suggestions and may be incomplete or incorrect. You are responsible for reviewing generated content before relying on it academically.</p>
         <h2>9. Leaderboards, Coins and Referrals</h2>

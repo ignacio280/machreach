@@ -3,14 +3,13 @@
 Tiers:
   - free      : 1 quiz/day (max 30 q), 1 flashcard set/day (max 30 c).
   - plus      : Unlimited AI generation, analytics, streak protection and cosmetics.
-  - ultimate  : Highest paid tier.
 
 Storage: re-uses the existing `clients` table via `mail_preferences` JSON-blob
 column (already exists in the schema). Keys used:
     mail_preferences = {
        ...other prefs...,
        "subscription": {
-           "tier": "free" | "plus" | "ultimate",
+           "tier": "free" | "plus",
            "since": "2026-04-21T...",
        }
     }
@@ -78,22 +77,8 @@ PLANS = {
             "Banners, flags e insignias exclusivas PLUS",
         ],
     },
-    "ultimate": {
-        "key": "ultimate",
-        "name": "Ultimate",
-        "price_clp_month": 8990,
-        "price_clp_year": 107880,
-        "blurb": "El plan completo para quienes quieren llevar su estudio al maximo.",
-        "features": [
-            "Todo lo de Plus",
-            "Límites máximos de IA",
-            "Historial completo de analítica",
-            "Más monedas, reparaciones y cosméticos Ultimate",
-            "Early access a herramientas nuevas",
-        ],
-    },
 }
-PLAN_ORDER = ["free", "plus", "ultimate"]
+PLAN_ORDER = ["free", "plus"]
 
 
 # ── Read / write tier ───────────────────────────────────────────────────
@@ -154,6 +139,49 @@ def _optional_db_work(db, savepoint_name: str, client_id: int):
         _exec(db, f"RELEASE SAVEPOINT {safe_name}")
 
 
+def normalize_legacy_subscription_tiers() -> int:
+    """Retire historical paid-tier records and queue provider cancellation."""
+    from machreach_core.db import _exec, _fetchall
+
+    changed = 0
+    with get_db() as db:
+        rows = _fetchall(db, "SELECT id, mail_preferences FROM clients")
+        for row in rows:
+            raw = row.get("mail_preferences") or ""
+            try:
+                prefs = json.loads(raw) if raw else {}
+            except Exception:
+                continue
+            if not isinstance(prefs, dict):
+                continue
+            subscription = prefs.get("subscription")
+            if not isinstance(subscription, dict) or subscription.get("tier") != "ultimate":
+                continue
+            subscription_id = str(subscription.get("ls_sub_id") or "").strip()
+            subscription["tier"] = "free"
+            subscription["status"] = "retired"
+            prefs["subscription"] = subscription
+            updated = _exec(
+                db,
+                "UPDATE clients SET mail_preferences = %s "
+                "WHERE id = %s AND COALESCE(mail_preferences, '') = %s",
+                (json.dumps(prefs), int(row["id"]), raw),
+            )
+            if not getattr(updated, "rowcount", 0):
+                continue
+            if subscription_id:
+                _exec(
+                    db,
+                    "INSERT INTO retired_billing_cancellations "
+                    "(subscription_id, client_id, status, attempts, last_error) "
+                    "VALUES (%s, %s, 'pending', 0, '') "
+                    "ON CONFLICT(subscription_id) DO NOTHING",
+                    (subscription_id, int(row["id"])),
+                )
+            changed += 1
+    return changed
+
+
 def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
     """Grant recurring paid-plan benefits once per UTC month.
 
@@ -161,7 +189,7 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
     time an active subscriber uses the product, including webhook/manual tier
     changes.
     """
-    if tier not in ("plus", "ultimate"):
+    if tier != "plus":
         return False
     changed = False
     month_key = _current_bonus_month()
@@ -207,9 +235,11 @@ def _effective_tier(prefs: dict) -> str:
     it expires; otherwise free."""
     sub = (prefs.get("subscription") or {})
     paid = sub.get("tier") or "free"
+    if paid == "ultimate":
+        paid = "free"
     paid = paid if paid in PLANS else "free"
     status = str(sub.get("status") or "active").lower()
-    if paid in ("plus", "ultimate") and status in {"active", "on_trial", "trialing"}:
+    if paid == "plus" and status in {"active", "on_trial", "trialing"}:
         return paid
     pu = _parse_iso(prefs.get("plus_until"))
     if pu and pu > _utcnow():
@@ -218,7 +248,7 @@ def _effective_tier(prefs: dict) -> str:
 
 
 def get_tier(client_id: int) -> str:
-    """Return 'free', 'plus', or 'ultimate'. Defaults to 'free'."""
+    """Return the effective Free or Plus tier. Defaults to Free."""
     try:
         with get_db() as db:
             prefs = _load_prefs(db, client_id)
@@ -236,7 +266,11 @@ def get_subscription_state(client_id: int) -> dict:
         with get_db() as db:
             prefs = _load_prefs(db, client_id)
         subscription = prefs.get("subscription") or {}
-        return dict(subscription) if isinstance(subscription, dict) else {}
+        result = dict(subscription) if isinstance(subscription, dict) else {}
+        if result.get("tier") == "ultimate":
+            result["tier"] = "free"
+            result["status"] = "retired"
+        return result
     except Exception:
         return {}
 
@@ -280,7 +314,7 @@ def set_tier(client_id: int, tier: str) -> dict:
         subscription = prefs.get("subscription") or {}
         subscription.update({
             "tier": tier,
-            "status": "active" if tier in ("plus", "ultimate") else "inactive",
+            "status": "active" if tier == "plus" else "inactive",
             "since": _utcnow().isoformat(),
         })
         prefs["subscription"] = subscription
@@ -300,7 +334,7 @@ def set_subscription_state(client_id: int, *, tier: str | None = None,
         subscription = prefs.get("subscription") or {}
         if tier is not None:
             subscription["tier"] = tier
-            if tier in ("plus", "ultimate") and not subscription.get("since"):
+            if tier == "plus" and not subscription.get("since"):
                 subscription["since"] = _utcnow().isoformat()
         if status is not None:
             subscription["status"] = str(status).lower()
@@ -317,7 +351,7 @@ def set_subscription_state(client_id: int, *, tier: str | None = None,
 # ── Capability checks (the API surface that quotes the tier) ────────────
 
 def has_unlimited_ai(client_id: int) -> bool:
-    return get_tier(client_id) in ("plus", "ultimate")
+    return get_tier(client_id) == "plus"
 
 
 

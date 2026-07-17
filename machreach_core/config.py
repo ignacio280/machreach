@@ -159,9 +159,8 @@ LEMON_SQUEEZY_SANDBOX_CLIENT_ID = os.getenv(
 LEMON_SQUEEZY_TEST_MODE      = os.getenv("LEMON_SQUEEZY_TEST_MODE", "").strip().lower() in {
     "1", "true", "yes", "on",
 }
-# Student PLUS / Ultimate subscription variant IDs.
-LS_VARIANT_STUDENT_PLUS     = os.getenv("LS_VARIANT_STUDENT_PLUS", "")
-LS_VARIANT_STUDENT_ULTIMATE = os.getenv("LS_VARIANT_STUDENT_ULTIMATE", "")
+# Student Plus subscription variant ID.
+LS_VARIANT_STUDENT_PLUS = os.getenv("LS_VARIANT_STUDENT_PLUS", "")
 # Coin-pack one-time variant IDs (key matches student.db.COIN_PACKS).
 LS_VARIANT_COIN_SMALL  = os.getenv("LS_VARIANT_COIN_SMALL", "")
 LS_VARIANT_COIN_MEDIUM = os.getenv("LS_VARIANT_COIN_MEDIUM", "")

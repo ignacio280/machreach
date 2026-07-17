@@ -23,15 +23,6 @@ function Pricing() {
       features: ["Todo lo de Free", "Quizzes IA ilimitados", "Flashcards IA ilimitadas", "Mas ensayos y analitica avanzada", "Streak Insurance+ y cosmeticos PLUS"],
       cta: "Subirme a PLUS", primary: true,
     },
-    {
-      key: "ultimate",
-      name: "Ultimate",
-      tag: "Bloqueado",
-      clp: 8990,
-      blurb: "Lo abriremos cuando tenga valor real.",
-      features: ["Todo lo de PLUS", "Limites maximos de IA", "Historial completo de analitica", "Mas monedas y reparaciones", "Cosmeticos Ultimate y early access"],
-      cta: "Bloqueado por ahora", primary: false, locked: true,
-    },
   ];
   return (
     <section id="pricing">
@@ -41,7 +32,7 @@ function Pricing() {
           <p>Cancela cuando quieras. Sin contratos. Sin letra chica.</p>
         </div>
 
-        <div className="price-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, padding: "26px 0 12px", overflow: "visible" }}>
+        <div className="price-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 20, padding: "26px 0 12px", overflow: "visible", maxWidth: 900, margin: "0 auto" }}>
           {tiers.map(t => {
             return (
               <div key={t.key} style={{
@@ -95,20 +86,13 @@ function Pricing() {
                     </li>
                   ))}
                 </ul>
-        {t.locked ? <button className="btn btn-lg price-cta price-cta-locked" disabled style={{
-                  background: "var(--surface-2)",
-                  color: "var(--ink-3)",
-                  borderColor: "var(--line)",
-                  width: "100%",
-                  boxShadow: "none",
-                  cursor: "not-allowed",
-                }}>{t.cta}</button> : <a href="/register" className={`btn btn-lg price-cta ${t.primary ? "price-cta-plus" : "price-cta-standard"}`} style={{
+        <a href="/register" className={`btn btn-lg price-cta ${t.primary ? "price-cta-plus" : "price-cta-standard"}`} style={{
                   background: t.primary ? "white" : "var(--ink)",
                   color: t.primary ? "var(--brand)" : "white",
                   borderColor: t.primary ? "white" : "var(--ink)",
                   width: "100%",
                   boxShadow: "0 4px 0 0 " + (t.primary ? "color-mix(in oklab, var(--ink) 30%, transparent)" : "color-mix(in oklab, var(--ink) 50%, var(--brand))"),
-                }}>{t.cta}</a>}
+                }}>{t.cta}</a>
               </div>
             );
           })}

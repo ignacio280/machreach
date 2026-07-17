@@ -25,7 +25,6 @@ def _configure_dependencies(monkeypatch):
     monkeypatch.setattr(config, "LEMON_SQUEEZY_STORE_ID", "configured")
     monkeypatch.setattr(config, "LEMON_SQUEEZY_WEBHOOK_SECRET", "configured")
     monkeypatch.setattr(config, "LS_VARIANT_STUDENT_PLUS", "configured")
-    monkeypatch.setattr(config, "LS_VARIANT_STUDENT_ULTIMATE", "configured")
     monkeypatch.setattr(config, "SYSTEM_SMTP_USER", "configured")
     monkeypatch.setattr(config, "SYSTEM_SMTP_PASSWORD", "configured")
     monkeypatch.setattr(config, "SENTRY_DSN", "configured")
@@ -59,7 +58,6 @@ def test_operational_health_reports_missing_dependencies(monkeypatch):
         "LEMON_SQUEEZY_STORE_ID",
         "LEMON_SQUEEZY_WEBHOOK_SECRET",
         "LS_VARIANT_STUDENT_PLUS",
-        "LS_VARIANT_STUDENT_ULTIMATE",
         "SYSTEM_SMTP_USER",
         "SYSTEM_SMTP_PASSWORD",
         "SENTRY_DSN",

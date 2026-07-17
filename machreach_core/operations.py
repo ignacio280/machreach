@@ -35,7 +35,6 @@ def _dependency_checks() -> dict:
         config.LEMON_SQUEEZY_STORE_ID,
         config.LEMON_SQUEEZY_WEBHOOK_SECRET,
         config.LS_VARIANT_STUDENT_PLUS,
-        config.LS_VARIANT_STUDENT_ULTIMATE,
     )
     return {
         "openai": _configured(bool(config.OPENAI_API_KEY)),
@@ -87,13 +86,15 @@ def collect_operational_health() -> dict:
         )
         invalid_wallets = _count(
             db,
-            "SELECT COUNT(*) FROM student_wallet WHERE coins < 0 OR streak_freezes < 0",
+            "SELECT COUNT(*) FROM student_wallet "
+            "WHERE coins < 0 OR coin_debt < 0 OR streak_freezes < 0",
         )
         invalid_orders = _count(
             db,
             "SELECT COUNT(*) FROM student_coin_pack_orders o "
             "LEFT JOIN student_wallet w ON w.client_id = o.client_id "
-            "WHERE o.coins_credited <= 0 OR w.client_id IS NULL",
+            "WHERE o.coins_credited <= 0 OR o.coins_reversed < 0 "
+            "OR o.coins_reversed > o.coins_credited OR w.client_id IS NULL",
         )
         recent = (
             "created_at >= NOW() - INTERVAL '15 minutes'"

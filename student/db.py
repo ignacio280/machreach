@@ -23,7 +23,7 @@ from machreach_core.db import (
 )
 
 log = logging.getLogger(__name__)
-STUDENT_SCHEMA_VERSION = 1
+STUDENT_SCHEMA_VERSION = 2
 
 
 # ── Schema (appended to MachReach's init_db) ────────────────
@@ -549,6 +549,12 @@ def init_student_db():
         _exec(db, "SELECT client_id, semester_label, canvas_active FROM student_courses LIMIT 0")
         _exec(db, "SELECT client_id, exam_id FROM student_course_files LIMIT 0")
         _exec(db, "SELECT client_id, coins FROM student_wallet LIMIT 0")
+        _exec(db, "SELECT coin_debt FROM student_wallet LIMIT 0")
+        _exec(
+            db,
+            "SELECT coins_reversed, refunded_amount, provider_total, refunded_at "
+            "FROM student_coin_pack_orders LIMIT 0",
+        )
         _exec(db, "SELECT id, university_id FROM clients LIMIT 0")
         _exec(db, "SELECT client_id, phase_id FROM student_focus_phases LIMIT 0")
         _exec(db, "SELECT client_id, course_name FROM student_course_reviews LIMIT 0")
@@ -1914,11 +1920,7 @@ def claim_focus_phase_rewards(client_id: int, phase_id: str, minutes: int,
         coins_awarded = int(round(base_coins * max(1.0, coin_multiplier)))
         _ensure_wallet(db, client_id)
         if coins_awarded:
-            _exec(
-                db,
-                "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
-                (coins_awarded, client_id),
-            )
+            _credit_wallet_with_debt(db, client_id, coins_awarded)
 
         _progress_focus_quests_in_transaction(db, client_id, minutes, pages)
 
@@ -5088,7 +5090,7 @@ PAID_STREAK_FREEZE_CAP = 5
 def _streak_freeze_cap(client_id: int) -> int:
     try:
         from student.subscription import get_tier
-        if get_tier(client_id) in ("plus", "ultimate"):
+        if get_tier(client_id) == "plus":
             return PAID_STREAK_FREEZE_CAP
     except Exception:
         pass
@@ -5224,6 +5226,7 @@ def init_wallet_table() -> None:
         "CREATE TABLE IF NOT EXISTS student_wallet ("
         "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE, "
         "coins INTEGER DEFAULT 0, "
+        "coin_debt INTEGER NOT NULL DEFAULT 0, "
         "streak_freezes INTEGER DEFAULT 0, "
         "selected_banner TEXT DEFAULT 'default', "
         "unlocked_banners TEXT DEFAULT '[\"default\"]', "
@@ -5231,11 +5234,19 @@ def init_wallet_table() -> None:
         "CREATE TABLE IF NOT EXISTS student_wallet ("
         "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE, "
         "coins INTEGER DEFAULT 0, "
+        "coin_debt INTEGER NOT NULL DEFAULT 0, "
         "streak_freezes INTEGER DEFAULT 0, "
         "selected_banner TEXT DEFAULT 'default', "
         "unlocked_banners TEXT DEFAULT '[\"default\"]', "
         "updated_at TIMESTAMP DEFAULT (datetime('now','localtime')))",
     )
+    for column, definition in (("coin_debt", "INTEGER NOT NULL DEFAULT 0"),):
+        try:
+            with get_db() as db:
+                _exec(db, f"ALTER TABLE student_wallet ADD COLUMN {column} {definition}")
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
 
 
 def init_coin_pack_orders_table() -> None:
@@ -5248,6 +5259,10 @@ def init_coin_pack_orders_table() -> None:
         "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
         "pack_key TEXT NOT NULL, "
         "coins_credited INTEGER NOT NULL DEFAULT 0, "
+        "coins_reversed INTEGER NOT NULL DEFAULT 0, "
+        "refunded_amount INTEGER NOT NULL DEFAULT 0, "
+        "provider_total INTEGER NOT NULL DEFAULT 0, "
+        "refunded_at TIMESTAMP, "
         "created_at TIMESTAMP DEFAULT NOW(), "
         "UNIQUE(provider, order_id))",
         "CREATE TABLE IF NOT EXISTS student_coin_pack_orders ("
@@ -5257,9 +5272,28 @@ def init_coin_pack_orders_table() -> None:
         "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
         "pack_key TEXT NOT NULL, "
         "coins_credited INTEGER NOT NULL DEFAULT 0, "
+        "coins_reversed INTEGER NOT NULL DEFAULT 0, "
+        "refunded_amount INTEGER NOT NULL DEFAULT 0, "
+        "provider_total INTEGER NOT NULL DEFAULT 0, "
+        "refunded_at TEXT, "
         "created_at TEXT DEFAULT (datetime('now','localtime')), "
         "UNIQUE(provider, order_id))",
     )
+    for column, definition in (
+        ("coins_reversed", "INTEGER NOT NULL DEFAULT 0"),
+        ("refunded_amount", "INTEGER NOT NULL DEFAULT 0"),
+        ("provider_total", "INTEGER NOT NULL DEFAULT 0"),
+        ("refunded_at", "TIMESTAMP DEFAULT NULL"),
+    ):
+        try:
+            with get_db() as db:
+                _exec(
+                    db,
+                    f"ALTER TABLE student_coin_pack_orders ADD COLUMN {column} {definition}",
+                )
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
     _create_table_safe(
         "CREATE INDEX IF NOT EXISTS idx_coin_pack_orders_client ON student_coin_pack_orders(client_id)",
         "CREATE INDEX IF NOT EXISTS idx_coin_pack_orders_client ON student_coin_pack_orders(client_id)",
@@ -5341,21 +5375,40 @@ def get_wallet(client_id: int) -> dict:
         unlocked = ["default"]
     if "default" not in unlocked:
         unlocked.insert(0, "default")
-    # Ultimate tier auto-unlocks every banner (incl. PLUS-only).
-    try:
-        from . import subscription as _sub
-        if _sub.get_tier(client_id) == "ultimate":
-            for k in BANNERS.keys():
-                if k not in unlocked:
-                    unlocked.append(k)
-    except Exception:
-        pass
     return {
         "coins":            int(row.get("coins") or 0),
+        "coin_debt":        int(row.get("coin_debt") or 0),
         "streak_freezes":   int(row.get("streak_freezes") or 0),
         "selected_banner":  row.get("selected_banner") or "default",
         "unlocked_banners": unlocked,
     }
+
+
+def _credit_wallet_with_debt(db, client_id: int, amount: int) -> int:
+    """Apply a coin change, using positive credits to repay refund debt first."""
+    amount = int(amount)
+    if amount > 0:
+        greatest = "GREATEST" if _USE_PG else "MAX"
+        _exec(
+            db,
+            f"UPDATE student_wallet SET "
+            f"coins = coins + {greatest}(%s - coin_debt, 0), "
+            f"coin_debt = {greatest}(coin_debt - %s, 0) "
+            "WHERE client_id = %s",
+            (amount, amount, client_id),
+        )
+    elif amount < 0:
+        _exec(
+            db,
+            "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
+            (amount, client_id),
+        )
+    return int(
+        _fetchval(
+            db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)
+        )
+        or 0
+    )
 
 
 def add_coins(client_id: int, amount: int, _reason: str = "") -> int:
@@ -5372,9 +5425,7 @@ def add_coins(client_id: int, amount: int, _reason: str = "") -> int:
             pass
     with get_db() as db:
         _ensure_wallet(db, client_id)
-        _exec(db, "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
-              (int(amount), client_id))
-        return _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
+        return _credit_wallet_with_debt(db, client_id, int(amount))
 
 
 def credit_coin_pack(client_id: int, pack_key: str, order_id: str | None = None) -> dict:
@@ -5413,10 +5464,88 @@ def credit_coin_pack(client_id: int, pack_key: str, order_id: str | None = None)
             if getattr(cur, "rowcount", 0) == 0:
                 new_balance = _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
                 return {"ok": True, "credited": 0, "coins": new_balance, "pack": pack_key, "duplicate": True}
-        _exec(db, "UPDATE student_wallet SET coins = coins + %s WHERE client_id = %s",
-              (total, client_id))
-        new_balance = _fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
+        new_balance = _credit_wallet_with_debt(db, client_id, total)
     return {"ok": True, "credited": total, "coins": new_balance, "pack": pack_key, "duplicate": False}
+
+
+def refund_coin_pack(
+    client_id: int,
+    order_id: str,
+    *,
+    refunded_amount: int = 0,
+    provider_total: int = 0,
+    fully_refunded: bool = False,
+) -> dict:
+    """Reverse a cumulative provider refund without allowing negative wallets.
+
+    Partial refunds reverse the same proportion of the pack. Any shortfall from
+    already-spent coins is stored as debt and consumed by future coin credits.
+    """
+    order_id = str(order_id or "").strip()
+    if not order_id:
+        return {"ok": False, "error": "Missing order id."}
+    refunded_amount = max(0, int(refunded_amount or 0))
+    provider_total = max(0, int(provider_total or 0))
+    with get_db() as db:
+        wallet = _lock_wallet(db, client_id)
+        suffix = " FOR UPDATE" if _USE_PG else ""
+        order = _fetchone(
+            db,
+            "SELECT * FROM student_coin_pack_orders "
+            "WHERE provider = %s AND order_id = %s" + suffix,
+            ("lemonsqueezy", order_id),
+        )
+        if not order or int(order.get("client_id") or 0) != int(client_id):
+            return {"ok": False, "error": "Coin order not found."}
+        credited = int(order.get("coins_credited") or 0)
+        already_reversed = int(order.get("coins_reversed") or 0)
+        if fully_refunded:
+            calculated_target = credited
+        elif provider_total > 0:
+            calculated_target = min(
+                credited, (credited * min(refunded_amount, provider_total)) // provider_total
+            )
+        else:
+            calculated_target = already_reversed
+        target_reversed = max(already_reversed, calculated_target)
+        reverse_now = max(0, target_reversed - already_reversed)
+        if reverse_now:
+            balance = int(wallet.get("coins") or 0)
+            from_balance = min(balance, reverse_now)
+            debt_added = reverse_now - from_balance
+            _exec(
+                db,
+                "UPDATE student_wallet SET coins = coins - %s, coin_debt = coin_debt + %s "
+                "WHERE client_id = %s",
+                (from_balance, debt_added, client_id),
+            )
+        _exec(
+            db,
+            "UPDATE student_coin_pack_orders SET coins_reversed = %s, "
+            "refunded_amount = %s, provider_total = %s, "
+            "refunded_at = CASE WHEN %s THEN CURRENT_TIMESTAMP ELSE refunded_at END "
+            "WHERE provider = %s AND order_id = %s",
+            (
+                target_reversed,
+                max(int(order.get("refunded_amount") or 0), refunded_amount),
+                max(int(order.get("provider_total") or 0), provider_total),
+                bool(fully_refunded),
+                "lemonsqueezy",
+                order_id,
+            ),
+        )
+        updated = _fetchone(
+            db,
+            "SELECT coins, coin_debt FROM student_wallet WHERE client_id = %s",
+            (client_id,),
+        )
+    return {
+        "ok": True,
+        "reversed": reverse_now,
+        "coins": int(updated.get("coins") or 0),
+        "coin_debt": int(updated.get("coin_debt") or 0),
+        "duplicate": reverse_now == 0,
+    }
 
 
 def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dict:
@@ -5450,7 +5579,7 @@ def _is_plus_user(client_id: int) -> bool:
     """True if user can access PLUS-only cosmetics."""
     try:
         from student.subscription import get_tier  # type: ignore
-        return get_tier(client_id) in ("plus", "ultimate")
+        return get_tier(client_id) == "plus"
     except Exception:
         return False
 
@@ -5537,15 +5666,6 @@ def get_flag_state(client_id: int) -> dict:
     sel = prefs.get("selected_flag") or "none"
     if sel not in FLAGS:
         sel = "none"
-    # Ultimate tier auto-unlocks every flag (incl. PLUS-only).
-    try:
-        from . import subscription as _sub
-        if _sub.get_tier(client_id) == "ultimate":
-            for k in FLAGS.keys():
-                if k not in unlocked:
-                    unlocked.append(k)
-    except Exception:
-        pass
     return {"selected_flag": sel, "unlocked_flags": unlocked}
 
 
