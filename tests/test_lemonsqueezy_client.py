@@ -97,6 +97,21 @@ def test_verify_webhook_and_cancel_subscription(monkeypatch):
     assert lemonsqueezy.cancel_subscription("sub-2") is False
 
 
+def test_verify_webhook_rejects_missing_configuration_header_and_compare_error(monkeypatch):
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_WEBHOOK_SECRET", "")
+    assert lemonsqueezy.verify_webhook(b"{}", "signature") is False
+
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_WEBHOOK_SECRET", "secret")
+    assert lemonsqueezy.verify_webhook(b"{}", "") is False
+
+    monkeypatch.setattr(
+        lemonsqueezy.hmac,
+        "compare_digest",
+        lambda *_args: (_ for _ in ()).throw(TypeError("invalid digest")),
+    )
+    assert lemonsqueezy.verify_webhook(b"{}", "signature") is False
+
+
 def test_update_subscription_variant_resumes_without_creating_checkout(monkeypatch):
     request = {}
     monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_API_KEY", "ls-key")
@@ -151,6 +166,21 @@ def test_update_subscription_variant_rejects_unchanged_paypal_response(monkeypat
         ),
     )
 
+    assert lemonsqueezy.update_subscription_variant("sub-1", "1563574") is False
+
+
+def test_update_subscription_variant_rejects_missing_input_and_network_failure(monkeypatch):
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_API_KEY", "ls-key")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_STORE_ID", "store-1")
+
+    assert lemonsqueezy.update_subscription_variant("", "1563574") is False
+    assert lemonsqueezy.update_subscription_variant("sub-1", "") is False
+
+    monkeypatch.setattr(
+        lemonsqueezy.requests,
+        "patch",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("network down")),
+    )
     assert lemonsqueezy.update_subscription_variant("sub-1", "1563574") is False
 
 

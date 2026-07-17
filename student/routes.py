@@ -22758,9 +22758,6 @@ No markdown, no code fences. ONLY JSON.
             from machreach_core import lemonsqueezy as ls
             from machreach_core import config as _cfg
             variant = _cfg.LS_VARIANT_STUDENT_PLUS if tier == "plus" else _cfg.LS_VARIANT_STUDENT_ULTIMATE
-            if not variant:
-                return jsonify(ok=False, error="Plan not configured for checkout."), 503
-
             paid_tiers = {"plus", "ultimate"}
             renewable_statuses = {"active", "on_trial", "trialing", "paused", "cancelled"}
             delinquent_statuses = {"past_due", "unpaid"}
@@ -22773,6 +22770,8 @@ No markdown, no code fences. ONLY JSON.
             if sub_id and local_paid_tier in paid_tiers:
                 if tier == local_paid_tier and provider_status in {"active", "on_trial", "trialing"}:
                     return jsonify(ok=True, tier=tier, unchanged=True)
+                if not variant:
+                    return jsonify(ok=False, error="Plan not configured for checkout."), 503
                 if provider_status in delinquent_statuses:
                     return jsonify(
                         ok=False,
@@ -22797,6 +22796,8 @@ No markdown, no code fences. ONLY JSON.
                         error="No pudimos verificar el estado de tu suscripcion. Contacta soporte antes de cambiar de plan.",
                     ), 409
 
+            if not variant:
+                return jsonify(ok=False, error="Plan not configured for checkout."), 503
             url = ls.create_checkout(
                 variant,
                 custom_data={"purpose": "student_sub", "tier": tier, "client_id": str(cid)},

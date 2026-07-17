@@ -65,3 +65,20 @@ def test_dynamic_dispatcher_supports_only_required_control_values():
     assert "token==='this.checked'" in hardened
     assert r"/^this\.files\[(\d+)\]$/" in hardened
     assert "eval(" not in hardened
+
+
+def test_csp_rewriter_preserves_unterminated_html_comment():
+    document = "<main>safe</main><!-- deployment note"
+
+    hardened = harden_html(document, "test-nonce")
+
+    assert "<!-- deployment note" in hardened
+
+
+def test_csp_rewriter_removes_empty_style_in_javascript_fragment():
+    document = "<script>if (x < y) html = '<div style=\"\">ok</div>';</script>"
+
+    hardened = harden_html(document, "test-nonce")
+
+    assert "style=" not in hardened
+    assert 'nonce="test-nonce"' in hardened

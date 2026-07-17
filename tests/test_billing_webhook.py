@@ -178,6 +178,136 @@ def test_same_paid_plan_does_not_create_a_duplicate_checkout(
     }
 
 
+def test_subscription_change_requires_login(client, flask_app, monkeypatch):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "plus"})
+
+    assert response.status_code == 401
+    assert response.get_json()["ok"] is False
+
+
+def test_subscription_state_read_falls_back_safely_when_database_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        ssub,
+        "get_db",
+        lambda: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+    )
+
+    assert ssub.get_subscription_state(999) == {}
+
+
+def test_subscription_change_rejects_unknown_plan(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    cid = make_user()
+    _complete_setup(cid)
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "enterprise"})
+
+    assert response.status_code == 400
+    assert response.get_json()["ok"] is False
+
+
+def test_new_paid_checkout_requires_configured_variant(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "")
+    cid = make_user()
+    _complete_setup(cid)
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "plus"})
+
+    assert response.status_code == 503
+    assert response.get_json()["ok"] is False
+
+
+def test_paid_plan_without_provider_id_blocks_another_checkout(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_ULTIMATE", "ultimate-variant")
+    cid = make_user()
+    _complete_setup(cid)
+    ssub.set_tier(cid, "plus")
+    monkeypatch.setattr(
+        ls,
+        "create_checkout",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("duplicate checkout")),
+    )
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "ultimate"})
+
+    assert response.status_code == 409
+    assert response.get_json()["ok"] is False
+
+
+def test_delinquent_subscription_blocks_plan_change_checkout(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_ULTIMATE", "ultimate-variant")
+    cid = make_user()
+    _complete_setup(cid)
+    ssub.set_subscription_state(cid, tier="plus", status="past_due", ls_sub_id="past-due-sub")
+    monkeypatch.setattr(
+        ls,
+        "create_checkout",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("duplicate checkout")),
+    )
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "ultimate"})
+
+    assert response.status_code == 409
+    assert response.get_json()["ok"] is False
+
+
+def test_expired_subscription_can_start_a_fresh_checkout(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_ULTIMATE", "ultimate-variant")
+    cid = make_user()
+    _complete_setup(cid)
+    ssub.set_subscription_state(cid, tier="plus", status="expired", ls_sub_id="expired-sub")
+    monkeypatch.setattr(ls, "create_checkout", lambda *_args, **_kwargs: "https://checkout.test/new")
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "ultimate"})
+
+    assert response.status_code == 200
+    assert response.get_json()["checkout_url"] == "https://checkout.test/new"
+
+
+def test_cancelled_same_plan_resumes_existing_subscription(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "plus-variant")
+    cid = make_user()
+    _complete_setup(cid)
+    ssub.set_subscription_state(cid, tier="plus", status="cancelled", ls_sub_id="cancelled-sub")
+    calls = []
+    monkeypatch.setattr(
+        ls,
+        "update_subscription_variant",
+        lambda sid, variant: calls.append((sid, variant)) or True,
+    )
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "plus"})
+
+    assert response.status_code == 200
+    assert response.get_json()["updated"] is True
+    assert calls == [("cancelled-sub", "plus-variant")]
+
+
 def test_plus_to_ultimate_updates_existing_subscription(
     client, make_user, flask_app, monkeypatch
 ):

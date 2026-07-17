@@ -119,3 +119,42 @@ def test_public_operational_probe_returns_503_without_exposing_failure_details(c
     assert payload["checks"]["worker_heartbeat"]["status"] == "alert"
     assert set(payload["checks"]["worker_heartbeat"]) == {"status"}
     assert "last_error" not in response.get_data(as_text=True)
+
+
+def test_postgres_capacity_alert_uses_connection_utilization(monkeypatch):
+    from contextlib import contextmanager
+    from machreach_core import operations
+
+    @contextmanager
+    def fake_db():
+        yield object()
+
+    monkeypatch.setattr(operations, "_USE_PG", True)
+    monkeypatch.setattr(operations, "get_db", fake_db)
+    monkeypatch.setattr(
+        operations,
+        "_fetchone",
+        lambda *_args, **_kwargs: {"updated_at": "fresh"},
+    )
+    monkeypatch.setattr(operations, "_async_job_is_stale", lambda *_args: False)
+    monkeypatch.setattr(
+        operations,
+        "_count",
+        lambda _db, sql, _params=(): 8 if "pg_stat_activity" in sql else 0,
+    )
+    monkeypatch.setattr(
+        operations,
+        "_fetchval",
+        lambda _db, sql, _params=(): 10 if "max_connections" in sql else 0,
+    )
+    _configure_dependencies(monkeypatch)
+
+    snapshot = operations.collect_operational_health()
+
+    assert snapshot["status"] == "degraded"
+    assert snapshot["checks"]["database_capacity"] == {
+        "status": "alert",
+        "used": 8,
+        "maximum": 10,
+        "utilization": 0.8,
+    }
