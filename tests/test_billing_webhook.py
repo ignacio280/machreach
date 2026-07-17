@@ -149,6 +149,129 @@ def test_subscription_checkout_forwards_test_mode(client, make_user, flask_app, 
     assert captured["test_mode"] is True
 
 
+def test_same_paid_plan_does_not_create_a_duplicate_checkout(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    cid = make_user()
+    _complete_setup(cid)
+    ssub.set_subscription_state(
+        cid,
+        tier="plus",
+        status="active",
+        ls_sub_id="existing-plus",
+    )
+    monkeypatch.setattr(
+        ls,
+        "create_checkout",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("duplicate checkout")),
+    )
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "plus"})
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "ok": True,
+        "tier": "plus",
+        "unchanged": True,
+    }
+
+
+def test_plus_to_ultimate_updates_existing_subscription(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_ULTIMATE", "ultimate-variant")
+    cid = make_user()
+    _complete_setup(cid)
+    ssub.set_subscription_state(
+        cid,
+        tier="plus",
+        status="active",
+        ls_sub_id="existing-plus",
+    )
+    calls = []
+    monkeypatch.setattr(
+        ls,
+        "update_subscription_variant",
+        lambda sid, variant: calls.append((sid, variant)) or True,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        ls,
+        "create_checkout",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("duplicate checkout")),
+    )
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "ultimate"})
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "ok": True,
+        "tier": "ultimate",
+        "updated": True,
+    }
+    assert calls == [("existing-plus", "ultimate-variant")]
+    assert ssub.get_tier(cid) == "ultimate"
+
+
+def test_plan_change_provider_failure_preserves_current_subscription(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_ULTIMATE", "ultimate-variant")
+    cid = make_user()
+    _complete_setup(cid)
+    ssub.set_subscription_state(
+        cid,
+        tier="plus",
+        status="active",
+        ls_sub_id="existing-plus",
+    )
+    monkeypatch.setattr(ls, "update_subscription_variant", lambda *_args: False)
+    monkeypatch.setattr(
+        ls,
+        "create_checkout",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("duplicate checkout")),
+    )
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "ultimate"})
+
+    assert response.status_code == 502
+    assert response.get_json()["ok"] is False
+    assert ssub.get_tier(cid) == "plus"
+    assert ssub.get_subscription_state(cid)["ls_sub_id"] == "existing-plus"
+
+
+def test_unknown_paid_subscription_state_blocks_duplicate_checkout(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_ULTIMATE", "ultimate-variant")
+    cid = make_user()
+    _complete_setup(cid)
+    ssub.set_subscription_state(
+        cid,
+        tier="plus",
+        status="provider_state_not_recognized",
+        ls_sub_id="existing-plus",
+    )
+    monkeypatch.setattr(
+        ls,
+        "create_checkout",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("duplicate checkout")),
+    )
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/change", json={"tier": "ultimate"})
+
+    assert response.status_code == 409
+    assert response.get_json()["ok"] is False
+
+
 def test_coin_checkout_forwards_test_mode(client, make_user, flask_app, monkeypatch):
     monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
     monkeypatch.setattr(cfg, "LS_VARIANT_COIN_SMALL", "variant_small")

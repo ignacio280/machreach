@@ -16,6 +16,7 @@ Public API:
 - create_checkout(variant_id, *, custom_data, email=None, redirect_url=None,
                    receipt_link_url=None) -> str  # the hosted checkout URL
 - verify_webhook(raw_body: bytes, signature_header: str) -> bool
+- update_subscription_variant(subscription_id: str, variant_id: str) -> bool
 - cancel_subscription(subscription_id: str) -> bool
 """
 from __future__ import annotations
@@ -153,4 +154,56 @@ def cancel_subscription(subscription_id: str) -> bool:
         return True
     except Exception as e:
         log.exception("[LS] cancel_subscription exception: %s", e)
+        return False
+
+
+def update_subscription_variant(subscription_id: str, variant_id: str) -> bool:
+    """Move an existing subscription to another configured variant.
+
+    ``cancelled=False`` also resumes a subscription that was scheduled to end,
+    avoiding a second checkout and duplicate subscription.
+    """
+    if not subscription_id or not variant_id or not is_configured():
+        return False
+    normalized_variant_id: int | str = (
+        int(str(variant_id)) if str(variant_id).isdigit() else str(variant_id)
+    )
+    payload = {
+        "data": {
+            "type": "subscriptions",
+            "id": str(subscription_id),
+            "attributes": {
+                "variant_id": normalized_variant_id,
+                "cancelled": False,
+            },
+        }
+    }
+    try:
+        resp = requests.patch(
+            f"{LS_API}/subscriptions/{subscription_id}",
+            headers=_auth_headers(),
+            json=payload,
+            timeout=20,
+        )
+        if resp.status_code >= 300:
+            log.error(
+                "[LS] update_subscription_variant %s failed: %s %s",
+                subscription_id,
+                resp.status_code,
+                resp.text[:200],
+            )
+            return False
+        attributes = (((resp.json() or {}).get("data") or {}).get("attributes") or {})
+        returned_variant_id = attributes.get("variant_id")
+        if str(returned_variant_id) != str(normalized_variant_id):
+            log.warning(
+                "[LS] update_subscription_variant %s returned variant %s instead of %s",
+                subscription_id,
+                returned_variant_id,
+                normalized_variant_id,
+            )
+            return False
+        return True
+    except Exception as e:
+        log.exception("[LS] update_subscription_variant exception: %s", e)
         return False

@@ -97,6 +97,63 @@ def test_verify_webhook_and_cancel_subscription(monkeypatch):
     assert lemonsqueezy.cancel_subscription("sub-2") is False
 
 
+def test_update_subscription_variant_resumes_without_creating_checkout(monkeypatch):
+    request = {}
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_API_KEY", "ls-key")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_STORE_ID", "store-1")
+
+    def fake_patch(url, **kwargs):
+        request.update(url=url, **kwargs)
+        return _Response(
+            status_code=200,
+            body={"data": {"attributes": {"variant_id": 1563574}}},
+        )
+
+    monkeypatch.setattr(lemonsqueezy.requests, "patch", fake_patch)
+
+    assert lemonsqueezy.update_subscription_variant("sub-1", "1563574") is True
+    payload = request["json"]
+    assert request["url"].endswith("/subscriptions/sub-1")
+    assert payload["data"]["attributes"] == {
+        "variant_id": 1563574,
+        "cancelled": False,
+    }
+
+
+def test_update_subscription_variant_rejects_provider_failure(monkeypatch):
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_API_KEY", "ls-key")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_STORE_ID", "store-1")
+    monkeypatch.setattr(
+        lemonsqueezy.requests,
+        "patch",
+        lambda *_args, **_kwargs: _Response(status_code=422, text="invalid"),
+    )
+
+    assert lemonsqueezy.update_subscription_variant("sub-1", "variant") is False
+
+
+def test_update_subscription_variant_rejects_unchanged_paypal_response(monkeypatch):
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_API_KEY", "ls-key")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_STORE_ID", "store-1")
+    monkeypatch.setattr(
+        lemonsqueezy.requests,
+        "patch",
+        lambda *_args, **_kwargs: _Response(
+            status_code=200,
+            body={
+                "data": {
+                    "attributes": {
+                        "variant_id": 1563572,
+                        "urls": {"customer_portal_update_subscription": "https://portal.test"},
+                    }
+                }
+            },
+        ),
+    )
+
+    assert lemonsqueezy.update_subscription_variant("sub-1", "1563574") is False
+
+
 def test_client_rejects_missing_configuration_and_handles_network_failure(monkeypatch):
     monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_API_KEY", "")
     monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_STORE_ID", "")

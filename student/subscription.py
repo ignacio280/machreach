@@ -3,7 +3,7 @@
 Tiers:
   - free      : 1 quiz/day (max 30 q), 1 flashcard set/day (max 30 c).
   - plus      : Unlimited AI generation, analytics, streak protection and cosmetics.
-  - ultimate  : Reserved for a future higher tier; locked for now.
+  - ultimate  : Highest paid tier.
 
 Storage: re-uses the existing `clients` table via `mail_preferences` JSON-blob
 column (already exists in the schema). Keys used:
@@ -82,7 +82,7 @@ PLANS = {
         "name": "Ultimate",
         "price_clp_month": 8990,
         "price_clp_year": 107880,
-        "blurb": "Bloqueado por ahora. Lo abriremos cuando tenga valor real.",
+        "blurb": "El plan completo para quienes quieren llevar su estudio al maximo.",
         "features": [
             "Todo lo de Plus",
             "Límites máximos de IA",
@@ -90,7 +90,6 @@ PLANS = {
             "Más monedas, reparaciones y cosméticos Ultimate",
             "Early access a herramientas nuevas",
         ],
-        "locked": True,
     },
 }
 PLAN_ORDER = ["free", "plus", "ultimate"]
@@ -200,6 +199,17 @@ def get_tier(client_id: int) -> str:
         return tier
     except Exception:
         return "free"
+
+
+def get_subscription_state(client_id: int) -> dict:
+    """Return a defensive copy of the stored provider subscription state."""
+    try:
+        with get_db() as db:
+            prefs = _load_prefs(db, client_id)
+        subscription = prefs.get("subscription") or {}
+        return dict(subscription) if isinstance(subscription, dict) else {}
+    except Exception:
+        return {}
 
 
 def grant_plus_days(client_id: int, days: int) -> str | None:

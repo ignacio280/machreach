@@ -22721,8 +22721,9 @@ No markdown, no code fences. ONLY JSON.
         """Switch student tier.
 
         - tier=free  -> cancel any existing LS subscription + flip back to free.
-        - tier=plus / ultimate -> return a Lemon Squeezy hosted-checkout URL.
-          The actual tier change happens server-side in the LS webhook.
+        - Existing paid subscription -> change its provider variant in place.
+        - New paid subscription -> return a Lemon Squeezy hosted-checkout URL.
+          New-subscription activation happens server-side in the LS webhook.
         """
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
@@ -22735,22 +22736,14 @@ No markdown, no code fences. ONLY JSON.
             if _sub.PLANS.get(tier, {}).get("locked"):
                 return jsonify(ok=False, error="Este plan todavía está bloqueado."), 403
             cid = _cid()
+            sub = _sub.get_subscription_state(cid)
+            sub_id = str(sub.get("ls_sub_id") or "").strip()
+            local_paid_tier = str(sub.get("tier") or "free").lower()
+            provider_status = str(sub.get("status") or "").lower()
             if tier == "free":
                 # Cancel the active LS subscription if we have its id stashed.
                 try:
-                    from machreach_core.db import get_db, _fetchone
                     from machreach_core import lemonsqueezy as ls
-                    import json as _json
-                    with get_db() as db:
-                        row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (cid,))
-                    prefs = {}
-                    try:
-                        prefs = _json.loads((row or {}).get("mail_preferences") or "{}")
-                    except Exception:
-                        prefs = {}
-                    sub = prefs.get("subscription") or {}
-                    sub_id = (sub.get("ls_sub_id") or "").strip()
-                    local_paid_tier = str(sub.get("tier") or "free").lower()
                     if sub_id:
                         if not ls.cancel_subscription(sub_id):
                             return jsonify(ok=False, error="No pudimos cancelar tu suscripcion. Intentalo de nuevo o contacta soporte."), 502
@@ -22767,6 +22760,43 @@ No markdown, no code fences. ONLY JSON.
             variant = _cfg.LS_VARIANT_STUDENT_PLUS if tier == "plus" else _cfg.LS_VARIANT_STUDENT_ULTIMATE
             if not variant:
                 return jsonify(ok=False, error="Plan not configured for checkout."), 503
+
+            paid_tiers = {"plus", "ultimate"}
+            renewable_statuses = {"active", "on_trial", "trialing", "paused", "cancelled"}
+            delinquent_statuses = {"past_due", "unpaid"}
+            terminal_statuses = {"expired", "inactive"}
+            if local_paid_tier in paid_tiers and not sub_id:
+                return jsonify(
+                    ok=False,
+                    error="No encontramos el identificador de tu suscripcion. Contacta soporte antes de cambiar de plan.",
+                ), 409
+            if sub_id and local_paid_tier in paid_tiers:
+                if tier == local_paid_tier and provider_status in {"active", "on_trial", "trialing"}:
+                    return jsonify(ok=True, tier=tier, unchanged=True)
+                if provider_status in delinquent_statuses:
+                    return jsonify(
+                        ok=False,
+                        error="Tu suscripcion tiene un pago pendiente. Actualiza el medio de pago o contacta soporte.",
+                    ), 409
+                if provider_status in renewable_statuses:
+                    if not ls.update_subscription_variant(sub_id, variant):
+                        return jsonify(
+                            ok=False,
+                            error="No pudimos cambiar tu plan. Intentalo de nuevo o contacta soporte.",
+                        ), 502
+                    _sub.set_subscription_state(
+                        cid,
+                        tier=tier,
+                        status="active",
+                        ls_sub_id=sub_id,
+                    )
+                    return jsonify(ok=True, tier=tier, updated=True)
+                if provider_status not in terminal_statuses:
+                    return jsonify(
+                        ok=False,
+                        error="No pudimos verificar el estado de tu suscripcion. Contacta soporte antes de cambiar de plan.",
+                    ), 409
+
             url = ls.create_checkout(
                 variant,
                 custom_data={"purpose": "student_sub", "tier": tier, "client_id": str(cid)},
