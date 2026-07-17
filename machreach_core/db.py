@@ -14,7 +14,7 @@ import json
 from cryptography.fernet import Fernet, InvalidToken
 from machreach_core.config import DATABASE_URL, ENCRYPTION_KEY, SECRET_KEY
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # ---------------------------------------------------------------------------
 # Detect engine: postgres vs sqlite fallback
@@ -287,6 +287,15 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     updated_at      TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY(provider, event_key)
 );
+
+CREATE TABLE IF NOT EXISTS operational_events (
+    id              BIGSERIAL PRIMARY KEY,
+    event_type      TEXT NOT NULL,
+    source          TEXT DEFAULT '',
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_operational_events_type_created
+    ON operational_events(event_type, created_at);
 """
 
 _SQLITE_SCHEMA = """
@@ -362,6 +371,15 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     updated_at      TEXT DEFAULT (datetime('now', 'localtime')),
     PRIMARY KEY(provider, event_key)
 );
+
+CREATE TABLE IF NOT EXISTS operational_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type      TEXT NOT NULL,
+    source          TEXT DEFAULT '',
+    created_at      TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_operational_events_type_created
+    ON operational_events(event_type, created_at);
 """
 
 
@@ -528,6 +546,7 @@ def check_schema_readiness() -> dict:
         _exec(db, "SELECT session_version, account_type FROM clients LIMIT 0")
         _exec(db, "SELECT status, attempts FROM async_jobs LIMIT 0")
         _exec(db, "SELECT provider, event_key, status FROM webhook_events LIMIT 0")
+        _exec(db, "SELECT event_type, created_at FROM operational_events LIMIT 0")
         _exec(db, "SELECT subscription_id, status FROM retired_billing_cancellations LIMIT 0")
         _exec(db, "SELECT client_id, name FROM student_courses LIMIT 0")
         _exec(db, "SELECT client_id, coins FROM student_wallet LIMIT 0")
@@ -587,6 +606,16 @@ def finish_webhook_event(provider: str, event_key: str, *, error: str = "") -> N
             f"UPDATE webhook_events SET status = %s, last_error = %s, updated_at = {now} "
             "WHERE provider = %s AND event_key = %s",
             (status, str(error or "")[:500], provider, event_key),
+        )
+
+
+def record_operational_event(event_type: str, source: str = "") -> None:
+    """Record a non-sensitive operational signal for health checks and alerts."""
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO operational_events (event_type, source) VALUES (%s, %s)",
+            (str(event_type or "unknown")[:80], str(source or "")[:80]),
         )
 
 

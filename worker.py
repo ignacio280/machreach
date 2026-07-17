@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
@@ -438,6 +437,11 @@ def send_streak_risk_pushes():
                 print(f"  [STREAK_RISK] sent (streak={streak})")
             except Exception as e:
                 print(f"  [STREAK_RISK] failed: {type(e).__name__}")
+                try:
+                    from machreach_core.db import record_operational_event
+                    record_operational_event("smtp_failure", "streak_risk")
+                except Exception:
+                    pass
                 _report_worker_error("STREAK_RISK_ACCOUNT", e)
     except Exception as e:
         _report_worker_error("STREAK_RISK", e)
@@ -543,6 +547,11 @@ def send_monthly_leaderboard_email(year: int | None = None, month: int | None = 
 
         print(f"[MONTHLY_WINNERS] sent {label} report")
     except Exception as e:
+        try:
+            from machreach_core.db import record_operational_event
+            record_operational_event("smtp_failure", "leaderboard")
+        except Exception:
+            pass
         _report_worker_error("MONTHLY_WINNERS", e)
 
 

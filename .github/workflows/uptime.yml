@@ -38,3 +38,31 @@ jobs:
               print(f"::error title=MachReach unhealthy::{payload}")
               sys.exit(1)
           print(f"Healthy: {payload}")
+
+      - name: Verify worker and operational dependencies
+        shell: python
+        run: |
+          import json
+          import sys
+          import urllib.error
+          import urllib.request
+
+          request = urllib.request.Request(
+              "https://machreach.com/health/operations",
+              headers={"User-Agent": "MachReach-Uptime/1.0"},
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  payload = json.load(response)
+          except urllib.error.HTTPError as exc:
+              payload = json.load(exc)
+              print(f"::error title=MachReach operational alert::{payload}")
+              sys.exit(1)
+          except Exception as exc:
+              print(f"::error title=MachReach operations probe unavailable::{exc}")
+              sys.exit(1)
+
+          if payload.get("status") != "ok":
+              print(f"::error title=MachReach operational alert::{payload}")
+              sys.exit(1)
+          print(f"Operations healthy: {payload}")

@@ -30,14 +30,14 @@ jobs:
       - name: Compile, lint, and type-check stable modules
         run: |
           python -m compileall -q app.py migrate.py machreach_core student worker.py
-          ruff check migrate.py machreach_core/lemonsqueezy.py student/subscription.py
+          ruff check migrate.py machreach_core/lemonsqueezy.py machreach_core/csp.py machreach_core/operations.py student/subscription.py
           python -m mypy --ignore-missing-imports --follow-imports=skip student/subscription.py machreach_core/lemonsqueezy.py
       - name: Test with coverage floor
         run: >-
           python -m pytest
           --cov=app --cov=machreach_core --cov=student --cov=worker
           --cov-report=term-missing:skip-covered
-          --cov-fail-under=40
+          --cov-fail-under=60
           -q
       - name: Audit Python dependencies
         run: python -m pip_audit -r requirements.lock

@@ -180,6 +180,11 @@ def _send_system_email(to: str, subject: str, body: str) -> bool:
     print(f"[SYSTEM EMAIL] Attempting to send to {to} via {SMTP_HOST}:{SMTP_PORT} as {SYSTEM_SMTP_USER}", flush=True)
     if not SYSTEM_SMTP_USER or not SYSTEM_SMTP_PASSWORD:
         print(f"[SYSTEM EMAIL] SMTP credentials not set — SYSTEM_SMTP_USER={'set' if SYSTEM_SMTP_USER else 'EMPTY'}, SYSTEM_SMTP_PASSWORD={'set' if SYSTEM_SMTP_PASSWORD else 'EMPTY'}", flush=True)
+        try:
+            from machreach_core.db import record_operational_event
+            record_operational_event("smtp_failure", "configuration")
+        except Exception:
+            _log.exception("[smtp] could not persist missing-configuration signal")
         return False
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -200,6 +205,11 @@ def _send_system_email(to: str, subject: str, body: str) -> bool:
         return True
     except Exception as e:
         import traceback
+        try:
+            from machreach_core.db import record_operational_event
+            record_operational_event("smtp_failure", "transactional")
+        except Exception:
+            _log.exception("[smtp] could not persist failure signal")
         print(f"[SYSTEM EMAIL] Send FAILED ({to}): {type(e).__name__}: {e}", flush=True)
         traceback.print_exc()
         return False
@@ -222,6 +232,29 @@ def health_check():
     except Exception as e:
         _log.exception("[health] database probe failed: %s", e)
         return jsonify({"status": "error", "db": "unavailable"}), 503
+
+
+@app.route("/health/operations")
+@limiter.limit("12 per minute")
+def operational_health_check():
+    """Minimal dependency/worker probe for an independent uptime monitor."""
+    try:
+        from machreach_core.operations import collect_operational_health
+        payload = collect_operational_health()
+        public_payload = {
+            "status": payload["status"],
+            "generated_at": payload["generated_at"],
+            "checks": {
+                name: {"status": check["status"]}
+                for name, check in payload["checks"].items()
+            },
+        }
+        response = jsonify(public_payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response, 200 if payload["status"] == "ok" else 503
+    except Exception as exc:
+        _log.exception("[health] operational probe failed: %s", exc)
+        return jsonify({"status": "error", "checks": {"probe": {"status": "alert"}}}), 503
 
 
 def _debug_admin_gate():
@@ -448,9 +481,12 @@ def _set_security_headers(response):
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     response.headers["X-Download-Options"] = "noopen"
-    # Content Security Policy — restricts where scripts/styles/images/frames can load from.
-    # 'unsafe-inline' is still required while legacy inline handlers/styles are
-    # migrated to static assets. Dynamic evaluation is not used or permitted.
+    # Content Security Policy — nonce inline blocks and extract legacy inline
+    # attributes so both script-src and style-src can reject unsafe-inline.
+    from machreach_core.csp import harden_html, new_nonce
+    csp_nonce = new_nonce()
+    if response.mimetype == "text/html" and not response.direct_passthrough:
+        response.set_data(harden_html(response.get_data(as_text=True), csp_nonce))
     posthog_host = ""
     posthog_assets = ""
     configured_posthog_host = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com").rstrip("/")
@@ -467,8 +503,10 @@ def _set_security_headers(response):
     analytics_connect_source = f" {posthog_host}" if posthog_host else ""
     _CSP = (
         "default-src 'self'; "
-        f"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net{analytics_script_source}; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+        f"script-src 'self' 'nonce-{csp_nonce}' https://cdn.jsdelivr.net{analytics_script_source}; "
+        "script-src-attr 'none'; "
+        f"style-src 'self' 'nonce-{csp_nonce}' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+        "style-src-attr 'none'; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
         "img-src 'self' data: blob: https:; "
         "media-src 'self' https:; "
@@ -3893,7 +3931,8 @@ def _public_info_page(title: str, eyebrow: str, intro: str, body_html: str, acti
 def privacy_page():
     return _public_info_page("Privacy Policy", "Legal", "How MachReach handles account, study, Canvas extension, and subscription data.", """
         <p class="mr-note"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, friends, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
-        <p><strong>Last updated:</strong> June 15, 2026</p>
+        <p><strong>Last updated:</strong> July 17, 2026</p>
+        <p>MachReach is operated from Santiago, Chile. Privacy and data-rights questions can be sent to <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
         <h2>1. Information We Collect</h2>
         <p><strong>Account information:</strong> your name, institutional or Canvas email address, your university, and your password hash. When you create an account through Canvas, MachReach reads the email address exposed by your Canvas profile so you can log in later with that email and the password you set.</p>
         <p><strong>Canvas LMS data:</strong> if you connect Canvas, the MachReach browser extension reads your course list from your own logged-in Canvas session and sends it to MachReach so we can show your classes and power class-level leaderboards. We only read your course list — we do not submit assignments, change grades, or publish content.</p>
@@ -3902,7 +3941,9 @@ def privacy_page():
         <p><strong>Study activity:</strong> focus sessions, minutes studied per course, XP events, streaks, badges, quiz attempts, flashcard reviews, leaderboard rank, course outcomes, grades you enter, and in-app coin activity.</p>
         <p><strong>Social activity:</strong> friend connections and referral activity if you invite friends. We store who you are friends with and how many people joined with your referral link.</p>
         <p><strong>Focus Guard extension:</strong> extension settings and active-session state are used to support focus sessions. Some settings may be stored locally in your browser.</p>
+        <p><strong>Google Calendar:</strong> if you choose to connect it, MachReach stores encrypted OAuth credentials and the minimum calendar information needed to perform the calendar actions you request.</p>
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
+        <p><strong>Technical data:</strong> security and application logs, IP address and browser information used for abuse prevention, session cookies, consent choices, error diagnostics, and optional product analytics after consent.</p>
         <h2>2. How We Use Your Information</h2>
         <ul>
           <li>To create your account, authenticate you, and let you reset your password</li>
@@ -3910,31 +3951,39 @@ def privacy_page():
           <li>To power university-scoped course autofill so students at the same university can add courses faster</li>
           <li>To generate and manage quizzes, flashcards, focus sessions, grade tracking, and course analytics</li>
           <li>To track XP, streaks, leaderboard rankings, badges, coins, friends, and referrals</li>
-          <li>To process subscriptions and service notifications such as password resets and study emails you opted into</li>
-          <li>To keep the service secure, reliable, and improving over time</li>
+          <li>To process subscriptions, coin-pack orders, refunds, cancellations, and account deletion</li>
+          <li>To send verification, password-reset, operational, and study emails you enabled</li>
+          <li>To prevent fraud and abuse, diagnose failures, and keep the service secure</li>
         </ul>
         <h2>3. Data Security</h2>
         <p>We use HTTPS/TLS, CSRF protection, rate limiting, strict security headers, parameterized SQL, HTML escaping, secure cookies in production, hashed passwords, and access controls for sensitive account data.</p>
-        <h2>4. Sub-processors</h2>
+        <h2>4. Service Providers and International Processing</h2>
         <ul>
           <li><strong>OpenAI:</strong> content you submit for AI-generated quizzes or flashcards may be sent to generate those study tools. OpenAI does not train on API data per its API data-usage policy.</li>
           <li><strong>Instructure / Canvas LMS:</strong> optional profile and course import when you connect Canvas.</li>
-          <li><strong>Lemon Squeezy:</strong> payment and subscription processing.</li>
+          <li><strong>Google:</strong> optional Google Calendar authorization and calendar actions.</li>
+          <li><strong>Lemon Squeezy:</strong> hosted checkout, subscriptions, coin-pack orders, and payment events.</li>
           <li><strong>Render:</strong> application hosting and database infrastructure.</li>
-          <li><strong>Sentry:</strong> error reporting with sensitive fields scrubbed where possible.</li>
+          <li><strong>Sentry:</strong> error reporting with sensitive fields scrubbed where possible, only when production monitoring is configured.</li>
           <li><strong>PostHog:</strong> optional product analytics, loaded only after you choose “Allow analytics” in the cookie banner. You can withdraw consent by clearing or changing your browser cookies.</li>
         </ul>
-        <h2>5. Your Rights</h2>
-        <p>You can access, export, correct, or delete your data from Settings, disconnect Canvas at any time, opt out of optional study emails, or contact <a href="mailto:support@machreach.com">support@machreach.com</a> for data-rights requests.</p>
-        <h2>6. Contact</h2>
-        <p>Questions or data-rights requests: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+        <p>These providers may process data outside Chile under their applicable contractual and security safeguards.</p>
+        <h2>5. Retention and Deletion</h2>
+        <p>Account and study data is kept while your account is active. Permanent deletion first attempts to cancel an active subscription and then removes account-linked data from the primary application database. Limited billing-event, security, fraud-prevention, and deletion records may be retained where necessary to complete the request, resolve disputes, prevent duplicate charges, or comply with law. Copies may remain temporarily in protected provider backups until those backups expire under the provider's schedule.</p>
+        <h2>6. Your Rights</h2>
+        <p>You can request access, correction, deletion, objection, and data portability. MachReach provides a JSON export and permanent deletion in Settings. You can also disconnect integrations, opt out of optional study emails, or contact <a href="mailto:support@machreach.com">support@machreach.com</a>. We may need to verify your identity before acting on a request.</p>
+        <p>Chile's updated personal-data framework under Law 21.719 takes effect on December 1, 2026. MachReach is preparing its processes for the additional rights and obligations effective on that date.</p>
+        <h2>7. Children</h2>
+        <p>MachReach is not intended for children under 16. If you believe a child under 16 created an account, contact us so we can investigate and remove it.</p>
+        <h2>8. Contact and Changes</h2>
+        <p>We will post material changes on this page and update the date above. Questions, complaints, or data-rights requests: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     """, "privacy")
 
 
 @app.route("/terms")
 def terms_page():
     return _public_info_page("Terms of Service", "Legal", "The rules for using MachReach, subscriptions, AI study tools, rankings, and account security.", """
-        <p><strong>Last updated:</strong> June 15, 2026</p>
+        <p><strong>Last updated:</strong> July 17, 2026</p>
         <h2>1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
         <h2>2. Description of Service</h2>
@@ -3951,15 +4000,23 @@ def terms_page():
         </ul>
         <h2>4. Academic Integrity</h2>
         <p>You are responsible for complying with your institution's academic-integrity policies. MachReach is a study aid; using it to plagiarize, cheat, or violate honor codes is prohibited.</p>
-        <h2>5. Subscriptions and Billing</h2>
-        <p>Paid student plans (Plus and Ultimate) are billed through Lemon Squeezy. You can cancel at any time; access continues until the end of the billing period. Refunds are handled case by case.</p>
-        <h2>6. AI Features</h2>
+        <h2>5. Subscriptions, Renewals and Billing</h2>
+        <p>Plus and Ultimate are recurring subscriptions processed through Lemon Squeezy. Checkout shows the price, currency, billing interval, taxes, and payment terms before purchase. Unless checkout states otherwise, subscriptions auto-renew for the same interval until cancelled.</p>
+        <p>You may cancel from MachReach plan controls or by contacting support. Cancellation stops future renewal; access ordinarily continues through the already-paid period and then returns to the free tier. If payment fails, paid access may be restricted while Lemon Squeezy retries or updates the subscription, and restored after successful payment recovery.</p>
+        <p>Deleting an account with an active subscription first triggers provider cancellation. If cancellation cannot be confirmed, MachReach keeps the account intact so the request can be retried without orphaning a recurring charge.</p>
+        <h2>6. Coin Packs</h2>
+        <p>Coin packs are one-time digital purchases. Coins have no cash value and cannot be transferred, resold, or redeemed for money. Provider event identifiers are recorded to prevent a duplicate or replayed webhook from crediting an order twice.</p>
+        <h2>7. Refunds and Right of Withdrawal</h2>
+        <p>Refund requests can be sent to <a href="mailto:support@machreach.com">support@machreach.com</a> with the purchase email and order identifier. Nothing in these Terms excludes a refund, cancellation, warranty, or right of withdrawal that cannot lawfully be waived. Chilean consumers retain applicable rights under Law 19.496 and electronic-commerce rules.</p>
+        <h2>8. AI Features</h2>
         <p>AI-generated quizzes, flashcards, or other study content are provided as suggestions and may be incomplete or incorrect. You are responsible for reviewing generated content before relying on it academically.</p>
-        <h2>7. Leaderboards, Coins and Referrals</h2>
+        <h2>9. Leaderboards, Coins and Referrals</h2>
         <p>XP, coins, streaks, badges, and leaderboard ranks are part of the game layer and have no cash value, cannot be transferred or sold between accounts, and can be redeemed only inside MachReach. Referral rewards (such as free Plus time) are granted for genuine sign-ups only. We may withhold, reverse, or reset rewards, ranks, or referral credit for suspected cheating or abuse.</p>
-        <h2>8. Limitation of Liability</h2>
-        <p>MachReach is provided as is without warranties of any kind. We are not liable for service interruptions, data loss beyond our control, or indirect, incidental, or consequential damages.</p>
-        <h2>9. Contact</h2>
+        <h2>10. Availability and Liability</h2>
+        <p>MachReach is a study aid and does not guarantee academic results or uninterrupted availability. To the maximum extent permitted by law, MachReach is not responsible for indirect or consequential loss caused by reliance on generated content or outages outside its reasonable control. This does not limit liability or remedies that cannot be limited under consumer law.</p>
+        <h2>11. Chilean Law and Changes</h2>
+        <p>These Terms are governed by Chilean law. Mandatory consumer protections and jurisdiction rights remain unaffected. Material changes will be posted here with an updated date and, where required, additional notice.</p>
+        <h2>12. Contact</h2>
         <p>Questions about these terms? Contact <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     """, "terms")
 

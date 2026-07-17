@@ -31,6 +31,20 @@ test("student can log in and create a manual course", async ({ page }) => {
   await expect(page.getByText("PHY-201", { exact: true })).toBeVisible();
 });
 
+test("grade-sheet controls work under the enforced CSP", async ({ page }) => {
+  await login(page);
+  await page.goto("/student/gpa");
+  await page.locator(".cname").first().fill("CSP-safe Calculus");
+  await page.locator(".w-grade").first().fill("6.5");
+
+  const saved = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((item) => item.startsWith("mr_planilla_v1_"));
+    return key ? JSON.parse(localStorage.getItem(key)) : null;
+  });
+  expect(saved.sems[0].courses[0].name).toBe("CSP-safe Calculus");
+  expect(saved.sems[0].courses[0].evals[0].grade).toBe("6.5");
+});
+
 test("AI generation completes through the web queue and worker", async ({ page }) => {
   await login(page);
 
