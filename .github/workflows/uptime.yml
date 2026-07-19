@@ -13,56 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Verify the public application and database
-        shell: python
-        run: |
-          import json
-          import sys
-          import urllib.request
+      - name: Check out the uptime monitor
+        uses: actions/checkout@v6
 
-          url = "https://machreach.com/health"
-          request = urllib.request.Request(
-              url,
-              headers={"User-Agent": "MachReach-Uptime/1.0"},
-          )
-          try:
-              with urllib.request.urlopen(request, timeout=20) as response:
-                  payload = json.load(response)
-                  if response.status != 200:
-                      raise RuntimeError(f"HTTP {response.status}")
-          except Exception as exc:
-              print(f"::error title=MachReach unavailable::{exc}")
-              sys.exit(1)
-
-          if payload.get("status") != "ok" or payload.get("db") != "connected":
-              print(f"::error title=MachReach unhealthy::{payload}")
-              sys.exit(1)
-          print(f"Healthy: {payload}")
-
-      - name: Verify worker and operational dependencies
-        shell: python
-        run: |
-          import json
-          import sys
-          import urllib.error
-          import urllib.request
-
-          request = urllib.request.Request(
-              "https://machreach.com/health/operations",
-              headers={"User-Agent": "MachReach-Uptime/1.0"},
-          )
-          try:
-              with urllib.request.urlopen(request, timeout=20) as response:
-                  payload = json.load(response)
-          except urllib.error.HTTPError as exc:
-              payload = json.load(exc)
-              print(f"::error title=MachReach operational alert::{payload}")
-              sys.exit(1)
-          except Exception as exc:
-              print(f"::error title=MachReach operations probe unavailable::{exc}")
-              sys.exit(1)
-
-          if payload.get("status") != "ok":
-              print(f"::error title=MachReach operational alert::{payload}")
-              sys.exit(1)
-          print(f"Operations healthy: {payload}")
+      - name: Verify public and operational health
+        run: python scripts/check_uptime.py
