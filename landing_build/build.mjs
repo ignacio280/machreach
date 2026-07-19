@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const LANDING = join(__dirname, "..", "static", "machreach_landing");
 const SRC_HTML = join(LANDING, "MachReach Landing.html");
 const PREFIX = "/static/machreach_landing/";
-const BUNDLE_VERSION = "landing-plan-12";
+const BUNDLE_VERSION = "landing-plan-13";
 
 const read = (f) => readFileSync(join(LANDING, f), "utf-8");
 const html = readFileSync(SRC_HTML, "utf-8");
