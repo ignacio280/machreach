@@ -773,6 +773,7 @@ LAYOUT = """<!DOCTYPE html>
     };
   </script>
   <link rel="stylesheet" href="/static/machreach_layout/layout-base.css?v=2"/>
+  <link rel="stylesheet" href="/static/machreach_consent.css?v=20260719"/>
 </head>
 <body>
   <div id="topbar-progress"><div class="bar"></div></div>
@@ -1443,28 +1444,22 @@ LAYOUT = """<!DOCTYPE html>
   <script src="/static/machreach_layout/layout-1.js?v=20260604-tooltip2"></script>
 
   <!-- Cookie Consent Banner (GDPR) -->
-  <div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--card);border-top:1px solid var(--border-light);box-shadow:0 -2px 16px rgba(0,0,0,.12);padding:16px 24px;font-size:13px;color:var(--text-secondary);">
-    <div style="max-width:960px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <p style="flex:1;margin:0;min-width:200px;">Usamos cookies esenciales para tu sesión. Con tu permiso, PostHog también puede medir uso del producto; nunca usamos cookies publicitarias. <a href="/privacy" style="color:var(--primary);text-decoration:underline;">Privacy Policy</a></p>
-      <button onclick="setCookieConsent(false)" class="btn btn-outline btn-sm">Solo esenciales</button>
-      <button onclick="setCookieConsent(true)" class="btn btn-primary btn-sm">Permitir analítica</button>
+  <section id="cookie-consent" class="mr-consent" role="dialog" aria-label="Preferencias de privacidad" aria-live="polite" aria-hidden="true" hidden>
+    <div class="mr-consent__panel">
+      <div class="mr-consent__copy">
+        <span class="mr-consent__icon" aria-hidden="true">✓</span>
+        <div>
+          <strong>Tu privacidad, bajo tu control</strong>
+          <p>Usamos cookies esenciales para mantener tu sesión segura. Si nos das permiso, PostHog también puede ayudarnos a mejorar MachReach. Nunca usamos cookies publicitarias. <a href="/privacy">Política de privacidad</a></p>
+        </div>
+      </div>
+      <div class="mr-consent__actions">
+        <button type="button" class="mr-consent__button mr-consent__button--secondary" data-consent-choice="essential">Solo esenciales</button>
+        <button type="button" class="mr-consent__button mr-consent__button--primary" data-consent-choice="analytics">Permitir analítica</button>
+      </div>
     </div>
-  </div>
-  <script>
-  (function(){
-    if(!document.cookie.match(/(?:^|;\\s*)cookie_consent=1/)){
-      var el=document.getElementById('cookie-consent');
-      if(el) el.style.display='block';
-    }
-  })();
-  function setCookieConsent(allowAnalytics){
-    document.cookie='cookie_consent=1;path=/;max-age=31536000;SameSite=Lax';
-    document.cookie='analytics_consent='+(allowAnalytics?'1':'0')+';path=/;max-age=31536000;SameSite=Lax';
-    var el=document.getElementById('cookie-consent');
-    if(el) el.style.display='none';
-    if(allowAnalytics) window.location.reload();
-  }
-  </script>
+  </section>
+  <script src="/static/machreach_consent.js?v=20260719" defer></script>
 
   <!-- Floating focus timer widget (persists across pages) -->
   <div id="focus-float" onclick="window.location='/student/focus'">

@@ -1,0 +1,180 @@
+.mr-consent {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  left: max(18px, env(safe-area-inset-left));
+  z-index: 11000;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mr-consent[hidden] {
+  display: none !important;
+}
+
+.mr-consent__panel {
+  width: min(1040px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 20px;
+  color: var(--text, #1a1a1f);
+  background: color-mix(in srgb, var(--card, #fff) 96%, transparent);
+  border: 1px solid var(--border-light, #e6dccb);
+  border-radius: 22px;
+  box-shadow: 0 18px 48px rgba(25, 20, 15, 0.18), 0 2px 8px rgba(25, 20, 15, 0.08);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  pointer-events: auto;
+}
+
+.mr-consent__copy {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.mr-consent__icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--primary, #ff6b35);
+  border-radius: 14px;
+  box-shadow: 0 7px 16px color-mix(in srgb, var(--primary, #ff6b35) 28%, transparent);
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.mr-consent__copy strong {
+  display: block;
+  margin-bottom: 3px;
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.mr-consent__copy p {
+  margin: 0;
+  color: var(--text-secondary, #5f5b66);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mr-consent__copy a {
+  color: var(--primary, #e95721);
+  font-weight: 800;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+
+.mr-consent__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mr-consent__button {
+  min-height: 44px;
+  padding: 10px 17px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  font: 800 13px/1.15 Nunito, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.mr-consent__button:hover {
+  transform: translateY(-1px);
+}
+
+.mr-consent__button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary, #ff6b35) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.mr-consent__button--secondary {
+  color: var(--text, #1a1a1f);
+  background: var(--bg, #f7f3ea);
+  border-color: var(--border-light, #ded5c7);
+}
+
+.mr-consent__button--secondary:hover {
+  background: color-mix(in srgb, var(--bg, #f7f3ea) 72%, var(--primary, #ff6b35));
+}
+
+.mr-consent__button--primary {
+  color: #fff;
+  background: var(--primary, #ff6b35);
+  box-shadow: 0 7px 16px color-mix(in srgb, var(--primary, #ff6b35) 28%, transparent);
+}
+
+.mr-consent__button--primary:hover {
+  background: color-mix(in srgb, var(--primary, #ff6b35) 88%, #000);
+  box-shadow: 0 9px 20px color-mix(in srgb, var(--primary, #ff6b35) 36%, transparent);
+}
+
+[data-theme="dark"] .mr-consent__panel {
+  background: color-mix(in srgb, var(--card, #17171d) 94%, transparent);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 760px) {
+  .mr-consent__panel {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .mr-consent__actions {
+    width: 100%;
+  }
+
+  .mr-consent__button {
+    flex: 1 1 0;
+  }
+}
+
+@media (max-width: 460px) {
+  .mr-consent {
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
+  }
+
+  .mr-consent__panel {
+    padding: 17px;
+    border-radius: 19px;
+  }
+
+  .mr-consent__copy {
+    align-items: flex-start;
+  }
+
+  .mr-consent__icon {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    border-radius: 12px;
+  }
+
+  .mr-consent__actions {
+    flex-direction: column-reverse;
+  }
+
+  .mr-consent__button {
+    width: 100%;
+    min-height: 46px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mr-consent__button {
+    transition: none;
+  }
+}

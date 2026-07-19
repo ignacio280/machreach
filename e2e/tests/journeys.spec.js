@@ -8,6 +8,45 @@ async function login(page, email = "browser-e2e@example.test") {
   await expect(page).toHaveURL(/\/student(?:$|\/)/);
 }
 
+test("analytics consent dismisses without reloading and stays dismissed", async ({ page }) => {
+  await page.goto("/login");
+  const banner = page.locator("#cookie-consent");
+  const allow = page.getByRole("button", { name: "Permitir analítica", exact: true });
+
+  await expect(banner).toBeVisible();
+  const desktopLayout = await banner.evaluate((element) => {
+    const panel = element.querySelector(".mr-consent__panel").getBoundingClientRect();
+    const buttons = [...element.querySelectorAll("button")].map((button) => button.getBoundingClientRect());
+    return { panel: { width: panel.width, height: panel.height }, buttonHeights: buttons.map((button) => button.height) };
+  });
+  expect(desktopLayout.panel.width).toBeLessThanOrEqual(1040);
+  expect(desktopLayout.buttonHeights.every((height) => height >= 44)).toBe(true);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileLayout = await banner.evaluate((element) => {
+    const panel = element.querySelector(".mr-consent__panel").getBoundingClientRect();
+    const buttons = [...element.querySelectorAll("button")].map((button) => button.getBoundingClientRect());
+    return {
+      panelWidth: panel.width,
+      buttons: buttons.map((button) => ({ width: button.width, height: button.height, top: button.top })),
+    };
+  });
+  expect(mobileLayout.panelWidth).toBeLessThanOrEqual(370);
+  expect(mobileLayout.buttons.every((button) => button.width >= 330 && button.height >= 46)).toBe(true);
+  expect(mobileLayout.buttons[0].top).toBeGreaterThan(mobileLayout.buttons[1].top);
+
+  await page.evaluate(() => { window.__consentPageMarker = "same-document"; });
+  await allow.click();
+
+  await expect(banner).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.__consentPageMarker)).toBe("same-document");
+  await expect.poll(() => page.evaluate(() => document.cookie)).toContain("cookie_consent=1");
+  await expect.poll(() => page.evaluate(() => document.cookie)).toContain("analytics_consent=1");
+
+  await page.reload();
+  await expect(banner).toBeHidden();
+});
+
 test("student can register and reaches email verification", async ({ page }) => {
   await page.goto("/register");
   await page.locator("#register-name").fill("New Browser Student");
