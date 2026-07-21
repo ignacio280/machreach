@@ -114,25 +114,13 @@ services:
           name: machreach-db
           property: connectionString
       - key: SECRET_KEY
-        fromService:
-          name: machreach
-          type: web
-          envVarKey: SECRET_KEY
+        sync: false
       - key: ENCRYPTION_KEY
-        fromService:
-          name: machreach
-          type: web
-          envVarKey: ENCRYPTION_KEY
+        sync: false
       - key: ADMIN_ACTION_SECRET
-        fromService:
-          name: machreach
-          type: web
-          envVarKey: ADMIN_ACTION_SECRET
+        sync: false
       - key: OPERATIONS_SECRET
-        fromService:
-          name: machreach
-          type: web
-          envVarKey: OPERATIONS_SECRET
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -146,22 +134,10 @@ services:
       - key: BASE_URL
         sync: false
       - key: LEMON_SQUEEZY_API_KEY
-        fromService:
-          name: machreach
-          type: web
-          envVarKey: LEMON_SQUEEZY_API_KEY
+        sync: false
       - key: LEMON_SQUEEZY_STORE_ID
-        fromService:
-          name: machreach
-          type: web
-          envVarKey: LEMON_SQUEEZY_STORE_ID
+        sync: false
       - key: SENTRY_DSN
-        fromService:
-          name: machreach
-          type: web
-          envVarKey: SENTRY_DSN
+        sync: false
       - key: LEADERBOARD_WINNERS_RECIPIENT
-        fromService:
-          name: machreach
-          type: web
-          envVarKey: LEADERBOARD_WINNERS_RECIPIENT
+        sync: false
