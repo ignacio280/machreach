@@ -7708,7 +7708,7 @@ Material:
 
             </tr>
 
-            <tr class="course-detail" id="detail-{c['id']}" style="display:none;">
+            <tr class="course-detail" id="detail-{c['id']}" hidden>
 
               <td colspan="4" style="background:var(--bg);padding:14px 18px;">
 
@@ -7806,7 +7806,7 @@ Material:
                 <span class="ccard-next{_urgent}">↗ {_next_label}</span>
                 <button class="ccard-go" onclick="toggleCourse({_course_id})" type="button">Ver detalles →</button>
               </div>
-              <div class="course-detail-card" id="detail-{_course_id}" style="display:none;">
+              <div class="course-detail-card" id="detail-{_course_id}" hidden>
                 <div class="course-benchmark" id="bench-{_course_id}"></div>
                 <div class="course-outcome-actions" id="outcome-{_course_id}">
                   <label>Nota final
@@ -8243,9 +8243,9 @@ Material:
 
           if (!row) return;
 
-          if (row.style.display === 'none') {{
+          if (row.hidden) {{
 
-            row.style.display = '';
+            row.hidden = false;
 
             await loadCourseBenchmark(courseId);
 
@@ -8253,7 +8253,7 @@ Material:
 
           }} else {{
 
-            row.style.display = 'none';
+            row.hidden = true;
 
           }}
 

@@ -70,6 +70,20 @@ test("student can log in and create a manual course", async ({ page }) => {
   await expect(page.getByText("PHY-201", { exact: true })).toBeVisible();
 });
 
+test("course details open from the course card", async ({ page }) => {
+  await login(page);
+  await page.goto("/student/courses");
+  await page.locator("#mc-code").fill("DETAIL-101");
+  await page.locator("#mc-name").fill("Course Detail Regression");
+  await page.getByRole("button", { name: "Agregar curso", exact: true }).click();
+
+  const card = page.locator(".ccard", { hasText: "Course Detail Regression" });
+  const details = card.locator(".course-detail-card");
+  await expect(details).toBeHidden();
+  await card.getByRole("button", { name: /ver detalles/i }).click();
+  await expect(details).toBeVisible();
+});
+
 test("grade-sheet controls work under the enforced CSP", async ({ page }) => {
   await login(page);
   await page.goto("/student/gpa");
