@@ -75,6 +75,8 @@ def test_encryption_key_is_required_in_render():
     env["PYTHONPATH"] = str(repo)
     env["RENDER"] = "1"
     env["SECRET_KEY"] = "prod-secret"
+    env["ADMIN_ACTION_SECRET"] = "deployment-admin-secret"
+    env["OPERATIONS_SECRET"] = "operations-secret"
     env["ENCRYPTION_KEY"] = ""
 
     result = subprocess.run(
@@ -110,3 +112,25 @@ def test_known_fallback_secrets_are_rejected_in_non_render_production():
 
     assert result.returncode != 0
     assert "SECRET_KEY must be set in production" in result.stderr
+
+
+def test_deployment_admin_secret_can_be_removed_after_mfa_enrollment():
+    repo = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo)
+    env["RENDER"] = "1"
+    env["SECRET_KEY"] = "prod-secret"
+    env["ENCRYPTION_KEY"] = "prod-encryption-key"
+    env["OPERATIONS_SECRET"] = "operations-secret"
+    env.pop("ADMIN_ACTION_SECRET", None)
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import machreach_core.config"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr

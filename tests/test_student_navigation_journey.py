@@ -2,7 +2,7 @@
 
 import pytest
 
-from machreach_core.db import _exec, get_db
+from machreach_core.db import _exec, _fetchone, get_db
 from student import db as sdb
 
 
@@ -117,3 +117,110 @@ def test_manual_course_creation_is_visible_through_course_api(client, active_stu
     assert created.status_code == 200
     assert created.get_json()["ok"] is True
     assert any(course["name"] == "Applied Physics" for course in listed.get_json()["courses"])
+
+
+def test_duplicate_canonical_course_requires_existing_join_flow(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    first_id = make_user("First Course Member")
+    second_id = make_user("Second Course Member")
+    with get_db() as db:
+        university = _fetchone(db, "SELECT id FROM universities ORDER BY id LIMIT 1")
+        university_id = int(university["id"])
+        _exec(
+            db,
+            "UPDATE clients SET university_id = %s, email_verified = 1, "
+            "academic_setup_complete = 1 WHERE id IN (%s, %s)",
+            (university_id, first_id, second_id),
+        )
+
+    def login(client_id, name):
+        with client.session_transaction() as session:
+            session.update({
+                "client_id": client_id,
+                "client_name": name,
+                "account_type": "student",
+                "session_version": 0,
+            })
+
+    login(first_id, "First Course Member")
+    created = client.post(
+        "/api/student/courses/manual",
+        json={"name": "Álgebra Lineal", "code": " MAT 101 "},
+    )
+    assert created.status_code == 200
+
+    login(second_id, "Second Course Member")
+    duplicate = client.post(
+        "/api/student/courses/manual",
+        json={"name": "Álgebra Lineal", "code": "mat   101"},
+    )
+    payload = duplicate.get_json()
+
+    assert duplicate.status_code == 409
+    assert payload["course_exists"] is True
+    joined = client.post(f"/api/student/courses/catalog/{payload['catalog_id']}/join")
+    assert joined.status_code == 200
+    assert joined.get_json()["joined_existing"] is True
+
+
+def test_admin_course_purge_removes_course_plan_data_but_preserves_global_xp(make_user):
+    admin_id = make_user("Course Administrator")
+    student_id = make_user("Course Member")
+    with get_db() as db:
+        university = _fetchone(db, "SELECT id FROM universities ORDER BY id LIMIT 1")
+        university_id = int(university["id"])
+        _exec(db, "UPDATE clients SET is_admin = 1 WHERE id = %s", (admin_id,))
+        _exec(
+            db,
+            "UPDATE clients SET university_id = %s WHERE id = %s",
+            (university_id, student_id),
+        )
+
+    sdb.record_course_to_catalog(university_id, "DEL-101", "Course To Delete")
+    catalog = sdb.find_catalog_course(university_id, "DEL-101", "Course To Delete")
+    membership = sdb.join_catalog_course(student_id, int(catalog["id"]))
+    course_id = int(membership["id"])
+    exam_id = sdb.upsert_exam(
+        student_id,
+        course_id,
+        None,
+        "Deleted Course Exam",
+        "2099-01-01",
+        30,
+        ["Topic"],
+    )
+    sdb.save_study_plan(
+        student_id,
+        {
+            "daily_plan": [
+                {"course_id": course_id, "exam_id": exam_id, "title": "Remove me"},
+                {"course_id": 999999, "title": "Keep me"},
+            ]
+        },
+    )
+    sdb.award_xp(student_id, "course_test", 25)
+
+    deletion = sdb.soft_delete_catalog_course(
+        admin_id,
+        int(catalog["id"]),
+        "Course To Delete",
+        "Obsolete catalog entry",
+    )
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE admin_course_deletions SET recover_until = %s WHERE id = %s",
+            ("2000-01-01 00:00:00", deletion["deletion_id"]),
+        )
+
+    assert sdb.purge_expired_course_deletions() == 1
+    assert sdb.get_course(course_id) is None
+    assert sdb.get_total_xp(student_id) == 25
+    remaining = sdb.get_latest_plan(student_id)["plan_json"]["daily_plan"]
+    assert remaining == [{"course_id": 999999, "title": "Keep me"}]
+    assert sdb.find_catalog_course(university_id, "DEL-101", "Course To Delete") is None
+
+    sdb.record_course_to_catalog(university_id, "DEL-101", "Course To Delete")
+    assert sdb.find_catalog_course(university_id, "DEL-101", "Course To Delete") is not None

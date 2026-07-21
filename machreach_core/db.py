@@ -14,7 +14,7 @@ import json
 from cryptography.fernet import Fernet, InvalidToken
 from machreach_core.config import DATABASE_URL, ENCRYPTION_KEY, SECRET_KEY
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # ---------------------------------------------------------------------------
 # Detect engine: postgres vs sqlite fallback
@@ -65,7 +65,8 @@ else:
 # ---------------------------------------------------------------------------
 
 def _get_fernet() -> Fernet:
-    import base64, hashlib
+    import base64
+    import hashlib
     key_bytes = hashlib.sha256(ENCRYPTION_KEY.encode()).digest()
     return Fernet(base64.urlsafe_b64encode(key_bytes))
 
@@ -396,6 +397,9 @@ def init_db():
     _run_migrations()
     init_async_jobs_table()
     _archive_and_drop_retired_product_tables()
+    with get_db() as db:
+        legacy_calendar_table = "google_" + "calendar_tokens"
+        _exec(db, f"DROP TABLE IF EXISTS {legacy_calendar_table}" + (" CASCADE" if _USE_PG else ""))
     with get_db() as db:
         _exec(
             db,

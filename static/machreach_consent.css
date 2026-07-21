@@ -67,7 +67,7 @@
 }
 
 .mr-consent__copy a {
-  color: var(--primary, #e95721);
+  color: #b54717;
   font-weight: 800;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 2px;
@@ -110,7 +110,7 @@
 }
 
 .mr-consent__button--primary {
-  color: #fff;
+  color: #1a1a1f;
   background: var(--primary, #ff6b35);
   box-shadow: 0 7px 16px color-mix(in srgb, var(--primary, #ff6b35) 28%, transparent);
 }

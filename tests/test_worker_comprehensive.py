@@ -68,7 +68,7 @@ def test_process_loop_claims_both_job_types_and_heartbeat(monkeypatch):
     heartbeats = []
     processed = []
     monkeypatch.setattr(worker, "record_worker_heartbeat", lambda: heartbeats.append(True))
-    monkeypatch.setattr(worker, "claim_async_jobs", lambda kind, **kwargs: claimed[kind])
+    monkeypatch.setattr(worker, "claim_async_jobs", lambda kind, **kwargs: claimed.get(kind, []))
     monkeypatch.setattr(worker, "_process_student_quiz_job", lambda job: processed.append(("quiz", job)))
     monkeypatch.setattr(worker, "_process_student_flashcard_job", lambda job: processed.append(("cards", job)))
 

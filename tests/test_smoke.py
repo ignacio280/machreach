@@ -22,7 +22,7 @@ def test_public_routes_no_server_error(client, path):
 def test_health_reports_db_connected(client):
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.get_json().get("db") == "connected"
+    assert r.get_json() == {"status": "healthy"}
 
 
 def test_health_hides_database_exception_details(client, monkeypatch):
@@ -37,7 +37,7 @@ def test_health_hides_database_exception_details(client, monkeypatch):
     r = client.get("/health")
 
     assert r.status_code == 503
-    assert r.get_json() == {"status": "error", "db": "unavailable"}
+    assert r.get_json() == {"status": "degraded"}
     assert "secret-pass" not in r.get_data(as_text=True)
 
 
@@ -51,7 +51,7 @@ def test_health_rejects_an_outdated_schema(client):
     try:
         r = client.get("/health")
         assert r.status_code == 503
-        assert r.get_json() == {"status": "error", "db": "unavailable"}
+        assert r.get_json() == {"status": "degraded"}
     finally:
         with get_db() as db:
             _exec(
@@ -70,14 +70,19 @@ def test_removed_reset_all_accounts_endpoint_is_not_registered(client, flask_app
 
 
 def test_admin_jobs_page_renders_for_admin(client, make_user):
+    from datetime import datetime, timezone
+    from machreach_core import admin_security
+
     cid = make_user("Admin Jobs Owner", "admin-jobs@example.com")
     with get_db() as db:
         _exec(db, "UPDATE clients SET is_admin = 1 WHERE id = %s", (cid,))
+    admin_security.enroll(cid, "JBSWY3DPEHPK3PXP")
     with client.session_transaction() as sess:
         sess["client_id"] = cid
         sess["client_name"] = "Admin Jobs Owner"
         sess["account_type"] = "student"
         sess["session_version"] = 0
+        sess["admin_mfa_verified_at"] = datetime.now(timezone.utc).timestamp()
 
     r = client.get("/admin/jobs")
 

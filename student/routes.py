@@ -19,11 +19,10 @@ import json
 import logging
 
 import re
+from typing import Any
 
-import secrets
 
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode
 
 
 
@@ -876,7 +875,7 @@ def register_student_routes(app, csrf, limiter):
 
     from student.canvas import extract_text_from_pdf, extract_text_from_docx, make_connect_token, verify_connect_token
 
-    from student.analyzer import (analyze_course_material, generate_flashcards, generate_quiz)
+    from student.analyzer import (generate_flashcards, generate_quiz)
 
     from student import db as sdb
     from student.removed_features import DEPRECATED_STUDENT_PATHS, REMOVED_API_PREFIXES
@@ -908,7 +907,7 @@ def register_student_routes(app, csrf, limiter):
     def _student_is_plus(client_id: int | None = None) -> bool:
         try:
             from student import subscription as _sub
-            return _sub.has_unlimited_ai(client_id if client_id is not None else _cid())
+            return _sub.has_plus_access(client_id if client_id is not None else _cid())
         except Exception:
             return False
 
@@ -978,7 +977,7 @@ def register_student_routes(app, csrf, limiter):
         quiz_rows = []
         for q in quizzes[:5]:
             try:
-                questions = sdb.get_quiz_questions(int(q.get("id")))[:8]
+                questions = sdb.get_quiz_questions(int(q.get("id") or 0))[:8]
             except Exception:
                 questions = []
             quiz_rows.append({
@@ -1000,7 +999,7 @@ def register_student_routes(app, csrf, limiter):
         for d in decks[:5]:
             cards = []
             try:
-                cards = sdb.get_flashcards(int(d.get("id")))[:8]
+                cards = sdb.get_flashcards(int(d.get("id") or 0))[:8]
             except Exception:
                 pass
             deck_rows.append({
@@ -2444,6 +2443,15 @@ Return this JSON shape:
         if len(name) > 160 or len(code) > 40:
             return jsonify({"error": "Nombre o código demasiado largo."}), 400
         cid = _cid()
+        university_id = sdb._client_university_id(cid)
+        existing_catalog = sdb.find_catalog_course(university_id, code, name)
+        if existing_catalog:
+            return jsonify({
+                "error": "Este curso ya existe. Únete al curso existente.",
+                "course_exists": True,
+                "catalog_id": int(existing_catalog["id"]),
+                "course": existing_catalog,
+            }), 409
         try:
             course_id = sdb.add_manual_course(cid, code, name)
         except ValueError as e:
@@ -2453,10 +2461,20 @@ Return this JSON shape:
         # Feed the student's university catalog so the next student there gets
         # this course as an autofill suggestion. Scoped to their university only.
         try:
-            sdb.record_course_to_catalog(sdb._client_university_id(cid), code, name)
+            sdb.record_course_to_catalog(university_id, code, name)
+            created_catalog = sdb.find_catalog_course(university_id, code, name)
+            if created_catalog:
+                sdb.attach_course_to_catalog(cid, course_id, int(created_catalog["id"]))
         except Exception:
             pass
         return jsonify({"ok": True, "id": course_id})
+
+    @app.route("/api/student/courses/catalog/<int:catalog_id>/join", methods=["POST"])
+    def student_join_course_catalog(catalog_id):
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        result = sdb.join_catalog_course(_cid(), catalog_id)
+        return jsonify(result), 200 if result.get("ok") else 404
 
     @app.route("/api/student/courses/catalog", methods=["GET"])
     def student_course_catalog():
@@ -2709,7 +2727,7 @@ Return this JSON shape:
 
     def student_delete_course(course_id):
 
-        """Remove a course and all its related data."""
+        """Leave a course membership; the ownerless course remains available."""
 
         if not _logged_in():
 
@@ -2721,7 +2739,7 @@ Return this JSON shape:
 
             return jsonify({"error": "Not found"}), 404
 
-        sdb.delete_course(course_id, _cid())
+        sdb.leave_course(_cid(), course_id)
 
         return jsonify({"ok": True})
 
@@ -3621,7 +3639,7 @@ Return this JSON shape:
 
                 saved_id = claim["session_id"]
                 actual_minutes = int(claim.get("minutes_saved") or 0)
-                actual_pages = int(claim.get("pages_saved") or 0)
+                int(claim.get("pages_saved") or 0)
 
                 phase_xp = int(claim.get("xp_awarded") or 0)
                 phase_coins = int(claim.get("coins_awarded") or 0)
@@ -4070,7 +4088,7 @@ Return this JSON shape:
 
         """Render a student page using MachReach's LAYOUT."""
 
-        from app import ADMIN_EMAILS, render_layout
+        from app import render_layout
 
         from machreach_core.db import get_client
 
@@ -4087,11 +4105,7 @@ Return this JSON shape:
 
             c = get_client(session["client_id"])
 
-            email = (c.get("email") or "").strip().lower() if c else ""
-
-            owner_emails = {e.strip().lower() for e in ADMIN_EMAILS}
-            owner_emails.update({"ignaciomachuca2005@gmail.com", "fernanda.machuca@uc.cl"})
-            is_admin = bool(c and c.get("is_admin")) or email in owner_emails
+            is_admin = bool(c and c.get("is_admin"))
 
         # End-of-week / end-of-month leaderboard results popup. Shows once
         # per period to every authenticated student.
@@ -4194,7 +4208,7 @@ Return this JSON shape:
         excerpt = _planner_plain_text(excerpt or "", max_chars=1200)
         fallback_name = (fallback_name or "Material adjunto").strip()
         fallback_hint = (fallback_hint or "").strip()
-        markers = []
+        markers: list[dict[str, Any]] = []
         marker_re = re.compile(r"\[SOURCE:\s*(.*?)\s*\|\s*approx pages\s*([0-9]+)\s*-\s*([0-9]+)\]", re.I)
         for m in marker_re.finditer(text):
             markers.append({
@@ -4244,7 +4258,7 @@ Return this JSON shape:
             return []
         target_units = max(3, min(14, int(target_units or 8)))
         chunk_size = max(1800, min(6500, len(text) // target_units + 1))
-        units = []
+        units: list[dict[str, Any]] = []
         pos = 0
         idx = 1
         while pos < len(text) and len(units) < target_units:
@@ -4324,8 +4338,10 @@ Material:
                 excerpt = _planner_plain_text(u.get("source_excerpt") or "", max_chars=9000)
                 if not excerpt:
                     continue
-                tags = u.get("tags") if isinstance(u.get("tags"), list) else []
-                steps = u.get("steps") if isinstance(u.get("steps"), list) else []
+                raw_tags = u.get("tags")
+                tags = raw_tags if isinstance(raw_tags, list) else []
+                raw_steps = u.get("steps")
+                steps = raw_steps if isinstance(raw_steps, list) else []
                 source_name = (u.get("source_name") or "Material adjunto").strip()[:120]
                 page_hint = (u.get("page_hint") or "").strip()[:120]
                 if re.search(r"ubicaci[oó]n aproximada", page_hint, re.I):
@@ -5894,9 +5910,9 @@ Material:
         if plus_until:
             d = str(plus_until)[:10]
             until_note = (
-                f'<div style="margin-top:14px;padding:11px 14px;border-radius:14px;'
-                f'background:rgba(255,122,61,.10);border:1px solid rgba(255,122,61,.35);'
-                f'font-weight:800;color:var(--text);">'
+                '<div style="margin-top:14px;padding:11px 14px;border-radius:14px;'
+                'background:rgba(255,122,61,.10);border:1px solid rgba(255,122,61,.35);'
+                'font-weight:800;color:var(--text);">'
                 + (f"&#127881; Your referral Plus is active until <b>{d}</b>" if is_en
                    else f"&#127881; Tu Plus de referidos est&aacute; activo hasta <b>{d}</b>")
                 + "</div>"
@@ -6347,13 +6363,13 @@ Material:
 
         _lang = session.get("lang", "es")
 
-        canvas_tok = bool(sdb.get_courses(cid))
+        bool(sdb.get_courses(cid))
 
         courses = sdb.get_courses(cid)
 
         exams = sdb.get_upcoming_exams(cid)
 
-        stats = sdb.get_study_stats(cid)
+        sdb.get_study_stats(cid)
 
         focus_stats = sdb.get_focus_stats(cid)
 
@@ -6557,9 +6573,7 @@ Material:
 
 
 
-        canvas_status = "Conectado" if canvas_tok else "Sin conectar"
 
-        canvas_color = "#10B981" if canvas_tok else "#EF4444"
 
 
 
@@ -6717,7 +6731,6 @@ Material:
             if _e == _today_iso:
                 _mr_xp_today += int(_row.get("xp") or 0)
 
-        analytics_strip_html = ""  # legacy placeholder, no longer rendered
 
 
 
@@ -7954,7 +7967,7 @@ Material:
         .cb-icon {{ width:44px;height:44px;border-radius:12px;background:#7B61FF;color:#fff;display:grid;place-items:center;font-size:22px;font-weight:900; }}
         .cb-body {{ flex:1; }}
         .cb-title {{ font-weight:900;font-size:14px;color:#1A1A1F; }}
-        .cb-meta {{ font-size:12px;color:#94939C;margin-top:2px; }}
+        .cb-meta {{ font-size:12px;color:#5C5C66;margin-top:2px; }}
         .cb-btn {{ background:#fff;border:1px solid #E2DCCC;padding:8px 14px;border-radius:999px;font-weight:800;font-size:12px;cursor:pointer;color:#1A1A1F;text-decoration:none; }}
         .course-cards {{ display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr))!important;gap:clamp(16px,2vw,28px)!important;align-items:start; }}
         @media (max-width:900px) {{ .course-cards {{ grid-template-columns:1fr; }} .page-title-cd{{font-size:38px;}} }}
@@ -8135,7 +8148,7 @@ Material:
               items.forEach(function(it){{
                 var code = _esc(it.code || ''); var nm = _esc(it.name || '');
                 var uses = (it.uses > 1) ? (it.uses + '\\u00d7') : '';
-                html += '<div class="mc-sug-item" onclick="mcPick(this)" data-code="' + code + '" data-name="' + nm + '">'
+                html += '<div class="mc-sug-item" onclick="mcPick(this)" data-id="' + _esc(it.id || '') + '" data-code="' + code + '" data-name="' + nm + '">'
                   + '<span class="mc-sug-code">' + (code || '&mdash;') + '</span>'
                   + '<span class="mc-sug-name">' + nm + '</span>'
                   + (uses ? ('<span class="mc-sug-uses">' + uses + '</span>') : '')
@@ -8149,6 +8162,7 @@ Material:
           var c = document.getElementById('mc-code'); var n = document.getElementById('mc-name');
           if (c) c.value = el.getAttribute('data-code') || '';
           if (n) n.value = el.getAttribute('data-name') || '';
+          if (n) n.dataset.catalogId = el.getAttribute('data-id') || '';
           var box = document.getElementById('mc-suggest'); if (box) box.hidden = true;
           if (n) n.focus();
         }}
@@ -8165,6 +8179,15 @@ Material:
               body: JSON.stringify({{ code: code, name: name }})
             }});
             var d = await _safeJson(r);
+            if (r.status === 409 && d && d.course_exists) {{
+              if (!confirm('Este curso ya existe. ¿Quieres unirte al curso existente?')) {{
+                throw new Error('Debes unirte al curso existente para evitar duplicados.');
+              }}
+              var joined = await fetch('/api/student/courses/catalog/' + encodeURIComponent(d.catalog_id) + '/join', {{method:'POST'}});
+              var joinedData = await _safeJson(joined);
+              if (!joined.ok) throw new Error((joinedData && joinedData.error) || 'No se pudo unir al curso.');
+              mrReload(); return;
+            }}
             if (!r.ok) throw new Error((d && d.error) || 'No se pudo agregar el curso.');
             mrReload();
           }} catch(e) {{
@@ -13257,8 +13280,8 @@ Material:
               <a class="btn btn-primary" href="/student/courses">Registrar notas finales</a>
             </div>
             """
-        canvas_form_disabled = "disabled" if gate["blocked"] else ""
-        canvas_form_hint = "Completa los resultados pendientes para habilitar Canvas." if gate["blocked"] else ""
+        "disabled" if gate["blocked"] else ""
+        "Completa los resultados pendientes para habilitar Canvas." if gate["blocked"] else ""
         return _s_render("Canvas Settings", f"""
 
         <style>
@@ -13481,7 +13504,8 @@ Material:
             sdb.save_date_override(_cid(), d, hours, is_free, note)
             return jsonify({"ok": True})
         except Exception as e:
-            import logging, traceback
+            import logging
+            import traceback
             logging.getLogger("student.routes").error("date-override save failed: %s\n%s", e, traceback.format_exc())
             return jsonify({"error": str(e)[:200]}), 500
 
@@ -14061,179 +14085,6 @@ Material:
             "replacement": "/api/student/quizzes/generate-async",
         }), 410
 
-        from student import subscription as _sub
-        _ok, _why = _sub.can_generate_quiz_today(_cid())
-        if not _ok:
-            return jsonify({"error": _why, "upgrade_required": True}), 402
-
-        data = request.get_json(force=True)
-
-        course_id = data.get("course_id")
-
-        ad_hoc_source = (data.get("source_text") or "").strip()
-
-        ad_hoc_title = (data.get("title") or "").strip()
-
-        topics = data.get("topics", [])
-
-        exam_id = data.get("exam_id")
-
-        difficulty = data.get("difficulty", "medium")
-
-        if difficulty not in ("easy", "medium", "hard"):
-
-            difficulty = "medium"
-
-        try:
-
-            count = int(data.get("count", 10))
-
-        except (TypeError, ValueError):
-
-            count = 10
-
-        count = max(1, min(count, 100))  # hard ceiling — generation batches under the hood
-
-        # Apply per-tier question cap (free = 30 max).
-        from student import subscription as _sub
-        count = _sub.cap_questions(_cid(), count)
-
-
-
-        # Drag-and-drop / paste path: caller supplied raw source text — no course needed.
-
-        if ad_hoc_source:
-
-            course_name = ad_hoc_title or "Custom Material"
-
-            questions = generate_quiz(
-
-                course_name=course_name,
-
-                topics=topics or None,
-
-                source_text=ad_hoc_source,
-
-                difficulty=difficulty,
-
-                count=count,
-
-            )
-
-            if not questions:
-
-                return jsonify({"error": "Failed to generate quiz. Try again."}), 500
-
-            title = ad_hoc_title or f"Quiz: {course_name} ({difficulty})"
-
-            quiz_id = sdb.create_quiz(_cid(), title, difficulty, course_id=course_id or None, exam_id=exam_id)
-
-            sdb.add_quiz_questions(quiz_id, questions)
-
-            try:
-                from student import subscription as _sub
-                _sub.record_generation(_cid(), "quiz_generated")
-            except Exception:
-                pass
-
-            return jsonify({
-
-                "quiz_id": quiz_id,
-
-                "question_count": len(questions),
-
-                "requested": count,
-
-                "short": len(questions) < count,
-
-            })
-
-
-
-        if not course_id:
-
-            return jsonify({"error": "course_id required"}), 400
-
-        course = sdb.get_course(course_id)
-
-        if not course or course["client_id"] != _cid():
-
-            return jsonify({"error": "Course not found"}), 404
-
-
-
-        # Gather source material — ONLY from student's uploaded files
-
-        source_text = ""
-
-        files = sdb.get_course_files(_cid(), course_id, exam_id=exam_id)
-
-        for f in files:
-
-            if f.get("extracted_text"):
-
-                source_text += f"--- {f.get('original_name','')} ---\n{f['extracted_text']}\n\n"
-
-        # Also include AI-generated notes
-
-        notes = sdb.get_notes(_cid(), course_id)
-
-        for n in notes:
-
-            if n.get("content_html"):
-
-                source_text += n["content_html"] + "\n\n"
-
-
-
-        if not source_text.strip():
-
-            return jsonify({"error": "No files uploaded for this course/exam. Please upload your study material first."}), 400
-
-
-
-        questions = generate_quiz(
-
-            course_name=course["name"],
-
-            topics=topics or None,
-
-            source_text=source_text,
-
-            difficulty=difficulty,
-
-            count=count,
-
-        )
-
-        if not questions:
-
-            return jsonify({"error": "Failed to generate quiz. Try again."}), 500
-
-
-
-        title = data.get("title", f"Quiz: {course['name']} ({difficulty})")
-
-        quiz_id = sdb.create_quiz(_cid(), title, difficulty, course_id=course_id, exam_id=exam_id)
-
-        sdb.add_quiz_questions(quiz_id, questions)
-
-
-
-        return jsonify({
-
-            "quiz_id": quiz_id,
-
-            "question_count": len(questions),
-
-            "requested": count,
-
-            "short": len(questions) < count,
-
-        })
-
-
-
     @app.route("/api/student/quizzes/generate-async", methods=["POST"])
     @limiter.limit("5 per minute")
 
@@ -14306,7 +14157,7 @@ Material:
         questions = sdb.get_quiz_questions(quiz_id)
 
         from student import subscription as _sub
-        is_plus = _sub.has_unlimited_ai(_cid())
+        is_plus = _sub.has_plus_access(_cid())
         clean_questions = []
         for q in questions:
             qd = dict(q)
@@ -14438,7 +14289,7 @@ Material:
             return jsonify({"error": "Not found"}), 404
 
         from student import subscription as _sub
-        is_plus = _sub.has_unlimited_ai(_cid())
+        is_plus = _sub.has_plus_access(_cid())
 
 
 
@@ -16491,7 +16342,7 @@ No markdown, no code fences. ONLY JSON.
         questions = sdb.get_quiz_questions(quiz_id)
 
         from student import subscription as _sub
-        _is_plus = _sub.has_unlimited_ai(_cid())
+        _is_plus = _sub.has_plus_access(_cid())
 
         questions_json = json.dumps([{
 
@@ -17689,7 +17540,7 @@ No markdown, no code fences. ONLY JSON.
         questions = sdb.get_quiz_questions(quiz_id)
 
         from student import subscription as _sub
-        _is_plus = _sub.has_unlimited_ai(_cid())
+        _is_plus = _sub.has_plus_access(_cid())
 
         questions_json = json.dumps([{
 
@@ -18604,7 +18455,7 @@ No markdown, no code fences. ONLY JSON.
                 try:
                     from zoneinfo import ZoneInfo
                     from student.timezones import tz_for_country
-                    from machreach_core.db import _fetchone as _fo
+                    from machreach_core.db import _fetchone as _fo, get_db
                     user_tz_name = "America/Santiago"
                     try:
                         with get_db() as _db:
@@ -18924,7 +18775,7 @@ No markdown, no code fences. ONLY JSON.
 
             if not prefs:
 
-                return jsonify(daily_email=True, email_hour=7, timezone="America/Mexico_City",
+                return jsonify(daily_email=True, email_hour=7, timezone="America/Santiago",
 
                                university="", field_of_study="")
 
@@ -18934,7 +18785,7 @@ No markdown, no code fences. ONLY JSON.
 
                 email_hour=prefs.get("email_hour", 7),
 
-                timezone=prefs.get("timezone", "America/Mexico_City"),
+                timezone=prefs.get("timezone", "America/Santiago"),
 
                 university=prefs.get("university", ""),
 
@@ -18954,7 +18805,7 @@ No markdown, no code fences. ONLY JSON.
 
                 email_hour=int(data.get("email_hour", 7)),
 
-                timezone=str(data.get("timezone", "America/Mexico_City"))[:64],
+                timezone=str(data.get("timezone", "America/Santiago"))[:64],
 
                 university=str(data.get("university", ""))[:120],
 
@@ -18968,7 +18819,8 @@ No markdown, no code fences. ONLY JSON.
 
         except Exception as e:
 
-            import logging, traceback
+            import logging
+            import traceback
 
             logging.getLogger("student.routes").error("email-prefs save failed: %s\n%s", e, traceback.format_exc())
 
@@ -19397,6 +19249,9 @@ No markdown, no code fences. ONLY JSON.
                 <input id="fr-search" class="fr-input" placeholder="{_fr["search_ph"]}">
                 <button class="fr-btn" onclick="frSearch()">{_fr["search"]}</button>
               </div>
+              <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--text-muted);">
+                <input id="fr-discovery" type="checkbox"> Permitir que otros estudiantes me encuentren por mi nombre
+              </label>
               <div id="fr-results" class="fr-list" style="margin-top:14px"></div>
             </div>
           </section>
@@ -19455,6 +19310,16 @@ No markdown, no code fences. ONLY JSON.
         const FR = {json.dumps(_fr, ensure_ascii=False)};
         const REF_LINK = {json.dumps(ref_link)};
         let __frFriends = [];
+
+        fetch('/api/student/friends/discovery').then(r=>r.json()).then(d=>{{
+          const input = document.getElementById('fr-discovery');
+          if (!input) return;
+          input.checked = d.enabled !== false;
+          input.addEventListener('change', () => fetch('/api/student/friends/discovery', {{
+            method:'POST', headers:{{'Content-Type':'application/json'}},
+            body:JSON.stringify({{enabled:input.checked}})
+          }}));
+        }}).catch(()=>{{}});
 
         function esc(s) {{ return (s||'').replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]); }}
         function initials(name) {{
@@ -19536,6 +19401,19 @@ No markdown, no code fences. ONLY JSON.
         }}
 
 
+        async function frBlock(uid) {{
+          if (!confirm('¿Bloquear a este estudiante? También se eliminará de tus amigos.')) return;
+          await fetch('/api/student/friends/block', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{friend_id:uid}})}});
+          loadAll();
+        }}
+
+        async function frReport(uid) {{
+          var reason = prompt('Describe brevemente el problema:');
+          if (!reason) return;
+          await fetch('/api/student/friends/report', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{friend_id:uid,reason:reason}})}});
+          alert('Reporte enviado.');
+        }}
+
         let __loadingAll = false;
         async function loadAll() {{
 
@@ -19591,6 +19469,8 @@ No markdown, no code fences. ONLY JSON.
                 <div class="fr-actions">
 
                   <button class="fr-btn small ghost" onclick="frRemove(${{u.id}})">${{FR.remove}}</button>
+                  <button class="fr-btn small ghost" onclick="frReport(${{u.id}})">Reportar</button>
+                  <button class="fr-btn small ghost" onclick="frBlock(${{u.id}})">Bloquear</button>
 
                 </div>
 
@@ -19619,99 +19499,15 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-    @app.route("/api/student/friends/search")
+    from student.friend_routes import register_friend_api_routes
 
-    def student_friends_search_api():
-
-        if not _logged_in():
-
-            return jsonify(error="Login required"), 401
-
-        cid = _cid()
-
-        q = (request.args.get("q") or "").strip()
-
-        results = sdb.search_users(q, exclude_client_id=cid, limit=20)
-
-        return jsonify(results=results)
-
-
-
-    @app.route("/api/student/friends/list")
-
-    def student_friends_list_api():
-
-        if not _logged_in():
-
-            return jsonify(error="Login required"), 401
-
-        cid = _cid()
-
-        return jsonify(**sdb.list_friends(cid))
-
-
-    @app.route("/api/student/presence/heartbeat", methods=["POST"])
-    def student_presence_heartbeat_api():
-        """Friend tab pings this every few seconds while open so others can
-        see them as online. The before_request hook also touches presence on
-        any authenticated request (throttled), so this is just an extra signal
-        for users idling on the friends page."""
-        if not _logged_in():
-            return jsonify(ok=False), 401
-        sdb.touch_presence(_cid())
-        return jsonify(ok=True)
-
-
-
-    @app.route("/api/student/friends/add", methods=["POST"])
-
-    def student_friends_add_api():
-
-        if not _logged_in():
-
-            return jsonify(error="Login required"), 401
-
-        cid = _cid()
-
-        data = request.get_json(silent=True) or {}
-
-        try:
-
-            fid = int(data.get("friend_id"))
-
-        except Exception:
-
-            return jsonify(error="Invalid friend_id"), 400
-
-        status = sdb.add_friend(cid, fid)
-
-        return jsonify(status=status)
-
-
-
-    @app.route("/api/student/friends/remove", methods=["POST"])
-
-    def student_friends_remove_api():
-
-        if not _logged_in():
-
-            return jsonify(error="Login required"), 401
-
-        cid = _cid()
-
-        data = request.get_json(silent=True) or {}
-
-        try:
-
-            fid = int(data.get("friend_id"))
-
-        except Exception:
-
-            return jsonify(error="Invalid friend_id"), 400
-
-        sdb.remove_friend(cid, fid)
-
-        return jsonify(ok=True)
+    register_friend_api_routes(
+        app,
+        limiter,
+        logged_in=_logged_in,
+        current_client_id=_cid,
+        db=sdb,
+    )
 
 
     # ================================================================
@@ -20890,23 +20686,21 @@ No markdown, no code fences. ONLY JSON.
   fetch('/api/academic/user/' + USER_ID).then(r => r.json()).then(p => {
     var box = document.getElementById('mr-prof');
     if (!p || p.error) { box.innerHTML = '<div class="pf-error">' + t('Profile not found.','Perfil no encontrado.') + '</div>'; return; }
-    var country = p.country ? ((p.country.flag_emoji || '') + ' ' + escapeHtml(p.country.name || '')) : '';
     var uniName = p.university ? escapeHtml(p.university.name || '') : '<span style="color:var(--text-muted);">' + t('No university set','Sin universidad') + '</span>';
     var majorName = p.major ? escapeHtml(p.major.name || '') : '<span style="color:var(--text-muted);">' + t('No major set','Sin carrera') + '</span>';
-    var retiredTag = p.is_retired ? '<span class="pf-retired-tag">🏖️ ' + t('Retired','Retirado') + '</span>' : '';
     var rankColor = (p.rank && p.rank.color) || '#6366F1';
     var rankName = (p.rank && p.rank.full_name) || t('Unranked','Sin rango');
     var leaderPos = p.leaderboard_position;
+    var isRetired = !!(leaderPos && leaderPos.scope === 'retirement');
+    var retiredTag = isRetired ? '<span class="pf-retired-tag">🏖️ ' + t('Graduate','Egresado') + '</span>' : '';
     var posLine = (leaderPos && leaderPos.rank)
       ? '#' + leaderPos.rank + ' / ' + (leaderPos.total||'?') + ' (' + (leaderPos.scope==='retirement' ? t('Retired','Retirado') : 'Global') + ')'
       : t('Unranked','Sin clasificar');
-    var bio = p.bio ? '<p style="margin:14px 0 0;color:var(--text-muted);font-size:14px;line-height:1.6;">' + escapeHtml(p.bio) + '</p>' : '';
     var _profEs = document.documentElement.lang !== 'en';
     var editBtn = IS_SELF ? '<a class="pf-edit-btn" href="/student/profile/edit">✏️ ' + (_profEs ? 'Editar perfil' : 'Edit profile') + '</a>' : '';
     var html = '';
-    var bnr = p.banner || {};
-    var bannerStyle = bnr.css ? ('background:' + bnr.css + ';') : '';
-    var bannerCls = bnr.css ? ('bnr-anim-host ' + escapeHtml(bnr.anim_class || '')) : 'pf-banner-fallback';
+    var bannerStyle = '';
+    var bannerCls = 'pf-banner-fallback';
     // Twitter-style banner with avatar overlapping the identity strip below.
     html += '<div class="pf-banner ' + bannerCls + '" style="' + bannerStyle + '"></div>';
     html += '<div class="pf-identity">';
@@ -20919,15 +20713,13 @@ No markdown, no code fences. ONLY JSON.
     html += '</div>';
     html += '</div>';
 
-    // Secondary hero card: country / university / major / bio + league chip
+    // Secondary hero card: public university, major, and level.
     html += '<div class="pf-hero">';
     html +=   '<div style="flex:1;min-width:200px;">';
     html +=     '<div class="pf-meta">';
-    if (country)  html += '<span>' + country + '</span>';
     html +=       '<span>🎓 ' + uniName + '</span>';
     html +=       '<span>📚 ' + majorName + '</span>';
     html +=     '</div>';
-    html +=     bio;
     html +=   '</div>';
     html +=   '<div class="pf-rank-card" style="border-color:' + rankColor + '44;">';
     html +=     '<div class="pf-rank-name" style="color:' + rankColor + ';">' + escapeHtml(rankName) + '</div>';
@@ -20936,11 +20728,12 @@ No markdown, no code fences. ONLY JSON.
     html += '</div>';
     html += '<div class="pf-grid">';
     html +=   '<div class="pf-stat"><div class="label">' + t('XP total','XP total') + '</div><div class="value">' + (p.xp||0).toLocaleString() + '</div></div>';
-    html +=   '<div class="pf-stat"><div class="label">' + t('Total hours studied','Horas estudiadas') + '</div><div class="value">' + ((p.total_hours||0).toFixed(1)) + 'h</div></div>';
-    html +=   '<div class="pf-stat"><div class="label">' + t('Focus sessions','Sesiones de enfoque') + '</div><div class="value">' + (p.sessions||0).toLocaleString() + '</div></div>';
+    if (!p.focus_private) {
+      html += '<div class="pf-stat"><div class="label">' + t('Total hours studied','Horas estudiadas') + '</div><div class="value">' + ((p.total_hours||0).toFixed(1)) + 'h</div></div>';
+      html += '<div class="pf-stat"><div class="label">' + t('Focus sessions','Sesiones de enfoque') + '</div><div class="value">' + (p.sessions||0).toLocaleString() + '</div></div>';
+    }
     html +=   '<div class="pf-stat"><div class="label">' + t('Leaderboard','Clasificación') + '</div><div class="value">' + posLine + '</div></div>';
     html +=   '<div class="pf-stat"><div class="label">' + t('Badges','Insignias') + '</div><div class="value">' + (p.badge_count||0) + '</div></div>';
-    html +=   '<div class="pf-stat"><div class="label">' + t('Status','Estado') + '</div><div class="value">' + (p.is_retired ? '🏖️ ' + t('Retired','Retirado') : '⚡ ' + t('Active','Activo')) + '</div></div>';
     html += '</div>';
     html += '<div class="pf-section"><h3>🏆 ' + t('Badges','Insignias') + '</h3>';
     if (!p.badges || !p.badges.length) {
@@ -20970,41 +20763,6 @@ No markdown, no code fences. ONLY JSON.
 
     # ── Retirement (opt out of active rankings) ──────────────
 
-    @app.route("/api/student/retire", methods=["POST"])
-    def student_retire():
-        if not _logged_in():
-            return jsonify({"error": "Unauthorized"}), 401
-        from machreach_core.db import get_db, _exec
-        try:
-            with get_db() as db:
-                _exec(
-                    db,
-                    "UPDATE clients SET retired = 1, retired_at = CURRENT_TIMESTAMP "
-                    "WHERE id = %s",
-                    (_cid(),),
-                )
-            return jsonify({"ok": True, "retired": True})
-        except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
-
-    @app.route("/api/student/unretire", methods=["POST"])
-    def student_unretire():
-        if not _logged_in():
-            return jsonify({"error": "Unauthorized"}), 401
-        from machreach_core.db import get_db, _exec
-        try:
-            with get_db() as db:
-                _exec(
-                    db,
-                    "UPDATE clients SET retired = 0, retired_at = NULL WHERE id = %s",
-                    (_cid(),),
-                )
-            return jsonify({"ok": True, "retired": False})
-        except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
-
-
-
     @app.route("/student/settings", methods=["GET", "POST"])
 
     def student_settings_page():
@@ -21025,7 +20783,7 @@ No markdown, no code fences. ONLY JSON.
         client = get_client(cid)
 
         # Retirement flag — controls whether the user appears on active leaderboards
-        _is_retired = bool((client or {}).get("retired") or 0)
+        # Graduation status is managed administratively; students cannot opt out of rankings.
 
 
 
@@ -21049,15 +20807,15 @@ No markdown, no code fences. ONLY JSON.
 
         prefs = sdb.get_email_prefs(cid) or {}
 
-        de = prefs.get("daily_email", 1)
+        prefs.get("daily_email", 1)
 
-        hour = prefs.get("email_hour", 7)
+        prefs.get("email_hour", 7)
 
-        tz = prefs.get("timezone", "America/Mexico_City")
+        prefs.get("timezone", "America/Santiago")
 
-        university = prefs.get("university", "") or ""
+        prefs.get("university", "") or ""
 
-        field_of_study = prefs.get("field_of_study", "") or ""
+        prefs.get("field_of_study", "") or ""
 
         canvas_tok = bool(sdb.get_courses(cid))
 
@@ -21197,8 +20955,6 @@ No markdown, no code fences. ONLY JSON.
 
             "Retiring...": "Egresando...",
 
-            "Manage Connection": "Administrar conexión",
-
             "Academic Profile": "Perfil académico",
 
             "Used to rank you on the country, university, and major leaderboards. You can change these at any time.": "Se usa para clasificarte en los rankings de país, universidad y carrera. Puedes cambiarlo cuando quieras.",
@@ -21206,8 +20962,6 @@ No markdown, no code fences. ONLY JSON.
             "Save Academic Profile": "Guardar perfil académico",
 
             "Country": "País",
-
-            "University": "Universidad",
 
             "Major": "Carrera",
 
@@ -21799,53 +21553,6 @@ No markdown, no code fences. ONLY JSON.
 
 
 
-        <!-- Retirement -->
-        <div class="card settings-panel settings-retirement" id="retire-card" style="border-color:{('var(--green)' if _is_retired else 'var(--yellow)')};">
-          <div class="card-header"><h2>{('🏖️ ' + _T('Retired')) if _is_retired else ('🎓 ' + _T('Retirement'))}</h2></div>
-          <div class="settings-panel-body">
-            {(
-              '''<p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.55;">'''
-              + _T("You are currently retired from active rankings. Your name only appears on the Retirement leaderboard. You can come back at any time.")
-              + '''</p>
-              <button class="btn btn-primary btn-sm" onclick="unretireMe()">↩️ ''' + _T("Return to active rankings") + '''</button>
-              <span id="retire-status" style="margin-left:10px;font-size:13px;color:var(--text-muted);"></span>'''
-            ) if _is_retired else (
-              '''<p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.55;">'''
-              + _T("When you finish your studies, retire to leave the active rankings with honor. Your XP is preserved and you'll appear on the Retirement leaderboard alongside other graduates. You can return at any time.")
-              + '''</p>
-              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('retire-confirm').style.display='block';this.style.display='none';" style="border:1px solid var(--yellow);color:var(--yellow);">🏖️ ''' + _T("Retire from active rankings") + '''</button>
-              <div id="retire-confirm" style="display:none;margin-top:14px;padding:16px;border:1px solid var(--yellow);border-radius:var(--radius-sm);background:var(--yellow-light);">
-                <p style="font-size:13px;color:var(--text);margin:0 0 10px;">''' + _T("Are you sure? You will be removed from the global, country, university and major leaderboards.") + '''</p>
-                <button class="btn btn-primary btn-sm" onclick="retireMe()" style="background:var(--yellow);border-color:var(--yellow);">''' + _T("Yes, retire me") + '''</button>
-                <span id="retire-status" style="margin-left:10px;font-size:13px;color:var(--text-muted);"></span>
-              </div>'''
-            )}
-          </div>
-        </div>
-        <script>
-          async function retireMe() {{
-            var s = document.getElementById('retire-status');
-            s.textContent = {repr(_T("Retiring..."))};
-            try {{
-              var r = await fetch('/api/student/retire', {{method:'POST'}});
-              var j = await r.json();
-              if (j.ok) {{ s.textContent = {repr(_T("Retired. Reloading..."))}; setTimeout(function(){{mrReload();}}, 600); }}
-              else {{ s.textContent = (j.error || 'Failed.'); }}
-            }} catch(e) {{ s.textContent = 'Error de red.'; }}
-          }}
-          async function unretireMe() {{
-            var s = document.getElementById('retire-status');
-            s.textContent = {repr(_T("Unretiring..."))};
-            try {{
-              var r = await fetch('/api/student/unretire', {{method:'POST'}});
-              var j = await r.json();
-              if (j.ok) {{ s.textContent = {repr(_T("Welcome back! Reloading..."))}; setTimeout(function(){{mrReload();}}, 600); }}
-              else {{ s.textContent = (j.error || 'Failed.'); }}
-            }} catch(e) {{ s.textContent = 'Error de red.'; }}
-          }}
-        </script>
-
-
         <!-- Data export -->
         <div class="card settings-panel settings-data">
           <div class="card-header"><h2>&#128229; {_T("Data & Privacy")}</h2></div>
@@ -21893,7 +21600,7 @@ No markdown, no code fences. ONLY JSON.
         <script>
 
         async function savePrefs() {{
-          // Daily-study email + Google Calendar were removed from settings;
+          // Daily-study email integrations were removed from settings;
           // this function only exists so any lingering onclick doesn't throw.
           var $pick = function(id){{ return document.getElementById(id); }};
           var body = {{}};
@@ -22053,6 +21760,8 @@ No markdown, no code fences. ONLY JSON.
         try:
             from student import subscription as _sub
             current_tier = _sub.get_tier(cid)
+            subscription_state = _sub.get_subscription_state(cid)
+            usage = _sub.generation_usage(cid) if current_tier == "plus" else None
             plans = _sub.PLANS
             tier_order = ["free", "plus"]
             tier_colors = {
@@ -22098,9 +21807,49 @@ No markdown, no code fences. ONLY JSON.
                     '</div>'
                 )
             subscriptions_html = "".join(sub_cards)
+            status = str(subscription_state.get("status") or "").lower()
+            billing_notice = ""
+            if status in {"past_due", "unpaid"}:
+                manage_url = str(
+                    subscription_state.get("update_payment_method_url")
+                    or subscription_state.get("customer_portal_url")
+                    or ""
+                )
+                manage_link = (
+                    f' <a class="btn btn-sm btn-outline" href="{_esc(manage_url)}" '
+                    'rel="noopener noreferrer">Actualizar medio de pago</a>'
+                    if manage_url else
+                    ' Contacta a soporte si necesitas ayuda para regularizarlo.'
+                )
+                billing_notice = (
+                    '<div class="alert alert-red" style="margin-bottom:14px;">'
+                    '<strong>Tu pago está pendiente.</strong> Plus permanece activo por hasta 7 días, '
+                    'pero no recibirás beneficios mensuales nuevos durante este período.'
+                    f'{manage_link}</div>'
+                )
+            elif status in {"cancelled", "canceled"} and subscription_state.get("ends_at"):
+                billing_notice = (
+                    '<div class="alert alert-info" style="margin-bottom:14px;">'
+                    'Tu renovación está cancelada. Mantendrás Plus hasta '
+                    f'<strong>{_esc(str(subscription_state["ends_at"])[:10])}</strong>.</div>'
+                )
+            usage_html = ""
+            if usage:
+                remaining = int(usage["remaining"])
+                warning_color = "#dc2626" if remaining == 0 else "#b45309" if remaining <= 20 else "#334155"
+                usage_html = (
+                    '<div style="margin-bottom:14px;padding:14px;border:1px solid var(--border);border-radius:12px;">'
+                    f'<strong>Generaciones IA:</strong> {usage["used"]} de {usage["limit"]} usadas · '
+                    f'<span style="color:{warning_color};font-weight:800;">{remaining} restantes</span>'
+                    f' · reinicio {_esc(str(usage["reset_at"])[:10])}'
+                    '<div style="height:8px;background:#e2e8f0;border-radius:999px;margin-top:9px;overflow:hidden;">'
+                    f'<div style="height:100%;width:{min(100, int(usage["used"]))}%;background:#7c3aed;"></div></div>'
+                    '</div>'
+                )
             subscription_section = (
                 '<div class="card">'
                 '<div class="card-header"><h2>\U0001F48E Suscripción</h2></div>'
+                + billing_notice + usage_html +
                 '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">'
                 + subscriptions_html +
                 '</div>'
@@ -22223,6 +21972,7 @@ No markdown, no code fences. ONLY JSON.
             shopBusy.delete(operation);
           }}
         }}
+
         async function buyFreeze() {{
           try {{ await shopRequest('freeze','/api/student/wallet/buy-freeze'); mrReload(); }}
           catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
@@ -22311,7 +22061,7 @@ No markdown, no code fences. ONLY JSON.
         try:
             level_name, floor, ceil = sdb.get_level(total_xp)
         except Exception:
-            level_name, floor, ceil = "Beginner", 0, 100
+            _level_name, floor, ceil = "Beginner", 0, 100
         # Pull the leaderboard rank for the identity strip ("Rank #X · Y XP").
         try:
             from student import academic as _ac
@@ -22394,8 +22144,10 @@ No markdown, no code fences. ONLY JSON.
             is_l = (key == eq_left)
             is_r = (key == eq_right)
             slot_pills = []
-            if is_l: slot_pills.append('<span style="background:#3b82f6;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">L</span>')
-            if is_r: slot_pills.append('<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">R</span>')
+            if is_l:
+                slot_pills.append('<span style="background:#3b82f6;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">L</span>')
+            if is_r:
+                slot_pills.append('<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;">R</span>')
             border = "border:2px solid #10b981;" if (is_l or is_r) else "border:1px solid var(--border);"
             eq_pill = (f'<div style="position:absolute;top:6px;right:6px;display:flex;gap:3px;">{"".join(slot_pills)}</div>'
                        if (is_l or is_r) else '')
@@ -22428,16 +22180,15 @@ No markdown, no code fences. ONLY JSON.
                 )
             return "".join(cards)
 
-        focus_grid = _cos_grid("focus_theme", sdb.FOCUS_THEMES, cos_state["focus_theme"],
+        _cos_grid("focus_theme", sdb.FOCUS_THEMES, cos_state["focus_theme"],
             lambda k, cfg: f'<div style="height:60px;background:{cfg["css"]};"></div>')
-        ring_grid = _cos_grid("timer_ring", sdb.TIMER_RINGS, cos_state["timer_ring"],
+        _cos_grid("timer_ring", sdb.TIMER_RINGS, cos_state["timer_ring"],
             lambda k, cfg: f'<div style="height:60px;display:flex;align-items:center;justify-content:center;"><div style="width:42px;height:42px;border-radius:50%;background:{cfg["css"]};display:flex;align-items:center;justify-content:center;"><div style="width:30px;height:30px;border-radius:50%;background:var(--card);"></div></div></div>')
 
         name = (c.get("name") or "Student").replace("<", "&lt;")
         email = (c.get("email") or "").replace("<", "&lt;")
-        progress_pct = 0
         if ceil > floor:
-            progress_pct = max(0, min(100, int((total_xp - floor) * 100 / (ceil - floor))))
+            max(0, min(100, int((total_xp - floor) * 100 / (ceil - floor))))
         _back_label = "← Volver al perfil" if session.get("lang", "es") != "en" else "← Back to profile"
         return _s_render("Edit profile", f"""
         <style>{sdb.BANNER_ANIM_CSS}
@@ -22727,8 +22478,9 @@ No markdown, no code fences. ONLY JSON.
     def student_subscription_change_api():
         """Switch student tier.
 
-        - tier=free  -> cancel any existing LS subscription + flip back to free.
-        - Existing paid subscription -> change its provider variant in place.
+        - tier=free  -> ask Lemon Squeezy to cancel renewal; its webhook controls access.
+        - Existing paid subscription -> change its provider variant in place;
+          its webhook controls access.
         - New paid subscription -> return a Lemon Squeezy hosted-checkout URL.
           New-subscription activation happens server-side in the LS webhook.
         """
@@ -22767,8 +22519,12 @@ No markdown, no code fences. ONLY JSON.
                 except Exception as e:
                     log.exception("Student subscription cancellation failed for client %s: %s", cid, e)
                     return jsonify(ok=False, error="No pudimos cancelar tu suscripcion. Intentalo de nuevo o contacta soporte."), 502
-                _sub.set_tier(cid, "free")
-                return jsonify(ok=True, tier="free")
+                return jsonify(
+                    ok=True,
+                    tier=_sub.get_tier(cid),
+                    cancellation_pending=True,
+                    message="La cancelación fue enviada. Plus seguirá activo hasta el fin del ciclo pagado.",
+                )
             # Upgrade -> hosted checkout
             from machreach_core import lemonsqueezy as ls
             variant = (
@@ -22806,13 +22562,12 @@ No markdown, no code fences. ONLY JSON.
                             ok=False,
                             error="No pudimos cambiar tu plan. Intentalo de nuevo o contacta soporte.",
                         ), 502
-                    _sub.set_subscription_state(
-                        cid,
-                        tier=tier,
-                        status="active",
-                        ls_sub_id=sub_id,
+                    return jsonify(
+                        ok=True,
+                        tier=_sub.get_tier(cid),
+                        update_pending=True,
+                        message="El cambio se aplicará cuando Lemon Squeezy lo confirme.",
                     )
-                    return jsonify(ok=True, tier=tier, updated=True)
                 if provider_status not in terminal_statuses:
                     return jsonify(
                         ok=False,

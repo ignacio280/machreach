@@ -7,14 +7,14 @@ from machreach_core.db import get_db
 
 def test_default_tier_is_free(make_user):
     assert ssub.get_tier(make_user()) == "free"
-    assert ssub.has_unlimited_ai(make_user()) is False
+    assert ssub.has_plus_access(make_user()) is False
 
 
 def test_paid_tier_set_and_read(make_user):
     cid = make_user()
     ssub.set_tier(cid, "plus")
     assert ssub.get_tier(cid) == "plus"
-    assert ssub.has_unlimited_ai(cid) is True
+    assert ssub.has_plus_access(cid) is True
 
 
 def test_unknown_tier_rejected(make_user):
@@ -28,7 +28,7 @@ def test_grant_plus_days_makes_user_plus(make_user):
     cid = make_user()
     ssub.grant_plus_days(cid, 7)
     assert ssub.get_tier(cid) == "plus"
-    assert ssub.has_unlimited_ai(cid) is True
+    assert ssub.has_plus_access(cid) is True
     assert ssub.plus_grant_until(cid) is not None
 
 
@@ -95,3 +95,52 @@ def test_plus_user_has_no_quiz_limit(make_user):
     ssub.record_generation(cid, "quiz_generated")
     allowed, _ = ssub.can_generate_quiz_today(cid)
     assert allowed is True
+
+
+def test_plus_combined_generation_limit_is_100(make_user):
+    cid = make_user()
+    ssub.set_tier(cid, "plus")
+    for index in range(ssub.PLUS_MONTHLY_GENERATIONS):
+        kind = "quiz_generated" if index % 2 else "flashcards_generated"
+        ssub.record_generation(cid, kind)
+
+    usage = ssub.generation_usage(cid)
+    quiz_allowed, quiz_reason = ssub.can_generate_quiz_today(cid)
+    cards_allowed, cards_reason = ssub.can_generate_flashcards_today(cid)
+
+    assert usage["used"] == 100
+    assert usage["remaining"] == 0
+    assert quiz_allowed is False
+    assert cards_allowed is False
+    assert "reinicia" in quiz_reason
+    assert "reinicia" in cards_reason
+
+
+def test_expired_provider_window_does_not_create_calendar_month_quota(make_user):
+    cid = make_user()
+    ssub.set_subscription_state(cid, tier="plus", status="active")
+    with get_db() as db:
+        prefs = ssub._load_prefs(db, cid)
+        prefs["subscription"]["quota_period_start"] = "2026-01-01T00:00:00"
+        prefs["subscription"]["quota_reset_at"] = "2026-02-01T00:00:00"
+        ssub._save_prefs(db, cid, prefs)
+
+    usage = ssub.generation_usage(cid)
+
+    assert usage["limit"] == 100
+    assert usage["remaining"] == 0
+
+
+def test_past_due_grace_expires_after_seven_days(make_user):
+    cid = make_user()
+    ssub.set_subscription_state(cid, tier="plus", status="past_due")
+    with get_db() as db:
+        prefs = ssub._load_prefs(db, cid)
+        prefs["subscription"]["past_due_since"] = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=8)
+        ).isoformat()
+        ssub._save_prefs(db, cid, prefs)
+
+    assert ssub.get_tier(cid) == "free"
+    assert ssub.expire_payment_grace_periods() == 1
+    assert ssub.get_subscription_state(cid)["status"] == "grace_expired"

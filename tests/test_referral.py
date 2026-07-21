@@ -55,7 +55,7 @@ def test_full_reward_flow_grants_a_week_of_plus(make_user):
     ssub.grant_plus_days(rewarded, 7)            # mirrors the signup route
 
     assert ssub.get_tier(owner) == "plus"
-    assert ssub.has_unlimited_ai(owner) is True
+    assert ssub.has_plus_access(owner) is True
 
 
 def test_multiple_referrals_stack_weeks(make_user):

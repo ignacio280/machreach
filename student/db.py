@@ -5,10 +5,12 @@ tables for Canvas integration, course analysis, and study plans.
 from __future__ import annotations
 
 import json
+import json as _json
 import logging
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Any
 
 from machreach_core.db import (
     _exec,
@@ -23,7 +25,7 @@ from machreach_core.db import (
 )
 
 log = logging.getLogger(__name__)
-STUDENT_SCHEMA_VERSION = 2
+STUDENT_SCHEMA_VERSION = 3
 
 
 # ── Schema (appended to MachReach's init_db) ────────────────
@@ -251,7 +253,7 @@ CREATE TABLE IF NOT EXISTS student_email_prefs (
     client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     daily_email BOOLEAN DEFAULT TRUE,
     email_hour  INTEGER DEFAULT 7,
-    timezone    TEXT DEFAULT 'America/Mexico_City',
+    timezone    TEXT DEFAULT 'America/Santiago',
     UNIQUE(client_id)
 );
 """
@@ -479,7 +481,7 @@ CREATE TABLE IF NOT EXISTS student_email_prefs (
     client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     daily_email INTEGER DEFAULT 1,
     email_hour  INTEGER DEFAULT 7,
-    timezone    TEXT DEFAULT 'America/Mexico_City',
+    timezone    TEXT DEFAULT 'America/Santiago',
     UNIQUE(client_id)
 );
 """
@@ -497,6 +499,12 @@ def init_student_db():
             db.executescript(STUDENT_SQLITE_SCHEMA)
     # Migrations
     _student_migrations()
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE student_email_prefs SET timezone = 'America/Santiago' "
+            "WHERE timezone IS NULL OR timezone = '' OR timezone = 'America/Mexico_City'",
+        )
     # Wallet (coins, freezes, banners)
     try:
         init_wallet_table()
@@ -599,6 +607,7 @@ def _student_migrations():
         ("student_quiz_questions", "topic", "TEXT DEFAULT ''"),
         # Presence — unix epoch seconds of the last activity touch.
         ("clients", "last_seen_at", "BIGINT DEFAULT 0"),
+        ("clients", "friend_discovery", "BOOLEAN DEFAULT TRUE"),
         # Grade-Sheet semester tracking. The user's current_semester drives
         # which slot incoming Canvas courses land in, and is also what the
         # /student/courses page shows in the picker. semester_label on each
@@ -606,6 +615,7 @@ def _student_migrations():
         ("clients", "current_semester", "TEXT DEFAULT ''"),
         ("student_courses", "semester_label", "TEXT DEFAULT ''"),
         ("student_courses", "canvas_active", "BOOLEAN DEFAULT TRUE"),
+        ("student_courses", "catalog_id", "INTEGER DEFAULT NULL"),
         ("student_exams", "grade", "REAL DEFAULT NULL"),
     ]
     for table, col, col_type in migrations:
@@ -746,6 +756,36 @@ def _student_migrations():
         "created_at TEXT DEFAULT (datetime('now','localtime')), "
         "UNIQUE(client_id, friend_client_id))",
     )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_friend_blocks ("
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "blocked_client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "created_at TIMESTAMP DEFAULT NOW(), PRIMARY KEY(client_id, blocked_client_id))",
+        "CREATE TABLE IF NOT EXISTS student_friend_blocks ("
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "blocked_client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), PRIMARY KEY(client_id, blocked_client_id))",
+    )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_friend_reports ("
+        "id SERIAL PRIMARY KEY, reporter_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "reported_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "reason TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS student_friend_reports ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "reported_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "reason TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now','localtime')))",
+    )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_friend_audit ("
+        "id SERIAL PRIMARY KEY, actor_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "target_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "action TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS student_friend_audit ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, actor_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "target_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "action TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now','localtime')))",
+    )
     # Referral program: each user owns one code; each new user can be referred once.
     _create_table_safe(
         "CREATE TABLE IF NOT EXISTS student_referral_codes ("
@@ -874,16 +914,18 @@ def add_manual_course(client_id: int, code: str, name: str) -> int:
     code = (code or "").strip()
     if not name:
         raise ValueError("Course name is required")
-    name_norm = _catalog_norm(name)
     with get_db() as db:
-        # De-dupe against the student's existing courses (same name).
+        # De-dupe only on normalized code plus the exact trimmed course name.
         existing = _fetchall(
             db,
-            "SELECT id, name FROM student_courses WHERE client_id = %s",
+            "SELECT id, name, code FROM student_courses WHERE client_id = %s",
             (client_id,),
         ) or []
         for r in existing:
-            if _catalog_norm(dict(r).get("name", "")) == name_norm:
+            if (
+                _catalog_norm(dict(r).get("code", "")) == _catalog_norm(code)
+                and str(dict(r).get("name") or "").strip() == name
+            ):
                 return int(dict(r)["id"])
         # Pick a unique negative id below the current minimum for this client.
         min_id = _fetchval(
@@ -918,8 +960,11 @@ def init_course_catalog_table() -> None:
             name          TEXT NOT NULL,
             name_norm     TEXT NOT NULL,
             uses          INTEGER DEFAULT 1,
+            deleted_at    TIMESTAMP,
+            deleted_by    INTEGER,
+            recover_until TIMESTAMP,
             created_at    TIMESTAMP DEFAULT NOW(),
-            UNIQUE(university_id, code_norm, name_norm)
+            UNIQUE(university_id, code_norm, name)
         )""",
         """CREATE TABLE IF NOT EXISTS student_course_catalog (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -929,10 +974,24 @@ def init_course_catalog_table() -> None:
             name          TEXT NOT NULL,
             name_norm     TEXT NOT NULL,
             uses          INTEGER DEFAULT 1,
+            deleted_at    TEXT,
+            deleted_by    INTEGER,
+            recover_until TEXT,
             created_at    TEXT DEFAULT (datetime('now','localtime')),
-            UNIQUE(university_id, code_norm, name_norm)
+            UNIQUE(university_id, code_norm, name)
         )""",
     )
+    for column, spec in (
+        ("deleted_at", "TIMESTAMP DEFAULT NULL"),
+        ("deleted_by", "INTEGER DEFAULT NULL"),
+        ("recover_until", "TIMESTAMP DEFAULT NULL"),
+    ):
+        try:
+            with get_db() as db:
+                _exec(db, f"ALTER TABLE student_course_catalog ADD COLUMN {column} {spec}")
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
     for idx, col in (
         ("idx_course_catalog_univ_name", "university_id, name_norm"),
         ("idx_course_catalog_univ_code", "university_id, code_norm"),
@@ -943,6 +1002,31 @@ def init_course_catalog_table() -> None:
                 db.cursor().execute(stmt) if _USE_PG else db.execute(stmt)
         except Exception:
             pass
+    if _USE_PG:
+        with get_db() as db:
+            _exec(
+                db,
+                "ALTER TABLE student_course_catalog DROP CONSTRAINT IF EXISTS "
+                "student_course_catalog_university_id_code_norm_name_norm_key",
+            )
+            _exec(
+                db,
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_course_catalog_exact_name "
+                "ON student_course_catalog(university_id, code_norm, name)",
+            )
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS admin_course_deletions ("
+        "id SERIAL PRIMARY KEY, catalog_id INTEGER NOT NULL, admin_id INTEGER NOT NULL, "
+        "course_name TEXT NOT NULL, course_code TEXT DEFAULT '', reason TEXT DEFAULT '', "
+        "status TEXT NOT NULL DEFAULT 'recoverable', deleted_at TIMESTAMP DEFAULT NOW(), "
+        "recover_until TIMESTAMP NOT NULL, recovered_at TIMESTAMP)",
+        "CREATE TABLE IF NOT EXISTS admin_course_deletions ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, catalog_id INTEGER NOT NULL, admin_id INTEGER NOT NULL, "
+        "course_name TEXT NOT NULL, course_code TEXT DEFAULT '', reason TEXT DEFAULT '', "
+        "status TEXT NOT NULL DEFAULT 'recoverable', "
+        "deleted_at TEXT DEFAULT (datetime('now','localtime')), recover_until TEXT NOT NULL, "
+        "recovered_at TEXT)",
+    )
 
 
 def record_course_to_catalog(university_id: int | None, code: str, name: str) -> None:
@@ -964,7 +1048,7 @@ def record_course_to_catalog(university_id: int | None, code: str, name: str) ->
                     "INSERT INTO student_course_catalog "
                     "(university_id, code, code_norm, name, name_norm) "
                     "VALUES (%s, %s, %s, %s, %s) "
-                    "ON CONFLICT (university_id, code_norm, name_norm) "
+                    "ON CONFLICT (university_id, code_norm, name) "
                     "DO UPDATE SET uses = student_course_catalog.uses + 1",
                     (university_id, code, code_norm, name, name_norm),
                 )
@@ -974,7 +1058,7 @@ def record_course_to_catalog(university_id: int | None, code: str, name: str) ->
                         "INSERT INTO student_course_catalog "
                         "(university_id, code, code_norm, name, name_norm) "
                         "VALUES (?, ?, ?, ?, ?) "
-                        "ON CONFLICT(university_id, code_norm, name_norm) "
+                        "ON CONFLICT(university_id, code_norm, name) "
                         "DO UPDATE SET uses = uses + 1",
                         (university_id, code, code_norm, name, name_norm),
                     )
@@ -983,8 +1067,8 @@ def record_course_to_catalog(university_id: int | None, code: str, name: str) ->
                     row = _fetchone(
                         db,
                         "SELECT id FROM student_course_catalog "
-                        "WHERE university_id = ? AND code_norm = ? AND name_norm = ?",
-                        (university_id, code_norm, name_norm),
+                        "WHERE university_id = ? AND code_norm = ? AND name = ?",
+                        (university_id, code_norm, name),
                     )
                     if row:
                         db.execute(
@@ -1012,20 +1096,319 @@ def search_course_catalog(university_id: int | None, query: str, limit: int = 8)
         if not qn:
             rows = _fetchall(
                 db,
-                "SELECT code, name, uses FROM student_course_catalog "
-                "WHERE university_id = %s ORDER BY uses DESC, name ASC LIMIT %s",
+                "SELECT id, code, name, uses FROM student_course_catalog "
+                "WHERE university_id = %s AND deleted_at IS NULL "
+                "ORDER BY uses DESC, name ASC LIMIT %s",
                 (university_id, limit),
             ) or []
         else:
             like = f"%{qn}%"
             rows = _fetchall(
                 db,
-                "SELECT code, name, uses FROM student_course_catalog "
-                "WHERE university_id = %s AND (name_norm LIKE %s OR code_norm LIKE %s) "
+                "SELECT id, code, name, uses FROM student_course_catalog "
+                "WHERE university_id = %s AND deleted_at IS NULL "
+                "AND (name_norm LIKE %s OR code_norm LIKE %s) "
                 "ORDER BY uses DESC, LENGTH(name) ASC, name ASC LIMIT %s",
                 (university_id, like, like, limit),
             ) or []
     return [dict(r) for r in rows]
+
+
+def find_catalog_course(university_id: int | None, code: str, name: str) -> dict | None:
+    """Find an active canonical course by normalized code and exact name."""
+    if not university_id or not (name or "").strip():
+        return None
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT id, university_id, code, name, uses FROM student_course_catalog "
+            "WHERE university_id = %s AND code_norm = %s AND name = %s "
+            "AND deleted_at IS NULL LIMIT 1",
+            (int(university_id), _catalog_norm(code), (name or "").strip()),
+        )
+    return dict(row) if row else None
+
+
+def join_catalog_course(client_id: int, catalog_id: int) -> dict:
+    """Create a student's membership in an existing ownerless course."""
+    university_id = _client_university_id(client_id)
+    with get_db() as db:
+        catalog = _fetchone(
+            db,
+            "SELECT id, code, name FROM student_course_catalog "
+            "WHERE id = %s AND university_id = %s AND deleted_at IS NULL",
+            (catalog_id, university_id),
+        )
+        if not catalog:
+            return {"ok": False, "error": "Course not found."}
+        existing = _fetchone(
+            db,
+            "SELECT id FROM student_courses WHERE client_id = %s AND catalog_id = %s",
+            (client_id, catalog_id),
+        )
+        if existing:
+            return {"ok": True, "id": int(existing["id"]), "already_joined": True}
+        min_id = _fetchval(
+            db,
+            "SELECT MIN(canvas_course_id) FROM student_courses WHERE client_id = %s",
+            (client_id,),
+        )
+        manual_id = (min(int(min_id), 0) if min_id is not None else 0) - 1
+        cli = _fetchone(db, "SELECT current_semester FROM clients WHERE id = %s", (client_id,))
+        semester = (dict(cli).get("current_semester") if cli else "") or ""
+        course_id = _insert_returning_id(
+            db,
+            "INSERT INTO student_courses "
+            "(client_id, canvas_course_id, name, code, term, semester_label, catalog_id) "
+            "VALUES (%s, %s, %s, %s, '', %s, %s) RETURNING id",
+            (client_id, manual_id, catalog["name"], catalog["code"], semester, catalog_id),
+            "INSERT INTO student_courses "
+            "(client_id, canvas_course_id, name, code, term, semester_label, catalog_id) "
+            "VALUES (?, ?, ?, ?, '', ?, ?)",
+        )
+        _exec(db, "UPDATE student_course_catalog SET uses = uses + 1 WHERE id = %s", (catalog_id,))
+    return {"ok": True, "id": course_id, "joined_existing": True}
+
+
+def attach_course_to_catalog(client_id: int, course_id: int, catalog_id: int) -> None:
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE student_courses SET catalog_id = %s WHERE id = %s AND client_id = %s",
+            (catalog_id, course_id, client_id),
+        )
+
+
+def soft_delete_catalog_course(
+    admin_id: int,
+    catalog_id: int,
+    confirmation: str,
+    reason: str = "",
+    recovery_days: int = 30,
+) -> dict:
+    """Hide an ownerless course and its memberships during a recovery window."""
+    now = datetime.now()
+    recover_until = now + timedelta(days=max(1, int(recovery_days)))
+    with get_db() as db:
+        catalog = _fetchone(
+            db,
+            "SELECT id, university_id, code, code_norm, name FROM student_course_catalog "
+            "WHERE id = %s AND deleted_at IS NULL",
+            (catalog_id,),
+        )
+        if not catalog:
+            return {"ok": False, "error": "Course not found."}
+        if str(confirmation or "").strip() != str(catalog["name"]):
+            return {"ok": False, "error": "Type the exact course name to confirm."}
+        memberships = _fetchall(
+            db,
+            "SELECT sc.id, sc.code, sc.name, sc.catalog_id FROM student_courses sc "
+            "JOIN clients c ON c.id = sc.client_id "
+            "WHERE c.university_id = %s AND (sc.catalog_id = %s OR sc.catalog_id IS NULL)",
+            (catalog["university_id"], catalog_id),
+        )
+        membership_ids = [
+            int(row["id"])
+            for row in memberships
+            if int(row.get("catalog_id") or 0) == catalog_id or (
+                _catalog_norm(row.get("code") or "") == str(catalog["code_norm"])
+                and str(row.get("name") or "").strip() == str(catalog["name"])
+            )
+        ]
+        for course_id in membership_ids:
+            _exec(
+                db,
+                "UPDATE student_courses SET catalog_id = %s, canvas_active = %s WHERE id = %s",
+                (catalog_id, False, course_id),
+            )
+        _exec(
+            db,
+            "UPDATE student_course_catalog SET deleted_at = %s, deleted_by = %s, "
+            "recover_until = %s WHERE id = %s",
+            (
+                now.strftime("%Y-%m-%d %H:%M:%S"),
+                admin_id,
+                recover_until.strftime("%Y-%m-%d %H:%M:%S"),
+                catalog_id,
+            ),
+        )
+        deletion_id = _insert_returning_id(
+            db,
+            "INSERT INTO admin_course_deletions "
+            "(catalog_id, admin_id, course_name, course_code, reason, recover_until) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (
+                catalog_id,
+                admin_id,
+                catalog["name"],
+                catalog["code"],
+                str(reason or "")[:500],
+                recover_until.strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+            "INSERT INTO admin_course_deletions "
+            "(catalog_id, admin_id, course_name, course_code, reason, recover_until) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+        )
+    return {
+        "ok": True,
+        "deletion_id": deletion_id,
+        "memberships_hidden": len(membership_ids),
+        "recover_until": recover_until.isoformat(),
+    }
+
+
+def recover_catalog_course(admin_id: int, deletion_id: int) -> dict:
+    """Restore a soft-deleted course before its recovery window expires."""
+    del admin_id  # actor is recorded by the application security audit log
+    with get_db() as db:
+        deletion = _fetchone(
+            db,
+            "SELECT id, catalog_id, recover_until, status FROM admin_course_deletions "
+            "WHERE id = %s",
+            (deletion_id,),
+        )
+        if not deletion or deletion.get("status") != "recoverable":
+            return {"ok": False, "error": "Recovery record not found."}
+        recover_until = _parse_focus_dt(deletion.get("recover_until"))
+        if not recover_until or recover_until < datetime.now():
+            return {"ok": False, "error": "The recovery window has expired."}
+        catalog_id = int(deletion["catalog_id"])
+        _exec(
+            db,
+            "UPDATE student_course_catalog SET deleted_at = NULL, deleted_by = NULL, "
+            "recover_until = NULL WHERE id = %s",
+            (catalog_id,),
+        )
+        _exec(
+            db,
+            "UPDATE student_courses SET canvas_active = %s WHERE catalog_id = %s",
+            (True, catalog_id),
+        )
+        _exec(
+            db,
+            "UPDATE admin_course_deletions SET status = 'recovered', "
+            "recovered_at = CURRENT_TIMESTAMP WHERE id = %s",
+            (deletion_id,),
+        )
+    return {"ok": True, "catalog_id": catalog_id}
+
+
+def purge_expired_course_deletions() -> int:
+    """Permanently remove course-specific data after the recovery window."""
+    def scrub_plan(value: Any, course_id: int, exam_ids: set[int]) -> Any:
+        """Remove only blocks tied to a deleted membership from saved plans."""
+        if isinstance(value, dict):
+            try:
+                linked_course = int(value.get("course_id") or 0) == course_id
+            except (TypeError, ValueError):
+                linked_course = False
+            try:
+                linked_exam = int(value.get("exam_id") or 0) in exam_ids
+            except (TypeError, ValueError):
+                linked_exam = False
+            if linked_course or linked_exam:
+                return None
+            return {key: scrub_plan(item, course_id, exam_ids) for key, item in value.items()}
+        if isinstance(value, list):
+            cleaned = [scrub_plan(item, course_id, exam_ids) for item in value]
+            return [item for item in cleaned if item is not None]
+        return value
+
+    purged = 0
+    with get_db() as db:
+        expired = _fetchall(
+            db,
+            "SELECT id, catalog_id FROM admin_course_deletions "
+            "WHERE status = 'recoverable' AND recover_until < CURRENT_TIMESTAMP",
+        )
+        for deletion in expired:
+            catalog_id = int(deletion["catalog_id"])
+            memberships = _fetchall(
+                db,
+                "SELECT id, client_id FROM student_courses WHERE catalog_id = %s",
+                (catalog_id,),
+            )
+            course_ids = [int(row["id"]) for row in memberships]
+            for row in memberships:
+                course_id = int(row["id"])
+                client_id = int(row["client_id"])
+                exam_rows = _fetchall(
+                    db,
+                    "SELECT id FROM student_exams WHERE course_id = %s AND client_id = %s",
+                    (course_id, client_id),
+                )
+                exam_ids = {int(exam["id"]) for exam in exam_rows}
+                saved_plans = _fetchall(
+                    db,
+                    "SELECT id, plan_json FROM student_study_plans WHERE client_id = %s",
+                    (client_id,),
+                )
+                for saved in saved_plans:
+                    try:
+                        payload = saved.get("plan_json") or {}
+                        if isinstance(payload, str):
+                            payload = json.loads(payload)
+                        cleaned = scrub_plan(payload, course_id, exam_ids)
+                        _exec(
+                            db,
+                            "UPDATE student_study_plans SET plan_json = %s WHERE id = %s",
+                            (json.dumps(cleaned or {}, ensure_ascii=False), int(saved["id"])),
+                        )
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        log.warning("Could not scrub saved plan %s during course purge", saved.get("id"))
+                for exam_id in exam_ids:
+                    _exec(
+                        db,
+                        "DELETE FROM student_planner_done WHERE client_id = %s AND exam_id = %s",
+                        (client_id, exam_id),
+                    )
+                _exec(
+                    db,
+                    "UPDATE student_study_progress SET course_id = NULL, exam_id = NULL "
+                    "WHERE client_id = %s AND (course_id = %s OR exam_id IN "
+                    "(SELECT id FROM student_exams WHERE course_id = %s))",
+                    (client_id, course_id, course_id),
+                )
+                _exec(
+                    db,
+                    "UPDATE student_focus_phases SET course_id = NULL, exam_id = NULL "
+                    "WHERE client_id = %s AND (course_id = %s OR exam_id IN "
+                    "(SELECT id FROM student_exams WHERE course_id = %s))",
+                    (client_id, course_id, course_id),
+                )
+                _exec(db, "DELETE FROM student_course_outcomes WHERE course_id = %s", (course_id,))
+                _exec(db, "DELETE FROM student_course_reviews WHERE course_id = %s", (course_id,))
+                _exec(db, "DELETE FROM student_courses WHERE id = %s", (course_id,))
+            _exec(
+                db,
+                "UPDATE admin_course_deletions SET status = 'purged' WHERE id = %s",
+                (int(deletion["id"]),),
+            )
+            _exec(db, "DELETE FROM student_course_catalog WHERE id = %s", (catalog_id,))
+            purged += 1
+            log.info("Purged canonical course %s and memberships %s", catalog_id, course_ids)
+    return purged
+
+
+def list_admin_course_catalog(limit: int = 200) -> dict:
+    with get_db() as db:
+        active = _fetchall(
+            db,
+            "SELECT id, university_id, code, name, uses FROM student_course_catalog "
+            "WHERE deleted_at IS NULL ORDER BY uses DESC, name ASC LIMIT %s",
+            (max(1, min(int(limit), 500)),),
+        )
+        recoverable = _fetchall(
+            db,
+            "SELECT id, catalog_id, course_code, course_name, reason, recover_until "
+            "FROM admin_course_deletions WHERE status = 'recoverable' "
+            "ORDER BY deleted_at DESC LIMIT %s",
+            (max(1, min(int(limit), 500)),),
+        )
+    return {
+        "active": [dict(row) for row in active],
+        "recoverable": [dict(row) for row in recoverable],
+    }
 
 
 def backfill_course_catalog() -> int:
@@ -1206,8 +1589,30 @@ def create_manual_course(client_id: int, name: str, code: str = "", term: str = 
         )
 
 
-def delete_course(client_id: int, course_db_id: int) -> bool:
+def leave_course(client_id: int, course_db_id: int) -> bool:
+    """Remove one membership while preserving Focus and global progress."""
     with get_db() as db:
+        owned = _fetchone(
+            db,
+            "SELECT id FROM student_courses WHERE id = %s AND client_id = %s",
+            (course_db_id, client_id),
+        )
+        if not owned:
+            return False
+        _exec(
+            db,
+            "UPDATE student_study_progress SET course_id = NULL, exam_id = NULL "
+            "WHERE client_id = %s AND (course_id = %s OR exam_id IN "
+            "(SELECT id FROM student_exams WHERE course_id = %s AND client_id = %s))",
+            (client_id, course_db_id, course_db_id, client_id),
+        )
+        _exec(
+            db,
+            "UPDATE student_focus_phases SET course_id = NULL, exam_id = NULL "
+            "WHERE client_id = %s AND (course_id = %s OR exam_id IN "
+            "(SELECT id FROM student_exams WHERE course_id = %s AND client_id = %s))",
+            (client_id, course_db_id, course_db_id, client_id),
+        )
         _exec(
             db,
             "DELETE FROM student_courses WHERE id = %s AND client_id = %s",
@@ -1504,17 +1909,6 @@ def delete_course_file(file_id: int, client_id: int):
     with get_db() as db:
         _exec(db, "DELETE FROM student_course_files WHERE id = %s AND client_id = %s",
               (file_id, client_id))
-
-
-def delete_course(course_id: int, client_id: int):
-    """Delete a course and all its related data (exams, files)."""
-    with get_db() as db:
-        _exec(db, "DELETE FROM student_course_files WHERE course_id = %s AND client_id = %s",
-              (course_id, client_id))
-        _exec(db, "DELETE FROM student_exams WHERE course_id = %s AND client_id = %s",
-              (course_id, client_id))
-        _exec(db, "DELETE FROM student_courses WHERE id = %s AND client_id = %s",
-              (course_id, client_id))
 
 
 # ── Focus / Pomodoro tracking ────────────────────────────────
@@ -2429,6 +2823,13 @@ def get_course_success_benchmark(course_id: int) -> dict:
             (key,),
         ) or {}
     total_reports = int(row.get("total_reports") or 0)
+    if total_reports < 5:
+        return {
+            "has_data": False,
+            "suppressed": True,
+            "min_required": 5,
+            "total_reports": total_reports,
+        }
     passed_count = int(row.get("passed_count") or 0)
     failed_count = int(row.get("failed_count") or 0)
     avg_minutes = int(round(float(row.get("avg_minutes") or 0)))
@@ -2554,7 +2955,7 @@ def save_schedule_settings(client_id: int, settings: list[dict]) -> None:
     cleaned: list[tuple[int, float, bool]] = []
     for item in settings or []:
         try:
-            day = int(item.get("day_of_week"))
+            day = int(item.get("day_of_week") or 0)
         except Exception:
             continue
         if day < 0 or day > 6:
@@ -2614,8 +3015,9 @@ def get_date_overrides(client_id: int, start_date: str | None = None, end_date: 
             d = dict(r)
             # normalize override_date to ISO string
             od = d.get("override_date")
-            if hasattr(od, "isoformat"):
-                d["override_date"] = od.isoformat()[:10]
+            isoformat = getattr(od, "isoformat", None)
+            if callable(isoformat):
+                d["override_date"] = str(isoformat())[:10]
             elif isinstance(od, str):
                 d["override_date"] = od[:10]
             out.append(d)
@@ -2890,7 +3292,7 @@ def count_due_flashcards(deck_id: int) -> int:
 
 
 def update_flashcard_progress(card_id: int, client_id: int, correct: bool,
-                              quality: int = None) -> bool:
+                              quality: int | None = None) -> bool:
     """Update flashcard with SM-2 spaced repetition algorithm.
     quality: 0-5 (0=complete blackout, 5=perfect recall)
     If quality is None, use old binary mode (correct=True→4, False→1).
@@ -3382,7 +3784,7 @@ def get_freeze_status(client_id: int) -> dict:
 
 # ── Badges ──────────────────────────────────────────────────
 
-BADGE_DEFS = {
+BADGE_DEFS: dict[str, dict[str, Any]] = {
     "first_login":     {"emoji": "🎉", "name": "Welcome!",        "desc": "Logged in for the first time"},
     "first_quiz":      {"emoji": "📝", "name": "Quiz Rookie",     "desc": "Completed your first quiz"},
     "quiz_master":     {"emoji": "🏆", "name": "Quiz Master",     "desc": "Scored 100% on a quiz"},
@@ -3773,7 +4175,7 @@ def get_email_prefs(client_id: int) -> dict | None:
 
 
 def upsert_email_prefs(client_id: int, daily_email: bool = True, email_hour: int = 7,
-                        timezone: str = "America/Mexico_City",
+                        timezone: str = "America/Santiago",
                         university: str = "", field_of_study: str = "",
                         lang: str = "en"):
     with get_db() as db:
@@ -3993,7 +4395,7 @@ def get_friend_leaderboard(client_id: int) -> list[dict]:
 
 # -- Daily Quests --------------------------------------------
 
-QUEST_POOL = [
+QUEST_POOL: list[dict[str, Any]] = [
     {"key": "focus_25",    "label": "Enfócate 25 minutos",            "target": 25, "xp": 10, "metric": "focus_minutes"},
     {"key": "focus_60",    "label": "Enfócate 60 minutos",            "target": 60, "xp": 25, "metric": "focus_minutes"},
     {"key": "session_3",   "label": "Completa 3 sesiones de estudio", "target": 3,  "xp": 20, "metric": "sessions_completed"},
@@ -4289,7 +4691,7 @@ def progress_quests_by_metric(client_id: int, metric: str, amount: int = 1) -> l
 # -- Friends -------------------------------------------------
 
 def search_users(query: str, exclude_client_id: int | None = None, limit: int = 20) -> list[dict]:
-    """Search clients by name or numeric ID. Returns id, name, email."""
+    """Search students by name, numeric ID, or exact email without exposing email."""
     q = (query or "").strip()
     if not q:
         return []
@@ -4298,21 +4700,41 @@ def search_users(query: str, exclude_client_id: int | None = None, limit: int = 
         # Numeric ID lookup
         if q.lstrip("#").isdigit():
             cid = int(q.lstrip("#"))
-            r = _fetchone(db, "SELECT id, name, email FROM clients WHERE id = %s", (cid,))
+            r = _fetchone(
+                db,
+                "SELECT id, name FROM clients WHERE id = %s AND account_type = 'student' "
+                "AND COALESCE(friend_discovery, TRUE) = TRUE" if _USE_PG else
+                "SELECT id, name FROM clients WHERE id = ? AND account_type = 'student' "
+                "AND COALESCE(friend_discovery, 1) = 1",
+                (cid,),
+            )
             if r:
                 rows.append(r)
-        # Name/email LIKE
-        like = f"%{q}%"
-        more = _fetchall(
-            db,
-            "SELECT id, name, email FROM clients "
-            "WHERE (name ILIKE %s OR email ILIKE %s) "
-            "ORDER BY id ASC LIMIT %s" if _USE_PG else
-            "SELECT id, name, email FROM clients "
-            "WHERE (name LIKE ? OR email LIKE ?) "
-            "ORDER BY id ASC LIMIT ?",
-            (like, like, limit),
-        ) or []
+        if "@" in q:
+            more = _fetchall(
+                db,
+                "SELECT id, name FROM clients WHERE account_type = 'student' "
+                "AND COALESCE(friend_discovery, TRUE) = TRUE "
+                "AND LOWER(email) = LOWER(%s) ORDER BY id ASC LIMIT %s" if _USE_PG else
+                "SELECT id, name FROM clients WHERE account_type = 'student' "
+                "AND COALESCE(friend_discovery, 1) = 1 "
+                "AND LOWER(email) = LOWER(?) ORDER BY id ASC LIMIT ?",
+                (q, limit),
+            ) or []
+        elif len(q) >= 3:
+            like = f"%{q}%"
+            more = _fetchall(
+                db,
+                "SELECT id, name FROM clients WHERE account_type = 'student' "
+                "AND COALESCE(friend_discovery, TRUE) = TRUE AND name ILIKE %s "
+                "ORDER BY id ASC LIMIT %s" if _USE_PG else
+                "SELECT id, name FROM clients WHERE account_type = 'student' "
+                "AND COALESCE(friend_discovery, 1) = 1 AND name LIKE ? "
+                "ORDER BY id ASC LIMIT ?",
+                (like, limit),
+            ) or []
+        else:
+            more = []
         rows.extend(more)
     seen = set()
     out = []
@@ -4322,11 +4744,51 @@ def search_users(query: str, exclude_client_id: int | None = None, limit: int = 
             continue
         if exclude_client_id and rid == exclude_client_id:
             continue
+        if exclude_client_id and users_blocked(exclude_client_id, int(rid)):
+            continue
         seen.add(rid)
-        out.append({"id": rid, "name": r.get("name") or "", "email": r.get("email") or ""})
+        out.append({"id": rid, "name": r.get("name") or ""})
         if len(out) >= limit:
             break
     return out
+
+
+def users_blocked(client_id: int, other_id: int) -> bool:
+    with get_db() as db:
+        return bool(_fetchone(
+            db,
+            "SELECT 1 FROM student_friend_blocks WHERE "
+            "(client_id = %s AND blocked_client_id = %s) OR "
+            "(client_id = %s AND blocked_client_id = %s) LIMIT 1",
+            (client_id, other_id, other_id, client_id),
+        ))
+
+
+def are_friends(client_id: int, other_id: int) -> bool:
+    if client_id == other_id:
+        return True
+    with get_db() as db:
+        return bool(_fetchone(
+            db,
+            "SELECT 1 FROM student_friends WHERE client_id = %s "
+            "AND friend_client_id = %s AND status = 'accepted'",
+            (client_id, other_id),
+        ))
+
+
+def set_friend_discovery(client_id: int, enabled: bool) -> None:
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE clients SET friend_discovery = %s WHERE id = %s",
+            (bool(enabled), client_id),
+        )
+
+
+def get_friend_discovery(client_id: int) -> bool:
+    with get_db() as db:
+        value = _fetchval(db, "SELECT friend_discovery FROM clients WHERE id = %s", (client_id,))
+    return bool(value if value is not None else True)
 
 
 def add_friend(client_id: int, friend_id: int) -> str:
@@ -4334,6 +4796,21 @@ def add_friend(client_id: int, friend_id: int) -> str:
     if client_id == friend_id:
         return "self"
     with get_db() as db:
+        target = _fetchone(
+            db,
+            "SELECT id FROM clients WHERE id = %s AND account_type = 'student'",
+            (friend_id,),
+        )
+        if not target:
+            return "not_found"
+        if _fetchone(
+            db,
+            "SELECT 1 FROM student_friend_blocks WHERE "
+            "(client_id = %s AND blocked_client_id = %s) OR "
+            "(client_id = %s AND blocked_client_id = %s) LIMIT 1",
+            (client_id, friend_id, friend_id, client_id),
+        ):
+            return "blocked"
         # If the other side already requested, accept both directions
         reverse = _fetchone(
             db,
@@ -4358,12 +4835,34 @@ def add_friend(client_id: int, friend_id: int) -> str:
                     "INSERT INTO student_friends (client_id, friend_client_id, status) VALUES (%s, %s, 'accepted')",
                     (client_id, friend_id),
                 )
+            _exec(
+                db,
+                "INSERT INTO student_friend_audit (actor_id, target_id, action) VALUES (%s, %s, 'accepted')",
+                (client_id, friend_id),
+            )
             return "accepted"
         if existing:
             return "already"
+        cooldown_sql = (
+            "created_at > NOW() - INTERVAL '24 hours'"
+            if _USE_PG else
+            "created_at > datetime('now','localtime','-24 hours')"
+        )
+        if _fetchone(
+            db,
+            "SELECT 1 FROM student_friend_audit WHERE actor_id = %s AND target_id = %s "
+            "AND action = 'requested' AND " + cooldown_sql + " LIMIT 1",
+            (client_id, friend_id),
+        ):
+            return "cooldown"
         _exec(
             db,
             "INSERT INTO student_friends (client_id, friend_client_id, status) VALUES (%s, %s, 'pending')",
+            (client_id, friend_id),
+        )
+        _exec(
+            db,
+            "INSERT INTO student_friend_audit (actor_id, target_id, action) VALUES (%s, %s, 'requested')",
             (client_id, friend_id),
         )
         return "requested"
@@ -4375,6 +4874,79 @@ def remove_friend(client_id: int, friend_id: int) -> None:
               (client_id, friend_id))
         _exec(db, "DELETE FROM student_friends WHERE client_id = %s AND friend_client_id = %s",
               (friend_id, client_id))
+        _exec(
+            db,
+            "INSERT INTO student_friend_audit (actor_id, target_id, action) VALUES (%s, %s, 'removed')",
+            (client_id, friend_id),
+        )
+
+
+def block_student(client_id: int, other_id: int) -> str:
+    if client_id == other_id:
+        return "self"
+    with get_db() as db:
+        _exec(
+            db,
+            "DELETE FROM student_friends WHERE "
+            "(client_id = %s AND friend_client_id = %s) OR "
+            "(client_id = %s AND friend_client_id = %s)",
+            (client_id, other_id, other_id, client_id),
+        )
+        if _USE_PG:
+            _exec(
+                db,
+                "INSERT INTO student_friend_blocks (client_id, blocked_client_id) "
+                "VALUES (%s, %s) ON CONFLICT (client_id, blocked_client_id) DO NOTHING",
+                (client_id, other_id),
+            )
+        else:
+            _exec(
+                db,
+                "INSERT OR IGNORE INTO student_friend_blocks (client_id, blocked_client_id) VALUES (%s, %s)",
+                (client_id, other_id),
+            )
+        _exec(
+            db,
+            "INSERT INTO student_friend_audit (actor_id, target_id, action) VALUES (%s, %s, 'blocked')",
+            (client_id, other_id),
+        )
+    return "blocked"
+
+
+def unblock_student(client_id: int, other_id: int) -> bool:
+    """Remove only the block created by this student; the other side's block remains."""
+    with get_db() as db:
+        result = _exec(
+            db,
+            "DELETE FROM student_friend_blocks WHERE client_id = %s AND blocked_client_id = %s",
+            (client_id, other_id),
+        )
+        if result.rowcount:
+            _exec(
+                db,
+                "INSERT INTO student_friend_audit (actor_id, target_id, action) "
+                "VALUES (%s, %s, 'unblocked')",
+                (client_id, other_id),
+            )
+    return bool(result.rowcount)
+
+
+def report_student(client_id: int, other_id: int, reason: str) -> bool:
+    reason = str(reason or "").strip()[:500]
+    if client_id == other_id or not reason:
+        return False
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO student_friend_reports (reporter_id, reported_id, reason) VALUES (%s, %s, %s)",
+            (client_id, other_id, reason),
+        )
+        _exec(
+            db,
+            "INSERT INTO student_friend_audit (actor_id, target_id, action) VALUES (%s, %s, 'reported')",
+            (client_id, other_id),
+        )
+    return True
 
 
 def list_friends(client_id: int) -> dict:
@@ -4386,21 +4958,21 @@ def list_friends(client_id: int) -> dict:
     with get_db() as db:
         accepted = _fetchall(
             db,
-            "SELECT c.id, c.name, c.email, c.last_seen_at FROM student_friends sf "
+            "SELECT c.id, c.name, c.last_seen_at FROM student_friends sf "
             "JOIN clients c ON c.id = sf.friend_client_id "
             "WHERE sf.client_id = %s AND sf.status = 'accepted'",
             (client_id,),
         ) or []
         incoming = _fetchall(
             db,
-            "SELECT c.id, c.name, c.email, c.last_seen_at FROM student_friends sf "
+            "SELECT c.id, c.name, c.last_seen_at FROM student_friends sf "
             "JOIN clients c ON c.id = sf.client_id "
             "WHERE sf.friend_client_id = %s AND sf.status = 'pending'",
             (client_id,),
         ) or []
         outgoing = _fetchall(
             db,
-            "SELECT c.id, c.name, c.email, c.last_seen_at FROM student_friends sf "
+            "SELECT c.id, c.name, c.last_seen_at FROM student_friends sf "
             "JOIN clients c ON c.id = sf.friend_client_id "
             "WHERE sf.client_id = %s AND sf.status = 'pending'",
             (client_id,),
@@ -4411,7 +4983,6 @@ def list_friends(client_id: int) -> dict:
         return {
             "id": r["id"],
             "name": r.get("name") or "",
-            "email": r.get("email") or "",
             "last_seen_at": ls,
             "online": is_online(ls),
         }
@@ -4506,10 +5077,8 @@ def get_streak_risk_recipients(min_streak: int = 5) -> list[dict]:
 
 # ── Wallet (coins, streak freezes, banners) ─────────────────
 
-import json as _json
-
 # Banner catalog: key -> { name, price_coins, xp_required, css, plus_only? }
-BANNERS = {
+BANNERS: dict[str, dict[str, Any]] = {
     # ── Defaults + simple solid color sweeps ───────────────────────────
     "default":    {"name": "Default",            "price_coins": 0,    "xp_required": 0,
                    "css": "linear-gradient(135deg,#475569,#1e293b)"},
@@ -4805,7 +5374,7 @@ BANNER_ANIM_CSS = """
 # Leaderboard flag catalog. Rendered as a horizontal CSS background on the
 # leaderboard row, mask-faded from full opacity on the LEFT to transparent on
 # the RIGHT. Same structure as banners (re-uses cfg["css"]).
-FLAGS = {
+FLAGS: dict[str, dict[str, Any]] = {
     "none":            {"name": "Sin bandera",                  "price_coins": 0,    "xp_required": 0,
                         "css": "transparent"},
     # ── Void Walker family (original + color variants) ─────────────────
@@ -5041,7 +5610,7 @@ TIMER_RINGS = {
 # ── Identity bundles ─────────────────────────────────────────────────
 # Each bundle grants its banner + flag at a 25% discount vs buying separately.
 # Price is computed dynamically from the included items.
-BUNDLES = {
+BUNDLES: dict[str, dict[str, Any]] = {
     "ocean": {
         "name": "Ocean Pack",
         "desc": "Ocean Wave banner + Void Walker Tide flag — sail in style.",
@@ -5099,7 +5668,7 @@ def _streak_freeze_cap(client_id: int) -> int:
 # ── Coin microtransactions ──────────────────────────────────────────
 # Real-money packs that credit virtual coins. Prices are in USD; the actual
 # payment processor (Lemon Squeezy one-time orders) is wired in routes.py.
-COIN_PACKS = {
+COIN_PACKS: dict[str, dict[str, Any]] = {
     "small":  {"name": "Pocket Pack",    "coins": 250,   "bonus": 0,    "price_clp": 990,   "tag": ""},
     "medium": {"name": "Stash Pack",     "coins": 800,   "bonus": 50,   "price_clp": 2990,  "tag": "+6%"},
     "large":  {"name": "Vault Pack",     "coins": 2000,  "bonus": 300,  "price_clp": 6990,  "tag": "+15%"},
@@ -5108,7 +5677,7 @@ COIN_PACKS = {
 }
 
 # Timed boosts. Each entry: (label, multiplier, hours, price_coins)
-BOOSTS = {
+BOOSTS: dict[str, dict[str, Any]] = {
 }
 
 def init_boosts_table() -> None:
@@ -5768,10 +6337,14 @@ def _badge_slot_keys(prefs: dict) -> tuple[str, str]:
     # Legacy single-slot entries fall back to the right side.
     if not right and legacy:
         right = legacy
-    if not isinstance(left, str): left = ""
-    if not isinstance(right, str): right = ""
-    if left and left not in BADGE_DEFS: left = ""
-    if right and right not in BADGE_DEFS: right = ""
+    if not isinstance(left, str):
+        left = ""
+    if not isinstance(right, str):
+        right = ""
+    if left and left not in BADGE_DEFS:
+        left = ""
+    if right and right not in BADGE_DEFS:
+        right = ""
     return left, right
 
 
@@ -5834,7 +6407,7 @@ def get_equipped_badges_for_clients(client_ids: list[int]) -> dict[int, dict]:
         except Exception:
             prefs = {}
         left_key, right_key = _badge_slot_keys(prefs)
-        entry = {"left": None, "right": None}
+        entry: dict[str, dict[str, Any] | None] = {"left": None, "right": None}
         if left_key:
             info = BADGE_DEFS[left_key]
             entry["left"] = {"emoji": info.get("emoji", ""), "name": info.get("name", ""), "key": left_key}

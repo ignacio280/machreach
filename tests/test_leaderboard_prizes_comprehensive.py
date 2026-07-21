@@ -51,6 +51,9 @@ def test_award_winners_credits_wallet_and_records_prize(monkeypatch, make_user):
 def test_winner_and_admin_emails_are_aggregated(monkeypatch, make_user):
     client_id = make_user("Email Winner")
     sent = []
+    from machreach_core import config
+
+    monkeypatch.setattr(config, "LEADERBOARD_WINNERS_RECIPIENT", "ops@example.test")
     monkeypatch.setattr(appmod, "_send_system_email", lambda to, subject, body: sent.append((to, subject, body)) or True)
     summary = {
         "global": [{"client_id": client_id, "name": "Email Winner", "scope_value": None, "rank": 1, "xp": 100, "coins": 500}],

@@ -222,8 +222,8 @@
       "Practice Quizzes": "Exámenes de Práctica",
       "Smart spaced repetition · Generated from your course materials":
         "Repetición espaciada · Generadas desde tus materiales de curso",
-      "Unlimited AI-generated questions · Adjustable difficulty":
-        "Preguntas ilimitadas con IA · Dificultad ajustable",
+      "Up to 100 combined AI generations per billing month":
+        "Hasta 100 generaciones IA combinadas por ciclo de cobro",
       "Generate study tools from your own notes and course material.":
         "Genera herramientas de estudio desde tus propios apuntes y materiales.",
       "General (no specific course)": "General (sin curso específico)",

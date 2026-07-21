@@ -2,7 +2,8 @@
 
 Tiers:
   - free      : 1 quiz/day (max 30 q), 1 flashcard set/day (max 30 c).
-  - plus      : Unlimited AI generation, analytics, streak protection and cosmetics.
+  - plus      : 100 combined quiz/flashcard generations per billing month,
+                analytics, streak protection and cosmetics.
 
 Storage: re-uses the existing `clients` table via `mail_preferences` JSON-blob
 column (already exists in the schema). Keys used:
@@ -21,6 +22,7 @@ import json
 import logging
 from contextlib import contextmanager
 from datetime import datetime, date, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from machreach_core.db import get_db
 
@@ -42,6 +44,8 @@ FREE_QUIZ_MAX_QUESTIONS   = 30
 FREE_DAILY_FLASHCARD_SETS = 1
 FREE_FLASHCARD_MAX_CARDS  = 30
 PLUS_MONTHLY_STREAK_FREEZES = 1
+PLUS_MONTHLY_GENERATIONS = 100
+PAYMENT_GRACE_DAYS = 7
 
 PLANS = {
     "free": {
@@ -65,8 +69,8 @@ PLANS = {
         "price_clp_year": 59880,
         "blurb": "Para estudiantes que usan MachReach todas las semanas.",
         "features": [
-            "Quizzes IA ilimitados",
-            "Flashcards IA ilimitadas",
+            f"{PLUS_MONTHLY_GENERATIONS} generaciones IA combinadas por mes",
+            "Uso compartido entre quizzes y flashcards",
             "Más preguntas/tarjetas por generación",
             "Plan de estudio inteligente semanal",
             "Explicaciones y análisis de debilidades en quizzes",
@@ -191,6 +195,9 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
     """
     if tier != "plus":
         return False
+    subscription = prefs.get("subscription") or {}
+    if str(subscription.get("status") or "").lower() in {"past_due", "unpaid"}:
+        return False
     changed = False
     month_key = _current_bonus_month()
     if prefs.get("plus_streak_insurance_month") != month_key:
@@ -224,7 +231,10 @@ def _parse_iso(s):
     if not s:
         return None
     try:
-        return datetime.fromisoformat(str(s).replace("Z", ""))
+        parsed = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
     except Exception:
         return None
 
@@ -239,8 +249,17 @@ def _effective_tier(prefs: dict) -> str:
         paid = "free"
     paid = paid if paid in PLANS else "free"
     status = str(sub.get("status") or "active").lower()
-    if paid == "plus" and status in {"active", "on_trial", "trialing"}:
-        return paid
+    if paid == "plus":
+        if status in {"active", "on_trial", "trialing"}:
+            return paid
+        if status in {"cancelled", "canceled"}:
+            ends_at = _parse_iso(sub.get("ends_at"))
+            if ends_at and ends_at > _utcnow():
+                return paid
+        if status in {"past_due", "unpaid"}:
+            failed_at = _parse_iso(sub.get("past_due_since") or sub.get("updated_at"))
+            if failed_at and failed_at + timedelta(days=PAYMENT_GRACE_DAYS) > _utcnow():
+                return paid
     pu = _parse_iso(prefs.get("plus_until"))
     if pu and pu > _utcnow():
         return "plus"
@@ -317,15 +336,27 @@ def set_tier(client_id: int, tier: str) -> dict:
             "status": "active" if tier == "plus" else "inactive",
             "since": _utcnow().isoformat(),
         })
+        if tier == "plus":
+            subscription.setdefault("quota_period_start", _utcnow().isoformat())
+            subscription.setdefault("quota_reset_at", (_utcnow() + timedelta(days=31)).isoformat())
         prefs["subscription"] = subscription
         _grant_paid_benefits(db, client_id, prefs, tier)
         _save_prefs(db, client_id, prefs)
     return {"ok": True, "tier": tier}
 
 
-def set_subscription_state(client_id: int, *, tier: str | None = None,
-                           status: str | None = None,
-                           ls_sub_id: str | None = None) -> dict:
+def set_subscription_state(
+    client_id: int,
+    *,
+    tier: str | None = None,
+    status: str | None = None,
+    ls_sub_id: str | None = None,
+    ends_at: str | None = None,
+    renews_at: str | None = None,
+    update_payment_method_url: str | None = None,
+    customer_portal_url: str | None = None,
+    payment_succeeded: bool = False,
+) -> dict:
     """Persist provider lifecycle state without discarding reconciliation IDs."""
     if tier is not None and tier not in PLANS:
         return {"ok": False, "error": "Unknown plan."}
@@ -338,8 +369,27 @@ def set_subscription_state(client_id: int, *, tier: str | None = None,
                 subscription["since"] = _utcnow().isoformat()
         if status is not None:
             subscription["status"] = str(status).lower()
+            if str(status).lower() in {"past_due", "unpaid"}:
+                subscription.setdefault("past_due_since", _utcnow().isoformat())
+            else:
+                subscription.pop("past_due_since", None)
         if ls_sub_id is not None:
             subscription["ls_sub_id"] = str(ls_sub_id)
+        if ends_at is not None:
+            subscription["ends_at"] = str(ends_at)
+        if renews_at is not None:
+            subscription["renews_at"] = str(renews_at)
+            subscription["quota_reset_at"] = str(renews_at)
+        if update_payment_method_url is not None:
+            subscription["update_payment_method_url"] = str(update_payment_method_url)
+        if customer_portal_url is not None:
+            subscription["customer_portal_url"] = str(customer_portal_url)
+        if payment_succeeded or (
+            tier == "plus" and not subscription.get("quota_period_start")
+        ):
+            subscription["quota_period_start"] = _utcnow().isoformat()
+            if not renews_at:
+                subscription["quota_reset_at"] = (_utcnow() + timedelta(days=31)).isoformat()
         subscription["updated_at"] = _utcnow().isoformat()
         prefs["subscription"] = subscription
         effective = _effective_tier(prefs)
@@ -350,7 +400,8 @@ def set_subscription_state(client_id: int, *, tier: str | None = None,
 
 # ── Capability checks (the API surface that quotes the tier) ────────────
 
-def has_unlimited_ai(client_id: int) -> bool:
+def has_plus_access(client_id: int) -> bool:
+    """Return whether the account currently has Plus capabilities."""
     return get_tier(client_id) == "plus"
 
 
@@ -358,13 +409,13 @@ def has_unlimited_ai(client_id: int) -> bool:
 
 def cap_questions(client_id: int, requested: int) -> int:
     """Clamp a quiz/flashcard `count` to the tier's allowed maximum."""
-    if has_unlimited_ai(client_id):
+    if has_plus_access(client_id):
         return max(1, int(requested))
     return max(1, min(int(requested), FREE_QUIZ_MAX_QUESTIONS))
 
 
 def cap_cards(client_id: int, requested: int) -> int:
-    if has_unlimited_ai(client_id):
+    if has_plus_access(client_id):
         return max(1, int(requested))
     return max(1, min(int(requested), FREE_FLASHCARD_MAX_CARDS))
 
@@ -375,25 +426,37 @@ def _today_str() -> str:
 
 def can_generate_quiz_today(client_id: int) -> tuple[bool, str]:
     """Return (allowed, reason)."""
-    if has_unlimited_ai(client_id):
-        return True, ""
+    if has_plus_access(client_id):
+        usage = generation_usage(client_id)
+        if usage["remaining"] > 0:
+            return True, ""
+        return False, (
+            f"Plus: ya usaste tus {PLUS_MONTHLY_GENERATIONS} generaciones IA de este ciclo. "
+            f"Tu cupo se reinicia el {usage['reset_at'][:10]}."
+        )
     used = _count_today(client_id, "quiz_generated")
     if used >= FREE_DAILY_QUIZZES:
         return False, (
             f"Free plan: {FREE_DAILY_QUIZZES} AI quiz per day. "
-            "Upgrade to Plus for unlimited."
+            "Upgrade to Plus for 100 monthly generations."
         )
     return True, ""
 
 
 def can_generate_flashcards_today(client_id: int) -> tuple[bool, str]:
-    if has_unlimited_ai(client_id):
-        return True, ""
+    if has_plus_access(client_id):
+        usage = generation_usage(client_id)
+        if usage["remaining"] > 0:
+            return True, ""
+        return False, (
+            f"Plus: ya usaste tus {PLUS_MONTHLY_GENERATIONS} generaciones IA de este ciclo. "
+            f"Tu cupo se reinicia el {usage['reset_at'][:10]}."
+        )
     used = _count_today(client_id, "flashcards_generated")
     if used >= FREE_DAILY_FLASHCARD_SETS:
         return False, (
             f"Free plan: {FREE_DAILY_FLASHCARD_SETS} AI flashcard set per day. "
-            "Upgrade to Plus for unlimited."
+            "Upgrade to Plus for 100 monthly generations."
         )
     return True, ""
 
@@ -439,3 +502,90 @@ def _count_today(client_id: int, kind: str) -> int:
             ) or 0)
     except Exception:
         return 0
+
+
+def generation_usage(client_id: int) -> dict:
+    """Return the combined Plus quota for the current provider billing window."""
+    now = _utcnow()
+    state = get_subscription_state(client_id)
+    period_start = _parse_iso(state.get("quota_period_start"))
+    reset_at = _parse_iso(state.get("quota_reset_at") or state.get("renews_at"))
+    boundaries_are_utc = bool(period_start and reset_at)
+    if not period_start or not reset_at:
+        period_start = datetime(now.year, now.month, 1)
+        if now.month == 12:
+            reset_at = datetime(now.year + 1, 1, 1)
+        else:
+            reset_at = datetime(now.year, now.month + 1, 1)
+    used = 0
+    try:
+        from machreach_core.db import _USE_PG, _fetchval
+        query_start = period_start
+        query_end = reset_at
+        if not _USE_PG and boundaries_are_utc:
+            santiago = ZoneInfo("America/Santiago")
+            query_start = period_start.replace(tzinfo=timezone.utc).astimezone(santiago).replace(tzinfo=None)
+            query_end = reset_at.replace(tzinfo=timezone.utc).astimezone(santiago).replace(tzinfo=None)
+        with get_db() as db:
+            used = int(_fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_xp WHERE client_id = %s "
+                "AND action IN (%s, %s) AND created_at >= %s AND created_at < %s",
+                (
+                    client_id,
+                    "quiz_generated",
+                    "flashcards_generated",
+                    query_start.strftime("%Y-%m-%d %H:%M:%S"),
+                    query_end.strftime("%Y-%m-%d %H:%M:%S"),
+                ),
+            ) or 0)
+    except Exception:
+        log.exception("Could not calculate AI generation usage for %s", client_id)
+    limit = PLUS_MONTHLY_GENERATIONS if get_tier(client_id) == "plus" else 0
+    window_expired = bool(boundaries_are_utc and reset_at <= now)
+    return {
+        "limit": limit,
+        "used": used,
+        # Never manufacture a new calendar-month allowance while waiting for
+        # Lemon Squeezy to confirm the next paid billing period.
+        "remaining": 0 if window_expired else max(0, limit - used),
+        "reset_at": reset_at.isoformat(),
+    }
+
+
+def expire_payment_grace_periods() -> int:
+    """Persist Free after a payment has remained past due for seven days."""
+    from machreach_core.db import _exec, _fetchall
+
+    changed = 0
+    now = _utcnow()
+    with get_db() as db:
+        rows = _fetchall(db, "SELECT id, mail_preferences FROM clients")
+        for row in rows:
+            try:
+                prefs = json.loads(row.get("mail_preferences") or "{}")
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(prefs, dict):
+                continue
+            subscription = prefs.get("subscription") or {}
+            if not isinstance(subscription, dict):
+                continue
+            if str(subscription.get("status") or "").lower() not in {"past_due", "unpaid"}:
+                continue
+            failed_at = _parse_iso(
+                subscription.get("past_due_since") or subscription.get("updated_at")
+            )
+            if not failed_at or failed_at + timedelta(days=PAYMENT_GRACE_DAYS) > now:
+                continue
+            subscription["tier"] = "free"
+            subscription["status"] = "grace_expired"
+            subscription["updated_at"] = now.isoformat()
+            prefs["subscription"] = subscription
+            _exec(
+                db,
+                "UPDATE clients SET mail_preferences = %s WHERE id = %s",
+                (json.dumps(prefs), int(row["id"])),
+            )
+            changed += 1
+    return changed

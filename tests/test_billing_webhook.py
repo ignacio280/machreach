@@ -94,6 +94,21 @@ def test_subscription_cancelled_reverts_to_free(client, make_user):
     assert ssub.get_tier(cid) == "free"
 
 
+def test_subscription_cancelled_keeps_plus_until_provider_end_date(client, make_user):
+    cid = make_user()
+    cancelled = _student_event("subscription_cancelled", cid)
+    cancelled["data"]["attributes"]["ends_at"] = "2099-12-31T23:59:59Z"
+
+    assert _post(client, cancelled).status_code == 200
+    assert ssub.get_tier(cid) == "plus"
+    assert ssub.get_subscription_state(cid)["ends_at"] == "2099-12-31T23:59:59Z"
+
+    expired = _student_event("subscription_expired", cid)
+    expired["data"]["attributes"]["ends_at"] = "2000-01-01T00:00:00Z"
+    assert _post(client, expired).status_code == 200
+    assert ssub.get_tier(cid) == "free"
+
+
 def test_legacy_ultimate_provider_event_is_cancelled_and_blocked(
     client, make_user, monkeypatch
 ):
@@ -147,7 +162,7 @@ def test_legacy_stored_tier_migration_rewrites_provider_state(make_user):
     assert cancellation == {"status": "pending"}
 
 
-def test_payment_failure_revokes_access_and_success_restores_it(client, make_user):
+def test_payment_failure_starts_grace_and_success_restores_it(client, make_user):
     cid = make_user()
     _post(client, _student_event("subscription_created", cid, "plus"))
     assert ssub.get_tier(cid) == "plus"
@@ -155,7 +170,8 @@ def test_payment_failure_revokes_access_and_success_restores_it(client, make_use
     failed = _student_event("subscription_payment_failed", cid, "plus")
     failed["data"]["attributes"]["status"] = "past_due"
     assert _post(client, failed).status_code == 200
-    assert ssub.get_tier(cid) == "free"
+    assert ssub.get_tier(cid) == "plus"
+    assert ssub.get_subscription_state(cid)["past_due_since"]
 
     recovered = _student_event("subscription_payment_success", cid, "plus")
     assert _post(client, recovered).status_code == 200
@@ -169,7 +185,7 @@ def test_payment_recovered_restores_access(client, make_user):
     failed = _student_event("subscription_payment_failed", cid, "plus")
     failed["data"]["attributes"]["status"] = "past_due"
     assert _post(client, failed).status_code == 200
-    assert ssub.get_tier(cid) == "free"
+    assert ssub.get_tier(cid) == "plus"
 
     recovered = _student_event("subscription_payment_recovered", cid, "plus")
     assert _post(client, recovered).status_code == 200
@@ -205,7 +221,7 @@ def test_full_subscription_refund_cancels_renewal_and_revokes_paid_access(
     assert cancelled == ["sub_test_1"]
 
 
-def test_full_subscription_refund_retries_if_renewal_cannot_be_cancelled(
+def test_full_subscription_refund_revokes_access_even_if_cancellation_fails(
     client, make_user, monkeypatch
 ):
     cid = make_user()
@@ -219,8 +235,9 @@ def test_full_subscription_refund_retries_if_renewal_cannot_be_cancelled(
         refunded=True,
     )
 
-    assert _post(client, refunded).status_code == 503
-    assert ssub.get_tier(cid) == "plus"
+    assert _post(client, refunded).status_code == 200
+    assert ssub.get_tier(cid) == "free"
+    assert ssub.get_subscription_state(cid)["status"] == "refunded"
 
 
 def test_partial_subscription_refund_keeps_paid_access(client, make_user):
@@ -236,6 +253,14 @@ def test_partial_subscription_refund_keeps_paid_access(client, make_user):
 
     assert _post(client, refunded).status_code == 200
     assert ssub.get_tier(cid) == "plus"
+    with get_db() as db:
+        review = _fetchone(
+            db,
+            "SELECT event_type FROM operational_events "
+            "WHERE event_type = %s ORDER BY id DESC LIMIT 1",
+            ("billing_refund_manual_review",),
+        )
+    assert review is not None
 
 
 def test_payment_invoice_event_preserves_provider_subscription_id(
@@ -492,7 +517,7 @@ def test_cancelled_same_plan_resumes_existing_subscription(
     response = client.post("/api/student/subscription/change", json={"tier": "plus"})
 
     assert response.status_code == 200
-    assert response.get_json()["updated"] is True
+    assert response.get_json()["update_pending"] is True
     assert calls == [("cancelled-sub", "plus-variant")]
 
 
@@ -829,9 +854,10 @@ def test_student_downgrade_cancels_provider_before_marking_free(client, make_use
     r = client.post("/api/student/subscription/change", json={"tier": "free"})
 
     assert r.status_code == 200
-    assert r.get_json()["tier"] == "free"
+    assert r.get_json()["tier"] == "plus"
+    assert r.get_json()["cancellation_pending"] is True
     assert calls == ["sub_test_1"]
-    assert ssub.get_tier(cid) == "free"
+    assert ssub.get_tier(cid) == "plus"
 
 
 def test_student_downgrade_failure_keeps_paid_tier(client, make_user, flask_app, monkeypatch):

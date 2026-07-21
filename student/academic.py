@@ -1094,10 +1094,8 @@ def monthly_winners(year: int, month: int, top_n: int = 3) -> dict:
     groups with at least one student earning XP in the period are included.
     """
     from datetime import date
-    from calendar import monthrange
 
     start = date(year, month, 1).strftime("%Y-%m-%d")
-    last_day = monthrange(year, month)[1]
     end_excl = date(year + (1 if month == 12 else 0),
                     1 if month == 12 else month + 1, 1).strftime("%Y-%m-%d")
 

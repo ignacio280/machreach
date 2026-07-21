@@ -1,0 +1,121 @@
+name: Encrypted database backups
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+    - cron: "37 7 1 1,4,7,10 *"
+  push:
+    branches: [master]
+    paths:
+      - migrate.py
+      - machreach_core/db.py
+      - student/db.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-backup
+  cancel-in-progress: false
+
+jobs:
+  encrypted-backup:
+    if: github.event.schedule != '37 7 1 1,4,7,10 *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.BACKUP_AWS_REGION }}
+      S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+      AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install age client
+        run: sudo apt-get update && sudo apt-get install -y age
+      - name: Validate backup secrets
+        run: |
+          test -n "$DATABASE_URL"
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$AWS_DEFAULT_REGION"
+          test -n "$S3_BUCKET"
+          test -n "$AGE_RECIPIENT"
+      - name: Create and encrypt logical backup
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          kind="daily"
+          if [ "${{ github.event_name }}" = "push" ]; then kind="migration"; fi
+          file="machreach-${kind}-${stamp}-${GITHUB_SHA::12}.dump"
+          docker run --rm postgres:17 pg_dump "$DATABASE_URL" \
+            --format=custom --no-owner --no-acl > "$file"
+          sha256sum "$file" > "$file.sha256"
+          age --recipient "$AGE_RECIPIENT" --output "$file.age" "$file"
+          age --recipient "$AGE_RECIPIENT" --output "$file.sha256.age" "$file.sha256"
+          aws s3 cp "$file.age" "s3://$S3_BUCKET/machreach/$kind/$file.age" --sse AES256 --only-show-errors
+          aws s3 cp "$file.sha256.age" "s3://$S3_BUCKET/machreach/$kind/$file.sha256.age" --sse AES256 --only-show-errors
+      - name: Enforce 30-day object retention
+        run: |
+          set -euo pipefail
+          cutoff="$(date -u -d '30 days ago' +%s)"
+          aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix machreach/ \
+            --query 'Contents[].[Key,LastModified]' --output text | while read -r key modified; do
+              [ -z "${key:-}" ] && continue
+              if [ "$(date -u -d "$modified" +%s)" -lt "$cutoff" ]; then
+                aws s3api delete-object --bucket "$S3_BUCKET" --key "$key" >/dev/null
+              fi
+            done
+      - name: Record successful backup for operational monitoring
+        run: >-
+          docker run --rm postgres:17 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c
+          "INSERT INTO operational_events (event_type, source)
+          VALUES ('backup_success', 'github-actions');"
+
+  quarterly-restore-drill:
+    if: github.event.schedule == '37 7 1 1,4,7,10 *' || (github.event_name == 'workflow_dispatch' && vars.RUN_RESTORE_DRILL == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: restore_drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d restore_drill"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.BACKUP_AWS_REGION }}
+      S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+      AGE_IDENTITY: ${{ secrets.BACKUP_AGE_IDENTITY }}
+      RESTORE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restore_drill
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install age client
+        run: sudo apt-get update && sudo apt-get install -y age
+      - name: Restore and validate newest backup
+        run: |
+          set -euo pipefail
+          key="$(aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix machreach/daily/ --query 'sort_by(Contents,&LastModified)[-1].Key' --output text)"
+          test -n "$key"
+          test "$key" != "None"
+          aws s3 cp "s3://$S3_BUCKET/$key" latest.dump.age --only-show-errors
+          printf '%s' "$AGE_IDENTITY" > age-identity.txt
+          chmod 600 age-identity.txt
+          age --decrypt --identity age-identity.txt --output latest.dump latest.dump.age
+          docker run --rm --network host -v "$PWD:/backup" postgres:17 \
+            pg_restore --dbname "$RESTORE_DATABASE_URL" --no-owner --no-acl /backup/latest.dump
+          docker run --rm --network host postgres:17 \
+            psql "$RESTORE_DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM clients;"
+          docker run --rm --network host postgres:17 \
+            psql "$RESTORE_DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM schema_metadata;"

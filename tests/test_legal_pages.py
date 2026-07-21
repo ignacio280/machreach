@@ -4,7 +4,6 @@ def test_privacy_policy_describes_current_processors_rights_and_retention(client
 
     assert response.status_code == 200
     assert "July 17, 2026" in body
-    assert "Google Calendar" in body
     assert "data portability" in body.lower()
     assert "Retention and Deletion" in body
     assert "December 1, 2026" in body

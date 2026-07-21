@@ -106,6 +106,20 @@ def collect_operational_health() -> dict:
             f"SELECT COUNT(*) FROM operational_events WHERE event_type = %s AND {recent}",
             ("smtp_failure",),
         )
+        billing_review = _count(
+            db,
+            "SELECT COUNT(*) FROM operational_events WHERE event_type IN (%s, %s)",
+            ("billing_refund_manual_review", "billing_reconciliation_failure"),
+        )
+        latest_backup = _fetchone(
+            db,
+            "SELECT created_at FROM operational_events WHERE event_type = %s "
+            "ORDER BY created_at DESC LIMIT 1",
+            ("backup_success",),
+        )
+        backup_stale = not latest_backup or _async_job_is_stale(
+            latest_backup.get("created_at"), 26 * 60 * 60
+        )
 
         if _USE_PG:
             used = _count(db, "SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database()")
@@ -127,6 +141,8 @@ def collect_operational_health() -> dict:
         "failed_webhooks": _signal(failed_webhooks),
         "coin_ledger": _signal(invalid_wallets + invalid_orders),
         "smtp_failures": _signal(smtp_failures),
+        "billing_refund_review": _signal(billing_review),
+        "backup_freshness": {"status": "alert" if backup_stale else "ok"},
         "database_capacity": db_capacity,
         **_dependency_checks(),
     }

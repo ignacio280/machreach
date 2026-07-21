@@ -29,7 +29,13 @@ class ProbeError(RuntimeError):
 
 
 def fetch_json(url: str, timeout: float = 15) -> dict[str, Any]:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    headers = {"User-Agent": USER_AGENT}
+    if url == OPERATIONS_HEALTH_URL:
+        secret = os.environ.get("OPERATIONS_SECRET", "").strip()
+        if not secret:
+            raise ProbeError("OPERATIONS_SECRET is not configured")
+        headers["X-Operations-Secret"] = secret
+    request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.load(response)
@@ -79,7 +85,7 @@ def probe_with_retries(
 
 
 def public_is_healthy(payload: dict[str, Any]) -> bool:
-    return payload.get("status") == "ok" and payload.get("db") == "connected"
+    return payload == {"status": "healthy"}
 
 
 def operations_are_healthy(payload: dict[str, Any]) -> bool:

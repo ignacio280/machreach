@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 import logging
+from typing import Any
 
 from machreach_core.db import get_db, _USE_PG
 
@@ -432,9 +433,13 @@ def _email_admin(period_kind: str, period_key: str, summary: dict) -> None:
                     )
         lines.append("")
     body = "\n".join(lines)
+    from machreach_core.config import LEADERBOARD_WINNERS_RECIPIENT
+    if not LEADERBOARD_WINNERS_RECIPIENT:
+        log.warning("Leaderboard payout summary recipient is not configured")
+        return
     try:
         _send_system_email(
-            "ignaciomachuca2005@gmail.com",
+            LEADERBOARD_WINNERS_RECIPIENT,
             f"[MachReach] {label} leaderboard payouts — {period_key}",
             body,
         )
@@ -448,7 +453,7 @@ def run_payouts_if_due() -> dict:
     """Cheap check + run for both weekly and monthly. Safe to call on
     every dashboard load."""
     init_prize_tables()
-    out = {"week": None, "month": None}
+    out: dict[str, dict[str, Any] | None] = {"week": None, "month": None}
     today = date.today()
     for kind in ("week", "month"):
         try:

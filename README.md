@@ -11,7 +11,7 @@ An all-in-one study platform for students.
 - **Grade tracking** — Chilean 1.0–7.0 scale, with "minimum grade to pass" math
 - **Gamification** — XP, streaks, leaderboards, badges, coins, daily quests, and friends
 - **Referrals** — invite a friend, earn a free week of Plus (stacks)
-- **Plus subscription** — unlimited AI generation and perks, billed via Lemon Squeezy
+- **Plus subscription** — 100 combined quiz/flashcard generations per billing month and perks, billed via Lemon Squeezy
 
 ## Setup
 ```bash
@@ -40,7 +40,8 @@ docs/                    - Pitch and pricing docs
 ```
 
 ## Deployment
-Runs on Render (`render.yaml`): a single gunicorn web service + a worker service, backed by Postgres.
+Runs on Render (`render.yaml`) as isolated production and staging stacks. Each stack has a
+gunicorn web service, a continuously running worker, and its own Postgres database.
 
 Production release, backup/restore, incident, rollback, retention, and alert
 procedures are documented in [docs/operations.md](docs/operations.md). Chile

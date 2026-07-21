@@ -102,15 +102,10 @@ if _IS_PRODUCTION and _secret in {"", "dev-secret-change-me", "change-me-to-a-ra
     raise RuntimeError("SECRET_KEY must be set in production")
 SECRET_KEY = _secret or "dev-secret-change-me"
 BASE_URL = os.getenv("BASE_URL", "http://localhost:5000")
-ADMIN_EMAILS = {
-    e.strip().lower()
-    for e in os.getenv(
-        "ADMIN_EMAILS",
-        "ignaciomachuca2005@gmail.com,fernanda.machuca@uc.cl",
-    ).split(",")
-    if e.strip()
-}
 ADMIN_ACTION_SECRET = os.getenv("ADMIN_ACTION_SECRET", "")
+OPERATIONS_SECRET = os.getenv("OPERATIONS_SECRET", "") or ADMIN_ACTION_SECRET
+if _IS_PRODUCTION and not OPERATIONS_SECRET:
+    raise RuntimeError("OPERATIONS_SECRET must be set in production")
 
 # Canvas OAuth. These values come from a Canvas Developer Key. The redirect
 # URI configured in Canvas must be: {BASE_URL}/canvas/oauth/callback

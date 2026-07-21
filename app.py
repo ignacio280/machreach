@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import bcrypt
 import hashlib
+import hmac
 import html as html_module
 import logging
 import os
@@ -15,7 +16,7 @@ from datetime import datetime, timezone
 from flask import Flask, flash, g, jsonify, make_response, redirect, render_template_string, request, session, url_for
 from markupsafe import Markup
 
-from machreach_core.config import ADMIN_ACTION_SECRET, ADMIN_EMAILS, SECRET_KEY
+from machreach_core.config import ADMIN_ACTION_SECRET, OPERATIONS_SECRET, SECRET_KEY
 from machreach_core.i18n import t, t_dict
 
 # ── Sentry error tracking (production only — set SENTRY_DSN env var) ──
@@ -37,7 +38,6 @@ if SENTRY_DSN:
 from machreach_core.db import (
     create_client,
     create_reset_token,
-    create_verification_token,
     get_client,
     get_client_by_email,
     get_valid_reset_token,
@@ -64,13 +64,13 @@ app.config["SESSION_COOKIE_NAME"] = "machreach_sess"
 # Trust Render/Heroku-style proxy headers so secure-cookie detection works
 if _IS_PRODUCTION:
     from werkzeug.middleware.proxy_fix import ProxyFix
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # type: ignore[method-assign]
 app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours max session
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # bounded document/file upload limit
 PASSWORD_MIN_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "10"))
 
 # ── Security: CSRF protection ──
-from flask_wtf.csrf import CSRFError, CSRFProtect, generate_csrf
+from flask_wtf.csrf import CSRFError, CSRFProtect, generate_csrf  # noqa: E402
 # Don't expire CSRF tokens faster than the session. The Flask-WTF default of
 # 1 hour caused "The CSRF tokens do not match" when a page was left open and
 # submitted later (very common on mobile). The token is still bound to the
@@ -124,8 +124,8 @@ def _canonical_host_redirect():
         return redirect(request.url.replace("://" + raw, "://" + raw[4:], 1), code=code)
 
 # ── Security: Rate limiting ──
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from flask_limiter import Limiter  # noqa: E402
+from flask_limiter.util import get_remote_address  # noqa: E402
 _ratelimit_storage_uri = (os.getenv("RATELIMIT_STORAGE_URI") or "memory://").strip() or "memory://"
 limiter = Limiter(
     get_remote_address,
@@ -135,7 +135,7 @@ limiter = Limiter(
 )
 
 # ── Startup diagnostic — log DB path so we can debug persistence ──
-from machreach_core.config import DATABASE_PATH
+from machreach_core.config import DATABASE_PATH  # noqa: E402
 logging.basicConfig(level=logging.INFO)
 _log = logging.getLogger("machreach")
 _log.info(f"DATABASE_PATH = {DATABASE_PATH}")
@@ -156,9 +156,9 @@ if _RUN_STARTUP_MIGRATIONS:
     init_db()
 
 # ── MachReach Student module ──
-from student.db import init_student_db
-from student.routes import register_student_routes
-from student.academic_routes import register_academic_routes
+from student.db import init_student_db  # noqa: E402
+from student.routes import register_student_routes  # noqa: E402
+from student.academic_routes import register_academic_routes  # noqa: E402
 if _RUN_STARTUP_MIGRATIONS:
     init_student_db()
 register_student_routes(app, csrf, limiter)
@@ -227,46 +227,45 @@ def health_check():
         from machreach_core.db import check_schema_readiness, get_db, _fetchval
         with get_db() as db:
             _fetchval(db, "SELECT 1")
-        schema = check_schema_readiness()
-        return jsonify({"status": "ok", "db": "connected", "schema": schema}), 200
+        check_schema_readiness()
+        response = jsonify({"status": "healthy"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 200
     except Exception as e:
         _log.exception("[health] database probe failed: %s", e)
-        return jsonify({"status": "error", "db": "unavailable"}), 503
+        return jsonify({"status": "degraded"}), 503
 
 
 @app.route("/health/operations")
 @limiter.limit("12 per minute")
 def operational_health_check():
-    """Minimal dependency/worker probe for an independent uptime monitor."""
+    """Detailed operational probe for authenticated monitors only."""
+    supplied = request.headers.get("X-Operations-Secret", "")
+    if not OPERATIONS_SECRET or not hmac.compare_digest(supplied, OPERATIONS_SECRET):
+        return jsonify({"error": "not_found"}), 404
     try:
         from machreach_core.operations import collect_operational_health
         payload = collect_operational_health()
-        public_payload = {
-            "status": payload["status"],
-            "generated_at": payload["generated_at"],
-            "checks": {
-                name: {"status": check["status"]}
-                for name, check in payload["checks"].items()
-            },
-        }
-        response = jsonify(public_payload)
+        response = jsonify(payload)
         response.headers["Cache-Control"] = "no-store"
         return response, 200 if payload["status"] == "ok" else 503
     except Exception as exc:
         _log.exception("[health] operational probe failed: %s", exc)
-        return jsonify({"status": "error", "checks": {"probe": {"status": "alert"}}}), 503
+        return jsonify({"status": "error"}), 503
 
 
 def _debug_admin_gate():
-    """Gate operational diagnostics behind an explicit flag and admin session."""
+    """Gate operational diagnostics behind explicit enablement and recent reauth."""
     enabled = os.getenv("ENABLE_DEBUG_ENDPOINTS", "").strip().lower() in {"1", "true", "yes", "on"}
     if not enabled:
         return jsonify({"error": "not_found"}), 404
     if not _is_admin():
         return jsonify({"error": "unauthorized"}), 403
+    if not _admin_mfa_session_ok() or not _admin_secret_ok():
+        return jsonify({"error": "reauthentication_required"}), 403
     if ADMIN_ACTION_SECRET:
         supplied = request.headers.get("X-Admin-Action-Secret", "")
-        if supplied != ADMIN_ACTION_SECRET:
+        if not hmac.compare_digest(supplied, ADMIN_ACTION_SECRET):
             return jsonify({"error": "unauthorized"}), 403
     return None
 
@@ -385,10 +384,7 @@ def _is_admin() -> bool:
     c = get_client(session["client_id"])
     if not c:
         return False
-    email = (c.get("email") or "").strip().lower()
-    owner_emails = {e.strip().lower() for e in ADMIN_EMAILS}
-    owner_emails.update({"ignaciomachuca2005@gmail.com", "fernanda.machuca@uc.cl"})
-    return bool(c.get("is_admin")) or email in owner_emails
+    return bool(c.get("is_admin"))
 
 
 def _log_admin_action(action: str, target: str = "", **extra):
@@ -408,13 +404,243 @@ def _log_admin_action(action: str, target: str = "", **extra):
 
 
 def _admin_secret_ok() -> bool:
-    """Optional second admin factor for production/admin consoles."""
-    if not ADMIN_ACTION_SECRET:
-        return True
-    return request.form.get("admin_secret", "") == ADMIN_ACTION_SECRET
+    """Return whether password + TOTP were reconfirmed in the last 10 minutes."""
+    try:
+        verified_at = float(session.get("admin_reauthenticated_at") or 0)
+    except (TypeError, ValueError):
+        return False
+    return datetime.now(timezone.utc).timestamp() - verified_at <= 10 * 60
 
 
-_PRESENCE_LAST_TOUCH = {}  # cid -> last unix-second we wrote a heartbeat
+def _admin_mfa_session_ok() -> bool:
+    try:
+        verified_at = float(session.get("admin_mfa_verified_at") or 0)
+    except (TypeError, ValueError):
+        return False
+    return datetime.now(timezone.utc).timestamp() - verified_at <= 12 * 60 * 60
+
+
+def _safe_admin_next(value: str | None) -> str:
+    candidate = str(value or "").strip()
+    return candidate if candidate.startswith("/admin") and not candidate.startswith("//") else "/admin"
+
+
+@app.before_request
+def _protect_admin_routes():
+    if not request.path.startswith("/admin"):
+        return None
+    if request.path in {"/admin/mfa", "/admin/mfa/verify"}:
+        return None
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    from machreach_core import admin_security
+    client_id = int(session["client_id"])
+    if not admin_security.is_enabled(client_id):
+        return redirect(url_for("admin_mfa_setup", next=request.full_path.rstrip("?")))
+    if not _admin_mfa_session_ok():
+        return redirect(url_for("admin_mfa_verify", next=request.full_path.rstrip("?")))
+    return None
+
+
+@app.route("/admin/mfa", methods=["GET", "POST"])
+@limiter.limit("8 per minute", methods=["POST"])
+def admin_mfa_setup():
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    from machreach_core import admin_security
+    client_id = int(session["client_id"])
+    if admin_security.is_enabled(client_id):
+        return redirect(url_for("admin_mfa_verify", next=_safe_admin_next(request.values.get("next"))))
+    secret = str(session.get("admin_mfa_setup_secret") or "")
+    if not secret:
+        secret = admin_security.generate_secret()
+        session["admin_mfa_setup_secret"] = secret
+    error = ""
+    if request.method == "POST":
+        supplied_secret = request.form.get("admin_action_secret", "")
+        deployment_ok = bool(ADMIN_ACTION_SECRET) and hmac.compare_digest(
+            supplied_secret,
+            ADMIN_ACTION_SECRET,
+        )
+        if not deployment_ok:
+            error = "The deployment administrator secret is incorrect."
+        elif not admin_security.verify_code(secret, request.form.get("code", "")):
+            error = "The authenticator code is invalid."
+        else:
+            admin_security.enroll(client_id, secret)
+            session.pop("admin_mfa_setup_secret", None)
+            session["admin_mfa_verified_at"] = datetime.now(timezone.utc).timestamp()
+            _log_admin_action("mfa_enabled")
+            return redirect(_safe_admin_next(request.form.get("next")))
+    client = get_client(client_id) or {}
+    uri = admin_security.provisioning_uri(secret, str(client.get("email") or "admin"))
+    return _render("Administrator MFA", f"""
+    <div class="card" style="max-width:620px;margin:40px auto;">
+      <h1>Secure administrator access</h1>
+      <p>Add this account to your authenticator app using the setup key below, then enter its six-digit code.</p>
+      {'<div class="alert alert-red">' + _esc(error) + '</div>' if error else ''}
+      <p><strong>Setup key</strong></p>
+      <code style="display:block;padding:14px;word-break:break-all;">{_esc(secret)}</code>
+      <details style="margin:14px 0;"><summary>Authenticator URI</summary><code>{_esc(uri)}</code></details>
+      <form method="post">
+        {_csrf_hidden_input()}
+        <input type="hidden" name="next" value="{_esc(_safe_admin_next(request.values.get('next')))}">
+        <div class="form-group"><label>Deployment administrator secret</label><input type="password" name="admin_action_secret" required autocomplete="current-password"></div>
+        <div class="form-group"><label>Six-digit authenticator code</label><input name="code" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" required autocomplete="one-time-code"></div>
+        <button class="btn btn-primary" type="submit">Enable administrator MFA</button>
+      </form>
+    </div>
+    """, active_page="admin")
+
+
+@app.route("/admin/mfa/verify", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
+def admin_mfa_verify():
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    from machreach_core import admin_security
+    client_id = int(session["client_id"])
+    if not admin_security.is_enabled(client_id):
+        return redirect(url_for("admin_mfa_setup", next=_safe_admin_next(request.values.get("next"))))
+    error = ""
+    if request.method == "POST":
+        if admin_security.verify_client_code(client_id, request.form.get("code", "")):
+            session["admin_mfa_verified_at"] = datetime.now(timezone.utc).timestamp()
+            _log_admin_action("mfa_verified")
+            return redirect(_safe_admin_next(request.form.get("next")))
+        error = "The authenticator code is invalid."
+    return _render("Verify administrator MFA", f"""
+    <div class="card" style="max-width:520px;margin:40px auto;">
+      <h1>Administrator verification</h1>
+      <p>Enter the current code from your authenticator app.</p>
+      {'<div class="alert alert-red">' + _esc(error) + '</div>' if error else ''}
+      <form method="post">
+        {_csrf_hidden_input()}
+        <input type="hidden" name="next" value="{_esc(_safe_admin_next(request.values.get('next')))}">
+        <div class="form-group"><label>Six-digit code</label><input name="code" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" required autocomplete="one-time-code" autofocus></div>
+        <button class="btn btn-primary" type="submit">Continue</button>
+      </form>
+    </div>
+    """, active_page="admin")
+
+
+@app.route("/admin/reauth", methods=["GET", "POST"])
+@limiter.limit("8 per minute", methods=["POST"])
+def admin_reauthenticate():
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    from machreach_core import admin_security
+    client_id = int(session["client_id"])
+    error = ""
+    if request.method == "POST":
+        client = get_client(client_id) or {}
+        password_ok = bool(client and _verify_pw(request.form.get("password", ""), str(client.get("password") or "")))
+        mfa_ok = admin_security.verify_client_code(client_id, request.form.get("code", ""))
+        if password_ok and mfa_ok:
+            now = datetime.now(timezone.utc).timestamp()
+            session["admin_mfa_verified_at"] = now
+            session["admin_reauthenticated_at"] = now
+            _log_admin_action("reauthenticated")
+            return redirect(_safe_admin_next(request.form.get("next")))
+        error = "Password or authenticator code is incorrect."
+    return _render("Confirm administrator action", f"""
+    <div class="card" style="max-width:520px;margin:40px auto;">
+      <h1>Confirm this administrator action</h1>
+      <p>Dangerous actions require your password and current authenticator code.</p>
+      {'<div class="alert alert-red">' + _esc(error) + '</div>' if error else ''}
+      <form method="post">
+        {_csrf_hidden_input()}
+        <input type="hidden" name="next" value="{_esc(_safe_admin_next(request.values.get('next')))}">
+        <div class="form-group"><label>Password</label><input type="password" name="password" required autocomplete="current-password"></div>
+        <div class="form-group"><label>Six-digit code</label><input name="code" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" required autocomplete="one-time-code"></div>
+        <button class="btn btn-primary" type="submit">Confirm for 10 minutes</button>
+      </form>
+    </div>
+    """, active_page="admin")
+
+
+@app.route("/admin/courses", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
+def admin_courses():
+    from student import db as sdb
+
+    if request.method == "POST":
+        if not _admin_secret_ok():
+            return redirect(url_for("admin_reauthenticate", next="/admin/courses"))
+        action = request.form.get("action", "")
+        if action == "delete":
+            result = sdb.soft_delete_catalog_course(
+                int(session["client_id"]),
+                int(request.form.get("catalog_id") or 0),
+                request.form.get("confirmation", ""),
+                request.form.get("reason", ""),
+            )
+            if result.get("ok"):
+                _log_admin_action(
+                    "course_soft_deleted",
+                    target=str(request.form.get("catalog_id") or ""),
+                    deletion_id=result.get("deletion_id"),
+                )
+                flash(("success", "Course hidden. It can be recovered for 30 days."))
+            else:
+                flash(("error", result.get("error") or "Could not delete the course."))
+        elif action == "recover":
+            result = sdb.recover_catalog_course(
+                int(session["client_id"]),
+                int(request.form.get("deletion_id") or 0),
+            )
+            if result.get("ok"):
+                _log_admin_action(
+                    "course_recovered",
+                    target=str(result.get("catalog_id") or ""),
+                )
+                flash(("success", "Course restored."))
+            else:
+                flash(("error", result.get("error") or "Could not recover the course."))
+        return redirect(url_for("admin_courses"))
+
+    catalog = sdb.list_admin_course_catalog()
+    active_rows = "".join(
+        f"""
+        <tr><td>{row['id']}</td><td>{_esc(row.get('code') or '')}</td>
+        <td>{_esc(row.get('name') or '')}</td><td>{int(row.get('uses') or 0)}</td>
+        <td><form method="post" style="display:flex;gap:6px;flex-wrap:wrap;">
+          {_csrf_hidden_input()}<input type="hidden" name="action" value="delete">
+          <input type="hidden" name="catalog_id" value="{row['id']}">
+          <input name="confirmation" required placeholder="Type exact course name">
+          <input name="reason" required maxlength="500" placeholder="Deletion reason">
+          <button class="btn btn-outline btn-sm" type="submit">Delete</button>
+        </form></td></tr>
+        """
+        for row in catalog["active"]
+    ) or '<tr><td colspan="5">No active courses.</td></tr>'
+    recovery_rows = "".join(
+        f"""
+        <tr><td>{row['id']}</td><td>{_esc(row.get('course_code') or '')}</td>
+        <td>{_esc(row.get('course_name') or '')}</td>
+        <td>{_esc(str(row.get('recover_until') or ''))}</td>
+        <td><form method="post">{_csrf_hidden_input()}
+          <input type="hidden" name="action" value="recover">
+          <input type="hidden" name="deletion_id" value="{row['id']}">
+          <button class="btn btn-primary btn-sm" type="submit">Recover</button>
+        </form></td></tr>
+        """
+        for row in catalog["recoverable"]
+    ) or '<tr><td colspan="5">No recoverable courses.</td></tr>'
+    return _render("Admin courses", f"""
+      <div class="breadcrumb"><a href="/admin">Admin</a> / Courses</div>
+      <div class="page-header"><h1>Course administration</h1>
+      <p class="subtitle">Courses are ownerless. Deletion is audited and recoverable for 30 days.</p></div>
+      <div class="card"><div class="card-header"><h2>Active courses</h2></div>
+      <div style="overflow:auto"><table><thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Members</th><th>Delete</th></tr></thead>
+      <tbody>{active_rows}</tbody></table></div></div>
+      <div class="card"><div class="card-header"><h2>Recovery window</h2></div>
+      <div style="overflow:auto"><table><thead><tr><th>Deletion</th><th>Code</th><th>Name</th><th>Recover until</th><th></th></tr></thead>
+      <tbody>{recovery_rows}</tbody></table></div></div>
+    """, active_page="admin")
+
+
+_PRESENCE_LAST_TOUCH: dict[int, int] = {}  # cid -> last unix-second we wrote a heartbeat
 _PRESENCE_TOUCH_THROTTLE = 25  # don't UPDATE more often than every 25s per user
 
 
@@ -1896,18 +2122,24 @@ def register():
         if password2 and password2 != password:
             flash(("error", "Passwords do not match." if session.get("lang") == "en" else "Las contraseñas no coinciden."))
             return redirect(url_for("register"))
-        if get_client_by_email(email):
+        existing_client = get_client_by_email(email)
+        if existing_client and existing_client.get("email_verified"):
             _log_security("REGISTER_DUPLICATE", email=email)
             flash(("error", t("auth.email_exists")))
             return redirect(url_for("register"))
-        client_id = create_client(name, email, _hash_pw(password), business, account_type)
-        _log_security("REGISTER_OK", client_id=client_id, email=email)
+        created_new = existing_client is None
+        if existing_client:
+            client_id = int(existing_client["id"])
+            _log_security("REGISTER_PENDING_REUSED", client_id=client_id, email=email)
+        else:
+            client_id = create_client(name, email, _hash_pw(password), business, account_type)
+            _log_security("REGISTER_OK", client_id=client_id, email=email)
 
         # Referral: stash the inviter's code on this new account so they're
         # rewarded once it verifies its email (genuine sign-up only). The code was
         # captured on the /register GET into a hidden field + session.
         _ref = (request.form.get("ref") or session.get("referral_ref") or "").strip().upper()[:16]
-        if _ref:
+        if _ref and created_new:
             try:
                 import json as _json
                 from machreach_core.db import get_mail_preferences, update_mail_preferences
@@ -1921,43 +2153,14 @@ def register():
                 print(f"[REFERRAL] Failed to stash ref for {email}: {_re}", flush=True)
             session.pop("referral_ref", None)
 
-        # Send verification email
-        email_sent = False
-        try:
-            import secrets as _secrets
-            from datetime import timedelta
-            from machreach_core.config import BASE_URL as _base_url
-            token = _secrets.token_urlsafe(32)
-            expires = (datetime.now() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
-            create_verification_token(client_id, token, expires)
-            verify_link = f"{_base_url}/verify-email/{token}"
-            body = (
-                f"Hi {name},\n\n"
-                f"Welcome to MachReach! Please verify your email address:\n\n"
-                f"{verify_link}\n\n"
-                f"This link expires in 24 hours.\n\n"
-                f"— MachReach"
-            )
-            email_sent = _send_system_email(email, "MachReach — Verify Your Email", body)
-        except Exception as e:
-            import traceback
-            print(f"[VERIFY] Verification flow failed for {email}: {e}", flush=True)
-            traceback.print_exc()
-
-        if email_sent:
-            return redirect(url_for("verify_email_pending", email=email, created="1"))
-        else:
-            # Verification email failed — delete the account so it's not half-created
-            try:
-                from machreach_core.db import get_db, _exec
-                with get_db() as db:
-                    _exec(db, "DELETE FROM email_verification_tokens WHERE client_id = %s", (client_id,))
-                    _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
-                print(f"[REGISTER] Rolled back account for {email} — verification email failed", flush=True)
-            except Exception:
-                pass
-            flash(("error", "We couldn't send the verification email. Please check your email address and try again, or contact support@machreach.com."))
-            return redirect(url_for("register"))
+        from machreach_core.verification_delivery import send_or_queue
+        delivery = send_or_queue(client_id, _send_system_email)
+        return redirect(url_for(
+            "verify_email_pending",
+            email=email,
+            created="1",
+            delayed="1" if delivery["queued"] else "0",
+        ))
     # Referral capture: a shared link is /register?ref=CODE. Keep it in the
     # session so it survives the preview->submit roundtrip, and pass it into the
     # Canvas signup form as a hidden field.
@@ -2039,6 +2242,11 @@ def login():
         session["client_name"] = client["name"]
         session["account_type"] = "student"
         session["session_version"] = int(client.get("session_version") or 0)
+        if client.get("is_admin"):
+            from machreach_core import admin_security
+            if admin_security.is_enabled(int(client["id"])):
+                return redirect(url_for("admin_mfa_verify", next="/admin"))
+            return redirect(url_for("admin_mfa_setup", next="/admin"))
         return redirect(url_for("student_dashboard_page"))
     _is_en = session.get("lang") == "en"
     _story = _auth_story_panel("login", session.get("lang", "es"))
@@ -2118,22 +2326,19 @@ def verify_email(token):
 def resend_verification():
     email = request.form.get("email", "").strip()
     client = get_client_by_email(email)
+    delayed = False
     if client and not client.get("email_verified"):
-        import secrets as _secrets
-        from machreach_core.config import BASE_URL as _base_url
-        token = _secrets.token_urlsafe(32)
-        expires = (datetime.now() + __import__("datetime").timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
-        create_verification_token(client["id"], token, expires)
-        verify_link = f"{_base_url}/verify-email/{token}"
-        body = f"Hi {client['name']},\n\nVerify your MachReach email:\n\n{verify_link}\n\nExpires in 24 hours.\n\n— MachReach"
-        try:
-            _send_system_email(email, "MachReach — Verify Your Email", body)
-        except Exception:
-            pass
+        from machreach_core.verification_delivery import send_or_queue
+        delayed = bool(send_or_queue(int(client["id"]), _send_system_email)["queued"])
     # If we know an email, take the user back to the dedicated pending page
     # so they land somewhere meaningful — the toast on /login was easy to miss.
     if email:
-        return redirect(url_for("verify_email_pending", email=email, sent="1"))
+        return redirect(url_for(
+            "verify_email_pending",
+            email=email,
+            sent="1",
+            delayed="1" if delayed else "0",
+        ))
     flash(("info", "If the email is registered, a new verification link has been sent."))
     return redirect(url_for("login"))
 
@@ -2146,10 +2351,13 @@ def verify_email_pending():
     email = (request.args.get("email") or "").strip()
     just_created = request.args.get("created") == "1"
     just_sent = request.args.get("sent") == "1"
+    delayed = request.args.get("delayed") == "1"
     safe_email = _esc(email)
     headline = ("&#127881; Account created!" if just_created
                 else "&#128231; Verify your email to continue")
     sub = (
+        "Email delivery is delayed. Your account is safe and we will retry automatically."
+        if delayed else
         "We just sent you a verification link. Click it and you're in."
         if just_created else
         "A new verification link is on its way — check your inbox."
@@ -2158,6 +2366,8 @@ def verify_email_pending():
         "to log in. Can't find it? Resend below."
     )
     resend_notice = (
+        '<div class="vep-flash vep-delay">Email delivery is taking longer than expected. '
+        'You can retry below; there is no need to create another account.</div>' if delayed else
         '<div class="vep-flash">A new verification link has been sent. '
         'Check your inbox (and your spam folder).</div>' if just_sent else ""
     )
@@ -2208,6 +2418,7 @@ def verify_email_pending():
         padding: 10px 14px; font-size: 13px;
         margin-bottom: 18px; text-align: center;
       }}
+      .vep-delay {{ background:#fff7ed; color:#9a3412; border-color:#fb923c; }}
       .vep-form {{ display: flex; gap: 8px; margin-bottom: 16px; }}
       .vep-form input {{
         flex: 1; padding: 10px 12px;
@@ -2238,6 +2449,7 @@ def verify_email_pending():
           </ol>
         </div>
         <form method="post" action="/resend-verification" class="vep-form">
+          {_csrf_hidden_input()}
           <input name="email" type="email" placeholder="your@email.com"
                  value="{safe_email}" required>
           <button type="submit">Resend link</button>
@@ -2493,10 +2705,8 @@ def _admin_delete_client_account(client_id: int) -> dict:
     target = get_client(client_id)
     if not target:
         return {"ok": False, "error": "User not found."}
-    protected_admins = {e.strip().lower() for e in ADMIN_EMAILS}
-    protected_admins.update({"ignaciomachuca2005@gmail.com", "fernanda.machuca@uc.cl"})
-    if (target.get("email") or "").strip().lower() in protected_admins:
-        return {"ok": False, "error": "The owner admin account cannot be deleted from the panel."}
+    if target.get("is_admin"):
+        return {"ok": False, "error": "Administrator accounts cannot be deleted from the panel."}
 
     deleted_steps = []
     with get_db() as db:
@@ -2579,7 +2789,7 @@ def admin_dashboard():
             elif confirm_phrase != "SEND TO ALL USERS":
                 error_msg = "Type SEND TO ALL USERS to confirm the broadcast."
             elif not _admin_secret_ok():
-                error_msg = "Admin action secret is incorrect."
+                error_msg = "Confirm your password and MFA at /admin/reauth before this action."
             else:
                 sent_count = 0
                 failed = []
@@ -2610,7 +2820,7 @@ def admin_dashboard():
             elif confirm_phrase != "DELETE USER":
                 error_msg = "Type DELETE USER to confirm account deletion."
             elif not _admin_secret_ok():
-                error_msg = "Admin action secret is incorrect."
+                error_msg = "Confirm your password and MFA at /admin/reauth before this action."
             elif target_id == session.get("client_id"):
                 error_msg = "You cannot delete your own logged-in account."
             else:
@@ -2634,7 +2844,6 @@ def admin_dashboard():
               <input type="hidden" name="client_id" value="{_esc(str(u.get("id") or ""))}">
               <input name="confirm_email" placeholder="Type email to delete" autocomplete="off" style="font-size:12px;padding:8px;">
               <input name="confirm_phrase" placeholder="DELETE USER" autocomplete="off" style="font-size:12px;padding:8px;">
-              {'<input name="admin_secret" placeholder="Admin secret" autocomplete="off" style="font-size:12px;padding:8px;grid-column:1 / -1;">' if ADMIN_ACTION_SECRET else ''}
               <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red);" onclick="return confirm('Delete this user and their data?')">Delete</button>
             </form>
           </td>
@@ -2647,12 +2856,14 @@ def admin_dashboard():
     <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Admin</div>
     <div class="page-header">
       <h1>&#128227; Admin</h1>
-      <p class="subtitle">Broadcast to users and manage accounts. Admin access comes from configured admin emails and is audited.</p>
+      <p class="subtitle">Broadcast to users and manage accounts. Access comes only from database administrator roles and is audited.</p>
     </div>
     <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
       <a class="btn btn-primary btn-sm" href="/admin/analytics">&#128202; Analytics de producto</a>
       <a class="btn btn-outline btn-sm" href="/admin/jobs">&#9881; Jobs & worker</a>
+      <a class="btn btn-outline btn-sm" href="/admin/courses">&#127891; Courses</a>
       <a class="btn btn-outline btn-sm" href="/admin/leaderboard-winners-test">&#127942; Preview monthly leaderboard winners email</a>
+      <a class="btn btn-outline btn-sm" href="/admin/reauth">&#128274; Confirm dangerous actions</a>
     </div>
     {'<div class="alert alert-red" style="margin-bottom:16px;">' + _esc(error_msg) + '</div>' if error_msg else ''}
     <div class="card" style="max-width:820px;">
@@ -2672,7 +2883,6 @@ def admin_dashboard():
           <label>Confirmation</label>
           <input name="confirm_phrase" placeholder="Type SEND TO ALL USERS" autocomplete="off" required style="font-size:15px;">
         </div>
-        {'<div class="form-group"><label>Admin action secret</label><input name="admin_secret" type="password" autocomplete="off" required style="font-size:15px;"></div>' if ADMIN_ACTION_SECRET else ''}
         <div style="display:flex;gap:12px;align-items:center;">
           <button type="submit" class="btn btn-primary" style="font-size:15px;padding:10px 28px;" onclick="return confirm('Send this email to ALL {len(users)} registered users?')">&#128640; Send to {len(users)} Users</button>
         </div>
@@ -2749,10 +2959,7 @@ def _record_product_event(event_type: str, metadata: dict | None = None):
 
 
 def _analytics_admin_filter_sql() -> str:
-    emails = {str(e).strip().lower() for e in (ADMIN_EMAILS or set()) if str(e).strip()}
-    emails.update({"ignaciomachuca2005@gmail.com", "fernanda.machuca@uc.cl"})
-    quoted = ",".join("'" + email.replace("'", "''") + "'" for email in sorted(emails))
-    return f"(client_id IS NULL OR client_id NOT IN (SELECT id FROM clients WHERE LOWER(email) IN ({quoted})))"
+    return "(client_id IS NULL OR client_id NOT IN (SELECT id FROM clients WHERE COALESCE(is_admin, 0) = 1))"
 
 
 def _analytics_should_skip_request() -> bool:
@@ -2855,7 +3062,7 @@ def admin_jobs():
             if job_type not in {"student_quiz_generation", "student_flashcard_generation"} or not job_key:
                 error_msg = "Invalid job retry request."
             elif not _admin_secret_ok():
-                error_msg = "Admin action secret is incorrect."
+                error_msg = "Confirm your password and MFA at /admin/reauth before this action."
             elif retry_async_job(job_type, job_key):
                 _log_admin_action("retry_job", target=f"{job_type}:{job_key}")
                 flash(("success", f"Queued retry for {job_type}:{job_key}"))
@@ -2927,17 +3134,11 @@ def admin_jobs():
     def _retry_form(job: dict) -> str:
         if job.get("status") != "error" or job.get("job_type") not in {"student_quiz_generation", "student_flashcard_generation"}:
             return ""
-        secret = (
-            "<input name='admin_secret' type='password' autocomplete='off' placeholder='Admin secret' "
-            "style='font-size:11px;padding:6px 8px;max-width:140px;'>"
-            if ADMIN_ACTION_SECRET else ""
-        )
         return f"""
         <form method="POST" style="margin:0;display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
           <input type="hidden" name="action" value="retry_job">
           <input type="hidden" name="job_type" value="{_esc(str(job.get('job_type') or ''))}">
           <input type="hidden" name="job_key" value="{_esc(str(job.get('job_key') or ''))}">
-          {secret}
           <button class="btn btn-outline btn-sm" type="submit">Retry</button>
         </form>
         """
@@ -3084,7 +3285,7 @@ def _current_process_rss_mb() -> float | None:
         pass
     try:
         import resource  # type: ignore
-        rss = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        rss = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)  # type: ignore[attr-defined]
         return round(rss / 1024, 1)
     except Exception:
         return None
@@ -3249,7 +3450,7 @@ def admin_product_analytics():
         ("Activos 15 min", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {active_15m_pg}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {active_15m_lite}")),
         ("Visitas hoy", _admin_metric(f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_pg} AND {external_events}", f"SELECT COUNT(*) FROM product_analytics_events WHERE event_type='page_view' AND {today_lite} AND {external_events}")),
         ("Usuarios únicos hoy", _admin_metric(f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_pg} AND {external_events}", f"SELECT COUNT(DISTINCT client_id) FROM product_analytics_events WHERE client_id IS NOT NULL AND {today_lite} AND {external_events}")),
-        ("Registros hoy", _admin_metric(f"SELECT COUNT(*) FROM clients WHERE created_at >= CURRENT_DATE", "SELECT COUNT(*) FROM clients WHERE date(created_at)=date('now','localtime')")),
+        ("Registros hoy", _admin_metric("SELECT COUNT(*) FROM clients WHERE created_at >= CURRENT_DATE", "SELECT COUNT(*) FROM clients WHERE date(created_at)=date('now','localtime')")),
         ("Focus min hoy", _admin_metric("SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress WHERE plan_date::date = CURRENT_DATE", "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress WHERE date(plan_date)=date('now','localtime')")),
         ("XP hoy", _admin_metric(f"SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE {today_pg}", f"SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE {today_lite}")),
         ("Quizzes hoy", _admin_metric(f"SELECT COUNT(*) FROM student_quizzes WHERE {today_pg}", f"SELECT COUNT(*) FROM student_quizzes WHERE {today_lite}")),
@@ -3417,22 +3618,16 @@ def admin_product_analytics():
     return _render("Admin analytics", body, active_page="admin", wide=True)
 
 
-@app.route("/admin/leaderboard-winners-test")
+@app.route("/admin/leaderboard-winners-test", methods=["GET", "POST"])
 def admin_leaderboard_winners_test():
-    """Admin preview / dry-run for the monthly leaderboard winners email.
-
-    Query params:
-        month=YYYY-MM   — calendar month to preview (defaults to last month)
-        send=1          — actually send the email to the configured recipient
-                          instead of just rendering the preview
-    """
+    """Preview monthly winners with a reauthenticated POST-only send action."""
     if not _is_admin():
         return redirect(url_for("dashboard"))
 
     from datetime import date
     from student.academic import monthly_winners
 
-    raw = (request.args.get("month") or "").strip()
+    raw = (request.values.get("month") or "").strip()
     if raw:
         try:
             year_s, month_s = raw.split("-", 1)
@@ -3448,9 +3643,13 @@ def admin_leaderboard_winners_test():
         else:
             year, month = today.year, today.month - 1
 
-    if (request.args.get("send") or "").strip() in ("1", "true", "yes"):
+    if request.method == "POST":
+        if not _admin_secret_ok():
+            flash(("warning", "Confirm your password and MFA before sending this email."))
+            return redirect(url_for("admin_reauthenticate", next=request.full_path.rstrip("?")))
         from worker import send_monthly_leaderboard_email, LEADERBOARD_WINNERS_RECIPIENT
         send_monthly_leaderboard_email(year=year, month=month)
+        _log_admin_action("send_monthly_leaderboard_email", month=f"{year:04d}-{month:02d}")
         flash(("success", f"Triggered monthly winners email ({year:04d}-{month:02d}) → {LEADERBOARD_WINNERS_RECIPIENT}"))
         return redirect(url_for("admin_leaderboard_winners_test", month=f"{year:04d}-{month:02d}"))
 
@@ -3487,14 +3686,14 @@ def admin_leaderboard_winners_test():
 
     sections = [
         f"<h2 style='margin:0 0 4px;font-size:22px;'>🏆 Leaderboard winners — {data['label']}</h2>",
-        f"<div style='color:var(--text-muted);font-size:13px;margin-bottom:18px;'>"
+        "<div style='color:var(--text-muted);font-size:13px;margin-bottom:18px;'>"
         f"Period: {data['start']} → {data['end_exclusive']} (exclusive)</div>",
         summary_card,
         # Global leaderboard intentionally hidden while only Chile is active.
     ]
 
     def _section(title, groups):
-        parts = [f"<div class='card' style='padding:16px;margin-bottom:14px;'>",
+        parts = ["<div class='card' style='padding:16px;margin-bottom:14px;'>",
                  f"<div style='font-weight:700;margin-bottom:8px;'>{title}</div>"]
         if not groups:
             parts.append(
@@ -3527,9 +3726,12 @@ def admin_leaderboard_winners_test():
         f"style='padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);'>"
         f"<button type='submit' class='btn btn-primary btn-sm'>Load</button>"
         f"</form>"
-        f"<a class='btn btn-secondary btn-sm' href='?month={year:04d}-{month:02d}&send=1' "
-        f"onclick=\"return confirm('Send the {year:04d}-{month:02d} email to the recipient now?');\" "
-        f"style='margin-left:auto;'>📤 Send email for {year:04d}-{month:02d}</a>"
+        f"<form method='post' action='' style='display:inline-flex;margin:0 0 0 auto;' "
+        f"onsubmit=\"return confirm('Send the {year:04d}-{month:02d} email to the recipient now?');\">"
+        f"{_csrf_hidden_input()}"
+        f"<input type='hidden' name='month' value='{year:04d}-{month:02d}'>"
+        f"<button class='btn btn-secondary btn-sm' type='submit'>📤 Send email for {year:04d}-{month:02d}</button>"
+        f"</form>"
         f"</div>"
     )
 
@@ -3546,11 +3748,6 @@ def settings():
     if not _logged_in():
         return redirect(url_for("login"))
     return redirect("/student/settings")
-
-# ---------------------------------------------------------------------------
-# Google Calendar — OAuth + API (shared by student + business)
-# ---------------------------------------------------------------------------
-
 
 # ---------------------------------------------------------------------------
 # Routes — Reply Inbox
@@ -3739,6 +3936,16 @@ def lemonsqueezy_webhook():
         # operations such as cancellation. Lemon includes the real provider
         # subscription id in the invoice attributes instead.
         sub_id = provider_subscription_id
+        urls = attrs.get("urls") if isinstance(attrs.get("urls"), dict) else {}
+        provider_fields = {
+            "ends_at": attrs.get("ends_at"),
+            "renews_at": attrs.get("renews_at"),
+            "update_payment_method_url": urls.get("update_payment_method"),
+            "customer_portal_url": urls.get("customer_portal"),
+        }
+        provider_fields = {
+            key: str(value) for key, value in provider_fields.items() if value is not None
+        }
         if removed_legacy_tier:
             cancelled = (
                 ls.cancel_subscription(sub_id, test_mode=True)
@@ -3759,26 +3966,56 @@ def lemonsqueezy_webhook():
                 tier=tier,
                 status=(attrs.get("status") or "active"),
                 ls_sub_id=sub_id,
+                **provider_fields,
             )
-        elif event_name in ("subscription_updated", "subscription_plan_changed"):
+        elif event_name in (
+            "subscription_updated",
+            "subscription_plan_changed",
+            "subscription_resumed",
+            "subscription_unpaused",
+        ):
             ssub.set_subscription_state(
                 cid,
                 tier=tier,
                 status=(attrs.get("status") or "active"),
                 ls_sub_id=sub_id or None,
+                **provider_fields,
             )
-        elif event_name in ("subscription_cancelled", "subscription_expired"):
-            ssub.set_subscription_state(cid, tier="free", status="canceled",
-                                        ls_sub_id=sub_id or None)
+        elif event_name == "subscription_cancelled":
+            ssub.set_subscription_state(
+                cid,
+                tier="plus",
+                status="cancelled",
+                ls_sub_id=sub_id or None,
+                **provider_fields,
+            )
+        elif event_name == "subscription_expired":
+            ssub.set_subscription_state(
+                cid,
+                tier="free",
+                status="expired",
+                ls_sub_id=sub_id or None,
+                **provider_fields,
+            )
         elif event_name == "subscription_payment_failed":
-            ssub.set_subscription_state(cid, status="past_due",
-                                        ls_sub_id=sub_id or None)
+            ssub.set_subscription_state(
+                cid,
+                status="past_due",
+                ls_sub_id=sub_id or None,
+                **provider_fields,
+            )
         elif event_name in (
             "subscription_payment_success",
             "subscription_payment_recovered",
         ):
-            ssub.set_subscription_state(cid, tier=tier, status="active",
-                                        ls_sub_id=sub_id or None)
+            ssub.set_subscription_state(
+                cid,
+                tier=tier,
+                status="active",
+                ls_sub_id=sub_id or None,
+                payment_succeeded=True,
+                **provider_fields,
+            )
         elif event_name == "subscription_payment_refunded":
             refunded_amount = int(attrs.get("refunded_amount") or 0)
             total = int(attrs.get("total") or 0)
@@ -3786,17 +4023,24 @@ def lemonsqueezy_webhook():
                 total > 0 and refunded_amount >= total
             )
             if fully_refunded:
+                # Entitlements are revoked from the signed provider event first.
+                # Provider cancellation is reconciliation and must never keep
+                # refunded access alive during a provider outage.
+                ssub.set_subscription_state(
+                    cid, tier="free", status="refunded", ls_sub_id=sub_id or None
+                )
                 cancelled = (
                     ls.cancel_subscription(sub_id, test_mode=True)
                     if signature_mode == "test" and sub_id
                     else ls.cancel_subscription(sub_id) if sub_id else False
                 )
                 if not cancelled:
-                    _finish_claimed_ls_event("subscription-refund-cancel-failed")
-                    return "Subscription refund cancellation failed", 503
-                ssub.set_subscription_state(
-                    cid, tier="free", status="refunded", ls_sub_id=sub_id or None
-                )
+                    from machreach_core.db import record_operational_event
+                    record_operational_event("billing_reconciliation_failure", "full_refund")
+                    _log.error("[LS] full refund revoked locally but provider cancellation failed: %s", sub_id)
+            else:
+                from machreach_core.db import record_operational_event
+                record_operational_event("billing_refund_manual_review", "partial_subscription")
         _finish_claimed_ls_event()
         return "ok", 200
 
@@ -3845,7 +4089,9 @@ def lemonsqueezy_webhook():
 @app.route("/download/focus-guard.zip")
 def download_focus_guard():
     """Ship the Focus Guard Chrome extension as a zip the user can load-unpack."""
-    import io, os, zipfile
+    import io
+    import os
+    import zipfile
     ext_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "extensions", "focus-guard")
     if not os.path.isdir(ext_dir):
         return "Focus Guard extension bundle not found on this server.", 404
@@ -4010,7 +4256,6 @@ def privacy_page():
         <p><strong>Study activity:</strong> focus sessions, minutes studied per course, XP events, streaks, badges, quiz attempts, flashcard reviews, leaderboard rank, course outcomes, grades you enter, and in-app coin activity.</p>
         <p><strong>Social activity:</strong> friend connections and referral activity if you invite friends. We store who you are friends with and how many people joined with your referral link.</p>
         <p><strong>Focus Guard extension:</strong> extension settings and active-session state are used to support focus sessions. Some settings may be stored locally in your browser.</p>
-        <p><strong>Google Calendar:</strong> if you choose to connect it, MachReach stores encrypted OAuth credentials and the minimum calendar information needed to perform the calendar actions you request.</p>
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
         <p><strong>Technical data:</strong> security and application logs, IP address and browser information used for abuse prevention, session cookies, consent choices, error diagnostics, and optional product analytics after consent.</p>
         <h2>2. How We Use Your Information</h2>
@@ -4030,7 +4275,6 @@ def privacy_page():
         <ul>
           <li><strong>OpenAI:</strong> content you submit for AI-generated quizzes or flashcards may be sent to generate those study tools. OpenAI does not train on API data per its API data-usage policy.</li>
           <li><strong>Instructure / Canvas LMS:</strong> optional profile and course import when you connect Canvas.</li>
-          <li><strong>Google:</strong> optional Google Calendar authorization and calendar actions.</li>
           <li><strong>Lemon Squeezy:</strong> hosted checkout, subscriptions, coin-pack orders, and payment events.</li>
           <li><strong>Render:</strong> application hosting and database infrastructure.</li>
           <li><strong>Sentry:</strong> error reporting with sensitive fields scrubbed where possible, only when production monitoring is configured.</li>

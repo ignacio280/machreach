@@ -51,7 +51,6 @@ def test_study_plan_builds_all_context_and_applies_hard_overrides(monkeypatch):
         schedule_settings=[{"day": 0, "hours": 2, "free": False}, {"day": 8, "hours": 0, "free": True}],
         course_difficulties={"Math": 5},
         incomplete_assignments=[{"date": "2026-07-16", "course": "Math", "topic": "Limits", "hours": 1, "priority": "high"}],
-        calendar_events="2026-08-01 meeting",
         date_overrides=[{"date": "2026-08-01", "hours": 1, "note": "work"}],
     )
     assert result["daily_plan"][0]["total_hours"] == 1

@@ -3,6 +3,7 @@
 import os
 import sys
 import tempfile
+import logging
 from pathlib import Path
 
 
@@ -23,8 +24,14 @@ import app as appmod  # noqa: E402
 import worker  # noqa: E402
 from flask import jsonify  # noqa: E402
 from machreach_core import lemonsqueezy as lemon  # noqa: E402
-from machreach_core.db import _exec, claim_async_jobs, create_client, get_db  # noqa: E402
+from machreach_core.db import (  # noqa: E402
+    _exec,
+    claim_async_jobs,
+    create_client,
+    get_db,
+)
 from student import analyzer  # noqa: E402
+from student import subscription as ssub  # noqa: E402
 
 
 appmod.app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
@@ -44,6 +51,9 @@ analyzer.generate_quiz = lambda **_kwargs: [{
     "topic": "Kinematics",
 }]
 
+for logger_name in ("werkzeug", "machreach", "machreach.security", "student"):
+    logging.getLogger(logger_name).setLevel(logging.ERROR)
+
 
 @appmod.app.post("/__e2e__/run-quiz-worker")
 def run_quiz_worker():
@@ -53,7 +63,7 @@ def run_quiz_worker():
     return jsonify(processed=len(jobs))
 
 
-def seed_verified_student(name: str, email: str) -> None:
+def seed_verified_student(name: str, email: str) -> int:
     client_id = create_client(
         name,
         email,
@@ -68,10 +78,20 @@ def seed_verified_student(name: str, email: str) -> None:
             "WHERE id = %s",
             (client_id,),
         )
+    return client_id
 
 
-seed_verified_student("Browser Student", "browser-e2e@example.test")
-seed_verified_student("Delete Student", "delete-e2e@example.test")
+browser_id = seed_verified_student("Browser Student", "browser-e2e@example.test")
+ssub.set_tier(browser_id, "plus")
+for project_name in ("chromium", "firefox", "webkit", "mobile-chrome", "mobile-safari"):
+    seed_verified_student(
+        f"Checkout Student {project_name}",
+        f"checkout-e2e-{project_name}@example.test",
+    )
+    seed_verified_student(
+        f"Delete Student {project_name}",
+        f"delete-e2e-{project_name}@example.test",
+    )
 
 
 if __name__ == "__main__":

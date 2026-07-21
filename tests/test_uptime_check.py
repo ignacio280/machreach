@@ -12,7 +12,7 @@ def test_probe_retries_transport_timeouts_and_recovers() -> None:
         side_effect=[
             ProbeError("The read operation timed out"),
             ProbeError("The read operation timed out"),
-            {"status": "ok", "db": "connected"},
+            {"status": "healthy"},
         ]
     )
     sleep = Mock()
@@ -25,7 +25,7 @@ def test_probe_retries_transport_timeouts_and_recovers() -> None:
         sleep=sleep,
     )
 
-    assert payload == {"status": "ok", "db": "connected"}
+    assert payload == {"status": "healthy"}
     assert fetch.call_count == 3
     assert sleep.call_args_list == [call(3), call(7)]
 
@@ -50,8 +50,8 @@ def test_probe_fails_after_all_attempts() -> None:
 def test_probe_retries_an_unhealthy_payload() -> None:
     fetch = Mock(
         side_effect=[
-            {"status": "degraded", "db": "disconnected"},
-            {"status": "ok", "db": "connected"},
+            {"status": "degraded"},
+            {"status": "healthy"},
         ]
     )
 
@@ -63,5 +63,5 @@ def test_probe_retries_an_unhealthy_payload() -> None:
         sleep=Mock(),
     )
 
-    assert payload["status"] == "ok"
+    assert payload["status"] == "healthy"
     assert fetch.call_count == 2

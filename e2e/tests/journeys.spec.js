@@ -6,6 +6,8 @@ async function login(page, email = "browser-e2e@example.test") {
   await page.locator("#login-password").fill("e2e-password-123");
   await page.locator('form[action="/login"] button[type="submit"]').click();
   await expect(page).toHaveURL(/\/student(?:$|\/)/);
+  const consent = page.locator('#cookie-consent:not([hidden]) [data-consent-choice="essential"]');
+  if (await consent.isVisible()) await consent.click();
 }
 
 test("analytics consent dismisses without reloading and stays dismissed", async ({ page }) => {
@@ -47,40 +49,48 @@ test("analytics consent dismisses without reloading and stays dismissed", async 
   await expect(banner).toBeHidden();
 });
 
-test("student can register and reaches email verification", async ({ page }) => {
+test("student can register and reaches email verification", async ({ page }, testInfo) => {
+  const email = `new-browser-${testInfo.project.name}@example.test`;
   await page.goto("/register");
   await page.locator("#register-name").fill("New Browser Student");
-  await page.locator("#register-email").fill("new-browser@example.test");
+  await page.locator("#register-email").fill(email);
   await page.locator("#register-password").fill("browser-password-123");
   await page.locator("#register-password2").fill("browser-password-123");
   await page.locator('form[action="/register"] button[type="submit"]').click();
 
   await expect(page).toHaveURL(/\/verify-email-pending/);
-  await expect(page.getByText("new-browser@example.test")).toBeVisible();
+  await expect(page.getByText(email)).toBeVisible();
 });
 
-test("student can log in and create a manual course", async ({ page }) => {
+test("student can log in and create a manual course", async ({ page }, testInfo) => {
   await login(page);
   await page.goto("/student/courses");
-  await page.locator("#mc-code").fill("PHY-201");
-  await page.locator("#mc-name").fill("Applied Physics");
+  const suffix = testInfo.project.name;
+  await page.locator("#mc-code").fill(`PHY-${suffix}`);
+  await page.locator("#mc-name").fill(`Applied Physics ${suffix}`);
   await page.getByRole("button", { name: "Agregar curso", exact: true }).click();
 
-  await expect(page.getByText("Applied Physics", { exact: true })).toBeVisible();
-  await expect(page.getByText("PHY-201", { exact: true })).toBeVisible();
+  await expect(page.getByText(`Applied Physics ${suffix}`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`PHY-${suffix}`, { exact: true })).toBeVisible();
 });
 
-test("course details open from the course card", async ({ page }) => {
+test("course details open from the course card", async ({ page }, testInfo) => {
   await login(page);
   await page.goto("/student/courses");
-  await page.locator("#mc-code").fill("DETAIL-101");
-  await page.locator("#mc-name").fill("Course Detail Regression");
+  const courseName = `Course Detail ${testInfo.project.name}`;
+  await page.locator("#mc-code").fill(`DETAIL-${testInfo.project.name}`);
+  await page.locator("#mc-name").fill(courseName);
   await page.getByRole("button", { name: "Agregar curso", exact: true }).click();
 
-  const card = page.locator(".ccard", { hasText: "Course Detail Regression" });
+  const card = page.locator(".ccard", { hasText: courseName });
   const details = card.locator(".course-detail-card");
   await expect(details).toBeHidden();
-  await card.getByRole("button", { name: /ver detalles/i }).click();
+  const detailsButton = card.getByRole("button", { name: /ver detalles/i });
+  await expect(detailsButton).toBeVisible();
+  // WebKit can treat the global entrance transform as continuously unstable
+  // while cards are re-rendered; dispatch the same native button click after
+  // visibility so this journey tests the CSP-bound handler itself.
+  await detailsButton.evaluate((button) => button.click());
   await expect(details).toBeVisible();
 });
 
@@ -133,8 +143,8 @@ test("AI generation completes through the web queue and worker", async ({ page }
   expect(completed.quizzes.some((quiz) => quiz.title === "Physics foundations")).toBe(true);
 });
 
-test("paid plan sends the browser to hosted checkout", async ({ page }) => {
-  await login(page);
+test("paid plan sends the browser to hosted checkout", async ({ page }, testInfo) => {
+  await login(page, `checkout-e2e-${testInfo.project.name}@example.test`);
   await page.route("https://checkout.lemonsqueezy.test/**", (route) => route.fulfill({
     status: 200,
     contentType: "text/html",
@@ -148,8 +158,9 @@ test("paid plan sends the browser to hosted checkout", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Hosted checkout" })).toBeVisible();
 });
 
-test("student can permanently delete the account", async ({ page }) => {
-  await login(page, "delete-e2e@example.test");
+test("student can permanently delete the account", async ({ page }, testInfo) => {
+  const email = `delete-e2e-${testInfo.project.name}@example.test`;
+  await login(page, email);
   await page.goto("/student/settings");
   await page.getByRole("button", { name: /eliminar mi cuenta|delete my account/i }).click();
   await page.locator('form[action="/settings/delete-account"] input[name="confirm"]').fill("DELETE");
@@ -157,7 +168,7 @@ test("student can permanently delete the account", async ({ page }) => {
 
   await expect(page).toHaveURL("/");
   await page.goto("/login");
-  await page.locator("#login-email").fill("delete-e2e@example.test");
+  await page.locator("#login-email").fill(email);
   await page.locator("#login-password").fill("e2e-password-123");
   await page.getByRole("button", { name: /iniciar sesi[oó]n|sign in/i }).click();
   await expect(page).toHaveURL(/\/login$/);

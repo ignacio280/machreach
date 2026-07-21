@@ -180,9 +180,8 @@ def register_academic_routes(app, csrf, limiter):
     def academic_user_profile(user_id: int):
         """Return the public-safe profile for any student.
 
-        Includes name, country, university, major, total XP, current rank,
-        retired status, and badge count. Email and other private fields
-        are NEVER exposed.
+        Includes only name, university, major, XP/level, badges, ranking, and
+        friend-gated Focus totals. Email and academic records are never exposed.
         """
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
@@ -190,23 +189,18 @@ def register_academic_routes(app, csrf, limiter):
         with get_db() as db:
             row = _fetchone(
                 db,
-                "SELECT id, name, country_iso, university_id, major_id, retired, "
-                "       retired_at, profile_bio, created_at "
+                "SELECT id, name, university_id, major_id, retired "
                 "FROM clients WHERE id = %s AND account_type = 'student'",
                 (user_id,),
             )
         if not row:
             return jsonify({"error": "not found"}), 404
+        viewer_id = _cid()
+        if sdb.users_blocked(viewer_id, user_id):
+            return jsonify({"error": "not found"}), 404
 
         univ = ac.get_university(int(row["university_id"])) if row.get("university_id") else None
         major = ac.get_major(int(row["major_id"])) if row.get("major_id") else None
-        country = None
-        if row.get("country_iso"):
-            for c in ac.list_countries():
-                if c.get("iso_code") == row["country_iso"]:
-                    country = c
-                    break
-
         total_xp = sdb.get_total_xp(user_id) or 0
         rank_info = sdb.get_study_rank(int(total_xp))
         badges = sdb.get_badges(user_id) or []
@@ -214,42 +208,29 @@ def register_academic_routes(app, csrf, limiter):
         my_scope = "retirement" if retired else "global"
         my_rank_obj = ac.my_rank(my_scope, user_id) or {}
 
-        # Equipped banner (cosmetic) + total study time.
+        can_view_focus = viewer_id == user_id or sdb.are_friends(viewer_id, user_id)
         try:
-            wallet = sdb.get_wallet(user_id) or {}
-            banner_key = wallet.get("selected_banner") or "default"
-            banner_cfg = sdb.BANNERS.get(banner_key) or sdb.BANNERS.get("default") or {}
-            banner = {
-                "key": banner_key,
-                "css": banner_cfg.get("css", ""),
-                "anim_class": (banner_cfg.get("anim_class") or "") if banner_cfg.get("animated") else "",
-            }
-        except Exception:
-            banner = {"key": "default", "css": "", "anim_class": ""}
-
-        try:
+            if not can_view_focus:
+                raise PermissionError
             focus_stats = sdb.get_focus_stats(user_id) or {}
             total_minutes = int(focus_stats.get("total_minutes") or 0)
             sessions = int(focus_stats.get("total_sessions") or focus_stats.get("sessions") or 0)
+        except PermissionError:
+            total_minutes, sessions = None, None
         except Exception:
             total_minutes, sessions = 0, 0
-        total_hours = round(total_minutes / 60, 1)
+        total_hours = round(total_minutes / 60, 1) if total_minutes is not None else None
 
         return jsonify({
             "user_id": int(row["id"]),
             "name": row.get("name") or "Student",
-            "is_retired": retired,
-            "retired_at": str(row.get("retired_at") or "") if retired else None,
-            "joined_at": str(row.get("created_at") or ""),
-            "bio": (row.get("profile_bio") or "")[:500],
-            "country": country,
             "university": univ,
             "major": major,
             "xp": int(total_xp),
             "total_minutes": total_minutes,
             "total_hours": total_hours,
             "sessions": sessions,
-            "banner": banner,
+            "focus_private": not can_view_focus,
             "rank": {
                 "full_name": rank_info.get("full_name"),
                 "tier": rank_info.get("tier"),

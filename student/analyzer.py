@@ -190,7 +190,7 @@ COURSE MATERIAL:
             temperature=0.1,
             max_tokens=4000,
         )
-        raw = resp.choices[0].message.content.strip()
+        raw = (resp.choices[0].message.content or "").strip()
         # Strip markdown fences if present
         raw = re.sub(r"^```json?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
@@ -211,7 +211,6 @@ def generate_study_plan(
     schedule_settings: list[dict] | None = None,
     course_difficulties: dict | None = None,
     incomplete_assignments: list[dict] | None = None,
-    calendar_events: str = "",
     date_overrides: list[dict] | None = None,
 ) -> dict:
     """
@@ -339,14 +338,6 @@ def generate_study_plan(
         incomplete_ctx = "\nINCOMPLETE ASSIGNMENTS FROM PREVIOUS DAYS (must be rescheduled):\n" + "\n".join(inc_lines)
         incomplete_ctx += "\nThese MUST be included in the new plan — prioritize them."
 
-    calendar_ctx = ""
-    if calendar_events:
-        calendar_ctx = (
-            "\nGOOGLE CALENDAR EVENTS (real commitments — do NOT schedule study during these blocks):\n"
-            + calendar_events
-            + "\nWork around these. If a study block conflicts, move it earlier or to a free slot the same day."
-        )
-
     overrides_ctx = ""
     if date_overrides:
         lines = []
@@ -379,7 +370,6 @@ Student preferences: {prefs_str}
 {schedule_ctx}
 {diff_ctx}
 {incomplete_ctx}
-{calendar_ctx}
 {overrides_ctx}
 {materials_ctx}
 
@@ -461,7 +451,7 @@ Rules:
             max_tokens=16000,
         )
         choice = resp.choices[0]
-        raw = choice.message.content.strip()
+        raw = (choice.message.content or "").strip()
         raw = re.sub(r"^```json?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
 
@@ -489,7 +479,6 @@ def _post_process_plan(plan: dict, courses_data: list[dict], date_overrides: lis
         return plan
     # Build {course_name -> {exam_name_lower -> exam_date_str}} index
     exam_dates = {}  # course_name -> last_exam_date (date)
-    course_exam_dates = {}  # (course_name, exam_topic_keyword) -> date
     from datetime import date as _date
     for cd in courses_data or []:
         cname = cd.get("course_name")
@@ -639,7 +628,7 @@ def generate_flashcards(
                 )
 
             with ThreadPoolExecutor(max_workers=min(6, len(chunks))) as ex:
-                results = list(ex.map(_gen_chunk_fc, [(l, b, t) for (l, b), t in zip(chunks, targets)]))
+                results = list(ex.map(_gen_chunk_fc, [(label, body, target) for (label, body), target in zip(chunks, targets)]))
             all_cards = []
             seen = set()
             for batch in results:
@@ -687,7 +676,7 @@ No markdown fences, no explanation. ONLY the JSON array."""
             temperature=0.3,
             max_tokens=8000,
         )
-        raw = resp.choices[0].message.content.strip()
+        raw = (resp.choices[0].message.content or "").strip()
         raw = re.sub(r"^```json?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
         cards = json.loads(raw)
@@ -781,7 +770,7 @@ Return ONLY a valid JSON array — no markdown fences, no commentary:
             max_tokens=8000,
             response_format={"type": "json_object"},
         )
-        raw = resp.choices[0].message.content.strip()
+        raw = (resp.choices[0].message.content or "").strip()
     except Exception:
         # Fallback without json_object (older / incompatible models)
         resp = _ai().chat.completions.create(
@@ -790,7 +779,7 @@ Return ONLY a valid JSON array — no markdown fences, no commentary:
             temperature=0.4,
             max_tokens=8000,
         )
-        raw = resp.choices[0].message.content.strip()
+        raw = (resp.choices[0].message.content or "").strip()
 
     raw = re.sub(r"^```json?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
@@ -874,7 +863,7 @@ def generate_quiz(
                 )
 
             with ThreadPoolExecutor(max_workers=min(6, len(chunks))) as ex:
-                results = list(ex.map(_gen_chunk_qz, [(l, b, t) for (l, b), t in zip(chunks, targets)]))
+                results = list(ex.map(_gen_chunk_qz, [(label, body, target) for (label, body), target in zip(chunks, targets)]))
             all_qs = []
             seen = set()
             for batch in results:

@@ -9,14 +9,8 @@ from __future__ import annotations
 
 import io
 import logging
-import re
 import zipfile
-from datetime import datetime
-from typing import Any
-from urllib.parse import urlparse
 
-import requests
-from requests import HTTPError
 
 log = logging.getLogger(__name__)
 

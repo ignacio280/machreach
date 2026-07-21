@@ -7,7 +7,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 
 # ── Sentry error tracking (production only) ──
-from machreach_core.config import SENTRY_DSN
+from machreach_core.config import LEADERBOARD_WINNERS_RECIPIENT, SENTRY_DSN
 if SENTRY_DSN:
     import sentry_sdk
     sentry_sdk.init(
@@ -279,12 +279,39 @@ def process_async_jobs():
     for job in claim_async_jobs("student_flashcard_generation", limit=2, progress="Generating your flashcards..."):
         processed += 1
         _process_student_flashcard_job(job)
+    for job in claim_async_jobs("verification_email", limit=5, progress="Sending verification email..."):
+        processed += 1
+        from app import _send_system_email
+        from machreach_core.verification_delivery import process_job
+        process_job(job, _send_system_email)
     if processed:
         print(f"[ASYNC JOBS] Processed {processed} job(s).")
 
 
 def heartbeat():
     record_worker_heartbeat()
+
+
+def clean_abandoned_unverified_accounts():
+    """Remove pending registrations after the documented seven-day window."""
+    from machreach_core.verification_delivery import delete_stale_unverified
+    deleted = delete_stale_unverified(days=7)
+    if deleted:
+        print(f"[ACCOUNT CLEANUP] Deleted {deleted} abandoned unverified account(s).")
+
+
+def expire_billing_grace_periods():
+    from student.subscription import expire_payment_grace_periods
+    changed = expire_payment_grace_periods()
+    if changed:
+        print(f"[BILLING] Expired {changed} payment grace period(s).")
+
+
+def purge_deleted_courses():
+    from student.db import purge_expired_course_deletions
+    purged = purge_expired_course_deletions()
+    if purged:
+        print(f"[COURSES] Purged {purged} expired deletion(s).")
 
 
 def cancel_retired_product_subscriptions():
@@ -448,9 +475,6 @@ def send_streak_risk_pushes():
 
 
 # ── Monthly leaderboard winners email ────────────────────────────────────
-from machreach_core.config import LEADERBOARD_WINNERS_RECIPIENT
-
-
 def send_monthly_leaderboard_email(year: int | None = None, month: int | None = None):
     """Email the leaderboard winners for a given calendar month.
 
@@ -572,7 +596,7 @@ if __name__ == "__main__":
 
     print("MachReach Uni worker started.")
 
-    scheduler = BlockingScheduler()
+    scheduler = BlockingScheduler(timezone="America/Santiago")
     scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
     scheduler.add_job(heartbeat, "interval", minutes=1, id="worker_heartbeat")
     scheduler.add_job(recover_worker_state, "interval", minutes=1, id="recover_worker_state")
@@ -580,6 +604,12 @@ if __name__ == "__main__":
                       id="retired_billing_cancellations")
     scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
     scheduler.add_job(send_streak_risk_pushes, "cron", hour=20, minute=0, id="streak_risk_push")
+    scheduler.add_job(clean_abandoned_unverified_accounts, "cron", hour=3, minute=30,
+                      id="clean_abandoned_unverified_accounts")
+    scheduler.add_job(expire_billing_grace_periods, "interval", hours=1,
+                      id="expire_billing_grace_periods")
+    scheduler.add_job(purge_deleted_courses, "cron", hour=3, minute=45,
+                      id="purge_deleted_courses")
     # First of every month at 01:00 UTC: email previous month's leaderboard winners.
     scheduler.add_job(send_monthly_leaderboard_email, "cron", day=1, hour=1, minute=0,
                       id="monthly_leaderboard_email")

@@ -3,11 +3,17 @@ databases:
     plan: basic-256mb
     databaseName: machreach
     user: machreach
+  - name: machreach-staging-db
+    plan: basic-256mb
+    databaseName: machreach_staging
+    user: machreach_staging
 
 services:
   - type: web
     name: machreach-web
     runtime: python
+    plan: starter
+    autoDeployTrigger: checksPass
     buildCommand: pip install --require-hashes -r requirements.lock
     preDeployCommand: python migrate.py
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 --max-requests 5000 --max-requests-jitter 500
@@ -24,6 +30,10 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: ENCRYPTION_KEY
+        sync: false
+      - key: ADMIN_ACTION_SECRET
+        sync: false
+      - key: OPERATIONS_SECRET
         sync: false
       - key: SMTP_HOST
         sync: false
@@ -91,6 +101,8 @@ services:
   - type: worker
     name: machreach-worker
     runtime: python
+    plan: starter
+    autoDeployTrigger: checksPass
     buildCommand: pip install --require-hashes -r requirements.lock
     preDeployCommand: python migrate.py
     startCommand: python worker.py
@@ -113,6 +125,16 @@ services:
           name: machreach-web
           type: web
           envVarKey: ENCRYPTION_KEY
+      - key: ADMIN_ACTION_SECRET
+        fromService:
+          name: machreach-web
+          type: web
+          envVarKey: ADMIN_ACTION_SECRET
+      - key: OPERATIONS_SECRET
+        fromService:
+          name: machreach-web
+          type: web
+          envVarKey: OPERATIONS_SECRET
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -145,3 +167,159 @@ services:
           name: machreach-web
           type: web
           envVarKey: LEADERBOARD_WINNERS_RECIPIENT
+
+  - type: web
+    name: machreach-staging-web
+    runtime: python
+    plan: starter
+    autoDeployTrigger: "off"
+    buildCommand: pip install --require-hashes -r requirements.lock
+    preDeployCommand: python migrate.py
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 --max-requests 5000 --max-requests-jitter 500
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.12"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: APP_ENV
+        value: staging
+      - key: DATABASE_URL
+        fromDatabase:
+          name: machreach-staging-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: ADMIN_ACTION_SECRET
+        generateValue: true
+      - key: OPERATIONS_SECRET
+        generateValue: true
+      - key: BASE_URL
+        sync: false
+      - key: RATELIMIT_STORAGE_URI
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: LEMON_SQUEEZY_TEST_MODE
+        value: "true"
+      - key: LEMON_SQUEEZY_TEST_API_KEY
+        sync: false
+      - key: LEMON_SQUEEZY_TEST_STORE_ID
+        sync: false
+      - key: LEMON_SQUEEZY_TEST_WEBHOOK_SECRET
+        sync: false
+      - key: LS_TEST_VARIANT_STUDENT_PLUS
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_SMALL
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_MEDIUM
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_LARGE
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_MEGA
+        sync: false
+      - key: LS_TEST_VARIANT_COIN_ULTRA
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: POSTHOG_KEY
+        sync: false
+      - key: POSTHOG_HOST
+        sync: false
+
+  - type: worker
+    name: machreach-staging-worker
+    runtime: python
+    plan: starter
+    autoDeployTrigger: "off"
+    buildCommand: pip install --require-hashes -r requirements.lock
+    preDeployCommand: python migrate.py
+    startCommand: python worker.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.12"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: APP_ENV
+        value: staging
+      - key: DATABASE_URL
+        fromDatabase:
+          name: machreach-staging-db
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: SECRET_KEY
+      - key: ENCRYPTION_KEY
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: ENCRYPTION_KEY
+      - key: ADMIN_ACTION_SECRET
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: ADMIN_ACTION_SECRET
+      - key: OPERATIONS_SECRET
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: OPERATIONS_SECRET
+      - key: BASE_URL
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: BASE_URL
+      - key: OPENAI_API_KEY
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: OPENAI_API_KEY
+      - key: SMTP_HOST
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: SMTP_HOST
+      - key: SMTP_PORT
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: SMTP_PORT
+      - key: SMTP_USER
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: SMTP_USER
+      - key: SMTP_PASSWORD
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: SMTP_PASSWORD
+      - key: LEMON_SQUEEZY_TEST_MODE
+        value: "true"
+      - key: LEMON_SQUEEZY_TEST_API_KEY
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: LEMON_SQUEEZY_TEST_API_KEY
+      - key: LEMON_SQUEEZY_TEST_STORE_ID
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: LEMON_SQUEEZY_TEST_STORE_ID
+      - key: SENTRY_DSN
+        fromService:
+          name: machreach-staging-web
+          type: web
+          envVarKey: SENTRY_DSN

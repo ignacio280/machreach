@@ -32,10 +32,15 @@ def _configure_dependencies(monkeypatch):
     monkeypatch.setenv("RATELIMIT_STORAGE_URI", "redis://configured")
 
 
+def _record_fresh_backup():
+    record_operational_event("backup_success", "test")
+
+
 def test_operational_health_is_sanitized_and_healthy_with_fresh_worker(monkeypatch):
     _clear_operational_state()
     _configure_dependencies(monkeypatch)
     record_worker_heartbeat()
+    _record_fresh_backup()
 
     snapshot = collect_operational_health()
 
@@ -45,6 +50,7 @@ def test_operational_health_is_sanitized_and_healthy_with_fresh_worker(monkeypat
     assert snapshot["checks"]["failed_webhooks"]["count"] == 0
     assert "error" not in str(snapshot).lower()
     assert snapshot["checks"]["sentry"]["status"] == "ok"
+    assert snapshot["checks"]["backup_freshness"]["status"] == "ok"
 
 
 def test_operational_health_reports_missing_dependencies(monkeypatch):
@@ -106,16 +112,22 @@ def test_operational_health_detects_stale_queue_exhausted_jobs_and_provider_fail
     assert snapshot["checks"]["smtp_failures"]["count"] == 1
 
 
-def test_public_operational_probe_returns_503_without_exposing_failure_details(client):
+def test_operational_probe_requires_secret(client, monkeypatch):
     _clear_operational_state()
+    import app as appmod
+    monkeypatch.setattr(appmod, "OPERATIONS_SECRET", "monitor-secret")
 
     response = client.get("/health/operations")
 
+    assert response.status_code == 404
+    response = client.get(
+        "/health/operations",
+        headers={"X-Operations-Secret": "monitor-secret"},
+    )
     assert response.status_code == 503
     payload = response.get_json()
     assert payload["status"] == "degraded"
     assert payload["checks"]["worker_heartbeat"]["status"] == "alert"
-    assert set(payload["checks"]["worker_heartbeat"]) == {"status"}
     assert "last_error" not in response.get_data(as_text=True)
 
 
@@ -156,3 +168,14 @@ def test_postgres_capacity_alert_uses_connection_utilization(monkeypatch):
         "maximum": 10,
         "utilization": 0.8,
     }
+
+
+def test_operational_health_alerts_when_backup_is_missing(monkeypatch):
+    _clear_operational_state()
+    _configure_dependencies(monkeypatch)
+    record_worker_heartbeat()
+
+    snapshot = collect_operational_health()
+
+    assert snapshot["status"] == "degraded"
+    assert snapshot["checks"]["backup_freshness"]["status"] == "alert"
