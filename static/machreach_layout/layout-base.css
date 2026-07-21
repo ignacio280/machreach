@@ -3133,7 +3133,7 @@
     .auth-note,
     .auth-legal {
       margin: 0;
-      color: #77756F !important;
+      color: #5C5A54 !important;
       text-align: center;
       font-size: 12px;
       line-height: 1.55;
@@ -3176,7 +3176,7 @@
       text-align: center;
     }
     .auth-details summary {
-      color: #77756F;
+      color: #5C5A54;
       cursor: pointer;
       font-size: 12px;
       font-weight: 850;

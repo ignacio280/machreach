@@ -26,7 +26,7 @@ import hashlib
 import hmac
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 
@@ -186,7 +186,7 @@ def update_subscription_variant(
     normalized_variant_id: int | str = (
         int(str(variant_id)) if str(variant_id).isdigit() else str(variant_id)
     )
-    payload = {
+    payload: dict[str, Any] = {
         "data": {
             "type": "subscriptions",
             "id": str(subscription_id),

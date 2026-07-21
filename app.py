@@ -3269,8 +3269,11 @@ def _current_process_rss_mb() -> float | None:
 
             counters = PROCESS_MEMORY_COUNTERS()
             counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
-            kernel32 = ctypes.windll.kernel32
-            psapi = ctypes.windll.psapi
+            # ``ctypes.windll`` only exists on Windows.  Using ``getattr``
+            # keeps this guarded Windows path type-checkable on Linux CI.
+            windll = getattr(ctypes, "windll")
+            kernel32 = windll.kernel32
+            psapi = windll.psapi
             kernel32.GetCurrentProcess.restype = wintypes.HANDLE
             psapi.GetProcessMemoryInfo.argtypes = [
                 wintypes.HANDLE,
