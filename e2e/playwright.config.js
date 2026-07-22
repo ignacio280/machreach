@@ -9,6 +9,9 @@ module.exports = defineConfig({
   timeout: 30_000,
   expect: { timeout: 8_000 },
   fullyParallel: false,
+  // All projects intentionally exercise one shared Flask server and database.
+  // Serial execution prevents cross-browser state contention and server overload.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {

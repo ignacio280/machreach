@@ -3146,7 +3146,8 @@
     .auth-footer a,
     .auth-link-row a,
     .auth-details a {
-      color: #B54717 !important;
+      /* Keep auth links above WCAG AA even while the page-entry fade is settling. */
+      color: #9F3610 !important;
       font-weight: 950;
       text-decoration: none;
     }

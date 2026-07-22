@@ -37,12 +37,13 @@
       return;
     }
 
-    setBannerVisibility(banner, true);
     banner.querySelectorAll("[data-consent-choice]").forEach(function (button) {
       button.addEventListener("click", function () {
         saveConsent(banner, button.getAttribute("data-consent-choice") === "analytics");
       });
     });
+    // Do not expose an interactive banner until every choice is wired up.
+    setBannerVisibility(banner, true);
   }
 
   if (document.readyState === "loading") {

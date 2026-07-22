@@ -6,6 +6,10 @@ async function login(page, email = "browser-e2e@example.test") {
   await page.locator("#login-password").fill("e2e-password-123");
   await page.locator('form[action="/login"] button[type="submit"]').click();
   await expect(page).toHaveURL(/\/student(?:$|\/)/);
+  await page.waitForFunction(() => {
+    const banner = document.getElementById("cookie-consent");
+    return !banner || !banner.hidden || document.cookie.includes("cookie_consent=1");
+  });
   const consent = page.locator('#cookie-consent:not([hidden]) [data-consent-choice="essential"]');
   if (await consent.isVisible()) await consent.click();
 }
@@ -45,7 +49,8 @@ test("analytics consent dismisses without reloading and stays dismissed", async 
   await expect.poll(() => page.evaluate(() => document.cookie)).toContain("cookie_consent=1");
   await expect.poll(() => page.evaluate(() => document.cookie)).toContain("analytics_consent=1");
 
-  await page.reload();
+  await page.goto("/login?consent_check=1", { waitUntil: "commit" });
+  await expect(page.locator("#login-email")).toBeVisible();
   await expect(banner).toBeHidden();
 });
 
@@ -90,8 +95,12 @@ test("course details open from the course card", async ({ page }, testInfo) => {
   // WebKit can treat the global entrance transform as continuously unstable
   // while cards are re-rendered; dispatch the same native button click after
   // visibility so this journey tests the CSP-bound handler itself.
-  await detailsButton.evaluate((button) => button.click());
-  await expect(details).toBeVisible();
+  await expect.poll(async () => {
+    if (await details.isHidden()) {
+      await detailsButton.evaluate((button) => button.click());
+    }
+    return details.isVisible();
+  }).toBe(true);
 });
 
 test("grade-sheet controls work under the enforced CSP", async ({ page }) => {
