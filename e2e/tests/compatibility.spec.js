@@ -10,6 +10,13 @@ async function expectNoHorizontalOverflow(page) {
 }
 
 async function expectNoWcagViolations(page) {
+  await page.evaluate(async () => {
+    const finiteAnimations = document.getAnimations().filter((animation) => {
+      const timing = animation.effect && animation.effect.getComputedTiming();
+      return timing && Number.isFinite(timing.endTime);
+    });
+    await Promise.all(finiteAnimations.map((animation) => animation.finished.catch(() => undefined)));
+  });
   const results = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 }
