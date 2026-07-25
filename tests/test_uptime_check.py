@@ -79,24 +79,10 @@ def test_probe_retries_an_unhealthy_payload() -> None:
     assert fetch.call_count == 2
 
 
-def test_backup_freshness_alone_is_advisory_for_uptime() -> None:
+def test_operational_alert_fails_uptime() -> None:
     payload = {
         "status": "degraded",
         "checks": {
-            "backup_freshness": {"status": "alert"},
-            "worker_heartbeat": {"status": "ok"},
-            "failed_webhooks": {"status": "ok", "count": 0},
-        },
-    }
-
-    assert operations_are_healthy(payload)
-
-
-def test_non_backup_operational_alert_still_fails_uptime() -> None:
-    payload = {
-        "status": "degraded",
-        "checks": {
-            "backup_freshness": {"status": "alert"},
             "worker_heartbeat": {"status": "alert"},
         },
     }

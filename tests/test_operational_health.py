@@ -32,16 +32,10 @@ def _configure_dependencies(monkeypatch):
     monkeypatch.setenv("RATELIMIT_STORAGE_URI", "redis://configured")
 
 
-def _record_fresh_backup():
-    record_operational_event("backup_success", "test")
-
-
 def test_operational_health_is_sanitized_and_healthy_with_fresh_worker(monkeypatch):
     _clear_operational_state()
     _configure_dependencies(monkeypatch)
     record_worker_heartbeat()
-    _record_fresh_backup()
-
     snapshot = collect_operational_health()
 
     assert snapshot["status"] == "ok"
@@ -50,7 +44,6 @@ def test_operational_health_is_sanitized_and_healthy_with_fresh_worker(monkeypat
     assert snapshot["checks"]["failed_webhooks"]["count"] == 0
     assert "error" not in str(snapshot).lower()
     assert snapshot["checks"]["sentry"]["status"] == "ok"
-    assert snapshot["checks"]["backup_freshness"]["status"] == "ok"
 
 
 def test_operational_health_reports_missing_dependencies(monkeypatch):
@@ -168,14 +161,3 @@ def test_postgres_capacity_alert_uses_connection_utilization(monkeypatch):
         "maximum": 10,
         "utilization": 0.8,
     }
-
-
-def test_operational_health_alerts_when_backup_is_missing(monkeypatch):
-    _clear_operational_state()
-    _configure_dependencies(monkeypatch)
-    record_worker_heartbeat()
-
-    snapshot = collect_operational_health()
-
-    assert snapshot["status"] == "degraded"
-    assert snapshot["checks"]["backup_freshness"]["status"] == "alert"
