@@ -5,11 +5,18 @@ from unittest.mock import Mock, call
 import pytest
 
 from scripts.check_uptime import (
+    OPERATIONS_HEALTH_URL,
     ProbeError,
+    http_status_is_probeable,
     operations_are_healthy,
     probe_with_retries,
     public_is_healthy,
 )
+
+
+def test_operations_degraded_status_is_available_to_the_validator() -> None:
+    assert http_status_is_probeable(OPERATIONS_HEALTH_URL, 503)
+    assert not http_status_is_probeable("https://example.test/health", 503)
 
 
 def test_probe_retries_transport_timeouts_and_recovers() -> None:

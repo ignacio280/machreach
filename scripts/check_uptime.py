@@ -29,6 +29,10 @@ class ProbeError(RuntimeError):
     """Raised when a health endpoint cannot be validated."""
 
 
+def http_status_is_probeable(url: str, status: int) -> bool:
+    return status == 200 or (url == OPERATIONS_HEALTH_URL and status == 503)
+
+
 def fetch_json(url: str, timeout: float = 15) -> dict[str, Any]:
     headers = {"User-Agent": USER_AGENT}
     if url == OPERATIONS_HEALTH_URL:
@@ -40,7 +44,7 @@ def fetch_json(url: str, timeout: float = 15) -> dict[str, Any]:
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.load(response)
-            if response.status != 200:
+            if not http_status_is_probeable(url, response.status):
                 raise ProbeError(f"HTTP {response.status}: {payload}")
             if not isinstance(payload, dict):
                 raise ProbeError("response was not a JSON object")
@@ -50,6 +54,8 @@ def fetch_json(url: str, timeout: float = 15) -> dict[str, Any]:
             payload = json.load(exc)
         except (json.JSONDecodeError, UnicodeDecodeError):
             payload = exc.reason
+        if http_status_is_probeable(url, exc.code) and isinstance(payload, dict):
+            return payload
         raise ProbeError(f"HTTP {exc.code}: {payload}") from exc
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise ProbeError(str(exc)) from exc
