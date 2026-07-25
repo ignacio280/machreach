@@ -4,7 +4,7 @@
 
 The Render Blueprint defines paid `starter` web and worker services for both production and staging. Production deploys only after GitHub checks pass. Staging uses its own paid Postgres database and deploys manually, with Lemon Squeezy test mode enabled.
 
-`/health` is intentionally public and exposes only `healthy` or `degraded`. `/health/operations` requires `X-Operations-Secret` and reports aggregate worker, queue, webhook, wallet, SMTP, database, dependency, and backup signals without user or job details.
+`/health` is intentionally public and exposes only `healthy` or `degraded`. `/health/operations` requires `X-Operations-Secret` and reports aggregate worker, queue, webhook, wallet, SMTP, database, dependency, and backup signals without user or job details. The five-minute uptime workflow treats backup freshness as an advisory because backup availability does not indicate a live application outage; the dedicated daily backup workflow remains the authoritative backup failure signal.
 
 ## Backups and recovery
 

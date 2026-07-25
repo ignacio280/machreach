@@ -4,7 +4,12 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from scripts.check_uptime import ProbeError, probe_with_retries, public_is_healthy
+from scripts.check_uptime import (
+    ProbeError,
+    operations_are_healthy,
+    probe_with_retries,
+    public_is_healthy,
+)
 
 
 def test_probe_retries_transport_timeouts_and_recovers() -> None:
@@ -65,3 +70,28 @@ def test_probe_retries_an_unhealthy_payload() -> None:
 
     assert payload["status"] == "healthy"
     assert fetch.call_count == 2
+
+
+def test_backup_freshness_alone_is_advisory_for_uptime() -> None:
+    payload = {
+        "status": "degraded",
+        "checks": {
+            "backup_freshness": {"status": "alert"},
+            "worker_heartbeat": {"status": "ok"},
+            "failed_webhooks": {"status": "ok", "count": 0},
+        },
+    }
+
+    assert operations_are_healthy(payload)
+
+
+def test_non_backup_operational_alert_still_fails_uptime() -> None:
+    payload = {
+        "status": "degraded",
+        "checks": {
+            "backup_freshness": {"status": "alert"},
+            "worker_heartbeat": {"status": "alert"},
+        },
+    }
+
+    assert not operations_are_healthy(payload)

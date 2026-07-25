@@ -22,6 +22,7 @@ ORIGIN_HEALTH_URL = os.environ.get(
     "UPTIME_ORIGIN_HEALTH_URL", "https://machreach.onrender.com/health"
 )
 USER_AGENT = "MachReach-Uptime/2.0"
+UPTIME_ADVISORY_CHECKS = frozenset({"backup_freshness"})
 
 
 class ProbeError(RuntimeError):
@@ -89,7 +90,32 @@ def public_is_healthy(payload: dict[str, Any]) -> bool:
 
 
 def operations_are_healthy(payload: dict[str, Any]) -> bool:
-    return payload.get("status") == "ok"
+    if payload.get("status") == "ok":
+        return True
+    if payload.get("status") != "degraded":
+        return False
+
+    checks = payload.get("checks")
+    if not isinstance(checks, dict) or not checks:
+        return False
+    return all(
+        name in UPTIME_ADVISORY_CHECKS
+        or (isinstance(value, dict) and value.get("status") in {"ok", "not_applicable"})
+        for name, value in checks.items()
+    )
+
+
+def operational_advisories(payload: dict[str, Any]) -> list[str]:
+    checks = payload.get("checks")
+    if not isinstance(checks, dict):
+        return []
+    return [
+        name
+        for name, value in checks.items()
+        if name in UPTIME_ADVISORY_CHECKS
+        and isinstance(value, dict)
+        and value.get("status") not in {"ok", "not_applicable"}
+    ]
 
 
 def diagnose_origin() -> None:
@@ -126,6 +152,12 @@ def main() -> int:
             OPERATIONS_HEALTH_URL,
             operations_are_healthy,
         )
+        advisories = operational_advisories(operations)
+        if advisories:
+            print(
+                "::warning title=MachReach operational advisory::"
+                f"{', '.join(advisories)}; the dedicated backup workflow remains authoritative"
+            )
         print(f"Operations health: {operations}")
     except ProbeError as exc:
         print(f"::error title=MachReach operational alert::{exc}")
