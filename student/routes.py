@@ -9365,7 +9365,7 @@ Material:
             repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 7px);
         }}
         .content:has(.focus-layout),.content-wide:has(.focus-layout),.mr-tb-main:has(.focus-layout) {{ min-height:calc(100vh - 88px)!important;height:auto!important;padding-bottom:34px!important;background:var(--focus-scene-bg)!important;position:relative;overflow:hidden;isolation:isolate; }}
-        .content:has(.focus-layout)::before,.content-wide:has(.focus-layout)::before,.mr-tb-main:has(.focus-layout)::before {{ content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--focus-scene-texture);opacity:var(--focus-scene-opacity);mix-blend-mode:multiply;animation:focusSceneDrift 18s linear infinite; }}
+        .content:has(.focus-layout)::before,.content-wide:has(.focus-layout)::before,.mr-tb-main:has(.focus-layout)::before {{ content:"";position:absolute;inset:-2%;z-index:0;pointer-events:none;background:var(--focus-scene-texture);opacity:var(--focus-scene-opacity);mix-blend-mode:multiply;animation:focusSceneDrift 18s infinite;will-change:transform; }}
         :root[data-theme="dark"] .content:has(.focus-layout)::before,:root[data-theme="dark"] .content-wide:has(.focus-layout)::before,:root[data-theme="dark"] .mr-tb-main:has(.focus-layout)::before {{ mix-blend-mode:screen;opacity:calc(var(--focus-scene-opacity) * .82); }}
         .focus-page-head,.focus-rival-card,.focus-exam-nudge,.focus-layout {{ position:relative;z-index:1; }}
         .focus-eye {{ font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#FF7A3D; }}
@@ -9389,16 +9389,32 @@ Material:
         :root[data-theme="dark"] .focus-layout .btn-primary,:root[data-theme="dark"] #focus-guard-card .btn-primary {{ border-color:#050505!important;box-shadow:0 4px 0 #050505,0 14px 32px color-mix(in oklab,var(--focus-accent) 25%,transparent)!important; }}
         .focus-layout .card {{ box-shadow:0 5px 0 color-mix(in oklab,var(--focus-accent) 30%,#1A1A1F),0 20px 48px color-mix(in oklab,var(--focus-accent) 10%,transparent)!important; }}
         :root[data-theme="dark"] .focus-layout .card {{ box-shadow:0 5px 0 var(--focus-accent),0 22px 58px rgba(0,0,0,.32)!important; }}
-        #focus-ambience-card,.focus-timer-shell {{ position:relative;overflow:hidden;isolation:isolate; }}
-        #focus-ambience-card::before,.focus-timer-shell::before {{ content:"";position:absolute;inset:-20%;z-index:-1;pointer-events:none;background:var(--focus-scene-orb);opacity:.55;filter:blur(10px);transform:translate3d(0,0,0);animation:focusAuraFloat 8s ease-in-out infinite alternate; }}
+        #focus-ambience-card,.focus-timer-shell {{ position:relative;isolation:isolate; }}
+        #focus-ambience-card {{ overflow:hidden; }}
+        .focus-timer-shell {{ overflow:visible; }}
+        #focus-ambience-card::before {{ content:"";position:absolute;inset:-20%;z-index:-1;pointer-events:none;background:var(--focus-scene-orb);opacity:.55;filter:blur(10px);transform:translate3d(0,0,0);animation:focusAuraFloat 8s ease-in-out infinite alternate; }}
         #focus-ambience-card::after {{ content:"";position:absolute;right:16px;top:14px;width:92px;height:92px;border-radius:30px;background:var(--focus-scene-texture);opacity:.28;transform:rotate(8deg);pointer-events:none; }}
         :root[data-theme="dark"] #focus-ambience-card::after {{ opacity:.20;mix-blend-mode:screen; }}
         .focus-grid {{ display:grid;grid-template-columns:1.4fr 1fr;gap:18px; }}
         @media (max-width:1100px) {{ .focus-grid {{ grid-template-columns:1fr; }} }}
         .focus-layout {{ grid-template-columns:minmax(0,1.06fr) minmax(340px,.94fr)!important;gap:14px!important;align-items:start!important;margin-bottom:24px!important; }}
+        @media (max-width:1100px) {{
+          .focus-layout {{ grid-template-columns:minmax(0,1fr)!important; }}
+          .focus-timer-shell,.focus-tools {{ min-width:0; }}
+        }}
+        @media (max-width:640px) {{
+          .focus-timer-shell #settings-pomodoro > div {{ display:grid!important;grid-template-columns:minmax(0,1fr); }}
+        }}
         .focus-timer-shell {{ padding:16px 18px!important; }}
         .focus-timer-shell .form-group {{ margin-bottom:8px!important; }}
         .focus-timer-shell label {{ margin-bottom:5px!important; }}
+        .focus-timer-shell input,.focus-timer-shell select {{ box-sizing:border-box; }}
+        .focus-timer-shell input:focus-visible,.focus-timer-shell select:focus-visible {{
+          outline:2px solid color-mix(in srgb,var(--focus-accent) 72%,transparent);
+          outline-offset:2px;
+          border-color:var(--focus-accent)!important;
+          box-shadow:0 2px 0 var(--focus-card-border)!important;
+        }}
         .focus-timer-shell #settings-pomodoro > div {{ gap:8px!important;margin-bottom:6px!important; }}
         .focus-timer-shell #settings-pomodoro p {{ display:none!important; }}
         .focus-timer-shell > .form-group,
@@ -9569,8 +9585,17 @@ Material:
         .xp-burst-main {{ font-family:"Bricolage Grotesque",sans-serif;font-size:clamp(54px,8vw,94px);font-weight:800;color:#FF7A3D;text-shadow:0 8px 0 #1A1A1F,0 20px 54px rgba(255,122,61,.35);animation:xpBurstRise 1.35s cubic-bezier(.18,1.35,.3,1) both; }}
         .xp-burst-sub {{ margin-top:10px;font-size:14px;font-weight:900;color:#FFF8E8;background:#1A1A1F;border:2px solid #FF7A3D;border-radius:999px;padding:8px 14px;box-shadow:0 5px 0 #FF7A3D;animation:xpBurstSub .9s .12s both; }}
         .xp-confetti {{ position:absolute;width:10px;height:16px;border-radius:3px;background:var(--c,#FF7A3D);left:50%;top:50%;animation:xpConfetti 1.2s cubic-bezier(.18,.8,.25,1) both; }}
-        @keyframes focusSceneDrift {{ from {{ transform:translate3d(-1.5%,0,0);background-position:0 0,0 0,0 0; }} to {{ transform:translate3d(1.5%,0,0);background-position:90px 60px,-70px 90px,40px 40px; }} }}
+        @keyframes focusSceneDrift {{
+          0%,100% {{ transform:translate3d(0,0,0) scale(1.015);animation-timing-function:cubic-bezier(.45,0,.55,1); }}
+          25% {{ transform:translate3d(1.35%,-.7%,0) scale(1.02);animation-timing-function:cubic-bezier(.45,0,.55,1); }}
+          50% {{ transform:translate3d(0,-1.35%,0) scale(1.015);animation-timing-function:cubic-bezier(.45,0,.55,1); }}
+          75% {{ transform:translate3d(-1.35%,-.7%,0) scale(1.02);animation-timing-function:cubic-bezier(.45,0,.55,1); }}
+        }}
         @keyframes focusAuraFloat {{ from {{ transform:translate3d(-2%,1%,0) scale(.98); }} to {{ transform:translate3d(2%,-1%,0) scale(1.04); }} }}
+        @media (prefers-reduced-motion: reduce) {{
+          .content:has(.focus-layout)::before,.content-wide:has(.focus-layout)::before,.mr-tb-main:has(.focus-layout)::before,
+          #focus-ambience-card::before {{ animation:none!important; }}
+        }}
         @keyframes ftBtnSwipe {{ to {{ transform:translateX(130%); }} }}
         @keyframes claimCardPop {{ 0% {{ transform:scale(.98); }} 45% {{ transform:scale(1.03); }} 100% {{ transform:scale(1); }} }}
         @keyframes xpBurstRise {{ 0% {{ opacity:0;transform:translateY(16px) scale(.72) rotate(-5deg); }} 22% {{ opacity:1;transform:translateY(0) scale(1.08) rotate(2deg); }} 72% {{ opacity:1; }} 100% {{ opacity:0;transform:translateY(-22px) scale(.96) rotate(0deg); }} }}
