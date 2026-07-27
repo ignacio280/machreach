@@ -998,7 +998,7 @@ LAYOUT = """<!DOCTYPE html>
       else window.alert(text);
     };
   </script>
-  <link rel="stylesheet" href="/static/machreach_layout/layout-base.css?v=2"/>
+  <link rel="stylesheet" href="/static/machreach_layout/layout-base.css?v=3"/>
   <link rel="stylesheet" href="/static/machreach_consent.css?v=20260719"/>
 </head>
 <body>
@@ -1688,11 +1688,16 @@ LAYOUT = """<!DOCTYPE html>
   <script src="/static/machreach_consent.js?v=20260719" defer></script>
 
   <!-- Floating focus timer widget (persists across pages) -->
-  <div id="focus-float" onclick="window.location='/student/focus'">
-    <span class="ff-close" onclick="event.stopPropagation();closeFocusFloat();">&times;</span>
-    <div class="ff-time" id="ff-time">--:--</div>
-    <div class="ff-label" id="ff-label">Focus</div>
-  </div>
+  <aside id="focus-float" aria-label="Temporizador de enfoque" aria-live="polite">
+    <button type="button" class="ff-main" onclick="activateFocusFloat()" aria-label="Abrir temporizador de enfoque">
+      <span class="ff-mini-icon" aria-hidden="true">&#9201;</span>
+      <span class="ff-copy">
+        <span class="ff-time" id="ff-time">--:--</span>
+        <span class="ff-label" id="ff-label">Focus</span>
+      </span>
+    </button>
+    <button type="button" class="ff-close" onclick="closeFocusFloat()" aria-label="Minimizar temporizador" title="Minimizar temporizador">&minus;</button>
+  </aside>
 
   <!-- Persistent silent <audio> element used for keepalive (prevents Chrome
        from throttling/freezing this tab while a focus session is running on
@@ -1700,7 +1705,7 @@ LAYOUT = """<!DOCTYPE html>
   <audio id="focus-keepalive" loop preload="auto" style="display:none"></audio>
   <audio id="focus-alarm" preload="auto" style="display:none"></audio>
 
-  <script src="/static/machreach_layout/layout-2.js"></script>
+  <script src="/static/machreach_layout/layout-2.js?v=20260726-focus-float-minimize2"></script>
 
   <!-- Student i18n: Spanish translations (client-side) -->
   {% if lang == 'es' and account_type|default('student') == 'student' %}

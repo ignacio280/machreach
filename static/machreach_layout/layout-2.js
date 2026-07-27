@@ -12,6 +12,7 @@
     var keepEl = document.getElementById('focus-keepalive');
     var alarmEl = document.getElementById('focus-alarm');
     var widget = document.getElementById('focus-float');
+    var minimizedKey = 'focus_float_minimized';
     if (!widget) return;
 
     var alarmDataUri = null;
@@ -176,6 +177,21 @@
     function writeState(s){
       try { localStorage.setItem('focus_float', JSON.stringify(s)); } catch(e){}
     }
+    function syncMinimizedState(){
+      var minimized = false;
+      try { minimized = localStorage.getItem(minimizedKey) === '1'; } catch(e){}
+      widget.classList.toggle('is-minimized', minimized);
+      widget.setAttribute('aria-label', minimized ? 'Temporizador de enfoque minimizado' : 'Temporizador de enfoque');
+      var mainButton = widget.querySelector('.ff-main');
+      if (mainButton) mainButton.setAttribute('aria-label', minimized ? 'Expandir temporizador de enfoque' : 'Abrir temporizador de enfoque');
+    }
+    function clearMinimizedState(){
+      try { localStorage.removeItem(minimizedKey); } catch(e){}
+      widget.classList.remove('is-minimized');
+      widget.setAttribute('aria-label', 'Temporizador de enfoque');
+      var mainButton = widget.querySelector('.ff-main');
+      if (mainButton) mainButton.setAttribute('aria-label', 'Abrir temporizador de enfoque');
+    }
     function markPhaseSaved(id){
       try {
         var arr = JSON.parse(localStorage.getItem('focus_saved_phases')||'[]');
@@ -265,6 +281,7 @@
       var d = readState();
       if (!d || !d.active){
         widget.style.display = 'none';
+        clearMinimizedState();
         stopKeepalive();
         return;
       }
@@ -289,6 +306,7 @@
         return;
       }
 
+      syncMinimizedState();
       widget.style.display = 'block';
       // Make sure keepalive stays running (browser may have paused it).
       if (keepEl && keepEl.paused) startKeepalive();
@@ -374,6 +392,7 @@
     if (initial && initial.active){
       ensureAudioReady();
       startKeepalive();
+      syncMinimizedState();
       widget.style.display = 'block';
     }
 
@@ -384,9 +403,24 @@
   })();
 
   function closeFocusFloat(){
-    try { localStorage.removeItem('focus_float'); } catch(e){}
     var el = document.getElementById('focus-float');
-    if (el) el.style.display='none';
-    var k = document.getElementById('focus-keepalive');
-    if (k){ try { k.pause(); k.currentTime = 0; } catch(e){} }
+    if (!el) return;
+    try { localStorage.setItem('focus_float_minimized', '1'); } catch(e){}
+    el.classList.add('is-minimized');
+    el.setAttribute('aria-label', 'Temporizador de enfoque minimizado');
+    var mainButton = el.querySelector('.ff-main');
+    if (mainButton) mainButton.setAttribute('aria-label', 'Expandir temporizador de enfoque');
+  }
+
+  function activateFocusFloat(){
+    var el = document.getElementById('focus-float');
+    if (el && el.classList.contains('is-minimized')){
+      try { localStorage.removeItem('focus_float_minimized'); } catch(e){}
+      el.classList.remove('is-minimized');
+      el.setAttribute('aria-label', 'Temporizador de enfoque');
+      var mainButton = el.querySelector('.ff-main');
+      if (mainButton) mainButton.setAttribute('aria-label', 'Abrir temporizador de enfoque');
+      return;
+    }
+    window.location = '/student/focus';
   }
