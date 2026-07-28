@@ -21959,7 +21959,7 @@ No markdown, no code fences. ONLY JSON.
                     if pack_billing_ready else
                     '  <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px;" disabled data-billing-disabled="true">Pagos no disponibles</button>'
                 ) +
-                f'</div>'
+                '</div>'
             )
         coin_packs_html = "".join(coin_pack_cards)
 
