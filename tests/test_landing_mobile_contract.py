@@ -23,3 +23,15 @@ def test_mobile_landing_has_authored_composition_and_resilient_intro():
         "].join", 1
     )[0]
     assert "HeroLeaderboard" in hero
+
+
+def test_public_landing_route_serves_the_mobile_artifact(client):
+    response = client.get("/")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'name="viewport" content="width=device-width, initial-scale=1"' in body
+    assert "landing-mobile-phone-15" in body
+    assert ".hero-anim-card { display: none !important; }" in body
+    assert ".mobile-leaderboard-demo" in body
+    assert "nav-cta-short" in body

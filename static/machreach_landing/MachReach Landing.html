@@ -651,16 +651,31 @@ section.section-live .mh-hl {
   .hero-grid h1 { overflow-wrap: anywhere; }
   .hero-grid .btn-lg { width: 100%; padding-inline: 18px; font-size: 16px; }
   .hero-grid > div:first-child { min-width: 0; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; overflow: hidden !important; }
+  .stats-grid > div { min-width: 0; padding: 24px 14px !important; border-right: none !important; }
+  .stats-grid > div:nth-child(odd) { border-right: 2px solid var(--line) !important; }
+  .stats-grid > div:nth-child(-n+2) { border-bottom: 2px solid var(--line) !important; }
+  .feat-grid,
+  .how-grid,
+  .quiz-wrap,
+  .foot-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .feat-grid > div,
+  .how-grid > div,
+  .quiz-wrap > div,
+  .foot-grid > div { min-width: 0; width: 100%; }
+  .plan-card { padding: 16px 12px !important; }
+  .plan-card > div { gap: 4px !important; }
+  .plan-block { padding: 8px 4px !important; font-size: 9px !important; }
   .price-grid { grid-template-columns: 1fr !important; gap: 28px !important; padding-inline: 0 !important; }
   .price-grid > div { width: 100%; min-width: 0; transform: none !important; padding: 24px !important; }
   .price-grid [style*="font-size: 48"] { font-size: 40px !important; overflow-wrap: anywhere; }
   .lb-wrap { display: none !important; }
   .mobile-leaderboard-demo { display: block !important; width: 100%; }
   .motion-ready .motion-reveal {
-    opacity: 1;
-    transform: none;
-    filter: none;
-    clip-path: none;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    clip-path: none !important;
   }
   .section-head { margin-bottom: 34px; text-align: left; }
   .section-head h2 { font-size: clamp(32px, 10vw, 44px); }
