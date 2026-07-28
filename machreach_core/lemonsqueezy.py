@@ -131,14 +131,15 @@ def list_subscriptions_by_email(
     store_id = LEMON_SQUEEZY_TEST_STORE_ID if test_mode else LEMON_SQUEEZY_STORE_ID
     if not email or not is_configured(test_mode=test_mode):
         return []
+    params: dict[str, str] = {
+        "filter[store_id]": str(store_id),
+        "filter[user_email]": str(email).strip().lower(),
+        "page[size]": "20",
+    }
     resp = requests.get(
         f"{LS_API}/subscriptions",
         headers=_auth_headers(test_mode=test_mode),
-        params={
-            "filter[store_id]": str(store_id),
-            "filter[user_email]": str(email).strip().lower(),
-            "page[size]": 20,
-        },
+        params=params,
         timeout=15,
     )
     if resp.status_code >= 300:
