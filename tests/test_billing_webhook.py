@@ -491,6 +491,7 @@ def test_expired_subscription_can_start_a_fresh_checkout(
     _complete_setup(cid)
     ssub.set_subscription_state(cid, tier="plus", status="expired", ls_sub_id="expired-sub")
     monkeypatch.setattr(ls, "create_checkout", lambda *_args, **_kwargs: "https://checkout.test/new")
+    monkeypatch.setattr(ls, "is_configured", lambda **_kwargs: True)
     _login_student(client, cid)
 
     response = client.post("/api/student/subscription/change", json={"tier": "plus"})
@@ -513,6 +514,7 @@ def test_cancelled_same_plan_resumes_existing_subscription(
         "update_subscription_variant",
         lambda sid, variant: calls.append((sid, variant)) or True,
     )
+    monkeypatch.setattr(ls, "is_configured", lambda **_kwargs: True)
     _login_student(client, cid)
 
     response = client.post("/api/student/subscription/change", json={"tier": "plus"})

@@ -22677,13 +22677,6 @@ No markdown, no code fences. ONLY JSON.
                 if _cfg.LEMON_SQUEEZY_TEST_MODE
                 else _cfg.LS_VARIANT_STUDENT_PLUS
             )
-            if tier != "free" and not ls.is_configured(
-                test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE
-            ):
-                return jsonify(
-                    ok=False,
-                    error="Los pagos no están disponibles porque la facturación no está configurada.",
-                ), 503
             paid_tiers = {"plus"}
             renewable_statuses = {"active", "on_trial", "trialing", "paused", "cancelled"}
             delinquent_statuses = {"past_due", "unpaid"}
@@ -22704,6 +22697,11 @@ No markdown, no code fences. ONLY JSON.
                 if provider_status in renewable_statuses:
                     if not variant:
                         return jsonify(ok=False, error="Plan not configured for checkout."), 503
+                    if not ls.is_configured(test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE):
+                        return jsonify(
+                            ok=False,
+                            error="Los pagos no están disponibles porque la facturación no está configurada.",
+                        ), 503
                     updated = (
                         ls.update_subscription_variant(sub_id, variant, test_mode=True)
                         if _cfg.LEMON_SQUEEZY_TEST_MODE
@@ -22728,6 +22726,11 @@ No markdown, no code fences. ONLY JSON.
 
             if not variant:
                 return jsonify(ok=False, error="Plan not configured for checkout."), 503
+            if not ls.is_configured(test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE):
+                return jsonify(
+                    ok=False,
+                    error="Los pagos no están disponibles porque la facturación no está configurada.",
+                ), 503
             url = ls.create_checkout(
                 variant,
                 custom_data={"purpose": "student_sub", "tier": tier, "client_id": str(cid)},

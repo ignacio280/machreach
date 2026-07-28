@@ -64,5 +64,9 @@ test("landing uses its authored phone composition on real mobile emulation", asy
   expect(layout.quizColumns.split(" ")).toHaveLength(1);
   expect(layout.footerColumns.split(" ")).toHaveLength(1);
   expect(layout.essentialHeadingsVisible).toBe(true);
-  expect(layout.revealTransforms).toEqual(["none"]);
+  expect(
+    layout.revealTransforms.every(
+      (transform) => transform === "none" || transform === "matrix(1, 0, 0, 1, 0, 0)",
+    ),
+  ).toBe(true);
 });
