@@ -25,7 +25,7 @@ from machreach_core.db import (
 )
 
 log = logging.getLogger(__name__)
-STUDENT_SCHEMA_VERSION = 3
+STUDENT_SCHEMA_VERSION = 4
 
 
 # ── Schema (appended to MachReach's init_db) ────────────────
@@ -547,17 +547,29 @@ def init_student_db():
         log.exception("backfill_course_catalog failed: %s", e)
     # Removed market feature: new installs should not create or expose its tables.
     # Weekly/monthly leaderboard prize tables.
-    try:
-        from student.leaderboard_prizes import init_prize_tables
-        init_prize_tables()
-    except Exception as e:
-        log.exception("init_prize_tables failed: %s", e)
+    from student.leaderboard_prizes import init_prize_tables
+    init_prize_tables()
     # Never advertise a current student schema after a partial initializer.
     with get_db() as db:
         _exec(db, "SELECT client_id, semester_label, canvas_active FROM student_courses LIMIT 0")
         _exec(db, "SELECT client_id, exam_id FROM student_course_files LIMIT 0")
         _exec(db, "SELECT client_id, coins FROM student_wallet LIMIT 0")
         _exec(db, "SELECT coin_debt FROM student_wallet LIMIT 0")
+        _exec(
+            db,
+            "SELECT period_kind, period_key, status, claim_token, claimed_at, completed_at "
+            "FROM student_lb_payout_run LIMIT 0",
+        )
+        _exec(
+            db,
+            "SELECT period_kind, next_period_key FROM student_lb_payout_cursor LIMIT 0",
+        )
+        _exec(
+            db,
+            "SELECT event_key, client_id, status, attempts, claimed_at, "
+            "next_attempt_at, sent_at "
+            "FROM student_lb_email_outbox LIMIT 0",
+        )
         _exec(
             db,
             "SELECT coins_reversed, refunded_amount, provider_total, refunded_at "
@@ -3145,6 +3157,7 @@ def export_student_data(client_id: int) -> dict:
         "coin_pack_orders": "student_coin_pack_orders",
         "leaderboard_prizes": "student_lb_prize",
         "leaderboard_periods_seen": "student_lb_period_seen",
+        "leaderboard_email_outbox": "student_lb_email_outbox",
     }
     data: dict = {}
     with get_db() as db:

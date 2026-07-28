@@ -3913,20 +3913,6 @@ Return this JSON shape:
 
 
 
-        # Lazy: run weekly/monthly leaderboard payouts if a boundary just passed.
-
-        try:
-
-            from student.leaderboard_prizes import run_payouts_if_due
-
-            run_payouts_if_due()
-
-        except Exception:
-
-            pass
-
-
-
         cid = _cid()
 
         canvas_tok = bool(sdb.get_courses(cid))

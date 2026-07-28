@@ -169,7 +169,9 @@ register_academic_routes(app, csrf, limiter)
 # System email helper — sends transactional emails from support@machreach.com
 # ---------------------------------------------------------------------------
 
-def _send_system_email(to: str, subject: str, body: str) -> bool:
+def _send_system_email(
+    to: str, subject: str, body: str, *, idempotency_key: str | None = None
+) -> bool:
     """Send a transactional email (verification, reset, invite) from the system account.
     Returns True on success."""
     from machreach_core.config import SMTP_HOST, SMTP_PORT
@@ -190,6 +192,10 @@ def _send_system_email(to: str, subject: str, body: str) -> bool:
     msg["Subject"] = subject
     msg["From"] = f"{SYSTEM_FROM_NAME} <{SYSTEM_FROM_EMAIL}>" if SYSTEM_FROM_EMAIL else SYSTEM_SMTP_USER
     msg["To"] = to
+    if idempotency_key:
+        import hashlib
+        digest = hashlib.sha256(idempotency_key.encode()).hexdigest()
+        msg["Message-ID"] = f"<{digest}@machreach.com>"
     msg.attach(MIMEText(body, "plain"))
     try:
         if SMTP_PORT == 587:

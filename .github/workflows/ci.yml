@@ -102,6 +102,7 @@ jobs:
           tests/test_delete_account_billing.py
           tests/test_canvas_reconciliation.py
           tests/test_removed_legacy_surface.py
+          tests/test_leaderboard_prizes_comprehensive.py
 
   browser-journeys:
     runs-on: ubuntu-latest

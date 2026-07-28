@@ -39,6 +39,21 @@ def _report_worker_error(context: str, exc: Exception) -> None:
         pass
 
 
+def process_leaderboard_payouts() -> None:
+    """Catch up closed leaderboard periods and drain their email outbox."""
+    try:
+        from student.leaderboard_prizes import (
+            cleanup_payout_outbox,
+            dispatch_payout_notifications,
+            run_due_payouts,
+        )
+        run_due_payouts()
+        dispatch_payout_notifications()
+        cleanup_payout_outbox()
+    except Exception as exc:
+        _report_worker_error("LEADERBOARD_PAYOUTS", exc)
+
+
 
 
 
@@ -608,16 +623,15 @@ if __name__ == "__main__":
                       id="clean_abandoned_unverified_accounts")
     scheduler.add_job(expire_billing_grace_periods, "interval", hours=1,
                       id="expire_billing_grace_periods")
+    scheduler.add_job(process_leaderboard_payouts, "interval", minutes=5,
+                      id="leaderboard_payouts", max_instances=1, coalesce=True)
     scheduler.add_job(purge_deleted_courses, "cron", hour=3, minute=45,
                       id="purge_deleted_courses")
-    # First of every month at 01:00 UTC: email previous month's leaderboard winners.
-    scheduler.add_job(send_monthly_leaderboard_email, "cron", day=1, hour=1, minute=0,
-                      id="monthly_leaderboard_email")
-
     # Run once immediately
     heartbeat()
     recover_worker_state()
     cancel_retired_product_subscriptions()
+    process_leaderboard_payouts()
     process_async_jobs()
 
     try:
