@@ -307,6 +307,7 @@ def test_subscription_checkout_forwards_test_mode(client, make_user, flask_app, 
         return "https://example.test/checkout"
 
     monkeypatch.setattr(ls, "create_checkout", fake_checkout)
+    monkeypatch.setattr(ls, "is_configured", lambda **_kwargs: True)
     cid = make_user()
     _complete_setup(cid)
     _login_student(client, cid)
@@ -557,6 +558,7 @@ def test_coin_checkout_forwards_test_mode(client, make_user, flask_app, monkeypa
         return "https://example.test/coin-checkout"
 
     monkeypatch.setattr(ls, "create_checkout", fake_checkout)
+    monkeypatch.setattr(ls, "is_configured", lambda **_kwargs: True)
     cid = make_user()
     _complete_setup(cid)
     _login_student(client, cid)
@@ -567,6 +569,120 @@ def test_coin_checkout_forwards_test_mode(client, make_user, flask_app, monkeypa
     assert response.get_json()["checkout_url"] == "https://example.test/coin-checkout"
     assert captured["variant"] == "variant_small"
     assert captured["test_mode"] is True
+
+
+def test_shop_is_plan_first_and_disables_unconfigured_billing(
+    client, make_user, monkeypatch
+):
+    monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", False)
+    monkeypatch.setattr(cfg, "LEMON_SQUEEZY_API_KEY", "")
+    monkeypatch.setattr(cfg, "LEMON_SQUEEZY_STORE_ID", "")
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "")
+    cid = make_user()
+    _complete_setup(cid)
+    _login_student(client, cid)
+
+    response = client.get("/student/shop")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert body.index('data-shop-tab="plan"') < body.index('data-shop-tab="coins"')
+    assert 'data-shop-panel="plan"' in body
+    assert 'data-shop-panel="coins"' in body
+    assert 'data-shop-panel="cosmetics"' in body
+    assert "IVA calculado y mostrado en checkout" in body
+    assert "renovaci" in body.lower()
+    assert "Pagos no disponibles" in body
+    assert 'data-billing-disabled="true"' in body
+
+
+def test_subscription_reconcile_restores_provider_status(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "plus-variant")
+    monkeypatch.setattr(ls, "is_configured", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        ls,
+        "list_subscriptions_by_email",
+        lambda email, **_kwargs: [{
+            "id": "provider-sub-42",
+            "attributes": {
+                "user_email": email,
+                "variant_id": "plus-variant",
+                "status": "active",
+                "renews_at": "2030-01-15T00:00:00Z",
+                "ends_at": None,
+                "urls": {
+                    "customer_portal": "https://billing.example.test/portal",
+                    "update_payment_method": "https://billing.example.test/payment",
+                },
+            },
+        }],
+    )
+    cid = make_user("Restore Student", "restore-student@example.test")
+    _complete_setup(cid)
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/reconcile")
+
+    assert response.status_code == 200
+    assert response.get_json()["restored"] is True
+    state = ssub.get_subscription_state(cid)
+    assert state["ls_sub_id"] == "provider-sub-42"
+    assert state["status"] == "active"
+    assert state["renews_at"] == "2030-01-15T00:00:00Z"
+
+
+def test_subscription_reconcile_prefers_active_provider_record(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "plus-variant")
+    monkeypatch.setattr(ls, "is_configured", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        ls,
+        "list_subscriptions_by_email",
+        lambda email, **_kwargs: [
+            {"id": "expired-sub", "attributes": {
+                "user_email": email, "variant_id": "plus-variant", "status": "expired",
+            }},
+            {"id": "active-sub", "attributes": {
+                "user_email": email, "variant_id": "plus-variant", "status": "active",
+            }},
+        ],
+    )
+    cid = make_user("Restore Priority", "restore-priority@example.test")
+    _complete_setup(cid)
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/reconcile")
+
+    assert response.status_code == 200
+    assert ssub.get_subscription_state(cid)["ls_sub_id"] == "active-sub"
+
+
+def test_subscription_reconcile_removes_stale_provider_entitlement(
+    client, make_user, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", False)
+    monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "plus-variant")
+    monkeypatch.setattr(ls, "is_configured", lambda **_kwargs: True)
+    monkeypatch.setattr(ls, "list_subscriptions_by_email", lambda *_args, **_kwargs: [])
+    cid = make_user("Stale Plus", "stale-plus@example.test")
+    _complete_setup(cid)
+    ssub.set_tier(cid, "plus")
+    _login_student(client, cid)
+
+    response = client.post("/api/student/subscription/reconcile")
+
+    assert response.status_code == 200
+    assert response.get_json()["provider_match"] is False
+    assert ssub.get_tier(cid) == "free"
+    assert ssub.get_subscription_state(cid)["status"] == "inactive"
 
 
 def test_bad_signature_rejected(client, make_user):

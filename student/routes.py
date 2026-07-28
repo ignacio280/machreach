@@ -21658,6 +21658,49 @@ No markdown, no code fences. ONLY JSON.
         cid = _cid()
         wallet = sdb.get_wallet(cid)
         total_xp = sdb.get_total_xp(cid)
+        from machreach_core import config as _shop_cfg
+
+        shop_test_mode = bool(_shop_cfg.LEMON_SQUEEZY_TEST_MODE)
+        shop_api_ready = bool(
+            (
+                _shop_cfg.LEMON_SQUEEZY_TEST_API_KEY
+                and _shop_cfg.LEMON_SQUEEZY_TEST_STORE_ID
+            )
+            if shop_test_mode else
+            (
+                _shop_cfg.LEMON_SQUEEZY_API_KEY
+                and _shop_cfg.LEMON_SQUEEZY_STORE_ID
+            )
+        )
+        plus_variant = (
+            _shop_cfg.LS_TEST_VARIANT_STUDENT_PLUS
+            if shop_test_mode else _shop_cfg.LS_VARIANT_STUDENT_PLUS
+        )
+        coin_variants = {
+            "small": (
+                _shop_cfg.LS_TEST_VARIANT_COIN_SMALL
+                if shop_test_mode else _shop_cfg.LS_VARIANT_COIN_SMALL
+            ),
+            "medium": (
+                _shop_cfg.LS_TEST_VARIANT_COIN_MEDIUM
+                if shop_test_mode else _shop_cfg.LS_VARIANT_COIN_MEDIUM
+            ),
+            "large": (
+                _shop_cfg.LS_TEST_VARIANT_COIN_LARGE
+                if shop_test_mode else _shop_cfg.LS_VARIANT_COIN_LARGE
+            ),
+            "mega": (
+                _shop_cfg.LS_TEST_VARIANT_COIN_MEGA
+                if shop_test_mode else _shop_cfg.LS_VARIANT_COIN_MEGA
+            ),
+            "ultra": (
+                _shop_cfg.LS_TEST_VARIANT_COIN_ULTRA
+                if shop_test_mode else _shop_cfg.LS_VARIANT_COIN_ULTRA
+            ),
+        }
+        subscription_billing_ready = bool(shop_api_ready and plus_variant)
+        requested_section = str(request.args.get("section") or "plan").lower()
+        active_section = requested_section if requested_section in {"plan", "coins", "cosmetics"} else "plan"
         # Build banner cards HTML
         is_plus = sdb._is_plus_user(cid)
         banner_cards = []
@@ -21795,7 +21838,7 @@ No markdown, no code fences. ONLY JSON.
                     price_html = "Gratis"
                 else:
                     _clp = f"{int(price):,}".replace(",", ".")
-                    price_html = f"${_clp}<span style='font-size:13px;font-weight:500;color:#64748b;'>/mes</span>"
+                    price_html = f"${_clp} CLP<span>/ mes</span>"
                 label_name = cfg.get("name", key.title())
                 locked = bool(cfg.get("locked"))
                 if is_current:
@@ -21804,15 +21847,23 @@ No markdown, no code fences. ONLY JSON.
                     btn = '<button class="btn btn-sm" disabled style="width:100%;background:#EDE7DA;color:#77756F;border:1px solid #D8CFBD;">Bloqueado por ahora</button>'
                 elif key == "free":
                     btn = f'<button class="btn btn-sm btn-outline" style="width:100%;" onclick="changeTier(\'{key}\')">Bajar a Gratis</button>'
+                elif not subscription_billing_ready:
+                    btn = '<button class="btn btn-sm btn-primary" style="width:100%;" disabled data-billing-disabled="true">Pagos no disponibles</button>'
                 else:
                     btn = f'<button class="btn btn-sm btn-primary" style="width:100%;" onclick="changeTier(\'{key}\')">Mejorar a {_esc(label_name)}</button>'
                 badge = '<div style="position:absolute;top:10px;right:10px;background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;">ACTIVO</div>' if is_current else ('<div style="position:absolute;top:10px;right:10px;background:#EDE7DA;color:#77756F;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;">PRONTO</div>' if locked else "")
                 sub_cards.append(
-                    f'<div style="position:relative;background:var(--card);border:2px solid {border};border-radius:16px;padding:18px;display:flex;flex-direction:column;">'
+                    f'<div class="shop-plan-card shop-plan-card--{key}" style="--plan-border:{border};">'
                     f'{badge}'
                     f'<div style="font-size:13px;font-weight:700;color:{border};text-transform:uppercase;letter-spacing:.5px;">{_esc(label_name)}</div>'
-                    f'<div style="font-size:28px;font-weight:800;margin:6px 0 4px;">{price_html}</div>'
+                    f'<div class="shop-price">{price_html}</div>'
                     f'<div style="color:var(--text-muted);font-size:12px;margin-bottom:10px;">{_esc(cfg.get("blurb",""))}</div>'
+                    + (
+                        '<div class="shop-billing-terms">IVA calculado y mostrado en checkout · cobro mensual · renovación automática. '
+                        'Cancela cuando quieras; mantienes el acceso hasta el fin del período pagado.</div>'
+                        if price else
+                        '<div class="shop-billing-terms">Sin cobros ni renovación.</div>'
+                    ) +
                     f'<ul style="list-style:none;padding:0;margin:0 0 14px;flex:1;">{features_html}</ul>'
                     f'{btn}'
                     '</div>'
@@ -21859,10 +21910,24 @@ No markdown, no code fences. ONLY JSON.
                 )
             subscription_section = (
                 '<div class="card">'
-                '<div class="card-header"><h2>\U0001F48E Suscripción</h2></div>'
+                '<div class="card-header"><h2>\U0001F48E Compara tu plan</h2></div>'
                 + billing_notice + usage_html +
-                '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">'
+                (
+                    '<div class="shop-billing-unavailable" role="status"><strong>Pagos no disponibles.</strong> '
+                    'La facturación de producción todavía no está configurada. Puedes comparar los planes, '
+                    'pero el checkout permanecerá desactivado.</div>'
+                    if not subscription_billing_ready else ""
+                ) +
+                '<div class="shop-plan-grid">'
                 + subscriptions_html +
+                '</div>'
+                '<div class="shop-restore">'
+                '<div><strong>¿Ya pagaste Plus?</strong><br><span>Restaura y reconcilia tu estado con el proveedor de pagos.</span></div>'
+                + (
+                    '<button class="btn btn-sm btn-outline" onclick="reconcileSubscription()">Restaurar compra</button>'
+                    if subscription_billing_ready else
+                    '<button class="btn btn-sm btn-outline" disabled data-billing-disabled="true">Restauración no disponible</button>'
+                ) +
                 '</div>'
                 '</div>'
             )
@@ -21874,6 +21939,7 @@ No markdown, no code fences. ONLY JSON.
         coin_pack_cards = []
         for pkey, pcfg in sdb.COIN_PACKS.items():
             total = int(pcfg["coins"]) + int(pcfg.get("bonus") or 0)
+            pack_billing_ready = bool(shop_api_ready and coin_variants.get(pkey))
             _pack_clp = f"{int(pcfg.get('price_clp') or 0):,}".replace(",", ".")
             bonus_html = (f'<div style="font-size:11px;color:#22c55e;font-weight:700;margin-top:4px;">+{pcfg["bonus"]} bonus \U0001FA99</div>'
                           if pcfg.get("bonus") else '')
@@ -21886,8 +21952,13 @@ No markdown, no code fences. ONLY JSON.
                 f'  <div style="font-size:13px;color:var(--text-muted);margin-top:6px;">{pcfg["name"]}</div>'
                 f'  <div style="font-size:24px;font-weight:800;margin-top:6px;">{total:,} monedas</div>'
                 f'  {bonus_html}'
-                f'  <div style="font-size:18px;font-weight:700;margin-top:10px;">${_pack_clp}</div>'
-                f'  <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px;" onclick="buyCoinPack(\'{pkey}\')">Comprar</button>'
+                f'  <div style="font-size:18px;font-weight:800;margin-top:10px;">${_pack_clp} CLP</div>'
+                f'  <div class="shop-billing-terms">Pago único · IVA calculado y mostrado en checkout · sin renovación.</div>'
+                + (
+                    f'  <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px;" onclick="buyCoinPack(\'{pkey}\')">Comprar</button>'
+                    if pack_billing_ready else
+                    '  <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px;" disabled data-billing-disabled="true">Pagos no disponibles</button>'
+                ) +
                 f'</div>'
             )
         coin_packs_html = "".join(coin_pack_cards)
@@ -21897,7 +21968,7 @@ No markdown, no code fences. ONLY JSON.
 {sdb.FLAG_ANIM_CSS}</style>
         <div class="shop-cd">
         <h1 style="margin-bottom:6px;">\U0001f6d2 Tienda</h1>
-        <p style="color:var(--text-muted);margin:0 0 24px;">Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque.</p>
+        <p style="color:var(--text-muted);margin:0 0 24px;">Gestiona tu plan, recarga monedas o personaliza tu perfil. Empieza comparando tu suscripción.</p>
         <style>
           .shop-cd {{ --card:#FFFFFF; --card-bg:#FFFFFF; --bg:#F4F1EA; --text:#1A1A1F; --text-muted:#6E6A60; --border:#E2DCCC; font-family:'Nunito',sans-serif; color:#1A1A1F; }}
           .shop-cd h1 {{ font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(42px,6vw,72px);line-height:.92;letter-spacing:-.05em;font-weight:600;color:#1A1A1F; }}
@@ -21910,11 +21981,42 @@ No markdown, no code fences. ONLY JSON.
           .shop-cd [style*="background:var(--card)"] {{ background:#FFFFFF!important; }}
           .shop-cd [style*="color:#334155"] {{ color:#5C5C66!important; }}
           .shop-cd [style*="color:#94a3b8"], .shop-cd [style*="color:#64748b"] {{ color:#77756F!important; }}
+          .shop-tabs {{ position:sticky;top:70px;z-index:5;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:6px;margin:0 0 20px;background:#E9E3D6;border:1px solid #D8D0BE;border-radius:18px; }}
+          .shop-tab {{ appearance:none;border:0;border-radius:13px;padding:11px 12px;background:transparent;color:#625E56;font:800 14px/1 'Nunito',sans-serif;cursor:pointer; }}
+          .shop-tab[aria-selected="true"] {{ background:#FFFFFF;color:#1A1A1F;box-shadow:0 2px 8px rgba(20,18,30,.08); }}
+          .shop-panel[hidden] {{ display:none!important; }}
+          .shop-panel {{ animation:shop-panel-in .18s ease-out; }}
+          @keyframes shop-panel-in {{ from {{ opacity:.35;transform:translateY(4px); }} }}
+          .shop-plan-grid {{ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px; }}
+          .shop-plan-card {{ position:relative;background:#FFFFFF;border:2px solid var(--plan-border);border-radius:16px;padding:18px;display:flex;flex-direction:column;min-width:0; }}
+          .shop-plan-card--plus {{ background:linear-gradient(145deg,#FBF9FF,#F3EEFF); }}
+          .shop-price {{ color:#17121F;font-size:28px;font-weight:900;line-height:1.1;margin:8px 0 5px; }}
+          .shop-price span {{ color:#51485F;font-size:13px;font-weight:800;margin-left:3px; }}
+          .shop-billing-terms {{ color:#625E56;font-size:11px;line-height:1.45;margin:0 0 12px; }}
+          .shop-billing-unavailable {{ margin:0 0 14px;padding:13px 14px;border:1px solid #E7B154;border-radius:12px;background:#FFF7DE;color:#694713;font-size:13px;line-height:1.45; }}
+          .shop-restore {{ display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;padding-top:16px;border-top:1px solid #E2DCCC;color:#1A1A1F;font-size:13px; }}
+          .shop-restore span {{ color:#6E6A60; }}
+          .shop-cd button:disabled {{ cursor:not-allowed!important;box-shadow:none!important;opacity:.58; }}
           .sh-active-chip {{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:rgba(255,255,255,.7); border-radius:999px; font-size:12px; font-weight:600; color:#78350f; }}
           .sh-cd {{ font-variant-numeric: tabular-nums; }}
+          @media (max-width:680px) {{
+            .shop-cd h1 {{ font-size:44px; }}
+            .shop-tabs {{ top:58px; }}
+            .shop-tab {{ padding:10px 7px;font-size:13px; }}
+            .shop-plan-grid {{ grid-template-columns:1fr; }}
+            .shop-restore {{ align-items:flex-start;flex-direction:column; }}
+            .shop-restore .btn {{ width:100%; }}
+          }}
         </style>
-        {active_html}
-        {subscription_section}
+        <nav class="shop-tabs" aria-label="Secciones de la tienda">
+          <button class="shop-tab" type="button" data-shop-tab="plan" aria-controls="shop-plan" aria-selected="{"true" if active_section == "plan" else "false"}" onclick="setShopSection('plan')">Plan</button>
+          <button class="shop-tab" type="button" data-shop-tab="coins" aria-controls="shop-coins" aria-selected="{"true" if active_section == "coins" else "false"}" onclick="setShopSection('coins')">Monedas</button>
+          <button class="shop-tab" type="button" data-shop-tab="cosmetics" aria-controls="shop-cosmetics" aria-selected="{"true" if active_section == "cosmetics" else "false"}" onclick="setShopSection('cosmetics')">Cosméticos</button>
+        </nav>
+        <section class="shop-panel" id="shop-plan" data-shop-panel="plan" {"hidden" if active_section != "plan" else ""}>
+          {subscription_section}
+        </section>
+        <section class="shop-panel" id="shop-coins" data-shop-panel="coins" {"hidden" if active_section != "coins" else ""}>
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;">
           <div class="stat-card stat-yellow" style="min-width:170px;"><div class="num" id="sh-coins">{coins} \U0001FA99</div><div class="label">Monedas</div></div>
           <div class="stat-card stat-blue" style="min-width:170px;"><div class="num" id="sh-freezes">{freezes}/{freeze_cap} \u2744\ufe0f</div><div class="label">Congeladores guardados (máx. {freeze_cap})</div></div>
@@ -21928,7 +22030,10 @@ No markdown, no code fences. ONLY JSON.
             {coin_packs_html}
           </div>
         </div>
+        </section>
 
+        <section class="shop-panel" id="shop-cosmetics" data-shop-panel="cosmetics" {"hidden" if active_section != "cosmetics" else ""}>
+        {active_html}
         <div class="card">
           <div class="card-header"><h2>\u2744\ufe0f Congeladores de racha 🔥</h2></div>
           <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Capacidad de tu plan: <b>{freezes}/{freeze_cap}</b> congeladores guardados. Gratis puede guardar hasta {sdb.FREE_STREAK_FREEZE_CAP}; Plus hasta {sdb.PAID_STREAK_FREEZE_CAP}.</p>
@@ -21956,9 +22061,26 @@ No markdown, no code fences. ONLY JSON.
             {flags_html}
           </div>
         </div>
+        </section>
 
         </div>
         <script>
+        function setShopSection(section, updateUrl = true) {{
+          const valid = ['plan', 'coins', 'cosmetics'];
+          if (!valid.includes(section)) section = 'plan';
+          document.querySelectorAll('[data-shop-panel]').forEach(panel => {{
+            panel.hidden = panel.dataset.shopPanel !== section;
+          }});
+          document.querySelectorAll('[data-shop-tab]').forEach(tab => {{
+            tab.setAttribute('aria-selected', String(tab.dataset.shopTab === section));
+          }});
+          if (updateUrl && window.history && window.history.replaceState) {{
+            const url = new URL(window.location.href);
+            if (section === 'plan') url.searchParams.delete('section');
+            else url.searchParams.set('section', section);
+            window.history.replaceState(null, '', url);
+          }}
+        }}
         const shopBusy = new Set();
         async function shopRequest(operation, url, payload) {{
           if (shopBusy.has(operation)) throw new Error('Esta acción ya está en curso.');
@@ -22028,6 +22150,13 @@ No markdown, no code fences. ONLY JSON.
             if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
             mrReload();
           }} catch(e) {{ alert(e.message || 'No se pudo cambiar el plan.'); }}
+        }}
+        async function reconcileSubscription() {{
+          try {{
+            const result = await shopRequest('subscription-reconcile','/api/student/subscription/reconcile');
+            alert(result.message || (result.restored ? 'Tu suscripción fue restaurada.' : 'Tu suscripción ya estaba actualizada.'));
+            window.location = '/student/shop?section=plan';
+          }} catch(e) {{ alert(e.message || 'No se pudo restaurar la compra.'); }}
         }}
         // Live countdown for active boost chips
         (function() {{
@@ -22411,13 +22540,18 @@ No markdown, no code fences. ONLY JSON.
         variant = variant_map.get(pack_key, "")
         if not variant:
             return jsonify(ok=False, error="Coin pack not configured for checkout."), 503
+        if not ls.is_configured(test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE):
+            return jsonify(
+                ok=False,
+                error="Los pagos no están disponibles porque la facturación no está configurada.",
+            ), 503
         cid = _cid()
         try:
             url = ls.create_checkout(
                 variant,
                 custom_data={"purpose": "coin_pack", "pack_key": pack_key, "client_id": str(cid)},
                 email=session.get("email") or None,
-                redirect_url=request.url_root.rstrip("/") + "/student/shop?bought=1",
+                redirect_url=request.url_root.rstrip("/") + "/student/shop?section=coins&bought=1",
                 test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE,
             )
         except Exception as e:
@@ -22543,6 +22677,13 @@ No markdown, no code fences. ONLY JSON.
                 if _cfg.LEMON_SQUEEZY_TEST_MODE
                 else _cfg.LS_VARIANT_STUDENT_PLUS
             )
+            if tier != "free" and not ls.is_configured(
+                test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE
+            ):
+                return jsonify(
+                    ok=False,
+                    error="Los pagos no están disponibles porque la facturación no está configurada.",
+                ), 503
             paid_tiers = {"plus"}
             renewable_statuses = {"active", "on_trial", "trialing", "paused", "cancelled"}
             delinquent_statuses = {"past_due", "unpaid"}
@@ -22597,6 +22738,104 @@ No markdown, no code fences. ONLY JSON.
             return jsonify(ok=True, checkout_url=url)
         except Exception as e:
             return jsonify(ok=False, error=str(e)), 500
+
+
+    @app.route("/api/student/subscription/reconcile", methods=["POST"])
+    def student_subscription_reconcile_api():
+        """Restore the local Plus state from the provider's email-scoped record."""
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        from machreach_core import config as _cfg
+        from machreach_core import lemonsqueezy as ls
+        from machreach_core.db import get_client
+        from student import subscription as _sub
+
+        test_mode = bool(_cfg.LEMON_SQUEEZY_TEST_MODE)
+        variant = (
+            _cfg.LS_TEST_VARIANT_STUDENT_PLUS
+            if test_mode else _cfg.LS_VARIANT_STUDENT_PLUS
+        )
+        if not variant or not ls.is_configured(test_mode=test_mode):
+            return jsonify(
+                ok=False,
+                error="La restauración no está disponible porque la facturación no está configurada.",
+            ), 503
+        client = get_client(_cid()) or {}
+        email = str(client.get("email") or "").strip().lower()
+        try:
+            subscriptions = ls.list_subscriptions_by_email(
+                email, test_mode=test_mode
+            )
+        except Exception as exc:
+            log.exception("Subscription reconciliation failed for client %s: %s", _cid(), exc)
+            return jsonify(
+                ok=False,
+                error="No pudimos consultar el estado de compra. Inténtalo nuevamente.",
+            ), 502
+        matches = [
+            row for row in subscriptions
+            if str((row.get("attributes") or {}).get("variant_id") or "") == str(variant)
+            and str((row.get("attributes") or {}).get("user_email") or "").strip().lower()
+            == email
+        ]
+        status_priority = {
+            "active": 0,
+            "on_trial": 0,
+            "trialing": 0,
+            "past_due": 1,
+            "unpaid": 1,
+            "cancelled": 2,
+            "canceled": 2,
+            "paused": 3,
+            "expired": 4,
+            "inactive": 4,
+        }
+        match = min(
+            matches,
+            key=lambda row: status_priority.get(
+                str((row.get("attributes") or {}).get("status") or "").lower(),
+                5,
+            ),
+            default=None,
+        )
+        if not match:
+            result = _sub.set_subscription_state(
+                _cid(),
+                tier="free",
+                status="inactive",
+                ls_sub_id="",
+                ends_at="",
+                renews_at="",
+                update_payment_method_url="",
+                customer_portal_url="",
+            )
+            return jsonify(
+                ok=True,
+                restored=False,
+                provider_match=False,
+                tier=result.get("tier"),
+                status=result.get("status"),
+                message="No hay una suscripción Plus vigente para esta cuenta.",
+            )
+        attributes = match.get("attributes") or {}
+        urls = attributes.get("urls") or {}
+        result = _sub.set_subscription_state(
+            _cid(),
+            tier="plus",
+            status=str(attributes.get("status") or "inactive"),
+            ls_sub_id=str(match.get("id") or ""),
+            ends_at=str(attributes.get("ends_at") or ""),
+            renews_at=str(attributes.get("renews_at") or ""),
+            update_payment_method_url=str(urls.get("update_payment_method") or ""),
+            customer_portal_url=str(urls.get("customer_portal") or ""),
+        )
+        return jsonify(
+            ok=True,
+            restored=True,
+            tier=result.get("tier"),
+            status=result.get("status"),
+            message="Estado de compra reconciliado con Lemon Squeezy.",
+        )
 
 
     log.info("Student routes registered.")

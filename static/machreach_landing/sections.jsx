@@ -343,6 +343,57 @@ function LeaderboardShowcaseLegacy() {
   );
 }
 
+function MobileLeaderboardDemo() {
+  const rows = [
+    { rank: 1, name: "Sofia_Db", xp: "24.100", tone: "#F59E0B" },
+    { rank: 2, name: "tú", xp: "22.850", tone: "var(--brand)", you: true },
+    { rank: 3, name: "Antonia", xp: "19.200", tone: "#8B5CF6" },
+  ];
+  return (
+    <div className="mobile-leaderboard-demo" aria-label="Ejemplo simplificado de ranking semanal">
+      <div style={{
+        border: "2px solid var(--ink)", borderRadius: 24, overflow: "hidden",
+        background: "var(--surface)", boxShadow: "0 5px 0 var(--ink)",
+      }}>
+        <div style={{
+          padding: "15px 16px", display: "flex", justifyContent: "space-between",
+          alignItems: "center", gap: 12, background: "var(--brand-soft)",
+          borderBottom: "2px solid var(--ink)",
+        }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 800 }}>Tu universidad</div>
+            <div style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 800 }}>SEMANA 26 · EN VIVO</div>
+          </div>
+          <span className="tag" style={{ background: "var(--surface)", color: "var(--brand-ink)" }}>+220 XP hoy</span>
+        </div>
+        <div style={{ padding: 10, display: "grid", gap: 8 }}>
+          {rows.map((row) => (
+            <div key={row.rank} style={{
+              display: "grid", gridTemplateColumns: "34px minmax(0, 1fr) auto",
+              alignItems: "center", gap: 10, padding: "12px 10px", borderRadius: 14,
+              background: row.you ? "var(--brand-soft)" : "var(--bg-2)",
+              border: row.you ? "2px solid var(--brand)" : "2px solid transparent",
+            }}>
+              <span style={{
+                width: 28, height: 28, borderRadius: 9, display: "grid", placeItems: "center",
+                background: row.tone, color: "white", fontFamily: "var(--font-display)",
+                fontWeight: 900, border: "2px solid var(--ink)",
+              }}>{row.rank}</span>
+              <span style={{ minWidth: 0, fontWeight: 900 }}>
+                {row.name}{row.you && <small style={{ marginLeft: 7, color: "var(--brand-ink)" }}>TU POSICIÓN</small>}
+              </span>
+              <strong style={{ fontFamily: "var(--font-display)", whiteSpace: "nowrap" }}>{row.xp} XP</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p style={{ marginTop: 16, color: "var(--ink-2)", fontSize: 15 }}>
+        Estudia con Focus, suma XP y vuelve a competir desde cero cada lunes.
+      </p>
+    </div>
+  );
+}
+
 function LeaderboardShowcase() {
   const [scope, setScope] = React.useState("uni");
   const [previewScope, setPreviewScope] = React.useState(null);
@@ -442,6 +493,7 @@ function LeaderboardShowcase() {
           <h2>Rankings semanales que<br/>te sacan a estudiar.</h2>
           <p>Tres niveles: tu carrera, tu universidad, tu país. Se reinician cada lunes para que siempre tengas una meta nueva.</p>
         </div>
+        <MobileLeaderboardDemo/>
         <div className="lb-wrap" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, alignItems: "center" }}>
           <div>
             <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
@@ -1011,8 +1063,6 @@ function LandingMotion() {
       "motion-deal-l",
     ];
     const revealSelectors = [
-      ".hero-grid > *",
-      "section .section-head",
       ".stats-grid > *",
       ".feat-grid > *",
       ".how-grid > *",

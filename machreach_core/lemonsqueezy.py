@@ -124,6 +124,30 @@ def create_checkout(
     return url
 
 
+def list_subscriptions_by_email(
+    email: str, *, test_mode: bool = False
+) -> list[dict]:
+    """Return this store's subscriptions for an exact customer email."""
+    store_id = LEMON_SQUEEZY_TEST_STORE_ID if test_mode else LEMON_SQUEEZY_STORE_ID
+    if not email or not is_configured(test_mode=test_mode):
+        return []
+    resp = requests.get(
+        f"{LS_API}/subscriptions",
+        headers=_auth_headers(test_mode=test_mode),
+        params={
+            "filter[store_id]": str(store_id),
+            "filter[user_email]": str(email).strip().lower(),
+            "page[size]": 20,
+        },
+        timeout=15,
+    )
+    if resp.status_code >= 300:
+        log.error("[LS] list subscriptions failed %s: %s", resp.status_code, resp.text[:500])
+        raise RuntimeError(f"Lemon Squeezy subscription lookup failed: {resp.status_code}")
+    data = (resp.json() or {}).get("data") or []
+    return [row for row in data if isinstance(row, dict)]
+
+
 def webhook_signature_mode(raw_body: bytes, signature_header: str) -> str | None:
     """Return ``live`` or ``test`` for an authenticated provider signature."""
     secrets = (

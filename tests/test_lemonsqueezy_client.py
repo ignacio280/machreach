@@ -88,6 +88,24 @@ def test_create_checkout_rejects_provider_error_and_missing_url(monkeypatch):
         assert "no URL" in str(exc)
 
 
+def test_list_subscriptions_scopes_lookup_to_store_and_email(monkeypatch):
+    request = {}
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_API_KEY", "ls-key")
+    monkeypatch.setattr(lemonsqueezy, "LEMON_SQUEEZY_STORE_ID", "store-1")
+
+    def fake_get(url, **kwargs):
+        request.update(url=url, **kwargs)
+        return _Response(body={"data": [{"id": "sub-1", "attributes": {}}]})
+
+    monkeypatch.setattr(lemonsqueezy.requests, "get", fake_get)
+
+    rows = lemonsqueezy.list_subscriptions_by_email(" Buyer@Example.Test ")
+
+    assert [row["id"] for row in rows] == ["sub-1"]
+    assert request["params"]["filter[store_id]"] == "store-1"
+    assert request["params"]["filter[user_email]"] == "buyer@example.test"
+
+
 def test_verify_webhook_and_cancel_subscription(monkeypatch):
     secret = "webhook-secret"
     raw = b'{"meta":{"event_name":"order_created"}}'

@@ -335,7 +335,7 @@ section.section-live .mh-hl {
    write — a line being written left → right
    page  — notebook page turning down from the top */
 .motion-ready .motion-reveal {
-  opacity: 0;
+  opacity: 1;
   will-change: transform, opacity, clip-path, filter;
 }
 .motion-ready .motion-reveal.motion-flip {
@@ -630,9 +630,41 @@ section.section-live .mh-hl {
 }
 
 /* responsive */
+.nav-cta-short { display: none; }
+.mobile-leaderboard-demo { display: none; }
 @media (max-width: 760px) {
-  section { padding: 64px 0; }
+  section { padding: 58px 0; }
+  .container { padding-inline: 18px; }
+  .nav-inner { padding: 10px 0; gap: 10px; }
   .nav-links { display: none; }
+  .logo { gap: 7px; min-width: 0; }
+  .logo-mark { width: 30px; height: 30px; }
+  .logo-text { font-size: 18px; }
+  .nav-actions { gap: 7px !important; }
+  .nav-theme-toggle { width: 34px !important; height: 34px !important; }
+  .nav-cta { min-height: 36px; padding: 7px 13px; font-size: 13px; border-radius: 11px; }
+  .nav-cta svg { display: none; }
+  .nav-cta-long { display: none; }
+  .nav-cta-short { display: inline; }
+  .hero-anim-card { display: none !important; }
+  .hero-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 0 !important; }
+  .hero-grid h1 { overflow-wrap: anywhere; }
+  .hero-grid .btn-lg { width: 100%; padding-inline: 18px; font-size: 16px; }
+  .hero-grid > div:first-child { min-width: 0; }
+  .price-grid { grid-template-columns: 1fr !important; gap: 28px !important; padding-inline: 0 !important; }
+  .price-grid > div { width: 100%; min-width: 0; transform: none !important; padding: 24px !important; }
+  .price-grid [style*="font-size: 48"] { font-size: 40px !important; overflow-wrap: anywhere; }
+  .lb-wrap { display: none !important; }
+  .mobile-leaderboard-demo { display: block !important; width: 100%; }
+  .motion-ready .motion-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    clip-path: none;
+  }
+  .section-head { margin-bottom: 34px; text-align: left; }
+  .section-head h2 { font-size: clamp(32px, 10vw, 44px); }
+  .section-head p { font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -685,12 +717,12 @@ section.section-live .mh-hl {
     /* ============ hero entrance choreography ============ */
     .hero-line { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: .1em; margin-bottom: -.1em; }
     .hero-line-in { display: inline-block; transform: translateY(0); transition: transform .9s cubic-bezier(.22,1,.36,1) var(--d, 0s); will-change: transform; }
-    body[data-intro="pending"] .hero-line-in { transform: translateY(112%); transition: none; }
+    body[data-intro="pending"] .hero-line-in { transform: none; transition: none; }
     .hero-anim { transition: opacity .8s cubic-bezier(.22,1,.36,1) var(--d, 0s), transform .8s cubic-bezier(.22,1,.36,1) var(--d, 0s); }
     .hero-anim[data-d="1"] { --d: .42s; }
     .hero-anim[data-d="2"] { --d: .56s; }
     .hero-anim[data-d="3"] { --d: .72s; }
-    body[data-intro="pending"] .hero-anim { opacity: 0; transform: translateY(26px); transition: none; }
+    body[data-intro="pending"] .hero-anim { opacity: 1; transform: none; transition: none; }
 
 
     /* animated flame on the streak badge */
@@ -3008,8 +3040,6 @@ function LandingMotion() {
       "motion-deal-l",
     ];
     const revealSelectors = [
-      ".hero-grid > *",
-      "section .section-head",
       ".stats-grid > *",
       ".feat-grid > *",
       ".how-grid > *",
@@ -3426,9 +3456,10 @@ window.Footer = Footer;
               <a href="#pricing">Precios</a>
               <a href="#faq">FAQ</a>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="nav-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <button onClick={() => setTweak("theme", tweaks.theme === "dark" ? "light" : "dark")}
                 aria-label="Cambiar tema"
+                className="nav-theme-toggle"
                 style={{
                   width: 38, height: 38, borderRadius: 12,
                   background: "var(--surface)", border: "2px solid var(--ink)",
@@ -3439,8 +3470,10 @@ window.Footer = Footer;
                   ? <Icon><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></Icon>
                   : <Icon><path d="M20 14a8 8 0 11-10-10 7 7 0 0010 10z"/></Icon>}
               </button>
-              <a href="/register" className="btn btn-primary btn-sm">
-                <IconCanvas size={14}/> Usar la extensión
+              <a href="/register" className="btn btn-primary btn-sm nav-cta">
+                <IconCanvas size={14}/>
+                <span className="nav-cta-long">Usar la extensión</span>
+                <span className="nav-cta-short">Empezar</span>
               </a>
             </div>
           </div>
@@ -3448,28 +3481,44 @@ window.Footer = Footer;
       );
     }
 
+    const INTRO_STORAGE_KEY = "machreach:intro-complete";
+
+    function shouldPlayIntro() {
+      if (typeof window === "undefined") return false;
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+      try { return window.localStorage.getItem(INTRO_STORAGE_KEY) !== "1"; }
+      catch (_) { return true; }
+    }
+
     function App() {
       const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
       const [introKey, setIntroKey] = React.useState(1);
+      const [introRequested, setIntroRequested] = React.useState(shouldPlayIntro);
 
       React.useEffect(() => {
         document.documentElement.dataset.theme = tweaks.theme || "light";
         document.documentElement.dataset.accent = tweaks.accent || "coral";
       }, [tweaks.theme, tweaks.accent]);
 
+      React.useEffect(() => {
+        if (!introRequested) document.body.dataset.intro = "done";
+      }, [introRequested]);
+
       const introDone = React.useCallback(() => {
         document.body.dataset.intro = "done";
+        try { window.localStorage.setItem(INTRO_STORAGE_KEY, "1"); } catch (_) {}
       }, []);
 
       const replayIntro = () => {
         window.scrollTo({ top: 0, behavior: "auto" });
         document.body.dataset.intro = "pending";
+        setIntroRequested(true);
         setIntroKey((k) => k + 1);
       };
 
       return (
         <>
-          <IntroOverlay key={introKey} enabled={!!tweaks.playIntro} onDone={introDone}/>
+          <IntroOverlay key={introKey} enabled={!!tweaks.playIntro && introRequested} onDone={introDone}/>
           <Nav tweaks={tweaks} setTweak={setTweak}/>
           <LandingMotion/>
           <Hero/>
