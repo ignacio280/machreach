@@ -190,17 +190,20 @@ def _load_subscription_row(db, client_id: int) -> dict:
 def _write_subscription_row(db, client_id: int, state: dict) -> None:
     from machreach_core.db import _exec
 
+    def nullable(value):
+        return value if value not in (None, "") else None
+
     values = (
         client_id,
         state.get("tier") or "free",
         state.get("status") or "inactive",
-        state.get("ls_sub_id"),
-        state.get("since"),
-        state.get("ends_at"),
-        state.get("renews_at"),
-        state.get("quota_period_start"),
-        state.get("quota_reset_at"),
-        state.get("past_due_since"),
+        nullable(state.get("ls_sub_id")),
+        nullable(state.get("since")),
+        nullable(state.get("ends_at")),
+        nullable(state.get("renews_at")),
+        nullable(state.get("quota_period_start")),
+        nullable(state.get("quota_reset_at")),
+        nullable(state.get("past_due_since")),
         state.get("update_payment_method_url") or "",
         state.get("customer_portal_url") or "",
         state.get("updated_at") or _utcnow().isoformat(),

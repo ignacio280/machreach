@@ -1,5 +1,6 @@
 """Money path: the Lemon Squeezy webhook that provisions/revokes paid tiers."""
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 import hashlib
 import hmac
 import json
@@ -105,7 +106,9 @@ def test_subscription_cancelled_keeps_plus_until_provider_end_date(client, make_
 
     assert _post(client, cancelled).status_code == 200
     assert ssub.get_tier(cid) == "plus"
-    assert ssub.get_subscription_state(cid)["ends_at"] == "2099-12-31T23:59:59Z"
+    assert datetime.fromisoformat(
+        ssub.get_subscription_state(cid)["ends_at"].replace("Z", "+00:00")
+    ) == datetime.fromisoformat("2099-12-31T23:59:59+00:00")
 
     expired = _student_event("subscription_expired", cid)
     expired["data"]["attributes"]["ends_at"] = "2000-01-01T00:00:00Z"
