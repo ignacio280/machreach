@@ -15,6 +15,7 @@ from student.canvas import (
     make_connect_token,
     verify_connect_token,
 )
+from student import canvas as canvas_mod
 
 
 def test_canvas_connect_tokens_round_trip_and_reject_tampering():
@@ -23,6 +24,22 @@ def test_canvas_connect_tokens_round_trip_and_reject_tampering():
     assert verify_connect_token(token) == 712
     assert verify_connect_token(token + "tampered") is None
     assert verify_connect_token("") is None
+
+
+def test_legacy_scalar_canvas_connect_token_remains_version_checked(monkeypatch):
+    class LegacySerializer:
+        def loads(self, token, max_age):
+            assert token == "legacy-token"
+            assert max_age > 0
+            return "712"
+
+    monkeypatch.setattr(canvas_mod, "_ext_serializer", lambda: LegacySerializer())
+    monkeypatch.setattr(canvas_mod, "_connection_version", lambda client_id: 0)
+
+    assert verify_connect_token("legacy-token") == 712
+
+    monkeypatch.setattr(canvas_mod, "_connection_version", lambda client_id: 1)
+    assert verify_connect_token("legacy-token") is None
 
 
 def test_docx_and_pdf_text_extraction_succeeds():

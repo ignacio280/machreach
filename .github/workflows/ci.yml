@@ -61,6 +61,10 @@ jobs:
           python -m pytest tests/test_friend_privacy.py \
             --cov=student.friend_routes --cov-report=term-missing \
             --cov-fail-under=90 -q
+          python -m pytest tests/test_canvas_and_i18n.py tests/test_upload_safety.py \
+            tests/test_extension.py tests/test_canvas_reconciliation.py \
+            --cov=student.canvas --cov-report=term-missing \
+            --cov-fail-under=90 -q
       - name: Audit Python dependencies
         run: python -m pip_audit -r requirements.lock
       - name: Verify landing build
