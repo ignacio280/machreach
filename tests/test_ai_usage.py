@@ -2,7 +2,7 @@ import pytest
 from concurrent.futures import ThreadPoolExecutor
 
 from machreach_core.db import _exec, _fetchone, get_db
-from student import ai_usage
+from student import ai_usage, subscription
 
 
 def test_reservation_is_idempotent_and_blocks_second_free_generation(make_user):
@@ -149,3 +149,34 @@ def test_concurrent_final_quota_reservation_has_one_winner(make_user):
         outcomes = list(pool.map(attempt, (1, 2)))
 
     assert sorted(outcomes) == ["blocked", "reserved"]
+
+
+def test_plus_tools_share_the_provider_billing_window(make_user):
+    client_id = make_user("AI Plus", "ai-plus@example.test")
+    subscription.set_subscription_state(
+        client_id,
+        tier="plus",
+        status="active",
+        ls_sub_id="ai-plus-subscription",
+        renews_at="2099-08-29T12:00:00Z",
+        provider_event_at="2026-07-29T12:00:00Z",
+    )
+
+    ai_usage.reserve(
+        client_id,
+        request_key="plus:brain",
+        feature="course_brain",
+        usage_kind="ai_tool_generated",
+        estimated_input_tokens=100,
+        estimated_output_tokens=50,
+    )
+    ai_usage.settle("plus:brain")
+    second = ai_usage.reserve(
+        client_id,
+        request_key="plus:quiz",
+        feature="quiz_worker",
+        usage_kind="quiz_generated",
+    )
+
+    assert second["tier"] == "plus"
+    assert subscription.generation_usage(client_id)["used"] == 1

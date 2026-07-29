@@ -37,7 +37,14 @@ jobs:
           python -m pytest
           --cov=app --cov=machreach_core --cov=student --cov=worker
           --cov-report=term-missing:skip-covered
-          --cov-fail-under=60
+          --cov-fail-under=62
+          -q
+      - name: Enforce AI accounting coverage
+        run: >-
+          python -m pytest tests/test_ai_usage.py
+          --cov=student.ai_usage
+          --cov-report=term-missing
+          --cov-fail-under=90
           -q
       - name: Audit Python dependencies
         run: python -m pip_audit -r requirements.lock
