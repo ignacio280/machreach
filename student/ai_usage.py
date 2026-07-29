@@ -55,15 +55,22 @@ def _ensure_schema(db) -> None:
     )
     if not _SCHEMA_MIGRATED:
         from machreach_core.db import _is_duplicate_column_error
-        try:
+        if _USE_PG:
             _exec(
                 db,
-                "ALTER TABLE student_ai_usage ADD COLUMN "
+                "ALTER TABLE student_ai_usage ADD COLUMN IF NOT EXISTS "
                 "estimated_cost_micros BIGINT NOT NULL DEFAULT 0",
             )
-        except Exception as exc:
-            if not _is_duplicate_column_error(exc):
-                raise
+        else:
+            try:
+                _exec(
+                    db,
+                    "ALTER TABLE student_ai_usage ADD COLUMN "
+                    "estimated_cost_micros BIGINT NOT NULL DEFAULT 0",
+                )
+            except Exception as exc:
+                if not _is_duplicate_column_error(exc):
+                    raise
         _SCHEMA_MIGRATED = True
     _exec(
         db,
