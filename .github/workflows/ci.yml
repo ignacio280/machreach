@@ -68,6 +68,9 @@ jobs:
           python -m pytest tests/test_worker_comprehensive.py \
             --cov=worker --cov-report=term-missing \
             --cov-fail-under=90 -q
+          python -m pytest tests/test_analyzer.py \
+            --cov=student.analyzer --cov-report=term-missing \
+            --cov-fail-under=90 -q
       - name: Audit Python dependencies
         run: python -m pip_audit -r requirements.lock
       - name: Verify landing build

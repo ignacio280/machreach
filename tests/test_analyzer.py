@@ -34,6 +34,23 @@ def test_analyze_material_empty_valid_and_invalid(monkeypatch):
     monkeypatch.setattr(analyzer, "_ai", lambda: _ai_with("not-json"))
     assert analyzer.analyze_course_material("Math", syllabus_html="x") == analyzer._empty_result("Math")
 
+    monkeypatch.setattr(
+        analyzer,
+        "_ai",
+        lambda: SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=lambda **kwargs: (_ for _ in ()).throw(
+                        RuntimeError("provider unavailable")
+                    )
+                )
+            )
+        ),
+    )
+    assert analyzer.analyze_course_material(
+        "Math", syllabus_html="material"
+    ) == analyzer._empty_result("Math")
+
 
 def test_study_plan_builds_all_context_and_applies_hard_overrides(monkeypatch):
     raw_plan = {
@@ -110,3 +127,115 @@ def test_study_plan_provider_failure_is_explicit(monkeypatch):
     monkeypatch.setattr(analyzer, "_ai", lambda: _ai_with("not-json"))
     with pytest.raises(RuntimeError, match="Plan generation failed"):
         analyzer.generate_study_plan([])
+
+
+def test_truncated_study_plan_is_repaired_when_json_can_be_closed(monkeypatch):
+    raw = '{"daily_plan":[{"date":"2026-08-01","sessions":[]}'
+    monkeypatch.setattr(analyzer, "_ai", lambda: _ai_with(raw, finish_reason="length"))
+
+    result = analyzer.generate_study_plan([])
+
+    assert result["daily_plan"][0]["date"] == "2026-08-01"
+
+
+def test_post_processing_ignores_invalid_catalog_rows_and_caps_sessions():
+    plan = {
+        "daily_plan": [{
+            "date": "2026-08-01",
+            "total_hours": 3,
+            "sessions": [
+                {"course": "Math", "hours": 1.5},
+                {"course": "Math", "hours": 1.5},
+            ],
+        }],
+    }
+    courses = [
+        {"exams": []},
+        {"course_name": "Invalid", "exams": [{"date": ""}, {"date": "bad"}]},
+        {"course_name": "Math", "exams": [{"date": "2026-08-10"}]},
+    ]
+    overrides = [
+        {"date": ""},
+        {"date": "2026-08-01", "hours": 2, "note": "limited"},
+    ]
+
+    result = analyzer._post_process_plan(plan, courses, overrides)
+
+    assert result["daily_plan"][0]["total_hours"] == 2
+    assert result["daily_plan"][0]["sessions"][1]["hours"] == 0.5
+
+
+def test_long_material_generation_chunks_and_deduplicates(monkeypatch):
+    long_source = (
+        "Chapter 1\n" + "a" * 60010 + "\nChapter 2\n" + "b" * 60010
+    )
+    monkeypatch.setattr(
+        analyzer,
+        "_ai",
+        lambda: _ai_with(
+            json.dumps([
+                {"front": "Shared", "back": "Answer"},
+                {"front": "Shared", "back": "Duplicate"},
+            ])
+        ),
+    )
+    cards = analyzer.generate_flashcards("Math", source_text=long_source, count=8)
+    assert cards == [{"front": "Shared", "back": "Answer"}]
+
+    calls = []
+
+    def batch(**kwargs):
+        calls.append(kwargs["context"][:30])
+        return [_question(f"Question {len(calls)}")]
+
+    monkeypatch.setattr(analyzer, "_generate_quiz_batch", batch)
+    quiz = analyzer.generate_quiz(
+        "Math", source_text=long_source, difficulty="hard", count=6
+    )
+    assert len(quiz) >= 2
+    assert len(calls) >= 2
+
+
+def test_quiz_batch_provider_fallback_and_malformed_items(monkeypatch):
+    calls = 0
+    raw = (
+        'prefix [{"question":"valid","option_a":"A","option_b":"B",'
+        '"option_c":"C","option_d":"D","correct":"a"},'
+        '"not-a-dict",{"question":""},'
+        '{"question":"bad answer","correct":"z"},'
+        '{"question":"missing options","correct":"a"}] suffix'
+    )
+
+    def create(**kwargs):
+        nonlocal calls
+        calls += 1
+        if "response_format" in kwargs:
+            raise RuntimeError("json mode unsupported")
+        return _ai_with(raw).chat.completions.create()
+
+    monkeypatch.setattr(
+        analyzer,
+        "_ai",
+        lambda: SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+        ),
+    )
+    batch = analyzer._generate_quiz_batch(
+        "Math", "Limits", "hard", "hard", "source", 5, 0, 1, []
+    )
+    assert calls == 2
+    assert [question["question"] for question in batch] == ["valid"]
+
+
+def test_quiz_generation_handles_invalid_count_and_provider_failures(monkeypatch):
+    calls = 0
+
+    def failing_batch(**kwargs):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(analyzer, "_generate_quiz_batch", failing_batch)
+
+    assert analyzer.generate_quiz("Math", count="bad") == []
+    assert calls >= 1
