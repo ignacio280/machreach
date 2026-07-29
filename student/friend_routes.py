@@ -91,7 +91,7 @@ def register_friend_api_routes(
         except (TypeError, ValueError):
             return jsonify(error="Invalid friend_id"), 400
         if not db.report_student(current_client_id(), friend_id, data.get("reason", "")):
-            return jsonify(error="A reason is required"), 400
+            return jsonify(error="Invalid report"), 400
         return jsonify(ok=True)
 
     @app.route("/api/student/friends/discovery", methods=["GET", "POST"])

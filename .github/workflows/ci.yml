@@ -58,6 +58,9 @@ jobs:
           python -m pytest tests/test_verification_delivery.py \
             --cov=machreach_core.verification_delivery --cov-report=term-missing \
             --cov-fail-under=90 -q
+          python -m pytest tests/test_friend_privacy.py \
+            --cov=student.friend_routes --cov-report=term-missing \
+            --cov-fail-under=90 -q
       - name: Audit Python dependencies
         run: python -m pip_audit -r requirements.lock
       - name: Verify landing build

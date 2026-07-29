@@ -88,3 +88,18 @@ def test_email_lookup_is_case_insensitive():
         row = _fetchone(db, "SELECT email FROM clients WHERE id = %s", (cid,))
 
     assert row["email"] == "case.user@example.com"
+
+
+def test_language_redirect_never_trusts_an_external_referrer(client):
+    external = client.get(
+        "/set-language/en",
+        headers={"Referer": "https://attacker.example/phish?from=machreach"},
+    )
+    same_origin = client.get(
+        "/set-language/es",
+        headers={"Referer": "http://localhost/student/dashboard?tab=today"},
+    )
+
+    assert external.status_code == 302
+    assert external.headers["Location"] == "/"
+    assert same_origin.headers["Location"] == "/student/dashboard?tab=today"

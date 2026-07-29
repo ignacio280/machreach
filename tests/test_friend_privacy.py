@@ -101,3 +101,68 @@ def test_students_cannot_self_remove_from_general_rankings(client, flask_app, ma
     assert client.post("/api/student/unretire").status_code == 404
     with get_db() as db:
         _exec(db, "UPDATE clients SET retired = 0 WHERE id = %s", (client_id,))
+
+
+def test_friend_api_rejects_unauthenticated_and_malformed_requests(
+    client, flask_app, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    assert client.get("/api/student/friends/search?q=x").status_code == 401
+    assert client.get("/api/student/friends/list").status_code == 401
+    assert client.post("/api/student/presence/heartbeat").status_code == 401
+    for path in ("add", "block", "unblock", "report", "remove"):
+        assert client.post(
+            f"/api/student/friends/{path}", json={"friend_id": "bad"}
+        ).status_code == 401
+    assert client.get("/api/student/friends/discovery").status_code == 401
+
+
+def test_friend_presence_discovery_report_and_remove_routes(
+    client, flask_app, make_user, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    first = make_user("Friend Controls")
+    second = make_user("Report Target")
+    _login(client, first, "Friend Controls")
+
+    assert client.get("/api/student/friends/list").status_code == 200
+    assert client.post("/api/student/presence/heartbeat").get_json() == {"ok": True}
+    assert client.post(
+        "/api/student/friends/add", json={"friend_id": "bad"}
+    ).status_code == 400
+    assert client.post(
+        "/api/student/friends/block", json={"friend_id": "bad"}
+    ).status_code == 400
+    assert client.post(
+        "/api/student/friends/unblock", json={"friend_id": "bad"}
+    ).status_code == 400
+    assert client.post(
+        "/api/student/friends/remove", json={"friend_id": "bad"}
+    ).status_code == 400
+    assert client.post(
+        "/api/student/friends/report",
+        json={"friend_id": second, "reason": ""},
+    ).status_code == 400
+    assert client.post(
+        "/api/student/friends/report",
+        json={"friend_id": "bad", "reason": "spam"},
+    ).status_code == 400
+    assert client.post(
+        "/api/student/friends/report",
+        json={"friend_id": 99999999, "reason": "spam"},
+    ).status_code == 400
+    assert client.post(
+        "/api/student/friends/report",
+        json={"friend_id": second, "reason": "spam"},
+    ).get_json() == {"ok": True}
+
+    assert client.post(
+        "/api/student/friends/discovery", json={"enabled": False}
+    ).get_json() == {"enabled": False}
+    assert client.get("/api/student/friends/discovery").get_json() == {
+        "enabled": False
+    }
+    sdb.add_friend(first, second)
+    assert client.post(
+        "/api/student/friends/remove", json={"friend_id": second}
+    ).get_json() == {"ok": True}

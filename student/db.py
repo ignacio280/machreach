@@ -5661,6 +5661,13 @@ def report_student(client_id: int, other_id: int, reason: str) -> bool:
     if client_id == other_id or not reason:
         return False
     with get_db() as db:
+        target = _fetchone(
+            db,
+            "SELECT id FROM clients WHERE id = %s AND account_type = 'student'",
+            (other_id,),
+        )
+        if not target:
+            return False
         _exec(
             db,
             "INSERT INTO student_friend_reports (reporter_id, reported_id, reason) VALUES (%s, %s, %s)",

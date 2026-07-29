@@ -12,6 +12,7 @@ import os
 
 import json
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 from flask import Flask, flash, g, jsonify, make_response, redirect, render_template_string, request, session, url_for
 from markupsafe import Markup
@@ -2463,7 +2464,15 @@ def verify_email_pending():
 def set_language(lang):
     if lang in ("en", "es"):
         session["lang"] = lang
-    return redirect(request.referrer or url_for("index"))
+    referrer = str(request.referrer or "")
+    parsed = urlsplit(referrer)
+    if parsed.netloc and parsed.netloc == request.host:
+        destination = parsed.path or "/"
+        if parsed.query:
+            destination += "?" + parsed.query
+    else:
+        destination = url_for("index")
+    return redirect(destination)
 
 
 # ---------------------------------------------------------------------------
