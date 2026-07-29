@@ -18940,6 +18940,8 @@ No markdown, no code fences. ONLY JSON.
             "search_ph": "Search by name, email, or #ID" if _lang == "en" else "Buscar por nombre, correo o #ID",
             "search": "Search" if _lang == "en" else "Buscar",
             "discovery": "Let other students find me by name" if _lang == "en" else "Permitir que otros estudiantes me encuentren por mi nombre",
+            "discovery_on": "YES · ON" if _lang == "en" else "SÍ · ACTIVADO",
+            "discovery_off": "NO · OFF" if _lang == "en" else "NO · DESACTIVADO",
             "requests": "Friend requests" if _lang == "en" else "Solicitudes de amistad",
             "pending": "Pending" if _lang == "en" else "Pendientes",
             "friends": "Your friends" if _lang == "en" else "Tus amigos",
@@ -19150,6 +19152,10 @@ No markdown, no code fences. ONLY JSON.
           .fr-privacy input:checked + .fr-toggle {{ background:#FF7A3D; }}
           .fr-privacy input:checked + .fr-toggle::after {{ transform:translateX(14px); }}
           .fr-privacy input:focus-visible + .fr-toggle {{ outline:3px solid rgba(255,122,61,.28);outline-offset:2px; }}
+          .fr-privacy-status {{ display:inline-flex;align-items:center;justify-content:center;min-height:24px;padding:0 8px;border:1px solid #C9C3B8;border-radius:999px;background:#E9E5DD;color:#625E57;font-size:10px;font-weight:950;letter-spacing:.04em;white-space:nowrap;transition:background .2s ease,color .2s ease,border-color .2s ease; }}
+          .fr-privacy-status::after {{ content:attr(data-off); }}
+          .fr-privacy input:checked ~ .fr-privacy-status {{ background:#FF7A3D;color:#141019;border-color:#1A1A1F;box-shadow:0 2px 0 rgba(26,26,31,.85); }}
+          .fr-privacy input:checked ~ .fr-privacy-status::after {{ content:attr(data-on); }}
           .fr-btn {{ min-height:44px;border:2px solid #1A1A1F;border-radius:14px;background:#1A1A1F;color:#FFF8E1;box-shadow:0 4px 0 rgba(26,26,31,.85);transition:transform .18s ease,box-shadow .18s ease,background .18s ease; }}
           .fr-btn:hover {{ transform:translateY(-1px);box-shadow:0 5px 0 rgba(26,26,31,.85),0 14px 28px rgba(20,18,30,.12); }}
           .fr-btn.orange {{ background:#FF7A3D;color:#1A1A1F; }}
@@ -19212,6 +19218,8 @@ No markdown, no code fences. ONLY JSON.
           :root[data-theme="dark"] .friends-cd .fr-privacy {{ background:rgba(255,255,255,.045);color:#D8D0C5;border-color:rgba(255,138,76,.38);box-shadow:0 2px 0 rgba(0,0,0,.22); }}
           :root[data-theme="dark"] .friends-cd .fr-privacy:hover {{ background:rgba(255,122,61,.09);border-color:#FF7A3D; }}
           :root[data-theme="dark"] .friends-cd .fr-toggle {{ background:#3D3948;border-color:#FF9B64; }}
+          :root[data-theme="dark"] .friends-cd .fr-privacy-status {{ background:#37333F;color:#BDB5AA;border-color:#5A5364; }}
+          :root[data-theme="dark"] .friends-cd .fr-privacy input:checked ~ .fr-privacy-status {{ background:#FF7A3D;color:#141019;border-color:#FF9B64; }}
           :root[data-theme="dark"] .friends-cd .fr-count {{ background:#1D1B26;color:#FF9B64;border-color:#FF7A3D; }}
           :root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-tabs,:root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-board {{ background:rgba(29,27,38,.92);border-color:#FF7A3D;box-shadow:0 5px 0 #FF7A3D; }}
           :root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-tab {{ background:rgba(255,255,255,.035);border-color:rgba(255,138,76,.46);color:#FFF8E1; }}
@@ -19275,6 +19283,7 @@ No markdown, no code fences. ONLY JSON.
               <label class="fr-privacy">
                 <input id="fr-discovery" type="checkbox">
                 <span class="fr-toggle" aria-hidden="true"></span>
+                <span class="fr-privacy-status" data-on="{_fr["discovery_on"]}" data-off="{_fr["discovery_off"]}" aria-hidden="true"></span>
                 <span>{_fr["discovery"]}</span>
               </label>
               <div id="fr-results" class="fr-list" style="margin-top:14px"></div>
