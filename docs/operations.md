@@ -2,13 +2,26 @@
 
 ## Availability and environments
 
-The Render Blueprint defines paid `starter` web and worker services for both production and staging. Production deploys only after GitHub checks pass. Staging uses its own paid Postgres database and deploys manually, with Lemon Squeezy test mode enabled.
+The checked-in Render Blueprint defines the paid production `starter` web and
+worker services. Production deploys only after GitHub checks pass. A staging
+stack is not currently declared in `render.yaml`; before a release requires
+staging, provision it separately with its own paid PostgreSQL database, manual
+deploys, isolated secrets, callback URLs, and Lemon Squeezy test mode.
 
 `/health` is intentionally public and exposes only `healthy` or `degraded`. `/health/operations` requires `X-Operations-Secret` and reports aggregate worker, queue, webhook, wallet, SMTP, database, and dependency signals without user or job details.
 
 ## Backups and recovery
 
 MachReach uses the `machreach-db` PostgreSQL database hosted on Render. There is no app-managed external S3 backup workflow. Database recovery must use the recovery capabilities enabled for the Render database plan.
+
+Target recovery objectives for the current product are **RPO 24 hours** and
+**RTO 4 hours**, subject to the recovery capabilities actually enabled on the
+Render database plan. Confirm the provider retention window in the Render
+dashboard before paid launch. Exercise a downloaded provider backup against a
+new, empty, non-production database with `scripts/restore_drill.ps1`; record the
+backup timestamp, start/end time, migration result, row-count verification, and
+achieved RPO/RTO. The script refuses targets whose database name does not
+contain `restore` or `drill`.
 
 ## Release gate
 

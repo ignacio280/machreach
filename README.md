@@ -40,8 +40,10 @@ docs/                    - Pitch and pricing docs
 ```
 
 ## Deployment
-Runs on Render (`render.yaml`) as isolated production and staging stacks. Each stack has a
-gunicorn web service, a continuously running worker, and its own Postgres database.
+Runs on Render (`render.yaml`) as a production gunicorn web service, continuously
+running worker, and PostgreSQL database. Staging is an external release
+requirement and must be provisioned separately with isolated credentials before
+using the staging steps in the operations runbook.
 
 Production release, backup/restore, incident, rollback, retention, and alert
 procedures are documented in [docs/operations.md](docs/operations.md). Chile

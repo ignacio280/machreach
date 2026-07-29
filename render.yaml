@@ -43,6 +43,12 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: AI_PLUS_MONTHLY_LIMIT
+        value: "100"
+      - key: AI_USER_DAILY_MAX
+        value: "120"
+      - key: AI_GLOBAL_DAILY_MAX
+        value: "5000"
       - key: BASE_URL
         sync: false
       - key: RATELIMIT_STORAGE_URI
@@ -131,6 +137,12 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: AI_PLUS_MONTHLY_LIMIT
+        value: "100"
+      - key: AI_USER_DAILY_MAX
+        value: "120"
+      - key: AI_GLOBAL_DAILY_MAX
+        value: "5000"
       - key: BASE_URL
         sync: false
       - key: LEMON_SQUEEZY_API_KEY
