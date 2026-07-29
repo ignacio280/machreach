@@ -1,7 +1,45 @@
 import worker
+import runpy
 from machreach_core import lemonsqueezy
 from machreach_core.db import enqueue_async_job, get_async_job_status
 from student import ai_usage, analyzer, db as sdb, subscription
+
+
+def test_leaderboard_worker_runs_all_recovery_stages_and_contains_failures(
+    monkeypatch,
+):
+    from student import leaderboard_prizes
+
+    calls = []
+    monkeypatch.setattr(
+        leaderboard_prizes, "run_due_payouts", lambda: calls.append("payouts")
+    )
+    monkeypatch.setattr(
+        leaderboard_prizes,
+        "dispatch_payout_notifications",
+        lambda: calls.append("notifications"),
+    )
+    monkeypatch.setattr(
+        leaderboard_prizes,
+        "cleanup_payout_outbox",
+        lambda: calls.append("cleanup"),
+    )
+    worker.process_leaderboard_payouts()
+    assert calls == ["payouts", "notifications", "cleanup"]
+
+    reported = []
+    monkeypatch.setattr(
+        leaderboard_prizes,
+        "run_due_payouts",
+        lambda: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_report_worker_error",
+        lambda context, exc: reported.append((context, type(exc).__name__)),
+    )
+    worker.process_leaderboard_payouts()
+    assert reported == [("LEADERBOARD_PAYOUTS", "RuntimeError")]
 
 
 def test_ad_hoc_quiz_job_succeeds_and_persists_questions(monkeypatch, make_user):
@@ -38,6 +76,51 @@ def test_quiz_job_nonretryable_validation_failure(monkeypatch, make_user):
     assert "Daily limit" in status["error"]
 
 
+def test_completed_ai_reservations_restore_worker_results_without_regeneration(
+    monkeypatch, make_user
+):
+    quiz_client = make_user("Settled Quiz Worker")
+    cards_client = make_user("Settled Cards Worker")
+    enqueue_async_job("student_quiz_generation", str(quiz_client), input_payload={})
+    enqueue_async_job("student_flashcard_generation", str(cards_client), input_payload={})
+    monkeypatch.setattr(subscription, "can_generate_quiz_today", lambda cid: (True, ""))
+    monkeypatch.setattr(
+        subscription, "can_generate_flashcards_today", lambda cid: (True, "")
+    )
+    monkeypatch.setattr(
+        ai_usage,
+        "reserve",
+        lambda *args, **kwargs: {
+            "status": "settled",
+            "result_json": (
+                '{"quiz_id": 71, "question_count": 4}'
+                if kwargs["feature"] == "quiz_worker"
+                else '{"deck_id": 81, "card_count": 6}'
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        analyzer,
+        "generate_quiz",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("must not regenerate")),
+    )
+    monkeypatch.setattr(
+        analyzer,
+        "generate_flashcards",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("must not regenerate")),
+    )
+
+    worker._process_student_quiz_job({"job_key": str(quiz_client), "id": 901})
+    worker._process_student_flashcard_job({"job_key": str(cards_client), "id": 902})
+
+    assert get_async_job_status(
+        "student_quiz_generation", str(quiz_client)
+    )["quiz_id"] == 71
+    assert get_async_job_status(
+        "student_flashcard_generation", str(cards_client)
+    )["deck_id"] == 81
+
+
 def test_ad_hoc_flashcard_job_succeeds_and_failure_is_recorded(monkeypatch, make_user):
     client_id = make_user("Cards Worker")
     enqueue_async_job("student_flashcard_generation", str(client_id), input_payload={})
@@ -60,6 +143,70 @@ def test_ad_hoc_flashcard_job_succeeds_and_failure_is_recorded(monkeypatch, make
     assert get_async_job_status("student_flashcard_generation", str(failing_id))["status"] == "error"
 
 
+def test_ai_worker_generation_failures_remain_retryable(monkeypatch, make_user):
+    quiz_client = make_user("Empty Quiz Provider")
+    cards_client = make_user("Empty Cards Provider")
+    enqueue_async_job("student_quiz_generation", str(quiz_client), input_payload={})
+    enqueue_async_job("student_flashcard_generation", str(cards_client), input_payload={})
+    monkeypatch.setattr(subscription, "can_generate_quiz_today", lambda cid: (True, ""))
+    monkeypatch.setattr(
+        subscription, "can_generate_flashcards_today", lambda cid: (True, "")
+    )
+    monkeypatch.setattr(subscription, "cap_questions", lambda cid, count: count)
+    monkeypatch.setattr(subscription, "cap_cards", lambda cid, count: count)
+    monkeypatch.setattr(analyzer, "generate_quiz", lambda **kwargs: [])
+    monkeypatch.setattr(analyzer, "generate_flashcards", lambda **kwargs: [])
+
+    worker._process_student_quiz_job({
+        "job_key": str(quiz_client),
+        "input": {"source_text": "material"},
+    })
+    worker._process_student_flashcard_job({
+        "job_key": str(cards_client),
+        "input": {"source_text": "material"},
+    })
+
+    assert get_async_job_status(
+        "student_quiz_generation", str(quiz_client)
+    )["status"] == "queued"
+    assert get_async_job_status(
+        "student_flashcard_generation", str(cards_client)
+    )["status"] == "queued"
+
+
+def test_ai_worker_rejects_missing_or_cross_tenant_course_sources(
+    monkeypatch, make_user
+):
+    quiz_client = make_user("Missing Quiz Course")
+    cards_client = make_user("Missing Cards Course")
+    enqueue_async_job("student_quiz_generation", str(quiz_client), input_payload={})
+    enqueue_async_job("student_flashcard_generation", str(cards_client), input_payload={})
+    monkeypatch.setattr(subscription, "can_generate_quiz_today", lambda cid: (True, ""))
+    monkeypatch.setattr(
+        subscription, "can_generate_flashcards_today", lambda cid: (True, "")
+    )
+
+    worker._process_student_quiz_job({
+        "job_key": str(quiz_client),
+        "input": {"course_id": 999999},
+    })
+    worker._process_student_flashcard_job({
+        "job_key": str(cards_client),
+        "input": {},
+    })
+
+    quiz_status = get_async_job_status(
+        "student_quiz_generation", str(quiz_client)
+    )
+    cards_status = get_async_job_status(
+        "student_flashcard_generation", str(cards_client)
+    )
+    assert quiz_status["status"] == "error"
+    assert "Course not found" in quiz_status["error"]
+    assert cards_status["status"] == "error"
+    assert "course_id required" in cards_status["error"]
+
+
 def test_process_loop_claims_both_job_types_and_heartbeat(monkeypatch):
     claimed = {
         "student_quiz_generation": [{"job_key": "1"}],
@@ -77,6 +224,76 @@ def test_process_loop_claims_both_job_types_and_heartbeat(monkeypatch):
 
     assert len(heartbeats) == 2
     assert [kind for kind, _ in processed] == ["quiz", "cards"]
+
+
+def test_process_loop_delivers_claimed_verification_jobs(monkeypatch):
+    import machreach_core.verification_delivery as delivery
+
+    processed = []
+    monkeypatch.setattr(worker, "record_worker_heartbeat", lambda: None)
+    monkeypatch.setattr(
+        worker,
+        "claim_async_jobs",
+        lambda kind, **kwargs: (
+            [{"id": 31, "job_key": "verify"}] if kind == "verification_email" else []
+        ),
+    )
+    monkeypatch.setattr(
+        delivery,
+        "process_job",
+        lambda job, sender: processed.append((job["id"], callable(sender))),
+    )
+
+    worker.process_async_jobs()
+
+    assert processed == [(31, True)]
+
+
+def test_heartbeat_recovers_stale_ai_usage_and_reports_failure(monkeypatch):
+    monkeypatch.setattr(worker, "record_worker_heartbeat", lambda: None)
+    monkeypatch.setattr(ai_usage, "reconcile_stale_reservations", lambda: 2)
+    worker.heartbeat()
+
+    reported = []
+    monkeypatch.setattr(
+        ai_usage,
+        "reconcile_stale_reservations",
+        lambda: (_ for _ in ()).throw(RuntimeError("reconciliation failed")),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_report_worker_error",
+        lambda context, exc: reported.append(context),
+    )
+    worker.heartbeat()
+    assert reported == ["AI_USAGE_RECOVERY"]
+
+
+def test_simple_maintenance_jobs_invoke_domain_services(monkeypatch):
+    import machreach_core.verification_delivery as delivery
+
+    calls = []
+    monkeypatch.setattr(
+        delivery,
+        "delete_stale_unverified",
+        lambda days: calls.append(("verification", days)) or 2,
+    )
+    monkeypatch.setattr(
+        subscription,
+        "expire_payment_grace_periods",
+        lambda: calls.append(("billing",)) or 1,
+    )
+    monkeypatch.setattr(
+        sdb,
+        "purge_expired_course_deletions",
+        lambda: calls.append(("courses",)) or 3,
+    )
+
+    worker.clean_abandoned_unverified_accounts()
+    worker.expire_billing_grace_periods()
+    worker.purge_deleted_courses()
+
+    assert calls == [("verification", 7), ("billing",), ("courses",)]
 
 
 def test_retired_subscription_cancellation_success_failure_and_exception(monkeypatch):
@@ -153,6 +370,52 @@ def test_refresh_student_plans_rolls_incomplete_work_forward(monkeypatch):
 
     assert saved[0][0] == 41
     assert saved[0][2] == {"pace": "steady"}
+
+
+def test_refresh_student_plans_skips_ineligible_and_recovers_per_account(
+    monkeypatch,
+):
+    reported = []
+    failed = []
+    monkeypatch.setattr(sdb, "get_all_student_client_ids", lambda: [1, 2, 3, 4])
+    monkeypatch.setattr(subscription, "has_plus_access", lambda cid: cid != 1)
+    monkeypatch.setattr(sdb, "get_incomplete_assignments", lambda cid, today: [])
+    monkeypatch.setattr(
+        sdb,
+        "get_courses",
+        lambda cid: (
+            []
+            if cid == 2
+            else [{"analysis_json": {"course_name": "Biology"}, "difficulty": 3}]
+        ),
+    )
+    monkeypatch.setattr(sdb, "get_schedule_settings", lambda cid: [])
+    monkeypatch.setattr(sdb, "get_latest_plan", lambda cid: None)
+    monkeypatch.setattr(
+        ai_usage,
+        "reserve",
+        lambda cid, **kwargs: (
+            {"status": "settled"} if cid == 3 else {"status": "reserved"}
+        ),
+    )
+    monkeypatch.setattr(
+        ai_usage, "fail", lambda key, error: failed.append((key, error))
+    )
+    monkeypatch.setattr(
+        analyzer,
+        "generate_study_plan",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("provider down")),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_report_worker_error",
+        lambda context, exc: reported.append(context),
+    )
+
+    worker.refresh_student_plans()
+
+    assert any(key.startswith("daily-plan:4:") for key, _ in failed)
+    assert reported == ["STUDENT_PLAN_ACCOUNT"]
 
 
 class _FakeSMTP:
@@ -245,6 +508,92 @@ def test_monthly_leaderboard_report_is_delivered(monkeypatch):
     assert "June 2026" in _FakeSMTP.sent[0]["Subject"]
 
 
+def test_ssl_email_paths_and_empty_monthly_report_are_delivered(monkeypatch):
+    _configure_smtp(monkeypatch)
+    import machreach_core.config as config
+    from student import academic
+
+    monkeypatch.setattr(config, "SMTP_PORT", 465)
+    monkeypatch.setattr(worker, "LEADERBOARD_WINNERS_RECIPIENT", "owner@example.test")
+    monkeypatch.setattr(
+        sdb,
+        "get_streak_risk_recipients",
+        lambda min_streak: [{
+            "streak": 5,
+            "name": "",
+            "email": "risk@example.test",
+        }],
+    )
+    monkeypatch.setattr(
+        academic,
+        "monthly_winners",
+        lambda year, month, top_n: {
+            "label": f"{year}-{month:02d}",
+            "start": "2026-06-01",
+            "end_exclusive": "2026-07-01",
+            "summary": {},
+            "by_country": [],
+            "by_university": [],
+            "by_major": [],
+        },
+    )
+
+    worker.send_streak_risk_pushes()
+    worker.send_monthly_leaderboard_email()
+
+    assert {message["To"] for message in _FakeSMTP.sent} == {
+        "risk@example.test",
+        "owner@example.test",
+    }
+
+
+def test_email_delivery_failures_are_observable_and_contained(monkeypatch):
+    _configure_smtp(monkeypatch)
+    import machreach_core.db as core_db
+    from student import academic
+    import smtplib
+
+    class FailingSMTP(_FakeSMTP):
+        def send_message(self, message):
+            raise RuntimeError("SMTP unavailable")
+
+    events = []
+    reports = []
+    monkeypatch.setattr(smtplib, "SMTP", FailingSMTP)
+    monkeypatch.setattr(
+        core_db,
+        "record_operational_event",
+        lambda kind, detail: events.append((kind, detail)),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_report_worker_error",
+        lambda context, exc: reports.append(context),
+    )
+    monkeypatch.setattr(
+        sdb,
+        "get_streak_risk_recipients",
+        lambda min_streak: [{
+            "streak": 8,
+            "name": "At Risk",
+            "email": "risk@example.test",
+        }],
+    )
+    monkeypatch.setattr(worker, "LEADERBOARD_WINNERS_RECIPIENT", "owner@example.test")
+    monkeypatch.setattr(
+        academic,
+        "monthly_winners",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("report failed")),
+    )
+
+    worker.send_streak_risk_pushes()
+    worker.send_monthly_leaderboard_email(2026, 6)
+
+    assert ("smtp_failure", "streak_risk") in events
+    assert ("smtp_failure", "leaderboard") in events
+    assert reports == ["STREAK_RISK_ACCOUNT", "MONTHLY_WINNERS"]
+
+
 def test_email_jobs_skip_cleanly_without_configuration(monkeypatch):
     import machreach_core.config as config
 
@@ -255,6 +604,52 @@ def test_email_jobs_skip_cleanly_without_configuration(monkeypatch):
 
     worker.send_streak_risk_pushes()
     worker.send_monthly_leaderboard_email(2026, 6)
+
+
+def test_worker_entrypoint_registers_recoverable_schedule(monkeypatch):
+    import apscheduler.schedulers.blocking as blocking
+    import machreach_core.db as core_db
+
+    registered = []
+
+    class FakeScheduler:
+        def __init__(self, timezone):
+            assert timezone == "America/Santiago"
+
+        def add_job(self, function, trigger, **kwargs):
+            registered.append((function.__name__, trigger, kwargs["id"]))
+
+        def start(self):
+            raise KeyboardInterrupt
+
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("FLASK_ENV", raising=False)
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setattr(blocking, "BlockingScheduler", FakeScheduler)
+    monkeypatch.setattr(core_db, "init_db", lambda: None)
+    monkeypatch.setattr(core_db, "check_schema_readiness", lambda: None)
+    monkeypatch.setattr(core_db, "record_worker_heartbeat", lambda: None)
+    monkeypatch.setattr(core_db, "claim_async_jobs", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        core_db, "list_retired_billing_cancellations", lambda limit=25: []
+    )
+    monkeypatch.setattr(core_db, "recover_stale_async_jobs", lambda: 0)
+    monkeypatch.setattr(
+        worker, "process_leaderboard_payouts", lambda: None
+    )
+    monkeypatch.setattr(sdb, "init_student_db", lambda: None)
+
+    runpy.run_module("worker", run_name="__main__")
+
+    job_ids = {job_id for _, _, job_id in registered}
+    assert {
+        "process_async_jobs",
+        "worker_heartbeat",
+        "recover_worker_state",
+        "leaderboard_payouts",
+        "streak_risk_push",
+    } <= job_ids
 
 
 def test_refresh_and_recovery_failures_are_contained(monkeypatch):
