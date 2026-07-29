@@ -18939,6 +18939,7 @@ No markdown, no code fences. ONLY JSON.
             "your_id": "Your ID" if _lang == "en" else "Tu ID",
             "search_ph": "Search by name, email, or #ID" if _lang == "en" else "Buscar por nombre, correo o #ID",
             "search": "Search" if _lang == "en" else "Buscar",
+            "discovery": "Let other students find me by name" if _lang == "en" else "Permitir que otros estudiantes me encuentren por mi nombre",
             "requests": "Friend requests" if _lang == "en" else "Solicitudes de amistad",
             "pending": "Pending" if _lang == "en" else "Pendientes",
             "friends": "Your friends" if _lang == "en" else "Tus amigos",
@@ -19141,6 +19142,14 @@ No markdown, no code fences. ONLY JSON.
           .fr-search-inner {{ padding:18px;border:2px solid #1A1A1F;border-radius:24px;background:#FFFFFF;box-shadow:0 5px 0 #1A1A1F,0 18px 38px rgba(20,18,30,.10); }}
           .fr-search-row {{ display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:12px; }}
           .fr-input {{ min-width:0;height:50px;border:2px solid #1A1A1F;background:#FFFDF8;border-radius:16px;box-shadow:inset 0 -2px 0 rgba(255,122,61,.22); }}
+          .fr-privacy {{ position:relative;display:inline-flex;align-items:center;gap:10px;width:max-content;max-width:100%;margin-top:14px;padding:7px 11px 7px 8px;border:1px solid #E2DCCC;border-radius:999px;background:#FFFDF8;color:#48443E;font-size:12px;font-weight:850;line-height:1.25;cursor:pointer;user-select:none;box-shadow:0 2px 0 rgba(26,26,31,.08);transition:border-color .18s ease,background .18s ease,transform .18s ease; }}
+          .fr-privacy:hover {{ border-color:#FF9B64;background:#FFFFFF;transform:translateY(-1px); }}
+          .fr-privacy input {{ position:absolute !important;width:1px !important;height:1px !important;margin:0 !important;opacity:0 !important;pointer-events:none; }}
+          .fr-toggle {{ position:relative;width:34px;height:20px;flex:0 0 34px;border:2px solid #1A1A1F;border-radius:999px;background:#E2DCCC;box-shadow:inset 0 1px 2px rgba(26,26,31,.16);transition:background .2s ease; }}
+          .fr-toggle::after {{ content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(26,26,31,.34);transition:transform .2s ease; }}
+          .fr-privacy input:checked + .fr-toggle {{ background:#FF7A3D; }}
+          .fr-privacy input:checked + .fr-toggle::after {{ transform:translateX(14px); }}
+          .fr-privacy input:focus-visible + .fr-toggle {{ outline:3px solid rgba(255,122,61,.28);outline-offset:2px; }}
           .fr-btn {{ min-height:44px;border:2px solid #1A1A1F;border-radius:14px;background:#1A1A1F;color:#FFF8E1;box-shadow:0 4px 0 rgba(26,26,31,.85);transition:transform .18s ease,box-shadow .18s ease,background .18s ease; }}
           .fr-btn:hover {{ transform:translateY(-1px);box-shadow:0 5px 0 rgba(26,26,31,.85),0 14px 28px rgba(20,18,30,.12); }}
           .fr-btn.orange {{ background:#FF7A3D;color:#1A1A1F; }}
@@ -19200,6 +19209,9 @@ No markdown, no code fences. ONLY JSON.
           :root[data-theme="dark"] .friends-cd .fr-row:hover,:root[data-theme="dark"] .friends-cd .fr-group-card:hover {{ background:rgba(255,122,61,.08);border-color:#FF7A3D; }}
           :root[data-theme="dark"] .friends-cd .fr-btn {{ background:#FF7A3D;color:#141019;border-color:#FF7A3D;box-shadow:0 4px 0 #0A0A10; }}
           :root[data-theme="dark"] .friends-cd .fr-btn.ghost {{ background:#1D1B26;color:#FFF8E1;border-color:#FF7A3D; }}
+          :root[data-theme="dark"] .friends-cd .fr-privacy {{ background:rgba(255,255,255,.045);color:#D8D0C5;border-color:rgba(255,138,76,.38);box-shadow:0 2px 0 rgba(0,0,0,.22); }}
+          :root[data-theme="dark"] .friends-cd .fr-privacy:hover {{ background:rgba(255,122,61,.09);border-color:#FF7A3D; }}
+          :root[data-theme="dark"] .friends-cd .fr-toggle {{ background:#3D3948;border-color:#FF9B64; }}
           :root[data-theme="dark"] .friends-cd .fr-count {{ background:#1D1B26;color:#FF9B64;border-color:#FF7A3D; }}
           :root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-tabs,:root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-board {{ background:rgba(29,27,38,.92);border-color:#FF7A3D;box-shadow:0 5px 0 #FF7A3D; }}
           :root[data-theme="dark"] .friends-cd .fr-lb-embed .lb-tab {{ background:rgba(255,255,255,.035);border-color:rgba(255,138,76,.46);color:#FFF8E1; }}
@@ -19260,8 +19272,10 @@ No markdown, no code fences. ONLY JSON.
                 <input id="fr-search" class="fr-input" placeholder="{_fr["search_ph"]}">
                 <button class="fr-btn" onclick="frSearch()">{_fr["search"]}</button>
               </div>
-              <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--text-muted);">
-                <input id="fr-discovery" type="checkbox"> Permitir que otros estudiantes me encuentren por mi nombre
+              <label class="fr-privacy">
+                <input id="fr-discovery" type="checkbox">
+                <span class="fr-toggle" aria-hidden="true"></span>
+                <span>{_fr["discovery"]}</span>
               </label>
               <div id="fr-results" class="fr-list" style="margin-top:14px"></div>
             </div>
