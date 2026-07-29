@@ -1,6 +1,7 @@
 """Money path: referral codes, redemption guards, and the free-week reward."""
 from student import db as sdb
 from student import subscription as ssub
+from machreach_core.db import _fetchone, get_db
 
 
 def test_code_is_stable_and_unique(make_user):
@@ -67,6 +68,39 @@ def test_multiple_referrals_stack_weeks(make_user):
         ssub.grant_plus_days(owner, 7)
     assert sdb.referral_count(owner) == 3
     assert ssub.get_tier(owner) == "plus"
+
+
+def test_failed_referral_reward_keeps_pending_marker_for_retry(
+    make_user, monkeypatch
+):
+    owner = make_user("Retry Referrer")
+    referred = make_user("Retry Referral")
+    code = sdb.get_or_create_referral_code(owner)
+    sdb.set_pending_referral(referred, code)
+    monkeypatch.setattr(
+        ssub,
+        "_extend_promotional_entitlement",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("temporary")),
+    )
+
+    try:
+        ssub.redeem_pending_referral_reward(referred)
+    except RuntimeError:
+        pass
+
+    with get_db() as db:
+        pending = _fetchone(
+            db,
+            "SELECT code FROM student_pending_referrals WHERE referred_id = %s",
+            (referred,),
+        )
+        redemption = _fetchone(
+            db,
+            "SELECT referred_id FROM student_referrals WHERE referred_id = %s",
+            (referred,),
+        )
+    assert pending == {"code": code}
+    assert redemption is None
 
 
 def test_signup_route_rewards_inviter_after_verify(make_user, client, monkeypatch):

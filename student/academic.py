@@ -725,23 +725,13 @@ def save_academic_profile(
             + " WHERE id = %s",
             (country_iso, university_id, major_id, client_id),
         )
-    # Best-effort: derive a sensible IANA timezone from the country and
-    # store it in mail_preferences so date rendering uses the right tz.
+    # Derive a canonical IANA timezone without touching unrelated settings.
     try:
-        import json as _json
         from student.timezones import tz_for_country
-        from machreach_core.db import get_mail_preferences, update_mail_preferences
+        from student import db as student_db
         tz = tz_for_country(country_iso)
         if tz:
-            raw = get_mail_preferences(client_id) or ""
-            try:
-                prefs = _json.loads(raw) if raw else {}
-                if not isinstance(prefs, dict):
-                    prefs = {}
-            except Exception:
-                prefs = {}
-            prefs["timezone"] = tz
-            update_mail_preferences(client_id, _json.dumps(prefs))
+            student_db.set_user_timezone(client_id, tz)
     except Exception:
         pass
 
@@ -816,11 +806,14 @@ def _period_sql(period: str) -> str:
     Periods reset at the boundary so the leaderboard "starts fresh" on
     Monday and on the 1st, which is what the prize/payout system relies on.
     """
+    from student.periods import month_window_utc, week_window_utc
+
     if period == "week":
-        # Postgres: date_trunc gives Monday 00:00 of current ISO week.
-        return " AND x.created_at >= date_trunc('week', NOW()) "
+        start, _ = week_window_utc(0, timezone_name="America/Santiago")
+        return f" AND x.occurred_at_utc >= '{start.isoformat()}' "
     if period == "month":
-        return " AND x.created_at >= date_trunc('month', NOW()) "
+        start, _ = month_window_utc(0, timezone_name="America/Santiago")
+        return f" AND x.occurred_at_utc >= '{start.isoformat()}' "
     return ""
 
 
@@ -985,9 +978,9 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
     join_extra = _period_sql(period)
     my_xp_where = ""
     if period == "week":
-        my_xp_where = " AND created_at >= NOW() - INTERVAL '7 days' "
+        my_xp_where = _period_sql("week").replace("x.", "")
     elif period == "month":
-        my_xp_where = " AND created_at >= NOW() - INTERVAL '30 days' "
+        my_xp_where = _period_sql("month").replace("x.", "")
 
     with get_db() as db:
         me = _fetchone(

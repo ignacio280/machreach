@@ -1119,9 +1119,36 @@ def update_client_password(client_id: int, password_hash: str, bump_session_vers
 
 
 def update_mail_preferences(client_id: int, preferences: str):
+    """Atomically merge top-level legacy preferences.
+
+    Subscription, referral, timezone, and reward state live in normalized
+    tables. This merge keeps remaining cosmetic/security writers from erasing
+    one another while legacy callers are retired.
+    """
+    try:
+        parsed = json.loads(preferences or "{}")
+        if not isinstance(parsed, dict):
+            parsed = {}
+        preferences = json.dumps(parsed, separators=(",", ":"))
+    except (TypeError, ValueError):
+        preferences = "{}"
     with get_db() as db:
-        _exec(db, "UPDATE clients SET mail_preferences = %s WHERE id = %s",
-              (preferences, client_id))
+        if _USE_PG:
+            _exec(
+                db,
+                "UPDATE clients SET mail_preferences = "
+                "(COALESCE(NULLIF(mail_preferences, ''), '{}')::jsonb "
+                "|| %s::jsonb)::text WHERE id = %s",
+                (preferences, client_id),
+            )
+        else:
+            _exec(
+                db,
+                "UPDATE clients SET mail_preferences = json_patch("
+                "CASE WHEN json_valid(mail_preferences) THEN mail_preferences "
+                "ELSE '{}' END, %s) WHERE id = %s",
+                (preferences, client_id),
+            )
 
 
 def get_mail_preferences(client_id: int) -> str:

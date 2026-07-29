@@ -5,33 +5,31 @@ Tiers:
   - plus      : 100 combined quiz/flashcard generations per billing month,
                 analytics, streak protection and cosmetics.
 
-Storage: re-uses the existing `clients` table via `mail_preferences` JSON-blob
-column (already exists in the schema). Keys used:
-    mail_preferences = {
-       ...other prefs...,
-       "subscription": {
-           "tier": "free" | "plus",
-           "since": "2026-04-21T...",
-       }
-    }
-This avoids a schema migration and works on both Postgres and SQLite.
+Provider state is stored in `student_subscription_state`; promotional access
+is stored separately in `student_promotional_entitlements`. Legacy
+`mail_preferences` values are read only as a migration fallback.
 """
 from __future__ import annotations
 
 import json
 import logging
 from contextlib import contextmanager
-from datetime import datetime, date, timedelta, timezone
-from zoneinfo import ZoneInfo
+from datetime import UTC, datetime, timedelta
 
-from machreach_core.db import get_db
+from machreach_core.db import _USE_PG, get_db
+from student.periods import (
+    day_window_utc,
+    month_key,
+    month_window_utc,
+    user_date,
+    utc_now,
+)
 
 log = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
-    """Return naive UTC for compatibility with existing stored timestamps."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return utc_now()
 
 # Legacy flag kept for back-compat with any references elsewhere; tier limits
 # now always enforce regardless of value.
@@ -91,25 +89,206 @@ def _load_prefs(db, client_id: int) -> dict:
     from machreach_core.db import _fetchone
     row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (client_id,))
     raw = (row or {}).get("mail_preferences") or ""
-    if not raw:
-        return {}
     try:
-        return json.loads(raw)
+        loaded = json.loads(raw) if raw else {}
+        prefs = loaded if isinstance(loaded, dict) else {}
     except Exception:
-        return {}
+        prefs = {}
+    try:
+        normalized = _fetchone(
+            db,
+            "SELECT * FROM student_subscription_state WHERE client_id = %s",
+            (client_id,),
+        )
+        if normalized:
+            prefs["subscription"] = _subscription_from_row(normalized)
+        entitlement = _fetchone(
+            db,
+            "SELECT plus_until FROM student_promotional_entitlements "
+            "WHERE client_id = %s",
+            (client_id,),
+        )
+        if entitlement and entitlement.get("plus_until"):
+            value = entitlement["plus_until"]
+            prefs["plus_until"] = (
+                value.isoformat() if isinstance(value, datetime) else str(value)
+            )
+    except Exception:
+        pass
+    return prefs
 
 
 def _save_prefs(db, client_id: int, prefs: dict) -> None:
     from machreach_core.db import _exec
+    subscription = prefs.get("subscription")
+    plus_until = prefs.get("plus_until") if "plus_until" in prefs else None
+    legacy_prefs = {
+        key: value
+        for key, value in prefs.items()
+        if key
+        not in {
+            "subscription",
+            "plus_until",
+            "pending_ref",
+            "last_free_freeze_grant",
+            "plus_streak_insurance_month",
+        }
+    }
     _exec(
         db,
         "UPDATE clients SET mail_preferences = %s WHERE id = %s",
-        (json.dumps(prefs), client_id),
+        (json.dumps(legacy_prefs), client_id),
+    )
+    if isinstance(subscription, dict):
+        _write_subscription_row(db, client_id, subscription)
+    if "plus_until" in prefs:
+        _write_promotional_entitlement(db, client_id, plus_until)
+
+
+def _subscription_from_row(row: dict | None) -> dict:
+    if not row:
+        return {}
+    mapping = {
+        "tier": "tier",
+        "status": "status",
+        "ls_sub_id": "ls_sub_id",
+        "since_at": "since",
+        "ends_at": "ends_at",
+        "renews_at": "renews_at",
+        "quota_period_start": "quota_period_start",
+        "quota_reset_at": "quota_reset_at",
+        "past_due_since": "past_due_since",
+        "update_payment_method_url": "update_payment_method_url",
+        "customer_portal_url": "customer_portal_url",
+        "updated_at": "updated_at",
+    }
+    result: dict = {}
+    for column, key in mapping.items():
+        value = row.get(column)
+        if value not in (None, ""):
+            result[key] = value.isoformat() if isinstance(value, datetime) else str(value)
+    return result
+
+
+def _load_subscription_row(db, client_id: int) -> dict:
+    from machreach_core.db import _fetchone
+
+    row = _fetchone(
+        db,
+        "SELECT * FROM student_subscription_state WHERE client_id = %s",
+        (client_id,),
+    )
+    if row:
+        return _subscription_from_row(row)
+    legacy = _load_prefs(db, client_id).get("subscription")
+    if isinstance(legacy, dict):
+        _write_subscription_row(db, client_id, legacy)
+        return dict(legacy)
+    return {}
+
+
+def _write_subscription_row(db, client_id: int, state: dict) -> None:
+    from machreach_core.db import _exec
+
+    values = (
+        client_id,
+        state.get("tier") or "free",
+        state.get("status") or "inactive",
+        state.get("ls_sub_id"),
+        state.get("since"),
+        state.get("ends_at"),
+        state.get("renews_at"),
+        state.get("quota_period_start"),
+        state.get("quota_reset_at"),
+        state.get("past_due_since"),
+        state.get("update_payment_method_url") or "",
+        state.get("customer_portal_url") or "",
+        state.get("updated_at") or _utcnow().isoformat(),
+    )
+    insert = (
+        "INSERT INTO student_subscription_state "
+        "(client_id, tier, status, ls_sub_id, since_at, ends_at, renews_at, "
+        "quota_period_start, quota_reset_at, past_due_since, "
+        "update_payment_method_url, customer_portal_url, updated_at) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+    )
+    update = (
+        "tier=excluded.tier, status=excluded.status, ls_sub_id=excluded.ls_sub_id, "
+        "since_at=excluded.since_at, ends_at=excluded.ends_at, "
+        "renews_at=excluded.renews_at, quota_period_start=excluded.quota_period_start, "
+        "quota_reset_at=excluded.quota_reset_at, past_due_since=excluded.past_due_since, "
+        "update_payment_method_url=excluded.update_payment_method_url, "
+        "customer_portal_url=excluded.customer_portal_url, updated_at=excluded.updated_at"
+    )
+    conflict = "ON CONFLICT(client_id) DO UPDATE SET " + update
+    _exec(db, insert + conflict, values)
+
+
+def _load_promotional_entitlement(db, client_id: int) -> str | None:
+    from machreach_core.db import _fetchval
+
+    value = _fetchval(
+        db,
+        "SELECT plus_until FROM student_promotional_entitlements "
+        "WHERE client_id = %s",
+        (client_id,),
+    )
+    if value:
+        return value.isoformat() if isinstance(value, datetime) else str(value)
+    legacy = _load_prefs(db, client_id).get("plus_until")
+    if legacy:
+        _write_promotional_entitlement(db, client_id, legacy)
+        return str(legacy)
+    return None
+
+
+def _write_promotional_entitlement(
+    db, client_id: int, plus_until: str | datetime | None
+) -> None:
+    from machreach_core.db import _exec
+
+    _exec(
+        db,
+        "INSERT INTO student_promotional_entitlements "
+        "(client_id, plus_until, updated_at) VALUES (%s, %s, %s) "
+        "ON CONFLICT(client_id) DO UPDATE SET plus_until=excluded.plus_until, "
+        "updated_at=excluded.updated_at",
+        (client_id, plus_until, _utcnow().isoformat()),
     )
 
 
-def _current_bonus_month() -> str:
-    return _utcnow().strftime("%Y-%m")
+def _extend_promotional_entitlement(db, client_id: int, days: int) -> str:
+    """Extend a promotion while holding its row lock in this transaction."""
+    from machreach_core.db import _exec, _fetchone
+
+    now = _utcnow()
+    _exec(
+        db,
+        "INSERT INTO student_promotional_entitlements "
+        "(client_id, plus_until, updated_at) VALUES (%s, NULL, %s) "
+        "ON CONFLICT(client_id) DO NOTHING",
+        (client_id, now.isoformat()),
+    )
+    row = _fetchone(
+        db,
+        "SELECT plus_until FROM student_promotional_entitlements "
+        "WHERE client_id = %s" + (" FOR UPDATE" if _USE_PG else ""),
+        (client_id,),
+    ) or {}
+    current = _parse_iso(row.get("plus_until"))
+    base = current if current and current > now else now
+    plus_until = (base + timedelta(days=int(days))).isoformat()
+    _exec(
+        db,
+        "UPDATE student_promotional_entitlements "
+        "SET plus_until = %s, updated_at = %s WHERE client_id = %s",
+        (plus_until, now.isoformat(), client_id),
+    )
+    return plus_until
+
+
+def _current_bonus_month(client_id: int, db=None) -> str:
+    return month_key(user_date(client_id, db=db))
 
 
 @contextmanager
@@ -173,6 +352,7 @@ def normalize_legacy_subscription_tiers() -> int:
             )
             if not getattr(updated, "rowcount", 0):
                 continue
+            _write_subscription_row(db, int(row["id"]), subscription)
             if subscription_id:
                 _exec(
                     db,
@@ -186,8 +366,10 @@ def normalize_legacy_subscription_tiers() -> int:
     return changed
 
 
-def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
-    """Grant recurring paid-plan benefits once per UTC month.
+def _grant_paid_benefits(
+    db, client_id: int, tier: str, subscription: dict | None = None
+) -> bool:
+    """Grant recurring paid-plan benefits once per user-local month.
 
     Kept here instead of a scheduler so rewards are applied reliably the next
     time an active subscriber uses the product, including webhook/manual tier
@@ -195,14 +377,28 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
     """
     if tier != "plus":
         return False
-    subscription = prefs.get("subscription") or {}
+    subscription = subscription or {}
     if str(subscription.get("status") or "").lower() in {"past_due", "unpaid"}:
         return False
     changed = False
-    month_key = _current_bonus_month()
-    if prefs.get("plus_streak_insurance_month") != month_key:
-        with _optional_db_work(db, "streak_insurance", client_id):
-            from machreach_core.db import _exec, _fetchval
+    current_month = _current_bonus_month(client_id, db=db)
+    from machreach_core.db import _exec, _fetchone
+
+    with _optional_db_work(db, "streak_insurance", client_id):
+        claimed = _exec(
+            db,
+            "INSERT INTO student_reward_state "
+            "(client_id, plus_insurance_period_key, updated_at) "
+            "VALUES (%s, %s, %s) "
+            "ON CONFLICT(client_id) DO UPDATE SET "
+            "plus_insurance_period_key=excluded.plus_insurance_period_key, "
+            "updated_at=excluded.updated_at "
+            "WHERE COALESCE(student_reward_state.plus_insurance_period_key, '') "
+            "<> excluded.plus_insurance_period_key",
+            (client_id, current_month, _utcnow().isoformat()),
+        )
+        if claimed.rowcount:
+            from machreach_core.db import _fetchval
             from student import db as sdb
             sdb._ensure_wallet(db, client_id)
             cur = int(_fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,)) or 0)
@@ -212,11 +408,9 @@ def _grant_paid_benefits(db, client_id: int, prefs: dict, tier: str) -> bool:
                     "UPDATE student_wallet SET streak_freezes = streak_freezes + %s WHERE client_id = %s",
                     (PLUS_MONTHLY_STREAK_FREEZES, client_id),
                 )
-            prefs["plus_streak_insurance_month"] = month_key
             changed = True
 
     with _optional_db_work(db, "member_badge", client_id):
-        from machreach_core.db import _exec, _fetchone
         has_badge = _fetchone(
             db,
             "SELECT 1 FROM student_badges WHERE client_id = %s AND badge_key = %s",
@@ -232,9 +426,9 @@ def _parse_iso(s):
         return None
     try:
         parsed = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
-        if parsed.tzinfo is not None:
-            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
-        return parsed
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
     except Exception:
         return None
 
@@ -270,10 +464,13 @@ def get_tier(client_id: int) -> str:
     """Return the effective Free or Plus tier. Defaults to Free."""
     try:
         with get_db() as db:
-            prefs = _load_prefs(db, client_id)
+            subscription = _load_subscription_row(db, client_id)
+            prefs = {
+                "subscription": subscription,
+                "plus_until": _load_promotional_entitlement(db, client_id),
+            }
             tier = _effective_tier(prefs)
-            if _grant_paid_benefits(db, client_id, prefs, tier):
-                _save_prefs(db, client_id, prefs)
+            _grant_paid_benefits(db, client_id, tier, subscription)
         return tier
     except Exception:
         return "free"
@@ -283,9 +480,7 @@ def get_subscription_state(client_id: int) -> dict:
     """Return a defensive copy of the stored provider subscription state."""
     try:
         with get_db() as db:
-            prefs = _load_prefs(db, client_id)
-        subscription = prefs.get("subscription") or {}
-        result = dict(subscription) if isinstance(subscription, dict) else {}
+            result = _load_subscription_row(db, client_id)
         if result.get("tier") == "ultimate":
             result["tier"] = "free"
             result["status"] = "retired"
@@ -301,26 +496,81 @@ def grant_plus_days(client_id: int, days: int) -> str | None:
     """
     try:
         with get_db() as db:
-            prefs = _load_prefs(db, client_id)
-            now = _utcnow()
-            cur = _parse_iso(prefs.get("plus_until"))
-            base = cur if (cur and cur > now) else now
-            prefs["plus_until"] = (base + timedelta(days=int(days))).isoformat()
-            _grant_paid_benefits(db, client_id, prefs, "plus")
-            _save_prefs(db, client_id, prefs)
-            return prefs["plus_until"]
+            if not _USE_PG:
+                db.execute("BEGIN IMMEDIATE")
+            plus_until = _extend_promotional_entitlement(db, client_id, days)
+            _grant_paid_benefits(db, client_id, "plus")
+            return plus_until
     except Exception as e:
         log.warning("grant_plus_days failed for %s: %s", client_id, e)
         return None
+
+
+def redeem_pending_referral_reward(
+    referred_id: int, days: int = 7
+) -> tuple[int, str] | None:
+    """Atomically redeem a verified signup and extend the inviter's promotion.
+
+    The pending marker is deleted only after both the idempotent redemption
+    ledger and promotional entitlement have been persisted.
+    """
+    from machreach_core.db import _exec, _fetchone
+
+    with get_db() as db:
+        if not _USE_PG:
+            db.execute("BEGIN IMMEDIATE")
+        pending = _fetchone(
+            db,
+            "SELECT p.code, rc.client_id AS referrer_id "
+            "FROM student_pending_referrals p "
+            "LEFT JOIN student_referral_codes rc ON rc.code = p.code "
+            "WHERE p.referred_id = %s"
+            + (" FOR UPDATE OF p" if _USE_PG else ""),
+            (referred_id,),
+        )
+        if not pending:
+            return None
+        referrer_id = int(pending.get("referrer_id") or 0)
+        code = str(pending.get("code") or "")
+        if not referrer_id or referrer_id == referred_id:
+            _exec(
+                db,
+                "DELETE FROM student_pending_referrals WHERE referred_id = %s",
+                (referred_id,),
+            )
+            return None
+        recorded = _exec(
+            db,
+            "INSERT INTO student_referrals (code, referrer_id, referred_id) "
+            "VALUES (%s, %s, %s) ON CONFLICT(referred_id) DO NOTHING",
+            (code, referrer_id, referred_id),
+        )
+        if not recorded.rowcount:
+            _exec(
+                db,
+                "DELETE FROM student_pending_referrals WHERE referred_id = %s",
+                (referred_id,),
+            )
+            return None
+        plus_until = _extend_promotional_entitlement(db, referrer_id, days)
+        _grant_paid_benefits(db, referrer_id, "plus")
+        _exec(
+            db,
+            "DELETE FROM student_pending_referrals WHERE referred_id = %s",
+            (referred_id,),
+        )
+        return referrer_id, plus_until
 
 
 def plus_grant_until(client_id: int) -> str | None:
     """Return the promotional plus_until ISO string if still active, else None."""
     try:
         with get_db() as db:
-            prefs = _load_prefs(db, client_id)
-        pu = _parse_iso(prefs.get("plus_until"))
-        return prefs.get("plus_until") if (pu and pu > _utcnow()) else None
+            stored = _load_promotional_entitlement(db, client_id)
+        pu = _parse_iso(stored)
+        if not (pu and pu > _utcnow()):
+            return None
+        return pu.replace(tzinfo=None).isoformat()
     except Exception:
         return None
 
@@ -329,8 +579,7 @@ def set_tier(client_id: int, tier: str) -> dict:
     if tier not in PLANS:
         return {"ok": False, "error": "Unknown plan."}
     with get_db() as db:
-        prefs = _load_prefs(db, client_id)
-        subscription = prefs.get("subscription") or {}
+        subscription = _load_subscription_row(db, client_id)
         subscription.update({
             "tier": tier,
             "status": "active" if tier == "plus" else "inactive",
@@ -339,9 +588,9 @@ def set_tier(client_id: int, tier: str) -> dict:
         if tier == "plus":
             subscription.setdefault("quota_period_start", _utcnow().isoformat())
             subscription.setdefault("quota_reset_at", (_utcnow() + timedelta(days=31)).isoformat())
-        prefs["subscription"] = subscription
-        _grant_paid_benefits(db, client_id, prefs, tier)
-        _save_prefs(db, client_id, prefs)
+        subscription["updated_at"] = _utcnow().isoformat()
+        _write_subscription_row(db, client_id, subscription)
+        _grant_paid_benefits(db, client_id, tier, subscription)
     return {"ok": True, "tier": tier}
 
 
@@ -361,8 +610,7 @@ def set_subscription_state(
     if tier is not None and tier not in PLANS:
         return {"ok": False, "error": "Unknown plan."}
     with get_db() as db:
-        prefs = _load_prefs(db, client_id)
-        subscription = prefs.get("subscription") or {}
+        subscription = _load_subscription_row(db, client_id)
         if tier is not None:
             subscription["tier"] = tier
             if tier == "plus" and not subscription.get("since"):
@@ -374,7 +622,7 @@ def set_subscription_state(
             else:
                 subscription.pop("past_due_since", None)
         if ls_sub_id is not None:
-            subscription["ls_sub_id"] = str(ls_sub_id)
+            subscription["ls_sub_id"] = str(ls_sub_id).strip() or None
         if ends_at is not None:
             subscription["ends_at"] = str(ends_at)
         if renews_at is not None:
@@ -391,10 +639,13 @@ def set_subscription_state(
             if not renews_at:
                 subscription["quota_reset_at"] = (_utcnow() + timedelta(days=31)).isoformat()
         subscription["updated_at"] = _utcnow().isoformat()
-        prefs["subscription"] = subscription
+        prefs = {
+            "subscription": subscription,
+            "plus_until": _load_promotional_entitlement(db, client_id),
+        }
         effective = _effective_tier(prefs)
-        _grant_paid_benefits(db, client_id, prefs, effective)
-        _save_prefs(db, client_id, prefs)
+        _write_subscription_row(db, client_id, subscription)
+        _grant_paid_benefits(db, client_id, effective, subscription)
     return {"ok": True, "tier": effective, "status": subscription.get("status")}
 
 
@@ -420,8 +671,8 @@ def cap_cards(client_id: int, requested: int) -> int:
     return max(1, min(int(requested), FREE_FLASHCARD_MAX_CARDS))
 
 
-def _today_str() -> str:
-    return date.today().isoformat()
+def _today_str(client_id: int) -> str:
+    return user_date(client_id).isoformat()
 
 
 def can_generate_quiz_today(client_id: int) -> tuple[bool, str]:
@@ -473,9 +724,10 @@ def record_generation(client_id: int, kind: str) -> None:
         with get_db() as db:
             _exec(
                 db,
-                "INSERT INTO student_xp (client_id, action, xp, detail) "
-                "VALUES (%s, %s, 0, %s)",
-                (client_id, kind, _today_str()),
+                "INSERT INTO student_xp "
+                "(client_id, action, xp, detail, occurred_at_utc) "
+                "VALUES (%s, %s, 0, %s, %s)",
+                (client_id, kind, _today_str(client_id), _utcnow().isoformat()),
             )
     except Exception as e:
         log.warning("record_generation failed: %s", e)
@@ -483,22 +735,15 @@ def record_generation(client_id: int, kind: str) -> None:
 
 def _count_today(client_id: int, kind: str) -> int:
     try:
-        from machreach_core.db import _fetchval, _USE_PG
+        from machreach_core.db import _fetchval
+        start, end = day_window_utc(client_id)
         with get_db() as db:
-            if _USE_PG:
-                return int(_fetchval(
-                    db,
-                    "SELECT COUNT(*) FROM student_xp "
-                    "WHERE client_id = %s AND action = %s "
-                    "AND created_at::date = CURRENT_DATE",
-                    (client_id, kind),
-                ) or 0)
             return int(_fetchval(
                 db,
                 "SELECT COUNT(*) FROM student_xp "
                 "WHERE client_id = %s AND action = %s "
-                "AND date(created_at) = date('now','localtime')",
-                (client_id, kind),
+                "AND occurred_at_utc >= %s AND occurred_at_utc < %s",
+                (client_id, kind, start.isoformat(), end.isoformat()),
             ) or 0)
     except Exception:
         return 0
@@ -512,31 +757,22 @@ def generation_usage(client_id: int) -> dict:
     reset_at = _parse_iso(state.get("quota_reset_at") or state.get("renews_at"))
     boundaries_are_utc = bool(period_start and reset_at)
     if not period_start or not reset_at:
-        period_start = datetime(now.year, now.month, 1)
-        if now.month == 12:
-            reset_at = datetime(now.year + 1, 1, 1)
-        else:
-            reset_at = datetime(now.year, now.month + 1, 1)
+        period_start, reset_at = month_window_utc(client_id, at=now)
     used = 0
     try:
-        from machreach_core.db import _USE_PG, _fetchval
-        query_start = period_start
-        query_end = reset_at
-        if not _USE_PG and boundaries_are_utc:
-            santiago = ZoneInfo("America/Santiago")
-            query_start = period_start.replace(tzinfo=timezone.utc).astimezone(santiago).replace(tzinfo=None)
-            query_end = reset_at.replace(tzinfo=timezone.utc).astimezone(santiago).replace(tzinfo=None)
+        from machreach_core.db import _fetchval
         with get_db() as db:
             used = int(_fetchval(
                 db,
                 "SELECT COUNT(*) FROM student_xp WHERE client_id = %s "
-                "AND action IN (%s, %s) AND created_at >= %s AND created_at < %s",
+                "AND action IN (%s, %s) "
+                "AND occurred_at_utc >= %s AND occurred_at_utc < %s",
                 (
                     client_id,
                     "quiz_generated",
                     "flashcards_generated",
-                    query_start.strftime("%Y-%m-%d %H:%M:%S"),
-                    query_end.strftime("%Y-%m-%d %H:%M:%S"),
+                    period_start.isoformat(),
+                    reset_at.isoformat(),
                 ),
             ) or 0)
     except Exception:
@@ -560,32 +796,23 @@ def expire_payment_grace_periods() -> int:
     changed = 0
     now = _utcnow()
     with get_db() as db:
-        rows = _fetchall(db, "SELECT id, mail_preferences FROM clients")
+        rows = _fetchall(
+            db,
+            "SELECT client_id, tier, status, past_due_since, updated_at "
+            "FROM student_subscription_state "
+            "WHERE status IN ('past_due', 'unpaid')",
+        )
         for row in rows:
-            try:
-                prefs = json.loads(row.get("mail_preferences") or "{}")
-            except (TypeError, ValueError):
-                continue
-            if not isinstance(prefs, dict):
-                continue
-            subscription = prefs.get("subscription") or {}
-            if not isinstance(subscription, dict):
-                continue
-            if str(subscription.get("status") or "").lower() not in {"past_due", "unpaid"}:
-                continue
             failed_at = _parse_iso(
-                subscription.get("past_due_since") or subscription.get("updated_at")
+                row.get("past_due_since") or row.get("updated_at")
             )
             if not failed_at or failed_at + timedelta(days=PAYMENT_GRACE_DAYS) > now:
                 continue
-            subscription["tier"] = "free"
-            subscription["status"] = "grace_expired"
-            subscription["updated_at"] = now.isoformat()
-            prefs["subscription"] = subscription
             _exec(
                 db,
-                "UPDATE clients SET mail_preferences = %s WHERE id = %s",
-                (json.dumps(prefs), int(row["id"])),
+                "UPDATE student_subscription_state SET tier = 'free', "
+                "status = 'grace_expired', updated_at = %s WHERE client_id = %s",
+                (now.isoformat(), int(row["client_id"])),
             )
             changed += 1
     return changed

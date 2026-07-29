@@ -11,6 +11,8 @@ import re
 import unicodedata
 from datetime import datetime, timedelta
 from typing import Any
+from datetime import UTC
+from zoneinfo import ZoneInfo
 
 from machreach_core.db import (
     _exec,
@@ -23,9 +25,10 @@ from machreach_core.db import (
     _USE_PG,
     get_db,
 )
+from student.periods import get_user_timezone, local_now, user_date, utc_now
 
 log = logging.getLogger(__name__)
-STUDENT_SCHEMA_VERSION = 4
+STUDENT_SCHEMA_VERSION = 5
 
 
 # ── Schema (appended to MachReach's init_db) ────────────────
@@ -492,6 +495,15 @@ CREATE TABLE IF NOT EXISTS student_email_prefs (
 def init_student_db():
     """Create student tables. Called alongside MachReach's init_db()."""
     with get_db() as db:
+        previous_schema_version = int(
+            _fetchval(
+                db,
+                "SELECT version FROM schema_metadata WHERE component = %s",
+                ("student",),
+            )
+            or 0
+        )
+    with get_db() as db:
         if _USE_PG:
             cur = db.cursor()
             cur.execute(STUDENT_PG_SCHEMA)
@@ -545,6 +557,9 @@ def init_student_db():
             log.info("course catalog backfill added %s entr%s", _n, "y" if _n == 1 else "ies")
     except Exception as e:
         log.exception("backfill_course_catalog failed: %s", e)
+    init_normalized_student_state(
+        run_backfill=previous_schema_version < STUDENT_SCHEMA_VERSION
+    )
     # Removed market feature: new installs should not create or expose its tables.
     # Weekly/monthly leaderboard prize tables.
     from student.leaderboard_prizes import init_prize_tables
@@ -578,6 +593,16 @@ def init_student_db():
         _exec(db, "SELECT id, university_id FROM clients LIMIT 0")
         _exec(db, "SELECT client_id, phase_id FROM student_focus_phases LIMIT 0")
         _exec(db, "SELECT client_id, course_name FROM student_course_reviews LIMIT 0")
+        _exec(
+            db,
+            "SELECT client_id, tier, status, updated_at "
+            "FROM student_subscription_state LIMIT 0",
+        )
+        _exec(
+            db,
+            "SELECT university_id, canonical_course_id, cohort_version "
+            "FROM student_course_outcomes LIMIT 0",
+        )
     _record_schema_version("student", STUDENT_SCHEMA_VERSION)
     log.info("Student tables initialized.")
 
@@ -589,6 +614,440 @@ def _create_table_safe(pg_sql: str, sqlite_sql: str):
             db.cursor().execute(pg_sql)
         else:
             db.execute(sqlite_sql)
+
+
+def init_normalized_student_state(*, run_backfill: bool = True) -> None:
+    """Create normalized account-domain state and backfill legacy records."""
+    _create_table_safe(
+        """CREATE TABLE IF NOT EXISTS student_subscription_state (
+            client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            tier TEXT NOT NULL DEFAULT 'free',
+            status TEXT NOT NULL DEFAULT 'inactive',
+            ls_sub_id TEXT,
+            since_at TIMESTAMPTZ,
+            ends_at TIMESTAMPTZ,
+            renews_at TIMESTAMPTZ,
+            quota_period_start TIMESTAMPTZ,
+            quota_reset_at TIMESTAMPTZ,
+            past_due_since TIMESTAMPTZ,
+            update_payment_method_url TEXT DEFAULT '',
+            customer_portal_url TEXT DEFAULT '',
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS student_subscription_state (
+            client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            tier TEXT NOT NULL DEFAULT 'free',
+            status TEXT NOT NULL DEFAULT 'inactive',
+            ls_sub_id TEXT,
+            since_at TEXT,
+            ends_at TEXT,
+            renews_at TEXT,
+            quota_period_start TEXT,
+            quota_reset_at TEXT,
+            past_due_since TEXT,
+            update_payment_method_url TEXT DEFAULT '',
+            customer_portal_url TEXT DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+    )
+    _create_table_safe(
+        """CREATE INDEX IF NOT EXISTS idx_student_subscription_provider_lookup
+           ON student_subscription_state(ls_sub_id)""",
+        """CREATE INDEX IF NOT EXISTS idx_student_subscription_provider_lookup
+           ON student_subscription_state(ls_sub_id)""",
+    )
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE student_subscription_state SET ls_sub_id = NULL "
+            "WHERE TRIM(COALESCE(ls_sub_id, '')) = ''",
+        )
+        _exec(db, "DROP INDEX IF EXISTS uq_student_subscription_provider")
+        _exec(
+            db,
+            "CREATE UNIQUE INDEX IF NOT EXISTS "
+            "uq_student_subscription_provider_nonblank "
+            "ON student_subscription_state(ls_sub_id) "
+            "WHERE NULLIF(TRIM(ls_sub_id), '') IS NOT NULL",
+        )
+    _create_table_safe(
+        """CREATE TABLE IF NOT EXISTS student_promotional_entitlements (
+            client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            plus_until TIMESTAMPTZ,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS student_promotional_entitlements (
+            client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            plus_until TEXT,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+    )
+    _create_table_safe(
+        """CREATE TABLE IF NOT EXISTS student_reward_state (
+            client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            weekly_freeze_granted_at TIMESTAMPTZ,
+            plus_insurance_period_key TEXT DEFAULT '',
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS student_reward_state (
+            client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            weekly_freeze_granted_at TEXT,
+            plus_insurance_period_key TEXT DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+    )
+    _create_table_safe(
+        """CREATE TABLE IF NOT EXISTS student_pending_referrals (
+            referred_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            code TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS student_pending_referrals (
+            referred_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            code TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+    )
+
+    for column, definition in (
+        ("university_id", "INTEGER"),
+        ("canonical_course_id", "INTEGER"),
+        ("cohort_version", "TEXT DEFAULT ''"),
+    ):
+        try:
+            with get_db() as db:
+                _exec(
+                    db,
+                    f"ALTER TABLE student_course_outcomes ADD COLUMN {column} {definition}",
+                )
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
+    for table, column, definition in (
+        ("student_xp", "occurred_at_utc", "TIMESTAMPTZ"),
+        ("student_study_progress", "recorded_at_utc", "TIMESTAMPTZ"),
+        ("student_focus_phases", "started_at_utc", "TIMESTAMPTZ"),
+        ("student_focus_phases", "claimed_at_utc", "TIMESTAMPTZ"),
+    ):
+        try:
+            with get_db() as db:
+                sqlite_definition = "TEXT" if not _USE_PG else definition
+                _exec(
+                    db,
+                    f"ALTER TABLE {table} ADD COLUMN {column} {sqlite_definition}",
+                )
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
+    _create_table_safe(
+        """CREATE INDEX IF NOT EXISTS idx_course_outcomes_benchmark
+           ON student_course_outcomes(
+               university_id, canonical_course_id, cohort_version, passed
+           )""",
+        """CREATE INDEX IF NOT EXISTS idx_course_outcomes_benchmark
+           ON student_course_outcomes(
+               university_id, canonical_course_id, cohort_version, passed
+           )""",
+    )
+    if run_backfill:
+        _backfill_normalized_student_state()
+
+
+def _backfill_normalized_student_state() -> None:
+    """Idempotently copy legacy JSON and course identity into normalized rows."""
+    with get_db() as db:
+        if not _USE_PG:
+            db.execute("BEGIN IMMEDIATE")
+        # Timezone must be normalized before interpreting legacy naive wall times.
+        legacy_clients = _fetchall(db, "SELECT id, mail_preferences FROM clients")
+        for legacy_client in legacy_clients:
+            try:
+                legacy_prefs = _json.loads(
+                    legacy_client.get("mail_preferences") or "{}"
+                )
+            except (TypeError, ValueError):
+                continue
+            timezone_name = (
+                legacy_prefs.get("timezone")
+                if isinstance(legacy_prefs, dict)
+                else None
+            )
+            if timezone_name:
+                from student.periods import normalize_timezone
+                _exec(
+                    db,
+                    "INSERT INTO student_email_prefs (client_id, timezone) "
+                    "VALUES (%s, %s) ON CONFLICT(client_id) DO NOTHING",
+                    (
+                        int(legacy_client["id"]),
+                        normalize_timezone(timezone_name),
+                    ),
+                )
+        if _USE_PG:
+            _exec(
+                db,
+                "UPDATE student_xp SET occurred_at_utc = "
+                "created_at AT TIME ZONE 'UTC' WHERE occurred_at_utc IS NULL",
+            )
+            _exec(
+                db,
+                "UPDATE student_study_progress SET recorded_at_utc = "
+                "created_at AT TIME ZONE 'UTC' WHERE recorded_at_utc IS NULL",
+            )
+            _exec(
+                db,
+                "UPDATE student_focus_phases SET started_at_utc = "
+                "started_at AT TIME ZONE 'UTC' WHERE started_at_utc IS NULL",
+            )
+            _exec(
+                db,
+                "UPDATE student_focus_phases SET claimed_at_utc = "
+                "claimed_at AT TIME ZONE 'UTC' "
+                "WHERE claimed_at_utc IS NULL AND claimed_at IS NOT NULL",
+            )
+        else:
+            for table, source, target in (
+                ("student_xp", "created_at", "occurred_at_utc"),
+                ("student_study_progress", "created_at", "recorded_at_utc"),
+                ("student_focus_phases", "started_at", "started_at_utc"),
+                ("student_focus_phases", "claimed_at", "claimed_at_utc"),
+            ):
+                legacy_rows = _fetchall(
+                    db,
+                    f"SELECT id, client_id, {source} AS legacy_time FROM {table} "
+                    f"WHERE {target} IS NULL AND {source} IS NOT NULL",
+                )
+                for legacy_row in legacy_rows:
+                    converted = _legacy_user_wall_time_to_utc(
+                        legacy_row.get("legacy_time"),
+                        int(legacy_row["client_id"]),
+                        db,
+                    )
+                    if converted:
+                        _exec(
+                            db,
+                            f"UPDATE {table} SET {target} = %s WHERE id = %s",
+                            (converted.isoformat(), legacy_row["id"]),
+                        )
+        rows = _fetchall(
+            db,
+            "SELECT id, mail_preferences FROM clients"
+            + (" FOR UPDATE" if _USE_PG else ""),
+        )
+        for row in rows:
+            try:
+                prefs = _json.loads(row.get("mail_preferences") or "{}")
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(prefs, dict):
+                continue
+            client_id = int(row["id"])
+            timezone_name = prefs.get("timezone")
+            if timezone_name:
+                from student.periods import normalize_timezone
+                _exec(
+                    db,
+                    "INSERT INTO student_email_prefs (client_id, timezone) "
+                    "VALUES (%s, %s) ON CONFLICT(client_id) DO NOTHING",
+                    (client_id, normalize_timezone(timezone_name)),
+                )
+            subscription = prefs.get("subscription")
+            if isinstance(subscription, dict):
+                _upsert_subscription_backfill(db, client_id, subscription)
+            plus_until = prefs.get("plus_until")
+            if plus_until:
+                if _USE_PG:
+                    _exec(
+                        db,
+                        "INSERT INTO student_promotional_entitlements "
+                        "(client_id, plus_until) VALUES (%s, %s) "
+                        "ON CONFLICT(client_id) DO NOTHING",
+                        (client_id, plus_until),
+                    )
+                else:
+                    _exec(
+                        db,
+                        "INSERT OR IGNORE INTO student_promotional_entitlements "
+                        "(client_id, plus_until) VALUES (%s, %s)",
+                        (client_id, plus_until),
+                    )
+            pending_ref = str(prefs.get("pending_ref") or "").strip()
+            if pending_ref:
+                if _USE_PG:
+                    _exec(
+                        db,
+                        "INSERT INTO student_pending_referrals (referred_id, code) "
+                        "VALUES (%s, %s) ON CONFLICT(referred_id) DO NOTHING",
+                        (client_id, pending_ref),
+                    )
+                else:
+                    _exec(
+                        db,
+                        "INSERT OR IGNORE INTO student_pending_referrals "
+                        "(referred_id, code) VALUES (%s, %s)",
+                        (client_id, pending_ref),
+                    )
+            last_freeze = _legacy_user_wall_time_to_utc(
+                prefs.get("last_free_freeze_grant"), client_id, db
+            )
+            insurance_period = str(
+                prefs.get("plus_streak_insurance_month") or ""
+            ).strip()
+            if last_freeze or insurance_period:
+                _exec(
+                    db,
+                    "INSERT INTO student_reward_state "
+                    "(client_id, weekly_freeze_granted_at, "
+                    "plus_insurance_period_key, updated_at) "
+                    "VALUES (%s, %s, %s, %s) "
+                    "ON CONFLICT(client_id) DO UPDATE SET "
+                    "weekly_freeze_granted_at=COALESCE("
+                    "student_reward_state.weekly_freeze_granted_at, "
+                    "excluded.weekly_freeze_granted_at), "
+                    "plus_insurance_period_key=CASE WHEN COALESCE("
+                    "student_reward_state.plus_insurance_period_key, '') = '' "
+                    "THEN excluded.plus_insurance_period_key ELSE "
+                    "student_reward_state.plus_insurance_period_key END, "
+                    "updated_at=excluded.updated_at",
+                    (
+                        client_id,
+                        last_freeze.isoformat() if last_freeze else None,
+                        insurance_period,
+                        utc_now().isoformat(),
+                    ),
+                )
+            cleaned = {
+                key: value
+                for key, value in prefs.items()
+                if key
+                not in {
+                    "subscription",
+                    "plus_until",
+                    "pending_ref",
+                    "last_free_freeze_grant",
+                    "plus_streak_insurance_month",
+                    "timezone",
+                }
+            }
+            if cleaned != prefs:
+                _exec(
+                    db,
+                    "UPDATE clients SET mail_preferences = %s WHERE id = %s",
+                    (_json.dumps(cleaned), client_id),
+                )
+        _exec(
+            db,
+            "UPDATE student_course_outcomes SET "
+            "university_id = (SELECT c.university_id FROM clients c "
+            "WHERE c.id = student_course_outcomes.client_id), "
+            "canonical_course_id = (SELECT sc.catalog_id FROM student_courses sc "
+            "WHERE sc.id = student_course_outcomes.course_id), "
+            "cohort_version = COALESCE((SELECT NULLIF(sc.term, '') "
+            "FROM student_courses sc WHERE sc.id = student_course_outcomes.course_id), "
+            "(SELECT NULLIF(sc.semester_label, '') FROM student_courses sc "
+            "WHERE sc.id = student_course_outcomes.course_id), 'unknown') "
+            "WHERE university_id IS NULL OR canonical_course_id IS NULL "
+            "OR cohort_version IS NULL OR cohort_version = ''",
+        )
+        missing = _fetchall(
+            db,
+            "SELECT o.id, o.course_id, o.client_id, sc.code, sc.name, "
+            "c.university_id, sc.term, sc.semester_label "
+            "FROM student_course_outcomes o "
+            "JOIN student_courses sc ON sc.id = o.course_id "
+            "JOIN clients c ON c.id = o.client_id "
+            "WHERE o.canonical_course_id IS NULL AND c.university_id IS NOT NULL",
+        )
+        for outcome in missing:
+            canonical = _fetchone(
+                db,
+                "SELECT id FROM student_course_catalog "
+                "WHERE university_id = %s AND code_norm = %s "
+                "AND name_norm = %s AND deleted_at IS NULL LIMIT 1",
+                (
+                    outcome["university_id"],
+                    _catalog_norm(outcome.get("code") or ""),
+                    _catalog_norm(outcome.get("name") or ""),
+                ),
+            )
+            if not canonical:
+                continue
+            canonical_id = int(canonical["id"])
+            _exec(
+                db,
+                "UPDATE student_courses SET catalog_id = %s "
+                "WHERE id = %s AND catalog_id IS NULL",
+                (canonical_id, outcome["course_id"]),
+            )
+            _exec(
+                db,
+                "UPDATE student_course_outcomes SET university_id = %s, "
+                "canonical_course_id = %s, cohort_version = %s WHERE id = %s",
+                (
+                    outcome["university_id"],
+                    canonical_id,
+                    outcome.get("term")
+                    or outcome.get("semester_label")
+                    or "unknown",
+                    outcome["id"],
+                ),
+            )
+
+
+def _legacy_user_wall_time_to_utc(value, client_id: int, db) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = (
+            value
+            if isinstance(value, datetime)
+            else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        )
+        if parsed.tzinfo is None:
+            # SQLite legacy defaults used server-local wall time, not browser
+            # or user-local time. The historical app/runtime timezone is Chile.
+            parsed = parsed.replace(tzinfo=ZoneInfo("America/Santiago"))
+        return parsed.astimezone(UTC)
+    except (TypeError, ValueError):
+        return None
+
+
+def _upsert_subscription_backfill(db, client_id: int, subscription: dict) -> None:
+    values = (
+        client_id,
+        subscription.get("tier") or "free",
+        subscription.get("status") or "inactive",
+        subscription.get("ls_sub_id"),
+        subscription.get("since"),
+        subscription.get("ends_at"),
+        subscription.get("renews_at"),
+        subscription.get("quota_period_start"),
+        subscription.get("quota_reset_at"),
+        subscription.get("past_due_since"),
+        subscription.get("update_payment_method_url") or "",
+        subscription.get("customer_portal_url") or "",
+    )
+    if _USE_PG:
+        _exec(
+            db,
+            "INSERT INTO student_subscription_state "
+            "(client_id, tier, status, ls_sub_id, since_at, ends_at, renews_at, "
+            "quota_period_start, quota_reset_at, past_due_since, "
+            "update_payment_method_url, customer_portal_url) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            "ON CONFLICT(client_id) DO NOTHING",
+            values,
+        )
+    else:
+        _exec(
+            db,
+            "INSERT OR IGNORE INTO student_subscription_state "
+            "(client_id, tier, status, ls_sub_id, since_at, ends_at, renews_at, "
+            "quota_period_start, quota_reset_at, past_due_since, "
+            "update_payment_method_url, customer_portal_url) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            values,
+        )
 
 
 def _student_migrations():
@@ -1934,19 +2393,32 @@ FOCUS_PHASE_CLAIM_GRACE_SECONDS = 20
 
 def _parse_focus_dt(value) -> datetime | None:
     if isinstance(value, datetime):
-        return value.replace(tzinfo=None)
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
     if not value:
         return None
-    raw = str(value).strip().replace("Z", "")
+    raw = str(value).strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(raw)
+        return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+    except Exception:
+        pass
+    raw = raw.replace("+00:00", "")
     for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
         try:
-            return datetime.strptime(raw[:26], fmt)
+            return datetime.strptime(raw[:26], fmt).replace(tzinfo=UTC)
         except Exception:
             pass
     try:
-        return datetime.fromisoformat(raw).replace(tzinfo=None)
+        return datetime.fromisoformat(raw).replace(tzinfo=UTC)
     except Exception:
         return None
+
+
+def _focus_started_at(row: dict) -> datetime | None:
+    """Use the canonical UTC timestamp, falling back only for legacy rows."""
+    return _parse_focus_dt(row.get("started_at_utc")) or _parse_focus_dt(
+        row.get("started_at")
+    )
 
 
 def _validate_focus_course_exam(db, client_id: int, course_id, exam_id):
@@ -2005,7 +2477,8 @@ def start_focus_phase(client_id: int, phase_id: str, mode: str = "pomodoro",
     except (TypeError, ValueError):
         expected_minutes = 0
     expected_minutes = max(0, min(FOCUS_MAX_MINUTES_PER_SESSION, expected_minutes))
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+    now_utc = utc_now()
+    now = now_utc.replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S.%f")
 
     with get_db() as db:
         course_id, exam_id = _validate_focus_course_exam(db, client_id, course_id, exam_id)
@@ -2020,9 +2493,13 @@ def start_focus_phase(client_id: int, phase_id: str, mode: str = "pomodoro",
             _exec(
                 db,
                 "INSERT INTO student_focus_phases "
-                "(client_id, phase_id, mode, expected_minutes, course_id, exam_id, started_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (client_id, phase_id, mode, expected_minutes, course_id, exam_id, now),
+                "(client_id, phase_id, mode, expected_minutes, course_id, exam_id, "
+                "started_at, started_at_utc) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    client_id, phase_id, mode, expected_minutes, course_id,
+                    exam_id, now, now_utc.isoformat(),
+                ),
             )
         except Exception:
             pass
@@ -2077,10 +2554,10 @@ def validate_focus_phase_claim(client_id: int, phase_id: str, minutes: int,
         if expected > 0 and minutes > expected + 1:
             return False, "minutes-exceed-phase", row
 
-        started_at = _parse_focus_dt(row.get("started_at"))
+        started_at = _focus_started_at(row)
         if not started_at:
             return False, "invalid-phase-start", row
-        elapsed = (datetime.now() - started_at).total_seconds()
+        elapsed = (utc_now() - started_at).total_seconds()
         # NOTE: no wall-clock max-age here. Pending phases stay claimable no
         # matter how long they sit (e.g. paused overnight and claimed in the
         # morning). XP is only ever forfeited client-side when the 30-min
@@ -2098,12 +2575,18 @@ def mark_focus_phase_claimed(client_id: int, phase_id: str) -> None:
     phase_id = (phase_id or "").strip()[:80]
     if not phase_id:
         return
+    now = utc_now()
     with get_db() as db:
         _exec(
             db,
-            "UPDATE student_focus_phases SET claimed_at = %s "
+            "UPDATE student_focus_phases SET claimed_at = %s, claimed_at_utc = %s "
             "WHERE client_id = %s AND phase_id = %s AND claimed_at IS NULL",
-            (datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"), client_id, phase_id),
+            (
+                now.replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S.%f"),
+                now.isoformat(),
+                client_id,
+                phase_id,
+            ),
         )
 
 
@@ -2243,11 +2726,11 @@ def claim_focus_phase_rewards(client_id: int, phase_id: str, minutes: int,
         expected = int(row.get("expected_minutes") or 0)
         if expected > 0 and minutes > expected + 1:
             return {"ok": False, "saved": False, "reason": "minutes-exceed-phase"}
-        started_at = _parse_focus_dt(row.get("started_at"))
+        started_at = _focus_started_at(row)
         if not started_at:
             return {"ok": False, "saved": False, "reason": "invalid-phase-start"}
         required_minutes = expected if expected > 0 else minutes
-        elapsed = (datetime.now() - started_at).total_seconds()
+        elapsed = (utc_now() - started_at).total_seconds()
         if minutes > 0 and elapsed < max(
             0, required_minutes * 60 - FOCUS_PHASE_CLAIM_GRACE_SECONDS
         ):
@@ -2257,7 +2740,7 @@ def claim_focus_phase_rewards(client_id: int, phase_id: str, minutes: int,
             db, client_id, requested_course or registered_course,
             requested_exam or registered_exam,
         )
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = user_date(client_id, db=db).isoformat()
         already_today = int(_fetchval(
             db,
             "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress "
@@ -2268,12 +2751,15 @@ def claim_focus_phase_rewards(client_id: int, phase_id: str, minutes: int,
         if minutes <= 0 and pages <= 0:
             return {"ok": True, "saved": False, "reason": "daily-cap-or-empty"}
 
-        claimed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        claimed_instant = utc_now()
+        claimed_at = claimed_instant.replace(tzinfo=None).strftime(
+            "%Y-%m-%d %H:%M:%S.%f"
+        )
         claimed = _exec(
             db,
-            "UPDATE student_focus_phases SET claimed_at = %s "
+            "UPDATE student_focus_phases SET claimed_at = %s, claimed_at_utc = %s "
             "WHERE client_id = %s AND phase_id = %s AND claimed_at IS NULL",
-            (claimed_at, client_id, phase_id),
+            (claimed_at, claimed_instant.isoformat(), client_id, phase_id),
         )
         if not claimed.rowcount:
             return {"ok": True, "saved": False, "reason": "duplicate-phase"}
@@ -2281,20 +2767,23 @@ def claim_focus_phase_rewards(client_id: int, phase_id: str, minutes: int,
         session_id = _insert_returning_id(
             db,
             "INSERT INTO student_study_progress "
-            "(client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
-            "VALUES (%s, %s, 1, %s, %s, %s, %s, %s) RETURNING id",
+            "(client_id, plan_date, completed, notes, focus_minutes, pages_read, "
+            "course_id, exam_id, recorded_at_utc) "
+            "VALUES (%s, %s, 1, %s, %s, %s, %s, %s, %s) RETURNING id",
             (
                 client_id,
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
+                local_now(client_id, db=db).strftime("%Y-%m-%d %H:%M:%S.%f"),
                 f"{mode}: {course_name}" if course_name else mode,
                 minutes,
                 pages,
                 course_id,
                 exam_id,
+                claimed_instant.isoformat(),
             ),
             "INSERT INTO student_study_progress "
-            "(client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
-            "VALUES (?, ?, 1, ?, ?, ?, ?, ?)",
+            "(client_id, plan_date, completed, notes, focus_minutes, pages_read, "
+            "course_id, exam_id, recorded_at_utc) "
+            "VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)",
         )
 
         detail = f"{(mode or 'pomodoro').title()} {minutes}min"
@@ -2312,8 +2801,10 @@ def claim_focus_phase_rewards(client_id: int, phase_id: str, minutes: int,
         xp_awarded = int(round(base_xp * max(1.0, xp_multiplier)))
         _exec(
             db,
-            "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s)",
-            (client_id, "focus_session", xp_awarded, detail),
+            "INSERT INTO student_xp "
+            "(client_id, action, xp, detail, occurred_at_utc) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (client_id, "focus_session", xp_awarded, detail, utc_now().isoformat()),
         )
 
         base_coins = minutes // 10
@@ -2388,7 +2879,7 @@ def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
     if minutes <= 0 and pages <= 0:
         return 0
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = user_date(client_id).isoformat()
     with get_db() as db:
         # Validate course ownership.
         if course_id:
@@ -2439,13 +2930,17 @@ def save_focus_session(client_id: int, mode: str, minutes: int, pages: int,
         # date queries match on the YYYY-MM-DD prefix so they're unaffected.
         return _insert_returning_id(
             db,
-            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
-            "VALUES (%s, %s, 1, %s, %s, %s, %s, %s) RETURNING id",
-            (client_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
+            "INSERT INTO student_study_progress "
+            "(client_id, plan_date, completed, notes, focus_minutes, pages_read, "
+            "course_id, exam_id, recorded_at_utc) "
+            "VALUES (%s, %s, 1, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (client_id, local_now(client_id, db=db).strftime("%Y-%m-%d %H:%M:%S.%f"),
              f"{mode}: {course_name}" if course_name else mode, minutes, pages,
-             course_id, exam_id),
-            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read, course_id, exam_id) "
-            "VALUES (?, ?, 1, ?, ?, ?, ?, ?)",
+             course_id, exam_id, utc_now().isoformat()),
+            "INSERT INTO student_study_progress "
+            "(client_id, plan_date, completed, notes, focus_minutes, pages_read, "
+            "course_id, exam_id, recorded_at_utc) "
+            "VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)",
         )
 
 
@@ -2492,14 +2987,12 @@ def get_focus_stats_today(client_id: int, local_date: str | None = None) -> dict
     Used by the Focus Mode page header so the numbers reflect what the
     student has put in *today*, not their lifetime totals.
 
-    `local_date` (YYYY-MM-DD) lets callers pass the browser's local date so
-    users in negative-UTC timezones don't see "phantom" sessions belonging
-    to the server's tomorrow.
+    Browser dates are ignored for accounting. The user's saved IANA timezone
+    defines the day, preventing stale or forged client dates from moving usage
+    across quota and reward boundaries.
     """
-    if local_date and len(local_date) == 10 and local_date[4] == '-' and local_date[7] == '-':
-        today_str = local_date
-    else:
-        today_str = datetime.now().strftime("%Y-%m-%d")
+    del local_date
+    today_str = user_date(client_id).isoformat()
     like_today = today_str + "%"
     with get_db() as db:
         total_min = _fetchval(
@@ -2580,11 +3073,11 @@ def get_time_per_exam(client_id: int, course_db_id: int) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-def _iso_week_anchor(week_offset: int) -> tuple:
+def _iso_week_anchor(week_offset: int, client_id: int | None = None) -> tuple:
     """Return (monday_date, sunday_date) for the ISO week offset from today.
     0 = this week, -1 = last week, etc."""
-    from datetime import date, timedelta
-    today = date.today()
+    from datetime import timedelta
+    today = user_date(client_id) if client_id is not None else utc_now().date()
     monday = today - timedelta(days=today.weekday())
     anchor = monday + timedelta(weeks=week_offset)
     return anchor, anchor + timedelta(days=6)
@@ -2599,7 +3092,7 @@ def get_course_week(client_id: int, course_db_id: int, week_offset: int = 0) -> 
     }
     """
     from datetime import timedelta
-    monday, sunday = _iso_week_anchor(week_offset)
+    monday, sunday = _iso_week_anchor(week_offset, client_id)
     # plan_date is stored as "YYYY-MM-DD HH:MM:SS" for focus rows, so range
     # compare the prefix substring.
     start_str = monday.strftime("%Y-%m-%d") + " 00:00:00"
@@ -2767,7 +3260,10 @@ def record_course_outcome(client_id: int, course_id: int, final_grade: float, pa
     with get_db() as db:
         course = _fetchone(
             db,
-            "SELECT id, name, code FROM student_courses WHERE id = %s AND client_id = %s",
+            "SELECT sc.id, sc.name, sc.code, sc.catalog_id, sc.term, "
+            "sc.semester_label, c.university_id "
+            "FROM student_courses sc JOIN clients c ON c.id = sc.client_id "
+            "WHERE sc.id = %s AND sc.client_id = %s",
             (course_id, client_id),
         )
         if not course:
@@ -2779,31 +3275,73 @@ def record_course_outcome(client_id: int, course_id: int, final_grade: float, pa
             (client_id, course_id),
         ) or 0
         key = _course_benchmark_key(course.get("name") or "", course.get("code") or "")
+        canonical_id = course.get("catalog_id")
+        university_id = course.get("university_id")
+        if not canonical_id and university_id:
+            canonical = _fetchone(
+                db,
+                "SELECT id FROM student_course_catalog "
+                "WHERE university_id = %s AND code_norm = %s "
+                "AND name_norm = %s AND deleted_at IS NULL LIMIT 1",
+                (
+                    university_id,
+                    _catalog_norm(course.get("code") or ""),
+                    _catalog_norm(course.get("name") or ""),
+                ),
+            )
+            canonical_id = canonical.get("id") if canonical else None
+            if canonical_id:
+                _exec(
+                    db,
+                    "UPDATE student_courses SET catalog_id = %s WHERE id = %s",
+                    (canonical_id, course_id),
+                )
+        cohort_version = (
+            course.get("term") or course.get("semester_label") or "unknown"
+        )
         if _USE_PG:
             _exec(
                 db,
                 "INSERT INTO student_course_outcomes "
-                "(client_id, course_id, course_key, course_name, course_code, final_grade, passing_grade, passed, total_focus_minutes, reported_at) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
+                "(client_id, course_id, course_key, course_name, course_code, "
+                "university_id, canonical_course_id, cohort_version, final_grade, "
+                "passing_grade, passed, total_focus_minutes, reported_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) "
                 "ON CONFLICT (client_id, course_id) DO UPDATE SET "
                 "course_key=EXCLUDED.course_key, course_name=EXCLUDED.course_name, "
-                "course_code=EXCLUDED.course_code, final_grade=EXCLUDED.final_grade, "
+                "course_code=EXCLUDED.course_code, university_id=EXCLUDED.university_id, "
+                "canonical_course_id=EXCLUDED.canonical_course_id, "
+                "cohort_version=EXCLUDED.cohort_version, final_grade=EXCLUDED.final_grade, "
                 "passing_grade=EXCLUDED.passing_grade, passed=EXCLUDED.passed, "
-                "total_focus_minutes=EXCLUDED.total_focus_minutes, reported_at=NOW()",
-                (client_id, course_id, key, course.get("name") or "", course.get("code") or "", final_grade, passing_grade, bool(passed), int(minutes)),
+                "total_focus_minutes=EXCLUDED.total_focus_minutes, "
+                "reported_at=CURRENT_TIMESTAMP",
+                (
+                    client_id, course_id, key, course.get("name") or "",
+                    course.get("code") or "", university_id, canonical_id,
+                    cohort_version, final_grade, passing_grade, bool(passed), int(minutes),
+                ),
             )
         else:
             _exec(
                 db,
                 "INSERT INTO student_course_outcomes "
-                "(client_id, course_id, course_key, course_name, course_code, final_grade, passing_grade, passed, total_focus_minutes, reported_at) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,datetime('now','localtime')) "
+                "(client_id, course_id, course_key, course_name, course_code, "
+                "university_id, canonical_course_id, cohort_version, final_grade, "
+                "passing_grade, passed, total_focus_minutes, reported_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,datetime('now')) "
                 "ON CONFLICT(client_id, course_id) DO UPDATE SET "
                 "course_key=excluded.course_key, course_name=excluded.course_name, "
-                "course_code=excluded.course_code, final_grade=excluded.final_grade, "
+                "course_code=excluded.course_code, university_id=excluded.university_id, "
+                "canonical_course_id=excluded.canonical_course_id, "
+                "cohort_version=excluded.cohort_version, final_grade=excluded.final_grade, "
                 "passing_grade=excluded.passing_grade, passed=excluded.passed, "
-                "total_focus_minutes=excluded.total_focus_minutes, reported_at=datetime('now','localtime')",
-                (client_id, course_id, key, course.get("name") or "", course.get("code") or "", final_grade, passing_grade, 1 if passed else 0, int(minutes)),
+                "total_focus_minutes=excluded.total_focus_minutes, reported_at=datetime('now')",
+                (
+                    client_id, course_id, key, course.get("name") or "",
+                    course.get("code") or "", university_id, canonical_id,
+                    cohort_version, final_grade, passing_grade,
+                    1 if passed else 0, int(minutes),
+                ),
             )
     return {
         "ok": True,
@@ -2811,28 +3349,70 @@ def record_course_outcome(client_id: int, course_id: int, final_grade: float, pa
         "passing_grade": passing_grade,
         "passed": bool(passed),
         "total_focus_minutes": int(minutes),
-        "benchmark": get_course_success_benchmark(course_id),
     }
 
 
 def get_course_success_benchmark(course_id: int) -> dict:
     with get_db() as db:
-        course = _fetchone(db, "SELECT name, code FROM student_courses WHERE id = %s", (course_id,))
+        course = _fetchone(
+            db,
+            "SELECT sc.name, sc.code, sc.catalog_id, sc.term, sc.semester_label, "
+            "c.university_id FROM student_courses sc "
+            "JOIN clients c ON c.id = sc.client_id WHERE sc.id = %s",
+            (course_id,),
+        )
         if not course:
             return {"has_data": False}
         key = _course_benchmark_key(course.get("name") or "", course.get("code") or "")
+        university_id = course.get("university_id")
+        canonical_id = course.get("catalog_id")
+        cohort_version = (
+            course.get("term") or course.get("semester_label") or "unknown"
+        )
+        if not university_id or not canonical_id:
+            return {
+                "has_data": False,
+                "suppressed": True,
+                "reason": "canonical_course_required",
+                "min_required": 5,
+                "methodology": (
+                    "Benchmarks only combine the same canonical course, "
+                    "university, and cohort."
+                ),
+            }
+        if cohort_version == "unknown":
+            return {
+                "has_data": False,
+                "suppressed": True,
+                "reason": "cohort_required",
+                "min_required": 5,
+                "methodology": (
+                    "A known course cohort is required before an anonymous "
+                    "benchmark can be calculated."
+                ),
+            }
         row = _fetchone(
             db,
             "SELECT COUNT(*) AS total_reports, "
-            "SUM(CASE WHEN passed THEN 1 ELSE 0 END) AS passed_count, "
-            "SUM(CASE WHEN NOT passed THEN 1 ELSE 0 END) AS failed_count, "
-            "COALESCE(AVG(CASE WHEN passed THEN total_focus_minutes END),0) AS avg_minutes, "
-            "COALESCE(AVG(CASE WHEN passed THEN final_grade END),0) AS avg_final_grade, "
+            "SUM(CASE WHEN passed_flag = 1 THEN 1 ELSE 0 END) AS passed_count, "
+            "SUM(CASE WHEN passed_flag = 0 THEN 1 ELSE 0 END) AS failed_count, "
+            "COALESCE(AVG(CASE WHEN passed_flag = 1 "
+            "THEN total_focus_minutes END),0) AS avg_minutes, "
+            "COALESCE(AVG(CASE WHEN passed_flag = 1 "
+            "THEN final_grade END),0) AS avg_final_grade, "
             "COALESCE(AVG(final_grade),0) AS avg_all_final_grade, "
-            "COALESCE(MIN(CASE WHEN passed THEN total_focus_minutes END),0) AS min_minutes, "
-            "COALESCE(MAX(CASE WHEN passed THEN total_focus_minutes END),0) AS max_minutes "
-            "FROM student_course_outcomes WHERE course_key = %s",
-            (key,),
+            "COALESCE(MIN(CASE WHEN passed_flag = 1 "
+            "THEN total_focus_minutes END),0) AS min_minutes, "
+            "COALESCE(MAX(CASE WHEN passed_flag = 1 "
+            "THEN total_focus_minutes END),0) AS max_minutes "
+            "FROM (SELECT client_id, "
+            "MAX(CASE WHEN passed THEN 1 ELSE 0 END) AS passed_flag, "
+            "AVG(total_focus_minutes) AS total_focus_minutes, "
+            "AVG(final_grade) AS final_grade "
+            "FROM student_course_outcomes WHERE university_id = %s "
+            "AND canonical_course_id = %s AND cohort_version = %s "
+            "GROUP BY client_id) AS anonymous_reports",
+            (university_id, canonical_id, cohort_version),
         ) or {}
     total_reports = int(row.get("total_reports") or 0)
     if total_reports < 5:
@@ -2841,6 +3421,11 @@ def get_course_success_benchmark(course_id: int) -> dict:
             "suppressed": True,
             "min_required": 5,
             "total_reports": total_reports,
+            "methodology": (
+                "Only outcomes for this canonical course, at your university, "
+                "in the same cohort are combined. Results remain hidden until "
+                "at least 5 students have reported."
+            ),
         }
     passed_count = int(row.get("passed_count") or 0)
     failed_count = int(row.get("failed_count") or 0)
@@ -2848,6 +3433,9 @@ def get_course_success_benchmark(course_id: int) -> dict:
     return {
         "has_data": passed_count > 0 and avg_minutes > 0,
         "course_key": key,
+        "university_id": int(university_id),
+        "canonical_course_id": int(canonical_id),
+        "cohort_version": cohort_version,
         "total_reports": total_reports,
         "passed_count": passed_count,
         "failed_count": failed_count,
@@ -2858,6 +3446,11 @@ def get_course_success_benchmark(course_id: int) -> dict:
         "avg_all_final_grade": round(float(row.get("avg_all_final_grade") or 0), 2),
         "min_minutes": int(row.get("min_minutes") or 0),
         "max_minutes": int(row.get("max_minutes") or 0),
+        "min_required": 5,
+        "methodology": (
+            "Anonymous aggregate of at least 5 reported outcomes for this "
+            "canonical course, at your university, in the same cohort."
+        ),
     }
 
 
@@ -2908,7 +3501,7 @@ def get_course_outcome_reports_admin(limit: int = 200) -> list[dict]:
 def get_exam_week(client_id: int, exam_db_id: int, week_offset: int = 0) -> dict:
     """Focus minutes per day-of-week for a specific exam in a given ISO week."""
     from datetime import timedelta
-    monday, sunday = _iso_week_anchor(week_offset)
+    monday, sunday = _iso_week_anchor(week_offset, client_id)
     start_str = monday.strftime("%Y-%m-%d") + " 00:00:00"
     end_str = sunday.strftime("%Y-%m-%d") + " 23:59:59"
     with get_db() as db:
@@ -3158,9 +3751,21 @@ def export_student_data(client_id: int) -> dict:
         "leaderboard_prizes": "student_lb_prize",
         "leaderboard_periods_seen": "student_lb_period_seen",
         "leaderboard_email_outbox": "student_lb_email_outbox",
+        "subscription_state": "student_subscription_state",
+        "promotional_entitlements": "student_promotional_entitlements",
+        "reward_state": "student_reward_state",
     }
     data: dict = {}
     with get_db() as db:
+        data["pending_referral"] = dict(
+            _fetchone(
+                db,
+                "SELECT code, created_at FROM student_pending_referrals "
+                "WHERE referred_id = %s",
+                (client_id,),
+            )
+            or {}
+        )
         data["academic_profile"] = dict(_fetchone(
             db,
             "SELECT c.country_iso, c.university_id, u.name AS university_name, "
@@ -3606,9 +4211,13 @@ def award_xp(client_id: int, action: str, xp: int, detail: str = "") -> int:
     with get_db() as db:
         return _insert_returning_id(
             db,
-            "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s) RETURNING id",
-            (client_id, action, xp, detail),
-            "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (?, ?, ?, ?)",
+            "INSERT INTO student_xp "
+            "(client_id, action, xp, detail, occurred_at_utc) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (client_id, action, xp, detail, utc_now().isoformat()),
+            "INSERT INTO student_xp "
+            "(client_id, action, xp, detail, occurred_at_utc) "
+            "VALUES (?, ?, ?, ?, ?)",
         )
 
 
@@ -3640,31 +4249,23 @@ def get_streak_days(client_id: int) -> int:
     in `student_streak_freezes` the first time the gap is observed.
     """
     with get_db() as db:
-        if _USE_PG:
-            rows = _fetchall(
-                db,
-                "SELECT DISTINCT created_at::date AS d FROM student_xp "
-                "WHERE client_id = %s ORDER BY d DESC LIMIT 90",
-                (client_id,),
-            )
-        else:
-            rows = _fetchall(
-                db,
-                "SELECT DISTINCT date(created_at) AS d FROM student_xp "
-                "WHERE client_id = %s ORDER BY d DESC LIMIT 90",
-                (client_id,),
-            )
+        rows = _fetchall(
+            db,
+            "SELECT occurred_at_utc, created_at FROM student_xp "
+            "WHERE client_id = %s ORDER BY created_at DESC LIMIT 5000",
+            (client_id,),
+        )
     if not rows:
         return 0
-    from datetime import date as _date, timedelta
-    today = _date.today()
+    today = user_date(client_id)
+    timezone_name = get_user_timezone(client_id)
+    timezone_info = ZoneInfo(timezone_name)
     # Build set of activity dates
     activity = set()
     for r in rows:
-        d = r["d"]
-        if isinstance(d, str):
-            d = _date.fromisoformat(d)
-        activity.add(d)
+        instant = _parse_focus_dt(r.get("occurred_at_utc") or r.get("created_at"))
+        if instant:
+            activity.add(instant.astimezone(timezone_info).date())
     # Earliest activity date — we never apply freezes for days before this
     # (otherwise a brand-new account could rack up an infinite streak by
     # auto-consuming freezes on days that never had any activity).
@@ -3776,8 +4377,7 @@ def _consume_wallet_freeze_for_date(client_id: int, target_date) -> bool:
 
 def get_freeze_status(client_id: int) -> dict:
     """Return whether this ISO week's freeze has been used."""
-    from datetime import date as _date
-    iso = _date.today().isocalendar()
+    iso = user_date(client_id).isocalendar()
     with get_db() as db:
         row = _fetchone(
             db,
@@ -4187,10 +4787,29 @@ def get_email_prefs(client_id: int) -> dict | None:
         )
 
 
+def set_user_timezone(client_id: int, timezone_name: str) -> str:
+    """Persist the canonical IANA timezone without touching other settings."""
+    from student.periods import normalize_timezone
+
+    timezone_name = normalize_timezone(timezone_name)
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO student_email_prefs (client_id, timezone) "
+            "VALUES (%s, %s) ON CONFLICT(client_id) DO UPDATE "
+            "SET timezone=excluded.timezone",
+            (client_id, timezone_name),
+        )
+    return timezone_name
+
+
 def upsert_email_prefs(client_id: int, daily_email: bool = True, email_hour: int = 7,
                         timezone: str = "America/Santiago",
                         university: str = "", field_of_study: str = "",
                         lang: str = "en"):
+    from student.periods import normalize_timezone
+
+    timezone = normalize_timezone(timezone)
     with get_db() as db:
         existing = _fetchone(db, "SELECT id FROM student_email_prefs WHERE client_id = %s",
                              (client_id,))
@@ -4288,6 +4907,41 @@ def get_student_rank(client_id: int) -> int:
 # ── Personal Leaderboards ──────────────────────────────────
 
 # ── Referral program ───────────────────────────────────────
+
+def set_pending_referral(referred_id: int, code: str) -> None:
+    code = (code or "").strip().upper()[:16]
+    if not code:
+        return
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO student_pending_referrals (referred_id, code) "
+            "VALUES (%s, %s) ON CONFLICT(referred_id) DO UPDATE "
+            "SET code=excluded.code",
+            (referred_id, code),
+        )
+
+
+def pop_pending_referral(referred_id: int) -> str | None:
+    """Atomically consume a pending referral after email verification."""
+    with get_db() as db:
+        if not _USE_PG:
+            db.execute("BEGIN IMMEDIATE")
+        row = _fetchone(
+            db,
+            "SELECT code FROM student_pending_referrals WHERE referred_id = %s"
+            + (" FOR UPDATE" if _USE_PG else ""),
+            (referred_id,),
+        )
+        if not row:
+            return None
+        _exec(
+            db,
+            "DELETE FROM student_pending_referrals WHERE referred_id = %s",
+            (referred_id,),
+        )
+        return str(row.get("code") or "") or None
+
 
 def get_or_create_referral_code(client_id: int) -> str:
     """Return this user's stable referral code, creating one on first use."""
@@ -4427,9 +5081,7 @@ def _progress_focus_quests_in_transaction(db, client_id: int, minutes: int, page
     the request process stops before route-level follow-up work can run.
     """
     import random
-    from datetime import date as _date
-
-    today = _date.today()
+    today = user_date(client_id, db=db)
     quest_date = today if _USE_PG else today.isoformat()
     rows = _fetchall(
         db,
@@ -4466,7 +5118,7 @@ def _progress_focus_quests_in_transaction(db, client_id: int, minutes: int, page
         "pages_read": max(0, int(pages or 0)),
     }
     newly_completed = False
-    now = "NOW()" if _USE_PG else "datetime('now','localtime')"
+    now = "CURRENT_TIMESTAMP" if _USE_PG else "datetime('now')"
     for row in rows:
         metric = next(
             (quest["metric"] for quest in QUEST_POOL if quest["key"] == row["quest_key"]),
@@ -4492,13 +5144,15 @@ def _progress_focus_quests_in_transaction(db, client_id: int, minutes: int, page
             if reward:
                 _exec(
                     db,
-                    "INSERT INTO student_xp (client_id, action, xp, detail) "
-                    "VALUES (%s, %s, %s, %s)",
+                    "INSERT INTO student_xp "
+                    "(client_id, action, xp, detail, occurred_at_utc) "
+                    "VALUES (%s, %s, %s, %s, %s)",
                     (
                         client_id,
                         "daily_quest",
                         reward,
                         f"Quest completed: {row['quest_key']}",
+                        utc_now().isoformat(),
                     ),
                 )
             newly_completed = True
@@ -4542,13 +5196,15 @@ def _progress_focus_quests_in_transaction(db, client_id: int, minutes: int, page
     if inserted.rowcount and QUEST_BUNDLE_BONUS_XP > 0:
         _exec(
             db,
-            "INSERT INTO student_xp (client_id, action, xp, detail) "
-            "VALUES (%s, %s, %s, %s)",
+            "INSERT INTO student_xp "
+            "(client_id, action, xp, detail, occurred_at_utc) "
+            "VALUES (%s, %s, %s, %s, %s)",
             (
                 client_id,
                 "daily_quest_bundle",
                 QUEST_BUNDLE_BONUS_XP,
                 "Completed all daily missions",
+                utc_now().isoformat(),
             ),
         )
 
@@ -4572,8 +5228,7 @@ def _sync_daily_quest_rewards(client_id: int, quest_date) -> None:
 def get_or_create_daily_quests(client_id: int) -> list[dict]:
     """Return today's 3 quests, generating them on first call of the day."""
     import random
-    from datetime import date as _date
-    today = _date.today()
+    today = user_date(client_id)
     today_s = today.isoformat()
     with get_db() as db:
         if _USE_PG:
@@ -4634,8 +5289,7 @@ def progress_quests_by_metric(client_id: int, metric: str, amount: int = 1) -> l
     quests = get_or_create_daily_quests(client_id)
     newly_completed: list[dict] = []
     matching_keys = {q["key"] for q in QUEST_POOL if q["metric"] == metric}
-    from datetime import date as _date
-    today = _date.today()
+    today = user_date(client_id)
     today_s = today.isoformat()
     with get_db() as db:
         for row in quests:
@@ -4649,7 +5303,7 @@ def progress_quests_by_metric(client_id: int, metric: str, amount: int = 1) -> l
                 _exec(
                     db,
                     "UPDATE student_daily_quests SET progress = %s, completed_at = "
-                    + ("NOW()" if _USE_PG else "datetime('now','localtime')")
+                    + ("CURRENT_TIMESTAMP" if _USE_PG else "datetime('now')")
                     + " WHERE id = %s",
                     (new_prog, row["id"]),
                 )
@@ -5052,8 +5706,6 @@ def is_user_online(client_id: int) -> bool:
 def get_streak_risk_recipients(min_streak: int = 5) -> list[dict]:
     """Return active students whose streak >= min_streak AND have no XP today.
     Each item: {client_id, email, name, streak}."""
-    from datetime import date as _date
-    today = _date.today()
     out: list[dict] = []
     with get_db() as db:
         clients = _fetchall(
@@ -5069,13 +5721,14 @@ def get_streak_risk_recipients(min_streak: int = 5) -> list[dict]:
         if streak < min_streak:
             continue
         # Did they get XP today already?
+        from student.periods import day_window_utc
+        start, end = day_window_utc(cid)
         with get_db() as db2:
             today_act = _fetchval(
                 db2,
-                ("SELECT id FROM student_xp WHERE client_id = %s AND created_at::date = %s LIMIT 1"
-                 if _USE_PG else
-                 "SELECT id FROM student_xp WHERE client_id = %s AND date(created_at) = %s LIMIT 1"),
-                (cid, today),
+                "SELECT id FROM student_xp WHERE client_id = %s "
+                "AND occurred_at_utc >= %s AND occurred_at_utc < %s LIMIT 1",
+                (cid, start.isoformat(), end.isoformat()),
             )
         if today_act:
             continue
@@ -5907,28 +6560,24 @@ def _lock_wallet(db, client_id: int) -> dict:
 
 
 def _grant_weekly_free_freeze(db, client_id: int) -> None:
-    """Once every 7 days, grant the user 1 free streak freeze (capped at 3 owned).
-    Tracked via clients.mail_preferences JSON key `last_free_freeze_grant`.
-    """
+    """Atomically claim one weekly freeze grant in normalized reward state."""
     try:
-        from datetime import datetime, timedelta
-        row = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (client_id,))
-        raw = (row or {}).get("mail_preferences") or ""
-        try:
-            prefs = _json.loads(raw) if raw else {}
-            if not isinstance(prefs, dict):
-                prefs = {}
-        except Exception:
-            prefs = {}
-        last = prefs.get("last_free_freeze_grant")
-        now = datetime.now()
-        due = True
-        if last:
-            try:
-                due = (now - datetime.fromisoformat(last)) >= timedelta(days=7)
-            except Exception:
-                due = True
-        if not due:
+        now = utc_now()
+        cutoff = now - timedelta(days=7)
+        _exec(
+            db,
+            "INSERT INTO student_reward_state (client_id) VALUES (%s) "
+            "ON CONFLICT(client_id) DO NOTHING",
+            (client_id,),
+        )
+        claimed = _exec(
+            db,
+            "UPDATE student_reward_state SET weekly_freeze_granted_at = %s, "
+            "updated_at = %s WHERE client_id = %s AND "
+            "(weekly_freeze_granted_at IS NULL OR weekly_freeze_granted_at <= %s)",
+            (now.isoformat(), now.isoformat(), client_id, cutoff.isoformat()),
+        )
+        if not claimed.rowcount:
             return
         # Grant if under cap. Paid plans can hold a few extra freezes through
         # Streak Insurance+.
@@ -5936,10 +6585,6 @@ def _grant_weekly_free_freeze(db, client_id: int) -> None:
         if int(cur) < _streak_freeze_cap(client_id):
             _exec(db, "UPDATE student_wallet SET streak_freezes = streak_freezes + 1 WHERE client_id = %s",
                   (client_id,))
-        # Always update the timestamp so the cycle advances even if at cap.
-        prefs["last_free_freeze_grant"] = now.isoformat()
-        _exec(db, "UPDATE clients SET mail_preferences = %s WHERE id = %s",
-              (_json.dumps(prefs), client_id))
     except Exception as e:
         log.exception("weekly free freeze grant failed: %s", e)
 
@@ -6530,7 +7175,13 @@ def use_streak_freeze(client_id: int) -> dict:
     streak chain doesn't break. No-op if no freezes available or yesterday
     already has activity."""
     from datetime import timedelta as _td
-    yesterday = (datetime.now().date() - _td(days=1)).strftime("%Y-%m-%d")
+    yesterday_day = user_date(client_id) - _td(days=1)
+    yesterday = yesterday_day.isoformat()
+    recorded_at = (
+        datetime.combine(yesterday_day, datetime.min.time())
+        .replace(hour=12, tzinfo=ZoneInfo(get_user_timezone(client_id)))
+        .astimezone(UTC)
+    )
     with get_db() as db:
         _ensure_wallet(db, client_id)
         owned = _fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s",
@@ -6548,11 +7199,21 @@ def use_streak_freeze(client_id: int) -> dict:
         # Insert a 1-minute sentinel session so the streak query sees yesterday.
         _insert_returning_id(
             db,
-            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
-            "VALUES (%s, %s, 1, %s, %s, %s) RETURNING id",
-            (client_id, yesterday + " 12:00:00", "[streak freeze]", 1, 0),
-            "INSERT INTO student_study_progress (client_id, plan_date, completed, notes, focus_minutes, pages_read) "
-            "VALUES (?, ?, 1, ?, ?, ?)",
+            "INSERT INTO student_study_progress "
+            "(client_id, plan_date, completed, notes, focus_minutes, "
+            "pages_read, recorded_at_utc) "
+            "VALUES (%s, %s, 1, %s, %s, %s, %s) RETURNING id",
+            (
+                client_id,
+                yesterday + " 12:00:00",
+                "[streak freeze]",
+                1,
+                0,
+                recorded_at.isoformat(),
+            ),
+            "INSERT INTO student_study_progress "
+            "(client_id, plan_date, completed, notes, focus_minutes, "
+            "pages_read, recorded_at_utc) VALUES (?, ?, 1, ?, ?, ?, ?)",
         )
         _exec(db, "UPDATE student_wallet SET streak_freezes = streak_freezes - 1 WHERE client_id = %s",
               (client_id,))

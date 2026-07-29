@@ -20,8 +20,9 @@ def test_period_leaderboard_uses_lifetime_xp_for_league(make_user):
     with get_db() as db:
         _exec(
             db,
-            "UPDATE student_xp SET created_at = %s WHERE id = %s",
-            ("2000-01-01 00:00:00", old_xp_id),
+            "UPDATE student_xp SET created_at = %s, occurred_at_utc = %s "
+            "WHERE id = %s",
+            ("2000-01-01 00:00:00", "2000-01-01T00:00:00+00:00", old_xp_id),
         )
     sdb.award_xp(client_id, "week_grind", 10, "current week")
 
@@ -41,8 +42,9 @@ def test_academic_ranks_api_reports_lifetime_league(client, make_user):
     with get_db() as db:
         _exec(
             db,
-            "UPDATE student_xp SET created_at = %s WHERE id = %s",
-            ("2000-01-01 00:00:00", old_xp_id),
+            "UPDATE student_xp SET created_at = %s, occurred_at_utc = %s "
+            "WHERE id = %s",
+            ("2000-01-01 00:00:00", "2000-01-01T00:00:00+00:00", old_xp_id),
         )
     sdb.award_xp(client_id, "week_grind", 10, "current week")
 

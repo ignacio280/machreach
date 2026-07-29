@@ -2152,14 +2152,8 @@ def register():
         _ref = (request.form.get("ref") or session.get("referral_ref") or "").strip().upper()[:16]
         if _ref and created_new:
             try:
-                import json as _json
-                from machreach_core.db import get_mail_preferences, update_mail_preferences
-                _praw = get_mail_preferences(client_id) or ""
-                _pdict = _json.loads(_praw) if _praw else {}
-                if not isinstance(_pdict, dict):
-                    _pdict = {}
-                _pdict["pending_ref"] = _ref
-                update_mail_preferences(client_id, _json.dumps(_pdict))
+                from student import db as _sdb
+                _sdb.set_pending_referral(client_id, _ref)
             except Exception as _re:
                 print(f"[REFERRAL] Failed to stash ref for {email}: {_re}", flush=True)
             session.pop("referral_ref", None)
@@ -2308,25 +2302,17 @@ def verify_email(token):
     if not rec:
         flash(("error", "Invalid or expired verification link. Please request a new one."))
         return redirect(url_for("login"))
-    mark_email_verified(rec["client_id"])
     # Referral reward: now that this sign-up is genuine (email verified), grant the
-    # inviter a free week of Plus. redeem_referral is idempotent (UNIQUE referred_id)
-    # and we clear the stashed code, so the reward can't fire twice.
+    # inviter a free week of Plus. The pending marker, redemption ledger, and
+    # entitlement extension commit together, so retries cannot lose or duplicate it.
     try:
-        import json as _json
-        from machreach_core.db import get_mail_preferences, update_mail_preferences
-        from student import db as _sdb
         from student import subscription as _ssub
-        _praw = get_mail_preferences(rec["client_id"]) or ""
-        _pdict = _json.loads(_praw) if _praw else {}
-        _ref = _pdict.pop("pending_ref", None) if isinstance(_pdict, dict) else None
-        if _ref:
-            update_mail_preferences(rec["client_id"], _json.dumps(_pdict))
-            _owner = _sdb.redeem_referral(_ref, rec["client_id"])
-            if _owner:
-                _ssub.grant_plus_days(_owner, 7)
+        _ssub.redeem_pending_referral_reward(rec["client_id"], 7)
     except Exception as _re:
         print(f"[REFERRAL] Reward grant failed for client {rec['client_id']}: {_re}", flush=True)
+        flash(("error", "We could not finish verification yet. Please try the link again."))
+        return redirect(url_for("login"))
+    mark_email_verified(rec["client_id"])
     client = get_client(rec["client_id"])
     flash(("success", f"Email verified! Welcome, {_esc(client['name']) if client else ''}. You can now log in."))
     return redirect(url_for("login"))
@@ -2606,10 +2592,19 @@ def _collect_ls_sub_ids(db, client_id: int) -> list:
     from machreach_core.db import _fetchone
     ids = []
     try:
+        normalized = _fetchone(
+            db,
+            "SELECT ls_sub_id FROM student_subscription_state "
+            "WHERE client_id = %s",
+            (client_id,),
+        )
+        normalized_id = str((normalized or {}).get("ls_sub_id") or "").strip()
+        if normalized_id:
+            ids.append(normalized_id)
         crow = _fetchone(db, "SELECT mail_preferences FROM clients WHERE id = %s", (client_id,))
         prefs = _json.loads(((crow or {}).get("mail_preferences")) or "{}")
         sid2 = ((prefs.get("subscription") or {}).get("ls_sub_id") or "").strip()
-        if sid2:
+        if sid2 and sid2 not in ids:
             ids.append(sid2)
     except Exception:
         pass
@@ -4260,7 +4255,7 @@ def _public_info_page(title: str, eyebrow: str, intro: str, body_html: str, acti
 def privacy_page():
     return _public_info_page("Privacy Policy", "Legal", "How MachReach handles account, study, Canvas extension, and subscription data.", """
         <p class="mr-note"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, friends, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
-        <p><strong>Last updated:</strong> July 17, 2026</p>
+        <p><strong>Last updated:</strong> July 28, 2026</p>
         <p>MachReach is operated from Santiago, Chile. Privacy and data-rights questions can be sent to <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
         <h2>1. Information We Collect</h2>
         <p><strong>Account information:</strong> your name, institutional or Canvas email address, your university, and your password hash. When you create an account through Canvas, MachReach reads the email address exposed by your Canvas profile so you can log in later with that email and the password you set.</p>
@@ -4268,6 +4263,8 @@ def privacy_page():
         <p><strong>Courses you add manually:</strong> if your university doesn't use Canvas, or you simply prefer to, you can add courses by typing a course code and name. To help other students at <em>your own university</em> fill these in faster, course codes and names you add may be saved to a shared, university-scoped autofill catalog. This catalog stores only the course code and course name together with the university — it is never linked to your identity, your grades, or your study activity, and it is only ever shown to other students at the same university.</p>
         <p><strong>Study materials:</strong> files, notes, and text you choose to upload or type for features such as quizzes and flashcards.</p>
         <p><strong>Study activity:</strong> focus sessions, minutes studied per course, XP events, streaks, badges, quiz attempts, flashcard reviews, leaderboard rank, course outcomes, grades you enter, and in-app coin activity.</p>
+        <p><strong>Course benchmarks:</strong> benchmark statistics combine only anonymous outcomes for the same canonical course, at the same university, and in the same cohort or course version. MachReach suppresses the aggregate until at least five students have reported an outcome. Your individual grade or study time is not shown to other students.</p>
+        <p><strong>University verification for physical prizes:</strong> selecting a university currently does not verify enrollment. If MachReach offers physical, cash-equivalent, or other real-world prizes, potential recipients will be asked to verify that they belong to the university associated with their account before a prize is delivered. Verification information will be limited to what is needed to confirm eligibility and handled under this policy.</p>
         <p><strong>Social activity:</strong> friend connections and referral activity if you invite friends. We store who you are friends with and how many people joined with your referral link.</p>
         <p><strong>Focus Guard extension:</strong> extension settings and active-session state are used to support focus sessions. Some settings may be stored locally in your browser.</p>
         <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
@@ -4310,7 +4307,7 @@ def privacy_page():
 @app.route("/terms")
 def terms_page():
     return _public_info_page("Terms of Service", "Legal", "The rules for using MachReach, subscriptions, AI study tools, rankings, and account security.", """
-        <p><strong>Last updated:</strong> July 17, 2026</p>
+        <p><strong>Last updated:</strong> July 28, 2026</p>
         <h2>1. Acceptance of Terms</h2>
         <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
         <h2>2. Description of Service</h2>
@@ -4340,6 +4337,7 @@ def terms_page():
         <p>AI-generated quizzes, flashcards, or other study content are provided as suggestions and may be incomplete or incorrect. You are responsible for reviewing generated content before relying on it academically.</p>
         <h2>9. Leaderboards, Coins and Referrals</h2>
         <p>XP, coins, streaks, badges, and leaderboard ranks are part of the game layer and have no cash value, cannot be transferred or sold between accounts, and can be redeemed only inside MachReach. Referral rewards (such as free Plus time) are granted for genuine sign-ups only. We may withhold, reverse, or reset rewards, ranks, or referral credit for suspected cheating or abuse.</p>
+        <p>Choosing a university in your profile is not proof of enrollment. If MachReach offers a physical, cash-equivalent, or other real-world prize, eligibility and delivery are conditional on the potential recipient verifying enrollment or affiliation with the university on their account. A user who cannot complete verification, submitted an inaccurate university, or is otherwise ineligible may be disqualified and the prize may pass to the next eligible recipient.</p>
         <h2>10. Availability and Liability</h2>
         <p>MachReach is a study aid and does not guarantee academic results or uninterrupted availability. To the maximum extent permitted by law, MachReach is not responsible for indirect or consequential loss caused by reliance on generated content or outages outside its reasonable control. This does not limit liability or remedies that cannot be limited under consumer law.</p>
         <h2>11. Chilean Law and Changes</h2>

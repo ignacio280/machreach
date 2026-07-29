@@ -1,4 +1,5 @@
 """Money path: subscription tiers, promotional Plus grants, and free limits."""
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from student import subscription as ssub
@@ -42,6 +43,20 @@ def test_grant_plus_days_stacks(make_user):
     assert second > first
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     assert (second - now).days >= 13
+
+
+def test_concurrent_promotional_grants_do_not_lose_days(make_user):
+    client_id = make_user("Concurrent Promotion")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        grants = list(
+            pool.map(lambda _index: ssub.grant_plus_days(client_id, 7), range(2))
+        )
+
+    assert all(grants)
+    expiry = datetime.fromisoformat(ssub.plus_grant_until(client_id))
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    assert (expiry - now).days >= 13
 
 
 def test_expired_grant_reverts_to_free(make_user):

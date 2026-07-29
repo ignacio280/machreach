@@ -26,11 +26,15 @@ def _post(client, payload: dict, sign=True):
                        headers={"X-Signature": sig})
 
 
+def _subscription_id(cid: int) -> str:
+    return f"sub_test_{cid}"
+
+
 def _student_event(event, cid, tier="plus"):
     return {
         "meta": {"event_name": event,
                  "custom_data": {"purpose": "student_sub", "client_id": str(cid), "tier": tier}},
-        "data": {"id": "sub_test_1", "attributes": {"status": "active"}},
+        "data": {"id": _subscription_id(cid), "attributes": {"status": "active"}},
     }
 
 
@@ -124,7 +128,7 @@ def test_legacy_ultimate_provider_event_is_cancelled_and_blocked(
 
     assert _post(client, changed).status_code == 200
     assert ssub.get_tier(cid) == "free"
-    assert cancelled == ["sub_test_1"]
+    assert cancelled == [_subscription_id(cid)]
 
 
 def test_legacy_stored_tier_migration_rewrites_provider_state(make_user):
@@ -206,7 +210,7 @@ def test_full_subscription_refund_cancels_renewal_and_revokes_paid_access(
         "type": "subscription-invoices",
         "id": "invoice-refunded",
         "attributes": {
-            "subscription_id": "sub_test_1",
+            "subscription_id": _subscription_id(cid),
             "total": 4990,
             "refunded_amount": 4990,
             "refunded": True,
@@ -217,8 +221,8 @@ def test_full_subscription_refund_cancels_renewal_and_revokes_paid_access(
     assert ssub.get_tier(cid) == "free"
     state = ssub.get_subscription_state(cid)
     assert state["status"] == "refunded"
-    assert state["ls_sub_id"] == "sub_test_1"
-    assert cancelled == ["sub_test_1"]
+    assert state["ls_sub_id"] == _subscription_id(cid)
+    assert cancelled == [_subscription_id(cid)]
 
 
 def test_full_subscription_refund_revokes_access_even_if_cancellation_fails(
@@ -229,7 +233,7 @@ def test_full_subscription_refund_revokes_access_even_if_cancellation_fails(
     monkeypatch.setattr(ls, "cancel_subscription", lambda _sid: False)
     refunded = _student_event("subscription_payment_refunded", cid, "plus")
     refunded["data"]["attributes"].update(
-        subscription_id="sub_test_1",
+        subscription_id=_subscription_id(cid),
         total=4990,
         refunded_amount=4990,
         refunded=True,
@@ -245,7 +249,7 @@ def test_partial_subscription_refund_keeps_paid_access(client, make_user):
     _post(client, _student_event("subscription_created", cid, "plus"))
     refunded = _student_event("subscription_payment_refunded", cid, "plus")
     refunded["data"]["attributes"].update(
-        subscription_id="sub_test_1",
+        subscription_id=_subscription_id(cid),
         total=4990,
         refunded_amount=1000,
         refunded=False,
@@ -330,7 +334,7 @@ def test_same_paid_plan_does_not_create_a_duplicate_checkout(
         cid,
         tier="plus",
         status="active",
-        ls_sub_id="existing-plus",
+        ls_sub_id=f"existing-plus-{cid}",
     )
     monkeypatch.setattr(
         ls,
@@ -507,7 +511,10 @@ def test_cancelled_same_plan_resumes_existing_subscription(
     monkeypatch.setattr(cfg, "LS_VARIANT_STUDENT_PLUS", "plus-variant")
     cid = make_user()
     _complete_setup(cid)
-    ssub.set_subscription_state(cid, tier="plus", status="cancelled", ls_sub_id="cancelled-sub")
+    provider_id = f"cancelled-sub-{cid}"
+    ssub.set_subscription_state(
+        cid, tier="plus", status="cancelled", ls_sub_id=provider_id
+    )
     calls = []
     monkeypatch.setattr(
         ls,
@@ -521,7 +528,7 @@ def test_cancelled_same_plan_resumes_existing_subscription(
 
     assert response.status_code == 200
     assert response.get_json()["update_pending"] is True
-    assert calls == [("cancelled-sub", "plus-variant")]
+    assert calls == [(provider_id, "plus-variant")]
 
 
 def test_unknown_paid_subscription_state_blocks_duplicate_checkout(
@@ -534,7 +541,7 @@ def test_unknown_paid_subscription_state_blocks_duplicate_checkout(
         cid,
         tier="plus",
         status="provider_state_not_recognized",
-        ls_sub_id="existing-plus",
+        ls_sub_id=f"existing-plus-{cid}",
     )
     monkeypatch.setattr(
         ls,
@@ -934,6 +941,32 @@ def test_parallel_webhook_workers_claim_an_event_once():
     assert {claim["status"] for claim in claims} == {"processing"}
 
 
+def test_webhook_subscription_update_cannot_overwrite_concurrent_user_timezone(
+    make_user,
+):
+    cid = make_user()
+
+    def update_billing():
+        return ssub.set_subscription_state(
+            cid,
+            tier="plus",
+            status="active",
+            ls_sub_id=f"sub-concurrent-{cid}",
+        )
+
+    def update_settings():
+        sdb.set_user_timezone(cid, "America/Punta_Arenas")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        billing = pool.submit(update_billing)
+        settings = pool.submit(update_settings)
+        assert billing.result()["ok"] is True
+        settings.result()
+
+    assert ssub.get_subscription_state(cid)["ls_sub_id"] == f"sub-concurrent-{cid}"
+    assert sdb.get_email_prefs(cid)["timezone"] == "America/Punta_Arenas"
+
+
 def test_coin_pack_without_order_id_is_acked_without_credit(client, make_user):
     cid = make_user()
     payload = {"meta": {"event_name": "order_created",
@@ -974,7 +1007,7 @@ def test_student_downgrade_cancels_provider_before_marking_free(client, make_use
     assert r.status_code == 200
     assert r.get_json()["tier"] == "plus"
     assert r.get_json()["cancellation_pending"] is True
-    assert calls == ["sub_test_1"]
+    assert calls == [_subscription_id(cid)]
     assert ssub.get_tier(cid) == "plus"
 
 
@@ -993,7 +1026,7 @@ def test_student_downgrade_failure_keeps_paid_tier(client, make_user, flask_app,
 
     assert r.status_code == 502
     assert r.get_json()["ok"] is False
-    assert calls == ["sub_test_1"]
+    assert calls == [_subscription_id(cid)]
     assert ssub.get_tier(cid) == "plus"
 
 
@@ -1014,3 +1047,46 @@ def test_student_downgrade_without_provider_id_keeps_paid_tier(client, make_user
     assert r.get_json()["ok"] is False
     assert calls == []
     assert ssub.get_tier(cid) == "plus"
+
+
+def test_provider_subscription_id_cannot_belong_to_two_students(make_user):
+    first = make_user("First Provider Owner")
+    second = make_user("Second Provider Owner")
+    provider_id = f"provider-subscription-unique-{first}"
+
+    assert ssub.set_subscription_state(
+        first, tier="plus", status="active", ls_sub_id=provider_id
+    )["ok"]
+
+    import pytest
+
+    with pytest.raises(Exception):
+        ssub.set_subscription_state(
+            second, tier="plus", status="active", ls_sub_id=provider_id
+        )
+
+
+def test_plus_monthly_insurance_is_claimed_once_under_concurrency(make_user):
+    client_id = make_user("Concurrent Insurance")
+
+    def activate():
+        return ssub.set_tier(client_id, "plus")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _index: activate(), range(2)))
+
+    assert all(result["ok"] for result in results)
+    with get_db() as db:
+        wallet = _fetchone(
+            db,
+            "SELECT streak_freezes FROM student_wallet WHERE client_id = %s",
+            (client_id,),
+        )
+        reward = _fetchone(
+            db,
+            "SELECT plus_insurance_period_key FROM student_reward_state "
+            "WHERE client_id = %s",
+            (client_id,),
+        )
+    assert wallet["streak_freezes"] == 1
+    assert reward["plus_insurance_period_key"]

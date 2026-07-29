@@ -2834,6 +2834,12 @@ Return this JSON shape:
             "is_plus": bool(is_plus),
             "plus_required": bool(benchmark.get("has_data") and not is_plus),
             "my_outcome": sdb.get_course_outcome(_cid(), course_id),
+            "suppressed": bool(benchmark.get("suppressed")),
+            "min_required": int(benchmark.get("min_required") or 5),
+            "methodology": benchmark.get("methodology") or (
+                "Only anonymous outcomes from the same canonical course, "
+                "university, and cohort are combined."
+            ),
         }
         if is_plus:
             response.update(benchmark)
@@ -8287,11 +8293,14 @@ Material:
             if (d && d.has_data) {{
               if (d.plus_required) {{
                 box.classList.add('locked');
-                box.textContent = 'Plus desbloquea datos reales de este ramo: horas promedio para aprobar, nota promedio y tasa de aprobación.';
+                box.textContent = 'Plus desbloquea el benchmark anónimo del mismo ramo canónico, universidad y cohorte. Solo aparece desde 5 estudiantes.';
               }} else {{
                 var reports = d.passed_count === 1 ? 'reporte' : 'reportes';
-                box.textContent = 'En promedio, quienes aprobaron este curso estudiaron ' + d.avg_hours + 'h y terminaron con nota final promedio ' + d.avg_final_grade + ' (' + d.passed_count + ' ' + reports + ', ' + d.pass_rate + '% aprobados).';
+                box.textContent = 'Benchmark anónimo del mismo ramo canónico, universidad y cohorte (mínimo 5 estudiantes): quienes aprobaron estudiaron ' + d.avg_hours + 'h y terminaron con nota final promedio ' + d.avg_final_grade + ' (' + d.passed_count + ' ' + reports + ', ' + d.pass_rate + '% aprobados).';
               }}
+              box.style.display = 'block';
+            }} else if (d && d.suppressed) {{
+              box.textContent = 'Privacidad del benchmark: solo combinamos el mismo ramo canónico, universidad y cohorte. Se muestra al reunir al menos ' + (d.min_required || 5) + ' resultados anónimos.';
               box.style.display = 'block';
             }}
           }} catch(e) {{}}

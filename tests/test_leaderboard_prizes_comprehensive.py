@@ -21,7 +21,7 @@ def test_prize_amounts_period_keys_windows_and_due_state():
     assert prizes._period_window("week", "2026-W29") == ("2026-07-13 00:00:00", "2026-07-20 00:00:00")
     assert prizes._period_window("month", "2026-12") == ("2026-12-01 00:00:00", "2027-01-01 00:00:00")
     assert prizes._xp_period_window("month", "2026-04", postgres=True) == (
-        "2026-04-01 03:00:00", "2026-05-01 04:00:00"
+        "2026-04-01T03:00:00+00:00", "2026-05-01T04:00:00+00:00"
     )
     assert prizes._is_due("week", date(2026, 7, 21)) is False
     assert prizes._is_due("month", date(2026, 7, 2)) is False

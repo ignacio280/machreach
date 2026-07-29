@@ -21,13 +21,21 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from machreach_core.db import get_db, _USE_PG
+from student.periods import (
+    latest_closed_leaderboard_period,
+    leaderboard_period_key,
+    leaderboard_period_window,
+    next_leaderboard_period,
+    utc_now,
+    zoned_date,
+)
 
 log = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
-    """Naive UTC timestamp for the project's TIMESTAMP columns."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    """UTC-aware timestamp for payout persistence and comparisons."""
+    return utc_now()
 
 
 # ── Schema ──────────────────────────────────────────────────────────────
@@ -39,8 +47,8 @@ CREATE TABLE IF NOT EXISTS student_lb_payout_run (
     period_key   TEXT NOT NULL,          -- ISO key, e.g. '2026-W17' or '2026-04'
     status       TEXT NOT NULL DEFAULT 'completed',
     claim_token  TEXT,
-    claimed_at   TIMESTAMP DEFAULT NOW(),
-    completed_at TIMESTAMP,
+    claimed_at   TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
     attempts     INTEGER NOT NULL DEFAULT 1,
     last_error   TEXT NOT NULL DEFAULT '',
     UNIQUE(period_kind, period_key)
@@ -57,7 +65,7 @@ CREATE TABLE IF NOT EXISTS student_lb_prize (
     coins         INTEGER NOT NULL,
     xp_in_period  INTEGER NOT NULL,
     shown         INTEGER DEFAULT 0,     -- pop-up acknowledged
-    created_at    TIMESTAMP DEFAULT NOW()
+    created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_lb_prize_client ON student_lb_prize(client_id, shown);
 
@@ -78,10 +86,10 @@ CREATE TABLE IF NOT EXISTS student_lb_email_outbox (
     status        TEXT NOT NULL DEFAULT 'pending',
     attempts      INTEGER NOT NULL DEFAULT 0,
     last_error    TEXT NOT NULL DEFAULT '',
-    created_at    TIMESTAMP DEFAULT NOW(),
-    claimed_at    TIMESTAMP,
-    next_attempt_at TIMESTAMP,
-    sent_at       TIMESTAMP
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    claimed_at    TIMESTAMPTZ,
+    next_attempt_at TIMESTAMPTZ,
+    sent_at       TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_lb_email_outbox_pending
 ON student_lb_email_outbox(status, id);
@@ -90,7 +98,7 @@ CREATE TABLE IF NOT EXISTS student_lb_period_seen (
     client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     period_kind  TEXT NOT NULL,
     period_key   TEXT NOT NULL,
-    seen_at      TIMESTAMP DEFAULT NOW(),
+    seen_at      TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (client_id, period_kind, period_key)
 );
 """
@@ -120,7 +128,7 @@ CREATE TABLE IF NOT EXISTS student_lb_prize (
     coins         INTEGER NOT NULL,
     xp_in_period  INTEGER NOT NULL,
     shown         INTEGER DEFAULT 0,
-    created_at    TEXT DEFAULT (datetime('now','localtime'))
+    created_at    TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_lb_prize_client ON student_lb_prize(client_id, shown);
 
@@ -153,7 +161,7 @@ CREATE TABLE IF NOT EXISTS student_lb_period_seen (
     client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     period_kind  TEXT NOT NULL,
     period_key   TEXT NOT NULL,
-    seen_at      TEXT DEFAULT (datetime('now','localtime')),
+    seen_at      TEXT DEFAULT (datetime('now')),
     PRIMARY KEY (client_id, period_kind, period_key)
 );
 """
@@ -165,6 +173,33 @@ def init_prize_tables() -> None:
         if _USE_PG:
             cur = db.cursor()
             cur.execute(_PRIZE_TABLES_PG)
+            for table, columns in {
+                "student_lb_payout_run": ("claimed_at", "completed_at"),
+                "student_lb_prize": ("created_at",),
+                "student_lb_email_outbox": (
+                    "created_at",
+                    "claimed_at",
+                    "next_attempt_at",
+                    "sent_at",
+                ),
+                "student_lb_period_seen": ("seen_at",),
+            }.items():
+                for column in columns:
+                    cur.execute(
+                        "SELECT data_type FROM information_schema.columns "
+                        "WHERE table_schema = current_schema() "
+                        "AND table_name = %s AND column_name = %s",
+                        (table, column),
+                    )
+                    row = cur.fetchone()
+                    data_type = (
+                        row.get("data_type") if hasattr(row, "get") else row[0]
+                    ) if row else None
+                    if data_type == "timestamp without time zone":
+                        cur.execute(
+                            f"ALTER TABLE {table} ALTER COLUMN {column} "
+                            f"TYPE TIMESTAMPTZ USING {column} AT TIME ZONE 'UTC'"
+                        )
         else:
             db.executescript(_PRIZE_TABLES_SQLITE)
     # Upgrade installations created before payout claims and the outbox existed.
@@ -256,79 +291,49 @@ def _period_key(kind: str, ref: date | None = None) -> str:
     refers to the period that closed seconds ago — the one whose winners we
     are about to pay out.
     """
-    ref = ref or date.today()
+    ref = ref or zoned_date("America/Santiago")
     if kind == "week":
         # The week that just ended is "yesterday's ISO week" relative to a
         # Monday-morning run. Yesterday is always inside the closed week.
         y = ref - timedelta(days=1)
-        iso = y.isocalendar()
-        return f"{iso.year}-W{iso.week:02d}"
+        return leaderboard_period_key("weekly", y)
     if kind == "month":
         # The month that ended is the month of yesterday.
         y = ref - timedelta(days=1)
-        return f"{y.year:04d}-{y.month:02d}"
+        return leaderboard_period_key("monthly", y)
     raise ValueError(f"Unknown period kind: {kind}")
 
 
 def _period_window(kind: str, period_key: str) -> tuple[str, str]:
     """Return (start_iso_dt, end_iso_dt) for the period_key — half-open."""
-    if kind == "week":
-        # period_key like '2026-W17'
-        year, wk = period_key.split("-W")
-        # ISO Monday of that week
-        monday = datetime.fromisocalendar(int(year), int(wk), 1).date()
-        next_monday = monday + timedelta(days=7)
-        return (monday.isoformat() + " 00:00:00",
-                next_monday.isoformat() + " 00:00:00")
-    if kind == "month":
-        year, mo = period_key.split("-")
-        first = date(int(year), int(mo), 1)
-        if first.month == 12:
-            next_first = date(first.year + 1, 1, 1)
-        else:
-            next_first = date(first.year, first.month + 1, 1)
-        return (first.isoformat() + " 00:00:00",
-                next_first.isoformat() + " 00:00:00")
-    raise ValueError(f"Unknown period kind: {kind}")
+    normalized_kind = "weekly" if kind == "week" else "monthly"
+    start, end = leaderboard_period_window(normalized_kind, period_key)
+    return start.isoformat() + " 00:00:00", end.isoformat() + " 00:00:00"
 
 
 def _xp_period_window(
     kind: str, period_key: str, *, postgres: bool | None = None
 ) -> tuple[str, str]:
-    """Adapt Santiago leaderboard boundaries to each engine's XP timestamp storage."""
+    """Convert the shared Santiago calendar period to UTC instants."""
     start, end = _period_window(kind, period_key)
-    use_postgres = _USE_PG if postgres is None else postgres
-    if use_postgres:
-        timezone = ZoneInfo("America/Santiago")
-        converted = []
-        for value in (start, end):
-            local = datetime.fromisoformat(value).replace(tzinfo=timezone)
-            converted.append(local.astimezone(UTC).replace(tzinfo=None).isoformat(sep=" "))
-        return converted[0], converted[1]
-    # SQLite's student_xp schema stores datetime('now', 'localtime').
-    return start, end
+    del postgres
+    timezone = ZoneInfo("America/Santiago")
+    converted = []
+    for value in (start, end):
+        local = datetime.fromisoformat(value).replace(tzinfo=timezone)
+        converted.append(local.astimezone(UTC).isoformat())
+    return converted[0], converted[1]
 
 
 def _latest_closed_period_key(kind: str, as_of: date) -> str:
     """Return the most recent fully closed period on any day of the week/month."""
-    if kind == "week":
-        current_monday = as_of - timedelta(days=as_of.isoweekday() - 1)
-        closed = current_monday - timedelta(days=1)
-        iso = closed.isocalendar()
-        return f"{iso.year}-W{iso.week:02d}"
-    if kind == "month":
-        closed = as_of.replace(day=1) - timedelta(days=1)
-        return f"{closed.year:04d}-{closed.month:02d}"
-    raise ValueError(f"Unknown period kind: {kind}")
+    normalized_kind = "weekly" if kind == "week" else "monthly"
+    return latest_closed_leaderboard_period(normalized_kind, as_of)
 
 
 def _next_period_key(kind: str, period_key: str) -> str:
-    start, end = _period_window(kind, period_key)
-    next_start = date.fromisoformat(end[:10])
-    if kind == "week":
-        iso = next_start.isocalendar()
-        return f"{iso.year}-W{iso.week:02d}"
-    return f"{next_start.year:04d}-{next_start.month:02d}"
+    normalized_kind = "weekly" if kind == "week" else "monthly"
+    return next_leaderboard_period(normalized_kind, period_key)
 
 
 def _periods_to_process(kind: str, latest: str, limit: int) -> list[str]:
@@ -444,7 +449,7 @@ def _fail_run(kind: str, period_key: str, claim_token: str, error: Exception) ->
 
 def _is_due(kind: str, today: date | None = None) -> bool:
     """Has the boundary just passed AND we haven't run the payout yet?"""
-    today = today or date.today()
+    today = today or zoned_date("America/Santiago")
     # Weekly payout fires on Mondays (ISO weekday 1). Monthly fires on
     # day 1 of the month. We tolerate the whole day so a missed run still
     # pays out later.
@@ -527,7 +532,7 @@ def _top5_per_bucket(
             f"       COALESCE(SUM(x.xp), 0) AS total_xp "
             f"FROM clients c "
             f"LEFT JOIN student_xp x ON x.client_id = c.id "
-            f"  AND x.created_at >= %s AND x.created_at < %s "
+            f"  AND x.occurred_at_utc >= %s AND x.occurred_at_utc < %s "
             f"WHERE c.account_type = 'student' AND COALESCE(c.retired,0) = 0 "
             f"{bucket_filter}"
             f"GROUP BY c.id, c.name "
@@ -554,7 +559,7 @@ def _top5_per_bucket(
         f"       COALESCE(SUM(x.xp),0) AS total_xp "
         f"FROM clients c "
         f"LEFT JOIN student_xp x ON x.client_id = c.id "
-        f"  AND x.created_at >= %s AND x.created_at < %s "
+        f"  AND x.occurred_at_utc >= %s AND x.occurred_at_utc < %s "
         f"WHERE c.account_type = 'student' AND COALESCE(c.retired,0) = 0 "
         f"{bucket_filter}"
         f"GROUP BY c.id, c.name{group_extra} "
@@ -622,12 +627,13 @@ def _award_winners(period_kind: str, period_key: str, claim_token: str) -> dict:
                 inserted = _exec(
                     db,
                     "INSERT INTO student_lb_prize "
-                    "(client_id, period_kind, period_key, scope, scope_value, rank, coins, xp_in_period) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                    "(client_id, period_kind, period_key, scope, scope_value, "
+                    "rank, coins, xp_in_period, created_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
                     "ON CONFLICT DO NOTHING",
                     (w["client_id"], period_kind, period_key, scope,
                      scope_value,
-                     w["rank"], coins, w["xp"]),
+                     w["rank"], coins, w["xp"], _utcnow()),
                 )
                 if inserted.rowcount == 1:
                     sdb._ensure_wallet(db, int(w["client_id"]))
@@ -872,7 +878,7 @@ def run_due_payouts(as_of: date | None = None, max_periods: int = 8) -> dict:
     workers and retries safe.
     """
     out: dict[str, dict[str, Any] | None] = {"week": None, "month": None}
-    today = as_of or datetime.now(ZoneInfo("America/Santiago")).date()
+    today = as_of or zoned_date("America/Santiago")
     for kind in ("week", "month"):
         latest = _latest_closed_period_key(kind, today)
         for key in _periods_to_process(kind, latest, max_periods):
@@ -1061,7 +1067,7 @@ def _user_rank_in_scope(client_id: int, scope: str, period_kind: str,
         f"  SELECT c.id AS client_id, COALESCE(SUM(x.xp), 0) AS total_xp "
         f"  FROM clients c "
         f"  LEFT JOIN student_xp x ON x.client_id = c.id "
-        f"    AND x.created_at >= %s AND x.created_at < %s "
+        f"    AND x.occurred_at_utc >= %s AND x.occurred_at_utc < %s "
         f"  WHERE c.account_type = 'student' AND COALESCE(c.retired, 0) = 0 "
         f"  {bucket_filter} "
         f"  GROUP BY c.id "
@@ -1146,7 +1152,8 @@ def mark_period_seen(client_id: int, period_kind: str, period_key: str) -> None:
     with get_db() as db:
         _exec(
             db,
-            "INSERT INTO student_lb_period_seen (client_id, period_kind, period_key) "
-            "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-            (client_id, period_kind, period_key),
+            "INSERT INTO student_lb_period_seen "
+            "(client_id, period_kind, period_key, seen_at) "
+            "VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
+            (client_id, period_kind, period_key, _utcnow()),
         )

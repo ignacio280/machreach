@@ -7,7 +7,7 @@ UNIQUE(client_id, plan_date) when plan_date had only second precision.
 """
 from student import db as sdb
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from machreach_core.db import get_db, _exec, _fetchall
 
@@ -47,12 +47,11 @@ def test_parallel_claims_credit_one_focus_phase_exactly_once(make_user):
     with get_db() as db:
         _exec(
             db,
-            "UPDATE student_focus_phases SET started_at = %s "
+            "UPDATE student_focus_phases SET started_at = %s, started_at_utc = %s "
             "WHERE client_id = %s AND phase_id = %s",
             (
-                (datetime.now() - timedelta(minutes=21)).strftime(
-                    "%Y-%m-%d %H:%M:%S.%f"
-                ),
+                (datetime.now(UTC) - timedelta(minutes=21)).replace(tzinfo=None),
+                datetime.now(UTC) - timedelta(minutes=21),
                 cid,
                 phase_id,
             ),
