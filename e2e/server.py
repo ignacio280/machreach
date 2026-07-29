@@ -20,6 +20,7 @@ os.environ["BASE_URL"] = "http://127.0.0.1:4173"
 os.environ["LEMON_SQUEEZY_WEBHOOK_SECRET"] = "e2e-webhook-secret"
 os.environ["LEMON_SQUEEZY_API_KEY"] = "e2e-api-key"
 os.environ["LEMON_SQUEEZY_STORE_ID"] = "e2e-store"
+os.environ["LS_PRODUCT_STUDENT_PLUS"] = "e2e-plus-product"
 os.environ["LS_VARIANT_STUDENT_PLUS"] = "e2e-plus-variant"
 
 import app as appmod  # noqa: E402
