@@ -2556,8 +2556,8 @@ Return this JSON shape:
         if mode not in {"brain", "studio", "exam"}:
             return jsonify({"error": "Modo invalido."}), 400
         reservation_key = (
-            request.headers.get("X-Idempotency-Key")
-            or f"course-brain:{cid}:{uuid4().hex}"
+            f"course-brain:{cid}:"
+            f"{(request.headers.get('X-Idempotency-Key') or uuid4().hex)[:128]}"
         )
         try:
             from student import ai_usage
@@ -2566,6 +2566,8 @@ Return this JSON shape:
                 request_key=reservation_key,
                 feature=f"course_brain_{mode}",
                 usage_kind="ai_tool_generated",
+                estimated_input_tokens=60000,
+                estimated_output_tokens=3500,
             )
             ctx = _course_brain_context(cid, dict(course))
             result = _run_course_brain_ai(mode, ctx)
@@ -4352,6 +4354,8 @@ Material:
                 request_key=request_key,
                 feature="planner_material_blocks",
                 usage_kind="ai_tool_generated",
+                estimated_input_tokens=30000,
+                estimated_output_tokens=6000,
             )
             resp = _ai().chat.completions.create(
                 model="gpt-4o-mini",
@@ -4477,8 +4481,8 @@ Material:
         except Exception:
             target_units = 8
         reservation_key = (
-            request.headers.get("X-Idempotency-Key")
-            or f"planner-material:{_cid()}:{uuid4().hex}"
+            f"planner-material:{_cid()}:"
+            f"{(request.headers.get('X-Idempotency-Key') or uuid4().hex)[:128]}"
         )
         units = _planner_ai_material_units(
             _cid(),
@@ -4521,8 +4525,8 @@ Material:
         block_title = (data.get("block_title") or "Bloque de material").strip()[:90]
         topics = [block_title]
         reservation_key = (
-            request.headers.get("X-Idempotency-Key")
-            or f"planner-{tool}:{_cid()}:{uuid4().hex}"
+            f"planner-{tool}:{_cid()}:"
+            f"{(request.headers.get('X-Idempotency-Key') or uuid4().hex)[:128]}"
         )
         from student import ai_usage
         if tool == "quiz":
@@ -4536,6 +4540,8 @@ Material:
                     request_key=reservation_key,
                     feature="planner_block_quiz",
                     usage_kind="quiz_generated",
+                    estimated_input_tokens=7500,
+                    estimated_output_tokens=2000,
                 )
             except ai_usage.AIQuotaExceeded as exc:
                 return jsonify({"error": str(exc), "upgrade_required": True}), 402
@@ -4567,6 +4573,8 @@ Material:
                 request_key=reservation_key,
                 feature="planner_block_flashcards",
                 usage_kind="flashcards_generated",
+                estimated_input_tokens=7500,
+                estimated_output_tokens=2000,
             )
         except ai_usage.AIQuotaExceeded as exc:
             return jsonify({"error": str(exc), "upgrade_required": True}), 402
@@ -14533,8 +14541,8 @@ Material:
         # AI narrative analysis
 
         analysis_reservation_key = (
-            request.headers.get("X-Idempotency-Key")
-            or f"quiz-analysis:{_cid()}:{quiz_id}:{uuid4().hex}"
+            f"quiz-analysis:{_cid()}:{quiz_id}:"
+            f"{(request.headers.get('X-Idempotency-Key') or uuid4().hex)[:128]}"
         )
         try:
 
@@ -14547,6 +14555,8 @@ Material:
                 request_key=analysis_reservation_key,
                 feature="quiz_analysis",
                 usage_kind="ai_tool_generated",
+                estimated_input_tokens=25000,
+                estimated_output_tokens=2000,
             )
 
             wrong_items = [i for i in items if not i["is_correct"]]

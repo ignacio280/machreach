@@ -91,6 +91,21 @@ def test_emergency_user_ceiling_fails_closed(make_user, monkeypatch):
         )
 
 
+def test_emergency_token_ceiling_fails_before_provider_work(make_user, monkeypatch):
+    client_id = make_user("AI Token Ceiling", "ai-token-ceiling@example.test")
+    monkeypatch.setenv("AI_USER_DAILY_TOKEN_MAX", "100")
+
+    with pytest.raises(ai_usage.AIQuotaExceeded):
+        ai_usage.reserve(
+            client_id,
+            request_key="tokens:too-large",
+            feature="course_brain",
+            usage_kind="ai_tool_generated",
+            estimated_input_tokens=90,
+            estimated_output_tokens=20,
+        )
+
+
 def test_stale_reservation_recovery_releases_capacity(make_user):
     client_id = make_user("AI Recovery", "ai-recovery@example.test")
     ai_usage.reserve(

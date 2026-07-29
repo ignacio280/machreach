@@ -90,6 +90,8 @@ def _process_student_quiz_job(job: dict):
             request_key=reservation_key,
             feature="quiz_worker",
             usage_kind="quiz_generated",
+            estimated_input_tokens=65000,
+            estimated_output_tokens=15000,
         )
         if reservation.get("status") == "settled":
             import json
@@ -224,6 +226,8 @@ def _process_student_flashcard_job(job: dict):
             request_key=reservation_key,
             feature="flashcard_worker",
             usage_kind="flashcards_generated",
+            estimated_input_tokens=65000,
+            estimated_output_tokens=15000,
         )
         if reservation.get("status") == "settled":
             import json
@@ -437,13 +441,13 @@ def refresh_student_plans():
         from student import db as sdb
         from student import ai_usage, subscription
         from student.analyzer import generate_study_plan
+        from student.periods import user_date
         import json
-        from datetime import datetime
 
         client_ids = sdb.get_all_student_client_ids()
-        today = datetime.now().strftime("%Y-%m-%d")
 
         for client_id in client_ids:
+            today = user_date(client_id).isoformat()
             reservation_key = f"daily-plan:{client_id}:{today}"
             try:
                 if not subscription.has_plus_access(client_id):
@@ -486,6 +490,8 @@ def refresh_student_plans():
                     request_key=reservation_key,
                     feature="daily_plan_refresh",
                     usage_kind="ai_tool_generated",
+                    estimated_input_tokens=50000,
+                    estimated_output_tokens=5000,
                 )
                 if reservation.get("status") == "settled":
                     continue

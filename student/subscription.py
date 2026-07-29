@@ -546,6 +546,12 @@ def redeem_pending_referral_reward(
                 (referred_id,),
             )
             return None
+        _fetchone(
+            db,
+            "SELECT id FROM clients WHERE id=%s"
+            + (" FOR UPDATE" if _USE_PG else ""),
+            (referrer_id,),
+        )
         rolling_limit = max(1, int(os.getenv("REFERRAL_REWARD_30D_MAX", "20")))
         cutoff = (_utcnow() - timedelta(days=30)).isoformat()
         recent_rewards = int(
@@ -688,6 +694,14 @@ def set_subscription_state(
     with get_db() as db:
         from machreach_core.db import _fetchone
         from student.db import _USE_PG
+        if not _USE_PG:
+            db.execute("BEGIN IMMEDIATE")
+        _fetchone(
+            db,
+            "SELECT id FROM clients WHERE id=%s"
+            + (" FOR UPDATE" if _USE_PG else ""),
+            (client_id,),
+        )
         current_row = _fetchone(
             db,
             "SELECT provider_event_at FROM student_subscription_state "

@@ -101,6 +101,12 @@ def reserve(
         utc_day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         user_daily_max = max(1, int(os.getenv("AI_USER_DAILY_MAX", "120")))
         global_daily_max = max(1, int(os.getenv("AI_GLOBAL_DAILY_MAX", "5000")))
+        user_token_max = max(
+            1, int(os.getenv("AI_USER_DAILY_TOKEN_MAX", "1000000"))
+        )
+        global_token_max = max(
+            1, int(os.getenv("AI_GLOBAL_DAILY_TOKEN_MAX", "25000000"))
+        )
         user_today = int(
             _fetchval(
                 db,
@@ -119,7 +125,36 @@ def reserve(
             )
             or 0
         )
-        if user_today >= user_daily_max or global_today >= global_daily_max:
+        user_tokens = int(
+            _fetchval(
+                db,
+                "SELECT COALESCE(SUM(estimated_input_tokens + "
+                "estimated_output_tokens),0) FROM student_ai_usage "
+                "WHERE client_id=%s AND reserved_at_utc >= %s "
+                "AND status IN ('reserved','settled')",
+                (client_id, utc_day_start.isoformat()),
+            )
+            or 0
+        )
+        global_tokens = int(
+            _fetchval(
+                db,
+                "SELECT COALESCE(SUM(estimated_input_tokens + "
+                "estimated_output_tokens),0) FROM student_ai_usage "
+                "WHERE reserved_at_utc >= %s AND status IN ('reserved','settled')",
+                (utc_day_start.isoformat(),),
+            )
+            or 0
+        )
+        estimated_total = max(0, int(estimated_input_tokens)) + max(
+            0, int(estimated_output_tokens)
+        )
+        if (
+            user_today >= user_daily_max
+            or global_today >= global_daily_max
+            or user_tokens + estimated_total > user_token_max
+            or global_tokens + estimated_total > global_token_max
+        ):
             raise AIQuotaExceeded("AI generation temporarily unavailable")
 
         tier = subscription._effective_tier(

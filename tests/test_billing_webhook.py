@@ -77,6 +77,23 @@ def test_subscription_name_cannot_bypass_variant_allowlist(client, make_user):
     assert ssub.get_tier(cid) == "free"
 
 
+def test_provider_event_id_is_the_durable_idempotency_key(client, make_user):
+    cid = make_user()
+    event = _student_event("subscription_created", cid)
+    event["meta"]["event_id"] = "evt-provider-123"
+
+    assert _post(client, event).status_code == 200
+    assert _post(client, event).status_code == 200
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT status, attempts FROM webhook_events "
+            "WHERE provider=%s AND event_key=%s",
+            ("lemonsqueezy", "id:evt-provider-123"),
+        )
+    assert row == {"status": "succeeded", "attempts": 1}
+
+
 def test_sandbox_webhook_is_limited_to_configured_qa_client(
     client, make_user, monkeypatch
 ):

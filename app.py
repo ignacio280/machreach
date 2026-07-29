@@ -3915,7 +3915,14 @@ def lemonsqueezy_webhook():
 
     import hashlib as _hashlib
     from machreach_core.db import claim_webhook_event
-    event_key = _hashlib.sha256(raw).hexdigest()
+    provider_event_id = str(
+        meta.get("event_id") or meta.get("event_uuid") or ""
+    ).strip()
+    event_key = (
+        f"id:{provider_event_id[:180]}"
+        if provider_event_id
+        else _hashlib.sha256(raw).hexdigest()
+    )
     event_claim = claim_webhook_event("lemonsqueezy", event_key, event_name)
     if not event_claim["claimed"]:
         if event_claim["status"] == "succeeded":
