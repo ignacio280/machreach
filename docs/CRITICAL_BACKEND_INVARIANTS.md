@@ -70,8 +70,9 @@ trust a browser date.
 ## Coverage scope
 
 Python coverage excludes only functions whose role is page presentation
-composition (`*_page`, `_render`, and `_s_render`). Those functions contain the
-locked inline UI and read-only view-model assembly and are exercised through
-the full Playwright desktop/mobile matrix. JSON APIs, state-changing routes,
-authentication, billing, AI, rewards, workers, persistence, and service modules
-remain in the meaningful backend coverage denominator.
+composition (`*_page`, legacy `*_page_legacy` renderers, `_render`, and
+`_s_render`). Those functions contain the locked inline UI and read-only
+view-model assembly and are exercised through the full Playwright
+desktop/mobile matrix. JSON APIs, state-changing routes, authentication,
+billing, AI, rewards, workers, persistence, and service modules remain in the
+meaningful backend coverage denominator.

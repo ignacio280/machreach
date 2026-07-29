@@ -2585,6 +2585,11 @@ Return this JSON shape:
                 "result": result,
             })
         except json.JSONDecodeError:
+            try:
+                from student.ai_usage import fail
+                fail(reservation_key, "invalid_json_response")
+            except Exception:
+                pass
             log.exception("Course Brain returned invalid JSON")
             return jsonify({"error": "La IA devolvio una respuesta invalida. Intenta de nuevo."}), 500
         except Exception as e:
@@ -2594,7 +2599,7 @@ Return this JSON shape:
             except Exception:
                 pass
             log.exception("Course Brain failed for course %s", course_id)
-            return jsonify({"error": f"No se pudo generar el estudio del curso: {e}"}), 500
+            return jsonify({"error": "No se pudo generar el estudio del curso. Intenta de nuevo."}), 500
 
 
 

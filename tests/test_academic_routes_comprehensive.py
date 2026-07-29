@@ -1,5 +1,5 @@
 import pytest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from machreach_core.db import _exec, _fetchall, _fetchone, get_db
 from student.periods import FrozenClock, use_clock
@@ -160,3 +160,71 @@ def test_academic_analytics_returns_sanitized_zero_state_and_clamps_future_week(
     assert len(current["last_14_days"]) == 14
     assert len(current["dow_dist"]) == 7
     assert future["week_offset"] == 0
+
+
+def test_academic_analytics_aggregates_real_sessions_and_skips_bad_dates(
+    client, academic_student
+):
+    today = datetime.now().date()
+    yesterday = today - timedelta(days=1)
+    with get_db() as db:
+        for plan_date, minutes, pages, notes in (
+            (f"{today.isoformat()} 09:00:00", 40, 3, "course: Algorithms"),
+            (today.isoformat(), 20, 2, "course: Algorithms"),
+            (yesterday.isoformat(), 30, 1, "course: Databases"),
+            ("not-a-date", 999, 9, "course: Ignored"),
+        ):
+            _exec(
+                db,
+                "INSERT INTO student_study_progress "
+                "(client_id, plan_date, focus_minutes, pages_read, notes) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (academic_student, plan_date, minutes, pages, notes),
+            )
+        _exec(
+            db,
+            "INSERT INTO student_xp (client_id, action, xp, detail) "
+            "VALUES (%s, %s, %s, %s)",
+            (academic_student, "analytics-contract", 55, "covered"),
+        )
+
+    current = client.get("/api/academic/analytics?week_offset=0").get_json()
+    assert current["totals"]["minutes"] == 1089
+    assert current["totals"]["pages"] == 15
+    assert current["totals"]["sessions"] == 4
+    assert current["totals"]["xp"] >= 55
+    assert current["totals"]["streak"] == 2
+    assert current["week_label"] == "this week"
+    assert current["best_dow"]["minutes"] > 0
+    assert current["top_courses"][0] == {
+        "course": "Algorithms",
+        "minutes": 60,
+    }
+
+    previous = client.get(
+        "/api/academic/analytics?week_offset=-1"
+    ).get_json()
+    older = client.get("/api/academic/analytics?week_offset=-3").get_json()
+    assert previous["week_label"] == "last week"
+    assert " – " in older["week_label"] or " â€“ " in older["week_label"]
+
+
+def test_public_academic_profile_hides_focus_from_strangers_and_blocked_users(
+    client, academic_student, make_user
+):
+    stranger_id = make_user("Profile Stranger")
+    private = client.get(f"/api/academic/user/{stranger_id}")
+    assert private.status_code == 200
+    assert private.get_json()["focus_private"] is True
+    assert private.get_json()["total_minutes"] is None
+
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO student_friend_blocks "
+            "(client_id, blocked_client_id) VALUES (%s, %s)",
+            (academic_student, stranger_id),
+        )
+    assert client.get(
+        f"/api/academic/user/{stranger_id}"
+    ).status_code == 404

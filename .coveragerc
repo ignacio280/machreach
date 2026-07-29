@@ -5,6 +5,6 @@
 # security, billing, quota, reward, and persistence code remains in coverage.
 exclude_also =
     ^\s*def .*_page\(
+    ^\s*def .*_page_legacy\(
     ^\s*def _s_render\(
     ^\s*def _render\(
-
