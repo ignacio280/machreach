@@ -9,7 +9,7 @@ import hmac
 import json
 import os
 
-from machreach_core import lemonsqueezy as ls
+from machreach_core import config as cfg, lemonsqueezy as ls
 from machreach_core.db import get_client
 
 SECRET = os.environ["LEMON_SQUEEZY_WEBHOOK_SECRET"].encode()
@@ -25,7 +25,9 @@ def _provision_student_sub(client, cid, ls_sub_id):
     payload = {
         "meta": {"event_name": "subscription_created",
                  "custom_data": {"purpose": "student_sub", "client_id": str(cid), "tier": "plus"}},
-        "data": {"id": ls_sub_id, "attributes": {"status": "active"}},
+        "data": {"id": ls_sub_id, "attributes": {
+            "status": "active", "variant_id": cfg.LS_VARIANT_STUDENT_PLUS,
+        }},
     }
     raw = json.dumps(payload).encode()
     r = client.post("/webhooks/lemonsqueezy", data=raw, content_type="application/json",

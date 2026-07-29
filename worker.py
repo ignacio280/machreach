@@ -75,15 +75,22 @@ def _set_quiz_job_status(client_id: int, status: str, progress: str = "", **payl
 def _process_student_quiz_job(job: dict):
     client_id = int(job["job_key"])
     data = job.get("input") or {}
+    reservation_key = f"quiz-job:{job.get('id') or job['job_key']}"
     _set_quiz_job_status(client_id, "running", "Generating your quiz...")
     try:
         from student import db as sdb
-        from student import subscription as _sub
+        from student import ai_usage, subscription as _sub
         from student.analyzer import generate_quiz
 
         ok, why = _sub.can_generate_quiz_today(client_id)
         if not ok:
             raise ValueError(why)
+        ai_usage.reserve(
+            client_id,
+            request_key=reservation_key,
+            feature="quiz_worker",
+            usage_kind="quiz_generated",
+        )
 
         course_id = data.get("course_id")
         ad_hoc_source = (data.get("source_text") or "").strip()
@@ -141,10 +148,7 @@ def _process_student_quiz_job(job: dict):
             quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id, exam_id=exam_id)
             sdb.add_quiz_questions(quiz_id, questions)
 
-        try:
-            _sub.record_generation(client_id, "quiz_generated")
-        except Exception:
-            pass
+        ai_usage.settle(reservation_key)
 
         _set_quiz_job_status(
             client_id,
@@ -157,6 +161,11 @@ def _process_student_quiz_job(job: dict):
         )
         print(f"[ASYNC JOBS] Generated quiz {quiz_id}")
     except Exception as exc:
+        try:
+            from student.ai_usage import fail
+            fail(reservation_key, str(exc))
+        except Exception:
+            pass
         print(f"[ASYNC JOBS] Quiz generation failed: {type(exc).__name__}")
         fail_async_job(
             "student_quiz_generation",
@@ -187,15 +196,22 @@ def _set_flashcard_job_status(client_id: int, status: str, progress: str = "", *
 def _process_student_flashcard_job(job: dict):
     client_id = int(job["job_key"])
     data = job.get("input") or {}
+    reservation_key = f"flashcard-job:{job.get('id') or job['job_key']}"
     _set_flashcard_job_status(client_id, "running", "Generating your flashcards...")
     try:
         from student import db as sdb
-        from student import subscription as _sub
+        from student import ai_usage, subscription as _sub
         from student.analyzer import generate_flashcards
 
         ok, why = _sub.can_generate_flashcards_today(client_id)
         if not ok:
             raise ValueError(why)
+        ai_usage.reserve(
+            client_id,
+            request_key=reservation_key,
+            feature="flashcard_worker",
+            usage_kind="flashcards_generated",
+        )
 
         course_id = data.get("course_id")
         exam_id = data.get("exam_id")
@@ -254,7 +270,7 @@ def _process_student_flashcard_job(job: dict):
             source_type=source_type,
         )
         sdb.add_flashcards(deck_id, cards)
-        _sub.record_generation(client_id, "flashcards_generated")
+        ai_usage.settle(reservation_key)
         _set_flashcard_job_status(
             client_id,
             "done",
@@ -265,6 +281,11 @@ def _process_student_flashcard_job(job: dict):
         )
         print(f"[ASYNC JOBS] Generated flashcard deck {deck_id}")
     except Exception as exc:
+        try:
+            from student.ai_usage import fail
+            fail(reservation_key, str(exc))
+        except Exception:
+            pass
         print(f"[ASYNC JOBS] Flashcard generation failed: {type(exc).__name__}")
         fail_async_job(
             "student_flashcard_generation",

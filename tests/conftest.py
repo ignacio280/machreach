@@ -20,6 +20,7 @@ os.environ["DATABASE_PATH"] = os.path.join(_TMPDIR, "test.db")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ENCRYPTION_KEY", "test-encryption-key")
 os.environ["LEMON_SQUEEZY_WEBHOOK_SECRET"] = "test-webhook-secret"
+os.environ["LS_VARIANT_STUDENT_PLUS"] = "test-plus-variant"
 
 # Repo root on the path so `import app` works regardless of pytest's CWD.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -35,7 +35,9 @@ def _student_event(event, cid, tier="plus"):
     return {
         "meta": {"event_name": event,
                  "custom_data": {"purpose": "student_sub", "client_id": str(cid), "tier": tier}},
-        "data": {"id": _subscription_id(cid), "attributes": {"status": "active"}},
+        "data": {"id": _subscription_id(cid), "attributes": {
+            "status": "active", "variant_id": cfg.LS_VARIANT_STUDENT_PLUS,
+        }},
     }
 
 
@@ -61,6 +63,20 @@ def test_subscription_created_grants_plus(client, make_user):
     assert ssub.get_tier(cid) == "plus"
 
 
+def test_subscription_name_cannot_bypass_variant_allowlist(client, make_user):
+    cid = make_user()
+    event = _student_event("subscription_created", cid, "plus")
+    event["data"]["attributes"].update(
+        variant_id="attacker-variant",
+        product_name="MachReach Plus Totally Real",
+    )
+
+    response = _post(client, event)
+
+    assert response.status_code == 400
+    assert ssub.get_tier(cid) == "free"
+
+
 def test_sandbox_webhook_is_limited_to_configured_qa_client(
     client, make_user, monkeypatch
 ):
@@ -69,6 +85,9 @@ def test_sandbox_webhook_is_limited_to_configured_qa_client(
     sandbox_secret = "sandbox-signing-secret"
     monkeypatch.setattr(ls, "LEMON_SQUEEZY_TEST_WEBHOOK_SECRET", sandbox_secret)
     monkeypatch.setattr(cfg, "LEMON_SQUEEZY_SANDBOX_CLIENT_ID", str(qa_id))
+    monkeypatch.setattr(
+        cfg, "LS_TEST_VARIANT_STUDENT_PLUS", cfg.LS_VARIANT_STUDENT_PLUS
+    )
 
     def post_sandbox(cid):
         payload = _student_event("subscription_created", cid, "plus")

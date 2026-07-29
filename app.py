@@ -3929,9 +3929,21 @@ def lemonsqueezy_webhook():
         requested_tier = str(custom.get("tier") or "plus").strip().lower()
         variant_id = str(attrs.get("variant_id") or "")
         product_name = str(attrs.get("product_name") or "").strip().lower()
-        provider_is_plus = (
-            (variant_id and variant_id == str(_cfg.LS_VARIANT_STUDENT_PLUS))
-            or "plus" in product_name
+        expected_variant = str(
+            _cfg.LS_TEST_VARIANT_STUDENT_PLUS
+            if signature_mode == "test"
+            else _cfg.LS_VARIANT_STUDENT_PLUS
+        ).strip()
+        existing_subscription_id = str(
+            (ssub.get_subscription_state(cid) if ssub else {}).get("ls_sub_id") or ""
+        ).strip()
+        provider_is_plus = bool(
+            (expected_variant and variant_id and variant_id == expected_variant)
+            or (
+                event_name in payment_events
+                and provider_subscription_id
+                and provider_subscription_id == existing_subscription_id
+            )
         )
         removed_legacy_tier = not provider_is_plus and (
             requested_tier == "ultimate" or "ultimate" in product_name
@@ -3969,6 +3981,12 @@ def lemonsqueezy_webhook():
             )
             _finish_claimed_ls_event()
             return "ok", 200
+        if not provider_is_plus:
+            _finish_claimed_ls_event("unapproved-subscription-variant")
+            _log.warning(
+                "[LS] rejected subscription variant=%r client=%s", variant_id, cid
+            )
+            return "Unsupported subscription variant", 400
         if event_name == "subscription_created":
             ssub.set_subscription_state(
                 cid,
