@@ -447,39 +447,6 @@ def _fail_run(kind: str, period_key: str, claim_token: str, error: Exception) ->
         )
 
 
-def _is_due(kind: str, today: date | None = None) -> bool:
-    """Has the boundary just passed AND we haven't run the payout yet?"""
-    today = today or zoned_date("America/Santiago")
-    # Weekly payout fires on Mondays (ISO weekday 1). Monthly fires on
-    # day 1 of the month. We tolerate the whole day so a missed run still
-    # pays out later.
-    if kind == "week" and today.isoweekday() != 1:
-        return False
-    if kind == "month" and today.day != 1:
-        return False
-    key = _period_key(kind, today)
-    with get_db() as db:
-        from machreach_core.db import _fetchval
-        existing = _fetchval(
-            db,
-            "SELECT id FROM student_lb_payout_run WHERE period_kind = %s AND period_key = %s",
-            (kind, key),
-        )
-    return not existing
-
-
-def _mark_run(kind: str, period_key: str) -> None:
-    with get_db() as db:
-        from machreach_core.db import _exec
-        _exec(
-            db,
-            "INSERT INTO student_lb_payout_run "
-            "(period_kind, period_key, status, claimed_at, completed_at) "
-            "VALUES (%s, %s, 'completed', %s, %s) ON CONFLICT DO NOTHING",
-            (kind, period_key, _utcnow(), _utcnow()),
-        )
-
-
 # ── Top-N query (per scope bucket) ──────────────────────────────────────
 
 def _top5_per_bucket(
@@ -503,15 +470,15 @@ def _top5_per_bucket(
         group_extra = ""
     elif scope == "country":
         bucket_col = "c.country_iso"
-        partition_by = "PARTITION BY c.country_iso"
+        partition_by = "PARTITION BY bucket"
         group_extra = ", c.country_iso"
     elif scope == "university":
         bucket_col = "CAST(c.university_id AS TEXT)"
-        partition_by = "PARTITION BY c.university_id"
+        partition_by = "PARTITION BY bucket"
         group_extra = ", c.university_id"
     elif scope == "major":
         bucket_col = "CAST(c.major_id AS TEXT)"
-        partition_by = "PARTITION BY c.major_id"
+        partition_by = "PARTITION BY bucket"
         group_extra = ", c.major_id"
     else:
         return []
@@ -749,124 +716,6 @@ def _complete_run(
             raise RuntimeError("payout claim ownership was lost before completion")
         _advance_cursor(period_kind, period_key, db)
     return True
-
-
-def _email_winners(period_kind: str, period_key: str, summary: dict) -> None:
-    """Email each winner a personal congrats."""
-    try:
-        from app import _send_system_email
-    except Exception:
-        log.warning("Could not import _send_system_email; skipping winner emails")
-        return
-
-    from machreach_core.db import _fetchone
-    label = "weekly" if period_kind == "week" else "monthly"
-    scope_pretty = {
-        "global": "Global",
-        "country": "Country",
-        "university": "University",
-        "major": "Major",
-    }
-    # Aggregate per-client across scopes so each winner gets ONE email
-    # listing every category they placed in.
-    per_client: dict[int, list[dict]] = {}
-    for scope, winners in summary.items():
-        for w in winners:
-            per_client.setdefault(w["client_id"], []).append(
-                {**w, "scope": scope}
-            )
-    for client_id, prizes in per_client.items():
-        try:
-            with get_db() as db:
-                row = _fetchone(
-                    db, "SELECT email, name FROM clients WHERE id = %s", (client_id,)
-                )
-            email = (row or {}).get("email") if row else None
-            name = (row or {}).get("name") if row else None
-            if not email:
-                continue
-            total = sum(p["coins"] for p in prizes)
-            lines = [
-                f"Hi {name or 'there'},",
-                "",
-                f"Great news — you placed on the {label} MachReach leaderboards ({period_key}):",
-                "",
-            ]
-            for p in sorted(prizes, key=lambda x: (-x["coins"], x["scope"])):
-                bucket = (
-                    f" [{p.get('scope_value')}]" if p.get("scope_value") else ""
-                )
-                lines.append(
-                    f"  • {scope_pretty.get(p['scope'], p['scope'])}{bucket} "
-                    f"— rank #{p['rank']}  →  +{p['coins']} coins"
-                )
-            lines += [
-                "",
-                f"Total reward: {total} coins. They've already been credited to your wallet.",
-                "",
-                "Keep grinding — see you on next period's board!",
-                "",
-                "— MachReach",
-            ]
-            _send_system_email(
-                email,
-                f"You won {total} coins on the {label} leaderboard!",
-                "\n".join(lines),
-            )
-        except Exception as e:
-            log.warning("Winner email to client %s failed: %s", client_id, e)
-
-
-def _email_admin(period_kind: str, period_key: str, summary: dict) -> None:
-    """Send admin a digest of every winner across every scope."""
-    try:
-        from app import _send_system_email
-    except Exception:
-        log.warning("Could not import _send_system_email; skipping admin notify")
-        return
-
-    label = "Weekly" if period_kind == "week" else "Monthly"
-    lines = [
-        f"{label} leaderboard payouts complete — {period_key}",
-        "",
-    ]
-    for scope in ("global", "country", "university", "major"):
-        winners = summary.get(scope) or []
-        if not winners:
-            continue
-        lines.append(f"=== {scope.upper()} ===")
-        # Group by bucket (scope_value) for non-global scopes
-        if scope == "global":
-            for w in winners:
-                lines.append(
-                    f"  #{w['rank']}  {w['name']} (id={w['client_id']})  "
-                    f"— {w['xp']} XP  → {w['coins']} coins"
-                )
-        else:
-            buckets: dict[str, list[dict]] = {}
-            for w in winners:
-                buckets.setdefault(str(w.get("scope_value") or "?"), []).append(w)
-            for bucket, ws in buckets.items():
-                lines.append(f"  [{scope}={bucket}]")
-                for w in ws:
-                    lines.append(
-                        f"    #{w['rank']}  {w['name']} (id={w['client_id']})  "
-                        f"— {w['xp']} XP  → {w['coins']} coins"
-                    )
-        lines.append("")
-    body = "\n".join(lines)
-    from machreach_core.config import LEADERBOARD_WINNERS_RECIPIENT
-    if not LEADERBOARD_WINNERS_RECIPIENT:
-        log.warning("Leaderboard payout summary recipient is not configured")
-        return
-    try:
-        _send_system_email(
-            LEADERBOARD_WINNERS_RECIPIENT,
-            f"[MachReach] {label} leaderboard payouts — {period_key}",
-            body,
-        )
-    except Exception as e:
-        log.warning("Admin payout email failed: %s", e)
 
 
 # ── Public entrypoint ───────────────────────────────────────────────────

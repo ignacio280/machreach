@@ -3,12 +3,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 import app as appmod
 import pytest
-from machreach_core.db import _exec, _fetchval, get_db
+from machreach_core.db import _exec, _fetchone, _fetchval, get_db
 from student import db as sdb
 from student import leaderboard_prizes as prizes
 
 
-def test_prize_amounts_period_keys_windows_and_due_state():
+def test_prize_amounts_period_keys_and_windows():
     prizes.init_prize_tables()
     monday = date(2026, 7, 20)
     first = date(2026, 8, 1)
@@ -23,18 +23,6 @@ def test_prize_amounts_period_keys_windows_and_due_state():
     assert prizes._xp_period_window("month", "2026-04", postgres=True) == (
         "2026-04-01T03:00:00+00:00", "2026-05-01T04:00:00+00:00"
     )
-    assert prizes._is_due("week", date(2026, 7, 21)) is False
-    assert prizes._is_due("month", date(2026, 7, 2)) is False
-
-
-def test_mark_run_is_idempotent_and_blocks_repeat():
-    prizes.init_prize_tables()
-    key = "2099-W01"
-    prizes._mark_run("week", key)
-    prizes._mark_run("week", key)
-    with get_db() as db:
-        count = _fetchval(db, "SELECT COUNT(*) FROM student_lb_payout_run WHERE period_kind = %s AND period_key = %s", ("week", key))
-    assert count == 1
 
 
 def test_award_winners_credits_wallet_and_records_prize(monkeypatch, make_user):
@@ -55,25 +43,53 @@ def test_award_winners_credits_wallet_and_records_prize(monkeypatch, make_user):
         assert _fetchval(db, "SELECT COUNT(*) FROM student_lb_prize WHERE client_id = %s", (client_id,)) == 1
 
 
-def test_winner_and_admin_emails_are_aggregated(monkeypatch, make_user):
-    client_id = make_user("Email Winner")
-    sent = []
-    from machreach_core import config
+def test_top_five_queries_are_deterministic_for_every_partition(make_user):
+    first_id = make_user("Partition First")
+    second_id = make_user("Partition Second")
+    with get_db() as db:
+        university = _fetchone(
+            db, "SELECT id FROM universities WHERE country_iso = %s ORDER BY id LIMIT 1",
+            ("CL",),
+        )
+        major = _fetchone(
+            db,
+            "SELECT id FROM majors WHERE university_id = %s ORDER BY id LIMIT 1",
+            (university["id"],),
+        )
+        for client_id in (first_id, second_id):
+            _exec(
+                db,
+                "UPDATE clients SET country_iso = %s, university_id = %s, major_id = %s "
+                "WHERE id = %s",
+                ("CL", university["id"], major["id"], client_id),
+            )
+    first_xp = sdb.award_xp(first_id, "partition", 100, "partition test")
+    second_xp = sdb.award_xp(second_id, "partition", 100, "partition test")
+    start, _end = prizes._xp_period_window("week", "2099-W10")
+    with get_db() as db:
+        for xp_id in (first_xp, second_xp):
+            _exec(
+                db,
+                "UPDATE student_xp SET occurred_at_utc = %s WHERE id = %s",
+                (start, xp_id),
+            )
 
-    monkeypatch.setattr(config, "LEADERBOARD_WINNERS_RECIPIENT", "ops@example.test")
-    monkeypatch.setattr(appmod, "_send_system_email", lambda to, subject, body: sent.append((to, subject, body)) or True)
-    summary = {
-        "global": [{"client_id": client_id, "name": "Email Winner", "scope_value": None, "rank": 1, "xp": 100, "coins": 500}],
-        "country": [{"client_id": client_id, "name": "Email Winner", "scope_value": "CL", "rank": 2, "xp": 100, "coins": 200}],
-        "university": [], "major": [],
-    }
-
-    prizes._email_winners("month", "2099-01", summary)
-    prizes._email_admin("month", "2099-01", summary)
-
-    assert len(sent) == 2
-    assert "700 coins" in sent[0][1]
-    assert "GLOBAL" in sent[1][2] and "COUNTRY" in sent[1][2]
+    for scope in ("global", "country", "university", "major"):
+        rows = prizes._top5_per_bucket(scope, "week", "2099-W10")
+        assert [row["client_id"] for row in rows] == [first_id, second_id]
+        assert [row["rank"] for row in rows] == [1, 2]
+        if scope == "global":
+            assert rows[0]["scope_value"] is None
+        else:
+            assert rows[0]["scope_value"] is not None
+        rank = prizes._user_rank_in_scope(
+            first_id, scope, "week", "2099-W10"
+        )
+        assert rank == {"rank": 1, "total_in_bucket": 2, "xp": 100}
+    assert prizes._top5_per_bucket("invalid", "week", "2099-W10") == []
+    assert prizes._user_rank_in_scope(
+        first_id, "invalid", "week", "2099-W10"
+    ) is None
 
 
 def test_run_payouts_handles_due_period_and_records_completion(monkeypatch):
@@ -88,8 +104,14 @@ def test_run_payouts_handles_due_period_and_records_completion(monkeypatch):
 def test_pending_results_and_acknowledgement(monkeypatch, make_user):
     prizes.init_prize_tables()
     client_id = make_user("Pending Winner")
-    prizes._mark_run("week", "2099-W04")
     with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO student_lb_payout_run "
+            "(period_kind, period_key, status, claimed_at, completed_at) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            ("week", "2099-W04", "completed", "2099-01-01", "2099-01-01"),
+        )
         _exec(db, "INSERT INTO student_lb_prize (client_id, period_kind, period_key, scope, rank, coins, xp_in_period) VALUES (%s,%s,%s,%s,%s,%s,%s)",
               (client_id, "week", "2099-W04", "global", 1, 250, 500))
     monkeypatch.setattr(prizes, "_user_rank_in_scope", lambda cid, scope, kind, key: {"rank": 1, "total_in_bucket": 10, "xp": 500} if scope == "global" else None)
@@ -348,6 +370,7 @@ def test_failed_email_does_not_starve_later_outbox_rows(monkeypatch):
             "SELECT status FROM student_lb_email_outbox "
             "WHERE event_key = 'lb:week:2499-W01:bad'",
         ) == "pending"
+    prizes.cleanup_payout_outbox()
 
 
 def test_reclaimed_worker_fences_old_owner_before_money_writes(monkeypatch, make_user):

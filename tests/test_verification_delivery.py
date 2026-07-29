@@ -1,0 +1,99 @@
+from machreach_core import verification_delivery as delivery
+from machreach_core.db import _exec, _fetchval, get_db
+
+
+def test_delivery_creates_single_use_token_and_handles_sender_failure(make_user):
+    client_id = make_user("Verify Delivery")
+    sent = []
+
+    assert delivery._deliver_once(
+        client_id,
+        lambda to, subject, body: sent.append((to, subject, body)) or True,
+    )
+    assert sent and "/verify-email/" in sent[0][2]
+    with get_db() as db:
+        assert _fetchval(
+            db,
+            "SELECT COUNT(*) FROM email_verification_tokens WHERE client_id = %s",
+            (client_id,),
+        ) == 1
+
+    assert delivery._deliver_once(
+        client_id,
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("smtp down")),
+    ) is False
+    assert delivery._deliver_once(99999999, lambda *_args: False) is True
+
+
+def test_send_or_queue_and_worker_terminal_failure(monkeypatch):
+    statuses = []
+    queued = []
+    monkeypatch.setattr(
+        delivery,
+        "set_async_job_status",
+        lambda *args: statuses.append(args),
+    )
+    monkeypatch.setattr(
+        delivery,
+        "enqueue_async_job",
+        lambda *args, **kwargs: queued.append((args, kwargs)),
+    )
+    monkeypatch.setattr(delivery, "_deliver_once", lambda *_args: True)
+    assert delivery.send_or_queue(7, lambda *_args: True) == {
+        "sent": True,
+        "queued": False,
+    }
+
+    monkeypatch.setattr(delivery, "_deliver_once", lambda *_args: False)
+    assert delivery.send_or_queue(8, lambda *_args: False) == {
+        "sent": False,
+        "queued": True,
+    }
+    assert queued[0][1]["max_attempts"] == delivery.MAX_ATTEMPTS
+
+    monkeypatch.setattr(
+        delivery, "get_client", lambda _cid: {"email_verified": False}
+    )
+    monkeypatch.setattr(
+        delivery, "fail_async_job", lambda *_args, **_kwargs: {"status": "error"}
+    )
+    events = []
+    monkeypatch.setattr(
+        delivery,
+        "record_operational_event",
+        lambda *args: events.append(args),
+    )
+    assert delivery.process_job({"job_key": "8"}, lambda *_args: False) == {
+        "status": "error"
+    }
+    assert events == [("smtp_failure", "verification")]
+
+    monkeypatch.setattr(delivery, "get_client", lambda _cid: None)
+    assert delivery.process_job({"job_key": "8"}, lambda *_args: False) == {
+        "status": "done"
+    }
+
+
+def test_stale_unverified_cleanup_preserves_verified_accounts(make_user):
+    stale_id = make_user("Stale Unverified")
+    verified_id = make_user("Old Verified")
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE clients SET created_at = %s WHERE id IN (%s, %s)",
+            ("2000-01-01 00:00:00", stale_id, verified_id),
+        )
+        _exec(
+            db,
+            "UPDATE clients SET email_verified = 1 WHERE id = %s",
+            (verified_id,),
+        )
+
+    assert delivery.delete_stale_unverified(days=0) >= 1
+    with get_db() as db:
+        assert _fetchval(
+            db, "SELECT COUNT(*) FROM clients WHERE id = %s", (stale_id,)
+        ) == 0
+        assert _fetchval(
+            db, "SELECT COUNT(*) FROM clients WHERE id = %s", (verified_id,)
+        ) == 1

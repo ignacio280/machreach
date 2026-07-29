@@ -180,3 +180,22 @@ def test_plus_tools_share_the_provider_billing_window(make_user):
 
     assert second["tier"] == "plus"
     assert subscription.generation_usage(client_id)["used"] == 1
+
+
+def test_reservation_records_configurable_cost_estimate(make_user, monkeypatch):
+    client_id = make_user("AI Cost", "ai-cost@example.test")
+    monkeypatch.setenv("AI_ESTIMATED_INPUT_USD_PER_MILLION", "1")
+    monkeypatch.setenv("AI_ESTIMATED_OUTPUT_USD_PER_MILLION", "2")
+
+    row = ai_usage.reserve(
+        client_id,
+        request_key="cost:estimate",
+        feature="course_brain",
+        usage_kind="ai_tool_generated",
+        model="cost-test-model",
+        estimated_input_tokens=100,
+        estimated_output_tokens=50,
+    )
+
+    assert row["model"] == "cost-test-model"
+    assert row["estimated_cost_micros"] == 200

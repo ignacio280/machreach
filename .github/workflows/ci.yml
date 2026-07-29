@@ -37,7 +37,7 @@ jobs:
           python -m pytest
           --cov=app --cov=machreach_core --cov=student --cov=worker
           --cov-report=term-missing:skip-covered
-          --cov-fail-under=62
+          --cov-fail-under=63
           -q
       - name: Enforce AI accounting coverage
         run: >-
@@ -46,6 +46,18 @@ jobs:
           --cov-report=term-missing
           --cov-fail-under=90
           -q
+      - name: Enforce critical money and security coverage
+        run: |
+          python -m pytest tests/test_leaderboard_prizes_comprehensive.py \
+            --cov=student.leaderboard_prizes --cov-report=term-missing \
+            --cov-fail-under=90 -q
+          python -m pytest tests/test_admin_security.py \
+            tests/test_admin_and_premium_routes.py tests/test_auth_security.py \
+            --cov=machreach_core.admin_security --cov-report=term-missing \
+            --cov-fail-under=90 -q
+          python -m pytest tests/test_verification_delivery.py \
+            --cov=machreach_core.verification_delivery --cov-report=term-missing \
+            --cov-fail-under=90 -q
       - name: Audit Python dependencies
         run: python -m pip_audit -r requirements.lock
       - name: Verify landing build

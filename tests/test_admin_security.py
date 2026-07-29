@@ -23,6 +23,43 @@ def test_totp_roundtrip_is_time_bounded():
 
     assert admin_security.verify_code(secret, code, timestamp=timestamp)
     assert not admin_security.verify_code(secret, code, timestamp=timestamp + 90)
+    assert not admin_security.verify_code(secret, "not-a-code", timestamp=timestamp)
+
+
+def test_mfa_secret_uri_and_corrupt_preferences_are_safe(monkeypatch):
+    secret = admin_security.generate_secret()
+    assert len(secret) == 32
+    uri = admin_security.provisioning_uri(
+        secret, "admin+security@example.com", issuer="Mach Reach"
+    )
+    assert uri.startswith("otpauth://totp/Mach%20Reach%3Aadmin%2Bsecurity")
+    assert f"secret={secret}" in uri
+
+    monkeypatch.setattr(admin_security, "get_mail_preferences", lambda _cid: "{bad")
+    assert admin_security._preferences(1) == {}
+    monkeypatch.setattr(admin_security, "get_mail_preferences", lambda _cid: "[]")
+    assert admin_security._preferences(1) == {}
+
+
+def test_mfa_storage_and_verification_fail_closed(monkeypatch):
+    monkeypatch.setattr(
+        admin_security, "get_mail_preferences", lambda _cid: "{}"
+    )
+    assert admin_security.secret_for(1) == ""
+    assert admin_security.verify_client_code(1, "123456") is False
+
+    monkeypatch.setattr(
+        admin_security,
+        "get_mail_preferences",
+        lambda _cid: '{"admin_mfa":{"secret":"encrypted"}}',
+    )
+    monkeypatch.setattr(
+        admin_security,
+        "decrypt_password",
+        lambda _value: (_ for _ in ()).throw(ValueError("corrupt")),
+    )
+    assert admin_security.is_enabled(1) is False
+    assert admin_security.verify_client_code(1, "123456") is False
 
 
 def test_email_address_never_grants_admin_access(client, make_user):

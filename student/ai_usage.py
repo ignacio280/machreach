@@ -6,23 +6,27 @@ concurrent workers cannot both consume the final available generation.
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 import json
 import os
 
 from machreach_core.db import _exec, _fetchone, _fetchval, get_db
-from student.periods import day_window_utc, month_window_utc
+from student.periods import day_window_utc, month_window_utc, utc_now
 
 
 class AIQuotaExceeded(ValueError):
     pass
 
 
+_SCHEMA_MIGRATED = False
+
+
 def _now() -> datetime:
-    return datetime.now(UTC)
+    return utc_now()
 
 
 def _ensure_schema(db) -> None:
+    global _SCHEMA_MIGRATED
     from student.db import _USE_PG
 
     timestamp = "TIMESTAMPTZ" if _USE_PG else "TEXT"
@@ -37,6 +41,7 @@ def _ensure_schema(db) -> None:
             model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
             estimated_input_tokens INTEGER NOT NULL DEFAULT 0,
             estimated_output_tokens INTEGER NOT NULL DEFAULT 0,
+            estimated_cost_micros BIGINT NOT NULL DEFAULT 0,
             tier TEXT NOT NULL,
             status TEXT NOT NULL,
             period_start_utc {timestamp} NOT NULL,
@@ -48,6 +53,18 @@ def _ensure_schema(db) -> None:
             ,result_json TEXT NOT NULL DEFAULT '{{}}'
         )""",
     )
+    if not _SCHEMA_MIGRATED:
+        from machreach_core.db import _is_duplicate_column_error
+        try:
+            _exec(
+                db,
+                "ALTER TABLE student_ai_usage ADD COLUMN "
+                "estimated_cost_micros BIGINT NOT NULL DEFAULT 0",
+            )
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
+        _SCHEMA_MIGRATED = True
     _exec(
         db,
         "CREATE INDEX IF NOT EXISTS idx_student_ai_usage_quota "
@@ -149,6 +166,12 @@ def reserve(
         estimated_total = max(0, int(estimated_input_tokens)) + max(
             0, int(estimated_output_tokens)
         )
+        estimated_cost_micros = int(round(
+            max(0, int(estimated_input_tokens))
+            * max(0.0, float(os.getenv("AI_ESTIMATED_INPUT_USD_PER_MILLION", "0.15")))
+            + max(0, int(estimated_output_tokens))
+            * max(0.0, float(os.getenv("AI_ESTIMATED_OUTPUT_USD_PER_MILLION", "0.60")))
+        ))
         if (
             user_today >= user_daily_max
             or global_today >= global_daily_max
@@ -245,6 +268,7 @@ def reserve(
             str(model)[:80],
             max(0, int(estimated_input_tokens)),
             max(0, int(estimated_output_tokens)),
+            estimated_cost_micros,
             tier,
             start.isoformat(),
             end.isoformat(),
@@ -262,9 +286,10 @@ def reserve(
                 db,
                 "INSERT INTO student_ai_usage "
                 "(request_key,client_id,feature,usage_kind,model,"
-                "estimated_input_tokens,estimated_output_tokens,tier,status,"
+                "estimated_input_tokens,estimated_output_tokens,"
+                "estimated_cost_micros,tier,status,"
                 "period_start_utc,period_end_utc,reserved_at_utc) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'reserved',%s,%s,%s)",
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'reserved',%s,%s,%s)",
                 values,
             )
         return dict(
