@@ -1,6 +1,7 @@
 import pytest
+from concurrent.futures import ThreadPoolExecutor
 
-from machreach_core.db import _fetchone, get_db
+from machreach_core.db import _exec, _fetchone, get_db
 from student import ai_usage
 
 
@@ -70,3 +71,66 @@ def test_failed_reservation_can_retry_without_consuming_quota(make_user):
         usage_kind="quiz_generated",
     )
     assert retried["status"] == "reserved"
+
+
+def test_emergency_user_ceiling_fails_closed(make_user, monkeypatch):
+    client_id = make_user("AI Ceiling", "ai-ceiling@example.test")
+    monkeypatch.setenv("AI_USER_DAILY_MAX", "1")
+    ai_usage.reserve(
+        client_id,
+        request_key="ceiling:first",
+        feature="course_brain",
+        usage_kind="ai_tool_generated",
+    )
+    with pytest.raises(ai_usage.AIQuotaExceeded):
+        ai_usage.reserve(
+            client_id,
+            request_key="ceiling:second",
+            feature="course_brain",
+            usage_kind="ai_tool_generated",
+        )
+
+
+def test_stale_reservation_recovery_releases_capacity(make_user):
+    client_id = make_user("AI Recovery", "ai-recovery@example.test")
+    ai_usage.reserve(
+        client_id,
+        request_key="stale:one",
+        feature="quiz_worker",
+        usage_kind="quiz_generated",
+    )
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE student_ai_usage SET reserved_at_utc=%s WHERE request_key=%s",
+            ("2000-01-01T00:00:00+00:00", "stale:one"),
+        )
+    assert ai_usage.reconcile_stale_reservations() == 1
+    retried = ai_usage.reserve(
+        client_id,
+        request_key="stale:one",
+        feature="quiz_worker",
+        usage_kind="quiz_generated",
+    )
+    assert retried["status"] == "reserved"
+
+
+def test_concurrent_final_quota_reservation_has_one_winner(make_user):
+    client_id = make_user("AI Concurrent", "ai-concurrent@example.test")
+
+    def attempt(index):
+        try:
+            ai_usage.reserve(
+                client_id,
+                request_key=f"concurrent:{index}",
+                feature="quiz_worker",
+                usage_kind="quiz_generated",
+            )
+            return "reserved"
+        except ai_usage.AIQuotaExceeded:
+            return "blocked"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(attempt, (1, 2)))
+
+    assert sorted(outcomes) == ["blocked", "reserved"]

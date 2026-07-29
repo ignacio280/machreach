@@ -76,6 +76,26 @@ def test_academic_profile_rejects_invalid_payloads(client, academic_student, pay
     assert client.post("/api/academic/profile", json=payload).status_code == 400
 
 
+def test_academic_profile_rejects_cross_country_university(client, academic_student):
+    university = client.get(
+        "/api/academic/universities?country=CL&q="
+    ).get_json()["universities"][0]
+    major = client.get(
+        f"/api/academic/majors?university_id={university['id']}"
+    ).get_json()["majors"][0]
+
+    response = client.post(
+        "/api/academic/profile",
+        json={
+            "country_iso": "US",
+            "university_id": university["id"],
+            "major_id": major["id"],
+        },
+    )
+
+    assert response.status_code == 400
+
+
 def test_academic_analytics_returns_sanitized_zero_state_and_clamps_future_week(client, academic_student):
     current = client.get("/api/academic/analytics?week_offset=bad").get_json()
     future = client.get("/api/academic/analytics?week_offset=5").get_json()

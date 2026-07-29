@@ -560,6 +560,8 @@ def init_student_db():
     init_normalized_student_state(
         run_backfill=previous_schema_version < STUDENT_SCHEMA_VERSION
     )
+    from student.ai_usage import init_schema as init_ai_usage_schema
+    init_ai_usage_schema()
     # Removed market feature: new installs should not create or expose its tables.
     # Weekly/monthly leaderboard prize tables.
     from student.leaderboard_prizes import init_prize_tables
@@ -597,6 +599,11 @@ def init_student_db():
             db,
             "SELECT client_id, tier, status, updated_at "
             "FROM student_subscription_state LIMIT 0",
+        )
+        _exec(
+            db,
+            "SELECT request_key, client_id, feature, status, reserved_at_utc "
+            "FROM student_ai_usage LIMIT 0",
         )
         _exec(
             db,

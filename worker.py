@@ -353,6 +353,13 @@ def process_async_jobs():
 
 def heartbeat():
     record_worker_heartbeat()
+    try:
+        from student.ai_usage import reconcile_stale_reservations
+        recovered = reconcile_stale_reservations()
+        if recovered:
+            print(f"[AI USAGE] Recovered {recovered} stale reservation(s).")
+    except Exception as exc:
+        _report_worker_error("AI_USAGE_RECOVERY", exc)
 
 
 def clean_abandoned_unverified_accounts():

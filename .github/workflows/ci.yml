@@ -99,6 +99,7 @@ jobs:
           tests/test_wallet_atomicity.py
           tests/test_focus.py
           tests/test_billing_webhook.py
+          tests/test_ai_usage.py
           tests/test_delete_account_billing.py
           tests/test_canvas_reconciliation.py
           tests/test_removed_legacy_surface.py

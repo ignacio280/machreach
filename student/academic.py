@@ -717,6 +717,31 @@ def save_academic_profile(
     major_id: int,
 ) -> None:
     with get_db() as db:
+        university = _fetchone(
+            db,
+            "SELECT id, country_iso, status FROM universities WHERE id = %s",
+            (university_id,),
+        )
+        major = _fetchone(
+            db,
+            "SELECT id, university_id, status FROM majors WHERE id = %s",
+            (major_id,),
+        )
+        if (
+            not university
+            or str(university.get("country_iso") or "").upper() != country_iso.upper()
+            or str(university.get("status") or "").lower() not in {"approved", "active"}
+        ):
+            raise ValueError("university does not belong to the selected country")
+        if (
+            not major
+            or str(major.get("status") or "").lower() not in {"approved", "active"}
+            or (
+                major.get("university_id") is not None
+                and int(major["university_id"]) != int(university_id)
+            )
+        ):
+            raise ValueError("major does not belong to the selected university")
         _exec(
             db,
             "UPDATE clients SET country_iso = %s, university_id = %s, major_id = %s, "

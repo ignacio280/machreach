@@ -151,12 +151,15 @@ def register_academic_routes(app, csrf, limiter):
         if not country_iso or not university_id or not major_id:
             return jsonify({"error": "missing fields"}), 400
 
-        ac.save_academic_profile(
-            client_id=cid,
-            country_iso=country_iso,
-            university_id=university_id,
-            major_id=major_id,
-        )
+        try:
+            ac.save_academic_profile(
+                client_id=cid,
+                country_iso=country_iso,
+                university_id=university_id,
+                major_id=major_id,
+            )
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
 
         return jsonify({"ok": True})
 

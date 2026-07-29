@@ -6,7 +6,7 @@ concurrent workers cannot both consume the final available generation.
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 import os
 
@@ -34,6 +34,9 @@ def _ensure_schema(db) -> None:
             client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
             feature TEXT NOT NULL,
             usage_kind TEXT NOT NULL,
+            model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+            estimated_input_tokens INTEGER NOT NULL DEFAULT 0,
+            estimated_output_tokens INTEGER NOT NULL DEFAULT 0,
             tier TEXT NOT NULL,
             status TEXT NOT NULL,
             period_start_utc {timestamp} NOT NULL,
@@ -50,14 +53,11 @@ def _ensure_schema(db) -> None:
         "CREATE INDEX IF NOT EXISTS idx_student_ai_usage_quota "
         "ON student_ai_usage(client_id, period_start_utc, period_end_utc, status)",
     )
-    try:
-        _exec(
-            db,
-            "ALTER TABLE student_ai_usage ADD COLUMN result_json TEXT NOT NULL DEFAULT '{}'",
-        )
-    except Exception as exc:
-        if "duplicate column" not in str(exc).lower() and "already exists" not in str(exc).lower():
-            raise
+
+
+def init_schema() -> None:
+    with get_db() as db:
+        _ensure_schema(db)
 
 
 def reserve(
@@ -66,6 +66,9 @@ def reserve(
     request_key: str,
     feature: str,
     usage_kind: str,
+    model: str = "gpt-4o-mini",
+    estimated_input_tokens: int = 0,
+    estimated_output_tokens: int = 0,
 ) -> dict:
     """Reserve one generation, returning the durable reservation.
 
@@ -94,6 +97,30 @@ def reserve(
         )
         if existing and existing.get("status") != "failed":
             return dict(existing)
+
+        utc_day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        user_daily_max = max(1, int(os.getenv("AI_USER_DAILY_MAX", "120")))
+        global_daily_max = max(1, int(os.getenv("AI_GLOBAL_DAILY_MAX", "5000")))
+        user_today = int(
+            _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_ai_usage WHERE client_id=%s "
+                "AND reserved_at_utc >= %s AND status IN ('reserved','settled')",
+                (client_id, utc_day_start.isoformat()),
+            )
+            or 0
+        )
+        global_today = int(
+            _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_ai_usage WHERE reserved_at_utc >= %s "
+                "AND status IN ('reserved','settled')",
+                (utc_day_start.isoformat(),),
+            )
+            or 0
+        )
+        if user_today >= user_daily_max or global_today >= global_daily_max:
+            raise AIQuotaExceeded("AI generation temporarily unavailable")
 
         tier = subscription._effective_tier(
             {
@@ -180,6 +207,9 @@ def reserve(
             client_id,
             feature,
             usage_kind,
+            str(model)[:80],
+            max(0, int(estimated_input_tokens)),
+            max(0, int(estimated_output_tokens)),
             tier,
             start.isoformat(),
             end.isoformat(),
@@ -196,9 +226,10 @@ def reserve(
             _exec(
                 db,
                 "INSERT INTO student_ai_usage "
-                "(request_key,client_id,feature,usage_kind,tier,status,"
+                "(request_key,client_id,feature,usage_kind,model,"
+                "estimated_input_tokens,estimated_output_tokens,tier,status,"
                 "period_start_utc,period_end_utc,reserved_at_utc) "
-                "VALUES (%s,%s,%s,%s,%s,'reserved',%s,%s,%s)",
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'reserved',%s,%s,%s)",
                 values,
             )
         return dict(
@@ -244,3 +275,18 @@ def fail(request_key: str, error: str = "") -> None:
             "WHERE request_key=%s AND status='reserved'",
             (_now().isoformat(), str(error)[:500], request_key),
         )
+
+
+def reconcile_stale_reservations(max_age_minutes: int = 30) -> int:
+    """Release reservations left behind by crashed request/worker processes."""
+    cutoff = (_now() - timedelta(minutes=max(1, max_age_minutes))).isoformat()
+    with get_db() as db:
+        _ensure_schema(db)
+        result = _exec(
+            db,
+            "UPDATE student_ai_usage SET status='failed', failed_at_utc=%s, "
+            "error='stale reservation recovered' WHERE status='reserved' "
+            "AND reserved_at_utc < %s",
+            (_now().isoformat(), cutoff),
+        )
+        return int(result.rowcount or 0)

@@ -4500,39 +4500,74 @@ Material:
             return jsonify({"error": "block source_text required"}), 400
         block_title = (data.get("block_title") or "Bloque de material").strip()[:90]
         topics = [block_title]
+        reservation_key = (
+            request.headers.get("X-Idempotency-Key")
+            or f"planner-{tool}:{_cid()}:{uuid4().hex}"
+        )
+        from student import ai_usage
         if tool == "quiz":
             from student import subscription as _sub
             ok, why = _sub.can_generate_quiz_today(_cid())
             if not ok:
                 return jsonify({"error": why, "upgrade_required": True}), 402
+            try:
+                reservation = ai_usage.reserve(
+                    _cid(),
+                    request_key=reservation_key,
+                    feature="planner_block_quiz",
+                    usage_kind="quiz_generated",
+                )
+            except ai_usage.AIQuotaExceeded as exc:
+                return jsonify({"error": str(exc), "upgrade_required": True}), 402
+            if reservation.get("status") == "settled":
+                saved = json.loads(reservation.get("result_json") or "{}")
+                return jsonify(saved)
             count = _sub.cap_questions(_cid(), 8)
-            questions = generate_quiz(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, difficulty="medium", count=count)
+            try:
+                questions = generate_quiz(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, difficulty="medium", count=count)
+            except Exception as exc:
+                ai_usage.fail(reservation_key, str(exc))
+                raise
             if not questions:
+                ai_usage.fail(reservation_key, "empty quiz")
                 return jsonify({"error": "No se pudo generar el quiz."}), 500
             title = f"Quiz bloque: {block_title}"
             quiz_id = sdb.create_quiz(_cid(), title, "medium", course_id=course_id, exam_id=exam_id)
             sdb.add_quiz_questions(quiz_id, questions)
-            try:
-                _sub.record_generation(_cid(), "quiz_generated")
-            except Exception:
-                pass
-            return jsonify({"ok": True, "type": "quiz", "id": quiz_id, "url": f"/student/quizzes/{quiz_id}", "count": len(questions)})
+            result = {"ok": True, "type": "quiz", "id": quiz_id, "url": f"/student/quizzes/{quiz_id}", "count": len(questions)}
+            ai_usage.settle(reservation_key, result)
+            return jsonify(result)
         from student import subscription as _sub
         ok, why = _sub.can_generate_flashcards_today(_cid())
         if not ok:
             return jsonify({"error": why, "upgrade_required": True}), 402
+        try:
+            reservation = ai_usage.reserve(
+                _cid(),
+                request_key=reservation_key,
+                feature="planner_block_flashcards",
+                usage_kind="flashcards_generated",
+            )
+        except ai_usage.AIQuotaExceeded as exc:
+            return jsonify({"error": str(exc), "upgrade_required": True}), 402
+        if reservation.get("status") == "settled":
+            saved = json.loads(reservation.get("result_json") or "{}")
+            return jsonify(saved)
         count = _sub.cap_cards(_cid(), 10)
-        cards = generate_flashcards(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, count=count)
+        try:
+            cards = generate_flashcards(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, count=count)
+        except Exception as exc:
+            ai_usage.fail(reservation_key, str(exc))
+            raise
         if not cards:
+            ai_usage.fail(reservation_key, "empty flashcards")
             return jsonify({"error": "No se pudieron generar las tarjetas."}), 500
         title = f"Tarjetas bloque: {block_title}"
         deck_id = sdb.create_flashcard_deck(_cid(), title, course_id=course_id, exam_id=exam_id, source_type="planner_block")
         sdb.add_flashcards(deck_id, cards)
-        try:
-            _sub.record_generation(_cid(), "flashcards_generated")
-        except Exception:
-            pass
-        return jsonify({"ok": True, "type": "flashcards", "id": deck_id, "url": f"/student/flashcards/{deck_id}", "count": len(cards)})
+        result = {"ok": True, "type": "flashcards", "id": deck_id, "url": f"/student/flashcards/{deck_id}", "count": len(cards)}
+        ai_usage.settle(reservation_key, result)
+        return jsonify(result)
 
 
     @app.route("/student/planner")
@@ -14477,11 +14512,22 @@ Material:
 
         # AI narrative analysis
 
+        analysis_reservation_key = (
+            request.headers.get("X-Idempotency-Key")
+            or f"quiz-analysis:{_cid()}:{quiz_id}:{uuid4().hex}"
+        )
         try:
 
             import json as _json
 
+            from student import ai_usage
             from student.analyzer import _ai
+            ai_usage.reserve(
+                _cid(),
+                request_key=analysis_reservation_key,
+                feature="quiz_analysis",
+                usage_kind="ai_tool_generated",
+            )
 
             wrong_items = [i for i in items if not i["is_correct"]]
 
@@ -14622,6 +14668,7 @@ No markdown, no code fences. ONLY JSON.
                 )
 
             raw = (resp.choices[0].message.content or "").strip()
+            ai_usage.settle(analysis_reservation_key)
 
             raw = re.sub(r"^```json?\s*", "", raw, flags=re.IGNORECASE)
 
@@ -14640,6 +14687,11 @@ No markdown, no code fences. ONLY JSON.
                       "next_actions": [], "study_plan_30min": [], "encouragement": ""}
 
         except Exception as e:
+            try:
+                from student.ai_usage import fail
+                fail(analysis_reservation_key, str(e))
+            except Exception:
+                pass
 
             log.error("Quiz analysis failed: %s", e)
 
