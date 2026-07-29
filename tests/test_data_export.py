@@ -23,6 +23,28 @@ def test_student_export_contains_core_study_and_gamification_data(client, make_u
     sdb.save_focus_session(client_id, "pomodoro", 25, 0, "Export Course", course_id)
     sdb.award_xp(client_id, "test_export", 12, "export marker")
     sdb.add_coins(client_id, 7, "export marker")
+    from student.canvas import revoke_connect_tokens
+    revoke_connect_tokens(client_id)
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO student_referral_reward_audit "
+            "(referred_id, referrer_id, days, status) VALUES (%s, %s, %s, %s)",
+            (client_id, client_id, 0, "withheld"),
+        )
+        _exec(
+            db,
+            "INSERT INTO student_academic_profile_audit "
+            "(client_id, new_country_iso, new_university_id, new_major_id, changed_at_utc) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (
+                client_id,
+                "CL",
+                university["id"],
+                major["id"],
+                "2026-01-01T00:00:00+00:00",
+            ),
+        )
 
     with client.session_transaction() as sess:
         sess["client_id"] = client_id
@@ -41,3 +63,7 @@ def test_student_export_contains_core_study_and_gamification_data(client, make_u
     assert student["study_progress"][0]["focus_minutes"] == 25
     assert any(row["action"] == "test_export" for row in student["xp"])
     assert student["wallet"]["coins"] == 7
+    assert student["canvas_connection_state"][0]["token_version"] == 1
+    assert student["referral_reward_audit"][0]["status"] == "withheld"
+    assert student["academic_profile_audit"][0]["new_country_iso"] == "CL"
+    assert "ai_usage" in student

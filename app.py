@@ -3868,6 +3868,11 @@ def lemonsqueezy_webhook():
     custom = (meta.get("custom_data") or {})
     data = body.get("data") or {}
     attrs = (data.get("attributes") or {})
+    first_order_item = (
+        attrs.get("first_order_item")
+        if isinstance(attrs.get("first_order_item"), dict)
+        else {}
+    )
     provider_event_at = str(
         attrs.get("updated_at")
         or attrs.get("created_at")
@@ -3941,17 +3946,36 @@ def lemonsqueezy_webhook():
             ssub = None
         requested_tier = str(custom.get("tier") or "plus").strip().lower()
         variant_id = str(attrs.get("variant_id") or "")
+        product_id = str(attrs.get("product_id") or "")
+        store_id = str(attrs.get("store_id") or "")
         product_name = str(attrs.get("product_name") or "").strip().lower()
         expected_variant = str(
             _cfg.LS_TEST_VARIANT_STUDENT_PLUS
             if signature_mode == "test"
             else _cfg.LS_VARIANT_STUDENT_PLUS
         ).strip()
+        expected_product = str(
+            _cfg.LS_TEST_PRODUCT_STUDENT_PLUS
+            if signature_mode == "test"
+            else _cfg.LS_PRODUCT_STUDENT_PLUS
+        ).strip()
+        expected_store = str(
+            _cfg.LEMON_SQUEEZY_TEST_STORE_ID
+            if signature_mode == "test"
+            else _cfg.LEMON_SQUEEZY_STORE_ID
+        ).strip()
         existing_subscription_id = str(
             (ssub.get_subscription_state(cid) if ssub else {}).get("ls_sub_id") or ""
         ).strip()
         provider_is_plus = bool(
-            (expected_variant and variant_id and variant_id == expected_variant)
+            (
+                expected_store
+                and store_id == expected_store
+                and expected_product
+                and product_id == expected_product
+                and expected_variant
+                and variant_id == expected_variant
+            )
             or (
                 event_name in payment_events
                 and provider_subscription_id
@@ -4112,6 +4136,45 @@ def lemonsqueezy_webhook():
                 if not res.get("ok"):
                     raise RuntimeError(res.get("error") or "refund reconciliation failed")
             else:
+                product_map = {
+                    "small": _cfg.LS_TEST_PRODUCT_COIN_SMALL if signature_mode == "test" else _cfg.LS_PRODUCT_COIN_SMALL,
+                    "medium": _cfg.LS_TEST_PRODUCT_COIN_MEDIUM if signature_mode == "test" else _cfg.LS_PRODUCT_COIN_MEDIUM,
+                    "large": _cfg.LS_TEST_PRODUCT_COIN_LARGE if signature_mode == "test" else _cfg.LS_PRODUCT_COIN_LARGE,
+                    "mega": _cfg.LS_TEST_PRODUCT_COIN_MEGA if signature_mode == "test" else _cfg.LS_PRODUCT_COIN_MEGA,
+                    "ultra": _cfg.LS_TEST_PRODUCT_COIN_ULTRA if signature_mode == "test" else _cfg.LS_PRODUCT_COIN_ULTRA,
+                }
+                variant_map = {
+                    "small": _cfg.LS_TEST_VARIANT_COIN_SMALL if signature_mode == "test" else _cfg.LS_VARIANT_COIN_SMALL,
+                    "medium": _cfg.LS_TEST_VARIANT_COIN_MEDIUM if signature_mode == "test" else _cfg.LS_VARIANT_COIN_MEDIUM,
+                    "large": _cfg.LS_TEST_VARIANT_COIN_LARGE if signature_mode == "test" else _cfg.LS_VARIANT_COIN_LARGE,
+                    "mega": _cfg.LS_TEST_VARIANT_COIN_MEGA if signature_mode == "test" else _cfg.LS_VARIANT_COIN_MEGA,
+                    "ultra": _cfg.LS_TEST_VARIANT_COIN_ULTRA if signature_mode == "test" else _cfg.LS_VARIANT_COIN_ULTRA,
+                }
+                expected_store = str(
+                    _cfg.LEMON_SQUEEZY_TEST_STORE_ID
+                    if signature_mode == "test"
+                    else _cfg.LEMON_SQUEEZY_STORE_ID
+                ).strip()
+                expected_product = str(product_map.get(pack_key) or "").strip()
+                expected_variant = str(variant_map.get(pack_key) or "").strip()
+                actual_store = str(attrs.get("store_id") or "").strip()
+                actual_product = str(first_order_item.get("product_id") or "").strip()
+                actual_variant = str(first_order_item.get("variant_id") or "").strip()
+                if not (
+                    expected_store
+                    and actual_store == expected_store
+                    and expected_product
+                    and actual_product == expected_product
+                    and expected_variant
+                    and actual_variant == expected_variant
+                ):
+                    _finish_claimed_ls_event("unapproved-coin-pack-product")
+                    _log.warning(
+                        "[LS] rejected coin pack product/variant pack=%r client=%s",
+                        pack_key,
+                        cid,
+                    )
+                    return "Unsupported coin pack product", 400
                 res = sdb.credit_coin_pack(cid, pack_key, order_id=order_id)
             if res.get("duplicate"):
                 _log.info("[LS] duplicate coin-pack order ignored: %s", order_id)

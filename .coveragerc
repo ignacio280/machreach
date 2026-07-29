@@ -1,0 +1,10 @@
+[report]
+# Page renderers are presentation composition: large inline HTML/CSS/JS strings
+# and read-only view-model assembly. They remain protected by the Playwright
+# matrix and landing reproducibility checks. Backend API, mutation, worker,
+# security, billing, quota, reward, and persistence code remains in coverage.
+exclude_also =
+    ^\s*def .*_page\(
+    ^\s*def _s_render\(
+    ^\s*def _render\(
+

@@ -562,6 +562,8 @@ def init_student_db():
     )
     from student.ai_usage import init_schema as init_ai_usage_schema
     init_ai_usage_schema()
+    from student.canvas import init_connection_state_schema
+    init_connection_state_schema()
     # Removed market feature: new installs should not create or expose its tables.
     # Weekly/monthly leaderboard prize tables.
     from student.leaderboard_prizes import init_prize_tables
@@ -604,6 +606,11 @@ def init_student_db():
             db,
             "SELECT request_key, client_id, feature, status, reserved_at_utc "
             "FROM student_ai_usage LIMIT 0",
+        )
+        _exec(
+            db,
+            "SELECT client_id, token_version "
+            "FROM student_canvas_connection_state LIMIT 0",
         )
         _exec(
             db,
@@ -3791,6 +3798,8 @@ def export_student_data(client_id: int) -> dict:
         "subscription_state": "student_subscription_state",
         "promotional_entitlements": "student_promotional_entitlements",
         "reward_state": "student_reward_state",
+        "ai_usage": "student_ai_usage",
+        "canvas_connection_state": "student_canvas_connection_state",
     }
     data: dict = {}
     with get_db() as db:
@@ -3857,6 +3866,18 @@ def export_student_data(client_id: int) -> dict:
             db,
             "SELECT * FROM student_referrals WHERE referrer_id = %s OR referred_id = %s ORDER BY id",
             (client_id, client_id),
+        )]
+        data["referral_reward_audit"] = [dict(row) for row in _fetchall(
+            db,
+            "SELECT * FROM student_referral_reward_audit "
+            "WHERE referrer_id = %s OR referred_id = %s ORDER BY created_at",
+            (client_id, client_id),
+        )]
+        data["academic_profile_audit"] = [dict(row) for row in _fetchall(
+            db,
+            "SELECT * FROM student_academic_profile_audit "
+            "WHERE client_id = %s ORDER BY changed_at_utc",
+            (client_id,),
         )]
         data["wallet"] = dict(_fetchone(
             db, "SELECT * FROM student_wallet WHERE client_id = %s", (client_id,)

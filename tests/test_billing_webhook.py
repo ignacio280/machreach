@@ -36,8 +36,34 @@ def _student_event(event, cid, tier="plus"):
         "meta": {"event_name": event,
                  "custom_data": {"purpose": "student_sub", "client_id": str(cid), "tier": tier}},
         "data": {"id": _subscription_id(cid), "attributes": {
-            "status": "active", "variant_id": cfg.LS_VARIANT_STUDENT_PLUS,
+            "status": "active",
+            "store_id": cfg.LEMON_SQUEEZY_STORE_ID,
+            "product_id": cfg.LS_PRODUCT_STUDENT_PLUS,
+            "variant_id": cfg.LS_VARIANT_STUDENT_PLUS,
         }},
+    }
+
+
+def _coin_order(cid: int, order_id: str, pack_key: str = "small") -> dict:
+    return {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {
+                "purpose": "coin_pack",
+                "client_id": str(cid),
+                "pack_key": pack_key,
+            },
+        },
+        "data": {
+            "id": order_id,
+            "attributes": {
+                "store_id": cfg.LEMON_SQUEEZY_STORE_ID,
+                "first_order_item": {
+                    "product_id": cfg.LS_PRODUCT_COIN_SMALL,
+                    "variant_id": cfg.LS_VARIANT_COIN_SMALL,
+                },
+            },
+        },
     }
 
 
@@ -102,6 +128,12 @@ def test_sandbox_webhook_is_limited_to_configured_qa_client(
     sandbox_secret = "sandbox-signing-secret"
     monkeypatch.setattr(ls, "LEMON_SQUEEZY_TEST_WEBHOOK_SECRET", sandbox_secret)
     monkeypatch.setattr(cfg, "LEMON_SQUEEZY_SANDBOX_CLIENT_ID", str(qa_id))
+    monkeypatch.setattr(
+        cfg, "LEMON_SQUEEZY_TEST_STORE_ID", cfg.LEMON_SQUEEZY_STORE_ID
+    )
+    monkeypatch.setattr(
+        cfg, "LS_TEST_PRODUCT_STUDENT_PLUS", cfg.LS_PRODUCT_STUDENT_PLUS
+    )
     monkeypatch.setattr(
         cfg, "LS_TEST_VARIANT_STUDENT_PLUS", cfg.LS_VARIANT_STUDENT_PLUS
     )
@@ -365,6 +397,7 @@ def test_payment_invoice_event_preserves_provider_subscription_id(
 def test_subscription_checkout_forwards_test_mode(client, make_user, flask_app, monkeypatch):
     monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
     monkeypatch.setattr(cfg, "LS_TEST_VARIANT_STUDENT_PLUS", "variant_plus")
+    monkeypatch.setattr(cfg, "LS_TEST_PRODUCT_STUDENT_PLUS", "product_plus")
     monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", True)
     captured = {}
 
@@ -621,6 +654,7 @@ def test_unknown_paid_subscription_state_blocks_duplicate_checkout(
 def test_coin_checkout_forwards_test_mode(client, make_user, flask_app, monkeypatch):
     monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
     monkeypatch.setattr(cfg, "LS_TEST_VARIANT_COIN_SMALL", "variant_small")
+    monkeypatch.setattr(cfg, "LS_TEST_PRODUCT_COIN_SMALL", "product_small")
     monkeypatch.setattr(cfg, "LEMON_SQUEEZY_TEST_MODE", True)
     captured = {}
 
@@ -681,6 +715,8 @@ def test_subscription_reconcile_restores_provider_status(
             "id": "provider-sub-42",
             "attributes": {
                 "user_email": email,
+                "store_id": cfg.LEMON_SQUEEZY_STORE_ID,
+                "product_id": cfg.LS_PRODUCT_STUDENT_PLUS,
                 "variant_id": "plus-variant",
                 "status": "active",
                 "renews_at": "2030-01-15T00:00:00Z",
@@ -718,14 +754,22 @@ def test_subscription_reconcile_prefers_active_provider_record(
     monkeypatch.setattr(
         ls,
         "list_subscriptions_by_email",
-        lambda email, **_kwargs: [
-            {"id": "expired-sub", "attributes": {
-                "user_email": email, "variant_id": "plus-variant", "status": "expired",
-            }},
-            {"id": "active-sub", "attributes": {
-                "user_email": email, "variant_id": "plus-variant", "status": "active",
-            }},
-        ],
+            lambda email, **_kwargs: [
+                {"id": "expired-sub", "attributes": {
+                    "user_email": email,
+                    "store_id": cfg.LEMON_SQUEEZY_STORE_ID,
+                    "product_id": cfg.LS_PRODUCT_STUDENT_PLUS,
+                    "variant_id": "plus-variant",
+                    "status": "expired",
+                }},
+                {"id": "active-sub", "attributes": {
+                    "user_email": email,
+                    "store_id": cfg.LEMON_SQUEEZY_STORE_ID,
+                    "product_id": cfg.LS_PRODUCT_STUDENT_PLUS,
+                    "variant_id": "plus-variant",
+                    "status": "active",
+                }},
+            ],
     )
     cid = make_user("Restore Priority", "restore-priority@example.test")
     _complete_setup(cid)
@@ -848,9 +892,7 @@ def test_archived_subscription_payment_retry_uses_invoice_subscription_id(client
 
 def test_coin_pack_order_credits_once(client, make_user):
     cid = make_user()
-    payload = {"meta": {"event_name": "order_created",
-                        "custom_data": {"purpose": "coin_pack", "client_id": str(cid), "pack_key": "small"}},
-               "data": {"id": "order_1", "attributes": {}}}
+    payload = _coin_order(cid, "order_1")
     r = _post(client, payload)
     assert r.status_code == 200
     assert sdb.get_wallet(cid)["coins"] == 250
@@ -869,19 +911,21 @@ def test_coin_pack_order_credits_once(client, make_user):
     assert event == {"status": "succeeded", "attempts": 1}
 
 
+def test_coin_pack_custom_data_cannot_upgrade_a_cheaper_variant(client, make_user):
+    cid = make_user()
+    payload = _coin_order(cid, "order_variant_tamper")
+    payload["meta"]["custom_data"]["pack_key"] = "ultra"
+
+    response = _post(client, payload)
+
+    assert response.status_code == 400
+    assert sdb.get_wallet(cid)["coins"] == 0
+
+
 def test_full_coin_pack_refund_reverses_credit_exactly_once(client, make_user):
     cid = make_user()
-    purchased = {
-        "meta": {
-            "event_name": "order_created",
-            "custom_data": {
-                "purpose": "coin_pack",
-                "client_id": str(cid),
-                "pack_key": "small",
-            },
-        },
-        "data": {"id": "order_refund_1", "attributes": {"total": 1990}},
-    }
+    purchased = _coin_order(cid, "order_refund_1")
+    purchased["data"]["attributes"]["total"] = 1990
     assert _post(client, purchased).status_code == 200
     refunded = json.loads(json.dumps(purchased))
     refunded["meta"]["event_name"] = "order_refunded"
@@ -898,17 +942,8 @@ def test_full_coin_pack_refund_reverses_credit_exactly_once(client, make_user):
 
 def test_partial_coin_pack_refund_reverses_proportional_credit(client, make_user):
     cid = make_user()
-    purchased = {
-        "meta": {
-            "event_name": "order_created",
-            "custom_data": {
-                "purpose": "coin_pack",
-                "client_id": str(cid),
-                "pack_key": "small",
-            },
-        },
-        "data": {"id": "order_partial_refund", "attributes": {"total": 2000}},
-    }
+    purchased = _coin_order(cid, "order_partial_refund")
+    purchased["data"]["attributes"]["total"] = 2000
     assert _post(client, purchased).status_code == 200
     refunded = json.loads(json.dumps(purchased))
     refunded["meta"]["event_name"] = "order_refunded"
@@ -925,17 +960,8 @@ def test_partial_coin_pack_refund_reverses_proportional_credit(client, make_user
 
 def test_out_of_order_partial_refunds_never_reverse_twice(client, make_user):
     cid = make_user()
-    purchased = {
-        "meta": {
-            "event_name": "order_created",
-            "custom_data": {
-                "purpose": "coin_pack",
-                "client_id": str(cid),
-                "pack_key": "small",
-            },
-        },
-        "data": {"id": "order_out_of_order", "attributes": {"total": 2000}},
-    }
+    purchased = _coin_order(cid, "order_out_of_order")
+    purchased["data"]["attributes"]["total"] = 2000
     assert _post(client, purchased).status_code == 200
 
     def refund(amount, event_revision):
@@ -961,17 +987,8 @@ def test_spent_coin_pack_refund_records_debt_repaid_by_future_earnings(
     client, make_user
 ):
     cid = make_user()
-    purchased = {
-        "meta": {
-            "event_name": "order_created",
-            "custom_data": {
-                "purpose": "coin_pack",
-                "client_id": str(cid),
-                "pack_key": "small",
-            },
-        },
-        "data": {"id": "order_refund_spent", "attributes": {"total": 1990}},
-    }
+    purchased = _coin_order(cid, "order_refund_spent")
+    purchased["data"]["attributes"]["total"] = 1990
     assert _post(client, purchased).status_code == 200
     sdb.add_coins(cid, -200, "spent before refund")
     refunded = json.loads(json.dumps(purchased))
@@ -1045,9 +1062,7 @@ def test_coin_pack_processing_failure_requests_provider_retry(
     client, make_user, monkeypatch
 ):
     cid = make_user()
-    payload = {"meta": {"event_name": "order_created",
-                        "custom_data": {"purpose": "coin_pack", "client_id": str(cid), "pack_key": "small"}},
-               "data": {"id": "order_retry_me", "attributes": {}}}
+    payload = _coin_order(cid, "order_retry_me")
     monkeypatch.setattr(sdb, "credit_coin_pack", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("db unavailable")))
 
     response = _post(client, payload)

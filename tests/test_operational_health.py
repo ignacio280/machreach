@@ -12,6 +12,8 @@ from machreach_core.operations import collect_operational_health
 
 def _clear_operational_state():
     with get_db() as db:
+        _exec(db, "DELETE FROM student_referral_reward_audit")
+        _exec(db, "DELETE FROM student_ai_usage")
         _exec(db, "DELETE FROM operational_events")
         _exec(db, "DELETE FROM webhook_events")
         _exec(db, "DELETE FROM async_jobs")
@@ -24,6 +26,7 @@ def _configure_dependencies(monkeypatch):
     monkeypatch.setattr(config, "LEMON_SQUEEZY_API_KEY", "configured")
     monkeypatch.setattr(config, "LEMON_SQUEEZY_STORE_ID", "configured")
     monkeypatch.setattr(config, "LEMON_SQUEEZY_WEBHOOK_SECRET", "configured")
+    monkeypatch.setattr(config, "LS_PRODUCT_STUDENT_PLUS", "configured")
     monkeypatch.setattr(config, "LS_VARIANT_STUDENT_PLUS", "configured")
     monkeypatch.setattr(config, "SYSTEM_SMTP_USER", "configured")
     monkeypatch.setattr(config, "SYSTEM_SMTP_PASSWORD", "configured")
@@ -56,6 +59,7 @@ def test_operational_health_reports_missing_dependencies(monkeypatch):
         "LEMON_SQUEEZY_API_KEY",
         "LEMON_SQUEEZY_STORE_ID",
         "LEMON_SQUEEZY_WEBHOOK_SECRET",
+        "LS_PRODUCT_STUDENT_PLUS",
         "LS_VARIANT_STUDENT_PLUS",
         "SYSTEM_SMTP_USER",
         "SYSTEM_SMTP_PASSWORD",

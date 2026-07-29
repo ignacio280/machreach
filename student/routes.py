@@ -21832,6 +21832,10 @@ No markdown, no code fences. ONLY JSON.
             _shop_cfg.LS_TEST_VARIANT_STUDENT_PLUS
             if shop_test_mode else _shop_cfg.LS_VARIANT_STUDENT_PLUS
         )
+        plus_product = (
+            _shop_cfg.LS_TEST_PRODUCT_STUDENT_PLUS
+            if shop_test_mode else _shop_cfg.LS_PRODUCT_STUDENT_PLUS
+        )
         coin_variants = {
             "small": (
                 _shop_cfg.LS_TEST_VARIANT_COIN_SMALL
@@ -21854,7 +21858,16 @@ No markdown, no code fences. ONLY JSON.
                 if shop_test_mode else _shop_cfg.LS_VARIANT_COIN_ULTRA
             ),
         }
-        subscription_billing_ready = bool(shop_api_ready and plus_variant)
+        coin_products = {
+            "small": _shop_cfg.LS_TEST_PRODUCT_COIN_SMALL if shop_test_mode else _shop_cfg.LS_PRODUCT_COIN_SMALL,
+            "medium": _shop_cfg.LS_TEST_PRODUCT_COIN_MEDIUM if shop_test_mode else _shop_cfg.LS_PRODUCT_COIN_MEDIUM,
+            "large": _shop_cfg.LS_TEST_PRODUCT_COIN_LARGE if shop_test_mode else _shop_cfg.LS_PRODUCT_COIN_LARGE,
+            "mega": _shop_cfg.LS_TEST_PRODUCT_COIN_MEGA if shop_test_mode else _shop_cfg.LS_PRODUCT_COIN_MEGA,
+            "ultra": _shop_cfg.LS_TEST_PRODUCT_COIN_ULTRA if shop_test_mode else _shop_cfg.LS_PRODUCT_COIN_ULTRA,
+        }
+        subscription_billing_ready = bool(
+            shop_api_ready and plus_product and plus_variant
+        )
         requested_section = str(request.args.get("section") or "plan").lower()
         active_section = requested_section if requested_section in {"plan", "coins", "cosmetics"} else "plan"
         # Build banner cards HTML
@@ -22095,7 +22108,11 @@ No markdown, no code fences. ONLY JSON.
         coin_pack_cards = []
         for pkey, pcfg in sdb.COIN_PACKS.items():
             total = int(pcfg["coins"]) + int(pcfg.get("bonus") or 0)
-            pack_billing_ready = bool(shop_api_ready and coin_variants.get(pkey))
+            pack_billing_ready = bool(
+                shop_api_ready
+                and coin_products.get(pkey)
+                and coin_variants.get(pkey)
+            )
             _pack_clp = f"{int(pcfg.get('price_clp') or 0):,}".replace(",", ".")
             bonus_html = (f'<div style="font-size:11px;color:#22c55e;font-weight:700;margin-top:4px;">+{pcfg["bonus"]} bonus \U0001FA99</div>'
                           if pcfg.get("bonus") else '')
@@ -22694,7 +22711,14 @@ No markdown, no code fences. ONLY JSON.
                 "ultra":  _cfg.LS_TEST_VARIANT_COIN_ULTRA,
             }
         variant = variant_map.get(pack_key, "")
-        if not variant:
+        product_map = {
+            "small": _cfg.LS_TEST_PRODUCT_COIN_SMALL if _cfg.LEMON_SQUEEZY_TEST_MODE else _cfg.LS_PRODUCT_COIN_SMALL,
+            "medium": _cfg.LS_TEST_PRODUCT_COIN_MEDIUM if _cfg.LEMON_SQUEEZY_TEST_MODE else _cfg.LS_PRODUCT_COIN_MEDIUM,
+            "large": _cfg.LS_TEST_PRODUCT_COIN_LARGE if _cfg.LEMON_SQUEEZY_TEST_MODE else _cfg.LS_PRODUCT_COIN_LARGE,
+            "mega": _cfg.LS_TEST_PRODUCT_COIN_MEGA if _cfg.LEMON_SQUEEZY_TEST_MODE else _cfg.LS_PRODUCT_COIN_MEGA,
+            "ultra": _cfg.LS_TEST_PRODUCT_COIN_ULTRA if _cfg.LEMON_SQUEEZY_TEST_MODE else _cfg.LS_PRODUCT_COIN_ULTRA,
+        }
+        if not product_map.get(pack_key) or not variant:
             return jsonify(ok=False, error="Coin pack not configured for checkout."), 503
         if not ls.is_configured(test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE):
             return jsonify(
@@ -22833,6 +22857,11 @@ No markdown, no code fences. ONLY JSON.
                 if _cfg.LEMON_SQUEEZY_TEST_MODE
                 else _cfg.LS_VARIANT_STUDENT_PLUS
             )
+            product = (
+                _cfg.LS_TEST_PRODUCT_STUDENT_PLUS
+                if _cfg.LEMON_SQUEEZY_TEST_MODE
+                else _cfg.LS_PRODUCT_STUDENT_PLUS
+            )
             paid_tiers = {"plus"}
             renewable_statuses = {"active", "on_trial", "trialing", "paused", "cancelled"}
             delinquent_statuses = {"past_due", "unpaid"}
@@ -22851,7 +22880,7 @@ No markdown, no code fences. ONLY JSON.
                         error="Tu suscripcion tiene un pago pendiente. Actualiza el medio de pago o contacta soporte.",
                     ), 409
                 if provider_status in renewable_statuses:
-                    if not variant:
+                    if not product or not variant:
                         return jsonify(ok=False, error="Plan not configured for checkout."), 503
                     if not ls.is_configured(test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE):
                         return jsonify(
@@ -22880,7 +22909,7 @@ No markdown, no code fences. ONLY JSON.
                         error="No pudimos verificar el estado de tu suscripcion. Contacta soporte antes de cambiar de plan.",
                     ), 409
 
-            if not variant:
+            if not product or not variant:
                 return jsonify(ok=False, error="Plan not configured for checkout."), 503
             if not ls.is_configured(test_mode=_cfg.LEMON_SQUEEZY_TEST_MODE):
                 return jsonify(
@@ -22914,7 +22943,15 @@ No markdown, no code fences. ONLY JSON.
             _cfg.LS_TEST_VARIANT_STUDENT_PLUS
             if test_mode else _cfg.LS_VARIANT_STUDENT_PLUS
         )
-        if not variant or not ls.is_configured(test_mode=test_mode):
+        product = (
+            _cfg.LS_TEST_PRODUCT_STUDENT_PLUS
+            if test_mode else _cfg.LS_PRODUCT_STUDENT_PLUS
+        )
+        store = (
+            _cfg.LEMON_SQUEEZY_TEST_STORE_ID
+            if test_mode else _cfg.LEMON_SQUEEZY_STORE_ID
+        )
+        if not store or not product or not variant or not ls.is_configured(test_mode=test_mode):
             return jsonify(
                 ok=False,
                 error="La restauración no está disponible porque la facturación no está configurada.",
@@ -22933,7 +22970,9 @@ No markdown, no code fences. ONLY JSON.
             ), 502
         matches = [
             row for row in subscriptions
-            if str((row.get("attributes") or {}).get("variant_id") or "") == str(variant)
+            if str((row.get("attributes") or {}).get("store_id") or "") == str(store)
+            and str((row.get("attributes") or {}).get("product_id") or "") == str(product)
+            and str((row.get("attributes") or {}).get("variant_id") or "") == str(variant)
             and str((row.get("attributes") or {}).get("user_email") or "").strip().lower()
             == email
         ]

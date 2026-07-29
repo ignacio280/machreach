@@ -31,7 +31,8 @@ Before production deploys:
 2. Deploy and exercise staging first. Confirm it uses only staging Postgres, provider test credentials, and staging callback URLs.
 3. Apply the Blueprint with the same `ENCRYPTION_KEY` shared by each environment's web and worker services. Never share database or provider secrets across environments.
 4. Confirm public `/health` is healthy, protected `/health/operations` has no failed signals, and the worker heartbeat is newer than two minutes.
-5. Exercise staging login, queued AI work, test checkout/webhook, account export, and provider-first deletion before approving production.
+5. In Lemon Squeezy, copy the production store ID plus the product and variant IDs for Plus and every enabled coin pack into the matching `LEMON_SQUEEZY_STORE_ID`, `LS_PRODUCT_*`, and `LS_VARIANT_*` Render variables. A signed event must match all three identifiers; checkout remains disabled when any required identifier is missing.
+6. Exercise staging login, queued AI work, test checkout/webhook, account export, and provider-first deletion before approving production.
 
 Database migrations must remain backward-compatible for at least one release.
 
@@ -62,4 +63,5 @@ After rollback or recovery, verify both health endpoints, worker heartbeat, queu
 - Oldest queued job over ten minutes or any job exhausting retries.
 - Failed webhook, billing reconciliation drift, or coin order without a completed ledger entry.
 - Outstanding partial-refund review or failed provider cancellation after a locally enforced full refund. After reconciling it in Lemon Squeezy, remove the corresponding `operational_events` row and record the action in the incident log.
+- Any AI reservation older than fifteen minutes or withheld referral reward reported by `/health/operations`.
 - Repeated verification-email failures, SMTP failure, database saturation, and Sentry exception-rate spikes.

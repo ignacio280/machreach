@@ -1,6 +1,8 @@
 import pytest
+from datetime import UTC, datetime
 
-from machreach_core.db import _exec, get_db
+from machreach_core.db import _exec, _fetchall, _fetchone, get_db
+from student.periods import FrozenClock, use_clock
 
 
 @pytest.fixture()
@@ -94,6 +96,60 @@ def test_academic_profile_rejects_cross_country_university(client, academic_stud
     )
 
     assert response.status_code == 400
+
+
+def test_university_changes_are_audited_and_rate_limited(
+    client, academic_student
+):
+    with get_db() as db:
+        universities = _fetchall(
+            db,
+            "SELECT id FROM universities WHERE country_iso = %s "
+            "AND status = %s ORDER BY id LIMIT 3",
+            ("CL", "approved"),
+        )
+        selections = []
+        for university in universities:
+            major = _fetchone(
+                db,
+                "SELECT id FROM majors WHERE university_id = %s "
+                "AND status = %s ORDER BY id LIMIT 1",
+                (university["id"], "approved"),
+            )
+            assert major
+            selections.append((university["id"], major["id"]))
+
+    def save(selection):
+        return client.post(
+            "/api/academic/profile",
+            json={
+                "country_iso": "CL",
+                "university_id": selection[0],
+                "major_id": selection[1],
+            },
+        )
+
+    with use_clock(FrozenClock(datetime(2026, 1, 1, tzinfo=UTC))):
+        assert save(selections[0]).status_code == 200
+        assert save(selections[1]).status_code == 200
+    with use_clock(FrozenClock(datetime(2026, 1, 2, tzinfo=UTC))):
+        blocked = save(selections[2])
+    assert blocked.status_code == 400
+    assert "30 days" in blocked.get_json()["error"]
+
+    with use_clock(FrozenClock(datetime(2026, 2, 1, tzinfo=UTC))):
+        assert save(selections[2]).status_code == 200
+
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT old_university_id, new_university_id, changed_at_utc "
+            "FROM student_academic_profile_audit WHERE client_id = %s ORDER BY id",
+            (academic_student,),
+        )
+    assert len(rows) == 3
+    assert rows[1]["old_university_id"] == selections[0][0]
+    assert rows[1]["new_university_id"] == selections[1][0]
 
 
 def test_academic_analytics_returns_sanitized_zero_state_and_clamps_future_week(client, academic_student):

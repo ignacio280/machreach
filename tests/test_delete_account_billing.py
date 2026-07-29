@@ -26,7 +26,10 @@ def _provision_student_sub(client, cid, ls_sub_id):
         "meta": {"event_name": "subscription_created",
                  "custom_data": {"purpose": "student_sub", "client_id": str(cid), "tier": "plus"}},
         "data": {"id": ls_sub_id, "attributes": {
-            "status": "active", "variant_id": cfg.LS_VARIANT_STUDENT_PLUS,
+            "status": "active",
+            "store_id": cfg.LEMON_SQUEEZY_STORE_ID,
+            "product_id": cfg.LS_PRODUCT_STUDENT_PLUS,
+            "variant_id": cfg.LS_VARIANT_STUDENT_PLUS,
         }},
     }
     raw = json.dumps(payload).encode()

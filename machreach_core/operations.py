@@ -1,7 +1,7 @@
 """Sanitized operational health checks for monitors and on-call alerts."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import timedelta
 import os
 
 from machreach_core.db import (
@@ -11,6 +11,7 @@ from machreach_core.db import (
     _fetchval,
     get_db,
 )
+from student.periods import utc_now
 
 
 def _count(db, sql: str, params=()) -> int:
@@ -34,6 +35,7 @@ def _dependency_checks() -> dict:
         config.LEMON_SQUEEZY_API_KEY,
         config.LEMON_SQUEEZY_STORE_ID,
         config.LEMON_SQUEEZY_WEBHOOK_SECRET,
+        config.LS_PRODUCT_STUDENT_PLUS,
         config.LS_VARIANT_STUDENT_PLUS,
     )
     return {
@@ -111,6 +113,19 @@ def collect_operational_health() -> dict:
             "SELECT COUNT(*) FROM operational_events WHERE event_type IN (%s, %s)",
             ("billing_refund_manual_review", "billing_reconciliation_failure"),
         )
+        ai_reservation_boundary = utc_now() - timedelta(minutes=15)
+        stale_ai_reservations = _count(
+            db,
+            "SELECT COUNT(*) FROM student_ai_usage "
+            "WHERE status = %s AND reserved_at_utc < %s",
+            ("reserved", ai_reservation_boundary),
+        )
+        withheld_referrals = _count(
+            db,
+            "SELECT COUNT(*) FROM student_referral_reward_audit "
+            "WHERE status = %s",
+            ("withheld",),
+        )
         if _USE_PG:
             used = _count(db, "SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database()")
             maximum = int(_fetchval(db, "SELECT current_setting('max_connections')") or 0)
@@ -132,6 +147,8 @@ def collect_operational_health() -> dict:
         "coin_ledger": _signal(invalid_wallets + invalid_orders),
         "smtp_failures": _signal(smtp_failures),
         "billing_refund_review": _signal(billing_review),
+        "stale_ai_reservations": _signal(stale_ai_reservations),
+        "withheld_referral_rewards": _signal(withheld_referrals),
         "database_capacity": db_capacity,
         **_dependency_checks(),
     }
@@ -141,6 +158,6 @@ def collect_operational_health() -> dict:
     )
     return {
         "status": "degraded" if degraded else "ok",
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "generated_at": utc_now().replace(microsecond=0).isoformat(),
         "checks": checks,
     }

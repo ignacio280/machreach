@@ -133,6 +133,9 @@ ENCRYPTION_KEY = _enc_key or "RGV2LWVuY3J5cHRpb24ta2V5LW5vdC1mb3ItcHJvZA=="
 
 # Sending limits
 FOLLOWUP_DELAY_DAYS = [3, 7, 14]  # Days after initial email for follow-ups
+ACADEMIC_UNIVERSITY_CHANGE_COOLDOWN_DAYS = max(
+    0, int(os.getenv("ACADEMIC_UNIVERSITY_CHANGE_COOLDOWN_DAYS", "30"))
+)
 
 # Apollo.io (prospect finder — free tier: 10k credits/month)
 APOLLO_API_KEY = os.getenv("APOLLO_API_KEY", "")
@@ -157,14 +160,26 @@ LEMON_SQUEEZY_TEST_MODE      = os.getenv("LEMON_SQUEEZY_TEST_MODE", "").strip().
     "1", "true", "yes", "on",
 }
 # Student Plus subscription variant ID.
+LS_PRODUCT_STUDENT_PLUS = os.getenv("LS_PRODUCT_STUDENT_PLUS", "")
 LS_VARIANT_STUDENT_PLUS = os.getenv("LS_VARIANT_STUDENT_PLUS", "")
+LS_TEST_PRODUCT_STUDENT_PLUS = os.getenv("LS_TEST_PRODUCT_STUDENT_PLUS", "")
 LS_TEST_VARIANT_STUDENT_PLUS = os.getenv("LS_TEST_VARIANT_STUDENT_PLUS", "")
-# Coin-pack one-time variant IDs (key matches student.db.COIN_PACKS).
+# Coin-pack one-time product and variant IDs (key matches student.db.COIN_PACKS).
+LS_PRODUCT_COIN_SMALL  = os.getenv("LS_PRODUCT_COIN_SMALL", "")
+LS_PRODUCT_COIN_MEDIUM = os.getenv("LS_PRODUCT_COIN_MEDIUM", "")
+LS_PRODUCT_COIN_LARGE  = os.getenv("LS_PRODUCT_COIN_LARGE", "")
+LS_PRODUCT_COIN_MEGA   = os.getenv("LS_PRODUCT_COIN_MEGA", "")
+LS_PRODUCT_COIN_ULTRA  = os.getenv("LS_PRODUCT_COIN_ULTRA", "")
 LS_VARIANT_COIN_SMALL  = os.getenv("LS_VARIANT_COIN_SMALL", "")
 LS_VARIANT_COIN_MEDIUM = os.getenv("LS_VARIANT_COIN_MEDIUM", "")
 LS_VARIANT_COIN_LARGE  = os.getenv("LS_VARIANT_COIN_LARGE", "")
 LS_VARIANT_COIN_MEGA   = os.getenv("LS_VARIANT_COIN_MEGA", "")
 LS_VARIANT_COIN_ULTRA  = os.getenv("LS_VARIANT_COIN_ULTRA", "")
+LS_TEST_PRODUCT_COIN_SMALL  = os.getenv("LS_TEST_PRODUCT_COIN_SMALL", "")
+LS_TEST_PRODUCT_COIN_MEDIUM = os.getenv("LS_TEST_PRODUCT_COIN_MEDIUM", "")
+LS_TEST_PRODUCT_COIN_LARGE  = os.getenv("LS_TEST_PRODUCT_COIN_LARGE", "")
+LS_TEST_PRODUCT_COIN_MEGA   = os.getenv("LS_TEST_PRODUCT_COIN_MEGA", "")
+LS_TEST_PRODUCT_COIN_ULTRA  = os.getenv("LS_TEST_PRODUCT_COIN_ULTRA", "")
 LS_TEST_VARIANT_COIN_SMALL  = os.getenv("LS_TEST_VARIANT_COIN_SMALL", "")
 LS_TEST_VARIANT_COIN_MEDIUM = os.getenv("LS_TEST_VARIANT_COIN_MEDIUM", "")
 LS_TEST_VARIANT_COIN_LARGE  = os.getenv("LS_TEST_VARIANT_COIN_LARGE", "")

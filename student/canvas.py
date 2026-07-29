@@ -31,14 +31,9 @@ _EXT_CONNECT_SALT = "canvas-ext-connect"
 _EXT_CONNECT_MAX_AGE_SECONDS = 15 * 60
 
 
-def _ext_serializer():
-    from itsdangerous import URLSafeTimedSerializer
-    from machreach_core.config import SECRET_KEY
-    return URLSafeTimedSerializer(SECRET_KEY, salt=_EXT_CONNECT_SALT)
-
-
-def _connection_version(client_id: int) -> int:
-    from machreach_core.db import _exec, _fetchval, get_db
+def init_connection_state_schema() -> None:
+    """Create durable token-revocation state during database startup."""
+    from machreach_core.db import _exec, get_db
     with get_db() as db:
         _exec(
             db,
@@ -46,6 +41,18 @@ def _connection_version(client_id: int) -> int:
             "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,"
             "token_version INTEGER NOT NULL DEFAULT 0)",
         )
+
+
+def _ext_serializer():
+    from itsdangerous import URLSafeTimedSerializer
+    from machreach_core.config import SECRET_KEY
+    return URLSafeTimedSerializer(SECRET_KEY, salt=_EXT_CONNECT_SALT)
+
+
+def _connection_version(client_id: int) -> int:
+    from machreach_core.db import _fetchval, get_db
+    init_connection_state_schema()
+    with get_db() as db:
         return int(
             _fetchval(
                 db,
@@ -85,13 +92,8 @@ def verify_connect_token(token: str) -> int | None:
 def revoke_connect_tokens(client_id: int) -> None:
     """Immediately invalidate every outstanding extension connect token."""
     from machreach_core.db import _exec, get_db
+    init_connection_state_schema()
     with get_db() as db:
-        _exec(
-            db,
-            "CREATE TABLE IF NOT EXISTS student_canvas_connection_state ("
-            "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,"
-            "token_version INTEGER NOT NULL DEFAULT 0)",
-        )
         _exec(
             db,
             "INSERT INTO student_canvas_connection_state(client_id, token_version) "

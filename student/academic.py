@@ -22,6 +22,7 @@ Columns added to clients
 """
 
 from __future__ import annotations
+from datetime import datetime, timedelta
 import logging
 import re
 import unicodedata
@@ -137,6 +138,35 @@ def init_academic_db() -> None:
     )
     _safe_index("idx_major_univ", "majors", "university_id")
     _safe_index("idx_major_name_norm", "majors", "name_norm")
+    _create_table_safe(
+        """CREATE TABLE IF NOT EXISTS student_academic_profile_audit (
+            id BIGSERIAL PRIMARY KEY,
+            client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            old_country_iso TEXT,
+            new_country_iso TEXT NOT NULL,
+            old_university_id INTEGER,
+            new_university_id INTEGER NOT NULL,
+            old_major_id INTEGER,
+            new_major_id INTEGER NOT NULL,
+            changed_at_utc TIMESTAMPTZ NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS student_academic_profile_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            old_country_iso TEXT,
+            new_country_iso TEXT NOT NULL,
+            old_university_id INTEGER,
+            new_university_id INTEGER NOT NULL,
+            old_major_id INTEGER,
+            new_major_id INTEGER NOT NULL,
+            changed_at_utc TEXT NOT NULL
+        )""",
+    )
+    _safe_index(
+        "idx_academic_profile_audit_client",
+        "student_academic_profile_audit",
+        "client_id",
+    )
 
     # Column additions on clients
     for col, coltype in (
@@ -716,7 +746,20 @@ def save_academic_profile(
     university_id: int,
     major_id: int,
 ) -> None:
+    from machreach_core.config import ACADEMIC_UNIVERSITY_CHANGE_COOLDOWN_DAYS
+    from student.periods import utc_now
+
+    now = utc_now()
     with get_db() as db:
+        current = _fetchone(
+            db,
+            "SELECT country_iso, university_id, major_id, academic_setup_complete "
+            "FROM clients WHERE id = %s"
+            + (" FOR UPDATE" if _USE_PG else ""),
+            (client_id,),
+        )
+        if not current:
+            raise ValueError("student profile does not exist")
         university = _fetchone(
             db,
             "SELECT id, country_iso, status FROM universities WHERE id = %s",
@@ -742,6 +785,39 @@ def save_academic_profile(
             )
         ):
             raise ValueError("major does not belong to the selected university")
+        university_changed = (
+            current.get("university_id") is not None
+            and int(current["university_id"]) != int(university_id)
+        )
+        if university_changed and ACADEMIC_UNIVERSITY_CHANGE_COOLDOWN_DAYS:
+            last_change = _fetchval(
+                db,
+                "SELECT changed_at_utc FROM student_academic_profile_audit "
+                "WHERE client_id = %s AND old_university_id IS NOT NULL "
+                "AND old_university_id <> new_university_id "
+                "ORDER BY changed_at_utc DESC LIMIT 1",
+                (client_id,),
+            )
+            if last_change:
+                parsed = datetime.fromisoformat(
+                    str(last_change).replace("Z", "+00:00")
+                )
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=now.tzinfo)
+                if now < parsed + timedelta(
+                    days=ACADEMIC_UNIVERSITY_CHANGE_COOLDOWN_DAYS
+                ):
+                    raise ValueError(
+                        "university can only be changed once every "
+                        f"{ACADEMIC_UNIVERSITY_CHANGE_COOLDOWN_DAYS} days"
+                    )
+        changed = (
+            str(current.get("country_iso") or "").upper() != country_iso.upper()
+            or current.get("university_id") is None
+            or int(current["university_id"]) != int(university_id)
+            or current.get("major_id") is None
+            or int(current["major_id"]) != int(major_id)
+        )
         _exec(
             db,
             "UPDATE clients SET country_iso = %s, university_id = %s, major_id = %s, "
@@ -750,6 +826,25 @@ def save_academic_profile(
             + " WHERE id = %s",
             (country_iso, university_id, major_id, client_id),
         )
+        if changed:
+            _exec(
+                db,
+                "INSERT INTO student_academic_profile_audit "
+                "(client_id, old_country_iso, new_country_iso, "
+                "old_university_id, new_university_id, old_major_id, "
+                "new_major_id, changed_at_utc) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    client_id,
+                    current.get("country_iso"),
+                    country_iso,
+                    current.get("university_id"),
+                    university_id,
+                    current.get("major_id"),
+                    major_id,
+                    now,
+                ),
+            )
     # Derive a canonical IANA timezone without touching unrelated settings.
     try:
         from student.timezones import tz_for_country
