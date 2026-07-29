@@ -7,6 +7,7 @@ concurrent workers cannot both consume the final available generation.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import json
 import os
 
 from machreach_core.db import _exec, _fetchone, _fetchval, get_db
@@ -41,6 +42,7 @@ def _ensure_schema(db) -> None:
             settled_at_utc {timestamp},
             failed_at_utc {timestamp},
             error TEXT NOT NULL DEFAULT ''
+            ,result_json TEXT NOT NULL DEFAULT '{{}}'
         )""",
     )
     _exec(
@@ -48,6 +50,14 @@ def _ensure_schema(db) -> None:
         "CREATE INDEX IF NOT EXISTS idx_student_ai_usage_quota "
         "ON student_ai_usage(client_id, period_start_utc, period_end_utc, status)",
     )
+    try:
+        _exec(
+            db,
+            "ALTER TABLE student_ai_usage ADD COLUMN result_json TEXT NOT NULL DEFAULT '{}'",
+        )
+    except Exception as exc:
+        if "duplicate column" not in str(exc).lower() and "already exists" not in str(exc).lower():
+            raise
 
 
 def reserve(
@@ -106,12 +116,13 @@ def reserve(
                 _fetchval(
                     db,
                     "SELECT COUNT(*) FROM student_xp WHERE client_id=%s "
-                    "AND action IN (%s,%s) AND occurred_at_utc >= %s "
+                    "AND action IN (%s,%s,%s) AND occurred_at_utc >= %s "
                     "AND occurred_at_utc < %s",
                     (
                         client_id,
                         "quiz_generated",
                         "flashcards_generated",
+                        "ai_tool_generated",
                         start.isoformat(),
                         end.isoformat(),
                     ),
@@ -197,7 +208,7 @@ def reserve(
         )
 
 
-def settle(request_key: str) -> None:
+def settle(request_key: str, result: dict | None = None) -> None:
     """Atomically settle a reservation and write its compatibility usage row."""
     with get_db() as db:
         _ensure_schema(db)
@@ -217,9 +228,10 @@ def settle(request_key: str) -> None:
         )
         _exec(
             db,
-            "UPDATE student_ai_usage SET status='settled', settled_at_utc=%s "
+            "UPDATE student_ai_usage SET status='settled', settled_at_utc=%s, "
+            "result_json=%s "
             "WHERE request_key=%s AND status='reserved'",
-            (now, request_key),
+            (now, json.dumps(result or {}, separators=(",", ":")), request_key),
         )
 
 

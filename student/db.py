@@ -632,6 +632,7 @@ def init_normalized_student_state(*, run_backfill: bool = True) -> None:
             past_due_since TIMESTAMPTZ,
             update_payment_method_url TEXT DEFAULT '',
             customer_portal_url TEXT DEFAULT '',
+            provider_event_at TIMESTAMPTZ,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""",
         """CREATE TABLE IF NOT EXISTS student_subscription_state (
@@ -647,9 +648,20 @@ def init_normalized_student_state(*, run_backfill: bool = True) -> None:
             past_due_since TEXT,
             update_payment_method_url TEXT DEFAULT '',
             customer_portal_url TEXT DEFAULT '',
+            provider_event_at TEXT,
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )""",
     )
+    try:
+        with get_db() as db:
+            _exec(
+                db,
+                "ALTER TABLE student_subscription_state ADD COLUMN provider_event_at "
+                + ("TIMESTAMPTZ" if _USE_PG else "TEXT"),
+            )
+    except Exception as exc:
+        if not _is_duplicate_column_error(exc):
+            raise
     _create_table_safe(
         """CREATE INDEX IF NOT EXISTS idx_student_subscription_provider_lookup
            ON student_subscription_state(ls_sub_id)""",

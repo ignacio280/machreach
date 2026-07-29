@@ -1,7 +1,7 @@
 import worker
 from machreach_core import lemonsqueezy
 from machreach_core.db import enqueue_async_job, get_async_job_status
-from student import analyzer, db as sdb, subscription
+from student import ai_usage, analyzer, db as sdb, subscription
 
 
 def test_ad_hoc_quiz_job_succeeds_and_persists_questions(monkeypatch, make_user):
@@ -107,6 +107,13 @@ def test_recover_worker_state_reports_recovered_jobs(monkeypatch):
 
 def test_refresh_student_plans_rolls_incomplete_work_forward(monkeypatch):
     saved = []
+    monkeypatch.setattr(subscription, "has_plus_access", lambda _cid: True)
+    monkeypatch.setattr(
+        ai_usage,
+        "reserve",
+        lambda *_args, **_kwargs: {"status": "reserved"},
+    )
+    monkeypatch.setattr(ai_usage, "settle", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(sdb, "get_all_student_client_ids", lambda: [41])
     monkeypatch.setattr(
         sdb,

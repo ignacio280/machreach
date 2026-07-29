@@ -160,6 +160,7 @@ def _subscription_from_row(row: dict | None) -> dict:
         "past_due_since": "past_due_since",
         "update_payment_method_url": "update_payment_method_url",
         "customer_portal_url": "customer_portal_url",
+        "provider_event_at": "provider_event_at",
         "updated_at": "updated_at",
     }
     result: dict = {}
@@ -206,14 +207,15 @@ def _write_subscription_row(db, client_id: int, state: dict) -> None:
         nullable(state.get("past_due_since")),
         state.get("update_payment_method_url") or "",
         state.get("customer_portal_url") or "",
+        nullable(state.get("provider_event_at")),
         state.get("updated_at") or _utcnow().isoformat(),
     )
     insert = (
         "INSERT INTO student_subscription_state "
         "(client_id, tier, status, ls_sub_id, since_at, ends_at, renews_at, "
         "quota_period_start, quota_reset_at, past_due_since, "
-        "update_payment_method_url, customer_portal_url, updated_at) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+        "update_payment_method_url, customer_portal_url, provider_event_at, updated_at) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
     )
     update = (
         "tier=excluded.tier, status=excluded.status, ls_sub_id=excluded.ls_sub_id, "
@@ -221,7 +223,8 @@ def _write_subscription_row(db, client_id: int, state: dict) -> None:
         "renews_at=excluded.renews_at, quota_period_start=excluded.quota_period_start, "
         "quota_reset_at=excluded.quota_reset_at, past_due_since=excluded.past_due_since, "
         "update_payment_method_url=excluded.update_payment_method_url, "
-        "customer_portal_url=excluded.customer_portal_url, updated_at=excluded.updated_at"
+        "customer_portal_url=excluded.customer_portal_url, "
+        "provider_event_at=excluded.provider_event_at, updated_at=excluded.updated_at"
     )
     conflict = "ON CONFLICT(client_id) DO UPDATE SET " + update
     _exec(db, insert + conflict, values)
@@ -608,11 +611,35 @@ def set_subscription_state(
     update_payment_method_url: str | None = None,
     customer_portal_url: str | None = None,
     payment_succeeded: bool = False,
+    provider_event_at: str | None = None,
 ) -> dict:
     """Persist provider lifecycle state without discarding reconciliation IDs."""
     if tier is not None and tier not in PLANS:
         return {"ok": False, "error": "Unknown plan."}
     with get_db() as db:
+        from machreach_core.db import _fetchone
+        from student.db import _USE_PG
+        current_row = _fetchone(
+            db,
+            "SELECT provider_event_at FROM student_subscription_state "
+            "WHERE client_id=%s" + (" FOR UPDATE" if _USE_PG else ""),
+            (client_id,),
+        ) or {}
+        incoming_event = _parse_iso(provider_event_at)
+        current_event = _parse_iso(current_row.get("provider_event_at"))
+        if incoming_event and current_event and incoming_event < current_event:
+            current_state = _load_subscription_row(db, client_id)
+            return {
+                "ok": True,
+                "ignored_stale": True,
+                "tier": _effective_tier(
+                    {
+                        "subscription": current_state,
+                        "plus_until": _load_promotional_entitlement(db, client_id),
+                    }
+                ),
+                "status": current_state.get("status"),
+            }
         subscription = _load_subscription_row(db, client_id)
         if tier is not None:
             subscription["tier"] = tier
@@ -635,6 +662,8 @@ def set_subscription_state(
             subscription["update_payment_method_url"] = str(update_payment_method_url)
         if customer_portal_url is not None:
             subscription["customer_portal_url"] = str(customer_portal_url)
+        if incoming_event:
+            subscription["provider_event_at"] = incoming_event.isoformat()
         if payment_succeeded or (
             tier == "plus" and not subscription.get("quota_period_start")
         ):
@@ -768,12 +797,13 @@ def generation_usage(client_id: int) -> dict:
             used = int(_fetchval(
                 db,
                 "SELECT COUNT(*) FROM student_xp WHERE client_id = %s "
-                "AND action IN (%s, %s) "
+                "AND action IN (%s, %s, %s) "
                 "AND occurred_at_utc >= %s AND occurred_at_utc < %s",
                 (
                     client_id,
                     "quiz_generated",
                     "flashcards_generated",
+                    "ai_tool_generated",
                     period_start.isoformat(),
                     reset_at.isoformat(),
                 ),

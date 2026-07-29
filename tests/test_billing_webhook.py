@@ -218,6 +218,29 @@ def test_payment_recovered_restores_access(client, make_user):
     assert ssub.get_tier(cid) == "plus"
 
 
+def test_stale_provider_event_cannot_overwrite_newer_subscription_state(make_user):
+    cid = make_user()
+    newer = ssub.set_subscription_state(
+        cid,
+        tier="plus",
+        status="active",
+        ls_sub_id=_subscription_id(cid),
+        provider_event_at="2026-07-29T12:00:00Z",
+    )
+    stale = ssub.set_subscription_state(
+        cid,
+        tier="free",
+        status="expired",
+        ls_sub_id=_subscription_id(cid),
+        provider_event_at="2026-07-28T12:00:00Z",
+    )
+
+    assert newer["ok"] is True
+    assert stale["ignored_stale"] is True
+    assert ssub.get_subscription_state(cid)["status"] == "active"
+    assert ssub.get_tier(cid) == "plus"
+
+
 def test_full_subscription_refund_cancels_renewal_and_revokes_paid_access(
     client, make_user, monkeypatch
 ):

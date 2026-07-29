@@ -85,12 +85,17 @@ def _process_student_quiz_job(job: dict):
         ok, why = _sub.can_generate_quiz_today(client_id)
         if not ok:
             raise ValueError(why)
-        ai_usage.reserve(
+        reservation = ai_usage.reserve(
             client_id,
             request_key=reservation_key,
             feature="quiz_worker",
             usage_kind="quiz_generated",
         )
+        if reservation.get("status") == "settled":
+            import json
+            saved = json.loads(reservation.get("result_json") or "{}")
+            _set_quiz_job_status(client_id, "done", "Quiz generated!", **saved)
+            return
 
         course_id = data.get("course_id")
         ad_hoc_source = (data.get("source_text") or "").strip()
@@ -148,7 +153,15 @@ def _process_student_quiz_job(job: dict):
             quiz_id = sdb.create_quiz(client_id, title, difficulty, course_id=course_id, exam_id=exam_id)
             sdb.add_quiz_questions(quiz_id, questions)
 
-        ai_usage.settle(reservation_key)
+        ai_usage.settle(
+            reservation_key,
+            {
+                "quiz_id": quiz_id,
+                "question_count": len(questions),
+                "requested": count,
+                "short": len(questions) < count,
+            },
+        )
 
         _set_quiz_job_status(
             client_id,
@@ -206,12 +219,19 @@ def _process_student_flashcard_job(job: dict):
         ok, why = _sub.can_generate_flashcards_today(client_id)
         if not ok:
             raise ValueError(why)
-        ai_usage.reserve(
+        reservation = ai_usage.reserve(
             client_id,
             request_key=reservation_key,
             feature="flashcard_worker",
             usage_kind="flashcards_generated",
         )
+        if reservation.get("status") == "settled":
+            import json
+            saved = json.loads(reservation.get("result_json") or "{}")
+            _set_flashcard_job_status(
+                client_id, "done", "Flashcards generated!", **saved
+            )
+            return
 
         course_id = data.get("course_id")
         exam_id = data.get("exam_id")
@@ -270,7 +290,14 @@ def _process_student_flashcard_job(job: dict):
             source_type=source_type,
         )
         sdb.add_flashcards(deck_id, cards)
-        ai_usage.settle(reservation_key)
+        ai_usage.settle(
+            reservation_key,
+            {
+                "deck_id": deck_id,
+                "card_count": len(cards),
+                "requested": count,
+            },
+        )
         _set_flashcard_job_status(
             client_id,
             "done",
@@ -401,6 +428,7 @@ def refresh_student_plans():
     assignments and regenerate the study plan with those rolled over."""
     try:
         from student import db as sdb
+        from student import ai_usage, subscription
         from student.analyzer import generate_study_plan
         import json
         from datetime import datetime
@@ -409,7 +437,10 @@ def refresh_student_plans():
         today = datetime.now().strftime("%Y-%m-%d")
 
         for client_id in client_ids:
+            reservation_key = f"daily-plan:{client_id}:{today}"
             try:
+                if not subscription.has_plus_access(client_id):
+                    continue
                 # Check if there are incomplete assignments
                 incomplete = sdb.get_incomplete_assignments(client_id, today)
 
@@ -443,6 +474,14 @@ def refresh_student_plans():
                 preferences = plan_row.get("preferences_json", {}) if plan_row else {}
 
                 # Regenerate
+                reservation = ai_usage.reserve(
+                    client_id,
+                    request_key=reservation_key,
+                    feature="daily_plan_refresh",
+                    usage_kind="ai_tool_generated",
+                )
+                if reservation.get("status") == "settled":
+                    continue
                 plan = generate_study_plan(
                     courses_data, preferences,
                     schedule_settings=schedule_list or None,
@@ -451,9 +490,16 @@ def refresh_student_plans():
                 )
                 if plan.get("daily_plan"):
                     sdb.save_study_plan(client_id, plan, preferences)
+                    ai_usage.settle(reservation_key, {"refreshed": True})
                     print(f"[STUDENT] Refreshed study plan"
                           f" ({len(incomplete)} incomplete assignments rolled over)")
+                else:
+                    ai_usage.fail(reservation_key, "empty plan")
             except Exception as e:
+                try:
+                    ai_usage.fail(reservation_key, str(e))
+                except Exception:
+                    pass
                 print(f"[STUDENT] Plan refresh failed: {type(e).__name__}")
                 _report_worker_error("STUDENT_PLAN_ACCOUNT", e)
     except Exception as e:

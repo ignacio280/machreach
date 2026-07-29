@@ -3868,6 +3868,12 @@ def lemonsqueezy_webhook():
     custom = (meta.get("custom_data") or {})
     data = body.get("data") or {}
     attrs = (data.get("attributes") or {})
+    provider_event_at = str(
+        attrs.get("updated_at")
+        or attrs.get("created_at")
+        or meta.get("event_created_at")
+        or ""
+    ).strip() or None
     payment_events = {
         "subscription_payment_failed",
         "subscription_payment_success",
@@ -3963,6 +3969,7 @@ def lemonsqueezy_webhook():
             "renews_at": attrs.get("renews_at"),
             "update_payment_method_url": urls.get("update_payment_method"),
             "customer_portal_url": urls.get("customer_portal"),
+            "provider_event_at": provider_event_at,
         }
         provider_fields = {
             key: str(value) for key, value in provider_fields.items() if value is not None

@@ -20,6 +20,7 @@ import logging
 
 import re
 from typing import Any
+from uuid import uuid4
 
 
 from datetime import datetime, timedelta, timezone
@@ -2534,9 +2535,21 @@ Return this JSON shape:
         mode = (data.get("mode") or "brain").strip().lower()
         if mode not in {"brain", "studio", "exam"}:
             return jsonify({"error": "Modo invalido."}), 400
+        reservation_key = (
+            request.headers.get("X-Idempotency-Key")
+            or f"course-brain:{cid}:{uuid4().hex}"
+        )
         try:
+            from student import ai_usage
+            ai_usage.reserve(
+                cid,
+                request_key=reservation_key,
+                feature=f"course_brain_{mode}",
+                usage_kind="ai_tool_generated",
+            )
             ctx = _course_brain_context(cid, dict(course))
             result = _run_course_brain_ai(mode, ctx)
+            ai_usage.settle(reservation_key)
             return jsonify({
                 "ok": True,
                 "mode": mode,
@@ -2553,6 +2566,11 @@ Return this JSON shape:
             log.exception("Course Brain returned invalid JSON")
             return jsonify({"error": "La IA devolvio una respuesta invalida. Intenta de nuevo."}), 500
         except Exception as e:
+            try:
+                from student.ai_usage import fail
+                fail(reservation_key, str(e))
+            except Exception:
+                pass
             log.exception("Course Brain failed for course %s", course_id)
             return jsonify({"error": f"No se pudo generar el estudio del curso: {e}"}), 500
 
@@ -4279,7 +4297,7 @@ Return this JSON shape:
         return units
 
 
-    def _planner_ai_material_units(course_name: str, exam_name: str, source_text: str, target_units: int = 8) -> list[dict]:
+    def _planner_ai_material_units(client_id: int, request_key: str, course_name: str, exam_name: str, source_text: str, target_units: int = 8) -> list[dict]:
         text = _planner_plain_text(source_text, max_chars=120000)
         if not text:
             return []
@@ -4307,7 +4325,14 @@ Material:
 {text}
 """
         try:
+            from student import ai_usage
             from student.analyzer import _ai
+            ai_usage.reserve(
+                client_id,
+                request_key=request_key,
+                feature="planner_material_blocks",
+                usage_kind="ai_tool_generated",
+            )
             resp = _ai().chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
@@ -4315,6 +4340,7 @@ Material:
                 max_tokens=6000,
                 response_format={"type": "json_object"},
             )
+            ai_usage.settle(request_key)
             raw = (resp.choices[0].message.content or "").strip()
             data = json.loads(re.sub(r"^```json?\s*|\s*```$", "", raw))
             units = data.get("units") if isinstance(data, dict) else None
@@ -4351,6 +4377,11 @@ Material:
                 })
             return cleaned
         except Exception as e:
+            try:
+                from student.ai_usage import fail
+                fail(request_key, str(e))
+            except Exception:
+                pass
             log.warning("planner material AI split failed: %s", e)
             return []
 
@@ -4425,7 +4456,18 @@ Material:
             target_units = int(data.get("target_units") or 8)
         except Exception:
             target_units = 8
-        units = _planner_ai_material_units(course.get("name") or "Curso", exam.get("name") or "Prueba", source_text, target_units)
+        reservation_key = (
+            request.headers.get("X-Idempotency-Key")
+            or f"planner-material:{_cid()}:{uuid4().hex}"
+        )
+        units = _planner_ai_material_units(
+            _cid(),
+            reservation_key,
+            course.get("name") or "Curso",
+            exam.get("name") or "Prueba",
+            source_text,
+            target_units,
+        )
         if not units:
             units = _planner_fallback_units(source_text, target_units)
         return jsonify({"ok": True, "units": units, "files": file_payload})
