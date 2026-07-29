@@ -644,7 +644,9 @@ def test_subscription_reconcile_restores_provider_status(
     state = ssub.get_subscription_state(cid)
     assert state["ls_sub_id"] == "provider-sub-42"
     assert state["status"] == "active"
-    assert state["renews_at"] == "2030-01-15T00:00:00Z"
+    assert datetime.fromisoformat(
+        state["renews_at"].replace("Z", "+00:00")
+    ) == datetime.fromisoformat("2030-01-15T00:00:00+00:00")
 
 
 def test_subscription_reconcile_prefers_active_provider_record(
