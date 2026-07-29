@@ -3976,15 +3976,31 @@ def lemonsqueezy_webhook():
         existing_subscription_id = str(
             (ssub.get_subscription_state(cid) if ssub else {}).get("ls_sub_id") or ""
         ).strip()
+        has_full_provider_identity = bool(
+            expected_store
+            and store_id == expected_store
+            and expected_product
+            and product_id == expected_product
+            and expected_variant
+            and variant_id == expected_variant
+        )
+        # Lemon Squeezy currently omits product_id from some subscription
+        # lifecycle payloads. Once a subscription was admitted with the full
+        # store/product/variant tuple, keep accepting its later signed events
+        # only when the immutable subscription binding plus store and variant
+        # still match. An unbound/new subscription never gets this fallback.
+        has_bound_provider_identity = bool(
+            not product_id
+            and provider_subscription_id
+            and provider_subscription_id == existing_subscription_id
+            and expected_store
+            and store_id == expected_store
+            and expected_variant
+            and variant_id == expected_variant
+        )
         provider_is_plus = bool(
-            (
-                expected_store
-                and store_id == expected_store
-                and expected_product
-                and product_id == expected_product
-                and expected_variant
-                and variant_id == expected_variant
-            )
+            has_full_provider_identity
+            or has_bound_provider_identity
             or (
                 event_name in payment_events
                 and provider_subscription_id

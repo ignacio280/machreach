@@ -103,6 +103,31 @@ def test_subscription_name_cannot_bypass_variant_allowlist(client, make_user):
     assert ssub.get_tier(cid) == "free"
 
 
+def test_bound_subscription_accepts_lifecycle_payload_without_product_id(
+    client, make_user
+):
+    cid = make_user()
+    assert _post(
+        client, _student_event("subscription_created", cid, "plus")
+    ).status_code == 200
+
+    updated = _student_event("subscription_updated", cid, "plus")
+    updated["data"]["attributes"]["product_id"] = None
+
+    assert _post(client, updated).status_code == 200
+    assert ssub.get_subscription_state(cid)["ls_sub_id"] == _subscription_id(cid)
+    assert ssub.get_tier(cid) == "plus"
+
+
+def test_unbound_subscription_without_product_id_is_rejected(client, make_user):
+    cid = make_user()
+    created = _student_event("subscription_created", cid, "plus")
+    created["data"]["attributes"]["product_id"] = None
+
+    assert _post(client, created).status_code == 400
+    assert ssub.get_tier(cid) == "free"
+
+
 def test_provider_event_id_is_the_durable_idempotency_key(client, make_user):
     cid = make_user()
     event = _student_event("subscription_created", cid)
