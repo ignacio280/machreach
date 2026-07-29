@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
@@ -388,7 +389,7 @@ def _grant_paid_benefits(
         return False
     changed = False
     current_month = _current_bonus_month(client_id, db=db)
-    from machreach_core.db import _exec, _fetchone
+    from machreach_core.db import _exec, _fetchone, _fetchval
 
     with _optional_db_work(db, "streak_insurance", client_id):
         claimed = _exec(
@@ -520,7 +521,7 @@ def redeem_pending_referral_reward(
     The pending marker is deleted only after both the idempotent redemption
     ledger and promotional entitlement have been persisted.
     """
-    from machreach_core.db import _exec, _fetchone
+    from machreach_core.db import _exec, _fetchone, _fetchval
 
     with get_db() as db:
         if not _USE_PG:
@@ -545,6 +546,17 @@ def redeem_pending_referral_reward(
                 (referred_id,),
             )
             return None
+        rolling_limit = max(1, int(os.getenv("REFERRAL_REWARD_30D_MAX", "20")))
+        cutoff = (_utcnow() - timedelta(days=30)).isoformat()
+        recent_rewards = int(
+            _fetchval(
+                db,
+                "SELECT COUNT(*) FROM student_referral_reward_audit "
+                "WHERE referrer_id=%s AND status='granted' AND created_at >= %s",
+                (referrer_id, cutoff),
+            )
+            or 0
+        )
         recorded = _exec(
             db,
             "INSERT INTO student_referrals (code, referrer_id, referred_id) "
@@ -558,14 +570,71 @@ def redeem_pending_referral_reward(
                 (referred_id,),
             )
             return None
+        if recent_rewards >= rolling_limit:
+            _exec(
+                db,
+                "INSERT INTO student_referral_reward_audit "
+                "(referred_id,referrer_id,days,status) VALUES (%s,%s,%s,'withheld') "
+                "ON CONFLICT(referred_id) DO NOTHING",
+                (referred_id, referrer_id, days),
+            )
+            _exec(
+                db,
+                "INSERT INTO operational_events(event_type,source) "
+                "VALUES (%s,%s)",
+                ("referral_reward_withheld", "rolling_cap"),
+            )
+            _exec(
+                db,
+                "DELETE FROM student_pending_referrals WHERE referred_id = %s",
+                (referred_id,),
+            )
+            return None
         plus_until = _extend_promotional_entitlement(db, referrer_id, days)
         _grant_paid_benefits(db, referrer_id, "plus")
+        _exec(
+            db,
+            "INSERT INTO student_referral_reward_audit "
+            "(referred_id,referrer_id,days,status) VALUES (%s,%s,%s,'granted') "
+            "ON CONFLICT(referred_id) DO NOTHING",
+            (referred_id, referrer_id, days),
+        )
         _exec(
             db,
             "DELETE FROM student_pending_referrals WHERE referred_id = %s",
             (referred_id,),
         )
         return referrer_id, plus_until
+
+
+def revoke_referral_reward(referred_id: int) -> bool:
+    """Administrative backend primitive for reversing one abusive reward."""
+    from machreach_core.db import _exec, _fetchone
+
+    with get_db() as db:
+        if not _USE_PG:
+            db.execute("BEGIN IMMEDIATE")
+        row = _fetchone(
+            db,
+            "SELECT * FROM student_referral_reward_audit WHERE referred_id=%s"
+            + (" FOR UPDATE" if _USE_PG else ""),
+            (referred_id,),
+        )
+        if not row or row.get("status") != "granted":
+            return False
+        referrer_id = int(row["referrer_id"])
+        current = _parse_iso(_load_promotional_entitlement(db, referrer_id))
+        now = _utcnow()
+        if current and current > now:
+            reduced = max(now, current - timedelta(days=int(row["days"])))
+            _write_promotional_entitlement(db, referrer_id, reduced.isoformat())
+        result = _exec(
+            db,
+            "UPDATE student_referral_reward_audit SET status='revoked', "
+            "revoked_at=%s WHERE referred_id=%s AND status='granted'",
+            (now.isoformat(), referred_id),
+        )
+        return bool(result.rowcount)
 
 
 def plus_grant_until(client_id: int) -> str | None:

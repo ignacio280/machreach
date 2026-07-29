@@ -14,6 +14,31 @@ def test_canvas_extension_status_rejects_invalid_token(client):
     assert response.get_json()["error"] == "invalid_token"
 
 
+def test_canvas_connect_token_can_be_revoked(make_user):
+    client_id = make_user("Canvas Revoke Student")
+    token = make_connect_token(client_id)
+    assert verify_connect_token(token) == client_id
+
+    canvas_mod.revoke_connect_tokens(client_id)
+
+    assert verify_connect_token(token) is None
+    assert verify_connect_token(make_connect_token(client_id)) == client_id
+
+
+def test_canvas_extension_import_rejects_oversized_course_list(client, make_user):
+    client_id = make_user("Canvas Import Limit")
+    response = client.post(
+        "/api/student/canvas/extension-import",
+        json={
+            "token": make_connect_token(client_id),
+            "courses": [{"id": index, "name": "Course"} for index in range(1001)],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "too_many_courses"
+
+
 def test_canvas_extension_status_only_counts_canvas_courses(client, make_user):
     client_id = make_user("Canvas Status Student")
     token = make_connect_token(client_id)

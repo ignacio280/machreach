@@ -37,20 +37,68 @@ def _ext_serializer():
     return URLSafeTimedSerializer(SECRET_KEY, salt=_EXT_CONNECT_SALT)
 
 
+def _connection_version(client_id: int) -> int:
+    from machreach_core.db import _exec, _fetchval, get_db
+    with get_db() as db:
+        _exec(
+            db,
+            "CREATE TABLE IF NOT EXISTS student_canvas_connection_state ("
+            "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,"
+            "token_version INTEGER NOT NULL DEFAULT 0)",
+        )
+        return int(
+            _fetchval(
+                db,
+                "SELECT token_version FROM student_canvas_connection_state "
+                "WHERE client_id=%s",
+                (client_id,),
+            )
+            or 0
+        )
+
+
 def make_connect_token(client_id: int) -> str:
     """Short-lived signed token identifying a student to the browser extension."""
-    return _ext_serializer().dumps(int(client_id))
+    return _ext_serializer().dumps(
+        {"client_id": int(client_id), "version": _connection_version(client_id)}
+    )
 
 
 def verify_connect_token(token: str) -> int | None:
     """Return the client_id encoded in a connect token, or None if invalid."""
     try:
-        return int(_ext_serializer().loads(
+        payload = _ext_serializer().loads(
             (token or "").strip(),
             max_age=_EXT_CONNECT_MAX_AGE_SECONDS,
-        ))
+        )
+        if isinstance(payload, dict):
+            client_id = int(payload["client_id"])
+            version = int(payload.get("version") or 0)
+        else:
+            client_id = int(payload)
+            version = 0
+        return client_id if version == _connection_version(client_id) else None
     except Exception:
         return None
+
+
+def revoke_connect_tokens(client_id: int) -> None:
+    """Immediately invalidate every outstanding extension connect token."""
+    from machreach_core.db import _exec, get_db
+    with get_db() as db:
+        _exec(
+            db,
+            "CREATE TABLE IF NOT EXISTS student_canvas_connection_state ("
+            "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,"
+            "token_version INTEGER NOT NULL DEFAULT 0)",
+        )
+        _exec(
+            db,
+            "INSERT INTO student_canvas_connection_state(client_id, token_version) "
+            "VALUES (%s, 1) ON CONFLICT(client_id) DO UPDATE SET "
+            "token_version=student_canvas_connection_state.token_version + 1",
+            (client_id,),
+        )
 
 
 # ── standalone helpers ──────────────────────────────────────

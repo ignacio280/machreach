@@ -874,7 +874,7 @@ def register_student_routes(app, csrf, limiter):
 
     # Import here to avoid circular imports at module level
 
-    from student.canvas import extract_text_from_pdf, extract_text_from_docx, make_connect_token, verify_connect_token
+    from student.canvas import extract_text_from_pdf, extract_text_from_docx, make_connect_token, revoke_connect_tokens, verify_connect_token
 
     from student.analyzer import (generate_flashcards, generate_quiz)
 
@@ -2319,6 +2319,8 @@ Return this JSON shape:
         courses = data.get("courses")
         if not isinstance(courses, list):
             return jsonify({"error": "courses must be a list"}), 400
+        if len(courses) > 1000:
+            return jsonify({"error": "too_many_courses"}), 400
 
         # University the courses belong to — used to feed the shared autofill
         # catalog so students who DON'T use Canvas still get suggestions.
@@ -2332,17 +2334,19 @@ Return this JSON shape:
                 cid_canvas = int(c.get("id"))
             except (TypeError, ValueError):
                 continue
-            name = (c.get("name") or c.get("course_code") or f"Course {cid_canvas}")
-            code = c.get("course_code") or ""
+            name = str(
+                c.get("name") or c.get("course_code") or f"Course {cid_canvas}"
+            )[:200]
+            code = str(c.get("course_code") or "")[:64]
             term = ""
             t = c.get("term") or {}
             if isinstance(t, dict):
-                term = t.get("name", "") or ""
+                term = str(t.get("name", "") or "")[:120]
             normalized_courses.append({
                 "canvas_course_id": cid_canvas,
-                "name": str(name),
-                "code": str(code),
-                "term": str(term),
+                "name": name,
+                "code": code,
+                "term": term,
             })
 
         try:
@@ -2371,6 +2375,22 @@ Return this JSON shape:
             "archived": result["archived"],
             "synced_at": datetime.now(timezone.utc).isoformat(),
         })
+
+    @app.route("/api/student/canvas/disconnect", methods=["POST"])
+    def student_canvas_disconnect():
+        if not _logged_in():
+            return jsonify({"error": "Unauthorized"}), 401
+        client_id = _cid()
+        revoke_connect_tokens(client_id)
+        from machreach_core.db import _exec, get_db
+        with get_db() as db:
+            _exec(
+                db,
+                "UPDATE student_courses SET canvas_active = %s "
+                "WHERE client_id = %s AND canvas_course_id > 0",
+                (False, client_id),
+            )
+        return jsonify({"ok": True})
 
     @app.route("/api/student/canvas/extension-status", methods=["POST"])
     @csrf.exempt

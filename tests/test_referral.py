@@ -149,3 +149,41 @@ def test_signup_route_rewards_inviter_after_verify(make_user, client, monkeypatc
     # Now the inviter gets their free week.
     assert sdb.referral_count(owner) == 1
     assert ssub.get_tier(owner) == "plus"
+
+
+def test_referral_rolling_cap_withholds_excess_reward(make_user, monkeypatch):
+    monkeypatch.setenv("REFERRAL_REWARD_30D_MAX", "1")
+    owner = make_user("Referral Cap Owner")
+    code = sdb.get_or_create_referral_code(owner)
+    first = make_user("Referral First")
+    second = make_user("Referral Second")
+    sdb.set_pending_referral(first, code)
+    sdb.set_pending_referral(second, code)
+
+    assert ssub.redeem_pending_referral_reward(first) is not None
+    first_expiry = ssub.plus_grant_until(owner)
+    assert ssub.redeem_pending_referral_reward(second) is None
+
+    assert ssub.plus_grant_until(owner) == first_expiry
+    with get_db() as db:
+        withheld = _fetchone(
+            db,
+            "SELECT status FROM student_referral_reward_audit WHERE referred_id=%s",
+            (second,),
+        )
+    assert withheld["status"] == "withheld"
+
+
+def test_referral_reward_can_be_revoked_once(make_user):
+    owner = make_user("Referral Revoke Owner")
+    referred = make_user("Referral Revoke Friend")
+    code = sdb.get_or_create_referral_code(owner)
+    sdb.set_pending_referral(referred, code)
+    assert ssub.redeem_pending_referral_reward(referred) is not None
+    before = ssub._parse_iso(ssub.plus_grant_until(owner))
+
+    assert ssub.revoke_referral_reward(referred) is True
+    assert ssub.revoke_referral_reward(referred) is False
+    after = ssub._parse_iso(ssub.plus_grant_until(owner))
+    assert before is not None
+    assert after is None or after < before

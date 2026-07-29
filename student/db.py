@@ -727,6 +727,24 @@ def init_normalized_student_state(*, run_backfill: bool = True) -> None:
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )""",
     )
+    _create_table_safe(
+        """CREATE TABLE IF NOT EXISTS student_referral_reward_audit (
+            referred_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            referrer_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            days INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            revoked_at TIMESTAMPTZ
+        )""",
+        """CREATE TABLE IF NOT EXISTS student_referral_reward_audit (
+            referred_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            referrer_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            days INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            revoked_at TEXT
+        )""",
+    )
 
     for column, definition in (
         ("university_id", "INTEGER"),

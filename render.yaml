@@ -49,6 +49,8 @@ services:
         value: "120"
       - key: AI_GLOBAL_DAILY_MAX
         value: "5000"
+      - key: REFERRAL_REWARD_30D_MAX
+        value: "20"
       - key: BASE_URL
         sync: false
       - key: RATELIMIT_STORAGE_URI
@@ -143,6 +145,8 @@ services:
         value: "120"
       - key: AI_GLOBAL_DAILY_MAX
         value: "5000"
+      - key: REFERRAL_REWARD_30D_MAX
+        value: "20"
       - key: BASE_URL
         sync: false
       - key: LEMON_SQUEEZY_API_KEY
