@@ -5951,6 +5951,10 @@ Material:
         """Referral page: share your code, earn a free week of Plus per friend."""
         if not _logged_in():
             return redirect(url_for("login"))
+        return redirect(url_for("student_friends_page"))
+
+        # Kept unreachable for one release so old deployments can roll back
+        # without losing the former template; remove after the redirect settles.
         from machreach_core.config import BASE_URL
         from student import subscription as ssub
         cid = _cid()
@@ -7654,7 +7658,7 @@ Material:
             (bool(courses), "Agrega tus cursos", "/student/courses"),
             (_ob_focus, "Inicia tu primera sesión de enfoque", "/student/focus"),
             (_ob_ai, "Genera tu primer quiz o set de flashcards", "/student/quizzes"),
-            (_ob_invite, "Invita a un amigo y gana una semana de Plus gratis", "/student/invite"),
+            (_ob_invite, "Invita a un amigo y gana una semana de Plus gratis", "/student/friends"),
         ]
         _ob_done = sum(1 for d, _, _ in _ob_items if d)
         _mr_onboarding_html = ""
@@ -8293,7 +8297,13 @@ Material:
           if (e.key === 'Escape') window.closeSemesterMenu();
         }});
         window.addEventListener('resize', window.closeSemesterMenu);
-        window.addEventListener('scroll', window.closeSemesterMenu, true);
+        window.handleSemesterViewportScroll = function handleSemesterViewportScroll(event) {{
+          var menu = document.getElementById('semester-menu');
+          if (!menu || menu.hidden) return;
+          if (event && (event.target === menu || menu.contains(event.target))) return;
+          window.positionSemesterMenu();
+        }};
+        window.addEventListener('scroll', window.handleSemesterViewportScroll, true);
 
         async function setCurrentSemester(label) {{
           if (label === '') return;  // ignore the placeholder
@@ -8359,9 +8369,6 @@ Material:
                 var reports = d.passed_count === 1 ? 'reporte' : 'reportes';
                 box.textContent = 'Benchmark anónimo del mismo ramo canónico, universidad y cohorte (mínimo 5 estudiantes): quienes aprobaron estudiaron ' + d.avg_hours + 'h y terminaron con nota final promedio ' + d.avg_final_grade + ' (' + d.passed_count + ' ' + reports + ', ' + d.pass_rate + '% aprobados).';
               }}
-              box.style.display = 'block';
-            }} else if (d && d.suppressed) {{
-              box.textContent = 'Privacidad del benchmark: solo combinamos el mismo ramo canónico, universidad y cohorte. Se muestra al reunir al menos ' + (d.min_required || 5) + ' resultados anónimos.';
               box.style.display = 'block';
             }}
           }} catch(e) {{}}
@@ -19095,7 +19102,6 @@ No markdown, no code fences. ONLY JSON.
             "no_plus_grant": "No active referral grant yet" if _lang == "en" else "A&uacute;n no hay Plus referido activo",
             "copy_link": "Copy link" if _lang == "en" else "Copiar enlace",
             "copied": "Copied" if _lang == "en" else "Copiado",
-            "open_invite_page": "Open invite page" if _lang == "en" else "Ver p&aacute;gina de invitaciones",
         }
 
         return _s_render("Friends" if _lang == "en" else "Amigos", f"""
@@ -19280,6 +19286,7 @@ No markdown, no code fences. ONLY JSON.
           .fr-referral h3 {{ color:#1A1A1F; }}
           .fr-referral .fr-note {{ color:#48443E; }}
           .fr-referral-badge {{ display:inline-flex;align-items:center;gap:8px;min-height:30px;padding:0 12px;border:2px solid #FF7A3D;border-radius:999px;background:#FFF3EA;color:#FF7A3D;font-size:11px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;box-shadow:0 3px 0 rgba(26,26,31,.92); }}
+          .fr-referral-badge + h3 {{ margin-top:22px!important; }}
           .fr-referral-copy {{ display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin-top:18px; }}
           .fr-referral-link {{ min-width:0;height:48px;border:2px solid #1A1A1F;border-radius:16px;background:#FFFDF8;color:#1A1A1F;padding:0 14px;font-weight:850;box-sizing:border-box;outline:none;box-shadow:0 3px 0 rgba(26,26,31,.86); }}
           .fr-referral-link:focus {{ border-color:#FFB36B;box-shadow:0 0 0 3px rgba(255,179,107,.18); }}
@@ -19384,7 +19391,7 @@ No markdown, no code fences. ONLY JSON.
               <div class="fr-panel-top">
                 <div>
                   <div class="fr-referral-badge">{_fr["invite_math"]}</div>
-                  <h3 style="margin-top:12px;">{_fr["invite_title"]}</h3>
+                  <h3>{_fr["invite_title"]}</h3>
                 </div>
               </div>
               <div class="fr-note">{_fr["invite_sub"]}</div>
@@ -19393,7 +19400,6 @@ No markdown, no code fences. ONLY JSON.
                 <input id="fr-ref-link" class="fr-referral-link" readonly value="{_esc(ref_link)}">
                 <button id="fr-ref-copy" class="fr-btn orange" type="button">{_fr["copy_link"]}</button>
               </div>
-              <a class="fr-btn ghost" href="/student/invite" style="margin-top:12px;text-decoration:none;width:max-content;">{_fr["open_invite_page"]}</a>
             </div>
             <div class="fr-referral-side">
               <div class="fr-referral-stat">
@@ -19939,13 +19945,7 @@ No markdown, no code fences. ONLY JSON.
     box-shadow:0 8px 0 var(--lb-ink),0 28px 74px rgba(20,18,30,.13);
   }
   #mr-lb-page .lb-hero::after {
-    inset:auto 24px 22px auto;
-    width:220px;
-    height:120px;
-    border:2px dashed rgba(26,26,31,.16);
-    border-radius:24px;
-    background:transparent;
-    filter:none;
+    display:none;
   }
   #mr-lb-page .lb-hero h2 {
     font-size:62px;
@@ -20617,7 +20617,7 @@ No markdown, no code fences. ONLY JSON.
         board.innerHTML = `<div class="lb-empty" style="text-align:center;">
           <div style="font-size:34px;margin-bottom:6px;">🤝</div>
           <p style="margin:0 0 14px;">${t("You're the only one on your friends board so far.", 'Por ahora estás solo en tu ranking de amigos.')}</p>
-          <a href="/student/invite" class="lb-invite-btn">${t('Invite some friends!', '¡Invita a tus amigos!')}</a>
+          <a href="/student/friends" class="lb-invite-btn">${t('Invite some friends!', '¡Invita a tus amigos!')}</a>
         </div>`;
         return;
       }
@@ -21851,7 +21851,7 @@ No markdown, no code fences. ONLY JSON.
                 tag = f'<span style="color:#94a3b8;">{cfg["xp_required"]} XP desbloqueado</span>'
                 btn = f'<button class="btn btn-sm btn-primary" onclick="buyBanner(\'{key}\')">Comprar ({cfg["price_coins"]} \U0001FA99)</button>'
             banner_cards.append(
-                f'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
+                f'<div class="shop-product-card shop-banner-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">'
                 f'<div class="bnr-anim-host {(cfg.get("anim_class") or "") if cfg.get("animated") else ""}" style="height:90px;background:{cfg["css"]};"></div>'
                 f'<div style="padding:14px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}{plus_pill}</div>'
                 f'<div style="font-size:12px;margin-top:4px;">{tag}</div>'
@@ -21897,7 +21897,7 @@ No markdown, no code fences. ONLY JSON.
                 '</div>'
             )
             flag_cards.append(
-                '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;padding:12px;">'
+                '<div class="shop-product-card shop-flag-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;padding:12px;">'
                 f'{preview}'
                 f'<div style="margin-top:10px;"><div style="font-weight:700;font-size:15px;">{cfg["name"]}{plus_pill}</div>'
                 f'<div style="font-size:12px;margin-top:4px;">{tag}</div>'
@@ -22075,7 +22075,7 @@ No markdown, no code fences. ONLY JSON.
             tag_html = (f'<div style="position:absolute;top:8px;right:8px;background:linear-gradient(90deg,#f59e0b,#ec4899);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;letter-spacing:.04em;">{pcfg["tag"]}</div>'
                         if pcfg.get("tag") else '')
             coin_pack_cards.append(
-                f'<div style="position:relative;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center;">'
+                f'<div class="shop-product-card shop-coin-pack-card" style="position:relative;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center;">'
                 f'  {tag_html}'
                 f'  <div style="font-size:38px;line-height:1;">\U0001FA99</div>'
                 f'  <div style="font-size:13px;color:var(--text-muted);margin-top:6px;">{pcfg["name"]}</div>'
@@ -22128,6 +22128,75 @@ No markdown, no code fences. ONLY JSON.
           .shop-cd button:disabled {{ cursor:not-allowed!important;box-shadow:none!important;opacity:.58; }}
           .sh-active-chip {{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:rgba(255,255,255,.7); border-radius:999px; font-size:12px; font-weight:600; color:#78350f; }}
           .sh-cd {{ font-variant-numeric: tabular-nums; }}
+          :root[data-theme="dark"] .shop-cd {{
+            --card:#242129;
+            --card-bg:#242129;
+            --bg:#15131A;
+            --text:#FFF8E8;
+            --text-muted:#BDB5AA;
+            --border:#514A57;
+            color:#FFF8E8;
+          }}
+          :root[data-theme="dark"] .shop-cd h1 {{ color:#FFF8E8; }}
+          :root[data-theme="dark"] .shop-cd .card,
+          :root[data-theme="dark"] .shop-cd .stat-card {{
+            background:#1D1B22!important;
+            border-color:#49434F!important;
+            color:#FFF8E8!important;
+            box-shadow:0 1px 0 rgba(255,255,255,.035),0 10px 30px rgba(0,0,0,.22)!important;
+          }}
+          :root[data-theme="dark"] .shop-cd .card-header {{ border-bottom-color:#49434F!important; }}
+          :root[data-theme="dark"] .shop-cd .card-header h2 {{ color:#FFF8E8!important; }}
+          :root[data-theme="dark"] .shop-cd .shop-tabs {{
+            background:#242129;
+            border-color:#49434F;
+          }}
+          :root[data-theme="dark"] .shop-cd .shop-tab {{ color:#BDB5AA; }}
+          :root[data-theme="dark"] .shop-cd .shop-tab[aria-selected="true"] {{
+            background:#39343E;
+            color:#FFF8E8;
+            box-shadow:0 2px 10px rgba(0,0,0,.3);
+          }}
+          :root[data-theme="dark"] .shop-cd .shop-plan-card,
+          :root[data-theme="dark"] .shop-cd .shop-product-card,
+          :root[data-theme="dark"] .shop-cd [style*="background:var(--card)"] {{
+            background:#242129!important;
+            color:#FFF8E8!important;
+            border-color:#514A57!important;
+          }}
+          :root[data-theme="dark"] .shop-cd .shop-plan-card--plus {{
+            background:linear-gradient(145deg,#282230,#221E2B)!important;
+            border-color:#8B5CF6!important;
+          }}
+          :root[data-theme="dark"] .shop-cd .shop-price,
+          :root[data-theme="dark"] .shop-cd .shop-product-card [style*="font-weight:800"],
+          :root[data-theme="dark"] .shop-cd .shop-product-card [style*="font-weight:700"] {{
+            color:#FFF8E8!important;
+          }}
+          :root[data-theme="dark"] .shop-cd .shop-price span,
+          :root[data-theme="dark"] .shop-cd .shop-billing-terms,
+          :root[data-theme="dark"] .shop-cd .shop-restore span {{
+            color:#BDB5AA;
+          }}
+          :root[data-theme="dark"] .shop-cd .shop-restore {{
+            border-top-color:#49434F;
+            color:#FFF8E8;
+          }}
+          :root[data-theme="dark"] .shop-cd .btn-outline,
+          :root[data-theme="dark"] .shop-cd .btn-ghost {{
+            background:#302C35!important;
+            color:#FFF8E8!important;
+            border-color:#5A5361!important;
+          }}
+          :root[data-theme="dark"] .shop-cd .shop-billing-unavailable {{
+            background:#332A19;
+            border-color:#8A6727;
+            color:#F6D58C;
+          }}
+          :root[data-theme="dark"] .shop-cd .sh-active-chip {{
+            background:#302C35;
+            color:#FFD0B5;
+          }}
           @media (max-width:680px) {{
             .shop-cd h1 {{ font-size:44px; }}
             .shop-tabs {{ top:58px; }}

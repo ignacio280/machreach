@@ -40,7 +40,6 @@ def active_student(client, make_user):
         "/student/focus",
         "/student/friends",
         "/student/gpa",
-        "/student/invite",
         "/student/leaderboard",
         "/student/planner",
         "/student/profile",

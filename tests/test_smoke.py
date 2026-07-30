@@ -122,7 +122,23 @@ def test_friends_tab_keeps_referral_invite_card(client, make_user):
     assert 'id="fr-referral-card"' in body
     assert f"/register?ref={code}" in body
     assert "Invita amigos, gana Plus" in body
-    assert "/student/invite" in body
+    assert "/student/invite" not in body
+
+
+def test_legacy_invite_page_redirects_to_friends(client, make_user):
+    cid = make_user("Legacy Invite Owner")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 1 WHERE id = %s", (cid,))
+    with client.session_transaction() as sess:
+        sess["client_id"] = cid
+        sess["client_name"] = "Legacy Invite Owner"
+        sess["account_type"] = "student"
+        sess["session_version"] = 0
+
+    response = client.get("/student/invite")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/student/friends")
 
 
 def test_www_redirects_to_apex(client):
@@ -283,6 +299,10 @@ def test_courses_page_uses_clear_delete_and_stable_theme_controls(client, make_u
     assert 'class="semester-select"' in body
     assert 'class="semester-menu"' in body
     assert ':root[data-theme="dark"] .mr-app-shell .content .page-head-cd .semester-option' in body
+    assert "window.handleSemesterViewportScroll" in body
+    assert "menu.contains(event.target)" in body
+    assert "window.addEventListener('scroll', window.closeSemesterMenu, true)" not in body
+    assert "Privacidad del benchmark:" not in body
 
 
 def test_leaderboard_page_uses_readable_prizes_and_rank_translations(client, make_user):
@@ -303,3 +323,25 @@ def test_leaderboard_page_uses_readable_prizes_and_rank_translations(client, mak
     assert "'Scholar':'Estudioso'" in body
     assert "'Researcher':'Investigador'" in body
     assert "'Academic':'Académico'" in body
+    assert "#mr-lb-page .lb-hero::after {" in body
+    assert "display:none;" in body
+
+
+def test_shop_cards_have_dark_mode_surfaces(client, make_user):
+    cid = make_user("Dark Shop Owner")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 1 WHERE id = %s", (cid,))
+    with client.session_transaction() as sess:
+        sess["client_id"] = cid
+        sess["client_name"] = "Dark Shop Owner"
+        sess["account_type"] = "student"
+        sess["session_version"] = 0
+
+    body = client.get("/student/shop").get_data(as_text=True)
+
+    assert 'class="shop-product-card shop-coin-pack-card ' in body
+    assert 'class="shop-product-card shop-banner-card ' in body
+    assert 'class="shop-product-card shop-flag-card ' in body
+    assert ':root[data-theme="dark"] .shop-cd .shop-plan-card' in body
+    assert ':root[data-theme="dark"] .shop-cd .shop-product-card' in body
+    assert "background:#242129!important" in body

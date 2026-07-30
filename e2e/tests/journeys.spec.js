@@ -103,6 +103,24 @@ test("course details open from the course card", async ({ page }, testInfo) => {
   }).toBe(true);
 });
 
+test("semester menu stays open while its options are scrolled", async ({ page }) => {
+  await login(page);
+  await page.goto("/student/courses");
+
+  const trigger = page.locator("#cur-sem-select");
+  const menu = page.locator("#semester-menu");
+  await trigger.click();
+  await expect(menu).toBeVisible();
+
+  await menu.evaluate((element) => {
+    element.scrollTop = Math.max(1, element.scrollHeight - element.clientHeight);
+    element.dispatchEvent(new Event("scroll", { bubbles: false }));
+  });
+
+  await expect(menu).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+});
+
 test("grade-sheet controls work under the enforced CSP", async ({ page }) => {
   await login(page);
   await page.goto("/student/gpa");
@@ -165,6 +183,24 @@ test("paid plan sends the browser to hosted checkout", async ({ page }, testInfo
 
   await expect(page).toHaveURL("https://checkout.lemonsqueezy.test/buy/e2e-plus");
   await expect(page.getByRole("heading", { name: "Hosted checkout" })).toBeVisible();
+});
+
+test("shop product cards use dark surfaces in dark mode", async ({ page }) => {
+  await login(page);
+  await page.goto("/student/shop");
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "dark";
+  });
+
+  const surfaces = await page.locator(".shop-plan-card, .shop-product-card").evaluateAll((elements) =>
+    elements.slice(0, 8).map((element) => getComputedStyle(element).backgroundColor),
+  );
+
+  expect(surfaces.length).toBeGreaterThan(1);
+  for (const color of surfaces) {
+    const channels = color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(Number);
+    expect(Math.max(...channels)).toBeLessThan(90);
+  }
 });
 
 test("student can permanently delete the account", async ({ page }, testInfo) => {
