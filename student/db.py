@@ -5776,8 +5776,6 @@ def get_streak_risk_recipients(min_streak: int = 5) -> list[dict]:
         clients = _fetchall(
             db,
             "SELECT id, name, email FROM clients "
-            "WHERE COALESCE(retired, FALSE) = FALSE AND email IS NOT NULL AND email <> ''" if _USE_PG else
-            "SELECT id, name, email FROM clients "
             "WHERE COALESCE(retired, 0) = 0 AND email IS NOT NULL AND email <> ''",
         ) or []
     for c in clients:
