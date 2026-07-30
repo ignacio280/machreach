@@ -59,3 +59,23 @@ def test_academic_ranks_api_reports_lifetime_league(client, make_user):
     assert response.status_code == 200
     body = response.get_json()
     assert body["league"]["key"] == "researcher"
+
+
+def test_zero_xp_students_are_unranked_for_that_period(make_user):
+    zero_xp_id = make_user("Zero XP Student")
+    earning_id = make_user("Earning Student")
+    _setup_ranked_student(zero_xp_id)
+    _setup_ranked_student(earning_id)
+    sdb.award_xp(earning_id, "week_grind", 25, "current period")
+
+    rows = ac.leaderboard("country", zero_xp_id, period="week")
+    ranked_ids = {row["client_id"] for row in rows}
+
+    assert earning_id in ranked_ids
+    assert zero_xp_id not in ranked_ids
+    assert ac.my_rank("country", zero_xp_id, period="week") is None
+    earning_rank = ac.my_rank("country", earning_id, period="week")
+    assert earning_rank["rank"] == 1
+    assert earning_rank["total"] == len(rows)
+    assert earning_rank["xp"] == 25
+    assert sdb.get_friend_leaderboard(zero_xp_id) == []

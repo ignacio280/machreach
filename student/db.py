@@ -4937,7 +4937,7 @@ def get_student_rank(client_id: int) -> int:
         rows = _fetchall(
             db,
             "SELECT client_id, SUM(xp) as total_xp FROM student_xp "
-            "GROUP BY client_id ORDER BY total_xp DESC",
+            "GROUP BY client_id HAVING SUM(xp) > 0 ORDER BY total_xp DESC",
             (),
         )
     for i, r in enumerate(rows, 1):
@@ -5107,6 +5107,7 @@ def get_friend_leaderboard(client_id: int) -> list[dict]:
             f"LEFT JOIN student_xp x ON x.client_id = c.id "
             f"WHERE c.id IN ({placeholders}) "
             f"GROUP BY c.id, c.name, c.email "
+            f"HAVING COALESCE(SUM(x.xp), 0) > 0 "
             f"ORDER BY total_xp DESC, name ASC",
             tuple(ids),
         )

@@ -143,28 +143,39 @@ _PERIOD_POPUP_HTML = """
   var modal = document.getElementById('mr-period-modal');
   if (!modal) return;
   var queue = [];
+  var IS_ES = document.documentElement.lang !== 'en';
+  function t(en, es){ return IS_ES ? es : en; }
   var SCOPES = [
     { key: 'global',     label: 'Global' },
-    { key: 'country',    label: 'Country' },
-    { key: 'university', label: 'University' },
-    { key: 'major',      label: 'Major' },
+    { key: 'country',    label: t('Country', 'País') },
+    { key: 'university', label: t('University', 'Universidad') },
+    { key: 'major',      label: t('Major', 'Carrera') },
   ];
+  document.getElementById('mr-period-next').textContent =
+    t('Got it', 'Perfecto, entendido');
   function show(p){
-    var kindLabel = p.period_kind === 'week' ? 'Weekly' : 'Monthly';
-    document.getElementById('mr-period-eyebrow').textContent = kindLabel + ' results';
+    document.getElementById('mr-period-eyebrow').textContent =
+      p.period_kind === 'week'
+        ? t('Weekly results', 'Resultados semanales')
+        : t('Monthly results', 'Resultados mensuales');
     document.getElementById('mr-period-title').textContent =
       p.period_kind === 'week'
-        ? "Last week's leaderboard"
-        : "Last month's leaderboard";
+        ? t("Last week's leaderboard", 'Ranking de la semana pasada')
+        : t("Last month's leaderboard", 'Ranking del mes pasado');
     document.getElementById('mr-period-sub').textContent =
-      'Period ' + (p.period_key || '') + ' is now closed.';
+      t(
+        'Period ' + (p.period_key || '') + ' is now closed.',
+        'El período ' + (p.period_key || '') + ' ya terminó.'
+      );
     var prizeBox = document.getElementById('mr-period-prize');
     if (p.total_coins_won > 0) {
       prizeBox.classList.remove('empty');
       prizeBox.innerHTML =
-        '<div class="small">\\u{1F389} You won</div>' +
-        '<div class="big">+' + p.total_coins_won + ' coins</div>' +
-        '<div class="small">Ya acreditado en tu billetera</div>';
+        '<div class="small">\\u{1F389} ' + t('You won', 'Ganaste') + '</div>' +
+        '<div class="big">+' + p.total_coins_won + ' ' + t('coins', 'monedas') + '</div>' +
+        '<div class="small">' +
+          t('Already credited to your wallet', 'Ya acreditado en tu billetera') +
+        '</div>';
     } else {
       prizeBox.classList.add('empty');
       prizeBox.innerHTML = '';
@@ -179,14 +190,18 @@ _PERIOD_POPUP_HTML = """
       var winClass = '';
       if (!data) {
         cell.className = 'mr-period-cell unranked';
-        rankHtml = 'Not ranked';
-        metaHtml = 'No XP this period';
+        rankHtml = t('Not ranked', 'Sin clasificación');
+        metaHtml = t('No XP this period', 'Sin XP en este período');
       } else {
         if (prize) {
           winClass = ' win';
-          metaHtml = data.xp + ' XP · +' + prize.coins + ' coins';
+          metaHtml =
+            data.xp + ' XP · +' + prize.coins + ' ' + t('coins', 'monedas');
         } else {
-          metaHtml = data.xp + ' XP · of ' + data.total_in_bucket + ' players';
+          metaHtml =
+            data.xp + ' XP · ' +
+            t('of ', 'de ') + data.total_in_bucket + ' ' +
+            t('players', 'jugadores');
         }
         rankHtml = '#' + data.rank;
       }

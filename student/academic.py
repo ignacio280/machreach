@@ -971,7 +971,12 @@ def _xp_select(where_extra: str = "", params: Iterable = (), period: str = "all"
         "LEFT JOIN student_xp x ON x.client_id = c.id " + join_extra +
         "WHERE c.account_type = 'student' " + retired_clause
     )
-    q = base + where_extra + " GROUP BY c.id, c.name, c.country_iso, c.university_id, c.major_id "
+    q = (
+        base
+        + where_extra
+        + " GROUP BY c.id, c.name, c.country_iso, c.university_id, c.major_id "
+        + " HAVING COALESCE(SUM(x.xp), 0) > 0 "
+    )
     return q, tuple(params)
 
 
@@ -1113,6 +1118,9 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
         )
         my_xp = _fetchval(db, my_xp_q, (client_id,)) or 0
 
+    if int(my_xp) <= 0:
+        return None
+
     where_extra = ""
     params: list = []
     retired_only = (scope == "retirement")
@@ -1147,9 +1155,14 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
         ") AS ahead"
     )
     q = _sqlite_port(q)
-    total_q = (
-        "SELECT COUNT(DISTINCT c.id) FROM clients c "
-        "WHERE c.account_type = 'student' " + retired_clause + where_extra
+    total_q = _sqlite_port(
+        "SELECT COUNT(*) FROM ("
+        "  SELECT c.id "
+        "  FROM clients c LEFT JOIN student_xp x ON x.client_id = c.id " + join_extra +
+        "  WHERE c.account_type = 'student' " + retired_clause + where_extra +
+        "  GROUP BY c.id "
+        "  HAVING COALESCE(SUM(x.xp),0) > 0 "
+        ") AS ranked_total"
     )
     with get_db() as db:
         ahead = _fetchval(db, q, tuple(params) + (int(my_xp),)) or 0
