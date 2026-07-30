@@ -21980,7 +21980,7 @@ No markdown, no code fences. ONLY JSON.
                 sub_cards.append(
                     f'<div class="shop-plan-card shop-plan-card--{key}" style="--plan-border:{border};">'
                     f'{badge}'
-                    f'<div style="font-size:13px;font-weight:700;color:{border};text-transform:uppercase;letter-spacing:.5px;">{_esc(label_name)}</div>'
+                    f'<div class="shop-plan-label" style="font-size:13px;font-weight:700;color:{border};text-transform:uppercase;letter-spacing:.5px;">{_esc(label_name)}</div>'
                     f'<div class="shop-price">{price_html}</div>'
                     f'<div style="color:var(--text-muted);font-size:12px;margin-bottom:10px;">{_esc(cfg.get("blurb",""))}</div>'
                     + (
@@ -22169,10 +22169,13 @@ No markdown, no code fences. ONLY JSON.
             border-color:#8B5CF6!important;
           }}
           :root[data-theme="dark"] .shop-cd .shop-price,
+          :root[data-theme="dark"] .shop-cd .shop-plan-card li,
           :root[data-theme="dark"] .shop-cd .shop-product-card [style*="font-weight:800"],
           :root[data-theme="dark"] .shop-cd .shop-product-card [style*="font-weight:700"] {{
             color:#FFF8E8!important;
           }}
+          :root[data-theme="dark"] .shop-cd .shop-plan-card--free .shop-plan-label {{ color:#AFC4DE!important; }}
+          :root[data-theme="dark"] .shop-cd .shop-plan-card--plus .shop-plan-label {{ color:#BFA1FF!important; }}
           :root[data-theme="dark"] .shop-cd .shop-price span,
           :root[data-theme="dark"] .shop-cd .shop-billing-terms,
           :root[data-theme="dark"] .shop-cd .shop-restore span {{

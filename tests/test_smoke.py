@@ -344,4 +344,5 @@ def test_shop_cards_have_dark_mode_surfaces(client, make_user):
     assert 'class="shop-product-card shop-flag-card ' in body
     assert ':root[data-theme="dark"] .shop-cd .shop-plan-card' in body
     assert ':root[data-theme="dark"] .shop-cd .shop-product-card' in body
+    assert ':root[data-theme="dark"] .shop-cd .shop-plan-card li' in body
     assert "background:#242129!important" in body

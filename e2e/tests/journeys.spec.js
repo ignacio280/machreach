@@ -201,6 +201,12 @@ test("shop product cards use dark surfaces in dark mode", async ({ page }) => {
     const channels = color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(Number);
     expect(Math.max(...channels)).toBeLessThan(90);
   }
+
+  const featureColor = await page.locator(".shop-plan-card li").first().evaluate(
+    (element) => getComputedStyle(element).color,
+  );
+  const featureChannels = featureColor.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(Number);
+  expect(featureChannels.reduce((total, channel) => total + channel, 0)).toBeGreaterThan(600);
 });
 
 test("student can permanently delete the account", async ({ page }, testInfo) => {
