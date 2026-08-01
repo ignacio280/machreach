@@ -17,6 +17,21 @@ TRANSLATIONS = {
     "nav.login": {"en": "Login", "es": "Iniciar Sesión"},
     "nav.get_started": {"en": "Get Started", "es": "Comenzar"},
 
+    # ── Cookie consent ──────────────────────────────────────────
+    # Rendered in the shared layout on every page, so it sits outside the
+    # student HTML fragment translator and needs real keys.
+    "consent.aria_label": {"en": "Privacy preferences", "es": "Preferencias de privacidad"},
+    "consent.title": {"en": "Your privacy, your call", "es": "Tu privacidad, bajo tu control"},
+    "consent.body": {
+        "en": "We use essential cookies to keep your session secure. With your permission, "
+              "PostHog can also help us improve MachReach. We never use advertising cookies.",
+        "es": "Usamos cookies esenciales para mantener tu sesión segura. Si nos das permiso, "
+              "PostHog también puede ayudarnos a mejorar MachReach. Nunca usamos cookies publicitarias.",
+    },
+    "consent.privacy_link": {"en": "Privacy policy", "es": "Política de privacidad"},
+    "consent.essential_only": {"en": "Essential only", "es": "Solo esenciales"},
+    "consent.allow_analytics": {"en": "Allow analytics", "es": "Permitir analítica"},
+
     # ── Landing page ────────────────────────────────────────────
 
     # ── Auth ────────────────────────────────────────────────────
@@ -541,6 +556,117 @@ RANK_ES_TO_EN = {
 }
 
 SPANISH_TO_EN_VISIBLE.update({
+    # ── Gaps found by rendering every student page in English ──────────────
+    # Measured rather than guessed: these are the exact text nodes that still
+    # came back Spanish with lang=en. Counts in comments are occurrences across
+    # the 14 student pages at the time they were added.
+    "Aún no conseguido": "Not earned yet",                       # x71, achievements
+    "Aun no conseguido": "Not earned yet",
+    "Ranking de la semana pasada": "Last week's leaderboard",
+    "Requiere suscripción PLUS": "Requires a PLUS subscription",
+    "Requiere suscripcion PLUS": "Requires a PLUS subscription",
+    "Estudio hoy": "Studied today",
+    "Racha activa": "Active streak",
+    "Todavía no hay actividad XP.": "No XP activity yet.",
+    "Todavia no hay actividad XP.": "No XP activity yet.",
+    "Ver mis cursos": "View my courses",
+
+    # Focus / timer
+    "⏱ Temporizador de estudio": "⏱ Study timer",
+    "Duración (min)": "Duration (min)",
+    "Duracion (min)": "Duration (min)",
+    "Pega un enlace de playlist o álbum de Spotify:": "Paste a Spotify playlist or album link:",
+    "Pega un enlace de playlist o album de Spotify:": "Paste a Spotify playlist or album link:",
+    "Selección rápida:": "Quick pick:",
+    "Seleccion rapida:": "Quick pick:",
+    # Exact-match entry required: without it the phrase fallback rewrites
+    # "para desbloquear" mid-sentence and ships "Sigue estudiando to unlocklas."
+    "Aún no tienes insignias. Sigue estudiando para desbloquearlas.":
+        "No badges yet. Keep studying to unlock them.",
+    "Aun no tienes insignias. Sigue estudiando para desbloquearlas.":
+        "No badges yet. Keep studying to unlock them.",
+    "— Elige un curso para empezar —": "— Pick a course to start —",
+    "Elige un curso antes de empezar el temporizador.": "Pick a course before starting the timer.",
+    "— Estudio general del curso —": "— General course study —",
+    "Páginas objetivo": "Target pages",
+    "🎵 Música para estudiar": "🎵 Study music",
+    "La música suena mientras estás en esta página. Para música sin interrupciones usa la app de escritorio de Spotify o una pestaña separada.":
+        "Music plays while you are on this page. For uninterrupted playback use the Spotify desktop app or a separate tab.",
+    "➕ Agregar a Chrome": "➕ Add to Chrome",
+
+    # Courses
+    "📘 Mis cursos": "📘 My courses",
+    "📚 Mis Cursos": "📚 My Courses",
+    "MachReach — Student — Mis Cursos": "MachReach — Student — My Courses",
+    "Semestre actual · 0 cursos · 0 evaluaciones": "Current semester · 0 courses · 0 evaluations",
+    "Aún no hay pruebas para este curso. Agrégalas en": "No exams for this course yet. Add them in",
+    "Aun no hay pruebas para este curso. Agregalas en": "No exams for this course yet. Add them in",
+
+    # Planner
+    "El plan semanal usa ponderaciones, riesgo, material adjunto, sesiones reales y reviews de dificultad para decidir qué estudiar. Es una herramienta Plus.":
+        "The weekly plan uses weightings, risk, attached material, real sessions and difficulty reviews to decide what to study. It is a Plus tool.",
+
+    # Quizzes / flashcards / reviews
+    "Prueba oficial": "Official exam",
+    "Sube una prueba pasada (PDF / DOCX). La transcribimos literal. Funciona mejor con selección múltiple.":
+        "Upload a past exam (PDF / DOCX). We transcribe it literally. Works best with multiple choice.",
+    "Evaluación (opcional)": "Evaluation (optional)",
+    "0 cartas · 0 dominadas · 0 para hoy": "0 cards · 0 mastered · 0 due today",
+    "▶ Crea un mazo para repasar": "▶ Create a deck to review",
+    "Explora dificultad y calidad por universidad/carrera. Las reviews son anonimas; nota final y horas estudiadas solo aparecen para usuarios Plus.":
+        "Explore difficulty and quality by university/major. Reviews are anonymous; final grade and hours studied are shown to Plus users only.",
+
+    # Leaderboard / friends
+    "🏳️ País": "🏳️ Country",
+    "🤝 Amigos": "🤝 Friends",
+    "👥 Tus amigos": "👥 Your friends",
+    "🏛️ Histórico": "🏛️ All-time",
+    "Liga por país": "Country league",
+    "Tu ranking nacional": "Your national ranking",
+    "Compite contra estudiantes de tu país y defiende tu posición semanal.":
+        "Compete against students from your country and defend your weekly position.",
+
+    # Shop / billing
+    "🛒 Tienda": "🛒 Shop",
+    "💎 Compara tu plan": "💎 Compare your plan",
+    "Gestiona tu plan, recarga monedas o personaliza tu perfil. Empieza comparando tu suscripción.":
+        "Manage your plan, top up coins or personalize your profile. Start by comparing your subscription.",
+    "La facturación de producción todavía no está configurada. Puedes comparar los planes, pero el checkout permanecerá desactivado.":
+        "Production billing is not configured yet. You can compare plans, but checkout stays disabled.",
+    "Pago único · IVA calculado y mostrado en checkout · sin renovación.":
+        "One-off payment · VAT calculated and shown at checkout · no renewal.",
+    "IVA calculado y mostrado en checkout · cobro mensual · renovación automática. Cancela cuando quieras; mantienes el acceso hasta el fin del período pagado.":
+        "VAT calculated and shown at checkout · billed monthly · renews automatically. Cancel any time; you keep access until the end of the paid period.",
+    "Sin cobros ni renovación.": "No charges and no renewal.",
+    "¿Ya pagaste Plus?": "Already paid for Plus?",
+    "Restaura y reconcilia tu estado con el proveedor de pagos.":
+        "Restore and reconcile your status with the payment provider.",
+    "Restauración no disponible": "Restore unavailable",
+    "Necesitas 80 monedas": "You need 80 coins",
+    "250 monedas": "250 coins",
+    "850 monedas": "850 coins",
+    "2,300 monedas": "2,300 coins",
+    "6,500 monedas": "6,500 coins",
+    "19,000 monedas": "19,000 coins",
+    "10 🪙 cada uno": "10 🪙 each",
+
+    # Streak freezes
+    "Hasta 3 congeladores de racha guardados": "Up to 3 streak freezes stored",
+    "Congeladores guardados (máx. 3)": "Stored freezes (max. 3)",
+    "Se usan automáticamente si te saltas un día. Capacidad de tu plan:":
+        "They are used automatically if you skip a day. Your plan's capacity:",
+    "congeladores guardados. Gratis puede guardar hasta 3; Plus hasta 5.":
+        "stored freezes. Free can store up to 3; Plus up to 5.",
+
+    # Achievements
+    "MachReach — Student — Logros": "MachReach — Student — Achievements",
+    "Sesiones profundas y tiempo estudiado": "Deep sessions and time studied",
+    "Pruebas, precision y practica": "Exams, accuracy and practice",
+    "Cursos sincronizados y avance academico": "Synced courses and academic progress",
+    "Amigos, perfil y rankings": "Friends, profile and rankings",
+    "Insignias raras, eventos y cosméticos": "Rare badges, events and cosmetics",
+    "Insignias raras, eventos y cosmeticos": "Rare badges, events and cosmetics",
+
     # Dashboard / home / study overview
     "Hoy es un buen día para": "Today is a good day to",
     "Hoy es un buen dia para": "Today is a good day to",
@@ -1112,6 +1238,18 @@ def translate_rank_name(name: str, lang: str | None = None) -> str:
     if (lang or get_lang()) != "en":
         return name
     return RANK_ES_TO_EN.get(str(name or ""), str(name or ""))
+
+
+def translate_student_title(title: str, lang: str | None = None) -> str:
+    """Translate a student page title.
+
+    Page titles are rendered by the shared layout rather than inside the
+    student HTML fragment, so they bypass ``translate_student_html_fragment``
+    and would otherwise stay Spanish in the browser tab for English readers.
+    """
+    if (lang or get_lang()) != "en" or not title:
+        return title
+    return _translate_visible_text(str(title).strip()) or title
 
 
 def _translate_visible_text(value: str) -> str | None:

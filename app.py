@@ -872,6 +872,9 @@ def _inject_analytics_context():
     return {
         # Cache key for versioned static URLs; changes once per deploy.
         "deploy_version": DEPLOY_VERSION,
+        # Consent banner lives in the shared layout, outside the student
+        # fragment translator, so it needs explicit keys.
+        "consent": t_dict("consent"),
         "posthog_key": os.getenv("POSTHOG_KEY", "") if analytics_allowed else "",
         "posthog_host": os.getenv("POSTHOG_HOST", "https://us.i.posthog.com"),
         "analytics_uid": session.get("client_id") or "",
@@ -1769,18 +1772,18 @@ LAYOUT = """<!DOCTYPE html>
   <script src="/static/machreach_layout/layout-1.js?v={{ deploy_version }}"></script>
 
   <!-- Cookie Consent Banner (GDPR) -->
-  <section id="cookie-consent" class="mr-consent" role="dialog" aria-label="Preferencias de privacidad" aria-live="polite" aria-hidden="true" hidden>
+  <section id="cookie-consent" class="mr-consent" role="dialog" aria-label="{{ consent.aria_label }}" aria-live="polite" aria-hidden="true" hidden>
     <div class="mr-consent__panel">
       <div class="mr-consent__copy">
         <span class="mr-consent__icon" aria-hidden="true">✓</span>
         <div>
-          <strong>Tu privacidad, bajo tu control</strong>
-          <p>Usamos cookies esenciales para mantener tu sesión segura. Si nos das permiso, PostHog también puede ayudarnos a mejorar MachReach. Nunca usamos cookies publicitarias. <a href="/privacy">Política de privacidad</a></p>
+          <strong>{{ consent.title }}</strong>
+          <p>{{ consent.body }} <a href="/privacy">{{ consent.privacy_link }}</a></p>
         </div>
       </div>
       <div class="mr-consent__actions">
-        <button type="button" class="mr-consent__button mr-consent__button--secondary" data-consent-choice="essential">Solo esenciales</button>
-        <button type="button" class="mr-consent__button mr-consent__button--primary" data-consent-choice="analytics">Permitir analítica</button>
+        <button type="button" class="mr-consent__button mr-consent__button--secondary" data-consent-choice="essential">{{ consent.essential_only }}</button>
+        <button type="button" class="mr-consent__button mr-consent__button--primary" data-consent-choice="analytics">{{ consent.allow_analytics }}</button>
       </div>
     </div>
   </section>

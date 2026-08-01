@@ -4080,7 +4080,7 @@ Return this JSON shape:
 
         from machreach_core.db import get_client
 
-        from machreach_core.i18n import SPANISH_TO_EN_VISIBLE, t, t_dict, translate_student_html_fragment
+        from machreach_core.i18n import SPANISH_TO_EN_VISIBLE, t, t_dict, translate_student_html_fragment, translate_student_title
 
         flashed = list(session.pop("_flashes", []) if "_flashes" in session else [])
 
@@ -4108,10 +4108,14 @@ Return this JSON shape:
             extension_connect_html + period_popup_html + content_html,
             lang,
         )
+        # The title is rendered by the shared layout, outside the fragment
+        # above, so it needs translating on its own or the browser tab stays
+        # Spanish for English readers.
+        rendered_title = translate_student_title(title, lang)
 
         return render_layout(
 
-            title=f"Student — {title}",
+            title=f"Student — {rendered_title}",
 
             content=Markup(rendered_content),
 
