@@ -218,22 +218,19 @@ footer { padding: 64px 0 40px; border-top: 2px solid var(--line); margin-top: 64
 
 /* ============ landing motion layer ============ */
 :root {
-  --landing-mx: .5;
-  --landing-my: .5;
-  --landing-dx: 0px;
-  --landing-dy: 0px;
-  --landing-scroll-pct: 0%;
+  --landing-paper-y: 0px;
+  --hero-shift: 0;
 }
 #landing-progress {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 5px;
+  height: 3px;
   z-index: 1000;
   pointer-events: none;
-  overflow: visible;
-  background: color-mix(in oklab, var(--surface) 52%, transparent);
+  overflow: hidden;
+  background: color-mix(in oklab, var(--line) 62%, transparent);
 }
 #landing-progress-bar {
   display: block;
@@ -241,38 +238,25 @@ footer { padding: 64px 0 40px; border-top: 2px solid var(--line); margin-top: 64
   height: 100%;
   transform: scaleX(0);
   transform-origin: left center;
-  background: linear-gradient(90deg, var(--gold), var(--brand), #FF7A3D);
-  box-shadow: 0 0 18px color-mix(in oklab, var(--brand) 40%, transparent);
+  background: var(--brand);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--brand) 35%, transparent);
 }
-/* the streak flame riding the tip of the progress bar */
 #landing-progress-flame {
-  position: absolute;
-  top: -8px;
-  left: var(--landing-scroll-pct, 0%);
-  width: 22px;
-  height: 22px;
-  margin-left: -11px;
-  display: block;
-  filter: drop-shadow(0 0 7px color-mix(in oklab, #FF7A3D 65%, transparent));
-  animation: motion-flame-wiggle .85s ease-in-out infinite alternate;
-  transform-origin: 50% 88%;
+  display: none;
 }
-/* ruled notebook paper, drifting slowly like a page sliding under the content */
 .landing-edge-pattern {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: .11;
+  opacity: .085;
   background-image:
     repeating-linear-gradient(0deg, transparent 0 31px, color-mix(in oklab, var(--ink) 22%, transparent) 31px 33px),
     linear-gradient(90deg, transparent 0 84px, color-mix(in oklab, var(--bad) 55%, transparent) 84px 86px, transparent 86px);
   background-size: 100% 33px, 100% 100%;
   mask-image: linear-gradient(to bottom, black 0%, black 70%, transparent 100%);
-  animation: motion-paper-drift 36s linear infinite;
-  transform: translate3d(var(--landing-dx), var(--landing-dy), 0);
-  transition: transform .28s ease;
-  will-change: transform, background-position;
+  transform: translate3d(0, calc(var(--landing-paper-y) * -1), 0);
+  will-change: transform;
 }
 .nav,
 section,
@@ -291,7 +275,6 @@ section {
   max-width: 100%;
 }
 
-/* dashed pencil divider drawn along the bottom of the live section */
 section::after {
   content: "";
   position: absolute;
@@ -300,14 +283,15 @@ section::after {
   bottom: 0;
   height: 0;
   pointer-events: none;
-  border-bottom: 2.5px dashed color-mix(in oklab, var(--ink) 30%, transparent);
-  clip-path: inset(-4px 100% -4px 0);
+  border-bottom: 1px solid color-mix(in oklab, var(--ink) 22%, transparent);
+  transform: scaleX(0);
+  transform-origin: left center;
   opacity: 0;
-  transition: clip-path 1.3s cubic-bezier(.22,1,.36,1) .15s, opacity .4s ease .15s;
+  transition: transform 1.05s cubic-bezier(.16,1,.3,1) .12s, opacity .35s ease .12s;
 }
 section.section-live::after {
-  clip-path: inset(-4px 0 -4px 0);
-  opacity: .5;
+  transform: scaleX(1);
+  opacity: .45;
 }
 /* highlighter sweep across section headings */
 .mh-hl {
@@ -322,7 +306,7 @@ section.section-live::after {
   border-radius: 5px;
   padding: 0 .08em;
   margin: 0 -.08em;
-  transition: background-size .95s cubic-bezier(.22,1,.36,1) .25s;
+  transition: background-size 1.1s cubic-bezier(.16,1,.3,1) .18s;
 }
 section.section-live .mh-hl {
   background-size: 100% 44%;
@@ -335,100 +319,49 @@ section.section-live .mh-hl {
    write — a line being written left → right
    page  — notebook page turning down from the top */
 .motion-ready .motion-reveal {
-  opacity: 1;
-  will-change: transform, opacity, clip-path, filter;
+  opacity: .01;
+  transform-origin: 50% 35%;
+  will-change: transform, opacity;
 }
-.motion-ready .motion-reveal.motion-flip {
-  transform: perspective(1200px) rotateX(-58deg) translateY(36px) scale(.96);
-  transform-origin: 50% 92%;
-  filter: brightness(1.07);
+.motion-ready .motion-reveal.motion-rise {
+  transform: translate3d(0, 34px, 0) scale(.975);
 }
-.motion-ready .motion-reveal.motion-deal {
-  transform: translate(52px, 58px) rotate(7deg) scale(.93);
+.motion-ready .motion-reveal.motion-score {
+  transform: translate3d(0, 24px, 0) scale(.92);
 }
-.motion-ready .motion-reveal.motion-deal-l {
-  transform: translate(-52px, 58px) rotate(-7deg) scale(.93);
-}
-.motion-ready .motion-reveal.motion-note {
-  transform: scale(1.15) rotate(-2.4deg);
-  filter: drop-shadow(0 30px 26px color-mix(in oklab, var(--ink) 24%, transparent));
-}
-.motion-ready .motion-reveal.motion-write {
-  transform: translateY(14px);
-  clip-path: inset(-4% 103% -10% -3%);
-}
-.motion-ready .motion-reveal.motion-page {
-  transform: perspective(1200px) rotateX(42deg) translateY(-14px);
-  transform-origin: 50% -6%;
+.motion-ready .motion-reveal.motion-stage {
+  transform: translate3d(0, 38px, 0) scale(.955) rotate(.35deg);
 }
 .motion-ready .motion-reveal.is-visible {
   opacity: 1;
   transform: none;
-  filter: none;
   transition:
-    opacity .6s cubic-bezier(.2,.8,.2,1),
-    transform .78s cubic-bezier(.3,1.45,.45,1),
-    filter .78s cubic-bezier(.2,.8,.2,1);
+    opacity .5s cubic-bezier(.16,1,.3,1),
+    transform .9s cubic-bezier(.16,1,.3,1);
   transition-delay: var(--reveal-delay, 0ms);
 }
-.motion-ready .motion-reveal.motion-write.is-visible {
-  clip-path: inset(-8% -8% -14% -6%);
-  transition:
-    opacity .35s cubic-bezier(.2,.8,.2,1),
-    transform .7s cubic-bezier(.22,1,.36,1),
-    clip-path .9s cubic-bezier(.6,.05,.3,1);
-  transition-delay: var(--reveal-delay, 0ms);
+.feat-grid > .motion-rise:nth-child(3n + 1),
+.how-grid > .motion-rise:nth-child(3n + 1) {
+  transform: translate3d(-18px, 34px, 0) rotate(-.6deg) scale(.975);
 }
-.motion-hotspot {
-  --motion-x: .5;
-  --motion-y: .5;
-  --motion-tilt-x: 0;
-  --motion-tilt-y: 0;
-  isolation: isolate;
+.feat-grid > .motion-rise:nth-child(3n),
+.how-grid > .motion-rise:nth-child(3n) {
+  transform: translate3d(18px, 34px, 0) rotate(.6deg) scale(.975);
 }
-.motion-hotspot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  opacity: 0;
-  background:
-    linear-gradient(
-      115deg,
-      transparent 0%,
-      transparent calc((var(--motion-x) * 100%) - 24%),
-      color-mix(in oklab, var(--brand) 20%, transparent) calc(var(--motion-x) * 100%),
-      transparent calc((var(--motion-x) * 100%) + 24%),
-      transparent 100%
-    );
-  transition: opacity .2s ease;
-}
-.motion-hotspot:hover::after {
-  opacity: 0;
-}
-.motion-hotspot > * {
-  position: relative;
-  z-index: 1;
+.feat-grid > .motion-rise.is-visible,
+.how-grid > .motion-rise.is-visible {
+  transform: none;
 }
 .btn {
   position: relative;
   overflow: hidden;
+  transition: transform .22s cubic-bezier(.16,1,.3,1), box-shadow .22s cubic-bezier(.16,1,.3,1), background .2s ease;
 }
-.btn::after {
-  content: "";
-  position: absolute;
-  inset: -20% -35%;
-  transform: translateX(-110%) rotate(10deg);
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, white 50%, transparent), transparent);
-  opacity: 0;
-  pointer-events: none;
-  transition: transform .6s cubic-bezier(.2,.8,.2,1), opacity .2s ease;
+.btn:hover {
+  transform: translateY(-2px);
 }
-.btn:hover::after {
-  transform: translateX(110%) rotate(10deg);
-  opacity: .8;
+.btn:active {
+  transform: translateY(2px);
 }
 .nav-links a {
   position: relative;
@@ -472,7 +405,7 @@ section.section-live .mh-hl {
 .price-grid > div:hover svg,
 .quiz-wrap .card:hover svg,
 .canvas-cta:hover svg {
-  transform: rotate(-7deg) scale(1.08);
+  transform: translateY(-2px) rotate(-2deg);
 }
 .stats-grid > div,
 .price-grid > div,
@@ -488,7 +421,13 @@ section.section-live .mh-hl {
 }
 .card:hover,
 .card-soft:hover {
-  box-shadow: 0 7px 0 0 var(--ink), 0 18px 34px rgba(15, 17, 27, .12);
+  box-shadow: 0 6px 0 0 var(--ink), 0 16px 30px rgba(15, 17, 27, .1);
+}
+
+.hero-anim-card {
+  transform: translate3d(0, var(--hero-card-shift, 0px), 0);
+  transition: transform .12s linear;
+  will-change: transform;
 }
 
 [data-theme="dark"] .canvas-cta {
@@ -603,30 +542,9 @@ section.section-live .mh-hl {
   border: 1px solid var(--brand) !important;
 }
 
-@media (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  .motion-hotspot:hover {
-    transform: perspective(900px)
-      rotateX(calc(var(--motion-tilt-y) * -1deg))
-      rotateY(calc(var(--motion-tilt-x) * 1deg))
-      translateY(-3px);
-  }
-  .btn.motion-hotspot:hover {
-    transform: translate(-1px, -1px) scale(1.015);
-  }
-}
-
-@keyframes motion-paper-drift {
-  from { background-position: 0 0, 0 0; }
-  to { background-position: 0 33px, 0 0; }
-}
-
-@keyframes motion-flame-wiggle {
-  from { transform: scale(1.08, .94) rotate(-4deg); }
-  to { transform: scale(.94, 1.1) rotate(4deg); }
-}
 @keyframes motion-dot-breathe {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 0%, transparent); }
-  50% { transform: scale(1.35); box-shadow: 0 0 0 7px color-mix(in oklab, var(--brand) 18%, transparent); }
+  0%, 100% { opacity: .72; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.12); }
 }
 
 /* responsive */
@@ -674,9 +592,8 @@ section.section-live .mh-hl {
   .motion-ready .motion-reveal {
     opacity: 1 !important;
     transform: none !important;
-    filter: none !important;
-    clip-path: none !important;
   }
+  .hero-anim-card { transform: none !important; }
   .section-head { margin-bottom: 34px; text-align: left; }
   .section-head h2 { font-size: clamp(32px, 10vw, 44px); }
   .section-head p { font-size: 16px; }
@@ -694,11 +611,9 @@ section.section-live .mh-hl {
   .motion-ready .motion-reveal {
     opacity: 1;
     transform: none;
-    filter: none;
-    clip-path: none;
     box-shadow: none;
   }
-  #landing-progress-flame { animation: none; }
+  .hero-anim-card { transform: none !important; }
 }
 
   </style>
@@ -728,35 +643,37 @@ section.section-live .mh-hl {
       0% { transform: translate(0, 0) scale(1); opacity: 1; }
       100% { transform: translate(var(--bx), var(--by)) scale(.3); opacity: 0; }
     }
-
     /* ============ hero entrance choreography ============ */
     .hero-line { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: .1em; margin-bottom: -.1em; }
-    .hero-line-in { display: inline-block; transform: translateY(0); transition: transform .9s cubic-bezier(.22,1,.36,1) var(--d, 0s); will-change: transform; }
-    body[data-intro="pending"] .hero-line-in { transform: none; transition: none; }
-    .hero-anim { transition: opacity .8s cubic-bezier(.22,1,.36,1) var(--d, 0s), transform .8s cubic-bezier(.22,1,.36,1) var(--d, 0s); }
+    .hero-line-in { display: inline-block; transform: translateY(0); transition: transform 1s cubic-bezier(.16,1,.3,1) var(--d, 0s); will-change: transform; }
+    body[data-intro="pending"] .hero-line-in { transform: translateY(112%); }
+    .hero-anim { transition: opacity .8s cubic-bezier(.16,1,.3,1) var(--d, 0s), transform .9s cubic-bezier(.16,1,.3,1) var(--d, 0s); }
     .hero-anim[data-d="1"] { --d: .42s; }
     .hero-anim[data-d="2"] { --d: .56s; }
     .hero-anim[data-d="3"] { --d: .72s; }
-    body[data-intro="pending"] .hero-anim { opacity: 1; transform: none; transition: none; }
+    body[data-intro="pending"] .hero-anim { opacity: 0; transform: translateY(18px); }
 
-
-    /* animated flame on the streak badge */
-    .hero-flame { display: inline-flex; animation: heroFlick 1.1s ease-in-out infinite alternate; transform-origin: 50% 82%; }
-    @keyframes heroFlick {
-      from { transform: scale(1.07, .94) rotate(-2.5deg); }
-      to { transform: scale(.94, 1.07) rotate(2deg); }
+    .hero-xp-badge { animation: heroBadgeSettle .9s cubic-bezier(.16,1,.3,1) .5s both; }
+    .hero-streak-badge { animation: heroBadgeSettle .9s cubic-bezier(.16,1,.3,1) .68s both; }
+    @keyframes heroBadgeSettle {
+      from { opacity: 0; transform: translateY(14px) scale(.92); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
+
+
+    .hero-flame { display: inline-flex; }
 
     @media (prefers-reduced-motion: reduce) {
       .mri-ember, .mri-burst-p { display: none; }
       body[data-intro="pending"] .hero-line-in,
       body[data-intro="pending"] .hero-anim { opacity: 1; transform: none; }
+      .hero-xp-badge, .hero-streak-badge { animation: none; }
     }
   </style>
 </head>
 <body>
   <script>document.body.dataset.intro = "pending";</script>
-  <div id="root"><div class="mri-intro" role="button" aria-label="Saltar intro" data-screen-label="Intro cinemática"><div class="mri-bg" style="--mri-glow:6%"></div><div aria-hidden="true" style="position:absolute;inset:0;overflow:hidden;pointer-events:none"><span class="mri-ember" style="left:90.06285350769758%;width:8.894976160518127px;height:8.894976160518127px;background:#FF7A3D;animation-duration:6.234362317358318s;animation-delay:-0.01164310455902817s;opacity:0.35"></span><span class="mri-ember" style="left:60.751688820892014%;width:7.7975120283317665px;height:7.7975120283317665px;background:#F6C293;animation-duration:6.57351494527029s;animation-delay:-6.5408249093797854s;opacity:0.35"></span><span class="mri-ember" style="left:23.67897227704816%;width:7.149940163821157px;height:7.149940163821157px;background:#FF7A3D;animation-duration:4.481167499383446s;animation-delay:-1.9192947291693014s;opacity:0.35"></span><span class="mri-ember" style="left:78.95612016436644%;width:3.396883477915253px;height:3.396883477915253px;background:#FF7A3D;animation-duration:4.798318151755666s;animation-delay:-3.6780995238709915s;opacity:0.35"></span><span class="mri-ember" style="left:92.86785143031011%;width:6.200057409099827px;height:6.200057409099827px;background:#F6C293;animation-duration:4.839484705247742s;animation-delay:-0.012645001203558668s;opacity:0.35"></span></div><div class="mri-stage"><div style="position:relative;width:168px;height:168px;filter:none"><svg width="168" height="168" viewBox="0 0 100 100" style="overflow:visible;display:block"><g style="opacity:0" transform="translate(50 64) scale(2.220446049250313e-16 2.220446049250313e-16) translate(-50 -64)"><path d="M50 14 C55 26 67 33 67 46 C67 57 59 64 50 64 C41 64 33 57 33 46 C33 33 45 26 50 14 Z" fill="#FF7A3D"></path><path d="M50 33 C53 39 60 42 60 49 C60 55 55 59 50 59 C45 59 40 55 40 49 C40 42 47 39 50 33 Z" fill="#F2A156"></path><path d="M50 45 C52 49 56 51 56 54 C56 57 53 59 50 59 C47 59 44 57 44 54 C44 51 48 49 50 45 Z" fill="#FFE9C9"></path></g><g transform="translate(-45.99999999999999 17.999999999999996) rotate(-21.999999999999996 50 70)" opacity="3.108624468950438e-16"><path d="M50 82 C41 73 29 70 16 72 L16 50 C29 48 41 51 50 58 Z" fill="#5B4694"></path></g><g transform="translate(45.99999999999999 17.999999999999996) rotate(21.999999999999996 50 70)" opacity="3.108624468950438e-16"><path d="M50 82 C59 73 71 70 84 72 L84 50 C71 48 59 51 50 58 Z" fill="#4A3880"></path></g></svg></div><div style="margin-top:18px;white-space:nowrap" aria-label="MachReach"><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--ink);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">M</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--ink);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">a</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--ink);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">c</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--ink);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">h</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">R</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">e</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">a</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">c</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">h</span></div><div style="margin-top:16px;font-family:var(--font-body);font-weight:700;font-size:clamp(15px,2.2vw,19px);color:var(--ink-2);opacity:0;transform:translateY(16px)">Estudiar deja de ser una lata.</div></div><div style="position:absolute;inset:0;background:#FFE9C9;opacity:0;pointer-events:none"></div><button class="mri-skip">Saltar intro →</button></div><nav class="nav"><div class="container nav-inner"><a href="#" class="logo"><div class="logo-mark"><svg width="34" height="34" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible"><g transform="translate(50 64) scale(1 1) translate(-50 -64)"><path d="M50 14 C55 26 67 33 67 46 C67 57 59 64 50 64 C41 64 33 57 33 46 C33 33 45 26 50 14 Z" fill="#FF7A3D"></path><path d="M50 33 C53 39 60 42 60 49 C60 55 55 59 50 59 C45 59 40 55 40 49 C40 42 47 39 50 33 Z" fill="#F2A156"></path><path d="M50 45 C52 49 56 51 56 54 C56 57 53 59 50 59 C47 59 44 57 44 54 C44 51 48 49 50 45 Z" fill="#FFE9C9"></path></g><path d="M50 82 C41 73 29 70 16 72 L16 50 C29 48 41 51 50 58 Z" fill="#5B4694"></path><path d="M50 82 C59 73 71 70 84 72 L84 50 C71 48 59 51 50 58 Z" fill="#4A3880"></path><path d="M50 58 L50 82" stroke="rgba(255,246,228,.45)" stroke-width="1.6"></path></svg></div><span class="logo-text">Mach<span class="dot">Reach</span></span></a><div class="nav-links"><a href="#features">Features</a><a href="#how">Cómo funciona</a><a href="#pricing">Precios</a><a href="#faq">FAQ</a></div><div class="nav-actions" style="display:flex;align-items:center;gap:10px"><button aria-label="Cambiar tema" class="nav-theme-toggle" style="width:38px;height:38px;border-radius:12px;background:var(--surface);border:2px solid var(--ink);display:grid;place-items:center;box-shadow:0 2px 0 0 var(--ink)"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14a8 8 0 11-10-10 7 7 0 0010 10z"></path></svg></button><a href="/register" class="btn btn-primary btn-sm nav-cta"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v9H4V6zM2 18h20M9 21h6"></path></svg><span class="nav-cta-long">Usar la extensión</span><span class="nav-cta-short">Empezar</span></a></div></div></nav><div id="landing-progress" aria-hidden="true"><span id="landing-progress-bar"></span><span id="landing-progress-flame"><svg viewBox="0 0 100 125" width="22" height="22" style="display:block;overflow:visible"><path d="M50 0 C62 28 92 44 92 76 C92 103 73 122 50 122 C27 122 8 103 8 76 C8 44 38 28 50 0 Z" fill="#FF7A3D"></path><path d="M50 45 C57 60 74 68 74 86 C74 102 63 112 50 112 C37 112 26 102 26 86 C26 68 43 60 50 45 Z" fill="#F2A156"></path><path d="M50 72 C54 80 62 84 62 93 C62 102 56 107 50 107 C44 107 38 102 38 93 C38 84 46 80 50 72 Z" fill="#FFE9C9"></path></svg></span></div><div class="landing-edge-pattern" aria-hidden="true"></div><section style="position:relative;padding-top:88px;padding-bottom:118px;overflow:clip"><div style="display:none"></div><div style="display:none"></div><div class="container"><div style="position:relative;z-index:1;display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center" class="hero-grid"><div><p class="hero-kicker hero-anim" style="--d:0s">Universidad, foco y progreso en una sola rutina.</p><h1 style="font-family:var(--font-display);font-size:clamp(44px, 6vw, 76px);font-weight:800;letter-spacing:-0.03em;line-height:1.02;margin-top:22px"><span class="hero-line"><span class="hero-line-in" style="--d:.06s">Estudiar deja</span></span><br/><span class="hero-line"><span class="hero-line-in" style="--d:.18s">de ser una</span></span><br/><span class="hero-line"><span class="hero-line-in" style="--d:.32s"><span style="background:var(--brand);color:white;padding:.04em .14em .1em;line-height:0.9;border-radius:12px;display:inline-block;transform:rotate(-1.5deg);box-shadow:0 4px 0 0 var(--ink);border:2px solid var(--ink);margin:.02em .04em .05em">lata.</span></span></span></h1><p style="color:var(--ink-2);font-size:20px;margin-top:22px;max-width:520px;line-height:1.5" class="hero-anim" data-d="1">MachReach convierte tu semestre en un juego que <em style="color:var(--ink);font-style:normal;font-weight:700;text-decoration:underline wavy var(--brand);text-underline-offset:4px">sí quieres ganar</em>.</p><div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:32px;align-items:center" class="hero-anim" data-d="2"><a href="/register" class="btn btn-primary btn-lg"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v9H4V6zM2 18h20M9 21h6"></path></svg> Usar la extensión</a><a href="#how" class="btn btn-ghost btn-lg">Ver cómo funciona <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div style="display:flex;align-items:center;gap:18px;margin-top:28px;color:var(--ink-3);font-size:14px;font-weight:600" class="hero-anim" data-d="3"><div style="display:flex"><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#fb923c;margin-left:0;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">VR</div><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#a78bfa;margin-left:-10px;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">MA</div><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#22d3ee;margin-left:-10px;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">FP</div><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#facc15;margin-left:-10px;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">IM</div><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#34d399;margin-left:-10px;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">SG</div></div><span>Beta abierta para estudiantes en Chile</span></div></div><div class="hero-anim hero-anim-card" data-d="2"><div style="position:relative;background:var(--surface);border:2px solid var(--ink);border-radius:28px;box-shadow:0 8px 0 0 var(--ink);padding:22px;transform:rotate(1.4deg)"><div style="position:absolute;top:-22px;right:-14px;z-index:2;background:var(--accent);color:var(--accent-ink);border:2px solid var(--ink);border-radius:14px;padding:8px 14px;font-family:var(--font-display);font-weight:800;box-shadow:0 4px 0 0 var(--ink);animation:float 2.6s ease-in-out infinite;display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z"></path></svg> +24 XP</div><div style="position:absolute;bottom:-18px;left:-16px;z-index:2;background:var(--surface);border:2px solid var(--ink);border-radius:14px;padding:10px 14px;font-family:var(--font-display);font-weight:800;box-shadow:0 4px 0 0 var(--ink);display:flex;align-items:center;gap:8px;animation:float 3.2s ease-in-out infinite"><span style="color:var(--bad)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 4 5 5 5 10a5 5 0 11-10 0c0-2 1-3 2-4 0 2 1 3 3 3 0-3-2-5 0-9z"></path></svg></span><span>18</span><span style="color:var(--ink-3);font-weight:600;font-size:13px">días seguidos</span></div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><div style="display:flex;align-items:center;gap:10px"><div style="width:38px;height:38px;border-radius:11px;background:var(--brand-soft);border:2px solid var(--brand);display:grid;place-items:center;color:var(--brand-ink)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v4a5 5 0 01-10 0V4zM4 5h3M17 5h3M9 14h6M10 18h4M12 14v4"></path></svg></div><div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;display:flex;align-items:center;gap:6px">Investigadores<span class="hero-season-pill" style="font-family:var(--font-mono);font-size:10px;padding:2px 6px;border-radius:5px;background:var(--ink);color:white;letter-spacing:.06em">S26</span></div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.05em">Temporada activa - 2d 14h restantes</div></div></div><span class="tag" style="border-color:var(--good);color:var(--good);background:color-mix(in oklab, var(--good) 12%, var(--surface))"><span style="width:6px;height:6px;border-radius:50%;background:var(--good);animation:pulse-ring 1.4s infinite"></span>live</span></div><div style="display:flex;flex-direction:column;gap:6px"><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:color-mix(in oklab, var(--gold) 14%, var(--surface));border:2px solid transparent;transition:transform .5s cubic-bezier(.5,1.6,.4,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--gold);text-align:center;display:flex;align-items:center;justify-content:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--gold);border:2px solid var(--ink);color:white;display:grid;place-items:center;font-size:11px">1</span></div><div style="width:36px;height:36px;border-radius:11.52px;background:#fb923c;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:none">SD</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">Sofia_Db</div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">UC</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">12.480</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--brand-soft);border:2px solid var(--brand);transition:transform .5s cubic-bezier(.5,1.6,.4,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--silver);text-align:center;display:flex;align-items:center;justify-content:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--silver);border:2px solid var(--ink);color:white;display:grid;place-items:center;font-size:11px">2</span></div><div style="width:36px;height:36px;border-radius:11.52px;background:var(--brand);border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:0 0 0 3px var(--brand-soft)">TL</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">tú<span style="font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;background:var(--brand);color:white;letter-spacing:.06em">YOU</span></div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:none;letter-spacing:.06em">Tu universidad</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">9.120</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--bg-2);border:2px solid transparent;transition:transform .5s cubic-bezier(.5,1.6,.4,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--bronze);text-align:center;display:flex;align-items:center;justify-content:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--bronze);border:2px solid var(--ink);color:white;display:grid;place-items:center;font-size:11px">3</span></div><div style="width:36px;height:36px;border-radius:11.52px;background:#a78bfa;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:none">M</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">matiasv</div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">UAndes</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">8.740</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--bg-2);border:2px solid transparent;transition:transform .5s cubic-bezier(.5,1.6,.4,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--ink-3);text-align:center;display:flex;align-items:center;justify-content:center">4</div><div style="width:36px;height:36px;border-radius:11.52px;background:#22d3ee;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:none">F</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">fernandapz</div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">USACH</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">7.610</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--bg-2);border:2px solid transparent;transition:transform .5s cubic-bezier(.5,1.6,.4,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--ink-3);text-align:center;display:flex;align-items:center;justify-content:center">5</div><div style="width:36px;height:36px;border-radius:11.52px;background:#34d399;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:none">IM</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">ignacio_m</div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">UC</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">7.185</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div></div><div style="margin-top:14px;padding-top:12px;border-top:2px dashed var(--line);display:flex;justify-content:space-between;align-items:center;font-size:12px;font-family:var(--font-mono);color:var(--ink-3)"><span style="display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M9 3v4M15 3v4"></path></svg> CIERRA LUN 09:00</span><span style="display:flex;align-items:center;gap:4px;color:var(--brand-ink);font-weight:800">PREMIO TOP 3 · 500 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M9.5 9.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"></path></svg></span></div></div></div></div></div><style>
+  <div id="root"><div class="mri-intro" role="button" aria-label="Saltar intro" data-screen-label="Intro cinemática"><div class="mri-bg" style="--mri-glow:6%"></div><div aria-hidden="true" style="position:absolute;inset:0;overflow:hidden;pointer-events:none"><span class="mri-ember" style="left:90.06285350769758%;width:8.894976160518127px;height:8.894976160518127px;background:#FF7A3D;animation-duration:6.234362317358318s;animation-delay:-0.01164310455902817s;opacity:0.35"></span><span class="mri-ember" style="left:60.751688820892014%;width:7.7975120283317665px;height:7.7975120283317665px;background:#F6C293;animation-duration:6.57351494527029s;animation-delay:-6.5408249093797854s;opacity:0.35"></span><span class="mri-ember" style="left:23.67897227704816%;width:7.149940163821157px;height:7.149940163821157px;background:#FF7A3D;animation-duration:4.481167499383446s;animation-delay:-1.9192947291693014s;opacity:0.35"></span><span class="mri-ember" style="left:78.95612016436644%;width:3.396883477915253px;height:3.396883477915253px;background:#FF7A3D;animation-duration:4.798318151755666s;animation-delay:-3.6780995238709915s;opacity:0.35"></span><span class="mri-ember" style="left:92.86785143031011%;width:6.200057409099827px;height:6.200057409099827px;background:#F6C293;animation-duration:4.839484705247742s;animation-delay:-0.012645001203558668s;opacity:0.35"></span></div><div class="mri-stage"><div style="position:relative;width:168px;height:168px;filter:none"><svg width="168" height="168" viewBox="0 0 100 100" style="overflow:visible;display:block"><g style="opacity:0" transform="translate(50 64) scale(2.220446049250313e-16 2.220446049250313e-16) translate(-50 -64)"><path d="M50 14 C55 26 67 33 67 46 C67 57 59 64 50 64 C41 64 33 57 33 46 C33 33 45 26 50 14 Z" fill="#FF7A3D"></path><path d="M50 33 C53 39 60 42 60 49 C60 55 55 59 50 59 C45 59 40 55 40 49 C40 42 47 39 50 33 Z" fill="#F2A156"></path><path d="M50 45 C52 49 56 51 56 54 C56 57 53 59 50 59 C47 59 44 57 44 54 C44 51 48 49 50 45 Z" fill="#FFE9C9"></path></g><g transform="translate(-45.99999999999999 17.999999999999996) rotate(-21.999999999999996 50 70)" opacity="3.108624468950438e-16"><path d="M50 82 C41 73 29 70 16 72 L16 50 C29 48 41 51 50 58 Z" fill="#5B4694"></path></g><g transform="translate(45.99999999999999 17.999999999999996) rotate(21.999999999999996 50 70)" opacity="3.108624468950438e-16"><path d="M50 82 C59 73 71 70 84 72 L84 50 C71 48 59 51 50 58 Z" fill="#4A3880"></path></g></svg></div><div style="margin-top:18px;white-space:nowrap" aria-label="MachReach"><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--ink);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">M</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--ink);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">a</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--ink);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">c</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--ink);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">h</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">R</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">e</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">a</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">c</span><span style="display:inline-block;font-family:var(--font-display);font-weight:800;font-size:clamp(44px, 8vw, 84px);letter-spacing:-0.04em;line-height:1;color:var(--brand);opacity:2.220446049250313e-16;transform:translateY(45.99999999999999px)">h</span></div><div style="margin-top:16px;font-family:var(--font-body);font-weight:700;font-size:clamp(15px,2.2vw,19px);color:var(--ink-2);opacity:0;transform:translateY(16px)">Estudiar deja de ser una lata.</div></div><div style="position:absolute;inset:0;background:#FFE9C9;opacity:0;pointer-events:none"></div><button class="mri-skip">Saltar intro →</button></div><nav class="nav"><div class="container nav-inner"><a href="#" class="logo"><div class="logo-mark"><svg width="34" height="34" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible"><g transform="translate(50 64) scale(1 1) translate(-50 -64)"><path d="M50 14 C55 26 67 33 67 46 C67 57 59 64 50 64 C41 64 33 57 33 46 C33 33 45 26 50 14 Z" fill="#FF7A3D"></path><path d="M50 33 C53 39 60 42 60 49 C60 55 55 59 50 59 C45 59 40 55 40 49 C40 42 47 39 50 33 Z" fill="#F2A156"></path><path d="M50 45 C52 49 56 51 56 54 C56 57 53 59 50 59 C47 59 44 57 44 54 C44 51 48 49 50 45 Z" fill="#FFE9C9"></path></g><path d="M50 82 C41 73 29 70 16 72 L16 50 C29 48 41 51 50 58 Z" fill="#5B4694"></path><path d="M50 82 C59 73 71 70 84 72 L84 50 C71 48 59 51 50 58 Z" fill="#4A3880"></path><path d="M50 58 L50 82" stroke="rgba(255,246,228,.45)" stroke-width="1.6"></path></svg></div><span class="logo-text">Mach<span class="dot">Reach</span></span></a><div class="nav-links"><a href="#features">Features</a><a href="#how">Cómo funciona</a><a href="#pricing">Precios</a><a href="#faq">FAQ</a></div><div class="nav-actions" style="display:flex;align-items:center;gap:10px"><button aria-label="Cambiar tema" class="nav-theme-toggle" style="width:38px;height:38px;border-radius:12px;background:var(--surface);border:2px solid var(--ink);display:grid;place-items:center;box-shadow:0 2px 0 0 var(--ink)"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14a8 8 0 11-10-10 7 7 0 0010 10z"></path></svg></button><a href="/register" class="btn btn-primary btn-sm nav-cta"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v9H4V6zM2 18h20M9 21h6"></path></svg><span class="nav-cta-long">Usar la extensión</span><span class="nav-cta-short">Empezar</span></a></div></div></nav><div id="landing-progress" aria-hidden="true"><span id="landing-progress-bar"></span><span id="landing-progress-flame"><svg viewBox="0 0 100 125" width="22" height="22" style="display:block;overflow:visible"><path d="M50 0 C62 28 92 44 92 76 C92 103 73 122 50 122 C27 122 8 103 8 76 C8 44 38 28 50 0 Z" fill="#FF7A3D"></path><path d="M50 45 C57 60 74 68 74 86 C74 102 63 112 50 112 C37 112 26 102 26 86 C26 68 43 60 50 45 Z" fill="#F2A156"></path><path d="M50 72 C54 80 62 84 62 93 C62 102 56 107 50 107 C44 107 38 102 38 93 C38 84 46 80 50 72 Z" fill="#FFE9C9"></path></svg></span></div><div class="landing-edge-pattern" aria-hidden="true"></div><section style="position:relative;padding-top:88px;padding-bottom:118px;overflow:clip"><div style="display:none"></div><div style="display:none"></div><div class="container"><div style="position:relative;z-index:1;display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center" class="hero-grid"><div><p class="hero-kicker hero-anim" style="--d:0s">Universidad, foco y progreso en una sola rutina.</p><h1 style="font-family:var(--font-display);font-size:clamp(44px, 6vw, 76px);font-weight:800;letter-spacing:-0.03em;line-height:1.02;margin-top:22px"><span class="hero-line"><span class="hero-line-in" style="--d:.06s">Estudiar deja</span></span><br/><span class="hero-line"><span class="hero-line-in" style="--d:.18s">de ser una</span></span><br/><span class="hero-line"><span class="hero-line-in" style="--d:.32s"><span style="background:var(--brand);color:white;padding:.04em .14em .1em;line-height:0.9;border-radius:12px;display:inline-block;transform:rotate(-1.5deg);box-shadow:0 4px 0 0 var(--ink);border:2px solid var(--ink);margin:.02em .04em .05em">lata.</span></span></span></h1><p style="color:var(--ink-2);font-size:20px;margin-top:22px;max-width:520px;line-height:1.5" class="hero-anim" data-d="1">MachReach convierte tu semestre en un juego que <em style="color:var(--ink);font-style:normal;font-weight:700;text-decoration:underline wavy var(--brand);text-underline-offset:4px">sí quieres ganar</em>.</p><div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:32px;align-items:center" class="hero-anim" data-d="2"><a href="/register" class="btn btn-primary btn-lg"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v9H4V6zM2 18h20M9 21h6"></path></svg> Usar la extensión</a><a href="#how" class="btn btn-ghost btn-lg">Ver cómo funciona <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div><div style="display:flex;align-items:center;gap:18px;margin-top:28px;color:var(--ink-3);font-size:14px;font-weight:600" class="hero-anim" data-d="3"><div style="display:flex"><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#fb923c;margin-left:0;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">VR</div><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#a78bfa;margin-left:-10px;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">MA</div><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#22d3ee;margin-left:-10px;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">FP</div><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#facc15;margin-left:-10px;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">IM</div><div style="width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);background:#34d399;margin-left:-10px;font-weight:800;font-size:13px;color:white;display:grid;place-items:center;font-family:var(--font-display)">SG</div></div><span>Beta abierta para estudiantes en Chile</span></div></div><div class="hero-anim hero-anim-card" data-d="2"><div style="position:relative;background:var(--surface);border:2px solid var(--ink);border-radius:28px;box-shadow:0 8px 0 0 var(--ink);padding:22px;transform:rotate(1.4deg)"><div class="hero-xp-badge" style="position:absolute;top:-22px;right:-14px;z-index:2;background:var(--accent);color:var(--accent-ink);border:2px solid var(--ink);border-radius:14px;padding:8px 14px;font-family:var(--font-display);font-weight:800;box-shadow:0 4px 0 0 var(--ink);display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z"></path></svg> +24 XP</div><div class="hero-streak-badge" style="position:absolute;bottom:-18px;left:-16px;z-index:2;background:var(--surface);border:2px solid var(--ink);border-radius:14px;padding:10px 14px;font-family:var(--font-display);font-weight:800;box-shadow:0 4px 0 0 var(--ink);display:flex;align-items:center;gap:8px"><span style="color:var(--bad)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 4 5 5 5 10a5 5 0 11-10 0c0-2 1-3 2-4 0 2 1 3 3 3 0-3-2-5 0-9z"></path></svg></span><span>18</span><span style="color:var(--ink-3);font-weight:600;font-size:13px">días seguidos</span></div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><div style="display:flex;align-items:center;gap:10px"><div style="width:38px;height:38px;border-radius:11px;background:var(--brand-soft);border:2px solid var(--brand);display:grid;place-items:center;color:var(--brand-ink)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v4a5 5 0 01-10 0V4zM4 5h3M17 5h3M9 14h6M10 18h4M12 14v4"></path></svg></div><div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;display:flex;align-items:center;gap:6px">Investigadores<span class="hero-season-pill" style="font-family:var(--font-mono);font-size:10px;padding:2px 6px;border-radius:5px;background:var(--ink);color:white;letter-spacing:.06em">S26</span></div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.05em">Temporada activa - 2d 14h restantes</div></div></div><span class="tag" style="border-color:var(--good);color:var(--good);background:color-mix(in oklab, var(--good) 12%, var(--surface))"><span style="width:6px;height:6px;border-radius:50%;background:var(--good);animation:pulse-ring 1.4s infinite"></span>live</span></div><div style="display:flex;flex-direction:column;gap:6px"><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:color-mix(in oklab, var(--gold) 14%, var(--surface));border:2px solid transparent;transition:transform .55s cubic-bezier(.16,1,.3,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--gold);text-align:center;display:flex;align-items:center;justify-content:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--gold);border:2px solid var(--ink);color:white;display:grid;place-items:center;font-size:11px">1</span></div><div style="width:36px;height:36px;border-radius:11.52px;background:#fb923c;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:none">SD</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">Sofia_Db</div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">UC</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">12.480</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--brand-soft);border:2px solid var(--brand);transition:transform .55s cubic-bezier(.16,1,.3,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--silver);text-align:center;display:flex;align-items:center;justify-content:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--silver);border:2px solid var(--ink);color:white;display:grid;place-items:center;font-size:11px">2</span></div><div style="width:36px;height:36px;border-radius:11.52px;background:var(--brand);border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:0 0 0 3px var(--brand-soft)">TL</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">tú<span style="font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;background:var(--brand);color:white;letter-spacing:.06em">YOU</span></div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:none;letter-spacing:.06em">Tu universidad</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">9.120</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--bg-2);border:2px solid transparent;transition:transform .55s cubic-bezier(.16,1,.3,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--bronze);text-align:center;display:flex;align-items:center;justify-content:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--bronze);border:2px solid var(--ink);color:white;display:grid;place-items:center;font-size:11px">3</span></div><div style="width:36px;height:36px;border-radius:11.52px;background:#a78bfa;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:none">M</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">matiasv</div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">UAndes</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">8.740</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--bg-2);border:2px solid transparent;transition:transform .55s cubic-bezier(.16,1,.3,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--ink-3);text-align:center;display:flex;align-items:center;justify-content:center">4</div><div style="width:36px;height:36px;border-radius:11.52px;background:#22d3ee;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:none">F</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">fernandapz</div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">USACH</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">7.610</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div><div style="display:grid;grid-template-columns:28px 40px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--bg-2);border:2px solid transparent;transition:transform .55s cubic-bezier(.16,1,.3,1), background .3s;position:relative"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--ink-3);text-align:center;display:flex;align-items:center;justify-content:center">5</div><div style="width:36px;height:36px;border-radius:11.52px;background:#34d399;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:12.959999999999999px;color:white;position:relative;box-shadow:none">IM</div><div style="min-width:0"><div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px">ignacio_m</div><div style="font-size:11px;color:var(--ink-3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em">UC</div></div><div style="text-align:right"><div style="font-family:var(--font-display);font-weight:800;font-size:16px">7.185</div><div style="font-size:10px;color:var(--ink-3);font-family:var(--font-mono);letter-spacing:.08em">XP</div></div></div></div><div style="margin-top:14px;padding-top:12px;border-top:2px dashed var(--line);display:flex;justify-content:space-between;align-items:center;font-size:12px;font-family:var(--font-mono);color:var(--ink-3)"><span style="display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M9 3v4M15 3v4"></path></svg> CIERRA LUN 09:00</span><span style="display:flex;align-items:center;gap:4px;color:var(--brand-ink);font-weight:800">PREMIO TOP 3 · 500 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M9.5 9.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"></path></svg></span></div></div></div></div></div><style>
         @media (max-width: 920px) {
           .hero-grid { grid-template-columns: 1fr !important; gap: 48px !important; }
         }
@@ -911,7 +828,7 @@ section.section-live .mh-hl {
 
   <script src="/static/machreach_landing/vendor/react.production.min.js"></script>
   <script src="/static/machreach_landing/vendor/react-dom.production.min.js"></script>
-  <script src="/static/machreach_landing/bundle.min.js?v=landing-mobile-phone-15" defer></script>
+  <script src="/static/machreach_landing/bundle.min.js?v=landing-motion-17" defer></script>
 <script>
 (function(){
   var links={"Features":"#features","C\u00f3mo funciona":"#how","Precios":"#pricing","Roadmap":"/roadmap","Sobre":"/about","Blog":"/blog","Contacto":"mailto:support@machreach.com","Prensa":"/press","T\u00e9rminos":"/terms","Privacidad":"/privacy","Cookies":"/cookies","Status":"/status"};

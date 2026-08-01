@@ -72,26 +72,24 @@ function HeroLeaderboard() {
       transform: "rotate(1.4deg)",
     }}>
       {/* Floating XP badge */}
-      <div style={{
+      <div className="hero-xp-badge" style={{
         position: "absolute", top: -22, right: -14, zIndex: 2,
         background: "var(--accent)", color: "var(--accent-ink)",
         border: "2px solid var(--ink)", borderRadius: 14,
         padding: "8px 14px", fontFamily: "var(--font-display)", fontWeight: 800,
         boxShadow: "0 4px 0 0 var(--ink)",
-        animation: "float 2.6s ease-in-out infinite",
         display: "flex", alignItems: "center", gap: 6,
       }}>
         <IconBolt size={16}/> +24 XP
       </div>
       {/* Floating streak */}
-      <div style={{
+      <div className="hero-streak-badge" style={{
         position: "absolute", bottom: -18, left: -16, zIndex: 2,
         background: "var(--surface)",
         border: "2px solid var(--ink)", borderRadius: 14,
         padding: "10px 14px", fontFamily: "var(--font-display)", fontWeight: 800,
         boxShadow: "0 4px 0 0 var(--ink)",
         display: "flex", alignItems: "center", gap: 8,
-        animation: "float 3.2s ease-in-out infinite",
       }}>
         <span style={{ color: "var(--bad)" }}><IconFire size={20}/></span>
         <span>18</span>
@@ -143,7 +141,7 @@ function HeroLeaderboard() {
                 ? "var(--brand-soft)"
                 : (i === 0 ? "color-mix(in oklab, var(--gold) 14%, var(--surface))" : "var(--bg-2)"),
               border: r.you ? "2px solid var(--brand)" : "2px solid transparent",
-              transition: "transform .5s cubic-bezier(.5,1.6,.4,1), background .3s",
+              transition: "transform .55s cubic-bezier(.16,1,.3,1), background .3s",
               position: "relative",
             }}>
               <div style={{

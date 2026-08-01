@@ -1047,21 +1047,31 @@ function LandingMotion() {
     root.classList.add("motion-ready");
 
     const progress = document.getElementById("landing-progress-bar");
-    const updateProgress = () => {
-      if (!progress) return;
+    const sections = Array.from(document.querySelectorAll("section"));
+    const heroCard = document.querySelector(".hero-anim-card");
+    let frame = 0;
+    const updateScene = () => {
+      frame = 0;
       const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
       const pct = Math.min(1, Math.max(0, window.scrollY / max));
-      progress.style.transform = `scaleX(${pct})`;
-      root.style.setProperty("--landing-scroll-pct", `${(pct * 100).toFixed(2)}%`);
+      if (progress) progress.style.transform = `scaleX(${pct})`;
+      root.style.setProperty("--landing-paper-y", `${Math.min(28, window.scrollY * 0.035).toFixed(2)}px`);
+      root.style.setProperty("--hero-shift", `${Math.min(1, window.scrollY / Math.max(480, window.innerHeight * 0.72)).toFixed(3)}`);
+      if (heroCard) heroCard.style.setProperty("--hero-card-shift", `${Math.min(28, window.scrollY * 0.045).toFixed(2)}px`);
+
+      const vh = Math.max(1, window.innerHeight);
+      sections.forEach((section) => {
+        const rect = section.getBoundingClientRect();
+        const sectionProgress = Math.min(1, Math.max(0, (vh - rect.top) / Math.max(vh, rect.height)));
+        section.style.setProperty("--section-progress", sectionProgress.toFixed(3));
+        section.classList.toggle("section-live", rect.top < vh * 0.8 && rect.bottom > vh * 0.2);
+      });
     };
 
-    const revealVariants = [
-      "motion-flip",
-      "motion-deal",
-      "motion-note",
-      "motion-page",
-      "motion-deal-l",
-    ];
+    const requestScene = () => {
+      if (!frame) frame = requestAnimationFrame(updateScene);
+    };
+
     const revealSelectors = [
       ".stats-grid > *",
       ".feat-grid > *",
@@ -1075,12 +1085,18 @@ function LandingMotion() {
       "footer .container > div:last-child",
     ].join(",");
     const revealTargets = Array.from(document.querySelectorAll(revealSelectors));
-    revealTargets.forEach((el, i) => {
-      /* section heads are written onto the page; everything else gets dealt/flipped/slapped like study material */
-      const variant = el.classList.contains("section-head") ? "motion-write" : revealVariants[i % revealVariants.length];
+    const groupOrder = new Map();
+    revealTargets.forEach((el) => {
+      const parent = el.parentElement;
+      const order = groupOrder.get(parent) || 0;
+      groupOrder.set(parent, order + 1);
+      const variant = el.matches(".canvas-cta, .lb-arena, .quiz-wrap > *, .price-grid > *")
+        ? "motion-stage"
+        : el.parentElement && el.parentElement.matches(".stats-grid, .lb-wrap")
+          ? "motion-score"
+          : "motion-rise";
       el.classList.add("motion-reveal", variant);
-      el.style.setProperty("--motion-order", i);
-      el.style.setProperty("--reveal-delay", `${(i % 6) * 70}ms`);
+      el.style.setProperty("--reveal-delay", `${Math.min(order, 4) * 75}ms`);
     });
 
     /* highlighter sweep: wrap heading text so the marker hugs each line */
@@ -1097,7 +1113,7 @@ function LandingMotion() {
           observer.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.16, rootMargin: "0px 0px -8% 0px" });
+    }, { threshold: 0.12, rootMargin: "0px 0px -6% 0px" });
     revealTargets.forEach(el => observer.observe(el));
     const markVisible = () => {
       revealTargets.forEach((el) => {
@@ -1108,56 +1124,6 @@ function LandingMotion() {
         }
       });
     };
-
-    const hotSelectors = [
-      ".card",
-      ".card-soft",
-      ".btn",
-      ".feat-grid > div",
-      ".stats-grid > div",
-      ".price-grid > div",
-      ".canvas-cta",
-      ".lb-arena",
-      ".lb-insight",
-    ].join(",");
-    const hotTargets = Array.from(document.querySelectorAll(hotSelectors));
-    const onMove = (event) => {
-      const el = event.currentTarget;
-      const rect = el.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / Math.max(1, rect.width);
-      const y = (event.clientY - rect.top) / Math.max(1, rect.height);
-      el.style.setProperty("--motion-x", x.toFixed(3));
-      el.style.setProperty("--motion-y", y.toFixed(3));
-      el.style.setProperty("--motion-tilt-x", ((x - 0.5) * 5).toFixed(3));
-      el.style.setProperty("--motion-tilt-y", ((y - 0.5) * 5).toFixed(3));
-    };
-    const onLeave = (event) => {
-      const el = event.currentTarget;
-      el.style.setProperty("--motion-x", "0.5");
-      el.style.setProperty("--motion-y", "0.5");
-      el.style.setProperty("--motion-tilt-x", "0");
-      el.style.setProperty("--motion-tilt-y", "0");
-    };
-    hotTargets.forEach((el) => {
-      el.classList.add("motion-hotspot");
-      el.style.setProperty("--motion-x", "0.5");
-      el.style.setProperty("--motion-y", "0.5");
-      el.style.setProperty("--motion-tilt-x", "0");
-      el.style.setProperty("--motion-tilt-y", "0");
-      el.addEventListener("mousemove", onMove);
-      el.addEventListener("mouseleave", onLeave);
-    });
-
-    const onPointer = (event) => {
-      const x = Math.min(1, Math.max(0, event.clientX / Math.max(1, window.innerWidth)));
-      const y = Math.min(1, Math.max(0, event.clientY / Math.max(1, window.innerHeight)));
-      root.style.setProperty("--landing-mx", x.toFixed(3));
-      root.style.setProperty("--landing-my", y.toFixed(3));
-      root.style.setProperty("--landing-dx", `${((x - 0.5) * 18).toFixed(2)}px`);
-      root.style.setProperty("--landing-dy", `${((y - 0.5) * 18).toFixed(2)}px`);
-    };
-
-    const sections = Array.from(document.querySelectorAll("section"));
     const sectionObserver = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         entry.target.classList.toggle("section-live", entry.isIntersecting);
@@ -1167,40 +1133,20 @@ function LandingMotion() {
       section.style.setProperty("--section-order", i);
       sectionObserver.observe(section);
     });
-    const markLiveSections = () => {
-      const vh = Math.max(1, window.innerHeight);
-      sections.forEach((section) => {
-        const rect = section.getBoundingClientRect();
-        const live = rect.top < vh * 0.82 && rect.bottom > vh * 0.18;
-        section.classList.toggle("section-live", live);
-      });
-    };
-
-    updateProgress();
+    updateScene();
     requestAnimationFrame(markVisible);
-    requestAnimationFrame(markLiveSections);
     setTimeout(markVisible, 320);
-    setTimeout(markLiveSections, 360);
-    window.addEventListener("scroll", updateProgress, { passive: true });
+    window.addEventListener("scroll", requestScene, { passive: true });
     window.addEventListener("scroll", markVisible, { passive: true });
-    window.addEventListener("scroll", markLiveSections, { passive: true });
-    window.addEventListener("resize", updateProgress);
+    window.addEventListener("resize", requestScene);
     window.addEventListener("resize", markVisible);
-    window.addEventListener("resize", markLiveSections);
-    window.addEventListener("pointermove", onPointer, { passive: true });
 
     return () => {
-      window.removeEventListener("scroll", updateProgress);
+      window.removeEventListener("scroll", requestScene);
       window.removeEventListener("scroll", markVisible);
-      window.removeEventListener("scroll", markLiveSections);
-      window.removeEventListener("resize", updateProgress);
+      window.removeEventListener("resize", requestScene);
       window.removeEventListener("resize", markVisible);
-      window.removeEventListener("resize", markLiveSections);
-      window.removeEventListener("pointermove", onPointer);
-      hotTargets.forEach((el) => {
-        el.removeEventListener("mousemove", onMove);
-        el.removeEventListener("mouseleave", onLeave);
-      });
+      if (frame) cancelAnimationFrame(frame);
       observer.disconnect();
       sectionObserver.disconnect();
     };
