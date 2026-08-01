@@ -1,55 +1,117 @@
+"""Landing (v6) composition, motion and build contracts.
+
+The landing is authored in `MachReach Landing.html` + `v5/`/`v6/` component
+files and compiled by landing_build/build.mjs into bundle.min.js and
+index.prod.html, which are committed. These tests pin the parts that are easy
+to break silently: the authored source, the responsive rules, the intro
+contract, and the fact that the served artifact is the built one.
+"""
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 LANDING = ROOT / "static" / "machreach_landing"
 
+BUNDLE_VERSION = "landing-v6-1"
 
-def test_mobile_landing_has_authored_composition_and_resilient_intro():
-    css = (LANDING / "styles.css").read_text(encoding="utf-8")
-    hero = (LANDING / "hero.jsx").read_text(encoding="utf-8")
-    sections = (LANDING / "sections.jsx").read_text(encoding="utf-8")
+# Every component the entry HTML pulls in, in dependency order.
+V6_SOURCES = [
+    "v5/tweaks-panel.jsx", "v5/motion.jsx", "v5/logo.jsx",
+    "v6/icons.jsx", "v6/fx.jsx", "v6/intro.jsx", "v6/plan.jsx",
+    "v6/analytics.jsx", "v6/hero.jsx", "v6/features.jsx",
+    "v6/sections.jsx", "v6/sections2.jsx", "v6/pricing.jsx",
+]
+
+
+def test_authored_sources_and_stylesheets_exist():
+    """The build reads these by name; a rename would break it at build time,
+    which is later than here."""
+    for rel in V6_SOURCES + ["v6/theme.css", "v6/ui.css", "MachReach Landing.html"]:
+        assert (LANDING / rel).is_file(), f"missing authored source: {rel}"
+
+
+def test_entry_html_loads_every_component_it_needs():
     source = (LANDING / "MachReach Landing.html").read_text(encoding="utf-8")
+    for rel in V6_SOURCES:
+        assert f'src="{rel}"' in source, f"{rel} not referenced by the entry HTML"
+    assert 'href="v6/theme.css"' in source
+    assert 'href="v6/ui.css"' in source
 
-    assert "mobile-leaderboard-demo" in sections
-    assert ".mobile-leaderboard-demo" in css
-    assert ".price-grid" in css and "grid-template-columns: 1fr" in css
-    assert ".hero-anim-card" in css and "display: none" in css
-    assert "Empezar" in source
-    # The intro plays on every visit by design: no persisted play-once gate.
-    # Reduced-motion users still skip it.
+
+def test_landing_is_responsive():
+    """The layout collapses to one column on small screens rather than
+    overflowing."""
+    ui = (LANDING / "v6/ui.css").read_text(encoding="utf-8")
+    assert "@media (max-width:1000px)" in ui
+    assert "@media (max-width:640px)" in ui
+    assert ".hero-grid{grid-template-columns:1fr" in ui
+    # Feature and pricing grids stack on phones.
+    assert ".feat-grid,.price-grid{grid-template-columns:1fr}" in ui
+
+
+def test_intro_plays_every_visit_and_respects_reduced_motion():
+    """No persisted play-once gate: the intro runs on each load. Reduced-motion
+    users still skip straight to the page."""
+    intro = (LANDING / "v6/intro.jsx").read_text(encoding="utf-8")
+    assert "function IntroV6" in intro
+    assert "localStorage" not in intro
+    assert "prefers-reduced-motion: reduce" in intro
+
+    source = (LANDING / "MachReach Landing.html").read_text(encoding="utf-8")
     assert "machreach:intro-complete" not in source
     assert "localStorage.setItem" not in source
-    assert "prefers-reduced-motion: reduce" in source
-    assert "section .section-head" not in sections.split("const revealSelectors", 1)[1].split(
-        "].join", 1
-    )[0]
-    assert "HeroLeaderboard" in hero
+    # Intro is on by default and its overlay clears the flag when it finishes.
+    assert '"playIntro": true' in source
+    assert 'document.body.dataset.intro = "done"' in source
 
 
-def test_public_landing_route_serves_the_mobile_artifact(client):
+def test_motion_primitives_are_defined_once_in_the_theme():
+    """The v6 reveal vocabulary. Components reference these class names, so a
+    rename in the stylesheet would silently leave elements invisible."""
+    theme = (LANDING / "v6/theme.css").read_text(encoding="utf-8")
+    for cls in [".rv{", ".rv-scale,.pop{", ".slap{", ".lmask{", ".draw{"]:
+        assert cls in theme, f"missing motion primitive: {cls}"
+    # Reduced motion neutralises all of them.
+    assert "@media (prefers-reduced-motion:reduce)" in theme
+    assert ".rv,.rv-scale,.pop,.slap{opacity:1;transform:none;filter:none}" in theme
+
+
+def test_built_artifact_is_current_and_self_hosted():
+    """index.prod.html must ship local React, not the CDN copies the authored
+    file uses for development."""
+    prod = (LANDING / "index.prod.html").read_text(encoding="utf-8")
+    assert "unpkg.com" not in prod, "prod artifact still points at the CDN"
+    assert "text/babel" not in prod, "prod artifact still needs the Babel transpiler"
+    assert "/static/machreach_landing/vendor/react.production.min.js" in prod
+    assert f"bundle.min.js?v={BUNDLE_VERSION}" in prod
+    assert 'href="/static/machreach_landing/v6/theme.css"' in prod
+    assert 'href="/static/machreach_landing/v6/ui.css"' in prod
+
+
+def test_built_artifact_is_prerendered():
+    """#root ships with real markup so the page is not blank before hydration."""
+    prod = (LANDING / "index.prod.html").read_text(encoding="utf-8")
+    assert '<div id="root"></div>' not in prod, "#root is empty — prerender failed"
+    for marker in ["hero-panel", "plan-grid", "an-chart", "price-grid", "faq-item"]:
+        assert marker in prod, f"section missing from prerendered markup: {marker}"
+
+
+def test_public_landing_route_serves_the_built_artifact(client):
     response = client.get("/")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert 'name="viewport" content="width=device-width, initial-scale=1"' in body
-    assert "landing-motion-17" in body
-    assert ".hero-anim-card { display: none !important; }" in body
-    assert ".mobile-leaderboard-demo" in body
-    assert "nav-cta-short" in body
+    assert f"bundle.min.js?v={BUNDLE_VERSION}" in body
+    assert "unpkg.com" not in body
+    # v6 sections the nav anchors point at.
+    for anchor in ['id="how"', 'id="pricing"', 'id="faq"', 'id="features"']:
+        assert anchor in body, f"missing landing anchor: {anchor}"
 
 
-def test_landing_motion_is_restrained_and_product_specific():
-    css = (LANDING / "styles.css").read_text(encoding="utf-8")
-    sections = (LANDING / "sections.jsx").read_text(encoding="utf-8")
-    source = (LANDING / "MachReach Landing.html").read_text(encoding="utf-8")
-
-    assert "motion-rise" in css and "motion-score" in css and "motion-stage" in css
-    assert "--hero-card-shift" in sections
-    assert "IntroEmbers" in source and "IntroBurst" in source
-    assert "heroBadgeSettle" in source
-    assert "motion-hotspot" not in sections
-    assert "motion-flip" not in sections
-    assert "motion-paper-drift" not in css
-    assert "mriRise" in source
-    assert "clip-path: inset(0 5%" not in css
+def test_landing_route_logo_links_home_not_to_a_fragment(client):
+    """The authored file uses href="#" for the in-page mock; the build rewrites
+    it so the real site's logo navigates home."""
+    body = client.get("/").get_data(as_text=True)
+    assert 'href="#" class="logo"' not in body
+    assert 'href="/" class="logo"' in body

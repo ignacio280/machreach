@@ -19,28 +19,51 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const LANDING = join(__dirname, "..", "static", "machreach_landing");
 const SRC_HTML = join(LANDING, "MachReach Landing.html");
 const PREFIX = "/static/machreach_landing/";
-const BUNDLE_VERSION = "landing-motion-17";
+const BUNDLE_VERSION = "landing-v6-1";
+
+// Stylesheets the source HTML links relatively; rewritten to absolute /static
+// paths in the emitted prod file.
+const STYLESHEETS = ["v6/theme.css", "v6/ui.css"];
 
 const read = (f) => readFileSync(join(LANDING, f), "utf-8");
 const html = readFileSync(SRC_HTML, "utf-8");
+// Only matches inline <script type="text/babel"> blocks; the JSX files are
+// loaded via src= and have an attribute before the ">", so they don't match.
 const babelScripts = [...html.matchAll(/<script type="text\/babel">([\s\S]*?)<\/script>/g)];
 
 // --- 1. Gather source ------------------------------------------------------
-const jsxFiles = ["icons.jsx", "tweaks-panel.jsx", "hero.jsx",
-                  "features.jsx", "sections.jsx", "pricing.jsx"];
-const inlinePrereqs = babelScripts
-  .map((m) => m[1])
-  .filter((code) => code.includes("const LOGO_COLORS") || code.includes("function IntroOverlay"));
-let src = inlinePrereqs.join("\n\n") + "\n\n" + jsxFiles.map(read).join("\n\n");
+// Order matters: these are concatenated into one scope, so anything referenced
+// at module level must come first. logo.jsx defines LOGO_COLORS/LOGO_PATHS,
+// which intro.jsx reads, and motion.jsx defines the hooks every section uses.
+const jsxFiles = [
+  "v5/tweaks-panel.jsx",
+  "v5/motion.jsx",
+  "v5/logo.jsx",
+  "v6/icons.jsx",
+  "v6/fx.jsx",
+  "v6/intro.jsx",
+  "v6/plan.jsx",
+  "v6/analytics.jsx",
+  "v6/hero.jsx",
+  "v6/features.jsx",
+  "v6/sections.jsx",
+  "v6/sections2.jsx",
+  "v6/pricing.jsx",
+];
+let src = jsxFiles.map(read).join("\n\n");
 
 // Extract the inline App bootstrap (last <script type="text/babel"> ... </script>)
 const m = babelScripts[babelScripts.length - 1];
 if (!m) throw new Error("Could not find inline App bootstrap script in source HTML");
 let bootstrap = m[1];
 // Drop the browser render call; we add a guarded hydrate/render at the end.
-bootstrap = bootstrap.replace(
-  /ReactDOM\.createRoot\(document\.getElementById\("root"\)\)\.render\(<App\/>\);/,
-  "");
+// Tolerant of `<App/>` and `<App />` — a missed match here is silent and would
+// render the app twice (once immediately, once from the guarded call below).
+const RENDER_CALL = /ReactDOM\.createRoot\(\s*document\.getElementById\("root"\)\s*\)\.render\(\s*<App\s*\/>\s*\);/;
+if (!RENDER_CALL.test(bootstrap)) {
+  throw new Error("Could not find the ReactDOM render call to strip from the bootstrap");
+}
+bootstrap = bootstrap.replace(RENDER_CALL, "");
 src += "\n\n" + bootstrap + `
 ;(function () {
   if (typeof document === "undefined") return;
@@ -125,8 +148,17 @@ console.log(`prerender: ${prerendered.length} chars captured`);
 // --- 4. Emit index.prod.html ----------------------------------------------
 let prod = html;
 // Rewrite assets to absolute /static paths
-prod = prod.replace('href="styles.css"', `href="${PREFIX}styles.css"`);
-prod = prod.replace('href="#" className="logo"', 'href="/" className="logo"');
+for (const sheet of STYLESHEETS) {
+  const before = prod;
+  prod = prod.replace(`href="${sheet}"`, `href="${PREFIX}${sheet}"`);
+  if (prod === before) throw new Error(`Stylesheet link not found in source HTML: ${sheet}`);
+}
+// The logo links to "#" in the authored file (it is an in-page mock). On the
+// real site it must navigate home. This has to be applied to the *prerendered*
+// markup — the authored `className="logo"` only ever appears inside the inline
+// bootstrap, which is replaced by the prod script tags below, so rewriting the
+// source text here would be a no-op.
+prerendered = prerendered.replaceAll('href="#" class="logo"', 'href="/" class="logo"');
 // Replace dev React/Babel + jsx script tags + inline bootstrap with prod scripts.
 let scriptsStart = prod.indexOf('<script src="https://unpkg.com/react@');
 if (scriptsStart === -1) scriptsStart = prod.indexOf('<script src="/static/machreach_landing/vendor/react.production.min.js">');
