@@ -4,6 +4,7 @@ Flask web application for MachReach Uni.
 from __future__ import annotations
 
 import bcrypt
+import gzip
 import hashlib
 import hmac
 import html as html_module
@@ -697,6 +698,70 @@ def _esc(text: str) -> str:
 
 def _csrf_hidden_input() -> str:
     return f'<input type="hidden" name="csrf_token" value="{_esc(generate_csrf())}">'
+
+
+# ── Response compression ────────────────────────────────────────────────────
+# Pages are server-rendered with their CSS/JS inline, so a single student view
+# is 70-270 KB of highly repetitive text. gunicorn does not compress, so without
+# this every navigation shipped the full payload.
+_COMPRESSIBLE_MIMETYPES = frozenset({
+    "text/html",
+    "text/css",
+    "text/plain",
+    "text/xml",
+    "application/json",
+    "application/javascript",
+    "application/manifest+json",
+    "image/svg+xml",
+})
+# Below ~1 KB, framing overhead cancels the saving out.
+_COMPRESS_MIN_BYTES = 1024
+# Static files stream by default; only materialize ones small enough to hold.
+_COMPRESS_MAX_BYTES = 2 * 1024 * 1024
+
+
+@app.after_request
+def _compress_response(response):
+    """Gzip compressible bodies.
+
+    Registered *before* the security-header handler on purpose: Flask runs
+    after_request callbacks in reverse registration order, so this runs last —
+    after ``harden_html`` has finished rewriting the HTML body. Compressing any
+    earlier would hand that rewrite a gzip blob instead of markup.
+    """
+    if not (200 <= response.status_code < 300):
+        return response
+    if "Content-Encoding" in response.headers:
+        return response
+    # Any cache in front of us must key on the request's encoding, whether or
+    # not this particular response ended up compressed.
+    response.headers.add("Vary", "Accept-Encoding")
+    if "gzip" not in (request.headers.get("Accept-Encoding") or "").lower():
+        return response
+    if response.mimetype not in _COMPRESSIBLE_MIMETYPES:
+        return response
+    if response.direct_passthrough:
+        # send_static_file streams from disk. Reading it in is only safe for
+        # bounded, known-length files.
+        length = response.content_length or 0
+        if not 0 < length <= _COMPRESS_MAX_BYTES:
+            return response
+        response.direct_passthrough = False
+    data = response.get_data()
+    if len(data) < _COMPRESS_MIN_BYTES:
+        return response
+    compressed = gzip.compress(data, compresslevel=6)
+    if len(compressed) >= len(data):
+        return response
+    response.set_data(compressed)
+    response.headers["Content-Encoding"] = "gzip"
+    response.headers["Content-Length"] = str(len(compressed))
+    # The entity changed, so the validator has to change with it, or a cache
+    # can serve this gzip body against an identity-encoded request's ETag.
+    etag = response.headers.get("ETag")
+    if etag and etag.endswith('"'):
+        response.headers["ETag"] = f'{etag[:-1]}-gzip"'
+    return response
 
 
 @app.after_request

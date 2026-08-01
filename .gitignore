@@ -16,3 +16,8 @@ recovery_local/
 e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
+
+# Local-only scratch: throwaway review DBs, server logs, UI verification scripts.
+work/
+# Throwaway launcher for local UI review (seeds a test account, disables SMTP/AI).
+dev_review_server.py
