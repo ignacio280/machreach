@@ -12,7 +12,9 @@ import logging
 import os
 
 import json
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from flask import Flask, flash, g, jsonify, make_response, redirect, render_template_string, request, session, url_for
@@ -52,6 +54,29 @@ from machreach_core.db import (
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+
+# ── Deploy identity ─────────────────────────────────────────────────────────
+# One string that changes exactly once per deploy, used to key client-side
+# caches. Render exposes the commit; locally there is no deploy, so fall back to
+# the process start time, which changes on every restart and keeps dev honest.
+def resolve_deploy_version(commit: str | None, *, now: datetime | None = None) -> str:
+    """Return the cache key for this deploy.
+
+    The commit is authoritative when present. Without one there is no deploy to
+    speak of, so fall back to a start-time stamp: it changes on every restart,
+    which keeps local caches from masking edits.
+    """
+    short = (commit or "").strip()[:12]
+    if short:
+        return short
+    moment = now or datetime.now(timezone.utc)
+    return "dev-" + moment.strftime("%Y%m%d%H%M%S")
+
+
+DEPLOY_VERSION = resolve_deploy_version(os.getenv("RENDER_GIT_COMMIT"))
+# Matches:  const VERSION = 'mr-v3';   capturing the quotes so any authored
+# value can be swapped without the file's own constant needing to be correct.
+_SW_VERSION_RE = re.compile(r"""(const\s+VERSION\s*=\s*['"])([^'"]*)(['"])""")
 
 # ── Security: session cookie hardening ──
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -845,6 +870,8 @@ def _inject_analytics_context():
     """
     analytics_allowed = request.cookies.get("analytics_consent") == "1"
     return {
+        # Cache key for versioned static URLs; changes once per deploy.
+        "deploy_version": DEPLOY_VERSION,
         "posthog_key": os.getenv("POSTHOG_KEY", "") if analytics_allowed else "",
         "posthog_host": os.getenv("POSTHOG_HOST", "https://us.i.posthog.com"),
         "analytics_uid": session.get("client_id") or "",
@@ -1070,7 +1097,7 @@ LAYOUT = """<!DOCTYPE html>
       else window.alert(text);
     };
   </script>
-  <link rel="stylesheet" href="/static/machreach_layout/layout-base.css?v=3"/>
+  <link rel="stylesheet" href="/static/machreach_layout/layout-base.css?v={{ deploy_version }}"/>
   <link rel="stylesheet" href="/static/machreach_consent.css?v=20260719"/>
 </head>
 <body>
@@ -1207,7 +1234,7 @@ LAYOUT = """<!DOCTYPE html>
         {% endfor %}
         </div>
         {{content|safe}}
-        <link rel="stylesheet" href="/static/machreach_layout/layout-dark.css"/>
+        <link rel="stylesheet" href="/static/machreach_layout/layout-dark.css?v={{ deploy_version }}"/>
       </div>
     </main>
     {% if active_page != 'student_setup' %}
@@ -1739,7 +1766,7 @@ LAYOUT = """<!DOCTYPE html>
   </script>
 
   <!-- ─── MachReach global UX enhancements ─── -->
-  <script src="/static/machreach_layout/layout-1.js?v=20260604-tooltip2"></script>
+  <script src="/static/machreach_layout/layout-1.js?v={{ deploy_version }}"></script>
 
   <!-- Cookie Consent Banner (GDPR) -->
   <section id="cookie-consent" class="mr-consent" role="dialog" aria-label="Preferencias de privacidad" aria-live="polite" aria-hidden="true" hidden>
@@ -1777,11 +1804,11 @@ LAYOUT = """<!DOCTYPE html>
   <audio id="focus-keepalive" loop preload="auto" style="display:none"></audio>
   <audio id="focus-alarm" preload="auto" style="display:none"></audio>
 
-  <script src="/static/machreach_layout/layout-2.js?v=20260726-focus-float-minimize2"></script>
+  <script src="/static/machreach_layout/layout-2.js?v={{ deploy_version }}"></script>
 
   <!-- Student i18n: Spanish translations (client-side) -->
   {% if lang == 'es' and account_type|default('student') == 'student' %}
-  <script src="/static/machreach_layout/layout-3.js"></script>
+  <script src="/static/machreach_layout/layout-3.js?v={{ deploy_version }}"></script>
   {% endif %}
 
   <!-- Student i18n: English fallback for newer pages that were authored in Spanish -->
@@ -2054,7 +2081,7 @@ LAYOUT = """<!DOCTYPE html>
     @keyframes mrSlideDown { from { transform:translate(-50%,-30px); opacity:0;} to { transform:translate(-50%,0); opacity:1;}}
   </style>
 
-  <script src="/static/machreach_layout/layout-4.js"></script>
+  <script src="/static/machreach_layout/layout-4.js?v={{ deploy_version }}"></script>
   {% endif %}
 
 </body>
@@ -2681,7 +2708,13 @@ def _collect_ls_sub_ids(db, client_id: int) -> list:
         if sid2 and sid2 not in ids:
             ids.append(sid2)
     except Exception:
-        pass
+        # Callers use this list to cancel provider subscriptions on account
+        # deletion. Returning a short list silently means a deleted account can
+        # keep being billed, so this must never disappear without a trace.
+        _log.warning(
+            "failed to collect Lemon Squeezy subscription ids for client %s; "
+            "found %d before the error", client_id, len(ids), exc_info=True,
+        )
     return ids
 
 
@@ -4636,7 +4669,16 @@ def favicon():
 def service_worker():
     # Served from the root path so the service worker controls the whole app
     # ("/" scope), not just /static/.
-    resp = make_response(app.send_static_file("sw.js"))
+    #
+    # VERSION is stamped with the deploy identity rather than read as authored.
+    # The worker keys its static cache on VERSION, so a hand-maintained constant
+    # means any deploy where someone forgets to bump it leaves returning users
+    # on old JS/CSS against new HTML.
+    source = (Path(app.static_folder) / "sw.js").read_text(encoding="utf-8")
+    body = _SW_VERSION_RE.sub(
+        lambda m: f"{m.group(1)}{DEPLOY_VERSION}{m.group(3)}", source, count=1
+    )
+    resp = make_response(body)
     resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
     resp.headers["Service-Worker-Allowed"] = "/"
     resp.headers["Cache-Control"] = "no-cache"

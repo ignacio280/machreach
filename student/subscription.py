@@ -115,7 +115,13 @@ def _load_prefs(db, client_id: int) -> dict:
                 value.isoformat() if isinstance(value, datetime) else str(value)
             )
     except Exception:
-        pass
+        # Falling through leaves prefs without subscription/plus_until, which
+        # reads downstream as "not a Plus member". A paying student losing
+        # access must not be an invisible event.
+        log.warning(
+            "failed to load subscription state for client %s; "
+            "entitlement checks will see no Plus access", client_id, exc_info=True,
+        )
     return prefs
 
 

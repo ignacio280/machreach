@@ -4265,7 +4265,12 @@ def award_xp(client_id: int, action: str, xp: int, detail: str = "") -> int:
             if mult and mult > 1.0:
                 xp = int(round(xp * mult))
         except Exception:
-            pass
+            # Same contract as add_coins: award the base XP, but leave a trace
+            # so a broken multiplier cannot silently under-reward for weeks.
+            log.warning(
+                "xp boost lookup failed for client %s action=%s; awarding unboosted %s",
+                client_id, action, xp, exc_info=True,
+            )
     with get_db() as db:
         return _insert_returning_id(
             db,
@@ -6713,7 +6718,12 @@ def add_coins(client_id: int, amount: int, _reason: str = "") -> int:
             if mult and mult > 1.0:
                 amount = int(round(amount * mult))
         except Exception:
-            pass
+            # Credit the base amount rather than failing the grant, but never
+            # silently: a boost the student paid for was not applied.
+            log.warning(
+                "coin boost lookup failed for client %s; crediting unboosted %s",
+                client_id, amount, exc_info=True,
+            )
     with get_db() as db:
         _ensure_wallet(db, client_id)
         return _credit_wallet_with_debt(db, client_id, int(amount))
