@@ -4213,6 +4213,19 @@ Return this JSON shape:
                         _profile_prefs = {}
                 except (TypeError, ValueError):
                     _profile_prefs = {}
+                _profile_setting_keys = {
+                    "profile_public", "appear_in_rankings", "show_online", "allow_requests",
+                    "block_reminders", "streak_risk", "grade_results", "weekly_summary",
+                    "product_news", "focus_block_sites", "focus_silence_notifications",
+                }
+                _legacy_profile_settings = _profile_prefs.get("profile_settings") or {}
+                if not isinstance(_legacy_profile_settings, dict):
+                    _legacy_profile_settings = {}
+                _profile_settings = {
+                    key: _profile_prefs[key] if key in _profile_prefs else _legacy_profile_settings[key]
+                    for key in _profile_setting_keys
+                    if key in _profile_prefs or key in _legacy_profile_settings
+                }
                 _focus_lifetime = sdb.get_focus_stats(_cid()) or {}
                 _level_name, _level_floor, _level_ceil = sdb.get_level(_total_xp)
                 try:
@@ -4320,7 +4333,7 @@ Return this JSON shape:
                         "cards": sum(int(d.get("card_count") or 0) for d in _profile_decks),
                         "friends": _friend_count,
                     },
-                    "preferences": _profile_prefs.get("profile_settings") or {},
+                    "preferences": _profile_settings,
                 }
             if _design_slug == "herramientas":
                 _tool_colors = ["#FF6A2B", "#6E4CD8", "#6FB03A", "#2FA8C6"]
@@ -23275,18 +23288,11 @@ No markdown, no code fences. ONLY JSON.
         settings = {key: bool(data[key]) for key in allowed if key in data}
         if not settings:
             return jsonify(error="No hay preferencias válidas."), 400
-        from machreach_core.db import get_mail_preferences, update_mail_preferences
-        try:
-            current = json.loads(get_mail_preferences(_cid()) or "{}")
-            if not isinstance(current, dict):
-                current = {}
-        except (TypeError, ValueError):
-            current = {}
-        merged = current.get("profile_settings") or {}
-        if not isinstance(merged, dict):
-            merged = {}
-        merged.update(settings)
-        update_mail_preferences(_cid(), json.dumps({"profile_settings": merged}))
+        from machreach_core.db import update_mail_preferences
+        # Each switch is a top-level JSON key so update_mail_preferences can
+        # merge it atomically. A nested read-modify-write object would let two
+        # simultaneous toggles erase one another.
+        update_mail_preferences(_cid(), json.dumps(settings))
         if "allow_requests" in settings:
             sdb.set_friend_discovery(_cid(), settings["allow_requests"])
         return jsonify(ok=True, preferences=settings)

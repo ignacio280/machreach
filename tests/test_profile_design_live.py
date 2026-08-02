@@ -88,6 +88,6 @@ def test_profile_preferences_merge_without_erasing_previous_choices(client, make
 
     assert first.status_code == 200
     assert second.status_code == 200
-    settings = json.loads(get_mail_preferences(client_id))["profile_settings"]
+    settings = json.loads(get_mail_preferences(client_id))
     assert settings["profile_public"] is False
     assert settings["allow_requests"] is False
