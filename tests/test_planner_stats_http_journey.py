@@ -1,6 +1,9 @@
 """Planner and study-stat routes preserve ownership and recover from AI failure."""
 
-from datetime import date
+import base64
+from datetime import date, timedelta
+import json
+import re
 
 from machreach_core.db import _exec, get_db
 from student import ai_usage, analyzer, db as sdb
@@ -28,6 +31,88 @@ def _plus(client_id: int) -> None:
         status="active",
         ls_sub_id=f"sub-planner-{client_id}",
     )
+
+
+def _app_payload(response) -> dict:
+    body = response.get_data(as_text=True)
+    encoded = re.search(r'atob\("([A-Za-z0-9+/=]+)"\)', body).group(1)
+    return json.loads(base64.b64decode(encoded))
+
+
+def test_live_design_focus_planner_and_grade_sheet_are_account_backed(
+    client, flask_app, make_user, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    client_id = make_user("Live Design Student")
+    course_id = sdb.create_manual_course(client_id, "Live Calculus", "MAT200")
+    exam_id = sdb.upsert_exam(
+        client_id,
+        course_id,
+        None,
+        name="Live Midterm",
+        exam_date=(date.today() + timedelta(days=30)).isoformat(),
+        weight_pct=40,
+        topics=["Limits"],
+    )
+    with get_db() as db:
+        _exec(db, "UPDATE student_exams SET status = 'upcoming' WHERE id = %s", (exam_id,))
+    sdb.save_focus_session(
+        client_id, "pomodoro", 25, 0, "Live Calculus", course_id, exam_id
+    )
+    _login(client, client_id, "Live Design Student")
+    _plus(client_id)
+
+    courses = _app_payload(client.get("/student/courses"))
+    assert courses["courses"]["items"][0]["name"] == "Live Calculus"
+    assert "total_sessions" in courses["courses"]
+
+    focus = _app_payload(client.get("/student/focus"))["focus"]
+    assert "total_minutes" in focus["stats"]
+    assert focus["next_exam"]["name"] == "Live Midterm"
+    assert focus["benchmark"]["has_data"] is False
+
+    settings = [
+        {"day_of_week": day, "available_hours": 2, "is_free_day": False}
+        for day in range(7)
+    ]
+    assert client.post(
+        "/api/student/planner/availability", json={"settings": settings}
+    ).status_code == 200
+    generated = client.post("/api/student/planner/regenerate", json={})
+    assert generated.status_code == 200
+    plan = generated.get_json()["plan"]
+    assert len(plan["days"]) == 7
+    assert any(day["blocks"] for day in plan["days"])
+    planner = _app_payload(client.get("/student/planner"))["plan"]
+    assert planner["week_start"] == plan["week_start"]
+
+    sheet = {
+        "current": 0,
+        "sems": [{"label": "I", "courses": [{
+            "id": "c1", "name": "Live Calculus", "credits": 10, "evals": []
+        }]}],
+    }
+    saved = client.post("/api/student/grades/sheet", json={"sheet": sheet})
+    assert saved.status_code == 200
+    assert sdb.get_grade_sheet(client_id) == sheet
+    assert _app_payload(client.get("/student/gpa"))["grades"]["sheet"] == sheet
+
+
+def test_grade_sheet_rejects_invalid_or_oversized_shapes(
+    client, flask_app, make_user, monkeypatch
+):
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    client_id = make_user("Invalid Sheet Student")
+    _login(client, client_id, "Invalid Sheet Student")
+    assert client.post("/api/student/grades/sheet", json={"sheet": []}).status_code == 400
+    assert client.post(
+        "/api/student/grades/sheet",
+        json={"sheet": {"sems": [{}]}},
+    ).status_code == 400
+    assert client.post(
+        "/api/student/grades/sheet",
+        json={"sheet": {"sems": [{"courses": [{}]}]}},
+    ).status_code == 400
 
 
 def test_stats_dashboard_semester_and_period_contracts(

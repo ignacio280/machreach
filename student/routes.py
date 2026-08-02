@@ -5133,7 +5133,17 @@ Material:
             except Exception:
                 files = []
             material_chars = sum(len(f.get("extracted_text") or "") for f in files)
-            review_summary = sdb.review_summary_for_course(c.get("name") or e.get("course_name") or "", c.get("code") or "")
+            _review_rows = sdb.search_course_reviews(
+                query=c.get("code") or c.get("name") or e.get("course_name") or "",
+                limit=100,
+            )
+            review_summary = {
+                "count": len(_review_rows),
+                "avg_difficulty": (
+                    sum(float(r.get("difficulty_rating") or 0) for r in _review_rows) / len(_review_rows)
+                    if _review_rows else 0
+                ),
+            }
             base_difficulty = int(c.get("difficulty") or 3)
             review_difficulty = float(review_summary.get("avg_difficulty") or 0)
             effective_difficulty = int(round(review_difficulty)) if review_summary.get("count") else base_difficulty
