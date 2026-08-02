@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 LANDING = ROOT / "static" / "machreach_landing"
 
-BUNDLE_VERSION = "landing-v6-1"
+BUNDLE_VERSION = "landing-v6-2"
 
 # Every component the entry HTML pulls in, in dependency order.
 V6_SOURCES = [
@@ -76,6 +76,15 @@ def test_motion_primitives_are_defined_once_in_the_theme():
     assert ".rv,.rv-scale,.pop,.slap{opacity:1;transform:none;filter:none}" in theme
 
 
+def test_cta_sheen_stays_inside_buttons_in_dark_mode():
+    """The animated sheen must never escape into the page as a floating
+    rectangular highlight, especially against the dark paper background."""
+    theme = (LANDING / "v6/theme.css").read_text(encoding="utf-8")
+    assert ".btn-primary{background:var(--brand);color:#fff;overflow:hidden;isolation:isolate}" in theme
+    assert "pointer-events:none" in theme
+    assert '[data-theme="dark"] .btn-primary::after' in theme
+
+
 def test_built_artifact_is_current_and_self_hosted():
     """index.prod.html must ship local React, not the CDN copies the authored
     file uses for development."""
@@ -84,8 +93,8 @@ def test_built_artifact_is_current_and_self_hosted():
     assert "text/babel" not in prod, "prod artifact still needs the Babel transpiler"
     assert "/static/machreach_landing/vendor/react.production.min.js" in prod
     assert f"bundle.min.js?v={BUNDLE_VERSION}" in prod
-    assert 'href="/static/machreach_landing/v6/theme.css"' in prod
-    assert 'href="/static/machreach_landing/v6/ui.css"' in prod
+    assert f'href="/static/machreach_landing/v6/theme.css?v={BUNDLE_VERSION}"' in prod
+    assert f'href="/static/machreach_landing/v6/ui.css?v={BUNDLE_VERSION}"' in prod
 
 
 def test_built_artifact_is_prerendered():

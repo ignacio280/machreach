@@ -68,7 +68,6 @@ function LiveBoard() {
 
 function Hero() {
   const tiltRef = useTilt(4);
-  const ctaRef = useMagnetic(0.22, 9);
   const [ref, seen] = useReveal({ threshold: 0.05 });
   return (
     <section className="hero" ref={ref}>
@@ -81,7 +80,7 @@ function Hero() {
           </h1>
           <p className="hero-sub rv" style={{ "--d": "560ms" }}>MachReach convierte tu semestre en un juego que <em>sí quieres ganar</em>.</p>
           <div className="hero-cta rv" style={{ "--d": "650ms" }}>
-            <span ref={ctaRef} style={{ display: "inline-flex" }}><a href="https://machreach.com/register" className="btn btn-primary btn-lg"><IconCanvas size={19} /> Usar la extensión</a></span>
+            <a href="https://machreach.com/register" className="btn btn-primary btn-lg"><IconCanvas size={19} /> Usar la extensión</a>
             <a href="#how" className="btn btn-ghost btn-lg">Ver cómo funciona <IconArrow size={17} /></a>
           </div>
           <div className="hero-trust rv" style={{ "--d": "750ms" }}>

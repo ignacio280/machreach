@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const LANDING = join(__dirname, "..", "static", "machreach_landing");
 const SRC_HTML = join(LANDING, "MachReach Landing.html");
 const PREFIX = "/static/machreach_landing/";
-const BUNDLE_VERSION = "landing-v6-1";
+const BUNDLE_VERSION = "landing-v6-2";
 
 // Stylesheets the source HTML links relatively; rewritten to absolute /static
 // paths in the emitted prod file.
@@ -150,7 +150,7 @@ let prod = html;
 // Rewrite assets to absolute /static paths
 for (const sheet of STYLESHEETS) {
   const before = prod;
-  prod = prod.replace(`href="${sheet}"`, `href="${PREFIX}${sheet}"`);
+  prod = prod.replace(`href="${sheet}"`, `href="${PREFIX}${sheet}?v=${BUNDLE_VERSION}"`);
   if (prod === before) throw new Error(`Stylesheet link not found in source HTML: ${sheet}`);
 }
 // The logo links to "#" in the authored file (it is an in-page mock). On the

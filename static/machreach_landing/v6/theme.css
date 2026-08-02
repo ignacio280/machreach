@@ -67,7 +67,7 @@ section{padding:clamp(70px,8.5vw,120px) 0;position:relative}
 .btn:active{transform:translate(2px,2px)!important;box-shadow:0 0 0 var(--ink)!important}
 .btn-lg{font-size:18px;padding:16px 30px;border-radius:15px;box-shadow:var(--sh2)}
 .btn-sm{font-size:14px;padding:9px 16px;border-radius:11px}
-.btn-primary{background:var(--brand);color:#fff}
+.btn-primary{background:var(--brand);color:#fff;overflow:hidden;isolation:isolate}
 .btn-primary:hover{color:#fff;transform:translate(-1px,-2px);box-shadow:var(--sh3)}
 .btn-lg.btn-primary:hover{box-shadow:0 6px 0 var(--ink),0 24px 44px -18px rgba(36,24,52,.45)}
 .btn-ghost{background:var(--surface);color:var(--ink)}
@@ -75,7 +75,8 @@ section{padding:clamp(70px,8.5vw,120px) 0;position:relative}
 .btn-ink{background:var(--ink);color:var(--paper)}
 .btn-ink:hover{color:var(--paper);transform:translate(-1px,-2px);box-shadow:var(--sh2)}
 .btn[disabled]{opacity:.55;cursor:not-allowed;box-shadow:var(--sh1)!important;transform:none!important}
-.btn-primary::after{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.4) 50%,transparent 70%);transform:translateX(-130%)}
+.btn-primary::after{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.4) 50%,transparent 70%);transform:translateX(-130%);pointer-events:none}
+[data-theme="dark"] .btn-primary::after{background:linear-gradient(100deg,transparent 32%,rgba(255,240,220,.2) 50%,transparent 68%)}
 .btn-primary:hover::after{animation:sheen .8s var(--ease)}
 @keyframes sheen{to{transform:translateX(130%)}}
 
