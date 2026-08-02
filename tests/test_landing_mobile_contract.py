@@ -49,17 +49,17 @@ def test_landing_is_responsive():
     assert ".feat-grid,.price-grid{grid-template-columns:1fr}" in ui
 
 
-def test_intro_plays_every_visit_and_respects_reduced_motion():
-    """No persisted play-once gate: the intro runs on each load. Reduced-motion
-    users still skip straight to the page."""
+def test_intro_is_remembered_and_respects_reduced_motion():
+    """Returning and reduced-motion visitors skip directly to the page while
+    the authored replay control can deliberately clear the completion gate."""
     intro = (LANDING / "v6/intro.jsx").read_text(encoding="utf-8")
     assert "function IntroV6" in intro
-    assert "localStorage" not in intro
+    assert 'localStorage.getItem("machreach:intro-complete")' in intro
+    assert 'localStorage.setItem("machreach:intro-complete", "1")' in intro
     assert "prefers-reduced-motion: reduce" in intro
 
     source = (LANDING / "MachReach Landing.html").read_text(encoding="utf-8")
-    assert "machreach:intro-complete" not in source
-    assert "localStorage.setItem" not in source
+    assert 'localStorage.removeItem("machreach:intro-complete")' in source
     # Intro is on by default and its overlay clears the flag when it finishes.
     assert '"playIntro": true' in source
     assert 'document.body.dataset.intro = "done"' in source

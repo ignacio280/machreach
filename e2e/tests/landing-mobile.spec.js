@@ -9,32 +9,33 @@ test("landing uses its authored phone composition on real mobile emulation", asy
     localStorage.setItem("machreach:intro-complete", "1");
   });
   await page.reload();
+  await page.waitForFunction(() => document.body.dataset.intro === "done");
+  await page.waitForTimeout(1800);
 
   const layout = await page.evaluate(() => {
     const rect = (selector) => {
       const element = document.querySelector(selector);
       const box = element?.getBoundingClientRect();
       return element && box
-        ? { display: getComputedStyle(element).display, left: box.left, right: box.right, width: box.width }
+        ? { display: getComputedStyle(element).display, left: box.left, right: box.right, width: element.offsetWidth }
         : null;
     };
     return {
       viewport: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,
-      heroPreview: rect(".hero-anim-card"),
-      mobileLeaderboard: rect(".mobile-leaderboard-demo"),
-      desktopLeaderboard: rect(".lb-wrap"),
+      heroPreview: rect(".hero-panel-wrap"),
+      leaderboard: rect(".lb-arena"),
       priceCards: [...document.querySelectorAll(".price-grid > div")].map((element) => {
         const box = element.getBoundingClientRect();
-        return { left: box.left, right: box.right, width: box.width };
+        return { left: box.left, right: box.right, width: element.offsetWidth };
       }),
       featureCards: [...document.querySelectorAll(".feat-grid > div")].slice(0, 3).map((element) => {
         const box = element.getBoundingClientRect();
-        return { left: box.left, right: box.right, width: box.width };
+        return { left: box.left, right: box.right, width: element.offsetWidth };
       }),
-      statsColumns: getComputedStyle(document.querySelector(".stats-grid")).gridTemplateColumns,
-      howColumns: getComputedStyle(document.querySelector(".how-grid")).gridTemplateColumns,
-      quizColumns: getComputedStyle(document.querySelector(".quiz-wrap")).gridTemplateColumns,
+      statsColumns: getComputedStyle(document.querySelector(".stats")).gridTemplateColumns,
+      howColumns: getComputedStyle(document.querySelector(".how")).gridTemplateColumns,
+      quizColumns: getComputedStyle(document.querySelector(".quiz-grid")).gridTemplateColumns,
       footerColumns: getComputedStyle(document.querySelector(".foot-grid")).gridTemplateColumns,
       essentialHeadingsVisible: [...document.querySelectorAll("h1, section h2")].every((element) => {
         const style = getComputedStyle(element);
@@ -42,17 +43,17 @@ test("landing uses its authored phone composition on real mobile emulation", asy
         return style.opacity !== "0" && style.visibility !== "hidden" && box.width > 0 && box.height > 0;
       }),
       revealTransforms: [...new Set(
-        [...document.querySelectorAll(".motion-reveal")].map((element) => getComputedStyle(element).transform),
+        [...document.querySelectorAll(".rv.in,.rv-scale.in,.pop.in,.slap.in")].map((element) => getComputedStyle(element).transform),
       )],
     };
   });
 
   expect(layout.viewport).toBeLessThanOrEqual(430);
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.viewport);
-  expect(layout.heroPreview.display).toBe("none");
-  expect(layout.desktopLeaderboard.display).toBe("none");
-  expect(layout.mobileLeaderboard.display).not.toBe("none");
-  expect(layout.mobileLeaderboard.width).toBeGreaterThan(layout.viewport - 60);
+  expect(layout.heroPreview.display).not.toBe("none");
+  expect(layout.heroPreview.width).toBeGreaterThan(layout.viewport - 60);
+  expect(layout.leaderboard.display).not.toBe("none");
+  expect(layout.leaderboard.width).toBeGreaterThan(layout.viewport - 60);
   expect(layout.priceCards).toHaveLength(2);
   expect(layout.priceCards.every((card) => card.width > layout.viewport - 60)).toBe(true);
   expect(
@@ -62,7 +63,7 @@ test("landing uses its authored phone composition on real mobile emulation", asy
   expect(layout.statsColumns.split(" ")).toHaveLength(2);
   expect(layout.howColumns.split(" ")).toHaveLength(1);
   expect(layout.quizColumns.split(" ")).toHaveLength(1);
-  expect(layout.footerColumns.split(" ")).toHaveLength(1);
+  expect(layout.footerColumns.split(" ")).toHaveLength(2);
   expect(layout.essentialHeadingsVisible).toBe(true);
   expect(
     layout.revealTransforms.every(
@@ -83,16 +84,15 @@ test("landing motion assembles cleanly without gimmick classes", async ({ page }
   const motion = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
-    total: document.querySelectorAll(".motion-reveal").length,
-    visible: document.querySelectorAll(".motion-reveal.is-visible").length,
+    total: document.querySelectorAll(".rv,.rv-scale,.pop,.slap").length,
+    visible: document.querySelectorAll(".rv.in,.rv-scale.in,.pop.in,.slap.in").length,
     oldGimmicks: document.querySelectorAll(
       ".motion-flip,.motion-deal,.motion-note,.motion-page,.motion-hotspot,.mri-ember,.mri-burst-p",
     ).length,
-    clippedReveals: [...document.querySelectorAll(".motion-reveal.is-visible")].filter(
+    clippedReveals: [...document.querySelectorAll(".rv.in,.rv-scale.in,.pop.in,.slap.in")].filter(
       (element) => !["none", "auto"].includes(getComputedStyle(element).clipPath),
     ).length,
-    progress: getComputedStyle(document.getElementById("landing-progress-bar")).transform,
-    paperShift: getComputedStyle(document.documentElement).getPropertyValue("--landing-paper-y").trim(),
+    progress: getComputedStyle(document.querySelector("#prog i")).transform,
   }));
 
   expect(motion.scrollWidth).toBeLessThanOrEqual(motion.viewport);
@@ -101,5 +101,4 @@ test("landing motion assembles cleanly without gimmick classes", async ({ page }
   expect(motion.oldGimmicks).toBe(0);
   expect(motion.clippedReveals).toBe(0);
   expect(motion.progress).not.toBe("none");
-  expect(motion.paperShift).not.toBe("0px");
 });

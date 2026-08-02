@@ -110,6 +110,7 @@ function App() {
 
   const replay = () => {
     scrollTo({ top: 0, behavior: "auto" });
+    try { localStorage.removeItem("machreach:intro-complete"); } catch (_) {}
     document.body.dataset.intro = "pending";
     setIntroKey((k) => k + 1);
   };

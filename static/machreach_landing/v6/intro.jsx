@@ -2,19 +2,24 @@
 function IntroV6({ onDone, enabled = true }) {
   const K = LOGO_COLORS, P = LOGO_PATHS;
   const DUR = 2750, OPEN = 1060;
+  const alreadySeen = (() => {
+    try { return localStorage.getItem("machreach:intro-complete") === "1"; }
+    catch (_) { return false; }
+  })();
   const [t, setT] = React.useState(0);
-  const [gone, setGone] = React.useState(!enabled);
+  const [gone, setGone] = React.useState(!enabled || alreadySeen);
   const [open, setOpen] = React.useState(false);
   const done = React.useRef(false);
 
   const finish = React.useCallback(() => {
     if (done.current) return; done.current = true;
+    try { localStorage.setItem("machreach:intro-complete", "1"); } catch (_) {}
     setOpen(true); onDone && onDone();
     setTimeout(() => setGone(true), OPEN + 60);
   }, [onDone]);
 
   React.useEffect(() => {
-    if (!enabled) { onDone && onDone(); return; }
+    if (!enabled || alreadySeen) { onDone && onDone(); return; }
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) { finish(); return; }
     let raf, t0 = performance.now();
     const tick = (now) => { const e = now - t0; setT(e); if (e >= DUR) return finish(); raf = requestAnimationFrame(tick); };
