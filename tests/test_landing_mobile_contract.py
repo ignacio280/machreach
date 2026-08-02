@@ -80,7 +80,8 @@ def test_cta_sheen_stays_inside_buttons_in_dark_mode():
     """The animated sheen must never escape into the page as a floating
     rectangular highlight, especially against the dark paper background."""
     theme = (LANDING / "v6/theme.css").read_text(encoding="utf-8")
-    assert ".btn-primary{background:var(--brand);color:#fff;overflow:hidden;isolation:isolate}" in theme
+    assert ".btn-primary{background:var(--brand);color:var(--brand-fg);overflow:hidden;isolation:isolate}" in theme
+    assert "--brand-fg:#241834" in theme
     assert "pointer-events:none" in theme
     assert '[data-theme="dark"] .btn-primary::after' in theme
 
