@@ -2,7 +2,7 @@
 .pl-hero{position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;padding:26px 28px;border:var(--bd);border-radius:var(--r-xl);background:var(--surface);box-shadow:var(--sh3)}
 .pl-hero::before{content:"";position:absolute;right:-60px;top:-80px;width:260px;height:260px;border-radius:50%;background:var(--brand-tint)}
 .pl-hero>*{position:relative;z-index:1}
-.pl-kicker{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--brand-2);font-weight:700}
+.pl-kicker{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#b83a0a;font-weight:700}
 .pl-hero h1{font-size:clamp(30px,4vw,46px);line-height:1;margin-top:10px}
 .pl-hero p{color:var(--ink-2);font-size:15px;margin-top:12px;max-width:52ch;line-height:1.45}
 .pl-next{min-width:250px;background:var(--surface-2);border:var(--bd);border-radius:var(--r);padding:16px;box-shadow:var(--sh1)}

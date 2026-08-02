@@ -2,6 +2,8 @@ const { test, expect } = require("@playwright/test");
 
 async function login(page, email = "browser-e2e@example.test") {
   await page.goto("/login");
+  const preLoginConsent = page.locator('#cookie-consent:not([hidden]) [data-consent-choice="essential"]');
+  if (await preLoginConsent.isVisible()) await preLoginConsent.click();
   await page.locator("#login-email").fill(email);
   await page.locator("#login-password").fill("e2e-password-123");
   await page.locator('form[action="/login"] button[type="submit"]').click();
@@ -57,6 +59,8 @@ test("analytics consent dismisses without reloading and stays dismissed", async 
 test("student can register and reaches email verification", async ({ page }, testInfo) => {
   const email = `new-browser-${testInfo.project.name}@example.test`;
   await page.goto("/register");
+  const consent = page.locator('#cookie-consent:not([hidden]) [data-consent-choice="essential"]');
+  if (await consent.isVisible()) await consent.click();
   await page.locator("#register-name").fill("New Browser Student");
   await page.locator("#register-email").fill(email);
   await page.locator("#register-password").fill("browser-password-123");
@@ -71,6 +75,7 @@ test("student can log in and create a manual course", async ({ page }, testInfo)
   await login(page);
   await page.goto("/student/courses");
   const suffix = testInfo.project.name;
+  await page.getByRole("button", { name: "Agregar a mano", exact: true }).click();
   await page.locator("#mc-code").fill(`PHY-${suffix}`);
   await page.locator("#mc-name").fill(`Applied Physics ${suffix}`);
   await page.getByRole("button", { name: "Agregar curso", exact: true }).click();
@@ -83,13 +88,14 @@ test("course details open from the course card", async ({ page }, testInfo) => {
   await login(page);
   await page.goto("/student/courses");
   const courseName = `Course Detail ${testInfo.project.name}`;
+  await page.getByRole("button", { name: "Agregar a mano", exact: true }).click();
   await page.locator("#mc-code").fill(`DETAIL-${testInfo.project.name}`);
   await page.locator("#mc-name").fill(courseName);
   await page.getByRole("button", { name: "Agregar curso", exact: true }).click();
 
   const card = page.locator(".ccard", { hasText: courseName });
-  const details = card.locator(".course-detail-card");
-  await expect(details).toBeHidden();
+  const details = card.locator(".cdet");
+  await expect(details).toHaveCount(0);
   const detailsButton = card.getByRole("button", { name: /ver detalles/i });
   await expect(detailsButton).toBeVisible();
   // WebKit can treat the global entrance transform as continuously unstable
@@ -103,36 +109,36 @@ test("course details open from the course card", async ({ page }, testInfo) => {
   }).toBe(true);
 });
 
-test("semester menu stays open while its options are scrolled", async ({ page }) => {
+test("semester controls remain usable", async ({ page }) => {
   await login(page);
   await page.goto("/student/courses");
 
-  const trigger = page.locator("#cur-sem-select");
-  const menu = page.locator("#semester-menu");
-  await trigger.click();
-  await expect(menu).toBeVisible();
-
-  await menu.evaluate((element) => {
-    element.scrollTop = Math.max(1, element.scrollHeight - element.clientHeight);
-    element.dispatchEvent(new Event("scroll", { bubbles: false }));
-  });
-
-  await expect(menu).toBeVisible();
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const controls = page.locator(".sem button");
+  await expect(controls).toHaveCount(12);
+  const active = page.locator(".sem button.on");
+  await expect(active).toBeVisible();
+  await active.click();
+  await expect(active).toHaveClass(/on/);
 });
 
 test("grade-sheet controls work under the enforced CSP", async ({ page }) => {
   await login(page);
   await page.goto("/student/gpa");
-  await page.locator(".cname").first().fill("CSP-safe Calculus");
-  await page.locator(".w-grade").first().fill("6.5");
+  if (await page.locator(".nt-course").count() === 0) {
+    await page.getByRole("button", { name: /Agregar ramo/ }).click();
+  }
+  if (await page.locator(".grade").count() === 0) {
+    await page.locator(".nt-course").first().getByRole("button", { name: /Evaluación/ }).click();
+  }
+  await page.locator(".nt-name").first().fill("CSP-safe Calculus");
+  await page.locator(".grade").first().fill("6.5");
 
   const saved = await page.evaluate(() => {
     const key = Object.keys(localStorage).find((item) => item.startsWith("mr_planilla_v1_"));
     return key ? JSON.parse(localStorage.getItem(key)) : null;
   });
-  expect(saved.sems[0].courses[0].name).toBe("CSP-safe Calculus");
-  expect(saved.sems[0].courses[0].evals[0].grade).toBe("6.5");
+  expect(saved.sems[saved.current].courses[0].name).toBe("CSP-safe Calculus");
+  expect(saved.sems[saved.current].courses[0].evals[0].grade).toBe("6.5");
 });
 
 test("AI generation completes through the web queue and worker", async ({ page }) => {
@@ -179,7 +185,7 @@ test("paid plan sends the browser to hosted checkout", async ({ page }, testInfo
   }));
   await page.goto("/student/shop");
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Mejorar a Plus", exact: true }).click();
+  await page.getByRole("button", { name: "Desbloquear Plus", exact: true }).click();
 
   await expect(page).toHaveURL("https://checkout.lemonsqueezy.test/buy/e2e-plus");
   await expect(page.getByRole("heading", { name: "Hosted checkout" })).toBeVisible();
@@ -192,7 +198,7 @@ test("shop product cards use dark surfaces in dark mode", async ({ page }) => {
     document.documentElement.dataset.theme = "dark";
   });
 
-  const surfaces = await page.locator(".shop-plan-card, .shop-product-card").evaluateAll((elements) =>
+  const surfaces = await page.locator(".plan, .pack, .cos").evaluateAll((elements) =>
     elements.slice(0, 8).map((element) => getComputedStyle(element).backgroundColor),
   );
 
@@ -202,7 +208,7 @@ test("shop product cards use dark surfaces in dark mode", async ({ page }) => {
     expect(Math.max(...channels)).toBeLessThan(90);
   }
 
-  const featureColor = await page.locator(".shop-plan-card li").first().evaluate(
+  const featureColor = await page.locator(".plan li").first().evaluate(
     (element) => getComputedStyle(element).color,
   );
   const featureChannels = featureColor.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(Number);

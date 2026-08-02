@@ -5,9 +5,9 @@
   --font-mono:"JetBrains Mono",ui-monospace,monospace;
 
   --paper:#FFFAF2; --paper-2:#FBEEDC; --surface:#FFFFFF; --surface-2:#FFF7EC;
-  --ink:#241834; --ink-2:#5E5170; --ink-3:#8F84A2;
+  --ink:#241834; --ink-2:#5E5170; --ink-3:#665974;
 
-  --brand:#FF6A2B; --brand-2:#DC4B14; --brand-3:#FF9257;
+  --brand:#FF6A2B; --brand-2:#DC4B14; --brand-3:#FF9257; --brand-fg:#241834;
   --amber:#F4B740; --plum:#6E4CD8; --plum-2:#4F30A8; --sky:#2FA8C6; --lime:#6FB03A; --pink:#D2528B;
   --brand-tint:#FFE7D8;
 
@@ -32,9 +32,9 @@
   --sh1:0 2px 0 #0C0518,0 4px 12px -6px rgba(0,0,0,.6); --sh2:0 3px 0 #0C0518,0 10px 22px -10px rgba(0,0,0,.65); --sh3:0 5px 0 #0C0518,0 20px 40px -16px rgba(0,0,0,.7);
   --soft:0 20px 44px -18px rgba(0,0,0,.7);
 }
-[data-accent="lime"]{--brand:#5FB524;--brand-2:#3F8A12;--brand-3:#88D44B;--brand-tint:#E3F5CE}
-[data-accent="violet"]{--brand:#7A4FEA;--brand-2:#5B32C4;--brand-3:#A98BFA;--brand-tint:#E9DEFB}
-[data-accent="sky"]{--brand:#1FA9CB;--brand-2:#127E9A;--brand-3:#5FC9E4;--brand-tint:#D3F0F7}
+[data-accent="lime"]{--brand:#5FB524;--brand-2:#3F8A12;--brand-3:#88D44B;--brand-tint:#E3F5CE;--brand-fg:#241834}
+[data-accent="violet"]{--brand:#7A4FEA;--brand-2:#5B32C4;--brand-3:#A98BFA;--brand-tint:#E9DEFB;--brand-fg:#fff}
+[data-accent="sky"]{--brand:#1FA9CB;--brand-2:#127E9A;--brand-3:#5FC9E4;--brand-tint:#D3F0F7;--brand-fg:#241834}
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth;overflow-x:clip;scroll-padding-top:100px}
@@ -67,8 +67,8 @@ section{padding:clamp(70px,8.5vw,120px) 0;position:relative}
 .btn:active{transform:translate(2px,2px)!important;box-shadow:0 0 0 var(--ink)!important}
 .btn-lg{font-size:18px;padding:16px 30px;border-radius:15px;box-shadow:var(--sh2)}
 .btn-sm{font-size:14px;padding:9px 16px;border-radius:11px}
-.btn-primary{background:var(--brand);color:#fff;overflow:hidden;isolation:isolate}
-.btn-primary:hover{color:#fff;transform:translate(-1px,-2px);box-shadow:var(--sh3)}
+.btn-primary{background:var(--brand);color:var(--brand-fg);overflow:hidden;isolation:isolate}
+.btn-primary:hover{color:var(--brand-fg);transform:translate(-1px,-2px);box-shadow:var(--sh3)}
 .btn-lg.btn-primary:hover{box-shadow:0 6px 0 var(--ink),0 24px 44px -18px rgba(36,24,52,.45)}
 .btn-ghost{background:var(--surface);color:var(--ink)}
 .btn-ghost:hover{color:var(--ink);transform:translate(-1px,-2px);box-shadow:var(--sh2)}

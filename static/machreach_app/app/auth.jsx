@@ -167,16 +167,16 @@ function AuthPage({ initial = "signup", live = null }) {
               <form className="auth-form" method="post" action={isSignup ? "/register" : "/login"} onSubmit={submit} noValidate>
                 {live && <input type="hidden" name="csrf_token" value={live.csrf || ""} />}
                 {live?.ref && <input type="hidden" name="ref" value={live.ref} />}
-                {isSignup && <Field id="name" name="name" label="Nombre" value={f.name} onChange={set("name")} placeholder="Tu nombre" autoComplete="name" err={err.name} />}
-                <Field id="email" name="email" label={isSignup ? "Correo" : "Correo electrónico"} type="email" value={f.email} onChange={set("email")} placeholder="tu@correo.com" autoComplete="username" err={err.email} />
-                <Field id="pw" name="password" label="Contraseña" toggle value={f.pw} onChange={set("pw")} placeholder={isSignup ? "Mínimo 10 caracteres" : "Tu contraseña"} autoComplete={isSignup ? "new-password" : "current-password"} err={err.pw} />
+                {isSignup && <Field id="register-name" name="name" label="Nombre" value={f.name} onChange={set("name")} placeholder="Tu nombre" autoComplete="name" err={err.name} />}
+                <Field id={isSignup ? "register-email" : "login-email"} name="email" label={isSignup ? "Correo" : "Correo electrónico"} type="email" value={f.email} onChange={set("email")} placeholder="tu@correo.com" autoComplete="username" err={err.email} />
+                <Field id={isSignup ? "register-password" : "login-password"} name="password" label="Contraseña" toggle value={f.pw} onChange={set("pw")} placeholder={isSignup ? "Mínimo 10 caracteres" : "Tu contraseña"} autoComplete={isSignup ? "new-password" : "current-password"} err={err.pw} />
                 {isSignup && f.pw.length > 0 && (
                   <div>
                     <div className="pwbar">{[0, 1, 2, 3].map((i) => <i key={i} className={i < score ? "on" : ""} style={{ "--lv": PW_COLOR[score] }} />)}</div>
                     <div className="pwnote">Seguridad: {PW_LABEL[score]}</div>
                   </div>
                 )}
-                {isSignup && <Field id="pw2" name="password2" label="Confirmar contraseña" toggle value={f.pw2} onChange={set("pw2")} placeholder="Repite tu contraseña" autoComplete="new-password" err={err.pw2} />}
+                {isSignup && <Field id="register-password2" name="password2" label="Confirmar contraseña" toggle value={f.pw2} onChange={set("pw2")} placeholder="Repite tu contraseña" autoComplete="new-password" err={err.pw2} />}
                 {!isSignup && (
                   <div className="remember">
                     <label className="chk">

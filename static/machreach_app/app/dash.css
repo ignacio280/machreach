@@ -7,6 +7,7 @@
 .side{position:sticky;top:0;align-self:start;height:100vh;display:flex;flex-direction:column;gap:16px;padding:18px 14px 16px;background:var(--paper-2);border-right:var(--bd);z-index:40}
 @media (max-width:1080px){.side{display:none}}
 .side-logo{display:flex;align-items:center;gap:9px;padding:4px 8px 2px;color:var(--ink)}
+.side-logo .logo-text em{color:var(--brand-2)}
 .side-logo:hover{color:var(--ink)}
 .side-logo:hover .logo-mark{animation:wob .6s var(--spring-b)}
 .side-nav{display:flex;flex-direction:column;gap:5px}
@@ -15,8 +16,8 @@
 .nv:hover{color:var(--ink);background:var(--surface);transform:translateX(3px)}
 .nv svg{flex:none;transition:transform .3s var(--spring-b)}
 .nv:hover svg{transform:rotate(-9deg) scale(1.12)}
-.nv.on{color:#fff;background:var(--brand);border-color:var(--ink);box-shadow:var(--sh1)}
-.nv.on:hover{color:#fff;transform:translate(2px,-1px)}
+.nv.on{color:var(--brand-fg);background:var(--brand);border-color:var(--ink);box-shadow:var(--sh1)}
+.nv.on:hover{color:var(--brand-fg);transform:translate(2px,-1px)}
 .nv .tick{margin-left:auto;font-family:var(--font-mono);font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;border:2px solid var(--ink);background:var(--amber);color:var(--ink)}
 .nv.on .tick{background:var(--surface)}
 .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px}

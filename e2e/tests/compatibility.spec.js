@@ -39,14 +39,14 @@ test("registration is usable and WCAG 2.2 AA clean", async ({ page }) => {
 
 test("authenticated course navigation works without overflow", async ({ page }) => {
   await page.goto("/login");
+  const consent = page.locator('#cookie-consent:not([hidden]) [data-consent-choice="essential"]');
+  if (await consent.isVisible()) await consent.click();
   await page.locator("#login-email").fill("browser-e2e@example.test");
   await page.locator("#login-password").fill("e2e-password-123");
   await page.locator('form[action="/login"] button[type="submit"]').click();
   await expect(page).toHaveURL(/\/student(?:$|\/)/);
-  const consent = page.locator('#cookie-consent:not([hidden]) [data-consent-choice="essential"]');
-  if (await consent.isVisible()) await consent.click();
   await page.goto("/student/courses");
-  await expect(page.locator("#manual-course-panel")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Agregar a mano" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await expectNoWcagViolations(page);
 });

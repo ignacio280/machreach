@@ -68,13 +68,14 @@
 
 .auth-submit{margin-top:6px;width:100%}
 .auth-fine{font-size:12.5px;color:var(--ink-2);text-align:center;line-height:1.5;font-weight:600;margin-top:10px}
+.auth-fine a{color:#b83a0a;text-decoration:underline;text-underline-offset:2px}
 .auth-links{display:flex;flex-direction:column;align-items:center;gap:7px;margin-top:12px;font-size:13.5px;font-weight:700}
-.auth-links a{color:var(--brand-2)}
+.auth-links a{color:#b83a0a}
 .auth-links a:hover{color:var(--brand);text-decoration:underline;text-underline-offset:3px}
 .auth-links .muted{color:var(--ink-2)}
 .auth-hr{border:0;border-top:2px dashed color-mix(in oklab,var(--ink-3) 55%,transparent);margin:18px 0 0}
 .auth-swap{text-align:center;font-size:14px;font-weight:700;color:var(--ink-2);margin-top:16px}
-.auth-swap button{font-family:var(--font-display);font-weight:800;color:var(--brand-2);border-bottom:2px solid transparent;transition:border-color .2s,color .2s}
+.auth-swap button{font-family:var(--font-display);font-weight:800;color:#b83a0a;border-bottom:2px solid transparent;transition:border-color .2s,color .2s}
 .auth-swap button:hover{color:var(--brand);border-color:var(--brand)}
 .auth-wrap .remember{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:2px}
 .auth-wrap .chk{display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:var(--ink-2);cursor:pointer}

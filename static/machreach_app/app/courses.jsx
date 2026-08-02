@@ -243,7 +243,7 @@ function ExtCard() {
 }
 
 function CoursesGrid({ plus, list, onDelete }) {
-  return <div className="cgrid">{list.map((c, i) => <CourseCard key={c.code} c={c} plus={plus} d={(i % 2) * 90} onDelete={onDelete} />)}</div>;
+  return <div className="cgrid" id="manual-course-panel">{list.map((c, i) => <CourseCard key={c.code} c={c} plus={plus} d={(i % 2) * 90} onDelete={onDelete} />)}</div>;
 }
 
 /* --- Agregar a mano --- */
@@ -257,11 +257,11 @@ function AddCourseModal({ onClose, onAdd }) {
       foot={<><button className="btn btn-ghost btn-sm" onClick={onClose}>Cancelar</button><button className="btn btn-primary btn-sm" onClick={save} disabled={!v.name.trim()}>Agregar curso</button></>}>
       <div className="mdl-f">
         <label>Nombre del ramo
-          <input autoFocus placeholder="Ej: Ecuaciones Diferenciales" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} onKeyDown={(e) => e.key === "Enter" && save()} />
+          <input id="mc-name" autoFocus placeholder="Ej: Ecuaciones Diferenciales" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} onKeyDown={(e) => e.key === "Enter" && save()} />
         </label>
         <div className="mdl-2">
           <label>Código
-            <input placeholder="MAT1640" value={v.code} onChange={(e) => setV({ ...v, code: e.target.value })} />
+            <input id="mc-code" placeholder="MAT1640" value={v.code} onChange={(e) => setV({ ...v, code: e.target.value })} />
           </label>
           <label>Semestre
             <select defaultValue="VI">{SEMS.map((s) => <option key={s}>{s}</option>)}</select>
