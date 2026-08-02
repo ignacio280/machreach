@@ -119,7 +119,9 @@ section{padding:clamp(70px,8.5vw,120px) 0;position:relative}
 .nav.hide{transform:translateY(-120%)}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:22px;background:var(--surface);border:var(--bd);border-radius:999px;padding:9px 9px 9px 18px;box-shadow:var(--sh1);transition:box-shadow .35s}
 .nav.stuck .nav-inner{box-shadow:var(--sh2)}
-.logo{display:flex;align-items:center;gap:10px;color:var(--ink)}
+.logo{display:flex;align-items:center;gap:10px;min-width:0;flex:none;flex-wrap:nowrap;color:var(--ink)}
+.logo-mark{width:32px;height:32px;display:grid;place-items:center;flex:0 0 32px;overflow:hidden}
+.logo-mark svg{width:32px!important;height:32px!important;max-width:32px!important;max-height:32px!important;overflow:hidden!important}
 .logo:hover{color:var(--ink)}
 .logo:hover .logo-mark{animation:wob .6s var(--spring-b)}
 @keyframes wob{0%,100%{transform:rotate(0)}30%{transform:rotate(-12deg) scale(1.08)}60%{transform:rotate(9deg)}}
@@ -133,6 +135,25 @@ section{padding:clamp(70px,8.5vw,120px) 0;position:relative}
 .icon-btn{width:40px;height:40px;border-radius:50%;background:var(--surface);border:var(--bd);display:grid;place-items:center;box-shadow:var(--sh1);transition:transform .2s var(--spring-b),box-shadow .2s}
 .icon-btn:hover{transform:translateY(-2px);box-shadow:var(--sh2)}
 @media (max-width:900px){.nav-links{display:none}}
+.nav-cta-short{display:none}
+@media (max-width:640px){
+  .nav{padding:10px 0}
+  .nav .container{padding:0 10px}
+  .nav-inner{gap:8px;padding:7px 7px 7px 10px}
+  .logo{gap:6px}
+  .logo-mark{width:28px;height:28px;flex-basis:28px}
+  .logo-mark svg{width:28px!important;height:28px!important;max-width:28px!important;max-height:28px!important}
+  .logo-text{font-size:17px!important}
+  .nav-inner>div:last-child{gap:6px!important;flex:none}
+  .nav .icon-btn{width:36px;height:36px}
+  .nav-cta{padding:9px 12px;font-size:13px}
+  .nav-cta-full{display:none}
+  .nav-cta-short{display:inline}
+}
+@media (max-width:390px){
+  .logo-mark{display:none}
+  .nav-cta svg{display:none}
+}
 
 .tagchip{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 10px;border-radius:999px;border:2px solid var(--ink);color:var(--ink);background:var(--surface)}
 .live-dot{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 var(--good);animation:dot 1.3s var(--ease) infinite}

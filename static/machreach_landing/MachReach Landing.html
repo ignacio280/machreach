@@ -90,7 +90,7 @@ function Nav({ tweaks, setTweak }) {
             <button className="icon-btn" aria-label="Cambiar tema" onClick={() => setTweak("theme", tweaks.theme === "dark" ? "light" : "dark")}>
               {tweaks.theme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
             </button>
-            <a href="https://machreach.com/register" className="btn btn-primary btn-sm"><IconCanvas size={15} /> Usar la extensión</a>
+            <a href="https://machreach.com/register" className="btn btn-primary btn-sm nav-cta"><IconCanvas size={15} /><span className="nav-cta-full">Usar la extensión</span><span className="nav-cta-short">Empezar</span></a>
           </div>
         </div>
       </div>

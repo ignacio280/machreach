@@ -4,6 +4,7 @@ const IconCal = (p) => <Icon {...p}><rect x="3.5" y="5" width="17" height="15" r
 const IconGrid = (p) => <Icon {...p}><rect x="4" y="4" width="6.5" height="6.5" rx="2" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="2" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="2" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2" /></Icon>;
 const IconStore = (p) => <Icon {...p}><path d="M4 9l1.5-5h13L20 9M4 9h16v10a1 1 0 01-1 1H5a1 1 0 01-1-1V9zM4 9a3 3 0 004 0 3 3 0 004 0 3 3 0 004 0 3 3 0 004 0" /></Icon>;
 const IconBell = (p) => <Icon {...p}><path d="M18 15V10a6 6 0 10-12 0v5l-2 3h16l-2-3zM10 21h4" /></Icon>;
+const IconMore = (p) => <Icon {...p}><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" /></Icon>;
 
 const AV = ["#FF8AA5", "#8DACFF", "#B29BFF", "#5DE3B0", "#FFB37A", "#9CD9F0", "#FFC857"];
 const SHELL_DATA = window.__MACHREACH_APP__ || window.__MACHREACH_DASHBOARD__ || {};
@@ -103,11 +104,38 @@ function Topbar({ title, sub, streak, xp, coins, plus = false, tweaks, setTweak,
 }
 
 function TabBar({ active = "home" }) {
-  const items = [NAV_MAIN[0], NAV_MAIN[1], NAV_MAIN[2], NAV_SOCIAL[0], NAV_SOCIAL[1]];
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  const items = [NAV_MAIN[0], NAV_MAIN[2], NAV_SOCIAL[0], NAV_SOCIAL[1]];
+  const moreItems = [
+    { id: "courses", label: SHELL_EN ? "Courses" : "Cursos", Ic: IconBook, href: "/student/courses" },
+    { id: "notas", label: SHELL_EN ? "Grades" : "Notas", Ic: IconGrid, href: "/student/gpa" },
+    { id: "quizzes", label: "Quiz", Ic: IconBrain, href: "/student/quizzes" },
+    { id: "flashcards", label: "Flashcards", Ic: IconBook, href: "/student/flashcards" },
+    { id: "stats", label: SHELL_EN ? "Analytics" : "Analíticas", Ic: IconChart, href: "/student/analytics" },
+    { id: "shop", label: SHELL_EN ? "Shop" : "Tienda", Ic: IconStore, href: "/student/shop" },
+    { id: "account", label: SHELL_EN ? "Account" : "Cuenta", Ic: IconPeople, href: "/student/profile" },
+  ];
+  const moreActive = moreItems.some((n) => n.id === active) || active === "tools";
+  React.useEffect(() => {
+    if (!moreOpen) return undefined;
+    const onKey = (event) => event.key === "Escape" && setMoreOpen(false);
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [moreOpen]);
   return (
-    <nav className="tabbar">
-      {items.map((n) => <a key={n.id} href={n.href || "#"} className={"tb" + (active === n.id ? " on" : "")}><n.Ic size={20} />{n.label}</a>)}
-    </nav>
+    <React.Fragment>
+      {moreOpen && <div className="mobile-more-backdrop" onClick={() => setMoreOpen(false)} aria-hidden="true" />}
+      <div id="mobile-more-menu" className={"mobile-more-menu" + (moreOpen ? " open" : "")} role="dialog" aria-modal="true" aria-label={SHELL_EN ? "More pages" : "Más páginas"}>
+        <div className="mobile-more-head"><b>{SHELL_EN ? "More pages" : "Más páginas"}</b><button type="button" onClick={() => setMoreOpen(false)} aria-label={SHELL_EN ? "Close" : "Cerrar"}><IconClose size={17} /></button></div>
+        <div className="mobile-more-grid">
+          {moreItems.map((n) => <a key={n.id} href={n.href} className={active === n.id || (active === "tools" && (n.id === "quizzes" || n.id === "flashcards")) ? "on" : ""}><span><n.Ic size={19} /></span>{n.label}</a>)}
+        </div>
+      </div>
+      <nav className="tabbar" aria-label={SHELL_EN ? "Main navigation" : "Navegación principal"}>
+        {items.map((n) => <a key={n.id} href={n.href || "#"} className={"tb" + (active === n.id ? " on" : "")}><n.Ic size={20} />{n.label}</a>)}
+        <button type="button" className={"tb" + (moreOpen || moreActive ? " on" : "")} aria-expanded={moreOpen} aria-controls="mobile-more-menu" onClick={() => setMoreOpen((open) => !open)}><IconMore size={20} />{SHELL_EN ? "More" : "Más"}</button>
+      </nav>
+    </React.Fragment>
   );
 }
 

@@ -177,7 +177,7 @@ function Timer({ scene, onRun, onCourse, data = {} }) {
         ))}
       </div>
       <div className="fx-controls">
-        <button className={"btn btn-lg " + (running ? "btn-ghost" : "btn-primary")} onClick={toggle}>
+        <button className={"fx-start btn btn-lg " + (running ? "btn-ghost" : "btn-primary")} onClick={toggle}>
           {running ? <><IconClose size={17} /> Pausar</> : <><IconTimer size={19} /> {left === cfg.work && phase === "work" ? "Empezar" : "Reanudar"}</>}
         </button>
         <button className="btn btn-ghost btn-lg" onClick={reset}>Reiniciar</button>
