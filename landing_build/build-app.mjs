@@ -1,0 +1,153 @@
+// Local-only build for the MachReach app-design preview pages.
+//
+// Mirrors build.mjs, but emits one artifact per app page instead of one landing:
+//   1. Concatenate the shared toolkit (reused from the landing's v5/v6 files),
+//      the app/ components, and exactly one pages/<id>.jsx bootstrap.
+//   2. Transpile JSX -> React.createElement and minify -> <id>.bundle.min.js
+//   3. Pre-render <App/> in jsdom for static markup.
+//   4. Emit <id>.prod.html with prod React UMD + the bundle + that markup.
+//
+// These pages are static mocks served under /design/<id>. They are NOT the live
+// student app; nothing here reads real user data.
+//
+// Output is committed; this script is NOT run at deploy time.
+
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join, basename } from "node:path";
+import { transformSync } from "esbuild";
+import { JSDOM } from "jsdom";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const STATIC = join(__dirname, "..", "static");
+const LANDING = join(STATIC, "machreach_landing");
+const APP = join(STATIC, "machreach_app");
+const PREFIX = "/static/machreach_app/";
+const LANDING_PREFIX = "/static/machreach_landing/";
+const BUNDLE_VERSION = "app-v6-1";
+
+// Shared with the landing so the design system has exactly one source of truth
+// — theme.css in particular is edited in place and must not be forked.
+const SHARED_JSX = ["v5/tweaks-panel.jsx", "v5/motion.jsx", "v5/logo.jsx", "v6/icons.jsx"];
+const SHARED_CSS = ["v6/theme.css"];
+const APP_CSS = ["app/dash.css", "app/focus.css"];
+
+// Components every page may reference. Order matters: this is one flat scope.
+const APP_JSX = [
+  "app/shell.jsx", "app/lock.jsx",
+  "app/dash-left.jsx", "app/dash-right.jsx",
+];
+
+const readLanding = (f) => readFileSync(join(LANDING, f), "utf-8");
+const readApp = (f) => readFileSync(join(APP, f), "utf-8");
+
+const pages = readdirSync(join(APP, "pages"))
+  .filter((f) => f.endsWith(".jsx"))
+  .map((f) => basename(f, ".jsx"))
+  .filter((id) => id === "dashboard")
+  .sort();
+
+if (!pages.length) throw new Error("No page bootstraps found in machreach_app/pages");
+
+// --- shared prerender scaffolding (built once, reused per page) -------------
+const reactUMD = readFileSync(join(LANDING, "vendor", "react.production.min.js"), "utf-8");
+const reactDomServerUMD = readFileSync(
+  join(__dirname, "node_modules", "react-dom", "umd", "react-dom-server-legacy.browser.production.min.js"),
+  "utf-8",
+);
+
+const sharedSrc = [...SHARED_JSX.map(readLanding), ...APP_JSX.map(readApp)].join("\n\n");
+
+function prerender(code) {
+  const dom = new JSDOM(
+    '<!doctype html><html><head></head><body><div id="root"></div></body></html>',
+    { runScripts: "dangerously", pretendToBeVisual: true });
+  const w = dom.window;
+  w.matchMedia = w.matchMedia || function () {
+    return { matches: false, media: "", addEventListener() {}, removeEventListener() {},
+             addListener() {}, removeListener() {}, onchange: null, dispatchEvent() { return false; } };
+  };
+  w.scrollTo = w.scrollTo || function () {};
+  class _Observer { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } }
+  w.IntersectionObserver = w.IntersectionObserver || _Observer;
+  w.ResizeObserver = w.ResizeObserver || _Observer;
+  // Seeded so committed HTML is reproducible across local and CI builds.
+  let seed = 0x4d524150;
+  w.Math.random = function () {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let v = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    v = (v + Math.imul(v ^ (v >>> 7), 61 | v)) ^ v;
+    return ((v ^ (v >>> 14)) >>> 0) / 4294967296;
+  };
+  const inject = (src) => { const s = w.document.createElement("script"); s.textContent = src; w.document.body.appendChild(s); };
+  let out = "";
+  try {
+    w.__MACHREACH_CAPTURE_APP__ = true;
+    inject(reactUMD);
+    inject(reactDomServerUMD);
+    inject(code);
+    if (typeof w.__MACHREACH_APP__ !== "function") throw new Error("App was not exposed for prerendering");
+    out = w.ReactDOMServer.renderToString(w.React.createElement(w.__MACHREACH_APP__));
+  } catch (e) {
+    console.warn(`  prerender failed, shipping empty #root (client will render): ${e.message}`);
+  } finally {
+    w.close();
+  }
+  return out;
+}
+
+const cssLinks = [
+  ...SHARED_CSS.map((f) => `<link rel="stylesheet" href="${LANDING_PREFIX}${f}"/>`),
+  ...APP_CSS.map((f) => `<link rel="stylesheet" href="${PREFIX}${f}"/>`),
+].join("\n");
+
+for (const id of pages) {
+  const bootstrap = readApp(join("pages", `${id}.jsx`));
+  const src = sharedSrc + "\n\n" + bootstrap + `
+;(function () {
+  if (typeof document === "undefined") return;
+  var el = document.getElementById("root");
+  if (!el) return;
+  if (window.__MACHREACH_CAPTURE_APP__) { window.__MACHREACH_APP__ = App; return; }
+  if (el.firstElementChild) { el.innerHTML = ""; }
+  ReactDOM.createRoot(el).render(React.createElement(App));
+})();`;
+
+  const out = transformSync(src, {
+    loader: "jsx", jsx: "transform",
+    jsxFactory: "React.createElement", jsxFragment: "React.Fragment",
+    minify: true, legalComments: "none",
+  });
+  writeFileSync(join(APP, `${id}.bundle.min.js`), out.code, "utf-8");
+
+  const markup = prerender(out.code);
+
+  // Title/sub are declared by the bootstrap; pull them out for <title>.
+  const title = (bootstrap.match(/PAGE_TITLE\s*=\s*"([^"]+)"/) || [, id])[1];
+
+  const html = `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MachReach — ${title}</title>
+<meta name="robots" content="noindex"/>
+<meta name="theme-color" content="#FFF6E9"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Nunito:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+${cssLinks}
+</head>
+<body>
+<div id="root">${markup}</div>
+<script src="${LANDING_PREFIX}vendor/react.production.min.js"></script>
+<script src="${LANDING_PREFIX}vendor/react-dom.production.min.js"></script>
+<script src="${PREFIX}${id}.bundle.min.js?v=${BUNDLE_VERSION}" defer></script>
+</body>
+</html>
+`;
+  writeFileSync(join(APP, `${id}.prod.html`), html, "utf-8");
+  console.log(`${id}: bundle ${out.code.length}B, prerender ${markup.length} chars, html ${html.length}B`);
+}
+
+console.log(`built ${pages.length} app page(s): ${pages.join(", ")}`);

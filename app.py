@@ -1100,7 +1100,13 @@ LAYOUT = """<!DOCTYPE html>
       else window.alert(text);
     };
   </script>
+  {% if dashboard_design %}
+  <link rel="stylesheet" href="/static/machreach_landing/v6/theme.css?v={{ deploy_version }}"/>
+  <link rel="stylesheet" href="/static/machreach_app/app/dash.css?v={{ deploy_version }}"/>
+  <link rel="stylesheet" href="/static/machreach_app/app/focus.css?v={{ deploy_version }}"/>
+  {% else %}
   <link rel="stylesheet" href="/static/machreach_layout/layout-base.css?v={{ deploy_version }}"/>
+  {% endif %}
   <link rel="stylesheet" href="/static/machreach_consent.css?v=20260719"/>
 </head>
 <body>
@@ -1185,6 +1191,9 @@ LAYOUT = """<!DOCTYPE html>
     })();
   </script>
   {% if logged_in and account_type|default('student') == 'student' %}
+  {% if dashboard_design %}
+  {{content|safe}}
+  {% else %}
   <div class="mr-app-shell app top-shell">
     <header class="mr-topbar">
       <a href="/student" class="mr-tb-brand">
@@ -1329,6 +1338,7 @@ LAYOUT = """<!DOCTYPE html>
     </script>
     {% endif %}
   </div>
+  {% endif %}
   {% else %}
   <div class="nav">
     <a href="/" class="brand">
@@ -2142,6 +2152,49 @@ def index():
     from student.landing_design import render_landing_page
     resp = make_response(render_landing_page(lang))
     resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
+
+
+@app.route("/design/")
+def design_index():
+    """Index of the app-design preview pages.
+
+    These are static mocks with sample data. They are deliberately separate
+    from /student/* so the live app is never served fabricated numbers.
+    """
+    from student.app_design import available_pages
+    items = "".join(
+        f'<li><a href="/design/{slug}">{_esc(label)}</a> '
+        f'<code>/design/{slug}</code></li>'
+        for slug, label in sorted(available_pages().items())
+    )
+    body = (
+        "<h1>App design preview</h1>"
+        "<p><strong>These pages are static mocks.</strong> They render sample "
+        "data and read nothing from the database. The live student app is at "
+        "<a href='/student'>/student</a>.</p>"
+        f"<ul>{items}</ul>"
+    )
+    resp = make_response(
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
+        "<meta name='robots' content='noindex'>"
+        "<title>MachReach — app design preview</title></head>"
+        f"<body style='font:16px/1.6 system-ui;max-width:46rem;margin:3rem auto;padding:0 1rem'>{body}</body></html>"
+    )
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    resp.headers["X-Robots-Tag"] = "noindex"
+    return resp
+
+
+@app.route("/design/<page>")
+def design_page(page: str):
+    from student.app_design import render_design_page
+    html = render_design_page(page)
+    if html is None:
+        return redirect(url_for("design_index"))
+    resp = make_response(html)
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    resp.headers["X-Robots-Tag"] = "noindex"
     return resp
 
 
@@ -4703,6 +4756,7 @@ def robots_txt():
         "Disallow: /student/\n"
         "Disallow: /api/\n"
         "Disallow: /admin/\n"
+        "Disallow: /design/\n"
         "Sitemap: https://machreach.com/sitemap.xml\n"
     )
     resp = make_response(body)

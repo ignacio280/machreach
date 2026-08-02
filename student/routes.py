@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 
 
 from flask import jsonify, redirect, request, session, url_for, render_template_string
+from flask_wtf.csrf import generate_csrf
 
 from markupsafe import Markup
 
@@ -3935,7 +3936,7 @@ Return this JSON shape:
 
         if plan_row:
 
-            today_str = datetime.now().strftime("%Y-%m-%d")
+            today_str = sdb.user_date(cid).isoformat()
 
             for day in plan_row["plan_json"].get("daily_plan", []):
 
@@ -4072,7 +4073,7 @@ Return this JSON shape:
 
 
 
-    def _s_render(title, content_html, active_page="student_dashboard"):
+    def _s_render(title, content_html, active_page="student_dashboard", *, dashboard_design=False):
 
         """Render a student page using MachReach's LAYOUT."""
 
@@ -4139,6 +4140,8 @@ Return this JSON shape:
             is_admin=is_admin,
 
             account_type="student",
+
+            dashboard_design=dashboard_design,
 
         )
 
@@ -6596,14 +6599,37 @@ Material:
             _mr_friends_data = {}
         _mr_friends = (_mr_friends_data.get("friends") or [])[:4]
 
+        # This card is a weekly league, so use the same period-aware service
+        # as the full Ranking page. The complete ranked set provides an exact
+        # population and a rank-centred window below the top 50.
         try:
-            _mr_lb_rows = sdb.get_leaderboard(limit=50) or []
+            from student import academic as _ac
+            _mr_rank_info = _ac.my_rank("global", cid, period="week") or {}
+            _mr_fetch_limit = max(5, int(_mr_rank_info.get("rank") or 0) + 3)
+            _mr_lb_rows = _ac.leaderboard("global", cid, limit=_mr_fetch_limit, period="week") or []
+            _mr_league_name = _ac.league_for_xp(total_xp).get("name") or level_name
+            if not _dash_is_en:
+                _mr_league_name = {
+                    "Initiate": "Iniciado", "Scholar": "Estudioso",
+                    "Researcher": "Investigador", "Academic": "Académico",
+                    "Mastermind": "Mente maestra", "Grand Scholar": "Gran estudioso",
+                    "Legend": "Leyenda",
+                }.get(_mr_league_name, _mr_league_name)
         except Exception:
             _mr_lb_rows = []
+            _mr_rank_info = {}
+            _mr_league_name = level_name
+        _mr_my_rank = int(_mr_rank_info.get("rank") or 0)
+        _mr_rank_total = int(_mr_rank_info.get("total") or len(_mr_lb_rows))
+
+        # Friend list rows own presence; the friend board owns XP totals.
         try:
-            _mr_my_rank = int(sdb.get_student_rank(cid) or 0)
+            _mr_friend_xp = {
+                int(row.get("client_id") or 0): int(row.get("total_xp") or 0)
+                for row in (sdb.get_friend_leaderboard(cid) or [])
+            }
         except Exception:
-            _mr_my_rank = 0
+            _mr_friend_xp = {}
 
         _mr_palette = ["#FF7B95", "#7DA0FF", "#A593FF", "#5DE3B0",
                        "#FFB37A", "#9CD9F0", "#FFC857", "#FF89B5"]
@@ -6636,7 +6662,7 @@ Material:
         # Mon-Sun column labels under the grid; days after today in the
         # current week render as blank placeholders.
         from datetime import date as _date_cls, timedelta as _td_cls
-        _mr_today = _date_cls.today()
+        _mr_today = sdb.user_date(cid)
         _mr_heat_start = _mr_today - _td_cls(days=_mr_today.weekday()) - _td_cls(weeks=4)
         _mr_heat = {}
         try:
@@ -6720,334 +6746,522 @@ Material:
         # =============================================================
         _mr_css = """
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Nunito:wght@400;500;600;700;800;900&display=swap');
+  /* ── Claude Design v6 "Inicio" ─────────────────────────────────────────
+     Sticker system: 2px ink borders, hard offset shadows, paper ground.
+     Tokens come from /static/machreach_layout/design.css via `.mrd` on the
+     wrapper, so dark mode falls out of the token flip and needs no overrides.
+     Every selector is scoped to `.mrd.mr-home`; the `!important` rules in
+     layout-base.css opt out of this page via `:not(.mrd *)`.
+     Class names are unchanged — the page's JS and HTML are untouched. */
 
-  .mr-home { font-family: "Nunito", sans-serif; color: #1A1A1F; }
-  .mr-home .serif, .mr-home h1, .mr-home h2 { font-family: "Bricolage Grotesque", sans-serif; letter-spacing: -0.02em; }
-  .mr-home, .mr-home * { box-sizing: border-box; }
-  .mr-home button { font: inherit; color: inherit; cursor: pointer; }
-  .mr-home a { color: inherit; text-decoration: none; }
+  .mrd.mr-home {
+    /* Bridge the legacy shell vars that this page's inline styles still use
+       (the onboarding checklist) onto the v6 palette. */
+    --text: var(--ink);
+    --text-muted: var(--ink-3);
+    --border: var(--ink);
+    --primary: var(--brand);
+    font-family: var(--font-body);
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .mrd.mr-home .serif { font-family: var(--font-display); letter-spacing: -.03em; }
+  .mrd.mr-home .mr-mission-title { overflow-wrap: anywhere; }
 
-  /* page bg */
-  body:has(.mr-home) .content,
-  body:has(.mr-home) .content-wide { background: #F4F1EA !important; }
-  :root[data-theme="dark"] body:has(.mr-home) .content,
-  :root[data-theme="dark"] body:has(.mr-home) .content-wide,
-  :root[data-theme="dark"] body:has(.mr-home) .mr-home { background: transparent !important; }
+  /* ── layout ── */
+  .mrd.mr-home .mr-layout {
+    display: grid; grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 20px; align-items: start; max-width: 1400px; margin: 0 auto;
+    padding: 4px 0 80px;
+  }
+  @media (max-width: 1240px) { .mrd.mr-home .mr-layout { grid-template-columns: 1fr; } }
+  .mrd.mr-home .mr-layout > *,
+  .mrd.mr-home .mr-left > *,
+  .mrd.mr-home .mr-right > * { min-width: 0; }
+  .mrd.mr-home .mr-left,
+  .mrd.mr-home .mr-right { display: flex; flex-direction: column; gap: 20px; }
 
-  .mr-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; max-width: 1400px; margin: 0 auto; padding: 6px 0 80px; }
-  @media (max-width: 1100px) { .mr-layout { grid-template-columns: 1fr; } }
-  /* Grid items default to min-width:auto, which lets long content blow the
-     column wider than the viewport on small screens — allow shrinking. */
-  .mr-layout > *, .mr-left > *, .mr-right > * { min-width: 0; }
-  .mr-mission-title { overflow-wrap: anywhere; }
+  /* ── mission hero ── */
+  .mrd.mr-home .mr-mission {
+    position: relative; overflow: hidden;
+    background: var(--surface); border: var(--bd);
+    border-radius: var(--r-xl); box-shadow: var(--sh3);
+    padding: 26px 28px; margin: 0; color: var(--ink);
+  }
+  .mrd.mr-home .mr-mission::before {
+    content: ""; position: absolute; right: -70px; top: -90px;
+    width: 280px; height: 280px; border-radius: 50%;
+    background: var(--brand-tint); pointer-events: none;
+  }
+  .mrd.mr-home .mr-mission::after {
+    content: ""; position: absolute; right: 38px; bottom: -58px;
+    width: 120px; height: 120px; border-radius: 50%;
+    border: var(--bd); background: var(--amber); opacity: .35; pointer-events: none;
+  }
+  .mrd.mr-home .mr-mission > * { position: relative; z-index: 1; }
+  .mrd.mr-home .mr-mission-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 20px; margin-bottom: 22px; flex-wrap: wrap;
+  }
+  .mrd.mr-home .mr-mission-eye {
+    display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+    font-family: var(--font-display); font-size: 13px; font-weight: 800;
+    letter-spacing: -.01em; text-transform: none; opacity: 1;
+    color: var(--ink); background: var(--surface);
+    padding: 8px 16px; border-radius: 999px; border: var(--bd);
+    box-shadow: 0 2px 0 var(--ink); transform: rotate(-.8deg); margin-bottom: 14px;
+  }
+  .mrd.mr-home .mr-mission-title {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(26px, 3.4vw, 38px); line-height: 1.04;
+    letter-spacing: -.03em; margin: 0; max-width: 22ch;
+    text-wrap: balance; color: var(--ink);
+  }
+  .mrd.mr-home .mr-mission-title em { font-style: normal; color: var(--brand); }
+  .mrd.mr-home .mr-mission-cta {
+    display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    margin-left: auto; padding: 16px 30px;
+    background: var(--brand); color: #fff;
+    border: var(--bd); border-radius: 15px;
+    font-family: var(--font-display); font-weight: 800; font-size: 18px;
+    letter-spacing: -.01em; white-space: nowrap; box-shadow: var(--sh2);
+    transition: transform .16s var(--spring-b), box-shadow .16s var(--ease);
+  }
+  .mrd.mr-home .mr-mission-cta:hover {
+    color: #fff; transform: translate(-1px, -2px);
+    box-shadow: 0 6px 0 var(--ink), 0 24px 44px -18px rgba(36,24,52,.45);
+  }
+  .mrd.mr-home .mr-mission-cta:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+  @media (max-width: 720px) { .mrd.mr-home .mr-mission-cta { margin-left: 0; width: 100%; } }
 
-  /* ── HERO MISSION ── */
-  .mr-mission {
-    background: linear-gradient(135deg, #FFF1E2 0%, #FFE3CB 50%, #FBD3B0 100%);
-    border: 1px solid #F1C896;
-    border-radius: 24px;
-    padding: 28px;
-    position: relative;
-    overflow: hidden;
-    color: #3A1A06;
-    margin-bottom: 20px;
+  /* ── quests ── */
+  .mrd.mr-home .mr-quests-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+  @media (max-width: 720px) { .mrd.mr-home .mr-quests-row { grid-template-columns: 1fr; } }
+  .mrd.mr-home .mr-quest {
+    background: var(--surface-2); border: var(--bd); border-radius: var(--r);
+    padding: 12px 13px; box-shadow: 0 2px 0 var(--ink); opacity: 1;
+    transition: transform .22s var(--spring-b), box-shadow .22s;
   }
-  .mr-mission::before {
-    content: ""; position: absolute; right: -40px; top: -40px;
-    width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(255,255,255,.5), transparent 70%);
-    border-radius: 50%; pointer-events: none;
+  .mrd.mr-home .mr-quest:hover { transform: translateY(-3px) rotate(-.7deg); box-shadow: var(--sh2); }
+  .mrd.mr-home .mr-quest.done {
+    background: var(--surface-2);
+    background: color-mix(in oklab, var(--good) 14%, var(--surface));
+    opacity: 1;
   }
-  .mr-mission-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; position: relative; z-index: 1; }
-  .mr-mission-eye { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.7; margin-bottom: 6px; }
-  .mr-mission-title { font-weight: 600; font-size: clamp(26px, 4.6vw, 38px); line-height: 1.08; margin: 0; color: #3A1A06; }
-  .mr-mission-title em { font-style: italic; color: #B33C00; }
-  .mr-mission-cta {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 14px 22px;
-    background: linear-gradient(135deg, #FF7A3D, #FF9F5F); color: #FFFFFF;
-    border-radius: 14px;
-    font-weight: 800; font-size: 15px;
-    border: 1px solid #E65F20;
-    box-shadow: 0 4px 0 rgba(179,60,0,.35), 0 8px 20px rgba(255,122,61,.28);
-    transition: transform .12s;
-    text-decoration: none;
+  .mrd.mr-home .mr-quest.done .mr-quest-title { text-decoration: none; }
+  .mrd.mr-home .mr-quest-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .mrd.mr-home .mr-quest-icon {
+    width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--ink);
+    display: grid; place-items: center; font-size: 13px; flex: none;
   }
-  .mr-mission-cta:hover { transform: translateY(-1px); }
-  .mr-mission-cta:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(179,60,0,.35); }
-
-  .mr-quests-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; position: relative; z-index: 1; }
-  @media (max-width: 720px) { .mr-quests-row { grid-template-columns: 1fr; } }
-  .mr-quest {
-    background: rgba(255,255,255,0.7);
-    border: 1px solid rgba(255,255,255,0.9);
-    border-radius: 16px;
-    padding: 14px;
-    transition: transform .15s;
+  .mrd.mr-home .mr-quest-icon.q1 { background: var(--brand-tint); }
+  .mrd.mr-home .mr-quest-icon.q2 { background: #E4D9FF; }
+  .mrd.mr-home .mr-quest-icon.q3 { background: #D7EEF7; }
+  .mrd.mr-home .mr-quest-reward {
+    margin-left: auto; font-family: var(--font-mono); font-size: 10px;
+    font-weight: 700; color: var(--ink-2);
   }
-  .mr-quest:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(58,26,6,.18); }
-  .mr-quest.done { opacity: 0.65; }
-  .mr-quest.done .mr-quest-title { text-decoration: line-through; }
-  .mr-quest-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .mr-quest-icon {
-    width: 32px; height: 32px;
-    border-radius: 10px;
-    display: grid; place-items: center;
-    font-size: 18px;
-    background: #FFD08C;
+  .mrd.mr-home .mr-quest-check { margin-left: auto; font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--good); }
+  .mrd.mr-home .mr-quest-title {
+    font-family: var(--font-display); font-weight: 800; font-size: 13.5px;
+    line-height: 1.2; margin-bottom: 9px; color: var(--ink);
   }
-  .mr-quest-icon.q1 { background: #FFD08C; }
-  .mr-quest-icon.q2 { background: #BFE0FF; }
-  .mr-quest-icon.q3 { background: #FFB9D6; }
-  .mr-quest-reward { font-size: 11px; font-weight: 800; color: #C98A0E; }
-  .mr-quest-title { font-weight: 700; font-size: 13px; line-height: 1.3; margin-bottom: 8px; color: #3A1A06; }
-  .mr-quest-prog { display: flex; align-items: center; gap: 8px; font-size: 11px; }
-  .mr-quest-bar { flex: 1; height: 6px; background: rgba(0,0,0,0.08); border-radius: 999px; overflow: hidden; }
-  .mr-quest-fill { height: 100%; background: linear-gradient(90deg, #FF7A3D, #FFB37A); border-radius: 999px; }
-  .mr-quest.done .mr-quest-fill { background: #2E9266; }
-  .mr-quest-num { font-weight: 700; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; color: #3A1A06; }
-  .mr-quest-check { color: #2E9266; font-size: 18px; }
-
-  /* ── STAT GRID ── */
-  .mr-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-  @media (max-width: 900px) { .mr-stats-grid { grid-template-columns: repeat(2, 1fr); } }
-  .mr-stat-card { background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 18px; padding: 18px; position: relative; overflow: hidden; }
-  .mr-stat-card.xp-stat { background: linear-gradient(135deg, #FFFFFF 0%, #FFF1C7 58%, #FFE1CC 100%); color: #201B20; border: 2px solid #201B20; box-shadow: 0 4px 0 #201B20, 0 18px 34px rgba(255,122,61,.14); }
-  .mr-stat-card.xp-stat .mr-stat-label { color: #8B3A18; }
-  .mr-stat-card.xp-stat .mr-stat-sub { color: #7C3B1C; font-weight: 800; }
-  .mr-stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94939C; }
-  .mr-stat-value { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 36px; letter-spacing: -0.03em; line-height: 1; margin-top: 8px; color: inherit; }
-  .mr-stat-sub { font-size: 12px; color: #5C5C66; margin-top: 8px; }
-  .mr-stat-sub .up { color: #2E9266; font-weight: 700; }
-  .mr-stat-deco { position: absolute; right: 12px; bottom: 8px; font-size: 58px; opacity: 0.12; pointer-events: none; transform: rotate(-8deg); }
-
-  /* ── GENERIC CARD ── */
-  .mr-card { background: #FFFFFF; border: 1px solid #E2DCCC; border-radius: 18px; padding: 22px; margin-bottom: 20px; }
-  .mr-card-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  .mr-card-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; color: #1A1A1F; }
-  .mr-card-link { font-size: 12px; color: #94939C; font-weight: 600; }
-  .mr-card-link:hover { color: #5B4694; }
-
-  /* ── SCHEDULE / TODAY PLAN ── */
-  .mr-sched-list { display: flex; flex-direction: column; gap: 10px; }
-  .mr-sess { display: flex; align-items: center; gap: 14px; padding: 14px; background: #FBF8F0; border: 1px solid #E2DCCC; border-radius: 14px; transition: transform .15s; }
-  .mr-sess:hover { transform: translateX(3px); }
-  .mr-sess.done { opacity: 0.55; }
-  .mr-sess.done .mr-sess-topic { text-decoration: line-through; }
-  .mr-sess-check { width: 22px; height: 22px; border: 2px solid #E2DCCC; border-radius: 7px; flex-shrink: 0; display: grid; place-items: center; background: #FFFFFF; cursor: pointer; transition: all .15s; padding: 0; }
-  .mr-sess.done .mr-sess-check { background: #2E9266; border-color: #2E9266; color: #fff; }
-  .mr-sess-time { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 18px; color: #5C5C66; width: 56px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-  .mr-sess-body { flex: 1; min-width: 0; }
-  .mr-sess-course { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 999px; margin-bottom: 4px; background: #ECE6FB; color: #5B4694; }
-  .mr-sess-topic { font-weight: 700; font-size: 14px; color: #1A1A1F; }
-  .mr-sess-meta { font-size: 12px; color: #94939C; margin-top: 2px; }
-  .mr-sess-prio { flex-shrink: 0; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; }
-  .mr-sess-prio.high { background: #FBDADA; color: #E04A4A; }
-  .mr-sess-prio.med  { background: #FFEFCC; color: #C98A0E; }
-  .mr-sess-prio.low  { background: #D7EDDF; color: #2E9266; }
-
-  .mr-empty { padding: 20px; text-align: center; color: #94939C; font-size: 13px; background: #FBF8F0; border-radius: 14px; border: 1px dashed #E2DCCC; }
-  .mr-empty .icon { font-size: 28px; display: block; margin-bottom: 8px; }
-  .mr-empty-title { color:#1A1A1F;font-weight:900;font-size:14px;margin-top:4px; }
-  .mr-empty-copy { max-width:420px;margin:6px auto 0;color:#77756F;line-height:1.35; }
-  .mr-empty-actions { display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:12px; }
-  .mr-empty .cta { display: inline-flex;align-items:center;justify-content:center;gap:6px;margin-top: 10px; padding: 8px 14px; border-radius: 10px; background: #1A1A1F; color: #FFF8E1; font-weight: 800; font-size: 12px;border:1px solid #1A1A1F; }
-  .mr-empty .mr-empty-actions .cta { margin-top:0; }
-  .mr-empty .cta.secondary { background:#FFF8E1;color:#1A1A1F;border-color:#E2DCCC;box-shadow:none; }
-
-  .mr-progress-panel { margin-bottom:20px;padding:20px;border:1px solid #E2DCCC;border-radius:20px;background:#FFFFFF;display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:center;box-shadow:0 14px 34px rgba(20,18,30,.06); }
-  .mr-progress-kicker { font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#8B3A18;margin-bottom:6px; }
-  .mr-progress-title { margin:0;font-family:"Bricolage Grotesque",sans-serif;font-size:30px;line-height:1.02;color:#1A1A1F;letter-spacing:0; }
-  .mr-progress-copy { color:#5C5C66;font-size:13px;line-height:1.45;margin:8px 0 0;max-width:520px; }
-  .mr-progress-actions { display:flex;gap:10px;flex-wrap:wrap;margin-top:14px; }
-  .mr-progress-btn { display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 14px;border-radius:12px;border:1px solid #1A1A1F;background:#1A1A1F;color:#FFF8E1;font-weight:900;font-size:13px;box-shadow:0 3px 0 rgba(26,26,31,.32); }
-  .mr-progress-btn.secondary { background:#FBF8F0;color:#1A1A1F;border-color:#E2DCCC;box-shadow:none; }
-  .mr-progress-mini-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:10px; }
-  .mr-progress-mini { min-height:112px;border:1px solid #E2DCCC;border-radius:16px;background:#FBF8F0;padding:14px;display:flex;flex-direction:column;justify-content:space-between; }
-  .mr-progress-mini .n { font-family:"Bricolage Grotesque",sans-serif;font-size:34px;font-weight:700;color:#FF7A3D;line-height:1; }
-  .mr-progress-mini .l { font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#77756F; }
-  @media (max-width: 900px) { .mr-progress-panel { grid-template-columns:1fr; } .mr-progress-mini-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-  @media (max-width: 560px) { .mr-progress-mini-grid { grid-template-columns:1fr; } }
-
-  /* ── COURSES TILES ── */
-  .mr-courses-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  @media (max-width: 900px) { .mr-courses-row { grid-template-columns: repeat(2, 1fr); } }
-  .mr-course-tile { background: #FBF8F0; border: 1px solid #E2DCCC; border-radius: 14px; padding: 14px; position: relative; overflow: hidden; transition: transform .15s; display: block; color: inherit; }
-  .mr-course-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(20,18,30,.06); }
-  .mr-course-tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #5B4694; }
-  .mr-course-tile.c0::before { background: #3B6FE6; }
-  .mr-course-tile.c1::before { background: #E85B9C; }
-  .mr-course-tile.c2::before { background: #2E9266; }
-  .mr-course-tile.c3::before { background: #FF7A3D; }
-  .mr-course-code { font-size: 11px; font-weight: 800; color: #94939C; letter-spacing: 0.06em; }
-  .mr-course-name { font-weight: 700; font-size: 14px; margin-top: 2px; line-height: 1.2; color: #1A1A1F; }
-  .mr-course-next { font-size: 11px; color: #94939C; margin-top: 6px; }
-  .mr-course-next.urgent { color: #E04A4A; font-weight: 700; }
-
-  /* ── EXAMS ── */
-  .mr-exams { display: flex; flex-direction: column; gap: 10px; }
-  .mr-exam { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 14px; border: 1px solid #E2DCCC; background: #FBF8F0; transition: transform .15s; }
-  .mr-exam:hover { transform: translateY(-2px); box-shadow: 0 1px 0 rgba(20,18,30,.04), 0 2px 6px rgba(20,18,30,.04); }
-  .mr-exam-day { width: 56px; flex-shrink: 0; border-radius: 12px; background: #1A1A1F; color: #FFF8E1; text-align: center; padding: 8px 4px; line-height: 1; }
-  .mr-exam-day.urgent { background: #E04A4A; }
-  .mr-exam-day.warn { background: #FF7A3D; }
-  .mr-exam-day .d-num { font-family: "Bricolage Grotesque", sans-serif; font-size: 26px; font-weight: 600; }
-  .mr-exam-day .d-mon { font-size: 10px; text-transform: uppercase; font-weight: 700; opacity: 0.75; margin-top: 2px; letter-spacing: 0.05em; }
-  .mr-exam-body { flex: 1; min-width: 0; }
-  .mr-exam-title { font-weight: 700; font-size: 14px; color: #1A1A1F; }
-  .mr-exam-meta { font-size: 12px; color: #94939C; margin-top: 2px; }
-  .mr-exam-cd { flex-shrink: 0; font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 18px; color: #1A1A1F; text-align: right; line-height: 1; }
-  .mr-exam-cd.urgent { color: #E04A4A; }
-  .mr-exam-cd small { display: block; font-size: 10px; color: #94939C; font-family: "Nunito", sans-serif; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-top: 2px; }
-
-  /* ── RIGHT COLUMN ── */
-  .mr-right { display: flex; flex-direction: column; gap: 18px; }
-
-  /* league */
-  .mr-league-card { background: linear-gradient(160deg, #5B4694 0%, #4A3470 100%); color: #fff; border-radius: 18px; padding: 22px; position: relative; overflow: hidden; }
-  .mr-league-card::before { content: ""; position: absolute; left: -30px; bottom: -30px; width: 180px; height: 180px; background: radial-gradient(circle, rgba(255,255,255,0.15), transparent 70%); border-radius: 50%; pointer-events: none; }
-  .mr-league-eye { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; }
-  .mr-league-name { font-family: "Bricolage Grotesque", sans-serif; font-size: 24px; font-weight: 600; margin-top: 2px; display: flex; align-items: center; gap: 8px; color: #fff; }
-  .mr-league-rank { display: flex; align-items: baseline; gap: 6px; margin-top: 14px; position: relative; z-index: 1; }
-  .mr-league-rank-num { font-family: "Bricolage Grotesque", sans-serif; font-size: 44px; font-weight: 600; line-height: 1; color: #fff; }
-  .mr-league-rank-of { font-size: 13px; opacity: 0.7; }
-  .mr-league-promo { margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.15); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; gap: 8px; position: relative; z-index: 1; }
-  .mr-mini-board { margin-top: 14px; display: flex; flex-direction: column; gap: 4px; position: relative; z-index: 1; }
-  .mr-lmrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255,255,255,0.08); border-radius: 10px; font-size: 13px; }
-  .mr-lmrow.me { background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.3); }
-  .mr-lmrow .lm-rank { font-family: "Bricolage Grotesque", sans-serif; font-weight: 600; font-size: 14px; width: 22px; text-align: center; opacity: 0.9; }
-  .mr-lmrow .lm-rank.gold { color: #F4B73A; }
-  .mr-lmrow .lm-av { width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #fff; }
-  .mr-lmrow .lm-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mr-lmrow .lm-xp { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12px; opacity: 0.95; }
-
-  /* streak */
-  .mr-streak-card { position: relative; overflow: hidden; background: linear-gradient(135deg, #FFFFFF 0%, #FFF7ED 72%, #FFE1CC 100%); transition: transform .2s ease, box-shadow .2s ease; }
-  .mr-streak-card::before { content: ""; position: absolute; width: 150px; height: 150px; right: -58px; top: -48px; border-radius: 50%; background: radial-gradient(circle, rgba(255,122,61,.32), transparent 68%); pointer-events: none; }
-  .mr-streak-card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255,255,255,.35) 48%, transparent 58%, transparent 100%); transform: translateX(-120%); pointer-events: none; }
-  .mr-streak-card:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(255,122,61,.16); }
-  .mr-streak-card:hover::after { animation: mrStreakSweep .9s ease; }
-  .mr-streak-card .mr-card-h, .mr-streak-card .mr-heat-grid, .mr-streak-card .mr-week-labels, .mr-streak-card .mr-streak-row { position: relative; z-index: 1; }
-  .mr-streak-num { font-family: "Bricolage Grotesque", sans-serif; font-size: 42px; font-weight: 600; color: #FF7A3D; line-height: 1; letter-spacing: -0.03em; display: inline-grid; place-items: center; min-width: 74px; height: 74px; border-radius: 22px; background: #1A1A1F; box-shadow: 0 5px 0 #FF7A3D; }
-  .mr-heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 14px; }
-  .mr-heat-cell { aspect-ratio: 1; border-radius: 6px; background: #EDE7DA; transition: transform .14s ease, box-shadow .14s ease; }
-  .mr-heat-cell:hover { transform: translateY(-2px) scale(1.06); box-shadow: 0 6px 14px rgba(255,122,61,.22); }
-  .mr-heat-cell.l1 { background: #F8E2C9; }
-  .mr-heat-cell.l2 { background: #F4B886; }
-  .mr-heat-cell.l3 { background: #FF7A3D; }
-  .mr-heat-cell.l4 { background: #C8501F; }
-  .mr-heat-cell.today { outline: 2px solid #1A1A1F; outline-offset: 1px; }
-  .mr-heat-cell.future { background: transparent; border: 1px dashed var(--border, #E5DECF); pointer-events: none; }
-  .mr-week-labels { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 6px; }
-  .mr-week-labels span { font-size: 9px; color: #94939C; text-align: center; font-weight: 700; }
-  .mr-streak-row { display: flex; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #E2DCCC; }
-  .mr-streak-row > div { flex: 1; }
-  .mr-srn { font-family: "Bricolage Grotesque", sans-serif; font-size: 22px; font-weight: 600; line-height: 1; color: #FF7A3D; }
-  .mr-srl { font-size: 10px; color: #94939C; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-top: 4px; }
-
-  :root[data-theme="dark"] .mr-home .mr-quest,
-  :root[data-theme="dark"] .mr-home .mr-stat-card,
-  :root[data-theme="dark"] .mr-home .mr-card,
-  :root[data-theme="dark"] .mr-home .mr-sess,
-  :root[data-theme="dark"] .mr-home .mr-course-tile,
-  :root[data-theme="dark"] .mr-home .mr-exam,
-  :root[data-theme="dark"] .mr-home .mr-empty,
-  :root[data-theme="dark"] .mr-home .mr-friend-act,
-  :root[data-theme="dark"] .mr-home .mr-progress-panel,
-  :root[data-theme="dark"] .mr-home .mr-progress-mini {
-    border-color: rgba(255,122,61,.30) !important;
-    box-shadow:0 1px 0 rgba(255,255,255,.03),0 14px 34px rgba(0,0,0,.22) !important;
+  .mrd.mr-home .mr-quest-prog { display: block; }
+  .mrd.mr-home .mr-quest-bar {
+    height: 9px; border-radius: 999px; background: var(--paper-2);
+    border: 2px solid var(--ink); overflow: hidden;
   }
-  :root[data-theme="dark"] .mr-home .mr-mission,
-  :root[data-theme="dark"] .mr-home .mr-league-card {
-    border-color:#FF7A3D !important;
+  .mrd.mr-home .mr-quest-fill {
+    display: block; height: 100%; background: var(--brand);
+    border-right: 2px solid var(--ink); border-radius: 0;
+    transition: width 1s var(--spring);
   }
-  :root[data-theme="dark"] .mr-home .mr-stat-card.xp-stat {
-    border: 2px solid #FF7A3D !important;
-    background: linear-gradient(135deg, #1D1B26 0%, #211814 68%, #15131D 100%) !important;
-    color: #FFF8E1 !important;
-    box-shadow: 0 4px 0 rgba(255,122,61,.9), 0 16px 36px rgba(0,0,0,.26) !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-stat-card.xp-stat .mr-stat-label {
-    color: #FFB07A !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-stat-card.xp-stat .mr-stat-value {
-    color: #FFF8E1 !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-stat-card.xp-stat .mr-stat-sub {
-    color: #D8CABE !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-mission::before {
-    display: none !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-streak-card {
-    background: linear-gradient(135deg, #191926 0%, #201A1A 74%, #301B11 100%) !important;
-    border: 2px solid #FF7A3D !important;
-    box-shadow: 0 4px 0 rgba(255,122,61,.9), 0 16px 36px rgba(0,0,0,.28) !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-streak-card::before {
-    display: none !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-streak-card::after {
-    background: linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255,122,61,.16) 48%, transparent 58%, transparent 100%);
-  }
-  :root[data-theme="dark"] .mr-home .mr-streak-row {
-    border-top-color: rgba(255,122,61,.42) !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-streak-num {
-    background: #0F1018;
-    color: #FF7A3D;
-    border: 1px solid rgba(255,122,61,.62);
-  }
-  :root[data-theme="dark"] .mr-home .mr-progress-panel {
-    background:#1D202A !important;
-    color:#F7F0E4 !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-progress-title,
-  :root[data-theme="dark"] .mr-home .mr-empty-title {
-    color:#FFF8E1 !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-progress-copy,
-  :root[data-theme="dark"] .mr-home .mr-empty-copy {
-    color:#BDB5AA !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-progress-mini {
-    background:#17161A !important;
-  }
-  :root[data-theme="dark"] .mr-home .mr-progress-btn.secondary,
-  :root[data-theme="dark"] .mr-home .mr-empty .cta.secondary {
-    background:#17161A !important;
-    color:#FFF8E1 !important;
-    border-color:rgba(255,122,61,.36) !important;
-  }
-  :root[data-theme="dark"] .mr-app-shell .content .mr-home .mr-streak-card,
-  :root[data-theme="dark"] .content .mr-home .mr-streak-card {
-    border-color: #FF7A3D !important;
-    box-shadow: 0 4px 0 #FF7A3D, 0 22px 52px rgba(0,0,0,.34) !important;
+  .mrd.mr-home .mr-quest.done .mr-quest-fill { background: var(--good); }
+  .mrd.mr-home .mr-quest-num {
+    font-family: var(--font-mono); font-size: 10px; color: var(--ink-3);
+    margin-top: 5px; text-align: right; min-width: 0; font-variant-numeric: tabular-nums;
   }
 
-  @keyframes mrStreakSweep { to { transform: translateX(120%); } }
+  /* ── stat cards ── */
+  .mrd.mr-home .mr-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 0; }
+  @media (max-width: 900px) { .mrd.mr-home .mr-stats-grid { grid-template-columns: repeat(2, 1fr); } }
+  .mrd.mr-home .mr-stat-card {
+    position: relative; overflow: hidden; display: block; color: var(--ink);
+    background: var(--surface); border: var(--bd); border-radius: var(--r);
+    padding: 15px 16px; box-shadow: var(--sh1);
+    transition: transform .22s var(--spring-b), box-shadow .22s;
+  }
+  .mrd.mr-home .mr-stat-card:hover { transform: translateY(-4px) rotate(-1deg); box-shadow: var(--sh3); }
+  .mrd.mr-home .mr-stats-grid > .mr-stat-card:nth-child(1) { background: color-mix(in oklab, var(--amber) 16%, var(--surface)); }
+  .mrd.mr-home .mr-stats-grid > .mr-stat-card:nth-child(2) { background: color-mix(in oklab, var(--lime) 14%, var(--surface)); }
+  .mrd.mr-home .mr-stat-card.streak-stat { background: color-mix(in oklab, var(--brand) 14%, var(--surface)); }
+  .mrd.mr-home .mr-stat-card.streak-stat:hover { transform: translateY(-4px) rotate(1deg); }
+  .mrd.mr-home .mr-stat-card.xp-stat { background: color-mix(in oklab, var(--plum) 13%, var(--surface)); color: var(--ink); }
+  .mrd.mr-home .mr-stat-card.xp-stat:hover { transform: translateY(-4px) rotate(1deg); }
+  .mrd.mr-home .mr-stat-label {
+    font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-3); font-weight: 700;
+  }
+  .mrd.mr-home .mr-stat-card.xp-stat .mr-stat-label,
+  .mrd.mr-home .mr-stat-card.streak-stat .mr-stat-label { color: var(--ink-3); }
+  .mrd.mr-home .mr-stat-value {
+    font-family: var(--font-display); font-weight: 800; font-size: 33px;
+    letter-spacing: -.04em; line-height: 1.05; margin-top: 6px;
+    color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .mrd.mr-home .mr-stat-sub { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; font-weight: 700; }
+  .mrd.mr-home .mr-stat-sub .up { color: var(--good); font-weight: 800; }
+  .mrd.mr-home .mr-stat-action {
+    font-family: var(--font-display); font-weight: 800; font-size: 12px;
+    color: var(--brand-2); margin-top: 8px;
+  }
+  .mrd.mr-home .mr-stat-card:hover .mr-stat-action { color: var(--brand); }
+  .mrd.mr-home .mr-stat-deco {
+    position: absolute; right: -8px; bottom: -10px; font-size: 52px;
+    opacity: .14; pointer-events: none; transform: rotate(-12deg);
+  }
 
-  /* friends */
-  .mr-friends-list { display: flex; flex-direction: column; gap: 10px; }
-  .mr-friend-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; }
-  .mr-friend-row:hover { background: #FBF8F0; }
-  .mr-friend-av { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; position: relative; }
-  .mr-friend-av .pres { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; background: #94939C; }
-  .mr-friend-av .pres.online { background: #2E9266; }
-  .mr-friend-info { flex: 1; min-width: 0; }
-  .mr-friend-name { font-weight: 700; font-size: 13px; color: #1A1A1F; }
-  .mr-friend-status { font-size: 11px; color: #94939C; }
-  .mr-friend-status.online { color: #2E9266; font-weight: 700; }
-  .mr-friend-act { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 8px; background: #FBF8F0; color: #5C5C66; border: 1px solid #E2DCCC; cursor: pointer; }
-  .mr-friend-act:hover { background: #5B4694; color: #fff; border-color: #5B4694; }
+  /* ── generic panel ── */
+  .mrd.mr-home .mr-card {
+    position: relative; background: var(--surface); border: var(--bd);
+    border-radius: var(--r-lg); box-shadow: var(--sh2); padding: 20px; margin: 0;
+  }
+  .mrd.mr-home .mr-card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .mrd.mr-home .mr-card-title {
+    font-family: var(--font-display); font-weight: 800; font-size: 18px;
+    display: flex; align-items: center; gap: 9px; color: var(--ink); letter-spacing: -.03em;
+  }
+  .mrd.mr-home .mr-card-link {
+    margin-left: auto; font-family: var(--font-display); font-weight: 800;
+    font-size: 13px; color: var(--brand-2); white-space: nowrap;
+  }
+  .mrd.mr-home .mr-card-link:hover { color: var(--brand); }
 
-  @keyframes mrPop { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: none; } }
-  .mr-pop-1 { animation: mrPop .5s .05s both; }
-  .mr-pop-2 { animation: mrPop .5s .12s both; }
-  .mr-pop-3 { animation: mrPop .5s .19s both; }
-  .mr-pop-4 { animation: mrPop .5s .26s both; }
+  /* ── today plan rows ── */
+  .mrd.mr-home .mr-sched-list { display: flex; flex-direction: column; gap: 10px; }
+  .mrd.mr-home .mr-sess {
+    display: flex; align-items: flex-start; gap: 12px; padding: 13px 14px;
+    border: var(--bd); border-radius: var(--r); background: var(--surface-2);
+    box-shadow: 0 2px 0 var(--ink); opacity: 1;
+    transition: transform .2s var(--spring-b), box-shadow .2s;
+  }
+  .mrd.mr-home .mr-sess:hover { transform: translateX(4px); box-shadow: var(--sh2); }
+  .mrd.mr-home .mr-sess.done { opacity: 1; }
+  .mrd.mr-home .mr-sess.done .mr-sess-topic,
+  .mrd.mr-home .mr-sess.done .mr-sess-course { text-decoration: line-through; opacity: .55; }
+  .mrd.mr-home .mr-sess-check {
+    width: 24px; height: 24px; flex: none; margin-top: 2px; padding: 0;
+    border: var(--bd); border-radius: 8px; background: var(--surface);
+    display: grid; place-items: center; color: transparent;
+    font-size: 14px; font-weight: 800; line-height: 1;
+    transition: background .2s, color .2s, transform .2s var(--spring-b);
+  }
+  .mrd.mr-home .mr-sess-check:hover { transform: scale(1.12); }
+  .mrd.mr-home .mr-sess.done .mr-sess-check { background: var(--good); border-color: var(--ink); color: #fff; }
+  .mrd.mr-home .mr-sess-time {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    color: var(--ink-2); padding-top: 4px; width: 44px; flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .mrd.mr-home .mr-sess-body { min-width: 0; flex: 1; }
+  .mrd.mr-home .mr-sess-course {
+    display: block; padding: 0; margin-bottom: 1px; background: none;
+    font-family: var(--font-display); font-weight: 800; font-size: 15px;
+    text-transform: none; letter-spacing: -.02em; color: var(--ink); border-radius: 0;
+  }
+  .mrd.mr-home .mr-sess-topic { font-size: 13.5px; color: var(--ink-2); margin-top: 1px; font-weight: 600; }
+  .mrd.mr-home .mr-sess-meta {
+    font-family: var(--font-mono); font-size: 10px; color: var(--ink-3);
+    margin-top: 5px; letter-spacing: .05em; text-transform: uppercase;
+  }
+  .mrd.mr-home .mr-sess-prio {
+    flex: none; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
+    letter-spacing: .08em; padding: 4px 9px; border-radius: 999px;
+    border: 2px solid var(--ink); text-transform: uppercase; color: var(--ink);
+  }
+  .mrd.mr-home .mr-sess-prio.high { background: #FFDFE1; }
+  .mrd.mr-home .mr-sess-prio.med  { background: #FFF0C9; }
+  .mrd.mr-home .mr-sess-prio.low  { background: #E1F3D6; }
+
+  /* ── empty states ── */
+  .mrd.mr-home .mr-empty {
+    padding: 26px 18px; text-align: center; font-size: 13px; font-weight: 700;
+    color: var(--ink-2); background: transparent;
+    border: 2px dashed var(--ink-3); border-radius: var(--r-lg);
+  }
+  .mrd.mr-home .mr-empty .icon { font-size: 30px; display: block; margin-bottom: 8px; }
+  .mrd.mr-home .mr-empty-title {
+    font-family: var(--font-display); font-weight: 800; font-size: 16px;
+    color: var(--ink); margin-top: 4px; letter-spacing: -.02em;
+  }
+  .mrd.mr-home .mr-empty-copy { max-width: 44ch; margin: 6px auto 0; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
+  .mrd.mr-home .mr-empty-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .mrd.mr-home .mr-empty .cta {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    margin-top: 12px; padding: 9px 16px; border-radius: 11px;
+    background: var(--brand); color: #fff; border: var(--bd);
+    box-shadow: 0 2px 0 var(--ink);
+    font-family: var(--font-display); font-weight: 800; font-size: 14px;
+    transition: transform .18s var(--spring-b), box-shadow .18s;
+  }
+  .mrd.mr-home .mr-empty .cta:hover { transform: translateY(-2px); box-shadow: var(--sh2); color: #fff; }
+  .mrd.mr-home .mr-empty .mr-empty-actions .cta { margin-top: 0; }
+  .mrd.mr-home .mr-empty .cta.secondary { background: var(--surface); color: var(--ink); }
+
+  /* ── low-activity progress panel ── */
+  .mrd.mr-home .mr-progress-panel {
+    margin: 0; padding: 22px; border: var(--bd); border-radius: var(--r-lg);
+    background: var(--surface); box-shadow: var(--sh2);
+    display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; align-items: center;
+  }
+  .mrd.mr-home .mr-progress-kicker {
+    font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--brand-2); margin-bottom: 8px;
+  }
+  .mrd.mr-home .mr-progress-title {
+    margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 28px;
+    line-height: 1.04; letter-spacing: -.03em; color: var(--ink);
+  }
+  .mrd.mr-home .mr-progress-copy { color: var(--ink-2); font-size: 13.5px; line-height: 1.45; margin: 9px 0 0; max-width: 52ch; }
+  .mrd.mr-home .mr-progress-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+  .mrd.mr-home .mr-progress-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 11px 18px; border-radius: var(--r-sm); border: var(--bd);
+    background: var(--brand); color: #fff; box-shadow: 0 2px 0 var(--ink);
+    font-family: var(--font-display); font-weight: 800; font-size: 14px;
+    transition: transform .18s var(--spring-b), box-shadow .18s;
+  }
+  .mrd.mr-home .mr-progress-btn:hover { transform: translateY(-2px); box-shadow: var(--sh2); color: #fff; }
+  .mrd.mr-home .mr-progress-btn.secondary { background: var(--surface); color: var(--ink); }
+  .mrd.mr-home .mr-progress-btn.secondary:hover { color: var(--ink); }
+  .mrd.mr-home .mr-progress-mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .mrd.mr-home .mr-progress-mini {
+    min-height: 112px; border: var(--bd); border-radius: var(--r);
+    background: var(--surface-2); box-shadow: 0 2px 0 var(--ink);
+    padding: 14px; display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .mrd.mr-home .mr-progress-mini .n {
+    font-family: var(--font-display); font-size: 32px; font-weight: 800;
+    color: var(--brand); line-height: 1; letter-spacing: -.04em;
+  }
+  .mrd.mr-home .mr-progress-mini .l {
+    font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+  }
+  @media (max-width: 900px) { .mrd.mr-home .mr-progress-panel { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .mrd.mr-home .mr-progress-mini-grid { grid-template-columns: 1fr; } }
+
+  /* ── course tiles ── */
+  .mrd.mr-home .mr-courses-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; }
+  @media (max-width: 980px) { .mrd.mr-home .mr-courses-row { grid-template-columns: repeat(2, 1fr); } }
+  .mrd.mr-home .mr-course-tile {
+    position: relative; overflow: hidden; display: block; color: var(--ink);
+    border: var(--bd); border-radius: var(--r); padding: 14px;
+    box-shadow: var(--sh1); background: var(--surface-2);
+    transition: transform .22s var(--spring-b), box-shadow .22s;
+  }
+  .mrd.mr-home .mr-course-tile:hover { color: var(--ink); transform: translateY(-5px) rotate(1deg); box-shadow: var(--sh3); }
+  .mrd.mr-home .mr-course-tile::before { content: none; }
+  .mrd.mr-home .mr-course-tile.c0 { background: color-mix(in oklab, var(--brand) 14%, var(--surface)); }
+  .mrd.mr-home .mr-course-tile.c1 { background: color-mix(in oklab, var(--lime) 15%, var(--surface)); }
+  .mrd.mr-home .mr-course-tile.c2 { background: color-mix(in oklab, var(--plum) 13%, var(--surface)); }
+  .mrd.mr-home .mr-course-tile.c3 { background: color-mix(in oklab, var(--sky) 14%, var(--surface)); }
+  .mrd.mr-home .mr-course-code {
+    font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+    letter-spacing: .09em; color: var(--ink-2);
+  }
+  .mrd.mr-home .mr-course-name {
+    font-family: var(--font-display); font-weight: 800; font-size: 15px;
+    line-height: 1.12; margin: 6px 0 0; color: var(--ink); letter-spacing: -.02em;
+  }
+  .mrd.mr-home .mr-course-next { font-size: 11.5px; font-weight: 700; color: var(--ink-2); margin-top: 10px; }
+  .mrd.mr-home .mr-course-next.urgent { color: var(--brand-2); }
+
+  /* ── exams ── */
+  .mrd.mr-home .mr-exams { display: flex; flex-direction: column; gap: 10px; }
+  .mrd.mr-home .mr-exam {
+    display: flex; align-items: center; gap: 13px; padding: 11px 13px;
+    border: var(--bd); border-radius: var(--r); background: var(--surface-2);
+    box-shadow: 0 2px 0 var(--ink);
+    transition: transform .2s var(--spring-b), box-shadow .2s;
+  }
+  .mrd.mr-home .mr-exam:hover { transform: translateX(4px); box-shadow: var(--sh2); }
+  .mrd.mr-home .mr-exam-day {
+    width: 48px; flex: none; text-align: center; border: var(--bd);
+    border-radius: 12px; padding: 5px 0; background: var(--surface); color: var(--ink);
+  }
+  .mrd.mr-home .mr-exam-day.urgent { background: #FFDFE1; color: var(--ink); }
+  .mrd.mr-home .mr-exam-day.warn { background: #FFF0C9; color: var(--ink); }
+  .mrd.mr-home .mr-exam-day .d-num { font-family: var(--font-display); font-weight: 800; font-size: 19px; line-height: 1; }
+  .mrd.mr-home .mr-exam-day .d-mon {
+    font-family: var(--font-mono); font-size: 9px; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--ink-2); opacity: 1; margin-top: 2px; font-weight: 700;
+  }
+  .mrd.mr-home .mr-exam-body { min-width: 0; flex: 1; }
+  .mrd.mr-home .mr-exam-title {
+    font-family: var(--font-display); font-weight: 800; font-size: 14.5px;
+    line-height: 1.15; color: var(--ink); letter-spacing: -.02em;
+  }
+  .mrd.mr-home .mr-exam-meta {
+    font-family: var(--font-mono); font-size: 10px; color: var(--ink-3);
+    margin-top: 4px; letter-spacing: .05em; text-transform: uppercase;
+  }
+  .mrd.mr-home .mr-exam-cd {
+    flex: none; font-family: var(--font-display); font-weight: 800; font-size: 20px;
+    text-align: right; line-height: 1; color: var(--ink);
+  }
+  .mrd.mr-home .mr-exam-cd.urgent { color: var(--brand-2); }
+  .mrd.mr-home .mr-exam-cd small {
+    display: block; font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: 3px;
+  }
+
+  /* ── league ── */
+  .mrd.mr-home .mr-league-card {
+    position: relative; overflow: hidden; background: var(--plum); color: #fff;
+    border: var(--bd); border-radius: var(--r-lg); box-shadow: var(--sh3); padding: 20px;
+  }
+  .mrd.mr-home .mr-league-card::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(circle at 82% 8%, rgba(255,255,255,.22), transparent 46%);
+    width: auto; height: auto; border-radius: 0;
+  }
+  .mrd.mr-home .mr-league-card > * { position: relative; z-index: 1; }
+  .mrd.mr-home .mr-league-eye {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em;
+    text-transform: uppercase; opacity: .8; font-weight: 700;
+  }
+  .mrd.mr-home .mr-league-name {
+    font-family: var(--font-display); font-size: 23px; font-weight: 800;
+    margin-top: 5px; display: flex; align-items: center; gap: 8px; color: #fff;
+    letter-spacing: -.03em;
+  }
+  .mrd.mr-home .mr-league-rank { display: flex; align-items: baseline; gap: 8px; margin-top: 14px; }
+  .mrd.mr-home .mr-league-rank-num {
+    font-family: var(--font-display); font-size: 44px; font-weight: 800;
+    letter-spacing: -.05em; line-height: 1; color: #fff; font-variant-numeric: tabular-nums;
+  }
+  .mrd.mr-home .mr-league-rank-of { font-size: 13px; opacity: .85; font-weight: 700; }
+  .mrd.mr-home .mr-league-promo {
+    margin-top: 6px; padding: 0; background: none; border-radius: 0;
+    font-size: 12.5px; opacity: .9; font-weight: 700;
+    display: flex; justify-content: space-between; gap: 8px;
+  }
+  .mrd.mr-home .mr-mini-board { margin-top: 15px; display: flex; flex-direction: column; gap: 6px; }
+  .mrd.mr-home .mr-lmrow {
+    display: flex; align-items: center; gap: 10px; padding: 8px 11px;
+    border-radius: 12px; background: rgba(255,255,255,.11); border: 0;
+    transition: transform .2s var(--spring-b), background .2s;
+  }
+  .mrd.mr-home .mr-lmrow:hover { transform: translateX(3px); background: rgba(255,255,255,.19); }
+  .mrd.mr-home .mr-lmrow.me { background: var(--amber); color: var(--ink); border: 0; box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .mrd.mr-home .mr-lmrow .lm-rank {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    width: 20px; text-align: center; opacity: .85;
+  }
+  .mrd.mr-home .mr-lmrow .lm-rank.gold { color: var(--gold); }
+  .mrd.mr-home .mr-lmrow.me .lm-rank.gold { color: var(--ink); }
+  .mrd.mr-home .mr-lmrow .lm-av {
+    width: 26px; height: 26px; border-radius: 50%; flex: none;
+    display: grid; place-items: center; font-family: var(--font-display);
+    font-weight: 800; font-size: 10px; color: var(--ink);
+  }
+  .mrd.mr-home .mr-lmrow .lm-name {
+    flex: 1; min-width: 0; font-size: 13px; font-weight: 800;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mrd.mr-home .mr-lmrow .lm-xp { font-family: var(--font-mono); font-size: 11px; font-weight: 700; opacity: 1; }
+
+  /* ── streak ── */
+  .mrd.mr-home .mr-streak-card { position: relative; overflow: hidden; background: var(--surface); }
+  .mrd.mr-home .mr-streak-card::before,
+  .mrd.mr-home .mr-streak-card::after { content: none; }
+  .mrd.mr-home .mr-streak-lead { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .mrd.mr-home .mr-streak-num {
+    font-family: var(--font-display); font-weight: 800; font-size: 46px;
+    letter-spacing: -.05em; line-height: 1; color: var(--brand);
+    background: none; border: 0; box-shadow: none; border-radius: 0;
+    min-width: 0; height: auto; display: block; font-variant-numeric: tabular-nums;
+  }
+  .mrd.mr-home .mr-streak-copy strong { display: block; font-family: var(--font-display); font-size: 14px; color: var(--ink); }
+  .mrd.mr-home .mr-streak-copy span { font-size: 12px; color: var(--ink-3); font-weight: 700; }
+  .mrd.mr-home .mr-streak-meter {
+    height: 8px; width: 130px; margin-top: 7px; overflow: hidden;
+    border: 2px solid var(--ink); border-radius: 999px; background: var(--paper-2);
+  }
+  .mrd.mr-home .mr-streak-meter i {
+    display: block; height: 100%; width: var(--streak-pct, 0%);
+    background: var(--brand); transition: width 1.1s var(--spring);
+  }
+  .mrd.mr-home .mr-heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 14px; }
+  .mrd.mr-home .mr-heat-cell {
+    aspect-ratio: 1; border-radius: 6px; border: 2px solid var(--ink);
+    background: var(--paper-2); transition: transform .2s var(--spring-b);
+  }
+  .mrd.mr-home .mr-heat-cell:hover { transform: scale(1.22); box-shadow: none; }
+  .mrd.mr-home .mr-heat-cell.l1 { background: #FFDCC6; }
+  .mrd.mr-home .mr-heat-cell.l2 { background: #FFB183; }
+  .mrd.mr-home .mr-heat-cell.l3 { background: #FF8B4A; }
+  .mrd.mr-home .mr-heat-cell.l4 { background: var(--brand); }
+  .mrd.mr-home .mr-heat-cell.today { outline: none; box-shadow: 0 0 0 3px var(--amber); }
+  .mrd.mr-home .mr-heat-cell.future { background: transparent; border: 2px dashed var(--ink-3); opacity: .4; }
+  .mrd.mr-home .mr-week-labels { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 6px; }
+  /* Below the two-column breakpoint the right rail goes full width and the
+     square cells would blow up to ~100px each. Keep them rail-sized. */
+  @media (max-width: 1240px) {
+    .mrd.mr-home .mr-heat-grid,
+    .mrd.mr-home .mr-week-labels { max-width: 320px; }
+  }
+  .mrd.mr-home .mr-week-labels span {
+    font-family: var(--font-mono); font-size: 9px; text-align: center;
+    color: var(--ink-3); font-weight: 700;
+  }
+  .mrd.mr-home .mr-streak-row {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin-top: 15px; padding-top: 14px; border-top: 2px dashed var(--ink-3);
+  }
+  .mrd.mr-home .mr-streak-row > div { flex: none; text-align: center; }
+  .mrd.mr-home .mr-srn {
+    font-family: var(--font-display); font-weight: 800; font-size: 20px;
+    line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .mrd.mr-home .mr-srl {
+    font-family: var(--font-mono); font-size: 9px; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--ink-3); font-weight: 700; margin-top: 3px;
+  }
+
+  /* ── friends ── */
+  .mrd.mr-home .mr-friends-list { display: flex; flex-direction: column; gap: 0; }
+  .mrd.mr-home .mr-friend-row { display: flex; align-items: center; gap: 11px; padding: 9px 0; border-radius: 0; }
+  .mrd.mr-home .mr-friend-row + .mr-friend-row { border-top: 2px dashed var(--paper-2); }
+  .mrd.mr-home .mr-friend-row:hover { background: transparent; }
+  .mrd.mr-home .mr-friend-av {
+    position: relative; width: 38px; height: 38px; flex: none;
+    border-radius: 50%; border: var(--bd); display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 800; font-size: 13px; color: var(--ink);
+  }
+  .mrd.mr-home .mr-friend-av .pres {
+    position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px;
+    border-radius: 50%; border: 2px solid var(--ink); background: var(--ink-3);
+  }
+  .mrd.mr-home .mr-friend-av .pres.online { background: var(--good); }
+  .mrd.mr-home .mr-friend-info { flex: 1; min-width: 0; }
+  .mrd.mr-home .mr-friend-name { font-family: var(--font-display); font-weight: 800; font-size: 14px; color: var(--ink); }
+  .mrd.mr-home .mr-friend-status { font-size: 11.5px; color: var(--ink-3); font-weight: 700; }
+  .mrd.mr-home .mr-friend-status.online { color: var(--good); }
+  .mrd.mr-home .mr-friend-act {
+    margin-left: auto; font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    padding: 5px 10px; border-radius: 999px; border: 2px solid var(--ink);
+    background: var(--surface-2); color: var(--ink-2);
+  }
+  .mrd.mr-home .mr-friend-act:hover { background: var(--brand); color: #fff; border-color: var(--ink); }
+
+  /* ── entrance ── */
+  @keyframes mrPop { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: none; } }
+  .mrd.mr-home .mr-pop-1 { animation: mrPop .5s .05s both; }
+  .mrd.mr-home .mr-pop-2 { animation: mrPop .5s .12s both; }
+  .mrd.mr-home .mr-pop-3 { animation: mrPop .5s .19s both; }
+  .mrd.mr-home .mr-pop-4 { animation: mrPop .5s .26s both; }
 </style>
 """
 
@@ -7173,7 +7387,8 @@ Material:
             if _by_dow:
                 _bdw = max(_by_dow.items(), key=lambda kv: kv[1])
                 _dow_es = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-                _best_dow = _dow_es[_bdw[0]]
+                _dow_en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                _best_dow = (_dow_en if _is_en else _dow_es)[_bdw[0]]
                 _best_dow_min = _bdw[1]
         _bdw_h, _bdw_m = divmod(int(_best_dow_min), 60)
         _bdw_label = (f"{_bdw_h}h {_bdw_m}min" if _bdw_h else f"{_bdw_m}min")
@@ -7613,6 +7828,98 @@ Material:
             )
 
         # ── final assembly ─────────────────────────────────────
+        # Feed the exact dashboard components from MachReach.zip with live
+        # values. Component defaults are used only by /design/dashboard.
+        _dash_quests = []
+        for _q in (_mr_quests or [])[:3]:
+            _label = next((p["label"] for p in sdb.QUEST_POOL if p["key"] == _q.get("quest_key")), _q.get("quest_key") or ("Mission" if _is_en else "Misión"))
+            if _is_en:
+                try:
+                    from machreach_core.i18n import _translate_visible_text
+                    _label = _translate_visible_text(str(_label)) or str(_label)
+                except Exception:
+                    _label = str(_label)
+            _target = max(1, int(_q.get("target") or 1))
+            _progress = max(0, int(_q.get("progress") or 0))
+            _qi = len(_dash_quests) % 3
+            _dash_quests.append({"ic": ["⏱", "🎯", "🧠"][_qi], "bg": ["#FFE0CB", "#E4D9FF", "#D7EEF7"][_qi], "t": str(_label), "p": min(100, round(100 * _progress / _target)), "tgt": _target, "cur": _progress, "xp": int(_q.get("xp_reward") or 0), "done": bool(_q.get("completed_at"))})
+
+        _dash_sessions = []
+        for _idx, _s in enumerate(((today_plan or {}).get("sessions") or [])):
+            _priority = (_s.get("priority") or "medium").lower()
+            _hours = float(_s.get("hours") or 0)
+            _dash_sessions.append({"time": _s.get("start_time") or (["08:30", "11:00", "14:00", "17:30", "20:00"][_idx] if _idx < 5 else "—"), "course": _s.get("course") or ("Study block" if _is_en else "Bloque de estudio"), "topic": _s.get("topic") or ("Planned study" if _is_en else "Estudio planificado"), "meta": f'{int(_hours * 60)} min · {_s.get("type") or ("study" if _is_en else "estudio")}', "prio": {"high": "hi", "medium": "mid", "low": "lo"}.get(_priority, "mid"), "label": ({"high": "High", "medium": "Medium", "low": "Low"} if _is_en else {"high": "Alta", "medium": "Media", "low": "Baja"}).get(_priority, "Medium" if _is_en else "Media"), "done": bool(today_assignment_progress.get(_idx, False))})
+
+        _course_bg = ["#FFEBD8", "#E6F3DC", "#E8DEFF", "#DCEFF6"]
+        _dash_courses = []
+        for _idx, _course in enumerate(_mr_course_tiles):
+            _next = ("No upcoming exams" if _is_en else "Sin evaluaciones próximas") if _course["next_days"] is None else f'{_course["next_label"]} {"in" if _is_en else "en"} {_course["next_days"]} {"days" if _is_en else "días"}'
+            _dash_courses.append({"code": _course["code"], "name": _course["name"], "pct": _course["pct"], "next": _next, "urgent": _course["next_days"] is not None and _course["next_days"] <= 7, "bg": _course_bg[_idx % len(_course_bg)], "href": f'/student/courses/{_course["id"]}'})
+
+        _dash_exams = []
+        for _exam in (exams or [])[:5]:
+            _exam_date = (_exam.get("exam_date") or "")[:10]
+            _days, _day, _month = None, "—", "—"
+            if _exam_date:
+                try:
+                    _parsed_date = datetime.strptime(_exam_date, "%Y-%m-%d").date()
+                    _days = (_parsed_date - _mr_today).days
+                    _day = _parsed_date.strftime("%d")
+                    _month = (_months_en if _is_en else _months_es)[_parsed_date.month - 1].lower()
+                except (TypeError, ValueError):
+                    pass
+            _meta = [f'{_exam.get("weight_pct")}% {"of grade" if _is_en else "de la nota"}'] if _exam.get("weight_pct") else []
+            _dash_exams.append({"d": _day, "m": _month, "tone": "red" if _days is not None and _days <= 7 else ("yel" if _days is not None and _days <= 14 else "grn"), "t": f'{_exam.get("name") or ("Assessment" if _is_en else "Evaluación")} — {_exam.get("course_name") or ""}', "meta": " · ".join(_meta) or ("No topics listed" if _is_en else "Sin temas listados"), "cd": str(_days) if _days is not None else "?", "sub": "days" if _is_en else "días", "red": _days is not None and _days <= 7})
+
+        _dash_board = []
+        for _idx, _row in enumerate(_mr_board):
+            _dash_board.append({"r": int(_row.get("rank") or (_mr_board_offset + _idx + 1)), "n": _row.get("name") or ("Student" if _is_en else "Estudiante"), "xp": f'{int(_row.get("xp") or 0):,}'.replace(",", "."), "me": int(_row.get("client_id") or 0) == cid})
+
+        _dash_heat, _heat_day = [], _mr_heat_start
+        for _ in range(35):
+            if _heat_day > _mr_today:
+                _dash_heat.append(-1)
+            else:
+                _minutes = int(_mr_heat.get(_heat_day, 0) or 0)
+                _dash_heat.append(0 if _minutes <= 0 else 1 if _minutes < 25 else 2 if _minutes < 60 else 3 if _minutes < 120 else 4)
+            _heat_day += _td_cls(days=1)
+
+        _dash_friends = []
+        for _friend in _mr_friends:
+            _online = bool(_friend.get("online"))
+            _friend_id = int(_friend.get("id") or 0)
+            _dash_friends.append({"n": _friend.get("name") or ("Friend" if _is_en else "Amigo"), "s": ("Online now" if _is_en else "En línea ahora") if _online else ("Recently active" if _is_en else "Activo recientemente"), "on": _online, "xp": f'{int(_mr_friend_xp.get(_friend_id, 0)):,}'.replace(",", ".")})
+
+        _level_number = 1
+        for _idx, (_floor, _name) in enumerate(sdb.LEVEL_THRESHOLDS):
+            if total_xp >= _floor:
+                _level_number = _idx + 1
+        try:
+            _wallet = sdb.get_wallet(cid) or {}
+        except Exception:
+            _wallet = {}
+
+        _dashboard_data = {
+            "live": True, "lang": _lang, "plus": _dash_is_plus,
+            "title": "Home" if _is_en else "Inicio", "sub": "Student dashboard" if _is_en else "Panel del estudiante",
+            "streak": streak_days, "xp": f"{total_xp:,}".replace(",", "."), "coins": int(_wallet.get("coins") or 0), "avatar": _mr_initials(session.get("client_name", "")),
+            "mission": {"eyebrow": _mission_eye, "headline": f'{_hello}, {_esc(_first_name)}! {_headline}', "copy": "Your real courses, deadlines and study history shape today’s mission." if _is_en else "Tus cursos, fechas y sesiones reales construyen la misión de hoy.", "focus_label": "Start focus" if _is_en else "Empezar enfoque", "plan_label": "View full plan" if _is_en else "Ver plan completo", "quests": _dash_quests},
+            "stats": [
+                {"label": "Total studied" if _is_en else "Total estudiado", "value": round(_total_mins / 60), "suffix": "h", "sub": f'{_total_sessions} {"sessions" if _is_en else "sesiones"}', "deco": "📚"},
+                {"label": "Best day" if _is_en else "Mejor día", "value": round(_best_dow_min / 60), "suffix": "h", "sub": _best_dow, "deco": "⚡"},
+                {"label": "Your streak" if _is_en else "Tu racha", "value": streak_days, "sub": "days in a row 🔥" if _is_en else "días seguidos 🔥", "deco": "🔥"},
+                {"label": "XP today" if _is_en else "XP de hoy", "value": _mr_xp_today, "sub": f'{_xp_to_next} XP {"to next level" if _is_en else "para el siguiente nivel"}', "deco": "⚡"},
+            ],
+            "plan": {"sessions": _dash_sessions, "date": _mr_today.isoformat(), "toggle_url": "/api/student/assignments/toggle", "csrf": generate_csrf(), "title": "Today’s plan" if _is_en else "Plan de hoy", "ready_label": "done" if _is_en else "listos", "plus_label": "Plus only" if _is_en else "Solo Plus", "week_label": "View week" if _is_en else "Ver semana", "lock_title": "The weekly plan is a Plus tool" if _is_en else "El plan semanal es una herramienta Plus", "lock_copy": "MachReach orders your blocks using real deadlines, course weights and study sessions." if _is_en else "MachReach ordena tus bloques usando fechas, ponderaciones y sesiones reales.", "empty": "No sessions planned for today yet." if _is_en else "Aún no hay sesiones planificadas para hoy.", "save_error": "Could not save that change. Try again." if _is_en else "No pudimos guardar el cambio. Inténtalo de nuevo."},
+            "courses": {"items": _dash_courses, "semester": _semester, "title": "My courses" if _is_en else "Mis cursos", "all_label": "View all" if _is_en else "Ver todos", "empty": "You do not have courses yet." if _is_en else "No tienes cursos todavía."},
+            "exams": {"items": _dash_exams, "title": "Upcoming assessments" if _is_en else "Próximas evaluaciones", "add_label": "Add" if _is_en else "Agregar", "empty": "No upcoming assessments." if _is_en else "Sin evaluaciones próximas."},
+            "league": {"eyebrow": "WEEKLY LEAGUE" if _is_en else "Liga semanal", "title": _mr_league_name, "rank": f'{_mr_my_rank}º' if _mr_my_rank else "—", "rank_copy": f'{"of" if _is_en else "de"} {_mr_rank_total}', "promo": f'{_xp_to_next} XP {"to rank up" if _is_en else "para subir"}', "board": _dash_board, "empty": "Be the first to earn XP." if _is_en else "Sé el primero en sumar XP."},
+            "level": {"level": _level_number, "pct": xp_pct, "title": f'{"Level" if _is_en else "Nivel"} {_level_number} · {level_name}', "copy": f'{_xp_to_next} XP {"to level" if _is_en else "para el nivel"} {_level_number + 1}'},
+            "streak_data": {"days": streak_days, "attendance": _attendance_pct, "active_days": _active_days, "freezes": _freezes_avail, "heat": _dash_heat, "title": "Your streak" if _is_en else "Tu racha", "days_label": "days in a row" if _is_en else "días seguidos", "range_label": "last 5 weeks" if _is_en else "últimas 5 semanas", "detail_label": "Details" if _is_en else "Detalle", "active_label": "Active days" if _is_en else "Días activos", "freezes_label": "Freezes" if _is_en else "Congeladores", "attendance_label": "Attendance" if _is_en else "Asistencia", "weekdays": ["M", "T", "W", "T", "F", "S", "S"] if _is_en else ["L", "M", "M", "J", "V", "S", "D"]},
+            "friends": {"items": _dash_friends, "title": "Your friends" if _is_en else "Tus amigos", "all_label": "View all" if _is_en else "Ver todos", "empty": "You do not have friends yet." if _is_en else "Aún no tienes amigos."},
+        }
+        _dashboard_json = json.dumps(_dashboard_data, ensure_ascii=False).replace("</", "<\\/")
+
         _mr_scripts = """
 <script>
   // Toggle a session row's "done" state. Mirrors the existing
@@ -7636,27 +7943,14 @@ Material:
 """
 
         _mr_html = (
-            _mr_css
-            + '<div class="mr-home">'
-            + _mr_onboarding_html
-            + '<div class="mr-layout">'
-            + '<div class="mr-left">'
-            + _mr_mission_html
-            + _mr_stats_html
-            + _mr_courses_card
-            + _mr_exams_card
-            + '</div>'
-            + '<aside class="mr-right">'
-            + _mr_league_card
-            + _mr_streak_card
-            + _mr_friends_card
-            + '</aside>'
-            + '</div>'
-            + '</div>'
-            + _mr_scripts
+            '<div id="root"></div>'
+            f'<script>window.__MACHREACH_DASHBOARD__={_dashboard_json};</script>'
+            '<script src="/static/machreach_landing/vendor/react.production.min.js"></script>'
+            '<script src="/static/machreach_landing/vendor/react-dom.production.min.js"></script>'
+            '<script src="/static/machreach_app/dashboard.bundle.min.js?v=20260802-dashboard-4" defer></script>'
         )
 
-        return _s_render("Dashboard", _mr_html, active_page="student_dashboard")
+        return _s_render("Dashboard", _mr_html, active_page="student_dashboard", dashboard_design=True)
 
 
 
