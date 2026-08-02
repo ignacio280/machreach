@@ -115,7 +115,7 @@ function TabBar({ active = "home" }) {
     { id: "shop", label: SHELL_EN ? "Shop" : "Tienda", Ic: IconStore, href: "/student/shop" },
     { id: "account", label: SHELL_EN ? "Account" : "Cuenta", Ic: IconPeople, href: "/student/profile" },
   ];
-  const moreActive = moreItems.some((n) => n.id === active) || active === "tools";
+  const moreActive = moreItems.some((n) => n.id === active) || active === "tools" || active === "profile";
   React.useEffect(() => {
     if (!moreOpen) return undefined;
     const onKey = (event) => event.key === "Escape" && setMoreOpen(false);
@@ -128,7 +128,7 @@ function TabBar({ active = "home" }) {
       <div id="mobile-more-menu" className={"mobile-more-menu" + (moreOpen ? " open" : "")} role="dialog" aria-modal="true" aria-label={SHELL_EN ? "More pages" : "Más páginas"}>
         <div className="mobile-more-head"><b>{SHELL_EN ? "More pages" : "Más páginas"}</b><button type="button" onClick={() => setMoreOpen(false)} aria-label={SHELL_EN ? "Close" : "Cerrar"}><IconClose size={17} /></button></div>
         <div className="mobile-more-grid">
-          {moreItems.map((n) => <a key={n.id} href={n.href} className={active === n.id || (active === "tools" && (n.id === "quizzes" || n.id === "flashcards")) ? "on" : ""}><span><n.Ic size={19} /></span>{n.label}</a>)}
+          {moreItems.map((n) => <a key={n.id} href={n.href} className={active === n.id || (n.id === "account" && active === "profile") || (active === "tools" && (n.id === "quizzes" || n.id === "flashcards")) ? "on" : ""}><span><n.Ic size={19} /></span>{n.label}</a>)}
         </div>
       </div>
       <nav className="tabbar" aria-label={SHELL_EN ? "Main navigation" : "Navegación principal"}>

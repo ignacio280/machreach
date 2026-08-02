@@ -4156,6 +4156,7 @@ Return this JSON shape:
             "/student/reviews": "reviews",
             "/student/analytics": "analiticas",
             "/student/shop": "tienda",
+            "/student/profile": "perfil",
         }
         _design_slug = _live_design_routes.get(request.path) if _logged_in() else None
         if _design_slug:
@@ -4190,6 +4191,7 @@ Return this JSON shape:
                     "reviews": "Reseñas anónimas de ramos",
                     "analiticas": "Tu rendimiento real",
                     "tienda": "Monedas y cosméticos",
+                    "perfil": "Tu cuenta",
                 }.get(_design_slug, "MachReach"),
                 "streak": _streak,
                 "xp": f"{_total_xp:,}".replace(",", "."),
@@ -4197,6 +4199,129 @@ Return this JSON shape:
                 "avatar": _avatar,
                 "csrf": generate_csrf(),
             }
+            if _design_slug == "perfil":
+                from machreach_core.db import get_client, get_mail_preferences
+                from student import academic as _academic
+
+                _profile_client = get_client(_cid()) or {}
+                _academic_profile = _academic.get_academic_profile(_cid()) or {}
+                _profile_university = _academic.get_university(_academic_profile.get("university_id")) if _academic_profile.get("university_id") else {}
+                _profile_major = _academic.get_major(_academic_profile.get("major_id")) if _academic_profile.get("major_id") else {}
+                try:
+                    _profile_prefs = json.loads(get_mail_preferences(_cid()) or "{}")
+                    if not isinstance(_profile_prefs, dict):
+                        _profile_prefs = {}
+                except (TypeError, ValueError):
+                    _profile_prefs = {}
+                _focus_lifetime = sdb.get_focus_stats(_cid()) or {}
+                _level_name, _level_floor, _level_ceil = sdb.get_level(_total_xp)
+                try:
+                    _global_rank = (_academic.my_rank("global", _cid()) or {}).get("rank")
+                except Exception:
+                    _global_rank = None
+                _profile_courses = []
+                _canvas_connected = False
+                _course_colors = ["#FFE7D6", "#DCEEFB", "#E4F7EE", "#E6E4FB"]
+                for _idx, _course in enumerate(sdb.get_courses(_cid()) or []):
+                    _canvas_connected = _canvas_connected or bool(_course.get("canvas_course_id"))
+                    _course_id = int(_course.get("id") or 0)
+                    _outcome = sdb.get_course_outcome(_cid(), _course_id) or {}
+                    _grade = _outcome.get("final_grade")
+                    if _grade is None:
+                        _graded = [float(e.get("grade")) for e in (sdb.get_course_exams(_course_id) or []) if e.get("grade") is not None]
+                        _grade = round(sum(_graded) / len(_graded), 1) if _graded else None
+                    _profile_courses.append({
+                        "id": _course_id,
+                        "name": _course.get("name") or "Curso",
+                        "code": _course.get("code") or "Sin código",
+                        "semester": _course.get("semester_label") or sdb.get_current_semester(_cid()) or "",
+                        "grade": str(_grade).replace(".", ",") if _grade is not None else "—",
+                        "bg": _course_colors[_idx % len(_course_colors)],
+                    })
+                _profile_badges = [{
+                    "key": _badge.get("badge_key") or "",
+                    "emoji": _badge.get("emoji") or "🏅",
+                    "name": _badge.get("name") or _badge.get("badge_key") or "Insignia",
+                    "description": _badge.get("desc") or "",
+                    "earned_at": str(_badge.get("earned_at") or "")[:10],
+                } for _badge in (sdb.get_badges(_cid()) or [])]
+                try:
+                    _friend_count = len((sdb.list_friends(_cid()) or {}).get("friends") or [])
+                except Exception:
+                    _friend_count = 0
+                try:
+                    _profile_decks = sdb.get_flashcard_decks(_cid()) or []
+                    _profile_quizzes = sdb.get_quizzes(_cid()) or []
+                except Exception:
+                    _profile_decks, _profile_quizzes = [], []
+                _created_at = str(_profile_client.get("created_at") or "")[:10]
+                _email = _profile_client.get("email") or ""
+                _handle = "@" + re.sub(r"[^a-z0-9._-]", "", _email.split("@", 1)[0].lower())
+                _level_number = 1
+                for _idx, (_threshold, *_rest) in enumerate(sdb.LEVEL_THRESHOLDS):
+                    if _total_xp >= int(_threshold):
+                        _level_number = _idx + 1
+                _level_ceil = max(int(_level_ceil or 0), _total_xp + 1)
+                _level_floor = int(_level_floor or 0)
+                _heat_by_day = {}
+                try:
+                    from machreach_core.db import _fetchall, get_db
+                    with get_db() as _db:
+                        _heat_rows = _fetchall(
+                            _db,
+                            "SELECT plan_date, focus_minutes FROM student_study_progress "
+                            "WHERE client_id = %s ORDER BY plan_date DESC LIMIT 2000",
+                            (_cid(),),
+                        )
+                    for _row in (_heat_rows or []):
+                        _day = str(_row.get("plan_date") or "")[:10]
+                        if _day:
+                            _heat_by_day[_day] = _heat_by_day.get(_day, 0) + int(_row.get("focus_minutes") or 0)
+                except Exception:
+                    _heat_by_day = {}
+                _heat_today = sdb.user_date(_cid())
+                _profile_heat = []
+                for _offset in range(181, -1, -1):
+                    _minutes = _heat_by_day.get((_heat_today - timedelta(days=_offset)).isoformat(), 0)
+                    _profile_heat.append(0 if _minutes <= 0 else 1 if _minutes < 30 else 2 if _minutes < 60 else 3 if _minutes < 120 else 4)
+                _app_data["profile"] = {
+                    "live": True,
+                    "client_id": _cid(),
+                    "name": _profile_client.get("name") or _client_name,
+                    "email": _email,
+                    "handle": _handle,
+                    "bio": _profile_client.get("profile_bio") or "",
+                    "avatar_color": _profile_prefs.get("profile_avatar") or "#FFD3A8",
+                    "created_at": _created_at,
+                    "major": (_profile_major or {}).get("name") or "Carrera sin configurar",
+                    "university": (_profile_university or {}).get("name") or "Universidad sin configurar",
+                    "semester": sdb.get_current_semester(_cid()) or "I",
+                    "friend_count": _friend_count,
+                    "friend_id": str(_cid()),
+                    "friend_discovery": bool(sdb.get_friend_discovery(_cid())),
+                    "canvas_connected": _canvas_connected,
+                    "total_xp": _total_xp,
+                    "streak": _streak,
+                    "focus_minutes": int(_focus_lifetime.get("total_minutes") or 0),
+                    "sessions": int(_focus_lifetime.get("sessions") or 0),
+                    "rank": int(_global_rank) if _global_rank else None,
+                    "level_number": _level_number,
+                    "level_name": _level_name,
+                    "level_floor": _level_floor,
+                    "level_ceil": _level_ceil,
+                    "level_progress": int(((_total_xp - _level_floor) / max(1, _level_ceil - _level_floor)) * 100),
+                    "courses": _profile_courses,
+                    "badges": _profile_badges,
+                    "heat": _profile_heat,
+                    "summary": {
+                        "sessions": int(_focus_lifetime.get("sessions") or 0),
+                        "quizzes": len(_profile_quizzes),
+                        "decks": len(_profile_decks),
+                        "cards": sum(int(d.get("card_count") or 0) for d in _profile_decks),
+                        "friends": _friend_count,
+                    },
+                    "preferences": _profile_prefs.get("profile_settings") or {},
+                }
             if _design_slug == "herramientas":
                 _tool_colors = ["#FF6A2B", "#6E4CD8", "#6FB03A", "#2FA8C6"]
                 _tool_decks = []
@@ -23114,6 +23239,57 @@ No markdown, no code fences. ONLY JSON.
         </script>
         """, active_page="student_shop")
 
+
+    @app.route("/api/student/profile", methods=["POST"])
+    def student_profile_update_api():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        name = re.sub(r"\s+", " ", str(data.get("name") or "").strip())
+        bio = str(data.get("bio") or "").strip()
+        avatar_color = str(data.get("avatar_color") or "#FFD3A8").upper()
+        allowed_avatars = {"#FFD3A8", "#FF8AA5", "#8DACFF", "#B29BFF", "#5DE3B0", "#9CD9F0", "#FFC857"}
+        if not name or len(name) > 80 or len(bio) > 180 or avatar_color not in allowed_avatars:
+            return jsonify(error="Revisa el nombre, la biografía y el color de avatar."), 400
+        from machreach_core.db import _exec, get_db, update_mail_preferences
+        with get_db() as db:
+            _exec(
+                db,
+                "UPDATE clients SET name = %s, profile_bio = %s WHERE id = %s",
+                (name, bio, _cid()),
+            )
+        update_mail_preferences(_cid(), json.dumps({"profile_avatar": avatar_color}))
+        session["client_name"] = name
+        return jsonify(ok=True, profile={"name": name, "bio": bio, "avatar_color": avatar_color})
+
+    @app.route("/api/student/profile/preferences", methods=["POST"])
+    def student_profile_preferences_api():
+        if not _logged_in():
+            return jsonify(error="Login required"), 401
+        data = request.get_json(silent=True) or {}
+        allowed = {
+            "profile_public", "appear_in_rankings", "show_online", "allow_requests",
+            "block_reminders", "streak_risk", "grade_results", "weekly_summary",
+            "product_news", "focus_block_sites", "focus_silence_notifications",
+        }
+        settings = {key: bool(data[key]) for key in allowed if key in data}
+        if not settings:
+            return jsonify(error="No hay preferencias válidas."), 400
+        from machreach_core.db import get_mail_preferences, update_mail_preferences
+        try:
+            current = json.loads(get_mail_preferences(_cid()) or "{}")
+            if not isinstance(current, dict):
+                current = {}
+        except (TypeError, ValueError):
+            current = {}
+        merged = current.get("profile_settings") or {}
+        if not isinstance(merged, dict):
+            merged = {}
+        merged.update(settings)
+        update_mail_preferences(_cid(), json.dumps({"profile_settings": merged}))
+        if "allow_requests" in settings:
+            sdb.set_friend_discovery(_cid(), settings["allow_requests"])
+        return jsonify(ok=True, preferences=settings)
 
     @app.route("/student/profile")
     def student_profile_page():

@@ -34,6 +34,7 @@ _PAGES: dict[str, str] = {
     "reviews": "Reviews",
     "analiticas": "Analíticas",
     "tienda": "Tienda",
+    "perfil": "Perfil",
     "cuenta": "Iniciar sesión y registro",
 }
 
@@ -48,6 +49,7 @@ _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "ranking": ("dash.css", "focus.css", "plan.css", "rank.css"),
     "reviews": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"),
     "tienda": ("dash.css", "focus.css", "plan.css", "analytics.css", "shop.css"),
+    "perfil": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css"),
     "cuenta": ("auth.css",),
 }
 
@@ -71,7 +73,7 @@ def render_design_page(slug: str) -> str | None:
     return artifact.read_text(encoding="utf-8")
 
 
-def render_live_page(slug: str, data: dict, version: str = "20260802-app-v6-3") -> str | None:
+def render_live_page(slug: str, data: dict, version: str = "20260802-app-v6-4") -> str | None:
     """Return the exact Claude app shell wired to server-provided live data."""
     if slug not in _PAGE_CSS:
         return None
