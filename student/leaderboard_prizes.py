@@ -457,6 +457,8 @@ def _top5_per_bucket(
     one bucket; for the others, a bucket per country/univ/major."""
     start_iso, end_iso = _xp_period_window(period_kind, period_key)
     from machreach_core.db import _fetchall
+    from student.academic import _leaderboard_visible_clause
+    visible_clause = _leaderboard_visible_clause("c")
 
     def fetch_rows(query: str, params: tuple) -> list[dict]:
         if db is not None:
@@ -501,6 +503,7 @@ def _top5_per_bucket(
             f"LEFT JOIN student_xp x ON x.client_id = c.id "
             f"  AND x.occurred_at_utc >= %s AND x.occurred_at_utc < %s "
             f"WHERE c.account_type = 'student' AND COALESCE(c.retired,0) = 0 "
+            f"{visible_clause}"
             f"{bucket_filter}"
             f"GROUP BY c.id, c.name "
             f"HAVING COALESCE(SUM(x.xp),0) > 0 "
@@ -528,6 +531,7 @@ def _top5_per_bucket(
         f"LEFT JOIN student_xp x ON x.client_id = c.id "
         f"  AND x.occurred_at_utc >= %s AND x.occurred_at_utc < %s "
         f"WHERE c.account_type = 'student' AND COALESCE(c.retired,0) = 0 "
+        f"{visible_clause}"
         f"{bucket_filter}"
         f"GROUP BY c.id, c.name{group_extra} "
         f"HAVING COALESCE(SUM(x.xp),0) > 0"
@@ -875,6 +879,8 @@ def _user_rank_in_scope(client_id: int, scope: str, period_kind: str,
     country set) or had 0 XP in the period."""
     start_iso, end_iso = _xp_period_window(period_kind, period_key)
     from machreach_core.db import _fetchone, _fetchall
+    from student.academic import _leaderboard_visible_clause
+    visible_clause = _leaderboard_visible_clause("c")
 
     # Find the user's bucket value (country/uni/major) so we can scope the
     # ranking query appropriately.
@@ -918,6 +924,7 @@ def _user_rank_in_scope(client_id: int, scope: str, period_kind: str,
         f"  LEFT JOIN student_xp x ON x.client_id = c.id "
         f"    AND x.occurred_at_utc >= %s AND x.occurred_at_utc < %s "
         f"  WHERE c.account_type = 'student' AND COALESCE(c.retired, 0) = 0 "
+        f"  {visible_clause} "
         f"  {bucket_filter} "
         f"  GROUP BY c.id "
         f"  HAVING COALESCE(SUM(x.xp), 0) > 0 "

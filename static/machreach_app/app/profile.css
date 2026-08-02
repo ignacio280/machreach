@@ -73,6 +73,7 @@
 .sw i{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;border:2px solid var(--ink);background:var(--surface);transition:transform .28s var(--spring-b)}
 .sw.on{background:var(--brand)}
 .sw.on i{transform:translateX(22px)}
+.sw:disabled{cursor:not-allowed;opacity:.55}
 
 /* form fields */
 .pf-form{display:grid;grid-template-columns:1fr 1fr;gap:13px}
@@ -119,6 +120,7 @@
 .pf-error{color:var(--bad);font-size:12px;font-weight:800;margin-right:auto}
 .pf-empty{padding:16px;border:2px dashed var(--paper-2);border-radius:var(--r);color:var(--ink-3);font-size:13px;font-weight:700;text-align:center}
 .pf-pref-status{margin-top:12px;color:var(--ink-2);font-size:12px;font-weight:800;text-align:right}
+.pf-coming{margin-top:12px;color:var(--ink-3);font-size:11.5px;font-weight:700;line-height:1.4}
 .btn-danger{background:var(--bad);color:#fff;border:2px solid var(--ink);box-shadow:0 3px 0 var(--ink)}
 .pf-tabpanel{animation:swapin .38s var(--ease) both}
 @keyframes swapin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}

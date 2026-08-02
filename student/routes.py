@@ -4229,9 +4229,9 @@ Return this JSON shape:
                 _focus_lifetime = sdb.get_focus_stats(_cid()) or {}
                 _level_name, _level_floor, _level_ceil = sdb.get_level(_total_xp)
                 try:
-                    _global_rank = (_academic.my_rank("global", _cid()) or {}).get("rank")
+                    _major_rank = (_academic.my_rank("major", _cid()) or {}).get("rank")
                 except Exception:
-                    _global_rank = None
+                    _major_rank = None
                 _profile_courses = []
                 _canvas_connected = False
                 _course_colors = ["#FFE7D6", "#DCEEFB", "#E4F7EE", "#E6E4FB"]
@@ -4241,8 +4241,16 @@ Return this JSON shape:
                     _outcome = sdb.get_course_outcome(_cid(), _course_id) or {}
                     _grade = _outcome.get("final_grade")
                     if _grade is None:
-                        _graded = [float(e.get("grade")) for e in (sdb.get_course_exams(_course_id) or []) if e.get("grade") is not None]
-                        _grade = round(sum(_graded) / len(_graded), 1) if _graded else None
+                        _graded = [
+                            (float(e.get("grade")), float(e.get("weight_pct") or 0))
+                            for e in (sdb.get_course_exams(_course_id) or [])
+                            if e.get("grade") is not None
+                        ]
+                        _weight_total = sum(weight for _, weight in _graded)
+                        if _graded and _weight_total > 0:
+                            _grade = round(sum(grade * weight for grade, weight in _graded) / _weight_total, 1)
+                        elif _graded:
+                            _grade = round(sum(grade for grade, _ in _graded) / len(_graded), 1)
                     _profile_courses.append({
                         "id": _course_id,
                         "name": _course.get("name") or "Curso",
@@ -4305,6 +4313,7 @@ Return this JSON shape:
                     "handle": _handle,
                     "bio": _profile_client.get("profile_bio") or "",
                     "avatar_color": _profile_prefs.get("profile_avatar") or "#FFD3A8",
+                    "cover_css": (sdb.BANNERS.get(_wallet.get("selected_banner") or "default") or sdb.BANNERS["default"]).get("css") or "",
                     "created_at": _created_at,
                     "major": (_profile_major or {}).get("name") or "Carrera sin configurar",
                     "university": (_profile_university or {}).get("name") or "Universidad sin configurar",
@@ -4317,7 +4326,7 @@ Return this JSON shape:
                     "streak": _streak,
                     "focus_minutes": int(_focus_lifetime.get("total_minutes") or 0),
                     "sessions": int(_focus_lifetime.get("sessions") or 0),
-                    "rank": int(_global_rank) if _global_rank else None,
+                    "rank": int(_major_rank) if _major_rank else None,
                     "level_number": _level_number,
                     "level_name": _level_name,
                     "level_floor": _level_floor,
@@ -23264,14 +23273,23 @@ No markdown, no code fences. ONLY JSON.
         allowed_avatars = {"#FFD3A8", "#FF8AA5", "#8DACFF", "#B29BFF", "#5DE3B0", "#9CD9F0", "#FFC857"}
         if not name or len(name) > 80 or len(bio) > 180 or avatar_color not in allowed_avatars:
             return jsonify(error="Revisa el nombre, la biografía y el color de avatar."), 400
-        from machreach_core.db import _exec, get_db, update_mail_preferences
+        from machreach_core.db import _USE_PG, _exec, get_db
+        avatar_patch = json.dumps({"profile_avatar": avatar_color}, separators=(",", ":"))
         with get_db() as db:
-            _exec(
-                db,
-                "UPDATE clients SET name = %s, profile_bio = %s WHERE id = %s",
-                (name, bio, _cid()),
-            )
-        update_mail_preferences(_cid(), json.dumps({"profile_avatar": avatar_color}))
+            if _USE_PG:
+                _exec(
+                    db,
+                    "UPDATE clients SET name = %s, profile_bio = %s, mail_preferences = "
+                    "(COALESCE(NULLIF(mail_preferences, ''), '{}')::jsonb || %s::jsonb)::text WHERE id = %s",
+                    (name, bio, avatar_patch, _cid()),
+                )
+            else:
+                _exec(
+                    db,
+                    "UPDATE clients SET name = %s, profile_bio = %s, mail_preferences = json_patch("
+                    "CASE WHEN json_valid(mail_preferences) THEN mail_preferences ELSE '{}' END, %s) WHERE id = %s",
+                    (name, bio, avatar_patch, _cid()),
+                )
         session["client_name"] = name
         return jsonify(ok=True, profile={"name": name, "bio": bio, "avatar_color": avatar_color})
 
@@ -23280,12 +23298,11 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return jsonify(error="Login required"), 401
         data = request.get_json(silent=True) or {}
-        allowed = {
-            "profile_public", "appear_in_rankings", "show_online", "allow_requests",
-            "block_reminders", "streak_risk", "grade_results", "weekly_summary",
-            "product_news", "focus_block_sites", "focus_silence_notifications",
-        }
-        settings = {key: bool(data[key]) for key in allowed if key in data}
+        allowed = {"profile_public", "appear_in_rankings", "show_online", "allow_requests"}
+        supplied = {key: data[key] for key in allowed if key in data}
+        if any(type(value) is not bool for value in supplied.values()):
+            return jsonify(error="Las preferencias deben ser booleanas."), 400
+        settings = dict(supplied)
         if not settings:
             return jsonify(error="No hay preferencias válidas."), 400
         from machreach_core.db import update_mail_preferences

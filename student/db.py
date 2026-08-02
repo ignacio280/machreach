@@ -5739,21 +5739,21 @@ def list_friends(client_id: int) -> dict:
     with get_db() as db:
         accepted = _fetchall(
             db,
-            "SELECT c.id, c.name, c.last_seen_at FROM student_friends sf "
+            "SELECT c.id, c.name, c.last_seen_at, c.mail_preferences FROM student_friends sf "
             "JOIN clients c ON c.id = sf.friend_client_id "
             "WHERE sf.client_id = %s AND sf.status = 'accepted'",
             (client_id,),
         ) or []
         incoming = _fetchall(
             db,
-            "SELECT c.id, c.name, c.last_seen_at FROM student_friends sf "
+            "SELECT c.id, c.name, c.last_seen_at, c.mail_preferences FROM student_friends sf "
             "JOIN clients c ON c.id = sf.client_id "
             "WHERE sf.friend_client_id = %s AND sf.status = 'pending'",
             (client_id,),
         ) or []
         outgoing = _fetchall(
             db,
-            "SELECT c.id, c.name, c.last_seen_at FROM student_friends sf "
+            "SELECT c.id, c.name, c.last_seen_at, c.mail_preferences FROM student_friends sf "
             "JOIN clients c ON c.id = sf.friend_client_id "
             "WHERE sf.client_id = %s AND sf.status = 'pending'",
             (client_id,),
@@ -5761,11 +5761,15 @@ def list_friends(client_id: int) -> dict:
 
     def _row(r):
         ls = int(r.get("last_seen_at") or 0)
+        try:
+            prefs = json.loads(r.get("mail_preferences") or "{}")
+        except (TypeError, ValueError):
+            prefs = {}
         return {
             "id": r["id"],
             "name": r.get("name") or "",
             "last_seen_at": ls,
-            "online": is_online(ls),
+            "online": is_online(ls) if prefs.get("show_online", True) is not False else False,
         }
 
     return {
@@ -5807,10 +5811,16 @@ def is_online(last_seen_at: int | None) -> bool:
 def is_user_online(client_id: int) -> bool:
     try:
         with get_db() as db:
-            ls = _fetchval(
-                db, "SELECT last_seen_at FROM clients WHERE id = %s", (client_id,),
+            row = _fetchone(
+                db, "SELECT last_seen_at, mail_preferences FROM clients WHERE id = %s", (client_id,),
             )
-        return is_online(int(ls or 0))
+        try:
+            prefs = json.loads((row or {}).get("mail_preferences") or "{}")
+        except (TypeError, ValueError):
+            prefs = {}
+        if prefs.get("show_online", True) is False:
+            return False
+        return is_online(int((row or {}).get("last_seen_at") or 0))
     except Exception:
         return False
 

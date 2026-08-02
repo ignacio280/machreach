@@ -24,18 +24,18 @@ const PF_NOTIF = [
   ["Novedades de MachReach", "Funciones nuevas y consejos de estudio.", false],
 ];
 
-function Sw({ on, onChange }) {
-  return <button className={"sw" + (on ? " on" : "")} onClick={() => onChange(!on)} role="switch" aria-checked={on}><i /></button>;
+function Sw({ on, onChange, label, disabled = false }) {
+  return <button type="button" className={"sw" + (on ? " on" : "")} onClick={() => onChange(!on)} role="switch" aria-checked={on} aria-label={label} disabled={disabled}><i /></button>;
 }
 
-function ToggleRows({ rows, initial = {}, keys = [], onSave }) {
+function ToggleRows({ rows, initial = {}, keys = [], onSave, disabled = false }) {
   const [st, setSt] = React.useState(() => rows.map((r, i) => Object.prototype.hasOwnProperty.call(initial, keys[i]) ? !!initial[keys[i]] : r[2]));
   return (
     <div>
       {rows.map(([t, s], i) => (
         <div className="pf-row" key={t}>
           <div className="who"><b>{t}</b><p>{s}</p></div>
-          <Sw on={st[i]} onChange={(v) => {
+          <Sw label={t} disabled={disabled} on={st[i]} onChange={(v) => {
             setSt((a) => a.map((x, j) => (j === i ? v : x)));
             if (onSave && keys[i]) onSave(keys[i], v);
           }} />
@@ -51,7 +51,7 @@ function ProfileHero({ plus, avatar, name, handle, data }) {
   const nextXp = Math.max(0, Number(data.level_ceil || 0) - Number(data.total_xp || 0));
   return (
     <section className="pf-hero rv" style={{ "--d": "0ms" }}>
-      <div className="pf-cover"><i /><i /><i />
+      <div className="pf-cover" style={data.cover_css ? { background: data.cover_css } : undefined}><i /><i /><i />
         <a className="btn btn-ghost btn-sm pf-coverbtn" href="/student/profile/edit"><IconCamera size={15} /> Portada</a>
       </div>
       <div className="pf-id">
@@ -300,7 +300,8 @@ function ProfileTabPrivacidad({ data, csrf }) {
         </section>
         <section className="pnl">
           <div className="pnl-h"><span className="ico-badge" style={{ background: "#FFE7D6" }}><IconBell size={16} /></span><h3>Notificaciones</h3></div>
-          <ToggleRows rows={PF_NOTIF} initial={prefs} keys={["block_reminders", "streak_risk", "grade_results", "weekly_summary", "product_news"]} onSave={savePreference} />
+          <ToggleRows rows={PF_NOTIF} initial={prefs} keys={["block_reminders", "streak_risk", "grade_results", "weekly_summary", "product_news"]} onSave={savePreference} disabled />
+          <p className="pf-coming">Estas preferencias estarán disponibles cuando se activen sus canales de notificación.</p>
           {status && <div className="pf-pref-status" role="status">{status}</div>}
         </section>
       </div>
@@ -313,8 +314,8 @@ function ProfileTabPrivacidad({ data, csrf }) {
         </section>
         <section className="pnl">
           <div className="pnl-h"><span className="ico-badge" style={{ background: "#E4F7EE" }}><IconTimer size={16} /></span><h3>Focus Guard</h3></div>
-          <div className="pf-row"><div className="who"><b>Bloquear sitios distractores</b><p>Durante cada bloque de enfoque activo.</p></div><Sw on={prefs.focus_block_sites ?? true} onChange={(v) => savePreference("focus_block_sites", v)} /></div>
-          <div className="pf-row"><div className="who"><b>Silenciar notificaciones</b><p>Pausa todos los avisos mientras corre el timer.</p></div><Sw on={prefs.focus_silence_notifications ?? true} onChange={(v) => savePreference("focus_silence_notifications", v)} /></div>
+          <div className="pf-row"><div className="who"><b>Bloquear sitios distractores</b><p>Se configura desde Focus Guard en la extensión.</p></div><Sw label="Bloquear sitios distractores" disabled on={true} onChange={() => {}} /></div>
+          <div className="pf-row"><div className="who"><b>Silenciar notificaciones</b><p>Disponible próximamente en Focus Guard.</p></div><Sw label="Silenciar notificaciones" disabled on={false} onChange={() => {}} /></div>
         </section>
       </div>
     </div>
@@ -336,7 +337,7 @@ function ProfilePage({ plus, data = {}, csrf = "" }) {
     { ...PF_STATS[0], n: Number(data.total_xp || 0).toLocaleString("es-CL"), d: "XP acumulado" },
     { ...PF_STATS[1], n: String(data.streak || 0), d: "días seguidos" },
     { ...PF_STATS[2], n: Math.round(Number(data.focus_minutes || 0) / 60) + " h", d: (data.sessions || 0) + " sesiones" },
-    { ...PF_STATS[3], n: data.rank ? "#" + data.rank : "—", l: "Ranking global", d: data.rank ? "Posición actual" : "Aún sin ranking" },
+    { ...PF_STATS[3], n: data.rank ? "#" + data.rank : "—", l: "Ranking carrera", d: data.rank ? "Posición actual" : "Aún sin ranking" },
   ];
   React.useEffect(() => { const t = setTimeout(() => setShown(true), 70); return () => clearTimeout(t); }, []);
   return (

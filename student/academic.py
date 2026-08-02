@@ -952,6 +952,19 @@ def _sqlite_port(q: str) -> str:
     return q
 
 
+def _leaderboard_visible_clause(alias: str = "c") -> str:
+    """Hide only students who explicitly opted out in profile settings."""
+    if _USE_PG:
+        return (
+            f" AND COALESCE(NULLIF({alias}.mail_preferences, '')::jsonb "
+            "->> 'appear_in_rankings', 'true') <> 'false' "
+        )
+    return (
+        f" AND COALESCE(json_extract(CASE WHEN json_valid({alias}.mail_preferences) "
+        f"THEN {alias}.mail_preferences ELSE '{{}}' END, '$.appear_in_rankings'), 1) != 0 "
+    )
+
+
 def _xp_select(where_extra: str = "", params: Iterable = (), period: str = "all",
                retired_only: bool = False) -> tuple[str, tuple]:
     join_extra = _period_sql(period)
@@ -969,7 +982,7 @@ def _xp_select(where_extra: str = "", params: Iterable = (), period: str = "all"
         "       (SELECT COALESCE(SUM(xl.xp), 0) FROM student_xp xl WHERE xl.client_id = c.id) AS lifetime_xp "
         "FROM clients c "
         "LEFT JOIN student_xp x ON x.client_id = c.id " + join_extra +
-        "WHERE c.account_type = 'student' " + retired_clause
+        "WHERE c.account_type = 'student' " + retired_clause + _leaderboard_visible_clause("c")
     )
     q = (
         base
@@ -992,7 +1005,7 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
         # Fetch the requester's scoping values
         me = _fetchone(
             db,
-            "SELECT country_iso, university_id, major_id FROM clients WHERE id = %s",
+            "SELECT country_iso, university_id, major_id, mail_preferences FROM clients WHERE id = %s",
             (client_id,),
         ) or {}
 
@@ -1110,13 +1123,21 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
     with get_db() as db:
         me = _fetchone(
             db,
-            "SELECT country_iso, university_id, major_id FROM clients WHERE id = %s",
+            "SELECT country_iso, university_id, major_id, mail_preferences FROM clients WHERE id = %s",
             (client_id,),
         ) or {}
         my_xp_q = _sqlite_port(
             "SELECT COALESCE(SUM(xp),0) FROM student_xp WHERE client_id = %s" + my_xp_where
         )
         my_xp = _fetchval(db, my_xp_q, (client_id,)) or 0
+
+    try:
+        import json as _json
+        _rank_prefs = _json.loads(me.get("mail_preferences") or "{}")
+    except (TypeError, ValueError):
+        _rank_prefs = {}
+    if _rank_prefs.get("appear_in_rankings", True) is False:
+        return None
 
     if int(my_xp) <= 0:
         return None
@@ -1149,7 +1170,7 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
         "SELECT COUNT(*) FROM ("
         "  SELECT c.id, COALESCE(SUM(x.xp),0) AS total_xp "
         "  FROM clients c LEFT JOIN student_xp x ON x.client_id = c.id " + join_extra +
-        "  WHERE c.account_type = 'student' " + retired_clause + where_extra +
+        "  WHERE c.account_type = 'student' " + retired_clause + _leaderboard_visible_clause("c") + where_extra +
         "  GROUP BY c.id "
         "  HAVING COALESCE(SUM(x.xp),0) > %s "
         ") AS ahead"
@@ -1159,7 +1180,7 @@ def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
         "SELECT COUNT(*) FROM ("
         "  SELECT c.id "
         "  FROM clients c LEFT JOIN student_xp x ON x.client_id = c.id " + join_extra +
-        "  WHERE c.account_type = 'student' " + retired_clause + where_extra +
+        "  WHERE c.account_type = 'student' " + retired_clause + _leaderboard_visible_clause("c") + where_extra +
         "  GROUP BY c.id "
         "  HAVING COALESCE(SUM(x.xp),0) > 0 "
         ") AS ranked_total"
@@ -1236,6 +1257,7 @@ def monthly_winners(year: int, month: int, top_n: int = 3) -> dict:
         "FROM clients c "
         "LEFT JOIN student_xp x ON x.client_id = c.id " + period_clause +
         "WHERE c.account_type = 'student' AND COALESCE(c.retired, 0) = 0 "
+        + _leaderboard_visible_clause("c")
     )
 
     def _rows_for(extra_where: str, extra_params: tuple) -> list[dict]:

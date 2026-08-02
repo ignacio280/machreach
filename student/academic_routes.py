@@ -201,6 +201,15 @@ def register_academic_routes(app, csrf, limiter):
         viewer_id = _cid()
         if sdb.users_blocked(viewer_id, user_id):
             return jsonify({"error": "not found"}), 404
+        if viewer_id != user_id:
+            from machreach_core.db import get_mail_preferences
+            try:
+                import json as _json
+                public_prefs = _json.loads(get_mail_preferences(user_id) or "{}")
+            except (TypeError, ValueError):
+                public_prefs = {}
+            if public_prefs.get("profile_public", True) is False:
+                return jsonify({"error": "not found"}), 404
 
         univ = ac.get_university(int(row["university_id"])) if row.get("university_id") else None
         major = ac.get_major(int(row["major_id"])) if row.get("major_id") else None
