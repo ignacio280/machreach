@@ -6661,7 +6661,7 @@ Material:
         # The window starts on a Monday so each cell lines up with the
         # Mon-Sun column labels under the grid; days after today in the
         # current week render as blank placeholders.
-        from datetime import date as _date_cls, timedelta as _td_cls
+        from datetime import timedelta as _td_cls
         _mr_today = sdb.user_date(cid)
         _mr_heat_start = _mr_today - _td_cls(days=_mr_today.weekday()) - _td_cls(weeks=4)
         _mr_heat = {}
