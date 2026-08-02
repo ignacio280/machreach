@@ -141,9 +141,11 @@ def test_profile_payload_uses_weighted_grade_and_selected_banner(client, make_us
         _exec(db, "UPDATE student_exams SET grade = %s WHERE id = %s", (4.0, exams[1]["id"]))
     sdb.get_wallet(client_id)
     with get_db() as db:
-        _exec(db, "UPDATE student_wallet SET selected_banner = %s WHERE client_id = %s", ("obsidian", client_id))
+        _exec(db, "UPDATE student_wallet SET selected_banner = %s WHERE client_id = %s", ("cherry", client_id))
 
-    profile = _app_payload(client.get("/student/profile").get_data(as_text=True))["profile"]
+    body = client.get("/student/profile").get_data(as_text=True)
+    profile = _app_payload(body)["profile"]
 
     assert profile["courses"][0]["grade"] == "4,4"
-    assert "#0f172a" in profile["cover_css"]
+    assert profile["cover_anim_class"] == "bnr-anim-cherry"
+    assert "@keyframes bnr-cherry" in body

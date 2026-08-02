@@ -86,8 +86,13 @@ def render_live_page(slug: str, data: dict, version: str = "20260802-app-v6-4") 
         f'<link rel="stylesheet" href="/static/machreach_app/app/{name}?v={version}">'
         for name in _PAGE_CSS[slug]
     )
+    animation_styles = ""
+    if slug == "perfil":
+        from student.db import BANNER_ANIM_CSS
+        animation_styles = f"<style>{BANNER_ANIM_CSS}</style>"
     return (
         f'<link rel="stylesheet" href="/static/machreach_landing/v6/theme.css?v={version}">'
+        + animation_styles
         + styles
         + '<div id="root"></div>'
         + '<script>window.__MACHREACH_APP__=JSON.parse(new TextDecoder().decode('

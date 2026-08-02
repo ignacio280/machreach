@@ -51,7 +51,7 @@ function ProfileHero({ plus, avatar, name, handle, data }) {
   const nextXp = Math.max(0, Number(data.level_ceil || 0) - Number(data.total_xp || 0));
   return (
     <section className="pf-hero rv" style={{ "--d": "0ms" }}>
-      <div className="pf-cover" style={data.cover_css ? { background: data.cover_css } : undefined}><i /><i /><i />
+      <div className={"pf-cover bnr-anim-host" + (data.cover_anim_class ? " " + data.cover_anim_class : "")} style={data.cover_css ? { background: data.cover_css } : undefined}><i /><i /><i />
         <a className="btn btn-ghost btn-sm pf-coverbtn" href="/student/profile/edit"><IconCamera size={15} /> Portada</a>
       </div>
       <div className="pf-id">

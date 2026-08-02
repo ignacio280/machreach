@@ -4314,6 +4314,7 @@ Return this JSON shape:
                     "bio": _profile_client.get("profile_bio") or "",
                     "avatar_color": _profile_prefs.get("profile_avatar") or "#FFD3A8",
                     "cover_css": (sdb.BANNERS.get(_wallet.get("selected_banner") or "default") or sdb.BANNERS["default"]).get("css") or "",
+                    "cover_anim_class": (sdb.BANNERS.get(_wallet.get("selected_banner") or "default") or {}).get("anim_class") or "",
                     "created_at": _created_at,
                     "major": (_profile_major or {}).get("name") or "Carrera sin configurar",
                     "university": (_profile_university or {}).get("name") or "Universidad sin configurar",
