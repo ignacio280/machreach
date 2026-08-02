@@ -1,5 +1,8 @@
 """Authenticated student journeys exercised through the public HTTP surface."""
 
+import base64
+import json
+import re
 import pytest
 
 from machreach_core.db import _exec, _fetchone, get_db
@@ -64,7 +67,10 @@ def test_course_detail_renders_for_its_owner(client, active_student):
     )
 
     assert response.status_code == 200
-    assert "Journey Mathematics" in response.get_data(as_text=True)
+    body = response.get_data(as_text=True)
+    encoded = re.search(r'atob\("([A-Za-z0-9+/=]+)"\)', body).group(1)
+    payload = json.loads(base64.b64decode(encoded))
+    assert any(course["name"] == "Journey Mathematics" for course in payload["courses"]["items"])
 
 
 @pytest.mark.parametrize(

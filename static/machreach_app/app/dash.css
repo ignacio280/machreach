@@ -1,5 +1,6 @@
 /* MachReach app shell + dashboard — sticker system, shares v6/theme.css tokens */
 .app{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:100vh;background:var(--paper)}
+.app>div{min-width:0}
 @media (max-width:1080px){.app{grid-template-columns:1fr}}
 
 /* ---------- sidebar ---------- */
@@ -66,6 +67,13 @@
 .pnl-h .lnk svg{transition:transform .2s var(--spring-b)}
 .pnl-h .lnk:hover svg{transform:translateX(3px)}
 .ico-badge{width:32px;height:32px;border-radius:10px;border:var(--bd);display:grid;place-items:center;flex:none;box-shadow:0 2px 0 var(--ink)}
+@media (max-width:600px){
+  .topbar-in{padding-inline:16px}
+  .page{padding:20px 16px 90px}
+  .pnl{padding:16px}
+  .pnl-h{flex-wrap:wrap;align-items:center}
+  .pnl-h .lnk{margin-left:0}
+}
 
 /* ---------- mission hero ---------- */
 .mission{position:relative;overflow:hidden;background:var(--surface);border:var(--bd);border-radius:var(--r-xl);box-shadow:var(--sh3);padding:26px 28px}

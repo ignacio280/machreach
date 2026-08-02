@@ -137,13 +137,25 @@ const __TWEAKS_STYLE = `
 // Single source of truth for tweak values. setTweak persists via the host
 // (__edit_mode_set_keys → host rewrites the EDITMODE block on disk).
 function useTweaks(defaults) {
-  const [values, setValues] = React.useState(defaults);
+  const [values, setValues] = React.useState(() => {
+    const live = Boolean(window.__MACHREACH_APP__?.live || window.__MACHREACH_DASHBOARD__?.live);
+    if (!live) return defaults;
+    const savedTheme = localStorage.getItem("machreach-theme");
+    return { ...defaults, theme: savedTheme === "dark" ? "dark" : "light" };
+  });
   // Accepts either setTweak('key', value) or setTweak({ key: value, ... }) so a
   // useState-style call doesn't write a "[object Object]" key into the persisted
   // JSON block.
   const setTweak = React.useCallback((keyOrEdits, val) => {
     const edits = typeof keyOrEdits === 'object' && keyOrEdits !== null
       ? keyOrEdits : { [keyOrEdits]: val };
+    const live = Boolean(window.__MACHREACH_APP__?.live || window.__MACHREACH_DASHBOARD__?.live);
+    if (live && Object.prototype.hasOwnProperty.call(edits, "theme")) {
+      localStorage.setItem("machreach-theme", edits.theme);
+      localStorage.setItem("mr_theme", "default");
+      document.documentElement.dataset.theme = edits.theme;
+      document.body.dataset.theme = edits.theme;
+    }
     setValues((prev) => ({ ...prev, ...edits }));
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
   }, []);

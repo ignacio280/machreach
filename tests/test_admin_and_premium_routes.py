@@ -1,5 +1,8 @@
 """Coverage for privileged dashboards and the real premium analytics view."""
 
+import base64
+import json
+import re
 import pytest
 from datetime import datetime, timezone
 
@@ -115,9 +118,11 @@ def test_premium_analytics_renders_complete_dashboard(
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "wa-page" in body
-    assert "wa-line-canvas" in body
-    assert "wa-course-count" in body
+    assert "/static/machreach_app/analiticas.bundle.min.js" in body
+    assert "/static/machreach_app/app/analytics.css" in body
+    encoded = re.search(r'atob\("([A-Za-z0-9+/=]+)"\)', body).group(1)
+    payload = json.loads(base64.b64decode(encoded))
+    assert payload["plus"] is True
 
 
 def test_rich_flashcard_quiz_and_exam_views_render(client, make_user):

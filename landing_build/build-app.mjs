@@ -24,19 +24,59 @@ const LANDING = join(STATIC, "machreach_landing");
 const APP = join(STATIC, "machreach_app");
 const PREFIX = "/static/machreach_app/";
 const LANDING_PREFIX = "/static/machreach_landing/";
-const BUNDLE_VERSION = "app-v6-1";
+const BUNDLE_VERSION = "app-v6-3";
 
 // Shared with the landing so the design system has exactly one source of truth
 // — theme.css in particular is edited in place and must not be forked.
 const SHARED_JSX = ["v5/tweaks-panel.jsx", "v5/motion.jsx", "v5/logo.jsx", "v6/icons.jsx"];
 const SHARED_CSS = ["v6/theme.css"];
-const APP_CSS = ["app/dash.css", "app/focus.css"];
-
-// Components every page may reference. Order matters: this is one flat scope.
-const APP_JSX = [
-  "app/shell.jsx", "app/lock.jsx",
-  "app/dash-left.jsx", "app/dash-right.jsx",
-];
+const PAGE_DEPS = {
+  amigos: {
+    css: ["dash.css", "focus.css", "plan.css", "rank.css", "friends.css"],
+    jsx: ["shell.jsx", "lock.jsx", "friends.jsx"],
+  },
+  analiticas: {
+    css: ["dash.css", "focus.css", "plan.css", "courses.css", "analytics.css"],
+    jsx: ["shell.jsx", "lock.jsx", "analytics.jsx"],
+  },
+  cuenta: { css: ["auth.css"], jsx: ["auth.jsx"], motion: false },
+  cursos: {
+    css: ["dash.css", "focus.css", "plan.css", "courses.css"],
+    jsx: ["shell.jsx", "lock.jsx", "dash-left.jsx", "courses.jsx"],
+  },
+  dashboard: {
+    css: ["dash.css", "focus.css"],
+    jsx: ["shell.jsx", "lock.jsx", "dash-left.jsx", "dash-right.jsx"],
+  },
+  focus: {
+    css: ["dash.css", "focus.css"],
+    jsx: ["shell.jsx", "lock.jsx", "ambience.jsx", "focus.jsx"],
+  },
+  herramientas: {
+    css: ["dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"],
+    jsx: ["shell.jsx", "lock.jsx", "tools.jsx"],
+  },
+  notas: {
+    css: ["dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"],
+    jsx: ["shell.jsx", "lock.jsx", "notas.jsx"],
+  },
+  plan: {
+    css: ["dash.css", "focus.css", "plan.css"],
+    jsx: ["shell.jsx", "lock.jsx", "plan.jsx"],
+  },
+  ranking: {
+    css: ["dash.css", "focus.css", "plan.css", "rank.css"],
+    jsx: ["shell.jsx", "lock.jsx", "rank.jsx"],
+  },
+  reviews: {
+    css: ["dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"],
+    jsx: ["shell.jsx", "lock.jsx", "reviews.jsx"],
+  },
+  tienda: {
+    css: ["dash.css", "focus.css", "plan.css", "analytics.css", "shop.css"],
+    jsx: ["shell.jsx", "lock.jsx", "shop.jsx"],
+  },
+};
 
 const readLanding = (f) => readFileSync(join(LANDING, f), "utf-8");
 const readApp = (f) => readFileSync(join(APP, f), "utf-8");
@@ -44,7 +84,7 @@ const readApp = (f) => readFileSync(join(APP, f), "utf-8");
 const pages = readdirSync(join(APP, "pages"))
   .filter((f) => f.endsWith(".jsx"))
   .map((f) => basename(f, ".jsx"))
-  .filter((id) => id === "dashboard")
+  .filter((id) => Object.hasOwn(PAGE_DEPS, id))
   .sort();
 
 if (!pages.length) throw new Error("No page bootstraps found in machreach_app/pages");
@@ -55,8 +95,6 @@ const reactDomServerUMD = readFileSync(
   join(__dirname, "node_modules", "react-dom", "umd", "react-dom-server-legacy.browser.production.min.js"),
   "utf-8",
 );
-
-const sharedSrc = [...SHARED_JSX.map(readLanding), ...APP_JSX.map(readApp)].join("\n\n");
 
 function prerender(code) {
   const dom = new JSDOM(
@@ -96,12 +134,19 @@ function prerender(code) {
   return out;
 }
 
-const cssLinks = [
-  ...SHARED_CSS.map((f) => `<link rel="stylesheet" href="${LANDING_PREFIX}${f}"/>`),
-  ...APP_CSS.map((f) => `<link rel="stylesheet" href="${PREFIX}${f}"/>`),
-].join("\n");
-
 for (const id of pages) {
+  const deps = PAGE_DEPS[id];
+  const sharedJsx = deps.motion === false
+    ? SHARED_JSX.filter((f) => f !== "v5/motion.jsx")
+    : SHARED_JSX;
+  const sharedSrc = [
+    ...sharedJsx.map(readLanding),
+    ...deps.jsx.map((f) => readApp(join("app", f))),
+  ].join("\n\n");
+  const cssLinks = [
+    ...SHARED_CSS.map((f) => `<link rel="stylesheet" href="${LANDING_PREFIX}${f}"/>`),
+    ...deps.css.map((f) => `<link rel="stylesheet" href="${PREFIX}app/${f}"/>`),
+  ].join("\n");
   const bootstrap = readApp(join("pages", `${id}.jsx`));
   const src = sharedSrc + "\n\n" + bootstrap + `
 ;(function () {

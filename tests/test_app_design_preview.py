@@ -68,13 +68,13 @@ def test_preview_never_touches_the_live_student_routes(client):
     assert "/design/" not in r.headers.get("Location", "")
 
 
-def test_preview_pages_do_not_claim_to_be_real_data():
-    """The mock values are hardcoded in the bootstraps. If a page is ever wired
-    to real data it should move off /design/, so this stays a deliberate step."""
+def test_preview_pages_do_not_receive_live_payloads():
+    """The same components can power live routes, but preview artifacts must
+    remain prerendered mocks with no injected account payload."""
     for slug in available_pages():
-        src = (APP_DIR / "pages" / f"{slug}.jsx").read_text(encoding="utf-8")
-        # Sample values live in the bootstrap as literals, never fetched.
-        assert "fetch(" not in src, f"{slug}: preview mock should not fetch data"
+        html = (APP_DIR / f"{slug}.prod.html").read_text(encoding="utf-8")
+        assert "window.__MACHREACH_APP__={" not in html
+        assert "window.__MACHREACH_DASHBOARD__={" not in html
 
 
 def test_design_system_is_shared_with_the_landing_not_forked():

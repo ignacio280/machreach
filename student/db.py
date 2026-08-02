@@ -537,6 +537,10 @@ def init_student_db():
         init_planner_done_table()
     except Exception as e:
         log.exception("init_planner_done_table failed: %s", e)
+    try:
+        init_grade_sheet_table()
+    except Exception as e:
+        log.exception("init_grade_sheet_table failed: %s", e)
     # Academic columns must exist before the course-catalog backfill reads
     # clients.university_id on a fresh install.
     try:
@@ -2295,6 +2299,45 @@ def init_planner_done_table():
             UNIQUE(client_id, block_date, exam_id, unit_index, title)
         )""",
     )
+
+
+def init_grade_sheet_table() -> None:
+    """Account-synced state for the interactive grade-sheet design."""
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_grade_sheets ("
+        "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE, "
+        "sheet_json TEXT NOT NULL, updated_at TIMESTAMP DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS student_grade_sheets ("
+        "client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE, "
+        "sheet_json TEXT NOT NULL, updated_at TEXT DEFAULT (datetime('now')))"
+    )
+
+
+def get_grade_sheet(client_id: int) -> dict | None:
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT sheet_json FROM student_grade_sheets WHERE client_id = %s",
+            (client_id,),
+        )
+    if not row:
+        return None
+    try:
+        value = json.loads(row.get("sheet_json") or "{}")
+    except (TypeError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def save_grade_sheet(client_id: int, sheet: dict) -> None:
+    payload = json.dumps(sheet, ensure_ascii=False, separators=(",", ":"))
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_grade_sheets WHERE client_id = %s", (client_id,))
+        _exec(
+            db,
+            "INSERT INTO student_grade_sheets (client_id, sheet_json) VALUES (%s, %s)",
+            (client_id, payload),
+        )
 
 
 def planner_mark_block(client_id: int, block_date: str, exam_id: int, unit_index: int,

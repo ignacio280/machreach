@@ -46,9 +46,9 @@ def test_csp_rewriter_keeps_dynamic_fragment_handlers_as_safe_calls(client, make
         session["session_version"] = 0
     body = client.get("/student/courses").get_data(as_text=True)
 
-    assert "data-mr-csp-call-click" in body
-    assert "data-mr-csp-call-change" in body
-    assert "function(event){deleteExamFile(' +" not in body
+    assert "/static/machreach_app/cursos.bundle.min.js" in body
+    assert "data-mr-csp-call-change" not in body
+    assert not re.search(r"<[^>]*\son[a-z]+\s*=", body, re.IGNORECASE)
     assert "function invoke(code,node,event)" in body
 
 

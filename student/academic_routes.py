@@ -299,6 +299,7 @@ def register_academic_routes(app, csrf, limiter):
         from machreach_core.db import get_db, _fetchall, _fetchval
         from datetime import datetime, timedelta
         from collections import defaultdict
+        from student.periods import local_now
 
         try:
             week_offset = int(request.args.get("week_offset") or 0)
@@ -322,15 +323,23 @@ def register_academic_routes(app, csrf, limiter):
                     "SELECT COALESCE(SUM(xp), 0) FROM student_xp WHERE client_id = %s",
                     (cid,),
                 ) or 0)
+                xp_events = _fetchall(
+                    db,
+                    "SELECT xp, created_at FROM student_xp WHERE client_id = %s ORDER BY created_at DESC LIMIT 2000",
+                    (cid,),
+                )
         except Exception:
             rows = []
             total_xp = 0
+            xp_events = []
 
         total_minutes = sum(int(r.get("focus_minutes") or 0) for r in rows)
         total_pages = sum(int(r.get("pages_read") or 0) for r in rows)
         total_sessions = len(rows)
 
-        today = datetime.now().date()
+        # Calendar buckets always use the account's saved IANA timezone and
+        # the shared injectable clock (via periods.user_date).
+        today = sdb.user_date(cid)
         # ISO week starts on Monday. Anchor "this week" to Monday of current week.
         week_anchor = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
         week_end = week_anchor + timedelta(days=6)
@@ -338,6 +347,7 @@ def register_academic_routes(app, csrf, limiter):
         per_day_min = defaultdict(int)
         per_day_sessions = defaultdict(int)
         per_course = defaultdict(int)
+        per_course_sessions = defaultdict(int)
         per_dow_week = defaultdict(int)  # only for the requested ISO week
 
         for r in rows:
@@ -361,6 +371,7 @@ def register_academic_routes(app, csrf, limiter):
                 course = notes.split(":", 1)[1].strip()
                 if course:
                     per_course[course] += mins
+                    per_course_sessions[course] += 1
 
         last_14 = []
         for i in range(13, -1, -1):
@@ -386,6 +397,20 @@ def register_academic_routes(app, csrf, limiter):
             ({"course": k, "minutes": v} for k, v in per_course.items()),
             key=lambda x: x["minutes"], reverse=True,
         )[:8]
+
+        xp_weeks = []
+        for weeks_ago in range(5, -1, -1):
+            start = today - timedelta(days=today.weekday(), weeks=weeks_ago)
+            end = start + timedelta(days=6)
+            amount = 0
+            for event in xp_events:
+                instant = sdb._parse_focus_dt(event.get("created_at"))
+                if instant is None:
+                    continue
+                event_date = local_now(cid, at=instant).date()
+                if start <= event_date <= end:
+                    amount += int(event.get("xp") or 0)
+            xp_weeks.append({"label": "Ahora" if weeks_ago == 0 else f"S-{weeks_ago}", "xp": amount})
 
         streak = 0
         cursor = today
@@ -414,5 +439,7 @@ def register_academic_routes(app, csrf, limiter):
             "week_start": week_anchor.strftime("%Y-%m-%d"),
             "week_end": week_end.strftime("%Y-%m-%d"),
             "top_courses": top_courses,
+            "course_sessions": dict(per_course_sessions),
+            "xp_weeks": xp_weeks,
             "best_dow": best_dow,
         })

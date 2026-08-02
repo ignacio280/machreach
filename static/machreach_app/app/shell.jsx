@@ -6,7 +6,7 @@ const IconStore = (p) => <Icon {...p}><path d="M4 9l1.5-5h13L20 9M4 9h16v10a1 1 
 const IconBell = (p) => <Icon {...p}><path d="M18 15V10a6 6 0 10-12 0v5l-2 3h16l-2-3zM10 21h4" /></Icon>;
 
 const AV = ["#FF8AA5", "#8DACFF", "#B29BFF", "#5DE3B0", "#FFB37A", "#9CD9F0", "#FFC857"];
-const SHELL_DATA = window.__MACHREACH_DASHBOARD__ || {};
+const SHELL_DATA = window.__MACHREACH_APP__ || window.__MACHREACH_DASHBOARD__ || {};
 const SHELL_EN = SHELL_DATA.lang === "en";
 
 function Ring({ pct, size = 34, sw = 5, color = "var(--brand)", label }) {

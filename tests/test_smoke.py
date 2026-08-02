@@ -1,6 +1,9 @@
 """Smoke tests: key routes respond without server errors, and the recent
 CSRF / canonical-host fixes behave as intended."""
 from contextlib import contextmanager
+import base64
+import json
+from pathlib import Path
 import re
 
 import pytest
@@ -119,9 +122,12 @@ def test_friends_tab_keeps_referral_invite_card(client, make_user):
     code = sdb.get_or_create_referral_code(cid)
 
     assert r.status_code == 200
-    assert 'id="fr-referral-card"' in body
-    assert f"/register?ref={code}" in body
-    assert "Invita amigos, gana Plus" in body
+    encoded = re.search(r'atob\("([A-Za-z0-9+/=]+)"\)', body).group(1)
+    payload = json.loads(base64.b64decode(encoded))
+    source = (Path(__file__).parents[1] / "static/machreach_app/app/friends.jsx").read_text(encoding="utf-8")
+    assert "/static/machreach_app/amigos.bundle.min.js" in body
+    assert payload["friends"]["referral_link"].endswith(f"/register?ref={code}")
+    assert "Invita amigos, gana Plus" in source
     assert "/student/invite" not in body
 
 
@@ -285,23 +291,15 @@ def test_courses_page_uses_clear_delete_and_stable_theme_controls(client, make_u
 
     body = client.get("/student/courses").get_data(as_text=True)
 
-    assert 'class="ccard-delete"' in body
-    assert 'aria-label="Eliminar curso"' in body
-    assert ">&times;</button>" in body
-    assert 'class="ccard-menu"' not in body
-    assert "grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr))!important" in body
-    assert "min-height:320px" in body
-    assert ':root[data-theme="dark"] .mr-app-shell .content > .page-head-cd' in body
-    assert "background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;padding:0!important" in body
-    assert "font-size:clamp(42px,5vw,76px)!important" in body
-    assert "background:#FFE7D8!important;border:2px solid #FF7A3D!important" in body
-    assert 'class="semester-picker"' in body
-    assert 'class="semester-select"' in body
-    assert 'class="semester-menu"' in body
-    assert ':root[data-theme="dark"] .mr-app-shell .content .page-head-cd .semester-option' in body
-    assert "window.handleSemesterViewportScroll" in body
-    assert "menu.contains(event.target)" in body
-    assert "window.addEventListener('scroll', window.closeSemesterMenu, true)" not in body
+    source = (Path(__file__).parents[1] / "static/machreach_app/app/courses.jsx").read_text(encoding="utf-8")
+    theme_source = (Path(__file__).parents[1] / "static/machreach_landing/v5/tweaks-panel.jsx").read_text(encoding="utf-8")
+    assert "/static/machreach_app/cursos.bundle.min.js" in body
+    assert 'aria-label="Eliminar curso"' in source
+    assert 'className="ccard-menu"' not in source
+    assert 'localStorage.setItem("machreach-theme"' in theme_source
+    encoded = re.search(r'atob\("([A-Za-z0-9+/=]+)"\)', body).group(1)
+    payload = json.loads(base64.b64decode(encoded))
+    assert any(course["name"] == "Ruta Novata UC 2024" for course in payload["courses"]["items"])
     assert "Privacidad del benchmark:" not in body
 
 
@@ -318,13 +316,12 @@ def test_leaderboard_page_uses_readable_prizes_and_rank_translations(client, mak
 
     body = client.get("/student/leaderboard").get_data(as_text=True)
 
-    assert "#mr-lb-page .lb-prize" in body
-    assert "color:#7A3E00" in body
-    assert "'Scholar':'Estudioso'" in body
-    assert "'Researcher':'Investigador'" in body
-    assert "'Academic':'Académico'" in body
-    assert "#mr-lb-page .lb-hero::after {" in body
-    assert "display:none;" in body
+    rank_css = (Path(__file__).parents[1] / "static/machreach_app/app/rank.css").read_text(encoding="utf-8")
+    rank_source = (Path(__file__).parents[1] / "static/machreach_app/app/rank.jsx").read_text(encoding="utf-8")
+    assert "/static/machreach_app/ranking.bundle.min.js" in body
+    assert "/static/machreach_app/app/rank.css" in body
+    assert ".prize" in rank_css
+    assert "useRankRows" in rank_source
 
 
 def test_shop_cards_have_dark_mode_surfaces(client, make_user):
@@ -339,10 +336,10 @@ def test_shop_cards_have_dark_mode_surfaces(client, make_user):
 
     body = client.get("/student/shop").get_data(as_text=True)
 
-    assert 'class="shop-product-card shop-coin-pack-card ' in body
-    assert 'class="shop-product-card shop-banner-card ' in body
-    assert 'class="shop-product-card shop-flag-card ' in body
-    assert ':root[data-theme="dark"] .shop-cd .shop-plan-card' in body
-    assert ':root[data-theme="dark"] .shop-cd .shop-product-card' in body
-    assert ':root[data-theme="dark"] .shop-cd .shop-plan-card li' in body
-    assert "background:#242129!important" in body
+    source = (Path(__file__).parents[1] / "static/machreach_app/app/shop.jsx").read_text(encoding="utf-8")
+    css = (Path(__file__).parents[1] / "static/machreach_app/app/shop.css").read_text(encoding="utf-8")
+    theme = (Path(__file__).parents[1] / "static/machreach_landing/v6/theme.css").read_text(encoding="utf-8")
+    assert "/static/machreach_app/tienda.bundle.min.js" in body
+    assert "CosCard" in source and "pack" in source and "PlanSection" in source
+    assert "background:var(--surface)" in css
+    assert '[data-theme="dark"]' in theme

@@ -265,6 +265,8 @@ def _gpa_planilla_html(lang: str = "en") -> str:
             html = html.replace(src, dst)
         return html
     EN_REPL = [
+        ('<div class="mrd-kicker">Planilla de notas</div>',
+         '<div class="mrd-kicker">Grade sheet</div>'),
         ("📊 Planilla de Notas", "📊 Grade Sheet"),
         ("Calcula tus promedios por semestre y la nota mínima que necesitas para aprobar.",
          "Calculate your semester averages and the minimum grade you need to pass."),
@@ -322,85 +324,120 @@ def _gpa_planilla_html(lang: str = "en") -> str:
 
 _GPA_PLANILLA_HTML_ES = r"""
 <style>
-  .pl-wrap { max-width: 1200px; margin: 0 auto; }
-  .pl-h { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
-  .pl-h h1 { margin:0; font-size:30px; }
-  .pl-actions { display:flex; gap:8px; flex-wrap:wrap; }
-  .pl-btn { background:var(--card); border:1px solid var(--border); color:var(--text); padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; transition: all .15s; }
-  .pl-btn:hover { background:var(--border-light); }
-  .pl-btn.primary { background: linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none; }
-  .pl-summary { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:18px; }
-  .pl-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
-  .pl-card .lbl { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; font-weight:700; }
-  .pl-card .val { font-size:28px; font-weight:800; margin-top:4px; font-variant-numeric: tabular-nums; }
-  .pl-tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:0; }
-  .pl-tab { min-width:82px; min-height:42px; padding:10px 16px; background:transparent; border:none; cursor:pointer; color:var(--text-muted); font-size:14px; font-weight:600; border-bottom:3px solid transparent; transition:all .12s; border-radius:6px 6px 0 0; text-align:center; }
-  .pl-tab:hover { color:var(--text); background:var(--border-light); }
-  .pl-tab.active { color:#1A1A1F !important; border-bottom-color:var(--primary); background:var(--primary); }
-  :root[data-theme="dark"] .pl-tab.active { color:#111015 !important; }
-  .pl-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; }
-  @media (max-width: 820px) { .pl-grid { grid-template-columns: 1fr; } }
-  .pl-course { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
-  .pl-course-h { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-  .pl-course-h input.cname { flex:1; min-width:0; background:transparent; border:none; color:var(--text); font-size:15px; font-weight:700; padding:4px 6px; border-bottom:2px solid transparent; outline:none; }
-  .pl-course-h input.cname:focus { border-bottom-color: var(--primary); }
-  .pl-course-h input.ccred { width:60px; background:var(--bg); border:1px solid var(--border); color:var(--text); font-size:13px; padding:4px 6px; border-radius:6px; text-align:center; }
-  .pl-course-h .label { font-size:11px; color:var(--text-muted); }
-  .pl-course-h .del { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; }
-  .pl-course-h .del:hover { background:rgba(239,68,68,.12); color:#ef4444; }
-  .pl-course-h .copy { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; }
-  .pl-course-h .copy:hover { background:rgba(56,189,248,.12); color:#0ea5e9; }
-  .pl-evals { width:100%; border-collapse:collapse; font-size:13px; }
-  .pl-evals th { text-align:left; padding:6px 4px; font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid var(--border); }
-  .pl-evals td { padding:4px 4px; }
-  .pl-evals input { width:100%; background:transparent; border:1px solid transparent; border-radius:5px; color:var(--text); padding:5px 7px; font-size:13px; box-sizing:border-box; outline:none; }
-  .pl-evals input:hover { background:var(--bg); }
-  .pl-evals input:focus { background:var(--bg); border-color:var(--primary); }
-  .pl-evals input.w-name { text-align:left; }
-  .pl-evals input.w-pct, .pl-evals input.w-grade { text-align:center; font-variant-numeric: tabular-nums; }
-  .pl-evals .delrow { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px 6px; border-radius:4px; }
-  .pl-evals .delrow:hover { background:rgba(239,68,68,.12); color:#ef4444; }
-  .pl-add-eval { background:transparent; border:1px dashed var(--border); color:var(--text-muted); padding:6px 10px; border-radius:6px; cursor:pointer; font-size:12px; margin-top:6px; width:100%; }
-  .pl-add-eval:hover { border-color:var(--primary); color:var(--primary); }
-  .pl-foot { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; padding-top:10px; margin-top:10px; border-top:1px dashed var(--border); font-size:13px; }
-  .pl-avg { font-weight:700; }
-  .pl-avg .num { font-size:20px; font-variant-numeric: tabular-nums; }
-  .pl-avg .num.pass { color:#10b981; }
-  .pl-avg .num.fail { color:#ef4444; }
-  .pl-avg .num.pending { color:var(--text-muted); }
-  .pl-nmpa { color:var(--text-muted); font-size:12px; }
-  .pl-nmpa strong { color:var(--text); }
-  .pl-warn { color:#ef4444; font-size:11px; padding:2px 6px; background:rgba(239,68,68,.1); border-radius:4px; margin-left:6px; }
-  .pl-ok { color:#10b981; font-size:11px; padding:2px 6px; background:rgba(16,185,129,.1); border-radius:4px; margin-left:6px; }
-  .pl-add-course { display:flex; align-items:center; justify-content:center; min-height:140px; background:transparent; border:2px dashed var(--border); border-radius:12px; cursor:pointer; color:var(--text-muted); font-size:14px; font-weight:600; transition:all .12s; }
-  .pl-add-course:hover { border-color:var(--primary); color:var(--primary); background:rgba(99,102,241,.04); }
-  .pl-help { font-size:12px; color:var(--text-muted); margin-top:18px; padding:12px 14px; background:var(--card); border-radius:8px; border-left:3px solid var(--primary); }
-  .pl-help b { color:var(--text); }
-  .pl-empty { padding:40px; text-align:center; color:var(--text-muted); background:var(--card); border-radius:12px; border:1px dashed var(--border); }
-  .pl-wrap.pl-stable .pl-card,
-  .pl-wrap.pl-stable .pl-course,
-  .pl-wrap.pl-stable .pl-empty,
-  .pl-wrap.pl-stable .pl-evals,
-  .pl-wrap.pl-stable .pl-evals tr,
-  .pl-wrap.pl-stable input,
-  .pl-wrap.pl-stable button,
-  .pl-wrap.pl-stable select,
-  .pl-wrap.pl-stable textarea,
-  .pl-wrap.pl-stable .pl-tab {
+  .mrd /* Planilla de Notas — MachReach app design.
+     Behaviour is untouched: every class name below is one the page's JavaScript
+     already writes; only the presentation moved to the v6 look. Shared tokens and
+     primitives come from /static/machreach_layout/design.css via .mrd on .pl-wrap. */
+  .pl-wrap{ max-width: 1200px; margin: 0 auto; }
+  .mrd.pl-wrap .pl-h{ display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-bottom:22px; }
+  .mrd.pl-wrap .pl-h h1{ font-family:var(--font-display); font-weight:800; letter-spacing:-.03em; margin:0; font-size:clamp(28px,4vw,42px); line-height:1; }
+  .mrd.pl-wrap .pl-h p{ color:var(--ink-2); font-size:14.5px; margin:10px 0 0; max-width:54ch; line-height:1.45; font-weight:600; }
+  .mrd.pl-wrap .pl-actions{ display:flex; gap:9px; flex-wrap:wrap; }
+  .mrd.pl-wrap .pl-btn{ background:var(--surface); border:var(--bd); color:var(--ink); padding:8px 14px; border-radius:11px;
+    cursor:pointer; font-family:var(--font-display); font-size:12.5px; font-weight:800;
+    box-shadow:0 2px 0 var(--ink); transition:transform .18s var(--spring-b), box-shadow .18s, background .2s; }
+  .mrd.pl-wrap .pl-btn:hover{ transform:translateY(-2px); box-shadow:var(--sh2); }
+  .mrd.pl-wrap .pl-btn:active{ transform:translateY(1px); box-shadow:0 1px 0 var(--ink); }
+  .mrd.pl-wrap .pl-btn.primary{ background:var(--brand); color:#fff; }
+
+  .mrd.pl-wrap .pl-summary{ display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:13px; margin-bottom:20px; }
+  @media (max-width: 820px) { .mrd.pl-wrap .pl-summary{ grid-template-columns:repeat(2,1fr); } }
+  .mrd.pl-wrap .pl-card{ background:var(--surface); border:var(--bd); border-radius:var(--r); padding:15px 17px; box-shadow:var(--sh1); }
+  .mrd.pl-wrap .pl-card .lbl{ font-family:var(--font-mono); font-size:9px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.1em; font-weight:700; }
+  .mrd.pl-wrap .pl-card .val{ font-family:var(--font-display); font-size:32px; font-weight:800; letter-spacing:-.04em; line-height:1.05;
+    margin-top:6px; font-variant-numeric:tabular-nums; }
+
+  .mrd.pl-wrap .pl-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; }
+  .mrd.pl-wrap .pl-tab{ min-width:40px; padding:7px 14px; background:var(--surface); border:var(--bd);
+    cursor:pointer; color:var(--ink); font-family:var(--font-display); font-size:13px; font-weight:800;
+    border-radius:11px; box-shadow:0 2px 0 var(--ink); text-align:center;
+    transition:transform .18s var(--spring-b), background .2s, color .2s; }
+  .mrd.pl-wrap .pl-tab:hover{ transform:translateY(-2px); }
+  .mrd.pl-wrap .pl-tab.active{ background:var(--ink) !important; color:var(--paper) !important; }
+  :root[data-theme="dark"] .mrd.pl-wrap .pl-tab.active{ color:var(--paper) !important; }
+
+  .mrd.pl-wrap .pl-grid{ display:grid; grid-template-columns:1fr; gap:16px; }
+  @media (max-width: 820px) { .mrd.pl-wrap .pl-grid{ grid-template-columns: 1fr; } }
+  .mrd.pl-wrap .pl-course{ background:var(--surface); border:var(--bd); border-radius:var(--r-lg); padding:18px 20px; box-shadow:var(--sh2);
+    transition:transform .22s var(--spring-b), box-shadow .22s; }
+  .mrd.pl-wrap .pl-course:hover{ transform:translateY(-3px); box-shadow:var(--sh3); }
+  .mrd.pl-wrap .pl-course-h{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .mrd.pl-wrap .pl-course-h input.cname{ flex:1; min-width:120px; background:transparent; border:0; border-bottom:2px dashed transparent;
+    color:var(--ink); font-family:var(--font-display); font-size:19px; font-weight:800; letter-spacing:-.02em; padding:4px 2px; outline:none; }
+  .mrd.pl-wrap .pl-course-h input.cname:hover{ border-bottom-color:var(--ink-3); }
+  .mrd.pl-wrap .pl-course-h input.cname:focus{ border-bottom-color:var(--brand); }
+  .mrd.pl-wrap .pl-course-h input.ccred{ width:56px; background:var(--surface-2); border:var(--bd); color:var(--ink);
+    font-family:var(--font-display); font-size:14px; font-weight:800; padding:5px 8px; border-radius:9px; text-align:center; }
+  .mrd.pl-wrap .pl-course-h .label{ font-family:var(--font-mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--ink-3); font-weight:700; }
+  .mrd.pl-wrap .pl-course-h .del, .mrd.pl-wrap .pl-course-h .copy{ width:30px; height:30px; border:var(--bd); background:var(--surface-2);
+    color:var(--ink-3); cursor:pointer; font-size:14px; padding:0; border-radius:9px; display:grid; place-items:center;
+    transition:background .2s, color .2s, transform .2s var(--spring-b); }
+  .mrd.pl-wrap .pl-course-h .del:hover{ background:var(--bad); color:#fff; transform:rotate(90deg); }
+  .mrd.pl-wrap .pl-course-h .copy:hover{ background:var(--sky); color:#fff; }
+
+  .mrd.pl-wrap .pl-evals{ width:100%; border-collapse:collapse; font-size:13px; }
+  .mrd.pl-wrap .pl-evals th{ text-align:left; padding:0 10px 4px; font-family:var(--font-mono); font-size:9px; color:var(--ink-3);
+    font-weight:700; text-transform:uppercase; letter-spacing:.1em; border-bottom:0; }
+  .mrd.pl-wrap .pl-evals td{ padding:4px 3px; }
+  .mrd.pl-wrap .pl-evals input{ width:100%; background:var(--surface-2); border:var(--bd); border-radius:11px; color:var(--ink);
+    font-family:var(--font-display); font-weight:800; padding:9px 11px; font-size:14px; box-sizing:border-box;
+    outline:none; box-shadow:0 2px 0 var(--ink); }
+  .mrd.pl-wrap .pl-evals input:focus-visible{ outline:3px solid var(--brand); outline-offset:2px; }
+  .mrd.pl-wrap .pl-evals input.w-name{ text-align:left; }
+  .mrd.pl-wrap .pl-evals input.w-pct, .mrd.pl-wrap .pl-evals input.w-grade{ text-align:center; font-variant-numeric:tabular-nums; }
+  .mrd.pl-wrap .pl-evals .delrow{ width:30px; height:30px; border:var(--bd); background:var(--surface-2); color:var(--ink-3);
+    cursor:pointer; padding:0; border-radius:9px; display:grid; place-items:center;
+    transition:background .2s, color .2s, transform .2s var(--spring-b); }
+  .mrd.pl-wrap .pl-evals .delrow:hover{ background:var(--bad); color:#fff; transform:rotate(90deg); }
+
+  .mrd.pl-wrap .pl-add-eval{ background:transparent; border:2px dashed var(--ink-3); color:var(--ink-2); padding:9px 12px;
+    border-radius:11px; cursor:pointer; font-family:var(--font-display); font-size:12.5px; font-weight:800;
+    margin-top:9px; width:100%; transition:border-color .2s, color .2s, background .2s; }
+  .mrd.pl-wrap .pl-add-eval:hover{ border-color:var(--brand); color:var(--brand-2); background:var(--brand-tint); }
+
+  .mrd.pl-wrap .pl-foot{ display:flex; justify-content:space-between; align-items:center; gap:11px; flex-wrap:wrap;
+    padding-top:13px; margin-top:14px; border-top:2px dashed var(--ink-3); font-size:13px; }
+  .mrd.pl-wrap .pl-avg{ font-family:var(--font-display); font-weight:800; }
+  .mrd.pl-wrap .pl-avg .num{ font-size:26px; letter-spacing:-.03em; font-variant-numeric:tabular-nums;
+    padding:2px 11px; border-radius:12px; border:var(--bd); box-shadow:0 2px 0 var(--ink); }
+  .mrd.pl-wrap .pl-avg .num.pass{ background:#E1F3D6; color:var(--ink); }
+  .mrd.pl-wrap .pl-avg .num.fail{ background:#FFDFE1; color:var(--ink); }
+  .mrd.pl-wrap .pl-avg .num.pending{ background:var(--surface-2); color:var(--ink-3); font-size:16px; }
+  .mrd.pl-wrap .pl-nmpa{ font-family:var(--font-mono); font-size:10.5px; font-weight:700; color:var(--ink-2);
+    padding:7px 13px; border-radius:999px; border:var(--bd); background:var(--surface-2); }
+  .mrd.pl-wrap .pl-nmpa strong{ color:var(--ink); }
+  .mrd.pl-wrap .pl-warn{ font-family:var(--font-mono); font-size:10px; font-weight:700; padding:3px 9px;
+    background:#FFDFE1; border:2px solid var(--ink); border-radius:999px; margin-left:6px; }
+  .mrd.pl-wrap .pl-ok{ font-family:var(--font-mono); font-size:10px; font-weight:700; padding:3px 9px;
+    background:#E1F3D6; border:2px solid var(--ink); border-radius:999px; margin-left:6px; }
+
+  .mrd.pl-wrap .pl-add-course{ display:flex; align-items:center; justify-content:center; min-height:150px; background:transparent;
+    border:2px dashed var(--ink-3); border-radius:var(--r-lg); cursor:pointer; color:var(--ink-2);
+    font-family:var(--font-display); font-size:14.5px; font-weight:800; transition:border-color .2s, color .2s, background .2s; }
+  .mrd.pl-wrap .pl-add-course:hover{ border-color:var(--brand); color:var(--brand-2); background:var(--brand-tint); }
+  .mrd.pl-wrap .pl-help{ font-size:12.5px; color:var(--ink-2); font-weight:700; line-height:1.5; margin-top:20px;
+    padding:14px 16px; background:var(--surface-2); border:var(--bd); border-radius:var(--r);
+    box-shadow:0 2px 0 var(--ink); }
+  .mrd.pl-wrap .pl-help b{ color:var(--ink); }
+  .mrd.pl-wrap .pl-empty{ padding:44px 20px; text-align:center; color:var(--ink-3); background:var(--surface);
+    border-radius:var(--r-lg); border:2px dashed var(--ink-3); font-family:var(--font-display); font-weight:800; }
+
+  .mrd.pl-wrap.pl-stable .pl-card, .mrd.pl-wrap.pl-stable .pl-course, .mrd.pl-wrap.pl-stable .pl-empty, .mrd.pl-wrap.pl-stable .pl-evals, .mrd.pl-wrap.pl-stable .pl-evals tr, .mrd.pl-wrap.pl-stable input, .mrd.pl-wrap.pl-stable button, .mrd.pl-wrap.pl-stable select, .mrd.pl-wrap.pl-stable textarea, .mrd.pl-wrap.pl-stable .pl-tab{
     animation:none !important;
   }
-  .pl-wrap.pl-stable .pl-card::after,
-  .pl-wrap.pl-stable .pl-course::after {
+  .mrd.pl-wrap.pl-stable .pl-card::after, .mrd.pl-wrap.pl-stable .pl-course::after{
     animation:none !important;
     opacity:0 !important;
   }
 </style>
 
-<div class="pl-wrap">
+<div class="pl-wrap mrd">
   <div class="pl-h">
     <div>
-      <h1>📊 Planilla de Notas</h1>
-      <p style="color:var(--text-muted);margin:4px 0 0;font-size:14px;">Calcula tus promedios por semestre y la nota mínima que necesitas para aprobar.</p>
+      <div class="mrd-kicker">Planilla de notas</div>
+      <h1>Cuánto necesitas para pasar.</h1>
+      <p>Calcula tus promedios por semestre y la nota mínima que necesitas en lo que queda para aprobar cada ramo.</p>
     </div>
     <div class="pl-actions">
       <button class="pl-btn" onclick="plExport()">⬇ Export</button>
@@ -1141,8 +1178,6 @@ Return this JSON shape:
     def student_analytics_page():
         if not _logged_in():
             return redirect(url_for("login"))
-        if not _student_is_plus():
-            return redirect("/student/shop")
         return _student_analytics_page_legacy()
 
     def _student_analytics_page_legacy():
@@ -4105,6 +4140,375 @@ Return this JSON shape:
                 f'<span id="mr-ext-connect" data-token="{_esc(make_connect_token(_cid()))}" hidden></span>'
             )
         lang = session.get("lang", "es")
+
+        # The Claude app project is the canonical visual source for the main
+        # student pages. Keep detail/study routes on their purpose-built views,
+        # but replace each exact top-level route with the authored React shell.
+        _live_design_routes = {
+            "/student/courses": "cursos",
+            "/student/focus": "focus",
+            "/student/planner": "plan",
+            "/student/gpa": "notas",
+            "/student/flashcards": "herramientas",
+            "/student/quizzes": "herramientas",
+            "/student/leaderboard": "ranking",
+            "/student/friends": "amigos",
+            "/student/reviews": "reviews",
+            "/student/analytics": "analiticas",
+            "/student/shop": "tienda",
+        }
+        _design_slug = _live_design_routes.get(request.path) if _logged_in() else None
+        if _design_slug:
+            try:
+                _wallet = sdb.get_wallet(_cid()) or {}
+            except Exception:
+                _wallet = {}
+            try:
+                _total_xp = int(sdb.get_total_xp(_cid()) or 0)
+            except Exception:
+                _total_xp = 0
+            try:
+                _streak = int(sdb.get_streak_days(_cid()) or 0)
+            except Exception:
+                _streak = 0
+            _client_name = session.get("client_name", "") or "MachReach"
+            _parts = [p for p in _client_name.split() if p]
+            _avatar = "".join(p[0] for p in _parts[:2]).upper() or "MR"
+            _app_data = {
+                "live": True,
+                "lang": lang,
+                "plus": _student_is_plus(),
+                "title": title,
+                "sub": {
+                    "cursos": "Ramos del semestre",
+                    "focus": "Sesión de estudio",
+                    "plan": "Planificación semanal",
+                    "notas": "Planilla de notas",
+                    "herramientas": "Flashcards y quizzes",
+                    "ranking": "Ligas y premios",
+                    "amigos": "Tu grupo de estudio",
+                    "reviews": "Reseñas anónimas de ramos",
+                    "analiticas": "Tu rendimiento real",
+                    "tienda": "Monedas y cosméticos",
+                }.get(_design_slug, "MachReach"),
+                "streak": _streak,
+                "xp": f"{_total_xp:,}".replace(",", "."),
+                "coins": int(_wallet.get("coins") or 0),
+                "avatar": _avatar,
+                "csrf": generate_csrf(),
+            }
+            if _design_slug == "herramientas":
+                _tool_colors = ["#FF6A2B", "#6E4CD8", "#6FB03A", "#2FA8C6"]
+                _tool_decks = []
+                for _idx, _deck in enumerate(sdb.get_flashcard_decks(_cid()) or []):
+                    _deck_id = int(_deck.get("id") or 0)
+                    _count = int(_deck.get("card_count") or 0)
+                    try:
+                        _due = int(sdb.count_due_flashcards(_deck_id) or 0)
+                    except Exception:
+                        _due = 0
+                    _tool_decks.append({
+                        "id": _deck_id,
+                        "n": _deck.get("title") or "Mazo",
+                        "c": _deck.get("course_name") or "MachReach",
+                        "cards": _count,
+                        "done": max(0, _count - _due),
+                        "due": _due,
+                        "dc": _tool_colors[_idx % len(_tool_colors)],
+                        "href": f"/student/flashcards/{_deck_id}",
+                    })
+                _tool_quizzes = []
+                for _quiz in (sdb.get_quizzes(_cid()) or []):
+                    _quiz_id = int(_quiz.get("id") or 0)
+                    _questions = int(_quiz.get("question_count") or 0)
+                    _tool_quizzes.append({
+                        "id": _quiz_id,
+                        "n": _quiz.get("title") or "Quiz",
+                        "m": f'{_questions} preguntas · {_quiz.get("course_name") or "MachReach"}',
+                        "s": int(_quiz.get("best_score")) if _quiz.get("best_score") is not None else None,
+                        "href": f"/student/quizzes/{_quiz_id}",
+                    })
+                _app_data["tools"] = {
+                    "live": True,
+                    "csrf": _app_data["csrf"],
+                    "initial_tab": "quiz" if request.path.endswith("/quizzes") else "cards",
+                    "decks": _tool_decks,
+                    "quizzes": _tool_quizzes,
+                }
+            if _design_slug == "amigos":
+                _friend_state = sdb.list_friends(_cid()) or {}
+                def _friend_rows(_rows):
+                    _out = []
+                    for _row in (_rows or []):
+                        _friend_id = int(_row.get("id") or 0)
+                        try:
+                            _friend_xp = int(sdb.get_total_xp(_friend_id) or 0)
+                        except Exception:
+                            _friend_xp = 0
+                        _out.append({
+                            "id": _friend_id,
+                            "n": _row.get("name") or "Estudiante",
+                            "on": bool(_row.get("online")),
+                            "s": "En línea ahora" if _row.get("online") else "Activo recientemente",
+                            "xp": f"{_friend_xp:,}".replace(",", "."),
+                        })
+                    return _out
+                _ref_code = sdb.get_or_create_referral_code(_cid())
+                _ref_base = (request.url_root or "").rstrip("/")
+                _app_data["friends"] = {
+                    "live": True,
+                    "my_id": _cid(),
+                    "friends": _friend_rows(_friend_state.get("friends")),
+                    "incoming": _friend_rows(_friend_state.get("incoming")),
+                    "discovery": sdb.get_friend_discovery(_cid()),
+                    "referral_link": f"{_ref_base}/register?ref={_ref_code}",
+                    "referral_joined": int(sdb.referral_count(_cid()) or 0),
+                }
+            if _design_slug == "cursos":
+                try:
+                    _time_rows = {int(x.get("course_id") or 0): x for x in (sdb.get_time_per_course(_cid()) or [])}
+                except Exception:
+                    _time_rows = {}
+                _colors = ["#FF6A2B", "#6FB03A", "#6E4CD8", "#2FA8C6", "#D2528B"]
+                _course_items = []
+                _completed_exams = 0
+                for _idx, _course in enumerate(sdb.get_courses(_cid()) or []):
+                    _course_id = int(_course.get("id") or 0)
+                    _exams = []
+                    for _exam in (sdb.get_course_exams(_course_id) or []):
+                        if _exam.get("completed") or _exam.get("grade") is not None:
+                            _completed_exams += 1
+                        _files = []
+                        try:
+                            for _file in (sdb.get_course_files(_cid(), _course_id, int(_exam.get("id") or 0)) or []):
+                                _files.append({"id": int(_file.get("id") or 0), "n": _file.get("original_name") or "Archivo", "m": "Material del curso"})
+                        except Exception:
+                            pass
+                        _exams.append({
+                            "id": int(_exam.get("id") or 0),
+                            "nm": _exam.get("name") or "Evaluación",
+                            "wt": f'{int(_exam.get("weight_pct") or 0)}%',
+                            "dt": (_exam.get("exam_date") or "—")[:10],
+                            "done": bool(_exam.get("completed")),
+                            "files": _files,
+                        })
+                    _stats = _time_rows.get(_course_id, {})
+                    _minutes = int(_stats.get("minutes") or 0)
+                    _next = next((e for e in _exams if not e.get("done")), None)
+                    _course_items.append({
+                        "id": _course_id,
+                        "code": _course.get("code") or "SIN CÓDIGO",
+                        "name": _course.get("name") or "Curso",
+                        "cc": _colors[_idx % len(_colors)],
+                        "origin": "Canvas / extensión" if _course.get("canvas_course_id") else "Agregado a mano",
+                        "sessions": int(_stats.get("sessions") or 0),
+                        "studied": f"{_minutes // 60}h {_minutes % 60:02d}m",
+                        "next": f'{_next["nm"]} · {_next["dt"]}' if _next else "Sin evaluaciones próximas",
+                        "urgent": False,
+                        "exams": _exams,
+                        "bench": {"hrs": "—", "grade": "—", "mine": f"{_minutes // 60}h", "delta": "—", "n": 0},
+                    })
+                try:
+                    _study_stats = sdb.get_study_stats(_cid()) or {}
+                except Exception:
+                    _study_stats = {}
+                _local_today = sdb.user_date(_cid())
+                _app_data["courses"] = {
+                    "live": True,
+                    "items": _course_items,
+                    "semester": sdb.get_current_semester(_cid()),
+                    "term_label": f'{_local_today.year} · {"primer" if _local_today.month <= 7 else "segundo"} semestre',
+                    "completed_exams": _completed_exams,
+                    "total_hours": float(_study_stats.get("total_hours") or 0),
+                    "total_sessions": int(_study_stats.get("sessions") or 0),
+                }
+            if _design_slug == "focus":
+                _focus_courses = []
+                for _course in (sdb.get_courses(_cid()) or []):
+                    _course_id = int(_course.get("id") or 0)
+                    _focus_courses.append({
+                        "id": _course_id,
+                        "name": _course.get("name") or "Curso",
+                        "exams": [{
+                            "id": int(_exam.get("id") or 0),
+                            "name": _exam.get("name") or "Evaluación",
+                        } for _exam in (sdb.get_course_exams(_course_id) or [])],
+                    })
+                _focus_today = sdb.user_date(_cid())
+                _focus_stats = dict(sdb.get_focus_stats_today(_cid()) or {})
+                _xp_today = 0
+                try:
+                    from machreach_core.db import _fetchall, get_db
+                    from student.periods import local_now as _user_local_now
+                    with get_db() as _db:
+                        _xp_events = _fetchall(
+                            _db,
+                            "SELECT xp, created_at FROM student_xp WHERE client_id = %s ORDER BY created_at DESC LIMIT 1000",
+                            (_cid(),),
+                        )
+                    for _event in _xp_events:
+                        _instant = sdb._parse_focus_dt(_event.get("created_at"))
+                        if _instant and _user_local_now(_cid(), at=_instant).date() == _focus_today:
+                            _xp_today += int(_event.get("xp") or 0)
+                except Exception:
+                    _xp_today = 0
+                _focus_stats["xp_today"] = _xp_today
+                _next_exam = None
+                for _exam in (sdb.get_upcoming_exams(_cid()) or []):
+                    try:
+                        _exam_day = datetime.strptime(str(_exam.get("exam_date") or "")[:10], "%Y-%m-%d").date()
+                    except (TypeError, ValueError):
+                        continue
+                    if _exam_day >= _focus_today:
+                        _next_exam = {
+                            "id": int(_exam.get("id") or 0),
+                            "name": _exam.get("name") or "Evaluación",
+                            "course": _exam.get("course_name") or "Curso",
+                            "date": _exam_day.strftime("%d/%m/%Y"),
+                            "days": (_exam_day - _focus_today).days,
+                            "weight": int(_exam.get("weight_pct") or 0),
+                        }
+                        break
+                _benchmark = {"has_data": False, "min_required": 5}
+                if _focus_courses:
+                    try:
+                        _benchmark = dict(sdb.get_course_success_benchmark(_focus_courses[0]["id"]) or _benchmark)
+                        _course_time = next((r for r in (sdb.get_time_per_course(_cid()) or []) if int(r.get("course_id") or 0) == _focus_courses[0]["id"]), {})
+                        _benchmark["my_hours"] = round(int(_course_time.get("minutes") or 0) / 60, 1)
+                    except Exception:
+                        pass
+                _app_data["focus"] = {
+                    "live": True,
+                    "courses": _focus_courses,
+                    "stats": _focus_stats,
+                    "today_label": _focus_today.strftime("%d/%m/%Y"),
+                    "status_label": "Listo para comenzar",
+                    "next_exam": _next_exam,
+                    "benchmark": _benchmark,
+                }
+            if _design_slug == "notas":
+                _semester_labels = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+                _current_semester = str(sdb.get_current_semester(_cid()) or "I")
+                _grade_sheet = sdb.get_grade_sheet(_cid())
+                if not _grade_sheet:
+                    _grade_semesters = [{"label": _label, "courses": []} for _label in _semester_labels]
+                    _current_index = _semester_labels.index(_current_semester) if _current_semester in _semester_labels else 0
+                    for _course in (sdb.get_courses(_cid()) or []):
+                        _course_id = int(_course.get("id") or 0)
+                        _grade_semesters[_current_index]["courses"].append({
+                            "id": f"c{_course_id}",
+                            "course_id": _course_id,
+                            "name": _course.get("name") or "Curso",
+                            "credits": 10,
+                            "evals": [{
+                                "id": f'e{int(_exam.get("id") or 0)}',
+                                "exam_id": int(_exam.get("id") or 0),
+                                "name": _exam.get("name") or "Evaluación",
+                                "pct": int(_exam.get("weight_pct") or 0),
+                                "grade": "" if _exam.get("grade") is None else str(_exam.get("grade")),
+                            } for _exam in (sdb.get_course_exams(_course_id) or [])],
+                        })
+                    _grade_sheet = {"current": _current_index, "sems": _grade_semesters}
+                _app_data["grades"] = {
+                    "live": True,
+                    "storage_key": f"mr_planilla_v1_{_cid()}",
+                    "current_semester": (_semester_labels.index(_current_semester) + 1) if _current_semester in _semester_labels else 1,
+                    "sheet": _grade_sheet,
+                    "csrf": _app_data["csrf"],
+                }
+            if _design_slug == "plan":
+                _saved_plan_row = sdb.get_latest_plan(_cid()) or {}
+                _saved_plan = _saved_plan_row.get("plan_json") or {}
+                if not isinstance(_saved_plan, dict):
+                    _saved_plan = {}
+                _settings_by_day = {
+                    int(_setting.get("day_of_week") or 0): _setting
+                    for _setting in (sdb.get_schedule_settings(_cid()) or [])
+                }
+                _availability = []
+                for _day_index in range(7):
+                    _setting = _settings_by_day.get(_day_index) or {}
+                    _availability.append({
+                        "day_of_week": _day_index,
+                        "available_hours": float(_setting.get("available_hours") if _setting.get("available_hours") is not None else (0 if _day_index == 6 else 2)),
+                        "is_free_day": bool(_setting.get("is_free_day") or _day_index == 6),
+                    })
+                _planner_exams = [{
+                    "id": int(_exam.get("id") or 0),
+                    "name": _exam.get("name") or "Evaluación",
+                    "course": _exam.get("course_name") or "Curso",
+                    "date": str(_exam.get("exam_date") or "")[:10],
+                    "weight": int(_exam.get("weight_pct") or 0),
+                } for _exam in (sdb.get_upcoming_exams(_cid()) or [])]
+                _plan_week_start = _saved_plan.get("week_start") or ""
+                try:
+                    _planner_done = sdb.planner_done_blocks(_cid(), since_date=_plan_week_start) if _plan_week_start else []
+                except Exception:
+                    _planner_done = []
+                _app_data["plan"] = {
+                    "live": True,
+                    "availability": _availability,
+                    "days": _saved_plan.get("days") or [],
+                    "week_start": _plan_week_start,
+                    "exams": _planner_exams,
+                    "done": _planner_done,
+                }
+            if _design_slug == "reviews":
+                _review_courses = []
+                for _course in (sdb.get_courses(_cid()) or []):
+                    _course_id = int(_course.get("id") or 0)
+                    if sdb.get_course_outcome(_cid(), _course_id):
+                        _review_courses.append({"id": _course_id, "name": _course.get("name") or "Curso"})
+                _app_data["reviews"] = {"live": True, "courses": _review_courses}
+            if _design_slug == "tienda":
+                try:
+                    _flag_state = sdb.get_flag_state(_cid()) or {}
+                except Exception:
+                    _flag_state = {}
+                try:
+                    from machreach_core import config as _cfg
+                    from machreach_core import lemonsqueezy as _ls
+                    from student import subscription as _subscription
+                    _test_mode = bool(_cfg.LEMON_SQUEEZY_TEST_MODE)
+                    _store = _cfg.LEMON_SQUEEZY_TEST_STORE_ID if _test_mode else _cfg.LEMON_SQUEEZY_STORE_ID
+                    _product = _cfg.LS_TEST_PRODUCT_STUDENT_PLUS if _test_mode else _cfg.LS_PRODUCT_STUDENT_PLUS
+                    _variant = _cfg.LS_TEST_VARIANT_STUDENT_PLUS if _test_mode else _cfg.LS_VARIANT_STUDENT_PLUS
+                    _billing_ready = bool(_store and _product and _variant and _ls.is_configured(test_mode=_test_mode))
+                    _subscription_state = _subscription.get_subscription_state(_cid()) or {}
+                except Exception:
+                    _billing_ready = False
+                    _subscription_state = {}
+                _banner_keys = ["peach", "ocean", "sunset", "forest", "lavender", "gold", "galaxy", "champion", "neon_rift", "candy", "mint", "obsidian"]
+                _flag_keys = ["candy", "stripes_3", "racing", "checker", "vortex_spiral", "polar_lights", "void", "heartbeat", "plus_anim_holo", "plus_prism", "matrix_rain", "flow_lava"]
+                def _catalog_items(_catalog, _keys):
+                    return [{
+                        "k": _key,
+                        "n": (_catalog.get(_key) or {}).get("name") or _key,
+                        "p": int((_catalog.get(_key) or {}).get("price_coins") or 0),
+                        "xp": int((_catalog.get(_key) or {}).get("xp_required") or 0),
+                        "plus": bool((_catalog.get(_key) or {}).get("plus_only")),
+                        "css": (_catalog.get(_key) or {}).get("css") or "transparent",
+                    } for _key in _keys if _key in _catalog]
+                _app_data["shop"] = {
+                    "live": True,
+                    "coins": int(_wallet.get("coins") or 0),
+                    "freezes": int(_wallet.get("streak_freezes") or 0),
+                    "xp": _total_xp,
+                    "free_cap": int(sdb.FREE_STREAK_FREEZE_CAP),
+                    "plus_cap": int(sdb.PAID_STREAK_FREEZE_CAP),
+                    "billing_ready": _billing_ready,
+                    "plus_until": str(_subscription_state.get("renews_at") or _subscription_state.get("ends_at") or "")[:10],
+                    "unlocked_banners": list(_wallet.get("unlocked_banners") or ["default"]),
+                    "unlocked_flags": list(_flag_state.get("unlocked_flags") or ["none"]),
+                    "banners": _catalog_items(sdb.BANNERS, _banner_keys),
+                    "flags": _catalog_items(sdb.FLAGS, _flag_keys),
+                }
+            from student.app_design import render_live_page
+            _live_content = render_live_page(_design_slug, _app_data)
+            if _live_content:
+                content_html = _live_content
+                dashboard_design = True
+
         rendered_content = translate_student_html_fragment(
             extension_connect_html + period_popup_html + content_html,
             lang,
@@ -4158,6 +4562,110 @@ Return this JSON shape:
             return jsonify({"error": "settings must be a list"}), 400
         sdb.save_schedule_settings(_cid(), settings)
         return jsonify({"ok": True, "settings": sdb.get_schedule_settings(_cid())})
+
+
+    @app.route("/api/student/grades/sheet", methods=["POST"])
+    def student_grade_sheet_api():
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        data = request.get_json(silent=True) or {}
+        sheet = data.get("sheet")
+        if not isinstance(sheet, dict) or not isinstance(sheet.get("sems"), list):
+            return jsonify({"error": "invalid grade sheet"}), 400
+        if len(sheet["sems"]) > 12:
+            return jsonify({"error": "too many semesters"}), 400
+        course_count = 0
+        exam_count = 0
+        for semester in sheet["sems"]:
+            if not isinstance(semester, dict) or not isinstance(semester.get("courses"), list):
+                return jsonify({"error": "invalid semester"}), 400
+            course_count += len(semester["courses"])
+            for course in semester["courses"]:
+                if not isinstance(course, dict) or not isinstance(course.get("evals"), list):
+                    return jsonify({"error": "invalid course"}), 400
+                exam_count += len(course["evals"])
+        if course_count > 120 or exam_count > 1200 or len(json.dumps(sheet, ensure_ascii=False)) > 500_000:
+            return jsonify({"error": "grade sheet is too large"}), 413
+        sdb.save_grade_sheet(_cid(), sheet)
+        return jsonify({"ok": True})
+
+
+    @app.route("/api/student/planner/regenerate", methods=["POST"])
+    def student_planner_regenerate_api():
+        """Build and persist a deterministic week from real availability/exams."""
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        if not _student_is_plus():
+            return jsonify({"error": "Plan is Plus only", "upgrade_required": True}), 402
+        from student.periods import utc_now
+
+        today = sdb.user_date(_cid())
+        week_start = today - timedelta(days=today.weekday())
+        settings = {
+            int(row.get("day_of_week") or 0): row
+            for row in (sdb.get_schedule_settings(_cid()) or [])
+        }
+        exams = []
+        for exam in (sdb.get_upcoming_exams(_cid()) or []):
+            try:
+                exam_day = datetime.strptime(str(exam.get("exam_date") or "")[:10], "%Y-%m-%d").date()
+            except (TypeError, ValueError):
+                continue
+            if exam_day < today:
+                continue
+            exams.append((exam_day, dict(exam)))
+        exams.sort(key=lambda item: (
+            max(0, (item[0] - today).days) / max(1, int(item[1].get("weight_pct") or 1)),
+            item[0],
+        ))
+
+        days = []
+        block_index = 0
+        for offset in range(7):
+            day = week_start + timedelta(days=offset)
+            setting = settings.get(day.weekday()) or {}
+            free = bool(setting.get("is_free_day"))
+            capacity = 0 if free else int(round(float(setting.get("available_hours") or 0) * 60))
+            blocks = []
+            if day >= today and exams and capacity >= 25:
+                max_blocks = min(3, max(1, capacity // 45))
+                for slot in range(max_blocks):
+                    exam_day, exam = exams[(offset + slot) % len(exams)]
+                    minutes = min(60, capacity)
+                    if minutes < 25:
+                        break
+                    days_left = max(0, (exam_day - day).days)
+                    phase = "Practicar" if days_left <= 7 else "Repasar" if days_left <= 21 else "Aprender"
+                    blocks.append({
+                        "index": block_index,
+                        "phase": phase,
+                        "title": f'{phase} para {exam.get("name") or "evaluación"}',
+                        "copy": f'{exam.get("course_name") or "Curso"} · {exam_day.strftime("%d/%m")}',
+                        "course": exam.get("course_name") or "Curso",
+                        "course_id": int(exam.get("course_id") or 0),
+                        "exam_id": int(exam.get("id") or 0),
+                        "minutes": minutes,
+                        "material_based": False,
+                    })
+                    block_index += 1
+                    capacity -= minutes
+            days.append({"date": day.isoformat(), "hours": float(setting.get("available_hours") or 0), "blocks": blocks})
+
+        plan = {
+            "generated_at": utc_now().isoformat(),
+            "week_start": week_start.isoformat(),
+            "week_offset": 0,
+            "days": days,
+            "exams": [{
+                "id": int(exam.get("id") or 0),
+                "name": exam.get("name") or "Evaluación",
+                "course": exam.get("course_name") or "Curso",
+                "date": exam_day.isoformat(),
+                "weight": int(exam.get("weight_pct") or 0),
+            } for exam_day, exam in exams],
+        }
+        plan_id = sdb.save_study_plan(_cid(), plan, {"availability": list(settings.values()), "source": "app_design"})
+        return jsonify({"ok": True, "plan_id": plan_id, "plan": dict(plan, live=True, availability=list(settings.values()), done=[])})
 
 
     @app.route("/api/student/planner/save", methods=["POST"])

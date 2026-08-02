@@ -2263,6 +2263,58 @@ def _auth_story_panel(kind: str, lang: str) -> str:
       </aside>
     """
 
+def _render_claude_auth(mode: str, *, ref: str = ""):
+    """Serve the supplied Cuenta design while keeping Flask auth authoritative."""
+    from student.app_design import render_live_page
+
+    csrf = generate_csrf()
+    messages = list(session.pop("_flashes", []) if "_flashes" in session else [])
+    payload = {
+        "mode": mode,
+        "csrf": csrf,
+        "ref": ref,
+        "messages": messages,
+    }
+    fragment = render_live_page("cuenta", payload)
+    if not fragment:
+        return None
+    page_title = "Crear cuenta" if mode == "signup" else "Iniciar sesión"
+    fallback_fields = (
+        f'<input type="hidden" name="csrf_token" value="{_esc(csrf)}">'
+        + (f'<input type="hidden" name="ref" value="{_esc(ref)}">'
+           '<p>¡Te invitaron! Tu amigo gana una semana gratis de Plus cuando te unes.</p>' if ref else "")
+        + ('<label for="register-name">Nombre</label><input id="register-name" name="name">'
+           '<label for="register-email">Correo</label><input id="register-email" name="email">'
+           '<label for="register-password">Contraseña</label><input id="register-password" name="password">'
+           if mode == "signup" else
+           '<label for="login-email">Correo</label><input id="login-email" name="email">'
+           '<label for="login-password">Contraseña</label><input id="login-password" name="password">')
+    )
+    content = Markup(
+        "<style>body>.nav,body>footer{display:none!important}"
+        "body>.container{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}"
+        "body>.container>.toast-container{position:fixed;z-index:2147483000}</style>"
+        + fragment
+        + f'<noscript><form method="post" action="/{"register" if mode == "signup" else "login"}">{fallback_fields}</form></noscript>'
+    )
+    return render_layout(
+        title=page_title,
+        content=content,
+        logged_in=False,
+        messages=[],
+        active_page="register" if mode == "signup" else "login",
+        client_name="",
+        wide=True,
+        nav=t_dict("nav"),
+        student_ui=t_dict("student_ui"),
+        tr=t,
+        lang=session.get("lang", "es"),
+        is_admin=False,
+        account_type="student",
+        dashboard_design=False,
+    )
+
+
 @app.route("/register", methods=["GET", "POST"])
 @limiter.limit("10 per minute", methods=["POST"])
 def register():
@@ -2321,6 +2373,9 @@ def register():
     _ref_code = (request.args.get("ref") or session.get("referral_ref") or "").strip().upper()[:16]
     if _ref_code:
         session["referral_ref"] = _ref_code
+    _auth_page = _render_claude_auth("signup", ref=_ref_code)
+    if _auth_page is not None:
+        return _auth_page
     _ref_hidden = f'<input type="hidden" name="ref" value="{_esc(_ref_code)}">' if _ref_code else ""
     _ref_banner = (
         '<div class="auth-ref">'
@@ -2402,6 +2457,9 @@ def login():
                 return redirect(url_for("admin_mfa_verify", next="/admin"))
             return redirect(url_for("admin_mfa_setup", next="/admin"))
         return redirect(url_for("student_dashboard_page"))
+    _auth_page = _render_claude_auth("login")
+    if _auth_page is not None:
+        return _auth_page
     _is_en = session.get("lang") == "en"
     _story = _auth_story_panel("login", session.get("lang", "es"))
     _resend_summary = "Didn't get verification email?" if _is_en else "&iquest;No recibiste el correo de verificaci&oacute;n?"

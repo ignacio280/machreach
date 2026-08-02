@@ -2,9 +2,11 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import hashlib
+import base64
 import hmac
 import json
 import os
+import re
 
 from student import subscription as ssub
 from student import db as sdb
@@ -716,14 +718,15 @@ def test_shop_is_plan_first_and_disables_unconfigured_billing(
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert body.index('data-shop-tab="plan"') < body.index('data-shop-tab="coins"')
-    assert 'data-shop-panel="plan"' in body
-    assert 'data-shop-panel="coins"' in body
-    assert 'data-shop-panel="cosmetics"' in body
-    assert "IVA calculado y mostrado en checkout" in body
-    assert "renovaci" in body.lower()
-    assert "Pagos no disponibles" in body
-    assert 'data-billing-disabled="true"' in body
+    encoded = re.search(r'atob\("([A-Za-z0-9+/=]+)"\)', body).group(1)
+    payload = json.loads(base64.b64decode(encoded))
+    source = open("static/machreach_app/app/shop.jsx", encoding="utf-8").read()
+    assert "/static/machreach_app/tienda.bundle.min.js" in body
+    assert source.index('id: "plan"') < source.index('id: "coins"') < source.index('id: "cosmetics"')
+    assert "IVA" in source
+    assert "renovaci" in source.lower()
+    assert "Pagos no disponibles" in source
+    assert payload["shop"]["billing_ready"] is False
 
 
 def test_subscription_reconcile_restores_provider_status(

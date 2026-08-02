@@ -14,6 +14,8 @@ Regenerate after editing any source file.
 """
 from __future__ import annotations
 
+import base64
+import json
 from pathlib import Path
 
 _APP_DIR = Path(__file__).resolve().parent.parent / "static" / "machreach_app"
@@ -22,6 +24,31 @@ _APP_DIR = Path(__file__).resolve().parent.parent / "static" / "machreach_app"
 # in the directory can never become a route.
 _PAGES: dict[str, str] = {
     "dashboard": "Inicio",
+    "cursos": "Cursos",
+    "focus": "Enfoque",
+    "plan": "Plan",
+    "notas": "Notas",
+    "herramientas": "Flashcards y quizzes",
+    "ranking": "Ranking",
+    "amigos": "Amigos",
+    "reviews": "Reviews",
+    "analiticas": "Analíticas",
+    "tienda": "Tienda",
+    "cuenta": "Iniciar sesión y registro",
+}
+
+_PAGE_CSS: dict[str, tuple[str, ...]] = {
+    "amigos": ("dash.css", "focus.css", "plan.css", "rank.css", "friends.css"),
+    "analiticas": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css"),
+    "cursos": ("dash.css", "focus.css", "plan.css", "courses.css"),
+    "focus": ("dash.css", "focus.css"),
+    "herramientas": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"),
+    "notas": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"),
+    "plan": ("dash.css", "focus.css", "plan.css"),
+    "ranking": ("dash.css", "focus.css", "plan.css", "rank.css"),
+    "reviews": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"),
+    "tienda": ("dash.css", "focus.css", "plan.css", "analytics.css", "shop.css"),
+    "cuenta": ("auth.css",),
 }
 
 
@@ -42,3 +69,28 @@ def render_design_page(slug: str) -> str | None:
     if not artifact.is_file():
         return None
     return artifact.read_text(encoding="utf-8")
+
+
+def render_live_page(slug: str, data: dict, version: str = "20260802-app-v6-3") -> str | None:
+    """Return the exact Claude app shell wired to server-provided live data."""
+    if slug not in _PAGE_CSS:
+        return None
+    payload = dict(data or {})
+    payload["live"] = True
+    encoded = base64.b64encode(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii")
+    styles = "".join(
+        f'<link rel="stylesheet" href="/static/machreach_app/app/{name}?v={version}">'
+        for name in _PAGE_CSS[slug]
+    )
+    return (
+        f'<link rel="stylesheet" href="/static/machreach_landing/v6/theme.css?v={version}">'
+        + styles
+        + '<div id="root"></div>'
+        + '<script>window.__MACHREACH_APP__=JSON.parse(new TextDecoder().decode('
+        + f'Uint8Array.from(atob("{encoded}"),function(c){{return c.charCodeAt(0)}})));</script>'
+        + '<script src="/static/machreach_landing/vendor/react.production.min.js"></script>'
+        + '<script src="/static/machreach_landing/vendor/react-dom.production.min.js"></script>'
+        + f'<script src="/static/machreach_app/{slug}.bundle.min.js?v={version}" defer></script>'
+    )

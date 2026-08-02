@@ -3,6 +3,8 @@ import re
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from machreach_core.db import _exec, get_db
 
 
@@ -23,6 +25,31 @@ def _payload(markup):
     match = re.search(r"window\.__MACHREACH_DASHBOARD__=(\{.*?\});</script>", markup, re.S)
     assert match, "the live dashboard payload is missing"
     return json.loads(match.group(1))
+
+
+@pytest.mark.parametrize(
+    ("path", "bundle"),
+    [
+        ("/student/courses", "cursos"),
+        ("/student/focus", "focus"),
+        ("/student/planner", "plan"),
+        ("/student/gpa", "notas"),
+        ("/student/flashcards", "herramientas"),
+        ("/student/quizzes", "herramientas"),
+        ("/student/leaderboard", "ranking"),
+        ("/student/friends", "amigos"),
+        ("/student/reviews", "reviews"),
+        ("/student/analytics", "analiticas"),
+        ("/student/shop", "tienda"),
+    ],
+)
+def test_live_student_pages_use_the_supplied_designs(client, make_user, path, bundle):
+    _student(client, make_user)
+    response = client.get(path)
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert f"/static/machreach_app/{bundle}.bundle.min.js" in body
+    assert "window.__MACHREACH_APP__=" in body
 
 
 def test_live_dashboard_uses_supplied_design_shell_and_real_identity(client, make_user):
@@ -144,8 +171,9 @@ def test_dashboard_plan_csrf_token_authorizes_real_toggle_endpoint(client, make_
     assert response.get_json()["ok"] is True
 
 
-def test_non_dashboard_pages_do_not_load_dashboard_design_styles(client, make_user):
+def test_courses_page_loads_the_shared_claude_app_shell(client, make_user):
     _student(client, make_user)
     body = client.get("/student/courses").get_data(as_text=True)
-    assert "/static/machreach_layout/layout-base.css" in body
-    assert "/static/machreach_layout/design.css" not in body
+    assert "/static/machreach_app/app/courses.css" in body
+    assert "/static/machreach_app/cursos.bundle.min.js" in body
+    assert "window.__MACHREACH_APP__=" in body
