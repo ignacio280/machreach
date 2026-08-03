@@ -247,21 +247,93 @@ function CoursesGrid({ plus, list, onDelete }) {
 }
 
 /* --- Agregar a mano --- */
-function AddCourseModal({ onClose, onAdd }) {
-  const [v, setV] = React.useState({ name: "", code: "", color: "#FF6A2B" });
+
+/* Suggestions shown on the design preview, where there is no API to ask. */
+const CATALOG_DEMO = [
+  { id: -1, code: "MAT1610", name: "Cálculo I", uses: 184 },
+  { id: -2, code: "MAT1620", name: "Cálculo II", uses: 152 },
+  { id: -3, code: "MAT1640", name: "Ecuaciones Diferenciales", uses: 97 },
+  { id: -4, code: "MAT1203", name: "Álgebra Lineal", uses: 143 },
+  { id: -5, code: "FIS1523", name: "Termodinámica", uses: 61 },
+  { id: -6, code: "IIC1103", name: "Introducción a la Programación", uses: 128 },
+];
+
+/* Course names other students at YOUR university already added. The endpoint is
+   scoped to the student's university server-side; we never send a university id. */
+function useCourseSuggestions(query, live, active) {
+  const [items, setItems] = React.useState([]);
+  React.useEffect(() => {
+    if (!active) { setItems([]); return undefined; }
+    const q = (query || "").trim();
+    if (!live) {
+      const qn = q.toLowerCase();
+      setItems(CATALOG_DEMO.filter((c) => !qn || (c.name + " " + c.code).toLowerCase().includes(qn)).slice(0, 8));
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetch("/api/student/courses/catalog?q=" + encodeURIComponent(q))
+        .then((r) => (r.ok ? r.json() : { courses: [] }))
+        .then((body) => { if (!cancelled) setItems(Array.isArray(body.courses) ? body.courses : []); })
+        .catch(() => { if (!cancelled) setItems([]); });
+    }, 180);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [query, live, active]);
+  return items;
+}
+
+function AddCourseModal({ onClose, onAdd, live = false }) {
+  const [v, setV] = React.useState({ name: "", code: "", color: "#FF6A2B", catalogId: null });
+  const [open, setOpen] = React.useState(false);
+  const [hi, setHi] = React.useState(-1);
   const PAL = ["#FF6A2B", "#6FB03A", "#6E4CD8", "#2FA8C6", "#D2528B", "#F4B740"];
+  const sug = useCourseSuggestions(v.name, live, open);
   const save = () => { if (v.name.trim()) { onAdd(v); onClose(); } };
+  const pick = (c) => {
+    setV((s) => ({ ...s, name: c.name, code: c.code || s.code, catalogId: c.id > 0 ? c.id : null }));
+    setOpen(false);
+    setHi(-1);
+  };
+  const onNameKey = (e) => {
+    if (open && sug.length) {
+      if (e.key === "ArrowDown") { e.preventDefault(); return setHi((i) => (i + 1) % sug.length); }
+      if (e.key === "ArrowUp") { e.preventDefault(); return setHi((i) => (i <= 0 ? sug.length : i) - 1); }
+      // Escape closes the list only — Modal's window listener would close the dialog.
+      if (e.key === "Escape") { e.stopPropagation(); setOpen(false); return setHi(-1); }
+      if (e.key === "Enter" && hi >= 0) { e.preventDefault(); return pick(sug[hi]); }
+    }
+    if (e.key === "Enter") save();
+  };
   return (
     <Modal title="Agregar curso a mano" sub="Úsalo para ramos que no llegan desde Canvas. Puedes agregarle evaluaciones y material después."
       onClose={onClose}
       foot={<><button className="btn btn-ghost btn-sm" onClick={onClose}>Cancelar</button><button className="btn btn-primary btn-sm" onClick={save} disabled={!v.name.trim()}>Agregar curso</button></>}>
       <div className="mdl-f">
-        <label>Nombre del ramo
-          <input id="mc-name" autoFocus placeholder="Ej: Ecuaciones Diferenciales" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} onKeyDown={(e) => e.key === "Enter" && save()} />
-        </label>
+        <div className="mc-ac">
+          <label>Nombre del ramo
+            <input id="mc-name" autoFocus autoComplete="off" role="combobox" aria-autocomplete="list"
+              aria-expanded={open && sug.length > 0} aria-controls="mc-ac-list"
+              placeholder="Ej: Ecuaciones Diferenciales" value={v.name}
+              onChange={(e) => { setV({ ...v, name: e.target.value, catalogId: null }); setOpen(true); setHi(-1); }}
+              onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={onNameKey} />
+          </label>
+          {open && sug.length > 0 && (
+            <ul className="mc-ac-list" id="mc-ac-list" role="listbox">
+              {sug.map((c, i) => (
+                <li key={c.id} role="option" aria-selected={i === hi} className={i === hi ? "on" : ""}
+                  onMouseEnter={() => setHi(i)} onMouseDown={(e) => { e.preventDefault(); pick(c); }}>
+                  <span className="mc-ac-n">{c.name}</span>
+                  {c.code ? <span className="mono mc-ac-c">{c.code}</span> : null}
+                  {c.uses > 1 ? <span className="mc-ac-u">{c.uses}</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          {v.catalogId ? <p className="mc-ac-hint">Ya existe en tu universidad — te unirás a ese curso.</p> : null}
+        </div>
         <div className="mdl-2">
           <label>Código
-            <input id="mc-code" placeholder="MAT1640" value={v.code} onChange={(e) => setV({ ...v, code: e.target.value })} />
+            <input id="mc-code" placeholder="MAT1640" value={v.code} onChange={(e) => setV({ ...v, code: e.target.value, catalogId: null })} />
           </label>
           <label>Semestre
             <select defaultValue="VI">{SEMS.map((s) => <option key={s}>{s}</option>)}</select>

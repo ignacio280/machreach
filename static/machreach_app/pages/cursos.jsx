@@ -19,15 +19,41 @@ function App() {
   const [list, setList] = React.useState(data.courses?.items || CRS);
   const [adding, setAdding] = React.useState(false);
   const [delTarget, setDelTarget] = React.useState(null);
+  // Join a course that already exists in the university catalog instead of
+  // creating a duplicate. Returns the new student_course id, or null if the
+  // student is already in it (nothing to append to the grid).
+  const joinCatalog = async (catalogId) => {
+    const response = await fetch("/api/student/courses/catalog/" + catalogId + "/join", { method: "POST", headers: { "X-CSRFToken": data.csrf || "" } });
+    const body = await response.json();
+    if (!response.ok) { alert(body.error || "No se pudo agregar el curso."); return { failed: true }; }
+    if (body.already_joined) { alert("Ya tienes este curso en tus ramos."); return { failed: true }; }
+    return { id: body.id };
+  };
   const addCourse = async (v) => {
     let id = null;
+    let course = v;
     if (data.live) {
-      const response = await fetch("/api/student/courses/manual", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": data.csrf || "" }, body: JSON.stringify({ name: v.name, code: v.code }) });
-      const body = await response.json();
-      if (!response.ok) return alert(body.error || "No se pudo agregar el curso.");
-      id = body.id;
+      if (v.catalogId) {
+        const joined = await joinCatalog(v.catalogId);
+        if (joined.failed) return;
+        id = joined.id;
+      } else {
+        const response = await fetch("/api/student/courses/manual", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": data.csrf || "" }, body: JSON.stringify({ name: v.name, code: v.code }) });
+        const body = await response.json();
+        if (response.status === 409 && body.catalog_id) {
+          // Someone at this university already created it — join theirs.
+          const joined = await joinCatalog(body.catalog_id);
+          if (joined.failed) return;
+          id = joined.id;
+          course = { ...v, name: body.course?.name || v.name, code: body.course?.code || v.code };
+        } else if (!response.ok) {
+          return alert(body.error || "No se pudo agregar el curso.");
+        } else {
+          id = body.id;
+        }
+      }
     }
-    setList((l) => [...l, { id, code: v.code || "SIN CÓDIGO", name: v.name, cc: v.color, origin: "Agregado a mano", sessions: 0, studied: "0h 00m", next: "Sin evaluaciones próximas", exams: [], bench: { hrs: "—", grade: "—", mine: "0h", delta: "—", n: 0 } }]);
+    setList((l) => [...l, { id, code: course.code || "SIN CÓDIGO", name: course.name, cc: course.color, origin: "Agregado a mano", sessions: 0, studied: "0h 00m", next: "Sin evaluaciones próximas", exams: [], bench: { hrs: "—", grade: "—", mine: "0h", delta: "—", n: 0 } }]);
   };
   const deleteCourse = async (course) => {
     if (data.live && course.id) {
@@ -57,7 +83,7 @@ function App() {
         </main>
       </div>
       <TabBar active={PAGE_ID} />
-      {adding && <AddCourseModal onClose={() => setAdding(false)} onAdd={addCourse} />}
+      {adding && <AddCourseModal onClose={() => setAdding(false)} onAdd={addCourse} live={!!data.live} />}
       {delTarget && <DeleteCourseModal course={delTarget} onClose={() => setDelTarget(null)} onConfirm={deleteCourse} />}
 
       {!data.live && <TweaksPanel title="Tweaks">
