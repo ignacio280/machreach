@@ -17,6 +17,22 @@ function App() {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const plus = data.live ? !!data.plus : !!tweaks.plus;
   const [plan, setPlan] = React.useState(data.plan || null);
+  // Week paging is read-only: only the live week (offset 0) can be generated.
+  const [week, setWeek] = React.useState({ offset: 0, busy: false });
+  const showWeek = async (offset) => {
+    if (!data.live) return;
+    setWeek({ offset, busy: true });
+    try {
+      const response = await fetch("/api/student/planner/week?offset=" + offset);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "No se pudo cargar la semana.");
+      setPlan(body.plan || { live: true, week_start: body.week_start, days: [], exams: [], done: [], availability: data.plan?.availability || [] });
+      setWeek({ offset: body.week_offset ?? offset, busy: false });
+    } catch (error) {
+      setWeek((w) => ({ ...w, busy: false }));
+      alert(error.message || "No se pudo cargar la semana.");
+    }
+  };
 
   React.useEffect(() => {
     document.documentElement.dataset.theme = tweaks.theme || "light";
@@ -33,8 +49,8 @@ function App() {
             <div className="dash">
               <div className="col">
                 <PlanHero data={plan} />
-                <Availability data={plan} csrf={data.csrf} onPlan={setPlan} />
-                <WeekGrid data={plan} csrf={data.csrf} />
+                <Availability data={plan} csrf={data.csrf} onPlan={(p) => { setPlan(p); setWeek({ offset: 0, busy: false }); }} locked={week.offset !== 0} />
+                <WeekGrid data={plan} csrf={data.csrf} week={data.live ? week : null} onWeek={data.live ? showWeek : null} />
               </div>
               <div className="col">
                 <WhyPanel data={plan} />

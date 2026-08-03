@@ -23,6 +23,7 @@ function App() {
   const [scene, setScene] = React.useState("silence");
   const [running, setRunning] = React.useState(false);
   const [courseId, setCourseId] = React.useState(data.focus?.courses?.[0]?.id || "");
+  const [reward, setReward] = React.useState(null);
   const plus = data.live ? !!data.plus : !!tweaks.plus;
   const [phoneBlocked, setPhoneBlocked] = React.useState(() => typeof matchMedia === "function" && matchMedia(PHONE_QUERY).matches);
 
@@ -53,10 +54,11 @@ function App() {
             <p>Para evitar sesiones interrumpidas y mantener el bloqueo de distracciones, usa Enfoque desde tu computador.</p>
             <a href="/student" className="btn btn-primary">Volver al inicio</a>
           </section> : <div className="col">
+            {reward && <RewardCard reward={reward} onClose={() => setReward(null)} />}
             <FocusHead scene={scene} data={data.focus} />
             <FocusNotes data={data.focus} />
             <div className="fx-grid">
-              <Timer scene={scene} onRun={setRunning} onCourse={setCourseId} data={data.focus} />
+              <Timer scene={scene} onRun={setRunning} onCourse={setCourseId} onReward={setReward} data={data.focus} />
               <div className="col fx-tools">
                 <Ambience scene={scene} setScene={setScene} />
                 <Guard live={!!data.live} />

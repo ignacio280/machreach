@@ -64,6 +64,7 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
   const [grade, setGrade] = React.useState("");
   const [passing, setPassing] = React.useState("3.95");
   const [resultStatus, setResultStatus] = React.useState("");
+  const [locked, setLocked] = React.useState(!!c.locked);
   const fileIn = React.useRef(null);
   const [ref, seen] = useReveal({ threshold: 0.12 });
   const addExam = async () => {
@@ -162,10 +163,18 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
   };
   const saveResult = async () => {
     if (!c.id) return;
+    if (!confirm(`¿Guardar ${grade || "—"} como nota final de ${c.name}?
+
+El ramo queda cerrado: no podrás agregar ni editar evaluaciones ni subir material. Para reabrirlo tendrías que borrar el ramo y crearlo de nuevo.`)) return;
     setResultStatus("Guardando…");
     const response = await fetch(`/api/student/courses/${c.id}/outcome`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": (window.__MACHREACH_APP__ || {}).csrf || "" }, body: JSON.stringify({ final_grade: grade, passing_grade: passing }) });
     const body = await response.json();
-    setResultStatus(response.ok ? "Resultado guardado" : (body.error || "No se pudo guardar"));
+    if (response.ok) {
+      setLocked(true);
+      setResultStatus("Ramo cerrado con nota " + (grade || "—"));
+    } else {
+      setResultStatus(body.error || "No se pudo guardar");
+    }
   };
   return (
     <article className={"ccard pop" + (seen ? " in" : "")} ref={ref} style={{ "--cc": c.cc, "--d": d + "ms" }}>
@@ -193,7 +202,7 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
           <div>
             <div className="cdet-h">
               <h4>Evaluaciones y su material</h4>
-              <button className="mini" onClick={() => setNewEx({ nm: "", wt: "", dt: "" })}>+ Agregar evaluación</button>
+              {!locked && <button className="mini" onClick={() => setNewEx({ nm: "", wt: "", dt: "" })}>+ Agregar evaluación</button>}
             </div>
             {exams.map((e, i) => (
               <div key={e.nm + i}>
@@ -213,8 +222,8 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
                   <span className="mat-count" title="Material de esta evaluación">📎 {e.files.length}</span>
                   <span className="wt">{e.wt}</span>
                   <span className="dt">{e.done ? "Rendida" : shortDate(e.dt)}</span>
-                  <button className="fx" onClick={() => startEdit(e, i)} aria-label={"Editar " + e.nm}><IconEditPen size={13} /></button>
-                  <button className="fx" onClick={() => removeExam(e, i)} aria-label="Quitar evaluación"><IconClose size={13} /></button>
+                  {!locked && <button className="fx" onClick={() => startEdit(e, i)} aria-label={"Editar " + e.nm}><IconEditPen size={13} /></button>}
+                  {!locked && <button className="fx" onClick={() => removeExam(e, i)} aria-label="Quitar evaluación"><IconClose size={13} /></button>}
                 </div>
                 )}
                 {openEx === i && (
@@ -235,7 +244,7 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
                         <span className="mono">{upload.name} · {upload.pct < 100 ? upload.pct + "%" : "Procesando…"}</span>
                       </div>
                     )}
-                    <button className="drop" disabled={!!upload} onClick={() => fileIn.current.click()}><IconSparkle size={15} /> {upload ? "Subiendo…" : `Subir material a ${e.nm}`}</button>
+                    {!locked && <button className="drop" disabled={!!upload} onClick={() => fileIn.current.click()}><IconSparkle size={15} /> {upload ? "Subiendo…" : `Subir material a ${e.nm}`}</button>}
                   </div>
                 )}
               </div>
@@ -252,12 +261,18 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
           </div>
           <div>
             <h4>Resultado del ramo</h4>
+            {locked ? (
+              <div className="course-closed">
+                <b>Ramo cerrado con nota {c.final_grade || grade || "—"}</b>
+                <p>Ya registraste la nota final, así que este ramo quedó congelado. Sale de tus cursos una semana después y su nota queda guardada en Notas. Si necesitas cambiarla, borra el ramo y créalo de nuevo — eso también quita tu nota del benchmark y borra tu review.</p>
+              </div>
+            ) : (
             <div className="grade-row">
               <label>Nota final<input type="number" step="0.01" min="1" max="7" placeholder="5,40" value={grade} onChange={(e) => setGrade(e.target.value)} /></label>
               <label>Nota para aprobar<input type="number" step="0.01" min="1" max="7" value={passing} onChange={(e) => setPassing(e.target.value)} /></label>
               <button className="btn btn-ghost btn-sm" onClick={saveResult}>Guardar resultado</button>
               {resultStatus && <span className="mono">{resultStatus}</span>}
-            </div>
+            </div>)}
           </div>
         </div>
       )}

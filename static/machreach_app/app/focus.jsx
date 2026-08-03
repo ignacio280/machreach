@@ -118,6 +118,115 @@ function FocusNotes({ data = {} }) {
   );
 }
 
+/* ---- Sound ------------------------------------------------------------
+   Ambience uses the recorded loops where MachReach ships one and falls back
+   to filtered noise for the rest, so every scene makes a sound. Both the
+   loops and the chime run through one gain node the volume slider owns. */
+const AMB_FILES = {
+  rain: "/static/audio/rain.mp3",
+  ocean: "/static/audio/beach.mp3",
+  forest: "/static/audio/forest.mp3",
+  fire: "/static/audio/fire-crackling.mp3",
+};
+const AMB_NOISE = {
+  night: { freq: 320, q: 0.8, kind: "lowpass", smooth: 0.97 },
+};
+
+const focusAudio = {
+  el: null,
+  ctx: null,
+  gain: null,
+  nodes: [],
+  volume: 0.45,
+  _element() {
+    if (!this.el) {
+      this.el = document.createElement("audio");
+      this.el.loop = true;
+      this.el.preload = "none";
+    }
+    return this.el;
+  },
+  _context() {
+    if (!this.ctx) {
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) return null;
+      this.ctx = new Ctor();
+    }
+    // Browsers suspend the context until a gesture; every call site is a click.
+    if (this.ctx.state === "suspended") this.ctx.resume().catch(() => {});
+    return this.ctx;
+  },
+  setVolume(pct) {
+    this.volume = Math.max(0, Math.min(1, pct / 100));
+    if (this.el) this.el.volume = this.volume;
+    if (this.gain) this.gain.gain.value = this.volume * 0.06;
+  },
+  stop() {
+    if (this.el) { try { this.el.pause(); this.el.currentTime = 0; } catch (e) { /* ignore */ } }
+    this.nodes.forEach((node) => { try { node.stop ? node.stop() : node.disconnect(); } catch (e) { /* ignore */ } });
+    this.nodes = [];
+    if (this.gain) { try { this.gain.disconnect(); } catch (e) { /* ignore */ } this.gain = null; }
+  },
+  play(scene) {
+    this.stop();
+    if (!scene || scene === "silence") return;
+    const file = AMB_FILES[scene];
+    if (file) {
+      const el = this._element();
+      el.src = file;
+      el.volume = this.volume;
+      const started = el.play();
+      if (started && started.catch) started.catch(() => {});
+      return;
+    }
+    const recipe = AMB_NOISE[scene];
+    const ctx = this._context();
+    if (!recipe || !ctx) return;
+    const gain = ctx.createGain();
+    gain.gain.value = this.volume * 0.06;
+    gain.connect(ctx.destination);
+    this.gain = gain;
+    const filter = ctx.createBiquadFilter();
+    filter.type = recipe.kind;
+    filter.frequency.value = recipe.freq;
+    filter.Q.value = recipe.q;
+    filter.connect(gain);
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < data.length; i += 1) {
+      last = last * recipe.smooth + (Math.random() * 2 - 1) * (1 - recipe.smooth);
+      data[i] = last;
+    }
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(filter);
+    source.start();
+    this.nodes.push(source, filter);
+  },
+  /* Three rising notes when a block ends — audible over an ambience loop. */
+  chime(kind = "work") {
+    const ctx = this._context();
+    if (!ctx) return;
+    const notes = kind === "work" ? [660, 880, 1170] : [880, 660];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const at = ctx.currentTime + i * 0.18;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.02, this.volume) * 0.5, at + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + 0.5);
+    });
+  },
+};
+
 /* ---- Timer that survives leaving the page ------------------------------
    The block is stored as an absolute end time, so it keeps running while the
    student is on another MachReach page (or the tab is throttled) and picks up
@@ -177,7 +286,7 @@ function restoreFocusTimer() {
   };
 }
 
-function Timer({ scene, onRun, onCourse, data = {} }) {
+function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   const MODES = FOCUS_MODES;
   const restored = React.useRef(data.live ? restoreFocusTimer() : null).current;
   const [mode, setMode] = React.useState(restored?.mode || "pomodoro");
@@ -209,7 +318,16 @@ function Timer({ scene, onRun, onCourse, data = {} }) {
     if (!data.live || !id || !course) return;
     try {
       const response = await fetch("/api/student/focus/save", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": (window.__MACHREACH_APP__ || {}).csrf || "" }, body: JSON.stringify({ phase_id: id, mode, minutes: Math.round(cfg.work / 60), pages: 0, course_id: course.id, course_name: course.name, exam_id: examId || null }) });
-      if (!response.ok) throw new Error("No se pudo guardar el bloque de enfoque.");
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "No se pudo guardar el bloque de enfoque.");
+      // The server hands back what the block earned; showing it is the whole
+      // point of finishing one.
+      onReward && onReward({
+        minutes: Number(body.minutes_saved || 0),
+        xp: Number(body.xp_awarded || 0),
+        coins: Number(body.coins_awarded || 0),
+        stats: body.stats || null,
+      });
     } catch (error) {
       setRunning(false);
       alert(error.message || "No se pudo guardar el bloque de enfoque.");
@@ -245,11 +363,13 @@ function Timer({ scene, onRun, onCourse, data = {} }) {
       if (remaining > 0 || advancing.current) return;
       advancing.current = true;
       if (phase === "work") {
+        focusAudio.chime("work");
         void saveVerifiedPhase();
         setPhase("break");
         setEndsAt(Date.now() + cfg.brk * 1000);
         setLeft(cfg.brk);
       } else {
+        focusAudio.chime("break");
         setPhase("work");
         setRound((r) => (r >= cfg.rounds ? 1 : r + 1));
         setEndsAt(Date.now() + cfg.work * 1000);
@@ -346,8 +466,31 @@ function Timer({ scene, onRun, onCourse, data = {} }) {
 }
 
 function Ambience({ scene, setScene }) {
-  const [vol, setVol] = React.useState(45);
+  const [vol, setVol] = React.useState(() => {
+    // Prerendered server-side, where localStorage does not exist.
+    try {
+      const stored = Number(localStorage.getItem("mr_ambience_volume"));
+      return Number.isFinite(stored) && stored >= 0 && stored <= 100 ? stored : 45;
+    } catch (e) { return 45; }
+  });
   useAmbience(scene);
+  // Audio only ever starts from the click that picks a scene — browsers block
+  // playback that is not tied to a gesture.
+  const pick = (id) => {
+    setScene(id);
+    focusAudio.setVolume(vol);
+    focusAudio.play(id);
+    try { localStorage.setItem("mr_ambience_sound", id); } catch (e) { /* private mode */ }
+  };
+  const changeVolume = (value) => {
+    setVol(value);
+    focusAudio.setVolume(value);
+    try { localStorage.setItem("mr_ambience_volume", String(value)); } catch (e) { /* private mode */ }
+  };
+  React.useEffect(() => {
+    focusAudio.setVolume(vol);
+    return () => focusAudio.stop();
+  }, []);
   return (
     <section className="pnl">
       <div className="pnl-h">
@@ -356,15 +499,37 @@ function Ambience({ scene, setScene }) {
       </div>
       <div className="scenes">
         {SCENES.map((s) => (
-          <button key={s.id} className={"scene" + (scene === s.id ? " on" : "")} onClick={() => setScene(s.id)}><span>{s.ic}</span>{s.label}</button>
+          <button key={s.id} className={"scene" + (scene === s.id ? " on" : "")} onClick={() => pick(s.id)}><span>{s.ic}</span>{s.label}</button>
         ))}
       </div>
       <div className="vol">
         <span className="mono">Volumen</span>
-        <input type="range" min="0" max="100" value={vol} onChange={(e) => setVol(+e.target.value)} disabled={scene === "silence"} />
+        <input type="range" min="0" max="100" value={vol} onChange={(e) => changeVolume(+e.target.value)} disabled={scene === "silence"} />
         <span className="mono num">{scene === "silence" ? "—" : vol + "%"}</span>
       </div>
     </section>
+  );
+}
+
+/* What the finished block earned. The server already credits XP and coins on
+   /focus/save — this is the receipt, which the React page never showed. */
+function RewardCard({ reward, onClose }) {
+  React.useEffect(() => {
+    const timer = setTimeout(onClose, 12000);
+    return () => clearTimeout(timer);
+  }, [reward]);
+  return (
+    <div className="fx-reward" role="status" aria-live="polite">
+      <span className="ico-badge" style={{ background: "#FFF2C9" }}><IconBolt size={17} color="var(--plum)" /></span>
+      <div className="fx-reward-b">
+        <b>Bloque guardado · {reward.minutes} min</b>
+        <span>
+          {reward.xp > 0 ? `+${reward.xp} XP` : "Sin XP en este bloque"}
+          {reward.coins > 0 ? ` · +${reward.coins} 🪙` : ""}
+        </span>
+      </div>
+      <button type="button" onClick={onClose} aria-label="Cerrar"><IconClose size={14} /></button>
+    </div>
   );
 }
 
@@ -434,4 +599,4 @@ function Benchmark({ plus, data = {}, courseId }) {
   );
 }
 
-Object.assign(window, { FocusHead, FocusNotes, Timer, Ambience, Guard, Benchmark, SCENES });
+Object.assign(window, { FocusHead, FocusNotes, Timer, Ambience, Guard, Benchmark, RewardCard, focusAudio, SCENES });

@@ -66,3 +66,9 @@
 .pl-lock-card p{color:var(--ink-2);font-size:15.5px;line-height:1.5;max-width:46ch;margin:0 auto 22px}
 .pl-lock-list{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:24px}
 .pl-lock-list span{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.05em;padding:6px 11px;border-radius:999px;border:2px solid var(--ink);background:var(--surface-2)}
+
+/* week paging in the plan header */
+.wk-nav{margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.wk-nav .lnk{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--brand-2);white-space:nowrap}
+.wk-nav .lnk:hover{color:var(--brand)}
+.wk-nav .lnk:disabled{color:var(--ink-3);cursor:not-allowed}

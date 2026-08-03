@@ -2235,6 +2235,20 @@ def leave_course(client_id: int, course_db_id: int) -> bool:
             "(SELECT id FROM student_exams WHERE course_id = %s AND client_id = %s))",
             (client_id, course_db_id, course_db_id, client_id),
         )
+        # Deleting a course by hand withdraws what the student contributed
+        # about it: the reported grade stops counting in the shared benchmark,
+        # and their review of it goes with it (they can no longer write one
+        # either, since that needs a registered outcome).
+        _exec(
+            db,
+            "DELETE FROM student_course_outcomes WHERE client_id = %s AND course_id = %s",
+            (client_id, course_db_id),
+        )
+        _exec(
+            db,
+            "DELETE FROM student_course_reviews WHERE client_id = %s AND course_id = %s",
+            (client_id, course_db_id),
+        )
         _exec(
             db,
             "DELETE FROM student_courses WHERE id = %s AND client_id = %s",
@@ -2252,16 +2266,74 @@ def update_course_analysis(course_db_id: int, analysis: dict):
               (json.dumps(analysis, ensure_ascii=False), course_db_id))
 
 
+# A course keeps its place for a week after its final grade is registered, so
+# the student can still see it and undo a mistake, then it retires.
+FINALISED_COURSE_GRACE_DAYS = 7
+
+
+def course_final_outcome(client_id: int, course_id: int) -> dict | None:
+    """The registered final grade, if any. Its presence freezes the course."""
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT final_grade, passing_grade, passed, reported_at "
+            "FROM student_course_outcomes WHERE client_id = %s AND course_id = %s",
+            (client_id, course_id),
+        )
+    return dict(row) if row else None
+
+
+def _finalised_course_ids(db, client_id: int, *, retired_only: bool) -> set[int]:
+    rows = _fetchall(
+        db,
+        "SELECT course_id, reported_at FROM student_course_outcomes WHERE client_id = %s",
+        (client_id,),
+    ) or []
+    cutoff = utc_now() - timedelta(days=FINALISED_COURSE_GRACE_DAYS)
+    out = set()
+    for row in rows:
+        course_id = int(row.get("course_id") or 0)
+        if not course_id:
+            continue
+        if not retired_only:
+            out.add(course_id)
+            continue
+        reported = _parse_focus_dt(row.get("reported_at"))
+        # No parsable timestamp: treat as still inside the grace window rather
+        # than retiring a course the student may have just closed.
+        if reported and reported <= cutoff:
+            out.add(course_id)
+    return out
+
+
+def finalised_course_ids(client_id: int) -> set[int]:
+    """Courses whose final grade is registered (locked, still visible)."""
+    with get_db() as db:
+        return _finalised_course_ids(db, client_id, retired_only=False)
+
+
+def retired_course_ids(client_id: int) -> set[int]:
+    """Finalised more than a week ago — off the courses page, kept in Notas."""
+    with get_db() as db:
+        return _finalised_course_ids(db, client_id, retired_only=True)
+
+
 def get_courses(client_id: int, include_archived: bool = False) -> list[dict]:
     active_filter = "" if include_archived else " AND COALESCE(canvas_active, TRUE)"
     with get_db() as db:
-        return _fetchall(
+        rows = _fetchall(
             db,
             "SELECT * FROM student_courses WHERE client_id = %s"
             + active_filter
             + " ORDER BY name",
             (client_id,),
-        )
+        ) or []
+        if include_archived:
+            return rows
+        # A course finalised over a week ago is done: it leaves the course list,
+        # Focus and the planner, and lives on as a grade in Notas.
+        retired = _finalised_course_ids(db, client_id, retired_only=True)
+    return [row for row in rows if int(row.get("id") or 0) not in retired]
 
 
 def get_course(course_db_id: int) -> dict | None:
@@ -2473,6 +2545,34 @@ def planner_done_blocks(client_id: int, since_date: str = "") -> list[dict]:
                              "SELECT * FROM student_planner_done WHERE client_id = %s ORDER BY block_date, id",
                              (client_id,))
         return [dict(r) for r in rows]
+
+
+def get_plan_for_week(client_id: int, week_start: str) -> dict | None:
+    """Newest plan saved for one week, so the planner can page back and forth.
+
+    week_start is matched inside plan_json rather than with a column because
+    plans were stored as opaque JSON long before weeks were navigable.
+    """
+    week_start = str(week_start or "")[:10]
+    if not week_start:
+        return None
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT * FROM student_study_plans WHERE client_id = %s ORDER BY generated_at DESC LIMIT 60",
+            (client_id,),
+        )
+    for row in (rows or []):
+        row = dict(row)
+        plan = row["plan_json"]
+        plan = json.loads(plan) if isinstance(plan, str) else plan
+        if str((plan or {}).get("week_start") or "")[:10] != week_start:
+            continue
+        row["plan_json"] = plan
+        preferences = row.get("preferences_json")
+        row["preferences_json"] = json.loads(preferences) if isinstance(preferences, str) else preferences
+        return row
+    return None
 
 
 def get_latest_plan(client_id: int) -> dict | None:

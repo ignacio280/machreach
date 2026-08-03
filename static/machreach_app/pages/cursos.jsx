@@ -78,7 +78,6 @@ function App() {
             <CoursesHead onAdd={() => setAdding(true)} data={data.courses} csrf={data.csrf} />
             <CoursesStats n={list.length} ex={list.reduce((a, c) => a + c.exams.length, 0)} data={data.courses} />
             <CoursesGrid plus={plus} list={list} onDelete={setDelTarget} />
-            <ExtCard />
           </div>
         </main>
       </div>

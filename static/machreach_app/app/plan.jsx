@@ -51,7 +51,7 @@ function PlanHero({ data = null }) {
   );
 }
 
-function Availability({ data = null, csrf = "", onPlan }) {
+function Availability({ data = null, csrf = "", onPlan, locked = false }) {
   const initial = data?.availability || [];
   const [hrs, setHrs] = React.useState(() => DAYS.map((_, i) => Number(initial[i]?.available_hours ?? [2.5,2,2.5,3,1.5,3,0][i])));
   const [free, setFree] = React.useState(() => DAYS.map((_, i) => Boolean(initial[i]?.is_free_day ?? (i === 6))));
@@ -60,6 +60,8 @@ function Availability({ data = null, csrf = "", onPlan }) {
   const total = hrs.reduce((a, b, i) => a + (free[i] ? 0 : b), 0);
   const save = async () => {
     if (!data?.live) return;
+    // Only the week the student is in can be planned.
+    if (locked) return setStatus("Solo puedes generar el plan de la semana actual.");
     setStatus("Guardando…");
     try {
       const response = await fetch("/api/student/planner/availability", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: JSON.stringify({ settings: DAYS.map((_, i) => ({ day_of_week: i, available_hours: hrs[i], is_free_day: free[i] })) }) });
@@ -80,7 +82,10 @@ function Availability({ data = null, csrf = "", onPlan }) {
         <h3>Horas de esta semana</h3>
         <span className="mono">{total.toFixed(1)} h disponibles</span>
         {status && <span className="mono">{status}</span>}
-        <button className="btn btn-ink btn-sm" onClick={save}><IconSparkle size={14} /> Regenerar plan</button>
+        <button className="btn btn-ink btn-sm" onClick={save} disabled={locked}
+          title={locked ? "Vuelve a la semana actual para regenerar el plan" : undefined}>
+          <IconSparkle size={14} /> Regenerar plan
+        </button>
       </div>
       <div className="pl-avail">
         {DAYS.map((d, i) => (
@@ -99,7 +104,7 @@ function Availability({ data = null, csrf = "", onPlan }) {
   );
 }
 
-function WeekGrid({ data = null, csrf = "" }) {
+function WeekGrid({ data = null, csrf = "", week = null, onWeek = null }) {
   const liveDays = data?.days || [];
   const dayDefs = liveDays.length ? liveDays.map((d, i) => ({ n: DAYS[i]?.n || "Día", dt: String(d.date || "").slice(5), off: !(d.blocks || []).length })) : DAYS;
   const blocks = liveDays.length ? liveDays.map((d) => (d.blocks || []).map((b) => ({ ph: b.phase || "Estudiar", cs: b.course || "Curso", tp: b.title || b.copy || "Bloque de estudio", mn: `${Number(b.minutes || 0)} min`, mat: !!b.material_based, why: b.why || "", date: d.date, examId: Number(b.exam_id || 0), unitIndex: b.material_based ? Number(b.unit_index ?? -1) : -1, minutes: Number(b.minutes || 0), doneTitle: [b.title || "", b.phase || "", b.index == null ? 0 : b.index, b.minutes || 0, b.material_based ? `unit:${b.unit_index == null ? -1 : b.unit_index}` : "general"].join("::") }))) : (data?.live ? DAYS.map(() => []) : BLOCKS);
@@ -138,7 +143,19 @@ function WeekGrid({ data = null, csrf = "" }) {
         <span className="ico-badge" style={{ background: "#E8DEFF" }}><IconGrid size={17} /></span>
         <h3>{data?.week_start ? `Semana desde ${data.week_start}` : "Plan semanal"}</h3>
         <span className="mono">{c}/{total} bloques listos</span>
-        {data?.live ? <span className="lnk" aria-disabled="true">Semana siguiente <IconArrow size={14} /></span> : <a href="#" className="lnk">Semana siguiente <IconArrow size={14} /></a>}
+        {onWeek ? (
+          <div className="wk-nav">
+            <button type="button" className="lnk" onClick={() => onWeek((week?.offset || 0) - 1)} disabled={week?.busy}>
+              <IconArrow size={14} style={{ transform: "rotate(180deg)" }} /> Semana anterior
+            </button>
+            {(week?.offset || 0) !== 0 && (
+              <button type="button" className="lnk" onClick={() => onWeek(0)} disabled={week?.busy}>Semana actual</button>
+            )}
+            <button type="button" className="lnk" onClick={() => onWeek((week?.offset || 0) + 1)} disabled={week?.busy}>
+              Semana siguiente <IconArrow size={14} />
+            </button>
+          </div>
+        ) : <a href="#" className="lnk">Semana siguiente <IconArrow size={14} /></a>}
       </div>
       <div className="week">
         {dayDefs.map((d, i) => (

@@ -2716,6 +2716,8 @@ Return this JSON shape:
         course = sdb.get_course(course_id)
         if not course or course["client_id"] != cid:
             return jsonify({"error": "Course not found"}), 404
+        if _course_locked(course_id):
+            return jsonify({"error": "Este ramo está cerrado: ya registraste su nota final.", "locked": True}), 409
 
         exam_id_raw = (request.form.get("exam_id") or "").strip()
         exam_id = None
@@ -2950,6 +2952,15 @@ Return this JSON shape:
         return jsonify(response)
 
 
+    def _course_locked(course_id: int) -> bool:
+        """A registered final grade freezes the course: no more evaluations,
+        edits or material. Deleting and recreating it is the only way back."""
+        try:
+            return bool(sdb.course_final_outcome(_cid(), int(course_id)))
+        except Exception:
+            return False
+
+
     @app.route("/api/student/courses/<int:course_id>/outcome", methods=["POST"])
     def student_course_outcome_api(course_id):
         if not _logged_in():
@@ -2957,6 +2968,12 @@ Return this JSON shape:
         course = sdb.get_course(course_id)
         if not course or course["client_id"] != _cid():
             return jsonify({"error": "Not found"}), 404
+        if _course_locked(course_id):
+            return jsonify({
+                "ok": False,
+                "error": "Este ramo ya tiene su nota final. Bórralo y créalo de nuevo si necesitas cambiarla.",
+                "locked": True,
+            }), 409
         data = request.get_json(silent=True) or {}
         result = sdb.record_course_outcome(
             _cid(),
@@ -2981,6 +2998,9 @@ Return this JSON shape:
         if not course or course["client_id"] != _cid():
 
             return jsonify({"error": "Not found"}), 404
+
+        if _course_locked(course_id):
+            return jsonify({"error": "Este ramo está cerrado: ya registraste su nota final.", "locked": True}), 409
 
         data = request.get_json(force=True)
 
@@ -3026,6 +3046,9 @@ Return this JSON shape:
             return jsonify({"error": "Unauthorized"}), 401
 
         data = request.get_json(force=True)
+
+        if _course_locked(int(data.get("course_id") or 0)):
+            return jsonify({"error": "Este ramo está cerrado: ya registraste su nota final.", "locked": True}), 409
 
         name = (data.get("name") or "").strip()
 
@@ -4524,8 +4547,12 @@ Return this JSON shape:
                     _stats = _time_rows.get(_course_id, {})
                     _minutes = int(_stats.get("minutes") or 0)
                     _next = next((e for e in _exams if not e.get("done")), None)
+                    _outcome = sdb.course_final_outcome(_cid(), _course_id)
                     _course_items.append({
                         "id": _course_id,
+                        "locked": bool(_outcome),
+                        "final_grade": (f'{float(_outcome["final_grade"]):.1f}'.replace(".", ",") if _outcome else ""),
+                        "passed": bool(_outcome.get("passed")) if _outcome else False,
                         "code": _course.get("code") or "SIN CÓDIGO",
                         "name": _course.get("name") or "Curso",
                         "cc": _colors[_idx % len(_colors)],
@@ -4622,6 +4649,21 @@ Return this JSON shape:
 
                 def _sheet_row_for(course):
                     course_id = int(course.get("id") or 0)
+                    final = _final_by_course.get(course_id)
+                    if final:
+                        return {
+                            "id": f"c{course_id}",
+                            "course_id": course_id,
+                            "name": course.get("name") or "Curso",
+                            "credits": 10,
+                            "locked": True,
+                            "evals": [{
+                                "id": f"c{course_id}-final",
+                                "name": "Nota final",
+                                "pct": 100,
+                                "grade": f'{float(final.get("final_grade") or 0):.1f}',
+                            }],
+                        }
                     return {
                         "id": f"c{course_id}",
                         "course_id": course_id,
@@ -4636,6 +4678,16 @@ Return this JSON shape:
                         } for exam in (sdb.get_course_exams(course_id) or [])],
                     }
 
+                # Finalised courses keep their grade here for good: Notas is
+                # where a closed semester lives on. The value is rewritten from
+                # the stored outcome on every load, so edits made on this page
+                # do not survive leaving it.
+                _final_by_course = {}
+                for _course_id in sdb.finalised_course_ids(_cid()):
+                    _outcome_row = sdb.course_final_outcome(_cid(), _course_id)
+                    if _outcome_row:
+                        _final_by_course[int(_course_id)] = _outcome_row
+
                 # Courses of the semester the student is currently in — the same
                 # set the Cursos page lists. A course with no semester label yet
                 # (older rows, fresh manual adds) counts as current.
@@ -4643,6 +4695,16 @@ Return this JSON shape:
                     _course for _course in (sdb.get_courses(_cid()) or [])
                     if str(_course.get("semester_label") or _current_semester) == _current_semester
                 ]
+                # A retired course is gone from Cursos but still belongs in
+                # Notas, so pull it back in by id.
+                _listed = {int(_c.get("id") or 0) for _c in _semester_courses}
+                for _final_id in _final_by_course:
+                    if _final_id in _listed:
+                        continue
+                    _final_course = sdb.get_course(_final_id)
+                    if _final_course and int(_final_course.get("client_id") or 0) == _cid():
+                        _semester_courses.append(dict(_final_course))
+
                 _grade_sheet = sdb.get_grade_sheet(_cid())
                 if not _grade_sheet:
                     _grade_semesters = [{"label": _label, "courses": []} for _label in _semester_labels]
@@ -4652,6 +4714,15 @@ Return this JSON shape:
                     # A saved sheet must still pick up courses added afterwards,
                     # otherwise the page silently drifts from Cursos. Existing
                     # rows are left alone — the student's own edits win.
+                    for _sem in (_grade_sheet.get("sems") or []):
+                        if not isinstance(_sem, dict):
+                            continue
+                        _sem["courses"] = [
+                            (_sheet_row_for({"id": _row.get("course_id"), "name": _row.get("name")})
+                             if isinstance(_row, dict) and int(_row.get("course_id") or 0) in _final_by_course
+                             else _row)
+                            for _row in (_sem.get("courses") or [])
+                        ]
                     _sems = _grade_sheet.get("sems")
                     if isinstance(_sems, list) and 0 <= _current_index < len(_sems):
                         _target = _sems[_current_index]
@@ -4880,7 +4951,15 @@ Return this JSON shape:
         from student.periods import utc_now
 
         today = sdb.user_date(_cid())
-        week_start = today - timedelta(days=today.weekday())
+        # A plan only ever covers the week the student is living in, starting
+        # today: days already spent cannot be planned. Sunday is the exception —
+        # the week is over, so planning from Sunday builds the week ahead.
+        if today.weekday() == 6:
+            week_start = today + timedelta(days=1)
+            plan_from = week_start
+        else:
+            week_start = today - timedelta(days=today.weekday())
+            plan_from = today
         # Keep only the three JSON-safe fields: the raw rows carry a created_at
         # that Postgres hands back as a datetime, which json.dumps refuses when
         # the plan is persisted.
@@ -4898,7 +4977,7 @@ Return this JSON shape:
                 exam_day = datetime.strptime(str(exam.get("exam_date") or "")[:10], "%Y-%m-%d").date()
             except (TypeError, ValueError):
                 continue
-            if exam_day < today:
+            if exam_day < plan_from:
                 continue
             exams.append((exam_day, dict(exam)))
         exams.sort(key=lambda item: (
@@ -4913,7 +4992,7 @@ Return this JSON shape:
         ai_week = None
         try:
             from student import planner_ai
-            ai_week = planner_ai.build_ai_week(_cid(), today, week_start, settings)
+            ai_week = planner_ai.build_ai_week(_cid(), today, week_start, settings, plan_from=plan_from)
         except Exception:
             log.exception("AI planner failed for client %s", _cid())
             ai_week = None
@@ -4926,7 +5005,7 @@ Return this JSON shape:
             free = bool(setting.get("is_free_day"))
             capacity = 0 if free else int(round(float(setting.get("available_hours") or 0) * 60))
             blocks = []
-            if day >= today and exams and capacity >= 25:
+            if day >= plan_from and exams and capacity >= 25:
                 max_blocks = min(3, max(1, capacity // 45))
                 for slot in range(max_blocks):
                     exam_day, exam = exams[(offset + slot) % len(exams)]
@@ -4972,6 +5051,40 @@ Return this JSON shape:
         }
         plan_id = sdb.save_study_plan(_cid(), plan, {"availability": list(settings.values()), "source": plan["source"]})
         return jsonify({"ok": True, "plan_id": plan_id, "plan": dict(plan, live=True, availability=list(settings.values()), done=[])})
+
+
+    @app.route("/api/student/planner/week", methods=["GET"])
+    def student_planner_week_api():
+        """Saved plan for one week, so the planner can page back and forward.
+
+        Read-only on purpose: past and future weeks can be looked at, but only
+        the live week can be (re)generated.
+        """
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        if not _student_is_plus():
+            return jsonify({"error": "Plan is Plus only", "upgrade_required": True}), 402
+        today = sdb.user_date(_cid())
+        current_start = today - timedelta(days=today.weekday())
+        try:
+            offset = int(request.args.get("offset") or 0)
+        except (TypeError, ValueError):
+            offset = 0
+        offset = max(-26, min(26, offset))
+        week_start = current_start + timedelta(weeks=offset)
+        row = sdb.get_plan_for_week(_cid(), week_start.isoformat())
+        plan = (row or {}).get("plan_json") or {}
+        try:
+            done = sdb.planner_done_blocks(_cid(), since_date=week_start.isoformat())
+        except Exception:
+            done = []
+        return jsonify({
+            "ok": True,
+            "week_start": week_start.isoformat(),
+            "week_offset": offset,
+            "editable": offset == 0,
+            "plan": dict(plan, live=True, done=done) if plan else None,
+        })
 
 
     @app.route("/api/student/planner/save", methods=["POST"])

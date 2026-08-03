@@ -194,13 +194,17 @@ def _call_model(prompt: str) -> dict | None:
     return None
 
 
-def build_ai_week(client_id: int, today: date, week_start: date, settings: dict) -> dict | None:
+def build_ai_week(client_id: int, today: date, week_start: date, settings: dict,
+                  plan_from: date | None = None) -> dict | None:
     """Return {"days": [...], "difficulty": {...}} or None to use the fallback.
 
     Blocks are validated against the student's own evaluations and their stated
     capacity: a hallucinated exam id, an over-long block or a day that busts
     its budget is dropped, never trusted.
     """
+    # Urgency is measured from the real date; the planning window may start
+    # later (a Sunday regeneration plans the week ahead).
+    first_day = plan_from or today
     exams = collect_exam_context(client_id, today)
     if not exams:
         return None
@@ -210,7 +214,7 @@ def build_ai_week(client_id: int, today: date, week_start: date, settings: dict)
         day = week_start + timedelta(days=offset)
         setting = settings.get(day.weekday()) or {}
         free = bool(setting.get("is_free_day"))
-        capacity = 0 if free or day < today else int(round(float(setting.get("available_hours") or 0) * 60))
+        capacity = 0 if free or day < first_day else int(round(float(setting.get("available_hours") or 0) * 60))
         days.append({
             "date": day.isoformat(),
             "weekday": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][day.weekday()],
