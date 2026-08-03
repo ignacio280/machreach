@@ -4697,12 +4697,22 @@ Return this JSON shape:
                         "available_hours": float(_setting.get("available_hours") if _setting.get("available_hours") is not None else (0 if _day_index == 6 else 2)),
                         "is_free_day": bool(_setting.get("is_free_day") or _day_index == 6),
                     })
+                # The AI plan judged how hard each evaluation's material is;
+                # carry that onto the live exam list so "Por qué este orden"
+                # can say more than weight and date.
+                _plan_difficulty = {
+                    int(_row.get("id") or 0): _row
+                    for _row in (_saved_plan.get("exams") or [])
+                    if isinstance(_row, dict)
+                }
                 _planner_exams = [{
                     "id": int(_exam.get("id") or 0),
                     "name": _exam.get("name") or "Evaluación",
                     "course": _exam.get("course_name") or "Curso",
                     "date": str(_exam.get("exam_date") or "")[:10],
                     "weight": int(_exam.get("weight_pct") or 0),
+                    "difficulty": int((_plan_difficulty.get(int(_exam.get("id") or 0)) or {}).get("difficulty") or 0),
+                    "difficulty_reason": str((_plan_difficulty.get(int(_exam.get("id") or 0)) or {}).get("difficulty_reason") or ""),
                 } for _exam in (sdb.get_upcoming_exams(_cid()) or [])]
                 _plan_week_start = _saved_plan.get("week_start") or ""
                 try:
@@ -4860,6 +4870,7 @@ Return this JSON shape:
 
 
     @app.route("/api/student/planner/regenerate", methods=["POST"])
+    @limiter.limit("12 per hour")
     def student_planner_regenerate_api():
         """Build and persist a deterministic week from real availability/exams."""
         if not _logged_in():
@@ -4895,9 +4906,21 @@ Return this JSON shape:
             item[0],
         ))
 
+        # Plus students get the model: it reads the material uploaded for each
+        # evaluation and weighs difficulty against weight and date. The
+        # deterministic build below is the fallback when the model is
+        # unavailable or answers with nothing usable.
+        ai_week = None
+        try:
+            from student import planner_ai
+            ai_week = planner_ai.build_ai_week(_cid(), today, week_start, settings)
+        except Exception:
+            log.exception("AI planner failed for client %s", _cid())
+            ai_week = None
+
         days = []
         block_index = 0
-        for offset in range(7):
+        for offset in range(0 if not ai_week else 7, 7):
             day = week_start + timedelta(days=offset)
             setting = settings.get(day.weekday()) or {}
             free = bool(setting.get("is_free_day"))
@@ -4927,10 +4950,15 @@ Return this JSON shape:
                     capacity -= minutes
             days.append({"date": day.isoformat(), "hours": float(setting.get("available_hours") or 0), "blocks": blocks})
 
+        if ai_week:
+            days = ai_week["days"]
+
+        _difficulty = (ai_week or {}).get("difficulty") or {}
         plan = {
             "generated_at": utc_now().isoformat(),
             "week_start": week_start.isoformat(),
             "week_offset": 0,
+            "source": "ai" if ai_week else "rules",
             "days": days,
             "exams": [{
                 "id": int(exam.get("id") or 0),
@@ -4938,9 +4966,11 @@ Return this JSON shape:
                 "course": exam.get("course_name") or "Curso",
                 "date": exam_day.isoformat(),
                 "weight": int(exam.get("weight_pct") or 0),
+                "difficulty": (_difficulty.get(int(exam.get("id") or 0)) or {}).get("score", 0),
+                "difficulty_reason": (_difficulty.get(int(exam.get("id") or 0)) or {}).get("reason", ""),
             } for exam_day, exam in exams],
         }
-        plan_id = sdb.save_study_plan(_cid(), plan, {"availability": list(settings.values()), "source": "app_design"})
+        plan_id = sdb.save_study_plan(_cid(), plan, {"availability": list(settings.values()), "source": plan["source"]})
         return jsonify({"ok": True, "plan_id": plan_id, "plan": dict(plan, live=True, availability=list(settings.values()), done=[])})
 
 

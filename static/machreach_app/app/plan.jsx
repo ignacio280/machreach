@@ -102,7 +102,7 @@ function Availability({ data = null, csrf = "", onPlan }) {
 function WeekGrid({ data = null, csrf = "" }) {
   const liveDays = data?.days || [];
   const dayDefs = liveDays.length ? liveDays.map((d, i) => ({ n: DAYS[i]?.n || "Día", dt: String(d.date || "").slice(5), off: !(d.blocks || []).length })) : DAYS;
-  const blocks = liveDays.length ? liveDays.map((d) => (d.blocks || []).map((b) => ({ ph: b.phase || "Estudiar", cs: b.course || "Curso", tp: b.title || b.copy || "Bloque de estudio", mn: `${Number(b.minutes || 0)} min`, mat: !!b.material_based, date: d.date, examId: Number(b.exam_id || 0), unitIndex: b.material_based ? Number(b.unit_index ?? -1) : -1, minutes: Number(b.minutes || 0), doneTitle: [b.title || "", b.phase || "", b.index == null ? 0 : b.index, b.minutes || 0, b.material_based ? `unit:${b.unit_index == null ? -1 : b.unit_index}` : "general"].join("::") }))) : (data?.live ? DAYS.map(() => []) : BLOCKS);
+  const blocks = liveDays.length ? liveDays.map((d) => (d.blocks || []).map((b) => ({ ph: b.phase || "Estudiar", cs: b.course || "Curso", tp: b.title || b.copy || "Bloque de estudio", mn: `${Number(b.minutes || 0)} min`, mat: !!b.material_based, why: b.why || "", date: d.date, examId: Number(b.exam_id || 0), unitIndex: b.material_based ? Number(b.unit_index ?? -1) : -1, minutes: Number(b.minutes || 0), doneTitle: [b.title || "", b.phase || "", b.index == null ? 0 : b.index, b.minutes || 0, b.material_based ? `unit:${b.unit_index == null ? -1 : b.unit_index}` : "general"].join("::") }))) : (data?.live ? DAYS.map(() => []) : BLOCKS);
   const doneKey = (b) => `${b.date || ""}|${b.examId || 0}|${b.unitIndex ?? -1}|${b.doneTitle || b.tp || ""}`;
   const [done, setDone] = React.useState(() => {
     if (!data?.live) return { "0-1": true };
@@ -154,11 +154,13 @@ function WeekGrid({ data = null, csrf = "" }) {
               const k = data?.live ? doneKey(b) : i + "-" + j;
               return (
                 <button className={"blk" + (done[k] ? " done" : "") + (b.mat ? " mat" : "")} key={j}
-                  disabled={saving === k} style={{ borderLeftColor: CLR[b.cs] }} onClick={() => toggleBlock(b, k)}>
+                  disabled={saving === k} style={{ borderLeftColor: CLR[b.cs] }} onClick={() => toggleBlock(b, k)}
+                  title={b.why || undefined}>
                   <span className="tick2"><IconCheck size={11} /></span>
                   <div className="ph">{b.ph}</div>
                   <div className="cs">{b.cs}</div>
                   <div className="tp">{b.tp}</div>
+                  {b.why && <div className="wy">{b.why}</div>}
                   <div className="mn">{b.mn}</div>
                 </button>
               );
@@ -170,8 +172,18 @@ function WeekGrid({ data = null, csrf = "" }) {
   );
 }
 
+const DIFF_LABEL = ["", "muy fácil", "fácil", "media", "difícil", "muy difícil"];
+
 function WhyPanel({ data = null }) {
-  const rows = data?.live ? (data.exams || []).slice(0, 5).map((exam, i) => [String(i + 1), `${exam.name} — ${exam.course}`, `${exam.weight || 0}% de la nota · fecha ${exam.date || "sin fecha"}.`]) : WHY;
+  // With an AI plan each evaluation carries the difficulty the model read out
+  // of the uploaded material, so the reason can say more than date + weight.
+  const rows = data?.live ? (data.exams || []).slice(0, 5).map((exam, i) => [
+    String(i + 1),
+    `${exam.name} — ${exam.course}`,
+    exam.difficulty
+      ? `${exam.weight || 0}% de la nota · ${exam.date || "sin fecha"} · dificultad ${DIFF_LABEL[exam.difficulty] || exam.difficulty}. ${exam.difficulty_reason || ""}`.trim()
+      : `${exam.weight || 0}% de la nota · fecha ${exam.date || "sin fecha"}.`,
+  ]) : WHY;
   return (
     <section className="pnl">
       <div className="pnl-h">
