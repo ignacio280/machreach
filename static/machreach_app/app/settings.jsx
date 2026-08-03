@@ -9,6 +9,8 @@ const ST_PRIVACY = [
   ["Aparecer en rankings", "Si lo apagas sales de todos los rankings, incluso el de carrera.", true],
   ["Estado en línea", "Muestra a tus amigos cuándo estás en una sesión de enfoque.", true],
   ["Permitir solicitudes", "Cualquiera con tu ID puede enviarte solicitud de amistad.", false],
+  ["Mostrar mi universidad", "Aparece junto a tu nombre en el ranking por país.", true],
+  ["Mostrar mi carrera", "Aparece junto a tu nombre en el ranking por universidad.", true],
 ];
 const ST_NOTIF = [
   ["Recordatorio de bloques", "Aviso 10 minutos antes de cada bloque planificado.", true],
@@ -152,7 +154,7 @@ function SettingsPrivacy({ data, csrf }) {
     <div className="pf-tabpanel">
       <section className="pnl">
         <div className="pnl-h"><span className="ico-badge" style={{ background: "#E6E4FB" }}><IconShield size={16} /></span><h3>Privacidad</h3></div>
-        <ToggleRows rows={ST_PRIVACY} initial={privacyInitial} keys={["profile_public", "appear_in_rankings", "show_online", "allow_requests"]} onSave={savePreference} />
+        <ToggleRows rows={ST_PRIVACY} initial={privacyInitial} keys={["profile_public", "appear_in_rankings", "show_online", "allow_requests", "show_university", "show_major"]} onSave={savePreference} />
         {status && <div className="pf-pref-status" role="status">{status}</div>}
       </section>
       <section className="pnl">

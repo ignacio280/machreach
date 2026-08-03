@@ -205,26 +205,36 @@ const focusAudio = {
     source.start();
     this.nodes.push(source, filter);
   },
-  /* Three rising notes when a block ends — audible over an ambience loop. */
-  chime(kind = "work") {
+  /* A struck bell: a few inharmonic partials with a fast attack and a long
+     decay. The long break rings lower and for longer so it is unmistakable. */
+  bell(kind = "work") {
     const ctx = this._context();
     if (!ctx) return;
-    const notes = kind === "work" ? [660, 880, 1170] : [880, 660];
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      const at = ctx.currentTime + i * 0.18;
-      gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.02, this.volume) * 0.5, at + 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.45);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(at);
-      osc.stop(at + 0.5);
+    const long = kind === "long";
+    const strikes = long ? [0, 1.1, 2.2] : kind === "break" ? [0] : [0, 0.55];
+    const root = long ? 392 : kind === "break" ? 587 : 659;
+    const decay = long ? 3.6 : 1.9;
+    const level = Math.max(0.05, this.volume) * (long ? 0.55 : 0.45);
+    strikes.forEach((offset) => {
+      const at = ctx.currentTime + offset;
+      // Partials of a bell are not harmonic — that ratio set is what makes it
+      // read as a bell instead of a beep.
+      [[1, 1], [2.01, 0.5], [2.99, 0.32], [4.21, 0.18], [5.43, 0.1]].forEach(([ratio, gainScale]) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = root * ratio;
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(level * gainScale, at + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + decay);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(at);
+        osc.stop(at + decay + 0.05);
+      });
     });
   },
+  chime(kind = "work") { this.bell(kind); },
 };
 
 /* ---- Timer that survives leaving the page ------------------------------
@@ -233,6 +243,8 @@ const focusAudio = {
    exactly where it should when they come back. */
 const FOCUS_MODES = { pomodoro: { work: 25 * 60, brk: 5 * 60, rounds: 4 }, custom: { work: 50 * 60, brk: 10 * 60, rounds: 2 } };
 const FOCUS_STORE = "mr_focus_timer_v1";
+// Time to claim once the long break starts, after which the XP is forfeit.
+const CLAIM_WINDOW_MS = 30 * 60 * 1000;
 
 function readFocusStore() {
   try { return JSON.parse(localStorage.getItem(FOCUS_STORE) || "null"); } catch (e) { return null; }
@@ -257,6 +269,8 @@ function restoreFocusTimer() {
     examId: stored.examId || "",
     phaseId: stored.phaseId || "",
     finishedPhaseId: "",
+    pending: Array.isArray(stored.pending) ? stored.pending : [],
+    claimUntil: Number(stored.claimUntil) || 0,
   };
   if (!stored.running) {
     return { ...base, phase: stored.phase || "work", round: stored.round || 1,
@@ -286,6 +300,16 @@ function restoreFocusTimer() {
   };
 }
 
+/* Counts the long-break window down: unclaimed XP is gone when it hits zero. */
+function ClaimCountdown({ until }) {
+  const [left, setLeft] = React.useState(Math.max(0, Math.ceil((until - Date.now()) / 1000)));
+  React.useEffect(() => {
+    const timer = setInterval(() => setLeft(Math.max(0, Math.ceil((until - Date.now()) / 1000))), 1000);
+    return () => clearInterval(timer);
+  }, [until]);
+  return <React.Fragment>Te quedan {pad(Math.floor(left / 60))}:{pad(left % 60)} para reclamarlo o lo pierdes.</React.Fragment>;
+}
+
 function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   const MODES = FOCUS_MODES;
   const restored = React.useRef(data.live ? restoreFocusTimer() : null).current;
@@ -298,6 +322,9 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   const total = phase === "work" ? cfg.work : cfg.brk;
   const [left, setLeft] = React.useState(restored ? restored.left : cfg.work);
   const [endsAt, setEndsAt] = React.useState(restored?.endsAt || 0);
+  const [pending, setPending] = React.useState(restored?.pending || []);
+  const [claimUntil, setClaimUntil] = React.useState(restored?.claimUntil || 0);
+  const [claiming, setClaiming] = React.useState(false);
   const courses = data.courses?.length ? data.courses : FX_COURSES.map((name, i) => ({ id: i + 1, name, exams: (FX_EXAMS[name] || []).map((name, j) => ({ id: j + 1, name })) }));
   const [courseId, setCourseId] = React.useState(restored?.courseId || courses[0]?.id || "");
   const course = courses.find((c) => String(c.id) === String(courseId)) || courses[0];
@@ -314,35 +341,30 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
     phaseId.current = id;
     return true;
   };
-  const savePhase = async (id) => {
+  // A finished block is not credited on its own: it waits in `pending` until
+  // the student claims it. That is what makes the long-break deadline mean
+  // anything — nothing is banked automatically overnight.
+  const queuePhase = (id) => {
     if (!data.live || !id || !course) return;
-    try {
-      const response = await fetch("/api/student/focus/save", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": (window.__MACHREACH_APP__ || {}).csrf || "" }, body: JSON.stringify({ phase_id: id, mode, minutes: Math.round(cfg.work / 60), pages: 0, course_id: course.id, course_name: course.name, exam_id: examId || null }) });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || "No se pudo guardar el bloque de enfoque.");
-      // The server hands back what the block earned; showing it is the whole
-      // point of finishing one.
-      onReward && onReward({
-        minutes: Number(body.minutes_saved || 0),
-        xp: Number(body.xp_awarded || 0),
-        coins: Number(body.coins_awarded || 0),
-        stats: body.stats || null,
-      });
-    } catch (error) {
-      setRunning(false);
-      alert(error.message || "No se pudo guardar el bloque de enfoque.");
-    }
+    setPending((current) => (current.some((p) => p.phase_id === id) ? current : [...current, {
+      phase_id: id,
+      mode,
+      minutes: Math.round(cfg.work / 60),
+      course_id: course.id,
+      course_name: course.name,
+      exam_id: examId || null,
+    }]));
   };
-  const saveVerifiedPhase = async () => {
+  const saveVerifiedPhase = () => {
     const id = phaseId.current;
     phaseId.current = "";
-    await savePhase(id);
+    queuePhase(id);
   };
 
-  // A work block that ran out while the student was on another page still owes
-  // the server its minutes.
+  // A block that ran out while the student was on another page is still theirs
+  // to claim when they come back.
   React.useEffect(() => {
-    if (restored?.finishedPhaseId) void savePhase(restored.finishedPhaseId);
+    if (restored?.finishedPhaseId) queuePhase(restored.finishedPhaseId);
   }, []);
 
   const skipModeReset = React.useRef(true);
@@ -363,13 +385,17 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
       if (remaining > 0 || advancing.current) return;
       advancing.current = true;
       if (phase === "work") {
-        focusAudio.chime("work");
+        // The last block of the cycle opens the long break, and with it the
+        // 30-minute window to claim everything earned in this session.
+        const lastOfCycle = round >= cfg.rounds;
+        focusAudio.bell(lastOfCycle ? "long" : "work");
+        if (lastOfCycle) setClaimUntil(Date.now() + CLAIM_WINDOW_MS);
         void saveVerifiedPhase();
         setPhase("break");
         setEndsAt(Date.now() + cfg.brk * 1000);
         setLeft(cfg.brk);
       } else {
-        focusAudio.chime("break");
+        focusAudio.bell("break");
         setPhase("work");
         setRound((r) => (r >= cfg.rounds ? 1 : r + 1));
         setEndsAt(Date.now() + cfg.work * 1000);
@@ -389,17 +415,57 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   // Persist after every change so another page (or a reload) sees the block.
   React.useEffect(() => {
     if (!data.live) return;
-    if (!running && !endsAt && left === MODES[mode].work && phase === "work" && round === 1) {
+    if (!running && !endsAt && !pending.length && left === MODES[mode].work && phase === "work" && round === 1) {
       writeFocusStore(null);
       return;
     }
-    writeFocusStore({ mode, phase, round, running, left, endsAt, courseId, examId, phaseId: phaseId.current });
-  }, [mode, phase, round, running, left, endsAt, courseId, examId]);
+    writeFocusStore({ mode, phase, round, running, left, endsAt, courseId, examId, phaseId: phaseId.current, pending, claimUntil });
+  }, [mode, phase, round, running, left, endsAt, courseId, examId, pending, claimUntil]);
 
   const pct = 1 - left / total;
   const R = 132, C = 2 * Math.PI * R;
   const [kick, setKick] = React.useState(0);
   const [guardWanted, setGuardWanted] = React.useState(false);
+  const claimPending = async () => {
+    if (!pending.length || claiming) return;
+    setClaiming(true);
+    try {
+      const response = await fetch("/api/student/focus/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": (window.__MACHREACH_APP__ || {}).csrf || "" },
+        body: JSON.stringify({ phases: pending, course_id: course?.id, course_name: course?.name }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || body.ok === false) throw new Error(body.error || "No se pudo reclamar el XP.");
+      setPending([]);
+      setClaimUntil(0);
+      onReward && onReward({
+        minutes: Number(body.minutes_saved || 0),
+        xp: Number(body.xp_awarded || 0),
+        coins: Number(body.coins_awarded || 0),
+        blocks: Number(body.saved_count || pending.length),
+        stats: body.stats || null,
+      });
+    } catch (error) {
+      alert(error.message || "No se pudo reclamar el XP.");
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  // Unclaimed XP dies with the window. Without this an overnight session could
+  // sit on a pile of blocks and bank them the next morning.
+  React.useEffect(() => {
+    if (!claimUntil || !pending.length) return undefined;
+    const timer = setInterval(() => {
+      if (Date.now() < claimUntil) return;
+      setPending([]);
+      setClaimUntil(0);
+      onReward && onReward({ expired: true, blocks: pending.length, minutes: 0, xp: 0, coins: 0 });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [claimUntil, pending.length]);
+
   const reset = () => {
     setRunning(false); setPhase("work"); setRound(1); setLeft(cfg.work); setEndsAt(0);
     phaseId.current = "";
@@ -459,6 +525,17 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
         </button>
         <button className="btn btn-ghost btn-lg" onClick={reset}>Reiniciar</button>
       </div>
+      {pending.length > 0 && (
+        <div className={"fx-claim" + (claimUntil ? " urgent" : "")}>
+          <div className="fx-claim-b">
+            <b>{pending.length === 1 ? "1 bloque sin reclamar" : `${pending.length} bloques sin reclamar`}</b>
+            <span>{claimUntil ? <ClaimCountdown until={claimUntil} /> : "Reclama tu XP cuando quieras durante la sesión."}</span>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={claimPending} disabled={claiming}>
+            <IconBolt size={15} /> {claiming ? "Reclamando…" : "Reclamar XP"}
+          </button>
+        </div>
+      )}
       <div className="fx-status">Ronda {round} de {cfg.rounds} · {course?.name || "Sin curso"} · el tiempo se guarda al terminar el bloque</div>
       {guardWanted && <FocusGuardModal onClose={() => setGuardWanted(false)} />}
     </section>
@@ -519,13 +596,16 @@ function RewardCard({ reward, onClose }) {
     return () => clearTimeout(timer);
   }, [reward]);
   return (
-    <div className="fx-reward" role="status" aria-live="polite">
-      <span className="ico-badge" style={{ background: "#FFF2C9" }}><IconBolt size={17} color="var(--plum)" /></span>
+    <div className={"fx-reward" + (reward.expired ? " lost" : "")} role="status" aria-live="polite">
+      <span className="ico-badge" style={{ background: reward.expired ? "#FFDFE1" : "#FFF2C9" }}><IconBolt size={17} color="var(--plum)" /></span>
       <div className="fx-reward-b">
-        <b>Bloque guardado · {reward.minutes} min</b>
+        <b>{reward.expired
+          ? `Perdiste el XP de ${reward.blocks || 0} bloque${(reward.blocks || 0) === 1 ? "" : "s"}`
+          : `${reward.blocks > 1 ? `${reward.blocks} bloques reclamados` : "Bloque reclamado"} · ${reward.minutes} min`}</b>
         <span>
-          {reward.xp > 0 ? `+${reward.xp} XP` : "Sin XP en este bloque"}
-          {reward.coins > 0 ? ` · +${reward.coins} 🪙` : ""}
+          {reward.expired
+            ? "Se acabó la ventana de 30 minutos del descanso largo."
+            : `${reward.xp > 0 ? `+${reward.xp} XP` : "Sin XP en este bloque"}${reward.coins > 0 ? ` · +${reward.coins} 🪙` : ""}`}
         </span>
       </div>
       <button type="button" onClick={onClose} aria-label="Cerrar"><IconClose size={14} /></button>

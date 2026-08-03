@@ -4265,6 +4265,7 @@ Return this JSON shape:
                     _profile_prefs = {}
                 _profile_setting_keys = {
                     "profile_public", "appear_in_rankings", "show_online", "allow_requests",
+                    "show_university", "show_major",
                     "block_reminders", "streak_risk", "grade_results", "weekly_summary",
                     "product_news", "focus_block_sites", "focus_silence_notifications",
                 }
@@ -23008,7 +23009,8 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return jsonify(error="Login required"), 401
         data = request.get_json(silent=True) or {}
-        allowed = {"profile_public", "appear_in_rankings", "show_online", "allow_requests"}
+        allowed = {"profile_public", "appear_in_rankings", "show_online", "allow_requests",
+                   "show_university", "show_major"}
         supplied = {key: data[key] for key in allowed if key in data}
         if any(type(value) is not bool for value in supplied.values()):
             return jsonify(error="Las preferencias deben ser booleanas."), 400

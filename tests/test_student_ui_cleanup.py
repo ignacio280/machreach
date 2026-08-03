@@ -2,7 +2,7 @@ import base64
 import json
 import re
 
-from machreach_core.db import _exec, get_db
+from machreach_core.db import _exec, _fetchone, get_db
 from student import db as sdb
 
 PHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
@@ -138,3 +138,40 @@ def test_restore_purchase_is_gone(client, make_user):
     assert response.status_code == 404
     assert "Restaurar compra" not in shop
     assert "reconcile" not in shop
+
+
+def test_leaderboard_rows_carry_avatar_colour_and_scope_labels(client, make_user):
+    """País shows where someone studies, Universidad shows what — unless they
+    switched it off in Privacidad."""
+    from machreach_core.db import update_mail_preferences
+    from student import academic
+
+    client_id = _student(client, make_user, name="Board Student")
+    with get_db() as db:
+        _exec(db, "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s)",
+              (client_id, "test", 300, "seed"))
+        major = _fetchone(db, "SELECT id FROM majors LIMIT 1", ())
+        univ = _fetchone(db, "SELECT id FROM universities LIMIT 1", ())
+        _exec(db, "UPDATE clients SET country_iso = 'CL', university_id = %s, major_id = %s WHERE id = %s",
+              (univ["id"], major["id"], client_id))
+    update_mail_preferences(client_id, json.dumps({
+        "profile_avatar": "#8DACFF", "show_university": True, "show_major": True,
+    }))
+
+    # Other tests seed students too, so find this one rather than trusting rank.
+    def _mine(rows):
+        return next(row for row in rows if int(row["client_id"]) == client_id)
+
+    mine_country = _mine(academic.leaderboard("country", client_id))
+    mine_university = _mine(academic.leaderboard("university", client_id))
+
+    assert mine_country["avatar_color"] == "#8DACFF"
+    assert mine_country["university"]
+    assert mine_university["major"]
+
+    update_mail_preferences(client_id, json.dumps({
+        "profile_avatar": "#8DACFF", "show_university": False, "show_major": False,
+    }))
+    hidden = _mine(academic.leaderboard("country", client_id))
+    assert "university" not in hidden
+    assert "major" not in hidden

@@ -132,3 +132,16 @@
 .fx-reward-b span{font-size:12.5px;font-weight:700;color:var(--ink-2)}
 .fx-reward>button{margin-left:auto;flex:none;width:26px;height:26px;display:grid;place-items:center;border-radius:50%;color:var(--ink-3)}
 .fx-reward>button:hover{background:var(--surface);color:var(--ink)}
+
+/* unclaimed blocks + the long-break claim window */
+.fx-claim{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border:var(--bd);border-radius:var(--r);background:#FFF6D8;box-shadow:0 2px 0 var(--ink);text-align:left}
+.fx-claim.urgent{background:#FFE7D6;animation:claimPulse 2.4s ease-in-out infinite}
+@keyframes claimPulse{0%,100%{box-shadow:0 2px 0 var(--ink)}50%{box-shadow:0 2px 0 var(--ink),0 0 0 6px color-mix(in oklab,var(--brand) 22%,transparent)}}
+[data-theme="dark"] .fx-claim{background:color-mix(in oklab,var(--amber) 24%,var(--surface))}
+[data-theme="dark"] .fx-claim.urgent{background:color-mix(in oklab,var(--brand) 24%,var(--surface))}
+.fx-claim-b{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fx-claim-b b{font-family:var(--font-display);font-size:14px;font-weight:800;color:var(--ink)}
+.fx-claim-b span{font-size:12px;font-weight:700;color:var(--ink-2)}
+.fx-claim .btn{margin-left:auto}
+.fx-reward.lost{background:#FFDFE1}
+[data-theme="dark"] .fx-reward.lost{background:color-mix(in oklab,var(--bad) 26%,var(--surface))}

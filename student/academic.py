@@ -993,6 +993,53 @@ def _xp_select(where_extra: str = "", params: Iterable = (), period: str = "all"
     return q, tuple(params)
 
 
+DEFAULT_AVATAR_COLOR = "#FFD3A8"
+
+
+def _decorate_leaderboard_identity(out: list[dict], rows: list[dict]) -> None:
+    """Attach avatar colour, university and carrera to leaderboard rows."""
+    import json as _json
+
+    by_client = {int(r["client_id"]): r for r in rows}
+    ids = [int(row["client_id"]) for row in out]
+    if not ids:
+        return
+    placeholders = ", ".join(["%s"] * len(ids))
+    with get_db() as db:
+        prefs_rows = _fetchall(
+            db,
+            f"SELECT id, mail_preferences FROM clients WHERE id IN ({placeholders})",
+            tuple(ids),
+        ) or []
+    prefs = {}
+    for row in prefs_rows:
+        try:
+            parsed = _json.loads(row.get("mail_preferences") or "{}")
+        except (TypeError, ValueError):
+            parsed = {}
+        prefs[int(row["id"])] = parsed if isinstance(parsed, dict) else {}
+
+    university_names: dict[int, str] = {}
+    major_names: dict[int, str] = {}
+    for row in out:
+        source = by_client.get(int(row["client_id"])) or {}
+        setting = prefs.get(int(row["client_id"])) or {}
+        row["avatar_color"] = str(setting.get("profile_avatar") or DEFAULT_AVATAR_COLOR)
+
+        university_id = int(source.get("university_id") or 0)
+        if university_id and setting.get("show_university", True) is not False:
+            if university_id not in university_names:
+                info = get_university(university_id) or {}
+                university_names[university_id] = info.get("short_name") or info.get("name") or ""
+            row["university"] = university_names[university_id]
+
+        major_id = int(source.get("major_id") or 0)
+        if major_id and setting.get("show_major", True) is not False:
+            if major_id not in major_names:
+                major_names[major_id] = (get_major(major_id) or {}).get("name") or ""
+            row["major"] = major_names[major_id]
+
+
 def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all") -> list[dict]:
     """
     scope ∈ {"global", "country", "university", "major", "retirement"}.
@@ -1069,6 +1116,14 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
             "league_color": lg["color"],
             "is_you": r["client_id"] == client_id,
         })
+    # Avatar colour, university and carrera. The last two are per-student
+    # opt-outs: a row that hid them simply carries no label, so the board never
+    # leaks what someone chose to keep private.
+    try:
+        _decorate_leaderboard_identity(out, rows)
+    except Exception:
+        pass
+
     # Enrich with leaderboard flags (per-row CSS background).
     try:
         from . import db as _sdb

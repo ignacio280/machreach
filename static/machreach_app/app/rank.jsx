@@ -34,7 +34,12 @@ function useRankRows(scope, period, live) {
     fetch("/api/academic/leaderboard?scope=" + encodeURIComponent(scope.id) + "&period=" + encodeURIComponent(period))
       .then((r) => r.json()).then((body) => {
         if (!active) return;
-        const rows = (body.rows || []).map((r) => [r.name || "Estudiante", r.league_name || scope.label, Number(r.xp || 0), !!r.is_you, r]);
+        // The subtitle answers the question the board is scoped by: on País
+        // that is which university someone studies at, on Universidad which
+        // carrera. Students who hid it fall back to their league.
+        const detailFor = (r) => (scope.id === "country" ? r.university : scope.id === "university" ? r.major : "")
+          || r.league_name || scope.label;
+        const rows = (body.rows || []).map((r) => [r.name || "Estudiante", detailFor(r), Number(r.xp || 0), !!r.is_you, r]);
         setState({ rows, loading: false });
       }).catch(() => active && setState({ rows: [], loading: false }));
     return () => { active = false; };
@@ -91,12 +96,12 @@ function Arena({ scope, period, rows = NAMES, loading = false }) {
       <div className="arena-close"><IconTimer size={13} /> {label}</div>
       <div className="podium">
         {!loading && top.length === 0 && <div className="fr-empty">Todavía no hay XP en esta liga.</div>}
-        {top.map(([n, u, xp], i) => {
+        {top.map(([n, u, xp, , raw], i) => {
           const pz = prizeFor(scope.id, i + 1, period);
           return (
             <div className={"pod p" + (i + 1)} key={n} style={{ "--pd": [180, 0, 340][i] + "ms" }}>
               <div className="pod-medal">{medals[i]}</div>
-              <div className="pod-av" style={{ background: AV[i % AV.length] }}>{initials2(n)}</div>
+              <div className="pod-av" style={{ background: raw?.avatar_color || AV[i % AV.length] }}>{initials2(n)}</div>
               <div className="pod-n">{n}</div>
               <div className="pod-u">{u}</div>
               <div className="pod-xp num"><CountXP v={xp} d={[180, 0, 340][i]} /> XP</div>
@@ -122,7 +127,7 @@ function Board({ scope, period, rows: allRows = NAMES, loading = false }) {
         <h3>Tabla completa</h3>
         <span className="mono">{allRows.length} estudiantes en esta liga</span>
       </div>
-      {rows.map(([n, u, xp, me], i) => {
+      {rows.map(([n, u, xp, me, raw], i) => {
         const rank = i + 4;
         const pz = prizeFor(scope.id, rank, period);
         return (
@@ -130,7 +135,7 @@ function Board({ scope, period, rows: allRows = NAMES, loading = false }) {
             {i === 2 && <div className="lb-gap" style={{ "--rd": i * 70 + 40 + "ms" }}>· · · 38 estudiantes más · · ·</div>}
             <div className={"lbrow" + (me ? " me" : "")} style={{ "--rd": i * 70 + "ms" }}>
               <span className="rk num">{rank}º</span>
-              <span className="av2" style={{ background: AV[(i + 3) % AV.length] }}>{initials2(n)}</span>
+              <span className="av2" style={{ background: raw?.avatar_color || AV[(i + 3) % AV.length] }}>{initials2(n)}</span>
               <span className="who"><span className="nm2">{n}{me && " · tú"}</span><span className="mt">{u}</span></span>
               {pz > 0 && <span className="prz">🪙 +{pz}</span>}
               <span className="xp2 num"><CountXP v={xp} d={i * 70} /></span>

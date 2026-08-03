@@ -38,6 +38,12 @@
 .pod.p2{order:1;background:#F1F3F7}
 .pod.p3{order:3;background:#FBEADA}
 @media (max-width:680px){.pod.p1,.pod.p2,.pod.p3{order:0}}
+/* The medal fills are light by design; in dark mode they kept ink-coloured
+   text on a cream card, which made the winner's name unreadable. */
+[data-theme="dark"] .pod.p1{background:color-mix(in oklab,var(--amber) 26%,var(--surface))}
+[data-theme="dark"] .pod.p2{background:color-mix(in oklab,var(--sky) 20%,var(--surface))}
+[data-theme="dark"] .pod.p3{background:color-mix(in oklab,var(--brand) 22%,var(--surface))}
+[data-theme="dark"] .pod-prize{color:var(--ink);background:var(--amber)}
 .pod-medal{font-size:26px;line-height:1}
 .pod-av{width:56px;height:56px;margin:9px auto 8px;border-radius:50%;border:var(--bd);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:19px;box-shadow:0 3px 0 var(--ink)}
 .pod.p1 .pod-av{width:68px;height:68px;font-size:23px}
