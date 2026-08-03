@@ -4870,8 +4870,15 @@ Return this JSON shape:
 
         today = sdb.user_date(_cid())
         week_start = today - timedelta(days=today.weekday())
+        # Keep only the three JSON-safe fields: the raw rows carry a created_at
+        # that Postgres hands back as a datetime, which json.dumps refuses when
+        # the plan is persisted.
         settings = {
-            int(row.get("day_of_week") or 0): row
+            int(row.get("day_of_week") or 0): {
+                "day_of_week": int(row.get("day_of_week") or 0),
+                "available_hours": float(row.get("available_hours") or 0),
+                "is_free_day": bool(row.get("is_free_day")),
+            }
             for row in (sdb.get_schedule_settings(_cid()) or [])
         }
         exams = []

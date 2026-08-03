@@ -1,7 +1,7 @@
 """Planner and study-stat routes preserve ownership and recover from AI failure."""
 
 import base64
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import json
 import re
 
@@ -411,3 +411,44 @@ def test_planner_material_fallback_and_block_tool_artifacts(
     ).get_json()
     assert cards["ok"] is True
     assert cards["type"] == "flashcards"
+
+
+def test_regenerate_survives_provider_shaped_availability_rows(
+    client, flask_app, make_user, monkeypatch
+):
+    """Postgres returns created_at as a datetime; the plan is persisted with
+    json.dumps, so raw rows used to blow up with a 500 (and an HTML error page
+    that the browser reported as "Unexpected token '<'")."""
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    client_id = make_user("Regen Student", "regen-student@example.test")
+    _plus(client_id)
+    _login(client, client_id)
+    monkeypatch.setattr(sdb, "get_schedule_settings", lambda _cid: [
+        {
+            "id": day + 1,
+            "client_id": client_id,
+            "day_of_week": day,
+            "available_hours": 2.0,
+            "is_free_day": False,
+            "created_at": datetime(2026, 8, 3, 11, 5, 8),
+        }
+        for day in range(7)
+    ])
+
+    response = client.post("/api/student/planner/regenerate", json={})
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["ok"] is True
+    assert body["plan"]["availability"][0]["available_hours"] == 2.0
+    assert "created_at" not in body["plan"]["availability"][0]
+
+
+def test_api_errors_are_json_not_an_html_page(client, make_user):
+    _login(client, make_user("Json Errors", "json-errors@example.test"))
+
+    missing = client.get("/api/student/definitely-not-a-route")
+
+    assert missing.status_code == 404
+    assert missing.get_json()["error"]
+    assert "<!DOCTYPE" not in missing.get_data(as_text=True)

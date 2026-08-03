@@ -46,6 +46,8 @@ const CRS = [
   },
 ];
 
+const IconEditPen = (p) => <Icon {...p}><path d="M4 20h4l10-10a2.8 2.8 0 10-4-4L4 16v4z" /><path d="M13.5 6.5l4 4" /></Icon>;
+
 /* The date input hands back yyyy-mm-dd; the exam list shows dd/mm. */
 const shortDate = (value) => {
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
@@ -56,6 +58,8 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
   const [open, setOpen] = React.useState(false);
   const [exams, setExams] = React.useState(c.exams);
   const [newEx, setNewEx] = React.useState(null);
+  const [editEx, setEditEx] = React.useState(null);
+  const [upload, setUpload] = React.useState(null);
   const [openEx, setOpenEx] = React.useState(null);
   const [grade, setGrade] = React.useState("");
   const [passing, setPassing] = React.useState("3.95");
@@ -71,8 +75,34 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
       if (!response.ok) return alert(body.error || "No se pudo guardar la evaluación.");
       id = body.id;
     }
-    setExams((x) => [...x, { id, nm: newEx.nm, wt: (newEx.wt || "0") + "%", dt: shortDate(newEx.dt), files: [] }]);
+    setExams((x) => [...x, { id, nm: newEx.nm, wt: (newEx.wt || "0") + "%", dt: newEx.dt || "—", files: [] }]);
     setNewEx(null);
+  };
+  const startEdit = (exam, index) => setEditEx({
+    i: index,
+    nm: exam.nm,
+    wt: String(parseInt(exam.wt, 10) || 0),
+    dt: /^\d{4}-\d{2}-\d{2}$/.test(exam.dt || "") ? exam.dt : "",
+  });
+  const saveEdit = async () => {
+    const target = exams[editEx.i];
+    if (!editEx.nm.trim()) return setEditEx(null);
+    if (target?.id && c.id) {
+      const response = await fetch("/api/student/exams/" + target.id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": (window.__MACHREACH_APP__ || {}).csrf || "" },
+        body: JSON.stringify({ course_id: c.id, name: editEx.nm, weight_pct: Number(editEx.wt || 0), exam_date: editEx.dt || null }),
+      });
+      if (!response.ok) {
+        let body = {};
+        try { body = await response.json(); } catch (e) { body = {}; }
+        return alert(body.error || "No se pudo guardar la evaluación.");
+      }
+    }
+    setExams((x) => x.map((ex, j) => (j === editEx.i
+      ? { ...ex, nm: editEx.nm, wt: (editEx.wt || "0") + "%", dt: editEx.dt || "—" }
+      : ex)));
+    setEditEx(null);
   };
   const removeExam = async (exam, index) => {
     if (exam.id) {
@@ -81,18 +111,46 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
     }
     setExams((x) => x.filter((_, j) => j !== index));
   };
+  // XHR rather than fetch: only XHR reports upload progress, and a syllabus
+  // PDF on a phone connection is a long silent wait otherwise.
+  const sendFile = (file, examId) => new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", `/api/student/courses/${c.id}/sources`);
+    request.setRequestHeader("X-CSRFToken", (window.__MACHREACH_APP__ || {}).csrf || "");
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      setUpload({ name: file.name, pct: Math.round((event.loaded / event.total) * 100) });
+    };
+    // Upload done, server still reading the file: keep the bar full and say so.
+    request.upload.onload = () => setUpload({ name: file.name, pct: 100 });
+    request.onload = () => {
+      let body = {};
+      try { body = JSON.parse(request.responseText); } catch (e) { body = {}; }
+      if (request.status >= 400) reject(new Error(body.error || "No se pudo subir el archivo."));
+      else resolve(body);
+    };
+    request.onerror = () => reject(new Error("No se pudo subir el archivo."));
+    const form = new FormData();
+    form.append("exam_id", String(examId));
+    form.append("file", file);
+    request.send(form);
+  });
   const pickFiles = async (e) => {
     const selected = [...(e.target.files || [])];
     const exam = exams[openEx];
+    const index = openEx;
     e.target.value = "";
     if (!selected.length || !exam?.id || !c.id) return;
     for (const file of selected) {
-      const form = new FormData(); form.append("exam_id", String(exam.id)); form.append("file", file);
-      const response = await fetch(`/api/student/courses/${c.id}/sources`, { method: "POST", headers: { "X-CSRFToken": (window.__MACHREACH_APP__ || {}).csrf || "" }, body: form });
-      const body = await response.json();
-      if (!response.ok) { alert(body.error || "No se pudo subir el archivo."); continue; }
-      setExams((x) => x.map((ex, j) => j === openEx ? { ...ex, files: [...ex.files, { id: body.id, n: body.name, m: `${body.char_count || 0} caracteres` }] } : ex));
+      setUpload({ name: file.name, pct: 0 });
+      try {
+        const body = await sendFile(file, exam.id);
+        setExams((x) => x.map((ex, j) => j === index ? { ...ex, files: [...ex.files, { id: body.id, n: body.name, m: `${body.char_count || 0} caracteres` }] } : ex));
+      } catch (error) {
+        alert(error.message);
+      }
     }
+    setUpload(null);
   };
   const dropFile = async (ei, fi) => {
     const file = exams[ei]?.files?.[fi];
@@ -139,15 +197,26 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
             </div>
             {exams.map((e, i) => (
               <div key={e.nm + i}>
+                {editEx && editEx.i === i ? (
+                  <div className="new-ex">
+                    <input autoFocus placeholder="Nombre de la evaluación" value={editEx.nm} onChange={(ev) => setEditEx({ ...editEx, nm: ev.target.value })} onKeyDown={(ev) => ev.key === "Enter" && saveEdit()} />
+                    <input placeholder="%" value={editEx.wt} onChange={(ev) => setEditEx({ ...editEx, wt: ev.target.value })} />
+                    <input type="date" aria-label="Fecha de la evaluación" value={editEx.dt} onChange={(ev) => setEditEx({ ...editEx, dt: ev.target.value })} />
+                    <button className="btn btn-primary btn-sm" onClick={saveEdit}>Guardar</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setEditEx(null)}>Cancelar</button>
+                  </div>
+                ) : (
                 <div className={"ex-row" + (openEx === i ? " open" : "")}>
                   <button className="nm" onClick={() => setOpenEx(openEx === i ? null : i)}>
                     <IconChevron size={13} className={openEx === i ? "rot" : ""} /> {e.nm}
                   </button>
                   <span className="mat-count" title="Material de esta evaluación">📎 {e.files.length}</span>
                   <span className="wt">{e.wt}</span>
-                  <span className="dt">{e.done ? "Rendida" : e.dt}</span>
+                  <span className="dt">{e.done ? "Rendida" : shortDate(e.dt)}</span>
+                  <button className="fx" onClick={() => startEdit(e, i)} aria-label={"Editar " + e.nm}><IconEditPen size={13} /></button>
                   <button className="fx" onClick={() => removeExam(e, i)} aria-label="Quitar evaluación"><IconClose size={13} /></button>
                 </div>
+                )}
                 {openEx === i && (
                   <div className="ex-mat">
                     <div className="ex-mat-h">Material de {e.nm} — MachReach lo usa para armar quizzes y flashcards de esta evaluación</div>
@@ -159,8 +228,14 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
                         <button className="fx" onClick={() => dropFile(i, k)} aria-label="Eliminar archivo"><IconClose size={13} /></button>
                       </div>
                     ))}
-                    {!e.files.length && <div className="ex-mat-empty">Sin material todavía para esta evaluación.</div>}
-                    <button className="drop" onClick={() => fileIn.current.click()}><IconSparkle size={15} /> Subir material a {e.nm}</button>
+                    {!e.files.length && !upload && <div className="ex-mat-empty">Sin material todavía para esta evaluación.</div>}
+                    {upload && (
+                      <div className="up-prog" role="status" aria-live="polite">
+                        <div className="up-bar"><i style={{ width: upload.pct + "%" }} /></div>
+                        <span className="mono">{upload.name} · {upload.pct < 100 ? upload.pct + "%" : "Procesando…"}</span>
+                      </div>
+                    )}
+                    <button className="drop" disabled={!!upload} onClick={() => fileIn.current.click()}><IconSparkle size={15} /> {upload ? "Subiendo…" : `Subir material a ${e.nm}`}</button>
                   </div>
                 )}
               </div>

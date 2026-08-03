@@ -4939,8 +4939,16 @@ def _render_error_page(code, heading, message, sub=""):
     ), code
 
 
+def _wants_json_error() -> bool:
+    """API callers must never be handed an HTML error page — the fetch() then
+    dies on "Unexpected token '<'" and the real error is lost."""
+    return request.path.startswith("/api/") or request.is_json
+
+
 @app.errorhandler(404)
 def _handle_404(e):
+    if _wants_json_error():
+        return jsonify({"error": "Not found"}), 404
     return _render_error_page(
         404,
         "This page wandered off.",
@@ -4955,6 +4963,8 @@ def _handle_500(e):
         app.logger.exception("500 error at %s %s: %s", request.method, request.path, e)
     except Exception:
         pass
+    if _wants_json_error():
+        return jsonify({"error": "Algo falló de nuestro lado. Inténtalo de nuevo."}), 500
     return _render_error_page(
         500,
         "Something broke on our end.",

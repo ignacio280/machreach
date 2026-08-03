@@ -77,12 +77,17 @@
 .file-row .fx:hover{color:var(--bad)}
 .drop{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;padding:12px;border:2px dashed var(--ink-3);border-radius:12px;font-family:var(--font-display);font-weight:800;font-size:12.5px;color:var(--ink-2);background:transparent;transition:border-color .2s,color .2s,background .2s}
 .drop:hover{border-color:var(--brand);color:var(--brand-2);background:var(--brand-tint)}
-.new-ex{display:grid;grid-template-columns:1fr 78px 150px auto;gap:7px;margin-top:8px;align-items:center}
+.new-ex{display:grid;grid-template-columns:1fr 78px 150px auto auto;gap:7px;margin-top:8px;align-items:center}
 .new-ex input[type=date]{font-family:var(--font-mono);font-size:12px}
 [data-theme="dark"] .new-ex input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1)}
 @media (max-width:620px){.new-ex{grid-template-columns:1fr 1fr}}
 .new-ex input{font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--ink);background:var(--surface);border:2px solid var(--ink);border-radius:10px;padding:8px 10px;box-shadow:0 2px 0 var(--ink);min-width:0}
 .new-ex input:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+/* upload progress for course material */
+.up-prog{display:flex;flex-direction:column;gap:6px;margin-top:9px}
+.up-bar{height:9px;border-radius:999px;border:2px solid var(--ink);background:var(--paper-2);overflow:hidden}
+.up-bar i{display:block;height:100%;background:var(--brand);transition:width .18s linear}
+.up-prog .mono{font-size:10.5px;color:var(--ink-2);font-weight:700}
 
 /* Modal chrome (.mdl-*) lives in dash.css — Modal itself is a shell component
    and every page that can open one loads dash.css. */
