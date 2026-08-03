@@ -99,7 +99,9 @@
 .guard-pnl{display:flex;align-items:center;gap:11px;padding:16px 20px}
 .guard-pnl h3{font-size:17px}
 .guard-pnl .tagchip{margin-left:auto}
-.guard-pnl .tagchip.off{background:var(--bad);border-color:var(--ink);color:#fff}
+.guard-pnl .tagchip.off{background:var(--surface);border-color:var(--ink);color:var(--ink)}
+.guard-pnl .tagchip.off:hover{background:var(--bad);color:#fff}
+.guard-pnl .tagchip .off-dot{width:7px;height:7px;border-radius:50%;background:var(--bad)}
 .guard{display:flex;align-items:center;gap:12px;padding:12px 0}
 .guard-t{font-family:var(--font-display);font-weight:800;font-size:14px}
 .guard-s{font-size:12px;color:var(--ink-2);font-weight:700}

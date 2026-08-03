@@ -3,29 +3,13 @@
 .pe-back{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--ink-2);transition:color .2s,transform .2s var(--spring-b);align-self:flex-start}
 .pe-back:hover{color:var(--brand);transform:translateX(-3px)}
 
-/* identity block */
-.pe-id{padding:0;border:var(--bd);border-radius:var(--r-xl);box-shadow:var(--sh3);overflow:hidden}
-.pe-face img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
-.pe-pic{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.pe-picav{width:84px;height:84px;flex:none;border-radius:50%;background:linear-gradient(135deg,#3B4A7A,#5B4694);display:grid;place-items:center;color:#fff;font-family:var(--font-display);font-size:28px;font-weight:800;border:3px solid var(--ink);box-shadow:0 3px 0 var(--ink);overflow:hidden}
-.pe-picav img{width:100%;height:100%;object-fit:cover;display:block}
-.pe-picacts{display:flex;gap:9px;flex-wrap:wrap}
-.pe-picnote{font-size:12px;font-weight:700;color:var(--ink-3);margin-top:9px}
-.pe-banner{height:140px;border-bottom:var(--bd);transition:background .3s}
-.pe-idbody{background:#0B1220;padding:14px 22px 18px;position:relative}
-.pe-face{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#3B4A7A,#5B4694);display:grid;place-items:center;color:#fff;font-family:var(--font-display);font-size:26px;font-weight:800;border:3px solid #0B1220;position:absolute;left:22px;top:-36px;z-index:2;box-shadow:0 4px 14px rgba(0,0,0,.35)}
-.pe-idrow{padding-top:42px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px}
-.pe-idrow .nm{font-family:var(--font-display);font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em}
-.pe-idrow .em{color:#94A3B8;font-size:12px;font-weight:600;margin-top:2px}
-.pe-idrow .rk{margin-top:4px;font-size:13px;color:#94A3B8;font-weight:600;letter-spacing:.02em}
-.pe-idrow .rk b{color:#fff;font-weight:800}
-.pe-stats{display:flex;gap:10px;flex-wrap:wrap}
-.pe-stat{min-width:110px;padding:10px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06)}
-.pe-stat .num{font-family:var(--font-display);font-size:20px;font-weight:800;color:#fff;letter-spacing:-.02em}
-.pe-stat .label{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8;font-weight:700;margin-top:4px}
-.pe-stat.yellow{border-color:rgba(250,204,21,.4);background:rgba(250,204,21,.1)}
-.pe-stat.blue{border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.1)}
-.pe-stat.red{border-color:rgba(244,63,94,.4);background:rgba(244,63,94,.1)}
+/* live profile preview — reuses .pf-* from profile.css */
+.pf-face .pf-facecam{position:absolute;right:-8px;top:-8px;width:34px;height:34px;border-radius:50%;border:3px solid var(--ink);background:var(--brand);color:#fff;display:grid;place-items:center;box-shadow:0 2px 0 var(--ink);transition:transform .2s var(--spring-b),background .2s}
+.pf-face .pf-facecam:hover{transform:scale(1.08) rotate(-6deg)}
+.pf-face .pf-facecam:disabled{opacity:.6}
+.pe-flagband{position:absolute;left:0;right:0;bottom:0;height:34px;-webkit-mask-image:linear-gradient(to right,#000 0%,#000 55%,transparent 100%);mask-image:linear-gradient(to right,#000 0%,#000 55%,transparent 100%)}
+.pe-slotbadge{font-size:.85em;margin:0 6px}
+.pe-picnote{padding:0 26px 18px;font-size:12px;font-weight:700;color:var(--ink-3)}
 
 /* cards */
 .pe-card{background:var(--surface);border:var(--bd);border-radius:var(--r-lg);box-shadow:var(--sh2);padding:20px 22px}

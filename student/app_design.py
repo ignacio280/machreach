@@ -36,6 +36,7 @@ _PAGES: dict[str, str] = {
     "tienda": "Tienda",
     "perfil": "Perfil",
     "perfil-editar": "Editar perfil",
+    "ajustes": "Ajustes",
     "cuenta": "Iniciar sesión y registro",
 }
 
@@ -51,7 +52,8 @@ _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "reviews": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"),
     "tienda": ("dash.css", "focus.css", "plan.css", "analytics.css", "shop.css"),
     "perfil": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css"),
-    "perfil-editar": ("dash.css", "profedit.css"),
+    "perfil-editar": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css", "profedit.css"),
+    "ajustes": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css"),
     "cuenta": ("auth.css",),
 }
 
@@ -92,8 +94,8 @@ def render_live_page(slug: str, data: dict, version: str = "20260802-app-v6-4") 
     if slug == "perfil":
         from student.db import BANNER_ANIM_CSS
         animation_styles = f"<style>{BANNER_ANIM_CSS}</style>"
-    elif slug == "perfil-editar":
-        # The edit page previews every unlocked cosmetic, so it needs the full
+    elif slug in ("perfil-editar", "tienda"):
+        # These two preview many cosmetics at once, so they need the full
         # animation catalog, not just the equipped banner's keyframes.
         from student.db import BANNER_ANIM_CSS, FLAG_ANIM_CSS
         animation_styles = f"<style>{BANNER_ANIM_CSS}{FLAG_ANIM_CSS}</style>"

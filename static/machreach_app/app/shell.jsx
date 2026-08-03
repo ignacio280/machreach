@@ -5,6 +5,8 @@ const IconGrid = (p) => <Icon {...p}><rect x="4" y="4" width="6.5" height="6.5" 
 const IconStore = (p) => <Icon {...p}><path d="M4 9l1.5-5h13L20 9M4 9h16v10a1 1 0 01-1 1H5a1 1 0 01-1-1V9zM4 9a3 3 0 004 0 3 3 0 004 0 3 3 0 004 0 3 3 0 004 0" /></Icon>;
 const IconBell = (p) => <Icon {...p}><path d="M18 15V10a6 6 0 10-12 0v5l-2 3h16l-2-3zM10 21h4" /></Icon>;
 const IconMore = (p) => <Icon {...p}><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" /></Icon>;
+const IconGear = (p) => <Icon {...p}><circle cx="12" cy="12" r="3.2" /><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18" /></Icon>;
+const IconLogout = (p) => <Icon {...p}><path d="M14.5 8V5.5a1.5 1.5 0 00-1.5-1.5H6a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 006 20h7a1.5 1.5 0 001.5-1.5V16M10 12h9.5M17 9l3 3-3 3" /></Icon>;
 
 const AV = ["#FF8AA5", "#8DACFF", "#B29BFF", "#5DE3B0", "#FFB37A", "#9CD9F0", "#FFC857"];
 const SHELL_DATA = window.__MACHREACH_APP__ || window.__MACHREACH_DASHBOARD__ || {};
@@ -171,6 +173,33 @@ function GenerationWatcher() {
   );
 }
 
+/* A block started on the focus page keeps running while the student walks
+   around the app; this chip is how they see that (and get back to it). */
+function FocusChip() {
+  const [left, setLeft] = React.useState(0);
+  React.useEffect(() => {
+    if (location.pathname === "/student/focus") return undefined;
+    const read = () => {
+      let state = null;
+      try { state = JSON.parse(localStorage.getItem("mr_focus_timer_v1") || "null"); } catch (e) { state = null; }
+      setLeft(state && state.running && state.endsAt
+        ? Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000))
+        : 0);
+    };
+    read();
+    const timer = setInterval(read, 1000);
+    return () => clearInterval(timer);
+  }, []);
+  if (!left) return null;
+  const mm = String(Math.floor(left / 60)).padStart(2, "0");
+  const ss = String(left % 60).padStart(2, "0");
+  return (
+    <a href="/student/focus" className="chip focusing" title={SHELL_EN ? "Focus block running" : "Bloque de enfoque en curso"}>
+      <IconTimer size={16} color="var(--brand)" /><span className="num">{mm}:{ss}</span>
+    </a>
+  );
+}
+
 function Topbar({ title, sub, streak, xp, coins, freezes, plus = false, tweaks, setTweak, avatar = "MR" }) {
   const freezeCount = freezes ?? SHELL_DATA.freezes;
   return (
@@ -183,6 +212,7 @@ function Topbar({ title, sub, streak, xp, coins, freezes, plus = false, tweaks, 
         {plus && <PlusBadge />}
         <div className="tb-spacer" />
         <div className="tb-stats">
+          <FocusChip />
           <span className="chip fire hide-sm"><IconFire size={16} color="var(--brand)" /><span className="num">{streak}</span></span>
           <span className="chip xp hide-sm"><IconBolt size={16} color="var(--plum)" /><span className="num">{xp}</span></span>
           <span className="chip coin hide-sm"><IconCoin size={16} color="#B58309" /><span className="num">{coins}</span></span>
@@ -190,6 +220,11 @@ function Topbar({ title, sub, streak, xp, coins, freezes, plus = false, tweaks, 
           <button className="icon-btn" aria-label="Cambiar tema" onClick={() => setTweak("theme", tweaks.theme === "dark" ? "light" : "dark")}>
             {tweaks.theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />}
           </button>
+          <a href="/student/settings" className="icon-btn" aria-label={SHELL_EN ? "Settings" : "Ajustes"} title={SHELL_EN ? "Settings" : "Ajustes"}><IconGear size={17} /></a>
+          <form method="post" action="/logout" className="tb-logout">
+            <input type="hidden" name="csrf_token" value={SHELL_DATA.csrf || ""} />
+            <button type="submit" className="icon-btn" aria-label={SHELL_EN ? "Log out" : "Cerrar sesión"} title={SHELL_EN ? "Log out" : "Cerrar sesión"}><IconLogout size={17} /></button>
+          </form>
           <a href="/student/profile" className="avatar" style={{ background: "#FFD3A8" }} aria-label={SHELL_EN ? "Profile" : "Perfil"}>
             {SHELL_DATA.avatar_url
               ? <img src={SHELL_DATA.avatar_url} alt="" style={{ width: "100%", height: "100%", borderRadius: "inherit", objectFit: "cover", display: "block" }} />

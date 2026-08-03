@@ -62,8 +62,9 @@ function CosCard({ c, plus, kind, data = {} }) {
   else { tag = ["dim", c.xp ? c.xp + " XP desbloqueado" : "Sin requisito de XP"]; btn = ["Comprar (" + c.p + " 🪙)", false]; }
   return (
     <div className="cos">
-      <div className={"cos-prev" + (kind === "flag" ? " flag" : "")} style={kind === "flag" ? null : { background: c.css }}>
-        {kind === "flag" && <React.Fragment><i style={{ background: c.css }} /><span className="pv">VISTA PREVIA</span></React.Fragment>}
+      <div className={"cos-prev bnr-anim-host" + (kind === "flag" ? " flag" : "") + (kind !== "flag" && c.anim ? " " + c.anim : "")}
+        style={kind === "flag" ? null : { background: c.css }}>
+        {kind === "flag" && <React.Fragment><i className={c.anim || ""} style={{ background: c.css }} /><span className="pv">VISTA PREVIA</span></React.Fragment>}
       </div>
       <div className="cos-b">
         <div className="cos-n">{c.n}{c.plus && <PlusBadge small />}</div>

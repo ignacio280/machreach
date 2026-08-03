@@ -1,8 +1,8 @@
-/* Page bootstrap — Editar perfil. */
+/* Page bootstrap — Ajustes. */
 
 const PAGE_ID = "profile";
-const PAGE_TITLE = "Editar perfil";
-const PAGE_SUB = "Perfil";
+const PAGE_TITLE = "Ajustes";
+const PAGE_SUB = "Tu cuenta";
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "light",
@@ -26,7 +26,7 @@ function App() {
       <div>
         <Topbar title={data.title || PAGE_TITLE} sub={data.sub || PAGE_SUB} streak={data.streak ?? "17"} xp={data.xp || "4.180"} coins={data.coins ?? "320"} avatar={data.avatar || "MR"} plus={plus} tweaks={tweaks} setTweak={setTweak} />
         <main className="page">
-          <ProfileEditPage plus={plus} data={data.profile_edit || {}} profile={data.profile || {}} csrf={data.csrf || ""} />
+          <SettingsPage plus={plus} data={data.profile || {}} csrf={data.csrf || ""} />
         </main>
       </div>
       <TabBar active={PAGE_ID} />

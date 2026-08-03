@@ -59,10 +59,12 @@ function PeCard({ eq, anim, onClick, children, className = "" }) {
   );
 }
 
-function ProfileEditPage({ plus, data = {}, csrf = "" }) {
+const PE_AVATARS = ["#FFD3A8", "#FF8AA5", "#8DACFF", "#B29BFF", "#5DE3B0", "#9CD9F0", "#FFC857"];
+
+function ProfileEditPage({ plus, data = {}, csrf = "", profile = {} }) {
   const live = !!data.live;
   const user = live ? data : PE_USER;
-  const initials = (user.name || "MR").slice(0, 2).toUpperCase();
+  const initials = (user.name || "MR").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
   const [pic, setPic] = React.useState(live ? data.picture_url || null : null);
   const [picBusy, setPicBusy] = React.useState(false);
@@ -140,6 +142,26 @@ function ProfileEditPage({ plus, data = {}, csrf = "" }) {
       alert(err.message);
     }
   };
+  const [avatarColor, setAvatarColor] = React.useState(profile.avatar_color || PE_AVATARS[0]);
+  const pickAvatarColor = async (colour) => {
+    const prev = avatarColor;
+    setAvatarColor(colour);
+    if (!live) return;
+    try {
+      // The identity fields ride along unchanged — this endpoint saves the
+      // whole profile row, and the rest of it is edited in Ajustes.
+      const response = await fetch("/api/student/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: JSON.stringify({ name: profile.name || user.name, bio: profile.bio || "", avatar_color: colour }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "No se pudo guardar el color.");
+    } catch (err) {
+      setAvatarColor(prev);
+      alert(err.message);
+    }
+  };
   const pickBanner = (k) => { const prev = banner; setBanner(k); post("/api/student/wallet/set-banner", { banner_key: k }, () => setBanner(prev)); };
   const pickFlag = (k) => { const prev = flag; setFlag(k); post("/api/student/wallet/set-flag", { flag_key: k }, () => setFlag(prev)); };
   const equipBadge = (k) => {
@@ -149,42 +171,65 @@ function ProfileEditPage({ plus, data = {}, csrf = "" }) {
     post("/api/student/wallet/set-badge", { badge_key: k, side }, () => setSlots(prev));
   };
 
+  const badgeOf = (key) => badges.find((b) => b.key === key);
+  const fcfg = flags.find((f) => f.key === flag) || { css: "transparent" };
+  const joined = profile.created_at
+    ? new Date(profile.created_at + "T12:00:00").toLocaleDateString("es-CL", { month: "long", year: "numeric" })
+    : "MachReach";
+
   return (
     <div className="pe-wrap in">
       <a className="pe-back" href={live ? "/student/profile" : "MachReach Perfil.html"}><IconArrow size={15} style={{ transform: "rotate(180deg)" }} /> Volver al perfil</a>
 
-      <section className="pe-id rv" style={{ "--d": "0ms" }}>
-        <div className={"pe-banner bnr-anim-host " + (bcfg.anim || "")} style={{ background: bcfg.css }} />
-        <div className="pe-idbody">
-          <div className="pe-face">{pic ? <img src={pic} alt="" /> : initials}</div>
-          <div className="pe-idrow">
-            <div>
-              <div className="nm">{user.name}</div>
-              <div className="em">{user.email}</div>
-              <div className="rk">Rank <b>{user.rank}</b> · <b>{user.xp}</b> XP</div>
+      {/* Live preview: the same hero the public profile renders, so every
+          change below is seen exactly as other students will see it. */}
+      <section className="pf-hero rv" style={{ "--d": "0ms" }}>
+        <div className={"pf-cover bnr-anim-host has-banner " + (bcfg.anim || "")} style={{ background: bcfg.css }}>
+          {flag !== "none" && <span className={"pe-flagband " + (fcfg.anim || "")} style={{ background: fcfg.css }} />}
+        </div>
+        <div className="pf-id">
+          <div className="pf-face" style={{ background: avatarColor }}>
+            {pic ? <img className="pf-facepic" src={pic} alt="" /> : initials}
+            <span className="lvl">{profile.level_number || 1}</span>
+            <button type="button" className="pf-facecam" disabled={picBusy}
+              onClick={() => fileRef.current.click()}
+              aria-label={pic ? "Cambiar foto de perfil" : "Subir foto de perfil"}>
+              <IconCamera size={15} />
+            </button>
+          </div>
+          <div className="pf-meta">
+            <div className="pf-name">
+              <h1>
+                {slots.left ? <span className="pe-slotbadge">{badgeOf(slots.left)?.emoji || "🏅"}</span> : null}
+                {user.name}
+                {slots.right ? <span className="pe-slotbadge">{badgeOf(slots.right)?.emoji || "🏅"}</span> : null}
+              </h1>
+              {plus && <PlusBadge />}
             </div>
-            <div className="pe-stats">
-              <div className="pe-stat yellow"><div className="num">{user.coins} 🪙</div><div className="label">Coins</div></div>
-              <div className="pe-stat blue"><div className="num">{user.freezes} ❄️</div><div className="label">Freezes</div></div>
-              <div className="pe-stat red"><div className="num">{user.streak} 🔥</div><div className="label">Racha 🔥</div></div>
+            <div className="pf-handle">{profile.handle || user.email} · Se unió en {joined}</div>
+            <div className="pf-tags">
+              <span className="pf-tag"><IconBook size={14} /> {profile.major || "Carrera sin configurar"}</span>
+              <span className="pf-tag">🎓 {profile.semester || "I"} semestre</span>
+              <span className="pf-tag"><IconPeople size={14} /> {profile.friend_count || 0} amigos</span>
             </div>
           </div>
+          <div className="pf-idacts">
+            {pic && <button className="btn btn-ghost btn-sm" type="button" disabled={picBusy} onClick={removePic}>Quitar foto</button>}
+            <a className="btn btn-primary btn-sm" href={live ? "/student/profile" : "MachReach Perfil.html"}>Ver mi perfil</a>
+          </div>
         </div>
+        <div className="pe-picnote">{picNote || (picBusy ? "Subiendo…" : pic ? "Foto guardada." : "Sin foto: mostramos tus iniciales. Toca la cámara para subir una (PNG, JPG o WebP, máx. 2 MB).")}</div>
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onPick} style={{ display: "none" }} />
       </section>
 
       <section className="pe-card rv" style={{ "--d": "60ms" }}>
-        <h2>📷 Profile picture</h2>
-        <p>Sube una foto para tu avatar. Se recorta circular y se usa en todo MachReach. PNG o JPG, máximo 2 MB.</p>
-        <div className="pe-pic">
-          <div className="pe-picav">{pic ? <img src={pic} alt="" /> : initials}</div>
-          <div>
-            <div className="pe-picacts">
-              <button className="btn btn-primary btn-sm" type="button" disabled={picBusy} onClick={() => fileRef.current.click()}><IconCamera size={15} /> {pic ? "Cambiar foto" : "Subir foto"}</button>
-              {pic && <button className="btn btn-ghost btn-sm" type="button" disabled={picBusy} onClick={removePic}>Quitar foto</button>}
-            </div>
-            <div className="pe-picnote">{picNote || (picBusy ? "Subiendo…" : pic ? "Foto lista — se guarda al subirla." : "Sin foto: mostramos tus iniciales.")}</div>
-          </div>
-          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onPick} style={{ display: "none" }} />
+        <h2>🎨 Color del avatar</h2>
+        <p>Se usa como fondo de tus iniciales cuando no tienes foto.</p>
+        <div className="pf-avpick">
+          {PE_AVATARS.map((c) => (
+            <button key={c} type="button" className={"pf-av" + (c === avatarColor ? " on" : "")} style={{ background: c }}
+              onClick={() => pickAvatarColor(c)} aria-label={"Color " + c} />
+          ))}
         </div>
       </section>
 

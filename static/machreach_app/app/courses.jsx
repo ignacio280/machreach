@@ -206,7 +206,6 @@ function CoursesHead({ onAdd, data = {}, csrf = "" }) {
       <div>
         <div className="pl-kicker">{data.live ? data.term_label : "2025 · segundo semestre"}</div>
         <h1>Mis cursos</h1>
-        <p>Tus ramos llegan solos desde Canvas con la extensión de MachReach. Agrega evaluaciones y notas para que el plan y el ranking sepan qué priorizar.</p>
         <div className="sem">
           <span className="mono">Semestre</span>
           {SEMS.map((s) => <button key={s} className={sem === s ? "on" : ""} onClick={() => chooseSemester(s)}>{s}</button>)}

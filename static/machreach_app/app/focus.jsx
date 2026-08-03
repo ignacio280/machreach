@@ -118,21 +118,82 @@ function FocusNotes({ data = {} }) {
   );
 }
 
+/* ---- Timer that survives leaving the page ------------------------------
+   The block is stored as an absolute end time, so it keeps running while the
+   student is on another MachReach page (or the tab is throttled) and picks up
+   exactly where it should when they come back. */
+const FOCUS_MODES = { pomodoro: { work: 25 * 60, brk: 5 * 60, rounds: 4 }, custom: { work: 50 * 60, brk: 10 * 60, rounds: 2 } };
+const FOCUS_STORE = "mr_focus_timer_v1";
+
+function readFocusStore() {
+  try { return JSON.parse(localStorage.getItem(FOCUS_STORE) || "null"); } catch (e) { return null; }
+}
+function writeFocusStore(state) {
+  try {
+    if (state) localStorage.setItem(FOCUS_STORE, JSON.stringify(state));
+    else localStorage.removeItem(FOCUS_STORE);
+  } catch (e) { /* private mode */ }
+}
+
+/* Replay whatever elapsed while the page was gone and return the state the
+   timer should resume in. `finishedPhaseId` is a work block that completed
+   away from the page and still owes the server its minutes. */
+function restoreFocusTimer() {
+  const stored = readFocusStore();
+  if (!stored || !stored.mode || !FOCUS_MODES[stored.mode]) return null;
+  const cfg = FOCUS_MODES[stored.mode];
+  const base = {
+    mode: stored.mode,
+    courseId: stored.courseId || "",
+    examId: stored.examId || "",
+    phaseId: stored.phaseId || "",
+    finishedPhaseId: "",
+  };
+  if (!stored.running) {
+    return { ...base, phase: stored.phase || "work", round: stored.round || 1,
+             left: Math.max(0, Number(stored.left) || 0), endsAt: 0, running: false };
+  }
+  let phase = stored.phase === "break" ? "break" : "work";
+  let round = Number(stored.round) || 1;
+  let endsAt = Number(stored.endsAt) || 0;
+  let finishedPhaseId = "";
+  let guard = 0;
+  while (endsAt && endsAt <= Date.now() && guard < 64) {
+    guard += 1;
+    if (phase === "work") {
+      finishedPhaseId = finishedPhaseId || base.phaseId;
+      base.phaseId = "";
+      phase = "break";
+      endsAt += cfg.brk * 1000;
+    } else {
+      phase = "work";
+      round = round >= cfg.rounds ? 1 : round + 1;
+      endsAt += cfg.work * 1000;
+    }
+  }
+  return {
+    ...base, phase, round, endsAt, running: true, finishedPhaseId,
+    left: Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)),
+  };
+}
+
 function Timer({ scene, onRun, onCourse, data = {} }) {
-  const MODES = { pomodoro: { work: 25 * 60, brk: 5 * 60, rounds: 4 }, custom: { work: 50 * 60, brk: 10 * 60, rounds: 2 } };
-  const [mode, setMode] = React.useState("pomodoro");
-  const [phase, setPhase] = React.useState("work");
-  const [round, setRound] = React.useState(1);
-  const [running, setRunning] = React.useState(false);
+  const MODES = FOCUS_MODES;
+  const restored = React.useRef(data.live ? restoreFocusTimer() : null).current;
+  const [mode, setMode] = React.useState(restored?.mode || "pomodoro");
+  const [phase, setPhase] = React.useState(restored?.phase || "work");
+  const [round, setRound] = React.useState(restored?.round || 1);
+  const [running, setRunning] = React.useState(!!restored?.running);
   React.useEffect(() => { onRun && onRun(running); }, [running]);
   const cfg = MODES[mode];
   const total = phase === "work" ? cfg.work : cfg.brk;
-  const [left, setLeft] = React.useState(cfg.work);
+  const [left, setLeft] = React.useState(restored ? restored.left : cfg.work);
+  const [endsAt, setEndsAt] = React.useState(restored?.endsAt || 0);
   const courses = data.courses?.length ? data.courses : FX_COURSES.map((name, i) => ({ id: i + 1, name, exams: (FX_EXAMS[name] || []).map((name, j) => ({ id: j + 1, name })) }));
-  const [courseId, setCourseId] = React.useState(courses[0]?.id || "");
+  const [courseId, setCourseId] = React.useState(restored?.courseId || courses[0]?.id || "");
   const course = courses.find((c) => String(c.id) === String(courseId)) || courses[0];
-  const [examId, setExamId] = React.useState("");
-  const phaseId = React.useRef("");
+  const [examId, setExamId] = React.useState(restored?.examId || "");
+  const phaseId = React.useRef(restored?.phaseId || "");
   React.useEffect(() => { onCourse && onCourse(course?.id || ""); }, [course?.id]);
 
   const beginVerifiedPhase = async () => {
@@ -144,48 +205,95 @@ function Timer({ scene, onRun, onCourse, data = {} }) {
     phaseId.current = id;
     return true;
   };
-  const saveVerifiedPhase = async () => {
-    if (!data.live || !phaseId.current || !course) return;
+  const savePhase = async (id) => {
+    if (!data.live || !id || !course) return;
     try {
-      const response = await fetch("/api/student/focus/save", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": (window.__MACHREACH_APP__ || {}).csrf || "" }, body: JSON.stringify({ phase_id: phaseId.current, mode, minutes: Math.round(cfg.work / 60), pages: 0, course_id: course.id, course_name: course.name, exam_id: examId || null }) });
+      const response = await fetch("/api/student/focus/save", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": (window.__MACHREACH_APP__ || {}).csrf || "" }, body: JSON.stringify({ phase_id: id, mode, minutes: Math.round(cfg.work / 60), pages: 0, course_id: course.id, course_name: course.name, exam_id: examId || null }) });
       if (!response.ok) throw new Error("No se pudo guardar el bloque de enfoque.");
     } catch (error) {
       setRunning(false);
       alert(error.message || "No se pudo guardar el bloque de enfoque.");
-    } finally {
-      phaseId.current = "";
     }
   };
+  const saveVerifiedPhase = async () => {
+    const id = phaseId.current;
+    phaseId.current = "";
+    await savePhase(id);
+  };
 
-  React.useEffect(() => { setRunning(false); setPhase("work"); setRound(1); setLeft(MODES[mode].work); }, [mode]);
-
+  // A work block that ran out while the student was on another page still owes
+  // the server its minutes.
   React.useEffect(() => {
-    if (!running) return;
-    const t = setInterval(() => {
-      setLeft((v) => {
-        if (v > 1) return v - 1;
-        if (phase === "work") { void saveVerifiedPhase(); setPhase("break"); return cfg.brk; }
-        setPhase("work"); setRound((r) => (r >= cfg.rounds ? 1 : r + 1)); return cfg.work;
-      });
-    }, 1000);
+    if (restored?.finishedPhaseId) void savePhase(restored.finishedPhaseId);
+  }, []);
+
+  const skipModeReset = React.useRef(true);
+  React.useEffect(() => {
+    if (skipModeReset.current) { skipModeReset.current = false; return; }
+    setRunning(false); setPhase("work"); setRound(1); setLeft(MODES[mode].work); setEndsAt(0);
+    writeFocusStore(null);
+  }, [mode]);
+
+  // Ticks off the wall clock rather than counting intervals, so a throttled or
+  // backgrounded tab cannot make the block last longer than it should.
+  const advancing = React.useRef(false);
+  React.useEffect(() => {
+    if (!running || !endsAt) return undefined;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      setLeft(remaining);
+      if (remaining > 0 || advancing.current) return;
+      advancing.current = true;
+      if (phase === "work") {
+        void saveVerifiedPhase();
+        setPhase("break");
+        setEndsAt(Date.now() + cfg.brk * 1000);
+        setLeft(cfg.brk);
+      } else {
+        setPhase("work");
+        setRound((r) => (r >= cfg.rounds ? 1 : r + 1));
+        setEndsAt(Date.now() + cfg.work * 1000);
+        setLeft(cfg.work);
+      }
+      advancing.current = false;
+    };
+    tick();
+    const t = setInterval(tick, 250);
     return () => clearInterval(t);
-  }, [running, phase, mode]);
+  }, [running, phase, mode, endsAt]);
 
   React.useEffect(() => {
     if (running && phase === "work" && !phaseId.current) void beginVerifiedPhase();
   }, [running, phase, round]);
 
+  // Persist after every change so another page (or a reload) sees the block.
+  React.useEffect(() => {
+    if (!data.live) return;
+    if (!running && !endsAt && left === MODES[mode].work && phase === "work" && round === 1) {
+      writeFocusStore(null);
+      return;
+    }
+    writeFocusStore({ mode, phase, round, running, left, endsAt, courseId, examId, phaseId: phaseId.current });
+  }, [mode, phase, round, running, left, endsAt, courseId, examId]);
+
   const pct = 1 - left / total;
   const R = 132, C = 2 * Math.PI * R;
   const [kick, setKick] = React.useState(0);
   const [guardWanted, setGuardWanted] = React.useState(false);
-  const reset = () => { setRunning(false); setPhase("work"); setRound(1); setLeft(cfg.work); };
+  const reset = () => {
+    setRunning(false); setPhase("work"); setRound(1); setLeft(cfg.work); setEndsAt(0);
+    phaseId.current = "";
+    writeFocusStore(null);
+  };
   const toggle = async () => {
     // Focus Guard is mandatory: without it we can neither block distractions
     // nor trust the reported minutes, so no block may start or resume.
     if (!running && data.live && !(await checkFocusGuard())) return setGuardWanted(true);
     if (!running && left === cfg.work && phase === "work" && !(await beginVerifiedPhase())) return;
-    setRunning((r) => { if (!r) setKick((k) => k + 1); return !r; });
+    setRunning((r) => {
+      if (!r) { setKick((k) => k + 1); setEndsAt(Date.now() + Math.max(1, left) * 1000); }
+      return !r;
+    });
   };
   const ang = (-90 + pct * 360) * Math.PI / 180;
   const hx = 150 + R * Math.cos(ang), hy = 150 + R * Math.sin(ang);
@@ -266,15 +374,25 @@ function Guard({ live = false }) {
   React.useEffect(() => {
     if (!live) return undefined;
     let alive = true;
-    checkFocusGuard().then((ok) => { if (alive) setInstalled(ok); });
-    return () => { alive = false; };
+    let timer = 0;
+    const check = () => checkFocusGuard().then((ok) => {
+      if (!alive) return;
+      setInstalled(ok);
+      // Poll so disabling or removing the extension flips the chip on its own,
+      // instead of the student having to reload to find out.
+      timer = setTimeout(check, ok ? 4000 : 1500);
+    });
+    const onVisible = () => { if (!document.hidden) { clearTimeout(timer); check(); } };
+    check();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { alive = false; clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [live]);
   return (
     <section className="pnl guard-pnl">
       <span className="ico-badge" style={{ background: installed === false ? "#FFDFE1" : "#E1F3D6" }}><IconShield size={17} /></span>
       <h3>Focus Guard</h3>
       {installed === false
-        ? <a className="tagchip off" href={FOCUS_GUARD_STORE_URL} target="_blank" rel="noopener">Falta instalar</a>
+        ? <a className="tagchip off" href={FOCUS_GUARD_STORE_URL} target="_blank" rel="noopener"><i className="off-dot" />Inactivo</a>
         : <span className="tagchip"><i className="live-dot" />{installed === null ? "Buscando…" : "Activo"}</span>}
     </section>
   );

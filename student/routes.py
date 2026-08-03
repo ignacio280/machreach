@@ -62,16 +62,16 @@ _PERIOD_POPUP_HTML = """
   #mr-period-modal { position: fixed; inset: 0; z-index: 99990; display: block; }
   #mr-period-modal.mr-period-hidden { display: none; }
   #mr-period-modal .mr-period-back {
-    position: absolute; inset: 0; background: rgba(8, 11, 24, .72);
-    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    position: absolute; inset: 0; background: rgba(36, 24, 52, .30);
+    backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
   }
   #mr-period-modal .mr-period-card {
     position: relative; max-width: 520px; width: calc(100% - 32px);
-    margin: 8vh auto 0; background: var(--card, #0f172a);
-    color: var(--text, #f8fafc);
-    border: 1px solid var(--border, rgba(255,255,255,.08));
-    border-radius: 18px; overflow: hidden;
-    box-shadow: 0 24px 80px rgba(0,0,0,.55);
+    margin: 8vh auto 0; background: var(--card, #FFFDF8);
+    color: var(--text, #241834);
+    border: 2px solid var(--text, #241834);
+    border-radius: 22px; overflow: hidden;
+    box-shadow: 0 6px 0 var(--text, #241834), 0 24px 60px rgba(36,24,52,.22);
     animation: mrPeriodIn .25s cubic-bezier(.2,.9,.3,1.4);
   }
   @keyframes mrPeriodIn {
@@ -80,23 +80,27 @@ _PERIOD_POPUP_HTML = """
   }
   #mr-period-modal .mr-period-head {
     padding: 22px 22px 14px; text-align: center;
-    background: linear-gradient(135deg, rgba(99,102,241,.18), rgba(139,92,246,.18));
-    border-bottom: 1px solid var(--border, rgba(255,255,255,.06));
+    background: var(--brand-tint, #FFE7D6);
+    border-bottom: 2px solid var(--text, #241834);
   }
   #mr-period-modal .mr-period-eyebrow {
-    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
-    color: #c7d2fe; font-weight: 700; margin-bottom: 4px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+    color: #8B3A18; font-weight: 700; margin-bottom: 5px;
   }
-  #mr-period-modal .mr-period-title { font-size: 22px; font-weight: 800; margin: 0; }
+  #mr-period-modal .mr-period-title {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 23px; font-weight: 800; letter-spacing: -.02em; margin: 0;
+  }
   #mr-period-modal .mr-period-sub {
-    font-size: 12px; color: var(--text-muted, #94a3b8); margin-top: 4px;
+    font-size: 12px; color: var(--text-muted, #5E5170); font-weight: 700; margin-top: 4px;
   }
   #mr-period-modal .mr-period-prize {
     margin: 16px 18px 0; padding: 14px 16px;
-    background: linear-gradient(135deg, #f59e0b, #ef4444);
-    color: #fff; border-radius: 12px;
-    font-weight: 700; text-align: center;
-    box-shadow: 0 8px 24px rgba(245,158,11,.3);
+    background: var(--primary, #FF6A2B);
+    color: #fff; border: 2px solid var(--text, #241834); border-radius: 14px;
+    font-weight: 800; text-align: center;
+    box-shadow: 0 3px 0 var(--text, #241834);
   }
   #mr-period-modal .mr-period-prize.empty { display: none; }
   #mr-period-modal .mr-period-prize .big { font-size: 28px; line-height: 1; margin: 4px 0 6px; }
@@ -106,32 +110,36 @@ _PERIOD_POPUP_HTML = """
     gap: 8px; padding: 16px 18px 8px;
   }
   #mr-period-modal .mr-period-cell {
-    padding: 10px 12px;
-    background: rgba(255,255,255,.04);
-    border: 1px solid var(--border, rgba(255,255,255,.06));
-    border-radius: 10px;
+    padding: 11px 13px;
+    background: var(--card-2, #FFF6E9);
+    border: 2px solid var(--text, #241834);
+    border-radius: 14px;
+    box-shadow: 0 2px 0 var(--text, #241834);
   }
   #mr-period-modal .mr-period-cell .lbl {
-    font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--text-muted, #94a3b8); font-weight: 700;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--text-muted, #5E5170); font-weight: 700;
   }
   #mr-period-modal .mr-period-cell .rank {
-    font-size: 22px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums;
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 22px; font-weight: 800; margin-top: 3px; font-variant-numeric: tabular-nums;
   }
   #mr-period-modal .mr-period-cell .meta {
-    font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 2px;
+    font-size: 11px; color: var(--text-muted, #5E5170); font-weight: 700; margin-top: 2px;
   }
-  #mr-period-modal .mr-period-cell.win { background: linear-gradient(135deg, rgba(245,158,11,.18), rgba(239,68,68,.18)); border-color: rgba(245,158,11,.4); }
-  #mr-period-modal .mr-period-cell.win .rank { color: #fbbf24; }
-  #mr-period-modal .mr-period-cell.unranked .rank { color: var(--text-muted, #94a3b8); font-size: 14px; font-weight: 600; }
-  #mr-period-modal .mr-period-foot { padding: 8px 18px 18px; text-align: center; }
+  #mr-period-modal .mr-period-cell.win { background: #FFF2C9; border-color: var(--text, #241834); }
+  #mr-period-modal .mr-period-cell.win .rank { color: #B58309; }
+  #mr-period-modal .mr-period-cell.unranked .rank { color: var(--text-muted, #5E5170); font-size: 15px; font-weight: 800; }
+  #mr-period-modal .mr-period-foot { padding: 10px 18px 18px; text-align: center; }
   #mr-period-modal .mr-period-btn {
-    background: linear-gradient(135deg,#6366f1,#8b5cf6); color: #fff;
-    border: none; padding: 10px 22px; border-radius: 10px;
-    font-weight: 700; font-size: 14px; cursor: pointer;
-    box-shadow: 0 4px 14px rgba(99,102,241,.4);
+    background: var(--primary, #FF6A2B); color: #fff;
+    border: 2px solid var(--text, #241834); padding: 11px 24px; border-radius: 14px;
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-weight: 800; font-size: 14.5px; cursor: pointer;
+    box-shadow: 0 3px 0 var(--text, #241834);
   }
-  #mr-period-modal .mr-period-btn:hover { filter: brightness(1.05); }
+  #mr-period-modal .mr-period-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 0 var(--text, #241834); }
   @media (max-width: 480px) {
     #mr-period-modal .mr-period-card { margin-top: 4vh; }
     #mr-period-modal .mr-period-grid { grid-template-columns: 1fr; }
@@ -4159,6 +4167,7 @@ Return this JSON shape:
             "/student/shop": "tienda",
             "/student/profile": "perfil",
             "/student/profile/edit": "perfil-editar",
+            "/student/settings": "ajustes",
         }
         # allow_live_design=False lets a route keep its own markup — the focus
         # page uses it to serve the phone notice instead of the timer.
@@ -4205,6 +4214,7 @@ Return this JSON shape:
                     "tienda": "Monedas y cosméticos",
                     "perfil": "Tu cuenta",
                     "perfil-editar": "Perfil",
+                    "ajustes": "Tu cuenta",
                 }.get(_design_slug, "MachReach"),
                 "streak": _streak,
                 "xp": f"{_total_xp:,}".replace(",", "."),
@@ -4214,7 +4224,9 @@ Return this JSON shape:
                 "avatar_url": _avatar_url,
                 "csrf": generate_csrf(),
             }
-            if _design_slug == "perfil":
+            # The editor and the settings page render the same identity, so all
+            # three share one payload.
+            if _design_slug in ("perfil", "perfil-editar", "ajustes"):
                 from machreach_core.db import get_client, get_mail_preferences
                 from student import academic as _academic
 
@@ -4730,7 +4742,8 @@ Return this JSON shape:
                 except Exception:
                     _billing_ready = False
                     _subscription_state = {}
-                _banner_keys = ["peach", "ocean", "sunset", "forest", "lavender", "gold", "galaxy", "champion", "neon_rift", "candy", "mint", "obsidian"]
+                # cherry and matrix are the animated ones — worth showing off.
+                _banner_keys = ["peach", "ocean", "sunset", "forest", "lavender", "gold", "galaxy", "champion", "neon_rift", "candy", "mint", "obsidian", "cherry", "matrix"]
                 _flag_keys = ["candy", "stripes_3", "racing", "checker", "vortex_spiral", "polar_lights", "void", "heartbeat", "plus_anim_holo", "plus_prism", "matrix_rain", "flow_lava"]
                 def _catalog_items(_catalog, _keys):
                     return [{
@@ -4740,6 +4753,10 @@ Return this JSON shape:
                         "xp": int((_catalog.get(_key) or {}).get("xp_required") or 0),
                         "plus": bool((_catalog.get(_key) or {}).get("plus_only")),
                         "css": (_catalog.get(_key) or {}).get("css") or "transparent",
+                        # Animated cosmetics should move in the shop too, so the
+                        # student sees what they are paying for.
+                        "anim": ((_catalog.get(_key) or {}).get("anim_class") or "")
+                                if (_catalog.get(_key) or {}).get("animated") else "",
                     } for _key in _keys if _key in _catalog]
                 _app_data["shop"] = {
                     "live": True,
@@ -8672,7 +8689,14 @@ Material:
         _dashboard_data = {
             "live": True, "lang": _lang, "plus": _dash_is_plus,
             "title": "Home" if _is_en else "Inicio", "sub": "Student dashboard" if _is_en else "Panel del estudiante",
-            "streak": streak_days, "xp": f"{total_xp:,}".replace(",", "."), "coins": int(_wallet.get("coins") or 0), "avatar": _mr_initials(session.get("client_name", "")),
+            "streak": streak_days, "xp": f"{total_xp:,}".replace(",", "."), "coins": int(_wallet.get("coins") or 0),
+            "freezes": int(_wallet.get("streak_freezes") or 0),
+            "avatar": _mr_initials(session.get("client_name", "")),
+            "avatar_url": (
+                f"/student/profile/picture/{_cid()}?v={sdb.profile_picture_version(_cid())}"
+                if sdb.profile_picture_version(_cid()) else ""
+            ),
+            "csrf": generate_csrf(),
             "mission": {"eyebrow": _mission_eye, "headline": f'{_hello}, {_esc(_first_name)}! {_headline}', "copy": "Your real courses, deadlines and study history shape today’s mission." if _is_en else "Tus cursos, fechas y sesiones reales construyen la misión de hoy.", "focus_label": "Start focus" if _is_en else "Empezar enfoque", "plan_label": "View full plan" if _is_en else "Ver plan completo", "quests": _dash_quests},
             "stats": [
                 {"label": "Total studied" if _is_en else "Total estudiado", "value": round(_total_mins / 60), "suffix": "h", "sub": f'{_total_sessions} {"sessions" if _is_en else "sesiones"}', "deco": "📚"},

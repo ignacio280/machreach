@@ -47,6 +47,9 @@
 .chip.xp{background:#EDE4FF}
 .chip.coin{background:#FFF3CF}
 .chip.freeze{background:#DCEEFB}
+.chip.focusing{background:var(--brand-tint);font-family:var(--font-mono);font-size:12.5px}
+.tb-logout{display:flex;margin:0}
+[data-theme="dark"] .chip.focusing{background:color-mix(in oklab,var(--brand) 22%,var(--surface))}
 [data-theme="dark"] .chip.fire{background:color-mix(in oklab,var(--brand) 22%,var(--surface))}
 [data-theme="dark"] .chip.xp{background:color-mix(in oklab,var(--plum) 28%,var(--surface))}
 [data-theme="dark"] .chip.coin{background:color-mix(in oklab,var(--amber) 24%,var(--surface))}
@@ -239,7 +242,8 @@
 }
 
 /* modal — shared by every page that can open a Modal (shell.jsx) */
-.mdl-back{position:fixed;inset:0;z-index:200;background:rgba(36,24,52,.55);backdrop-filter:blur(3px);display:grid;place-items:center;padding:22px;animation:rise .25s var(--ease)}
+/* Soft scrim, not a grey slab: the page behind stays legible. */
+.mdl-back{position:fixed;inset:0;z-index:200;background:color-mix(in oklab,var(--ink) 18%,transparent);backdrop-filter:blur(7px);display:grid;place-items:center;padding:22px;animation:rise .25s var(--ease)}
 .mdl{width:min(460px,100%);background:var(--surface);border:var(--bd);border-radius:var(--r-xl);box-shadow:var(--sh3);padding:24px;animation:mdlin .45s var(--spring-b)}
 @keyframes mdlin{0%{transform:scale(.9) translateY(14px);opacity:0}100%{transform:none;opacity:1}}
 .mdl-h{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
