@@ -95,6 +95,13 @@ function ShopHead({ data = {} }) {
 
 function PlanSection({ plus, data = {} }) {
   const freeCap = Number(data.free_cap ?? FREE_CAP), plusCap = Number(data.plus_cap ?? PLUS_CAP);
+  // Cancelling asks the provider to stop the renewal; access runs out with the
+  // period the student already paid for, so this is not an instant downgrade.
+  const cancelPlan = async () => {
+    if (!confirm("¿Cancelar MachReach Plus? Seguirás con Plus hasta el final del período pagado.")) return;
+    const body = await shopPost("/api/student/subscription/change", { tier: "free" });
+    if (body) location.reload();
+  };
   const free = ["Sesiones de enfoque ilimitadas", "Cursos desde Canvas con la extensión", "Ranking, ligas y premios", "Hasta " + freeCap + " congeladores de racha"];
   const plusFeat = ["Todo lo del plan gratis", "Plan semanal inteligente", "Analíticas completas de estudio", "Benchmark anónimo por ramo", "Explicaciones en cada quiz", "Hasta " + plusCap + " congeladores de racha"];
   return (
@@ -116,18 +123,14 @@ function PlanSection({ plus, data = {} }) {
           <div className="plan-terms">CLP · cobro mensual · IVA calculado y mostrado en checkout · renovación automática.</div>
           <ul>{plusFeat.map((f) => <li key={f}><IconCheck size={15} color="var(--plum)" />{f}</li>)}</ul>
           {plus
-            ? <span className="plan-current"><IconCheck size={15} /> {data.plus_until ? `Activo hasta ${data.plus_until}` : "Plus activo"}</span>
+            ? <React.Fragment>
+                <span className="plan-current"><IconCheck size={15} /> {data.plus_until ? `Activo hasta ${data.plus_until}` : "Plus activo"}</span>
+                <button className="btn btn-ghost btn-sm plan-cancel" onClick={cancelPlan}>Cancelar plan</button>
+              </React.Fragment>
             : <button className="btn btn-primary btn-lg" disabled={data.billing_ready === false} onClick={() => shopPost("/api/student/subscription/change", { tier: "plus" })}>{data.billing_ready === false ? "Pagos no disponibles" : "Desbloquear Plus"}</button>}
         </div>
       </div>
-      <div className="restore">
-        <span className="ico-badge" style={{ background: "var(--surface)" }}><IconShield size={16} /></span>
-        <div>
-          <div className="t">¿Ya pagaste Plus?</div>
-          <div className="s">Restaura y reconcilia tu estado con el proveedor de pagos.</div>
-        </div>
-        <button className="btn btn-ghost btn-sm" disabled={data.billing_ready === false} onClick={async () => { const body = await shopPost("/api/student/subscription/reconcile"); if (body) { alert(body.message || "Compra restaurada."); location.reload(); } }}>Restaurar compra</button>
-      </div>
+      {plus && <p className="plan-note">Al cancelar, Plus sigue activo hasta el final del período que ya pagaste y después vuelves al plan gratis.</p>}
     </div>
   );
 }

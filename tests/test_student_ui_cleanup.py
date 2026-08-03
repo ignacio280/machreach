@@ -125,3 +125,16 @@ def test_shop_payload_marks_animated_cosmetics(client, make_user):
     animated = {item["k"]: item["anim"] for item in shop["banners"] + shop["flags"] if item["anim"]}
     assert "cherry" in animated
     assert animated["cherry"] == sdb.BANNERS["cherry"]["anim_class"]
+
+
+def test_restore_purchase_is_gone(client, make_user):
+    """Self-service "restore" granted Plus from an email match, so it is gone;
+    entitlement now comes only from the signed provider webhook."""
+    _student(client, make_user)
+
+    response = client.post("/api/student/subscription/reconcile")
+    shop = client.get("/student/shop").get_data(as_text=True)
+
+    assert response.status_code == 404
+    assert "Restaurar compra" not in shop
+    assert "reconcile" not in shop

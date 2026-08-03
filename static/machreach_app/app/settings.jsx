@@ -41,29 +41,28 @@ function ToggleRows({ rows, initial = {}, keys = [], onSave, disabled = false })
 
 function SettingsIdentity({ data, csrf }) {
   const [name, setName] = React.useState(data.name || "");
-  const [bio, setBio] = React.useState(data.bio || "");
   const [saved, setSaved] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
-  const original = React.useRef({ name: data.name || "", bio: data.bio || "" });
+  const original = React.useRef({ name: data.name || "" });
   const save = async () => {
     setSaving(true); setError("");
     try {
       const response = await fetch("/api/student/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
-        // The avatar colour is edited on the profile editor; send back what the
-        // account already has so this form cannot reset it.
-        body: JSON.stringify({ name, bio, avatar_color: data.avatar_color || "#FFD3A8" }),
+        // Bio and avatar colour are not edited here; echo what the account
+        // already has so saving a name cannot wipe them.
+        body: JSON.stringify({ name, bio: data.bio || "", avatar_color: data.avatar_color || "#FFD3A8" }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "No se pudieron guardar los cambios.");
-      original.current = { name, bio };
+      original.current = { name };
       setSaved(true);
     } catch (e) { setError(e.message); }
     finally { setSaving(false); }
   };
-  const discard = () => { setName(original.current.name); setBio(original.current.bio); setSaved(false); setError(""); };
+  const discard = () => { setName(original.current.name); setSaved(false); setError(""); };
   return (
     <section className="pnl">
       <div className="pnl-h"><span className="ico-badge" style={{ background: "var(--brand-tint)" }}><IconEdit size={16} /></span><h3>Datos del perfil</h3></div>
@@ -74,9 +73,6 @@ function SettingsIdentity({ data, csrf }) {
           <select id="st-c" value="current" disabled><option value="current">{data.major || "Carrera sin configurar"}</option></select></div>
         <div className="pf-f"><label htmlFor="st-s">Semestre</label>
           <select id="st-s" value="current" disabled><option value="current">{data.semester || "I"}</option></select></div>
-        <div className="pf-f full"><label htmlFor="st-b">Sobre ti</label>
-          <textarea id="st-b" maxLength="180" value={bio} onChange={(e) => { setBio(e.target.value); setSaved(false); }} />
-          <span className="hint">Máximo 180 caracteres. Visible solo si tu perfil es público.</span></div>
       </div>
       <div className="pf-save">
         {saved && <span className="ok">✓ Cambios guardados</span>}
@@ -194,7 +190,6 @@ function SettingsPage({ plus, data = {}, csrf = "" }) {
           <h1>Tu cuenta, a tu manera.</h1>
           <p>Datos, privacidad y seguridad. Lo visual (foto, banner, banderas e insignias) vive en el editor de perfil.</p>
         </div>
-        <a className="btn btn-ghost" href="/student/profile/edit"><IconEdit size={16} /> Editar perfil</a>
       </section>
       <div className="pf-tabs">
         {ST_TABS.map((t) => (

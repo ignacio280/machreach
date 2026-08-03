@@ -5,10 +5,17 @@ const IconGrid = (p) => <Icon {...p}><rect x="4" y="4" width="6.5" height="6.5" 
 const IconStore = (p) => <Icon {...p}><path d="M4 9l1.5-5h13L20 9M4 9h16v10a1 1 0 01-1 1H5a1 1 0 01-1-1V9zM4 9a3 3 0 004 0 3 3 0 004 0 3 3 0 004 0 3 3 0 004 0" /></Icon>;
 const IconBell = (p) => <Icon {...p}><path d="M18 15V10a6 6 0 10-12 0v5l-2 3h16l-2-3zM10 21h4" /></Icon>;
 const IconMore = (p) => <Icon {...p}><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" /></Icon>;
-const IconGear = (p) => <Icon {...p}><circle cx="12" cy="12" r="3.2" /><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18" /></Icon>;
+const IconGear = (p) => <Icon {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 13.5a7.7 7.7 0 000-3l1.7-1.3-1.9-3.3-2 .8a7.6 7.6 0 00-2.6-1.5L14.3 3h-3.8l-.3 2.2a7.6 7.6 0 00-2.6 1.5l-2-.8L3.7 9.2l1.7 1.3a7.7 7.7 0 000 3l-1.7 1.3 1.9 3.3 2-.8a7.6 7.6 0 002.6 1.5l.3 2.2h3.8l.3-2.2a7.6 7.6 0 002.6-1.5l2 .8 1.9-3.3-1.7-1.3z" /></Icon>;
 const IconLogout = (p) => <Icon {...p}><path d="M14.5 8V5.5a1.5 1.5 0 00-1.5-1.5H6a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 006 20h7a1.5 1.5 0 001.5-1.5V16M10 12h9.5M17 9l3 3-3 3" /></Icon>;
 
 const AV = ["#FF8AA5", "#8DACFF", "#B29BFF", "#5DE3B0", "#FFB37A", "#9CD9F0", "#FFC857"];
+
+/* The topbar sets backdrop-filter, which makes it the containing block for any
+   position:fixed descendant — screen-anchored overlays have to leave it. */
+function Overlay({ children }) {
+  if (typeof document === "undefined" || !ReactDOM.createPortal) return children;
+  return ReactDOM.createPortal(children, document.body);
+}
 const SHELL_DATA = window.__MACHREACH_APP__ || window.__MACHREACH_DASHBOARD__ || {};
 const SHELL_EN = SHELL_DATA.lang === "en";
 
@@ -157,7 +164,7 @@ function GenerationWatcher() {
   }, []);
   if (!notes.length) return null;
   return (
-    <div className="gen-toasts" role="status" aria-live="polite">
+    <Overlay><div className="gen-toasts" role="status" aria-live="polite">
       {notes.map((note) => (
         <div className={"gen-toast" + (note.ok ? "" : " bad")} key={note.id}>
           <span className="gen-ic">{note.ok ? note.job.icon : "⚠️"}</span>
@@ -169,22 +176,25 @@ function GenerationWatcher() {
             onClick={() => setNotes((current) => current.filter((n) => n.id !== note.id))}><IconClose size={14} /></button>
         </div>
       ))}
-    </div>
+    </div></Overlay>
   );
 }
 
 /* A block started on the focus page keeps running while the student walks
-   around the app; this chip is how they see that (and get back to it). */
-function FocusChip() {
+   around the app. This floats bottom-right so the running block is impossible
+   to lose track of — and stays out of the way on the focus page itself, where
+   the real timer is already on screen. */
+function FocusFloat() {
   const [left, setLeft] = React.useState(0);
+  const [phase, setPhase] = React.useState("work");
   React.useEffect(() => {
     if (location.pathname === "/student/focus") return undefined;
     const read = () => {
       let state = null;
       try { state = JSON.parse(localStorage.getItem("mr_focus_timer_v1") || "null"); } catch (e) { state = null; }
-      setLeft(state && state.running && state.endsAt
-        ? Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000))
-        : 0);
+      if (!state || !state.running || !state.endsAt) return setLeft(0);
+      setPhase(state.phase === "break" ? "break" : "work");
+      setLeft(Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)));
     };
     read();
     const timer = setInterval(read, 1000);
@@ -193,10 +203,17 @@ function FocusChip() {
   if (!left) return null;
   const mm = String(Math.floor(left / 60)).padStart(2, "0");
   const ss = String(left % 60).padStart(2, "0");
+  const label = phase === "break"
+    ? (SHELL_EN ? "Break" : "Descanso")
+    : (SHELL_EN ? "Focus block" : "Bloque de enfoque");
   return (
-    <a href="/student/focus" className="chip focusing" title={SHELL_EN ? "Focus block running" : "Bloque de enfoque en curso"}>
-      <IconTimer size={16} color="var(--brand)" /><span className="num">{mm}:{ss}</span>
-    </a>
+    <Overlay>
+      <a href="/student/focus" className={"focus-float" + (phase === "break" ? " brk" : "")}
+        title={SHELL_EN ? "Back to Focus" : "Volver a Enfoque"}>
+        <span className="ff-ic"><IconTimer size={17} color={phase === "break" ? "var(--good)" : "var(--brand)"} /></span>
+        <span className="ff-b"><b>{mm}:{ss}</b><small>{label}</small></span>
+      </a>
+    </Overlay>
   );
 }
 
@@ -212,15 +229,15 @@ function Topbar({ title, sub, streak, xp, coins, freezes, plus = false, tweaks, 
         {plus && <PlusBadge />}
         <div className="tb-spacer" />
         <div className="tb-stats">
-          <FocusChip />
           <span className="chip fire hide-sm"><IconFire size={16} color="var(--brand)" /><span className="num">{streak}</span></span>
           <span className="chip xp hide-sm"><IconBolt size={16} color="var(--plum)" /><span className="num">{xp}</span></span>
-          <span className="chip coin hide-sm"><IconCoin size={16} color="#B58309" /><span className="num">{coins}</span></span>
-          <span className="chip freeze hide-sm" title={SHELL_EN ? "Streak freezes" : "Congeladores de racha"}>❄️<span className="num">{freezeCount ?? 0}</span></span>
+          <a href="/student/shop?section=coins" className="chip coin hide-sm" title={SHELL_EN ? "Coins — go to the shop" : "Monedas — ir a la tienda"}><IconCoin size={16} color="#B58309" /><span className="num">{coins}</span></a>
+          <a href="/student/shop?section=coins" className="chip freeze hide-sm" title={SHELL_EN ? "Streak freezes — go to the shop" : "Congeladores de racha — ir a la tienda"}>❄️<span className="num">{freezeCount ?? 0}</span></a>
           <button className="icon-btn" aria-label="Cambiar tema" onClick={() => setTweak("theme", tweaks.theme === "dark" ? "light" : "dark")}>
             {tweaks.theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />}
           </button>
-          <a href="/student/settings" className="icon-btn" aria-label={SHELL_EN ? "Settings" : "Ajustes"} title={SHELL_EN ? "Settings" : "Ajustes"}><IconGear size={17} /></a>
+          {/* Labelled, because a bare gear glyph read as decoration. */}
+          <a href="/student/settings" className="tb-settings" title={SHELL_EN ? "Settings" : "Ajustes"}><IconGear size={16} /><span>{SHELL_EN ? "Settings" : "Ajustes"}</span></a>
           <form method="post" action="/logout" className="tb-logout">
             <input type="hidden" name="csrf_token" value={SHELL_DATA.csrf || ""} />
             <button type="submit" className="icon-btn" aria-label={SHELL_EN ? "Log out" : "Cerrar sesión"} title={SHELL_EN ? "Log out" : "Cerrar sesión"}><IconLogout size={17} /></button>
@@ -233,6 +250,7 @@ function Topbar({ title, sub, streak, xp, coins, freezes, plus = false, tweaks, 
         </div>
       </div>
       <GenerationWatcher />
+      <FocusFloat />
     </header>
   );
 }

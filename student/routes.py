@@ -22460,14 +22460,6 @@ No markdown, no code fences. ONLY JSON.
                 '<div class="shop-plan-grid">'
                 + subscriptions_html +
                 '</div>'
-                '<div class="shop-restore">'
-                '<div><strong>¿Ya pagaste Plus?</strong><br><span>Restaura y reconcilia tu estado con el proveedor de pagos.</span></div>'
-                + (
-                    '<button class="btn btn-sm btn-outline" onclick="reconcileSubscription()">Restaurar compra</button>'
-                    if subscription_billing_ready else
-                    '<button class="btn btn-sm btn-outline" disabled data-billing-disabled="true">Restauración no disponible</button>'
-                ) +
-                '</div>'
                 '</div>'
             )
         except Exception as _sub_err:
@@ -22765,13 +22757,6 @@ No markdown, no code fences. ONLY JSON.
             if (r.checkout_url) {{ window.location = r.checkout_url; return; }}
             mrReload();
           }} catch(e) {{ alert(e.message || 'No se pudo cambiar el plan.'); }}
-        }}
-        async function reconcileSubscription() {{
-          try {{
-            const result = await shopRequest('subscription-reconcile','/api/student/subscription/reconcile');
-            alert(result.message || (result.restored ? 'Tu suscripción fue restaurada.' : 'Tu suscripción ya estaba actualizada.'));
-            window.location = '/student/shop?section=plan';
-          }} catch(e) {{ alert(e.message || 'No se pudo restaurar la compra.'); }}
         }}
         // Live countdown for active boost chips
         (function() {{
@@ -23462,114 +23447,6 @@ No markdown, no code fences. ONLY JSON.
             return jsonify(ok=True, checkout_url=url)
         except Exception as e:
             return jsonify(ok=False, error=str(e)), 500
-
-
-    @app.route("/api/student/subscription/reconcile", methods=["POST"])
-    def student_subscription_reconcile_api():
-        """Restore the local Plus state from the provider's email-scoped record."""
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        from machreach_core import config as _cfg
-        from machreach_core import lemonsqueezy as ls
-        from machreach_core.db import get_client
-        from student import subscription as _sub
-
-        test_mode = bool(_cfg.LEMON_SQUEEZY_TEST_MODE)
-        variant = (
-            _cfg.LS_TEST_VARIANT_STUDENT_PLUS
-            if test_mode else _cfg.LS_VARIANT_STUDENT_PLUS
-        )
-        product = (
-            _cfg.LS_TEST_PRODUCT_STUDENT_PLUS
-            if test_mode else _cfg.LS_PRODUCT_STUDENT_PLUS
-        )
-        store = (
-            _cfg.LEMON_SQUEEZY_TEST_STORE_ID
-            if test_mode else _cfg.LEMON_SQUEEZY_STORE_ID
-        )
-        if not store or not product or not variant or not ls.is_configured(test_mode=test_mode):
-            return jsonify(
-                ok=False,
-                error="La restauración no está disponible porque la facturación no está configurada.",
-            ), 503
-        client = get_client(_cid()) or {}
-        email = str(client.get("email") or "").strip().lower()
-        try:
-            subscriptions = ls.list_subscriptions_by_email(
-                email, test_mode=test_mode
-            )
-        except Exception as exc:
-            log.exception("Subscription reconciliation failed for client %s: %s", _cid(), exc)
-            return jsonify(
-                ok=False,
-                error="No pudimos consultar el estado de compra. Inténtalo nuevamente.",
-            ), 502
-        matches = [
-            row for row in subscriptions
-            if str((row.get("attributes") or {}).get("store_id") or "") == str(store)
-            and str((row.get("attributes") or {}).get("product_id") or "") == str(product)
-            and str((row.get("attributes") or {}).get("variant_id") or "") == str(variant)
-            and str((row.get("attributes") or {}).get("user_email") or "").strip().lower()
-            == email
-        ]
-        status_priority = {
-            "active": 0,
-            "on_trial": 0,
-            "trialing": 0,
-            "past_due": 1,
-            "unpaid": 1,
-            "cancelled": 2,
-            "canceled": 2,
-            "paused": 3,
-            "expired": 4,
-            "inactive": 4,
-        }
-        match = min(
-            matches,
-            key=lambda row: status_priority.get(
-                str((row.get("attributes") or {}).get("status") or "").lower(),
-                5,
-            ),
-            default=None,
-        )
-        if not match:
-            result = _sub.set_subscription_state(
-                _cid(),
-                tier="free",
-                status="inactive",
-                ls_sub_id="",
-                ends_at="",
-                renews_at="",
-                update_payment_method_url="",
-                customer_portal_url="",
-            )
-            return jsonify(
-                ok=True,
-                restored=False,
-                provider_match=False,
-                tier=result.get("tier"),
-                status=result.get("status"),
-                message="No hay una suscripción Plus vigente para esta cuenta.",
-            )
-        attributes = match.get("attributes") or {}
-        urls = attributes.get("urls") or {}
-        result = _sub.set_subscription_state(
-            _cid(),
-            tier="plus",
-            status=str(attributes.get("status") or "inactive"),
-            ls_sub_id=str(match.get("id") or ""),
-            ends_at=str(attributes.get("ends_at") or ""),
-            renews_at=str(attributes.get("renews_at") or ""),
-            update_payment_method_url=str(urls.get("update_payment_method") or ""),
-            customer_portal_url=str(urls.get("customer_portal") or ""),
-        )
-        return jsonify(
-            ok=True,
-            restored=True,
-            tier=result.get("tier"),
-            status=result.get("status"),
-            message="Estado de compra reconciliado con Lemon Squeezy.",
-        )
 
 
     log.info("Student routes registered.")

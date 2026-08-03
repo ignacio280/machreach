@@ -47,9 +47,10 @@
 .chip.xp{background:#EDE4FF}
 .chip.coin{background:#FFF3CF}
 .chip.freeze{background:#DCEEFB}
-.chip.focusing{background:var(--brand-tint);font-family:var(--font-mono);font-size:12.5px}
 .tb-logout{display:flex;margin:0}
-[data-theme="dark"] .chip.focusing{background:color-mix(in oklab,var(--brand) 22%,var(--surface))}
+.tb-settings{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:999px;border:var(--bd);background:var(--surface);box-shadow:var(--sh1);font-family:var(--font-display);font-weight:800;font-size:13.5px;color:var(--ink);transition:transform .2s var(--spring-b),background .2s,box-shadow .2s}
+.tb-settings:hover{transform:translateY(-2px);box-shadow:var(--sh2);background:var(--brand-tint);color:var(--ink)}
+@media (max-width:900px){.tb-settings span{display:none}.tb-settings{padding:9px}}
 [data-theme="dark"] .chip.fire{background:color-mix(in oklab,var(--brand) 22%,var(--surface))}
 [data-theme="dark"] .chip.xp{background:color-mix(in oklab,var(--plum) 28%,var(--surface))}
 [data-theme="dark"] .chip.coin{background:color-mix(in oklab,var(--amber) 24%,var(--surface))}
@@ -272,3 +273,15 @@
 .gen-toast>button{margin-left:auto;flex:none;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;color:var(--ink-3)}
 .gen-toast>button:hover{background:var(--surface-2);color:var(--ink)}
 @media (max-width:760px){.gen-toasts{right:12px;bottom:78px}}
+
+/* floating focus timer (shell.jsx FocusFloat) */
+.focus-float{position:fixed;right:18px;bottom:18px;z-index:210;display:flex;align-items:center;gap:11px;padding:11px 15px 11px 12px;border:var(--bd);border-radius:999px;background:var(--surface);color:var(--ink);box-shadow:var(--sh2);animation:rise .3s var(--spring-b);transition:transform .2s var(--spring-b),box-shadow .2s}
+.focus-float:hover{transform:translateY(-3px);box-shadow:var(--sh3);color:var(--ink)}
+.focus-float .ff-ic{width:34px;height:34px;flex:none;display:grid;place-items:center;border-radius:50%;border:2px solid var(--ink);background:var(--brand-tint)}
+.focus-float.brk .ff-ic{background:#E4F7EE}
+[data-theme="dark"] .focus-float .ff-ic{background:color-mix(in oklab,var(--brand) 26%,var(--surface))}
+[data-theme="dark"] .focus-float.brk .ff-ic{background:color-mix(in oklab,var(--good) 26%,var(--surface))}
+.focus-float .ff-b{display:flex;flex-direction:column;line-height:1.05}
+.focus-float .ff-b b{font-family:var(--font-mono);font-weight:700;font-size:16px;letter-spacing:-.01em}
+.focus-float .ff-b small{font-family:var(--font-mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-top:3px}
+@media (max-width:760px){.focus-float{right:12px;bottom:78px}}
