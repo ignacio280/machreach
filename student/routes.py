@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 
 
 
-from flask import jsonify, redirect, request, session, url_for, render_template_string
+from flask import jsonify, make_response, redirect, request, session, url_for, render_template_string
 from flask_wtf.csrf import generate_csrf
 
 from markupsafe import Markup
@@ -4157,6 +4157,7 @@ Return this JSON shape:
             "/student/analytics": "analiticas",
             "/student/shop": "tienda",
             "/student/profile": "perfil",
+            "/student/profile/edit": "perfil-editar",
         }
         _design_slug = _live_design_routes.get(request.path) if _logged_in() else None
         if _design_slug:
@@ -4175,6 +4176,14 @@ Return this JSON shape:
             _client_name = session.get("client_name", "") or "MachReach"
             _parts = [p for p in _client_name.split() if p]
             _avatar = "".join(p[0] for p in _parts[:2]).upper() or "MR"
+            # Uploaded avatar, if any. Versioned so a new upload busts the cache.
+            try:
+                _avatar_version = sdb.profile_picture_version(_cid())
+            except Exception:
+                _avatar_version = ""
+            _avatar_url = (
+                f"/student/profile/picture/{_cid()}?v={_avatar_version}" if _avatar_version else ""
+            )
             _app_data = {
                 "live": True,
                 "lang": lang,
@@ -4192,11 +4201,13 @@ Return this JSON shape:
                     "analiticas": "Tu rendimiento real",
                     "tienda": "Monedas y cosméticos",
                     "perfil": "Tu cuenta",
+                    "perfil-editar": "Perfil",
                 }.get(_design_slug, "MachReach"),
                 "streak": _streak,
                 "xp": f"{_total_xp:,}".replace(",", "."),
                 "coins": int(_wallet.get("coins") or 0),
                 "avatar": _avatar,
+                "avatar_url": _avatar_url,
                 "csrf": generate_csrf(),
             }
             if _design_slug == "perfil":
@@ -4313,6 +4324,7 @@ Return this JSON shape:
                     "handle": _handle,
                     "bio": _profile_client.get("profile_bio") or "",
                     "avatar_color": _profile_prefs.get("profile_avatar") or "#FFD3A8",
+                    "picture_url": _avatar_url,
                     "cover_css": (sdb.BANNERS.get(_wallet.get("selected_banner") or "default") or sdb.BANNERS["default"]).get("css") or "",
                     "cover_anim_class": (sdb.BANNERS.get(_wallet.get("selected_banner") or "default") or {}).get("anim_class") or "",
                     "created_at": _created_at,
@@ -4344,6 +4356,59 @@ Return this JSON shape:
                         "friends": _friend_count,
                     },
                     "preferences": _profile_settings,
+                }
+            if _design_slug == "perfil-editar":
+                from machreach_core.db import get_client
+                from student import academic as _academic
+
+                _edit_client = get_client(_cid()) or {}
+                try:
+                    _edit_retired = bool(_edit_client.get("retired") or 0)
+                    _edit_rank = (_academic.my_rank("retirement" if _edit_retired else "global", _cid()) or {}).get("rank")
+                except Exception:
+                    _edit_rank = None
+
+                def _cosmetic_cards(catalog, keys):
+                    # Only what the student actually unlocked — the shop is the
+                    # place to see the rest.
+                    cards = []
+                    for _key in keys:
+                        _cfg = catalog.get(_key)
+                        if not _cfg:
+                            continue
+                        cards.append({
+                            "key": _key,
+                            "name": _cfg.get("name") or _key,
+                            "css": _cfg.get("css") or "",
+                            "anim": (_cfg.get("anim_class") or "") if _cfg.get("animated") else "",
+                        })
+                    return cards
+
+                _flag_state = sdb.get_flag_state(_cid())
+                _equipped_badges = sdb.get_equipped_badges(_cid())
+                _app_data["profile_edit"] = {
+                    "live": True,
+                    "name": _edit_client.get("name") or _client_name,
+                    "email": _edit_client.get("email") or "",
+                    "rank": ("#" + str(_edit_rank)) if _edit_rank else "Unranked",
+                    "xp": f"{_total_xp:,}".replace(",", "."),
+                    "coins": int(_wallet.get("coins") or 0),
+                    "freezes": int(_wallet.get("streak_freezes") or 0),
+                    "streak": _streak,
+                    "picture_url": _avatar_url,
+                    "banners": _cosmetic_cards(sdb.BANNERS, _wallet.get("unlocked_banners") or ["default"]),
+                    "selected_banner": _wallet.get("selected_banner") or "default",
+                    "flags": _cosmetic_cards(sdb.FLAGS, _flag_state.get("unlocked_flags") or ["none"]),
+                    "selected_flag": _flag_state.get("selected_flag") or "none",
+                    "badges": [{
+                        "key": _badge.get("badge_key") or "",
+                        "emoji": _badge.get("emoji") or "🏅",
+                        "name": _badge.get("name") or _badge.get("badge_key") or "Insignia",
+                    } for _badge in (sdb.get_badges(_cid()) or [])],
+                    "equipped": {
+                        "left": _equipped_badges.get("left") or "",
+                        "right": _equipped_badges.get("right") or "",
+                    },
                 }
             if _design_slug == "herramientas":
                 _tool_colors = ["#FF6A2B", "#6E4CD8", "#6FB03A", "#2FA8C6"]
@@ -23293,6 +23358,48 @@ No markdown, no code fences. ONLY JSON.
                 )
         session["client_name"] = name
         return jsonify(ok=True, profile={"name": name, "bio": bio, "avatar_color": avatar_color})
+
+    @app.route("/api/student/profile/picture", methods=["POST"])
+    def student_profile_picture_upload_api():
+        """Upload an avatar. The image is validated by its magic bytes and
+        stored in the database — Render's filesystem does not survive a deploy."""
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        upload = request.files.get("photo")
+        if upload is None or not upload.filename:
+            return jsonify(ok=False, error="No enviaste ninguna imagen."), 400
+        # Read one byte past the cap so an oversized file is rejected without
+        # pulling the whole thing into memory.
+        blob = upload.read(sdb.PROFILE_PICTURE_MAX_BYTES + 1)
+        result = sdb.set_profile_picture(_cid(), blob)
+        if not result.get("ok"):
+            return jsonify(result), 400
+        result["url"] = f"/student/profile/picture/{_cid()}?v={result.get('version') or ''}"
+        return jsonify(result)
+
+    @app.route("/api/student/profile/picture", methods=["DELETE"])
+    def student_profile_picture_delete_api():
+        if not _logged_in():
+            return jsonify(ok=False, error="Login required"), 401
+        return jsonify(sdb.delete_profile_picture(_cid()))
+
+    @app.route("/student/profile/picture/<int:client_id>")
+    def student_profile_picture(client_id):
+        """Serve an avatar to signed-in students (they already see each other's
+        names on the leaderboard). 404 when the student never uploaded one."""
+        if not _logged_in():
+            return ("", 401)
+        picture = sdb.get_profile_picture(client_id)
+        if not picture:
+            return ("", 404)
+        response = make_response(picture["image"])
+        response.headers["Content-Type"] = picture["mime"]
+        response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        # Private: the URL is versioned, so a long TTL is safe and keeps the
+        # avatar out of shared caches.
+        response.headers["Cache-Control"] = "private, max-age=86400"
+        return response
 
     @app.route("/api/student/profile/preferences", methods=["POST"])
     def student_profile_preferences_api():

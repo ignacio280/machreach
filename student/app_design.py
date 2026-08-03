@@ -35,6 +35,7 @@ _PAGES: dict[str, str] = {
     "analiticas": "Analíticas",
     "tienda": "Tienda",
     "perfil": "Perfil",
+    "perfil-editar": "Editar perfil",
     "cuenta": "Iniciar sesión y registro",
 }
 
@@ -50,6 +51,7 @@ _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "reviews": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"),
     "tienda": ("dash.css", "focus.css", "plan.css", "analytics.css", "shop.css"),
     "perfil": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css"),
+    "perfil-editar": ("dash.css", "profedit.css"),
     "cuenta": ("auth.css",),
 }
 
@@ -90,6 +92,11 @@ def render_live_page(slug: str, data: dict, version: str = "20260802-app-v6-4") 
     if slug == "perfil":
         from student.db import BANNER_ANIM_CSS
         animation_styles = f"<style>{BANNER_ANIM_CSS}</style>"
+    elif slug == "perfil-editar":
+        # The edit page previews every unlocked cosmetic, so it needs the full
+        # animation catalog, not just the equipped banner's keyframes.
+        from student.db import BANNER_ANIM_CSS, FLAG_ANIM_CSS
+        animation_styles = f"<style>{BANNER_ANIM_CSS}{FLAG_ANIM_CSS}</style>"
     return (
         f'<link rel="stylesheet" href="/static/machreach_landing/v6/theme.css?v={version}">'
         + animation_styles

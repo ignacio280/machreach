@@ -1,0 +1,81 @@
+/* MachReach — Editar perfil (/student/profile/edit) */
+.pe-wrap{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.pe-back{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--ink-2);transition:color .2s,transform .2s var(--spring-b);align-self:flex-start}
+.pe-back:hover{color:var(--brand);transform:translateX(-3px)}
+
+/* identity block */
+.pe-id{padding:0;border:var(--bd);border-radius:var(--r-xl);box-shadow:var(--sh3);overflow:hidden}
+.pe-face img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.pe-pic{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.pe-picav{width:84px;height:84px;flex:none;border-radius:50%;background:linear-gradient(135deg,#3B4A7A,#5B4694);display:grid;place-items:center;color:#fff;font-family:var(--font-display);font-size:28px;font-weight:800;border:3px solid var(--ink);box-shadow:0 3px 0 var(--ink);overflow:hidden}
+.pe-picav img{width:100%;height:100%;object-fit:cover;display:block}
+.pe-picacts{display:flex;gap:9px;flex-wrap:wrap}
+.pe-picnote{font-size:12px;font-weight:700;color:var(--ink-3);margin-top:9px}
+.pe-banner{height:140px;border-bottom:var(--bd);transition:background .3s}
+.pe-idbody{background:#0B1220;padding:14px 22px 18px;position:relative}
+.pe-face{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#3B4A7A,#5B4694);display:grid;place-items:center;color:#fff;font-family:var(--font-display);font-size:26px;font-weight:800;border:3px solid #0B1220;position:absolute;left:22px;top:-36px;z-index:2;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.pe-idrow{padding-top:42px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px}
+.pe-idrow .nm{font-family:var(--font-display);font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em}
+.pe-idrow .em{color:#94A3B8;font-size:12px;font-weight:600;margin-top:2px}
+.pe-idrow .rk{margin-top:4px;font-size:13px;color:#94A3B8;font-weight:600;letter-spacing:.02em}
+.pe-idrow .rk b{color:#fff;font-weight:800}
+.pe-stats{display:flex;gap:10px;flex-wrap:wrap}
+.pe-stat{min-width:110px;padding:10px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06)}
+.pe-stat .num{font-family:var(--font-display);font-size:20px;font-weight:800;color:#fff;letter-spacing:-.02em}
+.pe-stat .label{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8;font-weight:700;margin-top:4px}
+.pe-stat.yellow{border-color:rgba(250,204,21,.4);background:rgba(250,204,21,.1)}
+.pe-stat.blue{border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.1)}
+.pe-stat.red{border-color:rgba(244,63,94,.4);background:rgba(244,63,94,.1)}
+
+/* cards */
+.pe-card{background:var(--surface);border:var(--bd);border-radius:var(--r-lg);box-shadow:var(--sh2);padding:20px 22px}
+.pe-card h2{font-size:19px;letter-spacing:-.025em}
+.pe-card>p{color:var(--ink-2);font-size:13px;font-weight:600;line-height:1.5;margin:8px 0 14px;max-width:70ch}
+.pe-card>p a{color:var(--brand-2);font-weight:800}
+.pe-card>p a:hover{color:var(--brand);text-decoration:underline;text-underline-offset:3px}
+
+.pe-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.pe-cos{position:relative;cursor:pointer;border-radius:14px;overflow:hidden;border:var(--bd);background:var(--surface-2);box-shadow:0 2px 0 var(--ink);text-align:left;transition:transform .18s var(--spring-b),box-shadow .18s}
+.pe-cos:hover{transform:translateY(-3px);box-shadow:var(--sh2)}
+.pe-cos.eq{outline:3px solid var(--good);outline-offset:-3px}
+.pe-cos .nm{padding:8px 11px;font-family:var(--font-display);font-size:12.5px;font-weight:800;color:var(--ink)}
+.pe-cos .prev{height:60px;display:block}
+.pe-cos .prevflag{height:30px;display:block;-webkit-mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%);mask-image:linear-gradient(to right,#000 0%,#000 60%,transparent 100%)}
+.pe-pill{position:absolute;top:6px;right:6px;background:#10b981;color:#fff;font-family:var(--font-display);font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;letter-spacing:.03em}
+.pe-anim{position:absolute;top:6px;left:6px;background:#7c3aed;color:#fff;font-family:var(--font-display);font-size:9px;font-weight:800;padding:3px 7px;border-radius:999px;letter-spacing:.04em}
+.pe-slots{position:absolute;top:6px;right:6px;display:flex;gap:3px}
+.pe-slots span{color:#fff;font-family:var(--font-display);font-size:9px;font-weight:800;padding:3px 7px;border-radius:999px}
+.pe-slots .l{background:#3b82f6}
+.pe-slots .r{background:#7c3aed}
+.pe-cos.badge{padding:14px;text-align:center}
+.pe-cos.badge .em{font-size:32px;line-height:1.1}
+.pe-cos.badge .nm{padding:4px 0 0;font-size:12px}
+.pe-cos.badge.none .em{opacity:.4}
+.pe-cos.badge.none .nm{color:var(--ink-3)}
+
+.pe-sides{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.pe-side{border:var(--bd);background:var(--surface-2);color:var(--ink);border-radius:999px;padding:7px 16px;font-family:var(--font-display);font-size:12.5px;font-weight:800;box-shadow:0 2px 0 var(--ink);transition:transform .18s var(--spring-b),background .2s,color .2s}
+.pe-side:hover{transform:translateY(-2px)}
+.pe-side.active{background:linear-gradient(90deg,#3b82f6,#7c3aed);color:#fff}
+.pe-empty{color:var(--ink-3);font-size:13px;font-weight:700}
+
+/* banner + flag animations (from the app's cosmetic CSS) */
+.bnr-anim-host{overflow:hidden;position:relative}
+@keyframes bnr-pan-x{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+@keyframes bnr-twinkle{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}
+@keyframes bnr-matrix-rain{0%{background-position:0 0,0 0}100%{background-position:0 480px,0 0}}
+.bnr-anim-matrix{background-size:84px 480px,100% 100%!important;background-repeat:repeat,no-repeat!important;animation:bnr-matrix-rain 3s linear infinite;filter:drop-shadow(0 0 5px rgba(74,222,128,.45))}
+.bnr-anim-cherry{background-size:200% 200%!important;animation:bnr-pan-x 20s linear infinite,bnr-twinkle 4s ease-in-out infinite}
+@keyframes flg-pan{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+@keyframes flg-shimmer{0%{background-position:-100% 50%}100%{background-position:200% 50%}}
+.flag-anim-pan,.flag-anim-fast,.flag-anim-shimmer{background-size:300% 100%!important}
+.flag-anim-pan{animation:flg-pan 14s linear infinite}
+.flag-anim-fast{animation:flg-pan 6s linear infinite}
+.flag-anim-shimmer{animation:flg-shimmer 5s ease-in-out infinite}
+@keyframes flg-heartbeat{0%,100%{filter:brightness(1)}50%{filter:brightness(1.35)}}
+.flg-heartbeat{animation:flg-heartbeat 1.4s ease-in-out infinite}
+@keyframes flg-checker{0%{background-position:0 0}100%{background-position:48px 0}}
+.flag-anim-checker{animation:flg-checker 3s linear infinite}
+.flag-anim-racing{background-size:56px 100%!important;animation:flg-checker 1.6s linear infinite}
+@keyframes flg-pulse{0%,100%{filter:brightness(1) saturate(1)}50%{filter:brightness(1.3) saturate(1.4)}}
+.flag-anim-pulse{animation:flg-pulse 4s ease-in-out infinite}

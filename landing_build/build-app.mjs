@@ -68,6 +68,10 @@ const PAGE_DEPS = {
     css: ["dash.css", "focus.css", "plan.css", "friends.css", "profile.css"],
     jsx: ["shell.jsx", "lock.jsx", "profile.jsx"],
   },
+  "perfil-editar": {
+    css: ["dash.css", "profedit.css"],
+    jsx: ["shell.jsx", "lock.jsx", "profedit.jsx"],
+  },
   ranking: {
     css: ["dash.css", "focus.css", "plan.css", "rank.css"],
     jsx: ["shell.jsx", "lock.jsx", "rank.jsx"],

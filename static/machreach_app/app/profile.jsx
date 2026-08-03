@@ -1,6 +1,5 @@
 /* MachReach — Perfil del estudiante */
 const IconEdit = (p) => <Icon {...p}><path d="M4 20h4l10-10a2.8 2.8 0 10-4-4L4 16v4z" /><path d="M13.5 6.5l4 4" /></Icon>;
-const IconCamera = (p) => <Icon {...p}><path d="M3.5 8.5h3.2l1.6-2.4h7.4l1.6 2.4h3.2v11H3.5v-11z" /><circle cx="12" cy="13.5" r="3.4" /></Icon>;
 const IconMail = (p) => <Icon {...p}><rect x="3" y="5.5" width="18" height="13" rx="3" /><path d="M4 7.5l8 5.5 8-5.5" /></Icon>;
 
 const PF_AVATARS = ["#FFD3A8", "#FF8AA5", "#8DACFF", "#B29BFF", "#5DE3B0", "#9CD9F0", "#FFC857"];
@@ -52,10 +51,12 @@ function ProfileHero({ plus, avatar, name, handle, data }) {
   return (
     <section className="pf-hero rv" style={{ "--d": "0ms" }}>
       <div className={"pf-cover bnr-anim-host" + (data.cover_anim_class ? " " + data.cover_anim_class : "")} style={data.cover_css ? { background: data.cover_css } : undefined}><i /><i /><i />
-        <a className="btn btn-ghost btn-sm pf-coverbtn" href="/student/profile/edit"><IconCamera size={15} /> Portada</a>
       </div>
       <div className="pf-id">
-        <div className="pf-face" style={{ background: avatar }}>{initials}<span className="lvl">{data.level_number || 1}</span></div>
+        <div className="pf-face" style={{ background: avatar }}>
+          {data.picture_url ? <img className="pf-facepic" src={data.picture_url} alt="" /> : initials}
+          <span className="lvl">{data.level_number || 1}</span>
+        </div>
         <div className="pf-meta">
           <div className="pf-name"><h1>{name}</h1>{plus && <PlusBadge />}</div>
           <div className="pf-handle">{handle} · Se unió en {joined}</div>
@@ -71,7 +72,7 @@ function ProfileHero({ plus, avatar, name, handle, data }) {
             if (navigator.share) await navigator.share({ title: "Mi perfil MachReach", url });
             else await navigator.clipboard?.writeText(url);
           }}><IconPeople size={15} /> Compartir perfil</button>
-          <a className="btn btn-primary btn-sm" href="#editar"><IconEdit size={15} /> Editar perfil</a>
+          <a className="btn btn-primary btn-sm" href="/student/profile/edit"><IconEdit size={15} /> Editar perfil</a>
         </div>
       </div>
       <div className="pf-xp">
@@ -364,4 +365,4 @@ function ProfilePage({ plus, data = {}, csrf = "" }) {
   );
 }
 
-Object.assign(window, { ProfilePage, Sw, IconEdit, IconCamera, IconMail });
+Object.assign(window, { ProfilePage, Sw, IconEdit, IconMail });

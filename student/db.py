@@ -4,6 +4,7 @@ tables for Canvas integration, course analysis, and study plans.
 """
 from __future__ import annotations
 
+import hashlib as _hashlib
 import json
 import json as _json
 import logging
@@ -553,6 +554,11 @@ def init_student_db():
         init_course_catalog_table()
     except Exception as e:
         log.exception("init_course_catalog_table failed: %s", e)
+    # Uploaded avatars (profile pictures)
+    try:
+        init_profile_picture_table()
+    except Exception as e:
+        log.exception("init_profile_picture_table failed: %s", e)
     # Sweep every previously-added course into the catalog so autofill reflects
     # the whole user base per university, not just recently-added courses.
     try:
@@ -1696,6 +1702,103 @@ def attach_course_to_catalog(client_id: int, course_id: int, catalog_id: int) ->
             "UPDATE student_courses SET catalog_id = %s WHERE id = %s AND client_id = %s",
             (catalog_id, course_id, client_id),
         )
+
+
+# ── Profile pictures (uploaded avatars) ─────────────────────
+
+PROFILE_PICTURE_MAX_BYTES = 2 * 1024 * 1024
+
+
+def init_profile_picture_table() -> None:
+    """One uploaded avatar per student, stored as bytes in the database.
+    Render's disk is ephemeral, so the image lives next to the row that owns it
+    and is served by /student/profile/picture/<client_id>."""
+    _create_table_safe(
+        """CREATE TABLE IF NOT EXISTS student_profile_pictures (
+            client_id  INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            mime       TEXT NOT NULL,
+            image      BYTEA NOT NULL,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS student_profile_pictures (
+            client_id  INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+            mime       TEXT NOT NULL,
+            image      BLOB NOT NULL,
+            updated_at TEXT DEFAULT (datetime('now','localtime'))
+        )""",
+    )
+
+
+def sniff_image_mime(blob: bytes) -> str | None:
+    """Identify an upload from its magic bytes. The browser's Content-Type and
+    the file name are attacker-controlled, so neither is trusted."""
+    if blob[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if blob[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if blob[:4] == b"RIFF" and blob[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def set_profile_picture(client_id: int, blob: bytes) -> dict:
+    """Replace the student's avatar. Rejects anything that isn't a real image."""
+    if not blob:
+        return {"ok": False, "error": "El archivo está vacío."}
+    if len(blob) > PROFILE_PICTURE_MAX_BYTES:
+        return {"ok": False, "error": "La imagen supera los 2 MB."}
+    mime = sniff_image_mime(blob)
+    if not mime:
+        return {"ok": False, "error": "Formato no admitido. Usa PNG, JPG o WebP."}
+    with get_db() as db:
+        # Delete + insert instead of an upsert so the oldest SQLite builds
+        # (no ON CONFLICT support) behave the same as Postgres.
+        _exec(db, "DELETE FROM student_profile_pictures WHERE client_id = %s", (client_id,))
+        _exec(
+            db,
+            "INSERT INTO student_profile_pictures (client_id, mime, image) VALUES (%s, %s, %s)",
+            (client_id, mime, blob if _USE_PG else memoryview(blob)),
+        )
+    return {"ok": True, "mime": mime, "version": profile_picture_version(client_id)}
+
+
+def get_profile_picture(client_id: int) -> dict | None:
+    """Bytes + mime for serving. Returns None when the student has no avatar."""
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT mime, image, updated_at FROM student_profile_pictures WHERE client_id = %s",
+            (client_id,),
+        )
+    if not row:
+        return None
+    return {
+        "mime": row["mime"],
+        "image": bytes(row["image"]),
+        "updated_at": str(row["updated_at"] or ""),
+    }
+
+
+def profile_picture_version(client_id: int) -> str:
+    """Cache-busting token for the avatar URL — never loads the bytes."""
+    try:
+        with get_db() as db:
+            row = _fetchone(
+                db,
+                "SELECT updated_at FROM student_profile_pictures WHERE client_id = %s",
+                (client_id,),
+            )
+    except Exception:
+        return ""
+    if not row:
+        return ""
+    return _hashlib.sha1(str(row["updated_at"] or "").encode("utf-8")).hexdigest()[:10]
+
+
+def delete_profile_picture(client_id: int) -> dict:
+    with get_db() as db:
+        _exec(db, "DELETE FROM student_profile_pictures WHERE client_id = %s", (client_id,))
+    return {"ok": True}
 
 
 def soft_delete_catalog_course(

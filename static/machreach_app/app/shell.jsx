@@ -96,7 +96,11 @@ function Topbar({ title, sub, streak, xp, coins, plus = false, tweaks, setTweak,
           <button className="icon-btn" aria-label="Cambiar tema" onClick={() => setTweak("theme", tweaks.theme === "dark" ? "light" : "dark")}>
             {tweaks.theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />}
           </button>
-          <a href="/student/profile" className="avatar" style={{ background: "#FFD3A8" }} aria-label={SHELL_EN ? "Profile" : "Perfil"}>{avatar}</a>
+          <a href="/student/profile" className="avatar" style={{ background: "#FFD3A8" }} aria-label={SHELL_EN ? "Profile" : "Perfil"}>
+            {SHELL_DATA.avatar_url
+              ? <img src={SHELL_DATA.avatar_url} alt="" style={{ width: "100%", height: "100%", borderRadius: "inherit", objectFit: "cover", display: "block" }} />
+              : avatar}
+          </a>
         </div>
       </div>
     </header>
