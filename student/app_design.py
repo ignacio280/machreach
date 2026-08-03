@@ -53,7 +53,7 @@ _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "tienda": ("dash.css", "focus.css", "plan.css", "analytics.css", "shop.css"),
     "perfil": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css"),
     "perfil-editar": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css", "profedit.css"),
-    "ajustes": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css"),
+    "ajustes": ("dash.css", "study.css", "plan.css", "friends.css", "profile.css", "settings.css"),
     "cuenta": ("auth.css",),
 }
 

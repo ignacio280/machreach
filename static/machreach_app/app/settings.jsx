@@ -91,7 +91,7 @@ function SettingsIdentity({ data, csrf }) {
 
 function SettingsAccount({ data, csrf, plus }) {
   return (
-    <React.Fragment>
+    <div className="pf-tabpanel">
       <section className="pnl">
         <div className="pnl-h"><span className="ico-badge" style={{ background: "#DCEEFB" }}><IconMail size={16} /></span><h3>Correo y acceso</h3></div>
         <form method="post" action="/settings/change-password">
@@ -135,7 +135,7 @@ function SettingsAccount({ data, csrf, plus }) {
           </form>
         </div>
       </section>
-    </React.Fragment>
+    </div>
   );
 }
 
@@ -153,7 +153,7 @@ function SettingsPrivacy({ data, csrf }) {
   };
   const privacyInitial = { ...prefs, allow_requests: data.friend_discovery };
   return (
-    <React.Fragment>
+    <div className="pf-tabpanel">
       <section className="pnl">
         <div className="pnl-h"><span className="ico-badge" style={{ background: "#E6E4FB" }}><IconShield size={16} /></span><h3>Privacidad</h3></div>
         <ToggleRows rows={ST_PRIVACY} initial={privacyInitial} keys={["profile_public", "appear_in_rankings", "show_online", "allow_requests"]} onSave={savePreference} />
@@ -174,7 +174,7 @@ function SettingsPrivacy({ data, csrf }) {
         <div className="pf-row"><div className="who"><b>{data.plus ? "MachReach Plus" : "Plan Gratis"}</b><p>{data.plus ? "Tu suscripción está activa." : "No tienes una suscripción de pago activa."}</p></div><span className="val">{data.plus ? "Activo" : "Gratis"}</span></div>
         <a className="lnk" href="/student/shop?section=plan" style={{ display: "inline-flex", marginTop: 14 }}>Gestionar facturación <IconArrow size={14} /></a>
       </section>
-    </React.Fragment>
+    </div>
   );
 }
 
@@ -201,13 +201,9 @@ function SettingsPage({ plus, data = {}, csrf = "" }) {
           <button key={t.id} className={"pf-tab" + (tab === t.id ? " on" : "")} onClick={() => setTab(t.id)}><t.Ic size={15} />{t.label}</button>
         ))}
       </div>
-      <div className="pf-grid">
-        <div className="col">
-          {tab === "perfil" && <SettingsIdentity data={data} csrf={csrf} />}
-          {tab === "cuenta" && <SettingsAccount data={data} csrf={csrf} plus={plus} />}
-          {tab === "privacidad" && <SettingsPrivacy data={{ ...data, plus }} csrf={csrf} />}
-        </div>
-      </div>
+      {tab === "perfil" && <SettingsIdentity data={data} csrf={csrf} />}
+      {tab === "cuenta" && <SettingsAccount data={data} csrf={csrf} plus={plus} />}
+      {tab === "privacidad" && <SettingsPrivacy data={{ ...data, plus }} csrf={csrf} />}
     </div>
   );
 }
