@@ -91,11 +91,22 @@ function ReviewModal({ data, onClose }) {
   };
   return <Modal title="Escribir una review" sub="Tu identidad nunca aparece en la publicación." onClose={onClose}
     foot={<><button className="btn btn-ghost btn-sm" onClick={onClose}>Cancelar</button><button className="btn btn-primary btn-sm" onClick={save} disabled={!form.course_id}>Publicar</button></>}>
-    <div className="mdl-fields">
-      <label>Ramo<select value={form.course_id} onChange={(e) => setForm({ ...form, course_id: e.target.value })}>{courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-      <label>Dificultad<select value={form.difficulty_rating} onChange={(e) => setForm({ ...form, difficulty_rating: Number(e.target.value) })}>{[1,2,3,4,5].map((n) => <option key={n} value={n}>{n}/5</option>)}</select></label>
-      <label>Calidad<select value={form.quality_rating} onChange={(e) => setForm({ ...form, quality_rating: Number(e.target.value) })}>{[1,2,3,4,5].map((n) => <option key={n} value={n}>{n}/5</option>)}</select></label>
-      <label>Tu experiencia<textarea rows="5" value={form.review_text} onChange={(e) => setForm({ ...form, review_text: e.target.value })} /></label>
+    <div className="mdl-f">
+      <label>Ramo
+        <select value={form.course_id} onChange={(e) => setForm({ ...form, course_id: e.target.value })}>{courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+      </label>
+      <div className="mdl-2">
+        <label>Dificultad
+          <select value={form.difficulty_rating} onChange={(e) => setForm({ ...form, difficulty_rating: Number(e.target.value) })}>{[1,2,3,4,5].map((n) => <option key={n} value={n}>{n}/5</option>)}</select>
+        </label>
+        <label>Calidad
+          <select value={form.quality_rating} onChange={(e) => setForm({ ...form, quality_rating: Number(e.target.value) })}>{[1,2,3,4,5].map((n) => <option key={n} value={n}>{n}/5</option>)}</select>
+        </label>
+      </div>
+      <label>Tu experiencia
+        <textarea rows="5" placeholder="Qué te habría servido saber antes de tomar el ramo." value={form.review_text} onChange={(e) => setForm({ ...form, review_text: e.target.value })} />
+      </label>
+      {!courses.length && <p className="mc-ac-hint">Agrega un curso en Mis cursos para poder escribir una review.</p>}
     </div>
   </Modal>;
 }

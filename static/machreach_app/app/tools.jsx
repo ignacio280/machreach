@@ -100,7 +100,10 @@ function QuizzesTab({ plus, data = {} }) {
       const queued = await fetch("/api/student/quizzes/generate-async", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": data.csrf || "" }, body: JSON.stringify({ source_text: source.text, title: source.title, difficulty: "medium", count: plus ? 20 : 10 }) });
       const result = await queued.json();
       if (!queued.ok) throw new Error(result.error || "No se pudo generar el quiz");
-      setStatus("Quiz en proceso. Aparecerá aquí cuando termine.");
+      // Runs in the worker: the student can navigate away and the watcher in
+      // the topbar tells them when it lands.
+      markGenerationQueued("quiz");
+      setStatus("Quiz en proceso. Puedes seguir navegando: te avisamos cuando esté listo.");
     } catch (error) { setStatus(error.message || "No se pudo generar el quiz"); }
   };
   return (

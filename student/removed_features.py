@@ -1,6 +1,7 @@
 """Central policy for student features removed from the live product."""
 
 DEPRECATED_STUDENT_PATHS = {
+    "/student/achievements",
     "/student/plan",
     "/student/notes",
     "/student/chat",

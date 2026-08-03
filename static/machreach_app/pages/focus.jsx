@@ -6,6 +6,11 @@ const PAGE_ID = "focus";
 const PAGE_TITLE = "Enfoque";
 const PAGE_SUB = "Sesión de estudio";
 
+/* Focus needs the desktop extension, so phones and phone-sized touch screens
+   (a landscape phone is wider than 760px) get the notice instead of a timer.
+   The server also refuses on a mobile user agent. */
+const PHONE_QUERY = "(max-width: 760px), (pointer: coarse) and (max-width: 1180px)";
+
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "light",
   "accent": "coral",
@@ -19,7 +24,7 @@ function App() {
   const [running, setRunning] = React.useState(false);
   const [courseId, setCourseId] = React.useState(data.focus?.courses?.[0]?.id || "");
   const plus = data.live ? !!data.plus : !!tweaks.plus;
-  const [phoneBlocked, setPhoneBlocked] = React.useState(() => typeof matchMedia === "function" && matchMedia("(max-width: 760px)").matches);
+  const [phoneBlocked, setPhoneBlocked] = React.useState(() => typeof matchMedia === "function" && matchMedia(PHONE_QUERY).matches);
 
   React.useEffect(() => {
     document.documentElement.dataset.theme = tweaks.theme || "light";
@@ -28,7 +33,7 @@ function App() {
 
   React.useEffect(() => {
     if (typeof matchMedia !== "function") return undefined;
-    const query = matchMedia("(max-width: 760px)");
+    const query = matchMedia(PHONE_QUERY);
     const update = () => setPhoneBlocked(query.matches);
     update();
     query.addEventListener?.("change", update);
@@ -54,7 +59,7 @@ function App() {
               <Timer scene={scene} onRun={setRunning} onCourse={setCourseId} data={data.focus} />
               <div className="col fx-tools">
                 <Ambience scene={scene} setScene={setScene} />
-                <Guard />
+                <Guard live={!!data.live} />
                 <Benchmark plus={plus} data={data.focus} courseId={courseId} />
               </div>
             </div>

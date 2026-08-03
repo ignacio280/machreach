@@ -12,6 +12,51 @@ const FX_EXAMS = { "Cálculo II": ["Prueba 2 — 4 ago", "Examen — 12 sep"], "
 
 function pad(n) { return String(n).padStart(2, "0"); }
 
+/* ---- Focus Guard: no extension, no session ----------------------------
+   The extension's content script stamps data-machreach-focus-guard on <html>
+   and answers a ping event. We clear the marker before every check so an
+   uninstalled extension cannot leave a stale "installed" attribute behind. */
+const FOCUS_GUARD_STORE_URL = "https://chromewebstore.google.com/detail/djfnmpaihpkibcngaaekhnbalbaibgnk";
+
+function focusGuardInstalled() {
+  return document.documentElement.getAttribute("data-machreach-focus-guard") === "1";
+}
+
+function checkFocusGuard() {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer = 0;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("machreach-focus-guard-ready", onReady);
+      clearTimeout(timer);
+      resolve(!!ok);
+    };
+    const onReady = () => finish(focusGuardInstalled());
+    try { document.documentElement.removeAttribute("data-machreach-focus-guard"); } catch (e) { /* ignore */ }
+    document.addEventListener("machreach-focus-guard-ready", onReady);
+    try { document.dispatchEvent(new CustomEvent("machreach-focus-guard-ping")); } catch (e) { /* ignore */ }
+    timer = setTimeout(() => finish(false), 450);
+  });
+}
+
+function FocusGuardModal({ onClose }) {
+  return (
+    <Modal title="Necesitas Focus Guard" sub="Instala la extensión gratuita de MachReach para iniciar una sesión. Bloquea los sitios que te distraen mientras estudias."
+      onClose={onClose}
+      foot={<>
+        <button className="btn btn-ghost btn-sm" onClick={() => location.reload()}>Ya la instalé — recargar</button>
+        <a className="btn btn-primary btn-sm" href={FOCUS_GUARD_STORE_URL} target="_blank" rel="noopener">Agregar a Chrome</a>
+      </>}>
+      <div className="mdl-warn">
+        <IconShield size={20} />
+        <div>Sin la extensión no podemos bloquear distracciones ni verificar el tiempo que estudiaste, así que el bloque no se puede iniciar.</div>
+      </div>
+    </Modal>
+  );
+}
+
 function FocusHead({ scene, data = {} }) {
   const stats = data.stats || {};
   const live = !!data.live;
@@ -133,8 +178,12 @@ function Timer({ scene, onRun, onCourse, data = {} }) {
   const pct = 1 - left / total;
   const R = 132, C = 2 * Math.PI * R;
   const [kick, setKick] = React.useState(0);
+  const [guardWanted, setGuardWanted] = React.useState(false);
   const reset = () => { setRunning(false); setPhase("work"); setRound(1); setLeft(cfg.work); };
   const toggle = async () => {
+    // Focus Guard is mandatory: without it we can neither block distractions
+    // nor trust the reported minutes, so no block may start or resume.
+    if (!running && data.live && !(await checkFocusGuard())) return setGuardWanted(true);
     if (!running && left === cfg.work && phase === "work" && !(await beginVerifiedPhase())) return;
     setRunning((r) => { if (!r) setKick((k) => k + 1); return !r; });
   };
@@ -183,6 +232,7 @@ function Timer({ scene, onRun, onCourse, data = {} }) {
         <button className="btn btn-ghost btn-lg" onClick={reset}>Reiniciar</button>
       </div>
       <div className="fx-status">Ronda {round} de {cfg.rounds} · {course?.name || "Sin curso"} · el tiempo se guarda al terminar el bloque</div>
+      {guardWanted && <FocusGuardModal onClose={() => setGuardWanted(false)} />}
     </section>
   );
 }
@@ -210,12 +260,22 @@ function Ambience({ scene, setScene }) {
   );
 }
 
-function Guard() {
+function Guard({ live = false }) {
+  // null while we wait for the extension to answer the ping.
+  const [installed, setInstalled] = React.useState(live ? null : true);
+  React.useEffect(() => {
+    if (!live) return undefined;
+    let alive = true;
+    checkFocusGuard().then((ok) => { if (alive) setInstalled(ok); });
+    return () => { alive = false; };
+  }, [live]);
   return (
     <section className="pnl guard-pnl">
-      <span className="ico-badge" style={{ background: "#E1F3D6" }}><IconShield size={17} /></span>
+      <span className="ico-badge" style={{ background: installed === false ? "#FFDFE1" : "#E1F3D6" }}><IconShield size={17} /></span>
       <h3>Focus Guard</h3>
-      <span className="tagchip"><i className="live-dot" />Activo</span>
+      {installed === false
+        ? <a className="tagchip off" href={FOCUS_GUARD_STORE_URL} target="_blank" rel="noopener">Falta instalar</a>
+        : <span className="tagchip"><i className="live-dot" />{installed === null ? "Buscando…" : "Activo"}</span>}
     </section>
   );
 }

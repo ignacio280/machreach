@@ -2,6 +2,7 @@
 .pf-hero{position:relative;overflow:hidden;background:var(--surface);border:var(--bd);border-radius:var(--r-xl);box-shadow:var(--sh3);padding:0}
 .pf-cover{height:132px;position:relative;overflow:hidden;border-bottom:var(--bd);background:var(--brand-tint)}
 .pf-cover::before{content:"";position:absolute;inset:0;background:radial-gradient(45% 120% at 18% 110%,color-mix(in oklab,var(--brand) 45%,transparent),transparent 70%),radial-gradient(40% 130% at 78% -20%,color-mix(in oklab,var(--plum) 42%,transparent),transparent 70%)}
+.pf-cover.has-banner::before{display:none}
 .pf-cover i{position:absolute;border-radius:50%;border:var(--bd);opacity:.5;animation:floaty 7s var(--spring) infinite}
 .pf-cover i:nth-child(1){width:90px;height:90px;right:16%;top:-32px;background:var(--amber)}
 .pf-cover i:nth-child(2){width:54px;height:54px;right:6%;bottom:-20px;background:var(--lime);animation-delay:-2.2s}

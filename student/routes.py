@@ -4108,7 +4108,8 @@ Return this JSON shape:
 
 
 
-    def _s_render(title, content_html, active_page="student_dashboard", *, dashboard_design=False):
+    def _s_render(title, content_html, active_page="student_dashboard", *, dashboard_design=False,
+                  allow_live_design=True):
 
         """Render a student page using MachReach's LAYOUT."""
 
@@ -4159,7 +4160,9 @@ Return this JSON shape:
             "/student/profile": "perfil",
             "/student/profile/edit": "perfil-editar",
         }
-        _design_slug = _live_design_routes.get(request.path) if _logged_in() else None
+        # allow_live_design=False lets a route keep its own markup — the focus
+        # page uses it to serve the phone notice instead of the timer.
+        _design_slug = _live_design_routes.get(request.path) if (_logged_in() and allow_live_design) else None
         if _design_slug:
             try:
                 _wallet = sdb.get_wallet(_cid()) or {}
@@ -4206,6 +4209,7 @@ Return this JSON shape:
                 "streak": _streak,
                 "xp": f"{_total_xp:,}".replace(",", "."),
                 "coins": int(_wallet.get("coins") or 0),
+                "freezes": int(_wallet.get("streak_freezes") or 0),
                 "avatar": _avatar,
                 "avatar_url": _avatar_url,
                 "csrf": generate_csrf(),
@@ -4602,26 +4606,61 @@ Return this JSON shape:
             if _design_slug == "notas":
                 _semester_labels = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
                 _current_semester = str(sdb.get_current_semester(_cid()) or "I")
+                _current_index = _semester_labels.index(_current_semester) if _current_semester in _semester_labels else 0
+
+                def _sheet_row_for(course):
+                    course_id = int(course.get("id") or 0)
+                    return {
+                        "id": f"c{course_id}",
+                        "course_id": course_id,
+                        "name": course.get("name") or "Curso",
+                        "credits": 10,
+                        "evals": [{
+                            "id": f'e{int(exam.get("id") or 0)}',
+                            "exam_id": int(exam.get("id") or 0),
+                            "name": exam.get("name") or "Evaluación",
+                            "pct": int(exam.get("weight_pct") or 0),
+                            "grade": "" if exam.get("grade") is None else str(exam.get("grade")),
+                        } for exam in (sdb.get_course_exams(course_id) or [])],
+                    }
+
+                # Courses of the semester the student is currently in — the same
+                # set the Cursos page lists. A course with no semester label yet
+                # (older rows, fresh manual adds) counts as current.
+                _semester_courses = [
+                    _course for _course in (sdb.get_courses(_cid()) or [])
+                    if str(_course.get("semester_label") or _current_semester) == _current_semester
+                ]
                 _grade_sheet = sdb.get_grade_sheet(_cid())
                 if not _grade_sheet:
                     _grade_semesters = [{"label": _label, "courses": []} for _label in _semester_labels]
-                    _current_index = _semester_labels.index(_current_semester) if _current_semester in _semester_labels else 0
-                    for _course in (sdb.get_courses(_cid()) or []):
-                        _course_id = int(_course.get("id") or 0)
-                        _grade_semesters[_current_index]["courses"].append({
-                            "id": f"c{_course_id}",
-                            "course_id": _course_id,
-                            "name": _course.get("name") or "Curso",
-                            "credits": 10,
-                            "evals": [{
-                                "id": f'e{int(_exam.get("id") or 0)}',
-                                "exam_id": int(_exam.get("id") or 0),
-                                "name": _exam.get("name") or "Evaluación",
-                                "pct": int(_exam.get("weight_pct") or 0),
-                                "grade": "" if _exam.get("grade") is None else str(_exam.get("grade")),
-                            } for _exam in (sdb.get_course_exams(_course_id) or [])],
-                        })
+                    _grade_semesters[_current_index]["courses"] = [_sheet_row_for(c) for c in _semester_courses]
                     _grade_sheet = {"current": _current_index, "sems": _grade_semesters}
+                else:
+                    # A saved sheet must still pick up courses added afterwards,
+                    # otherwise the page silently drifts from Cursos. Existing
+                    # rows are left alone — the student's own edits win.
+                    _sems = _grade_sheet.get("sems")
+                    if isinstance(_sems, list) and 0 <= _current_index < len(_sems):
+                        _target = _sems[_current_index]
+                        _rows = _target.get("courses")
+                        if not isinstance(_rows, list):
+                            _rows = []
+                            _target["courses"] = _rows
+                        # Match on course id, falling back to the name so a row
+                        # the student typed by hand is not duplicated by its
+                        # Cursos counterpart.
+                        _known_ids = {int(r.get("course_id") or 0) for r in _rows if isinstance(r, dict)}
+                        _known_names = {
+                            str(r.get("name") or "").strip().casefold()
+                            for r in _rows if isinstance(r, dict)
+                        }
+                        for _course in _semester_courses:
+                            if int(_course.get("id") or 0) in _known_ids:
+                                continue
+                            if str(_course.get("name") or "").strip().casefold() in _known_names:
+                                continue
+                            _rows.append(_sheet_row_for(_course))
                 _app_data["grades"] = {
                     "live": True,
                     "storage_key": f"mr_planilla_v1_{_cid()}",
@@ -10115,7 +10154,8 @@ Material:
               :root[data-theme="dark"] .focus-mobile-actions a:last-child { background:#0B0B10; color:#FFF8E8; border-color:#FF7A3D; }
             </style>
             """
-            return _s_render("Enfoque", mobile_notice, active_page="student_focus")
+            return _s_render("Enfoque", mobile_notice, active_page="student_focus",
+                             allow_live_design=False)
 
         courses = sdb.get_courses(_cid())
 
@@ -19206,603 +19246,6 @@ No markdown, no code fences. ONLY JSON.
 
     # Removed market feature paths are blocked by removed_features.py.
 
-    @app.route("/student/achievements")
-
-    def student_achievements_page():
-
-        if not _logged_in():
-
-            return redirect(url_for("login"))
-
-        cid = _cid()
-
-        total_xp = sdb.get_total_xp(cid)
-
-        rank_info = sdb.get_study_rank(total_xp)
-
-        streak = sdb.get_streak_days(cid)
-
-        badges = sdb.get_badges(cid)
-
-        history = sdb.get_xp_history(cid, limit=20)
-
-
-
-        # Auto-award streak/XP badges
-
-        for key, threshold in [("streak_3", 3), ("streak_7", 7), ("streak_14", 14), ("streak_30", 30), ("streak_60", 60), ("streak_100", 100)]:
-
-            if streak >= threshold:
-
-                sdb.earn_badge(cid, key)
-
-        for key, threshold in [("xp_100", 100), ("xp_500", 500), ("xp_1000", 1000), ("xp_2500", 2500), ("xp_5000", 5000)]:
-
-            if total_xp >= threshold:
-
-                sdb.earn_badge(cid, key)
-
-        badges = sdb.get_badges(cid)
-
-
-
-        pct = int(rank_info.get("progress_pct", 0) or 0)
-
-        rank_color = rank_info.get("color", "#6366f1") or "#6366f1"
-
-        rank_floor = int(rank_info.get("xp_floor", 0) or 0)
-
-        rank_ceil = int(rank_info.get("xp_ceil", max(rank_floor + 1, total_xp + 1)) or (rank_floor + 1))
-
-        rank_full_name = rank_info.get("full_name", "Unranked")
-
-        rank_translations = {
-            "Initiates": "Iniciados",
-            "Apprentices": "Aprendices",
-            "Scholars": "Estudiosos",
-            "Researchers": "Investigadores",
-            "Academics": "Académicos",
-            "Masterminds": "Mentes maestras",
-            "Grand Scholars": "Grandes estudiosos",
-            "Legends": "Leyendas",
-            "Arch Scholars": "Archisabios",
-            "High Sages": "Grandes sabios",
-            "Oracles of Knowledge": "Oráculos del conocimiento",
-            "Unranked": "Sin rango",
-        }
-        for src, dst in sorted(rank_translations.items(), key=lambda item: len(item[0]), reverse=True):
-            rank_full_name = rank_full_name.replace(src, dst)
-
-        _ach_lang = session.get("lang", "es")
-        _BADGE_ES = {
-            "first_login": ("¡Bienvenido!", "Iniciaste sesión por primera vez"),
-            "first_quiz": ("Novato en exámenes", "Completaste tu primer quiz"),
-            "quiz_master": ("Maestro de exámenes", "Sacaste 100% en un quiz"),
-            "flashcard_fan": ("Fan de tarjetas", "Repasaste 100 tarjetas"),
-            "streak_3": ("¡En llamas!", "Racha de estudio de 3 días"),
-            "streak_7": ("¡Imparable!", "Racha de estudio de 7 días"),
-            "streak_30": ("Estudiante diamante", "Racha de estudio de 30 días"),
-            "xp_100": ("Estrella ascendente", "Ganaste 100 XP"),
-            "xp_500": ("Estrella brillante", "Ganaste 500 XP"),
-            "xp_1000": ("Superestrella", "Ganaste 1.000 XP"),
-            "focus_1h": ("Enfocado", "1 hora total de enfoque"),
-            "focus_10h": ("Enfoque profundo", "10 horas totales de enfoque"),
-            "focus_50h": ("Maestro del enfoque", "50 horas totales de enfoque"),
-            "page_100": ("Pasa páginas", "Leíste 100 páginas"),
-            "quiz_10": ("Pro de exámenes", "Completaste 10 quizzes"),
-            "flashcard_500": ("Estratega de tarjetas", "Repasaste 500 tarjetas"),
-            "flashcard_1000": ("Leyenda de tarjetas", "Repasaste 1.000 tarjetas"),
-            "quiz_25": ("Veterano de quizzes", "Completaste 25 quizzes"),
-            "quiz_50": ("Leyenda de quizzes", "Completaste 50 quizzes"),
-            "xp_2500": ("Estudiante cohete", "Ganaste 2.500 XP"),
-            "xp_5000": ("Rey del XP", "Ganaste 5.000 XP"),
-            "streak_14": ("Guerrero de dos semanas", "Racha de estudio de 14 días"),
-            "streak_60": ("Voluntad de hierro", "Racha de estudio de 60 días"),
-            "streak_100": ("Club de los 100", "Racha de estudio de 100 días"),
-            "first_course": ("Primer curso", "Importaste tu primer curso"),
-            "five_courses": ("Coleccionista de cursos", "Importaste 5 cursos"),
-            "focus_100h": ("Señor del tiempo", "100 horas totales de enfoque"),
-            "page_500": ("Ratón de biblioteca", "Leíste 500 páginas"),
-            "page_1000": ("Biblioteca andante", "Leíste 1.000 páginas"),
-            "perfect_week": ("Semana perfecta", "Ganaste XP todos los días de una semana"),
-            "early_bird": ("Madrugador", "Estudiaste antes de las 7 AM"),
-            "night_owl": ("Nocturno", "Estudiaste después de las 11 PM"),
-            "quiz_100": ("Centurión de quizzes", "Completaste 100 quizzes"),
-            "quiz_500": ("Científico de quizzes", "Completaste 500 quizzes"),
-            "quiz_perfect_5": ("Tirador preciso", "5 quizzes con puntaje perfecto"),
-            "quiz_perfect_25": ("Diana perfecta", "25 quizzes con puntaje perfecto"),
-            "deck_builder": ("Arquitecto de mazos", "Creaste 10 mazos de tarjetas"),
-            "focus_session_4h": ("Mente maratón", "Completaste una sesión de enfoque de 4 horas"),
-            "focus_500h": ("Enfoque eterno", "500 horas totales de enfoque"),
-            "focus_1000h": ("Mente infinita", "1.000 horas totales de enfoque"),
-            "deep_work_week": ("Semana de trabajo profundo", "20 horas de enfoque en una semana"),
-            "streak_180": ("Héroe de medio año", "Racha de estudio de 180 días"),
-            "streak_365": ("Año de disciplina", "Racha de estudio de 365 días"),
-            "freeze_used": ("Salvado por hielo", "Usaste un congelador de racha por primera vez"),
-        }
-
-        def _badge_view(key, info):
-            if _ach_lang == "es" and key in _BADGE_ES:
-                name, desc = _BADGE_ES[key]
-                return {"emoji": info.get("emoji", ""), "name": name, "desc": desc}
-            return {
-                "emoji": info.get("emoji", ""),
-                "name": info.get("name", ""),
-                "desc": info.get("desc", ""),
-            }
-
-
-
-        badges_html = ""
-
-        for b in badges:
-
-            earned_date = str(b.get("earned_at", ""))[:10]
-            _bv = _badge_view(b.get("badge_key", ""), b)
-
-            badges_html += f"""
-
-            <div class="badge-card ach-badge-card" style="text-align:center;padding:16px 12px;background:var(--card);border-radius:var(--radius);
-
-                        border:1px solid var(--border);min-width:110px;flex:1;max-width:160px;
-
-                        transition:transform 0.2s,box-shadow 0.2s;cursor:default;position:relative"
-
-                 onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-md)';this.querySelector('.badge-tooltip').style.opacity='1';this.querySelector('.badge-tooltip').style.visibility='visible'"
-
-                 onmouseout="this.style.transform='';this.style.boxShadow='';this.querySelector('.badge-tooltip').style.opacity='0';this.querySelector('.badge-tooltip').style.visibility='hidden'">
-
-              <div style="font-size:2.2em;margin-bottom:4px">{_bv.get('emoji') or b.get('emoji','🏅')}</div>
-
-              <div style="font-weight:700;font-size:13px;color:var(--text)">{_esc(_bv.get('name',''))}</div>
-
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">{_esc(_bv.get('desc',''))}</div>
-
-              <div class="badge-tooltip" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
-
-                          background:var(--text);color:var(--bg);padding:8px 12px;border-radius:8px;font-size:12px;
-
-                          white-space:nowrap;opacity:0;visibility:hidden;transition:opacity 0.2s;z-index:10;
-
-                          pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.2)">
-
-                <div style="font-weight:700;margin-bottom:2px">{_esc(_bv.get('name',''))}</div>
-
-                <div>{_esc(_bv.get('desc',''))}</div>
-
-                <div style="opacity:0.7;margin-top:3px">Conseguido: {earned_date}</div>
-
-                <div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--text)"></div>
-
-              </div>
-
-            </div>"""
-
-
-
-        # All possible badges with tooltips, grouped into a scannable library.
-        badge_group_defs = [
-            ("Progreso XP", "Rangos, XP acumulado y crecimiento general"),
-            ("Racha", "Constancia diaria y calendario"),
-            ("Focus", "Sesiones profundas y tiempo estudiado"),
-            ("Quizzes", "Pruebas, precision y practica"),
-            ("Tarjetas", "Repaso espaciado y mazos"),
-            ("Cursos", "Cursos sincronizados y avance academico"),
-            ("Social", "Amigos, perfil y rankings"),
-            ("Especiales", "Insignias raras, eventos y cosméticos"),
-        ]
-
-        def _badge_group_for(key: str) -> str:
-            k = (key or "").lower()
-            if k.startswith("xp_") or k in {"perfect_week", "speed_demon", "marathoner"}:
-                return "Progreso XP"
-            if k.startswith("streak_") or k in {"early_bird", "night_owl", "weekend_warrior", "midnight_oil", "sunrise_session", "freeze_used"}:
-                return "Racha"
-            if k.startswith("focus_") or k in {"deep_work_week"}:
-                return "Focus"
-            if "quiz" in k:
-                return "Quizzes"
-            if "flashcard" in k or "deck" in k:
-                return "Tarjetas"
-            if "course" in k or "syllabus" in k or "page_" in k:
-                return "Cursos"
-            if k in {"identity", "banner_collector", "flag_collector"}:
-                return "Social"
-            return "Especiales"
-
-        all_badges_by_group = {title: [] for title, _ in badge_group_defs}
-
-        for key, info in sdb.BADGE_DEFS.items():
-            if str(key).startswith("duel_"):
-                continue
-            _iv = _badge_view(key, info)
-
-            earned = any(b["badge_key"] == key for b in badges)
-
-            opacity = "1" if earned else "0.25"
-
-            border = "var(--primary)" if earned else "var(--border)"
-
-            status_text = "Conseguido" if earned else "Aún no conseguido"
-
-            status_color = "#22c55e" if earned else "#94a3b8"
-
-            all_badges_by_group.setdefault(_badge_group_for(key), []).append(f"""
-
-            <div class="badge-card ach-badge-card ach-all-badge" style="text-align:center;padding:10px 8px;opacity:{opacity};min-width:90px;flex:1;max-width:120px;
-
-                        border:1px solid {border};border-radius:var(--radius-sm);background:var(--card);
-
-                        transition:all 0.2s;cursor:default;position:relative"
-
-                 onmouseover="this.style.opacity='1';this.querySelector('.badge-tooltip').style.opacity='1';this.querySelector('.badge-tooltip').style.visibility='visible'"
-
-                 onmouseout="this.style.opacity='{opacity}';this.querySelector('.badge-tooltip').style.opacity='0';this.querySelector('.badge-tooltip').style.visibility='hidden'">
-
-              <div style="font-size:1.6em">{_iv.get('emoji') or info['emoji']}</div>
-
-              <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:2px">{_esc(_iv.get('name',''))}</div>
-
-              <div class="badge-tooltip" style="position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
-
-                          background:var(--text);color:var(--bg);padding:8px 12px;border-radius:8px;font-size:12px;
-
-                          white-space:nowrap;opacity:0;visibility:hidden;transition:opacity 0.2s;z-index:10;
-
-                          pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.2)">
-
-                <div style="font-weight:700;margin-bottom:2px">{_esc(_iv.get('name',''))}</div>
-
-                <div>{_esc(_iv.get('desc',''))}</div>
-
-                <div style="color:{status_color};margin-top:3px;font-weight:600">{status_text}</div>
-
-                <div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--text)"></div>
-
-              </div>
-
-            </div>""")
-
-        all_badges_html = ""
-        for group_title, group_desc in badge_group_defs:
-            _cards = "".join(all_badges_by_group.get(group_title) or [])
-            if not _cards:
-                continue
-            all_badges_html += f"""
-            <div class="ach-badge-group">
-              <div class="ach-badge-group-head">
-                <div>{_esc(group_title)}</div>
-                <span>{_esc(group_desc)}</span>
-              </div>
-              <div class="ach-section-body compact">
-                {_cards}
-              </div>
-            </div>"""
-
-
-
-        def _fmt_xp_ts(raw):
-            # student_xp.created_at is either a datetime (Postgres) or an
-            # ISO-ish string (SQLite 'YYYY-MM-DD HH:MM:SS'). Postgres NOW()
-            # is UTC on Render — convert to the user's local tz before
-            # rendering so they don't see "today's quiz" stamped with a
-            # time that's hours off from their phone clock.
-            if raw is None:
-                return ("", "")
-            try:
-                from datetime import datetime as _dt, timezone as _tz
-                if hasattr(raw, "strftime"):
-                    dt_obj = raw
-                else:
-                    s = str(raw).strip()
-                    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
-                                "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%f"):
-                        try:
-                            dt_obj = _dt.strptime(s.split("+")[0].split("Z")[0], fmt)
-                            break
-                        except Exception:
-                            continue
-                    else:
-                        return (s[:10], s[11:16] if len(s) >= 16 else "")
-                # Treat naive timestamps as UTC (the server stores in UTC),
-                # then convert to the user's IANA tz from their profile.
-                try:
-                    from zoneinfo import ZoneInfo
-                    from student.timezones import tz_for_country
-                    from machreach_core.db import _fetchone as _fo, get_db
-                    user_tz_name = "America/Santiago"
-                    try:
-                        with get_db() as _db:
-                            _row = _fo(_db, "SELECT country_iso FROM clients WHERE id = %s", (cid,))
-                        iso = (dict(_row).get("country_iso") if _row else "") or ""
-                        if iso:
-                            user_tz_name = tz_for_country(iso)
-                    except Exception:
-                        pass
-                    if dt_obj.tzinfo is None:
-                        dt_obj = dt_obj.replace(tzinfo=_tz.utc)
-                    dt_obj = dt_obj.astimezone(ZoneInfo(user_tz_name))
-                except Exception:
-                    pass
-                return (dt_obj.strftime("%Y-%m-%d"), dt_obj.strftime("%H:%M"))
-            except Exception:
-                return (str(raw)[:10], "")
-
-        history_html = ""
-
-        for h in history:
-
-            _d, _t = _fmt_xp_ts(h.get("created_at"))
-            ts_html = ""
-            if _d:
-                ts_html = (
-                    f'<div style="color:var(--text-muted);font-size:11px;margin-top:2px">'
-                    f'{_esc(_d)}{" &middot; " + _esc(_t) if _t else ""}'
-                    f'</div>'
-                )
-
-            history_html += f"""
-
-            <div class="ach-history-row" style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;
-
-                        border-bottom:1px solid var(--border);font-size:14px;color:var(--text);gap:12px">
-
-              <div style="min-width:0;flex:1">
-                <div style="overflow:hidden;text-overflow:ellipsis">{_esc(h.get('detail','') or h['action'])}</div>
-                {ts_html}
-              </div>
-
-              <span style="color:#22c55e;font-weight:600;white-space:nowrap">+{h['xp']} XP</span>
-
-            </div>"""
-
-
-
-        return _s_render("Logros", f"""
-        <style>
-          .achievements-cd {{ max-width:900px;margin:0 auto 80px;font-family:'Nunito',sans-serif;color:#1A1A1F; }}
-          .achievements-cd h2 {{ font-family:'Bricolage Grotesque',sans-serif;font-size:34px;font-weight:600;letter-spacing:-.03em;color:#1A1A1F; }}
-          .achievements-cd .ach-rank-card {{ background:linear-gradient(135deg,#FFFFFF,#F4F1EA)!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important;border-radius:24px!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 18px 44px rgba(20,18,30,.08)!important; }}
-          .achievements-cd .ach-stat-card,.achievements-cd .ach-badge-card,.achievements-cd .ach-activity-card {{ background:#FFFFFF!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important;box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 10px rgba(20,18,30,.04)!important; }}
-          .achievements-cd [style*="background:var(--card)"] {{ background:#FFFFFF!important;color:#1A1A1F!important;border-color:#E2DCCC!important; }}
-          .achievements-cd [style*="background:#0f172a"], .achievements-cd [style*="background:#1e293b"], .achievements-cd [style*="background:#111827"] {{ background:#FFFFFF!important;color:#1A1A1F!important;border:1px solid #E2DCCC!important; }}
-          .achievements-cd .ach-stat-card .big {{ color:#FF7A3D!important; }}
-          .achievements-cd .ach-activity-card [style*="color:#fff"], .achievements-cd [style*="color:#fff"] {{ color:#1A1A1F!important; }}
-          .achievements-cd {{ --ach-ink:#201B20;--ach-card:#FFFFFF;--ach-line:#201B20;--ach-muted:#77756F;--ach-orange:#FF7A3D;max-width:none!important;margin:0 0 90px!important;display:flex;flex-direction:column;gap:18px; }}
-          .achievements-cd,.achievements-cd *,.achievements-cd *::before,.achievements-cd *::after {{ box-sizing:border-box!important; }}
-          .achievements-cd > h2 {{ margin:0!important;padding:clamp(24px,3vw,38px)!important;border:2px solid var(--ach-line)!important;border-radius:24px!important;background:linear-gradient(135deg,#FFE7D8 0%,#FFF8EE 58%,#E9F7DE 100%)!important;box-shadow:0 5px 0 var(--ach-line),0 22px 48px rgba(32,27,32,.10)!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:clamp(42px,5vw,72px)!important;line-height:.92!important;font-weight:800!important;letter-spacing:0!important;color:var(--ach-ink)!important; }}
-          .achievements-cd > h2::before {{ content:"XP Y LOGROS";display:flex;width:fit-content;margin:0 0 14px;padding:7px 12px;border:2px solid var(--ach-orange);border-radius:999px;background:#FFF8EE;color:#8B3A18;font-family:'Nunito',sans-serif;font-size:11px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;box-shadow:0 2px 0 rgba(32,27,32,.18); }}
-          .achievements-cd .ach-rank-card {{ margin:0!important;text-align:left!important;padding:24px!important;background:#FFFFFF!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:20px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important; }}
-          .achievements-cd .ach-rank-card > div:first-child {{ display:none!important; }}
-          .achievements-cd .ach-rank-card div {{ color:var(--ach-ink)!important;opacity:1!important; }}
-          .achievements-cd .ach-rank-card div:nth-child(2) {{ color:#8B3A18!important;font-size:11px!important;letter-spacing:.12em!important;text-transform:uppercase!important;font-weight:900!important; }}
-          .achievements-cd .ach-rank-card div:nth-child(3) {{ font-family:'Bricolage Grotesque',sans-serif!important;font-size:clamp(28px,3vw,42px)!important;line-height:1!important;font-weight:800!important;letter-spacing:0!important;margin:8px 0 4px!important; }}
-          .achievements-cd .ach-rank-card div:nth-child(4) {{ color:var(--ach-orange)!important;font-size:22px!important;font-weight:900!important; }}
-          .achievements-cd .ach-rank-card div:nth-child(5) {{ height:14px!important;max-width:none!important;margin:18px 0 10px!important;border:2px solid var(--ach-line)!important;border-radius:999px!important;background:#F1EBDD!important;overflow:hidden!important; }}
-          .achievements-cd .ach-rank-card div:nth-child(5) > div {{ height:100%!important;border-radius:999px!important;background:linear-gradient(90deg,var(--ach-orange),#FFB84D,#2E9266)!important;box-shadow:none!important; }}
-          .achievements-cd .ach-rank-card div:nth-child(6) {{ color:#5C5C66!important;font-size:13px!important;font-weight:800!important; }}
-          .achievements-cd > div[style*="grid-template-columns:1fr 1fr"] {{ display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important;margin:0!important; }}
-          .achievements-cd .ach-stat-card,.achievements-cd .ach-badge-card,.achievements-cd .ach-activity-card,.achievements-cd > h3 + div {{ background:var(--ach-card)!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:18px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important; }}
-          .achievements-cd .ach-stat-card {{ text-align:left!important;min-height:150px;padding:20px!important;position:relative;overflow:hidden; }}
-          .achievements-cd .ach-stat-card > div:nth-child(2) {{ font-family:'Bricolage Grotesque',sans-serif!important;font-size:46px!important;line-height:1!important;font-weight:800!important;color:var(--ach-orange)!important;margin:10px 0 6px!important; }}
-          .achievements-cd .ach-stat-card > div:nth-child(3) {{ color:#5C5C66!important;font-size:12px!important;font-weight:900!important;text-transform:uppercase!important;letter-spacing:.08em!important; }}
-          .achievements-cd > h3 {{ margin:12px 0 -4px!important;padding:0 0 0 4px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:26px!important;line-height:1.08!important;font-weight:800!important;letter-spacing:0!important;color:var(--ach-ink)!important; }}
-          .achievements-cd > h3 + div {{ margin:0!important;padding:24px!important;border-radius:18px!important;overflow:visible!important; }}
-          .achievements-cd .ach-badge-card {{ min-width:0!important;max-width:none!important;flex:auto!important;padding:16px 12px!important;background:#FFFDF8!important;border-color:#E6DCCB!important;box-shadow:none!important;overflow:visible!important;position:relative!important;z-index:1; }}
-          .achievements-cd .ach-badge-card:hover {{ overflow:visible!important;z-index:80!important; }}
-          .achievements-cd .ach-all-badge {{ min-width:0!important;max-width:none!important;min-height:96px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important; }}
-          .achievements-cd .ach-badge-card > div:nth-child(2),
-          .achievements-cd .ach-badge-card > div:nth-child(3) {{ white-space:normal!important;overflow-wrap:anywhere!important;line-height:1.18!important; }}
-          .achievements-cd .badge-tooltip {{
-            display:block!important;
-            top:auto!important;
-            bottom:calc(100% + 10px)!important;
-            left:50%!important;
-            width:max-content!important;
-            min-width:190px!important;
-            max-width:min(280px,calc(100vw - 48px))!important;
-            padding:10px 12px!important;
-            border:2px solid var(--ach-line)!important;
-            border-radius:12px!important;
-            white-space:normal!important;
-            overflow-wrap:normal!important;
-            word-break:normal!important;
-            line-height:1.25!important;
-            text-align:center!important;
-            z-index:2000!important;
-            opacity:0;
-            visibility:hidden;
-          }}
-          .achievements-cd .badge-tooltip > div {{ overflow-wrap:normal!important;word-break:normal!important; }}
-          .achievements-cd .badge-tooltip > div:last-child {{
-            top:100%!important;
-            bottom:auto!important;
-            border-color:transparent!important;
-            border-top-color:var(--ach-line)!important;
-          }}
-          .achievements-cd .ach-badge-card:hover .badge-tooltip,
-          .achievements-cd .ach-badge-card.is-tooltip-open .badge-tooltip {{ opacity:1!important;visibility:visible!important; }}
-          .achievements-cd .ach-history-row {{ border-bottom:1px solid #E6DCCB!important;color:var(--ach-ink)!important;padding:12px 0!important; }}
-          .achievements-cd .ach-section {{ background:var(--ach-card)!important;color:var(--ach-ink)!important;border:2px solid var(--ach-line)!important;border-radius:18px!important;box-shadow:0 4px 0 var(--ach-line),0 18px 34px rgba(32,27,32,.08)!important;padding:24px!important;overflow:visible!important; }}
-          .achievements-cd .ach-section > h3 {{ margin:0 0 18px!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;font-family:'Bricolage Grotesque',sans-serif!important;font-size:26px!important;line-height:1.08!important;font-weight:800!important;color:var(--ach-ink)!important; }}
-          .achievements-cd .ach-section-body {{ display:grid!important;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))!important;gap:12px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important; }}
-          .achievements-cd .ach-section-body.compact {{ grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:10px!important; }}
-          .achievements-cd .ach-section-body.activity {{ display:block!important; }}
-          .achievements-cd .ach-badge-groups {{ display:flex!important;flex-direction:column!important;gap:16px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important; }}
-          .achievements-cd .ach-badge-group {{ padding:16px!important;border:1px solid #E6DCCB!important;border-radius:16px!important;background:#FFFDF8!important;box-shadow:none!important;overflow:visible!important; }}
-          .achievements-cd .ach-badge-group-head {{ display:flex!important;align-items:flex-end!important;justify-content:space-between!important;gap:12px!important;margin:0 0 12px!important; }}
-          .achievements-cd .ach-badge-group-head div {{ font-family:'Bricolage Grotesque',sans-serif!important;font-size:21px!important;font-weight:800!important;line-height:1!important;color:var(--ach-ink)!important; }}
-          .achievements-cd .ach-badge-group-head span {{ max-width:360px!important;text-align:right!important;font-size:12px!important;font-weight:800!important;color:#6F6A63!important;line-height:1.25!important; }}
-          .achievements-cd > h2,.achievements-cd .ach-rank-card,.achievements-cd > div[style*="grid-template-columns:1fr 1fr"],.achievements-cd .ach-section {{ will-change:transform,opacity; }}
-          .achievements-cd > h2 {{ clip-path:none!important;animation:achHeroBuild .42s cubic-bezier(.16,.92,.22,1) both!important; }}
-          .achievements-cd .ach-rank-card {{ position:relative;animation:achPanelBuild .36s .06s cubic-bezier(.18,.88,.22,1) both!important; }}
-          .achievements-cd > div[style*="grid-template-columns:1fr 1fr"] {{ animation:achPanelBuild .34s .12s cubic-bezier(.18,.88,.22,1) both!important; }}
-          .achievements-cd .ach-section {{ position:relative;animation:achSectionSnap .34s cubic-bezier(.18,.88,.22,1) both!important; }}
-          .achievements-cd .ach-section:nth-of-type(1) {{ animation-delay:.17s!important; }}
-          .achievements-cd .ach-section:nth-of-type(2) {{ animation-delay:.22s!important; }}
-          .achievements-cd .ach-section:nth-of-type(3) {{ animation-delay:.27s!important; }}
-          .achievements-cd .ach-stat-card {{ transition:transform .16s ease,box-shadow .16s ease!important;animation:achStatPop .38s cubic-bezier(.16,1.25,.32,1) both!important; }}
-          .achievements-cd .ach-stat-card:nth-child(1) {{ animation-delay:.18s!important; }}
-          .achievements-cd .ach-stat-card:nth-child(2) {{ animation-delay:.24s!important; }}
-          .achievements-cd .ach-stat-card > div:nth-child(2) {{ animation:achCountPunch .42s .32s cubic-bezier(.16,1.35,.28,1) both!important; }}
-          .achievements-cd .ach-rank-card div:nth-child(5) > div {{ transform-origin:left center;animation:achProgressCharge .62s .28s cubic-bezier(.16,.9,.22,1) both,achProgressGlow 1.25s .85s ease-in-out infinite alternate!important; }}
-          .achievements-cd .ach-section::after,.achievements-cd .ach-rank-card::after {{ content:"";position:absolute;left:18px;right:18px;top:0;height:3px;border-radius:999px;background:linear-gradient(90deg,transparent,var(--ach-orange),#FFB84D,transparent);opacity:0;transform:translateX(-18%);animation:achEdgeScan .72s .18s cubic-bezier(.18,.88,.22,1) both;pointer-events:none; }}
-          .achievements-cd .ach-section > h3 {{ animation:achTitleSnap .3s cubic-bezier(.2,1,.28,1) both!important; }}
-          .achievements-cd .ach-section:nth-of-type(1) > h3 {{ animation-delay:.24s!important; }}
-          .achievements-cd .ach-section:nth-of-type(2) > h3 {{ animation-delay:.29s!important; }}
-          .achievements-cd .ach-section:nth-of-type(3) > h3 {{ animation-delay:.34s!important; }}
-          .achievements-cd .ach-badge-card {{ animation:achBadgeSnap .36s cubic-bezier(.18,1.3,.3,1) both!important;transition:transform .15s ease,box-shadow .15s ease!important; }}
-          .achievements-cd .ach-badge-card:nth-child(1) {{ animation-delay:.31s!important; }}
-          .achievements-cd .ach-badge-card:nth-child(2) {{ animation-delay:.34s!important; }}
-          .achievements-cd .ach-badge-card:nth-child(3) {{ animation-delay:.37s!important; }}
-          .achievements-cd .ach-badge-card:nth-child(4) {{ animation-delay:.40s!important; }}
-          .achievements-cd .ach-badge-card:nth-child(5) {{ animation-delay:.43s!important; }}
-          .achievements-cd .ach-badge-card:nth-child(6) {{ animation-delay:.46s!important; }}
-          .achievements-cd .ach-badge-card:nth-child(7) {{ animation-delay:.49s!important; }}
-          .achievements-cd .ach-badge-card:nth-child(8) {{ animation-delay:.52s!important; }}
-          .achievements-cd .ach-badge-card:nth-child(n+9) {{ animation-delay:.55s!important; }}
-          .achievements-cd .ach-badge-card:hover,.achievements-cd .ach-stat-card:hover {{ transform:translateY(-4px) scale(1.015)!important; }}
-          .achievements-cd .ach-history-row {{ animation:achHistorySlide .28s .36s cubic-bezier(.2,.9,.24,1) both!important; }}
-          @keyframes achHeroBuild {{ 0% {{ opacity:0;transform:translateY(14px) scale(.985);filter:blur(6px); }} 55% {{ opacity:1;filter:blur(0); }} 100% {{ opacity:1;transform:translateY(0) scale(1);filter:blur(0); }} }}
-          @keyframes achPanelBuild {{ 0% {{ opacity:0;transform:translate3d(-14px,16px,0) scale(.985); }} 72% {{ opacity:1;transform:translate3d(2px,-1px,0) scale(1.003); }} 100% {{ opacity:1;transform:translate3d(0,0,0) scale(1); }} }}
-          @keyframes achSectionSnap {{ 0% {{ opacity:0;transform:translate3d(18px,18px,0) scale(.985); }} 70% {{ opacity:1;transform:translate3d(-1px,-1px,0) scale(1.002); }} 100% {{ opacity:1;transform:translate3d(0,0,0) scale(1); }} }}
-          @keyframes achStatPop {{ 0% {{ opacity:0;transform:translateY(18px) scale(.92); }} 64% {{ opacity:1;transform:translateY(-2px) scale(1.025); }} 100% {{ opacity:1;transform:translateY(0) scale(1); }} }}
-          @keyframes achCountPunch {{ 0% {{ opacity:.3;transform:translateY(10px) scale(.72); }} 58% {{ opacity:1;transform:translateY(-1px) scale(1.14); }} 100% {{ opacity:1;transform:translateY(0) scale(1); }} }}
-          @keyframes achProgressCharge {{ from {{ transform:scaleX(0);filter:saturate(1.4) brightness(1.18); }} to {{ transform:scaleX(1);filter:saturate(1) brightness(1); }} }}
-          @keyframes achProgressGlow {{ from {{ filter:drop-shadow(0 0 0 rgba(255,122,61,0)); }} to {{ filter:drop-shadow(0 0 10px rgba(255,122,61,.45)); }} }}
-          @keyframes achEdgeScan {{ 0% {{ opacity:0;transform:translateX(-26%) scaleX(.45); }} 45% {{ opacity:.95; }} 100% {{ opacity:0;transform:translateX(26%) scaleX(1); }} }}
-          @keyframes achTitleSnap {{ from {{ opacity:0;transform:translateX(-12px); }} to {{ opacity:1;transform:translateX(0); }} }}
-          @keyframes achBadgeSnap {{ 0% {{ opacity:0;transform:translateY(12px) scale(.86) rotate(-2deg); }} 66% {{ opacity:1;transform:translateY(-2px) scale(1.035) rotate(.8deg); }} 100% {{ opacity:1;transform:translateY(0) scale(1) rotate(0); }} }}
-          @keyframes achHistorySlide {{ from {{ opacity:0;transform:translateX(-10px); }} to {{ opacity:1;transform:translateX(0); }} }}
-          @media (prefers-reduced-motion:reduce) {{ .achievements-cd *,.achievements-cd *::before,.achievements-cd *::after {{ animation:none!important;transition:none!important; }} }}
-          @media(max-width:720px) {{ .achievements-cd > div[style*="grid-template-columns:1fr 1fr"] {{ grid-template-columns:1fr!important; }} }}
-          .achievements-cd .ach-stat-card {{ display:flex!important;flex-direction:column;justify-content:center!important;align-items:flex-start!important;gap:6px!important; }}
-          .achievements-cd .ach-stat-card > div:first-child {{ display:none!important; }}
-          .achievements-cd [style*="color:var(--text-muted)"] {{ color:#6F6A63!important; }}
-          :root[data-theme="dark"] .achievements-cd {{ --ach-ink:#FFF8E1;--ach-card:#17161A;--ach-line:#FF7A3D;--ach-muted:#BDB5AA;color:#FFF8E1!important; }}
-          :root[data-theme="dark"] .achievements-cd > h2 {{ background:linear-gradient(135deg,#0F1014 0%,#17161A 62%,#211510 100%)!important;border-color:#FF7A3D!important;box-shadow:0 5px 0 #FF7A3D,0 24px 58px rgba(0,0,0,.36)!important;color:#FFF8E1!important; }}
-          :root[data-theme="dark"] .achievements-cd > h2::before {{ background:rgba(255,122,61,.12)!important;color:#FFB07A!important;border-color:#FF7A3D!important;box-shadow:0 2px 0 rgba(255,122,61,.55)!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-rank-card,:root[data-theme="dark"] .achievements-cd .ach-stat-card,:root[data-theme="dark"] .achievements-cd .ach-activity-card,:root[data-theme="dark"] .achievements-cd > h3 + div {{ background:#17161A!important;border-color:#FF7A3D!important;color:#FFF8E1!important;box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32)!important; }}
-          :root[data-theme="dark"] .achievements-cd > h3 {{ background:transparent!important;border:0!important;box-shadow:none!important;color:#FFF8E1!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-rank-card div,:root[data-theme="dark"] .achievements-cd > h3 {{ color:#FFF8E1!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-rank-card div:nth-child(2) {{ color:#FFB07A!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-rank-card div:nth-child(4),:root[data-theme="dark"] .achievements-cd .ach-stat-card > div:nth-child(2) {{ color:#FF7A3D!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-rank-card div:nth-child(5) {{ background:#0A0A10!important;border-color:#FF7A3D!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-rank-card div:nth-child(6),:root[data-theme="dark"] .achievements-cd .ach-stat-card > div:nth-child(3) {{ color:#BDB5AA!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-badge-card {{ background:#111116!important;border-color:rgba(255,122,61,.48)!important;color:#FFF8E1!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-stat-card > div:first-child {{ display:none!important; }}
-          :root[data-theme="dark"] .achievements-cd [style*="color:var(--text-muted)"] {{ color:#BDB5AA!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-history-row {{ border-bottom-color:rgba(255,122,61,.28)!important;color:#FFF8E1!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-section {{ background:#17161A!important;border-color:#FF7A3D!important;color:#FFF8E1!important;box-shadow:0 4px 0 #FF7A3D,0 20px 52px rgba(0,0,0,.32)!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-section > h3 {{ color:#FFF8E1!important;background:transparent!important;border:0!important;box-shadow:none!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-badge-group {{ background:#111116!important;border-color:rgba(255,122,61,.38)!important; }}
-          :root[data-theme="dark"] .achievements-cd .ach-badge-group-head span {{ color:#BDB5AA!important; }}
-        </style>
-
-        <div class="achievements-cd">
-
-          <h2 style="margin-bottom:20px">Progreso XP</h2>
-
-
-
-          <!-- Rank & XP Bar -->
-
-          <div class="ach-rank-card" style="background:linear-gradient(135deg,{rank_color} 0%,{rank_color}cc 60%,{rank_color}99 100%);color:#fff;
-
-                      border-radius:var(--radius);padding:28px 32px;margin-bottom:24px;text-align:center;
-
-                      box-shadow:0 8px 32px {rank_color}55;position:relative;overflow:hidden">
-
-            <div style="position:absolute;top:-20px;right:-20px;font-size:120px;opacity:0.08">🏆</div>
-
-            <div style="font-size:13px;opacity:0.85;text-transform:uppercase;letter-spacing:1.5px;font-weight:600">Posición</div>
-
-            <div style="font-size:2.2em;font-weight:800;margin:6px 0;letter-spacing:-1px">{_esc(rank_full_name)}</div>
-
-            <div style="font-size:1.4em;font-weight:600;opacity:0.95;color:#FF7A3D;">{total_xp} XP</div>
-
-            <div style="background:rgba(255,255,255,0.2);border-radius:8px;height:10px;margin:14px auto;max-width:320px">
-
-              <div style="background:#fff;border-radius:8px;height:10px;width:{pct}%;transition:width 0.6s ease;box-shadow:0 0 12px rgba(255,255,255,0.3)"></div>
-
-            </div>
-
-            <div style="font-size:13px;opacity:0.75">{total_xp - rank_floor} / {max(1, rank_ceil - rank_floor)} XP para el siguiente rango</div>
-
-          </div>
-
-
-
-          <!-- Streak & Badges Count -->
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px">
-
-            <div class="ach-stat-card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
-
-                        padding:20px;text-align:center;transition:transform 0.2s"
-
-                 onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-
-              <div style="font-size:2.2em">🔥</div>
-
-              <div style="font-size:2.4em;font-weight:800;color:#ea580c;margin:4px 0">{streak}</div>
-
-              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Racha activa</div>
-
-            </div>
-
-            <div class="ach-stat-card" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
-
-                        padding:20px;text-align:center;transition:transform 0.2s"
-
-                 onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-
-              <div style="font-size:2.2em">🏅</div>
-
-              <div style="font-size:2.4em;font-weight:800;color:#16a34a;margin:4px 0">{len(badges)}</div>
-
-              <div style="font-size:13px;color:var(--text-muted);font-weight:500">Insignias ganadas</div>
-
-            </div>
-
-          </div>
-
-
-
-          <!-- Earned Badges -->
-
-          <section class="ach-section">
-            <h3>Insignias desbloqueadas</h3>
-            <div class="ach-section-body">
-              {badges_html if badges_html else '<p style="color:var(--text-muted)">Aún no tienes insignias. Sigue estudiando para desbloquearlas.</p>'}
-            </div>
-          </section>
-
-
-
-          <!-- All Badges -->
-
-          <section class="ach-section">
-            <h3>Todas las insignias</h3>
-            <div class="ach-badge-groups">
-              {all_badges_html}
-            </div>
-          </section>
-
-
-
-          <!-- XP History -->
-
-          <section class="ach-section">
-            <h3>Actividad reciente</h3>
-            <div class="ach-section-body activity">
-              {history_html if history_html else '<p style="color:var(--text-muted)">Todavía no hay actividad XP.</p>'}
-            </div>
-          </section>
-
-        </div>
-
-        """, active_page="student_achievements")
 
 
 

@@ -78,7 +78,101 @@ function Sidebar({ active = "home", plus = false }) {
   );
 }
 
-function Topbar({ title, sub, streak, xp, coins, plus = false, tweaks, setTweak, avatar = "MR" }) {
+/* ---- Background AI generation ------------------------------------------
+   Quiz and flashcard generation runs in the worker, so it keeps going while
+   the student moves around the app. This watcher rides along in the topbar
+   (every page renders one) and reports the result wherever they end up.
+   The pending flag lives in sessionStorage so a page load mid-job still
+   knows a result is owed — otherwise a reload would swallow the toast. */
+const GEN_JOBS = [
+  {
+    key: "quiz",
+    url: "/api/student/quizzes/generate/status",
+    href: "/student/quizzes",
+    icon: "🧠",
+    done: SHELL_EN ? "Your quiz is ready" : "Tu quiz está listo",
+    failed: SHELL_EN ? "Quiz generation failed" : "No se pudo generar el quiz",
+    cta: SHELL_EN ? "Open quizzes" : "Ver quizzes",
+  },
+  {
+    key: "cards",
+    url: "/api/student/flashcards/generate/status",
+    href: "/student/flashcards",
+    icon: "🗃",
+    done: SHELL_EN ? "Your flashcards are ready" : "Tus flashcards están listas",
+    failed: SHELL_EN ? "Flashcard generation failed" : "No se pudieron generar las flashcards",
+    cta: SHELL_EN ? "Open flashcards" : "Ver flashcards",
+  },
+];
+const GEN_FLAG = (key) => "mr_gen_pending_" + key;
+
+function markGenerationQueued(key) {
+  try { sessionStorage.setItem(GEN_FLAG(key), "1"); } catch (e) { /* private mode */ }
+  dispatchEvent(new CustomEvent("mr-generation-queued"));
+}
+
+function GenerationWatcher() {
+  const [notes, setNotes] = React.useState([]);
+  React.useEffect(() => {
+    if (!SHELL_DATA.live) return undefined;
+    let alive = true;
+    let timer = 0;
+    const wasPending = (key) => {
+      try { return sessionStorage.getItem(GEN_FLAG(key)) === "1"; } catch (e) { return false; }
+    };
+    const clearPending = (key) => {
+      try { sessionStorage.removeItem(GEN_FLAG(key)); } catch (e) { /* private mode */ }
+    };
+    const poll = async () => {
+      let running = false;
+      for (const job of GEN_JOBS) {
+        let status = "idle";
+        try {
+          const response = await fetch(job.url, { credentials: "same-origin" });
+          if (!response.ok) continue;
+          status = (await response.json()).status || "idle";
+        } catch (e) { continue; }
+        if (status === "queued" || status === "running") {
+          try { sessionStorage.setItem(GEN_FLAG(job.key), "1"); } catch (e) { /* private mode */ }
+          running = true;
+        } else if (wasPending(job.key)) {
+          clearPending(job.key);
+          // Anything other than done/error (a cleared or expired job record)
+          // is not a result worth interrupting the student for.
+          if (status === "done" || status === "error") {
+            setNotes((current) => [...current, { id: job.key + Date.now(), job, ok: status === "done" }]);
+          }
+        }
+      }
+      if (!alive) return;
+      // Idle costs one request per page load; only an in-flight job keeps polling.
+      if (running) timer = setTimeout(poll, 5000);
+    };
+    const kick = () => { clearTimeout(timer); poll(); };
+    poll();
+    addEventListener("mr-generation-queued", kick);
+    return () => { alive = false; clearTimeout(timer); removeEventListener("mr-generation-queued", kick); };
+  }, []);
+  if (!notes.length) return null;
+  return (
+    <div className="gen-toasts" role="status" aria-live="polite">
+      {notes.map((note) => (
+        <div className={"gen-toast" + (note.ok ? "" : " bad")} key={note.id}>
+          <span className="gen-ic">{note.ok ? note.job.icon : "⚠️"}</span>
+          <div className="gen-b">
+            <b>{note.ok ? note.job.done : note.job.failed}</b>
+            {note.ok && <a href={note.job.href}>{note.job.cta}</a>}
+          </div>
+          <button type="button" aria-label={SHELL_EN ? "Dismiss" : "Cerrar"}
+            onClick={() => setNotes((current) => current.filter((n) => n.id !== note.id))}><IconClose size={14} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Topbar({ title, sub, streak, xp, coins, freezes, plus = false, tweaks, setTweak, avatar = "MR" }) {
+  const freezeCount = freezes ?? SHELL_DATA.freezes;
   return (
     <header className="topbar">
       <div className="topbar-in">
@@ -92,7 +186,7 @@ function Topbar({ title, sub, streak, xp, coins, plus = false, tweaks, setTweak,
           <span className="chip fire hide-sm"><IconFire size={16} color="var(--brand)" /><span className="num">{streak}</span></span>
           <span className="chip xp hide-sm"><IconBolt size={16} color="var(--plum)" /><span className="num">{xp}</span></span>
           <span className="chip coin hide-sm"><IconCoin size={16} color="#B58309" /><span className="num">{coins}</span></span>
-          <a href="/student/achievements" className="icon-btn" aria-label={SHELL_EN ? "Notifications" : "Notificaciones"}><IconBell size={17} /></a>
+          <span className="chip freeze hide-sm" title={SHELL_EN ? "Streak freezes" : "Congeladores de racha"}>❄️<span className="num">{freezeCount ?? 0}</span></span>
           <button className="icon-btn" aria-label="Cambiar tema" onClick={() => setTweak("theme", tweaks.theme === "dark" ? "light" : "dark")}>
             {tweaks.theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />}
           </button>
@@ -103,6 +197,7 @@ function Topbar({ title, sub, streak, xp, coins, plus = false, tweaks, setTweak,
           </a>
         </div>
       </div>
+      <GenerationWatcher />
     </header>
   );
 }
@@ -163,4 +258,4 @@ function Modal({ title, sub, onClose, children, foot }) {
   );
 }
 
-Object.assign(window, { IconHome, IconCal, IconGrid, IconStore, IconBell, AV, Ring, NavItem, Sidebar, Topbar, TabBar, Modal, NAV_MAIN, NAV_SOCIAL });
+Object.assign(window, { IconHome, IconCal, IconGrid, IconStore, IconBell, AV, Ring, NavItem, Sidebar, Topbar, TabBar, Modal, GenerationWatcher, markGenerationQueued, NAV_MAIN, NAV_SOCIAL });

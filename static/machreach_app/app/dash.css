@@ -46,9 +46,11 @@
 .chip.fire{background:#FFE9D9}
 .chip.xp{background:#EDE4FF}
 .chip.coin{background:#FFF3CF}
+.chip.freeze{background:#DCEEFB}
 [data-theme="dark"] .chip.fire{background:color-mix(in oklab,var(--brand) 22%,var(--surface))}
 [data-theme="dark"] .chip.xp{background:color-mix(in oklab,var(--plum) 28%,var(--surface))}
 [data-theme="dark"] .chip.coin{background:color-mix(in oklab,var(--amber) 24%,var(--surface))}
+[data-theme="dark"] .chip.freeze{background:color-mix(in oklab,var(--sky) 26%,var(--surface))}
 [data-theme="dark"] .avatar{color:#241834}
 .avatar{width:42px;height:42px;border-radius:50%;border:var(--bd);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:15px;color:var(--ink);box-shadow:var(--sh1);flex:none}
 
@@ -136,11 +138,13 @@
 /* ---------- courses ---------- */
 .courses{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
 @media (max-width:980px){.courses{grid-template-columns:repeat(2,1fr)}}
-.course{position:relative;overflow:hidden;display:block;border:var(--bd);border-radius:var(--r);padding:14px;box-shadow:var(--sh1);color:var(--ink);transition:transform .22s var(--spring-b),box-shadow .22s}
+/* min-height + the padding on code/nm keep long codes and names clear of the
+   progress ring pinned to the top-right corner. */
+.course{position:relative;overflow:hidden;display:block;min-height:150px;border:var(--bd);border-radius:var(--r);padding:14px;box-shadow:var(--sh1);color:var(--ink);transition:transform .22s var(--spring-b),box-shadow .22s}
 [data-theme="dark"] .course{background:var(--surface-2)!important}
 .course:hover{color:var(--ink);transform:translateY(-5px) rotate(1deg);box-shadow:var(--sh3)}
-.course .code{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--ink-2)}
-.course .nm{font-family:var(--font-display);font-weight:800;font-size:15px;line-height:1.12;margin:6px 0 12px;min-height:2.2em}
+.course .code{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--ink-2);padding-right:48px;overflow-wrap:anywhere}
+.course .nm{font-family:var(--font-display);font-weight:800;font-size:15px;line-height:1.12;margin:6px 0 12px;min-height:2.2em;padding-right:48px}
 .course .nx{font-size:11.5px;font-weight:700;color:var(--ink-2);margin-top:8px}
 .course .nx.urgent{color:var(--brand-2)}
 .ring{position:absolute;right:10px;top:10px}
@@ -233,3 +237,34 @@
   .mobile-more-grid a span{width:32px;height:32px;display:grid;place-items:center;flex:none;border-radius:10px;background:var(--surface);color:var(--brand)}
   .mobile-more-grid a.on{border-color:var(--brand);background:var(--brand-tint)}
 }
+
+/* modal — shared by every page that can open a Modal (shell.jsx) */
+.mdl-back{position:fixed;inset:0;z-index:200;background:rgba(36,24,52,.55);backdrop-filter:blur(3px);display:grid;place-items:center;padding:22px;animation:rise .25s var(--ease)}
+.mdl{width:min(460px,100%);background:var(--surface);border:var(--bd);border-radius:var(--r-xl);box-shadow:var(--sh3);padding:24px;animation:mdlin .45s var(--spring-b)}
+@keyframes mdlin{0%{transform:scale(.9) translateY(14px);opacity:0}100%{transform:none;opacity:1}}
+.mdl-h{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
+.mdl-h h3{font-size:21px;line-height:1.05}
+.mdl-h p{font-size:13px;color:var(--ink-2);font-weight:700;margin-top:5px;line-height:1.4}
+.mdl-x{margin-left:auto;width:34px;height:34px;flex:none;border-radius:50%;border:var(--bd);background:var(--surface-2);display:grid;place-items:center;box-shadow:0 2px 0 var(--ink);transition:transform .2s var(--spring-b),background .2s}
+.mdl-x:hover{transform:rotate(90deg);background:var(--bad);color:#fff}
+.mdl-f{display:flex;flex-direction:column;gap:12px}
+.mdl-f label{display:flex;flex-direction:column;gap:5px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.mdl-f input,.mdl-f select,.mdl-f textarea{font-family:var(--font-display);font-weight:800;font-size:14.5px;color:var(--ink);background:var(--surface-2);border:2px solid var(--ink);border-radius:12px;padding:10px 12px;box-shadow:0 2px 0 var(--ink)}
+.mdl-f input:focus-visible,.mdl-f select:focus-visible,.mdl-f textarea:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+.mdl-2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.mdl-foot{display:flex;gap:9px;justify-content:flex-end;margin-top:20px}
+.mdl-warn{display:flex;gap:11px;padding:13px;border:2px solid var(--ink);border-radius:14px;background:#FFDFE1;box-shadow:0 2px 0 var(--ink);font-size:13px;font-weight:700;line-height:1.4}
+
+/* background-generation toasts (shell.jsx GenerationWatcher) */
+.gen-toasts{position:fixed;right:18px;bottom:18px;z-index:300;display:flex;flex-direction:column;gap:9px;max-width:min(340px,calc(100vw - 36px))}
+.gen-toast{display:flex;align-items:flex-start;gap:11px;padding:12px 13px;border:var(--bd);border-radius:14px;background:var(--surface);box-shadow:var(--sh2);animation:rise .3s var(--spring-b)}
+.gen-toast.bad{background:#FFDFE1}
+[data-theme="dark"] .gen-toast.bad{background:color-mix(in oklab,var(--bad) 30%,var(--surface))}
+.gen-toast .gen-ic{font-size:20px;line-height:1.1}
+.gen-toast .gen-b{display:flex;flex-direction:column;gap:3px;min-width:0}
+.gen-toast .gen-b b{font-family:var(--font-display);font-size:13.5px;font-weight:800;color:var(--ink);line-height:1.2}
+.gen-toast .gen-b a{font-family:var(--font-display);font-size:12.5px;font-weight:800;color:var(--brand-2)}
+.gen-toast .gen-b a:hover{color:var(--brand);text-decoration:underline;text-underline-offset:3px}
+.gen-toast>button{margin-left:auto;flex:none;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;color:var(--ink-3)}
+.gen-toast>button:hover{background:var(--surface-2);color:var(--ink)}
+@media (max-width:760px){.gen-toasts{right:12px;bottom:78px}}

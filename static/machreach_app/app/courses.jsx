@@ -46,6 +46,12 @@ const CRS = [
   },
 ];
 
+/* The date input hands back yyyy-mm-dd; the exam list shows dd/mm. */
+const shortDate = (value) => {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  return parts ? `${parts[3]}/${parts[2]}` : (value || "—");
+};
+
 function CourseCard({ c, plus, d = 0, onDelete }) {
   const [open, setOpen] = React.useState(false);
   const [exams, setExams] = React.useState(c.exams);
@@ -65,7 +71,7 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
       if (!response.ok) return alert(body.error || "No se pudo guardar la evaluación.");
       id = body.id;
     }
-    setExams((x) => [...x, { id, nm: newEx.nm, wt: (newEx.wt || "0") + "%", dt: newEx.dt || "—", files: [] }]);
+    setExams((x) => [...x, { id, nm: newEx.nm, wt: (newEx.wt || "0") + "%", dt: shortDate(newEx.dt), files: [] }]);
     setNewEx(null);
   };
   const removeExam = async (exam, index) => {
@@ -163,7 +169,7 @@ function CourseCard({ c, plus, d = 0, onDelete }) {
               <div className="new-ex">
                 <input autoFocus placeholder="Nombre de la evaluación" value={newEx.nm} onChange={(e) => setNewEx({ ...newEx, nm: e.target.value })} onKeyDown={(e) => e.key === "Enter" && addExam()} />
                 <input placeholder="%" value={newEx.wt} onChange={(e) => setNewEx({ ...newEx, wt: e.target.value })} />
-                <input placeholder="dd/mm" value={newEx.dt} onChange={(e) => setNewEx({ ...newEx, dt: e.target.value })} />
+                <input type="date" aria-label="Fecha de la evaluación" value={newEx.dt} onChange={(e) => setNewEx({ ...newEx, dt: e.target.value })} />
                 <button className="btn btn-primary btn-sm" onClick={addExam}>Guardar</button>
               </div>
             )}

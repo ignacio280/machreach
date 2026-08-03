@@ -42,6 +42,9 @@
 .fx-note:hover{transform:translateY(-3px);box-shadow:var(--sh2)}
 .fx-note.rival{background:#FFE9DE}
 .fx-note.exam{background:#EFE7FF}
+/* The pastel fills stay light in dark mode, which hid the ink-coloured text. */
+[data-theme="dark"] .fx-note.rival{background:color-mix(in oklab,var(--brand) 20%,var(--surface))}
+[data-theme="dark"] .fx-note.exam{background:color-mix(in oklab,var(--plum) 26%,var(--surface))}
 .fx-note .eye{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
 .fx-note .t{font-family:var(--font-display);font-weight:800;font-size:14.5px;line-height:1.15;margin-top:3px}
 .fx-note .s{font-size:12px;color:var(--ink-2);font-weight:700;margin-top:2px}
@@ -96,6 +99,7 @@
 .guard-pnl{display:flex;align-items:center;gap:11px;padding:16px 20px}
 .guard-pnl h3{font-size:17px}
 .guard-pnl .tagchip{margin-left:auto}
+.guard-pnl .tagchip.off{background:var(--bad);border-color:var(--ink);color:#fff}
 .guard{display:flex;align-items:center;gap:12px;padding:12px 0}
 .guard-t{font-family:var(--font-display);font-weight:800;font-size:14px}
 .guard-s{font-size:12px;color:var(--ink-2);font-weight:700}
@@ -111,20 +115,9 @@
 .bench .n{font-family:var(--font-display);font-weight:800;font-size:26px;line-height:1;letter-spacing:-.03em}
 .bench .l{font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:700;margin-top:4px}
 
-/* ---------- zen: timer takes the stage while running ---------- */
-.fx-grid{transition:grid-template-columns .65s var(--ease)}
-.fx .col>.fx-head,.fx .col>.fx-strip{transition:max-height .55s var(--ease),opacity .35s var(--ease),transform .55s var(--ease),padding .55s var(--ease),border-width .3s}
-.fx>.col{transition:gap .55s var(--ease)}
-.fx-tools{transition:opacity .35s var(--ease),transform .55s var(--ease)}
-.fx.zen>.col{gap:0}
-.fx.zen .fx-head,.fx.zen .fx-strip{max-height:0;opacity:0;transform:translateY(-14px);overflow:hidden;padding-top:0;padding-bottom:0;border-width:0;pointer-events:none}
-.fx.zen .fx-grid{grid-template-columns:minmax(0,1fr) 0px}
-.fx.zen .fx-tools{opacity:0;transform:translateX(30px);pointer-events:none;overflow:hidden}
-.timer{transition:padding .6s var(--ease),min-height .6s var(--ease),border-radius .6s var(--ease)}
-.fx.zen .timer{min-height:calc(100vh - 132px);display:flex;flex-direction:column;justify-content:center;padding:30px 22px}
-.ring-wrap,.fx-fields,.modes{transition:width .6s var(--spring),height .6s var(--spring),max-height .5s var(--ease),opacity .35s var(--ease),margin .5s var(--ease)}
-.fx.zen .ring-wrap{width:min(470px,58vh);height:min(470px,58vh)}
+/* ---------- zen: running only tucks the setup row away ----------
+   The page keeps its normal layout — sidebar, topbar and side panels stay
+   put. Only the course/exam pickers and the mode switch collapse, since
+   those cannot be changed mid-block anyway. */
+.fx-fields,.modes{transition:max-height .5s var(--ease),opacity .35s var(--ease),margin .5s var(--ease)}
 .fx.zen .fx-fields,.fx.zen .modes{max-height:0;opacity:0;overflow:hidden;margin-top:0;margin-bottom:0;pointer-events:none;padding:0;border-width:0}
-.fx.zen .ring-time .tt{font-size:clamp(64px,13vh,104px)}
-.fx.zen .fx-status{font-size:12px}
-@media (max-width:1240px){.fx.zen .fx-grid{grid-template-columns:1fr}.fx.zen .fx-tools{display:none}}

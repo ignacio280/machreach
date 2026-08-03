@@ -77,25 +77,15 @@
 .file-row .fx:hover{color:var(--bad)}
 .drop{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;padding:12px;border:2px dashed var(--ink-3);border-radius:12px;font-family:var(--font-display);font-weight:800;font-size:12.5px;color:var(--ink-2);background:transparent;transition:border-color .2s,color .2s,background .2s}
 .drop:hover{border-color:var(--brand);color:var(--brand-2);background:var(--brand-tint)}
-.new-ex{display:grid;grid-template-columns:1fr 78px 104px auto;gap:7px;margin-top:8px;align-items:center}
+.new-ex{display:grid;grid-template-columns:1fr 78px 150px auto;gap:7px;margin-top:8px;align-items:center}
+.new-ex input[type=date]{font-family:var(--font-mono);font-size:12px}
+[data-theme="dark"] .new-ex input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1)}
 @media (max-width:620px){.new-ex{grid-template-columns:1fr 1fr}}
 .new-ex input{font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--ink);background:var(--surface);border:2px solid var(--ink);border-radius:10px;padding:8px 10px;box-shadow:0 2px 0 var(--ink);min-width:0}
 .new-ex input:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
 
-/* modal */
-.mdl-back{position:fixed;inset:0;z-index:200;background:rgba(36,24,52,.55);backdrop-filter:blur(3px);display:grid;place-items:center;padding:22px;animation:rise .25s var(--ease)}
-.mdl{width:min(460px,100%);background:var(--surface);border:var(--bd);border-radius:var(--r-xl);box-shadow:var(--sh3);padding:24px;animation:mdlin .45s var(--spring-b)}
-@keyframes mdlin{0%{transform:scale(.9) translateY(14px);opacity:0}100%{transform:none;opacity:1}}
-.mdl-h{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
-.mdl-h h3{font-size:21px;line-height:1.05}
-.mdl-h p{font-size:13px;color:var(--ink-2);font-weight:700;margin-top:5px;line-height:1.4}
-.mdl-x{margin-left:auto;width:34px;height:34px;flex:none;border-radius:50%;border:var(--bd);background:var(--surface-2);display:grid;place-items:center;box-shadow:0 2px 0 var(--ink);transition:transform .2s var(--spring-b),background .2s}
-.mdl-x:hover{transform:rotate(90deg);background:var(--bad);color:#fff}
-.mdl-f{display:flex;flex-direction:column;gap:12px}
-.mdl-f label{display:flex;flex-direction:column;gap:5px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
-.mdl-f input,.mdl-f select{font-family:var(--font-display);font-weight:800;font-size:14.5px;color:var(--ink);background:var(--surface-2);border:2px solid var(--ink);border-radius:12px;padding:10px 12px;box-shadow:0 2px 0 var(--ink)}
-.mdl-f input:focus-visible,.mdl-f select:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
-.mdl-2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+/* Modal chrome (.mdl-*) lives in dash.css — Modal itself is a shell component
+   and every page that can open one loads dash.css. */
 /* course-name autocomplete (courses other students at the same university added) */
 .mc-ac{position:relative;display:flex;flex-direction:column}
 .mc-ac-list{position:absolute;z-index:5;top:100%;left:0;right:0;margin-top:6px;max-height:216px;overflow:auto;list-style:none;padding:4px;background:var(--surface);border:2px solid var(--ink);border-radius:12px;box-shadow:var(--sh2)}
@@ -105,5 +95,3 @@
 .mc-ac-c{font-size:10.5px;opacity:.75}
 .mc-ac-u{font-size:10px;font-weight:700;opacity:.6}
 .mc-ac-hint{margin-top:6px;font-size:11.5px;font-weight:700;color:var(--ink-2)}
-.mdl-foot{display:flex;gap:9px;justify-content:flex-end;margin-top:20px}
-.mdl-warn{display:flex;gap:11px;padding:13px;border:2px solid var(--ink);border-radius:14px;background:#FFDFE1;box-shadow:0 2px 0 var(--ink);font-size:13px;font-weight:700;line-height:1.4}

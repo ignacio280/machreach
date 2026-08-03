@@ -6,6 +6,9 @@
 .wal{min-width:118px;border:var(--bd);border-radius:var(--r);padding:12px 15px;background:var(--surface);box-shadow:var(--sh1)}
 .wal.coins{background:#FFF3CF}
 .wal.frz{background:#DCEFF6}
+/* Same pastel-in-dark-mode problem as the focus notes: the value went invisible. */
+[data-theme="dark"] .wal.coins{background:color-mix(in oklab,var(--amber) 24%,var(--surface))}
+[data-theme="dark"] .wal.frz{background:color-mix(in oklab,var(--sky) 26%,var(--surface))}
 .wal .n{font-family:var(--font-display);font-weight:800;font-size:26px;line-height:1;letter-spacing:-.04em;display:flex;align-items:center;gap:7px}
 .wal .l{font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-3);font-weight:700;margin-top:4px}
 
@@ -49,6 +52,7 @@
 .pack{position:relative;overflow:hidden;text-align:center;border:var(--bd);border-radius:var(--r);background:var(--surface);box-shadow:var(--sh1);padding:18px 12px 15px;transition:transform .22s var(--spring-b),box-shadow .22s}
 .pack:hover{transform:translateY(-5px) rotate(var(--pt,-1deg));box-shadow:var(--sh3)}
 .pack.best{background:#FFF3CF;box-shadow:var(--sh2)}
+[data-theme="dark"] .pack.best{background:color-mix(in oklab,var(--amber) 24%,var(--surface))}
 .pack-tag{position:absolute;top:9px;left:9px;background:var(--brand);color:#fff;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.06em;padding:3px 9px;border:2px solid var(--ink);border-radius:999px}
 .pack-best{position:absolute;top:9px;right:9px;background:var(--ink);color:var(--paper);font-family:var(--font-mono);font-size:8.5px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border:2px solid var(--ink);border-radius:999px}
 .pack{padding-top:34px!important}
@@ -74,9 +78,11 @@
 .cos{overflow:hidden;border:var(--bd);border-radius:var(--r);background:var(--surface);box-shadow:var(--sh1);transition:transform .22s var(--spring-b),box-shadow .22s}
 .cos:hover{transform:translateY(-5px);box-shadow:var(--sh3)}
 .cos-prev{height:78px;border-bottom:var(--bd);position:relative}
-.cos-prev.flag{height:52px;background:#141026}
+/* The flag fades out to the right; let it fade into the card instead of onto
+   a dark plate. */
+.cos-prev.flag{height:52px;background:var(--surface-2)}
 .cos-prev.flag i{position:absolute;inset:0;-webkit-mask-image:linear-gradient(to right,rgba(0,0,0,.9) 0%,rgba(0,0,0,.45) 35%,rgba(0,0,0,.14) 65%,transparent 100%);mask-image:linear-gradient(to right,rgba(0,0,0,.9) 0%,rgba(0,0,0,.45) 35%,rgba(0,0,0,.14) 65%,transparent 100%)}
-.cos-prev .pv{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;color:#fff;font-weight:700;opacity:.85}
+.cos-prev .pv{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;color:#fff;font-weight:700;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.55)}
 .cos-b{padding:12px 13px 13px}
 .cos-n{font-family:var(--font-display);font-weight:800;font-size:13.5px;line-height:1.15;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .cos-t{font-family:var(--font-mono);font-size:9.5px;font-weight:700;margin-top:6px;min-height:13px}

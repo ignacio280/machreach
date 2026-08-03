@@ -1217,7 +1217,6 @@ LAYOUT = """<!DOCTYPE html>
         <a class="mr-tb-link {% if active_page == 'student_friends' %}active{% endif %}" href="/student/friends">{{ student_ui.friends }}</a>
         <a class="mr-tb-link {% if active_page == 'student_shop' %}active{% endif %}" href="/student/shop">{{ student_ui.shop }}</a>
         <a class="mr-tb-link {% if active_page == 'student_gpa' %}active{% endif %}" href="/student/gpa">{{ student_ui.grades }}</a>
-        <a class="mr-tb-link {% if active_page == 'student_achievements' %}active{% endif %}" href="/student/achievements">{{ student_ui.xp }}</a>
         {% if is_admin %}<a class="mr-tb-link {% if active_page == 'admin' %}active{% endif %}" href="/admin">{{ student_ui.admin }}</a>{% endif %}
       </nav>
       <div class="mr-tb-right">
@@ -1267,7 +1266,7 @@ LAYOUT = """<!DOCTYPE html>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V4h12v5a6 6 0 0 1-12 0z"/><path d="M6 5H3.5v1.5A3.5 3.5 0 0 0 7 10"/><path d="M18 5h2.5v1.5A3.5 3.5 0 0 1 17 10"/><path d="M9.5 21h5"/><path d="M12 15v6"/></svg>
         <span>Ranking</span>
       </a>
-      <button id="mrMoreTrigger" class="mr-tab {% if active_page in ['student_planner','student_quizzes','student_flashcards','student_reviews','student_friends','student_shop','student_gpa','student_achievements','student_profile','student_settings','admin'] %}active{% endif %}" type="button" onclick="mrToggleMore()" aria-haspopup="dialog" aria-controls="mrMore" aria-expanded="false">
+      <button id="mrMoreTrigger" class="mr-tab {% if active_page in ['student_planner','student_quizzes','student_flashcards','student_reviews','student_friends','student_shop','student_gpa','student_profile','student_settings','admin'] %}active{% endif %}" type="button" onclick="mrToggleMore()" aria-haspopup="dialog" aria-controls="mrMore" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
         <span>{% if lang == 'en' %}More{% else %}Más{% endif %}</span>
       </button>
@@ -1292,7 +1291,6 @@ LAYOUT = """<!DOCTYPE html>
           <a href="/student/friends"><span class="mr-more-ic">&#128101;</span>{{ student_ui.friends }}<span class="mr-more-chev">&rsaquo;</span></a>
           <a href="/student/shop"><span class="mr-more-ic">&#128722;</span>{{ student_ui.shop }}<span class="mr-more-chev">&rsaquo;</span></a>
           <a href="/student/gpa"><span class="mr-more-ic">&#128202;</span>{{ student_ui.grades }}<span class="mr-more-chev">&rsaquo;</span></a>
-          <a href="/student/achievements"><span class="mr-more-ic">&#127942;</span>{{ student_ui.xp }}<span class="mr-more-chev">&rsaquo;</span></a>
           {% if is_admin %}<a href="/admin"><span class="mr-more-ic">&#128227;</span>{{ student_ui.admin }}<span class="mr-more-chev">&rsaquo;</span></a>{% endif %}
         </nav>
         <div class="mr-more-actions">
@@ -1364,12 +1362,11 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Enfoque</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="javascript:void(0)" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>Más &#9662;</a>
+          <a href="javascript:void(0)" {% if active_page in ['student_gpa','student_friends','student_shop'] %}class="active"{% endif %}>Más &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/friends">&#128101; Amigos</a>
             <a href="/student/shop">&#129534; Tienda</a>
             <a href="/student/gpa">&#128200; Planilla de Notas</a>
-            <a href="/student/achievements">&#127942; XP e Insignias</a>
           </div>
         </div>
         <a href="/student/leaderboard" {% if active_page == 'student_leaderboard' %}class="active"{% endif %}>&#127942; Ranking</a>
@@ -1388,12 +1385,11 @@ LAYOUT = """<!DOCTYPE html>
         <a href="/student/focus" {% if active_page == 'student_focus' %}class="active"{% endif %}>&#127919; Focus</a>
         <div class="nav-divider"></div>
         <div class="nav-dropdown">
-          <a href="javascript:void(0)" {% if active_page in ['student_gpa','student_achievements','student_friends','student_shop'] %}class="active"{% endif %}>More &#9662;</a>
+          <a href="javascript:void(0)" {% if active_page in ['student_gpa','student_friends','student_shop'] %}class="active"{% endif %}>More &#9662;</a>
           <div class="nav-dropdown-menu">
             <a href="/student/friends">&#128101; Friends</a>
             <a href="/student/shop">&#129534; Shop</a>
             <a href="/student/gpa">&#128200; Grade Sheet</a>
-            <a href="/student/achievements">&#127942; XP &amp; Badges</a>
           </div>
         </div>
         <a href="/student/leaderboard" {% if active_page == 'student_leaderboard' %}class="active"{% endif %}>&#127942; Leaderboard</a>

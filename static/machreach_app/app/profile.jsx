@@ -50,7 +50,10 @@ function ProfileHero({ plus, avatar, name, handle, data }) {
   const nextXp = Math.max(0, Number(data.level_ceil || 0) - Number(data.total_xp || 0));
   return (
     <section className="pf-hero rv" style={{ "--d": "0ms" }}>
-      <div className={"pf-cover bnr-anim-host" + (data.cover_anim_class ? " " + data.cover_anim_class : "")} style={data.cover_css ? { background: data.cover_css } : undefined}><i /><i /><i />
+      {/* With a real banner equipped the decorative blobs are hidden, so the
+          hero shows exactly the banner the edit page marks as equipped. */}
+      <div className={"pf-cover bnr-anim-host" + (data.cover_css ? " has-banner" : "") + (data.cover_anim_class ? " " + data.cover_anim_class : "")} style={data.cover_css ? { background: data.cover_css } : undefined}>
+        {!data.cover_css && <React.Fragment><i /><i /><i /></React.Fragment>}
       </div>
       <div className="pf-id">
         <div className="pf-face" style={{ background: avatar }}>
