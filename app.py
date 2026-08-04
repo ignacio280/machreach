@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import Flask, flash, g, jsonify, make_response, redirect, render_template_string, request, session, url_for
+from flask import Flask, Response, flash, g, jsonify, make_response, redirect, render_template_string, request, session, url_for
 from markupsafe import Markup
 
 from machreach_core.config import ADMIN_ACTION_SECRET, OPERATIONS_SECRET, SECRET_KEY
@@ -2949,7 +2949,8 @@ def admin_dashboard():
       <p class="subtitle">Broadcast to users and manage accounts. Access comes only from database administrator roles and is audited.</p>
     </div>
     <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
-      <a class="btn btn-primary btn-sm" href="/admin/analytics">&#128202; Analytics de producto</a>
+      <a class="btn btn-primary btn-sm" href="/admin/growth">&#128200; Usuarios, referidos y pagos</a>
+      <a class="btn btn-outline btn-sm" href="/admin/analytics">&#128202; Analytics de producto</a>
       <a class="btn btn-outline btn-sm" href="/admin/jobs">&#9881; Jobs & worker</a>
       <a class="btn btn-outline btn-sm" href="/admin/courses">&#127891; Courses</a>
       <a class="btn btn-outline btn-sm" href="/admin/leaderboard-winners-test">&#127942; Preview monthly leaderboard winners email</a>
@@ -3709,6 +3710,191 @@ def admin_product_analytics():
     </div>
     """
     return _render("Admin analytics", body, active_page="admin", wide=True)
+
+
+@app.route("/admin/growth.csv")
+def admin_growth_csv():
+    """The same table as /admin/growth, for when a spreadsheet is easier."""
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    import csv
+    import io
+    from student import growth
+
+    columns = [
+        ("id", "ID"), ("name", "Nombre"), ("email", "Correo"),
+        ("created_at", "Registro"), ("verified", "Verificado"),
+        ("paying", "Paga Plus"), ("promo_plus", "Plus de regalo"),
+        ("referral_code", "Codigo"), ("referred", "Referidos"),
+        ("referred_verified", "Referidos verificados"),
+        ("referred_paying", "Referidos que pagan"),
+        ("weeks_earned", "Semanas ganadas"), ("xp", "XP"),
+    ]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([label for _, label in columns])
+    for row in growth.user_rows():
+        writer.writerow([row.get(key, "") for key, _ in columns])
+    _log_admin_action("growth_export")
+    return Response(
+        buffer.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=machreach-usuarios.csv"},
+    )
+
+
+@app.route("/admin/growth")
+def admin_growth():
+    """Owner dashboard: every account, what its invite link produced, and who
+    is actually paying."""
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    from student import growth
+
+    rows = growth.user_rows()
+    stats = growth.summary(rows)
+    query = (request.args.get("q") or "").strip()
+    only = (request.args.get("only") or "").strip()
+    view = rows
+    if query:
+        needle = query.lower()
+        view = [r for r in view if needle in r["name"].lower() or needle in r["email"].lower()
+                or needle == r["referral_code"].lower()]
+    if only == "paying":
+        view = [r for r in view if r["paying"]]
+    elif only == "inviters":
+        view = [r for r in view if r["referred"]]
+    elif only == "unverified":
+        view = [r for r in view if not r["verified"]]
+
+    def yes_no(value: bool, good: str = "Sí", bad: str = "—") -> str:
+        return f'<b style="color:#2E9266">{good}</b>' if value else f'<span style="color:#94939C">{bad}</span>'
+
+    if view:
+        body_rows = "".join(
+            "<tr>"
+            f"<td>{r['id']}</td>"
+            f"<td>{_esc(r['name'])}</td>"
+            f"<td><code>{_esc(r['email'])}</code></td>"
+            f"<td>{_esc(r['created_at'])}</td>"
+            f"<td>{yes_no(r['verified'])}</td>"
+            f"<td>{yes_no(r['paying'], 'Paga')}{' <small>+regalo</small>' if r['promo_plus'] and r['paying'] else ''}"
+            f"{'<small style=\"color:#B58309\">Plus de regalo</small>' if r['promo_plus'] and not r['paying'] else ''}</td>"
+            f"<td><code>{_esc(r['referral_code'] or '—')}</code></td>"
+            f"<td><b>{r['referred']}</b></td>"
+            f"<td>{r['referred_verified']}</td>"
+            f"<td><b style=\"color:#2E9266\">{r['referred_paying']}</b></td>"
+            f"<td>{r['weeks_earned']}</td>"
+            f"<td>{r['xp']:,}</td>"
+            "</tr>"
+            for r in view
+        )
+        table_html = (
+            "<table><thead><tr>"
+            "<th>ID</th><th>Nombre</th><th>Correo</th><th>Registro</th><th>Verificado</th>"
+            "<th>Plan</th><th>Código</th><th>Referidos</th><th>Verificados</th>"
+            "<th>Referidos que pagan</th><th>Semanas ganadas</th><th>XP</th>"
+            "</tr></thead><tbody>" + body_rows + "</tbody></table>"
+        )
+    else:
+        table_html = "<div class='admin-empty'>Ningún usuario coincide con este filtro.</div>"
+
+    daily = growth.signups_by_day(30)
+    peak = max((d["signups"] for d in daily), default=0) or 1
+    bars = "".join(
+        f'<span title="{_esc(d["day"])}: {d["signups"]}" style="height:{max(3, round(d["signups"] * 100 / peak))}%"></span>'
+        for d in daily
+    )
+
+    cards = "".join(
+        f"<div class='admin-metric'><div class='k'>{_esc(label)}</div>"
+        f"<div class='v'>{value}</div>"
+        f"<div class='s'>{_esc(sub)}</div></div>"
+        for label, value, sub in [
+            ("Usuarios", f"{stats['users']:,}", f"{stats['verified']:,} verificados ({stats['verified_pct']}%)"),
+            ("Pagan Plus", f"{stats['paying']:,}", f"{stats['paying_pct']}% de los registrados"),
+            ("Plus de regalo", f"{stats['promo_plus']:,}", "semanas de referido activas, sin pagar"),
+            ("Invitaron a alguien", f"{stats['inviters']:,}", "usuarios con al menos 1 referido"),
+            ("Altas por referido", f"{stats['signups_from_referrals']:,}", f"{stats['referral_share_pct']}% de todas las altas"),
+            ("Referidos que pagan", f"{stats['referred_paying']:,}", f"convierten al {stats['referred_conversion_pct']}%"),
+            ("Conversión general", f"{stats['overall_conversion_pct']}%", "de registro a plan pagado"),
+        ]
+    )
+
+    channel_note = (
+        f"El canal de referidos convierte al <b>{stats['referred_conversion_pct']}%</b> "
+        f"frente al <b>{stats['overall_conversion_pct']}%</b> general."
+        if stats["signups_from_referrals"] else
+        "Todavía no hay altas por enlace de invitación."
+    )
+
+    def filter_link(key: str, label: str) -> str:
+        # Styled here rather than with the legacy .btn classes, which render
+        # white-on-transparent inside the admin shell.
+        active = " on" if only == key else ""
+        href = f"/admin/growth?only={key}" if key else "/admin/growth"
+        return f'<a class="admin-chip{active}" href="{href}">{label}</a>'
+
+    body = f"""
+    <style>
+      .admin-growth {{ display:grid; gap:18px; }}
+      .admin-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }}
+      .admin-metric {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:16px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); }}
+      .admin-metric .k {{ color:#77756F; font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }}
+      .admin-metric .v {{ font-family:'Bricolage Grotesque',sans-serif; font-size:32px; font-weight:650; margin-top:6px; color:#1A1A1F; }}
+      .admin-metric .s {{ color:#77756F; font-size:12px; margin-top:4px; line-height:1.35; }}
+      .admin-panel {{ background:#fff; border:1px solid #E2DCCC; border-radius:18px; padding:18px; box-shadow:0 1px 0 rgba(20,18,30,.04),0 2px 6px rgba(20,18,30,.04); overflow:auto; }}
+      .admin-panel h2 {{ margin:0 0 12px; font-family:'Bricolage Grotesque',sans-serif; font-size:24px; }}
+      .admin-note {{ color:#5C5C66; background:#FBF8F0; border:1px solid #E2DCCC; border-radius:14px; padding:12px 14px; margin:0 0 14px; line-height:1.45; }}
+      .admin-empty {{ color:#94939C; background:#FBF8F0; border:1px dashed #D8D0BE; border-radius:14px; padding:16px; }}
+      .admin-growth table {{ width:100%; border-collapse:collapse; font-size:13px; }}
+      .admin-growth th {{ text-align:left; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#77756F; border-bottom:1px solid #E2DCCC; padding:8px 10px; white-space:nowrap; }}
+      .admin-growth td {{ padding:8px 10px; border-bottom:1px solid #F1ECE0; vertical-align:middle; white-space:nowrap; }}
+      .admin-growth tbody tr:hover {{ background:#FBF8F0; }}
+      .admin-growth code {{ font-size:12px; }}
+      .admin-growth small {{ display:block; font-size:10.5px; }}
+      .admin-tools {{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }}
+      .admin-tools input {{ padding:8px 12px; border:1px solid #E2DCCC; border-radius:999px; font-size:13px; min-width:220px; }}
+      .admin-chip {{ display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px; border:1px solid #E2DCCC; background:#fff; color:#1A1A1F; font-size:12.5px; font-weight:800; cursor:pointer; text-decoration:none; }}
+      .admin-chip:hover {{ border-color:#FF7A3D; color:#B14A16; }}
+      .admin-chip.on {{ background:#FF7A3D; border-color:#FF7A3D; color:#fff; }}
+      .spark {{ display:flex; align-items:flex-end; gap:3px; height:90px; }}
+      .spark span {{ flex:1; background:#FF7A3D; border-radius:3px 3px 0 0; min-height:3px; }}
+    </style>
+    <div class="admin-growth">
+      <div class="breadcrumb"><a href="/admin">Admin</a> / Usuarios y referidos</div>
+      <div class="page-header">
+        <h1>&#128200; Usuarios, referidos y pagos</h1>
+        <p class="subtitle">Quién se registró, a quién trajo con su enlace y quién terminó pagando.</p>
+      </div>
+      <div class="admin-grid">{cards}</div>
+      <div class="admin-panel">
+        <h2>Altas por día · 30 días</h2>
+        <div class="spark">{bars}</div>
+      </div>
+      <div class="admin-panel">
+        <h2>Todos los usuarios</h2>
+        <div class="admin-note">
+          {channel_note}
+          <br>"Pagan" cuenta solo suscripciones reales del proveedor de pago; las semanas
+          gratis por referido aparecen aparte porque no son ingresos.
+        </div>
+        <div class="admin-tools">
+          <form method="get" action="/admin/growth" style="display:flex;gap:8px;">
+            <input name="q" value="{_esc(query)}" placeholder="Buscar por nombre, correo o código">
+            <button class="admin-chip" type="submit">Buscar</button>
+          </form>
+          {filter_link("", "Todos")}
+          {filter_link("paying", "Solo los que pagan")}
+          {filter_link("inviters", "Solo con referidos")}
+          {filter_link("unverified", "Sin verificar")}
+          <a class="admin-chip" href="/admin/growth.csv">&#11015; Descargar CSV</a>
+        </div>
+        {table_html}
+      </div>
+    </div>
+    """
+    return _render("Admin crecimiento", body, active_page="admin", wide=True)
 
 
 @app.route("/admin/leaderboard-winners-test", methods=["GET", "POST"])
