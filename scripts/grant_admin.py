@@ -19,8 +19,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
-from machreach_core.db import _exec, _fetchall, _fetchone, get_db
+# Running a file inside scripts/ puts scripts/ on sys.path, not the repo root,
+# so the app packages would not import without a PYTHONPATH dance.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from machreach_core.db import _exec, _fetchall, _fetchone, get_db  # noqa: E402
 
 
 def _find(db, email: str) -> dict | None:
