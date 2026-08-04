@@ -58,9 +58,9 @@ function FinalCTA() {
 
 function Footer() {
   const cols = [
-    { h: "Producto", l: ["Features", "Cómo funciona", "Precios", "Roadmap"] },
-    { h: "Empresa", l: ["Sobre", "Blog", "Contacto", "Prensa"] },
-    { h: "Legal", l: ["Términos", "Privacidad", "Cookies", "Status"] },
+    { h: "Producto", l: ["Features", "Cómo funciona", "Precios"] },
+    { h: "Empresa", l: ["Sobre", "Contacto"] },
+    { h: "Legal", l: ["Términos", "Privacidad", "Cookies"] },
   ];
   return (
     <footer className="foot">

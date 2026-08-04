@@ -25,8 +25,12 @@ function App() {
 
   return (
     <div className="pub-shift">
+      {/* The bar offers the screen you are not on, which is the only thing
+          anyone wants from here. */}
       <PubTop tag={screen === "login" ? "Iniciar sesión" : "Crear cuenta"} tweaks={tweaks} setTweak={setTweak}
-        action={<a className="pub-link" href="/">Volver al inicio</a>} />
+        action={screen === "login"
+          ? <a className="pub-link" href="/register">Registrarse</a>
+          : <a className="pub-link" href="/login">Iniciar sesión</a>} />
       <AuthPage key={screen} initial={screen || "signup"} live={live?.live ? live : null} />
       {!live?.live && <TweaksPanel title="Tweaks">
         <TweakSection label="Pantalla">

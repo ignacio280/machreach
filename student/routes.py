@@ -4894,7 +4894,7 @@ Return this JSON shape:
 
         return render_layout(
 
-            title=f"Student — {rendered_title}",
+            title=f"{'Student' if lang == 'en' else 'Estudiante'} — {rendered_title}",
 
             content=Markup(rendered_content),
 

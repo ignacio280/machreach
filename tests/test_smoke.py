@@ -13,8 +13,8 @@ from student import db as sdb
 
 
 @pytest.mark.parametrize("path", [
-    "/", "/login", "/register", "/about", "/blog", "/press",
-    "/privacy", "/terms", "/roadmap", "/health",
+    "/", "/login", "/register", "/about",
+    "/privacy", "/terms", "/cookies", "/health",
     "/robots.txt", "/sitemap.xml", "/favicon.ico",
 ])
 def test_public_routes_no_server_error(client, path):

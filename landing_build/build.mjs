@@ -176,7 +176,7 @@ prod = prod.replace('<div id="root"></div>', `<div id="root">${prerendered}</div
 // after hydration, re-applying briefly to win against React's hydration).
 const footerFix = `<script>
 (function(){
-  var links={"Features":"#features","C\\u00f3mo funciona":"#how","Precios":"#pricing","Roadmap":"/roadmap","Sobre":"/about","Blog":"/blog","Contacto":"mailto:support@machreach.com","Prensa":"/press","T\\u00e9rminos":"/terms","Privacidad":"/privacy","Cookies":"/cookies","Status":"/status"};
+  var links={"Features":"#features","C\\u00f3mo funciona":"#how","Precios":"#pricing","Sobre":"/about","Contacto":"mailto:support@machreach.com","T\\u00e9rminos":"/terms","Privacidad":"/privacy","Cookies":"/cookies"};
   function patch(){document.querySelectorAll("footer a").forEach(function(a){var t=(a.textContent||"").trim();if(links[t])a.setAttribute("href",links[t]);});}
   document.addEventListener("DOMContentLoaded",function(){patch();var n=0,id=setInterval(function(){patch();if(++n>20)clearInterval(id);},150);});
 })();

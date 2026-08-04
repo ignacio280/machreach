@@ -2131,7 +2131,7 @@ LAYOUT = """<!DOCTYPE html>
        box-shadow:0 10px 40px rgba(99,102,241,.4);font-weight:500;align-items:center;gap:12px;
        max-width:90vw;animation:mrSlideDown .5s cubic-bezier(.22,.61,.36,1);">
     <span style="font-size:22px;">🎉</span>
-    <span>Welcome back — <strong>your previous progress has been preserved.</strong> All your XP is intact.</span>
+    <span>{% if lang == 'en' %}Welcome back — <strong>your previous progress has been preserved.</strong> All your XP is intact.{% else %}Bienvenido de vuelta — <strong>tu progreso anterior sigue guardado.</strong> Todo tu XP está intacto.{% endif %}</span>
     <button id="mrXpBannerClose" style="background:rgba(255,255,255,.2);border:0;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;">×</button>
   </div>
 
@@ -4837,189 +4837,130 @@ def _public_info_page(title: str, eyebrow: str, intro: str, body_html: str, acti
 
 @app.route("/privacy")
 def privacy_page():
-    return _public_info_page("Privacy Policy", "Legal", "How MachReach handles account, study, Canvas extension, and subscription data.", """
-        <p class="mr-note"><strong>Plain-English summary:</strong> MachReach helps students track focus time, courses, grades, flashcards, quizzes, rankings, streaks, friends, and study progress. We collect only what the product needs, we never sell your data, passwords are hashed with bcrypt, and you can disconnect Canvas or delete your account from Settings.</p>
-        <p><strong>Last updated:</strong> July 28, 2026</p>
-        <p>MachReach is operated from Santiago, Chile. Privacy and data-rights questions can be sent to <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
-        <h2>1. Information We Collect</h2>
-        <p><strong>Account information:</strong> your name, institutional or Canvas email address, your university, and your password hash. When you create an account through Canvas, MachReach reads the email address exposed by your Canvas profile so you can log in later with that email and the password you set.</p>
-        <p><strong>Canvas LMS data:</strong> if you connect Canvas, the MachReach browser extension reads your course list from your own logged-in Canvas session and sends it to MachReach so we can show your classes and power class-level leaderboards. We only read your course list — we do not submit assignments, change grades, or publish content.</p>
-        <p><strong>Courses you add manually:</strong> if your university doesn't use Canvas, or you simply prefer to, you can add courses by typing a course code and name. To help other students at <em>your own university</em> fill these in faster, course codes and names you add may be saved to a shared, university-scoped autofill catalog. This catalog stores only the course code and course name together with the university — it is never linked to your identity, your grades, or your study activity, and it is only ever shown to other students at the same university.</p>
-        <p><strong>Study materials:</strong> files, notes, and text you choose to upload or type for features such as quizzes and flashcards.</p>
-        <p><strong>Study activity:</strong> focus sessions, minutes studied per course, XP events, streaks, badges, quiz attempts, flashcard reviews, leaderboard rank, course outcomes, grades you enter, and in-app coin activity.</p>
-        <p><strong>Course benchmarks:</strong> benchmark statistics combine only anonymous outcomes for the same canonical course, at the same university, and in the same cohort or course version. MachReach suppresses the aggregate until at least five students have reported an outcome. Your individual grade or study time is not shown to other students.</p>
-        <p><strong>University verification for physical prizes:</strong> selecting a university currently does not verify enrollment. If MachReach offers physical, cash-equivalent, or other real-world prizes, potential recipients will be asked to verify that they belong to the university associated with their account before a prize is delivered. Verification information will be limited to what is needed to confirm eligibility and handled under this policy.</p>
-        <p><strong>Social activity:</strong> friend connections and referral activity if you invite friends. We store who you are friends with and how many people joined with your referral link.</p>
-        <p><strong>Focus Guard extension:</strong> extension settings and active-session state are used to support focus sessions. Some settings may be stored locally in your browser.</p>
-        <p><strong>Payment data:</strong> billing is processed by Lemon Squeezy. We receive subscription status and IDs, never card numbers.</p>
-        <p><strong>Technical data:</strong> security and application logs, IP address and browser information used for abuse prevention, session cookies, consent choices, error diagnostics, and optional product analytics after consent.</p>
-        <h2>2. How We Use Your Information</h2>
+    return _public_info_page("Política de Privacidad", "Legal", "Cómo MachReach trata los datos de tu cuenta, tu estudio, la extensión de Canvas y tu suscripción.", """
+        <p class="mr-note"><strong>Resumen en simple:</strong> MachReach ayuda a los estudiantes a llevar sus horas de enfoque, ramos, notas, flashcards, quizzes, ranking, rachas, amigos y progreso de estudio. Recolectamos solo lo que el producto necesita, nunca vendemos tus datos, las contraseñas se guardan cifradas con bcrypt, y puedes desconectar Canvas o eliminar tu cuenta desde Ajustes.</p>
+        <p><strong>Última actualización:</strong> 28 de julio de 2026</p>
+        <p>MachReach se opera desde Santiago de Chile. Las consultas sobre privacidad y derechos sobre tus datos pueden enviarse a <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+        <h2>1. Información que recolectamos</h2>
+        <p><strong>Datos de la cuenta:</strong> tu nombre, tu correo institucional o de Canvas, tu universidad y el hash de tu contraseña. Cuando creas la cuenta a través de Canvas, MachReach lee el correo que expone tu perfil de Canvas para que después puedas entrar con ese correo y la contraseña que definiste.</p>
+        <p><strong>Datos de Canvas LMS:</strong> si conectas Canvas, la extensión de MachReach lee tu lista de ramos desde tu propia sesión de Canvas y la envía a MachReach para mostrarte tus ramos y armar los rankings por ramo. Solo leemos tu lista de ramos &mdash; no entregamos tareas, no cambiamos notas ni publicamos contenido.</p>
+        <p><strong>Ramos que agregas a mano:</strong> si tu universidad no usa Canvas, o simplemente lo prefieres, puedes agregar ramos escribiendo el código y el nombre. Para que otros estudiantes <em>de tu misma universidad</em> los completen más rápido, los códigos y nombres que agregas pueden guardarse en un catálogo de autocompletado compartido y acotado a esa universidad. Ese catálogo guarda solo el código y el nombre del ramo junto con la universidad &mdash; nunca se vincula a tu identidad, a tus notas ni a tu actividad de estudio, y solo se muestra a estudiantes de la misma universidad.</p>
+        <p><strong>Material de estudio:</strong> archivos, apuntes y texto que decides subir o escribir para funciones como quizzes y flashcards.</p>
+        <p><strong>Actividad de estudio:</strong> sesiones de enfoque, minutos estudiados por ramo, eventos de XP, rachas, insignias, intentos de quiz, repasos de flashcards, posición en el ranking, resultados de ramos, las notas que ingresas y el movimiento de monedas dentro de la app.</p>
+        <p><strong>Benchmarks de ramos:</strong> las estadísticas de benchmark combinan únicamente resultados anónimos del mismo ramo canónico, en la misma universidad y en la misma cohorte o versión del ramo. MachReach oculta el agregado hasta que al menos cinco estudiantes hayan reportado un resultado. Tu nota o tu tiempo de estudio individual no se muestran a otros estudiantes.</p>
+        <p><strong>Verificación de universidad para premios físicos:</strong> elegir una universidad hoy no verifica que estés matriculado. Si MachReach ofrece premios físicos, equivalentes a dinero u otros premios del mundo real, a los posibles ganadores se les pedirá verificar que pertenecen a la universidad asociada a su cuenta antes de entregar el premio. La información de verificación se limitará a lo necesario para confirmar la elegibilidad y se tratará conforme a esta política.</p>
+        <p><strong>Actividad social:</strong> conexiones de amistad y actividad de referidos si invitas amigos. Guardamos con quién eres amigo y cuántas personas se unieron con tu enlace de invitación.</p>
+        <p><strong>Extensión Focus Guard:</strong> la configuración de la extensión y el estado de la sesión activa se usan para sostener las sesiones de enfoque. Algunas preferencias pueden quedar guardadas localmente en tu navegador.</p>
+        <p><strong>Datos de pago:</strong> el cobro lo procesa Lemon Squeezy. Recibimos el estado y los identificadores de la suscripción, nunca números de tarjeta.</p>
+        <p><strong>Datos técnicos:</strong> registros de seguridad y de la aplicación, dirección IP e información del navegador usadas para prevenir abusos, cookies de sesión, tus decisiones de consentimiento, diagnósticos de errores y analítica de producto opcional después de tu consentimiento.</p>
+        <h2>2. Cómo usamos tu información</h2>
         <ul>
-          <li>To create your account, authenticate you, and let you reset your password</li>
-          <li>To import your Canvas course list when you choose to connect through the MachReach extension, or to save courses you add manually</li>
-          <li>To power university-scoped course autofill so students at the same university can add courses faster</li>
-          <li>To generate and manage quizzes, flashcards, focus sessions, grade tracking, and course analytics</li>
-          <li>To track XP, streaks, leaderboard rankings, badges, coins, friends, and referrals</li>
-          <li>To process subscriptions, coin-pack orders, refunds, cancellations, and account deletion</li>
-          <li>To send verification, password-reset, operational, and study emails you enabled</li>
-          <li>To prevent fraud and abuse, diagnose failures, and keep the service secure</li>
+          <li>Para crear tu cuenta, autenticarte y permitirte restablecer tu contraseña</li>
+          <li>Para importar tu lista de ramos de Canvas cuando eliges conectarla con la extensión de MachReach, o para guardar los ramos que agregas a mano</li>
+          <li>Para sostener el autocompletado de ramos por universidad, y que quienes estudian en la misma universidad agreguen ramos más rápido</li>
+          <li>Para generar y administrar quizzes, flashcards, sesiones de enfoque, seguimiento de notas y analíticas de ramos</li>
+          <li>Para llevar XP, rachas, posiciones en el ranking, insignias, monedas, amigos y referidos</li>
+          <li>Para procesar suscripciones, compras de packs de monedas, reembolsos, cancelaciones y eliminación de cuentas</li>
+          <li>Para enviarte correos de verificación, de restablecimiento de contraseña, operativos y de estudio que hayas activado</li>
+          <li>Para prevenir fraude y abuso, diagnosticar fallas y mantener el servicio seguro</li>
         </ul>
-        <h2>3. Data Security</h2>
-        <p>We use HTTPS/TLS, CSRF protection, rate limiting, strict security headers, parameterized SQL, HTML escaping, secure cookies in production, hashed passwords, and access controls for sensitive account data.</p>
-        <h2>4. Service Providers and International Processing</h2>
+        <h2>3. Seguridad de los datos</h2>
+        <p>Usamos HTTPS/TLS, protección CSRF, límites de frecuencia, cabeceras de seguridad estrictas, SQL parametrizado, escape de HTML, cookies seguras en producción, contraseñas cifradas y controles de acceso para los datos sensibles de la cuenta.</p>
+        <h2>4. Proveedores y procesamiento internacional</h2>
         <ul>
-          <li><strong>OpenAI:</strong> content you submit for AI-generated quizzes or flashcards may be sent to generate those study tools. OpenAI does not train on API data per its API data-usage policy.</li>
-          <li><strong>Instructure / Canvas LMS:</strong> optional profile and course import when you connect Canvas.</li>
-          <li><strong>Lemon Squeezy:</strong> hosted checkout, subscriptions, coin-pack orders, and payment events.</li>
-          <li><strong>Render:</strong> application hosting and database infrastructure.</li>
-          <li><strong>Sentry:</strong> error reporting with sensitive fields scrubbed where possible, only when production monitoring is configured.</li>
-          <li><strong>PostHog:</strong> optional product analytics, loaded only after you choose “Allow analytics” in the cookie banner. You can withdraw consent by clearing or changing your browser cookies.</li>
+          <li><strong>OpenAI:</strong> el contenido que envías para generar quizzes o flashcards con IA puede enviarse para producir ese material. Según su política de uso de datos de API, OpenAI no entrena con datos de API.</li>
+          <li><strong>Instructure / Canvas LMS:</strong> importación opcional de perfil y ramos cuando conectas Canvas.</li>
+          <li><strong>Lemon Squeezy:</strong> checkout alojado, suscripciones, compras de packs de monedas y eventos de pago.</li>
+          <li><strong>Render:</strong> hosting de la aplicación e infraestructura de base de datos.</li>
+          <li><strong>Sentry:</strong> reporte de errores con los campos sensibles depurados cuando es posible, solo si el monitoreo de producción está configurado.</li>
+          <li><strong>PostHog:</strong> analítica de producto opcional, cargada solo después de que elijas &ldquo;Permitir analítica&rdquo; en el banner de cookies. Puedes retirar tu consentimiento borrando o cambiando las cookies de tu navegador.</li>
         </ul>
-        <p>These providers may process data outside Chile under their applicable contractual and security safeguards.</p>
-        <h2>5. Retention and Deletion</h2>
-        <p>Account and study data is kept while your account is active. Permanent deletion first attempts to cancel an active subscription and then removes account-linked data from the primary application database. Limited billing-event, security, fraud-prevention, and deletion records may be retained where necessary to complete the request, resolve disputes, prevent duplicate charges, or comply with law. Copies may remain temporarily in protected provider backups until those backups expire under the provider's schedule.</p>
-        <h2>6. Your Rights</h2>
-        <p>You can request access, correction, deletion, objection, and data portability. MachReach provides a JSON export and permanent deletion in Settings. You can also disconnect integrations, opt out of optional study emails, or contact <a href="mailto:support@machreach.com">support@machreach.com</a>. We may need to verify your identity before acting on a request.</p>
-        <p>Chile's updated personal-data framework under Law 21.719 takes effect on December 1, 2026. MachReach is preparing its processes for the additional rights and obligations effective on that date.</p>
-        <h2>7. Children</h2>
-        <p>MachReach is not intended for children under 16. If you believe a child under 16 created an account, contact us so we can investigate and remove it.</p>
-        <h2>8. Contact and Changes</h2>
-        <p>We will post material changes on this page and update the date above. Questions, complaints, or data-rights requests: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+        <p>Estos proveedores pueden procesar datos fuera de Chile bajo sus respectivas salvaguardas contractuales y de seguridad.</p>
+        <h2>5. Conservación y eliminación</h2>
+        <p>Los datos de tu cuenta y de tu estudio se conservan mientras la cuenta esté activa. La eliminación permanente primero intenta cancelar una suscripción activa y luego elimina los datos vinculados a la cuenta de la base de datos principal de la aplicación. Podemos conservar registros limitados de eventos de facturación, seguridad, prevención de fraude y de la propia eliminación cuando sea necesario para completar la solicitud, resolver disputas, evitar cobros duplicados o cumplir la ley. Pueden quedar copias temporales en respaldos protegidos del proveedor hasta que esos respaldos expiren según su calendario.</p>
+        <h2>6. Tus derechos</h2>
+        <p>Puedes solicitar acceso, rectificación, eliminación, oposición y portabilidad de tus datos. MachReach ofrece una exportación en JSON y la eliminación permanente desde Ajustes. También puedes desconectar integraciones, darte de baja de los correos de estudio opcionales o escribir a <a href="mailto:support@machreach.com">support@machreach.com</a>. Podemos necesitar verificar tu identidad antes de actuar sobre una solicitud.</p>
+        <p>El nuevo marco chileno de datos personales de la Ley 21.719 entra en vigencia el 1 de diciembre de 2026. MachReach está preparando sus procesos para los derechos y obligaciones adicionales que rigen desde esa fecha.</p>
+        <h2>7. Menores de edad</h2>
+        <p>MachReach no está dirigido a menores de 16 años. Si crees que un menor de 16 creó una cuenta, escríbenos para investigarlo y eliminarla.</p>
+        <h2>8. Contacto y cambios</h2>
+        <p>Publicaremos los cambios relevantes en esta página y actualizaremos la fecha de arriba. Consultas, reclamos o solicitudes sobre tus datos: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     """, "privacy")
 
 
 @app.route("/terms")
 def terms_page():
-    return _public_info_page("Terms of Service", "Legal", "The rules for using MachReach, subscriptions, AI study tools, rankings, and account security.", """
-        <p><strong>Last updated:</strong> July 28, 2026</p>
-        <h2>1. Acceptance of Terms</h2>
-        <p>By creating an account or using MachReach, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
-        <h2>2. Description of Service</h2>
-        <p>MachReach provides student study tools including Canvas extension course import, manually added courses, focus timers, study-time tracking, AI-generated flashcards and practice quizzes, grade tracking, XP, streaks, leaderboards, friends, coins and an in-app shop, course analytics, a referral program, and an optional Focus Guard browser extension. Some features require a paid Plus plan.</p>
-        <h2>3. Account Responsibilities</h2>
+    return _public_info_page("Términos del Servicio", "Legal", "Las reglas para usar MachReach: suscripciones, herramientas de estudio con IA, ranking y seguridad de tu cuenta.", """
+        <p><strong>Última actualización:</strong> 28 de julio de 2026</p>
+        <h2>1. Aceptación de los términos</h2>
+        <p>Al crear una cuenta o usar MachReach, aceptas estos Términos del Servicio. Si no estás de acuerdo, no uses el servicio.</p>
+        <h2>2. Descripción del servicio</h2>
+        <p>MachReach entrega herramientas de estudio para estudiantes: importación de ramos con la extensión de Canvas, ramos agregados a mano, temporizadores de enfoque, registro de horas de estudio, flashcards y quizzes de práctica generados con IA, seguimiento de notas, XP, rachas, rankings, amigos, monedas y una tienda dentro de la app, analíticas de ramos, un programa de referidos y una extensión opcional de navegador llamada Focus Guard. Algunas funciones requieren el plan de pago Plus.</p>
+        <h2>3. Responsabilidades de tu cuenta</h2>
         <ul>
-          <li>You must provide accurate information when registering, including your university</li>
-          <li>You are responsible for maintaining the security of your account credentials</li>
-          <li>If you connect Canvas, you must use your own Canvas account and the MachReach browser extension</li>
-          <li>When you add courses manually, you agree they may be saved to a shared autofill catalog scoped to your university (course codes and names only)</li>
-          <li>You must not share your account with others</li>
-          <li>You must be at least 16 years old to use MachReach</li>
-          <li>You must not attempt to probe, scan, or exploit vulnerabilities in the service</li>
+          <li>Debes entregar información veraz al registrarte, incluida tu universidad</li>
+          <li>Eres responsable de mantener seguras las credenciales de tu cuenta</li>
+          <li>Si conectas Canvas, debes usar tu propia cuenta de Canvas y la extensión de MachReach</li>
+          <li>Al agregar ramos a mano, aceptas que puedan guardarse en un catálogo de autocompletado compartido y acotado a tu universidad (solo códigos y nombres de ramos)</li>
+          <li>No debes compartir tu cuenta con otras personas</li>
+          <li>Debes tener al menos 16 años para usar MachReach</li>
+          <li>No debes intentar sondear, escanear ni explotar vulnerabilidades del servicio</li>
         </ul>
-        <h2>4. Academic Integrity</h2>
-        <p>You are responsible for complying with your institution's academic-integrity policies. MachReach is a study aid; using it to plagiarize, cheat, or violate honor codes is prohibited.</p>
-        <h2>5. Subscriptions, Renewals and Billing</h2>
-        <p>Plus is a recurring subscription processed through Lemon Squeezy. Checkout shows the price, currency, billing interval, taxes, and payment terms before purchase. Unless checkout states otherwise, subscriptions auto-renew for the same interval until cancelled.</p>
-        <p>You may cancel from MachReach plan controls or by contacting support. Cancellation stops future renewal; access ordinarily continues through the already-paid period and then returns to the free tier. If payment fails, paid access may be restricted while Lemon Squeezy retries or updates the subscription, and restored after successful payment recovery.</p>
-        <p>Deleting an account with an active subscription first triggers provider cancellation. If cancellation cannot be confirmed, MachReach keeps the account intact so the request can be retried without orphaning a recurring charge.</p>
-        <h2>6. Coin Packs</h2>
-        <p>Coin packs are one-time digital purchases. Coins have no cash value and cannot be transferred, resold, or redeemed for money. Provider event identifiers are recorded to prevent a duplicate or replayed webhook from crediting an order twice.</p>
-        <h2>7. Refunds and Right of Withdrawal</h2>
-        <p>Refund requests can be sent to <a href="mailto:support@machreach.com">support@machreach.com</a> with the purchase email and order identifier. Nothing in these Terms excludes a refund, cancellation, warranty, or right of withdrawal that cannot lawfully be waived. Chilean consumers retain applicable rights under Law 19.496 and electronic-commerce rules.</p>
-        <p>A full refund of a Plus subscription payment ends paid access when the refund is confirmed by Lemon Squeezy. A partial subscription refund does not change access unless support tells you otherwise as part of the agreed resolution. A refunded coin pack is reversed in proportion to the cumulative refund. If those coins were already spent, future coin earnings first settle the resulting coin balance adjustment; your spendable coin balance will not become negative.</p>
-        <h2>8. AI Features</h2>
-        <p>AI-generated quizzes, flashcards, or other study content are provided as suggestions and may be incomplete or incorrect. You are responsible for reviewing generated content before relying on it academically.</p>
-        <h2>9. Leaderboards, Coins and Referrals</h2>
-        <p>XP, coins, streaks, badges, and leaderboard ranks are part of the game layer and have no cash value, cannot be transferred or sold between accounts, and can be redeemed only inside MachReach. Referral rewards (such as free Plus time) are granted for genuine sign-ups only. We may withhold, reverse, or reset rewards, ranks, or referral credit for suspected cheating or abuse.</p>
-        <p>Choosing a university in your profile is not proof of enrollment. If MachReach offers a physical, cash-equivalent, or other real-world prize, eligibility and delivery are conditional on the potential recipient verifying enrollment or affiliation with the university on their account. A user who cannot complete verification, submitted an inaccurate university, or is otherwise ineligible may be disqualified and the prize may pass to the next eligible recipient.</p>
-        <h2>10. Availability and Liability</h2>
-        <p>MachReach is a study aid and does not guarantee academic results or uninterrupted availability. To the maximum extent permitted by law, MachReach is not responsible for indirect or consequential loss caused by reliance on generated content or outages outside its reasonable control. This does not limit liability or remedies that cannot be limited under consumer law.</p>
-        <h2>11. Chilean Law and Changes</h2>
-        <p>These Terms are governed by Chilean law. Mandatory consumer protections and jurisdiction rights remain unaffected. Material changes will be posted here with an updated date and, where required, additional notice.</p>
-        <h2>12. Contact</h2>
-        <p>Questions about these terms? Contact <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+        <h2>4. Integridad académica</h2>
+        <p>Eres responsable de cumplir las políticas de integridad académica de tu institución. MachReach es una ayuda de estudio; usarlo para plagiar, copiar o violar códigos de honor está prohibido.</p>
+        <h2>5. Suscripciones, renovaciones y cobros</h2>
+        <p>Plus es una suscripción recurrente procesada por Lemon Squeezy. El checkout muestra el precio, la moneda, el intervalo de cobro, los impuestos y las condiciones de pago antes de comprar. Salvo que el checkout diga otra cosa, las suscripciones se renuevan automáticamente por el mismo intervalo hasta que las canceles.</p>
+        <p>Puedes cancelar desde los controles de plan en MachReach o escribiendo a soporte. La cancelación detiene la siguiente renovación; normalmente el acceso continúa hasta el término del período ya pagado y después vuelve al plan gratuito. Si un pago falla, el acceso pagado puede restringirse mientras Lemon Squeezy reintenta o actualiza la suscripción, y se restablece cuando el pago se recupera.</p>
+        <p>Eliminar una cuenta con una suscripción activa primero dispara la cancelación con el proveedor. Si esa cancelación no se puede confirmar, MachReach mantiene la cuenta intacta para que puedas reintentar la solicitud sin dejar un cobro recurrente huérfano.</p>
+        <h2>6. Packs de monedas</h2>
+        <p>Los packs de monedas son compras digitales de una sola vez. Las monedas no tienen valor en dinero y no pueden transferirse, revenderse ni canjearse por dinero. Registramos los identificadores de los eventos del proveedor para evitar que un webhook duplicado o reenviado acredite una compra dos veces.</p>
+        <h2>7. Reembolsos y derecho de retracto</h2>
+        <p>Las solicitudes de reembolso se envían a <a href="mailto:support@machreach.com">support@machreach.com</a> con el correo de la compra y el identificador de la orden. Nada en estos Términos excluye un reembolso, cancelación, garantía o derecho de retracto que no pueda renunciarse legalmente. Los consumidores en Chile conservan los derechos que les otorga la Ley 19.496 y las normas de comercio electrónico.</p>
+        <p>El reembolso total de un pago de la suscripción Plus termina el acceso pagado cuando Lemon Squeezy lo confirma. Un reembolso parcial de la suscripción no cambia el acceso, salvo que soporte te indique otra cosa como parte de la solución acordada. Un pack de monedas reembolsado se revierte en proporción al reembolso acumulado. Si esas monedas ya se gastaron, las monedas que ganes después saldan primero ese ajuste; tu saldo disponible nunca quedará en negativo.</p>
+        <h2>8. Funciones con IA</h2>
+        <p>Los quizzes, flashcards y demás contenido generado con IA son sugerencias y pueden estar incompletos o equivocados. Es tu responsabilidad revisar el contenido generado antes de apoyarte en él académicamente.</p>
+        <h2>9. Rankings, monedas y referidos</h2>
+        <p>El XP, las monedas, las rachas, las insignias y las posiciones en el ranking son parte de la capa de juego: no tienen valor en dinero, no pueden transferirse ni venderse entre cuentas y solo pueden canjearse dentro de MachReach. Las recompensas por referidos (como días gratis de Plus) se otorgan solo por registros genuinos. Podemos retener, revertir o reiniciar recompensas, posiciones o crédito de referidos ante sospechas de trampa o abuso.</p>
+        <p>Elegir una universidad en tu perfil no es prueba de matrícula. Si MachReach ofrece un premio físico, equivalente a dinero u otro premio del mundo real, la elegibilidad y la entrega quedan condicionadas a que quien lo reciba verifique su matrícula o vínculo con la universidad registrada en su cuenta. Quien no complete la verificación, haya declarado una universidad incorrecta o no sea elegible por otro motivo puede quedar descalificado y el premio puede pasar al siguiente elegible.</p>
+        <h2>10. Disponibilidad y responsabilidad</h2>
+        <p>MachReach es una ayuda de estudio y no garantiza resultados académicos ni disponibilidad ininterrumpida. En la máxima medida que permita la ley, MachReach no responde por pérdidas indirectas o consecuenciales causadas por confiar en contenido generado o por caídas fuera de su control razonable. Esto no limita responsabilidades ni remedios que no puedan limitarse conforme a la ley del consumidor.</p>
+        <h2>11. Ley chilena y cambios</h2>
+        <p>Estos Términos se rigen por la ley chilena. Las protecciones obligatorias al consumidor y los derechos de jurisdicción se mantienen intactos. Los cambios relevantes se publicarán aquí con la fecha actualizada y, cuando corresponda, con aviso adicional.</p>
+        <h2>12. Contacto</h2>
+        <p>¿Dudas sobre estos términos? Escribe a <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     """, "terms")
 
 
 @app.route("/cookies")
 def cookies_page():
-    return _public_info_page("Cookies", "Privacy", "Essential product cookies plus optional, consent-based analytics.", """
-      <p>MachReach uses essential cookies for login sessions, CSRF protection, language preference, and basic UI preferences. If you block these, login and protected student features may stop working.</p>
-      <p>PostHog product analytics is optional and is not loaded until you explicitly allow analytics in the cookie banner. We do not use advertising cookies or sell analytics data.</p>
-      <p><button type="button" class="btn btn-outline" onclick="document.cookie='analytics_consent=0;path=/;max-age=31536000;SameSite=Lax';window.location.reload();">Disable analytics</button></p>
-      <p>Questions: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+    return _public_info_page("Cookies", "Privacidad", "Cookies esenciales del producto y analítica opcional, solo con tu consentimiento.", """
+      <p>MachReach usa cookies esenciales para la sesión de inicio de sesión, la protección CSRF, el idioma y algunas preferencias básicas de la interfaz. Si las bloqueas, el inicio de sesión y las funciones de estudiante pueden dejar de funcionar.</p>
+      <p>La analítica de producto de PostHog es opcional y no se carga hasta que aceptas explícitamente la analítica en el banner de cookies. No usamos cookies publicitarias ni vendemos datos de analítica.</p>
+      <p><button type="button" class="btn btn-outline" onclick="document.cookie='analytics_consent=0;path=/;max-age=31536000;SameSite=Lax';window.location.reload();">Desactivar analítica</button></p>
+      <p>Consultas: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     """, "cookies")
-
-
-@app.route("/status")
-def public_status_page():
-    return _public_info_page("Status", "System", "The current public status of MachReach services.", """
-      <p class="mr-note"><strong>Status notice:</strong> this page is informational and is not a live uptime monitor.</p>
-      <p>For incidents or support, contact <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
-    """, "status")
 
 
 @app.route("/about")
 def about_page():
-    return _public_info_page("About MachReach", "Built in Chile", "A study platform that pulls courses, focus, notes, quizzes, rankings, and progress into one place.", """
-      <p>MachReach is a student study platform built in Santiago, Chile. We started from a simple frustration: studying tools are scattered across a dozen apps — one for notes, one for flashcards, one for timers, one for tracking grades — and none of them talk to each other. MachReach pulls the whole study workflow into a single place.</p>
+    return _public_info_page("Sobre MachReach", "Hecho en Chile", "Una plataforma de estudio que junta ramos, enfoque, apuntes, quizzes, ranking y progreso en un solo lugar.", """
+      <p>MachReach es una plataforma de estudio para estudiantes, hecha en Santiago de Chile. Partimos de una molestia simple: las herramientas para estudiar están repartidas en diez apps distintas &mdash; una para apuntes, otra para flashcards, otra para el temporizador, otra para llevar las notas &mdash; y ninguna se habla con las demás. MachReach junta todo el flujo de estudio en un solo lugar.</p>
 
-      <h2>What you can do</h2>
+      <h2>Qué puedes hacer</h2>
       <ul>
-        <li><strong>Focus sessions</strong> — distraction-free study timers, with an optional browser extension that blocks distracting sites while a session is active.</li>
-        <li><strong>Courses &amp; Canvas extension</strong> — connect Canvas with the MachReach extension to import your real university courses.</li>
-        <li><strong>Flashcards &amp; quizzes</strong> — generate study sets and practice questions from your own material.</li>
-        <li><strong>Grades &amp; analytics</strong> — track marks on the Chilean 1.0–7.0 scale and see what you need to pass.</li>
-        <li><strong>XP, streaks &amp; leaderboards</strong> — stay motivated with friends and live rankings by country, university, and major.</li>
+        <li><strong>Sesiones de enfoque</strong> &mdash; temporizadores sin distracciones, con una extensión opcional que bloquea los sitios que te distraen mientras estudias.</li>
+        <li><strong>Ramos y extensión de Canvas</strong> &mdash; conecta Canvas con la extensión de MachReach para importar tus ramos reales de la universidad.</li>
+        <li><strong>Flashcards y quizzes</strong> &mdash; genera material de estudio y preguntas de práctica desde tus propios archivos.</li>
+        <li><strong>Notas y analíticas</strong> &mdash; lleva tus notas en escala 1,0 &ndash; 7,0 y mira cuánto necesitas para aprobar.</li>
+        <li><strong>XP, rachas y ranking</strong> &mdash; mantente motivado con tus amigos y con rankings en vivo por país, universidad y carrera.</li>
       </ul>
 
-      <h2>Who it's for</h2>
-      <p>University and high-school students who want one organized study system instead of a pile of disconnected apps. MachReach is built with Chilean students in mind, but the tools work anywhere.</p>
+      <h2>Para quién es</h2>
+      <p>Estudiantes de universidad y de colegio que quieren un sistema de estudio ordenado en vez de un montón de apps sueltas. MachReach está pensado para estudiantes chilenos, pero las herramientas funcionan en cualquier parte.</p>
 
-      <h2>Get in touch</h2>
-      <p>Questions, feedback, or partnership ideas? Email us at <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
+      <h2>Escríbenos</h2>
+      <p>¿Dudas, comentarios o ideas de colaboración? Escríbenos a <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     """, "about")
-
-
-@app.route("/blog")
-def blog_page():
-    return _public_info_page("Blog", "Updates", "Product notes and study-system ideas will live here once the public blog opens.", """
-      <p>We don't run a public blog yet — for now, product updates and new features are announced directly inside MachReach when you log in, so you never miss them.</p>
-
-      <h2>What we'll write about here</h2>
-      <ul>
-        <li>Study techniques and how to get the most out of focus sessions</li>
-        <li>New features and product updates</li>
-        <li>How students are using MachReach to stay on top of the semester</li>
-      </ul>
-
-      <p style="margin-top:24px;">Want updates by email? Reach out at <a href="mailto:support@machreach.com">support@machreach.com</a> and we'll keep you posted.</p>
-    """, "blog")
-
-
-@app.route("/press")
-def press_page():
-    return _public_info_page("Press", "Media", "Short facts for anyone writing about MachReach or exploring partnerships.", """
-      <p>Writing about MachReach or interested in a partnership? Here's the essentials. For interviews, assets, or anything else, email <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
-
-      <h2>Boilerplate</h2>
-      <p>MachReach is a student study platform built in Santiago, Chile, that brings focus sessions, course tracking, Canvas extension import, flashcards, quizzes, grade analytics, and motivational features like XP, streaks, and leaderboards into a single study system.</p>
-
-      <h2>Fast facts</h2>
-      <ul>
-        <li><strong>What:</strong> all-in-one study platform for students</li>
-        <li><strong>Based in:</strong> Santiago, Chile</li>
-        <li><strong>Key features:</strong> focus mode, Canvas extension course import, flashcards, quizzes, grade tracking, leaderboards</li>
-        <li><strong>Website:</strong> <a href="https://machreach.com">machreach.com</a></li>
-      </ul>
-
-      <h2>Media contact</h2>
-      <p><a href="mailto:support@machreach.com">support@machreach.com</a></p>
-    """, "press")
-
-
-@app.route("/roadmap")
-def roadmap_page():
-    return _public_info_page("Roadmap", "Next", "Where the product is heading next.", """
-      <p class="mr-note">Next priorities: stronger Focus mode, course benchmarks, richer friend rankings, and smarter Plus analytics.</p>
-      <h2>What that means</h2>
-      <ul>
-        <li><strong>Focus mode:</strong> richer session recovery, better reward moments, and clearer timer state.</li>
-        <li><strong>Course benchmarks:</strong> more useful comparisons once enough real outcomes exist.</li>
-        <li><strong>Friend rankings:</strong> tighter friend circles, private comparisons, and collaborative pressure.</li>
-        <li><strong>Plus analytics:</strong> deeper patterns without making the dashboard feel heavy.</li>
-      </ul>
-    """, "roadmap")
 
 
 # ---------------------------------------------------------------------------
@@ -5076,8 +5017,7 @@ def robots_txt():
 
 @app.route("/sitemap.xml")
 def sitemap_xml():
-    paths = ["/", "/about", "/blog", "/press", "/roadmap",
-             "/privacy", "/terms", "/cookies", "/status", "/login", "/register"]
+    paths = ["/", "/about", "/privacy", "/terms", "/cookies", "/login", "/register"]
     urls = "".join(
         f"  <url><loc>https://machreach.com{p}</loc></url>\n" for p in paths
     )
@@ -5173,8 +5113,8 @@ def _render_error_page(code, heading, message, sub=""):
         <p class="err-msg">{message}</p>
         {f'<div class="err-sub">{sub}</div>' if sub else ''}
         <div class="err-actions" style="margin-top: 18px;">
-          <a href="/" class="primary">&larr; Back to home</a>
-          <button class="ghost" onclick="history.back()">Go back</button>
+          <a href="/" class="primary">&larr; Volver al inicio</a>
+          <button class="ghost" onclick="history.back()">Atr&aacute;s</button>
         </div>
       </div>
     </div>
@@ -5204,11 +5144,11 @@ def _wants_json_error() -> bool:
 @app.errorhandler(404)
 def _handle_404(e):
     if _wants_json_error():
-        return jsonify({"error": "Not found"}), 404
+        return jsonify({"error": "No encontrado"}), 404
     return _render_error_page(
         404,
-        "This page wandered off.",
-        "The link you followed may be broken, or the page has moved. Try heading back home or using ⌘K for quick navigation.",
+        "Esta página se perdió.",
+        "El enlace que seguiste puede estar roto o la página se movió. Vuelve al inicio o usa ⌘K para navegar rápido.",
         sub=request.path[:80],
     )
 
@@ -5223,8 +5163,8 @@ def _handle_500(e):
         return jsonify({"error": "Algo falló de nuestro lado. Inténtalo de nuevo."}), 500
     return _render_error_page(
         500,
-        "Something broke on our end.",
-        "This one's on us. We've logged the error — in most cases a quick retry will fix it. If not, send us a note at support@machreach.com and we'll dig in.",
+        "Algo se rompió de nuestro lado.",
+        "Esta es nuestra culpa. Ya registramos el error y casi siempre se arregla reintentando. Si no, escríbenos a support@machreach.com y lo revisamos.",
     )
 
 
@@ -5232,8 +5172,8 @@ def _handle_500(e):
 def _handle_403(e):
     return _render_error_page(
         403,
-        "That area is off-limits.",
-        "You don't have permission to access this page. If you think this is a mistake, contact your account admin or support.",
+        "Esta zona no es para ti.",
+        "No tienes permiso para entrar a esta página. Si crees que es un error, escribe a soporte.",
     )
 
 
