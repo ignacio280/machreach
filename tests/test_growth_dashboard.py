@@ -169,3 +169,116 @@ def test_the_page_can_be_filtered_to_paying_users(client, make_user):
 
     assert "filter-payer@growth.test" in body
     assert "filter-owner@growth.test" not in body
+
+
+def _admin_session(client, make_user, name, email, *, reauth=True):
+    from datetime import datetime as _dt
+    from machreach_core import admin_security
+
+    admin_id = make_user(name, email)
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET is_admin = 1 WHERE id = %s", (admin_id,))
+    admin_security.enroll(admin_id, "JBSWY3DPEHPK3PXP")
+    now = _dt.now(timezone.utc).timestamp()
+    with client.session_transaction() as session:
+        session["client_id"] = admin_id
+        session["account_type"] = "student"
+        session["session_version"] = 0
+        session["admin_mfa_verified_at"] = now
+        if reauth:
+            session["admin_reauthenticated_at"] = now
+    return admin_id
+
+
+def test_deleting_a_user_needs_a_recent_reauthentication(client, make_user):
+    _admin_session(client, make_user, "Del Admin A", "del-a@growth.test", reauth=False)
+    victim = make_user("Victim A", "victim-a@growth.test")
+
+    response = client.get(f"/admin/growth/delete/{victim}")
+
+    assert response.status_code == 302
+    assert "/admin/reauth" in response.headers["Location"]
+
+
+def test_deletion_requires_the_exact_email_typed_back(client, flask_app, make_user, monkeypatch):
+    from machreach_core.db import get_client
+
+    _admin_session(client, make_user, "Del Admin B", "del-b@growth.test")
+    victim = make_user("Victim B", "victim-b@growth.test")
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+
+    response = client.post(f"/admin/growth/delete/{victim}",
+                           data={"confirm_email": "wrong@growth.test"})
+
+    assert response.status_code == 200
+    assert get_client(victim) is not None
+
+
+def test_a_confirmed_deletion_removes_the_account_and_its_rows(client, flask_app, make_user, monkeypatch):
+    from machreach_core.db import _fetchone, get_client
+
+    _admin_session(client, make_user, "Del Admin C", "del-c@growth.test")
+    victim = make_user("Victim C", "victim-c@growth.test")
+    sdb.create_manual_course(victim, "Cálculo", "MAT100")
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+
+    response = client.post(f"/admin/growth/delete/{victim}",
+                           data={"confirm_email": "victim-c@growth.test"})
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/admin/growth")
+    assert get_client(victim) is None
+    with get_db() as db:
+        assert _fetchone(db, "SELECT 1 FROM student_courses WHERE client_id = %s", (victim,)) is None
+
+
+def test_administrators_and_your_own_account_cannot_be_deleted(client, flask_app, make_user, monkeypatch):
+    from machreach_core.db import get_client
+
+    admin_id = _admin_session(client, make_user, "Del Admin D", "del-d@growth.test")
+    other_admin = make_user("Other Admin", "other-admin@growth.test")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET is_admin = 1 WHERE id = %s", (other_admin,))
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+
+    mine = client.post(f"/admin/growth/delete/{admin_id}",
+                       data={"confirm_email": "del-d@growth.test"})
+    theirs = client.post(f"/admin/growth/delete/{other_admin}",
+                         data={"confirm_email": "other-admin@growth.test"})
+
+    assert mine.status_code == 200
+    assert theirs.status_code == 200
+    assert get_client(admin_id) is not None
+    assert get_client(other_admin) is not None
+
+
+def test_the_table_offers_delete_only_where_it_is_allowed(client, make_user):
+    admin_id = _admin_session(client, make_user, "Del Admin E", "del-e@growth.test")
+    victim = make_user("Victim E", "victim-e@growth.test")
+
+    body = client.get("/admin/growth").get_data(as_text=True)
+
+    assert f'/admin/growth/delete/{victim}' in body
+    assert f'/admin/growth/delete/{admin_id}' not in body
+
+
+def test_deleting_a_paying_account_stops_when_billing_cannot_be_cancelled(
+    client, flask_app, make_user, monkeypatch
+):
+    """A cancelled-but-still-billed subscription is worse than a stale row."""
+    from machreach_core.db import get_client
+    import app as appmod
+
+    _admin_session(client, make_user, "Del Admin F", "del-f@growth.test")
+    victim = make_user("Victim F", "victim-f@growth.test")
+    with get_db() as db:
+        _exec(db, "INSERT INTO student_subscription_state (client_id, tier, status, ls_sub_id) "
+                  "VALUES (%s, 'plus', 'active', %s)", (victim, "ls-123"))
+    monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setattr(appmod, "_cancel_ls_subs", lambda ids, client_id: False)
+
+    response = client.post(f"/admin/growth/delete/{victim}",
+                           data={"confirm_email": "victim-f@growth.test"})
+
+    assert response.status_code == 200
+    assert get_client(victim) is not None

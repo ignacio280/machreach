@@ -3820,6 +3820,88 @@ def admin_product_analytics():
     return _render("Admin analytics", body, active_page="admin", wide=True)
 
 
+@app.route("/admin/growth/delete/<int:target_id>", methods=["GET", "POST"])
+@limiter.limit("6 per minute", methods=["POST"])
+def admin_growth_delete(target_id: int):
+    """Delete one account from the owner dashboard.
+
+    Same machinery and same guards as the deletion on /admin — reauthentication,
+    the exact email typed back, never yourself, never another administrator —
+    because a second implementation of an irreversible action is a second set of
+    ways to get it wrong.
+    """
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    if not _admin_secret_ok():
+        return redirect(url_for("admin_reauthenticate", next=f"/admin/growth/delete/{target_id}"))
+    from student import growth
+
+    target = get_client(target_id)
+    if not target:
+        flash(("error", "That account no longer exists."))
+        return redirect(url_for("admin_growth"))
+
+    email = str(target.get("email") or "")
+    error = ""
+    if request.method == "POST":
+        typed = (request.form.get("confirm_email") or "").strip().lower()
+        if typed != email.strip().lower():
+            error = "Type the account's exact email to confirm."
+        elif target_id == session.get("client_id"):
+            error = "You cannot delete your own logged-in account."
+        else:
+            result = _admin_delete_client_account(target_id)
+            if result.get("ok"):
+                _log_admin_action("delete_user", target=str(target_id), email=email)
+                flash(("success", f"Deleted account: {email}"))
+                return redirect(url_for("admin_growth"))
+            error = result.get("error") or "Could not delete that account."
+
+    row = next((r for r in growth.user_rows() if r["id"] == target_id), None)
+    losses = []
+    if row:
+        if row["referred"]:
+            losses.append(f"<li>Invitó a <b>{row['referred']}</b> persona(s); "
+                          f"<b>{row['referred_paying']}</b> de ellas paga. Esas cuentas se quedan, "
+                          "pero el crédito del referido desaparece.</li>")
+        if row["paying"]:
+            losses.append("<li>Tiene una <b>suscripción activa</b>. Se cancela en el proveedor "
+                          "antes de borrar nada; si esa cancelación falla, no se borra la cuenta.</li>")
+        if row["xp"]:
+            losses.append(f"<li>Pierde <b>{row['xp']:,}</b> XP, su historial de estudio y su puesto en el ranking.</li>")
+    losses_html = '<ul class="del-loss">' + "".join(losses) + "</ul>" if losses else ""
+
+    return _render("Eliminar cuenta", f"""
+    <div class="card" style="max-width:620px;margin:40px auto;">
+      <h1>Eliminar esta cuenta</h1>
+      <style>
+        .del-go {{ display:inline-flex; align-items:center; gap:8px; padding:11px 18px; border:0;
+          border-radius:999px; background:#D7263D; color:#fff; font-weight:800; font-size:14px; cursor:pointer; }}
+        .del-go:hover {{ background:#B01E31; }}
+        /* The shell's .alert-red renders as bare text here, and an irreversible
+           action deserves to look like one. */
+        .del-warn {{ background:#FDECEE; border:1px solid #F2B8C0; border-radius:14px;
+          padding:12px 14px; margin:14px 0; color:#8C1526; font-weight:700; line-height:1.45; }}
+        .del-loss {{ margin:0 0 14px; padding-left:20px; line-height:1.6; color:#5C5C66; }}
+      </style>
+      <p><b>{_esc(str(target.get('name') or ''))}</b> &mdash; <code>{_esc(email)}</code></p>
+      <div class="del-warn">Esto no se puede deshacer. Se borran sus cursos, notas,
+        sesiones, quizzes, amistades y su cuenta.</div>
+      {losses_html}
+      {'<div class="del-warn">' + _esc(error) + '</div>' if error else ''}
+      <form method="post">
+        {_csrf_hidden_input()}
+        <div class="form-group">
+          <label>Escribe <code>{_esc(email)}</code> para confirmar</label>
+          <input name="confirm_email" autocomplete="off" required>
+        </div>
+        <button class="del-go" type="submit">Eliminar definitivamente</button>
+        <a class="btn btn-outline" href="/admin/growth" style="margin-left:8px;">Cancelar</a>
+      </form>
+    </div>
+    """, active_page="admin")
+
+
 @app.route("/admin/growth.csv")
 def admin_growth_csv():
     """The same table as /admin/growth, for when a spreadsheet is easier."""
@@ -3861,6 +3943,8 @@ def admin_growth():
 
     rows = growth.user_rows()
     stats = growth.summary(rows)
+    admin_ids = {int(r["id"]) for r in _admin_rows(
+        "SELECT id FROM clients WHERE is_admin = 1", "SELECT id FROM clients WHERE is_admin = 1")}
     query = (request.args.get("q") or "").strip()
     only = (request.args.get("only") or "").strip()
     view = rows
@@ -3878,6 +3962,16 @@ def admin_growth():
     def yes_no(value: bool, good: str = "Sí", bad: str = "—") -> str:
         return f'<b style="color:#2E9266">{good}</b>' if value else f'<span style="color:#94939C">{bad}</span>'
 
+    def _delete_cell(row: dict) -> str:
+        """Own account and other administrators are not deletable, so they get
+        no button rather than a button that always refuses."""
+        if row["id"] == session.get("client_id"):
+            return '<span style="color:#94939C">tú</span>'
+        if row["id"] in admin_ids:
+            return '<span style="color:#94939C">admin</span>'
+        return (f'<a href="/admin/growth/delete/{row["id"]}" '
+                'style="color:#D7263D;font-weight:800;">Eliminar</a>')
+
     if view:
         body_rows = "".join(
             "<tr>"
@@ -3894,6 +3988,7 @@ def admin_growth():
             f"<td><b style=\"color:#2E9266\">{r['referred_paying']}</b></td>"
             f"<td>{r['weeks_earned']}</td>"
             f"<td>{r['xp']:,}</td>"
+            f"<td>{_delete_cell(r)}</td>"
             "</tr>"
             for r in view
         )
@@ -3901,7 +3996,7 @@ def admin_growth():
             "<table><thead><tr>"
             "<th>ID</th><th>Nombre</th><th>Correo</th><th>Registro</th><th>Verificado</th>"
             "<th>Plan</th><th>Código</th><th>Referidos</th><th>Verificados</th>"
-            "<th>Referidos que pagan</th><th>Semanas ganadas</th><th>XP</th>"
+            "<th>Referidos que pagan</th><th>Semanas ganadas</th><th>XP</th><th></th>"
             "</tr></thead><tbody>" + body_rows + "</tbody></table>"
         )
     else:
