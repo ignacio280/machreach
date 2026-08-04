@@ -903,42 +903,22 @@ LAYOUT = """<!DOCTYPE html>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        function pwaNotice(message, actionLabel, action) {
-          var notice = document.createElement('div');
-          notice.setAttribute('role', 'status');
-          notice.style.cssText = 'position:fixed;right:16px;bottom:86px;z-index:10000;background:#1A1A1F;color:#fff;padding:12px 14px;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.25);font:700 13px Nunito,sans-serif;max-width:300px';
-          notice.textContent = message + ' ';
-          if (actionLabel) {
-            var button = document.createElement('button');
-            button.type = 'button'; button.textContent = actionLabel;
-            button.style.cssText = 'margin-left:8px;border:0;border-radius:999px;padding:7px 10px;background:#FF7A3D;color:#111;font-weight:900;cursor:pointer';
-            button.addEventListener('click', action);
-            notice.appendChild(button);
-          }
-          document.body.appendChild(notice);
-        }
-        var refreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', function () {
-          if (refreshing) return;
-          refreshing = true;
-          window.location.reload();
-        });
+        // Updates install themselves. No banner, no button, and no reload
+        // under the user: the new worker takes over on the next navigation.
         navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function (registration) {
-          function offerUpdate(worker) {
-            if (!worker) return;
-            pwaNotice('A MachReach update is ready.', 'Update', function () { worker.postMessage({type:'SKIP_WAITING'}); });
+          function applyUpdate(worker) {
+            if (worker) worker.postMessage({type:'SKIP_WAITING'});
           }
-          if (registration.waiting) offerUpdate(registration.waiting);
+          if (registration.waiting) applyUpdate(registration.waiting);
           registration.addEventListener('updatefound', function () {
             var worker = registration.installing;
             if (!worker) return;
             worker.addEventListener('statechange', function () {
-              if (worker.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(worker);
+              if (worker.state === 'installed' && navigator.serviceWorker.controller) applyUpdate(worker);
             });
           });
         }).catch(function (error) {
           console.error('MachReach service worker registration failed', error);
-          pwaNotice('Offline support could not start. Refresh to retry.');
           if (window.Sentry && window.Sentry.captureException) window.Sentry.captureException(error);
         });
       });

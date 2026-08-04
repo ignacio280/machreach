@@ -386,3 +386,13 @@ def test_legacy_auth_card_rules_cannot_reach_the_design(client):
     ]
 
     assert unscoped == []
+
+
+def test_no_service_worker_update_banner(client):
+    """Updates install silently — the old "A MachReach update is ready" toast
+    and its Update button are gone."""
+    body = client.get("/login").get_data(as_text=True)
+
+    assert "update is ready" not in body
+    assert "pwaNotice" not in body
+    assert "SKIP_WAITING" in body        # the update itself still applies
