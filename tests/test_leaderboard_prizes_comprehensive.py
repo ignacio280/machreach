@@ -406,3 +406,39 @@ def test_reclaimed_worker_fences_old_owner_before_money_writes(monkeypatch, make
             "WHERE client_id = %s AND period_key = '2399-W02'",
             (client_id,),
         ) == 0
+
+
+def test_periods_that_closed_before_signup_are_never_shown(make_user):
+    """A brand-new account used to be greeted by every week since launch,
+    each one reading "Sin clasificación" on all four boards."""
+    from machreach_core.db import _exec, _fetchone, get_db
+    from student import leaderboard_prizes as prizes
+
+    client_id = make_user()
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET created_at = %s WHERE id = %s",
+              ("2099-02-01 10:00:00", client_id))
+        _exec(db, "INSERT INTO student_lb_payout_run (period_kind, period_key, status, completed_at) "
+                  "VALUES (%s, %s, 'completed', %s) ON CONFLICT DO NOTHING",
+              ("week", "2099-W01", "2099-01-12T00:00:00+00:00"))
+
+    assert prizes.get_pending_period_results(client_id) == []
+    # And it is recorded, so the check is not repeated on every page load.
+    with get_db() as db:
+        assert _fetchone(db, "SELECT 1 FROM student_lb_period_seen WHERE client_id = %s "
+                             "AND period_key = %s", (client_id, "2099-W01"))
+
+
+def test_a_period_without_any_xp_is_skipped(make_user):
+    from machreach_core.db import _exec, get_db
+    from student import leaderboard_prizes as prizes
+
+    client_id = make_user()
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET created_at = %s WHERE id = %s",
+              ("2098-12-01 10:00:00", client_id))
+        _exec(db, "INSERT INTO student_lb_payout_run (period_kind, period_key, status, completed_at) "
+                  "VALUES (%s, %s, 'completed', %s) ON CONFLICT DO NOTHING",
+              ("week", "2099-W02", "2099-01-19T00:00:00+00:00"))
+
+    assert prizes.get_pending_period_results(client_id) == []

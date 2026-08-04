@@ -14,6 +14,11 @@
 
 .cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
 @media (max-width:1000px){.cgrid{grid-template-columns:1fr}}
+.cgrid-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:44px 24px;border:2px dashed rgba(36,24,52,.26);border-radius:var(--r-lg);background:var(--surface-2)}
+.cgrid-empty .ico{width:56px;height:56px;border-radius:18px;border:var(--bd);box-shadow:0 3px 0 var(--ink);background:var(--brand);color:#fff;display:grid;place-items:center;transform:rotate(-3deg)}
+.cgrid-empty h3{font-size:21px;letter-spacing:-.02em}
+.cgrid-empty p{color:var(--ink-2);font-size:14.5px;font-weight:600;margin:0}
+.cgrid-empty .btn{margin-top:6px}
 .ccard{position:relative;overflow:hidden;border:var(--bd);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--sh2);padding:18px 20px;transition:transform .22s var(--spring-b),box-shadow .22s}
 .ccard:hover{transform:translateY(-4px);box-shadow:var(--sh3)}
 .ccard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--cc,var(--brand));border-right:2px solid var(--ink)}

@@ -2201,6 +2201,43 @@ def _auth_story_panel(kind: str, lang: str) -> str:
       </aside>
     """
 
+def _render_auth_flow(slug: str, page_title: str, **payload):
+    """Serve one of the supplied side-flow designs (verify email, recover
+    password) with the server deciding which view opens."""
+    from student.app_design import render_live_page
+
+    csrf = generate_csrf()
+    data = dict(payload)
+    data["csrf"] = csrf
+    data["messages"] = list(session.pop("_flashes", []) if "_flashes" in session else [])
+    fragment = render_live_page(slug, data)
+    if not fragment:
+        return None
+    # The design ships a complete stylesheet; the legacy layout CSS would only
+    # fight it on specificity, so this page opts out of it.
+    return render_layout(
+        title=page_title,
+        content=Markup(
+            "<style>body>.nav,body>footer{display:none!important}"
+            "body>.container{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}"
+            "body>.container>.toast-container{position:fixed;z-index:2147483000}</style>"
+            + fragment
+        ),
+        logged_in=False,
+        messages=[],
+        active_page="login",
+        client_name="",
+        wide=True,
+        nav=t_dict("nav"),
+        student_ui=t_dict("student_ui"),
+        tr=t,
+        lang=session.get("lang", "es"),
+        is_admin=False,
+        account_type="student",
+        dashboard_design=True,
+    )
+
+
 def _render_claude_auth(mode: str, *, ref: str = ""):
     """Serve the supplied Cuenta design while keeping Flask auth authoritative."""
     from student.app_design import render_live_page
@@ -2490,121 +2527,18 @@ def resend_verification():
 
 @app.route("/verify-email-pending")
 def verify_email_pending():
-    """Dedicated landing page for users whose email isn't verified yet.
-    Replaces the easy-to-miss flash toast shown on /login — this is the full
-    page, with the resend form front and center."""
+    """Landing page for accounts whose email is still unverified — the resend
+    form lives here rather than behind an easy-to-miss toast on /login."""
     email = (request.args.get("email") or "").strip()
-    just_created = request.args.get("created") == "1"
-    just_sent = request.args.get("sent") == "1"
-    delayed = request.args.get("delayed") == "1"
-    safe_email = _esc(email)
-    headline = ("&#127881; Account created!" if just_created
-                else "&#128231; Verify your email to continue")
-    sub = (
-        "Email delivery is delayed. Your account is safe and we will retry automatically."
-        if delayed else
-        "We just sent you a verification link. Click it and you're in."
-        if just_created else
-        "A new verification link is on its way — check your inbox."
-        if just_sent else
-        "Your email isn't verified yet. Click the link we sent to your inbox "
-        "to log in. Can't find it? Resend below."
-    )
-    resend_notice = (
-        '<div class="vep-flash vep-delay">Email delivery is taking longer than expected. '
-        'You can retry below; there is no need to create another account.</div>' if delayed else
-        '<div class="vep-flash">A new verification link has been sent. '
-        'Check your inbox (and your spam folder).</div>' if just_sent else ""
-    )
-    return render_layout(title="Verify your email", logged_in=False,
-        messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
-        active_page="login", client_name="", nav=t_dict("nav"),
-        lang=session.get("lang", "es"),
-        content=Markup(f"""
-    <style>
-      .vep-wrap {{
-        max-width: 520px; margin: 48px auto; padding: 0 16px;
-      }}
-      .vep-card {{
-        background: var(--card); border: 1px solid var(--border);
-        border-radius: 16px; padding: 32px 28px;
-        box-shadow: 0 8px 40px rgba(0,0,0,.08);
-      }}
-      .vep-icon {{
-        width: 68px; height: 68px; margin: 0 auto 16px;
-        border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 32px;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        color: #fff;
-      }}
-      .vep-card h1 {{
-        text-align: center; font-size: 22px; margin: 0 0 8px;
-      }}
-      .vep-card .vep-sub {{
-        text-align: center; color: var(--text-muted);
-        font-size: 14px; line-height: 1.55; margin: 0 0 22px;
-      }}
-      .vep-email {{
-        background: var(--bg); border: 1px solid var(--border);
-        border-radius: 10px; padding: 10px 14px;
-        font-size: 14px; text-align: center; color: var(--text);
-        margin-bottom: 20px; word-break: break-all;
-      }}
-      .vep-steps {{
-        background: var(--bg); border: 1px solid var(--border);
-        border-radius: 10px; padding: 14px 16px; margin-bottom: 22px;
-      }}
-      .vep-steps ol {{ margin: 0; padding-left: 20px; font-size: 13px; color: var(--text-muted); line-height: 1.8; }}
-      .vep-steps strong {{ color: var(--text); }}
-      .vep-flash {{
-        background: #d1fae5; color: #065f46;
-        border: 1px solid #34d399; border-radius: 10px;
-        padding: 10px 14px; font-size: 13px;
-        margin-bottom: 18px; text-align: center;
-      }}
-      .vep-delay {{ background:#fff7ed; color:#9a3412; border-color:#fb923c; }}
-      .vep-form {{ display: flex; gap: 8px; margin-bottom: 16px; }}
-      .vep-form input {{
-        flex: 1; padding: 10px 12px;
-        border: 1px solid var(--border); border-radius: 10px;
-        background: var(--bg); color: var(--text); font-size: 14px;
-      }}
-      .vep-form button {{
-        padding: 10px 16px; border-radius: 10px;
-        background: linear-gradient(135deg,#6366f1,#8b5cf6);
-        color: #fff; font-weight: 600; font-size: 14px;
-        border: none; cursor: pointer;
-      }}
-      .vep-foot {{ text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 20px; }}
-      .vep-foot a {{ color: var(--primary); font-weight: 600; }}
-    </style>
-    <div class="vep-wrap">
-      <div class="vep-card">
-        <div class="vep-icon">&#128231;</div>
-        <h1>{headline}</h1>
-        <p class="vep-sub">{sub}</p>
-        {resend_notice}
-        {(f'<div class="vep-email">Sent to <strong>{safe_email}</strong></div>' if email else '')}
-        <div class="vep-steps">
-          <ol>
-            <li>Open the email from <strong>MachReach</strong></li>
-            <li>Click <strong>Verify email</strong></li>
-            <li>Log in and start studying.</li>
-          </ol>
-        </div>
-        <form method="post" action="/resend-verification" class="vep-form">
-          {_csrf_hidden_input()}
-          <input name="email" type="email" placeholder="your@email.com"
-                 value="{safe_email}" required>
-          <button type="submit">Resend link</button>
-        </form>
-        <div class="vep-foot">
-          Already verified? <a href="/login">Log in</a>
-        </div>
-      </div>
-    </div>
-    """))
+    if request.args.get("delayed") == "1":
+        state = "delayed"
+    elif request.args.get("created") == "1":
+        state = "created"
+    elif request.args.get("sent") == "1":
+        state = "sent"
+    else:
+        state = "blocked"
+    return _render_auth_flow("verificar", "Verifica tu correo", state=state, email=email)
 
 
 @app.route("/set-language/<lang>")
@@ -2640,30 +2574,30 @@ def forgot_password():
             create_reset_token(client["id"], token, expires)
             from machreach_core.config import BASE_URL
             reset_link = f"{BASE_URL}/reset-password/{token}"
-            body = f"Click here to reset your MachReach password:\n\n{reset_link}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email."
+            body = "\n\n".join([
+                "Click here to reset your MachReach password:",
+                reset_link,
+                "This link expires in 1 hour.",
+                "If you didn't request this, ignore this email.",
+            ])
             try:
                 _send_system_email(email, "MachReach — Password Reset", body)
             except Exception:
                 pass  # Don't reveal whether email was sent
-        # Always show same message to prevent email enumeration
-        flash(("success", t("auth.reset_sent")))
-        return redirect(url_for("forgot_password"))
-    return render_layout(title="Forgot Password", logged_in=False,
-        messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
-        active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"),
-        content=Markup(f"""
-    <div class="auth-wrapper">
-      <div class="auth-card">
-        <h1>{t("auth.reset_title")}</h1>
-        <p class="subtitle">{t("auth.reset_desc")}</p>
-        <form method="post">
-          <div class="form-group"><label>{t("auth.email")}</label><input name="email" type="email" placeholder="you@school.edu" required></div>
-          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.send_reset")}</button>
-        </form>
-        <div class="auth-footer"><a href="/login">{t("auth.log_in")}</a></div>
-      </div>
-    </div>
-    """))
+        # Same answer either way, so the page can never be used to discover
+        # which addresses have an account.
+        return redirect(url_for("forgot_password", sent="1", email=email))
+    state = "form"
+    if request.args.get("ok") == "1":
+        state = "ok"
+    elif request.args.get("expired") == "1":
+        state = "expired"
+    elif request.args.get("sent") == "1":
+        state = "sent"
+    return _render_auth_flow(
+        "recuperar", "Recupera tu contraseña",
+        state=state, email=(request.args.get("email") or "").strip(),
+    )
 
 
 @app.route("/reset-password/<token>", methods=["GET", "POST"])
@@ -2671,8 +2605,9 @@ def forgot_password():
 def reset_password(token):
     reset = get_valid_reset_token(token)
     if not reset:
-        flash(("error", t("auth.reset_invalid")))
-        return redirect(url_for("login"))
+        # A dead link gets the flow's own "caducó" view, with a field to ask
+        # for a fresh one, rather than a toast on the login page.
+        return redirect(url_for("forgot_password", expired="1"))
     if request.method == "POST":
         pw1 = request.form.get("password", "")
         pw2 = request.form.get("password2", "")
@@ -2685,23 +2620,10 @@ def reset_password(token):
         update_client_password(reset["client_id"], _hash_pw(pw1))
         mark_reset_token_used(token)
         _log_security("PASSWORD_RESET_OK", client_id=reset["client_id"])
-        flash(("success", t("auth.reset_success")))
-        return redirect(url_for("login"))
-    return render_layout(title="Reset Password", logged_in=False,
-        messages=list(session.pop("_flashes", []) if "_flashes" in session else []),
-        active_page="", client_name="", nav=t_dict("nav"), lang=session.get("lang", "es"),
-        content=Markup(f"""
-    <div class="auth-wrapper">
-      <div class="auth-card">
-        <h1>{t("auth.reset_btn")}</h1>
-        <form method="post">
-          <div class="form-group"><label>{t("auth.new_password")}</label><input name="password" type="password" placeholder="At least {PASSWORD_MIN_LENGTH} characters" required minlength="{PASSWORD_MIN_LENGTH}"></div>
-          <div class="form-group"><label>{t("auth.confirm_password")}</label><input name="password2" type="password" required minlength="{PASSWORD_MIN_LENGTH}"></div>
-          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;">{t("auth.reset_btn")}</button>
-        </form>
-      </div>
-    </div>
-    """))
+        return redirect(url_for("forgot_password", ok="1"))
+    return _render_auth_flow(
+        "recuperar", "Elige una nueva contraseña", state="reset", token=token,
+    )
 
 
 # ---------------------------------------------------------------------------

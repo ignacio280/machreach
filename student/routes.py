@@ -254,6 +254,23 @@ _PERIOD_POPUP_HTML = """
 
 
 
+DEFAULT_AVATAR_COLOR = "#FFD3A8"
+
+
+def _student_avatar_color(client_id: int) -> str:
+    """The colour picked in the profile editor, used wherever the initials
+    bubble is drawn — the topbar included, not just the ranking."""
+    from machreach_core.db import get_mail_preferences
+
+    try:
+        prefs = json.loads(get_mail_preferences(client_id) or "{}")
+    except (TypeError, ValueError):
+        return DEFAULT_AVATAR_COLOR
+    if not isinstance(prefs, dict):
+        return DEFAULT_AVATAR_COLOR
+    return str(prefs.get("profile_avatar") or "") or DEFAULT_AVATAR_COLOR
+
+
 def _gpa_planilla_html(lang: str = "en") -> str:
     """Return the GPA planilla HTML, localized for `lang` ('en' | 'es').
 
@@ -4219,6 +4236,7 @@ Return this JSON shape:
             _avatar_url = (
                 f"/student/profile/picture/{_cid()}?v={_avatar_version}" if _avatar_version else ""
             )
+            _avatar_color = _student_avatar_color(_cid())
             _app_data = {
                 "live": True,
                 "lang": lang,
@@ -4245,6 +4263,7 @@ Return this JSON shape:
                 "freezes": int(_wallet.get("streak_freezes") or 0),
                 "avatar": _avatar,
                 "avatar_url": _avatar_url,
+                "avatar_color": _avatar_color,
                 "csrf": generate_csrf(),
             }
             # The editor and the settings page render the same identity, so all
@@ -8657,6 +8676,7 @@ Material:
                 f"/student/profile/picture/{_cid()}?v={sdb.profile_picture_version(_cid())}"
                 if sdb.profile_picture_version(_cid()) else ""
             ),
+            "avatar_color": _student_avatar_color(cid),
             "csrf": generate_csrf(),
             "mission": {"eyebrow": _mission_eye, "headline": f'{_hello}, {_esc(_first_name)}! {_headline}', "copy": "Your real courses, deadlines and study history shape today’s mission." if _is_en else "Tus cursos, fechas y sesiones reales construyen la misión de hoy.", "focus_label": "Start focus" if _is_en else "Empezar enfoque", "plan_label": "View full plan" if _is_en else "Ver plan completo", "quests": _dash_quests},
             "stats": [

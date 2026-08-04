@@ -33,7 +33,7 @@ function Mission({ data = {} }) {
     <section className={"mission rv" + (seen ? " in" : "")} ref={ref}>
       <div className="mission-top">
         <div>
-          <span className="pill"><i className="dot" />{data.eyebrow || "Martes · semana 6 del semestre"}</span>
+          <span className="pill">{data.eyebrow || "Martes · semana 6 del semestre"}</span>
           <h1 style={{ marginTop: 16 }} dangerouslySetInnerHTML={{ __html: data.headline || "Buenos días, Sofía. Hoy toca <em>Cálculo II</em>." }} />
           <p className="mission-sub">{data.copy || "Tu prueba está en 3 días y llevas 62% del temario. Un bloque de enfoque ahora te deja al día."}</p>
         </div>

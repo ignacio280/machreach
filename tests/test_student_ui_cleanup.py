@@ -218,3 +218,68 @@ def test_setup_redirects_once_the_profile_is_complete(client, make_user):
 
     assert response.status_code == 302
     assert "/student" in response.headers["Location"]
+
+
+def test_topbar_carries_the_chosen_avatar_colour(client, make_user):
+    """The bubble used to be hardcoded peach no matter what the student picked
+    in the profile editor."""
+    from machreach_core.db import update_mail_preferences
+
+    client_id = _student(client, make_user, name="Colour Student")
+    update_mail_preferences(client_id, json.dumps({"profile_avatar": "#5DE3B0"}))
+
+    courses = _app_payload(client.get("/student/courses").get_data(as_text=True))
+    # The dashboard inlines its payload as plain JSON rather than base64.
+    dashboard = client.get("/student").get_data(as_text=True)
+
+    assert courses["avatar_color"] == "#5DE3B0"
+    assert '"avatar_color": "#5DE3B0"' in dashboard
+    source = open("static/machreach_app/app/shell.jsx", encoding="utf-8").read()
+    assert "SHELL_DATA.avatar_color" in source
+
+
+def test_the_courses_page_has_an_empty_state(client, make_user):
+    _student(client, make_user, name="Empty Student")
+    source = open("static/machreach_app/app/courses.jsx", encoding="utf-8").read()
+
+    assert "Está vacío…" in source
+    assert "¡Comienza agregando tu primer ramo!" in source
+    assert "cgrid-empty" in open("static/machreach_app/app/courses.css", encoding="utf-8").read()
+
+
+def test_focus_guard_chip_distinguishes_offline_from_desactivado():
+    """Activo has to mean sites are being blocked right now — not merely that
+    the extension is installed."""
+    source = open("static/machreach_app/app/focus.jsx", encoding="utf-8").read()
+
+    assert "Offline" in source and "Desactivado" in source
+    assert "function focusGuardBlocking" in source
+    # It mirrors the extension's own rule, so the two can never disagree.
+    assert 'state.phase !== "break"' in source
+    assert "Inactivo" not in source
+
+
+def test_the_status_pills_lost_their_dots():
+    for name in ("dash-left.jsx", "focus.jsx"):
+        source = open(f"static/machreach_app/app/{name}", encoding="utf-8").read()
+        assert 'className="dot"' not in source
+
+
+def test_auth_flow_pages_serve_the_authored_designs(client):
+    forgot = client.get("/forgot-password").get_data(as_text=True)
+    verify = client.get("/verify-email-pending?email=a@b.com").get_data(as_text=True)
+
+    assert "/static/machreach_app/recuperar.bundle.min.js" in forgot
+    assert "/static/machreach_app/verificar.bundle.min.js" in verify
+    for body in (forgot, verify):
+        assert "/static/machreach_app/app/authflow.css" in body
+        assert "/static/machreach_layout/layout-base.css" not in body
+    # The design's floating doodles are not shipped.
+    assert "AF_DOODLES" not in open("static/machreach_app/app/authflow.jsx", encoding="utf-8").read()
+
+
+def test_a_dead_reset_link_lands_on_the_expired_view(client):
+    response = client.get("/reset-password/not-a-real-token")
+
+    assert response.status_code == 302
+    assert "expired=1" in response.headers["Location"]

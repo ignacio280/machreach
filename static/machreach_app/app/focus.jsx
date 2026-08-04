@@ -63,7 +63,7 @@ function FocusHead({ scene, data = {} }) {
   return (
     <section className="fx-head">
       <div>
-        <span className="pill"><i className="dot" />{live ? (data.status_label || "Listo para comenzar") : "Sesión en curso · Cálculo II"}</span>
+        <span className="pill">{live ? (data.status_label || "Listo para comenzar") : "Sesión en curso · Cálculo II"}</span>
         <h1 style={{ marginTop: 14 }}>Enfoque</h1>
         <p>Mostrando lo que has estudiado <b style={{ color: "var(--ink)" }}>hoy</b> · {live ? (data.today_label || "hoy") : "martes 4 de agosto"}</p>
       </div>
@@ -621,9 +621,28 @@ function RewardCard({ reward, onClose }) {
   );
 }
 
+/* Mirrors the extension's own rule (content.js): it blocks while a work block
+   is running and stops the moment the student pauses or takes a break. */
+function focusGuardBlocking() {
+  const state = readFocusStore();
+  if (!state) return false;
+  return !!state.running && state.phase !== "break"
+    && (!state.endsAt || Date.now() < Number(state.endsAt));
+}
+
 function Guard({ live = false }) {
   // null while we wait for the extension to answer the ping.
   const [installed, setInstalled] = React.useState(live ? null : true);
+  // "Activo" has to mean sites are being blocked right now, not merely that
+  // the extension exists — otherwise it reads as Activo all day.
+  const [blocking, setBlocking] = React.useState(false);
+  React.useEffect(() => {
+    if (!live) { setBlocking(true); return undefined; }
+    const tick = () => setBlocking(focusGuardBlocking());
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [live]);
   React.useEffect(() => {
     if (!live) return undefined;
     let alive = true;
@@ -642,11 +661,15 @@ function Guard({ live = false }) {
   }, [live]);
   return (
     <section className="pnl guard-pnl">
-      <span className="ico-badge" style={{ background: installed === false ? "#FFDFE1" : "#E1F3D6" }}><IconShield size={17} /></span>
+      <span className="ico-badge" style={{ background: installed === false ? "#FFDFE1" : blocking ? "#E1F3D6" : "#FFF2C9" }}><IconShield size={17} /></span>
       <h3>Focus Guard</h3>
       {installed === false
-        ? <a className="tagchip off" href={FOCUS_GUARD_STORE_URL} target="_blank" rel="noopener"><i className="off-dot" />Inactivo</a>
-        : <span className="tagchip"><i className="live-dot" />{installed === null ? "Buscando…" : "Activo"}</span>}
+        ? <a className="tagchip off" href={FOCUS_GUARD_STORE_URL} target="_blank" rel="noopener"><i className="off-dot" />Offline</a>
+        : installed === null
+        ? <span className="tagchip idle"><i className="idle-dot" />Buscando…</span>
+        : blocking
+        ? <span className="tagchip"><i className="live-dot" />Activo</span>
+        : <span className="tagchip idle"><i className="idle-dot" />Desactivado</span>}
     </section>
   );
 }

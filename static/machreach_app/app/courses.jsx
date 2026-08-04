@@ -337,7 +337,18 @@ function ExtCard() {
   );
 }
 
-function CoursesGrid({ plus, list, onDelete }) {
+function CoursesGrid({ plus, list, onDelete, onAdd }) {
+  if (!list.length) {
+    // Without this the page just stopped below the stat cards.
+    return (
+      <div className="cgrid-empty" id="manual-course-panel">
+        <div className="ico"><IconBook size={26} /></div>
+        <h3>Está vacío…</h3>
+        <p>¡Comienza agregando tu primer ramo!</p>
+        {onAdd && <button className="btn btn-primary" onClick={onAdd}>Agregar a mano<IconArrow size={17} /></button>}
+      </div>
+    );
+  }
   return <div className="cgrid" id="manual-course-panel">{list.map((c, i) => <CourseCard key={c.code} c={c} plus={plus} d={(i % 2) * 90} onDelete={onDelete} />)}</div>;
 }
 

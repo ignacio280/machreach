@@ -951,10 +951,34 @@ def _user_rank_in_scope(client_id: int, scope: str, period_kind: str,
     }
 
 
+def _account_created_on(client_id: int) -> date | None:
+    """The day this account was opened, as a plain date."""
+    from machreach_core.db import _fetchval
+
+    with get_db() as db:
+        raw = _fetchval(db, "SELECT created_at FROM clients WHERE id = %s", (client_id,))
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        return raw.date()
+    if isinstance(raw, date):
+        return raw
+    try:
+        return datetime.fromisoformat(str(raw).replace("Z", "+00:00").replace(" ", "T", 1)).date()
+    except ValueError:
+        return None
+
+
 def get_pending_period_results(client_id: int) -> list[dict]:
     """Return a list of fully-rendered period summaries the user has not
     yet acknowledged. Each entry contains ranks across all scopes plus
-    any prize amounts they won in that period."""
+    any prize amounts they won in that period.
+
+    Periods that closed before the account existed, and periods the user
+    finished with no XP at all, are skipped: a brand-new student was told
+    "Sin clasificación" for every board of every week since launch. They are
+    marked as seen on the way past so the work is done once.
+    """
     from machreach_core.db import _fetchall
 
     # Grab all completed payout runs the user hasn't seen.
@@ -970,14 +994,28 @@ def get_pending_period_results(client_id: int) -> list[dict]:
             (client_id,),
         )
 
+    joined_on = _account_created_on(client_id)
     out: list[dict] = []
     for run in runs:
         kind = run.get("period_kind")
         key = run.get("period_key")
+        if joined_on is not None:
+            try:
+                # _period_window speaks this module's "week"/"month" kinds.
+                period_end = date.fromisoformat(_period_window(kind, key)[1][:10])
+            except ValueError:
+                period_end = None
+            if period_end is not None and joined_on >= period_end:
+                mark_period_seen(client_id, kind, key)
+                continue
         # Per-scope rank lookup
         scopes_data: dict[str, dict | None] = {}
         for scope in ("global", "country", "university", "major"):
             scopes_data[scope] = _user_rank_in_scope(client_id, scope, kind, key)
+        if not any(scopes_data.values()):
+            # No XP anywhere in the period — there is nothing to report.
+            mark_period_seen(client_id, kind, key)
+            continue
         # Prizes in this period
         with get_db() as db:
             prize_rows = _fetchall(

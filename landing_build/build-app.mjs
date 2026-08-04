@@ -39,6 +39,16 @@ const PAGE_DEPS = {
     css: ["dash.css", "focus.css", "plan.css", "courses.css", "analytics.css"],
     jsx: ["shell.jsx", "lock.jsx", "analytics.jsx"],
   },
+  recuperar: {
+    css: ["dash.css", "pubtop.css", "authflow.css"],
+    jsx: ["pubtop.jsx", "authflow.jsx"],
+    motion: false,
+  },
+  verificar: {
+    css: ["dash.css", "pubtop.css", "authflow.css"],
+    jsx: ["pubtop.jsx", "authflow.jsx"],
+    motion: false,
+  },
   cuenta: { css: ["pubtop.css", "auth.css"], jsx: ["pubtop.jsx", "auth.jsx"], motion: false },
   cursos: {
     css: ["dash.css", "focus.css", "plan.css", "courses.css"],

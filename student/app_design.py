@@ -39,6 +39,8 @@ _PAGES: dict[str, str] = {
     "ajustes": "Ajustes",
     "cuenta": "Iniciar sesión y registro",
     "setup": "Configuración inicial",
+    "recuperar": "Recuperar contraseña",
+    "verificar": "Verificar correo",
 }
 
 _PAGE_CSS: dict[str, tuple[str, ...]] = {
@@ -57,6 +59,8 @@ _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "ajustes": ("dash.css", "study.css", "plan.css", "friends.css", "profile.css", "settings.css"),
     "cuenta": ("pubtop.css", "auth.css"),
     "setup": ("dash.css", "profile.css", "pubtop.css", "setup.css"),
+    "recuperar": ("dash.css", "pubtop.css", "authflow.css"),
+    "verificar": ("dash.css", "pubtop.css", "authflow.css"),
 }
 
 

@@ -1,0 +1,39 @@
+/* Flujos de correo/contraseña — verify-email-pending, forgot-password, reset */
+.af-page{min-height:100dvh;background:var(--paper);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px 60px}
+.af-shell{width:100%;max-width:520px;position:relative;z-index:2}
+.af-card{background:var(--surface);border:var(--bd);border-radius:var(--r-lg);box-shadow:var(--sh3);padding:30px 28px}
+.af-ico{width:64px;height:64px;margin:0 auto 18px;border-radius:18px;border:var(--bd);box-shadow:0 4px 0 var(--ink);display:grid;place-items:center;background:var(--brand);color:#fff;transform:rotate(-3deg);animation:af-pop .5s var(--spring-b) both}
+.af-ico.good{background:var(--good)}
+.af-ico.warn{background:var(--amber,#EFBC42);color:var(--ink)}
+@keyframes af-pop{from{transform:scale(.4) rotate(-14deg);opacity:0}}
+.af-card h1{font-size:26px;line-height:1.06;text-align:center;margin-bottom:9px}
+.af-sub{text-align:center;color:var(--ink-2);font-size:14.5px;line-height:1.55;font-weight:600;margin:0 auto;max-width:40ch}
+.af-flash{display:flex;gap:9px;align-items:flex-start;margin-top:18px;padding:11px 13px;border:var(--bd);border-radius:var(--r-sm);background:rgba(31,181,132,.14);font-size:13px;font-weight:700;line-height:1.45;box-shadow:0 2px 0 var(--ink)}
+.af-flash svg{flex:none;margin-top:1px;color:var(--good)}
+.af-flash.warn{background:rgba(239,188,66,.2)}
+.af-flash.warn svg{color:#B58309}
+.af-mail{display:flex;align-items:center;gap:10px;margin-top:18px;padding:12px 14px;border:2px dashed rgba(36,24,52,.24);border-radius:var(--r-sm);background:var(--surface-2)}
+.af-mail .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700;flex:none}
+.af-mail .v{font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--ink);word-break:break-all}
+.af-steps{margin-top:18px;border:var(--bd);border-radius:var(--r-sm);background:var(--surface-2);box-shadow:0 2px 0 var(--ink);overflow:hidden}
+.af-steps li{display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:2px solid rgba(36,24,52,.1);font-size:13.5px;font-weight:700;color:var(--ink-2)}
+.af-steps li:last-child{border-bottom:0}
+.af-steps li b{color:var(--ink);font-weight:800}
+.af-steps .n{flex:none;width:24px;height:24px;border-radius:999px;border:2px solid var(--ink);background:var(--surface);display:grid;place-items:center;font-family:var(--font-display);font-size:12px;font-weight:800;color:var(--ink)}
+.af-form{margin-top:20px;display:grid;gap:10px}
+.af-label{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--ink-3);display:block;margin-bottom:7px}
+.af-in{width:100%;padding:13px 15px;border:var(--bd);border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink);font-family:var(--font-body);font-weight:700;font-size:15px;box-shadow:0 2px 0 var(--ink)}
+.af-in::placeholder{color:var(--ink-3);font-weight:600}
+.af-in:focus{outline:none;background:var(--surface);box-shadow:0 2px 0 var(--ink),0 0 0 4px var(--brand-tint)}
+.af-form .btn{width:100%}
+.af-row{display:flex;gap:9px;align-items:flex-end}
+.af-row>div{flex:1}
+.af-row .btn{width:auto;flex:none}
+.af-err{color:var(--bad);font-size:12.5px;font-weight:800}
+.af-foot{margin-top:20px;padding-top:18px;border-top:2px solid rgba(36,24,52,.12);text-align:center;font-size:13.5px;font-weight:700;color:var(--ink-3)}
+.af-foot a{font-weight:800}
+.af-note{margin-top:15px;text-align:center;font-size:12.5px;color:var(--ink-3);font-weight:700;line-height:1.5}
+.af-cool{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:700;text-align:center;margin-top:12px}
+.af-swap{animation:swapin .38s var(--ease) both}
+@media (max-width:560px){.af-card{padding:22px 18px}.af-card h1{font-size:23px}.af-row{flex-direction:column;align-items:stretch}.af-row .btn{width:100%}}
+@keyframes swapin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
