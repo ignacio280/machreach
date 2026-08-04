@@ -7045,230 +7045,36 @@ Material:
                 return redirect(url_for("student_dashboard_page"))
         except Exception:
             pass
-        body = """
-        <style>
-          .ss-wrap { max-width: 560px; margin: 60px auto; }
-          .ss-card { background: var(--card, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 18px; padding: 32px; }
-          .ss-h1 { font-size: 26px; font-weight: 800; margin: 0 0 6px; }
-          .ss-sub { color: var(--text-muted, #6b7280); font-size: 14px; margin: 0 0 20px; }
-          .ss-step { display: none; }
-          .ss-step.active { display: block; }
-          .ss-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted, #6b7280); font-weight: 700; margin-bottom: 6px; }
-          .ss-input, .ss-select { width: 100%; padding: 12px 14px; border: 1px solid var(--border, #e5e7eb); border-radius: 10px; background: var(--bg, #fff); color: var(--text, #111827); font-size: 14px; box-sizing: border-box; }
-          .ss-list { max-height: 240px; overflow-y: auto; border: 1px solid var(--border, #e5e7eb); border-radius: 10px; margin-top: 8px; background: var(--bg, #fff); }
-          .ss-item { display:block; width:100%; padding: 10px 14px; border:0; border-bottom: 1px solid var(--border, #e5e7eb); cursor: pointer; font:inherit; text-align:left; color:inherit; background:transparent; font-size: 14px; }
-          .ss-item:last-child { border-bottom: none; }
-          .ss-item:hover { background: rgba(99,102,241,.08); }
-          .ss-item.create { color: var(--primary, #6366f1); font-weight: 600; }
-          .ss-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 22px; }
-          .ss-pill { display: inline-block; padding: 4px 10px; background: rgba(99,102,241,.1); color: var(--primary, #6366f1); border-radius: 999px; font-size: 12px; font-weight: 600; margin-bottom: 14px; }
-          .ss-err { color: #ef4444; font-size: 12px; margin-top: 6px; min-height: 16px; }
-        </style>
-        <div class="ss-wrap">
-          <div class="ss-card">
-            <span class="ss-pill" id="ss-progress">Step 1 of 3</span>
-            <h1 class="ss-h1">Welcome to MachReach Student</h1>
-            <p class="ss-sub">We need three quick things so we can rank you on the right leaderboards and tailor your study plan. This is required.</p>
+        # The authored Setup design, standalone: it brings its own top bar, so
+        # the surrounding app chrome is hidden the same way the auth pages do it.
+        from app import render_layout
+        from student.app_design import render_live_page
 
-            <div class="ss-step active" id="ss-step-0">
-              <label class="ss-label" for="ss-country">Your country</label>
-              <select class="ss-select" id="ss-country">
-                <option value="">- Pick your country -</option>
-              </select>
-            </div>
-
-            <div class="ss-step" id="ss-step-1">
-              <label class="ss-label" for="ss-univ-q">Your university</label>
-              <input class="ss-input" id="ss-univ-q" type="text" placeholder="Search universities..." autocomplete="off">
-              <div class="ss-list" id="ss-univ-list" role="listbox" aria-live="polite"></div>
-            </div>
-
-            <div class="ss-step" id="ss-step-2">
-              <label class="ss-label" for="ss-major-q">Your major</label>
-              <input class="ss-input" id="ss-major-q" type="text" placeholder="Search majors..." autocomplete="off">
-              <div class="ss-list" id="ss-major-list" role="listbox" aria-live="polite"></div>
-            </div>
-
-            <div class="ss-err" id="ss-err" role="alert" aria-live="assertive"></div>
-            <div class="ss-actions">
-              <button class="btn btn-outline" id="ss-back" disabled>Back</button>
-              <button class="btn btn-primary" id="ss-next">Next</button>
-            </div>
-          </div>
-        </div>
-
-        <script>
-        (function() {
-          const state = { step: 0, country_iso: '', university_id: null, university_name: '', major_id: null, major_name: '' };
-          const stepEls = [0,1,2].map(i => document.getElementById('ss-step-' + i));
-          const progress = document.getElementById('ss-progress');
-          const back = document.getElementById('ss-back');
-          const next = document.getElementById('ss-next');
-          const err  = document.getElementById('ss-err');
-
-          function escapeHtml(s) {
-            return String(s||'').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-          }
-          function show(i) {
-            state.step = i;
-            stepEls.forEach((el, idx) => el.classList.toggle('active', idx === i));
-            progress.textContent = 'Step ' + (i + 1) + ' of 3';
-            back.disabled = (i === 0);
-            next.textContent = (i === 2) ? 'Finish' : 'Next';
-            err.textContent = '';
-          }
-
-          async function loadCountries() {
-            next.disabled = true;
-            err.textContent = 'Loading countries...';
-            try {
-              const response = await fetch('/api/academic/countries');
-              const r = await response.json();
-              if (!response.ok) throw new Error(r.error || 'Could not load countries.');
-              const sel = document.getElementById('ss-country');
-              sel.innerHTML = '<option value="">- Pick your country -</option>';
-              (r.countries || []).forEach(c => {
-                const o = document.createElement('option');
-                const iso = c.iso_code || c.iso || '';
-                const flag = c.flag_emoji || c.flag || '';
-                o.value = iso;
-                o.textContent = (flag ? (flag + ' ') : '') + (c.name || iso);
-                sel.appendChild(o);
-              });
-              sel.addEventListener('change', () => { state.country_iso = sel.value; });
-              err.textContent = '';
-              next.disabled = false;
-            } catch(e) {
-              err.innerHTML = 'Could not load countries. <button type="button" id="ss-retry-countries" class="btn btn-outline">Retry</button>';
-              document.getElementById('ss-retry-countries').addEventListener('click', loadCountries);
-            }
-          }
-
-          let univTimer = null;
-          document.getElementById('ss-univ-q').addEventListener('input', e => {
-            clearTimeout(univTimer);
-            const q = e.target.value.trim();
-            univTimer = setTimeout(() => searchUniv(q), 220);
-          });
-          async function searchUniv(q) {
-            const list = document.getElementById('ss-univ-list');
-            if (!state.country_iso) { list.innerHTML = '<div class="ss-item">Pick a country first.</div>'; return; }
-            list.innerHTML = '<div class="ss-item">Loading...</div>';
-            try {
-              const response = await fetch('/api/academic/universities?country=' + state.country_iso + '&q=' + encodeURIComponent(q));
-              const r = await response.json();
-              if (!response.ok) throw new Error(r.error || 'Search failed.');
-              const items = (r.universities || []).map(u =>
-                '<button type="button" role="option" class="ss-item" data-id="' + u.id + '" data-name="' + escapeHtml(u.name) + '">' + escapeHtml(u.name) + '</button>'
-              ).join('');
-              list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
-              list.querySelectorAll('.ss-item[data-id]').forEach(el => {
-                el.addEventListener('click', () => pickUniv(parseInt(el.dataset.id), el.dataset.name));
-              });
-            } catch(e) {
-              list.innerHTML = '<button type="button" class="ss-item" id="ss-retry-univ">Search failed. Retry.</button>';
-              document.getElementById('ss-retry-univ').addEventListener('click', () => searchUniv(q));
-            }
-          }
-          function pickUniv(id, name) {
-            state.university_id = id; state.university_name = name;
-            document.getElementById('ss-univ-q').value = name;
-            document.getElementById('ss-univ-list').innerHTML = '<div class="ss-item">&#10003; ' + escapeHtml(name) + '</div>';
-          }
-
-          let majTimer = null;
-          document.getElementById('ss-major-q').addEventListener('input', e => {
-            clearTimeout(majTimer);
-            const q = e.target.value.trim();
-            majTimer = setTimeout(() => searchMajor(q), 220);
-          });
-          async function searchMajor(q) {
-            const list = document.getElementById('ss-major-list');
-            const url = '/api/academic/majors?q=' + encodeURIComponent(q) + (state.university_id ? '&university_id=' + state.university_id : '');
-            list.innerHTML = '<div class="ss-item">Loading...</div>';
-            try {
-              const response = await fetch(url);
-              const r = await response.json();
-              if (!response.ok) throw new Error(r.error || 'Search failed.');
-              const items = (r.majors || []).map(m =>
-                '<button type="button" role="option" class="ss-item" data-id="' + m.id + '" data-name="' + escapeHtml(m.name) + '">' + escapeHtml(m.name) + '</button>'
-              ).join('');
-              list.innerHTML = items || '<div class="ss-item">No matches. Try a different search.</div>';
-              list.querySelectorAll('.ss-item[data-id]').forEach(el => {
-                el.addEventListener('click', () => pickMajor(parseInt(el.dataset.id), el.dataset.name));
-              });
-            } catch(e) {
-              list.innerHTML = '<button type="button" class="ss-item" id="ss-retry-major">Search failed. Retry.</button>';
-              document.getElementById('ss-retry-major').addEventListener('click', () => searchMajor(q));
-            }
-          }
-          function pickMajor(id, name) {
-            state.major_id = id; state.major_name = name;
-            document.getElementById('ss-major-q').value = name;
-            document.getElementById('ss-major-list').innerHTML = '<div class="ss-item">&#10003; ' + escapeHtml(name) + '</div>';
-          }
-
-          back.addEventListener('click', () => { if (state.step > 0) show(state.step - 1); });
-          next.addEventListener('click', async () => {
-            if (state.step === 0 && !state.country_iso) { err.textContent = 'Pick your country.'; return; }
-            if (state.step === 1 && !state.university_id) { err.textContent = 'Pick your university.'; return; }
-            if (state.step === 2 && !state.major_id) { err.textContent = 'Pick your major.'; return; }
-            if (state.step < 2) { show(state.step + 1); return; }
-            next.disabled = true; next.textContent = 'Saving...';
-            try {
-              const response = await fetch('/api/academic/profile', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({
-                  country_iso: state.country_iso,
-                  university_id: state.university_id,
-                  major_id: state.major_id,
-                }),
-              });
-              const r = await response.json();
-              if (!response.ok || !r.ok) throw new Error(r.error || 'Save failed.');
-              mrGo('/student');
-            } catch(e) {
-              err.textContent = e.message || 'Save failed. Check your connection and retry.';
-              next.disabled = false;
-              next.textContent = 'Finish';
-            }
-          });
-
-          loadCountries();
-          show(0);
-        })();
-        </script>
-        """
-        # The wizard is authored in English; render it fully in Spanish for
-        # ES sessions so the card never mixes languages.
-        if session.get("lang", "es") != "en":
-            for _en, _es in (
-                ("Welcome to MachReach Student", "Bienvenido a MachReach Student"),
-                ("We need three quick things so we can rank you on the right leaderboards and tailor your study plan. This is required.",
-                 "Necesitamos tres datos rápidos para ubicarte en los rankings correctos y personalizar tu plan de estudio. Es obligatorio."),
-                ("Your country", "Tu país"),
-                ("Your university", "Tu universidad"),
-                ("Your major", "Tu carrera"),
-                ("- Pick your country -", "- Elige tu país -"),
-                ("Search universities...", "Busca tu universidad..."),
-                ("Search majors...", "Busca tu carrera..."),
-                ("Step 1 of 3", "Paso 1 de 3"),
-                ("'Step ' + (i + 1) + ' of 3'", "'Paso ' + (i + 1) + ' de 3'"),
-                (">Back<", ">Volver<"),
-                (">Next<", ">Siguiente<"),
-                ("? 'Finish' : 'Next'", "? 'Finalizar' : 'Siguiente'"),
-                ("next.textContent = 'Saving...'", "next.textContent = 'Guardando...'"),
-                ("next.textContent = 'Finish'", "next.textContent = 'Finalizar'"),
-                ("No matches. Try a different search.", "Sin resultados. Prueba otra búsqueda."),
-                ("Pick a country first.", "Primero elige un país."),
-                ("Could not load countries.", "No pudimos cargar los países."),
-                ("Pick your country.", "Elige tu país."),
-                ("Pick your university.", "Elige tu universidad."),
-                ("Pick your major.", "Elige tu carrera."),
-                ("'Save failed.'", "'No se pudo guardar.'"),
-            ):
-                body = body.replace(_en, _es)
-        return _s_render("Set up your account", body, active_page="student_setup")
+        fragment = render_live_page("setup", {"csrf": generate_csrf()})
+        if not fragment:
+            return redirect(url_for("student_dashboard_page"))
+        from machreach_core.i18n import t, t_dict
+        return render_layout(
+            title="Configuración inicial",
+            content=Markup(
+                "<style>body>.nav,body>footer{display:none!important}"
+                "body>.container{width:100%!important;max-width:none!important;"
+                "margin:0!important;padding:0!important}</style>"
+                + fragment
+            ),
+            logged_in=False,
+            messages=[],
+            active_page="student_setup",
+            client_name="",
+            wide=True,
+            nav=t_dict("nav"),
+            student_ui=t_dict("student_ui"),
+            tr=t,
+            lang=session.get("lang", "es"),
+            is_admin=False,
+            account_type="student",
+            dashboard_design=False,
+        )
 
 
     @app.route("/student")

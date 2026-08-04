@@ -197,10 +197,14 @@ def test_onboarding_uses_keyboard_options_and_live_errors(client, make_user):
 
     body = client.get("/student/setup").get_data(as_text=True)
 
-    assert '<label class="ss-label" for="ss-country">' in body
-    assert 'id="ss-univ-list" role="listbox" aria-live="polite"' in body
-    assert 'role="option" class="ss-item"' in body
-    assert 'id="ss-err" role="alert" aria-live="assertive"' in body
+    # Onboarding is a React page now, so the accessible markup lives in the
+    # bundle the page loads rather than in the server response.
+    assert "/static/machreach_app/setup.bundle.min.js" in body
+    source = open("static/machreach_app/app/setup.jsx", encoding="utf-8").read()
+    assert 'htmlFor="su-cq"' in source and 'htmlFor="su-uq"' in source and 'htmlFor="su-mq"' in source
+    assert 'id="su-univ-list" role="listbox" aria-live="polite"' in source
+    assert source.count('role="option"') == 3
+    assert 'id="su-err" role="alert" aria-live="assertive"' in source
 
 
 def test_posthog_loads_only_after_analytics_consent(client, monkeypatch):

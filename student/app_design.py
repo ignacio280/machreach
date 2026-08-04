@@ -38,6 +38,7 @@ _PAGES: dict[str, str] = {
     "perfil-editar": "Editar perfil",
     "ajustes": "Ajustes",
     "cuenta": "Iniciar sesión y registro",
+    "setup": "Configuración inicial",
 }
 
 _PAGE_CSS: dict[str, tuple[str, ...]] = {
@@ -55,6 +56,7 @@ _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "perfil-editar": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css", "profedit.css"),
     "ajustes": ("dash.css", "study.css", "plan.css", "friends.css", "profile.css", "settings.css"),
     "cuenta": ("auth.css",),
+    "setup": ("dash.css", "profile.css", "pubtop.css", "setup.css"),
 }
 
 

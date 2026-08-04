@@ -1,0 +1,15 @@
+/* Barra superior pública (pre-app): cuenta / setup */
+.pub-top{position:sticky;top:0;z-index:40;background:var(--paper);border-bottom:var(--bd)}
+.pub-top-in{max-width:var(--container);margin:0 auto;padding:0 22px;height:64px;display:flex;align-items:center;gap:14px}
+.pub-brand{display:flex;align-items:center;gap:10px;color:var(--ink)}
+.pub-brand b{font-family:var(--font-display);font-size:19px;letter-spacing:-.03em;font-weight:800}
+.pub-brand:hover{color:var(--ink)}
+.pub-tag{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700;padding-left:14px;margin-left:4px;border-left:2px solid rgba(36,24,52,.16)}
+.pub-sp{flex:1}
+.pub-act{display:flex;align-items:center;gap:9px}
+.pub-ib{width:38px;height:38px;flex:none;display:grid;place-items:center;border:var(--bd);border-radius:11px;background:var(--surface);color:var(--ink);box-shadow:0 2px 0 var(--ink);cursor:pointer;transition:.18s var(--ease)}
+.pub-ib:hover{transform:translate(-1px,-2px);box-shadow:0 4px 0 var(--ink)}
+.pub-link{font-family:var(--font-display);font-weight:800;font-size:14px;color:var(--ink-2)}
+.pub-link:hover{color:var(--brand-2)}
+.pub-shift .su-page,.pub-shift .auth-wrap{min-height:calc(100dvh - 64px)}
+@media (max-width:560px){.pub-top-in{padding:0 15px;height:58px}.pub-tag{display:none}.pub-shift .su-page,.pub-shift .auth-wrap{min-height:calc(100dvh - 58px)}}

@@ -1,0 +1,67 @@
+/* Setup — onboarding académico obligatorio (/student/setup) */
+.su-page{min-height:100vh;background:var(--paper);position:relative;display:flex;flex-direction:column;align-items:center;padding:26px 20px 60px}
+.su-top{width:100%;max-width:660px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:26px;position:relative;z-index:2}
+.su-top .su-brand{display:flex;align-items:center;gap:10px}
+.su-top .su-brand b{font-family:var(--font-display);font-size:19px;letter-spacing:-.03em}
+.su-shell{width:100%;max-width:660px;position:relative;z-index:2}
+
+.su-steps{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.su-dot{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+.su-num{flex:none;width:30px;height:30px;border:var(--bd);border-radius:999px;background:var(--surface);color:var(--ink-3);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:14px;box-shadow:0 2px 0 var(--ink);transition:.3s var(--ease)}
+.su-dot.on .su-num{background:var(--brand);color:#fff}
+.su-dot.done .su-num{background:var(--good);color:#fff}
+.su-dot .su-name{font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.su-dot.on .su-name,.su-dot.done .su-name{color:var(--ink)}
+.su-bar{flex:1;height:3px;border-radius:99px;background:var(--paper-2);box-shadow:inset 0 0 0 1px rgba(36,24,52,.14)}
+.su-dot.done+.su-bar{background:var(--good)}
+
+.su-card{background:var(--surface);border:var(--bd);border-radius:var(--r-lg);box-shadow:var(--sh3);padding:28px}
+.su-kicker{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--brand-2);background:var(--brand-tint);border:2px solid var(--brand);border-radius:999px;padding:4px 10px;margin-bottom:14px}
+.su-h1{font-size:31px;line-height:1.02;margin-bottom:8px}
+.su-sub{color:var(--ink-2);font-size:14.5px;line-height:1.5;font-weight:600;max-width:46ch}
+.su-panel{margin-top:22px;animation:swapin .38s var(--ease) both}
+.su-label{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--ink-3);margin-bottom:8px;display:block}
+
+.su-field{position:relative}
+.su-input{width:100%;padding:13px 15px 13px 42px;border:var(--bd);border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink);font-family:var(--font-body);font-weight:700;font-size:15px;box-shadow:0 2px 0 var(--ink)}
+.su-input::placeholder{color:var(--ink-3);font-weight:600}
+.su-input:focus{outline:none;background:var(--surface);box-shadow:0 2px 0 var(--ink),0 0 0 4px var(--brand-tint)}
+.su-field svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--ink-3);pointer-events:none}
+
+.su-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.su-chip{display:flex;align-items:center;gap:10px;padding:11px 13px;border:var(--bd);border-radius:var(--r-sm);background:var(--surface);box-shadow:0 2px 0 var(--ink);font-family:var(--font-body);font-weight:800;font-size:14px;color:var(--ink);cursor:pointer;text-align:left;transition:.18s var(--ease)}
+.su-chip .fl{font-size:19px;line-height:1}
+.su-chip:hover{transform:translate(-1px,-2px);box-shadow:0 4px 0 var(--ink)}
+.su-chip.sel{background:var(--brand-tint);border-color:var(--brand)}
+.su-chip.sel .tick{margin-left:auto;color:var(--brand-2)}
+
+.su-list{margin-top:12px;border:var(--bd);border-radius:var(--r-sm);overflow:hidden;background:var(--surface);box-shadow:0 2px 0 var(--ink);max-height:290px;overflow-y:auto}
+.su-row{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;border-bottom:2px solid rgba(36,24,52,.1);background:transparent;font:inherit;color:var(--ink);cursor:pointer;text-align:left;transition:background .16s}
+.su-row:last-child{border-bottom:0}
+.su-row:hover{background:var(--surface-2)}
+.su-row.sel{background:var(--brand-tint)}
+.su-row .av{flex:none;width:34px;height:34px;border-radius:10px;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:13px;background:var(--paper-2);color:var(--ink)}
+.su-row .tx{min-width:0;flex:1}
+.su-row .tx b{display:block;font-family:var(--font-display);font-size:15px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.su-row .tx span{display:block;font-size:12px;color:var(--ink-3);font-weight:700}
+.su-row .tag{flex:none;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.su-row.sel .tag{color:var(--brand-2)}
+.su-empty{padding:26px 16px;text-align:center;color:var(--ink-3);font-size:13.5px;font-weight:700}
+.su-empty b{display:block;color:var(--ink);font-family:var(--font-display);font-size:15px;margin-bottom:4px}
+.su-hint{margin-top:10px;font-size:12.5px;color:var(--ink-3);font-weight:700}
+.su-hint .lnk{color:var(--brand-2);font-weight:800;cursor:pointer}
+
+.su-recap{display:grid;gap:8px;margin-top:16px}
+.su-recap div{display:flex;align-items:center;gap:10px;padding:11px 13px;border:2px dashed rgba(36,24,52,.22);border-radius:var(--r-sm);background:var(--surface-2);font-size:14px;font-weight:800}
+.su-recap div .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700;width:80px;flex:none}
+
+.su-foot{display:flex;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:2px solid rgba(36,24,52,.12)}
+.su-foot .su-err{color:var(--bad);font-size:12.5px;font-weight:800;margin-right:auto}
+.su-foot .su-of{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-right:auto}
+.su-foot .btn{flex:none}
+
+.su-note{margin-top:16px;text-align:center;font-size:12.5px;color:var(--ink-3);font-weight:700}
+.su-done{text-align:center;padding:14px 0 4px}
+.su-done .ring{width:74px;height:74px;margin:0 auto 18px;border-radius:999px;background:var(--good);border:var(--bd);box-shadow:0 4px 0 var(--ink);display:grid;place-items:center;color:#fff;animation:pop-in .5s var(--spring-b) both}
+@keyframes pop-in{from{transform:scale(.4) rotate(-12deg);opacity:0}}
+@media (max-width:560px){.su-card{padding:20px}.su-h1{font-size:26px}.su-grid{grid-template-columns:1fr}.su-dot .su-name{display:none}}

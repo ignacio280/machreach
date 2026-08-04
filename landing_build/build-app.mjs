@@ -76,6 +76,11 @@ const PAGE_DEPS = {
     css: ["dash.css", "study.css", "plan.css", "friends.css", "profile.css", "settings.css"],
     jsx: ["shell.jsx", "lock.jsx", "settings.jsx"],
   },
+  setup: {
+    css: ["dash.css", "profile.css", "pubtop.css", "setup.css"],
+    jsx: ["pubtop.jsx", "setup.jsx"],
+    motion: false,
+  },
   ranking: {
     css: ["dash.css", "focus.css", "plan.css", "rank.css"],
     jsx: ["shell.jsx", "lock.jsx", "rank.jsx"],

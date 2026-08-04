@@ -175,3 +175,46 @@ def test_leaderboard_rows_carry_avatar_colour_and_scope_labels(client, make_user
     hidden = _mine(academic.leaderboard("country", client_id))
     assert "university" not in hidden
     assert "major" not in hidden
+
+
+def test_setup_page_serves_the_authored_design(client, make_user):
+    """Onboarding is the design's standalone page: its own top bar, no app
+    chrome, and the doodles the design shipped are gone."""
+    client_id = make_user(name="Setup Student")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 0, university_id = NULL, "
+                  "major_id = NULL, country_iso = '' WHERE id = %s", (client_id,))
+    with client.session_transaction() as session:
+        session["client_id"] = client_id
+        session["client_name"] = "Setup Student"
+        session["account_type"] = "student"
+        session["session_version"] = 0
+        session["lang"] = "es"
+
+    body = client.get("/student/setup").get_data(as_text=True)
+
+    assert "/static/machreach_app/setup.bundle.min.js" in body
+    assert "/static/machreach_app/app/setup.css" in body
+    assert "/static/machreach_app/app/pubtop.css" in body
+    assert "ss-wrap" not in body           # the legacy onboarding markup is gone
+    source = open("static/machreach_app/app/setup.jsx", encoding="utf-8").read()
+    assert "doodle" not in source
+
+
+def test_setup_redirects_once_the_profile_is_complete(client, make_user):
+    client_id = _student(client, make_user, name="Done Setup")
+    from student import academic
+
+    # The save validates that the university really is in the chosen country.
+    with get_db() as db:
+        univ = _fetchone(db, "SELECT id, country_iso FROM universities WHERE country_iso <> '' LIMIT 1", ())
+        major = _fetchone(db, "SELECT id FROM majors LIMIT 1", ())
+    academic.save_academic_profile(
+        client_id=client_id, country_iso=univ["country_iso"],
+        university_id=int(univ["id"]), major_id=int(major["id"]),
+    )
+
+    response = client.get("/student/setup")
+
+    assert response.status_code == 302
+    assert "/student" in response.headers["Location"]
