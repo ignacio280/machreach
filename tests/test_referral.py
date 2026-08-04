@@ -1,7 +1,7 @@
 """Money path: referral codes, redemption guards, and the free-week reward."""
 from student import db as sdb
 from student import subscription as ssub
-from machreach_core.db import _fetchone, get_db
+from machreach_core.db import _exec, _fetchone, get_db
 
 
 def test_code_is_stable_and_unique(make_user):
@@ -187,3 +187,59 @@ def test_referral_reward_can_be_revoked_once(make_user):
     after = ssub._parse_iso(ssub.plus_grant_until(owner))
     assert before is not None
     assert after is None or after < before
+
+
+def test_redeeming_a_referral_makes_both_users_friends(make_user):
+    """The link was shared personally, so the two accounts end up connected
+    without either having to send a request."""
+    owner = make_user()
+    newbie = make_user()
+    code = sdb.get_or_create_referral_code(owner)
+    sdb.set_pending_referral(newbie, code)
+
+    assert ssub.redeem_pending_referral_reward(newbie) is not None
+
+    assert sdb.are_friends(owner, newbie) is True
+    assert sdb.are_friends(newbie, owner) is True
+
+
+def test_referral_friendship_promotes_a_pending_request(make_user):
+    owner = make_user()
+    newbie = make_user()
+    sdb.add_friend(newbie, owner)                      # asked first, then joined
+    assert sdb.are_friends(owner, newbie) is False
+    code = sdb.get_or_create_referral_code(owner)
+    sdb.set_pending_referral(newbie, code)
+
+    ssub.redeem_pending_referral_reward(newbie)
+
+    assert sdb.are_friends(owner, newbie) is True
+
+
+def test_a_block_beats_the_referral_friendship(make_user):
+    owner = make_user()
+    newbie = make_user()
+    with get_db() as db:
+        _exec(db, "INSERT INTO student_friend_blocks (client_id, blocked_client_id) VALUES (%s, %s)",
+              (owner, newbie))
+    code = sdb.get_or_create_referral_code(owner)
+    sdb.set_pending_referral(newbie, code)
+
+    assert ssub.redeem_pending_referral_reward(newbie) is not None   # reward still lands
+    assert sdb.are_friends(owner, newbie) is False
+
+
+def test_a_withheld_reward_still_connects_the_two(make_user, monkeypatch):
+    """Hitting the anti-abuse cap costs the inviter the free week, not the
+    friendship."""
+    monkeypatch.setenv("REFERRAL_REWARD_30D_MAX", "1")
+    owner = make_user()
+    code = sdb.get_or_create_referral_code(owner)
+    first, second = make_user(), make_user()
+    sdb.set_pending_referral(first, code)
+    sdb.set_pending_referral(second, code)
+
+    assert ssub.redeem_pending_referral_reward(first) is not None
+    assert ssub.redeem_pending_referral_reward(second) is None       # capped
+
+    assert sdb.are_friends(owner, second) is True

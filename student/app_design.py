@@ -55,7 +55,7 @@ _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "perfil": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css"),
     "perfil-editar": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css", "profedit.css"),
     "ajustes": ("dash.css", "study.css", "plan.css", "friends.css", "profile.css", "settings.css"),
-    "cuenta": ("auth.css",),
+    "cuenta": ("pubtop.css", "auth.css"),
     "setup": ("dash.css", "profile.css", "pubtop.css", "setup.css"),
 }
 
@@ -79,7 +79,7 @@ def render_design_page(slug: str) -> str | None:
     return artifact.read_text(encoding="utf-8")
 
 
-def render_live_page(slug: str, data: dict, version: str = "20260802-app-v6-4") -> str | None:
+def render_live_page(slug: str, data: dict, version: str = "20260804-app-v6-5") -> str | None:
     """Return the exact Claude app shell wired to server-provided live data."""
     if slug not in _PAGE_CSS:
         return None

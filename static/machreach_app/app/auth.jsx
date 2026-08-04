@@ -12,6 +12,13 @@ const Spinner = () => (
   </svg>
 );
 
+/* Flask hands flashes over as nested pairs — ("message", ("error", text)) —
+   so unwrap down to the text rather than printing the category with it. */
+const flashText = (m) => {
+  while (Array.isArray(m) && m.length) m = m[m.length - 1];
+  return String(m == null ? "" : m);
+};
+
 const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v.trim());
 function pwScore(v) {
   let s = 0;
@@ -162,7 +169,7 @@ function AuthPage({ initial = "signup", live = null }) {
               <h2>{isSignup ? "Crea tu cuenta" : "Bienvenido de vuelta"}</h2>
               <p className="lead">{isSignup ? "Empieza a estudiar mejor en minutos." : "Inicia sesión para seguir estudiando."}</p>
               {live?.messages?.map((message, i) => (
-                <div className="err" role="alert" key={i} style={{ marginBottom: 12 }}>{Array.isArray(message) ? message[1] : String(message)}</div>
+                <div className="auth-flash" role="alert" key={i}>{flashText(message)}</div>
               ))}
               <form className="auth-form" method="post" action={isSignup ? "/register" : "/login"} onSubmit={submit} noValidate>
                 {live && <input type="hidden" name="csrf_token" value={live.csrf || ""} />}
@@ -198,7 +205,7 @@ function AuthPage({ initial = "signup", live = null }) {
               ) : (
                 <div className="auth-links">
                   <a href="/forgot-password">¿Olvidaste tu contraseña?</a>
-                  <a href="/login" className="muted" style={{ color: "var(--ink-2)" }}>¿No recibiste el correo de verificación?</a>
+                  <a href="/verify-email-pending" className="muted" style={{ color: "var(--ink-2)" }}>¿No recibiste el correo de verificación?</a>
                 </div>
               )}
               <hr className="auth-hr" />

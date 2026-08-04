@@ -347,3 +347,42 @@ def test_shop_cards_have_dark_mode_surfaces(client, make_user):
     assert "CosCard" in source and "pack" in source and "PlanSection" in source
     assert "background:var(--surface)" in css
     assert '[data-theme="dark"]' in theme
+
+
+def test_auth_pages_serve_the_design_shell_without_the_legacy_layout(client):
+    """/login and /register are the Cuenta design: its own public top bar, its
+    own stylesheet, and none of the legacy layout CSS that used to repaint the
+    card through `.auth-card h1`-style rules."""
+    for path, tag in (("/login", "Iniciar sesión"), ("/register", "Crear cuenta")):
+        body = client.get(path).get_data(as_text=True)
+
+        assert "/static/machreach_app/cuenta.bundle.min.js" in body
+        assert "/static/machreach_app/app/pubtop.css" in body
+        assert "/static/machreach_layout/layout-base.css" not in body
+        assert tag in body
+
+
+def test_the_top_loading_bar_is_gone_everywhere(client):
+    layout = client.get("/login").get_data(as_text=True)
+    css = open("static/machreach_layout/layout-base.css", encoding="utf-8").read()
+
+    assert 'id="topbar-progress"' not in layout
+    assert "topbarStart" not in layout
+    assert "topbar-progress" not in css
+
+
+def test_legacy_auth_card_rules_cannot_reach_the_design(client):
+    """The legacy pages that still use `.auth-card` all sit inside
+    `.auth-wrapper`, so every such rule is scoped to it."""
+    import re
+
+    css = open("static/machreach_layout/layout-base.css", encoding="utf-8").read()
+    selectors = re.findall(r"([^{}]*)\{", css)
+    unscoped = [
+        part.strip()
+        for selector in selectors
+        for part in selector.split(",")
+        if ".auth-card" in part and ".auth-wrapper" not in part
+    ]
+
+    assert unscoped == []

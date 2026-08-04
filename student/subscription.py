@@ -582,6 +582,14 @@ def redeem_pending_referral_reward(
                 (referred_id,),
             )
             return None
+        # The referral is genuine and fresh: connect the two accounts as friends
+        # regardless of whether the Plus reward itself survives the rolling cap.
+        try:
+            from student.db import link_referral_friendship
+            link_referral_friendship(db, referrer_id, referred_id)
+        except Exception as e:  # never let a friendship failure void the reward
+            log.warning("referral friendship failed for %s -> %s: %s",
+                        referrer_id, referred_id, e)
         if recent_rewards >= rolling_limit:
             _exec(
                 db,

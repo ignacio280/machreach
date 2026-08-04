@@ -39,7 +39,7 @@ const PAGE_DEPS = {
     css: ["dash.css", "focus.css", "plan.css", "courses.css", "analytics.css"],
     jsx: ["shell.jsx", "lock.jsx", "analytics.jsx"],
   },
-  cuenta: { css: ["auth.css"], jsx: ["auth.jsx"], motion: false },
+  cuenta: { css: ["pubtop.css", "auth.css"], jsx: ["pubtop.jsx", "auth.jsx"], motion: false },
   cursos: {
     css: ["dash.css", "focus.css", "plan.css", "courses.css"],
     jsx: ["shell.jsx", "lock.jsx", "dash-left.jsx", "courses.jsx"],

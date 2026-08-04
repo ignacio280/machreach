@@ -5845,6 +5845,54 @@ def add_friend(client_id: int, friend_id: int) -> str:
         return "requested"
 
 
+def link_referral_friendship(db, referrer_id: int, referred_id: int) -> bool:
+    """Make an inviter and the person who used their link friends outright.
+
+    They already know each other — the link was shared personally — so there is
+    no request to accept: both directions land as 'accepted'. Takes an open
+    connection so it commits with the redemption that triggered it.
+
+    Returns True if a new edge was created. A block on either side wins, and an
+    existing pending request is promoted rather than duplicated.
+    """
+    if not referrer_id or not referred_id or referrer_id == referred_id:
+        return False
+    if _fetchone(
+        db,
+        "SELECT 1 FROM student_friend_blocks WHERE "
+        "(client_id = %s AND blocked_client_id = %s) OR "
+        "(client_id = %s AND blocked_client_id = %s) LIMIT 1",
+        (referrer_id, referred_id, referred_id, referrer_id),
+    ):
+        return False
+    created = False
+    for owner, other in ((referrer_id, referred_id), (referred_id, referrer_id)):
+        existing = _fetchone(
+            db,
+            "SELECT id, status FROM student_friends WHERE client_id = %s AND friend_client_id = %s",
+            (owner, other),
+        )
+        if existing is None:
+            _exec(
+                db,
+                "INSERT INTO student_friends (client_id, friend_client_id, status) "
+                "VALUES (%s, %s, 'accepted')",
+                (owner, other),
+            )
+            created = True
+        elif existing["status"] != "accepted":
+            _exec(db, "UPDATE student_friends SET status = 'accepted' WHERE id = %s",
+                  (existing["id"],))
+            created = True
+    if created:
+        _exec(
+            db,
+            "INSERT INTO student_friend_audit (actor_id, target_id, action) VALUES (%s, %s, 'accepted')",
+            (referred_id, referrer_id),
+        )
+    return created
+
+
 def remove_friend(client_id: int, friend_id: int) -> None:
     with get_db() as db:
         _exec(db, "DELETE FROM student_friends WHERE client_id = %s AND friend_client_id = %s",

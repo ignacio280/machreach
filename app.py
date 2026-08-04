@@ -1110,48 +1110,10 @@ LAYOUT = """<!DOCTYPE html>
   <link rel="stylesheet" href="/static/machreach_consent.css?v=20260719"/>
 </head>
 <body>
-  <div id="topbar-progress"><div class="bar"></div></div>
   <script>
     window.__IS_LOGGED_IN__ = {% if logged_in %}true{% else %}false{% endif %};
     window.__ACCOUNT_TYPE__ = "{{ account_type|default('student') }}";
-    // Top progress bar controller
     (function(){
-      var tp = null, bar = null, timer = null, progress = 0;
-      function init(){ tp = document.getElementById('topbar-progress'); bar = tp && tp.querySelector('.bar'); }
-      if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
-      window.topbarStart = function(){
-        if (!bar) init();
-        if (!bar) return;
-        progress = 8; tp.classList.remove('done'); bar.style.width = '8%';
-        clearInterval(timer);
-        timer = setInterval(function(){
-          // Asymptotic approach to 90%
-          progress += (92 - progress) * 0.08;
-          if (bar) bar.style.width = progress.toFixed(1) + '%';
-          if (progress > 91.5) clearInterval(timer);
-        }, 220);
-      };
-      window.topbarDone = function(){
-        if (!bar) return;
-        clearInterval(timer);
-        bar.style.width = '100%';
-        setTimeout(function(){ tp.classList.add('done'); setTimeout(function(){ bar.style.width = '0%'; }, 260); }, 180);
-      };
-      // Trigger on link clicks (same-origin, non-modifier)
-      document.addEventListener('click', function(e){
-        var a = e.target.closest && e.target.closest('a[href]');
-        if (!a) return;
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-        var href = a.getAttribute('href') || '';
-        if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return;
-        if (a.target === '_blank') return;
-        try { var u = new URL(a.href, location.href); if (u.origin !== location.origin) return; } catch(_) {}
-        window.topbarStart();
-      }, true);
-      // Trigger on form submissions
-      document.addEventListener('submit', function(){ window.topbarStart(); }, true);
-      // Complete on pageshow (also handles back-forward cache)
-      window.addEventListener('pageshow', function(){ window.topbarDone(); });
       // Close any open nav dropdown when clicking outside or pressing Escape.
       document.addEventListener('click', function(e){
         document.querySelectorAll('.nav-dropdown.open').forEach(function(d){
@@ -2307,7 +2269,10 @@ def _render_claude_auth(mode: str, *, ref: str = ""):
         lang=session.get("lang", "es"),
         is_admin=False,
         account_type="student",
-        dashboard_design=False,
+        # The design ships its own complete stylesheet. Loading the legacy
+        # layout CSS alongside it only lets old `.auth-card`-era rules win on
+        # specificity and repaint the card, so keep it off this page.
+        dashboard_design=True,
     )
 
 

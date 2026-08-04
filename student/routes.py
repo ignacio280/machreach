@@ -4506,6 +4506,7 @@ Return this JSON shape:
                             "xp": f"{_friend_xp:,}".replace(",", "."),
                         })
                     return _out
+                from student import subscription as ssub
                 _ref_code = sdb.get_or_create_referral_code(_cid())
                 _ref_base = (request.url_root or "").rstrip("/")
                 _app_data["friends"] = {
@@ -4516,6 +4517,9 @@ Return this JSON shape:
                     "discovery": sdb.get_friend_discovery(_cid()),
                     "referral_link": f"{_ref_base}/register?ref={_ref_code}",
                     "referral_joined": int(sdb.referral_count(_cid()) or 0),
+                    # Without this the card claims there is no referral Plus even
+                    # while the free weeks are running.
+                    "plus_until": str(ssub.plus_grant_until(_cid()) or "")[:10],
                 }
             if _design_slug == "cursos":
                 try:

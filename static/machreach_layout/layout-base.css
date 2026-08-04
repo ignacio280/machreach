@@ -73,7 +73,7 @@
     :root[data-theme="dark"] .toast-info .toast-progress { background: #93C5FD; }
     :root[data-theme="dark"] .seq-body { background: #0F172A; border-color: #334155; }
     :root[data-theme="dark"] .seq-card { border-left-color: #818CF8; }
-    :root[data-theme="dark"] .auth-card { border-color: #334155; }
+    :root[data-theme="dark"] .auth-wrapper .auth-card { border-color: #334155; }
     :root[data-theme="dark"] .tab { color: #94A3B8; }
     :root[data-theme="dark"] .tab:hover { color: #E2E8F0; }
     :root[data-theme="dark"] .tab.active { color: #A5B4FC; border-bottom-color: #818CF8; }
@@ -534,9 +534,9 @@
 
     /* Auth pages */
     .auth-wrapper { max-width: 440px; margin: 60px auto; padding: 0 24px; }
-    .auth-card { background: var(--card); border-radius: var(--radius); padding: 40px; box-shadow: var(--shadow-lg); border: 1px solid var(--border-light); }
-    .auth-card h1 { font-size: 24px; text-align: center; margin-bottom: 6px; font-weight: 800; }
-    .auth-card .subtitle { text-align: center; color: var(--text-muted); margin-bottom: 28px; font-size: 14px; }
+    .auth-wrapper .auth-card { background: var(--card); border-radius: var(--radius); padding: 40px; box-shadow: var(--shadow-lg); border: 1px solid var(--border-light); }
+    .auth-wrapper .auth-card h1 { font-size: 24px; text-align: center; margin-bottom: 6px; font-weight: 800; }
+    .auth-wrapper .auth-card .subtitle { text-align: center; color: var(--text-muted); margin-bottom: 28px; font-size: 14px; }
     .auth-footer { text-align: center; margin-top: 20px; font-size: 13px; color: var(--text-muted); }
     .auth-footer a { color: var(--primary); font-weight: 600; text-decoration: none; }
 
@@ -688,7 +688,7 @@
       .hero p { font-size: 15px; }
       .nav { padding: 0 12px; }
       .seq-card .seq-actions { opacity: 1; }
-      .auth-card { padding: 28px 20px; }
+      .auth-wrapper .auth-card { padding: 28px 20px; }
     }
     /* Mobile hamburger */
     .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: #94A3B8; font-size: 22px; line-height: 1; z-index: 201; border-radius: 8px; transition: background .15s var(--ease), color .15s var(--ease); }
@@ -847,12 +847,6 @@
     .empty-state.compact h3 { font-size: 17px; }
     .empty-state.compact p { font-size: 13.5px; }
 
-    /* ─── Top progress bar ─── */
-    #topbar-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: transparent; z-index: 10000; pointer-events: none; }
-    #topbar-progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, #6366F1, #A78BFA, #F472B6); background-size: 200% 100%; transition: width .35s var(--ease), opacity .25s var(--ease); box-shadow: 0 0 10px rgba(124,58,237,.55), 0 0 4px rgba(99,102,241,.45); animation: topbarShimmer 2s linear infinite; }
-    #topbar-progress.done .bar { opacity: 0; }
-    @keyframes topbarShimmer { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
-
     /* Claude-style MachReach app skin. This sits after the legacy theme so the
        whole logged-in product shares the landing/dashboard visual language. */
     :root {
@@ -963,7 +957,7 @@
       padding: 28px 32px 70px;
     }
     .container-wide { max-width: 1560px; }
-    .card, .stat-card, .auth-card, .feature, .preview-content, .cmdk-panel,
+    .card, .stat-card, .auth-wrapper .auth-card, .feature, .preview-content, .cmdk-panel,
     .empty-state, .skeleton-card, .skeleton-stat {
       background: #FFFFFF;
       border-color: #E2DCCC;
@@ -1184,39 +1178,39 @@
       background: #11131A !important;
       color: #F7F0E4;
     }
-    :root[data-theme="dark"] .auth-card {
+    :root[data-theme="dark"] .auth-wrapper .auth-card {
       background: #1D202A !important;
       color: #F7F0E4 !important;
       border-color: #34313A !important;
       box-shadow: 0 18px 54px rgba(0,0,0,.36) !important;
     }
-    :root[data-theme="dark"] .auth-card h1,
-    :root[data-theme="dark"] .auth-card label,
-    :root[data-theme="dark"] .auth-card strong {
+    :root[data-theme="dark"] .auth-wrapper .auth-card h1,
+    :root[data-theme="dark"] .auth-wrapper .auth-card label,
+    :root[data-theme="dark"] .auth-wrapper .auth-card strong {
       color: #F7F0E4 !important;
     }
-    :root[data-theme="dark"] .auth-card .subtitle,
-    :root[data-theme="dark"] .auth-card p,
+    :root[data-theme="dark"] .auth-wrapper .auth-card .subtitle,
+    :root[data-theme="dark"] .auth-wrapper .auth-card p,
     :root[data-theme="dark"] .auth-footer {
       color: #B9B0A5 !important;
     }
-    :root[data-theme="dark"] .auth-card input,
-    :root[data-theme="dark"] .auth-card textarea,
-    :root[data-theme="dark"] .auth-card select {
+    :root[data-theme="dark"] .auth-wrapper .auth-card input,
+    :root[data-theme="dark"] .auth-wrapper .auth-card textarea,
+    :root[data-theme="dark"] .auth-wrapper .auth-card select {
       background: #11131A !important;
       color: #F7F0E4 !important;
       border-color: #34313A !important;
     }
-    :root[data-theme="dark"] .auth-card input::placeholder,
-    :root[data-theme="dark"] .auth-card textarea::placeholder {
+    :root[data-theme="dark"] .auth-wrapper .auth-card input::placeholder,
+    :root[data-theme="dark"] .auth-wrapper .auth-card textarea::placeholder {
       color: #82796F !important;
     }
-    :root[data-theme="dark"] .auth-card [style*="background:var(--surface)"],
-    :root[data-theme="dark"] .auth-card [style*="background: var(--surface)"] {
+    :root[data-theme="dark"] .auth-wrapper .auth-card [style*="background:var(--surface)"],
+    :root[data-theme="dark"] .auth-wrapper .auth-card [style*="background: var(--surface)"] {
       background: #171A23 !important;
       border-color: #34313A !important;
     }
-    :root[data-theme="dark"] .auth-card [style*="rgba(255,122,61,.08)"] {
+    :root[data-theme="dark"] .auth-wrapper .auth-card [style*="rgba(255,122,61,.08)"] {
       background: rgba(255,122,61,.13) !important;
       border-color: rgba(255,122,61,.5) !important;
       color: #F7F0E4 !important;
@@ -3000,19 +2994,19 @@
       letter-spacing: .04em;
       text-transform: uppercase;
     }
-    .auth-dots {
+    .auth-wrapper .auth-dots {
       display: flex;
       gap: 6px;
     }
-    .auth-dots i {
+    .auth-wrapper .auth-dots i {
       width: 10px;
       height: 10px;
       border-radius: 999px;
       display: block;
     }
-    .auth-dots i:nth-child(1) { background: #FF5F56; }
-    .auth-dots i:nth-child(2) { background: #FFBD2E; }
-    .auth-dots i:nth-child(3) { background: #27C93F; }
+    .auth-wrapper .auth-dots i:nth-child(1) { background: #FF5F56; }
+    .auth-wrapper .auth-dots i:nth-child(2) { background: #FFBD2E; }
+    .auth-wrapper .auth-dots i:nth-child(3) { background: #27C93F; }
     .auth-preview-body {
       display: grid;
       gap: 10px;
@@ -3066,7 +3060,7 @@
       border-radius: inherit;
       background: var(--mrd-brand);
     }
-    .auth-card {
+    .auth-wrapper .auth-card {
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -3086,10 +3080,10 @@
       border-radius: 28px !important;
       box-shadow: 0 7px 0 #1A1A1F, 0 24px 58px rgba(20,18,30,.12) !important;
     }
-    .auth-card-head {
+    .auth-wrapper .auth-card-head {
       margin-bottom: 26px;
     }
-    .auth-card h1 {
+    .auth-wrapper .auth-card h1 {
       margin: 0;
       color: #1A1A1F !important;
       text-align: left;
@@ -3099,7 +3093,7 @@
       line-height: .96;
       letter-spacing: 0;
     }
-    .auth-card .subtitle {
+    .auth-wrapper .auth-card .subtitle {
       margin: 14px 0 0;
       color: #5C5C66 !important;
       text-align: left;
@@ -3107,7 +3101,7 @@
       line-height: 1.55;
       font-weight: 700;
     }
-    .auth-form {
+    .auth-wrapper .auth-form {
       display: grid;
       gap: 14px;
       margin-top: 0;
@@ -3117,16 +3111,16 @@
       gap: 8px;
     }
     .auth-field label,
-    .auth-card label {
+    .auth-wrapper .auth-card label {
       margin: 0;
       color: #1A1A1F !important;
       font-size: 12px;
       font-weight: 950;
       letter-spacing: .08em;
     }
-    .auth-card input,
-    .auth-card textarea,
-    .auth-card select {
+    .auth-wrapper .auth-card input,
+    .auth-wrapper .auth-card textarea,
+    .auth-wrapper .auth-card select {
       height: 52px;
       margin: 0 !important;
       padding: 0 16px !important;
@@ -3138,17 +3132,17 @@
       font-size: 15px !important;
       font-weight: 800;
     }
-    .auth-card input:focus,
-    .auth-card textarea:focus,
-    .auth-card select:focus {
+    .auth-wrapper .auth-card input:focus,
+    .auth-wrapper .auth-card textarea:focus,
+    .auth-wrapper .auth-card select:focus {
       border-color: var(--mrd-brand) !important;
       box-shadow: 0 0 0 4px rgba(255,122,61,.18), inset 0 -2px 0 rgba(255,122,61,.24) !important;
     }
-    .auth-card input::placeholder {
+    .auth-wrapper .auth-card input::placeholder {
       color: #908A80 !important;
       font-weight: 750;
     }
-    .auth-submit.btn.btn-primary {
+    .auth-wrapper .auth-submit.btn.btn-primary {
       width: 100%;
       min-height: 54px;
       justify-content: center;
@@ -3162,11 +3156,11 @@
       font-size: 18px;
       font-weight: 800;
     }
-    .auth-submit.btn.btn-primary:hover {
+    .auth-wrapper .auth-submit.btn.btn-primary:hover {
       transform: translate(-1px,-1px);
       box-shadow: 0 6px 0 #1A1A1F, 0 18px 34px rgba(255,122,61,.24) !important;
     }
-    .auth-submit.btn.btn-primary:active {
+    .auth-wrapper .auth-submit.btn.btn-primary:active {
       transform: translateY(4px);
       box-shadow: 0 1px 0 #1A1A1F !important;
     }
@@ -3285,31 +3279,31 @@
     :root[data-theme="dark"] .auth-story {
       background: linear-gradient(135deg,#0A0A10,#12101A 58%,#2A1B16) !important;
     }
-    :root[data-theme="dark"] .auth-card {
+    :root[data-theme="dark"] .auth-wrapper .auth-card {
       background: #1D1B26 !important;
       color: #FFF8E1 !important;
     }
-    :root[data-theme="dark"] .auth-card h1,
-    :root[data-theme="dark"] .auth-card label,
+    :root[data-theme="dark"] .auth-wrapper .auth-card h1,
+    :root[data-theme="dark"] .auth-wrapper .auth-card label,
     :root[data-theme="dark"] .auth-field label {
       color: #FFF8E1 !important;
     }
-    :root[data-theme="dark"] .auth-card .subtitle,
+    :root[data-theme="dark"] .auth-wrapper .auth-card .subtitle,
     :root[data-theme="dark"] .auth-note,
     :root[data-theme="dark"] .auth-legal,
     :root[data-theme="dark"] .auth-footer,
     :root[data-theme="dark"] .auth-details summary {
       color: #BDB5AA !important;
     }
-    :root[data-theme="dark"] .auth-card input,
-    :root[data-theme="dark"] .auth-card textarea,
-    :root[data-theme="dark"] .auth-card select {
+    :root[data-theme="dark"] .auth-wrapper .auth-card input,
+    :root[data-theme="dark"] .auth-wrapper .auth-card textarea,
+    :root[data-theme="dark"] .auth-wrapper .auth-card select {
       background: rgba(255,255,255,.035) !important;
       color: #FFF8E1 !important;
       border-color: var(--mrd-brand) !important;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.035), 0 2px 0 rgba(255,122,61,.36) !important;
     }
-    :root[data-theme="dark"] .auth-card input::placeholder {
+    :root[data-theme="dark"] .auth-wrapper .auth-card input::placeholder {
       color: #82796F !important;
     }
     :root[data-theme="dark"] .auth-footer {
@@ -3330,14 +3324,14 @@
       .auth-shell {
         grid-template-columns: 1fr;
       }
-      .auth-card {
+      .auth-wrapper .auth-card {
         order: 1;
       }
       .auth-story {
         order: 2;
         min-height: 430px;
       }
-      .auth-card { min-height: 0; }
+      .auth-wrapper .auth-card { min-height: 0; }
     }
     @media (max-width: 640px) {
       .auth-wrapper {
@@ -3349,13 +3343,13 @@
         border-radius: 24px !important;
       }
       .auth-story,
-      .auth-card {
+      .auth-wrapper .auth-card {
         padding: 28px 22px !important;
       }
       .auth-story h2 {
         font-size: 40px;
       }
-      .auth-card h1 {
+      .auth-wrapper .auth-card h1 {
         font-size: 38px;
       }
       .auth-resend-form {

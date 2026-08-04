@@ -83,6 +83,9 @@
 .auth-wrap .chk input{position:absolute;opacity:0;pointer-events:none}
 .auth-wrap .chk input:checked+i{background:var(--brand);color:#fff;transform:rotate(-6deg) scale(1.06)}
 
+/* server-side flash (live pages only) */
+.auth-flash{font-size:13.5px;font-weight:700;line-height:1.45;color:var(--bad);background:color-mix(in oklab,var(--bad) 10%,transparent);border:2px solid color-mix(in oklab,var(--bad) 38%,transparent);border-radius:var(--r-sm);padding:10px 13px;margin-top:14px}
+
 /* success */
 .auth-done{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:20px 0}
 .auth-done .tick{width:86px;height:86px;border-radius:50%;background:var(--good);border:var(--bd);display:grid;place-items:center;color:#fff;box-shadow:var(--sh2);animation:popbounce .6s var(--spring-b) both}

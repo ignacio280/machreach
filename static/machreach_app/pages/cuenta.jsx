@@ -24,7 +24,9 @@ function App() {
   }, [tweaks.theme, tweaks.accent]);
 
   return (
-    <>
+    <div className="pub-shift">
+      <PubTop tag={screen === "login" ? "Iniciar sesión" : "Crear cuenta"} tweaks={tweaks} setTweak={setTweak}
+        action={<a className="pub-link" href="/">Volver al inicio</a>} />
       <AuthPage key={screen} initial={screen || "signup"} live={live?.live ? live : null} />
       {!live?.live && <TweaksPanel title="Tweaks">
         <TweakSection label="Pantalla">
@@ -38,6 +40,6 @@ function App() {
             options={[{ value: "coral", label: "Coral (marca)" }, { value: "lime", label: "Lima" }, { value: "violet", label: "Violeta" }, { value: "sky", label: "Cielo" }]} />
         </TweakSection>
       </TweaksPanel>}
-    </>
+    </div>
   );
 }
