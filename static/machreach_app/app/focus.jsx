@@ -205,27 +205,34 @@ const focusAudio = {
     source.start();
     this.nodes.push(source, filter);
   },
-  /* A struck bell: a few inharmonic partials with a fast attack and a long
-     decay. The long break rings lower and for longer so it is unmistakable. */
-  bell(kind = "work") {
+  /* A short jingle, not a beep: a rising motif with a plucked attack, played
+     twice over (melody + a softer octave) so it carries across a room. The
+     long break gets a longer, resolving phrase so the two are never confused. */
+  jingle(kind = "work") {
     const ctx = this._context();
     if (!ctx) return;
-    const long = kind === "long";
-    const strikes = long ? [0, 1.1, 2.2] : kind === "break" ? [0] : [0, 0.55];
-    const root = long ? 392 : kind === "break" ? 587 : 659;
-    const decay = long ? 3.6 : 1.9;
-    const level = Math.max(0.05, this.volume) * (long ? 0.55 : 0.45);
-    strikes.forEach((offset) => {
+    // C5 E5 G5 C6 for a finished block; the long break lands on a full
+    // cadence and ends held, which reads as "session over".
+    const motif = kind === "long"
+      ? [[523.25, 0], [659.25, 0.14], [783.99, 0.28], [1046.5, 0.42], [783.99, 0.60], [1046.5, 0.74], [1318.5, 0.92]]
+      : kind === "break"
+        ? [[783.99, 0], [659.25, 0.13], [523.25, 0.26]]
+        : [[523.25, 0], [659.25, 0.12], [783.99, 0.24], [1046.5, 0.38]];
+    const hold = kind === "long" ? 1.5 : 0.5;
+    const level = Math.max(0.06, this.volume) * 0.5;
+    motif.forEach(([freq, offset], index) => {
+      const last = index === motif.length - 1;
       const at = ctx.currentTime + offset;
-      // Partials of a bell are not harmonic — that ratio set is what makes it
-      // read as a bell instead of a beep.
-      [[1, 1], [2.01, 0.5], [2.99, 0.32], [4.21, 0.18], [5.43, 0.1]].forEach(([ratio, gainScale]) => {
+      const decay = last ? hold : 0.34;
+      // Two voices: a triangle carries the tune, a quiet sine an octave below
+      // gives it body without turning it into a beep.
+      [[freq, "triangle", 1], [freq / 2, "sine", 0.35]].forEach(([tone, shape, mix]) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = root * ratio;
+        osc.type = shape;
+        osc.frequency.setValueAtTime(tone, at);
         gain.gain.setValueAtTime(0.0001, at);
-        gain.gain.exponentialRampToValueAtTime(level * gainScale, at + 0.008);
+        gain.gain.exponentialRampToValueAtTime(level * mix, at + 0.012);
         gain.gain.exponentialRampToValueAtTime(0.0001, at + decay);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -234,6 +241,7 @@ const focusAudio = {
       });
     });
   },
+  bell(kind = "work") { this.jingle(kind); },
   chime(kind = "work") { this.bell(kind); },
 };
 
