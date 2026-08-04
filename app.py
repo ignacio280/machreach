@@ -475,6 +475,34 @@ def _protect_admin_routes():
     return None
 
 
+def _mfa_qr_svg(uri: str) -> str:
+    """QR for an otpauth:// URI, as an inline data: PNG.
+
+    A data URI rather than its own route, so the secret never becomes a URL
+    that could land in a log or a proxy cache; a PNG rather than inline SVG,
+    because the app's stylesheets restyle bare <path> elements and paint the
+    modules into invisibility.
+    """
+    try:
+        import base64
+        import io
+        import segno
+
+        buffer = io.BytesIO()
+        segno.make(uri, error="m").save(
+            buffer, kind="png", scale=6, border=2, dark="#1A1A1F", light="#FFFFFF",
+        )
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return (
+            f'<img src="data:image/png;base64,{encoded}" width="260" height="260" '
+            'alt="Codigo QR para tu app de autenticacion" '
+            'style="display:block;image-rendering:pixelated;">'
+        )
+    except Exception as error:  # never block enrolment over a picture
+        app.logger.warning("MFA QR render failed: %s", error)
+        return '<p class="subtitle">QR unavailable — use the setup key below.</p>'
+
+
 @app.route("/admin/mfa", methods=["GET", "POST"])
 @limiter.limit("8 per minute", methods=["POST"])
 def admin_mfa_setup():
@@ -508,19 +536,98 @@ def admin_mfa_setup():
     client = get_client(client_id) or {}
     uri = admin_security.provisioning_uri(secret, str(client.get("email") or "admin"))
     return _render("Administrator MFA", f"""
-    <div class="card" style="max-width:620px;margin:40px auto;">
+    <div class="card" style="max-width:660px;margin:40px auto;">
       <h1>Secure administrator access</h1>
-      <p>Add this account to your authenticator app using the setup key below, then enter its six-digit code.</p>
+      <style>
+        .mfa-go {{ display:inline-flex; align-items:center; gap:8px; padding:11px 18px; border:0;
+          border-radius:999px; background:#FF7A3D; color:#fff; font-weight:800; font-size:14px; cursor:pointer; }}
+        .mfa-go:hover {{ background:#E9662B; }}
+      </style>
+
+      <p>Two things are needed here, and neither is a password you already know.</p>
       {'<div class="alert alert-red">' + _esc(error) + '</div>' if error else ''}
-      <p><strong>Setup key</strong></p>
-      <code style="display:block;padding:14px;word-break:break-all;">{_esc(secret)}</code>
-      <details style="margin:14px 0;"><summary>Authenticator URI</summary><code>{_esc(uri)}</code></details>
+
+      <h2 style="font-size:19px;margin:22px 0 6px;">1 · Scan this with an authenticator app</h2>
+      <p style="margin:0 0 12px;">Google Authenticator, Authy, 1Password &mdash; any of them. Scanning is all
+         it takes; there is nothing to type into the app.</p>
+      <div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="background:#fff;padding:10px;border:1px solid var(--border);border-radius:14px;">{_mfa_qr_svg(uri)}</div>
+        <div style="flex:1;min-width:220px;">
+          <p style="margin:0 0 6px;"><strong>Can&rsquo;t scan?</strong> In the app choose
+             &ldquo;enter a setup key&rdquo; and paste this, with type <em>time-based</em>:</p>
+          <code style="display:block;padding:12px;word-break:break-all;">{_esc(secret)}</code>
+          <p class="subtitle" style="margin:10px 0 0;">Don&rsquo;t reload this page before submitting &mdash;
+             a reload issues a new key and the one in your app would stop matching.</p>
+        </div>
+      </div>
+
+      <h2 style="font-size:19px;margin:26px 0 6px;">2 · Fill in the form</h2>
+      <p style="margin:0 0 12px;">The <strong>deployment administrator secret</strong> is the
+         <code>ADMIN_ACTION_SECRET</code> environment variable of this service (Render &rarr; machreach
+         &rarr; Environment). The <strong>six-digit code</strong> is the number your authenticator app is
+         showing right now.</p>
       <form method="post">
         {_csrf_hidden_input()}
         <input type="hidden" name="next" value="{_esc(_safe_admin_next(request.values.get('next')))}">
-        <div class="form-group"><label>Deployment administrator secret</label><input type="password" name="admin_action_secret" required autocomplete="current-password"></div>
+        <div class="form-group"><label>Deployment administrator secret (ADMIN_ACTION_SECRET)</label><input type="password" name="admin_action_secret" required autocomplete="current-password"></div>
         <div class="form-group"><label>Six-digit authenticator code</label><input name="code" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" required autocomplete="one-time-code"></div>
-        <button class="btn btn-primary" type="submit">Enable administrator MFA</button>
+        <button class="mfa-go" type="submit">Enable administrator MFA</button>
+      </form>
+      <details style="margin:16px 0 0;"><summary>Authenticator URI</summary><code style="word-break:break-all;">{_esc(uri)}</code></details>
+    </div>
+    """, active_page="admin")
+
+
+@app.route("/admin/mfa/rotate", methods=["GET", "POST"])
+@limiter.limit("5 per minute", methods=["POST"])
+def admin_mfa_rotate():
+    """Throw away this account's authenticator so a new one can be enrolled.
+
+    A setup key that leaked is only worth worrying about if it cannot be
+    replaced, so replacing it is supported — but it costs the same two proofs
+    that enrolling did: the deployment secret and a live code from the
+    authenticator being retired.
+    """
+    if not _is_admin():
+        return redirect(url_for("dashboard"))
+    from machreach_core import admin_security
+    client_id = int(session["client_id"])
+    if not admin_security.is_enabled(client_id):
+        return redirect(url_for("admin_mfa_setup"))
+    error = ""
+    if request.method == "POST":
+        supplied = request.form.get("admin_action_secret", "")
+        deployment_ok = bool(ADMIN_ACTION_SECRET) and hmac.compare_digest(supplied, ADMIN_ACTION_SECRET)
+        if not deployment_ok:
+            error = "The deployment administrator secret is incorrect."
+        elif not admin_security.verify_client_code(client_id, request.form.get("code", "")):
+            error = "The authenticator code is invalid."
+        else:
+            admin_security.disable(client_id)
+            session.pop("admin_mfa_setup_secret", None)
+            session.pop("admin_mfa_verified_at", None)
+            _log_admin_action("mfa_rotated")
+            flash(("success", "Authenticator removed. Enrol a new one to continue."))
+            return redirect(url_for("admin_mfa_setup"))
+    return _render("Rotate administrator MFA", f"""
+    <div class="card" style="max-width:620px;margin:40px auto;">
+      <h1>Rotate administrator MFA</h1>
+      <style>
+        .mfa-go {{ display:inline-flex; align-items:center; gap:8px; padding:11px 18px; border:0;
+          border-radius:999px; background:#FF7A3D; color:#fff; font-weight:800; font-size:14px; cursor:pointer; }}
+        .mfa-go:hover {{ background:#E9662B; }}
+      </style>
+
+      <p>This deletes the authenticator currently registered for your account and sends you
+         back to enrolment with a brand-new setup key. Do it if the old key was ever seen by
+         anyone else.</p>
+      {'<div class="alert alert-red">' + _esc(error) + '</div>' if error else ''}
+      <form method="post">
+        {_csrf_hidden_input()}
+        <div class="form-group"><label>Deployment administrator secret (ADMIN_ACTION_SECRET)</label><input type="password" name="admin_action_secret" required autocomplete="current-password"></div>
+        <div class="form-group"><label>Six-digit code from the authenticator you are replacing</label><input name="code" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" required autocomplete="one-time-code"></div>
+        <button class="mfa-go" type="submit">Remove and start over</button>
+        <a class="btn btn-outline" href="/admin" style="margin-left:8px;">Cancel</a>
       </form>
     </div>
     """, active_page="admin")
@@ -2955,6 +3062,7 @@ def admin_dashboard():
       <a class="btn btn-outline btn-sm" href="/admin/courses">&#127891; Courses</a>
       <a class="btn btn-outline btn-sm" href="/admin/leaderboard-winners-test">&#127942; Preview monthly leaderboard winners email</a>
       <a class="btn btn-outline btn-sm" href="/admin/reauth">&#128274; Confirm dangerous actions</a>
+      <a class="btn btn-outline btn-sm" href="/admin/mfa/rotate">&#128257; Rotate administrator MFA</a>
     </div>
     {'<div class="alert alert-red" style="margin-bottom:16px;">' + _esc(error_msg) + '</div>' if error_msg else ''}
     <div class="card" style="max-width:820px;">

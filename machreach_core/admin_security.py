@@ -88,6 +88,23 @@ def enroll(client_id: int, secret: str) -> None:
     update_mail_preferences(client_id, json.dumps(prefs, separators=(",", ":")))
 
 
+def disable(client_id: int) -> bool:
+    """Forget this account's authenticator so it can enrol again.
+
+    Used when a setup key has to be rotated — a leaked key is only worth
+    rotating if there is a supported way to replace it. Returns whether there
+    was an enrolment to remove.
+    """
+    if not _preferences(client_id).get("admin_mfa"):
+        return False
+    # update_mail_preferences merges rather than replaces, so dropping the key
+    # locally and writing the rest back would not remove anything. Writing an
+    # explicit null does: SQLite's json_patch deletes it outright, and on
+    # Postgres the key survives as null, which reads the same everywhere here.
+    update_mail_preferences(client_id, json.dumps({"admin_mfa": None}, separators=(",", ":")))
+    return True
+
+
 def secret_for(client_id: int) -> str:
     record = _preferences(client_id).get("admin_mfa") or {}
     if not isinstance(record, dict) or not record.get("secret"):
