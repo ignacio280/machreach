@@ -255,31 +255,65 @@ const FOCUS_STORE = "mr_focus_timer_v1";
 const CLAIM_WINDOW_MS = 30 * 60 * 1000;
 
 /* Telling "moved to another MachReach page" apart from "closed the app".
-   pagehide fires for both, so instead every open page stamps the clock a few
-   times a minute. A navigation leaves a gap of about a second; a closed tab
-   leaves one that grows forever. */
+   The verdict itself lives in mrFocusPresence (shared with shell.jsx through
+   `window` — same bundle, first module to run takes the one clean reading).
+   The heartbeat stamp survives as its legacy fallback and as the tell for a
+   sessionStorage marker the browser resurrected long after the app closed. */
 const FOCUS_ALIVE = "mr_focus_alive_v1";
 const FOCUS_HEARTBEAT_MS = 3000;
-const FOCUS_ABANDON_MS = 15000;
 
 function touchFocusHeartbeat() {
   try { localStorage.setItem(FOCUS_ALIVE, String(Date.now())); } catch (e) { /* private mode */ }
 }
 
-/* Snapshot taken when the script loads, before a single component mounts.
-   The topbar's float starts beating the moment it renders, so anything that
-   asked later would find a heartbeat this very page had just written. */
-const FOCUS_WAS_ABANDONED = (() => {
+/* Duplicate of shell.jsx's mrFocusPresence, kept in both files because either
+   module may load first; the window guard makes the second copy a no-op. */
+function mrFocusPresence() {
+  if (window.__mrFocusPresence) return window.__mrFocusPresence;
+  const state = { hadTab: true, known: true, abandoned: false, channel: null, verdict: null };
+  window.__mrFocusPresence = state;
   try {
-    const last = Number(localStorage.getItem(FOCUS_ALIVE) || 0);
-    return !!last && Date.now() - last > FOCUS_ABANDON_MS;
-  } catch (e) {
-    return false;   // cannot tell: never throw away a running block on a guess
+    state.hadTab = sessionStorage.getItem("mr_focus_tab_v1") === "1";
+    sessionStorage.setItem("mr_focus_tab_v1", "1");
+  } catch (e) { state.hadTab = true; }   // cannot tell: never wipe a block on a guess
+  let store = null;
+  try { store = JSON.parse(localStorage.getItem("mr_focus_timer_v1") || "null"); } catch (e) { store = null; }
+  const heartbeatStale = () => {
+    try {
+      const last = Number(localStorage.getItem(FOCUS_ALIVE) || 0);
+      return !!last && Date.now() - last > 15000;
+    } catch (e) { return false; }
+  };
+  if (typeof BroadcastChannel !== "undefined") {
+    try {
+      state.channel = new BroadcastChannel("mr_focus_presence_v1");
+      state.channel.addEventListener("message", (event) => {
+        if (event.data === "ping") state.channel.postMessage("pong");
+      });
+    } catch (e) { state.channel = null; }
   }
-})();
+  const running = !!(store && store.running);
+  if (!running || state.hadTab) {
+    state.abandoned = running && state.hadTab && heartbeatStale();
+    state.verdict = Promise.resolve(state.abandoned);
+    return state;
+  }
+  state.known = false;
+  state.verdict = new Promise((resolve) => {
+    const settle = (abandoned) => { state.known = true; state.abandoned = abandoned; resolve(abandoned); };
+    if (!state.channel) return settle(heartbeatStale());
+    const timer = setTimeout(() => settle(true), 350);
+    state.channel.addEventListener("message", (event) => {
+      if (event.data === "pong") { clearTimeout(timer); settle(false); }
+    });
+    state.channel.postMessage("ping");
+  });
+  return state;
+}
 
 function focusAbandoned() {
-  return FOCUS_WAS_ABANDONED;
+  const presence = mrFocusPresence();
+  return presence.known && presence.abandoned;
 }
 
 /* Every page that can show the timer keeps the stamp fresh. */
@@ -309,10 +343,14 @@ function restoreFocusTimer() {
   const stored = readFocusStore();
   if (!stored || !stored.mode || !FOCUS_MODES[stored.mode]) return null;
   const cfg = FOCUS_MODES[stored.mode];
-  if (stored.running && focusAbandoned()) {
-    // The app was closed with a block running. The block does not survive it:
-    // the timer comes back reset, and none of the away time is credited.
-    // Blocks that had already finished stay claimable — they were earned.
+  const presence = mrFocusPresence();
+  if (stored.running && (!presence.known || presence.abandoned)) {
+    // The app was closed with a block running (or the verdict is still out —
+    // a fresh tab waiting up to 350ms for another tab to answer). The block
+    // does not survive a close: the timer comes back reset, and none of the
+    // away time is credited. Blocks that had already finished stay claimable —
+    // they were earned. `awaitingVerdict` tells the Timer to hold off writing
+    // this reset down and to adopt the block if a live tab does answer.
     return {
       mode: stored.mode,
       courseId: stored.courseId || "",
@@ -326,6 +364,7 @@ function restoreFocusTimer() {
       left: cfg.work,
       endsAt: 0,
       running: false,
+      awaitingVerdict: !presence.known,
     };
   }
   const base = {
@@ -377,8 +416,8 @@ function ClaimCountdown({ until }) {
 
 function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   const MODES = FOCUS_MODES;
-  // Read the stored block BEFORE the heartbeat starts, or this page's own
-  // first beat would make an abandoned block look freshly alive.
+  // The stored block is read against the page-load presence verdict; a fresh
+  // tab may still be waiting for it (see `awaitingVerdict` below).
   const restored = React.useRef(data.live ? restoreFocusTimer() : null).current;
   useFocusHeartbeat(!!data.live);
   const [mode, setMode] = React.useState(restored?.mode || "pomodoro");
@@ -399,6 +438,31 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   const [examId, setExamId] = React.useState(restored?.examId || "");
   const phaseId = React.useRef(restored?.phaseId || "");
   React.useEffect(() => { onCourse && onCourse(course?.id || ""); }, [course?.id]);
+  // A fresh tab that found a running block waits (350ms at most) for another
+  // tab to claim it is alive. Until then this Timer shows the reset state but
+  // must not persist it — that would destroy the very block being decided on.
+  const [verdictPending, setVerdictPending] = React.useState(!!restored?.awaitingVerdict);
+  React.useEffect(() => {
+    if (!restored?.awaitingVerdict) return undefined;
+    let on = true;
+    mrFocusPresence().verdict.then((abandoned) => {
+      if (!on) return;
+      setVerdictPending(false);
+      if (abandoned) return;
+      // Another MachReach tab is alive: the app was never closed. Adopt the
+      // block exactly where the replay says it should be by now.
+      const revived = restoreFocusTimer();
+      if (!revived || !revived.running) return;
+      setPhase(revived.phase);
+      setRound(revived.round);
+      setLeft(revived.left);
+      setEndsAt(revived.endsAt);
+      setRunning(true);
+      phaseId.current = revived.phaseId || "";
+      if (revived.finishedPhaseId) queuePhase(revived.finishedPhaseId);
+    });
+    return () => { on = false; };
+  }, []);
 
   const beginVerifiedPhase = async () => {
     if (!data.live || phase !== "work") return true;
@@ -482,13 +546,13 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
 
   // Persist after every change so another page (or a reload) sees the block.
   React.useEffect(() => {
-    if (!data.live) return;
+    if (!data.live || verdictPending) return;
     if (!running && !endsAt && !pending.length && left === MODES[mode].work && phase === "work" && round === 1) {
       writeFocusStore(null);
       return;
     }
     writeFocusStore({ mode, phase, round, running, left, endsAt, courseId, examId, phaseId: phaseId.current, pending, claimUntil });
-  }, [mode, phase, round, running, left, endsAt, courseId, examId, pending, claimUntil]);
+  }, [mode, phase, round, running, left, endsAt, courseId, examId, pending, claimUntil, verdictPending]);
 
   const pct = 1 - left / total;
   const R = 132, C = 2 * Math.PI * R;

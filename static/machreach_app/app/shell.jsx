@@ -184,24 +184,74 @@ function GenerationWatcher() {
    around the app. This floats bottom-right so the running block is impossible
    to lose track of — and stays out of the way on the focus page itself, where
    the real timer is already on screen. */
-/* Was the last MachReach page closed rather than navigated away from? Read
-   once at load, for the same reason focus.jsx does. */
-const SHELL_FOCUS_ABANDONED = (() => {
+/* Was the last MachReach page closed rather than navigated away from? The old
+   heartbeat-gap guess (no stamp for 15s = closed) resumed the block when the
+   app was closed and reopened inside those 15 seconds. Three signals now
+   decide, and only one of them is a guess:
+   - sessionStorage marker: survives navigation and reload in this tab, dies
+     with the tab. Present = this tab was already on MachReach, so keep going.
+   - BroadcastChannel ping: a tab with no marker asks whether any other
+     MachReach tab is alive. Silence = the app really was closed — the block
+     resets even if the reopen came one second later.
+   - heartbeat stamp (legacy, still written every 3s): the fallback verdict
+     where BroadcastChannel does not exist, and the tell for a marker the
+     browser resurrected hours later ("reopen closed tab", session restore).
+   Shared through `window` because shell.jsx and focus.jsx ship in the same
+   bundle: whichever module runs first must make the one and only reading,
+   or the second would see a marker the first had just written. */
+function mrFocusPresence() {
+  if (window.__mrFocusPresence) return window.__mrFocusPresence;
+  const state = { hadTab: true, known: true, abandoned: false, channel: null, verdict: null };
+  window.__mrFocusPresence = state;
   try {
-    const last = Number(localStorage.getItem("mr_focus_alive_v1") || 0);
-    return !!last && Date.now() - last > 15000;
-  } catch (e) {
-    return false;
+    state.hadTab = sessionStorage.getItem("mr_focus_tab_v1") === "1";
+    sessionStorage.setItem("mr_focus_tab_v1", "1");
+  } catch (e) { state.hadTab = true; }   // cannot tell: never wipe a block on a guess
+  let store = null;
+  try { store = JSON.parse(localStorage.getItem("mr_focus_timer_v1") || "null"); } catch (e) { store = null; }
+  const heartbeatStale = () => {
+    try {
+      const last = Number(localStorage.getItem("mr_focus_alive_v1") || 0);
+      return !!last && Date.now() - last > 15000;
+    } catch (e) { return false; }
+  };
+  if (typeof BroadcastChannel !== "undefined") {
+    try {
+      state.channel = new BroadcastChannel("mr_focus_presence_v1");
+      state.channel.addEventListener("message", (event) => {
+        if (event.data === "ping") state.channel.postMessage("pong");
+      });
+    } catch (e) { state.channel = null; }
   }
-})();
+  const running = !!(store && store.running);
+  if (!running || state.hadTab) {
+    // A marked tab still resets when the heartbeat is long dead: that marker
+    // came out of a tab the browser restored, not one that stayed open.
+    state.abandoned = running && state.hadTab && heartbeatStale();
+    state.verdict = Promise.resolve(state.abandoned);
+    return state;
+  }
+  // No marker, block running: a reopen after closing, or a second tab while
+  // the app is open elsewhere. Only a live tab can tell those apart.
+  state.known = false;
+  state.verdict = new Promise((resolve) => {
+    const settle = (abandoned) => { state.known = true; state.abandoned = abandoned; resolve(abandoned); };
+    if (!state.channel) return settle(heartbeatStale());
+    const timer = setTimeout(() => settle(true), 350);
+    state.channel.addEventListener("message", (event) => {
+      if (event.data === "pong") { clearTimeout(timer); settle(false); }
+    });
+    state.channel.postMessage("ping");
+  });
+  return state;
+}
+const SHELL_FOCUS_PRESENCE = mrFocusPresence();
 
-/* Acting on that verdict, once, before this page's own heartbeat erases the
-   evidence. Hiding the float was not enough: the record still said "running",
-   so the next page — looking at a heartbeat this page had just refreshed —
-   concluded the app had never been closed and resumed the block. The decision
-   has to be written down, not re-derived. */
-(function reconcileAbandonedFocus() {
-  if (!SHELL_FOCUS_ABANDONED) return;
+/* Acting on the verdict: hiding the float was not enough — the record still
+   said "running", so the next page resumed the block. The decision has to be
+   written down, not re-derived. */
+SHELL_FOCUS_PRESENCE.verdict.then((abandoned) => {
+  if (!abandoned) return;
   try {
     const raw = localStorage.getItem("mr_focus_timer_v1");
     if (!raw) return;
@@ -220,7 +270,7 @@ const SHELL_FOCUS_ABANDONED = (() => {
       phaseId: "", left: full,
     }));
   } catch (e) { /* private mode: nothing to repair */ }
-})();
+});
 
 function FocusFloat() {
   const [left, setLeft] = React.useState(0);
@@ -241,9 +291,9 @@ function FocusFloat() {
       let state = null;
       try { state = JSON.parse(localStorage.getItem("mr_focus_timer_v1") || "null"); } catch (e) { state = null; }
       if (!state || !state.running || !state.endsAt) return setLeft(0);
-      // A record left behind by a closed tab is not a running timer. The
-      // reading is from page load, before this page began its own heartbeat.
-      if (SHELL_FOCUS_ABANDONED) return setLeft(0);
+      // A record left behind by a closed tab is not a running timer. Until the
+      // presence verdict is in (350ms at worst) the float stays hidden.
+      if (!SHELL_FOCUS_PRESENCE.known || SHELL_FOCUS_PRESENCE.abandoned) return setLeft(0);
       setPhase(state.phase === "break" ? "break" : "work");
       setLeft(Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)));
     };
