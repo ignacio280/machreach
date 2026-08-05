@@ -154,12 +154,40 @@ def _canonical_host_redirect():
 from flask_limiter import Limiter  # noqa: E402
 from flask_limiter.util import get_remote_address  # noqa: E402
 _ratelimit_storage_uri = (os.getenv("RATELIMIT_STORAGE_URI") or "memory://").strip() or "memory://"
+
+
+def _rate(name: str, fallback: str) -> str:
+    """A limit, overridable by environment variable so it can be widened
+    without a deploy: RATELIMIT_LOGIN="60 per minute", and so on."""
+    return (os.getenv(f"RATELIMIT_{name}") or fallback).strip() or fallback
+
+
+# Limits are counted per IP address, and a university shares one: everybody on
+# the campus network arrives from the same address. The budget therefore has to
+# fit a whole lecture hall browsing at once, not one person. Brute force is
+# fenced off per account instead, which is where it actually belongs.
+RATE_DEFAULT = _rate("DEFAULT", "1200 per minute")
+RATE_LOGIN = _rate("LOGIN", "40 per minute")
+RATE_LOGIN_ACCOUNT = _rate("LOGIN_ACCOUNT", "8 per minute")
+RATE_REGISTER = _rate("REGISTER", "40 per minute")
+RATE_EMAIL = _rate("EMAIL", "12 per minute")
+
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["200 per minute"],
+    default_limits=[RATE_DEFAULT],
     storage_uri=_ratelimit_storage_uri,
 )
+
+
+def _submitted_email() -> str:
+    """Rate-limit key for the account being tried, not the network it is tried
+    from. Ten people signing in from one campus is normal; ten passwords for
+    one address in a minute is not."""
+    try:
+        return (request.form.get("email") or "").strip().lower() or get_remote_address()
+    except Exception:
+        return get_remote_address()
 
 # ── Startup diagnostic — log DB path so we can debug persistence ──
 from machreach_core.config import DATABASE_PATH  # noqa: E402
@@ -2401,7 +2429,7 @@ def _render_claude_auth(mode: str, *, ref: str = ""):
 
 
 @app.route("/register", methods=["GET", "POST"])
-@limiter.limit("10 per minute", methods=["POST"])
+@limiter.limit(RATE_REGISTER, methods=["POST"])
 def register():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -2517,7 +2545,8 @@ def register():
 
 
 @app.route("/login", methods=["GET", "POST"])
-@limiter.limit("5 per minute", methods=["POST"])
+@limiter.limit(RATE_LOGIN, methods=["POST"])
+@limiter.limit(RATE_LOGIN_ACCOUNT, key_func=_submitted_email, methods=["POST"])
 def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip()
@@ -2611,7 +2640,8 @@ def verify_email(token):
 
 
 @app.route("/resend-verification", methods=["POST"])
-@limiter.limit("3 per minute")
+@limiter.limit(RATE_EMAIL)
+@limiter.limit("3 per minute", key_func=_submitted_email)
 def resend_verification():
     email = request.form.get("email", "").strip()
     client = get_client_by_email(email)
@@ -2668,7 +2698,8 @@ def set_language(lang):
 # ---------------------------------------------------------------------------
 
 @app.route("/forgot-password", methods=["GET", "POST"])
-@limiter.limit("3 per minute", methods=["POST"])
+@limiter.limit(RATE_EMAIL, methods=["POST"])
+@limiter.limit("3 per minute", key_func=_submitted_email, methods=["POST"])
 def forgot_password():
     if request.method == "POST":
         email = request.form.get("email", "").strip()
@@ -5165,6 +5196,21 @@ def _handle_500(e):
         500,
         "Algo se rompió de nuestro lado.",
         "Esta es nuestra culpa. Ya registramos el error y casi siempre se arregla reintentando. Si no, escríbenos a support@machreach.com y lo revisamos.",
+    )
+
+
+@app.errorhandler(429)
+def _handle_429(e):
+    """Too many requests. On a shared campus network this is far more likely to
+    be a busy building than an attack, so it says so and offers a retry."""
+    if _wants_json_error():
+        return jsonify({"error": "Demasiadas solicitudes. Espera un momento."}), 429
+    return _render_error_page(
+        429,
+        "Vamos demasiado rápido.",
+        "Recibimos muchas solicitudes desde tu red en muy poco tiempo — pasa cuando "
+        "media universidad entra a la vez. Espera un minuto y vuelve a intentarlo; "
+        "no perdiste nada.",
     )
 
 
