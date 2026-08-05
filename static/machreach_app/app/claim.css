@@ -1,0 +1,91 @@
+/* Focus reward claim.
+
+   Imported from the design project. One deviation: the design writes
+   var(--display) for the display face, which does not exist in this theme —
+   the token here is --font-display, so every rule uses that. */
+.clm{border:2.5px solid var(--ink);border-radius:22px;background:var(--paper);box-shadow:0 8px 0 -2px color-mix(in oklab,var(--ink) 18%,transparent);padding:16px 18px 16px;margin-top:14px;animation:clmin .55s cubic-bezier(.2,1.2,.4,1) both}
+@keyframes clmin{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+.clm-hd{display:flex;align-items:center;gap:14px;text-align:left}
+.clm-txt{min-width:0}
+.clm-eye{font-size:10.5px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:var(--brand)}
+.clm-t{font-family:var(--font-display),serif;font-size:19px;line-height:1.15;letter-spacing:-.02em;margin:3px 0 2px}
+.clm-s{font-size:12.5px;font-weight:700;color:var(--ink-2);margin:0}
+
+.clm-sealwrap{position:relative;width:84px;height:84px;flex:0 0 84px;display:grid;place-items:center}
+.clm-seal{position:relative;z-index:3;width:76px;height:76px;border-radius:50%;display:grid;place-items:center;border:3px solid var(--ink);background:linear-gradient(160deg,var(--plum),color-mix(in oklab,var(--plum) 60%,var(--brand)));box-shadow:0 8px 0 -1px var(--ink),0 0 0 8px color-mix(in oklab,var(--plum) 16%,transparent);animation:sealidle 2.4s ease-in-out infinite}
+@keyframes sealidle{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-7px) rotate(3deg)}}
+.clm[data-phase="sealed"] .clm-seal{cursor:default}
+.clm:not([data-phase="sealed"]) .clm-seal{animation:sealpop .7s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes sealpop{0%{transform:scale(1)}22%{transform:scale(.82) rotate(-8deg)}55%{transform:scale(1.22) rotate(6deg)}100%{transform:scale(1.05) rotate(0)}}
+
+.clm-glow{position:absolute;width:112px;height:112px;border-radius:50%;background:radial-gradient(circle,color-mix(in oklab,var(--plum) 42%,transparent),transparent 68%);animation:clmglow 2.4s ease-in-out infinite}
+@keyframes clmglow{0%,100%{transform:scale(.9);opacity:.55}50%{transform:scale(1.12);opacity:.95}}
+.clm:not([data-phase="sealed"]) .clm-glow{animation:clmglowb .8s ease-out both}
+@keyframes clmglowb{0%{transform:scale(.9);opacity:.6}40%{transform:scale(1.7);opacity:1}100%{transform:scale(1.25);opacity:.7}}
+
+.clm-shock{position:absolute;width:80px;height:80px;border-radius:50%;border:3px solid var(--plum);animation:clmshock .9s cubic-bezier(.15,.7,.3,1) both}
+.clm-shock.d2{border-color:var(--brand);animation-delay:.14s}
+@keyframes clmshock{from{transform:scale(.7);opacity:.9}to{transform:scale(2.5);opacity:0}}
+
+.clm-rays{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.clm-rays i{position:absolute;width:3.5px;height:24px;border-radius:3px;background:var(--plum);transform:rotate(var(--a)) translateY(-48px);transform-origin:center;animation:clmray .7s cubic-bezier(.2,.9,.3,1) var(--d) both}
+.clm-rays i:nth-child(2n){background:var(--brand)}
+.clm-rays i:nth-child(3n){background:#EFB33A}
+@keyframes clmray{0%{opacity:0;transform:rotate(var(--a)) translateY(-30px) scaleY(.2)}45%{opacity:1;transform:rotate(var(--a)) translateY(-52px) scaleY(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-68px) scaleY(.5)}}
+
+.clm-sparks{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.clm-sparks i{position:absolute;width:9px;height:9px;border-radius:3px;background:var(--brand);animation:clmspark 1s cubic-bezier(.15,.8,.3,1) var(--d) both}
+.clm-sparks i.p{background:var(--plum);border-radius:50%}
+.clm-sparks i.b{background:#EFB33A;height:14px;border-radius:4px}
+@keyframes clmspark{0%{opacity:0;transform:rotate(var(--a)) translateY(-20px) scale(.3)}25%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateY(calc(-1*var(--r))) rotate(220deg) scale(.7)}}
+
+.clm-rows{display:grid;gap:8px;margin:14px 0 2px}
+.clm-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:11px;padding:11px 13px;border:2px solid var(--ink);border-radius:15px;background:var(--surface);opacity:0;transform:translateY(14px)}
+.clm-rows.on .clm-row{animation:clmrow .55s cubic-bezier(.2,1.2,.4,1) var(--d) both}
+@keyframes clmrow{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}
+.clm-row .l{text-align:left;font-size:13.5px;font-weight:800}
+.clm-row .v{font-size:21px;font-weight:900;letter-spacing:-.02em;display:flex;align-items:baseline;gap:5px}
+.clm-row .v small{font-size:11px;font-weight:800;color:var(--ink-2);letter-spacing:0}
+.clm-row.xp .v{color:var(--plum)}
+.clm-row.coin .v{color:#B58309}
+.clm-row.fire .v{color:var(--brand)}
+.clm-row .ico-badge{background:var(--paper)}
+
+.clm-foot{margin-top:12px}
+.clm-btn{width:100%;justify-content:center}
+.clm[data-phase="sealed"] .clm-btn{animation:clmbtn 1.9s ease-in-out .6s infinite}
+@keyframes clmbtn{0%,100%{transform:none}50%{transform:scale(1.028)}}
+
+.clm-orb{position:fixed;z-index:200;width:15px;height:15px;margin:-7px 0 0 -7px;border-radius:50%;pointer-events:none;background:var(--plum);box-shadow:0 0 0 2px var(--ink),0 0 16px 3px color-mix(in oklab,var(--plum) 55%,transparent);animation:orbfly .95s cubic-bezier(.4,.02,.2,1) both}
+.clm-orb.coin{background:#EFB33A;box-shadow:0 0 0 2px var(--ink),0 0 16px 3px rgba(239,179,58,.6)}
+.clm-orb.fire{background:var(--brand);box-shadow:0 0 0 2px var(--ink),0 0 16px 3px color-mix(in oklab,var(--brand) 55%,transparent)}
+@keyframes orbfly{0%{transform:translate(0,0) scale(.2);opacity:0}12%{opacity:1}32%{transform:translate(var(--sx),var(--sy)) scale(1.1)}100%{transform:translate(var(--dx),var(--dy)) scale(.4);opacity:.15}}
+
+.chip.chip-pop{animation:chippop .6s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes chippop{0%{transform:none}30%{transform:scale(1.24) rotate(-3deg);filter:brightness(1.14)}100%{transform:none}}
+
+/* The claim window can run out while the panel is on screen. Losing the XP is
+   not a celebration, so it gets a flat notice rather than the seal. */
+.clm.lost{border-color:var(--bad);background:color-mix(in oklab,var(--bad) 10%,var(--paper));animation:none}
+.clm.lost .clm-eye{color:var(--bad)}
+
+@media (max-width:520px){.clm{padding:14px}.clm-hd{gap:11px}.clm-sealwrap{width:66px;height:66px;flex-basis:66px}.clm-seal{width:60px;height:60px}.clm-glow{width:88px;height:88px}.clm-t{font-size:17px}.clm-row{padding:9px 11px}.clm-row .v{font-size:18px}}
+@media (prefers-reduced-motion:reduce){.clm-seal,.clm-glow,.clm-btn{animation:none!important}.clm-rays,.clm-sparks,.clm-shock{display:none}}
+
+/* overlay */
+.clm-back{position:fixed;inset:0;z-index:120;display:grid;place-items:start center;overflow-y:auto;padding:24px;background:color-mix(in oklab,var(--ink) 46%,transparent);backdrop-filter:blur(8px) saturate(1.1);animation:clmback .3s ease both}
+@keyframes clmback{from{opacity:0}to{opacity:1}}
+.clm-back .clm-card{width:min(430px,100%);margin:auto;background:var(--paper);border:2.5px solid var(--ink);border-radius:26px;box-shadow:0 18px 0 -6px color-mix(in oklab,var(--ink) 22%,transparent),0 34px 70px -20px rgba(0,0,0,.45);padding:26px 24px 22px;text-align:center;animation:clmcard .5s cubic-bezier(.2,1.3,.4,1) both}
+@keyframes clmcard{from{opacity:0;transform:translateY(26px) scale(.93)}to{opacity:1;transform:none}}
+.clm-t.big{font-size:23px;margin:8px 0 4px}
+.clm-sealwrap.big{width:auto;height:176px;flex:none;margin:6px 0 2px}
+.clm-sealwrap.big .clm-seal{width:106px;height:106px}
+.clm-sealwrap.big .clm-glow{width:150px;height:150px}
+.clm-sealwrap.big .clm-shock{width:110px;height:110px}
+.clm-sealwrap.big .clm-rays i{width:4px;height:34px;transform:rotate(var(--a)) translateY(-64px);animation-name:clmraybig}
+@keyframes clmraybig{0%{opacity:0;transform:rotate(var(--a)) translateY(-40px) scaleY(.2)}45%{opacity:1;transform:rotate(var(--a)) translateY(-70px) scaleY(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-92px) scaleY(.5)}}
+.clm-back:not([data-phase="enter"]) .clm-seal{animation:sealpop .7s cubic-bezier(.2,1.5,.4,1) both}
+.clm-back:not([data-phase="enter"]) .clm-glow{animation:clmglowb .8s ease-out both}
+@media (max-height:660px){.clm-back{padding:14px}.clm-back .clm-card{padding:18px 20px 16px}.clm-sealwrap.big{height:126px}.clm-sealwrap.big .clm-seal{width:80px;height:80px}.clm-sealwrap.big .clm-glow{width:112px;height:112px}.clm-t.big{font-size:19px}.clm-row{padding:8px 12px}}
+@media (max-width:520px){.clm-back .clm-card{padding:22px 18px 18px}.clm-sealwrap.big{height:150px}.clm-sealwrap.big .clm-seal{width:90px;height:90px}.clm-t.big{font-size:20px}}
+.clm-back .clm-btn::after{display:none}

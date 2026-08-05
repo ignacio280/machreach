@@ -51,7 +51,7 @@ _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "amigos": ("dash.css", "focus.css", "plan.css", "rank.css", "friends.css"),
     "analiticas": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css"),
     "cursos": ("dash.css", "focus.css", "plan.css", "courses.css"),
-    "focus": ("dash.css", "focus.css"),
+    "focus": ("dash.css", "focus.css", "claim.css"),
     "herramientas": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"),
     "notas": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"),
     "plan": ("dash.css", "focus.css", "plan.css"),

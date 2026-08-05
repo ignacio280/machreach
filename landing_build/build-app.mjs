@@ -63,8 +63,8 @@ const PAGE_DEPS = {
     jsx: ["shell.jsx", "lock.jsx", "flashcards.jsx"],
   },
   focus: {
-    css: ["dash.css", "focus.css"],
-    jsx: ["shell.jsx", "lock.jsx", "ambience.jsx", "focus.jsx"],
+    css: ["dash.css", "focus.css", "claim.css"],
+    jsx: ["shell.jsx", "lock.jsx", "ambience.jsx", "claim.jsx", "focus.jsx"],
   },
   herramientas: {
     css: ["dash.css", "focus.css", "plan.css", "courses.css", "analytics.css", "shop.css", "friends.css", "study.css"],

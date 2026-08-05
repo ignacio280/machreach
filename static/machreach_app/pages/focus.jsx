@@ -23,8 +23,17 @@ function App() {
   const [scene, setScene] = React.useState("silence");
   const [running, setRunning] = React.useState(false);
   const [courseId, setCourseId] = React.useState(data.focus?.courses?.[0]?.id || "");
-  const [reward, setReward] = React.useState(null);
+  // The claim animation throws orbs at the topbar chips; the chips have to
+  // actually go up when they land, or the flourish is a lie. Server totals
+  // only — the claim response is what moves these.
+  const [earned, setEarned] = React.useState(null);
   const plus = data.live ? !!data.plus : !!tweaks.plus;
+  const numeric = (value) => Number(String(value ?? "0").replace(/\./g, "")) || 0;
+  const topXp = earned
+    ? (numeric(data.xp) + earned.xp).toLocaleString("es-CL")
+    : (data.xp || "4.180");
+  const topCoins = earned ? numeric(data.coins) + earned.coins : (data.coins ?? "320");
+  const topStreak = earned && earned.streak ? earned.streak : (data.streak ?? "17");
   const [phoneBlocked, setPhoneBlocked] = React.useState(() => typeof matchMedia === "function" && matchMedia(PHONE_QUERY).matches);
 
   React.useEffect(() => {
@@ -45,7 +54,7 @@ function App() {
     <div className="app">
       <Sidebar active={PAGE_ID} plus={plus} />
       <div>
-        <Topbar title={data.title || PAGE_TITLE} sub={data.sub || PAGE_SUB} streak={data.streak ?? "17"} xp={data.xp || "4.180"} coins={data.coins ?? "320"} avatar={data.avatar || "MR"} plus={plus} tweaks={tweaks} setTweak={setTweak} />
+        <Topbar title={data.title || PAGE_TITLE} sub={data.sub || PAGE_SUB} streak={topStreak} xp={topXp} coins={topCoins} avatar={data.avatar || "MR"} plus={plus} tweaks={tweaks} setTweak={setTweak} />
         <main className={"page fx" + (running ? " zen" : "")} data-scene={scene}>
           {phoneBlocked ? <section className="focus-mobile-blocker">
             <span className="focus-mobile-icon"><IconTimer size={30} /></span>
@@ -54,11 +63,11 @@ function App() {
             <p>Para evitar sesiones interrumpidas y mantener el bloqueo de distracciones, usa Enfoque desde tu computador.</p>
             <a href="/student" className="btn btn-primary">Volver al inicio</a>
           </section> : <div className="col">
-            {reward && <RewardCard reward={reward} onClose={() => setReward(null)} />}
             <FocusHead scene={scene} data={data.focus} />
             <FocusNotes data={data.focus} />
             <div className="fx-grid">
-              <Timer scene={scene} onRun={setRunning} onCourse={setCourseId} onReward={setReward} data={data.focus} />
+              <Timer scene={scene} onRun={setRunning} onCourse={setCourseId}
+                onReward={(r) => { if (r && !r.expired) setEarned(r); }} data={data.focus} />
               <div className="col fx-tools">
                 <Ambience scene={scene} setScene={setScene} />
                 <Guard live={!!data.live} />

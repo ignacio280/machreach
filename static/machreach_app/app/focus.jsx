@@ -431,6 +431,11 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   const [endsAt, setEndsAt] = React.useState(restored?.endsAt || 0);
   const [pending, setPending] = React.useState(restored?.pending || []);
   const [claimUntil, setClaimUntil] = React.useState(restored?.claimUntil || 0);
+  // Blocks whose claim window ran out. Shown flat, not celebrated.
+  const [lostBlocks, setLostBlocks] = React.useState(0);
+  // The running claim animation. Held here rather than in the panel so that
+  // clearing `pending` — which the claim itself does — cannot unmount it.
+  const [claimFlow, setClaimFlow] = React.useState(null);
   const [claiming, setClaiming] = React.useState(false);
   const courses = data.courses?.length ? data.courses : FX_COURSES.map((name, i) => ({ id: i + 1, name, exams: (FX_EXAMS[name] || []).map((name, j) => ({ id: j + 1, name })) }));
   const [courseId, setCourseId] = React.useState(restored?.courseId || courses[0]?.id || "");
@@ -558,8 +563,10 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   const R = 132, C = 2 * Math.PI * R;
   const [kick, setKick] = React.useState(0);
   const [guardWanted, setGuardWanted] = React.useState(false);
+  /* Returns the totals the server actually banked, so the claim animation can
+     roll those and nothing else. Null means it failed and the user was told. */
   const claimPending = async () => {
-    if (!pending.length || claiming) return;
+    if (!pending.length || claiming) return null;
     setClaiming(true);
     try {
       const response = await fetch("/api/student/focus/claim", {
@@ -569,20 +576,42 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok || body.ok === false) throw new Error(body.error || "No se pudo reclamar el XP.");
-      setPending([]);
-      setClaimUntil(0);
-      onReward && onReward({
+      const claimed = {
         minutes: Number(body.minutes_saved || 0),
         xp: Number(body.xp_awarded || 0),
         coins: Number(body.coins_awarded || 0),
         blocks: Number(body.saved_count || pending.length),
+        streak: Number((body.stats || {}).streak_days || 0),
         stats: body.stats || null,
-      });
+      };
+      setPending([]);
+      setClaimUntil(0);
+      onReward && onReward(claimed);
+      return claimed;
     } catch (error) {
       alert(error.message || "No se pudo reclamar el XP.");
+      return null;
     } finally {
       setClaiming(false);
     }
+  };
+
+  /* Opens the celebration and fires the request together. The overlay plays
+     its entrance while the server decides the totals, and holds on "Sumando…"
+     if the answer is slow — so no figure is ever animated before it is real. */
+  const startClaim = async () => {
+    if (!pending.length || claiming) return;
+    setClaimFlow({
+      preview: {
+        mins: pending.reduce((sum, p) => sum + (Number(p.minutes) || 0), 0),
+        course: pending[0]?.course_name || course?.name || "Sin curso",
+        rounds: pending.length,
+      },
+      result: null,
+    });
+    const claimed = await claimPending();
+    if (!claimed) { setClaimFlow(null); return; }   // claimPending already told the user
+    setClaimFlow((flow) => (flow ? { ...flow, result: claimed } : null));
   };
 
   // Unclaimed XP dies with the window. Without this an overnight session could
@@ -591,6 +620,7 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
     if (!claimUntil || !pending.length) return undefined;
     const timer = setInterval(() => {
       if (Date.now() < claimUntil) return;
+      setLostBlocks(pending.length);
       setPending([]);
       setClaimUntil(0);
       onReward && onReward({ expired: true, blocks: pending.length, minutes: 0, xp: 0, coins: 0 });
@@ -658,15 +688,31 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
         <button className="btn btn-ghost btn-lg" onClick={reset}>Reiniciar</button>
       </div>
       {pending.length > 0 && (
-        <div className={"fx-claim" + (claimUntil ? " urgent" : "")}>
-          <div className="fx-claim-b">
-            <b>{pending.length === 1 ? "1 bloque sin reclamar" : `${pending.length} bloques sin reclamar`}</b>
-            <span>{claimUntil ? <ClaimCountdown until={claimUntil} /> : "Reclama tu XP cuando quieras durante la sesión."}</span>
+        <ClaimPanel
+          preview={{
+            mins: pending.reduce((sum, p) => sum + (Number(p.minutes) || 0), 0),
+            course: pending[0]?.course_name || course?.name || "Sin curso",
+            rounds: pending.length,
+          }}
+          expiresAt={claimUntil}
+          busy={claiming}
+          onStart={startClaim}
+        />
+      )}
+      {claimFlow && (
+        <ClaimOverlay preview={claimFlow.preview} result={claimFlow.result}
+          onClose={() => setClaimFlow(null)} />
+      )}
+      {lostBlocks > 0 && (
+        <section className="clm lost">
+          <div className="clm-hd">
+            <div className="clm-txt">
+              <div className="clm-eye">Ventana cerrada</div>
+              <h3 className="clm-t">Perdiste el XP de {lostBlocks} {lostBlocks === 1 ? "bloque" : "bloques"}</h3>
+              <p className="clm-s">Se acabó la ventana de 30 minutos del descanso largo.</p>
+            </div>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={claimPending} disabled={claiming}>
-            <IconBolt size={15} /> {claiming ? "Reclamando…" : "Reclamar XP"}
-          </button>
-        </div>
+        </section>
       )}
       <div className="fx-status">Ronda {round} de {cfg.rounds} · {course?.name || "Sin curso"} · el tiempo se guarda al terminar el bloque</div>
       {guardWanted && <FocusGuardModal onClose={() => setGuardWanted(false)} />}
@@ -722,91 +768,6 @@ function Ambience({ scene, setScene }) {
 
 /* What the finished block earned. The server already credits XP and coins on
    /focus/save — this is the receipt, which the React page never showed. */
-/* The claim celebration. Full-screen overlay instead of the old inline card:
-   the numbers shown are exactly what the server answered for this claim
-   (xp_awarded / coins_awarded / minutes_saved / saved_count) — never a
-   client-side estimate. Expired claims get a muted, confetti-free variant. */
-function useBurstCount(target, duration = 900) {
-  const [value, setValue] = React.useState(0);
-  React.useEffect(() => {
-    const end = Math.max(0, Number(target) || 0);
-    if (!end) { setValue(0); return undefined; }
-    let raf, t0;
-    const step = (ts) => {
-      if (!t0) t0 = ts;
-      const p = Math.min(1, (ts - t0) / duration);
-      setValue(Math.round(end * (1 - Math.pow(2, -10 * p))));
-      if (p < 1) raf = requestAnimationFrame(step);
-      else setValue(end);
-    };
-    raf = requestAnimationFrame(step);
-    // rAF stalls in throttled/hidden tabs; the real figure must land anyway.
-    const settle = setTimeout(() => setValue(end), duration + 150);
-    return () => { cancelAnimationFrame(raf); clearTimeout(settle); };
-  }, [target]);
-  return value;
-}
-
-const BURST_COLORS = ["var(--brand)", "var(--plum)", "var(--sky)", "var(--good)", "#F7B801"];
-
-function RewardCard({ reward, onClose }) {
-  const lost = !!reward.expired;
-  const xp = useBurstCount(lost ? 0 : reward.xp);
-  React.useEffect(() => {
-    const timer = setTimeout(onClose, lost ? 5200 : 4200);
-    return () => clearTimeout(timer);
-  }, [reward]);
-  // One set of particles per claim; positions frozen at mount.
-  const bits = React.useRef(Array.from({ length: 18 }, (_, i) => ({
-    left: 6 + Math.random() * 88,
-    delay: Math.random() * 0.45,
-    dur: 1.6 + Math.random() * 1.4,
-    drift: -60 + Math.random() * 120,
-    spin: -420 + Math.random() * 840,
-    size: 7 + Math.random() * 7,
-    color: BURST_COLORS[i % BURST_COLORS.length],
-    round: i % 3 === 0,
-  }))).current;
-  const blocks = Number(reward.blocks) || 0;
-  return (
-    <div className={"fx-burst" + (lost ? " lost" : "")} role="status" aria-live="polite" onClick={onClose}>
-      {!lost && bits.map((b, i) => (
-        <i key={i} className={"fx-bit" + (b.round ? " dot" : "")} style={{
-          left: b.left + "%",
-          width: b.size, height: b.round ? b.size : b.size * 0.55,
-          background: b.color,
-          animationDelay: b.delay + "s",
-          animationDuration: b.dur + "s",
-          "--drift": b.drift + "px",
-          "--spin": b.spin + "deg",
-        }} />
-      ))}
-      <div className="fx-burst-card" onClick={(e) => e.stopPropagation()}>
-        {!lost && <span className="fx-burst-rays" aria-hidden="true" />}
-        <span className="fx-burst-ico"><IconBolt size={30} color={lost ? "var(--bad)" : "var(--plum)"} /></span>
-        {lost ? (
-          <React.Fragment>
-            <div className="fx-burst-xp none">Sin XP</div>
-            <div className="fx-burst-line"><b>{`Perdiste el XP de ${blocks} bloque${blocks === 1 ? "" : "s"}`}</b></div>
-            <div className="fx-burst-sub">Se acabó la ventana de 30 minutos del descanso largo.</div>
-          </React.Fragment>
-        ) : (
-          <React.Fragment>
-            <div className={"fx-burst-xp" + (reward.xp > 0 ? "" : " none")}>{reward.xp > 0 ? `+${xp} XP` : "Sin XP en este bloque"}</div>
-            <div className="fx-burst-line">
-              <b>{blocks > 1 ? `${blocks} bloques reclamados` : "Bloque reclamado"}</b>
-              <span className="fx-burst-chip">{reward.minutes} min</span>
-              {reward.coins > 0 && <span className="fx-burst-chip coin">+{reward.coins} 🪙</span>}
-            </div>
-            <div className="fx-burst-sub">Guardado en tu cuenta.</div>
-          </React.Fragment>
-        )}
-        <button type="button" onClick={onClose} aria-label="Cerrar"><IconClose size={14} /></button>
-      </div>
-    </div>
-  );
-}
-
 /* Mirrors the extension's own rule (content.js): it blocks while a work block
    is running and stops the moment the student pauses or takes a break. */
 function focusGuardBlocking() {
@@ -896,4 +857,4 @@ function Benchmark({ plus, data = {}, courseId }) {
   );
 }
 
-Object.assign(window, { FocusHead, FocusNotes, Timer, Ambience, Guard, Benchmark, RewardCard, focusAudio, useFocusHeartbeat, focusAbandoned, touchFocusHeartbeat, SCENES });
+Object.assign(window, { FocusHead, FocusNotes, Timer, Ambience, Guard, Benchmark, focusAudio, useFocusHeartbeat, focusAbandoned, touchFocusHeartbeat, SCENES });
