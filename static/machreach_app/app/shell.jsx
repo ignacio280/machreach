@@ -184,15 +184,39 @@ function GenerationWatcher() {
    around the app. This floats bottom-right so the running block is impossible
    to lose track of — and stays out of the way on the focus page itself, where
    the real timer is already on screen. */
+/* Was the last MachReach page closed rather than navigated away from? Read
+   once at load, for the same reason focus.jsx does. */
+const SHELL_FOCUS_ABANDONED = (() => {
+  try {
+    const last = Number(localStorage.getItem("mr_focus_alive_v1") || 0);
+    return !!last && Date.now() - last > 15000;
+  } catch (e) {
+    return false;
+  }
+})();
+
 function FocusFloat() {
   const [left, setLeft] = React.useState(0);
   const [phase, setPhase] = React.useState("work");
+  // Every page holding the float is a page that is open, so it keeps the
+  // heartbeat alive — that is what makes navigation not look like a close.
+  React.useEffect(() => {
+    const beat = () => {
+      try { localStorage.setItem("mr_focus_alive_v1", String(Date.now())); } catch (e) { /* private mode */ }
+    };
+    beat();
+    const timer = setInterval(beat, 3000);
+    return () => clearInterval(timer);
+  }, []);
   React.useEffect(() => {
     if (location.pathname === "/student/focus") return undefined;
     const read = () => {
       let state = null;
       try { state = JSON.parse(localStorage.getItem("mr_focus_timer_v1") || "null"); } catch (e) { state = null; }
       if (!state || !state.running || !state.endsAt) return setLeft(0);
+      // A record left behind by a closed tab is not a running timer. The
+      // reading is from page load, before this page began its own heartbeat.
+      if (SHELL_FOCUS_ABANDONED) return setLeft(0);
       setPhase(state.phase === "break" ? "break" : "work");
       setLeft(Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000)));
     };

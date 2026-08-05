@@ -254,6 +254,44 @@ const FOCUS_STORE = "mr_focus_timer_v1";
 // Time to claim once the long break starts, after which the XP is forfeit.
 const CLAIM_WINDOW_MS = 30 * 60 * 1000;
 
+/* Telling "moved to another MachReach page" apart from "closed the app".
+   pagehide fires for both, so instead every open page stamps the clock a few
+   times a minute. A navigation leaves a gap of about a second; a closed tab
+   leaves one that grows forever. */
+const FOCUS_ALIVE = "mr_focus_alive_v1";
+const FOCUS_HEARTBEAT_MS = 3000;
+const FOCUS_ABANDON_MS = 15000;
+
+function touchFocusHeartbeat() {
+  try { localStorage.setItem(FOCUS_ALIVE, String(Date.now())); } catch (e) { /* private mode */ }
+}
+
+/* Snapshot taken when the script loads, before a single component mounts.
+   The topbar's float starts beating the moment it renders, so anything that
+   asked later would find a heartbeat this very page had just written. */
+const FOCUS_WAS_ABANDONED = (() => {
+  try {
+    const last = Number(localStorage.getItem(FOCUS_ALIVE) || 0);
+    return !!last && Date.now() - last > FOCUS_ABANDON_MS;
+  } catch (e) {
+    return false;   // cannot tell: never throw away a running block on a guess
+  }
+})();
+
+function focusAbandoned() {
+  return FOCUS_WAS_ABANDONED;
+}
+
+/* Every page that can show the timer keeps the stamp fresh. */
+function useFocusHeartbeat(enabled = true) {
+  React.useEffect(() => {
+    if (!enabled) return undefined;
+    touchFocusHeartbeat();
+    const beat = setInterval(touchFocusHeartbeat, FOCUS_HEARTBEAT_MS);
+    return () => clearInterval(beat);
+  }, [enabled]);
+}
+
 function readFocusStore() {
   try { return JSON.parse(localStorage.getItem(FOCUS_STORE) || "null"); } catch (e) { return null; }
 }
@@ -271,6 +309,25 @@ function restoreFocusTimer() {
   const stored = readFocusStore();
   if (!stored || !stored.mode || !FOCUS_MODES[stored.mode]) return null;
   const cfg = FOCUS_MODES[stored.mode];
+  if (stored.running && focusAbandoned()) {
+    // The app was closed with a block running. The block does not survive it:
+    // the timer comes back reset, and none of the away time is credited.
+    // Blocks that had already finished stay claimable — they were earned.
+    return {
+      mode: stored.mode,
+      courseId: stored.courseId || "",
+      examId: stored.examId || "",
+      phaseId: "",
+      finishedPhaseId: "",
+      pending: Array.isArray(stored.pending) ? stored.pending : [],
+      claimUntil: Number(stored.claimUntil) || 0,
+      phase: "work",
+      round: 1,
+      left: cfg.work,
+      endsAt: 0,
+      running: false,
+    };
+  }
   const base = {
     mode: stored.mode,
     courseId: stored.courseId || "",
@@ -320,7 +377,10 @@ function ClaimCountdown({ until }) {
 
 function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   const MODES = FOCUS_MODES;
+  // Read the stored block BEFORE the heartbeat starts, or this page's own
+  // first beat would make an abandoned block look freshly alive.
   const restored = React.useRef(data.live ? restoreFocusTimer() : null).current;
+  useFocusHeartbeat(!!data.live);
   const [mode, setMode] = React.useState(restored?.mode || "pomodoro");
   const [phase, setPhase] = React.useState(restored?.phase || "work");
   const [round, setRound] = React.useState(restored?.round || 1);
@@ -710,4 +770,4 @@ function Benchmark({ plus, data = {}, courseId }) {
   );
 }
 
-Object.assign(window, { FocusHead, FocusNotes, Timer, Ambience, Guard, Benchmark, RewardCard, focusAudio, SCENES });
+Object.assign(window, { FocusHead, FocusNotes, Timer, Ambience, Guard, Benchmark, RewardCard, focusAudio, useFocusHeartbeat, focusAbandoned, touchFocusHeartbeat, SCENES });
