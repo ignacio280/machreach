@@ -75,3 +75,42 @@ def test_an_unreadable_store_never_discards_a_running_block():
 
     assert "catch" in snapshot
     assert snapshot.rindex("return false") > snapshot.index("catch")
+
+
+def test_the_first_page_repairs_the_record_instead_of_only_hiding_it():
+    """The bug this exists to prevent: the dashboard hid the floating timer,
+    then refreshed the heartbeat, and the next page — seeing a heartbeat one
+    second old — resumed a block that had been "running" all night."""
+    shell = _read(SHELL)
+    reconcile = shell[shell.index("function reconcileAbandonedFocus"):shell.index("function FocusFloat")]
+
+    assert "SHELL_FOCUS_ABANDONED" in reconcile
+    assert "removeItem" in reconcile                      # nothing owed: drop it
+    assert "running: false" in reconcile                  # something owed: strip the block
+    assert "endsAt: 0" in reconcile
+    assert "Array.isArray(state.pending)" in reconcile    # earned XP survives
+
+
+def test_the_repair_runs_before_this_page_starts_beating():
+    """Order is the whole fix: repair first, heartbeat second."""
+    shell = _read(SHELL)
+
+    assert shell.index("function reconcileAbandonedFocus") < shell.index("function FocusFloat")
+    # The heartbeat only ever runs inside an effect, which is after mount.
+    snapshot = shell[shell.index("const SHELL_FOCUS_ABANDONED"):shell.index("function reconcileAbandonedFocus")]
+    assert "setItem" not in snapshot
+
+
+def test_the_repair_reaches_every_page_not_just_focus():
+    """It lives in the shell, which every page bundle includes — the focus page
+    alone was the reason the verdict never stuck."""
+    import json
+    import re
+
+    build = open("landing_build/build-app.mjs", encoding="utf-8").read()
+    pages = re.findall(r"jsx: \[([^\]]+)\]", build)
+    assert pages, "no page bundles found"
+    app_pages = [p for p in pages if "shell.jsx" in p]
+
+    assert len(app_pages) >= 10
+    assert all("shell.jsx" in p for p in app_pages)

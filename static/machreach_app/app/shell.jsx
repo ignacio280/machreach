@@ -195,6 +195,33 @@ const SHELL_FOCUS_ABANDONED = (() => {
   }
 })();
 
+/* Acting on that verdict, once, before this page's own heartbeat erases the
+   evidence. Hiding the float was not enough: the record still said "running",
+   so the next page — looking at a heartbeat this page had just refreshed —
+   concluded the app had never been closed and resumed the block. The decision
+   has to be written down, not re-derived. */
+(function reconcileAbandonedFocus() {
+  if (!SHELL_FOCUS_ABANDONED) return;
+  try {
+    const raw = localStorage.getItem("mr_focus_timer_v1");
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    if (!state || !state.running) return;
+    const pending = Array.isArray(state.pending) ? state.pending : [];
+    if (!pending.length) {
+      localStorage.removeItem("mr_focus_timer_v1");
+      return;
+    }
+    // Finished blocks are still owed their XP, so the record survives with the
+    // running block stripped out of it. Durations mirror FOCUS_MODES.
+    const full = state.mode === "custom" ? 50 * 60 : 25 * 60;
+    localStorage.setItem("mr_focus_timer_v1", JSON.stringify({
+      ...state, running: false, endsAt: 0, phase: "work", round: 1,
+      phaseId: "", left: full,
+    }));
+  } catch (e) { /* private mode: nothing to repair */ }
+})();
+
 function FocusFloat() {
   const [left, setLeft] = React.useState(0);
   const [phase, setPhase] = React.useState("work");
