@@ -4142,6 +4142,88 @@ Return this JSON shape:
         return jsonify({"current": sdb.get_current_semester(cid)})
 
 
+    @app.route("/api/student/semester/summary", methods=["GET"])
+    def student_semester_summary():
+        """Everything the closing wizard and the semester viewer need."""
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        cid = _cid()
+        label = (request.args.get("label") or sdb.get_current_semester(cid) or "").strip()
+        summary = sdb.semester_summary(cid, label)
+        summary["current"] = sdb.get_current_semester(cid)
+        summary["available"] = sdb.semester_labels_with_courses(cid)
+        summary["closed_semesters"] = sorted(sdb.closed_semesters(cid).keys())
+        return jsonify(summary)
+
+
+    @app.route("/api/student/semester/correct", methods=["POST"])
+    def student_semester_correct():
+        """Fix the semester the student says they are in.
+
+        Correcting is not advancing, so it skips the final-grade gate on
+        purpose: nothing is ending, someone just picked the wrong number.
+        """
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        data = request.get_json(silent=True) or {}
+        result = sdb.correct_current_semester(
+            _cid(),
+            str(data.get("label") or ""),
+            move_courses=bool(data.get("move_courses", True)),
+        )
+        return jsonify(result), (200 if result.get("ok") else 400)
+
+
+    @app.route("/api/student/courses/<int:course_id>/semester", methods=["POST"])
+    def student_course_semester(course_id: int):
+        """Move a single course to another semester."""
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        data = request.get_json(silent=True) or {}
+        label = str(data.get("label") or "").strip()
+        if not label:
+            return jsonify({"error": "Elige un semestre."}), 400
+        if not sdb.set_course_semester(_cid(), course_id, label):
+            return jsonify({"error": "Curso no encontrado."}), 404
+        return jsonify({"ok": True, "course_id": course_id, "semester": label})
+
+
+    @app.route("/api/student/semester/close", methods=["POST"])
+    def student_semester_close():
+        """Close a semester: record every answer, pay the reward, advance.
+
+        Pays coins and a badge and awards no XP, so a grade can never move
+        anybody on a leaderboard.
+        """
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        cid = _cid()
+        data = request.get_json(silent=True) or {}
+        label = str(data.get("label") or sdb.get_current_semester(cid) or "").strip()
+        answers = data.get("answers")
+        if not isinstance(answers, list):
+            return jsonify({"error": "Faltan las respuestas de los ramos."}), 400
+        result = sdb.close_semester(cid, label, answers, str(data.get("next_label") or ""))
+        if not result.get("ok"):
+            return jsonify(result), 400
+        result["wallet"] = sdb.get_wallet(cid)
+        result["current"] = sdb.get_current_semester(cid)
+        return jsonify(result)
+
+
+    @app.route("/api/student/semester/prompt", methods=["GET", "POST"])
+    def student_semester_prompt():
+        """Whether to offer closing, and the dismissal for that offer."""
+        if not _logged_in():
+            return jsonify({"error": "unauthorized"}), 401
+        cid = _cid()
+        if request.method == "POST":
+            data = request.get_json(silent=True) or {}
+            sdb.dismiss_semester_prompt(cid, str(data.get("label") or ""))
+            return jsonify({"ok": True})
+        return jsonify(sdb.semester_close_hint(cid))
+
+
     @app.route("/api/student/courses/by-semester", methods=["GET"])
     def student_courses_by_semester():
         if not _logged_in():
@@ -4548,7 +4630,19 @@ Return this JSON shape:
                 _colors = ["#FF6A2B", "#6FB03A", "#6E4CD8", "#2FA8C6", "#D2528B"]
                 _course_items = []
                 _completed_exams = 0
-                for _idx, _course in enumerate(sdb.get_courses(_cid()) or []):
+                # Mis cursos is the semester you are in. Once you advance, last
+                # semester's courses belong to the viewer, not to this list —
+                # otherwise closing a semester leaves its ramos sitting in the
+                # new one. Untagged courses stay visible so nobody loses a
+                # course to a blank label.
+                _semester_now = (sdb.get_current_semester(_cid()) or "").strip()
+                _all_courses = sdb.get_courses(_cid()) or []
+                if _semester_now:
+                    _all_courses = [
+                        _c for _c in _all_courses
+                        if (str(_c.get("semester_label") or "").strip() or _semester_now) == _semester_now
+                    ]
+                for _idx, _course in enumerate(_all_courses):
                     _course_id = int(_course.get("id") or 0)
                     _exams = []
                     for _exam in (sdb.get_course_exams(_course_id) or []):
@@ -4593,14 +4687,20 @@ Return this JSON shape:
                 except Exception:
                     _study_stats = {}
                 _local_today = sdb.user_date(_cid())
+                _current_semester = sdb.get_current_semester(_cid())
                 _app_data["courses"] = {
                     "live": True,
                     "items": _course_items,
-                    "semester": sdb.get_current_semester(_cid()),
+                    "semester": _current_semester,
                     "term_label": f'{_local_today.year} · {"primer" if _local_today.month <= 7 else "segundo"} semestre',
                     "completed_exams": _completed_exams,
                     "total_hours": float(_study_stats.get("total_hours") or 0),
                     "total_sessions": int(_study_stats.get("sessions") or 0),
+                    # The picker browses the student's own history instead of
+                    # twelve empty numerals, and closing is offered on evidence.
+                    "semesters": sdb.semester_labels_with_courses(_cid()),
+                    "closed_semesters": sorted(sdb.closed_semesters(_cid()).keys()),
+                    "close_hint": sdb.semester_close_hint(_cid()),
                 }
             if _design_slug == "focus":
                 _focus_courses = []

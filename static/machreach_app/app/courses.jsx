@@ -280,32 +280,251 @@ El ramo queda cerrado: no podrás agregar ni editar evaluaciones ni subir materi
   );
 }
 
-function CoursesHead({ onAdd, data = {}, csrf = "" }) {
-  const [sem, setSem] = React.useState(data.semester || "VI");
+/* The chips used to BE the semester setter: clicking a numeral silently
+   rewrote which semester you were in. They are a viewer now, and the semester
+   you are actually in is stated, with its own two verbs — corregir (I picked
+   wrong) and terminar (the semester is over). Those are different things and
+   only one of them should ask for your grades. */
+function CoursesHead({ onAdd, onCorrect, onClose, data = {}, viewing, onView }) {
   const [ref, seen] = useReveal({ threshold: 0.2 });
-  const chooseSemester = async (value) => {
-    if (data.live) {
-      const response = await fetch("/api/student/semester/current", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: JSON.stringify({ label: value }) });
-      const body = await response.json();
-      if (!response.ok) return alert(body.error || "No se pudo cambiar el semestre.");
-    }
-    setSem(value);
-  };
+  const current = data.live ? (data.semester || "") : "VI";
+  const available = data.live
+    ? Array.from(new Set([...(data.semesters || []), current].filter(Boolean)))
+    : SEMS.slice(0, 6);
+  const closed = new Set(data.closed_semesters || []);
+  const shown = viewing || current;
+  const ordered = available.slice().sort((a, b) => SEMS.indexOf(a) - SEMS.indexOf(b));
+
   return (
     <section className={"cr-head rv" + (seen ? " in" : "")} ref={ref}>
       <div>
         <div className="pl-kicker">{data.live ? data.term_label : "2025 · segundo semestre"}</div>
         <h1>Mis cursos</h1>
         <div className="sem">
-          <span className="mono">Semestre</span>
-          {SEMS.map((s) => <button key={s} className={sem === s ? "on" : ""} onClick={() => chooseSemester(s)}>{s}</button>)}
+          <span className="sem-now">
+            Semestre actual <b>{current || "—"}</b>
+            <button type="button" className="sem-fix" onClick={onCorrect}>Corregir</button>
+          </span>
+          {ordered.length > 1 && ordered.map((label) => (
+            <button key={label} className={shown === label ? "on" : ""} onClick={() => onView(label)}
+              title={closed.has(label) ? "Semestre cerrado" : "Semestre en curso"}>
+              {label}{closed.has(label) ? " ✓" : ""}
+            </button>
+          ))}
         </div>
       </div>
       <div className="cr-actions">
         <a href="https://chromewebstore.google.com/detail/djfnmpaihpkibcngaaekhnbalbaibgnk" target="_blank" rel="noopener" className="btn btn-primary"><IconCanvas size={16} /> Sincronizar Canvas</a>
         <button className="btn btn-ghost" onClick={onAdd}>Agregar a mano</button>
+        <button className="btn btn-ghost" onClick={onClose}>Terminé el semestre</button>
       </div>
     </section>
+  );
+}
+
+/* --- Corregir el semestre (no es lo mismo que terminarlo) --- */
+
+function CorrectSemesterModal({ data = {}, csrf = "", onClose, onDone }) {
+  const [label, setLabel] = React.useState(data.semester || "I");
+  const [move, setMove] = React.useState(true);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  const count = (data.items || []).length;
+
+  const save = async () => {
+    setBusy(true); setErr("");
+    try {
+      const response = await fetch("/api/student/semester/correct", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: JSON.stringify({ label, move_courses: move }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "No se pudo corregir el semestre.");
+      onDone(body);
+    } catch (error) { setErr(error.message); setBusy(false); }
+  };
+
+  return (
+    <Modal title="Corregir tu semestre"
+      sub="Úsalo si elegiste mal el semestre al empezar. No te pide notas: no estás terminando nada."
+      onClose={onClose}
+      foot={<>
+        <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-primary btn-sm" onClick={save} disabled={busy}>{busy ? "Guardando…" : "Guardar"}</button>
+      </>}>
+      <label className="fld-label">En qué semestre vas realmente</label>
+      <div className="sem-grid">
+        {SEMS.map((s) => (
+          <button key={s} type="button" className={"sem-pick" + (label === s ? " on" : "")} onClick={() => setLabel(s)}>{s}</button>
+        ))}
+      </div>
+      {count > 0 && (
+        <label className="sem-move">
+          <input type="checkbox" checked={move} onChange={(e) => setMove(e.target.checked)} />
+          <span>Mover mis {count} ramo{count === 1 ? "" : "s"} actuales a {label}</span>
+        </label>
+      )}
+      {err && <p className="sem-err">{err}</p>}
+    </Modal>
+  );
+}
+
+/* --- Terminé el semestre --- */
+
+const CLOSE_STATUS = [
+  { key: "graded", label: "Tengo la nota" },
+  { key: "pending", label: "Aún no la tengo" },
+  { key: "withdrawn", label: "Me retiré / convalidé" },
+];
+
+function CloseSemesterWizard({ data = {}, csrf = "", onClose, onDone }) {
+  const label = data.semester || "";
+  const [step, setStep] = React.useState(0);
+  const [courses, setCourses] = React.useState([]);
+  const [answers, setAnswers] = React.useState({});
+  const [dropped, setDropped] = React.useState({});
+  const [result, setResult] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+
+  React.useEffect(() => {
+    if (!data.live) {
+      const demo = (data.items || []).map((c, i) => ({ id: c.id || -i - 1, name: c.name, code: c.code }));
+      setCourses(demo);
+      return;
+    }
+    fetch(`/api/student/semester/summary?label=${encodeURIComponent(label)}`)
+      .then((r) => r.json())
+      .then((body) => {
+        setCourses(body.courses || []);
+        const seed = {};
+        (body.courses || []).forEach((c) => {
+          seed[c.id] = { status: c.status || "graded", grade: c.final_grade == null ? "" : String(c.final_grade).replace(".", ",") };
+        });
+        setAnswers(seed);
+      })
+      .catch(() => setErr("No pudimos cargar tus ramos."));
+  }, [label, data.live]);
+
+  const kept = courses.filter((c) => !dropped[c.id]);
+  const setAnswer = (id, patch) => setAnswers((a) => ({ ...a, [id]: { ...(a[id] || {}), ...patch } }));
+
+  const parseGrade = (text) => {
+    const value = parseFloat(String(text || "").replace(",", "."));
+    return Number.isFinite(value) ? value : null;
+  };
+
+  const missing = kept.filter((c) => {
+    const answer = answers[c.id] || {};
+    if (answer.status !== "graded") return !answer.status;
+    const grade = parseGrade(answer.grade);
+    return grade === null || grade < 1 || grade > 7;
+  });
+
+  const submit = async () => {
+    setBusy(true); setErr("");
+    try {
+      const payload = kept.map((c) => {
+        const answer = answers[c.id] || {};
+        return {
+          course_id: c.id,
+          status: answer.status || "graded",
+          final_grade: answer.status === "graded" ? parseGrade(answer.grade) : null,
+        };
+      });
+      const response = await fetch("/api/student/semester/close", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: JSON.stringify({ label, answers: payload, next_label: SEMS[Math.min(SEMS.length - 1, SEMS.indexOf(label) + 1)] }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw new Error(body.error || "No se pudo cerrar el semestre.");
+      setResult(body);
+      setStep(2);
+    } catch (error) { setErr(error.message); }
+    setBusy(false);
+  };
+
+  if (step === 2 && result) {
+    return (
+      <Modal title={`Semestre ${label} cerrado`} sub="Tus notas quedaron guardadas en Notas."
+        onClose={() => onDone(result)}
+        foot={<button className="btn btn-primary btn-sm" onClick={() => onDone(result)}>
+          {result.next_semester ? `Empezar semestre ${result.next_semester}` : "Listo"}
+        </button>}>
+        <div className="sem-sum">
+          <div><b>{result.average == null ? "—" : String(result.average).replace(".", ",")}</b><span>Promedio</span></div>
+          <div><b>{result.passed}</b><span>Aprobados</span></div>
+          <div><b>{result.failed}</b><span>Reprobados</span></div>
+          <div><b>{Math.round((result.focus_minutes || 0) / 60)}h</b><span>Estudiadas</span></div>
+        </div>
+        <div className="sem-reward">
+          <b>+{result.coins_awarded} 🪙</b>
+          <span>por cerrar el semestre{result.pending ? ` · ${result.pending} nota(s) por confirmar` : ""}</span>
+        </div>
+        {!!(result.badges || []).length && <p className="sem-note">Nueva insignia desbloqueada 🎓</p>}
+        {result.best && <p className="sem-note">Tu mejor ramo fue <b>{result.best}</b>.</p>}
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title={`Terminar el semestre ${label}`}
+      sub={step === 0 ? "Primero confirma qué ramos cursaste realmente." : "Ahora, cómo terminó cada uno."}
+      onClose={onClose}
+      foot={step === 0
+        ? <>
+            <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-primary btn-sm" onClick={() => setStep(1)} disabled={!kept.length}>Continuar</button>
+          </>
+        : <>
+            <button className="btn btn-ghost btn-sm" onClick={() => setStep(0)}>Atrás</button>
+            <button className="btn btn-primary btn-sm" onClick={submit} disabled={busy || !!missing.length}>
+              {busy ? "Cerrando…" : "Cerrar semestre"}
+            </button>
+          </>}>
+      {step === 0 && (
+        <div className="sem-list">
+          {!courses.length && <p className="sem-note">No hay ramos en este semestre.</p>}
+          {courses.map((c) => (
+            <label key={c.id} className="sem-row">
+              <input type="checkbox" checked={!dropped[c.id]}
+                onChange={(e) => setDropped((d) => ({ ...d, [c.id]: !e.target.checked }))} />
+              <span className="tx"><b>{c.name}</b><span>{c.code}</span></span>
+            </label>
+          ))}
+          <p className="sem-note">Desmarca un ramo que hayas agregado por error: se queda en tu lista, pero no entra al cierre.</p>
+        </div>
+      )}
+      {step === 1 && (
+        <div className="sem-list">
+          {kept.map((c) => {
+            const answer = answers[c.id] || {};
+            return (
+              <div key={c.id} className="sem-answer">
+                <div className="tx"><b>{c.name}</b><span>{c.code}</span></div>
+                <div className="opts">
+                  {CLOSE_STATUS.map((option) => (
+                    <button key={option.key} type="button"
+                      className={"opt" + (answer.status === option.key ? " on" : "")}
+                      onClick={() => setAnswer(c.id, { status: option.key })}>{option.label}</button>
+                  ))}
+                </div>
+                {answer.status === "graded" && (
+                  <input className="sem-grade" inputMode="decimal" placeholder="Nota final (1,0 – 7,0)"
+                    value={answer.grade || ""} onChange={(e) => setAnswer(c.id, { grade: e.target.value })} />
+                )}
+              </div>
+            );
+          })}
+          <p className="sem-note">
+            Solo las notas reales entran a tu promedio y a los benchmarks. Las pendientes
+            quedan anotadas para que las confirmes después, y no ensucian nada mientras tanto.
+          </p>
+          {!!missing.length && <p className="sem-err">Falta responder por {missing.length} ramo(s).</p>}
+        </div>
+      )}
+      {err && <p className="sem-err">{err}</p>}
+    </Modal>
   );
 }
 
@@ -470,4 +689,71 @@ function DeleteCourseModal({ course, onClose, onConfirm }) {
   );
 }
 
-Object.assign(window, { CoursesHead, CoursesStats, CoursesGrid, ExtCard, AddCourseModal, DeleteCourseModal, CRS, SEMS });
+/* Offered on evidence — every evaluation is behind us, or the semester has
+   been silent for two weeks. Never closes anything on its own: advancing
+   without permission silently corrupts a history that took months to build. */
+function SemesterCloseBanner({ hint, csrf = "", onClose }) {
+  const [hidden, setHidden] = React.useState(false);
+  if (hidden) return null;
+  const dismiss = async () => {
+    setHidden(true);
+    try {
+      await fetch("/api/student/semester/prompt", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: JSON.stringify({ label: hint.semester }),
+      });
+    } catch (e) { /* dismissing is cosmetic; never block the page on it */ }
+  };
+  return (
+    <section className="sem-banner" role="status">
+      <span className="ico-badge" style={{ background: "#FFF2C9" }}><IconTrophy size={17} /></span>
+      <div className="tx">
+        <b>¿Terminaste el semestre {hint.semester}?</b>
+        <span>{hint.reason === "inactive"
+          ? "Llevas dos semanas sin actividad en estos ramos."
+          : "Ya pasaron todas las evaluaciones que tenías agendadas."} Cierra el semestre y guarda tus notas.</span>
+      </div>
+      <button className="btn btn-primary btn-sm" onClick={onClose}>Terminé el semestre</button>
+      <button className="sem-x" onClick={dismiss} aria-label="Ahora no"><IconClose size={14} /></button>
+    </section>
+  );
+}
+
+/* A closed semester is history: readable, not editable. */
+function PastSemester({ label, summary, onBack }) {
+  const courses = summary?.courses || [];
+  const grade = (course) => {
+    if (course.status === "pending") return "Nota pendiente";
+    if (course.status === "withdrawn") return "Retirado";
+    return course.final_grade == null ? "—" : String(course.final_grade).replace(".", ",");
+  };
+  return (
+    <section className="pnl sem-past">
+      <div className="pnl-h">
+        <span className="ico-badge" style={{ background: "#E8DEFF" }}><IconBook size={17} /></span>
+        <h3>Semestre {label}</h3>
+        <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ marginLeft: "auto" }}>Volver al actual</button>
+      </div>
+      {summary?.average != null && (
+        <div className="sem-sum">
+          <div><b>{String(summary.average).replace(".", ",")}</b><span>Promedio</span></div>
+          <div><b>{summary.passed}</b><span>Aprobados</span></div>
+          <div><b>{summary.failed}</b><span>Reprobados</span></div>
+          <div><b>{Math.round((summary.focus_minutes || 0) / 60)}h</b><span>Estudiadas</span></div>
+        </div>
+      )}
+      <div className="sem-list">
+        {!courses.length && <p className="sem-note">Este semestre no tiene ramos guardados.</p>}
+        {courses.map((course) => (
+          <div className="sem-row" key={course.id}>
+            <span className="tx"><b>{course.name}</b><span>{course.code}</span></span>
+            <span className={"sem-grade-tag" + (course.status === "pending" ? " warn" : "")}>{grade(course)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="sem-note">Los semestres cerrados son solo lectura. Sus notas viven en Notas.</p>
+    </section>
+  );
+}
+
+Object.assign(window, { CoursesHead, CoursesStats, CoursesGrid, ExtCard, AddCourseModal, DeleteCourseModal, CorrectSemesterModal, CloseSemesterWizard, SemesterCloseBanner, PastSemester, CRS, SEMS });

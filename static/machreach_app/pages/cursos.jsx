@@ -19,6 +19,24 @@ function App() {
   const [list, setList] = React.useState(data.courses?.items || CRS);
   const [adding, setAdding] = React.useState(false);
   const [delTarget, setDelTarget] = React.useState(null);
+  const [correcting, setCorrecting] = React.useState(false);
+  const [closing, setClosing] = React.useState(false);
+  // Which semester the page is SHOWING. Empty means "the one I am in".
+  const [viewing, setViewing] = React.useState("");
+  const [pastCourses, setPastCourses] = React.useState(null);
+  const courses = data.courses || {};
+  const current = courses.semester || "";
+  const viewingPast = !!viewing && viewing !== current;
+
+  React.useEffect(() => {
+    if (!data.live || !viewingPast) { setPastCourses(null); return; }
+    let alive = true;
+    fetch(`/api/student/semester/summary?label=${encodeURIComponent(viewing)}`)
+      .then((r) => r.json())
+      .then((body) => { if (alive) setPastCourses(body); })
+      .catch(() => { if (alive) setPastCourses({ courses: [] }); });
+    return () => { alive = false; };
+  }, [viewing, viewingPast, data.live]);
   // Join a course that already exists in the university catalog instead of
   // creating a duplicate. Returns the new student_course id, or null if the
   // student is already in it (nothing to append to the grid).
@@ -75,15 +93,33 @@ function App() {
         <Topbar title={data.title || PAGE_TITLE} sub={data.sub || PAGE_SUB} streak={data.streak ?? "17"} xp={data.xp || "4.180"} coins={data.coins ?? "320"} avatar={data.avatar || "MR"} plus={plus} tweaks={tweaks} setTweak={setTweak} />
         <main className="page">
           <div className="col">
-            <CoursesHead onAdd={() => setAdding(true)} data={data.courses} csrf={data.csrf} />
-            <CoursesStats n={list.length} ex={list.reduce((a, c) => a + c.exams.length, 0)} data={data.courses} />
-            <CoursesGrid plus={plus} list={list} onDelete={setDelTarget} onAdd={() => setAdding(true)} />
+            <CoursesHead onAdd={() => setAdding(true)} data={data.courses} csrf={data.csrf}
+              viewing={viewing || current} onView={(label) => setViewing(label)}
+              onCorrect={() => setCorrecting(true)} onClose={() => setClosing(true)} />
+            {data.live && courses.close_hint?.offer && !viewingPast && (
+              <SemesterCloseBanner hint={courses.close_hint} csrf={data.csrf}
+                onClose={() => setClosing(true)} />
+            )}
+            {viewingPast ? (
+              <PastSemester label={viewing} summary={pastCourses} onBack={() => setViewing("")} />
+            ) : (
+              <>
+                <CoursesStats n={list.length} ex={list.reduce((a, c) => a + c.exams.length, 0)} data={data.courses} />
+                <CoursesGrid plus={plus} list={list} onDelete={setDelTarget} onAdd={() => setAdding(true)} />
+              </>
+            )}
           </div>
         </main>
       </div>
       <TabBar active={PAGE_ID} />
       {adding && <AddCourseModal onClose={() => setAdding(false)} onAdd={addCourse} live={!!data.live} />}
       {delTarget && <DeleteCourseModal course={delTarget} onClose={() => setDelTarget(null)} onConfirm={deleteCourse} />}
+      {correcting && <CorrectSemesterModal data={data.courses} csrf={data.csrf}
+        onClose={() => setCorrecting(false)}
+        onDone={() => { if (data.live) location.reload(); else setCorrecting(false); }} />}
+      {closing && <CloseSemesterWizard data={data.courses} csrf={data.csrf}
+        onClose={() => setClosing(false)}
+        onDone={() => { if (data.live) location.reload(); else setClosing(false); }} />}
 
       {!data.live && <TweaksPanel title="Tweaks">
         <PlanTweak plus={plus} setTweak={setTweak} />

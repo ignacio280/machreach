@@ -1311,6 +1311,34 @@ def _student_migrations():
         "target_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
         "action TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now','localtime')))",
     )
+    # One row per semester the student has closed. UNIQUE keeps the closing
+    # reward from being farmed by closing the same semester twice.
+    _create_table_safe(
+        "CREATE TABLE IF NOT EXISTS student_semester_closures ("
+        "id SERIAL PRIMARY KEY, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "semester_label TEXT NOT NULL, "
+        "courses_total INTEGER NOT NULL DEFAULT 0, "
+        "courses_graded INTEGER NOT NULL DEFAULT 0, "
+        "courses_passed INTEGER NOT NULL DEFAULT 0, "
+        "average REAL, "
+        "focus_minutes INTEGER NOT NULL DEFAULT 0, "
+        "coins_awarded INTEGER NOT NULL DEFAULT 0, "
+        "closed_at TIMESTAMP DEFAULT NOW(), "
+        "UNIQUE(client_id, semester_label))",
+        "CREATE TABLE IF NOT EXISTS student_semester_closures ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
+        "semester_label TEXT NOT NULL, "
+        "courses_total INTEGER NOT NULL DEFAULT 0, "
+        "courses_graded INTEGER NOT NULL DEFAULT 0, "
+        "courses_passed INTEGER NOT NULL DEFAULT 0, "
+        "average REAL, "
+        "focus_minutes INTEGER NOT NULL DEFAULT 0, "
+        "coins_awarded INTEGER NOT NULL DEFAULT 0, "
+        "closed_at TEXT DEFAULT (datetime('now','localtime')), "
+        "UNIQUE(client_id, semester_label))",
+    )
     # Referral program: each user owns one code; each new user can be referred once.
     _create_table_safe(
         "CREATE TABLE IF NOT EXISTS student_referral_codes ("
@@ -1364,7 +1392,11 @@ def _student_migrations():
         "reported_at TEXT DEFAULT (datetime('now','localtime')), "
         "UNIQUE(client_id, course_id))",
     )
-    for col, col_type in (("final_grade", "REAL"), ("passing_grade", "REAL DEFAULT 3.95")):
+    # outcome_status: how the course ended — 'graded', 'pending' (results not
+    # published yet) or 'withdrawn'. Only 'graded' rows carry a number, and only
+    # those reach the average and the benchmarks.
+    for col, col_type in (("final_grade", "REAL"), ("passing_grade", "REAL DEFAULT 3.95"),
+                          ("outcome_status", "TEXT DEFAULT 'graded'")):
         try:
             with get_db() as db:
                 if _USE_PG:
@@ -2127,23 +2159,385 @@ def set_current_semester(client_id: int, label: str) -> None:
         _exec(db, "UPDATE clients SET current_semester = %s WHERE id = %s", (label, client_id))
 
 
+# How a course can end. Only GRADED carries a number and reaches the average
+# and the benchmarks; the other two exist so a student is never trapped by a
+# professor who has not published yet, or by a course they dropped.
+OUTCOME_GRADED = "graded"
+OUTCOME_PENDING = "pending"
+OUTCOME_WITHDRAWN = "withdrawn"
+OUTCOME_STATUSES = (OUTCOME_GRADED, OUTCOME_PENDING, OUTCOME_WITHDRAWN)
+
+# What closing a semester pays. Coins and a badge only — never XP, so a grade
+# can never move anybody's position on a leaderboard.
+SEMESTER_CLOSE_COINS = 120
+SEMESTER_CLOSE_COINS_PER_COURSE = 15
+SEMESTER_CLOSE_COINS_CAP = 400
+
+
 def get_pending_course_outcomes(client_id: int, semester_label: str | None = None) -> list[dict]:
-    """Courses in a semester that still need a final grade report."""
+    """Courses in a semester still waiting on an answer.
+
+    A course counts as pending when it has no outcome row at all, or when the
+    student explicitly parked it as "grade not published yet". A withdrawn
+    course is answered, so it does not appear here.
+    """
     sem = (semester_label if semester_label is not None else get_current_semester(client_id) or "").strip()
     if not sem:
         return []
     with get_db() as db:
         rows = _fetchall(
             db,
-            "SELECT c.id, c.name, c.code, COALESCE(c.semester_label,'') AS semester_label "
+            "SELECT c.id, c.name, c.code, COALESCE(c.semester_label,'') AS semester_label, "
+            "COALESCE(o.outcome_status,'') AS outcome_status "
             "FROM student_courses c "
             "LEFT JOIN student_course_outcomes o ON o.client_id = c.client_id AND o.course_id = c.id "
             "WHERE c.client_id = %s AND COALESCE(c.semester_label,'') = %s "
-            "AND (o.id IS NULL OR o.final_grade IS NULL) "
+            "AND (o.id IS NULL OR COALESCE(o.outcome_status,'graded') = 'pending') "
             "ORDER BY c.name ASC",
             (client_id, sem),
         ) or []
     return [dict(r) for r in rows]
+
+
+def set_course_semester(client_id: int, course_id: int, label: str) -> bool:
+    """Move one course to another semester — the fix for a course filed under
+    the wrong one, which is the only fix that actually works per course."""
+    label = (label or "").strip()
+    with get_db() as db:
+        owned = _fetchone(
+            db, "SELECT id FROM student_courses WHERE id = %s AND client_id = %s",
+            (course_id, client_id),
+        )
+        if not owned:
+            return False
+        _exec(db, "UPDATE student_courses SET semester_label = %s WHERE id = %s AND client_id = %s",
+              (label, course_id, client_id))
+    return True
+
+
+def correct_current_semester(client_id: int, label: str, move_courses: bool = True) -> dict:
+    """Fix the semester the student says they are in.
+
+    Correcting is not advancing: nothing is ending, so this deliberately skips
+    the final-grade gate. When asked, the courses still filed under the old
+    label come along, which is what someone who picked the wrong number at
+    signup actually wants.
+    """
+    label = (label or "").strip()
+    if not label:
+        return {"ok": False, "error": "Elige un semestre."}
+    with get_db() as db:
+        previous = ((_fetchone(db, "SELECT current_semester FROM clients WHERE id = %s",
+                               (client_id,)) or {}).get("current_semester") or "").strip()
+        moved = 0
+        if move_courses and previous and previous != label:
+            result = _exec(
+                db,
+                "UPDATE student_courses SET semester_label = %s "
+                "WHERE client_id = %s AND COALESCE(semester_label,'') = %s",
+                (label, client_id, previous),
+            )
+            moved = int(getattr(result, "rowcount", 0) or 0)
+        _exec(db, "UPDATE student_courses SET semester_label = %s "
+                  "WHERE client_id = %s AND COALESCE(semester_label,'') = ''",
+              (label, client_id))
+        _exec(db, "UPDATE clients SET current_semester = %s WHERE id = %s", (label, client_id))
+    return {"ok": True, "previous": previous, "current": label, "moved": moved}
+
+
+def record_course_closure(client_id: int, course_id: int, status: str,
+                          final_grade=None, passing_grade: float = 3.95) -> dict:
+    """Answer for one course at the end of a semester.
+
+    'graded' delegates to record_course_outcome so a grade written here is
+    indistinguishable from one written on the course card. The other two write
+    a row without a number, which keeps them out of every average.
+    """
+    status = (status or "").strip().lower()
+    if status not in OUTCOME_STATUSES:
+        return {"ok": False, "error": "Estado de ramo no válido."}
+    if status == OUTCOME_GRADED:
+        result = record_course_outcome(client_id, course_id, final_grade, passing_grade)
+        if result.get("ok"):
+            with get_db() as db:
+                _exec(db, "UPDATE student_course_outcomes SET outcome_status = %s "
+                          "WHERE client_id = %s AND course_id = %s",
+                      (OUTCOME_GRADED, client_id, course_id))
+        return result
+
+    with get_db() as db:
+        course = _fetchone(
+            db,
+            "SELECT sc.id, sc.name, sc.code, sc.catalog_id, sc.term, sc.semester_label, "
+            "c.university_id FROM student_courses sc JOIN clients c ON c.id = sc.client_id "
+            "WHERE sc.id = %s AND sc.client_id = %s",
+            (course_id, client_id),
+        )
+        if not course:
+            return {"ok": False, "error": "Course not found."}
+        minutes = _fetchval(
+            db,
+            "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress "
+            "WHERE client_id = %s AND course_id = %s",
+            (client_id, course_id),
+        ) or 0
+        key = _course_benchmark_key(course.get("name") or "", course.get("code") or "")
+        cohort = course.get("term") or course.get("semester_label") or "unknown"
+        conflict = "EXCLUDED" if _USE_PG else "excluded"
+        _exec(
+            db,
+            "INSERT INTO student_course_outcomes "
+            "(client_id, course_id, course_key, course_name, course_code, university_id, "
+            "canonical_course_id, cohort_version, final_grade, passing_grade, passed, "
+            "total_focus_minutes, outcome_status) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s,%s,%s,%s) "
+            "ON CONFLICT(client_id, course_id) DO UPDATE SET "
+            f"final_grade=NULL, passed={conflict}.passed, "
+            f"total_focus_minutes={conflict}.total_focus_minutes, "
+            f"outcome_status={conflict}.outcome_status",
+            (
+                client_id, course_id, key, course.get("name") or "",
+                course.get("code") or "", course.get("university_id"),
+                course.get("catalog_id"), cohort, float(passing_grade or 3.95),
+                False if _USE_PG else 0, int(minutes), status,
+            ),
+        )
+    return {"ok": True, "status": status, "final_grade": None}
+
+
+def semester_courses(client_id: int, semester_label: str) -> list[dict]:
+    """Every course filed under a semester, with the answer it already has."""
+    sem = (semester_label or "").strip()
+    if not sem:
+        return []
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT c.id, c.name, c.code, o.final_grade, o.passing_grade, o.passed, "
+            "COALESCE(o.outcome_status,'') AS outcome_status, "
+            "COALESCE(o.total_focus_minutes,0) AS focus_minutes "
+            "FROM student_courses c "
+            "LEFT JOIN student_course_outcomes o "
+            "  ON o.client_id = c.client_id AND o.course_id = c.id "
+            "WHERE c.client_id = %s AND COALESCE(c.semester_label,'') = %s "
+            "ORDER BY c.name ASC",
+            (client_id, sem),
+        ) or []
+    out = []
+    for row in rows:
+        row = dict(row)
+        grade = row.get("final_grade")
+        out.append({
+            "id": int(row["id"]),
+            "name": row.get("name") or "",
+            "code": row.get("code") or "",
+            "status": row.get("outcome_status") or "",
+            "final_grade": round(float(grade), 2) if grade is not None else None,
+            "passed": bool(row.get("passed")) if grade is not None else None,
+            "focus_minutes": int(row.get("focus_minutes") or 0),
+        })
+    return out
+
+
+def semester_labels_with_courses(client_id: int) -> list[str]:
+    """Semesters this student has actually used, so the picker shows their own
+    history instead of twelve empty Roman numerals."""
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT DISTINCT COALESCE(semester_label,'') AS label FROM student_courses "
+            "WHERE client_id = %s AND COALESCE(semester_label,'') <> ''",
+            (client_id,),
+        ) or []
+    return sorted({str(r["label"]) for r in rows}, key=lambda x: (len(x), x))
+
+
+def closed_semesters(client_id: int) -> dict[str, dict]:
+    with get_db() as db:
+        rows = _fetchall(
+            db, "SELECT * FROM student_semester_closures WHERE client_id = %s", (client_id,)
+        ) or []
+    return {str(dict(r)["semester_label"]): dict(r) for r in rows}
+
+
+def semester_summary(client_id: int, semester_label: str) -> dict:
+    """Everything the closing wizard and the semester viewer need."""
+    sem = (semester_label or "").strip()
+    courses = semester_courses(client_id, sem)
+    graded = [c for c in courses if c["status"] == OUTCOME_GRADED and c["final_grade"] is not None]
+    average = round(sum(c["final_grade"] for c in graded) / len(graded), 2) if graded else None
+    closure = closed_semesters(client_id).get(sem)
+    return {
+        "semester": sem,
+        "courses": courses,
+        "total": len(courses),
+        "graded": len(graded),
+        "pending": sum(1 for c in courses if c["status"] == OUTCOME_PENDING),
+        "withdrawn": sum(1 for c in courses if c["status"] == OUTCOME_WITHDRAWN),
+        "unanswered": sum(1 for c in courses if not c["status"]),
+        "passed": sum(1 for c in graded if c["passed"]),
+        "failed": sum(1 for c in graded if not c["passed"]),
+        "average": average,
+        "focus_minutes": sum(c["focus_minutes"] for c in courses),
+        "best": max(graded, key=lambda c: c["final_grade"])["name"] if graded else "",
+        "closed": bool(closure),
+        "closed_at": str(closure.get("closed_at")) if closure else "",
+    }
+
+
+def close_semester(client_id: int, semester_label: str, answers: list[dict],
+                   next_label: str = "") -> dict:
+    """Record every course's answer, bank the reward, and move the student on.
+
+    Pays coins and a badge. It deliberately awards no XP: grades must not be
+    able to shift a leaderboard, or the ranking stops measuring study time and
+    starts measuring who typed a 7,0.
+    """
+    sem = (semester_label or "").strip()
+    if not sem:
+        return {"ok": False, "error": "Falta el semestre."}
+    if closed_semesters(client_id).get(sem):
+        return {"ok": False, "error": "Ese semestre ya está cerrado."}
+
+    courses = {c["id"]: c for c in semester_courses(client_id, sem)}
+    if not courses:
+        return {"ok": False, "error": "No hay ramos en ese semestre."}
+
+    supplied = {}
+    for answer in answers or []:
+        try:
+            course_id = int(answer.get("course_id"))
+        except (TypeError, ValueError):
+            continue
+        if course_id in courses:
+            supplied[course_id] = answer
+    missing = [c["name"] for cid, c in courses.items() if cid not in supplied]
+    if missing:
+        return {"ok": False, "error": "Falta responder por: " + ", ".join(sorted(missing)[:5])}
+
+    for course_id, answer in supplied.items():
+        status = str(answer.get("status") or "").strip().lower()
+        result = record_course_closure(
+            client_id, course_id, status,
+            final_grade=answer.get("final_grade"),
+            passing_grade=answer.get("passing_grade") or 3.95,
+        )
+        if not result.get("ok"):
+            return {"ok": False, "error": f"{courses[course_id]['name']}: {result.get('error')}"}
+
+    summary = semester_summary(client_id, sem)
+    coins = min(
+        SEMESTER_CLOSE_COINS_CAP,
+        SEMESTER_CLOSE_COINS + SEMESTER_CLOSE_COINS_PER_COURSE * summary["total"],
+    )
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO student_semester_closures "
+            "(client_id, semester_label, courses_total, courses_graded, courses_passed, "
+            "average, focus_minutes, coins_awarded) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
+            "ON CONFLICT DO NOTHING",
+            (client_id, sem, summary["total"], summary["graded"], summary["passed"],
+             summary["average"], summary["focus_minutes"], coins),
+        )
+    add_coins(client_id, coins, f"semester_closed:{sem}")
+    badges = [key for key in _semester_badge_keys(client_id) if earn_badge(client_id, key)]
+    if (next_label or "").strip():
+        with get_db() as db:
+            _exec(db, "UPDATE clients SET current_semester = %s WHERE id = %s",
+                  ((next_label or "").strip(), client_id))
+    summary["coins_awarded"] = coins
+    summary["badges"] = badges
+    summary["closed"] = True
+    summary["next_semester"] = (next_label or "").strip()
+    return {"ok": True, **summary}
+
+
+def _semester_badge_keys(client_id: int) -> list[str]:
+    """Which closing badges the student now qualifies for."""
+    closed = len(closed_semesters(client_id))
+    keys = []
+    for threshold, key in ((1, "semester_1"), (3, "semester_3"), (6, "semester_6"),
+                           (10, "semester_10")):
+        if closed >= threshold:
+            keys.append(key)
+    return keys
+
+
+def semester_close_hint(client_id: int) -> dict:
+    """Whether to offer closing the current semester, and why.
+
+    Deliberately evidence-based rather than calendar-based: Chilean semesters do
+    not end on a shared date, so a hardcoded one would be wrong for half the
+    users. Never closes anything on its own.
+    """
+    from machreach_core.db import get_mail_preferences
+
+    sem = (get_current_semester(client_id) or "").strip()
+    blank = {"offer": False, "semester": sem, "reason": "", "courses": 0, "pending_notes": 0}
+    if not sem:
+        return blank
+    courses = semester_courses(client_id, sem)
+    if not courses:
+        return blank
+
+    try:
+        prefs = json.loads(get_mail_preferences(client_id) or "{}")
+        dismissed = str((prefs or {}).get("semester_prompt_dismissed") or "")
+    except (TypeError, ValueError):
+        dismissed = ""
+
+    pending_notes = sum(1 for c in courses if c["status"] == OUTCOME_PENDING)
+    course_ids = [c["id"] for c in courses]
+    placeholders = ",".join(["%s"] * len(course_ids))
+    with get_db() as db:
+        exam_rows = _fetchall(
+            db,
+            f"SELECT exam_date FROM student_exams WHERE client_id = %s AND course_id IN ({placeholders})",
+            (client_id, *course_ids),
+        ) or []
+        last_activity = _fetchval(
+            db,
+            f"SELECT MAX(plan_date) FROM student_study_progress "
+            f"WHERE client_id = %s AND course_id IN ({placeholders})",
+            (client_id, *course_ids),
+        )
+
+    today = utc_now().date()
+    dates = []
+    for row in exam_rows:
+        parsed = _parse_focus_dt(dict(row).get("exam_date"))
+        if parsed:
+            dates.append(parsed.date())
+
+    reason = ""
+    if dates and max(dates) < today:
+        reason = "evaluations_done"
+    elif not dates:
+        last = _parse_focus_dt(last_activity)
+        if last and (today - last.date()).days >= 14:
+            reason = "inactive"
+
+    return {
+        "offer": bool(reason) and dismissed != sem,
+        "semester": sem,
+        "reason": reason,
+        "courses": len(courses),
+        "pending_notes": pending_notes,
+    }
+
+
+def dismiss_semester_prompt(client_id: int, semester_label: str) -> None:
+    from machreach_core.db import get_mail_preferences, update_mail_preferences
+
+    try:
+        prefs = json.loads(get_mail_preferences(client_id) or "{}")
+        if not isinstance(prefs, dict):
+            prefs = {}
+    except (TypeError, ValueError):
+        prefs = {}
+    prefs["semester_prompt_dismissed"] = (semester_label or "").strip()
+    update_mail_preferences(client_id, json.dumps(prefs, separators=(",", ":")))
 
 
 def get_courses_by_semester(client_id: int) -> dict:
@@ -2272,21 +2666,30 @@ FINALISED_COURSE_GRACE_DAYS = 7
 
 
 def course_final_outcome(client_id: int, course_id: int) -> dict | None:
-    """The registered final grade, if any. Its presence freezes the course."""
+    """The registered final grade, if any. Its presence freezes the course.
+
+    A course parked as "grade not published yet" is deliberately not an
+    outcome: the student still has to come back and enter the number, so the
+    course stays editable and stays out of the reviews gate.
+    """
     with get_db() as db:
         row = _fetchone(
             db,
-            "SELECT final_grade, passing_grade, passed, reported_at "
+            "SELECT final_grade, passing_grade, passed, reported_at, "
+            "COALESCE(outcome_status,'graded') AS outcome_status "
             "FROM student_course_outcomes WHERE client_id = %s AND course_id = %s",
             (client_id, course_id),
         )
-    return dict(row) if row else None
+    if not row or str(dict(row).get("outcome_status")) == OUTCOME_PENDING:
+        return None
+    return dict(row)
 
 
 def _finalised_course_ids(db, client_id: int, *, retired_only: bool) -> set[int]:
     rows = _fetchall(
         db,
-        "SELECT course_id, reported_at FROM student_course_outcomes WHERE client_id = %s",
+        "SELECT course_id, reported_at FROM student_course_outcomes "
+        "WHERE client_id = %s AND COALESCE(outcome_status,'graded') <> 'pending'",
         (client_id,),
     ) or []
     cutoff = utc_now() - timedelta(days=FINALISED_COURSE_GRACE_DAYS)
@@ -3701,6 +4104,11 @@ def get_course_success_benchmark(course_id: int) -> dict:
             "AVG(final_grade) AS final_grade "
             "FROM student_course_outcomes WHERE university_id = %s "
             "AND canonical_course_id = %s AND cohort_version = %s "
+            # A course parked as "grade not published" or withdrawn is an
+            # answer, not a result: counting it would dilute the aggregate and
+            # push the 5-report threshold with rows that carry no grade.
+            "AND final_grade IS NOT NULL "
+            "AND COALESCE(outcome_status,'graded') = 'graded' "
             "GROUP BY client_id) AS anonymous_reports",
             (university_id, canonical_id, cohort_version),
         ) or {}
@@ -3754,7 +4162,7 @@ def get_course_outcomes_admin(limit: int = 80) -> list[dict]:
             "SUM(CASE WHEN NOT passed THEN 1 ELSE 0 END) AS failed_reports, "
             "COALESCE(AVG(CASE WHEN passed THEN final_grade END),0) AS avg_pass_grade, "
             "COALESCE(AVG(CASE WHEN passed THEN total_focus_minutes END),0) AS avg_pass_minutes "
-            "FROM student_course_outcomes GROUP BY course_key "
+            "FROM student_course_outcomes WHERE final_grade IS NOT NULL ""AND COALESCE(outcome_status,'graded') = 'graded' GROUP BY course_key "
             "ORDER BY reports DESC, passed_reports DESC, course_name ASC LIMIT %s",
             (limit,),
         ) or []
@@ -4747,6 +5155,11 @@ BADGE_DEFS: dict[str, dict[str, Any]] = {
     "quiz_perfect_25": {"emoji": "🏹", "name": "Bullseye",        "desc": "25 perfect-score quizzes"},
     # ── Flashcard mastery ──────────────────────────────────────────
     "deck_builder":    {"emoji": "🏗️", "name": "Deck Architect",  "desc": "Created 10 flashcard decks"},
+    # ── Semesters closed ────────────────────────────────────────────
+    "semester_1":      {"emoji": "🎓", "name": "Semestre cerrado", "desc": "Cerraste tu primer semestre"},
+    "semester_3":      {"emoji": "📚", "name": "Tres semestres",   "desc": "Cerraste 3 semestres"},
+    "semester_6":      {"emoji": "🧭", "name": "Media carrera",    "desc": "Cerraste 6 semestres"},
+    "semester_10":     {"emoji": "👑", "name": "Veterano",         "desc": "Cerraste 10 semestres"},
     # ── Focus mastery ───────────────────────────────────────────────
     "focus_session_4h":{"emoji": "🪨", "name": "Marathon Mind",   "desc": "Completed a single 4-hour focus session"},
     "focus_500h":      {"emoji": "🌌", "name": "Eternal Focus",   "desc": "500 hours of total focus time"},
@@ -4951,6 +5364,7 @@ _BADGE_LADDERS = {
                 (100, "quiz_100"), (500, "quiz_500")],
     "perfect_quizzes": [(1, "quiz_master"), (5, "quiz_perfect_5"), (25, "quiz_perfect_25")],
     "courses": [(1, "first_course"), (5, "five_courses"), (10, "ten_courses")],
+    "semesters": [(1, "semester_1"), (3, "semester_3"), (6, "semester_6"), (10, "semester_10")],
     "decks": [(10, "deck_builder")],
 }
 

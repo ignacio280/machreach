@@ -14,8 +14,18 @@ def test_pruned_badges_are_removed():
 
 
 def test_no_unreachable_is_a_known_count():
-    # Sanity: the catalog is the pruned size.
-    assert len(sdb.BADGE_DEFS) == 78
+    # Sanity: the catalog is the pruned size, plus the four semester-closing
+    # badges. Bump this deliberately — an accidental growth is the bug.
+    assert len(sdb.BADGE_DEFS) == 82
+
+
+def test_every_semester_badge_is_reachable():
+    """A badge nobody can earn is worse than no badge."""
+    ladder = dict(sdb._BADGE_LADDERS)["semesters"]
+
+    assert [key for _, key in ladder] == ["semester_1", "semester_3", "semester_6", "semester_10"]
+    for _, key in ladder:
+        assert key in sdb.BADGE_DEFS
 
 
 def test_evaluate_badges_threshold_awards(make_user):
