@@ -95,6 +95,20 @@ function ShopHead({ data = {} }) {
 
 function PlanSection({ plus, data = {} }) {
   const freeCap = Number(data.free_cap ?? FREE_CAP), plusCap = Number(data.plus_cap ?? PLUS_CAP);
+  // `plus` is what the student HAS; `paid` is what they PAY for. Free weeks
+  // from invites make the first true while the second stays false, and only
+  // the second may hide the buy button — otherwise an invited student is
+  // locked out of ever subscribing. Falls back to `plus` on an old payload.
+  const paid = data.paid ?? plus;
+  const promoDays = Number(data.promo_days || 0);
+  const promoNote = !promoDays ? null : (
+    <p className="plan-note">
+      {promoDays === 1 ? "Tienes 1 día" : `Tienes ${promoDays} días`} de Plus gratis por tus invitaciones.{" "}
+      {data.promo_banked
+        ? "Están guardados mientras tu plan pagado siga activo y empiezan a correr apenas termine."
+        : "Si compras Plus, tu plan parte de inmediato y estos días quedan guardados para después — no pierdes ninguno."}
+    </p>
+  );
   // Cancelling asks the provider to stop the renewal; access runs out with the
   // period the student already paid for, so this is not an instant downgrade.
   const cancelPlan = async () => {
@@ -108,12 +122,12 @@ function PlanSection({ plus, data = {} }) {
     <div className="sh-stage">
       <div className="plans">
         <div className="plan">
-          <div className="plan-label">{plus ? "Plan anterior" : "Plan actual · Gratis"}</div>
+          <div className="plan-label">{paid ? "Plan anterior" : "Plan actual · Gratis"}</div>
           <h3>Gratis</h3>
           <div className="plan-price">$0<small> / mes</small></div>
           <div className="plan-sub">Para siempre, sin tarjeta.</div>
           <ul>{free.map((f) => <li key={f}><IconCheck size={15} color="var(--good)" />{f}</li>)}</ul>
-          {plus ? <span className="plan-current">Plan anterior</span> : <span className="plan-current"><IconCheck size={15} /> Tu plan actual</span>}
+          {paid ? <span className="plan-current">Plan anterior</span> : <span className="plan-current"><IconCheck size={15} /> Tu plan actual</span>}
         </div>
         <div className="plan plus">
           <div className="plan-label">Recomendado</div>
@@ -122,15 +136,19 @@ function PlanSection({ plus, data = {} }) {
           <div className="plan-sub">Cancela cuando quieras. 1 amigo invitado = 7 días gratis.</div>
           <div className="plan-terms">CLP · cobro mensual · IVA calculado y mostrado en checkout · renovación automática.</div>
           <ul>{plusFeat.map((f) => <li key={f}><IconCheck size={15} color="var(--plum)" />{f}</li>)}</ul>
-          {plus
+          {paid
             ? <React.Fragment>
                 <span className="plan-current"><IconCheck size={15} /> {data.plus_until ? `Activo hasta ${data.plus_until}` : "Plus activo"}</span>
                 <button className="btn btn-ghost btn-sm plan-cancel" onClick={cancelPlan}>Cancelar plan</button>
               </React.Fragment>
-            : <button className="btn btn-primary btn-lg" disabled={data.billing_ready === false} onClick={() => shopPost("/api/student/subscription/change", { tier: "plus" })}>{data.billing_ready === false ? "Pagos no disponibles" : "Desbloquear Plus"}</button>}
+            : <React.Fragment>
+                {plus && <span className="plan-current"><IconCheck size={15} /> Plus activo con tus días gratis</span>}
+                <button className="btn btn-primary btn-lg" disabled={data.billing_ready === false} onClick={() => shopPost("/api/student/subscription/change", { tier: "plus" })}>{data.billing_ready === false ? "Pagos no disponibles" : "Desbloquear Plus"}</button>
+              </React.Fragment>}
         </div>
       </div>
-      {plus && <p className="plan-note">Al cancelar, Plus sigue activo hasta el final del período que ya pagaste y después vuelves al plan gratis.</p>}
+      {promoNote}
+      {paid && <p className="plan-note">Al cancelar, Plus sigue activo hasta el final del período que ya pagaste y después vuelves al plan gratis.</p>}
     </div>
   );
 }

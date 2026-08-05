@@ -4709,9 +4709,16 @@ def register_student_routes(app, csrf, limiter):
                     _variant = _cfg.LS_TEST_VARIANT_STUDENT_PLUS if _test_mode else _cfg.LS_VARIANT_STUDENT_PLUS
                     _billing_ready = bool(_store and _product and _variant and _ls.is_configured(test_mode=_test_mode))
                     _subscription_state = _subscription.get_subscription_state(_cid()) or {}
+                    # Whether they PAY, which is not whether they HAVE Plus:
+                    # invited students hold free weeks. Keying the plan card off
+                    # the effective tier is what left them unable to ever buy.
+                    _is_paid = _subscription._paid_only_tier(_subscription_state) == "plus"
+                    _promo = _subscription.promotional_summary(_cid())
                 except Exception:
                     _billing_ready = False
                     _subscription_state = {}
+                    _is_paid = False
+                    _promo = {"days_left": 0, "banked": False}
                 # cherry and matrix are the animated ones — worth showing off.
                 _banner_keys = ["peach", "ocean", "sunset", "forest", "lavender", "gold", "galaxy", "champion", "neon_rift", "candy", "mint", "obsidian", "cherry", "matrix"]
                 _flag_keys = ["candy", "stripes_3", "racing", "checker", "vortex_spiral", "polar_lights", "void", "heartbeat", "plus_anim_holo", "plus_prism", "matrix_rain", "flow_lava"]
@@ -4736,6 +4743,9 @@ def register_student_routes(app, csrf, limiter):
                     "free_cap": int(sdb.FREE_STREAK_FREEZE_CAP),
                     "plus_cap": int(sdb.PAID_STREAK_FREEZE_CAP),
                     "billing_ready": _billing_ready,
+                    "paid": bool(_is_paid),
+                    "promo_days": int(_promo.get("days_left") or 0),
+                    "promo_banked": bool(_promo.get("banked")),
                     "plus_until": str(_subscription_state.get("renews_at") or _subscription_state.get("ends_at") or "")[:10],
                     "unlocked_banners": list(_wallet.get("unlocked_banners") or ["default"]),
                     "unlocked_flags": list(_flag_state.get("unlocked_flags") or ["none"]),
@@ -22211,6 +22221,12 @@ No markdown, no code fences. ONLY JSON.
             from student import subscription as _sub
             current_tier = _sub.get_tier(cid)
             subscription_state = _sub.get_subscription_state(cid)
+            # What the student PAYS for, which is not what they currently have:
+            # free weeks from invites also read as Plus. Keying the cards off
+            # the effective tier is what used to label Plus "Plan actual" and
+            # disable it, leaving an invited student unable to ever buy.
+            paid_tier = _sub._paid_only_tier(subscription_state)
+            promo = _sub.promotional_summary(cid)
             usage = _sub.generation_usage(cid) if current_tier == "plus" else None
             plans = _sub.PLANS
             tier_order = ["free", "plus"]
@@ -22224,7 +22240,7 @@ No markdown, no code fences. ONLY JSON.
                 if not cfg:
                     continue
                 border, _bg = tier_colors.get(key, ("#64748b", "#f1f5f9"))
-                is_current = (key == current_tier)
+                is_current = (key == paid_tier)
                 features_html = "".join(
                     f'<li style="margin:6px 0;font-size:13px;color:#334155;">{_esc(str(f))}</li>'
                     for f in cfg.get("features", [])
@@ -22291,6 +22307,22 @@ No markdown, no code fences. ONLY JSON.
                     'Tu renovación está cancelada. Mantendrás Plus hasta '
                     f'<strong>{_esc(str(subscription_state["ends_at"])[:10])}</strong>.</div>'
                 )
+            promo_notice = ""
+            if promo.get("days_left"):
+                _dias = int(promo["days_left"])
+                _plural = "día" if _dias == 1 else "días"
+                promo_notice = (
+                    '<div class="alert alert-info" style="margin-bottom:14px;">'
+                    f'<strong>Tienes {_dias} {_plural} de Plus gratis por tus invitaciones.</strong> '
+                    + (
+                        'Están guardados mientras tu plan pagado esté activo, y empiezan a correr '
+                        'apenas ese plan termine. No se gastan por debajo de lo que pagaste.'
+                        if promo.get("banked") else
+                        'Si compras Plus ahora, tu plan pagado parte de inmediato y estos días quedan '
+                        'guardados para cuando el plan termine — no pierdes ninguno.'
+                    )
+                    + '</div>'
+                )
             usage_html = ""
             if usage:
                 remaining = int(usage["remaining"])
@@ -22307,7 +22339,7 @@ No markdown, no code fences. ONLY JSON.
             subscription_section = (
                 '<div class="card">'
                 '<div class="card-header"><h2>\U0001F48E Compara tu plan</h2></div>'
-                + billing_notice + usage_html +
+                + billing_notice + promo_notice + usage_html +
                 (
                     '<div class="shop-billing-unavailable" role="status"><strong>Pagos no disponibles.</strong> '
                     'La facturación de producción todavía no está configurada. Puedes comparar los planes, '

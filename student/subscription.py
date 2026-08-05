@@ -270,8 +270,125 @@ def _write_promotional_entitlement(
     )
 
 
+# ── Promotional time while a paid plan is running ───────────────────────
+#
+# Free weeks (referral rewards) are stored as an absolute `plus_until`, which
+# burns in real time. That is wrong the moment the student also pays: the
+# weeks they earned would be spent underneath a month they already bought.
+#
+# So promotional time has two states, and at most one is live:
+#   running  — `plus_until` is set, the clock is ticking
+#   banked   — `banked_seconds` holds what is left, nothing is ticking
+#
+# Paid access starting banks the remainder; paid access stopping pays it back
+# out from that instant. Nothing is ever lost, and nothing is ever spent twice.
+
+
+def _paid_only_tier(subscription: dict) -> str:
+    """The tier the paid subscription grants on its own, promo ignored."""
+    return _effective_tier({"subscription": subscription, "plus_until": None})
+
+
+def _load_promotional_bank(db, client_id: int) -> int:
+    from machreach_core.db import _fetchval
+
+    try:
+        return max(0, int(_fetchval(
+            db,
+            "SELECT banked_seconds FROM student_promotional_entitlements "
+            "WHERE client_id = %s",
+            (client_id,),
+        ) or 0))
+    except Exception:
+        # Pre-migration deployments have no column; treat it as an empty bank
+        # rather than failing a subscription write over a promotion.
+        return 0
+
+
+def _write_promotional_bank(db, client_id: int, seconds: int) -> None:
+    from machreach_core.db import _exec
+
+    _exec(
+        db,
+        "UPDATE student_promotional_entitlements SET banked_seconds = %s, "
+        "updated_at = %s WHERE client_id = %s",
+        (max(0, int(seconds)), _utcnow().isoformat(), client_id),
+    )
+
+
+def _reconcile_promotional_bank(db, client_id: int, subscription: dict) -> str | None:
+    """Move promotional time between running and banked, and report what is
+    live now. Safe to call on every read: it only writes on a real transition.
+    """
+    plus_until_raw = _load_promotional_entitlement(db, client_id)
+    try:
+        bank = _load_promotional_bank(db, client_id)
+    except Exception:
+        return plus_until_raw
+    now = _utcnow()
+    paid_active = _paid_only_tier(subscription) == "plus"
+    plus_until = _parse_iso(plus_until_raw)
+
+    if paid_active:
+        # Paid covers the student today: park whatever promotional time is
+        # still ahead of them so it is there when the plan stops.
+        if plus_until and plus_until > now:
+            remaining = int((plus_until - now).total_seconds())
+            if remaining > 0:
+                try:
+                    _write_promotional_entitlement(db, client_id, None)
+                    _write_promotional_bank(db, client_id, bank + remaining)
+                except Exception:
+                    log.warning("could not bank promotional time for %s", client_id)
+                    return plus_until_raw
+            return None
+        return None if bank else plus_until_raw
+
+    # No paid access. Anything banked starts running from this moment.
+    if bank > 0:
+        resumed = (now + timedelta(seconds=bank)).isoformat()
+        try:
+            _write_promotional_entitlement(db, client_id, resumed)
+            _write_promotional_bank(db, client_id, 0)
+        except Exception:
+            log.warning("could not resume promotional time for %s", client_id)
+            return plus_until_raw
+        return resumed
+    return plus_until_raw
+
+
+def promotional_summary(client_id: int) -> dict:
+    """What the student still holds in free weeks, running or banked."""
+    try:
+        with get_db() as db:
+            subscription = _load_subscription_row(db, client_id)
+            plus_until = _reconcile_promotional_bank(db, client_id, subscription)
+            bank = _load_promotional_bank(db, client_id)
+    except Exception:
+        return {"days_left": 0, "banked": False, "plus_until": None}
+    now = _utcnow()
+    if bank > 0:
+        return {
+            "days_left": max(0, round(bank / 86400)),
+            "banked": True,
+            "plus_until": None,
+        }
+    parsed = _parse_iso(plus_until)
+    if parsed and parsed > now:
+        return {
+            "days_left": max(0, round((parsed - now).total_seconds() / 86400)),
+            "banked": False,
+            "plus_until": plus_until,
+        }
+    return {"days_left": 0, "banked": False, "plus_until": None}
+
+
 def _extend_promotional_entitlement(db, client_id: int, days: int) -> str:
-    """Extend a promotion while holding its row lock in this transaction."""
+    """Extend a promotion while holding its row lock in this transaction.
+
+    A reward earned while a paid plan is running goes straight to the bank —
+    otherwise those days would tick away under a month the student paid for.
+    """
     from machreach_core.db import _exec, _fetchone
 
     now = _utcnow()
@@ -288,6 +405,14 @@ def _extend_promotional_entitlement(db, client_id: int, days: int) -> str:
         "WHERE client_id = %s" + (" FOR UPDATE" if _USE_PG else ""),
         (client_id,),
     ) or {}
+    if _paid_only_tier(_load_subscription_row(db, client_id)) == "plus":
+        bank = _load_promotional_bank(db, client_id) + int(days) * 86400
+        current = _parse_iso(row.get("plus_until"))
+        if current and current > now:
+            bank += int((current - now).total_seconds())
+            _write_promotional_entitlement(db, client_id, None)
+        _write_promotional_bank(db, client_id, bank)
+        return (now + timedelta(seconds=bank)).isoformat()
     current = _parse_iso(row.get("plus_until"))
     base = current if current and current > now else now
     plus_until = (base + timedelta(days=int(days))).isoformat()
@@ -480,7 +605,9 @@ def get_tier(client_id: int) -> str:
             subscription = _load_subscription_row(db, client_id)
             prefs = {
                 "subscription": subscription,
-                "plus_until": _load_promotional_entitlement(db, client_id),
+                # Also the moment a lapsed plan hands the student back their
+                # banked free weeks — no webhook has to land for that.
+                "plus_until": _reconcile_promotional_bank(db, client_id, subscription),
             }
             tier = _effective_tier(prefs)
             _grant_paid_benefits(db, client_id, tier, subscription)
@@ -770,7 +897,10 @@ def set_subscription_state(
         subscription["updated_at"] = _utcnow().isoformat()
         prefs = {
             "subscription": subscription,
-            "plus_until": _load_promotional_entitlement(db, client_id),
+            # Against the state being written, not the one on disk: a plan
+            # activating banks the free weeks in the same transaction, and a
+            # plan expiring releases them.
+            "plus_until": _reconcile_promotional_bank(db, client_id, subscription),
         }
         effective = _effective_tier(prefs)
         _write_subscription_row(db, client_id, subscription)

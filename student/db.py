@@ -706,18 +706,34 @@ def init_normalized_student_state(*, run_backfill: bool = True) -> None:
             "ON student_subscription_state(ls_sub_id) "
             "WHERE NULLIF(TRIM(ls_sub_id), '') IS NOT NULL",
         )
+    # banked_seconds holds promotional time that is paused because a paid plan
+    # is running. Free weeks never burn underneath a month the student paid
+    # for: they wait here and resume the moment paid access stops.
     _create_table_safe(
         """CREATE TABLE IF NOT EXISTS student_promotional_entitlements (
             client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
             plus_until TIMESTAMPTZ,
+            banked_seconds BIGINT NOT NULL DEFAULT 0,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""",
         """CREATE TABLE IF NOT EXISTS student_promotional_entitlements (
             client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
             plus_until TEXT,
+            banked_seconds BIGINT NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )""",
     )
+    # Deployments whose table predates the column.
+    try:
+        with get_db() as db:
+            _exec(
+                db,
+                "ALTER TABLE student_promotional_entitlements "
+                "ADD COLUMN banked_seconds BIGINT DEFAULT 0",
+            )
+    except Exception as exc:
+        if not _is_duplicate_column_error(exc):
+            raise
     _create_table_safe(
         """CREATE TABLE IF NOT EXISTS student_reward_state (
             client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
