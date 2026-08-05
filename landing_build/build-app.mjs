@@ -58,6 +58,10 @@ const PAGE_DEPS = {
     css: ["dash.css", "focus.css"],
     jsx: ["shell.jsx", "lock.jsx", "dash-left.jsx", "dash-right.jsx"],
   },
+  flashcards: {
+    css: ["dash.css", "focus.css", "plan.css", "flashcards.css"],
+    jsx: ["shell.jsx", "lock.jsx", "flashcards.jsx"],
+  },
   focus: {
     css: ["dash.css", "focus.css"],
     jsx: ["shell.jsx", "lock.jsx", "ambience.jsx", "focus.jsx"],
@@ -73,6 +77,10 @@ const PAGE_DEPS = {
   plan: {
     css: ["dash.css", "focus.css", "plan.css"],
     jsx: ["shell.jsx", "lock.jsx", "plan.jsx"],
+  },
+  quiz: {
+    css: ["dash.css", "focus.css", "plan.css", "quiz.css"],
+    jsx: ["shell.jsx", "lock.jsx", "quiz.jsx"],
   },
   perfil: {
     css: ["dash.css", "focus.css", "plan.css", "friends.css", "profile.css"],

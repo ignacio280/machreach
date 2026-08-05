@@ -1,0 +1,77 @@
+/* Flashcards — dentro del deck (/student/flashcards/<id>) */
+.fc-wrap{max-width:860px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.fc-back{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;color:var(--ink-3)}
+.fc-back:hover{color:var(--brand-2)}
+.fc-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.fc-head h1{font-size:clamp(26px,3.4vw,36px);line-height:1.02;margin-top:9px}
+.fc-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:10px}
+.fc-pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;padding:5px 10px;border-radius:999px;border:2px solid var(--ink);background:var(--surface-2);color:var(--ink-2)}
+.fc-modes{display:flex;gap:0;border:2px solid var(--ink);border-radius:12px;overflow:hidden;box-shadow:0 3px 0 var(--ink);flex:none;align-self:flex-end}
+.fc-modes button{padding:9px 15px;border:0;background:var(--surface);font-family:var(--font-display);font-weight:800;font-size:13.5px;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;gap:7px;transition:.18s var(--ease)}
+.fc-modes button+button{border-left:2px solid var(--ink)}
+.fc-modes button.on{background:var(--ink);color:var(--paper)}
+
+.fc-progress{display:flex;align-items:center;gap:12px}
+.fc-track{flex:1;height:11px;border:2px solid var(--ink);border-radius:999px;background:var(--paper-2);overflow:hidden}
+.fc-fill{display:block;height:100%;background:var(--brand);border-right:2px solid var(--ink);transition:width .45s var(--spring)}
+.fc-count{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;font-weight:700;color:var(--ink-2);white-space:nowrap}
+
+/* Carta */
+.fc-stage{position:relative;perspective:1600px;min-height:320px}
+.fc-stack{position:absolute;inset:0;pointer-events:none}
+.fc-stack i{position:absolute;left:14px;right:14px;top:10px;bottom:0;border:var(--bd);border-radius:var(--r-lg);background:var(--surface-2);box-shadow:0 3px 0 var(--ink)}
+.fc-stack i:nth-child(2){left:26px;right:26px;top:19px;opacity:.6}
+.fc-card{position:relative;width:100%;min-height:320px;cursor:pointer;transform-style:preserve-3d;transition:transform .58s var(--spring);border:0;padding:0;background:transparent;display:block}
+.fc-card.flip{transform:rotateY(180deg)}
+.fc-face{position:absolute;inset:0;backface-visibility:hidden;border:var(--bd);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--sh3);padding:44px 34px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.fc-face.back{transform:rotateY(180deg);background:var(--brand-tint)}
+.fc-side{position:absolute;top:16px;left:20px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--brand-2)}
+.fc-seen{position:absolute;top:16px;right:20px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;color:var(--ink-3)}
+.fc-text{font-family:var(--font-display);font-weight:700;font-size:clamp(20px,2.6vw,28px);line-height:1.25;letter-spacing:-.02em;color:var(--ink);text-wrap:pretty;max-width:34ch}
+.fc-face.back .fc-text{font-family:var(--font-body);font-weight:700;font-size:clamp(17px,2.1vw,21px);line-height:1.45;max-width:42ch}
+.fc-tap{position:absolute;bottom:16px;font-family:var(--font-mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+
+.fc-acts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.fc-btn{flex:1;min-width:150px;max-width:230px;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 18px;border:var(--bd);border-radius:14px;font-family:var(--font-display);font-weight:800;font-size:15.5px;cursor:pointer;box-shadow:0 4px 0 var(--ink);transition:transform .16s var(--spring-b),box-shadow .16s}
+.fc-btn:hover{transform:translate(-1px,-2px);box-shadow:0 6px 0 var(--ink)}
+.fc-btn.no{background:#FFDFE1;color:var(--ink)}
+.fc-btn.yes{background:var(--good);color:#fff}
+.fc-btn kbd{font-family:var(--font-mono);font-size:10px;font-weight:700;border:2px solid currentColor;border-radius:6px;padding:0 5px;opacity:.6}
+.fc-keys{text-align:center;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.05em;color:var(--ink-3);font-weight:700}
+.fc-keys kbd{border:2px solid var(--ink-3);border-radius:6px;padding:1px 6px;margin:0 2px}
+
+.fc-srs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.fc-srs button{padding:12px 8px;border:var(--bd);border-radius:13px;background:var(--surface);box-shadow:0 3px 0 var(--ink);cursor:pointer;transition:transform .16s var(--spring-b)}
+.fc-srs button:hover{transform:translateY(-2px)}
+.fc-srs button b{display:block;font-family:var(--font-display);font-weight:800;font-size:14px}
+.fc-srs button span{display:block;font-family:var(--font-mono);font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-top:4px}
+.fc-srs button.q0{background:#FFDFE1}.fc-srs button.q3{background:#FDF0D5}.fc-srs button.q5{background:#E4F7EE}
+
+/* Resumen */
+.fc-done{border:var(--bd);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--sh3);padding:30px;text-align:center}
+.fc-done .ring{width:76px;height:76px;margin:0 auto 18px;border-radius:22px;border:var(--bd);box-shadow:0 4px 0 var(--ink);background:var(--good);color:#fff;display:grid;place-items:center;transform:rotate(-3deg)}
+.fc-done h2{font-size:27px;line-height:1.04;margin-bottom:8px}
+.fc-done p{color:var(--ink-2);font-size:14.5px;font-weight:600;line-height:1.5;max-width:44ch;margin:0 auto}
+.fc-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:22px;text-align:left}
+.fc-kpi{border:2px solid var(--ink);border-radius:13px;background:var(--surface-2);box-shadow:0 3px 0 var(--ink);padding:12px 13px}
+.fc-kpi .n{font-family:var(--font-display);font-weight:800;font-size:22px;line-height:1;letter-spacing:-.03em}
+.fc-kpi .l{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-top:5px}
+
+/* Editar */
+.fc-editor{display:grid;gap:9px}
+.fc-erow{border:2px solid var(--ink);border-radius:14px;background:var(--surface);box-shadow:0 3px 0 var(--ink);padding:13px 15px;display:grid;grid-template-columns:30px 1fr auto;gap:12px;align-items:start}
+.fc-erow .ix{width:30px;height:30px;border-radius:9px;border:2px solid var(--ink);background:var(--paper-2);display:grid;place-items:center;font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--ink)}
+.fc-erow .pair{display:grid;gap:7px;min-width:0}
+.fc-erow .pair label{display:grid;gap:4px}
+.fc-erow .pair .k{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.fc-in{width:100%;padding:9px 11px;border:2px solid var(--ink);border-radius:10px;background:var(--surface-2);color:var(--ink);font-family:var(--font-body);font-weight:700;font-size:14px;resize:vertical}
+.fc-in:focus{outline:none;background:var(--surface);box-shadow:0 0 0 3px var(--brand-tint)}
+.fc-erow-side{display:flex;flex-direction:column;gap:7px;align-items:flex-end}
+.fc-erow .rate{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:var(--ink-3);white-space:nowrap}
+.fc-del{width:30px;height:30px;border-radius:9px;border:2px solid var(--ink);background:var(--surface-2);display:grid;place-items:center;color:var(--ink-3);cursor:pointer;transition:.2s var(--ease)}
+.fc-del:hover{background:var(--bad);color:#fff;transform:rotate(90deg)}
+.fc-add{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border:2px dashed var(--ink-3);border-radius:14px;background:transparent;font-family:var(--font-display);font-weight:800;font-size:14.5px;color:var(--ink-2);cursor:pointer;transition:.2s var(--ease)}
+.fc-add:hover{border-color:var(--brand);color:var(--brand-2);background:var(--brand-tint)}
+.fc-editbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fc-editbar .sp{flex:1}
+@media (max-width:700px){.fc-face{padding:34px 22px}.fc-srs{grid-template-columns:repeat(2,1fr)}.fc-kpis{grid-template-columns:1fr 1fr}.fc-erow{grid-template-columns:1fr;gap:9px}.fc-erow-side{flex-direction:row;align-items:center}}
