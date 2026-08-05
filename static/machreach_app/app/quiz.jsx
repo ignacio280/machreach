@@ -110,16 +110,29 @@ function QuizTaking({ quiz, cfg, plus, answers, setAnswers, idx, setIdx, onFinis
   const q = quiz.qs[idx];
   const picked = answers[q.id];
   const graded = cfg.instant && picked;
-  const [left, setLeft] = React.useState(cfg.mins * 60);
+  // Counted off an absolute deadline, not off ticks. A background tab has its
+  // timers throttled to roughly one call a minute, so decrementing per tick
+  // would quietly hand a student who switched tabs several extra minutes —
+  // on the one feature whose whole point is exam pressure. Same reason the
+  // focus timer stores an end time.
+  const deadline = React.useRef(0);
+  if (!deadline.current) deadline.current = Date.now() + cfg.mins * 60 * 1000;
+  const remaining = () => Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000));
+  const [left, setLeft] = React.useState(remaining);
   const finish = React.useRef(onFinish);
   finish.current = onFinish;
   React.useEffect(() => {
     if (!cfg.timer) return undefined;
-    const t = setInterval(() => setLeft((v) => {
-      if (v <= 1) { clearInterval(t); finish.current(); return 0; }
-      return v - 1;
-    }), 1000);
-    return () => clearInterval(t);
+    const tick = () => {
+      const value = remaining();
+      setLeft(value);
+      if (value <= 0) { clearInterval(t); finish.current(); }
+    };
+    const t = setInterval(tick, 250);
+    // A throttled tab catches up the moment it comes back to the front.
+    const onVisible = () => { if (!document.hidden) tick(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVisible); };
   }, [cfg.timer]);
 
   const pick = (k) => { if (graded) return; setAnswers({ ...answers, [q.id]: k }); };
