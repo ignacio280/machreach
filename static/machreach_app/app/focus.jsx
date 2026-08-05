@@ -722,25 +722,87 @@ function Ambience({ scene, setScene }) {
 
 /* What the finished block earned. The server already credits XP and coins on
    /focus/save — this is the receipt, which the React page never showed. */
-function RewardCard({ reward, onClose }) {
+/* The claim celebration. Full-screen overlay instead of the old inline card:
+   the numbers shown are exactly what the server answered for this claim
+   (xp_awarded / coins_awarded / minutes_saved / saved_count) — never a
+   client-side estimate. Expired claims get a muted, confetti-free variant. */
+function useBurstCount(target, duration = 900) {
+  const [value, setValue] = React.useState(0);
   React.useEffect(() => {
-    const timer = setTimeout(onClose, 12000);
+    const end = Math.max(0, Number(target) || 0);
+    if (!end) { setValue(0); return undefined; }
+    let raf, t0;
+    const step = (ts) => {
+      if (!t0) t0 = ts;
+      const p = Math.min(1, (ts - t0) / duration);
+      setValue(Math.round(end * (1 - Math.pow(2, -10 * p))));
+      if (p < 1) raf = requestAnimationFrame(step);
+      else setValue(end);
+    };
+    raf = requestAnimationFrame(step);
+    // rAF stalls in throttled/hidden tabs; the real figure must land anyway.
+    const settle = setTimeout(() => setValue(end), duration + 150);
+    return () => { cancelAnimationFrame(raf); clearTimeout(settle); };
+  }, [target]);
+  return value;
+}
+
+const BURST_COLORS = ["var(--brand)", "var(--plum)", "var(--sky)", "var(--good)", "#F7B801"];
+
+function RewardCard({ reward, onClose }) {
+  const lost = !!reward.expired;
+  const xp = useBurstCount(lost ? 0 : reward.xp);
+  React.useEffect(() => {
+    const timer = setTimeout(onClose, lost ? 5200 : 4200);
     return () => clearTimeout(timer);
   }, [reward]);
+  // One set of particles per claim; positions frozen at mount.
+  const bits = React.useRef(Array.from({ length: 18 }, (_, i) => ({
+    left: 6 + Math.random() * 88,
+    delay: Math.random() * 0.45,
+    dur: 1.6 + Math.random() * 1.4,
+    drift: -60 + Math.random() * 120,
+    spin: -420 + Math.random() * 840,
+    size: 7 + Math.random() * 7,
+    color: BURST_COLORS[i % BURST_COLORS.length],
+    round: i % 3 === 0,
+  }))).current;
+  const blocks = Number(reward.blocks) || 0;
   return (
-    <div className={"fx-reward" + (reward.expired ? " lost" : "")} role="status" aria-live="polite">
-      <span className="ico-badge" style={{ background: reward.expired ? "#FFDFE1" : "#FFF2C9" }}><IconBolt size={17} color="var(--plum)" /></span>
-      <div className="fx-reward-b">
-        <b>{reward.expired
-          ? `Perdiste el XP de ${reward.blocks || 0} bloque${(reward.blocks || 0) === 1 ? "" : "s"}`
-          : `${reward.blocks > 1 ? `${reward.blocks} bloques reclamados` : "Bloque reclamado"} · ${reward.minutes} min`}</b>
-        <span>
-          {reward.expired
-            ? "Se acabó la ventana de 30 minutos del descanso largo."
-            : `${reward.xp > 0 ? `+${reward.xp} XP` : "Sin XP en este bloque"}${reward.coins > 0 ? ` · +${reward.coins} 🪙` : ""}`}
-        </span>
+    <div className={"fx-burst" + (lost ? " lost" : "")} role="status" aria-live="polite" onClick={onClose}>
+      {!lost && bits.map((b, i) => (
+        <i key={i} className={"fx-bit" + (b.round ? " dot" : "")} style={{
+          left: b.left + "%",
+          width: b.size, height: b.round ? b.size : b.size * 0.55,
+          background: b.color,
+          animationDelay: b.delay + "s",
+          animationDuration: b.dur + "s",
+          "--drift": b.drift + "px",
+          "--spin": b.spin + "deg",
+        }} />
+      ))}
+      <div className="fx-burst-card" onClick={(e) => e.stopPropagation()}>
+        {!lost && <span className="fx-burst-rays" aria-hidden="true" />}
+        <span className="fx-burst-ico"><IconBolt size={30} color={lost ? "var(--bad)" : "var(--plum)"} /></span>
+        {lost ? (
+          <React.Fragment>
+            <div className="fx-burst-xp none">Sin XP</div>
+            <div className="fx-burst-line"><b>{`Perdiste el XP de ${blocks} bloque${blocks === 1 ? "" : "s"}`}</b></div>
+            <div className="fx-burst-sub">Se acabó la ventana de 30 minutos del descanso largo.</div>
+          </React.Fragment>
+        ) : (
+          <React.Fragment>
+            <div className={"fx-burst-xp" + (reward.xp > 0 ? "" : " none")}>{reward.xp > 0 ? `+${xp} XP` : "Sin XP en este bloque"}</div>
+            <div className="fx-burst-line">
+              <b>{blocks > 1 ? `${blocks} bloques reclamados` : "Bloque reclamado"}</b>
+              <span className="fx-burst-chip">{reward.minutes} min</span>
+              {reward.coins > 0 && <span className="fx-burst-chip coin">+{reward.coins} 🪙</span>}
+            </div>
+            <div className="fx-burst-sub">Guardado en tu cuenta.</div>
+          </React.Fragment>
+        )}
+        <button type="button" onClick={onClose} aria-label="Cerrar"><IconClose size={14} /></button>
       </div>
-      <button type="button" onClick={onClose} aria-label="Cerrar"><IconClose size={14} /></button>
     </div>
   );
 }

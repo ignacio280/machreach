@@ -128,13 +128,35 @@
 .fx.zen .fx-fields,.fx.zen .modes{max-height:0;opacity:0;overflow:hidden;margin-top:0;margin-bottom:0;pointer-events:none;padding:0;border-width:0}
 
 /* block receipt: minutes, XP and coins the finished block earned */
-.fx-reward{display:flex;align-items:center;gap:12px;padding:13px 15px;border:var(--bd);border-radius:var(--r);background:#FFF6D8;box-shadow:var(--sh1);animation:rise .3s var(--spring-b)}
-[data-theme="dark"] .fx-reward{background:color-mix(in oklab,var(--amber) 26%,var(--surface))}
-.fx-reward-b{display:flex;flex-direction:column;gap:2px;min-width:0}
-.fx-reward-b b{font-family:var(--font-display);font-size:14.5px;font-weight:800;color:var(--ink)}
-.fx-reward-b span{font-size:12.5px;font-weight:700;color:var(--ink-2)}
-.fx-reward>button{margin-left:auto;flex:none;width:26px;height:26px;display:grid;place-items:center;border-radius:50%;color:var(--ink-3)}
-.fx-reward>button:hover{background:var(--surface);color:var(--ink)}
+/* claim celebration overlay */
+.fx-burst{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;background:color-mix(in oklab,var(--ink) 26%,transparent);animation:burstScrim .25s ease;overflow:hidden}
+@keyframes burstScrim{from{opacity:0}to{opacity:1}}
+.fx-burst-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:min(320px,86vw);max-width:88vw;padding:26px 30px 22px;border:var(--bd);border-radius:calc(var(--r) + 6px);background:var(--paper);box-shadow:0 6px 0 var(--ink),0 24px 60px color-mix(in oklab,var(--ink) 35%,transparent);animation:burstPop .55s var(--spring-b)}
+@keyframes burstPop{0%{transform:scale(.6) translateY(26px);opacity:0}60%{transform:scale(1.05) translateY(-4px);opacity:1}100%{transform:scale(1) translateY(0)}}
+.fx-burst-ico{width:58px;height:58px;display:grid;place-items:center;border:var(--bd);border-radius:50%;background:#FFF2C9;box-shadow:0 3px 0 var(--ink);animation:burstIco .7s var(--spring-b) .1s backwards}
+[data-theme="dark"] .fx-burst-ico{background:color-mix(in oklab,var(--amber) 30%,var(--surface))}
+@keyframes burstIco{0%{transform:scale(0) rotate(-30deg)}70%{transform:scale(1.18) rotate(6deg)}100%{transform:scale(1) rotate(0)}}
+.fx-burst-rays{position:absolute;top:14px;width:130px;height:130px;pointer-events:none;background:conic-gradient(from 0deg,transparent 0 14deg,color-mix(in oklab,var(--brand) 45%,transparent) 14deg 18deg,transparent 18deg 40deg,color-mix(in oklab,var(--brand) 45%,transparent) 40deg 44deg,transparent 44deg 66deg,color-mix(in oklab,var(--brand) 45%,transparent) 66deg 70deg,transparent 70deg 92deg,color-mix(in oklab,var(--brand) 45%,transparent) 92deg 96deg,transparent 96deg 118deg,color-mix(in oklab,var(--brand) 45%,transparent) 118deg 122deg,transparent 122deg 144deg,color-mix(in oklab,var(--brand) 45%,transparent) 144deg 148deg,transparent 148deg 170deg,color-mix(in oklab,var(--brand) 45%,transparent) 170deg 174deg,transparent 174deg 196deg,color-mix(in oklab,var(--brand) 45%,transparent) 196deg 200deg,transparent 200deg 222deg,color-mix(in oklab,var(--brand) 45%,transparent) 222deg 226deg,transparent 226deg 248deg,color-mix(in oklab,var(--brand) 45%,transparent) 248deg 252deg,transparent 252deg 274deg,color-mix(in oklab,var(--brand) 45%,transparent) 274deg 278deg,transparent 278deg 300deg,color-mix(in oklab,var(--brand) 45%,transparent) 300deg 304deg,transparent 304deg 326deg,color-mix(in oklab,var(--brand) 45%,transparent) 326deg 330deg,transparent 330deg 360deg);-webkit-mask:radial-gradient(circle,transparent 34px,#000 35px 58px,transparent 59px);mask:radial-gradient(circle,transparent 34px,#000 35px 58px,transparent 59px);animation:burstRays 1.1s ease-out .15s backwards}
+@keyframes burstRays{0%{transform:scale(.4) rotate(-40deg);opacity:0}35%{opacity:1}100%{transform:scale(1.5) rotate(14deg);opacity:0}}
+.fx-burst-xp{font-family:var(--font-display);font-size:44px;font-weight:800;letter-spacing:-.03em;color:var(--brand);line-height:1;margin-top:6px;animation:burstXp .5s var(--spring-b) .25s backwards}
+.fx-burst-xp.none{font-size:22px;color:var(--ink-2)}
+@keyframes burstXp{0%{transform:scale(.5);opacity:0}100%{transform:scale(1);opacity:1}}
+.fx-burst-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center}
+.fx-burst-line b{font-family:var(--font-display);font-size:15px;font-weight:800;color:var(--ink)}
+.fx-burst-chip{padding:3px 9px;border:var(--bd);border-radius:999px;background:var(--paper-2);font-size:12px;font-weight:800;color:var(--ink-2)}
+.fx-burst-chip.coin{background:#FFF2C9;color:#8a5a00}
+[data-theme="dark"] .fx-burst-chip.coin{background:color-mix(in oklab,var(--amber) 30%,var(--surface));color:var(--ink)}
+.fx-burst-sub{font-size:12.5px;font-weight:700;color:var(--ink-3)}
+.fx-burst-card>button{position:absolute;top:10px;right:10px;width:26px;height:26px;display:grid;place-items:center;border-radius:50%;color:var(--ink-3)}
+.fx-burst-card>button:hover{background:var(--surface);color:var(--ink)}
+.fx-bit{position:absolute;top:-24px;border:1.5px solid var(--ink);border-radius:3px;animation:bitFall linear both;pointer-events:none}
+.fx-bit.dot{border-radius:50%}
+@keyframes bitFall{0%{transform:translate(0,0) rotate(0);opacity:1}80%{opacity:1}100%{transform:translate(var(--drift),105vh) rotate(var(--spin));opacity:0}}
+.fx-burst.lost .fx-burst-card{animation:burstPop .55s var(--spring-b),burstShake .5s ease .55s}
+@keyframes burstShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}50%{transform:translateX(6px)}75%{transform:translateX(-3px)}}
+.fx-burst.lost .fx-burst-ico{background:#FFDFE1}
+[data-theme="dark"] .fx-burst.lost .fx-burst-ico{background:color-mix(in oklab,var(--bad) 26%,var(--surface))}
+@media (prefers-reduced-motion:reduce){.fx-burst,.fx-burst *,.fx-bit{animation:none !important}}
 
 /* unclaimed blocks + the long-break claim window */
 .fx-claim{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border:var(--bd);border-radius:var(--r);background:#FFF6D8;box-shadow:0 2px 0 var(--ink);text-align:left}
@@ -146,5 +168,3 @@
 .fx-claim-b b{font-family:var(--font-display);font-size:14px;font-weight:800;color:var(--ink)}
 .fx-claim-b span{font-size:12px;font-weight:700;color:var(--ink-2)}
 .fx-claim .btn{margin-left:auto}
-.fx-reward.lost{background:#FFDFE1}
-[data-theme="dark"] .fx-reward.lost{background:color-mix(in oklab,var(--bad) 26%,var(--surface))}

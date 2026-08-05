@@ -2214,6 +2214,68 @@ def index():
     return resp
 
 
+_LANDING_STATS_CACHE: dict = {"at": 0.0, "payload": None}
+_LANDING_STATS_TTL_SECONDS = 300
+
+
+@app.route("/api/public/landing-stats")
+@limiter.limit("30 per minute")
+def public_landing_stats():
+    """Real aggregate numbers for the landing's stats strip.
+
+    The strip used to show hardcoded figures; it now shows these or nothing.
+    Aggregates only — no per-user data. Cached in-process so a landing-page
+    burst costs one query round per five minutes, not one per visitor.
+    """
+    import time as _time
+
+    now = _time.monotonic()
+    if _LANDING_STATS_CACHE["payload"] is not None and now - _LANDING_STATS_CACHE["at"] < _LANDING_STATS_TTL_SECONDS:
+        payload = _LANDING_STATS_CACHE["payload"]
+    else:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from machreach_core.db import get_db, _fetchval
+
+        # clients.last_seen_at is BIGINT epoch seconds, not a timestamp.
+        week_ago_epoch = int(_time.time()) - 7 * 86400
+        # The product's day is Chile's day — same convention as user quotas.
+        today_cl = datetime.now(ZoneInfo("America/Santiago")).date().isoformat()
+        try:
+            with get_db() as db:
+                students_week = int(_fetchval(
+                    db,
+                    "SELECT COUNT(*) FROM clients WHERE COALESCE(email_verified,0)=1 "
+                    "AND COALESCE(last_seen_at,0) >= %s",
+                    (week_ago_epoch,),
+                ) or 0)
+                minutes_today = int(_fetchval(
+                    db,
+                    "SELECT COALESCE(SUM(focus_minutes),0) FROM student_study_progress "
+                    "WHERE plan_date LIKE %s",
+                    (today_cl + "%",),
+                ) or 0)
+                universities = int(_fetchval(
+                    db,
+                    "SELECT COUNT(DISTINCT university_id) FROM clients "
+                    "WHERE university_id IS NOT NULL AND COALESCE(email_verified,0)=1",
+                ) or 0)
+            payload = {
+                "students_week": students_week,
+                "hours_today": round(minutes_today / 60, 1),
+                "universities": universities,
+            }
+            _LANDING_STATS_CACHE.update(at=now, payload=payload)
+        except Exception:
+            _log.exception("[landing-stats] aggregate query failed")
+            payload = _LANDING_STATS_CACHE["payload"]
+    if payload is None:
+        return jsonify({"ok": False}), 503
+    response = jsonify({"ok": True, **payload})
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
+
+
 @app.route("/design/")
 def design_index():
     """Index of the app-design preview pages.

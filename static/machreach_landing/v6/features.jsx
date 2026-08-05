@@ -1,14 +1,31 @@
 /* v6 Stats + Features — exact live copy */
 
+/* Real numbers or no numbers. The strip fetches live aggregates and stays
+   hidden until they arrive; if the endpoint fails there is no strip, never an
+   invented figure. */
 function StatsStrip() {
   const [ref, seen] = useReveal({ threshold: 0.25 });
-  const s1 = useCountUp(2347, seen), s2 = useCountUp(184, seen), s3 = useCountUp(12, seen), s4 = useCountUp(98, seen);
+  const [live, setLive] = React.useState(null);
+  React.useEffect(() => {
+    let on = true;
+    fetch("/api/public/landing-stats")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (on && data && data.ok) setLive(data); })
+      .catch(() => {});
+    return () => { on = false; };
+  }, []);
+  const go = seen && !!live;
+  const s1 = useCountUp(live ? live.students_week : 0, go);
+  const s2 = useCountUp(live ? live.hours_today : 0, go);
+  const s3 = useCountUp(live ? live.universities : 0, go);
+  // Nothing to brag about yet: no strip at all beats a row of zeros, and a
+  // stat that is zero right now simply stays home.
+  if (!live || !(live.students_week > 0)) return null;
   const items = [
-    { v: Math.round(s1).toLocaleString("es-CL"), l: "estudiantes activos esta semana" },
-    { v: Math.round(s2) + "h", l: "horas estudiadas hoy" },
-    { v: Math.round(s3), l: "universidades conectadas" },
-    { v: Math.round(s4) + "%", l: "satisfacción de usuarios" },
+    { v: Math.round(s1).toLocaleString("es-CL"), l: live.students_week === 1 ? "estudiante activo esta semana" : "estudiantes activos esta semana" },
   ];
+  if (live.hours_today > 0) items.push({ v: (live.hours_today < 10 ? (Math.round(s2 * 10) / 10).toLocaleString("es-CL") : Math.round(s2).toLocaleString("es-CL")) + "h", l: "horas estudiadas hoy" });
+  if (live.universities > 0) items.push({ v: Math.round(s3), l: live.universities === 1 ? "universidad conectada" : "universidades conectadas" });
   return (
     <section ref={ref} style={{ paddingTop: 0 }}>
       <div className="container">
