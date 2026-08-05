@@ -22,9 +22,7 @@ def _course(client_id, name, code, semester="VI"):
     # Mirror the app: the student is in a semester, and courses created there
     # inherit it. Several behaviours key off clients.current_semester.
     sdb.set_current_semester(client_id, semester)
-    course_id = sdb.create_manual_course(client_id, name, code)
-    sdb.set_course_semester(client_id, course_id, semester)
-    return course_id
+    return sdb.create_manual_course(client_id, name, code)
 
 
 def _exam(client_id, course_id, when):
@@ -178,22 +176,6 @@ def test_correcting_can_leave_the_courses_where_they_are(make_user):
 
     assert sdb.semester_courses(client_id, "VI") != []
     assert sdb.get_current_semester(client_id) == "VII"
-
-
-def test_a_single_course_can_be_refiled(make_user):
-    client_id = make_user("Refile", "refile@sem.test")
-    course_id = _course(client_id, "Cálculo", "MAT900", semester="VI")
-
-    assert sdb.set_course_semester(client_id, course_id, "V") is True
-    assert sdb.semester_courses(client_id, "V")[0]["id"] == course_id
-
-
-def test_a_course_belonging_to_someone_else_cannot_be_refiled(make_user):
-    mine = make_user("Mine", "mine@sem.test")
-    theirs = make_user("Theirs", "theirs@sem.test")
-    course_id = _course(theirs, "Ajeno", "AJE100")
-
-    assert sdb.set_course_semester(mine, course_id, "I") is False
 
 
 # ── Benchmarks ─────────────────────────────────────────────────────────

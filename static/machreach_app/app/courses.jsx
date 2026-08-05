@@ -298,7 +298,9 @@ function CoursesHead({ onAdd, onCorrect, onClose, data = {}, viewing, onView }) 
   return (
     <section className={"cr-head rv" + (seen ? " in" : "")} ref={ref}>
       <div>
-        <div className="pl-kicker">{data.live ? data.term_label : "2025 · segundo semestre"}</div>
+        {/* No calendar kicker here: it said "2026 · segundo semestre" next to a
+            pill saying "Semestre actual VI", and people read the two as the
+            same fact disagreeing with itself. */}
         <h1>Mis cursos</h1>
         <div className="sem">
           <span className="sem-now">
@@ -346,7 +348,6 @@ function CorrectSemesterModal({ data = {}, csrf = "", onClose, onDone }) {
 
   return (
     <Modal title="Corregir tu semestre"
-      sub="Úsalo si elegiste mal el semestre al empezar. No te pide notas: no estás terminando nada."
       onClose={onClose}
       foot={<>
         <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancelar</button>

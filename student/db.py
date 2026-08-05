@@ -2199,22 +2199,6 @@ def get_pending_course_outcomes(client_id: int, semester_label: str | None = Non
     return [dict(r) for r in rows]
 
 
-def set_course_semester(client_id: int, course_id: int, label: str) -> bool:
-    """Move one course to another semester — the fix for a course filed under
-    the wrong one, which is the only fix that actually works per course."""
-    label = (label or "").strip()
-    with get_db() as db:
-        owned = _fetchone(
-            db, "SELECT id FROM student_courses WHERE id = %s AND client_id = %s",
-            (course_id, client_id),
-        )
-        if not owned:
-            return False
-        _exec(db, "UPDATE student_courses SET semester_label = %s WHERE id = %s AND client_id = %s",
-              (label, course_id, client_id))
-    return True
-
-
 def correct_current_semester(client_id: int, label: str, move_courses: bool = True) -> dict:
     """Fix the semester the student says they are in.
 
@@ -2527,6 +2511,30 @@ def semester_close_hint(client_id: int) -> dict:
     }
 
 
+def tour_seen(client_id: int) -> bool:
+    """Whether the student has already been walked through the app."""
+    from machreach_core.db import get_mail_preferences
+
+    try:
+        prefs = json.loads(get_mail_preferences(client_id) or "{}")
+    except (TypeError, ValueError):
+        return False
+    return bool((prefs or {}).get("tour_done"))
+
+
+def mark_tour_seen(client_id: int) -> None:
+    from machreach_core.db import get_mail_preferences, update_mail_preferences
+
+    try:
+        prefs = json.loads(get_mail_preferences(client_id) or "{}")
+        if not isinstance(prefs, dict):
+            prefs = {}
+    except (TypeError, ValueError):
+        prefs = {}
+    prefs["tour_done"] = True
+    update_mail_preferences(client_id, json.dumps(prefs, separators=(",", ":")))
+
+
 def dismiss_semester_prompt(client_id: int, semester_label: str) -> None:
     from machreach_core.db import get_mail_preferences, update_mail_preferences
 
@@ -2595,13 +2603,18 @@ def create_manual_course(client_id: int, name: str, code: str = "", term: str = 
                 next_id = int(row["min_id"]) - 1
             except Exception:
                 next_id = -1
+        # A course belongs to the semester it was created in — Canvas imports
+        # and catalog joins already stamp it, and this path did not, which left
+        # hand-added courses in a semester of their own.
+        semester = ((_fetchone(db, "SELECT current_semester FROM clients WHERE id = %s",
+                               (client_id,)) or {}).get("current_semester") or "")
         return _insert_returning_id(
             db,
-            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term) "
-            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (client_id, next_id, name, code, term),
-            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (client_id, next_id, name, code, term, semester),
+            "INSERT INTO student_courses (client_id, canvas_course_id, name, code, term, semester_label) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
         )
 
 

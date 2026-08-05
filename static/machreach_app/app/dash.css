@@ -285,3 +285,24 @@
 .focus-float .ff-b b{font-family:var(--font-mono);font-weight:700;font-size:16px;letter-spacing:-.01em}
 .focus-float .ff-b small{font-family:var(--font-mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-top:3px}
 @media (max-width:760px){.focus-float{right:12px;bottom:78px}}
+
+/* ── First-run walkthrough ────────────────────────────────────────────── */
+.tour{position:fixed;inset:0;z-index:2147482000;pointer-events:none}
+.tour-veil{position:absolute;inset:0;background:rgba(20,14,30,.62);pointer-events:auto;animation:tourIn .25s var(--ease) both}
+/* A ring rather than a cut-out: it survives any layout without a mask that
+   has to be kept in sync with the page. */
+.tour-ring{position:fixed;border-radius:14px;border:3px solid var(--brand);box-shadow:0 0 0 9999px rgba(20,14,30,.0),0 0 0 4px rgba(255,106,43,.35),0 10px 30px rgba(0,0,0,.35);background:rgba(255,255,255,.10);pointer-events:none;transition:top .22s var(--ease),left .22s var(--ease),width .22s var(--ease),height .22s var(--ease)}
+.tour-card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 32px));background:var(--surface);border:var(--bd);border-radius:var(--r-lg);box-shadow:var(--sh3);padding:20px 22px;pointer-events:auto;animation:tourIn .25s var(--ease) both}
+.tour-card.anchored{transform:none}
+.tour-step{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.tour-card h3{font-size:21px;margin:6px 0 8px;letter-spacing:-.02em}
+.tour-card p{font-size:14px;line-height:1.55;color:var(--ink-2);font-weight:600;margin:0 0 10px}
+.tour-card p b{color:var(--ink)}
+.tour-note{font-size:12.5px !important;color:var(--ink-3) !important}
+.tour-link{display:flex;gap:8px;margin:10px 0 4px}
+.tour-link input{flex:1;min-width:0;padding:10px 12px;border:var(--bd);border-radius:var(--r-sm);background:var(--surface-2);font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--ink)}
+.tour-foot{display:flex;align-items:center;gap:9px;margin-top:14px}
+.tour-skip{margin-right:auto;background:none;border:0;color:var(--ink-3);font-size:12.5px;font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.tour-skip:hover{color:var(--ink)}
+@keyframes tourIn{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+@media (max-width:900px){.tour-card,.tour-card.anchored{left:50%;top:auto;bottom:18px;transform:translateX(-50%)}}

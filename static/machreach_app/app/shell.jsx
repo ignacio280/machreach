@@ -51,7 +51,7 @@ const NAV_SOCIAL = [
 function NavItem({ n, active, plus }) {
   const locked = n.plusOnly && !plus;
   return (
-    <a href={n.href || "#"} className={"nv" + (active === n.id ? " on" : "")}>
+    <a href={n.href || "#"} data-tour={n.id} className={"nv" + (active === n.id ? " on" : "")}>
       <n.Ic size={18} />{n.label}
       {locked ? <span className="lockic"><IconLock size={14} /></span> : n.tick ? <span className="tick">{n.tick}</span> : null}
     </a>
@@ -251,8 +251,148 @@ function Topbar({ title, sub, streak, xp, coins, freezes, plus = false, tweaks, 
       </div>
       <GenerationWatcher />
       <FocusFloat />
+      {SHELL_DATA.show_tour && <Tour />}
     </header>
   );
+}
+
+
+/* ---- First-run walkthrough ---------------------------------------------
+   Shown once, on the page the student lands on straight after setup. Each
+   step spotlights the real sidebar entry it is talking about rather than a
+   screenshot, so what they learn is where things actually are. It ends on the
+   referral, which is the only way a free account can try the Plus tools. */
+const TOUR_STEPS = [
+  {
+    title: "Bienvenido a MachReach",
+    body: "Un minuto y sabes dónde está todo. Puedes saltarlo cuando quieras.",
+  },
+  {
+    anchor: "home", title: "Inicio",
+    body: "Tu misión del día: qué te toca estudiar hoy, tu racha y lo que viene esta semana.",
+  },
+  {
+    anchor: "focus", title: "Enfoque",
+    body: "El temporizador de estudio. Con la extensión instalada bloquea los sitios que te distraen mientras corre, y cada bloque terminado te da XP y monedas.",
+  },
+  {
+    anchor: "courses", title: "Mis cursos",
+    body: "Tus ramos, sus evaluaciones y el material que subes. Cuando termina el semestre, aquí lo cierras y guardas tus notas finales.",
+  },
+  {
+    anchor: "tools", title: "Herramientas",
+    body: "Quizzes y flashcards generados con IA desde tu propio material: subes la guía y practicas con ella.",
+  },
+  {
+    anchor: "notas", title: "Notas",
+    body: "Tu planilla en escala 1,0 a 7,0. Te dice cuánto necesitas en lo que queda para aprobar.",
+  },
+  {
+    anchor: "rank", title: "Ranking",
+    body: "Compites por horas de estudio con tu país, tu universidad y tu carrera. Las notas nunca afectan tu posición: solo el estudio real.",
+  },
+  {
+    anchor: "friends", title: "Amigos",
+    body: "Tu liga privada. Ves quién está estudiando ahora y compites solo con ellos.",
+  },
+  {
+    anchor: "shop", title: "Tienda",
+    body: "Las monedas que ganas estudiando se gastan aquí: banderas, portadas y congeladores para no perder la racha.",
+  },
+  {
+    anchor: "plan", title: "Plan y Analíticas", plusPitch: true,
+    body: "Estos dos son de Plus: el plan de estudio que la IA arma según la dificultad, la fecha y la ponderación de cada prueba, y las analíticas de tu rendimiento real.",
+  },
+  { final: true, title: "Pruébalo gratis invitando a un amigo" },
+];
+
+function Tour() {
+  const [step, setStep] = React.useState(0);
+  const [rect, setRect] = React.useState(null);
+  const [done, setDone] = React.useState(false);
+  const current = TOUR_STEPS[step];
+
+  React.useEffect(() => {
+    const measure = () => {
+      if (!current.anchor) return setRect(null);
+      const node = document.querySelector(`[data-tour="${current.anchor}"]`);
+      // On a phone the sidebar is not on screen; the card then stands alone
+      // rather than pointing at nothing.
+      if (!node || !node.getClientRects().length) return setRect(null);
+      const box = node.getBoundingClientRect();
+      setRect({ top: box.top, left: box.left, width: box.width, height: box.height });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [step]);
+
+  const finish = () => {
+    setDone(true);
+    try {
+      fetch("/api/student/tour/done", {
+        method: "POST", headers: { "X-CSRFToken": SHELL_DATA.csrf || "" },
+      });
+    } catch (e) { /* the tour is not worth blocking the app over */ }
+  };
+
+  if (done) return null;
+  const last = step === TOUR_STEPS.length - 1;
+  // Rendered into <body>: the topbar has a backdrop-filter, which makes it the
+  // containing block for position:fixed, and the spotlight would be measured
+  // against the viewport but drawn against the header.
+  const card = rect
+    ? { top: Math.min(window.innerHeight - 260, Math.max(16, rect.top - 8)), left: rect.left + rect.width + 18 }
+    : null;
+
+  return ReactDOM.createPortal((
+    <div className="tour" role="dialog" aria-modal="true" aria-label="Tutorial">
+      <div className="tour-veil" onClick={finish} />
+      {rect && (
+        <div className="tour-ring" style={{
+          top: rect.top - 6, left: rect.left - 6,
+          width: rect.width + 12, height: rect.height + 12,
+        }} />
+      )}
+      <div className={"tour-card" + (card ? " anchored" : "")}
+        style={card ? { top: card.top, left: card.left } : undefined}>
+        <div className="tour-step">Paso {step + 1} de {TOUR_STEPS.length}</div>
+        <h3>{current.title}</h3>
+        {current.final ? (
+          <>
+            <p>Plan y Analíticas son de Plus. No hace falta pagar para probarlos:
+               <b> cada amigo que se une con tu enlace te da 7 días de Plus gratis.</b></p>
+            {SHELL_DATA.referral_link && (
+              <div className="tour-link">
+                <input readOnly value={SHELL_DATA.referral_link}
+                  onFocus={(e) => e.target.select()} />
+                <button type="button" className="btn btn-primary btn-sm"
+                  onClick={() => { try { navigator.clipboard.writeText(SHELL_DATA.referral_link); } catch (e) {} }}>
+                  Copiar
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <p>{current.body}</p>
+        )}
+        {current.plusPitch && <p className="tour-note">Sin Plus se ven con candado — en un momento te digo cómo probarlos gratis.</p>}
+        <div className="tour-foot">
+          <button type="button" className="tour-skip" onClick={finish}>
+            {last ? "Cerrar" : "Saltar tutorial"}
+          </button>
+          {step > 0 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStep(step - 1)}>Atrás</button>}
+          {last
+            ? <a className="btn btn-primary btn-sm" href="/student/friends" onClick={finish}>Invitar a un amigo</a>
+            : <button type="button" className="btn btn-primary btn-sm" onClick={() => setStep(step + 1)}>Siguiente</button>}
+        </div>
+      </div>
+    </div>
+  ), document.body);
 }
 
 function TabBar({ active = "home" }) {

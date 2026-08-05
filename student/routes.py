@@ -4174,18 +4174,13 @@ Return this JSON shape:
         return jsonify(result), (200 if result.get("ok") else 400)
 
 
-    @app.route("/api/student/courses/<int:course_id>/semester", methods=["POST"])
-    def student_course_semester(course_id: int):
-        """Move a single course to another semester."""
+    @app.route("/api/student/tour/done", methods=["POST"])
+    def student_tour_done():
+        """Remember that the walkthrough has been given."""
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
-        data = request.get_json(silent=True) or {}
-        label = str(data.get("label") or "").strip()
-        if not label:
-            return jsonify({"error": "Elige un semestre."}), 400
-        if not sdb.set_course_semester(_cid(), course_id, label):
-            return jsonify({"error": "Curso no encontrado."}), 404
-        return jsonify({"ok": True, "course_id": course_id, "semester": label})
+        sdb.mark_tour_seen(_cid())
+        return jsonify({"ok": True})
 
 
     @app.route("/api/student/semester/close", methods=["POST"])
@@ -8766,6 +8761,7 @@ Material:
         except Exception:
             _wallet = {}
 
+        from machreach_core.config import BASE_URL
         _dashboard_data = {
             "live": True, "lang": _lang, "plus": _dash_is_plus,
             "title": "Home" if _is_en else "Inicio", "sub": "Student dashboard" if _is_en else "Panel del estudiante",
@@ -8778,6 +8774,11 @@ Material:
             ),
             "avatar_color": _student_avatar_color(cid),
             "csrf": generate_csrf(),
+            "show_tour": not sdb.tour_seen(cid),
+            "referral_link": (
+                f'{(BASE_URL or request.url_root or "").rstrip("/")}'
+                f"/register?ref={sdb.get_or_create_referral_code(cid)}"
+            ),
             "mission": {"eyebrow": _mission_eye, "headline": f'{_hello}, {_esc(_first_name)}! {_headline}', "copy": "Your real courses, deadlines and study history shape today’s mission." if _is_en else "Tus cursos, fechas y sesiones reales construyen la misión de hoy.", "focus_label": "Start focus" if _is_en else "Empezar enfoque", "plan_label": "View full plan" if _is_en else "Ver plan completo", "quests": _dash_quests},
             "stats": [
                 {"label": "Total studied" if _is_en else "Total estudiado", "value": round(_total_mins / 60), "suffix": "h", "sub": f'{_total_sessions} {"sessions" if _is_en else "sesiones"}', "deco": "📚"},
