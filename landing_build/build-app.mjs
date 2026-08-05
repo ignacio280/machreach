@@ -81,6 +81,7 @@ const PAGE_DEPS = {
   quiz: {
     css: ["dash.css", "focus.css", "plan.css", "quiz.css"],
     jsx: ["shell.jsx", "lock.jsx", "quiz.jsx"],
+    live: true,
   },
   perfil: {
     css: ["dash.css", "focus.css", "plan.css", "friends.css", "profile.css"],
@@ -199,6 +200,14 @@ for (const id of pages) {
     minify: true, legalComments: "none",
   });
   writeFileSync(join(APP, `${id}.bundle.min.js`), out.code, "utf-8");
+
+  // A live-only page has no mock to preview: it renders one real record from
+  // the server payload. Only its bundle ships; there is no /design/<id> route
+  // for the prod.html to serve, so neither is built.
+  if (deps.live) {
+    console.log(`${id}: bundle ${out.code.length}B (live-only, no preview page)`);
+    continue;
+  }
 
   const markup = prerender(out.code);
 

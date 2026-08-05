@@ -29,7 +29,6 @@ _PAGES: dict[str, str] = {
     "plan": "Plan",
     "notas": "Notas",
     "herramientas": "Flashcards y quizzes",
-    "quiz": "Quiz en curso",
     "flashcards": "Estudiando deck",
     "ranking": "Ranking",
     "amigos": "Amigos",
@@ -45,6 +44,9 @@ _PAGES: dict[str, str] = {
     "verificar": "Verificar correo",
 }
 
+# Stylesheets each page needs when served live. A slug may appear here without
+# appearing in _PAGES: `quiz` is a live-only page — it renders one real quiz,
+# so there is no mock worth previewing under /design.
 _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "amigos": ("dash.css", "focus.css", "plan.css", "rank.css", "friends.css"),
     "analiticas": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css"),

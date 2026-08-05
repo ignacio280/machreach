@@ -326,7 +326,7 @@ function QuizResult({ quiz, answers, plus, elapsed, onRestart, onWrongOnly }) {
 
       <div className="qz-acts">
         <button className="btn btn-primary" onClick={onRestart}><QzRetry size={17} />Repetir quiz</button>
-        {wrong.length > 0 && <button className="btn btn-ghost" onClick={() => onWrongOnly(wrong.map((q) => q.id))}>Solo las {wrong.length} falladas</button>}
+        {wrong.length > 0 && <button className="btn btn-ghost" onClick={() => onWrongOnly(wrong.map((q) => q.id))}>{wrong.length === 1 ? "Solo la fallada" : `Solo las ${wrong.length} falladas`}</button>}
         <span className="sp" />
         <a className="btn btn-ghost" href="/student/quizzes">Volver a quizzes</a>
       </div>
