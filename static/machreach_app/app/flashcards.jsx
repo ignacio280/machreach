@@ -57,22 +57,21 @@ function FcHead({ mode, setMode, count, deck, live }) {
   );
 }
 
-function FcStudy({ cards, plus, onDone, srs, live }) {
+function FcStudy({ cards, onDone, live }) {
   const [i, setI] = React.useState(0);
   const [flip, setFlip] = React.useState(false);
   const [log, setLog] = React.useState({});
   const card = cards[i];
   const started = React.useRef(Date.now()).current;
 
-  const mark = React.useCallback((ok, quality) => {
+  const mark = React.useCallback((ok) => {
     if (!card) return;
     if (live) {
       // Practice progress: a dropped request costs the student their history,
       // so it is fired per card rather than batched at the end of the round.
-      const payload = quality === undefined
-        ? { card_id: card.id, correct: !!ok }
-        : { card_id: card.id, quality };
-      fcSend("/api/student/flashcards/progress", { body: payload }).catch(() => {});
+      // Spaced repetition still runs — the server reads this yes/no as an SM-2
+      // quality of 4 or 1 and schedules the card from there.
+      fcSend("/api/student/flashcards/progress", { body: { card_id: card.id, correct: !!ok } }).catch(() => {});
     }
     setLog((l) => ({ ...l, [card.id]: ok }));
     setFlip(false);
@@ -84,12 +83,12 @@ function FcStudy({ cards, plus, onDone, srs, live }) {
     const k = (e) => {
       if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
       if (e.code === "Space") { e.preventDefault(); setFlip((f) => !f); }
-      if (e.key === "1") mark(false, srs && plus ? 0 : undefined);
-      if (e.key === "2") mark(true, srs && plus ? 4 : undefined);
+      if (e.key === "1") mark(false);
+      if (e.key === "2") mark(true);
     };
     addEventListener("keydown", k);
     return () => removeEventListener("keydown", k);
-  }, [mark, srs, plus]);
+  }, [mark]);
 
   if (!card) return null;
   const done = Object.keys(log).length;
@@ -117,19 +116,10 @@ function FcStudy({ cards, plus, onDone, srs, live }) {
         </button>
       </div>
 
-      {srs && plus ? (
-        <div className="fc-srs">
-          <button className="q0" onClick={() => mark(false, 0)}><b>Otra vez</b><span>&lt; 1 min</span></button>
-          <button className="q3" onClick={() => mark(true, 3)}><b>Difícil</b><span>en 2 días</span></button>
-          <button onClick={() => mark(true, 4)}><b>Bien</b><span>en 5 días</span></button>
-          <button className="q5" onClick={() => mark(true, 5)}><b>Fácil</b><span>en 12 días</span></button>
-        </div>
-      ) : (
-        <div className="fc-acts">
-          <button className="fc-btn no" onClick={() => mark(false)}><IconClose size={17} />No la sabía<kbd>1</kbd></button>
-          <button className="fc-btn yes" onClick={() => mark(true)}><IconCheck size={19} />La sabía<kbd>2</kbd></button>
-        </div>
-      )}
+      <div className="fc-acts">
+        <button className="fc-btn no" onClick={() => mark(false)}><IconClose size={17} />No la sabía<kbd>1</kbd></button>
+        <button className="fc-btn yes" onClick={() => mark(true)}><IconCheck size={19} />La sabía<kbd>2</kbd></button>
+      </div>
 
       <p className="fc-keys"><kbd>Espacio</kbd> girar · <kbd>1</kbd> fallé · <kbd>2</kbd> acerté</p>
     </>
@@ -246,7 +236,7 @@ function FcEdit({ cards, setCards, deckId, live }) {
   );
 }
 
-function FlashcardsPage({ view = "study", plus = true, srs = true, data = {} }) {
+function FlashcardsPage({ view = "study", plus = true, data = {} }) {
   const live = !!data.live;
   const deck = live
     ? { title: data.deck?.title || "Deck", course: data.deck?.course || "", id: data.deck?.id }
@@ -261,8 +251,6 @@ function FlashcardsPage({ view = "study", plus = true, srs = true, data = {} }) 
   const [seconds, setSeconds] = React.useState(252);
   const [round, setRound] = React.useState(0);
   const [pool, setPool] = React.useState(initial);
-  // Spaced repetition is the Plus behaviour; free accounts grade with two buttons.
-  const srsOn = live ? !!plus : srs;
 
   const finish = (l, secs) => { setLog(l); if (secs !== undefined) setSeconds(secs); };
 
@@ -284,7 +272,7 @@ function FlashcardsPage({ view = "study", plus = true, srs = true, data = {} }) 
           onAgain={() => { setPool(cards); setLog(null); setRound(round + 1); }}
           onWrong={() => { setPool(pool.filter((c) => log[c.id] === false)); setLog(null); setRound(round + 1); }} />
       ) : (
-        <FcStudy key={round} cards={pool} plus={plus} srs={srsOn} live={live} onDone={finish} />
+        <FcStudy key={round} cards={pool} live={live} onDone={finish} />
       )}
     </div>
   );

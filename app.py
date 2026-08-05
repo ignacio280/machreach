@@ -472,6 +472,107 @@ def _safe_admin_next(value: str | None) -> str:
     return candidate if candidate.startswith("/admin") and not candidate.startswith("//") else "/admin"
 
 
+# ── Admin shell ────────────────────────────────────────────────────────────
+#
+# Every admin page used to be an island: one breadcrumb back to /admin, and the
+# only list of sections lived on /admin itself. Moving between two of them meant
+# going back first. The sections are declared once here and every page renders
+# the same bar, so any section is one click from any other.
+
+_ADMIN_SECTIONS: tuple[tuple[str, str, str], ...] = (
+    ("/admin",                        "Panel",     "\U0001F4E3"),
+    ("/admin/growth",                 "Usuarios",  "\U0001F4C8"),
+    ("/admin/analytics",              "Analytics", "\U0001F4CA"),
+    ("/admin/jobs",                   "Jobs",      "⚙️"),
+    ("/admin/courses",                "Cursos",    "\U0001F393"),
+    ("/admin/leaderboard-winners-test", "Ganadores", "\U0001F3C6"),
+)
+
+# Security utilities. Separated because they are things you do, not places you
+# browse — and because putting "rotate MFA" beside "Usuarios" invites a misclick.
+_ADMIN_TOOLS: tuple[tuple[str, str], ...] = (
+    ("/admin/reauth",     "Confirmar acciones"),
+    ("/admin/mfa/rotate", "Rotar MFA"),
+)
+
+_ADMIN_SHELL_CSS = """
+<style>
+  /* Colours come from the layout's variables so the bar follows the app if it
+     ever gains a dark theme; the literals are only fallbacks.
+
+     Not sticky on purpose: the layout sets `overflow-x:hidden` on body, which
+     computes overflow-y to `auto` and makes body a scroll container that never
+     scrolls — position:sticky inside it would silently never engage. Fixing
+     that means touching global layout CSS, which is not worth it for a bar
+     that already sits at the top of every page. */
+  .adm-bar{margin:0 -4px 18px;padding:0 4px 12px;border-bottom:1px solid var(--border,#E2DCCC)}
+  .adm-bar-in{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .adm-brand{display:inline-flex;align-items:baseline;gap:7px;font-family:'Bricolage Grotesque',sans-serif;
+    font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--text,#1A1A1F);text-decoration:none;flex:none}
+  .adm-brand span{color:#FF7A3D}
+  .adm-brand small{font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--text-muted,#77756F);border:1px solid var(--border,#E2DCCC);border-radius:999px;
+    padding:2px 7px;background:var(--card,#fff)}
+  .adm-tabs{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+  .adm-tab{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:999px;
+    border:1px solid var(--border,#E2DCCC);background:var(--card,#fff);color:var(--text-secondary,#4E4852);
+    font-size:13.5px;font-weight:700;text-decoration:none;white-space:nowrap;
+    transition:transform .15s ease,box-shadow .15s ease,background .15s ease,color .15s ease}
+  .adm-tab:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(20,18,30,.08);color:var(--text,#1A1A1F)}
+  .adm-tab.on{background:var(--text,#1A1A1F);border-color:var(--text,#1A1A1F);color:var(--card,#fff)}
+  .adm-tab.on:hover{transform:none;box-shadow:none;color:var(--card,#fff)}
+  .adm-tab i{font-style:normal;font-size:13px;line-height:1}
+  .adm-side{display:flex;gap:6px;flex-wrap:wrap;flex:none}
+  .adm-side a{display:inline-flex;align-items:center;padding:6px 11px;border-radius:999px;
+    border:1px dashed var(--border,#E2DCCC);background:transparent;color:var(--text-muted,#77756F);
+    font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;transition:.15s ease}
+  .adm-side a:hover{border-style:solid;border-color:#FF7A3D;color:#FF7A3D;background:var(--card,#fff)}
+  .adm-side a.exit{color:var(--text-secondary,#4E4852)}
+  .adm-head{margin:0 0 18px}
+  .adm-head h1{font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(25px,3.2vw,33px);
+    font-weight:700;letter-spacing:-.025em;line-height:1.05;margin:0;color:var(--text,#1A1A1F)}
+  .adm-head p{margin:7px 0 0;color:var(--text-muted,#77756F);font-size:14px;line-height:1.5;max-width:74ch}
+  @media (max-width:760px){
+    .adm-bar{margin-bottom:14px}
+    .adm-bar-in{gap:10px}
+    /* Brand, tabs and tools each take their own row: sharing one leaves the
+       tabs a sliver to scroll inside. */
+    .adm-brand{flex-basis:100%}
+    .adm-tabs{flex-basis:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+    .adm-tabs::-webkit-scrollbar{display:none}
+    .adm-side{flex-basis:100%}
+  }
+  @media (prefers-reduced-motion:reduce){.adm-tab{transition:none}.adm-tab:hover{transform:none}}
+</style>
+"""
+
+
+def _admin_shell(active: str, heading: str, subtitle: str = "", body: str = "") -> str:
+    """Wrap an admin page in the shared nav + header.
+
+    `active` is the section path, so the bar highlights where you are. Pages
+    that are not sections (a delete confirmation, MFA rotation) pass the
+    section they belong under, or "" for none.
+    """
+    tabs = "".join(
+        f'<a class="adm-tab{" on" if path == active else ""}" href="{path}">'
+        f'<i>{icon}</i>{_esc(label)}</a>'
+        for path, label, icon in _ADMIN_SECTIONS
+    )
+    tools = "".join(
+        f'<a href="{path}">{_esc(label)}</a>' for path, label in _ADMIN_TOOLS
+    )
+    return f"""{_ADMIN_SHELL_CSS}
+    <div class="adm-bar"><div class="adm-bar-in">
+      <a class="adm-brand" href="/admin">Mach<span>Reach</span> <small>Admin</small></a>
+      <nav class="adm-tabs">{tabs}</nav>
+      <div class="adm-side">{tools}<a class="exit" href="/student">&larr; Volver a la app</a></div>
+    </div></div>
+    <div class="adm-head"><h1>{heading}</h1>
+      {f'<p>{subtitle}</p>' if subtitle else ''}</div>
+    {body}"""
+
+
 @app.before_request
 def _protect_admin_routes():
     if not request.path.startswith("/admin"):
@@ -623,9 +724,8 @@ def admin_mfa_rotate():
             _log_admin_action("mfa_rotated")
             flash(("success", "Authenticator removed. Enrol a new one to continue."))
             return redirect(url_for("admin_mfa_setup"))
-    return _render("Rotate administrator MFA", f"""
-    <div class="card" style="max-width:620px;margin:40px auto;">
-      <h1>Rotate administrator MFA</h1>
+    return _render("Rotate administrator MFA", _admin_shell("", "\U0001F501 Rotar MFA", "", f"""
+    <div class="card" style="max-width:620px;margin:0 auto;">
       <style>
         .mfa-go {{ display:inline-flex; align-items:center; gap:8px; padding:11px 18px; border:0;
           border-radius:999px; background:#FF7A3D; color:#fff; font-weight:800; font-size:14px; cursor:pointer; }}
@@ -644,7 +744,7 @@ def admin_mfa_rotate():
         <a class="btn btn-outline" href="/admin" style="margin-left:8px;">Cancel</a>
       </form>
     </div>
-    """, active_page="admin")
+    """), active_page="admin")
 
 
 @app.route("/admin/mfa/verify", methods=["GET", "POST"])
@@ -697,10 +797,8 @@ def admin_reauthenticate():
             _log_admin_action("reauthenticated")
             return redirect(_safe_admin_next(request.form.get("next")))
         error = "Password or authenticator code is incorrect."
-    return _render("Confirm administrator action", f"""
-    <div class="card" style="max-width:520px;margin:40px auto;">
-      <h1>Confirm this administrator action</h1>
-      <p>Dangerous actions require your password and current authenticator code.</p>
+    return _render("Confirm administrator action", _admin_shell("", "\U0001F512 Confirmar acción", "Las acciones peligrosas piden tu contraseña y el código actual del autenticador.", f"""
+    <div class="card" style="max-width:520px;margin:0 auto;">
       {'<div class="alert alert-red">' + _esc(error) + '</div>' if error else ''}
       <form method="post">
         {_csrf_hidden_input()}
@@ -710,7 +808,7 @@ def admin_reauthenticate():
         <button class="btn btn-primary" type="submit">Confirm for 10 minutes</button>
       </form>
     </div>
-    """, active_page="admin")
+    """), active_page="admin")
 
 
 @app.route("/admin/courses", methods=["GET", "POST"])
@@ -781,17 +879,14 @@ def admin_courses():
         """
         for row in catalog["recoverable"]
     ) or '<tr><td colspan="5">No recoverable courses.</td></tr>'
-    return _render("Admin courses", f"""
-      <div class="breadcrumb"><a href="/admin">Admin</a> / Courses</div>
-      <div class="page-header"><h1>Course administration</h1>
-      <p class="subtitle">Courses are ownerless. Deletion is audited and recoverable for 30 days.</p></div>
+    return _render("Admin courses", _admin_shell("/admin/courses", "\U0001F393 Cursos", "Los cursos no tienen dueño. Borrarlos queda auditado y es recuperable por 30 días.", f"""
       <div class="card"><div class="card-header"><h2>Active courses</h2></div>
       <div style="overflow:auto"><table><thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Members</th><th>Delete</th></tr></thead>
       <tbody>{active_rows}</tbody></table></div></div>
       <div class="card"><div class="card-header"><h2>Recovery window</h2></div>
       <div style="overflow:auto"><table><thead><tr><th>Deletion</th><th>Code</th><th>Name</th><th>Recover until</th><th></th></tr></thead>
       <tbody>{recovery_rows}</tbody></table></div></div>
-    """, active_page="admin")
+    """), active_page="admin")
 
 
 _PRESENCE_LAST_TOUCH: dict[int, int] = {}  # cid -> last unix-second we wrote a heartbeat
@@ -3128,21 +3223,7 @@ def admin_dashboard():
         for u in users
     )
 
-    return _render("Admin", f"""
-    <div class="breadcrumb"><a href="/dashboard">Dashboard</a> / Admin</div>
-    <div class="page-header">
-      <h1>&#128227; Admin</h1>
-      <p class="subtitle">Broadcast to users and manage accounts. Access comes only from database administrator roles and is audited.</p>
-    </div>
-    <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;">
-      <a class="btn btn-primary btn-sm" href="/admin/growth">&#128200; Usuarios, referidos y pagos</a>
-      <a class="btn btn-outline btn-sm" href="/admin/analytics">&#128202; Analytics de producto</a>
-      <a class="btn btn-outline btn-sm" href="/admin/jobs">&#9881; Jobs & worker</a>
-      <a class="btn btn-outline btn-sm" href="/admin/courses">&#127891; Courses</a>
-      <a class="btn btn-outline btn-sm" href="/admin/leaderboard-winners-test">&#127942; Preview monthly leaderboard winners email</a>
-      <a class="btn btn-outline btn-sm" href="/admin/reauth">&#128274; Confirm dangerous actions</a>
-      <a class="btn btn-outline btn-sm" href="/admin/mfa/rotate">&#128257; Rotate administrator MFA</a>
-    </div>
+    return _render("Admin", _admin_shell("/admin", "Panel", "Envía un correo a todos los usuarios y administra cuentas. El acceso viene solo de la base de datos y queda auditado.", f"""
     {'<div class="alert alert-red" style="margin-bottom:16px;">' + _esc(error_msg) + '</div>' if error_msg else ''}
     <div class="card" style="max-width:820px;">
       <div class="card-header"><h2>Send Email to All Users</h2></div>
@@ -3176,7 +3257,7 @@ def admin_dashboard():
         </tbody>
       </table>
     </div>
-    """, active_page="admin", wide=True)
+    """), active_page="admin", wide=True)
 
 
 _ANALYTICS_TABLE_READY = False
@@ -3487,8 +3568,6 @@ def admin_jobs():
       .jobs-table code {{ font-size:11px; white-space:normal; }}
     </style>
     <div class="admin-jobs">
-      <div class="breadcrumb"><a href="/admin">Admin</a> / Jobs</div>
-      <div class="page-header"><h1>&#9881; Jobs & worker</h1><p class="subtitle">Background quiz and flashcard generation, retries, worker heartbeat, signups and payment fulfillment.</p></div>
       {'<div class="alert alert-red">' + _esc(error_msg) + '</div>' if error_msg else ''}
       <div class="admin-grid">{cards}</div>
       <div class="admin-panel">
@@ -3503,7 +3582,11 @@ def admin_jobs():
       <div class="admin-panel"><h2>Recent coin-pack orders</h2>{_simple_table(["Order","Client","Email","Pack","Coins","Created"], coin_orders, ["order_id","client_id","email","pack_key","coins_credited","created_at"], "No coin-pack orders recorded yet.")}</div>
     </div>
     """
-    return _render("Admin jobs", body, active_page="admin", wide=True)
+    return _render("Admin jobs", _admin_shell(
+        "/admin/jobs", "⚙️ Jobs & worker",
+        "Generación de quizzes y flashcards en segundo plano, reintentos, latido del worker, registros y cobros.",
+        body,
+    ), active_page="admin", wide=True)
 
 
 def _current_process_rss_mb() -> float | None:
@@ -3880,8 +3963,6 @@ def admin_product_analytics():
       @media (max-width: 900px) {{ .admin-chart-grid {{ grid-template-columns:1fr; }} .admin-bar-row {{ grid-template-columns:1fr; }} }}
     </style>
     <div class="admin-analytics">
-      <div class="breadcrumb"><a href="/admin">Admin</a> / Analytics</div>
-      <div class="page-header"><h1>&#128202; Analytics de producto</h1><p class="subtitle">Tráfico, uso de IA, estudio real y señales para mejorar Free y Plus.</p></div>
       <div class="admin-grid">{card_html}</div>
       {charts_html}
       <div class="admin-panel">
@@ -3896,7 +3977,11 @@ def admin_product_analytics():
       <div class="admin-panel"><h2>Reportes individuales de ramos</h2>{table(["Usuario","Correo","Curso","Código","Resultado","Horas estudiadas","Reportado"], course_outcome_reports, ["user_name","user_email","course_name","course_code","result","total_focus_hours","reported_at"])}</div>
     </div>
     """
-    return _render("Admin analytics", body, active_page="admin", wide=True)
+    return _render("Admin analytics", _admin_shell(
+        "/admin/analytics", "\U0001F4CA Analytics de producto",
+        "Tráfico, uso de IA, estudio real y señales para mejorar Free y Plus.",
+        body,
+    ), active_page="admin", wide=True)
 
 
 @app.route("/admin/growth/delete/<int:target_id>", methods=["GET", "POST"])
@@ -4144,11 +4229,6 @@ def admin_growth():
       .spark span {{ flex:1; background:#FF7A3D; border-radius:3px 3px 0 0; min-height:3px; }}
     </style>
     <div class="admin-growth">
-      <div class="breadcrumb"><a href="/admin">Admin</a> / Usuarios y referidos</div>
-      <div class="page-header">
-        <h1>&#128200; Usuarios, referidos y pagos</h1>
-        <p class="subtitle">Quién se registró, a quién trajo con su enlace y quién terminó pagando.</p>
-      </div>
       <div class="admin-grid">{cards}</div>
       <div class="admin-panel">
         <h2>Altas por día · 30 días</h2>
@@ -4176,7 +4256,11 @@ def admin_growth():
       </div>
     </div>
     """
-    return _render("Admin crecimiento", body, active_page="admin", wide=True)
+    return _render("Admin crecimiento", _admin_shell(
+        "/admin/growth", "\U0001F4C8 Usuarios, referidos y pagos",
+        "Quién se registró, a quién trajo con su enlace y quién terminó pagando.",
+        body,
+    ), active_page="admin", wide=True)
 
 
 @app.route("/admin/leaderboard-winners-test", methods=["GET", "POST"])
@@ -4297,7 +4381,11 @@ def admin_leaderboard_winners_test():
     )
 
     body = nav + "".join(sections)
-    return _render("Monthly leaderboard winners", body, active_page="admin", wide=True)
+    return _render("Monthly leaderboard winners", _admin_shell(
+        "/admin/leaderboard-winners-test", "\U0001F3C6 Ganadores del mes",
+        "Previsualiza el correo mensual de ganadores antes de enviarlo.",
+        body,
+    ), active_page="admin", wide=True)
 
 
 # ---------------------------------------------------------------------------

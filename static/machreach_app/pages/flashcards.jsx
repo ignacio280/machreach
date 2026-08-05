@@ -10,8 +10,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "light",
   "accent": "coral",
   "plus": true,
-  "view": "study",
-  "srs": false
+  "view": "study"
 }/*EDITMODE-END*/;
 
 function App() {
@@ -30,8 +29,8 @@ function App() {
       <div>
         <Topbar title={data.title || PAGE_TITLE} sub={data.sub || PAGE_SUB} streak={data.streak ?? "17"} xp={data.xp || "4.180"} coins={data.coins ?? "320"} avatar={data.avatar || "MR"} plus={plus} tweaks={tweaks} setTweak={setTweak} />
         <main className="page">
-          <FlashcardsPage key={data.live ? "live" : tweaks.view + tweaks.plus + tweaks.srs}
-            view={tweaks.view} plus={plus} srs={!!tweaks.srs} data={data} />
+          <FlashcardsPage key={data.live ? "live" : tweaks.view + tweaks.plus}
+            view={tweaks.view} plus={plus} data={data} />
         </main>
       </div>
       <TabBar active={PAGE_ID} />
@@ -40,7 +39,6 @@ function App() {
         <TweakSection label="Vista">
           <TweakSelect label="Momento" value={tweaks.view} onChange={(v) => setTweak("view", v)}
             options={[{ value: "study", label: "Estudiando" }, { value: "done", label: "Fin de la vuelta" }, { value: "edit", label: "Editando tarjetas" }]} />
-          <TweakToggle label="Calificación SRS (4 botones)" value={!!tweaks.srs} onChange={(v) => setTweak("srs", v)} />
         </TweakSection>
         <PlanTweak plus={plus} setTweak={setTweak} />
         <TweakSection label="Tema">
