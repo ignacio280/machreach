@@ -59,21 +59,7 @@ app.secret_key = SECRET_KEY
 # One string that changes exactly once per deploy, used to key client-side
 # caches. Render exposes the commit; locally there is no deploy, so fall back to
 # the process start time, which changes on every restart and keeps dev honest.
-def resolve_deploy_version(commit: str | None, *, now: datetime | None = None) -> str:
-    """Return the cache key for this deploy.
-
-    The commit is authoritative when present. Without one there is no deploy to
-    speak of, so fall back to a start-time stamp: it changes on every restart,
-    which keeps local caches from masking edits.
-    """
-    short = (commit or "").strip()[:12]
-    if short:
-        return short
-    moment = now or datetime.now(timezone.utc)
-    return "dev-" + moment.strftime("%Y%m%d%H%M%S")
-
-
-DEPLOY_VERSION = resolve_deploy_version(os.getenv("RENDER_GIT_COMMIT"))
+from machreach_core.config import DEPLOY_VERSION, resolve_deploy_version  # noqa: E402,F401
 # Matches:  const VERSION = 'mr-v3';   capturing the quotes so any authored
 # value can be swapped without the file's own constant needing to be correct.
 _SW_VERSION_RE = re.compile(r"""(const\s+VERSION\s*=\s*['"])([^'"]*)(['"])""")
@@ -1222,7 +1208,7 @@ LAYOUT = """<!DOCTYPE html>
   {% else %}
   <link rel="stylesheet" href="/static/machreach_layout/layout-base.css?v={{ deploy_version }}"/>
   {% endif %}
-  <link rel="stylesheet" href="/static/machreach_consent.css?v=20260719"/>
+  <link rel="stylesheet" href="/static/machreach_consent.css?v={{ deploy_version }}"/>
 </head>
 <body>
   <script>
@@ -1870,7 +1856,7 @@ LAYOUT = """<!DOCTYPE html>
       </div>
     </div>
   </section>
-  <script src="/static/machreach_consent.js?v=20260719" defer></script>
+  <script src="/static/machreach_consent.js?v={{ deploy_version }}" defer></script>
 
   <!-- Floating focus timer widget (persists across pages) -->
   <aside id="focus-float" aria-label="Temporizador de enfoque" aria-live="polite">

@@ -189,3 +189,25 @@ LS_TEST_VARIANT_COIN_ULTRA  = os.getenv("LS_TEST_VARIANT_COIN_ULTRA", "")
 # Sentry (error tracking — set SENTRY_DSN in production)
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 LEADERBOARD_WINNERS_RECIPIENT = os.getenv("LEADERBOARD_WINNERS_RECIPIENT", "")
+
+# ── Deploy identity ─────────────────────────────────────────────────────────
+# One string that changes exactly once per deploy, used to key every client-side
+# cache. It lives here rather than in app.py so the app-design shell can use the
+# same value without importing the Flask app.
+def resolve_deploy_version(commit: str | None, *, now=None) -> str:
+    """Return the cache key for this deploy.
+
+    The commit is authoritative when present. Without one there is no deploy to
+    speak of, so fall back to a start-time stamp: it changes on every restart,
+    which keeps local caches from masking edits.
+    """
+    from datetime import datetime, timezone
+
+    short = (commit or "").strip()[:12]
+    if short:
+        return short
+    moment = now or datetime.now(timezone.utc)
+    return "dev-" + moment.strftime("%Y%m%d%H%M%S")
+
+
+DEPLOY_VERSION = resolve_deploy_version(os.getenv("RENDER_GIT_COMMIT"))

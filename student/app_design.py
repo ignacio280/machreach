@@ -83,8 +83,18 @@ def render_design_page(slug: str) -> str | None:
     return artifact.read_text(encoding="utf-8")
 
 
-def render_live_page(slug: str, data: dict, version: str = "20260804-app-v6-5") -> str | None:
-    """Return the exact Claude app shell wired to server-provided live data."""
+def render_live_page(slug: str, data: dict, version: str | None = None) -> str | None:
+    """Return the exact Claude app shell wired to server-provided live data.
+
+    The version keys the browser cache. It was a hardcoded string, which meant
+    the URL of every bundle stayed identical across deploys — and the service
+    worker serves /static cache-first, so a returning student kept running the
+    JavaScript from their first ever visit. It tracks the deploy now, so a new
+    deploy is a new URL and the cache cannot answer with yesterday's code.
+    """
+    from machreach_core.config import DEPLOY_VERSION
+
+    version = version or DEPLOY_VERSION
     if slug not in _PAGE_CSS:
         return None
     payload = dict(data or {})
