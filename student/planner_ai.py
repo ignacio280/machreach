@@ -167,12 +167,17 @@ Reglas duras:
 def _call_model(prompt: str) -> dict | None:
     from student.analyzer import _ai
 
+    # This runs inside a web request, and gunicorn kills the whole worker —
+    # all four threads — at 120s. Two model attempts at 40s each leave room
+    # for the deterministic fallback to still answer the student in time.
+    # No SDK retries: the fallback model IS the retry.
+    client = _ai().with_options(timeout=40.0, max_retries=0)
     last_error: Exception | None = None
     for model in (PLANNER_MODEL, PLANNER_FALLBACK_MODEL):
         if not model:
             continue
         try:
-            response = _ai().chat.completions.create(
+            response = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,

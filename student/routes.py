@@ -1005,181 +1005,6 @@ def register_student_routes(app, csrf, limiter):
         txt = re.sub(r"\s+", " ", txt).strip()
         return txt[:limit]
 
-    def _course_brain_context(client_id: int, course: dict) -> dict:
-        course_id = int(course["id"])
-        sources = []
-
-        try:
-            files = sdb.get_course_files(client_id, course_id) or []
-        except Exception:
-            files = []
-        for f in files[:8]:
-            text = (f.get("extracted_text") or "").strip()
-            if text:
-                sources.append({
-                    "type": "file",
-                    "title": f.get("original_name") or "Archivo del curso",
-                    "text": text[:5000],
-                })
-
-        try:
-            notes = sdb.get_notes(client_id, course_id) or []
-        except Exception:
-            notes = []
-        for n in notes[:8]:
-            text = _strip_html_text(n.get("content_html") or "", 2500)
-            if text:
-                sources.append({
-                    "type": "note",
-                    "title": n.get("title") or "Nota",
-                    "text": text,
-                })
-
-        try:
-            exams = sdb.get_course_exams(course_id) or []
-        except Exception:
-            exams = []
-        exam_rows = []
-        for e in exams:
-            exam_rows.append({
-                "id": e.get("id"),
-                "name": e.get("name") or "Evaluacion",
-                "date": (e.get("exam_date") or "")[:10],
-                "weight_pct": int(e.get("weight_pct") or 0),
-                "topics": _json_loads_safe(e.get("topics_json"), []) or [],
-            })
-
-        try:
-            quizzes = sdb.get_quizzes(client_id, course_id) or []
-        except Exception:
-            quizzes = []
-        quiz_rows = []
-        for q in quizzes[:5]:
-            try:
-                questions = sdb.get_quiz_questions(int(q.get("id") or 0))[:8]
-            except Exception:
-                questions = []
-            quiz_rows.append({
-                "title": q.get("title") or "Quiz",
-                "difficulty": q.get("difficulty") or "",
-                "best_score": q.get("best_score"),
-                "question_count": q.get("question_count"),
-                "sample_questions": [
-                    {"question": x.get("question"), "topic": x.get("topic"), "correct": x.get("correct")}
-                    for x in questions
-                ],
-            })
-
-        try:
-            decks = sdb.get_flashcard_decks(client_id, course_id) or []
-        except Exception:
-            decks = []
-        deck_rows = []
-        for d in decks[:5]:
-            cards = []
-            try:
-                cards = sdb.get_flashcards(int(d.get("id") or 0))[:8]
-            except Exception:
-                pass
-            deck_rows.append({
-                "title": d.get("title") or "Mazo",
-                "card_count": d.get("card_count"),
-                "sample_cards": [
-                    {"front": c.get("front"), "back": c.get("back")}
-                    for c in cards
-                ],
-            })
-
-        try:
-            time_rows = sdb.get_time_per_course(client_id) or []
-            stats = next((x for x in time_rows if int(x.get("course_id") or 0) == course_id), {})
-        except Exception:
-            stats = {}
-
-        return {
-            "course": {
-                "id": course_id,
-                "name": course.get("name") or "Curso",
-                "code": course.get("code") or "",
-                "difficulty": course.get("difficulty") or 3,
-                "term": course.get("term") or "",
-            },
-            "sources": sources,
-            "exams": exam_rows,
-            "quizzes": quiz_rows,
-            "flashcard_decks": deck_rows,
-            "focus_stats": {
-                "minutes": int(stats.get("minutes") or 0),
-                "sessions": int(stats.get("sessions") or 0),
-            },
-        }
-
-    def _course_brain_prompt(mode: str, ctx: dict) -> str:
-        payload = json.dumps(ctx, ensure_ascii=False, indent=2)[:42000]
-        today = datetime.now().date().isoformat()
-        base_rules = f"""Today is {today}. You are MachReach Course Brain, a source-grounded study assistant.
-Use only the course context below. If the context is thin, say exactly what source is missing instead of inventing facts.
-Write in Spanish unless the course/source text is clearly English.
-Return ONLY valid JSON. No markdown fences.
-
-COURSE CONTEXT:
-{payload}
-"""
-        if mode == "brain":
-            return base_rules + """
-Return this JSON shape:
-{
-  "title": "Course Brain",
-  "summary": "4-6 sentence grounded course overview",
-  "source_health": {"level":"strong|medium|thin", "reason":"short reason"},
-  "key_concepts": [{"name":"Concept", "why_it_matters":"...", "sources":["source title"]}],
-  "what_to_master": ["specific mastery target"],
-  "gaps": ["missing material or unclear area"],
-  "recommended_next": ["next action"]
-}
-"""
-        if mode == "exam":
-            return base_rules + """
-Pick the next upcoming exam/evaluation from the context. If there is no dated exam, build a general next-test plan.
-Return this JSON shape:
-{
-  "title": "Plan para la próxima prueba",
-  "next_exam": {"name":"...", "date":"YYYY-MM-DD or null", "days_until":0, "weight_pct":0},
-  "priority_topics": [{"topic":"...", "reason":"...", "source":"source title or exam metadata"}],
-  "seven_day_plan": [{"day":"Día 1", "work":"specific action under 16 words", "output":"what student should produce"}],
-  "quiz_targets": ["question type to practice"],
-  "focus_plan": {"sessions": 0, "minutes_each": 25, "why":"..."},
-  "risks": ["risk before exam"]
-}
-"""
-        return base_rules + """
-Create a NotebookLM-style study studio output for this course.
-Return this JSON shape:
-{
-  "title": "Study Studio",
-  "study_guide": [{"section":"...", "must_know":["..."], "self_check":"question"}],
-  "faq": [{"q":"...", "a":"grounded answer"}],
-  "mind_map": [{"node":"central or concept", "children":["related concept"]}],
-  "practice_prompts": ["prompt for active recall"],
-  "next_actions": ["specific next action"]
-}
-"""
-
-    def _run_course_brain_ai(mode: str, ctx: dict) -> dict:
-        from student.analyzer import _ai
-        prompt = _course_brain_prompt(mode, ctx)
-        resp = _ai().chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.15,
-            max_tokens=3500,
-        )
-        raw = (resp.choices[0].message.content or "").strip()
-        raw = re.sub(r"^```json?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-        return json.loads(raw)
-
-
     def _semester_outcome_gate(client_id: int | None = None, semester_label: str | None = None) -> dict:
         cid = client_id if client_id is not None else _cid()
         current = (semester_label if semester_label is not None else sdb.get_current_semester(cid) or "").strip()
@@ -2616,66 +2441,11 @@ Return this JSON shape:
 
     @app.route("/api/student/courses/<int:course_id>/ai-studio", methods=["POST"])
     def student_course_ai_studio_api(course_id):
-        if not _logged_in():
-            return jsonify({"error": "Unauthorized"}), 401
-        cid = _cid()
-        if not _student_is_plus(cid):
-            return jsonify({
-                "error": "Course Brain y Study Studio son herramientas PLUS.",
-                "upgrade_required": True,
-            }), 402
-        course = sdb.get_course(course_id)
-        if not course or course["client_id"] != cid:
-            return jsonify({"error": "Course not found"}), 404
-        data = request.get_json(silent=True) or {}
-        mode = (data.get("mode") or "brain").strip().lower()
-        if mode not in {"brain", "studio", "exam"}:
-            return jsonify({"error": "Modo invalido."}), 400
-        reservation_key = (
-            f"course-brain:{cid}:"
-            f"{(request.headers.get('X-Idempotency-Key') or uuid4().hex)[:128]}"
-        )
-        try:
-            from student import ai_usage
-            ai_usage.reserve(
-                cid,
-                request_key=reservation_key,
-                feature=f"course_brain_{mode}",
-                usage_kind="ai_tool_generated",
-                estimated_input_tokens=60000,
-                estimated_output_tokens=3500,
-            )
-            ctx = _course_brain_context(cid, dict(course))
-            result = _run_course_brain_ai(mode, ctx)
-            ai_usage.settle(reservation_key)
-            return jsonify({
-                "ok": True,
-                "mode": mode,
-                "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                "context_counts": {
-                    "sources": len(ctx.get("sources") or []),
-                    "exams": len(ctx.get("exams") or []),
-                    "quizzes": len(ctx.get("quizzes") or []),
-                    "flashcard_decks": len(ctx.get("flashcard_decks") or []),
-                },
-                "result": result,
-            })
-        except json.JSONDecodeError:
-            try:
-                from student.ai_usage import fail
-                fail(reservation_key, "invalid_json_response")
-            except Exception:
-                pass
-            log.exception("Course Brain returned invalid JSON")
-            return jsonify({"error": "La IA devolvio una respuesta invalida. Intenta de nuevo."}), 500
-        except Exception as e:
-            try:
-                from student.ai_usage import fail
-                fail(reservation_key, str(e))
-            except Exception:
-                pass
-            log.exception("Course Brain failed for course %s", course_id)
-            return jsonify({"error": "No se pudo generar el estudio del curso. Intenta de nuevo."}), 500
+        """Course Brain / Study Studio was removed from the product. The route
+        stays as a tombstone so an old client gets a clear answer instead of a
+        404 that looks like a broken deploy — and so no model call can ever
+        again run inside a web request thread on its behalf."""
+        return jsonify({"error": "Esta herramienta ya no existe en MachReach."}), 410
 
 
 
@@ -5366,7 +5136,9 @@ Material:
                 estimated_input_tokens=30000,
                 estimated_output_tokens=6000,
             )
-            resp = _ai().chat.completions.create(
+            # Web-request context: bounded so a slow model cannot hold a
+            # gunicorn thread to the 120s worker kill.
+            resp = _ai().with_options(timeout=40.0, max_retries=0).chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.25,
@@ -15723,9 +15495,12 @@ No markdown, no code fences. ONLY JSON.
 
 """
 
+            # Web-request context: bounded so a slow model cannot hold a
+            # gunicorn thread to the 120s worker kill (two attempts, 80s worst).
+            _bounded_ai = _ai().with_options(timeout=40.0, max_retries=0)
             try:
 
-                resp = _ai().chat.completions.create(
+                resp = _bounded_ai.chat.completions.create(
 
                     model="gpt-4o-mini",
 
@@ -15741,7 +15516,7 @@ No markdown, no code fences. ONLY JSON.
 
             except Exception:
 
-                resp = _ai().chat.completions.create(
+                resp = _bounded_ai.chat.completions.create(
 
                     model="gpt-4o-mini",
 

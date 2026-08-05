@@ -75,9 +75,14 @@ def _balance_quiz_answer_letters(questions: list[dict]) -> list[dict]:
 
 
 def _ai() -> OpenAI:
+    # The SDK default timeout is 600s. A call that slow inside a gunicorn
+    # request would hold a thread until the 120s worker kill takes the other
+    # in-flight requests down with it. 90s with one retry fits the worker's
+    # jobs; anything that runs inside a web request must tighten further with
+    # .with_options() (the planner does).
     global _client
     if _client is None:
-        _client = OpenAI(api_key=OPENAI_API_KEY)
+        _client = OpenAI(api_key=OPENAI_API_KEY, timeout=90.0, max_retries=1)
     return _client
 
 

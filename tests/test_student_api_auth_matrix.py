@@ -16,7 +16,10 @@ def test_all_student_api_routes_are_session_protected(
     monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
     failures = []
     checked = []
-    retired_without_state = {"/api/student/courses/1/upload": 410}
+    retired_without_state = {
+        "/api/student/courses/1/upload": 410,
+        "/api/student/courses/1/ai-studio": 410,
+    }
 
     for rule in sorted(flask_app.url_map.iter_rules(), key=lambda item: item.rule):
         if not rule.rule.startswith("/api/student/"):
