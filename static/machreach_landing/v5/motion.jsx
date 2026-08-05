@@ -52,7 +52,11 @@ function useCountUp(target, active, dur = 1600) {
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    // A hidden tab never paints, so requestAnimationFrame never runs and the
+    // figure would sit at zero — the animation is a flourish, but reading
+    // "0 estudiantes activos" is a lie. Land on the real number regardless.
+    const settle = setTimeout(() => setV(target), dur + 200);
+    return () => { cancelAnimationFrame(raf); clearTimeout(settle); };
   }, [target, active]);
   return v;
 }

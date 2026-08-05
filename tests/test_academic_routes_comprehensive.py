@@ -52,7 +52,8 @@ def test_academic_catalog_profile_and_leaderboards(client, academic_student):
     assert profile["major"]["id"] == major_id
 
     assert client.post("/api/academic/starter-tutorial/seen").get_json()["ok"] is True
-    assert client.post("/api/academic/banner/seen").get_json()["ok"] is True
+    # The "your XP is intact" welcome banner is gone, and so is its endpoint.
+    assert client.post("/api/academic/banner/seen").status_code == 404
     assert client.post("/api/academic/universities", json={}).status_code == 403
     assert client.post("/api/academic/majors", json={}).status_code == 403
 

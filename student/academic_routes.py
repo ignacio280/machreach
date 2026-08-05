@@ -13,7 +13,6 @@ Endpoints
   POST  /api/academic/majors                body: {name, university_id}
   GET   /api/academic/profile
   POST  /api/academic/profile               body: {country_iso, university_id, major_id, canvas_url, canvas_token}
-  POST  /api/academic/banner/seen
   GET   /api/academic/leaderboard?scope=global|country|university|major
   GET   /api/academic/ranks                 // compact summary for dashboard
 """
@@ -132,7 +131,6 @@ def register_academic_routes(app, csrf, limiter):
             "major": major,
             "prior_xp": prior_xp,
             "starter_tutorial_seen": bool(session.get("starter_tutorial_seen")),
-            "xp_preserve_banner_seen": bool(prof.get("xp_preserve_banner_seen")),
         })
 
     @app.route("/api/academic/profile", methods=["POST"])
@@ -168,13 +166,6 @@ def register_academic_routes(app, csrf, limiter):
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
         session["starter_tutorial_seen"] = True
-        return jsonify({"ok": True})
-
-    @app.route("/api/academic/banner/seen", methods=["POST"])
-    def academic_banner_seen():
-        if not _logged_in():
-            return jsonify({"error": "unauthorized"}), 401
-        ac.mark_welcome_banner_seen(_cid())
         return jsonify({"ok": True})
 
     # ── public profile ──────────────────────────────────────

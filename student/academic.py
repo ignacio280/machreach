@@ -18,7 +18,9 @@ Columns added to clients
   major_id                  FK to majors.
   academic_setup_complete   0/1 gate flag — forces onboarding modal until 1.
   academic_setup_at         Timestamp when user finished setup.
-  xp_preserve_banner_seen   0/1 — has the user seen the "progress preserved" welcome once.
+  xp_preserve_banner_seen   Vestigial. The "your progress is preserved" welcome
+                            banner was removed; the column stays only because
+                            dropping one buys nothing. Do not build on it.
 """
 
 from __future__ import annotations
@@ -854,15 +856,6 @@ def save_academic_profile(
             student_db.set_user_timezone(client_id, tz)
     except Exception:
         pass
-
-
-def mark_welcome_banner_seen(client_id: int) -> None:
-    with get_db() as db:
-        _exec(
-            db,
-            "UPDATE clients SET xp_preserve_banner_seen = 1 WHERE id = %s",
-            (client_id,),
-        )
 
 
 def needs_setup(client_id: int) -> bool:

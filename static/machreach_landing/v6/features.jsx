@@ -1,10 +1,15 @@
 /* v6 Stats + Features — exact live copy */
 
-/* Real numbers or no numbers. The strip fetches live aggregates and stays
-   hidden until they arrive; if the endpoint fails there is no strip, never an
-   invented figure. */
+/* Real numbers or no numbers. The strip fetches live aggregates; if the
+   endpoint fails, or the figures are too thin to mean anything, there is no
+   strip at all rather than an invented — or embarrassing — one. */
+
+// Below this many weekly actives the strip is more of an admission than a
+// boast, and an almost-empty band reads as a layout bug. Lower it once the
+// numbers can carry themselves.
+const STATS_MIN_STUDENTS = 10;
+
 function StatsStrip() {
-  const [ref, seen] = useReveal({ threshold: 0.25 });
   const [live, setLive] = React.useState(null);
   React.useEffect(() => {
     let on = true;
@@ -14,24 +19,27 @@ function StatsStrip() {
       .catch(() => {});
     return () => { on = false; };
   }, []);
-  const go = seen && !!live;
+  // Counting starts when the data lands, not when the section scrolls into
+  // view. The scroll hook cannot work here: the section does not exist until
+  // the fetch resolves, so its ref is still null when the observer would have
+  // been attached — which left every figure frozen at zero.
+  const go = !!live;
   const s1 = useCountUp(live ? live.students_week : 0, go);
   const s2 = useCountUp(live ? live.hours_today : 0, go);
   const s3 = useCountUp(live ? live.universities : 0, go);
-  // Nothing to brag about yet: no strip at all beats a row of zeros, and a
-  // stat that is zero right now simply stays home.
-  if (!live || !(live.students_week > 0)) return null;
+  if (!live || live.students_week < STATS_MIN_STUDENTS) return null;
+  // A stat that is zero right now simply stays home.
   const items = [
-    { v: Math.round(s1).toLocaleString("es-CL"), l: live.students_week === 1 ? "estudiante activo esta semana" : "estudiantes activos esta semana" },
+    { v: Math.round(s1).toLocaleString("es-CL"), l: "estudiantes activos esta semana" },
   ];
   if (live.hours_today > 0) items.push({ v: (live.hours_today < 10 ? (Math.round(s2 * 10) / 10).toLocaleString("es-CL") : Math.round(s2).toLocaleString("es-CL")) + "h", l: "horas estudiadas hoy" });
   if (live.universities > 0) items.push({ v: Math.round(s3), l: live.universities === 1 ? "universidad conectada" : "universidades conectadas" });
   return (
-    <section ref={ref} style={{ paddingTop: 0 }}>
+    <section style={{ paddingTop: 0 }}>
       <div className="container">
-        <div className={"stats " + (seen ? "in" : "")}>
+        <div className="stats in">
           {items.map((s, i) => (
-            <div key={i} className={"stat pop " + (seen ? "in" : "")} style={{ "--d": `${i * 110}ms` }}>
+            <div key={i} className="stat pop in" style={{ "--d": `${i * 110}ms` }}>
               <div className="stat-v num">{s.v}</div>
               <div className="stat-l">{s.l}</div>
             </div>

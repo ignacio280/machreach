@@ -2233,23 +2233,6 @@ LAYOUT = """<!DOCTYPE html>
   </script>
   {% endif %}
 
-  {% if logged_in and account_type|default('student') == 'student' %}
-  <!-- ── Preserved-XP welcome banner (academic setup lives on /student/setup) ── -->
-  <div id="mrXpBanner" style="display:none;position:fixed;left:50%;top:calc(92px + env(safe-area-inset-top, 0px));transform:translateX(-50%);z-index:1900;
-       background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;padding:12px 20px;border-radius:12px;
-       box-shadow:0 10px 40px rgba(99,102,241,.4);font-weight:500;align-items:center;gap:12px;
-       max-width:90vw;animation:mrSlideDown .5s cubic-bezier(.22,.61,.36,1);">
-    <span style="font-size:22px;">🎉</span>
-    <span>{% if lang == 'en' %}Welcome back — <strong>your previous progress has been preserved.</strong> All your XP is intact.{% else %}Bienvenido de vuelta — <strong>tu progreso anterior sigue guardado.</strong> Todo tu XP está intacto.{% endif %}</span>
-    <button id="mrXpBannerClose" style="background:rgba(255,255,255,.2);border:0;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;">×</button>
-  </div>
-
-  <style>
-    @keyframes mrSlideDown { from { transform:translate(-50%,-30px); opacity:0;} to { transform:translate(-50%,0); opacity:1;}}
-  </style>
-
-  <script src="/static/machreach_layout/layout-4.js?v={{ deploy_version }}"></script>
-  {% endif %}
 
 </body>
 </html>"""
