@@ -58,6 +58,11 @@
 .timer{position:relative;overflow:hidden;text-align:center;background:var(--surface);border:var(--bd);border-radius:var(--r-xl);box-shadow:var(--sh3);padding:22px}
 .timer::before{content:"";position:absolute;left:50%;top:-40%;width:520px;height:520px;transform:translateX(-50%);border-radius:50%;background:var(--scene);opacity:.07;transition:background .45s var(--ease)}
 .timer>*{position:relative;z-index:1}
+/* No courses yet: there is nothing to time a block against. */
+.fx-nocourse{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:clamp(36px,8vw,64px) 26px}
+.fx-nocourse .ico-badge{width:60px;height:60px;border-radius:18px;background:var(--brand);color:var(--brand-fg);box-shadow:var(--sh2);transform:rotate(-3deg)}
+.fx-nocourse h2{font-size:clamp(22px,3vw,28px);line-height:1.06;margin:6px 0 0}
+.fx-nocourse p{max-width:46ch;color:var(--ink-2);font-size:14px;font-weight:700;line-height:1.5;margin:0 0 6px}
 .fx-fields{display:grid;grid-template-columns:1fr 1fr;gap:11px;text-align:left}
 @media (max-width:560px){.fx-fields{grid-template-columns:1fr}}
 .fld label{display:block;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-bottom:5px}

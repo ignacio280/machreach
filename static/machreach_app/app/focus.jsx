@@ -437,7 +437,13 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   // clearing `pending` — which the claim itself does — cannot unmount it.
   const [claimFlow, setClaimFlow] = React.useState(null);
   const [claiming, setClaiming] = React.useState(false);
-  const courses = data.courses?.length ? data.courses : FX_COURSES.map((name, i) => ({ id: i + 1, name, exams: (FX_EXAMS[name] || []).map((name, j) => ({ id: j + 1, name })) }));
+  // The sample courses exist for the offline design preview only. A live page
+  // with no courses must say so — inventing "Cálculo II" for a student who
+  // never enrolled in it lets them time a block against a course that is not
+  // theirs, and the server rejects the phase anyway.
+  const courses = data.live
+    ? (data.courses || [])
+    : FX_COURSES.map((name, i) => ({ id: i + 1, name, exams: (FX_EXAMS[name] || []).map((name, j) => ({ id: j + 1, name })) }));
   const [courseId, setCourseId] = React.useState(restored?.courseId || courses[0]?.id || "");
   const course = courses.find((c) => String(c.id) === String(courseId)) || courses[0];
   const [examId, setExamId] = React.useState(restored?.examId || "");
@@ -645,6 +651,19 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
   };
   const ang = (-90 + pct * 360) * Math.PI / 180;
   const hx = 150 + R * Math.cos(ang), hy = 150 + R * Math.sin(ang);
+
+  // Every block is filed against a course, so with none there is nothing to
+  // start. Sending them to add one is the only useful thing this page can do.
+  if (data.live && !courses.length) {
+    return (
+      <section className="timer fx-nocourse">
+        <span className="ico-badge"><IconBook size={22} /></span>
+        <h2>Primero agrega un ramo</h2>
+        <p>Cada bloque de enfoque se guarda en un ramo tuyo, así el tiempo cuenta para la prueba que viene. Todavía no tienes ninguno.</p>
+        <a className="btn btn-primary btn-lg" href="/student/courses">Ir a Mis cursos<IconArrow size={18} /></a>
+      </section>
+    );
+  }
 
   return (
     <section className={"timer" + (running ? " run" : "")}>
