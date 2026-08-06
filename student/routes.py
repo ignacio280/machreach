@@ -2269,7 +2269,6 @@ def register_student_routes(app, csrf, limiter):
             except Exception:
                 pass
 
-        from datetime import datetime, timezone
         return jsonify({
             "ok": True,
             "saved": saved,
