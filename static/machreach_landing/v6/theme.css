@@ -7,7 +7,11 @@
   --paper:#FFFAF2; --paper-2:#FBEEDC; --surface:#FFFFFF; --surface-2:#FFF7EC;
   --ink:#241834; --ink-2:#5E5170; --ink-3:#665974;
 
-  --brand:#FF6A2B; --brand-2:#DC4B14; --brand-3:#FF9257; --brand-fg:#241834;
+  /* --brand-2 is the one that carries text — eyebrows, links, small labels.
+     At #DC4B14 it landed on 3.9:1 over the cream surfaces, under the 4.5:1
+     WCAG AA needs for body text. Darkened just far enough to clear it on
+     every background it actually sits on (4.59:1 at worst, over --paper-2). */
+  --brand:#FF6A2B; --brand-2:#C43C0A; --brand-3:#FF9257; --brand-fg:#241834;
   --amber:#F4B740; --plum:#6E4CD8; --plum-2:#4F30A8; --sky:#2FA8C6; --lime:#6FB03A; --pink:#D2528B;
   --brand-tint:#FFE7D8;
 
@@ -98,6 +102,9 @@ section{padding:clamp(70px,8.5vw,120px) 0;position:relative}
 .in .draw{stroke-dashoffset:0}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  /* Smooth scrolling is motion too: this block silenced every animation and
+     transition but left the page gliding under anyone who asked it not to. */
+  html{scroll-behavior:auto}
   .rv,.rv-scale,.pop,.slap{opacity:1;transform:none;filter:none}
   .lmask>span{transform:none}
 }

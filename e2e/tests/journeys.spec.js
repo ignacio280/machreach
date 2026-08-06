@@ -113,12 +113,25 @@ test("semester controls remain usable", async ({ page }) => {
   await login(page);
   await page.goto("/student/courses");
 
-  const controls = page.locator(".sem button");
-  await expect(controls).toHaveCount(12);
-  const active = page.locator(".sem button.on");
-  await expect(active).toBeVisible();
-  await active.click();
-  await expect(active).toHaveClass(/on/);
+  // This asserted twelve buttons in the header, which was true only while the
+  // page listed every semester up front. Semesters now appear there once the
+  // student actually has more than one, so a fresh account shows none — and
+  // the count told us nothing about the thing being tested anyway. What this
+  // journey is really for is that the React handlers survive the enforced CSP,
+  // so it drives the control that is always there and checks it did something.
+  const correct = page.locator(".sem .sem-fix");
+  await expect(correct).toBeVisible();
+  await correct.click();
+
+  const picker = page.locator(".sem-grid .sem-pick");
+  await expect(picker.first()).toBeVisible();
+  // I through XII, the full span a degree can run to.
+  await expect(picker).toHaveCount(12);
+
+  // Picking a semester marks it, which only happens if the handler ran.
+  const target = picker.nth(2);
+  await target.click();
+  await expect(target).toHaveClass(/on/);
 });
 
 test("grade-sheet controls work under the enforced CSP", async ({ page }) => {
@@ -219,11 +232,26 @@ test("student can permanently delete the account", async ({ page }, testInfo) =>
   const email = `delete-e2e-${testInfo.project.name}@example.test`;
   await login(page, email);
   await page.goto("/student/settings");
-  await page.getByRole("button", { name: /eliminar mi cuenta|delete my account/i }).click();
-  await page.locator('form[action="/settings/delete-account"] input[name="confirm"]').fill("DELETE");
-  await page.locator('form[action="/settings/delete-account"] button[type="submit"]').click();
 
-  await expect(page).toHaveURL("/");
+  // Settings is tabbed now and opens on the profile tab, so the deletion form
+  // is not on screen at all until "Cuenta" is picked. On top of that the page
+  // went Spanish and the form gained a native confirm(): this looked for a
+  // button named "eliminar mi cuenta", clicked it before filling the
+  // confirmation, and never answered the dialog. Open the tab, type the word,
+  // submit, then agree.
+  await page.getByRole("button", { name: "Cuenta", exact: true }).click();
+
+  const form = page.locator('form[action="/settings/delete-account"]');
+  await form.locator('input[name="confirm"]').fill("ELIMINAR");
+  // A standing handler rather than a one-shot, and the navigation awaited
+  // alongside the click: on WebKit the confirm() and the submit that follows it
+  // raced the assertion, leaving the page on /student/settings often enough to
+  // show up as a flake.
+  page.on("dialog", (dialog) => dialog.accept());
+  await Promise.all([
+    page.waitForURL("/"),
+    form.getByRole("button", { name: /eliminar cuenta/i }).click(),
+  ]);
   await page.goto("/login");
   await page.locator("#login-email").fill(email);
   await page.locator("#login-password").fill("e2e-password-123");

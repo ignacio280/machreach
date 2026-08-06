@@ -1,6 +1,12 @@
 const { test, expect } = require("@playwright/test");
 
 async function login(page) {
+  // The tab bar is fixed to the bottom, and Playwright scrolls an element into
+  // view before clicking it. With smooth scrolling on, that scroll animates,
+  // the fixed bar's box moves every frame, and the click waits forever for it
+  // to hold still. Asking for reduced motion settles the page — and is the
+  // path a real user with that preference gets anyway.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/login");
   const consent = page.locator('#cookie-consent:not([hidden]) [data-consent-choice="essential"]');
   if (await consent.isVisible()) await consent.click();
@@ -8,6 +14,18 @@ async function login(page) {
   await page.locator("#login-password").fill("e2e-password-123");
   await page.locator('form[action="/login"] button[type="submit"]').click();
   await expect(page).toHaveURL(/\/student(?:$|\/)/);
+
+  // A first visit opens the welcome tour, whose card sits over the tab bar:
+  // elementFromPoint on the "Más" button returned .tour-card, so the click
+  // spent its timeout against an overlay. Dismiss it the way a student does.
+  // It mounts through a portal a moment after the dashboard settles, so this
+  // waits for it rather than looking once and moving on.
+  const tour = page.locator(".tour-card");
+  await tour.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+  if (await tour.count()) {
+    await page.locator(".tour-skip").click();
+    await expect(tour).toHaveCount(0);
+  }
 }
 
 test("landing logo mark stays inside the mobile header", async ({ page }, testInfo) => {
@@ -46,6 +64,14 @@ test("Focus is blocked on mobile", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith("mobile"), "mobile projects only");
   await login(page);
   await page.goto("/student/focus");
-  await expect(page.locator(".focus-mobile-blocker")).toBeVisible();
-  await expect(page.locator(".fx-start")).toBeHidden();
+  // Focus is fenced off twice, and which fence fires depends on how the phone
+  // presents itself: the server turns a mobile User-Agent away before the app
+  // renders (.focus-mobile-locked), and the page itself blocks a narrow or
+  // coarse-pointer viewport (.focus-mobile-blocker). This asserted only the
+  // second, so a real phone — which the server catches first — read as a
+  // failure. What matters is that the timer is unreachable, by either route.
+  await expect(
+    page.locator(".focus-mobile-locked, .focus-mobile-blocker"),
+  ).toBeVisible();
+  await expect(page.locator(".fx-start")).toHaveCount(0);
 });

@@ -565,7 +565,10 @@ function CoursesGrid({ plus, list, onDelete, onAdd }) {
         <div className="ico"><IconBook size={26} /></div>
         <h3>Está vacío…</h3>
         <p>¡Comienza agregando tu primer ramo!</p>
-        {onAdd && <button className="btn btn-primary" onClick={onAdd}>Agregar a mano<IconArrow size={17} /></button>}
+        {/* Named apart from the toolbar's "Agregar a mano", which is always on
+            screen too: two buttons with one accessible name is ambiguous to a
+            screen reader, and it reads better as a first-run invitation. */}
+        {onAdd && <button className="btn btn-primary" onClick={onAdd}>Agregar mi primer ramo<IconArrow size={17} /></button>}
       </div>
     );
   }

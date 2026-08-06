@@ -20,6 +20,10 @@ test("landing uses its authored phone composition on real mobile emulation", asy
         ? { display: getComputedStyle(element).display, left: box.left, right: box.right, width: element.offsetWidth }
         : null;
     };
+    const cols = (selector) => {
+      const element = document.querySelector(selector);
+      return element ? getComputedStyle(element).gridTemplateColumns : null;
+    };
     return {
       viewport: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -33,10 +37,14 @@ test("landing uses its authored phone composition on real mobile emulation", asy
         const box = element.getBoundingClientRect();
         return { left: box.left, right: box.right, width: element.offsetWidth };
       }),
-      statsColumns: getComputedStyle(document.querySelector(".stats")).gridTemplateColumns,
-      howColumns: getComputedStyle(document.querySelector(".how")).gridTemplateColumns,
-      quizColumns: getComputedStyle(document.querySelector(".quiz-grid")).gridTemplateColumns,
-      footerColumns: getComputedStyle(document.querySelector(".foot-grid")).gridTemplateColumns,
+      // The stats strip only renders once there are real figures worth
+      // showing, so on a fresh database it is absent — and reading its columns
+      // unconditionally threw before any assertion ran. Absent is a valid
+      // composition; only the shape it has when present is interesting.
+      statsColumns: cols(".stats"),
+      howColumns: cols(".how"),
+      quizColumns: cols(".quiz-grid"),
+      footerColumns: cols(".foot-grid"),
       essentialHeadingsVisible: [...document.querySelectorAll("h1, section h2")].every((element) => {
         const style = getComputedStyle(element);
         const box = element.getBoundingClientRect();
@@ -60,7 +68,9 @@ test("landing uses its authored phone composition on real mobile emulation", asy
     layout.featureCards.every((card) => card.width > layout.viewport - 60),
     JSON.stringify(layout),
   ).toBe(true);
-  expect(layout.statsColumns.split(" ")).toHaveLength(2);
+  // Two columns when the strip is on screen; nothing to check when the numbers
+  // are too thin for it to appear at all.
+  if (layout.statsColumns) expect(layout.statsColumns.split(" ")).toHaveLength(2);
   expect(layout.howColumns.split(" ")).toHaveLength(1);
   expect(layout.quizColumns.split(" ")).toHaveLength(1);
   expect(layout.footerColumns.split(" ")).toHaveLength(2);
