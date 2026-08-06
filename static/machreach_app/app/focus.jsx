@@ -329,9 +329,17 @@ function useFocusHeartbeat(enabled = true) {
 function readFocusStore() {
   try { return JSON.parse(localStorage.getItem(FOCUS_STORE) || "null"); } catch (e) { return null; }
 }
+
+/* Which tab last wrote the record. Two focus pages open at once each held
+   their own copy of the block and wrote it back every second, so pausing in
+   one was undone by the other's next tick a second later — and the record
+   kept saying "running" long after the student had stopped. Stamping the
+   writer lets a tab tell somebody else's change from the echo of its own. */
+const FOCUS_TAB_ID = Math.random().toString(36).slice(2, 10);
+
 function writeFocusStore(state) {
   try {
-    if (state) localStorage.setItem(FOCUS_STORE, JSON.stringify(state));
+    if (state) localStorage.setItem(FOCUS_STORE, JSON.stringify({ ...state, writer: FOCUS_TAB_ID }));
     else localStorage.removeItem(FOCUS_STORE);
   } catch (e) { /* private mode */ }
 }
@@ -510,6 +518,8 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
     if (restored?.finishedPhaseId) queuePhase(restored.finishedPhaseId);
   }, []);
 
+  // Switching mode throws the block away — but only when the student did it.
+  // A mode arriving from another tab is that same block, not a new choice.
   const skipModeReset = React.useRef(true);
   React.useEffect(() => {
     if (skipModeReset.current) { skipModeReset.current = false; return; }
@@ -564,6 +574,31 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
     }
     writeFocusStore({ mode, phase, round, running, left, endsAt, courseId, examId, phaseId: phaseId.current, pending, claimUntil });
   }, [mode, phase, round, running, left, endsAt, courseId, examId, pending, claimUntil, verdictPending]);
+
+  /* One block, one record — so a second focus page follows the first instead
+     of arguing with it. Without this the two tabs each ran their own copy and
+     the last write won, which is how a paused block came back playing. The
+     `storage` event only reaches other tabs, and the writer stamp drops the
+     echo of a change this tab made itself. */
+  React.useEffect(() => {
+    if (!data.live) return undefined;
+    const onStorage = (event) => {
+      if (event.key !== FOCUS_STORE) return;
+      const next = readFocusStore();
+      if (!next || next.writer === FOCUS_TAB_ID) return;
+      if (next.mode && next.mode !== mode) { skipModeReset.current = true; setMode(next.mode); }
+      setPhase(next.phase === "break" ? "break" : "work");
+      setRound(Number(next.round) || 1);
+      setEndsAt(Number(next.endsAt) || 0);
+      setLeft(Math.max(0, Number(next.left) || 0));
+      setRunning(!!next.running);
+      phaseId.current = next.phaseId || "";
+      setPending(Array.isArray(next.pending) ? next.pending : []);
+      setClaimUntil(Number(next.claimUntil) || 0);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [data.live, mode]);
 
   const pct = 1 - left / total;
   const R = 132, C = 2 * Math.PI * R;
@@ -644,10 +679,17 @@ function Timer({ scene, onRun, onCourse, onReward, data = {} }) {
     // nor trust the reported minutes, so no block may start or resume.
     if (!running && data.live && !(await checkFocusGuard())) return setGuardWanted(true);
     if (!running && left === cfg.work && phase === "work" && !(await beginVerifiedPhase())) return;
-    setRunning((r) => {
-      if (!r) { setKick((k) => k + 1); setEndsAt(Date.now() + Math.max(1, left) * 1000); }
-      return !r;
-    });
+    if (running) {
+      // Pausing has to drop the deadline as well. Leaving it behind kept a
+      // timestamp in the record that other pages read as "still counting",
+      // so a paused block came back minutes further along than it was left.
+      setRunning(false);
+      setEndsAt(0);
+      return;
+    }
+    setKick((k) => k + 1);
+    setEndsAt(Date.now() + Math.max(1, left) * 1000);
+    setRunning(true);
   };
   const ang = (-90 + pct * 360) * Math.PI / 180;
   const hx = 150 + R * Math.cos(ang), hy = 150 + R * Math.sin(ang);
