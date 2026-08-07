@@ -491,6 +491,36 @@ CREATE TABLE IF NOT EXISTS student_email_prefs (
 """
 
 
+def drop_retired_boosts_table() -> bool:
+    """Drop student_boosts, the last trace of the removed timed-boosts feature.
+
+    Returns True when the table is gone (dropped now or already absent).
+
+    The drop refuses to run while the table holds rows. Boosts were shipped and
+    withdrawn on the same day in April 2026, months before launch, so it should
+    be empty everywhere — but "should be" is a bad reason to run an irreversible
+    DROP against production. If a row ever does turn up it means somebody paid
+    coins for a boost, and that is a record to look at rather than delete on the
+    way past.
+    """
+    with get_db() as db:
+        try:
+            remaining = int(_fetchval(db, "SELECT COUNT(*) FROM student_boosts") or 0)
+        except Exception:
+            return True   # Already dropped, or never created on this database.
+        if remaining:
+            log.error(
+                "student_boosts still holds %s row(s); leaving the table in place. "
+                "Boost purchases were meant to be impossible, so inspect these "
+                "before dropping it by hand.",
+                remaining,
+            )
+            return False
+        _exec(db, "DROP TABLE IF EXISTS student_boosts")
+    log.info("Dropped the empty student_boosts table.")
+    return True
+
+
 # ── init ────────────────────────────────────────────────────
 
 def init_student_db():

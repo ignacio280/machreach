@@ -112,3 +112,74 @@ def test_worker_cancels_archived_provider_subscription(monkeypatch):
             ("legacy-worker-cancel",),
         )
     assert row == {"status": "cancelled", "attempts": 1}
+
+
+# --- The retired timed-boosts table ----------------------------------------
+
+def _create_boosts_table():
+    with odb.get_db() as db:
+        odb._exec(db, "DROP TABLE IF EXISTS student_boosts")
+        odb._exec(
+            db,
+            "CREATE TABLE student_boosts ("
+            "id INTEGER PRIMARY KEY, client_id INTEGER, kind TEXT, "
+            "multiplier REAL, expires_at TIMESTAMP)",
+        )
+
+
+def test_the_boosts_table_is_dropped_when_it_is_empty():
+    from student.db import drop_retired_boosts_table
+
+    _create_boosts_table()
+    assert "student_boosts" in _table_names()
+
+    assert drop_retired_boosts_table() is True
+    assert "student_boosts" not in _table_names()
+
+
+def test_dropping_the_boosts_table_is_safe_to_repeat():
+    """It runs on every deploy, so the second time must not raise."""
+    from student.db import drop_retired_boosts_table
+
+    assert drop_retired_boosts_table() is True
+    assert drop_retired_boosts_table() is True
+    assert "student_boosts" not in _table_names()
+
+
+def test_a_boosts_table_with_rows_is_left_alone(caplog):
+    """The guard on an irreversible DROP.
+
+    A row here would mean a student spent coins on a boost, which the code
+    said was impossible. That is a contradiction worth reading before it is
+    deleted, so the migration keeps the table and says why.
+    """
+    from student.db import drop_retired_boosts_table
+
+    _create_boosts_table()
+    with odb.get_db() as db:
+        odb._exec(
+            db,
+            "INSERT INTO student_boosts (id, client_id, kind, multiplier, expires_at) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (1, 42, "xp", 2.0, "2026-04-21 12:00:00"),
+        )
+
+    with caplog.at_level("ERROR"):
+        assert drop_retired_boosts_table() is False
+
+    assert "student_boosts" in _table_names()
+    assert "still holds 1 row" in caplog.text
+
+    # Leave the schema as the other tests expect to find it.
+    with odb.get_db() as db:
+        odb._exec(db, "DROP TABLE IF EXISTS student_boosts")
+
+
+def test_a_freshly_initialised_schema_never_creates_the_boosts_table():
+    from student.db import init_student_db
+
+    with odb.get_db() as db:
+        odb._exec(db, "DROP TABLE IF EXISTS student_boosts")
+    init_student_db()
+
+    assert "student_boosts" not in _table_names()
