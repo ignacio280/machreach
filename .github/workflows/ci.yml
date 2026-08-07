@@ -8,7 +8,14 @@ permissions:
   contents: read
 
 jobs:
-  test-and-audit:
+  # Deliberately its own job, and deliberately first. These steps used to sit
+  # at the tail of test-and-build, behind the linter and seven coverage gates,
+  # so a formatting complaint was enough to stop them running at all. That is
+  # how cryptography 49.0.0 (PYSEC-2026-3552) and brace-expansion 5.0.8
+  # (GHSA-rgw5-rvv9-x895) went three days unreported while CI sat red for
+  # unrelated reasons. A vulnerability scan must not depend on the code being
+  # tidy, so nothing here needs the application installed or the tests green.
+  dependency-audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -23,10 +30,40 @@ jobs:
           cache-dependency-path: |
             landing_build/package-lock.json
             ios-app/package-lock.json
+      - name: Install the auditor only
+        # pip-audit reads the lock file; it does not need the packages
+        # themselves, so a broken dependency cannot hide a known CVE.
+        run: python -m pip install pip-audit==2.10.1
+      - name: Audit Python dependencies
+        run: python -m pip_audit -r requirements.lock
+      - name: Audit landing build dependencies
+        working-directory: landing_build
+        run: |
+          npm ci
+          npm audit --audit-level=moderate
+      - name: Audit iOS dependencies
+        working-directory: ios-app
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=moderate
+
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: landing_build/package-lock.json
       - name: Install locked Python dependencies
         run: |
           python -m pip install --require-hashes -r requirements.lock
-          python -m pip install pytest==9.0.2 pytest-cov==7.1.0 pip-audit==2.10.1 ruff==0.15.21 mypy==2.2.0
+          python -m pip install pytest==9.0.2 pytest-cov==7.1.0 ruff==0.15.21 mypy==2.2.0
       - name: Compile, lint, and type-check application
         run: |
           python -m compileall -q app.py migrate.py machreach_core student worker.py
@@ -71,20 +108,15 @@ jobs:
           python -m pytest tests/test_analyzer.py \
             --cov=student.analyzer --cov-report=term-missing \
             --cov-fail-under=90 -q
-      - name: Audit Python dependencies
-        run: python -m pip_audit -r requirements.lock
-      - name: Verify landing build
+      - name: Verify landing build is reproducible
+        # The bundle is committed, so this proves the artifact in the repo is
+        # what the current source actually produces. Vulnerability scanning for
+        # these same packages lives in dependency-audit.
         working-directory: landing_build
         run: |
           npm ci
-          npm audit --audit-level=moderate
           node build.mjs
           git diff --exit-code -- ../static/machreach_landing
-      - name: Verify iOS dependency lock
-        working-directory: ios-app
-        run: |
-          npm ci --ignore-scripts
-          npm audit --audit-level=moderate
       - name: Validate Focus Guard JavaScript and manifest
         run: |
           node --check extensions/focus-guard/background.js
