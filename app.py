@@ -1040,18 +1040,6 @@ def _set_security_headers(response):
         pass
     analytics_script_source = f" {posthog_assets}" if posthog_assets else ""
     analytics_connect_source = f" {posthog_host}" if posthog_host else ""
-    # Google Tag Manager loads the container and gtag from googletagmanager.com
-    # and reports to the analytics hosts. Only widened while a container is
-    # configured, so a deployment without one keeps the tighter policy.
-    if _GTM_CONTAINER_ID:
-        analytics_script_source += " https://www.googletagmanager.com"
-        analytics_connect_source += (
-            " https://www.googletagmanager.com https://www.google-analytics.com"
-            " https://*.google-analytics.com https://*.analytics.google.com"
-        )
-        gtm_frame_source = " https://www.googletagmanager.com"
-    else:
-        gtm_frame_source = ""
     _CSP = (
         "default-src 'self'; "
         f"script-src 'self' 'nonce-{csp_nonce}' https://cdn.jsdelivr.net{analytics_script_source}; "
@@ -1062,7 +1050,7 @@ def _set_security_headers(response):
         "img-src 'self' data: blob: https:; "
         "media-src 'self' https:; "
         f"connect-src 'self' https://api.openai.com https://*.instructure.com https://cdn.jsdelivr.net{analytics_connect_source}; "
-        f"frame-src 'self' https://open.spotify.com https://www.youtube.com https://www.youtube-nocookie.com{gtm_frame_source}; "
+        "frame-src 'self' https://open.spotify.com https://www.youtube.com https://www.youtube-nocookie.com; "
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
         "form-action 'self' https://*.lemonsqueezy.com; "
@@ -1090,12 +1078,6 @@ def _make_session_permanent():
 # HTML Layout
 # ---------------------------------------------------------------------------
 
-# The container id is public — it ships in the HTML of every page that loads
-# it — so it lives here rather than in the secret store. Blank disables Google
-# Analytics outright, which is what local and test runs get.
-_GTM_CONTAINER_ID = re.sub(r"[^A-Za-z0-9\-_]", "", os.getenv("GTM_CONTAINER_ID", "GTM-WD2G9CS4"))[:32]
-
-
 @app.context_processor
 def _inject_analytics_context():
     """Expose PostHog config + identity to every template (cheap, no DB).
@@ -1111,12 +1093,6 @@ def _inject_analytics_context():
         "consent": t_dict("consent"),
         "posthog_key": os.getenv("POSTHOG_KEY", "") if analytics_allowed else "",
         "posthog_host": os.getenv("POSTHOG_HOST", "https://us.i.posthog.com"),
-        # Google Tag Manager, which is how Google Analytics gets loaded. Gated
-        # on the same cookie as PostHog and for the same reason: the container
-        # writes _ga cookies and ships behaviour to Google, so it may not run
-        # until the student has said yes. Withholding the id here means the
-        # snippet is never rendered — nothing to opt out of after the fact.
-        "gtm_container_id": _GTM_CONTAINER_ID if analytics_allowed else "",
         "analytics_uid": session.get("client_id") or "",
         "analytics_account_type": session.get("account_type") or "",
     }
@@ -1239,15 +1215,6 @@ LAYOUT = """<!DOCTYPE html>
   posthog.init('{{ posthog_key }}', { api_host: '{{ posthog_host }}', person_profiles: 'identified_only', capture_pageview: true, capture_pageleave: true });
   {% if analytics_uid %}posthog.identify('{{ analytics_uid }}', { account_type: {{ analytics_account_type|tojson }} });{% endif %}
   </script>{% endif %}
-  {% if gtm_container_id %}<!-- Google Tag Manager -->
-  <script>
-  {% raw %}(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;{% endraw %}
-  // The page runs a nonce-based CSP with no 'unsafe-inline'. Handing the
-  // container our nonce lets it stamp the tags it injects, which is the only
-  // way they are allowed to execute.
-  {% raw %}var n=d.querySelector('script[nonce]');if(n)j.setAttribute('nonce',n.nonce||n.getAttribute('nonce'));f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer',{% endraw %}{{ gtm_container_id|tojson }});
-  </script>
-  <!-- End Google Tag Manager -->{% endif %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -1339,10 +1306,6 @@ LAYOUT = """<!DOCTYPE html>
   <link rel="stylesheet" href="/static/machreach_consent.css?v={{ deploy_version }}"/>
 </head>
 <body>
-  {% if gtm_container_id %}<!-- Google Tag Manager (noscript) -->
-  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ gtm_container_id|urlencode }}"
-    height="0" width="0" style="display:none;visibility:hidden" title="Google Tag Manager"></iframe></noscript>
-  <!-- End Google Tag Manager (noscript) -->{% endif %}
   <script>
     window.__IS_LOGGED_IN__ = {% if logged_in %}true{% else %}false{% endif %};
     window.__ACCOUNT_TYPE__ = "{{ account_type|default('student') }}";
@@ -5061,7 +5024,6 @@ def privacy_page():
           <li><strong>Render:</strong> hosting de la aplicación e infraestructura de base de datos.</li>
           <li><strong>Sentry:</strong> reporte de errores con los campos sensibles depurados cuando es posible, solo si el monitoreo de producción está configurado.</li>
           <li><strong>PostHog:</strong> analítica de producto opcional, cargada solo después de que elijas &ldquo;Permitir analítica&rdquo; en el banner de cookies. Puedes retirar tu consentimiento borrando o cambiando las cookies de tu navegador.</li>
-          <li><strong>Google (Tag Manager y Analytics):</strong> analítica de audiencia opcional, sujeta al mismo consentimiento: el código no se escribe en la página hasta que eliges &ldquo;Permitir analítica&rdquo;. Registra páginas vistas y uso general del sitio, y coloca cookies propias de Google.</li>
         </ul>
         <p>Estos proveedores pueden procesar datos fuera de Chile bajo sus respectivas salvaguardas contractuales y de seguridad.</p>
         <h2>5. Conservación y eliminación</h2>
@@ -5123,7 +5085,7 @@ def terms_page():
 def cookies_page():
     return _public_info_page("Cookies", "Privacidad", "Cookies esenciales del producto y analítica opcional, solo con tu consentimiento.", """
       <p>MachReach usa cookies esenciales para la sesión de inicio de sesión, la protección CSRF, el idioma y algunas preferencias básicas de la interfaz. Si las bloqueas, el inicio de sesión y las funciones de estudiante pueden dejar de funcionar.</p>
-      <p>La analítica es opcional y no se carga hasta que la aceptas explícitamente en el banner de cookies: PostHog para analítica de producto, y Google Analytics (a través de Google Tag Manager) para analítica de audiencia, que coloca cookies propias de Google. No usamos cookies publicitarias ni vendemos datos de analítica.</p>
+      <p>La analítica de producto de PostHog es opcional y no se carga hasta que aceptas explícitamente la analítica en el banner de cookies. No usamos cookies publicitarias ni vendemos datos de analítica.</p>
       <p><button type="button" class="btn btn-outline" onclick="document.cookie='analytics_consent=0;path=/;max-age=31536000;SameSite=Lax';window.location.reload();">Desactivar analítica</button></p>
       <p>Consultas: <a href="mailto:support@machreach.com">support@machreach.com</a>.</p>
     """, "cookies")

@@ -144,11 +144,6 @@ services:
         sync: false
       - key: POSTHOG_HOST
         sync: false
-      # Google Tag Manager container, which is what loads Google Analytics.
-      # Public by nature — it ships in the page — so it is set here rather than
-      # kept secret. Blank switches Google Analytics off entirely.
-      - key: GTM_CONTAINER_ID
-        value: "GTM-WD2G9CS4"
       - key: LEADERBOARD_WINNERS_RECIPIENT
         sync: false
 
