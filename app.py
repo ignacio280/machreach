@@ -3985,7 +3985,11 @@ def admin_growth_delete(target_id: int):
 
     target = get_client(target_id)
     if not target:
-        flash(("error", "That account no longer exists."))
+        # flash() takes the category as its second argument. Passing a
+        # (category, message) tuple as the message makes Flask file it under
+        # the category "message" with a tuple as the body, which is not what
+        # the toast template unpacks.
+        flash("That account no longer exists.", "error")
         return redirect(url_for("admin_growth"))
 
     email = str(target.get("email") or "")
@@ -4000,7 +4004,7 @@ def admin_growth_delete(target_id: int):
             result = _admin_delete_client_account(target_id)
             if result.get("ok"):
                 _log_admin_action("delete_user", target=str(target_id), email=email)
-                flash(("success", f"Deleted account: {email}"))
+                flash(f"Deleted account: {email}", "success")
                 return redirect(url_for("admin_growth"))
             error = result.get("error") or "Could not delete that account."
 

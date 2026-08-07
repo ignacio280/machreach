@@ -20,8 +20,23 @@ import logging
 import os
 import re
 from datetime import date, timedelta
+from typing import TypedDict
 
 log = logging.getLogger(__name__)
+
+
+class DaySlot(TypedDict):
+    """One day of the week the model is asked to fill.
+
+    Spelled out because the values are not all the same type: without it the
+    dict reads as `dict[str, object]`, and `capacity` — which is arithmetic
+    everywhere it is used — comes back as something you cannot compare or
+    subtract.
+    """
+
+    date: str
+    weekday: str
+    capacity: int
 
 # Plus-only feature: default to a strong general model and let an operator
 # point at a better one without a deploy. PLANNER_AI_FALLBACK_MODEL is tried
@@ -100,7 +115,7 @@ def collect_exam_context(client_id: int, today: date, horizon_days: int = 60) ->
     return out
 
 
-def _prompt(exams: list[dict], days: list[dict], today: date) -> str:
+def _prompt(exams: list[dict], days: list[DaySlot], today: date) -> str:
     catalogue = []
     for exam in exams:
         entry = [
@@ -214,7 +229,7 @@ def build_ai_week(client_id: int, today: date, week_start: date, settings: dict,
     if not exams:
         return None
 
-    days = []
+    days: list[DaySlot] = []
     for offset in range(7):
         day = week_start + timedelta(days=offset)
         setting = settings.get(day.weekday()) or {}
@@ -225,7 +240,7 @@ def build_ai_week(client_id: int, today: date, week_start: date, settings: dict,
             "weekday": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][day.weekday()],
             "capacity": max(0, capacity),
         })
-    if not any(day["capacity"] > 0 for day in days):
+    if not any(slot["capacity"] > 0 for slot in days):
         return None
 
     answer = _call_model(_prompt(exams, days, today))
@@ -257,10 +272,13 @@ def build_ai_week(client_id: int, today: date, week_start: date, settings: dict,
 
     out_days = []
     index = 0
-    for day in days:
-        remaining = day["capacity"]
+    # `slot`, not `day`: the name is already a date earlier in this function,
+    # and rebinding it to a dict here is what made the week unreadable to a
+    # type checker — and to anyone tracing what `day` holds at a given line.
+    for slot in days:
+        remaining = slot["capacity"]
         blocks = []
-        for raw in (answered.get(day["date"]) or []):
+        for raw in (answered.get(slot["date"]) or []):
             if not isinstance(raw, dict) or remaining < MIN_BLOCK_MINUTES:
                 continue
             exam_id = int(raw.get("exam_id") or 0)
@@ -296,8 +314,8 @@ def build_ai_week(client_id: int, today: date, week_start: date, settings: dict,
             index += 1
             remaining -= minutes
         out_days.append({
-            "date": day["date"],
-            "hours": round(day["capacity"] / 60, 2),
+            "date": slot["date"],
+            "hours": round(slot["capacity"] / 60, 2),
             "blocks": blocks,
         })
 

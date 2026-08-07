@@ -2406,7 +2406,10 @@ def close_semester(client_id: int, semester_label: str, answers: list[dict],
     supplied = {}
     for answer in answers or []:
         try:
-            course_id = int(answer.get("course_id"))
+            # A missing key gives None, which int() rejects with TypeError —
+            # caught below, but only by accident. Say so instead: an answer
+            # without a course id is skipped, same as one with a bad id.
+            course_id = int(answer.get("course_id") or 0)
         except (TypeError, ValueError):
             continue
         if course_id in courses:

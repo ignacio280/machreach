@@ -718,3 +718,46 @@ def test_course_material_quiz_and_flashcard_jobs_use_uploaded_sources(monkeypatc
 
     assert get_async_job_status("student_quiz_generation", str(client_id))["status"] == "done"
     assert get_async_job_status("student_flashcard_generation", str(client_id))["status"] == "done"
+
+
+def test_january_reports_on_the_previous_december(monkeypatch):
+    """Called with no month, the report covers the month that just ended.
+
+    In January that means stepping back across the year boundary. Getting it
+    wrong sends the report for a month that has not happened yet, and only
+    ever on one day of the year — so it is worth pinning rather than trusting.
+    """
+    import datetime as datetime_module
+    from student import academic
+
+    _configure_smtp(monkeypatch)
+    monkeypatch.setattr(worker, "LEADERBOARD_WINNERS_RECIPIENT", "owner@example.test")
+
+    class _JanuaryDate(datetime_module.date):
+        @classmethod
+        def today(cls):
+            return cls(2027, 1, 9)
+
+    # The function imports `date` from the module when it runs, so replacing it
+    # here is what the call actually picks up.
+    monkeypatch.setattr(datetime_module, "date", _JanuaryDate)
+
+    asked = {}
+    monkeypatch.setattr(
+        academic,
+        "monthly_winners",
+        lambda year, month, top_n: asked.update(year=year, month=month) or {
+            "label": f"{year}-{month:02d}",
+            "start": f"{year}-{month:02d}-01",
+            "end_exclusive": f"{year + 1}-01-01",
+            "summary": {},
+            "by_country": [],
+            "by_university": [],
+            "by_major": [],
+        },
+    )
+
+    worker.send_monthly_leaderboard_email()
+
+    assert asked == {"year": 2026, "month": 12}
+    assert "2026-12" in _FakeSMTP.sent[0]["Subject"]
