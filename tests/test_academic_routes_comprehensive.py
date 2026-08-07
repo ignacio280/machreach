@@ -237,3 +237,61 @@ def test_public_academic_profile_hides_focus_from_strangers_and_blocked_users(
     assert client.get(
         f"/api/academic/user/{stranger_id}"
     ).status_code == 404
+
+
+# --- Leaderboard headings --------------------------------------------------
+
+def test_leaderboard_headings_name_the_students_own_groups(client, academic_student):
+    """Regression: the carrera board was headed "Ingeniería Civil" for everyone.
+
+    The board itself filtered correctly on the viewer's own major_id, so the
+    heading was a caption contradicting the list under it — a student reading
+    their real ranking was told it belonged to a degree they do not study.
+    """
+    from student import academic as ac
+
+    universities = client.get("/api/academic/universities?country=CL&q=").get_json()["universities"]
+    university_id = universities[0]["id"]
+    majors = client.get(f"/api/academic/majors?university_id={university_id}").get_json()["majors"]
+    chosen = majors[-1]
+    client.post("/api/academic/profile", json={
+        "country_iso": "cl", "university_id": university_id, "major_id": chosen["id"],
+    })
+
+    major_board = client.get("/api/academic/leaderboard?scope=major").get_json()
+    university_board = client.get("/api/academic/leaderboard?scope=university").get_json()
+    country_board = client.get("/api/academic/leaderboard?scope=country").get_json()
+
+    assert major_board["scope_label"] == chosen["name"]
+    assert university_board["scope_label"] == (
+        universities[0].get("short_name") or universities[0]["name"]
+    )
+    assert country_board["scope_label"] == "Chile"
+    # Whatever the catalogue happens to be ordered by, the heading must be the
+    # carrera this student picked and not a fixed one.
+    assert ac.leaderboard_scope_label("major", academic_student) == chosen["name"]
+
+
+def test_boards_that_are_not_personal_send_no_heading(client, academic_student):
+    """Amigos, egresados and global rank everyone the same way, so the client
+    keeps its own wording rather than being handed a name."""
+    for scope in ("friends", "retirement", "global"):
+        board = client.get(f"/api/academic/leaderboard?scope={scope}").get_json()
+        assert board["scope_label"] == ""
+
+
+def test_a_student_without_a_carrera_is_not_given_someone_elses(client, academic_student):
+    """The empty label is what makes the page fall back to "Tu carrera".
+
+    Naming a degree here would be worse than saying nothing, which is exactly
+    the bug this replaced.
+    """
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE clients SET major_id = NULL, university_id = NULL WHERE id = %s",
+            (academic_student,),
+        )
+
+    assert client.get("/api/academic/leaderboard?scope=major").get_json()["scope_label"] == ""
+    assert client.get("/api/academic/leaderboard?scope=university").get_json()["scope_label"] == ""

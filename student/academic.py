@@ -1033,6 +1033,50 @@ def _decorate_leaderboard_identity(out: list[dict], rows: list[dict]) -> None:
             row["major"] = major_names[major_id]
 
 
+def leaderboard_scope_label(scope: str, client_id: int) -> str:
+    """Name the group a scope actually ranks this student against.
+
+    The ranking page carried these headings as static copy, so the carrera
+    board was titled "Ingeniería Civil" for everyone regardless of what they
+    study. The board underneath was right — it filters on the viewer's own
+    major_id — which made the heading a caption contradicting its own list.
+
+    Returns "" when there is no name to give: the student never chose a
+    carrera, or the scope is not personal to begin with (friends, egresados,
+    global). The caller shows a generic heading then, which is vague but true,
+    rather than naming somebody else's degree.
+    """
+    if scope not in {"country", "university", "major"}:
+        return ""
+    with get_db() as db:
+        me = _fetchone(
+            db,
+            "SELECT country_iso, university_id, major_id FROM clients WHERE id = %s",
+            (client_id,),
+        ) or {}
+        if scope == "country":
+            iso = str(me.get("country_iso") or "").strip()
+            if not iso:
+                return ""
+            row = _fetchone(
+                db, "SELECT name FROM countries WHERE iso_code = %s", (iso,)
+            ) or {}
+            # The ISO code is a poor heading but still beats a wrong country.
+            return str(row.get("name") or iso)
+
+    if scope == "university":
+        university_id = int(me.get("university_id") or 0)
+        if not university_id:
+            return ""
+        info = get_university(university_id) or {}
+        return str(info.get("short_name") or info.get("name") or "")
+
+    major_id = int(me.get("major_id") or 0)
+    if not major_id:
+        return ""
+    return str((get_major(major_id) or {}).get("name") or "")
+
+
 def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all") -> list[dict]:
     """
     scope ∈ {"global", "country", "university", "major", "retirement"}.

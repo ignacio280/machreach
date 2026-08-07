@@ -1,8 +1,14 @@
 /* Ranking page */
 const SCOPES = [
-  { id: "country", ic: "🏳️", label: "País", eye: "Liga por país", h: "Chile", sub: "Todos los estudiantes de MachReach en Chile", arena: "#4A5FC1" },
+  // `h` is only the heading of last resort. On a live page the server sends
+  // the real name of the group being ranked (scope_label); these strings are
+  // what the design preview shows, and what a student sees when they have not
+  // set a carrera or universidad yet. None of them may name a specific one:
+  // this list used to say "Ingeniería Civil", which every student saw over a
+  // board that was correctly filtered to their own degree.
+  { id: "country", ic: "🏳️", label: "País", eye: "Liga por país", h: "Tu país", sub: "Todos los estudiantes de MachReach en tu país", arena: "#4A5FC1" },
   { id: "university", ic: "🎓", label: "Universidad", eye: "Liga universitaria", h: "Tu universidad", sub: "Solo estudiantes de tu casa de estudios", arena: "#2E7F8F" },
-  { id: "major", ic: "📚", label: "Carrera", eye: "Liga por carrera", h: "Ingeniería Civil", sub: "Compites contra tu misma carrera, en cualquier universidad", arena: "#6B4AA8" },
+  { id: "major", ic: "📚", label: "Carrera", eye: "Liga por carrera", h: "Tu carrera", sub: "Compites contra tu misma carrera, en cualquier universidad", arena: "#6B4AA8" },
   { id: "friends", ic: "🤝", label: "Amigos", eye: "Liga de amigos", h: "Tus amigos", sub: "Solo la gente que aceptaste como amigo", arena: "#B45A3C" },
   { id: "retirement", ic: "🏖️", label: "Egresados", eye: "Liga de egresados", h: "Egresados", sub: "Quienes ya terminaron la carrera — sin premios, pura gloria", arena: "#3F7A55" },
   { id: "global", ic: "🌎", label: "Global", eye: "Liga global", h: "Global", sub: "Disponible cuando MachReach abra en más países", arena: "#4A5FC1", off: true },
@@ -26,9 +32,9 @@ const initials2 = (n) => { const p = n.split(" "); return (p[0][0] + (p[1] ? p[1
 const fmt = (n) => n.toLocaleString("es-CL");
 
 function useRankRows(scope, period, live) {
-  const [state, setState] = React.useState({ rows: live ? [] : NAMES, loading: !!live });
+  const [state, setState] = React.useState({ rows: live ? [] : NAMES, loading: !!live, label: "" });
   React.useEffect(() => {
-    if (!live) { setState({ rows: NAMES, loading: false }); return; }
+    if (!live) { setState({ rows: NAMES, loading: false, label: "" }); return; }
     let active = true;
     setState((s) => ({ ...s, loading: true }));
     fetch("/api/academic/leaderboard?scope=" + encodeURIComponent(scope.id) + "&period=" + encodeURIComponent(period))
@@ -40,8 +46,10 @@ function useRankRows(scope, period, live) {
         const detailFor = (r) => (scope.id === "country" ? r.university : scope.id === "university" ? r.major : "")
           || r.league_name || scope.label;
         const rows = (body.rows || []).map((r) => [r.name || "Estudiante", detailFor(r), Number(r.xp || 0), !!r.is_you, r]);
-        setState({ rows, loading: false });
-      }).catch(() => active && setState({ rows: [], loading: false }));
+        // Empty for the boards that are not personal, and for a student who
+        // has not set a carrera — Arena falls back to the generic heading.
+        setState({ rows, loading: false, label: String(body.scope_label || "") });
+      }).catch(() => active && setState({ rows: [], loading: false, label: "" }));
     return () => { active = false; };
   }, [scope.id, period, live]);
   return state;
@@ -83,7 +91,7 @@ function CountXP({ v, d = 0 }) {
   return <React.Fragment>{fmt(Math.round(on ? n : 0))}</React.Fragment>;
 }
 
-function Arena({ scope, period, rows = NAMES, loading = false }) {
+function Arena({ scope, period, rows = NAMES, loading = false, heading = "" }) {
   const top = rows.slice(0, 3);
   const medals = ["🥇", "🥈", "🥉"];
   const label = period === "week" ? "Cierra el domingo a medianoche" : period === "month" ? "Cierra el último día del mes" : "Sin cierre — es el acumulado de siempre";
@@ -91,7 +99,7 @@ function Arena({ scope, period, rows = NAMES, loading = false }) {
     <section className="arena" style={{ "--arena": scope.arena }}>
       <div className="arena-sweep" />
       <div className="arena-eye">{scope.eye}</div>
-      <h2>{scope.h}</h2>
+      <h2>{heading || scope.h}</h2>
       <div className="arena-sub">{scope.sub}</div>
       <div className="arena-close"><IconTimer size={13} /> {label}</div>
       <div className="podium">

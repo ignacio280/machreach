@@ -270,7 +270,14 @@ def register_academic_routes(app, csrf, limiter):
         if period not in {"all", "week", "month"}:
             period = "all"
         rows = ac.leaderboard(scope, _cid(), limit=100, period=period)
-        return jsonify({"scope": scope, "period": period, "rows": rows})
+        return jsonify({
+            "scope": scope,
+            "period": period,
+            "rows": rows,
+            # What this board is scoped to, for the heading above it. Empty
+            # when the student has not set a carrera or university yet.
+            "scope_label": ac.leaderboard_scope_label(scope, _cid()),
+        })
 
     @app.route("/api/academic/ranks", methods=["GET"])
     def academic_ranks():

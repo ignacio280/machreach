@@ -33,7 +33,7 @@ function App() {
         <main className="page">
           <div className="col">
             <RankHead scope={scope} setScope={setScope} period={period} setPeriod={setPeriod} />
-            <Arena key={"a-" + scope.id + period} scope={scope} period={period} rows={rankState.rows} loading={rankState.loading} />
+            <Arena key={"a-" + scope.id + period} scope={scope} period={period} rows={rankState.rows} loading={rankState.loading} heading={rankState.label} />
             <Board key={"b-" + scope.id + period} scope={scope} period={period} rows={rankState.rows} loading={rankState.loading} />
           </div>
         </main>
